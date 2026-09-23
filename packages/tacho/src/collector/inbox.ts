@@ -35,6 +35,42 @@ export interface InboxDeps {
   refreshBundle: () => Promise<void>;
   onHostSuspended: (reason: string) => void;
   now: () => number;
+  /**
+   * The commands this host already answered. Absent, every delivery is
+   * applied as it comes.
+   */
+  handled?: HandledCommands;
+}
+
+/** The most command ids `HandledCommands` remembers; the oldest goes first. */
+export const HANDLED_COMMANDS_KEPT = 1024;
+
+/**
+ * The acknowledgement each command produced, by command id. The control
+ * plane delivers a `sent` command again until an acknowledgement for it
+ * lands, so an acknowledgement lost on the way back brings the same steer or
+ * kill round a second time. A command found here is not applied again: its
+ * first acknowledgement is queued once more instead. Held in memory, so a
+ * restart forgets it.
+ */
+export class HandledCommands {
+  private readonly acks = new Map<string, CommandAcknowledgement>();
+
+  constructor(private readonly limit = HANDLED_COMMANDS_KEPT) {}
+
+  get(commandId: string): CommandAcknowledgement | undefined {
+    const ack = this.acks.get(commandId);
+    return ack === undefined ? undefined : { ...ack };
+  }
+
+  remember(ack: CommandAcknowledgement): void {
+    this.acks.delete(ack.command_id);
+    this.acks.set(ack.command_id, { ...ack });
+    for (const id of this.acks.keys()) {
+      if (this.acks.size <= this.limit) break;
+      this.acks.delete(id);
+    }
+  }
 }
 
 export interface InboxResult {
@@ -238,8 +274,21 @@ export async function applyCommands(
   deps: InboxDeps,
 ): Promise<InboxResult> {
   const now = deps.now();
+  // A redelivered command, or one listed twice, is answered from `handled`
+  // once the rest are sealed, and nothing is applied for it.
+  const fresh: DeliveredCommand[] = [];
+  const repeated: string[] = [];
+  for (const command of commands) {
+    if (
+      deps.handled !== undefined &&
+      (deps.handled.get(command.id) !== undefined ||
+        fresh.some((other) => other.id === command.id))
+    )
+      repeated.push(command.id);
+    else fresh.push(command);
+  }
   if (
-    commands.some(
+    fresh.some(
       (command) =>
         command.session_uuid === null &&
         command.command === "refresh_bundle" &&
@@ -247,7 +296,13 @@ export async function applyCommands(
     )
   )
     await deps.refreshBundle();
-  return sealCommands(commands, deps, now);
+  const result = sealCommands(fresh, deps, now);
+  for (const ack of result.acknowledgements) deps.handled?.remember(ack);
+  for (const id of repeated) {
+    const ack = deps.handled?.get(id);
+    if (ack !== undefined) result.acknowledgements.push(ack);
+  }
+  return result;
 }
 
 function sealCommands(

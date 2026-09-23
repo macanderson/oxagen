@@ -110,7 +110,10 @@ import {
   type HookReplay,
   type PolicyView,
 } from "./hook-handler";
-import { applyCommands } from "./inbox";
+import {
+  applyCommands as applyDeliveredCommands,
+  HandledCommands,
+} from "./inbox";
 import {
   createMcpGateway,
   type GatewayAttribution,
@@ -129,6 +132,7 @@ import {
 } from "./model-routes";
 import {
   parseRegistryState,
+  rememberBaseline,
   sessionMapKey,
   type SessionRecord,
   type RegistryState,
@@ -476,7 +480,11 @@ async function initializeDaemon(
     }
   }
 
-  let bundleVerified = verifyBundle(host.bundle, host.bundle_public_key_pem).ok;
+  let bundleVerified = verifyBundle(
+    host.bundle,
+    host.bundle_public_key_pem,
+    host.host_enrollment_id,
+  ).ok;
   /**
    * When the control plane last confirmed the cached mandate, as epoch ms.
    *
@@ -553,6 +561,14 @@ async function initializeDaemon(
   let stateDirty = false;
   let stopped = false;
   const pendingAcks: CommandAcknowledgement[] = [];
+  // The control plane delivers a `sent` command again until its
+  // acknowledgement lands. Every delivery goes through this daemon's record
+  // of the commands it already answered, so a steer is queued once and a kill
+  // signalled once however often it arrives. In memory only: `daemon.json` is
+  // the registry's state and has no place for it.
+  const handledCommands = new HandledCommands();
+  const applyCommands: typeof applyDeliveredCommands = (commands, deps) =>
+    applyDeliveredCommands(commands, { ...deps, handled: handledCommands });
   const serial = new Serial();
 
   // Exponential backoff for the command poll, the same 2s→60s shape the
@@ -691,6 +707,26 @@ async function initializeDaemon(
   // Bound once the contained runner exists below. Until then no session is
   // one the launcher started, which is the fail-closed answer.
   let launchedContained: (harnessSessionId: string) => boolean = () => false;
+  /**
+   * The host status hooks and the model proxy act on. `host.host_status` is
+   * the control plane's latest word and is not signed; the bundle's
+   * `host_status` is signed but can be older. An edit of the first to
+   * `active` must not lift a signed suspension, so while the bundle verifies
+   * the more restrictive of the two applies, as `tacho-hook` does offline.
+   */
+  function hostStatusInForce(): HostFile["host_status"] {
+    const order: readonly HostFile["host_status"][] = [
+      "active",
+      "paused",
+      "suspended",
+      "revoked",
+    ];
+    const unsigned = host.host_status;
+    const signed = host.bundle.host_status;
+    return bundleVerified && order.indexOf(signed) > order.indexOf(unsigned)
+      ? signed
+      : unsigned;
+  }
   function policy(): PolicyView {
     const current = host as HostFile;
     return {
@@ -698,7 +734,7 @@ async function initializeDaemon(
       bundle: current.bundle,
       verified: bundleVerified,
       mandateConfirmedAt,
-      hostStatus: current.host_status,
+      hostStatus: hostStatusInForce(),
       denyGeneration: current.deny_generation,
       controlReachable:
         lastControlAt !== undefined &&
@@ -938,6 +974,7 @@ async function initializeDaemon(
       const verification = verifyBundle(
         response.bundle,
         host.bundle_public_key_pem,
+        host.host_enrollment_id,
       );
       if (!verification.ok) {
         log(
@@ -1130,6 +1167,9 @@ async function initializeDaemon(
   // --- end transcript tailer ---------------------------------------------
 
   async function sendAcks(): Promise<void> {
+    // A message whose session sealed before a boundary reached it is
+    // `expired`; left unsent, the operator reads it as still on its way.
+    pendingAcks.push(...registry.takeExpiredOnSeal());
     const lastEnvelopeAt = Math.max(
       lastIngestAt ?? -Infinity,
       lastCommandPollAt ?? -Infinity,
@@ -1584,10 +1624,13 @@ async function initializeDaemon(
       // The first read that answers in this worktree fixes the session's
       // baseline. Later reads measure from it rather than from a `HEAD`
       // that the session's own commits keep moving. `ensure` clears the
-      // baseline when `cwd` changes, so a move to another repository
-      // captures that tree's HEAD instead of diffing against the old one.
-      if (facts !== undefined && session.baselineCommit === undefined)
-        session.baselineCommit = facts.head_sha;
+      // baseline when `cwd` changes, and `rememberBaseline` puts back the one
+      // the session holds for the repository it is in now, so a `cd` inside
+      // one repository keeps it and a move to another captures that tree's
+      // HEAD. A session that moved while the probe ran is not given this
+      // repository's HEAD.
+      if (facts?.head_sha !== undefined && session.cwd === cwd)
+        rememberBaseline(session, facts.repo_root ?? cwd, facts.head_sha);
       if (facts === undefined && !due) continue;
       found.push({
         session,
@@ -1863,6 +1906,10 @@ async function initializeDaemon(
           }),
       );
       state.agents = [];
+      // The host's tombstones are not this session's: carried here, every
+      // pending terminal held the whole list, and a restore put back ones
+      // spent since.
+      state.tombstones = [];
       const retention = retentionInForce();
       pending.terminal = {
         events: outcome.events,
@@ -2172,7 +2219,7 @@ async function initializeDaemon(
     registry,
     hostRecorder: () => hostRecorder,
     record,
-    policy: () => ({ bundle: host.bundle, hostStatus: host.host_status }),
+    policy: () => ({ bundle: host.bundle, hostStatus: hostStatusInForce() }),
     upstreams: () => ({
       ...DEFAULT_MODEL_UPSTREAMS,
       ...displacedUpstreams,
@@ -2393,6 +2440,15 @@ async function initializeDaemon(
           const { record: session, created } = registry.ensure(sessionId, {
             ambient: true,
           });
+          // Its terminal is sealed but not yet in the WAL. A frame sealed now
+          // takes the seq after it and reaches the WAL first, so the records
+          // are dropped; a sealed chain takes them, marked after the stop.
+          if (session.pendingTerminal === true) {
+            log(
+              `OTel records for session ${sessionId} dropped: its end is not yet written`,
+            );
+            continue;
+          }
           if (created)
             log(
               `session ${sessionId} first seen through OTel; no hook stream yet`,
