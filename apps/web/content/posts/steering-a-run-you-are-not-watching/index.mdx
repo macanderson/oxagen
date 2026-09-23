@@ -1,6 +1,6 @@
 ---
 title: "Steering a run you are not watching"
-description: "When a long run goes wrong, most teams can kill it or argue with it. Both are bad. A steer is a third option: a message with a delivery mode, a status, and a record."
+description: "When a long run goes wrong, most teams can stop it or type at it. Both work badly. A steer is a third option. It is a message with a delivery mode, a status, and a record."
 date: 2026-09-16
 authors:
   - Oxagen Research
@@ -16,107 +16,107 @@ tags:
 draft: false
 ---
 
-An agent has been running for nine hours. You open the transcript over breakfast and see that around hour three it decided the caching layer was the problem, and everything since has been a careful, well-tested, thoroughly documented rewrite of the wrong component.
+An agent has been running for nine hours. You open the transcript over breakfast. Around hour three, the agent decided the caching layer was the problem. Since then it has rewritten the wrong component, with tests and documentation.
 
-You have two buttons. One kills the run, which throws away nine hours and, more annoyingly, throws away the part of the work that was fine. The other lets you type a message, which is the option everyone takes and the one the research is least kind to.
+You have two buttons. One stops the run. That throws away nine hours, including the part of the work that was fine. The other lets you type a message. Most people pick this one, and the research shows it works badly.
 
-## Typing at it is the failure mode
+## Corrections typed as chat often do not work
 
-Correcting an agent by conversation assumes the agent can take a correction by conversation. Laban and colleagues measured that assumption and found an average drop of 39 percent across six generation tasks when an instruction arrives across turns instead of all at once.[^1] They decompose the drop into a minor loss in aptitude and a large rise in unreliability, with the mechanism being that models commit to an assumption early and over-rely on it.
+A correction typed as chat only helps if the agent can take a correction that way. Laban and colleagues tested this. They gave models an instruction over several turns instead of all at once. Scores dropped by 39 percent on average across six generation tasks.[^1] The authors split the drop into a small loss in skill and a large rise in unreliability. They found the cause. Models commit to an assumption early and then rely on it too much.
 
-So the message you type at hour nine lands in a context that already contains nine hours of confident work in the wrong direction. Sinha and colleagues describe why that matters: a model becomes more likely to make mistakes when its context holds its own earlier errors, an effect they call self-conditioning.[^2] Your correction is one paragraph arriving into a document that is arguing against it, written by the reader.
+So your message at hour nine lands in a context that already holds nine hours of confident work in the wrong direction. Sinha and colleagues explain why that matters. When a model's context holds its own earlier errors, the model becomes more likely to make new mistakes. They call this self-conditioning.[^2] Your correction is one paragraph. The rest of the context was written by the model, and it points the other way.
 
-Backlund and Petersson found the sharpest version in long-running agents. In Vending-Bench, where runs exceed 20 million tokens, agents fall into what the authors call tangential meltdown loops from which they rarely recover, with no clear correlation between failure and the context window filling up.[^3] The run that most needs a correction is the run least able to take one as a suggestion.
+Backlund and Petersson found the strongest form of this in long-running agents. In Vending-Bench, runs go past 20 million tokens. Agents fall into what the authors call tangential meltdown loops, and they rarely recover. The authors found no clear link between these failures and the context window filling up.[^3] So the runs that most need a correction are the runs least able to act on one sent as a suggestion.
 
-None of this argues for less human involvement. It argues that a correction has to arrive as something other than another turn of chat.
+People still need to correct long runs. The correction has to arrive through some channel other than one more chat turn.
 
-## Interruption is a design property
+## Interruption has to be built into the loop
 
-The formal version of this question is older than language agents. Hadfield-Menell and colleagues analysed the off-switch as a game: a rational agent with a fixed objective has an incentive to disable its off-switch, because it cannot achieve the objective while switched off.[^4] Their result is that for the agent to prefer preserving the switch, it has to be uncertain about the utility of the outcome and treat the human's actions as observations about that utility.
+The formal study of this question is older than language agents. Hadfield-Menell and colleagues modeled the off-switch as a game. An agent with a fixed goal cannot reach that goal while it is switched off. So a rational agent with a fixed goal has a reason to disable its off-switch.[^4] The authors showed what it takes for the agent to prefer keeping the switch. The agent has to be unsure how good the outcome is. It also has to treat the human's actions as evidence about that.
 
-The practical translation is not a claim about what today's models want. It is about where the property lives. If the ability to interrupt depends on the agent choosing to check for messages, it is a behaviour, and behaviours are what long runs lose. If it is a property of the loop the agent runs inside, it holds whether or not the agent is having a good day. That is an argument for putting the control in the harness rather than in the prompt.
+This result says nothing about what today's models want. It says where the ability to interrupt should live. Suppose the agent has to choose to check for messages. Then interruption is a behavior, and long runs tend to lose behaviors. Suppose instead the interrupt is part of the loop the agent runs inside. Then it works in any state the agent is in. So the control belongs in the harness, the program that runs the agent's loop, and not in the prompt.
 
-Takerngsaksiri and colleagues built the applied version at Atlassian. HULA puts software engineers in the loop of an LLM agent so they can refine and guide the coding plan and the source code, with humans retaining review at each step, and they report it deployed internally on Jira.[^5] The finding worth taking is the placement: the human enters at defined points in the agent's process, not by winning an argument with it.
+Takerngsaksiri and colleagues built an applied version at Atlassian. Their system, HULA, puts software engineers in the loop of an LLM agent. The engineers refine and guide the coding plan and the source code, and they review each step. The authors report that HULA is deployed internally on Jira.[^5] The useful finding is where the human comes in. The human enters at set points in the agent's process. The human does not have to win an argument with the agent.
 
 ## A steer is a message with a delivery mode
 
-In Oxagen, a correction to a running agent is a **steer**: free text sent to a run, which enters the run at a model request. Nothing else in a run can receive text, which is a deliberately small surface. Oxagen never executes a steer as instructions. It is content that reaches the model, and whether the harness treats it as an instruction is the harness's own contract.
+In Oxagen, a correction you send to a running agent is called a **steer**. A steer is free text sent to a run. It enters the run at a model request. Nothing else in a run can receive text, and the surface is kept small on purpose. Oxagen never carries out a steer as a command. The steer is content that reaches the model. Each harness decides for itself whether to treat that content as an instruction.
 
-What makes it different from typing in a chat box is that the sender picks how urgently it lands, and the choice has a stated cost.
+A steer differs from a chat box in one way. The sender picks how soon the steer lands, and each choice has a stated cost.
 
 <Ladder
   title="Three ways a steer reaches a running agent"
   axis="Cost of delivery"
   steps={[
-    { label: "Next step", detail: "The default. The steer rides the next model request. Nothing in flight is disturbed and nothing extra is billed." },
-    { label: "Turn boundary", detail: "The steer waits for the current turn to end, so the agent finishes the thought it is on before reading it." },
-    { label: "Interrupt", detail: "Stops the response that is streaming. The partial tokens are billed. A pending tool call is abandoned only if it is reversible." },
+    { label: "Next step", detail: "The default. The steer goes out with the next model request. Nothing already running is disturbed, and nothing extra is billed." },
+    { label: "Turn boundary", detail: "The steer waits for the current turn to end. The agent finishes its current thought, then reads the steer." },
+    { label: "Interrupt", detail: "Stops the response that is streaming. The partial tokens are billed. A pending tool call is dropped only if it can be undone." },
   ]}
-  caption="The delivery modes an operator chooses between. An interrupt sitting behind an irreversible tool call degrades to next step rather than abandoning a side effect that has already left the building."
+  caption="The delivery modes an operator can choose. If a pending tool call cannot be undone, an interrupt waits for the next step instead. It does not drop a call whose effect has already happened."
 />
 
-That last sentence in the caption is the part worth dwelling on. An interrupt that arrives while the agent is halfway through a payment, a deploy, or a delete is not a stop. It is a torn write. The rule that an interrupt degrades to the next step boundary when the pending call cannot be undone is what stops the control from creating the incident it was reached for.
+Think about an interrupt that arrives while the agent is halfway through a payment, a deploy, or a delete. Stopping there does not undo the action. It leaves the action half done. So when the pending call cannot be undone, the interrupt waits for the next step boundary. This keeps the control from causing the incident it was meant to stop.
 
-## Whether the model saw it is a question with an answer
+## Each steer has a recorded status
 
-The second thing a chat box does not give you is a status.
+A chat box also gives you no status. A steer has one.
 
 <Flow
   title="The states a steer moves through"
   steps={[
     { label: "Queued", detail: "Accepted, waiting for its delivery point." },
-    { label: "Sent", detail: "Handed to the run." },
+    { label: "Sent", detail: "Sent to the run." },
     { label: "Received", detail: "The run has it." },
-    { label: "Acknowledged", detail: "It landed on a model request.", emph: true },
-    { label: "Applied", detail: "The model read it in a turn you can point at." },
+    { label: "Acknowledged", detail: "It reached a model request.", emph: true },
+    { label: "Applied", detail: "The model read it in a turn the record names." },
   ]}
-  caption="The path a delivered steer takes. A steer can also be cancelled, expire, or fail, and each of those is a state rather than a silence."
+  caption="The path a delivered steer takes. A steer can also be cancelled, expire, or fail. Oxagen records each of those as a state too."
 />
 
-The vocabulary is closed and every state is recorded, which turns a question people usually answer by inference into one they answer by pointing. "Did the agent get my message" becomes the identity of the model request the steer landed on. "Did anyone correct this run before it went wrong" becomes a query. And a steer that expired without being delivered says so, rather than looking identical to one that was read and ignored.
+The list of states is fixed, and Oxagen records every state. People usually guess whether a message got through. With a steer, they can look it up. The record names the model request each steer landed on. You can run a query to see whether anyone corrected a run before it went wrong. A steer that expired before delivery shows as expired. It does not look the same as a steer the model read and ignored.
 
-Every steer is attributed to the operator who sent it and recorded as a frame in the run's own record, next to the model requests and the tool calls. That is the durable version of what watching used to give you: not that someone was present, but that what they said is in the same timeline as what the agent did.
+Oxagen records each steer with the operator who sent it. The steer is stored as a frame, one entry in the run's record, next to the model requests and tool calls. This keeps what the operator said on the same timeline as what the agent did. That is the lasting part of what watching a run used to give you.
 
-## Not every message carries the same authority
+## Operators and other agents send messages with different authority
 
-The moment more than one agent is running, the channel that carries corrections becomes a channel that carries instructions from whoever can reach it. Oxagen separates the two by sender rather than by content.
+Once more than one agent is running, the channel for corrections can carry instructions from anyone who can reach it. Oxagen tells the two kinds of message apart by who sent them. It does not judge the content.
 
 <Schema
-  title="Two things that arrive through the same channel, with different standing"
+  title="Two kinds of message that arrive through the same channel, with different authority"
   edges={[
     {
       from: "An operator",
       rel: "steers",
       to: "A running agent",
-      notes: ["Enters with operator authority", "Attributed, recorded as a frame"],
+      notes: ["Enters with operator authority", "Recorded as a frame, with the sender's name"],
     },
     {
       from: "Another agent",
       rel: "messages",
       to: "A running agent",
-      notes: ["Enters quoted and marked as tainted", "Evidence the model may weigh, never an instruction"],
+      notes: ["Enters quoted and marked as untrusted (tainted)", "Evidence the model may weigh, never an instruction"],
     },
   ]}
-  caption="The same transport, two standings. An agent-to-agent message is content to consider, and the record says where it came from."
+  caption="One channel, two levels of authority. A message from another agent is content to consider. The record says where it came from."
 />
 
-The distinction costs nothing while one agent is running and becomes the whole design once several are. An agent that can instruct another agent is an agent that can be used to instruct another agent, and the text that does it will have come from a web page, a ticket, or a file somebody else wrote. Marking the source and refusing to promote it to an instruction is not a filter on the content. It is a statement about what kind of thing it is, which is the only version of that decision that keeps working when the content is convincing.
+With one agent running, this split costs nothing. With several, it becomes the main design choice. If one agent can instruct another, then someone can use the first agent to instruct the second. The text that does it will come from a web page, a ticket, or a file someone else wrote. So Oxagen marks where the message came from and does not promote it to an instruction. This does not filter the content. It records what kind of message it is. That decision keeps working even when the content is convincing.
 
 <Callout kind="warn" title="A steer is not a check">
-A steer is external input, which is the thing Huang and colleagues found self-correction needs,[^6] and it is still not a verdict. Whether the run ended up right is a question for a test suite, a database state, or a named person. Steering changes where the agent is going. Something outside the model still has to say whether it arrived.
+A steer is outside input. Huang and colleagues found that self-correction needs outside input,[^6] but a steer is still not a verdict. A test suite, a database state, or a named person has to say whether the run ended up right. A steer changes where the agent is going. Something outside the model still has to say whether it got there.
 </Callout>
 
-## What this replaces
+## What steering replaces
 
-Go back to the loop from the first post in this pillar: assign, watch, correct, review. Watching was never the valuable part. It was the delivery mechanism for two things that are valuable, which are catching a wrong turn early and being able to say something about it that the run will act on.
+The first post in this pillar described a loop: assign, watch, correct, review. Watching was not the useful part. It delivered two useful things. You could catch a wrong turn early. You could also say something the run would act on.
 
-At a horizon of a week, both of those have to come from somewhere other than a person's attention. Catching a wrong turn early comes from checks that run during the work rather than after it. Saying something the run will act on comes from a channel that has a delivery mode, a status, and an owner. Neither is as good as a senior engineer sitting next to the agent for a week. Both survive the agent running for a week while the senior engineer does something else, which is the trade being made whether or not anyone writes it down.
+When a run lasts a week, both have to come from something other than a person's attention. Checks that run during the work, not after it, catch wrong turns early. A channel with a delivery mode, a status, and an owner carries messages the run will act on. Neither is as good as a senior engineer sitting beside the agent for a week. Both keep working while the agent runs for a week and the engineer does other work. Teams make this trade whether or not they write it down.
 
-## Where this meets Oxagen
+## Where this fits in Oxagen
 
-Oxagen is workforce management for autonomous agents. Steering sits in the equipment clause of an agent's mandate, beside the tools and skills it may use and the business context it is permitted to read. The rules that decide which of its requests stop and wait for a person sit in the budget and rules clause. Both are set before a run starts and applied while it runs.
+Oxagen is workforce management for autonomous agents. Each agent works under a mandate. Steering sits in the mandate's equipment clause, beside the tools and skills the agent may use and the business context it may read. The rules that decide which requests stop and wait for a person sit in the budget and rules clause. Both are set before a run starts and applied while it runs.
 
-For actions routed through Oxagen, that gives an operator three things at hour nine. A rule can already have stopped the request that would have started the rewrite, and routed it to a named person instead. A steer can reach the run at the next model request, or at the next turn, or now, with the cost of each choice stated and an irreversible call protected from the last one. And the record holds the request, the rule that answered it, the steer, who sent it, and the turn it landed on, so the next version of this morning starts from a query rather than from nine hours of reading.
+For actions routed through Oxagen, this gives an operator three things at hour nine. First, a rule may already have stopped the request that started the rewrite and routed it to a named person. Second, a steer can reach the run at the next model request, at the next turn, or right away. Each choice has a stated cost, and an interrupt waits if the pending call cannot be undone. Third, the record holds the request, the rule that answered it, the steer, its sender, and the turn it landed on. So the next time this happens, you start from a query instead of nine hours of reading.
 
 [^1]: Laban, P., Hayashi, H., Zhou, Y., & Neville, J. (2025). *LLMs Get Lost In Multi-Turn Conversation*. arXiv. https://arxiv.org/abs/2505.06120
 [^2]: Sinha, A., Arun, A., Goel, S., Staab, S., & Geiping, J. (2025). *The Illusion of Diminishing Returns: Measuring Long Horizon Execution in LLMs*. arXiv. https://arxiv.org/abs/2509.09677

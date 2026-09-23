@@ -1,4 +1,5 @@
-// Existing steering reads grouped under the Library, Freshness and Proposals.
+// Existing steering reads grouped under the Library, Proposals, Freshness and
+// Delivery.
 import { Suspense } from "react";
 import { useTranslations } from "next-intl";
 import { firstParam } from "@/shared/safe-path";

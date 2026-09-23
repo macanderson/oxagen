@@ -1,13 +1,14 @@
 "use client";
-// In-app AI usage (§1.4's In-app AI usage row, §3.9 "the second meter"): the
-// usage credit balance that pays for the in-app agent's model calls, and the
-// top-up that buys more. Credits are the second meter and are metered apart
-// from governed action units, so this section renders in both billing modes.
+// Token balance (§1.4's In-app AI usage row, §3.9 "the second meter"): the
+// prepaid balance that pays for the tokens Oxagen buys for the in-app agent,
+// and the top-up that adds to it. The price list names this line "Tokens
+// Oxagen buys for you": at cost, with no markup since the 2026-09-18
+// amendment (packages/billing/src/metering.ts), and capped by the balance. It
+// is metered apart from governed actions, so it renders in both billing modes.
 //
-// The balance is printed in credits through formatCount and at face value
-// through <Money>; one credit is $0.01. At a balance of zero or less the
-// section says the agent's platform-paid turns stop until a top-up lands. No
-// token count and no per-call cost appears here (§1.4).
+// The balance is printed at face value through <Money>. At zero or less the
+// section says the agent's turns on Oxagen's model key stop until a top-up
+// lands. No token count and no per-call cost appears here (§1.4).
 //
 // Owners and billing members top up; anyone else who can read the balance sees
 // who can. A Free organization cannot top up at any role — the checkout
@@ -104,6 +105,7 @@ function TopUpForm({
           step={1}
           value={text}
           aria-describedby="credits-min"
+          data-touch-target=""
           className={`${inputBase} w-36`}
           onChange={(event) => {
             setText(event.currentTarget.value);
@@ -118,6 +120,7 @@ function TopUpForm({
         label={t("submit")}
         pendingLabel={t("submitting")}
         fullWidth={false}
+        secondary
         className="self-start"
       />
     </SafeForm>
@@ -148,7 +151,6 @@ export function UsageCreditsSection({
   minUsd: number;
 }) {
   const t = useTranslations("billing.usageCredits");
-  const locale = useLocale();
   const title = t("title");
   if (!credits.ok) {
     return (
@@ -166,9 +168,6 @@ export function UsageCreditsSection({
     >
       <Facts>
         <Fact name="balance" term={t("balance")}>
-          {t("credits", { count: formatCount(c.balanceCredits, locale) })}
-        </Fact>
-        <Fact name="face-value" term={t("faceValue")}>
           <Money value={c.balance} />
         </Fact>
       </Facts>

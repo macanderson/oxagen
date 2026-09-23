@@ -38,6 +38,35 @@ import { sessionMapKey } from "./registry";
 export const DEFAULT_TAIL_BUDGET_BYTES = 4 * 1024 * 1024;
 
 /**
+ * Harnesses whose transcript `transcript.ts` can normalize. Only Claude
+ * Code's JSONL shape has a normalizer; a session whose harness is
+ * `undefined` speaks Claude Code's own hook shape too (customAgent sessions
+ * and legacy records both default this way) and is tailed the same. Codex
+ * and Cursor sessions can carry a `transcript_path` (Codex's hook payload
+ * has the field; Cursor's does not, but a session can inherit one from an
+ * earlier Claude Code identity), and tailing one fed every line through a
+ * normalizer that does not understand it: nothing sealed, and — once a
+ * refused line seals a `telemetry_gap` instead of silently failing (see
+ * `feedLine`) — a gap frame per line, forever, for a transcript this reader
+ * was never going to make sense of. Skipping it here is a smaller change
+ * than adding the normalizer neither harness has yet; that stays a
+ * follow-up.
+ */
+const TRANSCRIPT_NORMALIZED_HARNESSES: ReadonlySet<TachoHarness> = new Set([
+  "claude-code",
+]);
+
+/** Whether `transcript.ts` has a normalizer for this session's harness. */
+function hasTranscriptNormalizer(
+  session: Pick<TailedSession, "harness">,
+): boolean {
+  return (
+    session.harness === undefined ||
+    TRANSCRIPT_NORMALIZED_HARNESSES.has(session.harness)
+  );
+}
+
+/**
  * The most of a finished subagent transcript read in one go. It is read whole
  * on SubagentStop, inside a hook the harness is waiting on, so the read has a
  * ceiling; a subagent that wrote more than this loses its tail.
@@ -53,7 +82,14 @@ export interface TailedSession {
   customAgent?: string;
   transcriptPath?: string;
   sealed: boolean;
-  recorder: Pick<SessionRecorder, "ingestTranscriptLine" | "takeBodies">;
+  recorder: Pick<
+    SessionRecorder,
+    | "ingestTranscriptLine"
+    | "takeBodies"
+    | "markChain"
+    | "rollbackChain"
+    | "sealCollectorEvent"
+  >;
 }
 
 export interface TranscriptTailerOptions {
@@ -65,7 +101,23 @@ export interface TranscriptTailerOptions {
   statePath?: string;
   budgetBytes?: number;
   log?: (line: string) => void;
+  /** Epoch ms; defaults to `Date.now`. A test supplies a controllable clock. */
+  now?: () => number;
+  /** How long a sealed session's transcript may sit unchanged before its cursor drains; see `DEFAULT_SEALED_TAIL_IDLE_MS`. */
+  sealedIdleMs?: number;
 }
+
+/**
+ * How long a sealed session's transcript may go without growing before the
+ * tailer stops reading it. `agent_stop` is not always the transcript's last
+ * write: Claude Code has flushed a `cost-state` or a final `assistant`
+ * record after it before, and a chain that stopped reading the instant it
+ * saw `sealed` lost whatever landed after. Five minutes is long enough for
+ * that kind of trailing write and short enough that a transcript from a
+ * session that will never write again does not hold a cursor (and a stat
+ * call every tick) indefinitely.
+ */
+export const DEFAULT_SEALED_TAIL_IDLE_MS = 5 * 60 * 1000;
 
 interface Cursor {
   path: string;
@@ -84,15 +136,21 @@ interface Cursor {
   /** Subagent transcripts already fed, so a replayed SubagentStop feeds none twice. */
   subagents: string[];
   /**
-   * Set once the session sealed and the tailer drained what was left, which
-   * is one unbounded pass after the seal so a final `cost-state` line the
-   * harness flushes after SessionEnd still lands. The cursor then stays as a
+   * Set once a sealed session's transcript has gone `sealedIdleMs` without
+   * growing, so the cursor stops reading it. The cursor then stays as a
    * tombstone for as long as the registry lists the sealed session (seven
    * days), and nothing reads the transcript again. Dropping it sooner lets
    * the next tick make a fresh cursor at byte 0 and append the whole
    * transcript after `agent_stop`.
    */
   drained?: boolean;
+  /**
+   * Epoch ms this cursor last saw its transcript grow while the session was
+   * sealed. Unset while the session is still open, and reset every time a
+   * sealed transcript grows, so `drained` is set only once it has been
+   * genuinely quiet for `sealedIdleMs`, not merely stopped for one tick.
+   */
+  sealedQuietSinceMs?: number;
 }
 
 interface PersistedTailState {
@@ -261,30 +319,61 @@ export class TranscriptTailer {
       const key = this.cursorKey(session);
       live.add(key);
       if (session.transcriptPath === undefined) continue;
-      const existing = this.cursors.get(key) ?? this.adoptLegacy(session, key);
-      if (existing?.drained) continue;
-      if (session.sealed && existing === undefined) {
-        // Sealed with no cursor: a daemon before the tombstone dropped it, or
-        // its state file was lost. Either way the chain is closed, and
-        // reading from byte 0 would append the transcript after agent_stop.
-        this.cursors.set(key, {
-          path: session.transcriptPath,
-          offset: 0,
-          subagents: [],
-          drained: true,
-        });
-        this.dirty = true;
-        continue;
+      if (!hasTranscriptNormalizer(session)) continue;
+      // One session's advance is caught here, not only inside `advance`
+      // itself: a throw this loop did not expect — from `cursorFor`, from
+      // `this.options.record` (a WAL write), from anything other than the
+      // per-line path `advance` already guards — must not stop every other
+      // session's transcript from being tailed for the rest of this tick.
+      try {
+        const existing =
+          this.cursors.get(key) ?? this.adoptLegacy(session, key);
+        if (existing?.drained) continue;
+        if (session.sealed && existing === undefined) {
+          // Sealed with no cursor: a daemon before the tombstone dropped it,
+          // or its state file was lost. Either way the chain is closed, and
+          // reading from byte 0 would append the transcript after agent_stop.
+          this.cursors.set(key, {
+            path: session.transcriptPath,
+            offset: 0,
+            subagents: [],
+            drained: true,
+          });
+          this.dirty = true;
+          continue;
+        }
+        const cursor = this.cursorFor(session, session.transcriptPath);
+        if (session.sealed) {
+          // A sealed chain still gets read at the normal budget, tick after
+          // tick, until its transcript has sat unchanged for `sealedIdleMs`:
+          // Claude Code has written a trailing `cost-state` or a final
+          // `assistant` record after `agent_stop` before, and one pass right
+          // at seal time is not guaranteed to be the last write. See
+          // `DEFAULT_SEALED_TAIL_IDLE_MS`.
+          const before = cursor.offset;
+          await this.advance(session, cursor, this.budget);
+          const now = this.options.now?.() ?? Date.now();
+          if (cursor.offset > before) {
+            delete cursor.sealedQuietSinceMs;
+            this.dirty = true;
+          } else if (cursor.sealedQuietSinceMs === undefined) {
+            cursor.sealedQuietSinceMs = now;
+            this.dirty = true;
+          } else if (
+            now - cursor.sealedQuietSinceMs >=
+            (this.options.sealedIdleMs ?? DEFAULT_SEALED_TAIL_IDLE_MS)
+          ) {
+            cursor.drained = true;
+            this.dirty = true;
+          }
+          continue;
+        }
+        await this.advance(session, cursor, this.budget);
+      } catch (error) {
+        this.options.log?.(
+          `transcript tail for ${session.harnessSessionId} failed this tick: ${error instanceof Error ? error.message : String(error)}`,
+        );
       }
-      const cursor = this.cursorFor(session, session.transcriptPath);
-      if (session.sealed) {
-        // One unbounded pass after the chain closed; nothing reads it after.
-        await this.advance(session, cursor, Number.POSITIVE_INFINITY);
-        cursor.drained = true;
-        this.dirty = true;
-        continue;
-      }
-      await this.advance(session, cursor, this.budget);
     }
     for (const id of [...this.cursors.keys()]) {
       if (!live.has(id)) {
@@ -322,6 +411,7 @@ export class TranscriptTailer {
   async drain(harnessSessionId: string): Promise<void> {
     const session = this.options.session(harnessSessionId);
     if (session?.transcriptPath === undefined) return;
+    if (!hasTranscriptNormalizer(session)) return;
     const cursor = this.cursorFor(session, session.transcriptPath);
     if (cursor.drained) return;
     await this.advance(session, cursor, Number.POSITIVE_INFINITY);
@@ -339,6 +429,7 @@ export class TranscriptTailer {
   ): Promise<number | undefined> {
     const session = this.options.session(harnessSessionId);
     if (session === undefined) return undefined;
+    if (!hasTranscriptNormalizer(session)) return undefined;
     const cursor = this.cursorFor(
       session,
       session.transcriptPath ??
@@ -364,7 +455,7 @@ export class TranscriptTailer {
     let fed = 0;
     for (const line of lines) {
       if (line.length === 0) continue;
-      this.feed(session, line, subagentId);
+      this.feedLine(session, line, subagentId);
       fed += 1;
     }
     cursor.subagents.push(subagentId);
@@ -376,14 +467,65 @@ export class TranscriptTailer {
   /**
    * One line to the recorder, and its events and bodies to the WAL in one
    * call, so a body is never written for an event that is still in memory.
+   *
+   * Marked and rolled back per line, not per tick: one line the envelope
+   * refuses (a shape `normalizeTranscriptLine` did not anticipate, or a
+   * field an earlier clamp missed) used to throw out of the whole read loop,
+   * before the cursor advanced past the lines already fed and before any
+   * line after it was ever tried — one bad line stopped shipping for the
+   * whole host and, because the offset had not moved, replayed itself and
+   * everything before it on every following tick. Now the chain rolls back
+   * to where it stood before the line, a `telemetry_gap` frame takes its
+   * place so the loss is visible on the chain, and the caller still moves
+   * the cursor past it.
    */
-  private feed(
+  private feedLine(
     session: TailedSession,
     line: string,
     subagentId?: string,
   ): void {
-    const events = session.recorder.ingestTranscriptLine(line, subagentId);
-    this.options.record(events, session.recorder.takeBodies());
+    const recorder = session.recorder;
+    const mark = recorder.markChain();
+    try {
+      const events = recorder.ingestTranscriptLine(line, subagentId);
+      this.options.record(events, recorder.takeBodies());
+    } catch (error) {
+      recorder.rollbackChain(mark);
+      this.sealGap(session, "transcript_line_refused", error, subagentId);
+    }
+  }
+
+  /**
+   * A `telemetry_gap` frame for a piece of transcript this tailer could not
+   * carry forward: a line the envelope refused, or a line longer than the
+   * tick's read budget. Bodies are taken in the same call as `feedLine`
+   * does, so a gap frame's own attrs never wait behind an event still in
+   * memory.
+   */
+  private sealGap(
+    session: TailedSession,
+    reason: string,
+    error: unknown,
+    subagentId?: string,
+  ): void {
+    const detail = error instanceof Error ? error.message : String(error);
+    const gap = session.recorder.sealCollectorEvent(
+      "telemetry_gap",
+      { gap_dropped_count: 1 },
+      {
+        attrs: {
+          "gap.reason": reason,
+          "gap.detail": detail.slice(0, 512),
+          ...(subagentId !== undefined
+            ? { "gap.subagent_id": subagentId }
+            : {}),
+        },
+      },
+    );
+    this.options.record([gap], session.recorder.takeBodies());
+    this.options.log?.(
+      `transcript gap (${reason}) for ${session.harnessSessionId}: ${detail}`,
+    );
   }
 
   private async advance(
@@ -450,20 +592,31 @@ export class TranscriptTailer {
           st.size,
         );
         if (skipTo === undefined) return;
-        this.options.log?.(
-          `transcript ${cursor.path}: skipped a ${skipTo - cursor.offset} byte line at ${cursor.offset}`,
+        // A line past the budget was silent before: only a log line marked
+        // it, and nothing on the chain showed the session had a gap.
+        this.sealGap(
+          session,
+          "transcript_line_too_long",
+          new Error(
+            `${skipTo - cursor.offset} bytes at offset ${cursor.offset}`,
+          ),
         );
         cursor.offset = skipTo;
         this.dirty = true;
         continue;
       }
+      // Fed and advanced one line at a time: a line the recorder refuses
+      // rolls back and seals a gap in `feedLine` without disturbing the
+      // lines before or after it, and the cursor moves past exactly the
+      // bytes that line and its newline held, not the whole chunk, so a
+      // later line's failure can never re-open one already recorded.
       for (const line of lines) {
-        if (line.length === 0) continue;
-        this.feed(session, line);
+        const lineBytes = Buffer.byteLength(line, "utf8") + 1;
+        if (line.length > 0) this.feedLine(session, line);
+        cursor.offset += lineBytes;
+        remaining -= lineBytes;
+        this.dirty = true;
       }
-      cursor.offset += consumed;
-      remaining -= consumed;
-      this.dirty = true;
     }
     // Fingerprint the head once enough of it has been consumed, so the next
     // tick can tell a replaced file from the one this cursor read.

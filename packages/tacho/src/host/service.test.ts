@@ -60,6 +60,15 @@ describe("service units", () => {
     expect(unit).toContain('Environment="A=x\\"y"');
     expect(unit).toContain("Restart=always");
   });
+
+  // Tacho collector P0-1: `stop()` awaits the git reconciliation lane, which
+  // can run for minutes; without a stop timeout, systemd's own default can
+  // SIGKILL the daemon mid-shutdown before its finalize/persist sequence
+  // completes.
+  it("bounds how long systemd waits before it kills the daemon on stop", () => {
+    const unit = renderSystemdUnit(SPEC);
+    expect(unit).toMatch(/^TimeoutStopSec=\d+$/m);
+  });
 });
 
 describe("service managers", () => {

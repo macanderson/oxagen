@@ -64,6 +64,27 @@ describe("tachoEventsIngest", () => {
         },
       }).accepted,
     ).toBe(1);
+    // A refused proof verdict is named beside the accepted frames.
+    expect(
+      tachoEventsIngest.output.safeParse({
+        accepted: 1,
+        event_ids: [sealedGenesis().event_id_idem],
+        chain_breaks: [],
+        body_rejections: [],
+        proof_rejections: [
+          {
+            event_id_idem: sealedGenesis().event_id_idem,
+            reason: "proof_body_invalid: verdict",
+          },
+        ],
+        control: {
+          host_status: "active",
+          deny_generation: { org: 1, workspace: 1 },
+          bundle_etag: "etag",
+          commands: [],
+        },
+      }).success,
+    ).toBe(true);
   });
 
   it("rejects unknown batch members, a body with prompt bytes, and a mismatched count", () => {
@@ -208,24 +229,19 @@ describe("proof.observed frames in a batch (ADR-064)", () => {
     expect(parsed.events[1]?.kind).toBe("proof.observed");
   });
 
-  it("refuses the whole batch when a proof body claims a flip its results do not show (negative)", () => {
-    const result = tachoEventsIngest.input.safeParse(
+  it("does not refuse the batch for a malformed proof body: the handler skips only its verdict", () => {
+    // Refusing the whole batch here made the host quarantine it, and the next
+    // batch then failed the dense-seq check for good. The frame is a link in
+    // the chain; the handler records it and names the refused verdict in
+    // `proof_rejections`.
+    const flipWithoutFlip = tachoEventsIngest.input.safeParse(
       batchWithProof({ ...flip, target_result: "pass" }),
     );
-    expect(result.success).toBe(false);
-    expect(result.error?.issues[0]?.path).toEqual([
-      "events",
-      1,
-      "body",
-      "verdict",
-    ]);
-  });
-
-  it("refuses a proof body carrying a field the schema does not name (negative)", () => {
+    expect(flipWithoutFlip.success).toBe(true);
     expect(
       tachoEventsIngest.input.safeParse(
         batchWithProof({ ...flip, test_name: "notes.contract.test.ts" }),
       ).success,
-    ).toBe(false);
+    ).toBe(true);
   });
 });

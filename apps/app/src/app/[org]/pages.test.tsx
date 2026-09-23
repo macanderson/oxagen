@@ -33,7 +33,6 @@ const {
   requireViewer,
   Audit,
   Billing,
-  BillingActions,
   Fleet,
   Run,
   Agents,
@@ -61,14 +60,19 @@ const {
   return {
     requireViewer: vi.fn<(org: string, ws?: string) => Promise<unknown>>(),
     Audit: vi.fn((_props: Record<string, unknown>) => null),
-    Billing: vi.fn((_props: Record<string, unknown>) => null),
-    BillingActions: vi.fn((_props: Record<string, unknown>) => null),
+    // Billing draws its own header (a not-loaded state replaces it), so the
+    // stand-in draws the h1 from the title the route hands it.
+    Billing: vi.fn((props: Record<string, unknown>) => (
+      <h1>{String(props.title)}</h1>
+    )),
     Fleet: vi.fn(
       (props: Record<string, unknown> & { spendTiles?: ReactNode }) => (
         <>{props.spendTiles}</>
       ),
     ),
-    Agents: vi.fn((_props: Record<string, unknown>) => null),
+    // Agents draws the page header only when it has agents to list, so the
+    // stub draws the header it is handed.
+    Agents: vi.fn((props: { header?: ReactNode }) => <>{props.header}</>),
     Agent: vi.fn((_props: Record<string, unknown>) => null),
     AgentSource: vi.fn((_props: Record<string, unknown>) => null),
     Steering: vi.fn((props: { searchParams: Record<string, string> }) => (
@@ -114,11 +118,17 @@ vi.mock("@/server/viewer", () => ({
   },
 }));
 vi.mock("@/features/audit", () => ({ Audit, AuditSkeleton: () => null }));
-vi.mock("@/features/billing", () => ({ Billing, BillingActions }));
+vi.mock("@/features/billing", () => ({ Billing }));
+// Billing names the signed-in person on its denied state; the session is Better
+// Auth's, so the stub answers with the name alone.
+vi.mock("@/server/session", () => ({
+  getAuthUser: () => Promise.resolve({ name: "Marcus Bell" }),
+}));
 vi.mock("@/features/fleet", () => ({ Fleet, FleetRegister: () => null }));
 vi.mock("@/features/run", () => ({ Run }));
 vi.mock("@/features/agents", () => ({
   Agents,
+  AgentsLoading: () => null,
   Agent,
   AgentSource,
   AgentsCreate: () => null,
@@ -270,7 +280,7 @@ describe("the Audit page", () => {
 });
 
 describe("the Billing page", () => {
-  it("resolves the organization viewer, names the page once and hands the viewer, the data source, the checkout outcome and the invoices cursor to Billing", async () => {
+  it("resolves the organization viewer, names the page once and hands the viewer, the data source, the title, the signed-in name, the checkout outcome and the invoices cursor to Billing", async () => {
     const ctx = { orgSlug: "acme", orgName: "Acme Robotics" };
     requireViewer.mockResolvedValue(ctx);
     await expectPageTitle(
@@ -280,20 +290,16 @@ describe("the Billing page", () => {
     );
     expect(requireViewer).toHaveBeenCalledWith(...ORG);
     expect(Billing).toHaveBeenCalledOnce();
+    // Billing renders the header itself (eyebrow, subtext and Change plan),
+    // since its not-loaded states replace the header with the body.
     expect(Billing.mock.calls[0]?.[0]).toEqual({
       ctx,
       source,
+      title: title("billing"),
+      viewerName: "Marcus Bell",
       checkout: "success",
       cursor: "c2",
     });
-    // The header carries the eyebrow, the description and Change plan
-    // (pages/billing.md); the action reads the plan on its own.
-    expect(screen.getByText("Organization")).toBeInTheDocument();
-    expect(
-      screen.getByText(/What Acme Robotics pays Oxagen/),
-    ).toBeInTheDocument();
-    expect(BillingActions).toHaveBeenCalledOnce();
-    expect(BillingActions.mock.calls[0]?.[0]).toEqual({ ctx, source });
   });
 
   it("hands Billing no checkout outcome and the newest invoices when the URL carries neither", async () => {
@@ -435,32 +441,35 @@ describe("the Agents pages", () => {
     requireViewer.mockResolvedValue(ctx);
   });
 
-  it("the identities page hands the workspace viewer, the data source and the cursor to Agents", async () => {
+  it("the agents page hands the workspace viewer, the data source, the cursor and its header to Agents", async () => {
     await expectPageTitle(
       await AGENTS(),
       routeProps(SEGMENTS, { cursor: "c2" }),
       title("agents"),
     );
     expect(requireViewer).toHaveBeenCalledWith(...WS);
-    expect(Agents.mock.calls.at(-1)?.[0]).toEqual({
+    expect(Agents.mock.calls.at(-1)?.[0]).toMatchObject({
       ctx,
       source,
       cursor: "c2",
-      view: "composition",
     });
+    expect(Object.keys(Agents.mock.calls.at(-1)?.[0] ?? {}).sort()).toEqual([
+      "ctx",
+      "cursor",
+      "header",
+      "source",
+    ]);
     expect(screen.queryByTestId("not-recorded")).toBeNull();
   });
 
-  it("the identities page hands the operations view to Agents when the URL names it", async () => {
+  it("the agents page ignores a view in the URL: the column set is the table's session state", async () => {
     await expectPageTitle(
       await AGENTS(),
       routeProps(SEGMENTS, { view: "operations" }),
       title("agents"),
     );
-    expect(Agents.mock.calls.at(-1)?.[0]).toMatchObject({
-      cursor: null,
-      view: "operations",
-    });
+    expect(Agents.mock.calls.at(-1)?.[0]).not.toHaveProperty("view");
+    expect(Agents.mock.calls.at(-1)?.[0]).toMatchObject({ cursor: null });
   });
 
   it("the agent page hands the agent, the tab and the cursor the URL names to Agent", async () => {

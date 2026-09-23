@@ -16,6 +16,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   insertTachoEvents: vi.fn(),
   selectTachoEvents: vi.fn(),
+  selectTachoStoredFrames: vi.fn(),
   withTenantDb: vi.fn(),
   loggerError: vi.fn(),
   unlockOnboardingGate: vi.fn(),
@@ -49,6 +50,7 @@ vi.mock("@oxagen/telemetry", async (importOriginal) => {
     ...original,
     insertTachoEvents: mocks.insertTachoEvents,
     selectTachoEvents: mocks.selectTachoEvents,
+    selectTachoStoredFrames: mocks.selectTachoStoredFrames,
   };
 });
 
@@ -658,24 +660,31 @@ function wire(db: FakeDb): void {
             // each chain up by name — so a chain nobody served is still a
             // miss, which is the property these tests are about.
             where: async () =>
-              tableName(table) === "contained_launches"
-                ? db.containedLaunches
-                : tableName(table) === "context_promotions"
-                  ? [{ ledger: 0, steering: 0 }]
-                  : tableName(table) === "session_files"
-                    ? // The rollup reads this session's existing rows to keep
-                      // one file on one row across batches, so the fixture
-                      // holds them rather than answering with another table's
-                      // shape.
-                      db.files.map((row) => ({
-                        path: row["path"],
-                        repoRelativePath: row["repoRelativePath"],
-                      }))
-                    : db.gatewayChains.map((row) => ({
-                        chain: row.chainSessionUuid,
-                        at: row.lastSeenAt,
-                        genesisHash: row.chainGenesisHash,
-                      })),
+              tableName(table) === "sessions"
+                ? // The ownership read before any body is written: which
+                  // host opened each session the batch names.
+                  [...db.sessions.values()].map((row) => ({
+                    sessionUuid: row["sessionUuid"],
+                    hostId: row["hostId"],
+                  }))
+                : tableName(table) === "contained_launches"
+                  ? db.containedLaunches
+                  : tableName(table) === "context_promotions"
+                    ? [{ ledger: 0, steering: 0 }]
+                    : tableName(table) === "session_files"
+                      ? // The rollup reads this session's existing rows to keep
+                        // one file on one row across batches, so the fixture
+                        // holds them rather than answering with another table's
+                        // shape.
+                        db.files.map((row) => ({
+                          path: row["path"],
+                          repoRelativePath: row["repoRelativePath"],
+                        }))
+                      : db.gatewayChains.map((row) => ({
+                          chain: row.chainSessionUuid,
+                          at: row.lastSeenAt,
+                          genesisHash: row.chainGenesisHash,
+                        })),
             leftJoin: () => ({ where: async () => [] }),
           }),
         }),
@@ -840,6 +849,9 @@ beforeEach(() => {
   resetColumnProbesForTests();
   mocks.insertTachoEvents.mockResolvedValue(undefined);
   mocks.selectTachoEvents.mockResolvedValue([]);
+  // ClickHouse holds none of a re-sent batch's frames unless a case says so:
+  // the retry of an append that failed after the Postgres commit.
+  mocks.selectTachoStoredFrames.mockResolvedValue(new Map());
   mocks.bodyPut.mockImplementation(async (input: { digest: string }) => ({
     ref: `evb:v1:test:${input.digest.slice(7)}`,
   }));
@@ -1762,6 +1774,60 @@ describe("ingest_tacho_events", () => {
     expect(mocks.bodyPut).not.toHaveBeenCalled();
   });
 
+  it("keeps the host's queued commands when the append fails after the Postgres commit, and delivers them on the retry", async () => {
+    // The commands were drained, marked `sent`, inside the transaction that
+    // commits before the append. A failed append answered a 500: the host
+    // never got them, and a `sent` row is never selected again.
+    const db = fakeDb();
+    wire(db);
+    mocks.insertTachoEvents.mockRejectedValueOnce(new Error("clickhouse down"));
+    await expect(
+      tachoEventsIngestHandler(batch(session()), CONTEXT),
+    ).rejects.toThrow("clickhouse down");
+    expect(db.controlCommands[0]?.["outcome"]).toBe("queued");
+
+    const out = await tachoEventsIngestHandler(batch(session()), CONTEXT);
+    expect(out.control.commands.map((command) => command.id)).toEqual([
+      "tcm_1",
+    ]);
+    expect(db.controlCommands[0]?.["outcome"]).toBe("sent");
+  });
+
+  it("tries the spend counter again before calling its write lost", async () => {
+    // A retried batch folds these frames as already recorded, so a spend
+    // write lost here is written by no later request.
+    const db = fakeDb();
+    wire(db);
+    mocks.recordSpend
+      .mockRejectedValueOnce(new Error("redis blip"))
+      .mockRejectedValueOnce(new Error("redis blip"));
+    await tachoEventsIngestHandler(batch(session()), CONTEXT);
+    expect(mocks.recordSpend).toHaveBeenCalledTimes(3);
+    expect(mocks.loggerError).not.toHaveBeenCalled();
+  });
+
+  it("refuses a session another host opened before writing any of the batch's bodies", async () => {
+    const db = fakeDb();
+    (db.hosts[0] as Record<string, unknown>)["mode"] = "enforce";
+    wire(db);
+    const events = sessionWithContent();
+    db.sessions.set(SESSION, {
+      id: "s9",
+      publicId: "tse_fake0000000000000009",
+      sessionUuid: SESSION,
+      hostId: "99999999-9999-4999-8999-999999999999",
+      seqCount: 1,
+    });
+    await expect(
+      tachoEventsIngestHandler(
+        batch(events, [bodyFor(events[1] as TachoEvent)]),
+        CONTEXT,
+      ),
+    ).rejects.toThrow(/session belongs to another host/);
+    expect(mocks.bodyPut).not.toHaveBeenCalled();
+    expect(mocks.insertTachoEvents).not.toHaveBeenCalled();
+  });
+
   it("surfaces a ClickHouse append failure after logging it", async () => {
     const db = fakeDb();
     wire(db);
@@ -2223,6 +2289,31 @@ function sessionWithContent(tier?: "gateway"): TachoEvent[] {
   return out;
 }
 
+/**
+ * A `selectTachoStoredFrames` that answers from what `insertTachoEvents` call
+ * `call` wrote: ClickHouse holding that append's rows.
+ */
+function storedFramesAfter(call: number) {
+  return async (args: { sessionUuid: string; seqs: number[] }) => {
+    const inserts = (mocks.insertTachoEvents.mock.calls[call]?.[0] ??
+      []) as Array<{ event: TachoEvent; bytesRef?: string }>;
+    const rows = new Map<
+      number,
+      { hash: string; contentDigest: string; bytesRef: string }
+    >();
+    for (const insert of inserts) {
+      if (insert.event.session_uuid !== args.sessionUuid) continue;
+      if (!args.seqs.includes(insert.event.seq)) continue;
+      rows.set(insert.event.seq, {
+        hash: insert.event.hash,
+        contentDigest: insert.event.content?.digest ?? "",
+        bytesRef: insert.bytesRef ?? "",
+      });
+    }
+    return rows;
+  };
+}
+
 function batch(events: TachoEvent[], bodies?: unknown[]) {
   return {
     schema: "tacho.batch.v1" as const,
@@ -2470,6 +2561,8 @@ describe("ingest_tacho_events: bodies and the seal", () => {
     const sealedAt = row["sealedAt"];
     db.updates.length = 0;
     const eventsSent = mocks.sendEvent.mock.calls.length;
+    // The first batch's append landed: ClickHouse holds every frame.
+    mocks.selectTachoStoredFrames.mockImplementation(storedFramesAfter(0));
 
     await tachoEventsIngestHandler(batch(events), CONTEXT);
 
@@ -2497,27 +2590,14 @@ describe("ingest_tacho_events: bodies and the seal", () => {
     expect(mocks.sendEvent.mock.calls.length).toBe(eventsSent);
   });
 
-  /** What ClickHouse serves after `insertTachoEvents` call `call`, as `selectTachoEvents` rows. */
-  function storedRows(call: number) {
-    const inserts = mocks.insertTachoEvents.mock.calls[call]?.[0] as Array<{
-      event: TachoEvent;
-      bytesRef?: string;
-    }>;
-    return inserts.map((insert) => ({
-      seq: insert.event.seq,
-      contentDigest: insert.event.content?.digest ?? "",
-      bytesRef: insert.bytesRef ?? "",
-    }));
-  }
-  const refOf = (call: number, seq: number) =>
+  const insertedSeqs = (call: number) =>
     (
-      mocks.insertTachoEvents.mock.calls[call]?.[0] as Array<{
+      (mocks.insertTachoEvents.mock.calls[call]?.[0] ?? []) as Array<{
         event: TachoEvent;
-        bytesRef?: string;
       }>
-    ).find((insert) => insert.event.seq === seq)?.bytesRef;
+    ).map((insert) => insert.event.seq);
 
-  it("keeps the stored body reference on a re-sent row whose body the retry dropped", async () => {
+  it("writes nothing again for a re-sent frame ClickHouse already holds, so its stored row and body reference stand", async () => {
     const db = fakeDb();
     (db.hosts[0] as Record<string, unknown>)["mode"] = "enforce";
     wire(db);
@@ -2526,20 +2606,74 @@ describe("ingest_tacho_events: bodies and the seal", () => {
       batch(events, [bodyFor(events[1] as TachoEvent)]),
       CONTEXT,
     );
-    const firstRef = refOf(0, 1);
-    expect(firstRef).toMatch(/^evb:v1:test:/);
-    mocks.selectTachoEvents.mockResolvedValue(storedRows(0));
+    mocks.selectTachoStoredFrames.mockImplementation(storedFramesAfter(0));
 
     await tachoEventsIngestHandler(batch(events), CONTEXT);
 
-    expect(mocks.selectTachoEvents).toHaveBeenCalledOnce();
-    expect(mocks.selectTachoEvents).toHaveBeenCalledWith({
+    // One read of the hashes of every re-sent seq, not of their bodies.
+    expect(mocks.selectTachoStoredFrames).toHaveBeenCalledOnce();
+    expect(mocks.selectTachoStoredFrames).toHaveBeenCalledWith({
       sessionUuid: SESSION,
-      afterSeq: 0,
-      limit: 1,
+      seqs: events.map((event) => event.seq),
     });
-    expect(refOf(1, 1)).toBe(firstRef);
+    // A re-send used to write every row again, restamping `received_at` and
+    // `chain_verified` on frames that had already landed.
+    expect(insertedSeqs(1)).toEqual([]);
     expect(mocks.bodyPut).toHaveBeenCalledOnce();
+  });
+
+  it("refuses a re-sent frame whose hash differs from the recorded frame's, and reports it as a chain break (negative)", async () => {
+    // A reset host, or anyone holding the host key, re-sent other frames for
+    // seqs the chain already held. Below the recorded head they skipped every
+    // check and were written over the stored rows, sealed or not.
+    const db = fakeDb();
+    wire(db);
+    const events = session();
+    await tachoEventsIngestHandler(batch(events), CONTEXT);
+    const stored = storedFramesAfter(0);
+    mocks.selectTachoStoredFrames.mockImplementation(
+      async (args: { sessionUuid: string; seqs: number[] }) => {
+        const rows = await stored(args);
+        const row = rows.get(2);
+        if (row) rows.set(2, { ...row, hash: `sha256:${"f".repeat(64)}` });
+        return rows;
+      },
+    );
+
+    const out = await tachoEventsIngestHandler(batch(events), CONTEXT);
+
+    expect(insertedSeqs(1)).toEqual([]);
+    expect(out.chain_breaks).toContainEqual({
+      session_uuid: SESSION,
+      at_seq: 2,
+      reason: expect.stringContaining("hash other than the recorded frame's"),
+    });
+  });
+
+  it("writes the frames a failed append left out, and sends the seal event that attempt never sent", async () => {
+    const db = fakeDb();
+    wire(db);
+    const events = session();
+    // The Postgres commit landed and the ClickHouse append did not.
+    mocks.insertTachoEvents.mockRejectedValueOnce(new Error("clickhouse down"));
+    await expect(
+      tachoEventsIngestHandler(batch(events), CONTEXT),
+    ).rejects.toThrow("clickhouse down");
+    expect(mocks.sendEvent).not.toHaveBeenCalled();
+
+    // The host re-sends. Every frame is below the recorded head now, so the
+    // fold sees nothing new; ClickHouse holds none of them.
+    await tachoEventsIngestHandler(batch(events), CONTEXT);
+
+    expect(insertedSeqs(1)).toEqual(events.map((event) => event.seq));
+    expect(mocks.sendEvent).toHaveBeenCalledWith({
+      name: "cost/run.sealed",
+      data: {
+        runId: "tse_fake0000000000000001",
+        orgId: CONTEXT.orgId,
+        workspaceId: CONTEXT.workspaceId,
+      },
+    });
   });
 
   it("refuses as backpressure when the store is out of memory for the re-send's read (#3662)", async () => {
@@ -2551,10 +2685,10 @@ describe("ingest_tacho_events: bodies and the seal", () => {
       batch(events, [bodyFor(events[1] as TachoEvent)]),
       CONTEXT,
     );
-    // The read that resolves a re-sent frame's stored body reaches the same
-    // node the append does, and only a re-send sends it, so it sits on the
-    // retry path of the very failure this refusal exists for.
-    mocks.selectTachoEvents.mockRejectedValueOnce(
+    // The read that compares a re-sent frame with the stored one reaches the
+    // same node the append does, and only a re-send sends it, so it sits on
+    // the retry path of the very failure this refusal exists for.
+    mocks.selectTachoStoredFrames.mockRejectedValueOnce(
       Object.assign(
         new Error(
           "Memory limit (total) exceeded: would use 1.66 GiB, maximum: 1.50 GiB.",
@@ -2569,27 +2703,6 @@ describe("ingest_tacho_events: bodies and the seal", () => {
     expect((refusal as { code?: string }).code).toBe("store_overloaded");
     // The append never ran, so the second batch is still the host's to ship.
     expect(mocks.insertTachoEvents).toHaveBeenCalledOnce();
-  });
-
-  it("carries no stored reference onto a re-sent row with another content digest (negative)", async () => {
-    const db = fakeDb();
-    (db.hosts[0] as Record<string, unknown>)["mode"] = "enforce";
-    wire(db);
-    const events = sessionWithContent();
-    await tachoEventsIngestHandler(
-      batch(events, [bodyFor(events[1] as TachoEvent)]),
-      CONTEXT,
-    );
-    mocks.selectTachoEvents.mockResolvedValue(
-      storedRows(0).map((row) => ({
-        ...row,
-        contentDigest: digestBytes("other bytes"),
-      })),
-    );
-
-    await tachoEventsIngestHandler(batch(events), CONTEXT);
-
-    expect(refOf(1, 1)).toBeUndefined();
   });
 
   it("seals inspect on an observe-tier host whatever bodies it shipped (spec §8.4)", async () => {
@@ -3223,6 +3336,42 @@ describe("proof.observed frames (ADR-064)", () => {
     ]);
     expect(mocks.recordProofFrames).not.toHaveBeenCalled();
     expect(mocks.sendEvent).not.toHaveBeenCalled();
+  });
+
+  it("records a frame whose proof body the schema refuses, skips only its verdict, and says so", async () => {
+    // The contract used to refuse the whole batch at the input parse. The
+    // host quarantined it, the next batch failed the dense-seq check, and
+    // the session read chain_verified = false for the rest of its life.
+    const db = fakeDb();
+    wire(db);
+    let cursor: ChainCursor = GENESIS_CURSOR;
+    const events = [
+      unsealed("agent_start", { session_start_source: "startup" }),
+      // A flip its own results do not show.
+      unsealed("proof.observed", { ...FLIP, target_result: "pass" }),
+      unsealed("proof.observed", FLIP),
+    ].map((draft) => {
+      const sealed = sealEvent(draft, cursor);
+      cursor = sealed.next;
+      return sealed.event;
+    });
+    const out = await tachoEventsIngestHandler(batch(events), CONTEXT);
+    expect(tachoEventsIngest.output.parse(out)).toEqual(out);
+    expect(out.proof_rejections).toEqual([
+      {
+        event_id_idem: events[1]?.event_id_idem,
+        reason: expect.stringMatching(/^proof_body_invalid: /),
+      },
+    ]);
+    expect(out.chain_breaks).toEqual([]);
+    // The frame is on the chain; only the well-formed verdict is recorded.
+    const inserted = (
+      mocks.insertTachoEvents.mock.calls[0]?.[0] as Array<{
+        event: TachoEvent;
+      }>
+    ).map((insert) => insert.event.seq);
+    expect(inserted).toEqual([0, 1, 2]);
+    expect(mocks.recordProofFrames.mock.calls[0]?.[3]).toEqual([events[2]]);
   });
 
   it("never hands the recorder a frame at or below the recorded head (negative)", async () => {

@@ -3088,7 +3088,9 @@ describe("cursor", () => {
     });
     d.lines.length = 0;
     await status({}, d);
-    expect(d.lines.join("\n")).toContain("Cursor      complete: 10 present");
+    expect(d.lines.join("\n")).toContain(
+      `Cursor      complete: ${String(CURSOR_HOOK_EVENTS.length)} present`,
+    );
 
     await unenroll({ token: "tok" }, d);
     // Ours is gone; the operator's survives, and the file we created for the

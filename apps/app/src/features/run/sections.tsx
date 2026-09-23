@@ -1,8 +1,8 @@
 // Three of the Run page's tabs (spec pages/run.md): Issues, Policy and
-// Context. Policy and Context read the whole-run transcript the page already
-// holds, filtered to the entries that carry a policy decision or a recall, so
-// they add no read of their own. A transcript that stopped short says the
-// list is a prefix; a failed read says it failed.
+// Context. Policy and Context each read the run's transcript narrowed to their
+// own chip, page by page to the end (`readWholeTranscript`), and list the
+// entries that carry a policy decision or a recall. A list that stops short of
+// the end (`isWhole`) says it is a prefix; a failed read says it failed.
 import { useLocale, useTranslations } from "next-intl";
 import type { RunTranscript, TranscriptEntry } from "@/data/contracts/run";
 import type { RunRow } from "@/data/contracts/runs";
@@ -15,6 +15,8 @@ import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
 import { cell, Table } from "@/ui/table";
 import { Panel } from "./parts";
+import { entryKey } from "./transcript-model";
+import { isWhole } from "./whole-transcript";
 
 type Place = { org: string; ws: string; runId: string };
 
@@ -50,7 +52,20 @@ export function IssuesSection({ run }: { run: RunRow }) {
   );
 }
 
-function FrameLink({ seq, place }: { seq: string; place: Place }) {
+function FrameLink({
+  seq,
+  chainRef,
+  place,
+}: {
+  seq: string;
+  /** Set for a subagent's frame, which the Frames tab cannot open by seq. */
+  chainRef: string | undefined;
+  place: Place;
+}) {
+  // The Frames tab reads the run's own chain. A subagent's frame shares its
+  // seq with a different frame there, so it is named and not linked.
+  if (chainRef !== undefined)
+    return <span className={`${mono} text-muted-foreground`}>{seq}</span>;
   return (
     <SafeLink
       to={routes.run(place.org, place.ws, place.runId, {
@@ -104,10 +119,15 @@ export function PolicySection({
           ]}
         >
           {entries.map((entry) => (
-            <tr key={entry.seq}>
+            <tr key={entryKey(entry)}>
               <td className={cell}>
                 <FrameLink
                   seq={entry.decision?.seq ?? entry.seq}
+                  chainRef={
+                    entry.decision === null
+                      ? entry.subagent?.chainRef
+                      : entry.decision.chainRef
+                  }
                   place={place}
                 />
               </td>
@@ -129,7 +149,7 @@ export function PolicySection({
           ))}
         </Table>
       )}
-      {read.value.complete ? null : (
+      {isWhole(read.value) ? null : (
         <p className="pt-3 text-xs text-muted-foreground">{t("cut")}</p>
       )}
     </Panel>
@@ -167,9 +187,13 @@ export function ContextSection({
           ]}
         >
           {entries.map((entry) => (
-            <tr key={entry.seq}>
+            <tr key={entryKey(entry)}>
               <td className={cell}>
-                <FrameLink seq={entry.seq} place={place} />
+                <FrameLink
+                  seq={entry.seq}
+                  chainRef={entry.subagent?.chainRef}
+                  place={place}
+                />
               </td>
               <td className={`${cell} ${mono}`}>{entry.label}</td>
               <td className={`${cell} text-right tabular-nums`}>
@@ -179,7 +203,7 @@ export function ContextSection({
           ))}
         </Table>
       )}
-      {read.value.complete ? null : (
+      {isWhole(read.value) ? null : (
         <p className="pt-3 text-xs text-muted-foreground">{t("cut")}</p>
       )}
     </Panel>

@@ -37,6 +37,17 @@ describe("the permission catalogue", () => {
   });
 });
 
+describe("runtime.read", () => {
+  // The Runtimes page's denied state names runtime.read, so an owner must be
+  // able to grant it on Roles (roadmap mockups/pages/runtimes.md, Permissions).
+  it("is the Runtimes page's read, over list_tacho_hosts alone", () => {
+    expect(capabilitiesOf(["runtime.read"])).toEqual(["list_tacho_hosts"]);
+    expect(permissionsHeldBy(new Set(["list_tacho_hosts"]))).toEqual([
+      "runtime.read",
+    ]);
+  });
+});
+
 describe("capabilitiesOf", () => {
   it("expands permissions to a sorted, deduplicated capability set", () => {
     const out = capabilitiesOf(["run.control", "run.read", "run.control"]);

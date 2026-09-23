@@ -37,7 +37,12 @@ import {
   evaluatePreToolUse,
   type MatchContext,
 } from "../host/bundle";
-import type { SessionRecord, SessionRegistry } from "./registry";
+import {
+  rememberHookId,
+  sawHookId,
+  type SessionRecord,
+  type SessionRegistry,
+} from "./registry";
 
 export interface PolicyView {
   bundle: PolicyBundle;
@@ -421,6 +426,14 @@ function drainMessages(
  * Map one hook payload to its events and its answer. `agent` names a custom
  * agent (`tacho hook --agent <name>`): its payload is Claude Code's shape and
  * its session is labelled `runtime: "custom"`, `harness: <name>`.
+ *
+ * `hookId` names one hook invocation, the same id `tacho-hook` sends on both
+ * its live request and the spool file it falls back to when that request
+ * times out on the client's own side (see `HookRunDeps.hookId` in
+ * `claude-code/hook-client.ts`). A client timeout does not mean the daemon
+ * never received the hook — this function may already have run for it —
+ * so a replay carrying an id this session already recorded is dropped
+ * rather than sealing everything a second time.
  */
 export async function handleHookEvent(
   raw: unknown,
@@ -429,8 +442,17 @@ export async function handleHookEvent(
   replay?: HookReplay,
   harness?: TachoHarness,
   agent?: string,
+  hookId?: string,
 ): Promise<HookOutcome> {
-  const outcome = await routeHook(raw, env, deps, replay, harness, agent);
+  const outcome = await routeHook(
+    raw,
+    env,
+    deps,
+    replay,
+    harness,
+    agent,
+    hookId,
+  );
   // Drained after the route, whichever branch returned: every event the
   // route sealed is in `events` by now, so every body is pending on the
   // recorder, and taking them here is what keeps the two lists paired.
@@ -537,6 +559,7 @@ async function routeHook(
   replay?: HookReplay,
   harness?: TachoHarness,
   agent?: string,
+  hookId?: string,
 ): Promise<RoutedOutcome> {
   const input = hookInputSchema.parse(raw);
   // The daemon checks again: anything holding the local token can post an
@@ -564,6 +587,20 @@ async function routeHook(
   });
   if (inferredCwd && record.cwd === undefined && input.cwd !== undefined) {
     record.cwd = input.cwd;
+  }
+  // A replay of a hook this session already recorded — the client's own
+  // request timed out and it fell back to a spool file, but the daemon had
+  // already processed the live request before that timeout fired. Sealing
+  // it again would open a second turn, a second tool_call, or (for
+  // `UserPromptSubmit`) a phantom prompt nobody sent twice. Nothing new is
+  // sealed for the replay; the answer is empty, which is safe here because a
+  // replay is fed back into the daemon for its record only, not read by a
+  // harness waiting on stdout.
+  if (hookId !== undefined) {
+    if (sawHookId(record, hookId)) {
+      return { events: [], response: {}, record };
+    }
+    rememberHookId(record, hookId);
   }
   // Stella's tool-use ids are derived from the call, so the daemon numbers
   // each invocation before anything reads the payload.

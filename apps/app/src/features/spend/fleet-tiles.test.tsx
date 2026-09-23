@@ -36,11 +36,13 @@ const DAY = { from: "2026-09-15", to: "2026-09-15" };
 const fleet = vi.fn<DataSource["spend"]["fleet"]>();
 const refuse = () => Promise.reject(new Error("not a Fleet spend read"));
 const source: DataSource = {
+  runtimes: { list: refuse, agents: refuse },
   pretenant: { orgs: refuse, workspaces: refuse },
   shell: { context: refuse, preferences: refuse },
   billing: {
     plan: refuse,
     usageCredits: refuse,
+    retention: refuse,
     bucket: refuse,
     contractRate: refuse,
     invoices: refuse,

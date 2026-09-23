@@ -255,8 +255,15 @@ export function foldUsageDocument(
   return false;
 }
 
-/** The longest stream line the meter will hold; a longer one is skipped. */
-const MAX_LINE_BYTES = 1024 * 1024;
+/**
+ * The longest stream line the meter will hold before it gives up on finding
+ * usage in it; a longer one is skipped. Matches `MAX_DOCUMENT_BYTES`: a
+ * `response.completed` line can carry the whole response's `output`
+ * alongside its usage block, so the same-sized prompt that would not have
+ * dropped an unstreamed document's usage must not drop a streamed one's
+ * either, just because the vendor's ending happened to be one SSE line.
+ */
+const MAX_LINE_BYTES = 16 * 1024 * 1024;
 /** The largest unstreamed document the meter will parse for usage. */
 const MAX_DOCUMENT_BYTES = 16 * 1024 * 1024;
 
