@@ -109,10 +109,8 @@ export const LEGACY_ROUTES: readonly LegacyRoute[] = [
   { from: "/{org}/{ws}/workbench/tools", to: "/{org}/{ws}/tools" },
   { from: "/{org}/{ws}/workbench/tools/capabilities", to: "/{org}/{ws}/tools" },
   { from: "/{org}/{ws}/workbench/tools/mcp", to: "/{org}/{ws}/tools" },
-  // Skills is a shelf of the Steering library. Send retired routes to the
-  // Steering route, which moves `?tab=skills` to `/steering/skills`, rather
+  // Skills is a Steering tab. Send retired routes there in one redirect rather
   // than through the compatibility-only /skills route (ADR-090 amendment).
-  // The target stays a literal page route, as proxy.test.ts requires.
   {
     from: "/{org}/{ws}/workbench/tools/skills/**",
     to: "/{org}/{ws}/steering?tab=skills",
