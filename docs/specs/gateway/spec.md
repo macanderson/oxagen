@@ -228,7 +228,7 @@ the turn's outcome before it raises anything.
 - **Re-specifying the proxy.** It is built. Only the delta is here.
 - **A per-workspace or per-session model key.** `docs/specs/model-funding-source/spec.md`
   §5 rules the first out. The second has no decision behind it.
-- **The witness protocol.** `docs/specs/tacho/witness-protocol.md` is a separate
+- **The witness protocol.** `oxagen-roadmap:docs/oxagen/specs/tacho/witness-protocol.md` is a separate
   line of work and does not block any gap above.
 
 ## 5. Build order and acceptance

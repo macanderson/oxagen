@@ -1,6 +1,7 @@
 /**
  * environments — Agent Environments & Credential Vault (Spec:
- * docs/superpowers/specs/2026-06-24-credential-vault-environments-sandboxes-spec.md §5).
+ * docs/superpowers/specs/2026-06-24-credential-vault-environments-sandboxes-spec.md §5,
+ * removed 2026-09-23 as stale; git history keeps it).
  *
  * Phase 0 ("Vault + Environments core", §18) shipped four tables; §5.6 binds
  * an agent to one of them. The sandbox-template tables (§5.2–§5.3) were

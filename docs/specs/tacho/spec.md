@@ -26,7 +26,7 @@ The design formerly called Tacho ("the tachograph for AI agents", `design/overvi
 
 The spec makes two commitments:
 
-1. **Claude Code is controlled through the same contract Stella will implement natively.** Stella today has no live Oxagen control loop either (it has a content-free telemetry export, a usage drain, a headless engine, and a driver channel; see Stella `docs/spec/oxagen-trace-drain.md` §1). This spec therefore defines the **control contract** (§7), the **evidence contract** (§6), and the **enrollment contract** (§5) once, in Oxagen. Claude Code meets it through hooks; Stella meets it through `tacho-core` linked into its executor (`design/examples/rust-stella.md`). "Controlled like a Stella agent" means controlled through this contract; Stella has no live control loop yet.
+1. **Claude Code is controlled through the same contract Stella will implement natively.** Stella today has no live Oxagen control loop either (it has a content-free telemetry export, a usage drain, a headless engine, and a driver channel; see Stella `docs/spec/oxagen-trace-drain.md` §1). This spec therefore defines the **control contract** (§7), the **evidence contract** (§6), and the **enrollment contract** (§5) once, in Oxagen. Claude Code meets it through hooks; Stella meets it through `tacho-core` linked into its executor (`oxagen-roadmap:docs/oxagen/specs/tacho/design/examples/rust-stella.md`). "Controlled like a Stella agent" means controlled through this contract; Stella has no live control loop yet.
 2. **The record distinguishes the two enforcement tiers.** Per ADR-040 §4 and the review §2(a): a hook that denies a tool call inside a process Oxagen does not own is **attestation with harness-level enforcement**, graded `client_attested`. Only tool calls that route through Oxagen's governed gateway (the workspace MCP endpoint, or a reverse-RPC engine such as `stella-serve`) are **gateway-enforced**. Every session record carries its `enforcement_tier` and every event its `fidelity`; nothing in the UI, docs, or attestation reports may say "prevented" where the record says "observed".
 
 Codex CLI is out of scope for v1 (§13). Its hook surface is documented upstream but was not verified in this design pass, and the user's instruction was to focus on Claude Code if Codex would need a materially different approach.
@@ -46,7 +46,7 @@ Tacho's seven product requirements (`design/overview.md` §2: R1 SDK-agnostic, R
 - **H7 — Zero coupling in the published artifact.** `@oxagen/tacho` is one of three public npm packages (with `@oxagen/cli` and `@oxagen/skills`). It ships with no `@oxagen/*` runtime dependency, following the CLI's standalone-publish discipline (`apps/cli/scripts/prepare-standalone-publish.mjs`) and the usage-telemetry pattern of carrying its own copy of a schema with a test-only cross-check against the server package.
 - **H8 — An app with no hook surface is connected, not unsupported.** The AI applications a non-developer runs — Claude Desktop and its kin — have no hook surface, and wrapping is therefore not available on them. They do have an MCP client config, so enrollment writes one Oxagen server into it and the collector's local gateway serves the workspace toolbelt under the mandate (§5.6). That is the `gateway` tier, and it is neither a degraded wrap nor a superset of one: wrapping is **broader and weaker** (it sees every action, but the hook runs in a process Oxagen does not own, so the record is `client_attested`), connection is **narrower and stronger** (Oxagen sees only what routes through it, but a denied call does not execute). No surface may put the two on a single "more governed / less governed" axis; ADR-078 §2 bans it in both directions.
 
-Non-goals for v1: an egress proxy or eBPF ambient capture (`design/overview.md` §4(c)), the insurer attestation API (`design/insurer-api.md`), and a Codex adapter. The event model reserves room for all three.
+Non-goals for v1: an egress proxy or eBPF ambient capture (`design/overview.md` §4(c)), the insurer attestation API (`oxagen-roadmap:docs/oxagen/specs/tacho/design/insurer-api.md`), and a Codex adapter. The event model reserves room for all three.
 
 ---
 
@@ -76,7 +76,7 @@ The four tiers of `design/overview.md` §3 hold. This section places each tier i
 │  create_tacho_host_enrollment · ingest_tacho_events · get_tacho_policy_bundle│
 │  request_tacho_elevation · control_tacho_session · resolve_approval (exists)│
 │  PDP = kernel IAM (authorizeExternalCapability) → Cedar when needed (§12)   │
-│  Mint = Biscuit tokens (design/adr-0003) · deny generations · emergency deny│
+│  Mint = Biscuit tokens (roadmap adr-0003) · deny generations · emergency deny│
 │  stores: Postgres agent.tacho_hosts / tacho_sessions / approval_requests    │
 │          ClickHouse tacho_events (+ tool_invocations, token_usage, audit)   │
 │          evidence: RunEvidenceManifestV1 via ingest_run_evidence (phase C)  │
@@ -182,7 +182,7 @@ Identity consequence: a Claude Code host is an **agent** in the registry with an
 
 ### 5.3 Claude Agent SDK and custom agents
 
-These do not enroll a host. They register an agent (`agent.definition.create` with `agent_type: "claude-agent-sdk"` or `"custom"`), receive an agent-scoped API key, and pass `{ agentKey, apiKey }` to `startSession` or `govern`. The collector is optional for them: if `tachod` is reachable the SDK uses it (shared chain, shared spool); otherwise the inline emitter chains and spools in-process to `~/.config/oxagen/tacho/spool/<agentKey>/` and ships directly. The trade is stated in the docs: an inline emitter cannot sign checkpoints with a host device key, so its checkpoints carry the agent key's fingerprint and its sessions score against the wider posterior (`design/trust-scoring.md` §3).
+These do not enroll a host. They register an agent (`agent.definition.create` with `agent_type: "claude-agent-sdk"` or `"custom"`), receive an agent-scoped API key, and pass `{ agentKey, apiKey }` to `startSession` or `govern`. The collector is optional for them: if `tachod` is reachable the SDK uses it (shared chain, shared spool); otherwise the inline emitter chains and spools in-process to `~/.config/oxagen/tacho/spool/<agentKey>/` and ships directly. The trade is stated in the docs: an inline emitter cannot sign checkpoints with a host device key, so its checkpoints carry the agent key's fingerprint and its sessions score against the wider posterior (`oxagen-roadmap:docs/oxagen/specs/tacho/design/trust-scoring.md` §3).
 
 ### 5.4 The hook set the enrollment writes
 
@@ -353,7 +353,7 @@ Tool calls to the Oxagen MCP endpoint (`mcp__oxagen__*`) are not evaluated here 
 
 `PermissionRequest` is the elevation point. `tacho-hook` emits `approval_request`, then calls `request_tacho_elevation` with the canonical action (`tool:<name>`, resource, digest of the input, the requesting span, the trust tier). The handler runs `authorizeExternalCapability("claude.<tool>", ctx, "require_approval")`; an `allow` mints a token; `require_approval` creates an `agent.approval_requests` row and the handler holds the request on the existing `waitForApproval` listener up to the hook timeout (default 600 s, configurable per bundle); a resolution through the existing `resolve_approval` capability (from the `/approvals` queue, Slack, or the CLI) returns `allow` or `deny`. The token is a Biscuit v2 as decided (design ADR 0003): bound to `agentKey`, session, exact action, expiry (default 120 s), use limit, and the approval event id, verified offline by `tacho-hook` against the cached mint keys, then `token_use` and `behavior: allow`. Deny or verification failure is `token_denied` and `behavior: deny`; the hook's `permissionDecisionReason` carries the policy id or approver so the model and the human see why.
 
-While an elevation is pending, the collector shows it in `oxagen tacho status` and the control plane shows it in the approvals queue with the four-hop chain (`design/approval-tokens.md` §4).
+While an elevation is pending, the collector shows it in `oxagen tacho status` and the control plane shows it in the approvals queue with the four-hop chain (`oxagen-roadmap:docs/oxagen/specs/tacho/design/approval-tokens.md` §4).
 
 ### 7.4 Commands: pause, resume, cancel, steer, message, revoke
 
@@ -407,7 +407,7 @@ Custom agents are `client_attested` by construction. They reach the `gateway` ti
 
 ## 10. Stella
 
-Stella implements this contract natively (`tacho-core`, `design/examples/rust-stella.md`): the executor's `tool.call.requested` bus event is the `PreToolUse` equivalent, `policy.evaluated` maps to `policy_decision`, its `ApprovalRequest`/`ApprovalResponse` types carry elevation, and `stella-serve`'s `/pause` `/resume` `/cancel` are the command set. Its existing signed-enrollment machinery (`enterprise_telemetry.rs`) is what §5.2 copies, so the Stella side of enrollment is a second event class on an existing document. A `stella-serve` session is `gateway` tier by construction and needs no hooks; a workstation Stella session is `client_attested` like Claude Code. The Stella-repo plan is a numbered sub-plan of this spec (plan §PR 9) and a Stella `docs/spec/` companion, following the `serve-surface.md` pattern.
+Stella implements this contract natively (`tacho-core`, `oxagen-roadmap:docs/oxagen/specs/tacho/design/examples/rust-stella.md`): the executor's `tool.call.requested` bus event is the `PreToolUse` equivalent, `policy.evaluated` maps to `policy_decision`, its `ApprovalRequest`/`ApprovalResponse` types carry elevation, and `stella-serve`'s `/pause` `/resume` `/cancel` are the command set. Its existing signed-enrollment machinery (`enterprise_telemetry.rs`) is what §5.2 copies, so the Stella side of enrollment is a second event class on an existing document. A `stella-serve` session is `gateway` tier by construction and needs no hooks; a workstation Stella session is `client_attested` like Claude Code. The Stella-repo plan is a numbered sub-plan of this spec (plan §PR 9) and a Stella `docs/spec/` companion, following the `serve-surface.md` pattern.
 
 ## 11. Threat model deltas for a hooked harness
 
