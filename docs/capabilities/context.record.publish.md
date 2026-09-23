@@ -18,6 +18,7 @@ Requires the same classification a merged Context PR carries (`kind`, `force`, `
 | Field | Type | Notes |
 | --- | --- | --- |
 | record_id | string | The record's stable id — the rules-file stem; the workspace-unique key |
+| label | string, optional | Display name, at most 200 characters. Omit it to retain the current label or derive Capital Case from the slug. |
 | title | string | Human-readable record title |
 | body | string | The canonical record body (one TOML record per file) |
 | kind | string | One of `rule`, `constraint`, `procedure`, `fact`, `memory`, `preference` |
@@ -47,3 +48,5 @@ Inserts/updates `agent.context_records` and inserts `agent.context_record_versio
 - `conflict: provisional` — the workspace is the onboarding gate's and no main repository is bound yet (`org.onboarding_state.main_repo_bound_at` is null); `bind_main_repository` clears it. Checked before any write. A workspace from before the gate has no row and is never refused here.
 - A record_id reserved by a soft-deleted record → conflict error naming the slug.
 - Two concurrent publishes race safely, on both of the rows they contend for. On the record row, the loser of the insert republishes onto the winner's row. On the version row, the loser's transaction rolls back whole and the handler rereads the latest version and answers against what the winner published: an identical request reads `published: false`, a different one lands as the next version. Three attempts, then `conflict: concurrent_publish`.
+
+Labels are display metadata. Publishing a new label with unchanged body and classification updates the label without creating a record version. The five-minute context label job fills missing labels in batches of 500, including rows ingested before this field shipped. It leaves existing labels and record identities unchanged.

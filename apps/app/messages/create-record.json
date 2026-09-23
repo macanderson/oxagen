@@ -12,7 +12,10 @@
         "flake": "The checkout e2e suite flaked on Safari through August"
       },
       "noGrant": "A record steers. It never grants. No sentence you write here makes a denied call allowed.",
-      "next": "Pick a kind"
+      "next": "Pick a kind",
+      "name": "Name",
+      "slug": "Slug",
+      "slugHint": "The slug identifies this record and its file. You can edit it before publishing."
     },
     "kind": {
       "title": "What kind is it?",

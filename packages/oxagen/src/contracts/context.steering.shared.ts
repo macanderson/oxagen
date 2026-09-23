@@ -141,6 +141,7 @@ export const proposedRecordSchema = z
       "The lineage this proposal is about; the file stem under .oxagen/rules/",
     ),
     title: z.string().min(1).max(200).optional(),
+    label: z.string().trim().min(1).max(200).optional(),
     kind: recordKindSchema,
     force: recordForceSchema,
     /** Required on a constraint, refused on every other kind. */
@@ -233,6 +234,7 @@ export const publishedRecordSchema = z
     id: z.string().regex(/^ctr_[0-9A-Za-z]+$/),
     lineageId: z.string(),
     title: z.string(),
+    label: z.string().optional(),
     /**
      * Every write path has required agent.context_records.kind since #3302,
      * but the DB-level NOT NULL is a deliberate follow-up migration (see
