@@ -5,21 +5,30 @@
 // nothing; a completed suspend or deregister reloads the page it leaves.
 //
 // Deregister is the design's `delagent` dialog: the agent key under the title,
-// what ends and what is kept, and a checkbox the danger button waits on. It
+// what ends (the roles held, read when it opens, the mandates and the host
+// enrollment) and what is kept, and a checkbox the danger button in the footer
+// waits on. A completed deregister leaves a receipt in the dialog, and the list
+// reloads when the person closes it. It
 // says plainly that it opens no pull request: `retire_agent` retires the
 // principal and revokes what it holds, and archiving the definition file is
 // #3855.
 import { useTranslations } from "next-intl";
-import { type ReactNode, type SyntheticEvent, useState } from "react";
+import {
+  type ReactNode,
+  type SyntheticEvent,
+  useEffect,
+  useState,
+} from "react";
 import type { ActionResult } from "@/server/kernel";
 import type { SafePath } from "@/shared/safe-path";
 import { buttonDanger, buttonSecondary, mono } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
-import { SheetDialog } from "@/ui/sheet-dialog";
+import { SheetDialog, SheetFooterAction } from "@/ui/sheet-dialog";
 import { UNANSWERED, useActionFailure } from "./action-failure";
 import {
+  readAgentRoleNames,
   retireAgent,
   rotateAgentCredential,
   setAgentSuspended,
@@ -140,7 +149,7 @@ function useCopy(key: "rotate" | "suspend" | "resume", name: string): Copy {
 }
 
 /** What deregistering ends, when the caller has the counts in hand. */
-type Holds = { mandates: number; credentials: number; hosts: number };
+type Holds = { mandates: number; hosts: number };
 
 /** Deregister, from the identities table or the agent's header. */
 export function RetireAgent({
@@ -155,7 +164,7 @@ export function RetireAgent({
 }: Target & {
   /** The definition file's name, which the pull-request line names. */
   slug: string;
-  /** The mandates, credentials and host enrollments retirement ends; omitted where the page has no counts. */
+  /** The mandates and host enrollments retirement ends; omitted where the page has no counts. */
   holds?: Holds;
   /** The agents list, reloaded once the agent is retired. */
   after: SafePath;
@@ -169,14 +178,35 @@ export function RetireAgent({
   const [understood, setUnderstood] = useState(false);
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  // The roles the agent holds, read when the dialog opens; null until they
+  // answer or when the read failed, and the Ends line then names them without
+  // a count.
+  const [roles, setRoles] = useState<number | null>(null);
+  const [retired, setRetired] = useState(false);
   const testId = "retire-agent";
+  const formId = `${testId}-${slug}-form`;
+
+  useEffect(() => {
+    if (!open) return;
+    void (async () => {
+      try {
+        const result = await readAgentRoleNames(org, ws, agentId);
+        setRoles(result.ok ? result.value.length : null);
+      } catch {
+        setRoles(null);
+      }
+    })();
+  }, [open, org, ws, agentId]);
 
   function openChange(next: boolean) {
     setOpen(next);
-    if (!next) {
-      setFailure(null);
-      setUnderstood(false);
-    }
+    if (next) return;
+    setFailure(null);
+    setUnderstood(false);
+    // The list reloads once the receipt is read: the retired row loses its
+    // Deregister action, and with it this dialog.
+    if (retired) navigate.replace(after);
+    setRetired(false);
   }
 
   async function submit(event: SyntheticEvent<HTMLFormElement>) {
@@ -186,12 +216,8 @@ export function RetireAgent({
     setFailure(null);
     try {
       const result = await retireAgent(org, ws, agentId);
-      if (result.ok) {
-        setOpen(false);
-        navigate.replace(after);
-      } else {
-        setFailure(failureText(result));
-      }
+      if (result.ok) setRetired(true);
+      else setFailure(failureText(result));
     } catch {
       setFailure(failureText(UNANSWERED));
     } finally {
@@ -199,9 +225,15 @@ export function RetireAgent({
     }
   }
 
+  const ends =
+    holds === undefined
+      ? t("endsUnknown")
+      : roles === null
+        ? t("endsValueNoRoles", holds)
+        : t("endsValue", { ...holds, roles });
   const facts: readonly [string, string][] = [
     [t("kept"), t("keptValue")],
-    [t("ends"), holds === undefined ? t("endsUnknown") : t("endsValue", holds)],
+    [t("ends"), ends],
   ];
   return (
     <>
@@ -219,61 +251,76 @@ export function RetireAgent({
         onOpenChange={openChange}
         title={t("title")}
         subtitle={name}
+        closeLabel={retired ? t("close") : t("cancel")}
         testId={testId}
       >
-        <form
-          onSubmit={(e) => void submit(e)}
-          className="flex flex-col gap-3 text-sm"
-        >
-          <p>{t("body")}</p>
+        {retired ? (
           <p
-            data-not-backed=""
-            data-gap="#3855"
-            className="text-xs text-muted-foreground"
+            role="status"
+            data-testid={`${testId}-receipt`}
+            className="text-sm text-foreground"
           >
-            {t.rich("pullRequest", {
-              slug,
-              mono: (chunks) => <span className={mono}>{chunks}</span>,
-            })}
+            {t("done", { name })}
           </p>
-          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
-            {facts.map(([term, value]) => (
-              <div key={term} className="contents">
-                <dt className="text-muted-foreground">{term}</dt>
-                <dd>{value}</dd>
-              </div>
-            ))}
-          </dl>
-          <label className="flex items-start gap-2">
-            <input
-              type="checkbox"
-              checked={understood}
-              data-touch-target=""
-              className="mt-0.5"
-              onChange={(event) => {
-                setUnderstood(event.target.checked);
-              }}
-            />
-            <span className="flex flex-col">
-              <span>{t("understand")}</span>
-              <span className="text-xs text-muted-foreground">
-                {t("understandHint")}
-              </span>
-            </span>
-          </label>
-          {failure === null ? null : (
-            <FormAlert testId={`${testId}-failure`}>{failure}</FormAlert>
-          )}
-          <button
-            type="submit"
-            disabled={!understood || pending}
-            data-touch-target=""
-            data-testid={`${testId}-confirm`}
-            className={`${buttonDanger} w-full disabled:cursor-not-allowed disabled:opacity-50`}
+        ) : (
+          <form
+            id={formId}
+            onSubmit={(e) => void submit(e)}
+            className="flex flex-col gap-3 text-sm"
           >
-            {pending ? t("pending") : t("confirm")}
-          </button>
-        </form>
+            <p>{t("body")}</p>
+            <p
+              data-not-backed=""
+              data-gap="#3855"
+              className="text-xs text-muted-foreground"
+            >
+              {t.rich("pullRequest", {
+                slug,
+                mono: (chunks) => <span className={mono}>{chunks}</span>,
+              })}
+            </p>
+            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
+              {facts.map(([term, value]) => (
+                <div key={term} className="contents">
+                  <dt className="text-muted-foreground">{term}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+            </dl>
+            <label className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                checked={understood}
+                data-touch-target=""
+                className="mt-0.5"
+                onChange={(event) => {
+                  setUnderstood(event.target.checked);
+                }}
+              />
+              <span className="flex flex-col">
+                <span>{t("understand")}</span>
+                <span className="text-xs text-muted-foreground">
+                  {t("understandHint")}
+                </span>
+              </span>
+            </label>
+            {failure === null ? null : (
+              <FormAlert testId={`${testId}-failure`}>{failure}</FormAlert>
+            )}
+            <SheetFooterAction>
+              <button
+                type="submit"
+                form={formId}
+                disabled={!understood || pending}
+                data-touch-target=""
+                data-testid={`${testId}-confirm`}
+                className={`${buttonDanger} disabled:cursor-not-allowed disabled:opacity-50`}
+              >
+                {pending ? t("pending") : t("confirm")}
+              </button>
+            </SheetFooterAction>
+          </form>
+        )}
       </SheetDialog>
     </>
   );

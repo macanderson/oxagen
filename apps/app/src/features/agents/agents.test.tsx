@@ -34,6 +34,7 @@ vi.mock("./actions", () => ({
   rotateAgentCredential: vi.fn(),
   setAgentSuspended: vi.fn(),
   readAssignableRoles: vi.fn(() => new Promise(() => {})),
+  readAgentRoleNames: vi.fn(() => new Promise(() => {})),
   assignAgentRole: vi.fn(),
   revokeAgentRole: vi.fn(),
   registerAgent: vi.fn(),
@@ -169,22 +170,23 @@ describe("Agents, loaded", () => {
       ),
     });
     expect(tiles().map((tile) => tile.textContent)).toEqual([
-      "Agents here7organization count not recorded · 7 listed below",
+      // "Listed below" counts the rows this read returned, not the total.
+      "Agents here7organization count not recorded · 2 listed below",
       "Enrolled25 not yet enrolled",
-      "Holding a mandate1acme.core.release-bot · in Core platform",
+      "Holding a mandate1acme.core.release-bot · in Core platform · counted in Core platform only",
       // Every tamper incident the store keeps on the agents' hosts, and the
       // newest as <scope> · <kind>, <date> with how many are open.
-      "Tamper incidents4acme.core.release-bot · hooks_removed, 2026-09-11 · 3 open",
+      "Tamper incidents4acme.core.release-bot · hooks_removed, 2026-09-11 · 3 open · counted in Core platform only",
     ]);
     expect(tiles()[3]?.querySelector("[data-critical]")).not.toBeNull();
     // The design scopes the last two to the organization; the read answers
-    // for the workspace and says so.
+    // for the workspace and says so in the visible basis line, with the
+    // fuller reason on hover.
     expect(
-      [...document.querySelectorAll('[data-gap="organization"]')].map((el) =>
+      [...document.querySelectorAll('[data-scope="workspace"]')].map((el) =>
         el.getAttribute("title"),
       ),
     ).toEqual([
-      "No organization-wide rollup of agents is recorded yet.",
       "Counted over the agents in Core platform. No organization-wide rollup is recorded yet.",
       "Summed over the agents in Core platform. No organization-wide rollup is recorded yet.",
     ]);
@@ -210,8 +212,8 @@ describe("Agents, loaded", () => {
     expect(tiles().map((tile) => tile.textContent)).toEqual([
       "Agents here2organization count not recorded · 2 listed below",
       "Enrolled21 listed here on the observe tier, the rest on harness",
-      "Holding a mandate0no agent holds one",
-      "Tamper incidents0none in the retention window",
+      "Holding a mandate0no agent in Core platform holds one",
+      "Tamper incidents0none in the retention window in Core platform",
     ]);
     expect(tiles()[3]?.querySelector("[data-critical]")).toBeNull();
   });
@@ -244,19 +246,48 @@ describe("Agents, loaded", () => {
       "Enrolled31 listed here on the observe tier, 1 on harness, 1 on another tier or none recorded",
     );
     expect(tiles()[3]?.textContent).toBe(
-      "Tamper incidents2acme.core.c · chain_break, 2026-09-02 · all resolved",
+      "Tamper incidents2acme.core.c · chain_break, 2026-09-02 · all resolved · counted in Core platform only",
     );
   });
 
-  it("names the holders it has and counts the rest", async () => {
+  it("names every holder among the rows, as the design does, with no count of the rest", async () => {
     await renderAgents({
-      list: agentPage([agentRow({ mandates: 1 })], null, {
-        holdingMandate: 3,
-      }),
+      list: agentPage(
+        [
+          agentRow({ mandates: 1 }),
+          agentRow({
+            id: "agt_b",
+            slug: "b",
+            agentKey: "acme.core.b",
+            mandates: 2,
+          }),
+          agentRow({
+            id: "agt_c",
+            slug: "c",
+            agentKey: "acme.core.c",
+            mandates: 0,
+          }),
+          agentRow({
+            id: "agt_d",
+            slug: "d",
+            agentKey: "acme.core.d",
+            mandates: 1,
+          }),
+          agentRow({
+            id: "agt_e",
+            slug: "e",
+            agentKey: "acme.core.e",
+            mandates: 1,
+          }),
+        ],
+        null,
+        { holdingMandate: 4 },
+      ),
     });
     expect(tiles()[2]?.textContent).toBe(
-      "Holding a mandate3acme.core.release-bot · in Core platform, 2 more in Core platform",
+      "Holding a mandate4acme.core.release-bot · in Core platform, acme.core.b · in Core platform, acme.core.d · in Core platform, acme.core.e · in Core platform · counted in Core platform only",
     );
+    expect(tiles()[2]?.textContent).not.toContain("more in");
   });
 
   it("prints the mandate tile as not recorded when the read carries no count (negative)", async () => {
@@ -310,7 +341,7 @@ describe("Agents, loaded", () => {
       // The host over "<kind> · <tier>": no store records the kind.
       "build-01not recorded · gateway",
       "prn_91",
-      "healthyframes arriving, chain intact",
+      "healthyenrolled, and its latest wrapped session recorded the gateway tier",
       "42runs 30d",
       "EditRolesDeregister",
     ]);
@@ -356,7 +387,7 @@ describe("Agents, loaded", () => {
       "tamper2 open incidents",
       "not enrolledno hook is installed, so its runs are recorded only",
       "observeenrolled, and nothing is delivered or refused yet",
-      "healthyframes arriving, chain intact",
+      "healthyenrolled, and its latest wrapped session recorded the contained tier",
       "not recorded",
     ]);
     const pending = rows()[1];
@@ -407,22 +438,32 @@ describe("Agents, loaded", () => {
       "gateway",
       "not recorded",
       "42",
-      "$12.50client_attested",
-      "1,840,00062% cached",
+      // Spend names who observed it and that it is the wrapped sessions'.
+      "$12.50client attested · wrapped sessions",
+      "1,840,00062% cached · wrapped sessions",
       "2",
       // Every tamper incident recorded on its hosts, open or resolved.
       "3",
       "EditRolesDeregister",
     ]);
-    const tokens = first.querySelector("[data-basis]");
-    expect(tokens).toHaveAttribute("data-basis", "wrapped_sessions");
-    expect(tokens).toHaveAttribute(
-      "title",
-      "40 wrapped sessions, as the harness reported them. Ledger runs' tokens are not in this total.",
-    );
+    expect(
+      [...first.querySelectorAll("[data-basis]")].map((el) => [
+        el.getAttribute("data-basis"),
+        el.getAttribute("title"),
+      ]),
+    ).toEqual([
+      [
+        "wrapped_sessions",
+        "Priced wrapped sessions in the last 30 days. Ledger runs and unpriced sessions are not in this figure.",
+      ],
+      [
+        "wrapped_sessions",
+        "40 wrapped sessions, as the harness reported them. Ledger runs' tokens are not in this total.",
+      ],
+    ]);
     expect(first.querySelector('[data-gap="belt"]')).toHaveAttribute(
       "title",
-      "No store records the width of each agent's belt yet. The agent's own page computes its belt.",
+      "list_agents does not compute each agent's belt yet (#3852). The agent's own page shows the belt its grants give it.",
     );
     expect(cellsOf(second).slice(4, 11)).toEqual([
       "not recorded",
@@ -500,16 +541,17 @@ describe("Agents list controls", () => {
     expect(rows()).toHaveLength(12);
   });
 
-  it("searches the rows and says when nothing matches", async () => {
+  it("searches the rows and says when nothing matches, in a row of the table", async () => {
     await renderAgents({ list: many() });
     const search = screen.getByRole("searchbox", { name: "Search this list" });
     fireEvent.change(search, { target: { value: "agent-07" } });
     expect(rows().map((row) => row.dataset.agent)).toEqual(["agent-07"]);
     fireEvent.change(search, { target: { value: "nothing like it" } });
     expect(rows()).toHaveLength(0);
-    expect(
-      screen.getByText("No agent matches this search."),
-    ).toBeInTheDocument();
+    const empty = screen.getByTestId("agents-no-match");
+    expect(empty).toHaveTextContent("No rows match.");
+    expect(empty.closest("tbody")).not.toBeNull();
+    expect(empty.querySelector("td")).toHaveAttribute("colspan", "10");
   });
 
   it("sorts by a header and says so with aria-sort", async () => {
@@ -548,26 +590,69 @@ describe("Agents list controls", () => {
     operations();
     fireEvent.click(screen.getByRole("button", { name: "Sort by Tokens 30d" }));
     expect(rows().map((row) => row.dataset.agent)).toEqual(["b", "c", "a"]);
-    expect(cellsOf(only(rows()))[8]).toBe("10cache rate not recorded");
+    expect(cellsOf(only(rows()))[8]).toBe(
+      "10cache rate not recorded · wrapped sessions",
+    );
   });
 
-  it("derives its facets from the columns in view, so they change with the column set", async () => {
-    await renderAgents({ list: many() });
-    const facets = () =>
-      screen
-        .getAllByRole("combobox")
-        .map((select) => select.getAttribute("aria-label"))
-        .filter((label) => label !== null);
-    expect(facets()).toEqual(["Filter by Owner", "Filter by Health"]);
+  const facets = () =>
+    screen
+      .getAllByRole("combobox")
+      .map((select) => select.getAttribute("aria-label"))
+      .filter((label) => label !== null);
+
+  it("derives its facets from the columns in view, status-like first, so they change with the column set", async () => {
+    const TIERS = ["observe", "harness", "gateway"] as const;
+    const HARNESSES = ["claude-code", "stella", "codex", "cursor"] as const;
+    await renderAgents({
+      list: agentPage(
+        Array.from({ length: 12 }, (_, i) => {
+          const n = String(i).padStart(2, "0");
+          return agentRow({
+            id: `agt_a${n}`,
+            slug: `agent-${n}`,
+            agentKey: `acme.core.agent-${n}`,
+            operatorName: i % 2 === 0 ? "Marcus Bell" : "Sana Moreau",
+            status: i % 3 === 0 ? "unenrolled" : "enrolled",
+            enforcementTier: TIERS[i % 3] ?? null,
+            harness: HARNESSES[i % 4] ?? "custom",
+          });
+        }),
+      ),
+    });
+    // The design's ltFacets: a status-like column (Health) before Owner.
+    expect(facets()).toEqual(["Filter by Health", "Filter by Owner"]);
     fireEvent.change(
       screen.getByRole("combobox", { name: "Filter by Owner" }),
       { target: { value: "Sana Moreau" } },
     );
     expect(screen.getByText("1–6 of 6")).toBeInTheDocument();
     operations();
-    expect(facets()).toEqual(["Filter by Operator", "Filter by Status"]);
+    // Status and Tier first, then the column with fewer values; three at
+    // most, so Harness (four values) is cut and the Tier facet stays.
+    expect(facets()).toEqual([
+      "Filter by Status",
+      "Filter by Tier",
+      "Filter by Operator",
+    ]);
+    expect(
+      within(screen.getByRole("combobox", { name: "Filter by Tier" }))
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual(["All · Tier", "gateway", "harness", "observe"]);
     // The Owner facet left the view, so it no longer filters.
     expect(screen.getByText("1–10 of 12")).toBeInTheDocument();
+  });
+
+  it("offers no facet on a list of fewer than four rows (negative)", async () => {
+    await renderAgents({
+      list: agentPage([
+        agentRow({ id: "agt_a", slug: "a", operatorName: "Marcus Bell" }),
+        agentRow({ id: "agt_b", slug: "b", operatorName: "Sana Moreau" }),
+        agentRow({ id: "agt_c", slug: "c", status: "unenrolled" }),
+      ]),
+    });
+    expect(facets()).toEqual([]);
   });
 
   it("links the agents beyond the read's page by its cursor", async () => {
@@ -779,6 +864,16 @@ describe("Agents at phone width", () => {
         .at(-1);
       expect(actionsHeader?.textContent).toBe("");
       expect(actionsHeader).toHaveAttribute("aria-label", "Row actions");
+      // The list controls are 44px targets too: the search box and the Rows
+      // select, beside the buttons.
+      expect(
+        within(phone.container).getByRole("searchbox", {
+          name: "Search this list",
+        }),
+      ).toHaveAttribute("data-touch-target");
+      expect(
+        within(phone.container).getByRole("combobox", { name: "Rows" }),
+      ).toHaveAttribute("data-touch-target");
       const targets = phone.container.querySelectorAll("[data-touch-target]");
       expect(targets.length).toBeGreaterThan(1);
       for (const target of targets)

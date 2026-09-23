@@ -10,8 +10,10 @@
 // incidents sums the tamper incidents recorded on each agent's hosts, the set
 // the Incidents column reads, and names the newest. The design scopes the
 // last two to the organization; `list_agents` answers for the workspace, so
-// each says so on hover, and the organization count on Agents here prints as
-// not recorded until an organization rollup exists (#3854).
+// each basis line says "counted in <workspace> only" where a touch device can
+// read it, and the organization count on Agents here prints as not recorded
+// until an organization rollup exists (#3854). "Listed below" is the number
+// of rows this read returned, not the workspace total.
 //
 // **Two controls the design asks for have no capability yet.** *Request
 // access* (denied, #3820) and *Open an incident* (error, #3847) open dialogs
@@ -37,14 +39,12 @@ import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { AgentsTable } from "./agents-table";
 import { RegisterAnAgent, WrapClaudeCode } from "./create-actions";
+import { AgentKeyPrefix, keyPrefixOf } from "./key-prefix";
 import { NotRecordedValue, Tile } from "./parts";
 import { OpenIncident, RequestAccess, TryAgain } from "./state-actions";
 
 type Place = { org: string; ws: string };
 type Failure = Exclude<Read<unknown>, { ok: true }>;
-
-/** How many holders the Holding a mandate basis names before it counts the rest. */
-const HOLDERS_NAMED = 3;
 
 function Tiles({ page, workspace }: { page: AgentPage; workspace: string }) {
   const t = useTranslations("agents.list.tiles");
@@ -67,11 +67,6 @@ function Tiles({ page, workspace }: { page: AgentPage; workspace: string }) {
           date: tamper.newest.detectedAt.slice(0, 10),
         };
   const holders = agents.filter((a) => (a.mandates ?? 0) > 0);
-  const named = holders.slice(0, HOLDERS_NAMED);
-  const unnamed =
-    totals.holdingMandate === null
-      ? 0
-      : Math.max(0, totals.holdingMandate - named.length);
   return (
     <section aria-label={t("label")} className={statStrip}>
       <Tile
@@ -79,7 +74,7 @@ function Tiles({ page, workspace }: { page: AgentPage; workspace: string }) {
         value={count(totals.identities)}
         basis={
           <span data-gap="organization" title={gaps("organization")}>
-            {t("agentsHere.basis", { listed: count(totals.identities) })}
+            {t("agentsHere.basis", { listed: count(agents.length) })}
           </span>
         }
       />
@@ -112,27 +107,22 @@ function Tiles({ page, workspace }: { page: AgentPage; workspace: string }) {
             <NotRecordedValue />
           ) : (
             <span
-              data-gap="organization"
+              data-scope="workspace"
               title={t("mandate.scope", { workspace })}
             >
               {totals.holdingMandate === 0
-                ? t("mandate.none")
-                : [
-                    ...named.map((a) =>
-                      t("mandate.holder", {
-                        key: a.agentKey ?? a.slug,
-                        workspace,
-                      }),
-                    ),
-                    ...(unnamed > 0
-                      ? [
-                          t("mandate.more", {
-                            count: count(unnamed),
-                            workspace,
-                          }),
-                        ]
-                      : []),
-                  ].join(", ")}
+                ? t("mandate.none", { workspace })
+                : t("mandate.holders", {
+                    holders: holders
+                      .map((a) =>
+                        t("mandate.holder", {
+                          key: a.agentKey ?? a.slug,
+                          workspace,
+                        }),
+                      )
+                      .join(", "),
+                    workspace,
+                  })}
             </span>
           )
         }
@@ -142,15 +132,16 @@ function Tiles({ page, workspace }: { page: AgentPage; workspace: string }) {
         value={count(tamper.recorded)}
         critical={tamper.recorded > 0}
         basis={
-          <span
-            data-gap="organization"
-            title={t("tamper.scope", { workspace })}
-          >
+          <span data-scope="workspace" title={t("tamper.scope", { workspace })}>
             {newest === null
-              ? t("tamper.none")
+              ? t("tamper.none", { workspace })
               : tamper.open > 0
-                ? t("tamper.open", { ...newest, count: count(tamper.open) })
-                : t("tamper.resolved", newest)}
+                ? t("tamper.open", {
+                    ...newest,
+                    count: count(tamper.open),
+                    workspace,
+                  })
+                : t("tamper.resolved", { ...newest, workspace })}
           </span>
         }
       />
@@ -374,7 +365,7 @@ export async function Agents({
   if (page.agents.length === 0 && cursor === null)
     return <Empty workspace={ctx.wsName} {...place} />;
   return (
-    <>
+    <AgentKeyPrefix value={keyPrefixOf(page.agents.map((a) => a.agentKey))}>
       {header}
       <div className="flex flex-col gap-4">
         <Tiles page={page} workspace={ctx.wsName} />
@@ -391,7 +382,7 @@ export async function Agents({
           first={cursor === null ? null : routes.agents(place.org, place.ws)}
         />
       </div>
-    </>
+    </AgentKeyPrefix>
   );
 }
 

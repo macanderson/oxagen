@@ -88,9 +88,9 @@ type Messages = {
         mandate: {
           title: string;
           holder: string;
-          more: string;
           none: string;
           scope: string;
+          holders: string;
         };
         tamper: {
           title: string;
@@ -141,6 +141,8 @@ type Messages = {
         cached: string;
         cacheNotRecorded: string;
         tokensBasis: string;
+        wrappedOnly: string;
+        spendBasis: string;
       };
       health: {
         tamper: string;
@@ -200,6 +202,7 @@ type Messages = {
         invalidSlug: string;
         design: string;
         designNote: string;
+        slugHintEnding: string;
       };
       states: {
         loading: string;
@@ -250,6 +253,12 @@ type Messages = {
         incidentTitle: string;
         incidentBody: string;
       };
+      costBasis: {
+        gateway_observed: string;
+        client_attested: string;
+        mixed: string;
+        estimated: string;
+      };
     };
     detail: {
       header: string;
@@ -299,7 +308,6 @@ type Messages = {
           title: string;
           field: string;
           hint: string;
-          builtIn: string;
           loading: string;
           empty: string;
           notEnforced: string;
@@ -311,6 +319,15 @@ type Messages = {
           note: string;
           noteNoOperator: string;
           cancel: string;
+          option: string;
+          held: string;
+          repository: string;
+          repositoryGap: string;
+          done: string;
+          doneNotEnforced: string;
+          doneWhy: string;
+          already: string;
+          close: string;
         };
         revoke: {
           open: string;
@@ -678,6 +695,10 @@ type Messages = {
         understandHint: string;
         confirm: string;
         pending: string;
+        endsValueNoRoles: string;
+        done: string;
+        cancel: string;
+        close: string;
       };
       killSwitch: {
         open: string;

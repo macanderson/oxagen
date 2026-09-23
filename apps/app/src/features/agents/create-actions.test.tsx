@@ -31,6 +31,7 @@ vi.mock("@/features/create", () => ({
 }));
 
 const { AgentsCreate } = await import("./create-actions");
+const { AgentKeyPrefix, keyPrefixOf } = await import("./key-prefix");
 const t = translator("agents.list.register");
 
 beforeEach(() => {
@@ -105,12 +106,49 @@ describe("Register an agent", () => {
     expect(dialog).toHaveTextContent(
       "This does not write Postgres. It opens a Context PR that adds .oxagen/agents/perf-watch.toml and the generated harness file beside it.",
     );
+    // With no key on the page to take the namespaces from, the hint names
+    // the ending alone.
     expect(dialog).toHaveTextContent(
       "The agent key ends in .perf-watch and is immutable.",
     );
+    // Open the Context PR sits in the footer beside Cancel, as the design
+    // draws it, and submits the form from there.
+    const footer = dialog.querySelector("[data-sheet-footer]");
+    if (!(footer instanceof HTMLElement)) throw new Error("no footer");
     expect(
-      within(dialog).getByRole("button", { name: "Cancel" }),
-    ).toBeInTheDocument();
+      within(footer)
+        .getAllByRole("button")
+        .map((button) => button.textContent),
+    ).toEqual(["Cancel", "Open the Context PR"]);
+    expect(
+      within(footer).getByRole("button", { name: "Open the Context PR" }),
+    ).toHaveAttribute("form", "register-agent-form");
+  });
+
+  it("names the whole key the slug becomes when the page holds a key", () => {
+    render(
+      <IntlProvider>
+        <AgentKeyPrefix value="a-intel.core">
+          <AgentsCreate org="acme" ws="core-platform" />
+        </AgentKeyPrefix>
+      </IntlProvider>,
+    );
+    const dialog = openRegister();
+    expect(dialog).toHaveTextContent(
+      "The agent key becomes a-intel.core.<slug> and is immutable.",
+    );
+    fireEvent.change(within(dialog).getByLabelText("Slug"), {
+      target: { value: "perf-watch" },
+    });
+    expect(dialog).toHaveTextContent(
+      "The agent key becomes a-intel.core.perf-watch and is immutable.",
+    );
+  });
+
+  it("takes the prefix from the first recorded key and none when no key is recorded", () => {
+    expect(keyPrefixOf([null, "acme.core.release-bot"])).toBe("acme.core");
+    expect(keyPrefixOf([null])).toBeNull();
+    expect(keyPrefixOf([])).toBeNull();
   });
 
   it("offers Design on the avatar and says what designing needs, since the definition stores no avatar", () => {

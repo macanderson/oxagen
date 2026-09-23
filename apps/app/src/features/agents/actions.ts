@@ -13,6 +13,7 @@ import { agentDefinitionCommit } from "@oxagen/oxagen/contracts/agent.definition
 import { agentPropose } from "@oxagen/oxagen/contracts/agent.propose";
 import { agentRetire } from "@oxagen/oxagen/contracts/agent.retire";
 import { agentRoleAssign } from "@oxagen/oxagen/contracts/agent.role.assign";
+import { agentRoleList } from "@oxagen/oxagen/contracts/agent.role.list";
 import { agentRoleRevoke } from "@oxagen/oxagen/contracts/agent.role.revoke";
 import { agentSuspend } from "@oxagen/oxagen/contracts/agent.suspend";
 import { costCenterList } from "@oxagen/oxagen/contracts/cost_center.list";
@@ -255,6 +256,8 @@ export async function pauseAgent(
 /** One role the picker may offer: its name is what both writes take. */
 type AssignableRole = {
   name: string;
+  /** What the role is for, as the catalogue records it; null when it records nothing. */
+  description: string | null;
   scope: "org" | "workspace";
   /** A seeded agent role rather than one this organization wrote. */
   builtIn: boolean;
@@ -315,6 +318,7 @@ export async function readAssignableRoles(
         .filter((role) => role.kind === "agent")
         .map((role) => ({
           name: role.name,
+          description: role.description,
           scope: role.scopeKind,
           builtIn: role.isSystemDefault,
         })),
@@ -322,6 +326,31 @@ export async function readAssignableRoles(
       tier: result.value.enforcement.tier,
       more: result.value.hasMore,
     },
+  };
+}
+
+/**
+ * The names of the roles the agent holds now (list_agent_roles: active,
+ * unexpired assignments on its principal). Assign reads them to mark and
+ * disable a role already held, as the design's picker does, and Deregister
+ * reads them to count the roles retirement ends.
+ */
+export async function readAgentRoleNames(
+  org: string,
+  ws: string,
+  agentId: string,
+): Promise<ActionResult<string[]>> {
+  const ctx = await requireViewer(org, ws);
+  const read = await kernelRead(ctx, {
+    contract: agentRoleList,
+    input: { agentId },
+    page: "agents",
+  });
+  const result = readToActionResult(read);
+  if (!result.ok) return result;
+  return {
+    ok: true,
+    value: [...new Set(result.value.roles.map((role) => role.roleName))],
   };
 }
 

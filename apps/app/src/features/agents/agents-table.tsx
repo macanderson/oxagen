@@ -9,16 +9,17 @@
 // facets that are still in view, the sort and the page survive a switch.
 //
 // **A column no store backs says so in every row.** Steering, Toolbelt and
-// Belt have no per-agent record yet, and no store records a runtime's kind, so
-// each prints the not-recorded words, naming the missing store on hover,
-// rather than a count someone typed. Every header still sorts, as the design's
-// list controls do; a column with nothing recorded sorts as a tie. Tokens 30d
-// is the wrapped sessions' reported usage and says so on hover. The Tier and
-// Health cells read the tier the agent's latest wrapped session recorded and
-// the open tamper incidents on its hosts, and show that and nothing stronger:
-// an enrolled agent with no recorded tier has no health verdict. The
-// Incidents column counts every tamper incident the store keeps on the
-// agent's hosts, the set the Tamper incidents tile sums.
+// Belt have no per-agent record yet (#3296, #3852), and no store records a
+// runtime's kind (#3816), so each prints the not-recorded words, naming the
+// missing store on hover, rather than a count someone typed. Every header
+// still sorts, as the design's list controls do; a column with nothing
+// recorded sorts as a tie. Spend 30d and Tokens 30d are the wrapped sessions'
+// figures and say so under each number. The Tier and Health cells read the
+// tier the agent's latest wrapped session recorded and the open tamper
+// incidents on its hosts, and show that and nothing stronger: an enrolled
+// agent with no recorded tier has no health verdict. The Incidents column
+// counts every tamper incident the store keeps on the agent's hosts, the set
+// the Tamper incidents tile sums.
 //
 // **The controls work over the rows in hand.** The read asks for the
 // contract's largest page; a workspace with more agents than that pages the
@@ -59,6 +60,17 @@ const DEFAULT_PAGE_SIZE = 10;
 const MAX_FACETS = 3;
 /** A column with more distinct values than this is a poor filter. */
 const MAX_FACET_VALUES = 8;
+/** A list shorter than this offers no facet (`ltFacets`). */
+const MIN_FACET_ROWS = 4;
+/** A value longer than this is prose, not an enumeration (`ltFacets`). */
+const MAX_FACET_VALUE_LENGTH = 28;
+/**
+ * The design's status-like column names (`LT_FACET` in the mockup's engine),
+ * whose facets come first. Matched against the column's key, not its
+ * translated label, so the order is the same in every locale.
+ */
+const STATUS_LIKE =
+  /status|state|tier|kind|role|risk|severity|result|health|effect|mode|side|level|verdict|decision|origin|scope|period|basis|algorithm|trend|position|governance/i;
 
 type Health = "tamper" | "notEnrolled" | "observe" | "healthy";
 
@@ -131,12 +143,21 @@ function Sub({ children }: { children: ReactNode }) {
 
 function HealthBadge({ row }: { row: AgentRow }) {
   const t = useTranslations("agents.list.health");
+  const tier = useTranslations("agents.tier");
   const health = healthOf(row);
   if (health === null) return <NotRecordedValue gap="tier" />;
+  // Each explanation names the record the verdict rests on and nothing more:
+  // "healthy" is an enrolled agent with no open tamper incident whose latest
+  // wrapped session recorded a tier above observe. No store records frame
+  // arrival or a chain check per agent, so the words do not claim either.
   const why =
     health === "tamper"
       ? t("tamperWhy", { count: row.tamperIncidents })
-      : t(`${health}Why`);
+      : health === "healthy"
+        ? t("healthyWhy", {
+            tier: row.enforcementTier === null ? "" : tier(row.enforcementTier),
+          })
+        : t(`${health}Why`);
   return (
     <span title={why} className="inline-flex flex-col gap-0.5">
       <Badge tone={HEALTH_TONE[health]} data-health={health}>
@@ -162,8 +183,9 @@ const notRecorded = (): null => null;
 
 /**
  * Tokens 30d: the wrapped sessions' reported total over the share of input
- * read from cache. The basis is on hover, because ledger runs' tokens are not
- * in the total and a bare number would claim they were.
+ * read from cache. The sub-line says the figure is the wrapped sessions',
+ * because ledger runs' tokens are not in the total (#3853) and a bare number
+ * would claim they were; the hover adds the session count.
  */
 function Tokens({ row }: { row: AgentRow }) {
   const t = useTranslations("agents.list.cells");
@@ -180,6 +202,8 @@ function Tokens({ row }: { row: AgentRow }) {
         {tokens.cacheReadRate === null
           ? t("cacheNotRecorded")
           : t("cached", { rate: formatRatio(tokens.cacheReadRate, locale) })}
+        {" · "}
+        {t("wrappedOnly")}
       </Sub>
     </span>
   );
@@ -358,14 +382,26 @@ function useColumns(set: ColumnSet, org: string, ws: string): Column[] {
       numeric: true,
       sort: (row) =>
         row.spend30d === null ? null : Number(row.spend30d.micros),
+      // Priced wrapped sessions only: the sub-line names who observed the
+      // figure and that it is the wrapped sessions', and the hover says what
+      // it leaves out, since Runs 30d beside it counts ledger runs too.
       render: (row) =>
         row.spend30d === null ? (
           <NotRecordedValue />
         ) : (
-          <>
+          <span
+            data-basis="wrapped_sessions"
+            title={t("list.cells.spendBasis")}
+          >
             <Money value={row.spend30d} />
-            <Sub>{row.spend30d.basis ?? t("list.basisNotRecorded")}</Sub>
-          </>
+            <Sub>
+              {row.spend30d.basis === null
+                ? t("list.basisNotRecorded")
+                : t(`list.costBasis.${row.spend30d.basis}`)}
+              {" · "}
+              {t("list.cells.wrappedOnly")}
+            </Sub>
+          </span>
         ),
     },
     {
@@ -448,7 +484,6 @@ function RowActions({
             slug={row.slug}
             holds={{
               mandates: row.mandates ?? 0,
-              credentials: row.credentials,
               hosts: row.hosts,
             }}
             after={routes.agents(org, ws)}
@@ -514,22 +549,33 @@ export function AgentsTable({
 
   // Facets are derived from the columns in view, so they differ between the
   // two sets; a facet naming a column that left the view stops filtering.
-  const offered = useMemo(
-    () =>
-      columns
-        .flatMap((column) => {
-          const facet = column.facet;
-          if (facet === undefined) return [];
-          const values = [
-            ...new Set(rows.map(facet).filter((v): v is string => v !== null)),
-          ].sort((a, b) => a.localeCompare(b));
-          return values.length >= 2 && values.length <= MAX_FACET_VALUES
-            ? [{ column, facet, values }]
-            : [];
-        })
-        .slice(0, MAX_FACETS),
-    [columns, rows],
-  );
+  // The rule is the design's `ltFacets`: a list of at least four rows; a
+  // column of two to eight short values that are not unique per row;
+  // status-like columns first, then the one with fewer values; three at most.
+  const offered = useMemo(() => {
+    if (rows.length < MIN_FACET_ROWS) return [];
+    return columns
+      .flatMap((column) => {
+        const facet = column.facet;
+        if (facet === undefined || column.numeric === true) return [];
+        const values = [
+          ...new Set(rows.map(facet).filter((v): v is string => v !== null)),
+        ].sort((a, b) => a.localeCompare(b));
+        const enumeration =
+          values.length >= 2 &&
+          values.length <= MAX_FACET_VALUES &&
+          values.length < rows.length &&
+          values.every((value) => value.length <= MAX_FACET_VALUE_LENGTH);
+        return enumeration ? [{ column, facet, values }] : [];
+      })
+      .sort(
+        (a, b) =>
+          Number(!STATUS_LIKE.test(a.column.key)) -
+            Number(!STATUS_LIKE.test(b.column.key)) ||
+          a.values.length - b.values.length,
+      )
+      .slice(0, MAX_FACETS);
+  }, [columns, rows]);
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -604,6 +650,7 @@ export function AgentsTable({
           value={query}
           aria-label={t("list.controls.search")}
           placeholder={t("list.controls.search")}
+          data-touch-target=""
           className={`${inputBase} min-w-40 flex-1`}
           onChange={(event) => {
             setQuery(event.target.value);
@@ -615,6 +662,7 @@ export function AgentsTable({
             key={column.key}
             aria-label={t("list.controls.facetLabel", { column: column.label })}
             value={facets[column.key] ?? ""}
+            data-touch-target=""
             className={`${inputBase} w-auto`}
             onChange={(event) => {
               setFacets((was) => ({
@@ -638,6 +686,7 @@ export function AgentsTable({
           {t("list.controls.rows")}
           <select
             value={size}
+            data-touch-target=""
             className={`${inputBase} w-auto`}
             onChange={(event) => {
               setSize(Number(event.target.value));
@@ -739,13 +788,18 @@ export function AgentsTable({
                 ))}
               </tr>
             ))}
+            {shown.length === 0 ? (
+              <tr data-testid="agents-no-match">
+                <td
+                  colSpan={columns.length}
+                  className={`${cell} text-center text-muted-foreground`}
+                >
+                  {t("list.controls.noMatch")}
+                </td>
+              </tr>
+            ) : null}
           </tbody>
         </table>
-        {shown.length === 0 ? (
-          <p className="px-4 py-6 text-center text-sm text-muted-foreground">
-            {t("list.controls.noMatch")}
-          </p>
-        ) : null}
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">

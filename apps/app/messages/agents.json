@@ -32,15 +32,15 @@
         "mandate": {
           "title": "Holding a mandate",
           "holder": "{key} · in {workspace}",
-          "more": "{count} more in {workspace}",
-          "none": "no agent holds one",
-          "scope": "Counted over the agents in {workspace}. No organization-wide rollup is recorded yet."
+          "none": "no agent in {workspace} holds one",
+          "scope": "Counted over the agents in {workspace}. No organization-wide rollup is recorded yet.",
+          "holders": "{holders} · counted in {workspace} only"
         },
         "tamper": {
           "title": "Tamper incidents",
-          "open": "{key} · {kind}, {date} · {count} open",
-          "resolved": "{key} · {kind}, {date} · all resolved",
-          "none": "none in the retention window",
+          "open": "{key} · {kind}, {date} · {count} open · counted in {workspace} only",
+          "resolved": "{key} · {kind}, {date} · all resolved · counted in {workspace} only",
+          "none": "none in the retention window in {workspace}",
           "scope": "Summed over the agents in {workspace}. No organization-wide rollup is recorded yet."
         }
       },
@@ -84,7 +84,9 @@
         "none": "—",
         "cached": "{rate} cached",
         "cacheNotRecorded": "cache rate not recorded",
-        "tokensBasis": "{count, plural, one {# wrapped session} other {# wrapped sessions}}, as the harness reported them. Ledger runs' tokens are not in this total."
+        "tokensBasis": "{count, plural, one {# wrapped session} other {# wrapped sessions}}, as the harness reported them. Ledger runs' tokens are not in this total.",
+        "wrappedOnly": "wrapped sessions",
+        "spendBasis": "Priced wrapped sessions in the last 30 days. Ledger runs and unpriced sessions are not in this figure."
       },
       "health": {
         "tamper": "tamper",
@@ -94,7 +96,7 @@
         "tamperWhy": "{count, plural, one {# open incident} other {# open incidents}}",
         "notEnrolledWhy": "no hook is installed, so its runs are recorded only",
         "observeWhy": "enrolled, and nothing is delivered or refused yet",
-        "healthyWhy": "frames arriving, chain intact"
+        "healthyWhy": "enrolled, and its latest wrapped session recorded the {tier} tier"
       },
       "controls": {
         "search": "Search this list",
@@ -108,7 +110,7 @@
         "next": "Next page",
         "page": "Page {page}",
         "sortBy": "Sort by {column}",
-        "noMatch": "No agent matches this search.",
+        "noMatch": "No rows match.",
         "cursor": "Agents beyond this page"
       },
       "basisNotRecorded": "basis not recorded",
@@ -129,7 +131,7 @@
       "register": {
         "title": "Register an agent",
         "slug": "Slug",
-        "slugHint": "The agent key ends in <mono>.{slug}</mono> and is immutable.",
+        "slugHint": "The agent key becomes <mono>{key}</mono> and is immutable.",
         "avatar": "Avatar",
         "avatarHint": "The definition carries no avatar yet, so the agent shows these initials.",
         "harness": "Harness",
@@ -143,7 +145,8 @@
         "close": "Close",
         "invalidSlug": "Use lowercase letters, digits and single hyphens, at most 18 characters.",
         "design": "Design",
-        "designNote": "Designing an avatar needs an avatar field on the definition, and the definition carries none yet. The agent shows these initials until it does."
+        "designNote": "Designing an avatar needs an avatar field on the definition, and the definition carries none yet. The agent shows these initials until it does.",
+        "slugHintEnding": "The agent key ends in <mono>.{slug}</mono> and is immutable."
       },
       "states": {
         "loading": "Loading agents",
@@ -182,7 +185,7 @@
         "organization": "No organization-wide rollup of agents is recorded yet.",
         "tier": "No wrapped session has recorded an enforcement tier for this agent yet.",
         "runtimeKind": "No store records a runtime's kind yet. A host row is one enrollment, not a machine.",
-        "belt": "No store records the width of each agent's belt yet. The agent's own page computes its belt.",
+        "belt": "list_agents does not compute each agent's belt yet (#3852). The agent's own page shows the belt its grants give it.",
         "policy": "The read's refusal does not name the policy that decided it.",
         "trace": "A failed read does not carry its trace id or region yet."
       },
@@ -193,6 +196,12 @@
         "requestLink": "Open Roles",
         "incidentTitle": "Open an incident",
         "incidentBody": "An incident would record this failure, the code {code}, and when it happened, for the people who run this workspace. No capability opens an incident from the console yet. Send the code to your organization owner."
+      },
+      "costBasis": {
+        "gateway_observed": "gateway observed",
+        "client_attested": "client attested",
+        "mixed": "mixed basis",
+        "estimated": "estimated"
       }
     },
     "detail": {
@@ -243,7 +252,6 @@
           "title": "Assign a role",
           "field": "Role",
           "hint": "Only agent-kind roles are listed. <link>Manage roles</link>",
-          "builtIn": "{name} (seeded)",
           "loading": "Reading the role catalogue.",
           "empty": "This organization has no role an agent may hold. Write one on the Roles page, then assign it here.",
           "notEnforced": "On the {tier} tier the kernel allows every capability, so this role records intent and governs nothing until the organization moves to a tier that enforces it.",
@@ -251,10 +259,19 @@
           "confirm": "Assign",
           "pending": "Assigning",
           "why": "Why",
-          "whyPlaceholder": "Kept in the audit record with this assignment",
+          "whyPlaceholder": "Read by the approver and kept in the audit record",
           "note": "Effective permission stays <mono>roles ∩ {operator}'s grants</mono>. A role cannot lift an agent above its operator.",
           "noteNoOperator": "Effective permission stays <mono>roles ∩ the operator's grants</mono>. A role cannot lift an agent above its operator.",
-          "cancel": "Cancel"
+          "cancel": "Cancel",
+          "option": "{name} — {description}",
+          "held": "{name} · held",
+          "repository": "Repository",
+          "repositoryGap": "No role can be bound to one repository yet (#3865). A role applies at its own scope: the organization or this workspace.",
+          "done": "{role} assigned to {key}{why}. Recorded with your name; effective at its next call.",
+          "doneNotEnforced": "{role} assigned to {key}{why}. Recorded with your name. It governs nothing until the organization's tier enforces roles.",
+          "doneWhy": " · “{reason}”",
+          "already": "{key} already holds {role}.",
+          "close": "Close"
         },
         "revoke": {
           "open": "Revoke {role}",
@@ -616,12 +633,16 @@
         "kept": "Kept",
         "keptValue": "every run, frame and receipt. The record is never deleted.",
         "ends": "Ends",
-        "endsValue": "{mandates, plural, one {# mandate} other {# mandates}}, {credentials, plural, one {# credential} other {# credentials}}, {hosts, plural, one {# host enrollment} other {# host enrollments}}",
-        "endsUnknown": "its mandates, credentials and host enrollments",
+        "endsValue": "{roles, plural, one {# role} other {# roles}}, {mandates, plural, one {# mandate} other {# mandates}}, {hosts, plural, =0 {no host enrollment} one {the host enrollment} other {# host enrollments}}",
+        "endsUnknown": "its roles, mandates and host enrollment",
         "understand": "I understand this cannot be undone",
         "understandHint": "Re-registering creates a new principal.",
         "confirm": "Deregister",
-        "pending": "Deregistering"
+        "pending": "Deregistering",
+        "endsValueNoRoles": "the roles it holds, {mandates, plural, one {# mandate} other {# mandates}}, {hosts, plural, =0 {no host enrollment} one {the host enrollment} other {# host enrollments}}",
+        "done": "{name} deregistered. Credential revoked, every run and frame kept.",
+        "cancel": "Cancel",
+        "close": "Close"
       },
       "killSwitch": {
         "open": "Kill switch",

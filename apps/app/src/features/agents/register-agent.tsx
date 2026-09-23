@@ -10,6 +10,10 @@
 // Claude Code is not this either: it leaves the page for the Register Agent
 // gate, which wraps an agent that already runs.
 //
+// The slug hint names the whole key the slug becomes when the page holds a
+// key to take the namespaces from (./key-prefix.tsx). Open the Context PR sits
+// in the footer beside Cancel, as the design draws it.
+//
 // The definition carries no avatar field (#3855), so the Avatar row shows the
 // initials the agent will show. Its Design button, which the design draws,
 // says what designing would need rather than opening a designer whose choice
@@ -26,11 +30,13 @@ import {
 } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { PullRequestLink } from "@/ui/navigation";
-import { SheetDialog } from "@/ui/sheet-dialog";
+import { SheetDialog, SheetFooterAction } from "@/ui/sheet-dialog";
 import { UNANSWERED, useActionFailure } from "./action-failure";
 import { registerAgent } from "./actions";
+import { useAgentKeyPrefix } from "./key-prefix";
 
 const TEST_ID = "register-agent";
+const FORM_ID = `${TEST_ID}-form`;
 /** The slug rule propose_agent applies (agent.propose.ts `agentSlugSchema`). */
 const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const SLUG_MAX = 18;
@@ -53,6 +59,7 @@ export function RegisterAgent({
   const t = useTranslations("agents.list.register");
   const create = useTranslations("agents.list.create");
   const failureText = useActionFailure();
+  const prefix = useAgentKeyPrefix();
   const [open, setOpen] = useState(false);
   const [slug, setSlug] = useState("");
   const [pending, setPending] = useState(false);
@@ -137,6 +144,7 @@ export function RegisterAgent({
           </div>
         ) : (
           <form
+            id={FORM_ID}
             onSubmit={(e) => void submit(e)}
             className="flex flex-col gap-3 text-sm"
           >
@@ -161,10 +169,19 @@ export function RegisterAgent({
               >
                 {slug !== "" && !slugOk
                   ? t("invalidSlug")
-                  : t.rich("slugHint", {
-                      slug: slug === "" ? "<slug>" : slug,
-                      mono: (chunks) => <span className={mono}>{chunks}</span>,
-                    })}
+                  : prefix === null
+                    ? t.rich("slugHintEnding", {
+                        slug: slug === "" ? "<slug>" : slug,
+                        mono: (chunks) => (
+                          <span className={mono}>{chunks}</span>
+                        ),
+                      })
+                    : t.rich("slugHint", {
+                        key: `${prefix}.${slug === "" ? "<slug>" : slug}`,
+                        mono: (chunks) => (
+                          <span className={mono}>{chunks}</span>
+                        ),
+                      })}
               </p>
             </div>
             <div className="flex flex-col gap-1">
@@ -245,11 +262,16 @@ export function RegisterAgent({
             {failure === null ? null : (
               <FormAlert testId={`${TEST_ID}-failure`}>{failure}</FormAlert>
             )}
-            <SubmitButton
-              pending={pending}
-              label={t("confirm")}
-              pendingLabel={t("pending")}
-            />
+            <SheetFooterAction>
+              <SubmitButton
+                pending={pending}
+                fullWidth={false}
+                form={FORM_ID}
+                testId={`${TEST_ID}-confirm`}
+                label={t("confirm")}
+                pendingLabel={t("pending")}
+              />
+            </SheetFooterAction>
           </form>
         )}
       </SheetDialog>
