@@ -204,6 +204,7 @@ export function RunHeader({
   const locale = useLocale();
   const when = (at: string) =>
     format.dateTime(new Date(at), { dateStyle: "medium", timeStyle: "short" });
+  const displayedCost = run.cost ?? run.reportedCost ?? null;
   const operator = operatorFact(run, (kind) => t(`facts.operatorKind.${kind}`));
   return (
     <header className="flex flex-col gap-4">
@@ -332,15 +333,19 @@ export function RunHeader({
       </div>
       <div data-testid="run-figures" className={statStrip}>
         <Figure label={t("figures.cost")}>
-          {run.cost === null ? (
+          {displayedCost === null ? (
             <NoValue />
           ) : (
             <>
-              <Money value={run.cost} />
+              <Money value={displayedCost} />
               <span
                 className={`${mono} ml-2 text-[11px] font-normal tracking-normal text-muted-foreground`}
               >
-                {run.cost.basis ?? t("basisNotRecorded")}
+                {run.cost === null
+                  ? t("costReportedProvisional")
+                  : t("costFinalized", {
+                      basis: run.cost.basis ?? t("basisNotRecorded"),
+                    })}
               </span>
             </>
           )}

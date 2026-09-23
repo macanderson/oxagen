@@ -180,6 +180,7 @@ export const RunRow = z.object({
   steps: z.number().int().nonnegative(),
   frames: z.number().int().nonnegative(),
   cost: Cost.nullable(),
+  reportedCost: Cost.nullable().optional(),
   model: RunModel.nullable(),
   machine: RunMachine.nullable(),
   harness: z

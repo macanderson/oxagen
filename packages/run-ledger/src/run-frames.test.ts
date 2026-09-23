@@ -792,3 +792,37 @@ describe("a frame's summary and identity on a run the assistant recorded", () =>
     expect(modelFrame.turnIndex).toBeNull();
   });
 });
+
+describe("reported frame usage", () => {
+  it("keeps missing counts unknown and excludes duplicate model reports", () => {
+    const first = tachoFrame(
+      tachoRow(1, "llm_call", {
+        source: "transcript",
+        body: JSON.stringify({
+          input_tokens: 12,
+          cache_read_tokens: 400,
+          output_tokens: 9,
+        }),
+        attrs: {},
+      }),
+    );
+    expect(first.usage).toEqual({
+      inputUncached: 12,
+      cacheRead: 400,
+      cacheWrite: null,
+      output: 9,
+      reasoning: null,
+    });
+    const duplicate = tachoFrame(
+      tachoRow(2, "llm_call", {
+        source: "otel_log",
+        attrs: { "oxagen.llm_call_duplicate_of": "transcript" },
+        body: JSON.stringify({ input_tokens: 12, output_tokens: 9 }),
+      }),
+    );
+    expect(duplicate.usage).toBeNull();
+    expect(foldTranscript([first, duplicate], "turns")[0]?.usage).toEqual(
+      first.usage,
+    );
+  });
+});

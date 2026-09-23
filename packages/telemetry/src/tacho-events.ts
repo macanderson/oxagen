@@ -87,6 +87,9 @@ export interface TachoFrameRow {
   redactions: string;
   /** The typed body as JSON text. */
   body: string;
+  source?: string;
+  fidelity?: string;
+  attrs?: Record<string, string>;
   toolName: string;
   toolStatus: string;
   toolUseId: string;
@@ -113,6 +116,9 @@ interface RawTachoFrameRow {
   bytes_ref: string;
   redactions: string;
   body: string;
+  source?: string;
+  fidelity?: string;
+  attrs?: Record<string, string>;
   tool_name: string;
   tool_status: string;
   tool_use_id: string;
@@ -132,7 +138,9 @@ interface RawTachoFrameRow {
  * the ambient scope through chSelect.
  */
 /** A nullable ClickHouse count as a number, or null. */
-function nullableCount(value: string | number | null | undefined): number | null {
+function nullableCount(
+  value: string | number | null | undefined,
+): number | null {
   if (value === null || value === undefined) return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
@@ -147,7 +155,7 @@ export async function selectTachoEvents(args: {
     query: `
       SELECT
         seq, toString(ts) AS ts, event_id, kind, prev_hash, hash, content_digest, bytes_ref,
-        redactions, body, tool_name, tool_status, tool_use_id, model, provider,
+        redactions, body, source, fidelity, attrs, tool_name, tool_status, tool_use_id, model, provider,
         policy_decision, cost_usd_micros, turn_seq, ttft_ms, api_duration_ms
       FROM ${TACHO_EVENTS_TABLE} FINAL
       WHERE org_id = {orgId:UUID}
@@ -174,6 +182,9 @@ export async function selectTachoEvents(args: {
     bytesRef: r.bytes_ref,
     redactions: r.redactions,
     body: r.body,
+    source: r.source,
+    fidelity: r.fidelity,
+    attrs: r.attrs,
     toolName: r.tool_name,
     toolStatus: r.tool_status,
     toolUseId: r.tool_use_id,

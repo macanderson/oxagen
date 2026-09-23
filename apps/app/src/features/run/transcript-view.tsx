@@ -29,6 +29,7 @@
 // never replaced, so the scroll position and the playhead stay where they are.
 // A cursor this capability did not write is refused, and the view says so
 // instead of starting the transcript again.
+import { TokenUsage } from "./token-usage";
 import { useLocale, useTranslations } from "next-intl";
 import {
   type ReactNode,
@@ -642,6 +643,7 @@ function TurnBlock({
           there at every zoom. Inside the disclosure it was the one line a
           reader needed to read the rest and the one line a collapsed turn
           hid. */}
+      <TokenUsage entries={turn.frames} />
       {turn.prompt === null ? null : <Role who="you" text={turn.prompt} />}
       <details
         data-testid="transcript-turn"

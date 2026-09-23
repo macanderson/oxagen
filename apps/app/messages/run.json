@@ -515,6 +515,19 @@
         "blocked": "blocked",
         "withheld": "withheld"
       }
+    },
+    "costReportedProvisional": "Agent reported. Provisional until finalized.",
+    "costFinalized": "Finalized rollup ({basis})",
+    "tokenUsage": {
+      "title": "Reported tokens",
+      "missing": "Token usage was not recorded for these frames.",
+      "notRecorded": "Not recorded",
+      "inputUncached": "Uncached input",
+      "cacheRead": "Cache read",
+      "cacheWrite": "Cache write",
+      "output": "Output",
+      "reasoning": "Reasoning (within output)",
+      "coverage": "Counts cover loaded frames. Missing counts remain unknown. Cache reads are input too. These counts do not identify which input content was useful."
     }
   }
 }

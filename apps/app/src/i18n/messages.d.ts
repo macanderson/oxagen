@@ -3932,6 +3932,19 @@ type Messages = {
         withheld: string;
       };
     };
+    costReportedProvisional: string;
+    costFinalized: string;
+    tokenUsage: {
+      title: string;
+      missing: string;
+      notRecorded: string;
+      inputUncached: string;
+      cacheRead: string;
+      cacheWrite: string;
+      output: string;
+      reasoning: string;
+      coverage: string;
+    };
   };
   shell: {
     skipToContent: string;
