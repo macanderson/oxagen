@@ -116,7 +116,10 @@ vi.mock("@/server/viewer", () => ({
 vi.mock("@/features/audit", async (actual) => ({
   Audit,
   AuditSkeleton: () => null,
-  AuditHeaderAction: () => <p data-testid="audit-header-action" />,
+  AuditHeaderAction: ({ org }: { org: string }) => (
+    <p data-testid="audit-header-action">{org}</p>
+  ),
+  AuditRetentionLine: () => <p data-testid="audit-retention-line" />,
   auditTabOf: (await actual<typeof import("@/features/audit")>()).auditTabOf,
 }));
 vi.mock("@/features/billing", () => ({ Billing, BillingActions }));
@@ -270,28 +273,29 @@ describe("the Audit page", () => {
     expect(page).toHaveTextContent(
       "What happened, who allowed it, under what authority, and what it cost.",
     );
-    expect(page).toHaveTextContent(
-      "control-plane events retained 7 years · acme",
-    );
-    expect(screen.getByTestId("audit-header-action")).toBeInTheDocument();
+    expect(screen.getByTestId("audit-retention-line")).toBeInTheDocument();
+    expect(screen.getByTestId("audit-header-action")).toHaveTextContent("acme");
     // Audit has a page, so it has no UNRECORDED row (§3.6).
     expect(screen.queryByTestId("not-recorded")).toBeNull();
   });
 
-  it("opens another tab from its segment, under the same header", async () => {
+  it("opens another tab from its segment, under the same header, with the query it carries", async () => {
     const ctx = { orgSlug: "acme" };
     requireViewer.mockResolvedValue(ctx);
     await expectPageTitle(
       await AUDIT_TAB(),
-      routeProps({ ...SEGMENTS, tab: "keys" }),
+      routeProps(
+        { ...SEGMENTS, tab: "exports" },
+        { export: "3f1c2b7a-9d4e-4c1b-8a2f-5e6d7c8b9a01" },
+      ),
       title("audit"),
     );
     expect(requireViewer).toHaveBeenCalledWith(...ORG);
     expect(Audit.mock.calls.at(-1)?.[0]).toEqual({
       ctx,
       source,
-      tab: "keys",
-      searchParams: {},
+      tab: "exports",
+      searchParams: { export: "3f1c2b7a-9d4e-4c1b-8a2f-5e6d7c8b9a01" },
     });
   });
 
