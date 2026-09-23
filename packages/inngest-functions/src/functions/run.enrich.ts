@@ -240,8 +240,8 @@ export const [runEnrichmentSweep] = createFunction(
   { id: "run.enrichment-sweep", retries: 2, concurrency: { limit: 1 } },
   { cron: "*/5 * * * *" },
   async ({ step }) => {
+    // tenancy: global scheduling reads tenant IDs only; each enrichment runs in that tenant scope.
     const pending = await step.run("pending", () =>
-      // tenancy: global scheduling reads tenant IDs only; each enrichment runs in that tenant scope.
       withSystemDb(async (tx) => {
         const rows = [];
         for (const table of [schema.tachoSessions, schema.agentRuns]) {
