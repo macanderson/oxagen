@@ -45,6 +45,8 @@ export function validateContainedArguments(
 
 export function containedConfiguration(
   harness: ContainedHarness,
+  /** The one repository the bridge forwards GitHub traffic for, if any. */
+  githubRepository?: string,
 ): Record<string, string> {
   const events =
     harness === "codex"
@@ -91,6 +93,11 @@ export function containedConfiguration(
       ]),
     ].join("\n") + "\n";
   return {
+    // Part of the measured configuration digest, so the receipt names which
+    // repository the run could reach, never the token that reached it.
+    ...(githubRepository === undefined
+      ? {}
+      : { "github.json": JSON.stringify({ repository: githubRepository }) }),
     "requirements.toml": requirements,
     "settings.json": JSON.stringify({
       hooks,

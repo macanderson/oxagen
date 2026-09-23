@@ -11,6 +11,11 @@ import type { IssueRunTokenAnswer } from "../collector/credential-issuer";
 import type { TachoEvent } from "../envelope";
 import { containedConfiguration } from "./configuration";
 import { startContainedBridge } from "./bridge";
+import {
+  containedGitHubSchema,
+  revokeRunGitHubToken,
+  verifyRunGitHubToken,
+} from "./github";
 import { launchContainedAgent, type ContainedRunResult } from "./launcher";
 
 export const containedRunRequestSchema = z
@@ -19,8 +24,28 @@ export const containedRunRequestSchema = z
     harness: z.enum(["claude-code", "codex"]),
     args: z.array(z.string().max(65536)).max(128),
     image: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9/_.:@-]{0,255}$/),
+    /** Optional: one installation token for one repository (ADR-152). */
+    github: containedGitHubSchema.optional(),
   })
   .strict();
+
+/**
+ * `register_contained_launch` is served beside ingest under `/v1/tacho`
+ * (#3772), authenticated by the gateway credential, never under the
+ * org-scoped `/v1/<org>/<workspace>` routes. The enrollment claims state the
+ * ingest endpoint, so the registration endpoint is its sibling: a host
+ * pointed at a local or staging API registers there too.
+ */
+export function containedLaunchEndpoint(
+  host: Pick<HostFile, "endpoints">,
+): string {
+  const ingest = new URL(host.endpoints.ingest);
+  if (!ingest.pathname.endsWith("/tacho/events"))
+    throw new Error(
+      "The enrollment's ingest endpoint is not a Tacho events route; re-enroll this runner",
+    );
+  return new URL("contained-launch", ingest).href;
+}
 
 export interface ContainedRunnerOptions {
   host: () => HostFile;
@@ -36,10 +61,11 @@ export interface ContainedRunnerOptions {
 }
 
 export function createContainedRunner(options: ContainedRunnerOptions) {
-  const measurements = new Set<string>();
+  /** Harness session ids this launcher started and has not yet finished. */
+  const launched = new Set<string>();
   const active = new Map<string, AbortController>();
   return {
-    attested: (uuid: string) => measurements.has(uuid),
+    launched: (harnessSessionId: string) => launched.has(harnessSessionId),
     stop: (uuid: string) => active.get(uuid)?.abort(),
     stopAll: () => {
       for (const controller of active.values()) controller.abort();
@@ -66,11 +92,15 @@ export function createContainedRunner(options: ContainedRunnerOptions) {
         throw new Error(
           "The daemon must hold this harness's model credential before containment can start",
         );
+      // A token that reaches more than this run's repository is refused
+      // before any session starts, so a refusal leaves no record to explain.
+      if (input.github) await verifyRunGitHubToken(input.github, options.fetch);
       const controller = new AbortController();
       const abort = () => controller.abort();
       signal?.addEventListener("abort", abort, { once: true });
       if (signal?.aborted) abort();
       let sessionUuid: string | undefined;
+      let launchedSessionId: string | undefined;
       const session = (id: string) => {
         const found = options.registry.get(id);
         if (!found) throw new Error("Contained session was not recorded");
@@ -83,6 +113,11 @@ export function createContainedRunner(options: ContainedRunnerOptions) {
           output,
           signal: controller.signal,
           prepare: async ({ sessionId, directory, workspace }) => {
+            // Before the start hook: a mandate that requires containment
+            // refuses any session the launcher did not start, this one
+            // included, until it is on this list.
+            launched.add(sessionId);
+            launchedSessionId = sessionId;
             await options.hook({
               harness: input.harness,
               payload: {
@@ -150,6 +185,19 @@ export function createContainedRunner(options: ContainedRunnerOptions) {
                   sessionId,
                   enrollmentId: options.host().host_enrollment_id,
                 }),
+              ...(input.github ? { github: input.github } : {}),
+              forwarded: (method, path) =>
+                options.record([
+                  started.recorder.sealCollectorEvent("policy_decision", {
+                    policy_decision: "allow",
+                    policy_source: "bundle",
+                    policy_reason: "contained_github_route",
+                    tool_name: `${method} ${path.split("?")[0] ?? ""}`.slice(
+                      0,
+                      256,
+                    ),
+                  }),
+                ]),
               refused: (path) =>
                 options.record([
                   started.recorder.sealCollectorEvent("policy_decision", {
@@ -161,7 +209,10 @@ export function createContainedRunner(options: ContainedRunnerOptions) {
                 ]),
             });
             return {
-              files: containedConfiguration(input.harness),
+              files: containedConfiguration(
+                input.harness,
+                input.github?.repository,
+              ),
               close: bridge.close,
             };
           },
@@ -171,27 +222,27 @@ export function createContainedRunner(options: ContainedRunnerOptions) {
             if (!genesis)
               throw new Error("Contained session has no recorded genesis");
             const current = options.host();
-            const endpoint = new URL(current.api_url);
-            endpoint.pathname = `/v1/${encodeURIComponent(current.org_slug)}/${encodeURIComponent(current.workspace_slug)}/tacho/contained-launch`;
-            const response = await options.fetch(endpoint.href, {
-              method: "POST",
-              headers: {
-                authorization: `Bearer ${current.gateway_api_key}`,
-                "content-type": "application/json",
+            const response = await options.fetch(
+              containedLaunchEndpoint(current),
+              {
+                method: "POST",
+                headers: {
+                  authorization: `Bearer ${current.gateway_api_key}`,
+                  "content-type": "application/json",
+                },
+                body: JSON.stringify({
+                  host_enrollment_id: current.host_enrollment_id,
+                  session_uuid: started.recorder.sessionUuid,
+                  genesis_hash: genesis,
+                  measurement,
+                }),
+                signal: AbortSignal.timeout(30_000),
               },
-              body: JSON.stringify({
-                host_enrollment_id: current.host_enrollment_id,
-                session_uuid: started.recorder.sessionUuid,
-                genesis_hash: genesis,
-                measurement,
-              }),
-              signal: AbortSignal.timeout(30_000),
-            });
+            );
             if (!response.ok)
               throw new Error(
                 `Contained launch registration failed (${response.status}); the agent was not started`,
               );
-            measurements.add(started.recorder.sessionUuid);
             options.record([
               started.recorder.sealCollectorEvent(
                 "policy_decision",
@@ -227,6 +278,16 @@ export function createContainedRunner(options: ContainedRunnerOptions) {
       } finally {
         signal?.removeEventListener("abort", abort);
         if (sessionUuid) active.delete(sessionUuid);
+        if (launchedSessionId) launched.delete(launchedSessionId);
+        // The token expires with the run, not with GitHub's one-hour ceiling.
+        if (input.github)
+          await revokeRunGitHubToken(input.github.token, options.fetch).then(
+            (outcome) => options.log(`Contained run GitHub token ${outcome}`),
+            (error: unknown) =>
+              options.log(
+                `Contained run GitHub token was not revoked: ${error instanceof Error ? error.message : String(error)}`,
+              ),
+          );
       }
     },
   };

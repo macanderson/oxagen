@@ -681,9 +681,13 @@ async function initializeDaemon(
     };
   }
 
+  // Bound once the contained runner exists below. Until then no session is
+  // one the launcher started, which is the fail-closed answer.
+  let launchedContained: (harnessSessionId: string) => boolean = () => false;
   function policy(): PolicyView {
     const current = host as HostFile;
     return {
+      launchedContained: (id) => launchedContained(id),
       bundle: current.bundle,
       verified: bundleVerified,
       mandateConfirmedAt,
@@ -2209,6 +2213,7 @@ async function initializeDaemon(
     fetch: options.fetch ?? ((input, init) => fetch(input, init)),
     log,
   });
+  launchedContained = contained.launched;
 
   /**
    * The real interrupt. A pause, cancel or kill already stops the session at

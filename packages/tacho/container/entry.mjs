@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { createServer, request } from "node:http";
-import { copyFileSync, mkdirSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 
 const [harness, ...input] = process.argv.slice(2);
 if (!["claude-code", "codex"].includes(harness))
@@ -46,6 +46,22 @@ const env = {
   OXAGEN_CONTAINED_ROUTE: "contained-route",
   CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
 };
+// GitHub is reachable only through the bridge, for the one repository the
+// launcher named (ADR-152). The token stays outside; git and the REST API see
+// a loopback URL that the bridge rewrites and authenticates.
+const github = "/opt/oxagen/session/github.json";
+if (existsSync(github)) {
+  const { repository } = JSON.parse(readFileSync(github, "utf8"));
+  Object.assign(env, {
+    GIT_CONFIG_COUNT: "2",
+    GIT_CONFIG_KEY_0: "url.http://127.0.0.1:43801/github/git/.insteadOf",
+    GIT_CONFIG_VALUE_0: "https://github.com/",
+    GIT_CONFIG_KEY_1: "safe.directory",
+    GIT_CONFIG_VALUE_1: "/workspace",
+    GITHUB_API_URL: "http://127.0.0.1:43801/github/api",
+    GITHUB_REPOSITORY: repository,
+  });
+}
 const args =
   harness === "codex"
     ? ["exec", "--ephemeral", ...(input[0] === "exec" ? input.slice(1) : input)]

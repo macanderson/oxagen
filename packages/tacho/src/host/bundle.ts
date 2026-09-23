@@ -244,6 +244,11 @@ export interface EvaluationInput {
    * freshness by `expires_at` alone.
    */
   mandateConfirmedAt?: number;
+  /**
+   * The mandate requires the contained tier and the launcher did not start
+   * this session (ADR-152). Set by the caller, which knows the session.
+   */
+  containmentUnmet?: boolean;
   now: number;
   context?: MatchContext;
 }
@@ -400,6 +405,17 @@ export function evaluatePreToolUse(input: EvaluationInput): Evaluation {
     return deny(
       "bundle_unverified",
       "The cached policy bundle did not verify and enforce mode fails closed.",
+    );
+  }
+
+  // 1b. A mandate that requires the contained tier refuses every tool in a
+  // session the launcher did not start (ADR-152). Read only from a verified
+  // bundle, so a forged requirement cannot deny, and a forged absence is
+  // what an unverified bundle already fails closed on above.
+  if (input.containmentUnmet === true) {
+    return deny(
+      "containment_required",
+      "This agent's mandate requires the contained tier. Start it with `tacho run --contained`.",
     );
   }
 

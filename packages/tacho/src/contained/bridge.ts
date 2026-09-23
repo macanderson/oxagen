@@ -5,6 +5,12 @@ import {
   type ServerResponse,
 } from "node:http";
 import type { HookEnvelope } from "../collector/server";
+import {
+  forwardToGitHub,
+  gitHubTarget,
+  type ContainedGitHub,
+  type GitHubUpstreams,
+} from "./github";
 import type { ContainedHarness } from "./profile";
 
 export interface ContainedBridgeOptions {
@@ -22,6 +28,14 @@ export interface ContainedBridgeOptions {
     headers?: Record<string, string>;
   }>;
   refused: (path: string) => void;
+  /**
+   * The run's GitHub grant, when the operator supplied one (ADR-152). The
+   * token never crosses into the sandbox; the bridge adds it on the way out.
+   */
+  github?: ContainedGitHub;
+  githubUpstreams?: GitHubUpstreams;
+  /** Records a GitHub request the bridge forwarded for the run. */
+  forwarded?: (method: string, path: string) => void;
 }
 
 function send(response: ServerResponse, status: number, body: unknown): void {
@@ -111,6 +125,18 @@ export function containedBridgeHandler(options: ContainedBridgeOptions) {
           result.body === undefined ? undefined : JSON.stringify(result.body),
         );
         return;
+      }
+      if (options.github && path.startsWith("/github/")) {
+        const target = gitHubTarget(
+          path,
+          options.github.repository,
+          options.githubUpstreams,
+        );
+        if (target) {
+          options.forwarded?.(request.method ?? "GET", path);
+          forwardToGitHub(target, options.github.token, request, response);
+          return;
+        }
       }
       options.refused(path);
       send(response, 403, {

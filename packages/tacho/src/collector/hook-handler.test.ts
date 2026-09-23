@@ -418,6 +418,87 @@ describe("handleHookEvent over the recorded session", () => {
     });
   });
 
+  describe("a mandate that requires the contained tier (ADR-152)", () => {
+    const fixture = (name: string) =>
+      loadFixtures().find((f) => f.name === name) as Fixture;
+    const LAUNCHED = "340ed354-6344-4727-9f8b-1e40b5e12aa7";
+
+    it("refuses the start, the prompt and the tool in a session the launcher did not start", async () => {
+      const { deps } = harness(
+        { mode: "enforce", containment: { required: true } },
+        { launchedContained: () => false },
+      );
+      const start = await handleHookEvent(
+        fixture("01-SessionStart.json").stdin,
+        {},
+        deps,
+      );
+      expect(start.response).toEqual({
+        continue: false,
+        stopReason:
+          "This agent's mandate requires the contained tier. Start it with `tacho run --contained`.",
+      });
+      expect(start.events[1]?.body).toMatchObject({
+        policy_decision: "deny",
+        policy_reason_code: "containment_required",
+        policy_source: "bundle",
+      });
+      const prompt = await handleHookEvent(
+        fixture("03-UserPromptSubmit.json").stdin,
+        {},
+        deps,
+      );
+      expect(prompt.response).toMatchObject({ decision: "block" });
+      const tool = await handleHookEvent(
+        fixture("04-PreToolUse.json").stdin,
+        {},
+        deps,
+      );
+      expect(tool.response).toMatchObject({
+        hookSpecificOutput: {
+          permissionDecision: "deny",
+          permissionDecisionReason: expect.stringContaining("contained tier"),
+        },
+      });
+      expect(tool.events.at(-1)?.body).toMatchObject({
+        policy_decision: "deny",
+        policy_reason_code: "containment_required",
+      });
+    });
+
+    it("admits a session the launcher started", async () => {
+      const { deps } = harness(
+        { mode: "enforce", containment: { required: true } },
+        { launchedContained: (id) => id === LAUNCHED },
+      );
+      const start = await handleHookEvent(
+        fixture("01-SessionStart.json").stdin,
+        {},
+        deps,
+      );
+      expect(start.response).not.toMatchObject({ continue: false });
+      const tool = await handleHookEvent(
+        fixture("04-PreToolUse.json").stdin,
+        {},
+        deps,
+      );
+      expect(JSON.stringify(tool.events)).not.toContain("containment_required");
+    });
+
+    it("records and never refuses in observe mode", async () => {
+      const { deps } = harness(
+        { mode: "observe", containment: { required: true } },
+        { launchedContained: () => false },
+      );
+      const start = await handleHookEvent(
+        fixture("01-SessionStart.json").stdin,
+        {},
+        deps,
+      );
+      expect(start.response).not.toMatchObject({ continue: false });
+    });
+  });
+
   it("allows a subagent start on a bundle the daemon keeps confirming", async () => {
     // The daemon records a confirmation on every `not_modified`, and the
     // staleness window is measured from that rather than from `issued_at`.
