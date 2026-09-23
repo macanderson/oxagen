@@ -55,10 +55,18 @@ async function main(): Promise<void> {
   // here is safe and keeps every command instrumented from one place.
   const program = buildProgram();
   const knownCommands = program.commands.map((cmd) => cmd.name());
-  const { classifyCommand, classifyErrorType, recordUsageEvent } = await import(
-    "./telemetry/usage.js"
-  );
-  const command = classifyCommand(process.argv, knownCommands);
+  const {
+    classifyCommand,
+    classifyErrorType,
+    recordUsageEvent,
+    topLevelCommand,
+  } = await import("./telemetry/usage.js");
+  let command = classifyCommand(process.argv, knownCommands);
+  // Replace the argv guess with the command Commander dispatched, so an
+  // option before the command name cannot hide it (`oxagen -m x verify`).
+  program.hook("preAction", (_root, action) => {
+    command = topLevelCommand(action, program) ?? command;
+  });
   const startedAt = Date.now();
   let errorType = "";
   let exitStatus = "success";

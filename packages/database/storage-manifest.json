@@ -3892,7 +3892,7 @@
       "writes": []
     }
   ],
-  "contentHash": "0785e8ba72814bbad59ab180de58c94a0226fa17716443d4a5c5bb42a04cee3f",
+  "contentHash": "85bab8db3df87e0cf0ee2b44a170c68d617cdf2dd2a38443d22c03a2e21bc4dc",
   "domains": [
     {
       "name": "agent",
@@ -7334,6 +7334,24 @@
           "nullable": true,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "summary_input_digest",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "summary_observed_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "summary_observed_revision",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
         },
         {
           "name": "spec_version",
@@ -22076,6 +22094,24 @@
           "nullable": true,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "summary_input_digest",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "summary_observed_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "summary_observed_revision",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
         }
       ],
       "domain": "tacho",

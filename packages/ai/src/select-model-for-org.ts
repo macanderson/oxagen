@@ -28,7 +28,11 @@
  */
 import { wrapLanguageModel, type LanguageModel } from "ai";
 import { mintedKeyLimitMiddleware } from "./assistant-model-key-limit";
-import { resolveModelFundingSource, type TurnFunding } from "./funding-source";
+import {
+  resolveModelFundingSource,
+  type ModelFundingSource,
+  type TurnFunding,
+} from "./funding-source";
 import { selectModel, type ModelSelector } from "./models";
 
 /** Exactly the two fields every metered call path needs, and nothing else. */
@@ -55,7 +59,19 @@ export async function selectModelForOrg(
   orgId: string,
   selector: Omit<ModelSelector, "credential"> = {},
 ): Promise<OrgModelSelection> {
-  const funding = await resolveModelFundingSource(orgId);
+  return selectModelFromFunding(
+    orgId,
+    await resolveModelFundingSource(orgId),
+    selector,
+  );
+}
+
+/** Build from an already-resolved snapshot when the governed runtime also needs its credential. */
+export function selectModelFromFunding(
+  orgId: string,
+  funding: ModelFundingSource,
+  selector: Omit<ModelSelector, "credential"> = {},
+): OrgModelSelection {
   const model = selectModel({
     ...selector,
     ...(funding.modelKey ? { credential: funding.modelKey } : {}),

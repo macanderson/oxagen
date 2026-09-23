@@ -31,7 +31,7 @@ import {
 
 const SUMMARIZE_ROLES = ["Owner", "Admin", "Member"] as const;
 
-export const RUN_SUMMARIZE_EVENT = "run/summarize";
+export const RUN_SUMMARIZE_EVENT = "run/enrich";
 
 interface RunSummarizeEvent {
   name: typeof RUN_SUMMARIZE_EVENT;
