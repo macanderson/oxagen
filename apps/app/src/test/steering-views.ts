@@ -12,6 +12,8 @@
 import type { DataSource } from "@/data/ports";
 import type {
   ContextPr,
+  MemoryPage,
+  OxagenTree,
   Proposal,
   ProposalPage,
   ProposalStatus,
@@ -215,6 +217,8 @@ export type SteeringReads = {
   freshness: Read<SteeringFreshness>;
   hub: Read<SteeringHub>;
   deliveries: Read<SteeringDeliveries>;
+  memories: Read<MemoryPage>;
+  tree: Read<OxagenTree>;
 };
 
 /** The freshness panel's read: a bound repository, one publication, both gates off. */
@@ -257,6 +261,8 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
       scanned: 0,
       truncated: false,
     }),
+    memories: readOk({ memories: [], total: 0 }),
+    tree: readOk({ state: "unbound" }),
     ...overrides,
   };
   const calls: Record<keyof SteeringReads, unknown[][]> = {
@@ -267,6 +273,8 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
     freshness: [],
     hub: [],
     deliveries: [],
+    memories: [],
+    tree: [],
   };
   const refuse = () => Promise.reject(new Error("not a Steering read"));
   const source: DataSource = {
@@ -283,7 +291,16 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
     },
     approvals: { pending: refuse, resolved: refuse },
     agents: {
-      list: refuse,
+      // The Assignments count reads the registry (features/steering/agents-read.ts);
+      // an empty workspace is the neutral answer for tests that do not set one.
+      list: () =>
+        Promise.resolve(
+          readOk({
+            agents: [],
+            nextCursor: null,
+            totals: { identities: 0, enrolled: 0, tamperIncidents: 0 },
+          }),
+        ),
       get: refuse,
       toolbelt: refuse,
       incidents: refuse,
@@ -351,6 +368,14 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
       hub: (...args) => {
         calls.hub.push(args);
         return Promise.resolve(reads.hub);
+      },
+      memories: (...args) => {
+        calls.memories.push(args);
+        return Promise.resolve(reads.memories);
+      },
+      tree: (...args) => {
+        calls.tree.push(args);
+        return Promise.resolve(reads.tree);
       },
     },
     tools: {
