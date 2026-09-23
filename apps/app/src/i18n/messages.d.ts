@@ -3727,6 +3727,8 @@ type Messages = {
       speed: string;
       transportNote: string;
       frameHead: string;
+      subagent: string;
+      subagentTyped: string;
       fidelity: {
         full: string;
         digest_only: string;

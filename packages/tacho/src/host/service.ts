@@ -120,6 +120,20 @@ function systemdQuote(value: string, command = false): string {
   return `"${command ? escaped.replace(/\$/g, "$$$$") : escaped}"`;
 }
 
+/**
+ * How long systemd waits for `stop()` to finish before it SIGKILLs the
+ * daemon. `stop()` awaits the git reconciliation lane, whose own worst case
+ * (`startGitReads`'s comment in `daemon.ts` has the arithmetic: up to four
+ * sessions at ~210 s each) is 840 s; this is not that ceiling, it is a bound
+ * generous enough to let an ordinary shutdown — including one lane's
+ * reconciliation — finish cleanly, while still ending an unbounded hang
+ * rather than leaving systemd's own default (90 s on most distributions) to
+ * kill a daemon that was still finalizing its own chain. `stop()` persists
+ * `state.json` before it starts the wait this bounds, so a kill here loses at
+ * most the wait itself, never the cursor.
+ */
+const STOP_TIMEOUT_SEC = 230;
+
 export function renderSystemdUnit(spec: ServiceSpec): string {
   const env = Object.entries(spec.env)
     .map(([key, value]) => `Environment=${systemdQuote(`${key}=${value}`)}`)
@@ -135,6 +149,7 @@ WorkingDirectory=${spec.workingDirectory}
 ${env}
 Restart=always
 RestartSec=2
+TimeoutStopSec=${STOP_TIMEOUT_SEC}
 StandardOutput=append:${spec.logPath}
 StandardError=append:${spec.logPath}
 

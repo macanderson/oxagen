@@ -90,6 +90,7 @@ import {
   gunzipSync,
   brotliDecompressSync,
   zstdDecompressSync,
+  inflateSync,
 } from "node:zlib";
 import { digestText } from "../claude-code/context";
 import type { SessionRecorder } from "../claude-code/recorder";
@@ -376,6 +377,7 @@ function readableBody(
     if (name === "zstd") return zstdDecompressSync(body);
     if (name === "gzip" || name === "x-gzip") return gunzipSync(body);
     if (name === "br") return brotliDecompressSync(body);
+    if (name === "deflate") return inflateSync(body);
   } catch {
     // A body nobody here can decode is still forwarded as it came.
   }
@@ -431,7 +433,11 @@ function modelOf(
   json: () => Record<string, unknown> | undefined,
 ): { model: string | undefined; ambiguous: boolean } {
   const parsed = json()?.["model"];
-  const fromBody = typeof parsed === "string" ? parsed : undefined;
+  // Clamped to the envelope's `model` column (`short`, 512 chars,
+  // `envelope.ts`): a request that names an absurd model must not carry that
+  // string onto the frame unclamped and fail to seal it.
+  const fromBody =
+    typeof parsed === "string" ? parsed.slice(0, 512) : undefined;
   const leading = leadingModel(readable());
   return {
     model: fromBody ?? leading,
@@ -526,8 +532,12 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
   const upstreamIdleMs = deps.upstreamIdleMs ?? DEFAULT_UPSTREAM_IDLE_MS;
   const hookTimeoutMs =
     deps.beforeForwardTimeoutMs ?? DEFAULT_BEFORE_FORWARD_TIMEOUT_MS;
-  const httpAgent = new HttpAgent({ keepAlive: true, maxSockets: 64 });
-  const httpsAgent = new HttpsAgent({ keepAlive: true, maxSockets: 64 });
+  // Unbounded: a per-origin cap here queues a session's own concurrent
+  // streams against each other, which a proxy in the critical path must not
+  // do. `keepAlive` still reuses connections; nothing here limits how many
+  // are open at once.
+  const httpAgent = new HttpAgent({ keepAlive: true, maxSockets: Infinity });
+  const httpsAgent = new HttpsAgent({ keepAlive: true, maxSockets: Infinity });
   const inFlight = new Map<string, Set<InFlight>>();
   const spent = new Map<string, number>();
   const observed = new Map<string, number>();
@@ -570,7 +580,7 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
         ? undefined
         : route.provider === "anthropic"
           ? header(req, "x-claude-code-session-id")
-          : header(req, "session-id");
+          : (header(req, "session-id") ?? header(req, "session_id"));
     let id = explicit ?? native;
     let how = explicit !== undefined ? "header" : "harness_header";
     if (id === undefined && route.api === "anthropic.messages") {
@@ -972,7 +982,7 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
               // one. A `model_not_permitted` frame that does not name the
               // model leaves the operator guessing which entry to add.
               ...(askedModel !== undefined
-                ? { "oxagen.model": askedModel }
+                ? { "oxagen.model": askedModel.slice(0, 512) }
                 : {}),
               ...(record !== undefined
                 ? {
@@ -1039,19 +1049,21 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     // injected body when `beforeForward` changed one, because the request that
     // was made is the request a fork has to replay.
     const sent = injected ? body : readable();
-    const requestTooLarge =
-      sent !== undefined && sent.length > TACHO_MAX_BODY_BYTES;
-    const requestText =
-      sent !== undefined && !requestTooLarge
-        ? sent.toString("utf8")
-        : undefined;
     // The body stores the request with the prefix the previous call already
-    // holds cut out. The digests of the full request stay on the frame, so a
-    // reader can tell the stored text from what crossed the wire.
+    // holds cut out. Folding runs on the full decoded text, whatever its
+    // size: a request over the cap usually folds down to the few messages
+    // that are new, and checking the raw bytes here — before the fold had a
+    // chance to make that saving — used to throw it away and ship no request
+    // half at all for a call whose folded delta would have been a few KB.
+    // Only `fold.text`, what would actually be stored, is checked against
+    // the cap, below.
+    const requestText = sent !== undefined ? sent.toString("utf8") : undefined;
     const fold =
       requestText === undefined
         ? undefined
         : priors.fold(sessionKey, requestText);
+    const requestTooLarge =
+      fold !== undefined && fold.storedBytes > TACHO_MAX_BODY_BYTES;
     // Nothing else of the request is kept past this point but its bytes to send.
     decoded = undefined;
     parsed = undefined;
@@ -1121,6 +1133,23 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
       settled = true;
       set.delete(entry);
       if (set.size === 0) inFlight.delete(sessionKey);
+      try {
+        settleMetered(errorClass);
+      } catch (error) {
+        // Sealing a frame or appending it to the WAL must never surface
+        // here: this runs inside response, error and close event listeners
+        // with nothing above it to catch a throw, and Node treats an
+        // uncaught exception thrown from a listener as fatal, which would
+        // take the whole daemon down mid-call over one frame. The response
+        // already sent, or already decided, is unaffected; only this call's
+        // own frame is lost, and that is logged rather than silent.
+        deps.log(
+          `model proxy: sealing the call's frame failed, the response the caller already has is unaffected: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    };
+
+    const settleMetered = (errorClass: string | undefined): void => {
       if (!metered) return;
       const usage: ObservedUsage = meter?.end() ?? {};
       const model = usage.model ?? requestModel;
@@ -1139,16 +1168,55 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
         errorClass ??
         (status !== undefined && status >= 400 ? `http_${status}` : undefined);
       const responseText = responseBody.text();
-      // Bytes came back and none of them are here, so the encoding the vendor
-      // chose is one this build has no decoder for. That is a different gap
-      // from a response too large to hold, and a replay that cannot tell them
-      // apart cannot tell a host that is behind from a host that is working.
+      // The exchange ships at most `TACHO_MAX_BODY_BYTES`, request and
+      // response together: `prepareContent` (evidence/frame-body.ts) holds no
+      // body at all past that cap, so two halves that separately fit but do
+      // not together would otherwise cost the call both of them, when the
+      // request alone — usually the smaller half, already folded down to
+      // what changed — would have replayed fine on its own. The response is
+      // dropped first.
+      let requestContentText = requestTooLarge ? undefined : fold?.text;
+      let responseContentText = responseText;
+      if (
+        requestContentText !== undefined &&
+        responseContentText !== undefined
+      ) {
+        const combinedBytes = Buffer.byteLength(
+          jcs({ request: requestContentText, response: responseContentText }),
+          "utf8",
+        );
+        if (combinedBytes > TACHO_MAX_BODY_BYTES) {
+          responseContentText = undefined;
+          const requestOnlyBytes = Buffer.byteLength(
+            jcs({ request: requestContentText, response: undefined }),
+            "utf8",
+          );
+          if (requestOnlyBytes > TACHO_MAX_BODY_BYTES)
+            requestContentText = undefined;
+        }
+      }
+      // `fold` already remembered this call as the session's next prior
+      // (`request-prefix.ts`), on the assumption its own body would ship.
+      // A request cut for size here — alone, or only once paired with the
+      // response — breaks that assumption: the next call's `unchanged_from`
+      // would point at a body nobody stored. Forgetting falls back to
+      // storing the next call in full, which costs the saving this call
+      // would have offered but never points at an unstored body.
+      if (fold !== undefined && requestContentText === undefined) {
+        priors.forget(sessionKey);
+      }
+      // Bytes came back and none of them are here, so either the encoding the
+      // vendor chose is one this build has no decoder for, or the exchange
+      // pushed the shared cap over and this half was the one dropped to keep
+      // the other. Both read the same to a reader: nothing to show, and why.
       const responseOmitted = responseBody.tooLarge
         ? "too_large"
         : responseText === undefined && responseBytes > 0
           ? "not_decoded"
-          : undefined;
-      const exchange = exchangeContent(fold?.text, responseText);
+          : responseContentText === undefined && responseText !== undefined
+            ? "too_large"
+            : undefined;
+      const exchange = exchangeContent(requestContentText, responseContentText);
       deps.record(
         [
           recorder.sealCollectorEvent(
@@ -1225,9 +1293,11 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
                   ? { "oxagen.response_content_type": responseType }
                   : {}),
                 ...(injected ? { "oxagen.request_injected": "1" } : {}),
-                ...(requestTooLarge
+                ...(fold !== undefined && requestContentText === undefined
                   ? { "oxagen.request_body_omitted": "too_large" }
-                  : {}),
+                  : fold === undefined && sent === undefined && body.length > 0
+                    ? { "oxagen.request_body_omitted": "not_decoded" }
+                    : {}),
                 ...(fold !== undefined
                   ? {
                       "oxagen.request_full_digest": fold.fullDigest,
@@ -1288,11 +1358,17 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
       const decoder = decoderFor(
         typeof contentEncoding === "string" ? contentEncoding : undefined,
       );
+      let decoderFailed = false;
       decoder?.on("data", (chunk: Buffer) => {
         meter?.write(chunk);
         responseBody.write(chunk);
       });
-      decoder?.on("error", () => undefined);
+      decoder?.on("error", () => {
+        // A body this build's decoder cannot read. zlib does not follow this
+        // with an `end`, so nothing downstream should keep waiting for one;
+        // `decoderFailed` tells the `end` handler below to settle without it.
+        decoderFailed = true;
+      });
       const compressed =
         typeof contentEncoding === "string" &&
         contentEncoding.toLowerCase() !== "identity";
@@ -1314,14 +1390,35 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
           responseBody.write(chunk);
         }
       });
+      // Sealing runs after the response has been handed to `res` via `pipe`
+      // below, not before it: a WAL append is synchronous work the caller's
+      // connection should never wait on. `process.nextTick` is the smallest
+      // deferral that still guarantees that ordering — this listener is
+      // registered before `upstream.pipe(res)`, so both run synchronously
+      // inside the same `end` emission, in registration order; queuing the
+      // seal for the next tick lets pipe's own `end` handler (which calls
+      // `res.end()`) run first within that same emission, while everything
+      // that reads a sealed frame straight back off `call()` still sees it,
+      // because nothing here waits on I/O the way `setImmediate` would.
+      const settleDeferred = (errorClass: string | undefined): void =>
+        process.nextTick(() => settle(errorClass));
       upstream.on("end", () => {
-        if (decoder === undefined) {
-          settle(undefined);
+        if (decoder === undefined || decoderFailed) {
+          // No decoder ran, or it failed and will not emit `end` or another
+          // `error` of its own (zlib leaves the stream unusable after one):
+          // either way nothing more is coming, so settle now rather than
+          // wait on an event that was never going to arrive and leak the
+          // in-flight entry (P1-3).
+          settleDeferred(undefined);
           return;
         }
-        decoder.once("end", () => settle(undefined));
-        decoder.once("error", () => settle(undefined));
-        decoder.end();
+        decoder.once("end", () => settleDeferred(undefined));
+        decoder.once("error", () => settleDeferred(undefined));
+        try {
+          decoder.end();
+        } catch {
+          settleDeferred(undefined);
+        }
       });
       // Node emits both aborted and error when a response is destroyed, even
       // when this proxy destroyed it because the caller left. Classify and
