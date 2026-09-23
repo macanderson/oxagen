@@ -92,6 +92,7 @@ async function renderWorkspaces(
       apiKeys: vi.fn(),
       costCenters: vi.fn(),
       modelCredential: vi.fn(),
+      dataPlane: vi.fn(),
       sso: vi.fn(),
     },
     mandates: { list: vi.fn(), get: vi.fn() },

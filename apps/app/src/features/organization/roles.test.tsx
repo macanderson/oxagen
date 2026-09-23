@@ -103,6 +103,7 @@ async function renderRoles(
       apiKeys: vi.fn(),
       costCenters: vi.fn(),
       modelCredential: vi.fn(),
+      dataPlane: vi.fn(),
       sso,
     },
     mandates: { list: vi.fn(), get: vi.fn() },

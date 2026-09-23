@@ -167,6 +167,7 @@ export function fleetSource(reads: FleetReads) {
       apiKeys: refuse,
       costCenters: refuse,
       modelCredential: refuse,
+      dataPlane: refuse,
       sso: refuse,
     },
     mandates: {

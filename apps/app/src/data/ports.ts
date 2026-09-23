@@ -34,6 +34,7 @@ import type { FirstFrame, OnboardingGate } from "./contracts/onboarding";
 import type {
   ApiKey,
   CostCenterList,
+  DataPlane,
   MemberList,
   ModelCredential,
   RoleCatalog,
@@ -342,6 +343,8 @@ export interface DataSource {
      * Org-scoped: the key pays for every workspace's assistant turns.
      */
     modelCredential(ctx: OrgCtx): Promise<Read<ModelCredential>>;
+    /** get_data_plane {kind:"postgres"}, redacted; the Data plane tab. */
+    dataPlane(ctx: OrgCtx): Promise<Read<DataPlane>>;
     /**
      * list_sso_providers — the organisation's identity providers, their
      * domain proofs and group mappings, and whether SSO is required. No

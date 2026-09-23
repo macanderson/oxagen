@@ -21,25 +21,70 @@ import {
 } from "@/shared/credential-state";
 import type { SafePath } from "@/shared/safe-path";
 import { mono } from "@/ui/control-styles";
+import { Badge } from "@/ui/badge";
 import { useExpiryClock } from "@/ui/expiry-clock";
-import { cell } from "@/ui/table";
+import { cell, numericCell } from "@/ui/table";
 import { KeyRowActions } from "./create-key-dialog";
-import { DateCell } from "./parts";
+import { DateCell, NotRecorded } from "./parts";
 
-/** The key's state as a dot and a word. */
-function KeyStatus({ state }: { state: CredentialState }) {
-  const t = useTranslations("organization.apiKeys.status");
+/** How close an expiry must be before the badge warns of it. */
+const EXPIRING_WITHIN_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The Expires cell: the key's state as a dot and a word, then the expiry date.
+ * A live key reads "active", or "expires in N days" inside the last thirty
+ * days, or "never used" when no request has presented it; an expired or a
+ * revoked key says so. The words come from the key's own instants, judged on
+ * this row's running clock.
+ */
+function KeyExpiry({
+  apiKey,
+  state,
+  current,
+}: {
+  apiKey: ApiKey;
+  state: CredentialState;
+  current: number;
+}) {
+  const t = useTranslations("organization.apiKeys");
+  const expiresAt =
+    apiKey.expiresAt === null ? null : Date.parse(apiKey.expiresAt);
+  const days =
+    expiresAt === null ? null : Math.ceil((expiresAt - current) / DAY_MS);
+  const badge =
+    state === "revoked" ? (
+      <Badge tone="quiet" data-status="revoked">
+        {t("state.revoked")}
+      </Badge>
+    ) : state === "expired" ? (
+      <Badge tone="denied" data-status="expired">
+        {t("state.expired")}
+      </Badge>
+    ) : days !== null && days <= EXPIRING_WITHIN_DAYS ? (
+      <Badge tone="approval" data-status="expiring">
+        {t("state.expiring", { days })}
+      </Badge>
+    ) : apiKey.lastUsedAt === null ? (
+      <Badge tone="quiet" data-status="never-used">
+        {t("state.neverUsed")}
+      </Badge>
+    ) : (
+      <Badge tone="allowed" data-status="live">
+        {t("state.active")}
+      </Badge>
+    );
   return (
-    <span
-      data-status={state}
-      className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium text-foreground"
-    >
-      <span
-        aria-hidden="true"
-        className={`size-2 rounded-full ${state === "live" ? "bg-success" : state === "expired" ? "bg-warning" : "bg-muted-foreground"}`}
-      />
-      {t(state)}
-    </span>
+    <>
+      {badge}
+      <div className={`${mono} text-[11px] text-dim`}>
+        {apiKey.expiresAt === null ? (
+          t("never")
+        ) : (
+          <DateCell iso={apiKey.expiresAt} />
+        )}
+      </div>
+    </>
   );
 }
 
@@ -87,27 +132,33 @@ export function KeyRow({
   const mayRotate = state === "live" && apiKey.rotatable && !archived;
   return (
     <tr data-api-key={apiKey.id}>
-      <td className={`${cell} font-medium text-foreground`}>{apiKey.name}</td>
-      <td className={`${cell} ${mono}`}>{apiKey.prefix}</td>
       <td className={cell}>
-        <DateCell iso={apiKey.createdAt} />
+        <div className="font-semibold text-foreground">{apiKey.name}</div>
+        <div className={`${mono} text-[11px] text-dim`}>
+          {t("masked", { prefix: apiKey.prefix })}
+        </div>
       </td>
       <td className={cell}>
+        <NotRecorded />
+      </td>
+      <td className={cell}>
+        <NotRecorded />
+      </td>
+      <td className={cell}>
+        <NotRecorded />
+      </td>
+      <td className={`${cell} ${mono} text-[11px] text-dim`}>
         {apiKey.lastUsedAt === null ? (
           t("neverUsed")
         ) : (
           <DateCell iso={apiKey.lastUsedAt} />
         )}
       </td>
-      <td className={cell}>
-        {apiKey.expiresAt === null ? (
-          t("never")
-        ) : (
-          <DateCell iso={apiKey.expiresAt} />
-        )}
+      <td className={numericCell}>
+        <NotRecorded />
       </td>
       <td className={cell}>
-        <KeyStatus state={state} />
+        <KeyExpiry apiKey={apiKey} state={state} current={current} />
       </td>
       <td className={cell}>
         {state === "revoked" ? null : (

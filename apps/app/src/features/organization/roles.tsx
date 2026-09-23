@@ -1,80 +1,235 @@
-// Organization › Roles (ARCHITECTURE.md §1.2, ADR-063): the organization's
-// roles with the permissions each one allows, who holds it and where it came
-// from, and a button that opens the permission catalogue the editor speaks.
-// The read reports whether Oxagen resolves these grants for this
-// organization's tier (§1.5), and the section says so either way rather than
-// implying an enforcement the record does not carry. A refused or failed read
-// replaces the sections; the tabs stay.
+// Organization › Roles (pages/organization-roles.md, ADR-063): every role of
+// the organization with its kind, its scope, the catalogue permissions it
+// carries, who holds it and where it came from, and the role editor. The frame
+// reads the catalogue once (`list_iam_roles`, every page of it) and hands it
+// here.
 //
-// Below the roles table sit the IdP group mappings (ADR-145): for each single
-// sign-on provider, which organization role each identity provider group
-// grants. They come from the SSO read, so a refused or failed SSO read says so
-// in that section alone and leaves the roles in place.
-import { useLocale, useTranslations } from "next-intl";
+// Held by reads the role's active assignments (`memberCount`): people for a
+// human role, agents for an agent role, "nobody" at zero. `list_iam_roles`
+// does not split a count between people, agents and keys, so a role is counted
+// in the one unit its kind names.
+//
+// The read reports whether Oxagen resolves these grants for this
+// organization's tier (ARCHITECTURE.md §1.5), and the tab says so under the
+// note rather than implying an enforcement the record does not carry.
+//
+// Below the roles sit the IdP group mappings (ADR-145), which the design does
+// not draw and which have no other home: for each single sign-on provider,
+// which organization role each group grants. They come from the SSO read, so a
+// refused or failed SSO read says so in that section alone.
+import { useTranslations } from "next-intl";
 import type { Role, RoleCatalog, SsoSettings } from "@/data/contracts/org";
-import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
-import type { OrgCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
-import { linkText, mono, panel } from "@/ui/control-styles";
-import { formatCount } from "@/ui/money-format";
+import { Badge } from "@/ui/badge";
+import {
+  linkText,
+  mono,
+  panel,
+  panelBody,
+  panelHeader,
+  panelTitle,
+} from "@/ui/control-styles";
+import { useFormatter } from "@/ui/formatter";
 import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
-import { cell, numericCell, Table } from "@/ui/table";
-import { CatalogueDialog } from "./catalogue-dialog";
-import { CreateRole, DeleteRole, EditRole } from "./role-actions";
+import { type ListRow, ListTable } from "./list-table";
+import { note } from "./parts";
+import { DeleteRole, RoleEditor } from "./role-actions";
 import { SsoPlanNotice } from "./sso";
 import { SsoGroupRoles } from "./sso-group-roles";
-import { OrganizationTabs } from "./tabs";
 
-export async function Roles({
-  ctx,
-  source,
-}: {
-  ctx: OrgCtx;
-  source: DataSource;
-}) {
-  const [read, sso] = await Promise.all([
-    source.org.roles(ctx),
-    source.org.sso(ctx),
-  ]);
+/** Permissions shown as chips before the rest collapse into "+N more". */
+const CHIPS = 4;
+
+const lead = "text-sm text-muted-foreground";
+const sectionTitle = "text-base font-semibold text-foreground";
+
+function Permissions({ role }: { role: Role }) {
+  const t = useTranslations("organization.roleCatalog");
+  if (role.permissions.length === 0) {
+    return <span className="text-dim">{t("noPermissions")}</span>;
+  }
+  const rest = role.permissions.length - CHIPS;
   return (
-    <RolesView
-      org={ctx.orgSlug}
-      canEdit={ctx.orgRole === "owner" || ctx.orgRole === "admin"}
-      read={read}
-      sso={sso}
-    />
+    <span className="flex max-w-[30ch] flex-wrap gap-1">
+      {role.permissions.slice(0, CHIPS).map((permission) => (
+        <Badge key={permission} tone="quiet" dot={false} mono>
+          {permission}
+        </Badge>
+      ))}
+      {rest > 0 ? (
+        <span className="text-[11px] text-dim">
+          {t("more", { count: rest })}
+        </span>
+      ) : null}
+    </span>
   );
 }
 
-const sectionTitle = "text-base font-semibold text-foreground";
-const lead = "text-sm text-muted-foreground";
+function HeldBy({ role }: { role: Role }) {
+  const t = useTranslations("organization.roleCatalog.heldBy");
+  if (role.heldBy === 0) return <span className="text-dim">{t("nobody")}</span>;
+  return (
+    <span className="whitespace-nowrap">
+      {role.kind === "human"
+        ? t("people", { count: role.heldBy })
+        : t("agents", { count: role.heldBy })}
+    </span>
+  );
+}
 
-function RolesView({
+function Origin({ role }: { role: Role }) {
+  const t = useTranslations("organization.roleCatalog.origin");
+  const format = useFormatter();
+  if (role.builtIn) {
+    return (
+      <Badge tone="quiet" dot={false}>
+        {t("builtIn")}
+      </Badge>
+    );
+  }
+  const date = format.dateTime(new Date(role.createdAt), {
+    dateStyle: "medium",
+  });
+  return (
+    <span className="text-[11.5px] text-dim">
+      {role.createdBy === null
+        ? t("createdAt", { date })
+        : t("createdBy", { name: role.createdBy, date })}
+    </span>
+  );
+}
+
+export function RolesTab({
   org,
-  canEdit,
-  read,
+  catalog,
   sso,
 }: {
   org: string;
-  /** Owners and admins edit; the handler checks the role again. */
-  canEdit: boolean;
-  read: Read<RoleCatalog>;
+  catalog: RoleCatalog;
   sso: Read<SsoSettings>;
 }) {
   const t = useTranslations("organization.roleCatalog");
+  const columns = [
+    { label: t("columns.role") },
+    { label: t("columns.kind") },
+    { label: t("columns.scope") },
+    { label: t("columns.permissions") },
+    { label: t("columns.heldBy") },
+    { label: t("columns.origin") },
+    { label: t("columns.actions") },
+  ];
+  const rows: ListRow[] = catalog.roles.map((role) => ({
+    key: role.id,
+    rowId: role.id,
+    search: `${role.name} ${role.description ?? ""} ${role.permissions.join(" ")}`,
+    values: {
+      kind: role.kind,
+      scope: role.scope,
+      origin: role.builtIn ? "builtIn" : "custom",
+    },
+    cells: [
+      <span key="role">
+        <span className={`${mono} text-[12.5px] font-medium text-foreground`}>
+          {role.name}
+        </span>
+        {role.description === null ? null : (
+          <span className="block text-[11.5px] text-dim">
+            {role.description}
+          </span>
+        )}
+      </span>,
+      <Badge
+        key="kind"
+        tone={role.kind === "agent" ? "allowed" : "quiet"}
+        dot={false}
+      >
+        {t(`kind.${role.kind}`)}
+      </Badge>,
+      <span key="scope" className={`${mono} text-[11.5px]`}>
+        {t(`scope.${role.scope}`)}
+      </span>,
+      <Permissions key="permissions" role={role} />,
+      <HeldBy key="held" role={role} />,
+      <Origin key="origin" role={role} />,
+      <div key="actions" className="flex flex-wrap gap-2">
+        <RoleEditor
+          org={org}
+          catalog={catalog.catalog}
+          role={role}
+          mode={role.builtIn ? "view" : "edit"}
+          openLabel={role.builtIn ? t("view") : t("edit")}
+        />
+        <RoleEditor
+          org={org}
+          catalog={catalog.catalog}
+          role={role}
+          mode="duplicate"
+          openLabel={t("duplicate")}
+        />
+        <DeleteRole org={org} role={role} />
+      </div>,
+    ],
+  }));
   return (
-    <div className="flex flex-col gap-6">
-      <OrganizationTabs org={org} current="roles" />
-      {read.ok ? (
-        <>
-          <RoleTable org={org} canEdit={canEdit} value={read.value} />
-          <GroupMappings org={org} canEdit={canEdit} read={sso} />
-        </>
-      ) : (
-        <ReadFailure read={read} section={t("title")} />
-      )}
+    <div className="flex flex-col gap-3.5">
+      <section aria-labelledby="org-roles" className={panel}>
+        <div className={panelHeader}>
+          <h2 id="org-roles" className={panelTitle}>
+            {t("title")}
+          </h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone="quiet" dot={false} data-store="roles">
+              {t("badge")}
+            </Badge>
+            <RoleEditor
+              org={org}
+              catalog={catalog.catalog}
+              mode="create"
+              openLabel={t("editor.create")}
+              primary
+            />
+          </div>
+        </div>
+        <ListTable
+          label={t("tableLabel")}
+          columns={columns}
+          rows={rows}
+          filters={[
+            {
+              key: "kind",
+              label: t("filters.kind"),
+              options: [
+                { value: "human", label: t("kind.human") },
+                { value: "agent", label: t("kind.agent") },
+              ],
+            },
+            {
+              key: "scope",
+              label: t("filters.scope"),
+              options: [
+                { value: "org", label: t("scope.org") },
+                { value: "workspace", label: t("scope.workspace") },
+              ],
+            },
+            {
+              key: "origin",
+              label: t("filters.origin"),
+              options: [
+                { value: "builtIn", label: t("originFilter.builtIn") },
+                { value: "custom", label: t("originFilter.custom") },
+              ],
+            },
+          ]}
+          empty={catalog.roles.length === 0 ? t("empty") : t("noMatch")}
+        />
+        <div className={`${panelBody} flex flex-col gap-2`}>
+          <p className={note}>{t("note")}</p>
+          <Enforcement enforcement={catalog.enforcement} />
+        </div>
+      </section>
+      <GroupMappings org={org} canEdit read={sso} />
     </div>
   );
 }
@@ -87,101 +242,14 @@ function Enforcement({
 }) {
   const t = useTranslations("organization.roleCatalog.enforcement");
   return (
-    <p data-enforced={enforcement.enforced ? "true" : "false"} className={lead}>
+    <p
+      data-enforced={enforcement.enforced ? "true" : "false"}
+      className="text-[12px] text-dim"
+    >
       {enforcement.enforced
         ? t("enforced")
         : t("recorded", { tier: enforcement.tier })}
     </p>
-  );
-}
-
-function Origin({ role }: { role: Role }) {
-  const t = useTranslations("organization.roleCatalog.origin");
-  if (role.builtIn) return t("builtIn");
-  return role.createdBy === null
-    ? t("custom")
-    : t("createdBy", { name: role.createdBy });
-}
-
-function RoleTable({
-  org,
-  canEdit,
-  value,
-}: {
-  org: string;
-  canEdit: boolean;
-  value: RoleCatalog;
-}) {
-  const t = useTranslations("organization.roleCatalog");
-  const tKind = useTranslations("organization.roleCatalog.kind");
-  const tScope = useTranslations("organization.roleCatalog.scope");
-  const tActions = useTranslations("organization.actions");
-  const locale = useLocale();
-  const columns = [
-    { label: t("columns.role") },
-    { label: t("columns.kind") },
-    { label: t("columns.scope") },
-    { label: t("columns.permissions") },
-    { label: t("columns.heldBy"), numeric: true },
-    { label: t("columns.origin") },
-    ...(canEdit ? [{ label: t("columns.actions") }] : []),
-  ];
-  return (
-    <section aria-labelledby="roles-table" className="flex flex-col gap-3">
-      <h2 id="roles-table" className={sectionTitle}>
-        {t("title")}
-      </h2>
-      <p className={lead}>{t("lead")}</p>
-      <Enforcement enforcement={value.enforcement} />
-      {canEdit ? null : <p className={lead}>{tActions("readOnly")}</p>}
-      <div className="flex flex-wrap gap-2">
-        {canEdit ? <CreateRole org={org} catalog={value.catalog} /> : null}
-        <CatalogueDialog catalog={value.catalog} />
-      </div>
-      {value.roles.length === 0 ? (
-        <p className={lead}>{t("empty")}</p>
-      ) : (
-        <Table label={t("tableLabel")} columns={columns}>
-          {value.roles.map((role) => (
-            <tr key={role.id} data-role={role.id}>
-              <td className={cell}>
-                <div className={`${mono} font-medium text-foreground`}>
-                  {role.name}
-                </div>
-                {role.description === null ? null : (
-                  <div className="text-muted-foreground">
-                    {role.description}
-                  </div>
-                )}
-              </td>
-              <td className={cell}>{tKind(role.kind)}</td>
-              <td className={cell}>{tScope(role.scope)}</td>
-              <td className={cell}>
-                {role.permissions.length === 0
-                  ? t("noPermissions")
-                  : role.permissions.join(", ")}
-              </td>
-              <td className={numericCell}>
-                {formatCount(role.heldBy, locale)}
-              </td>
-              <td className={cell}>
-                <Origin role={role} />
-              </td>
-              {canEdit ? (
-                <td className={cell}>
-                  {role.builtIn ? null : (
-                    <div className="flex flex-wrap gap-2">
-                      <EditRole org={org} role={role} catalog={value.catalog} />
-                      <DeleteRole org={org} role={role} />
-                    </div>
-                  )}
-                </td>
-              ) : null}
-            </tr>
-          ))}
-        </Table>
-      )}
-    </section>
   );
 }
 

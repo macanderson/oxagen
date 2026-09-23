@@ -5,8 +5,12 @@
       "people": "People",
       "roles": "Roles",
       "apiKeys": "API keys",
-      "modelFunding": "Model funding",
-      "sso": "Single sign-on"
+      "modelFunding": "Model funding and routes",
+      "sso": "Single sign-on",
+      "invitations": "Invitations",
+      "workspaces": "Workspaces",
+      "dataPlane": "Data plane",
+      "costCenters": "Cost centers"
     },
     "roles": {
       "owner": "Owner",
@@ -22,7 +26,43 @@
       "role": "Role",
       "joined": "Joined",
       "actions": "Actions",
-      "empty": "This organization has no members."
+      "empty": "This organization has no members.",
+      "twoFactorPolicy": "two-factor policy not recorded",
+      "tableLabel": "People",
+      "workspaces": "Workspaces",
+      "twoFactor": "Two-factor",
+      "lastSeen": "Last seen",
+      "status": "Status",
+      "statusActive": "active",
+      "statusInvited": "invited",
+      "note": "Changing a role is a governed action. It passes IAM and writes an audit record.",
+      "open": "Open",
+      "noMatch": "No person matches this search.",
+      "filters": {
+        "status": "Status",
+        "twoFactor": "Two-factor"
+      },
+      "member": {
+        "title": "Person",
+        "email": "Email",
+        "role": "Role",
+        "joined": "Joined",
+        "workspaces": "Workspaces",
+        "twoFactor": "Two-factor",
+        "lastSeen": "Last seen",
+        "status": "Status",
+        "id": "Id"
+      },
+      "inUse": {
+        "title": "Roles in use",
+        "manage": "Manage roles",
+        "tableLabel": "Roles in use",
+        "role": "Role",
+        "holders": "Holders",
+        "description": "Description",
+        "noDescription": "no description recorded",
+        "footer": "{agents, plural, one {# agent role is} other {# agent roles are}} on the Roles tab."
+      }
     },
     "actions": {
       "readOnly": "An owner or an admin makes these changes.",
@@ -36,7 +76,15 @@
         "mainRepo": "Main repository",
         "mainRepoHint": "owner/name on GitHub. This is where the workspace keeps .oxagen/, and it cannot change here later. The Oxagen GitHub App has to be installed on that owner and reachable from a GitHub account this organization has connected. Oxagen finds the installation from the owner.",
         "permissions": "Permissions",
-        "roleNameHint": "Lowercase letters and digits, separated by a dot, a hyphen, or an underscore. It cannot change later."
+        "roleNameHint": "Lowercase letters and digits, separated by a dot, a hyphen, or an underscore. It cannot change later.",
+        "productionBranch": "Production branch",
+        "productionBranchHint": "No contract records the production branch yet, so it is shown and not changed here.",
+        "productionBranchCreateHint": "No contract takes a production branch yet. The workspace starts on the repository as GitHub reports it.",
+        "retention": "Retention mode",
+        "retentionHint": "content_exact keeps prompts and tool bodies in full. digest_only lowers the replay grade. No contract records the mode per workspace yet.",
+        "mainRepoFixed": "Changing main is an org-owner action with approval. list_workspaces does not return the main repository yet.",
+        "namespace": "Namespace",
+        "namespaceHint": "Immutable. It is in every agent key in this workspace."
       },
       "createRole": {
         "open": "Create role",
@@ -65,14 +113,19 @@
       },
       "editWorkspace": {
         "open": "Edit",
-        "title": "Edit {name}",
+        "title": "Edit workspace",
         "confirm": "Save",
-        "pending": "Saving"
+        "pending": "Saving",
+        "facts": {
+          "toolbelt": "Toolbelt limit",
+          "budget": "Default budget",
+          "agents": "Agents"
+        }
       },
       "governance": {
-        "heading": "Steering governance",
-        "about": "Who merges a Context PR in this workspace. It is kept in .oxagen/rules/governance.toml on the main repository's production branch, read afresh every time a Context PR opens or merges.",
-        "unchanged": "Leave unchanged",
+        "heading": "Governance mode",
+        "about": "Written to .oxagen/rules/governance.toml on the main repository through a Context PR. It takes effect on merge. The mode decides who merges a Context PR in this workspace.",
+        "unchanged": "Leave unchanged (the mode in force is not read here)",
         "unchangedHint": "Nothing is read from GitHub and nothing is written, so this page does not say which mode is in force. The workspace's Repositories page does.",
         "solo": "Any workspace member merges, the author included.",
         "team": "An org Owner or Admin, or a workspace Owner, other than the author merges.",
@@ -87,7 +140,8 @@
           "openPr": "Open pull request #{number}",
           "refused": "The name was saved. The governance mode was not changed: {reason}",
           "close": "Done"
-        }
+        },
+        "createHint": "Set it from Edit once the workspace exists. Create a workspace takes no governance mode yet."
       },
       "archiveWorkspace": {
         "open": "Archive",
@@ -158,7 +212,10 @@
       "confirmTitle": "Revoke invitation",
       "confirmBody": "This invitation will stop working. You can send a new invitation later.",
       "confirmRevoke": "Confirm revoke",
-      "keepInvitation": "Keep invitation"
+      "keepInvitation": "Keep invitation",
+      "invitedBy": "Invited by",
+      "tableLabel": "Pending invitations",
+      "noMatch": "No invitation matches this search."
     },
     "invite": {
       "open": "Invite",
@@ -197,11 +254,15 @@
         "lastUsed": "Last used",
         "expires": "Expires",
         "status": "Status",
-        "actions": "Actions"
+        "actions": "Actions",
+        "principal": "Principal",
+        "grants": "Grants",
+        "createdBy": "Created by",
+        "actions30d": "Actions 30d"
       },
       "actions": {
         "create": {
-          "open": "Create a key",
+          "open": "Create key",
           "title": "Create an API key",
           "body": "The key acts as you. Oxagen shows the secret once and stores only its prefix and a hash, so a lost key is rotated, never recovered.",
           "name": "Name",
@@ -285,23 +346,27 @@
         "previous": "Previous",
         "next": "Next"
       },
-      "emptyFiltered": "Every key in this workspace has been revoked. Choose All to see {revoked, plural, one {it} other {them}}."
-    },
-    "denied": {
-      "title": "You cannot see this organization’s people",
-      "body": "Signed in as {role}. Needed: {permission}. An owner can grant it, and the grant is recorded in the audit record."
-    },
-    "pending": {
-      "title": "Waiting for approval",
-      "body": "Access request {id} is waiting for an owner’s decision."
-    },
-    "error": {
-      "title": "Organization could not be loaded",
-      "body": "{status} {code}. Nothing was changed. Reload the page to try again."
+      "emptyFiltered": "Every key in this workspace has been revoked. Choose All to see {revoked, plural, one {it} other {them}}.",
+      "title": "API keys",
+      "caption": "each key is a service principal with its own grants",
+      "badge": "postgres · iam + vault",
+      "note": "A key is shown once, at creation, and never again. Keys carry grants, not roles, so an auditor’s key can read receipts and nothing else. Revoking a key ends its service principal’s access at the next call.",
+      "masked": "{prefix}…",
+      "state": {
+        "active": "active",
+        "expiring": "{days, plural, one {expires in # day} other {expires in # days}}",
+        "neverUsed": "never used",
+        "expired": "expired",
+        "revoked": "revoked"
+      },
+      "surfaces": {
+        "title": "Surfaces this reaches",
+        "badge": "one agent tool contract",
+        "body": "One agent tool contract drives the API, MCP, the CLI and these screens, so a key that can do something here can do exactly that much everywhere else. Parity is checked by the manifest gate."
+      }
     },
     "roleCatalog": {
       "title": "Roles",
-      "lead": "What each role allows, and who holds it.",
       "enforcement": {
         "enforced": "Oxagen checks these grants on governed calls.",
         "recorded": "recorded for people, enforced for agents. On the {tier} tier Oxagen allows a person every governed action whatever a role says. An agent is checked on every tier: its own grants and the grants of the person it acts for both bound what it may do."
@@ -309,25 +374,25 @@
       "tableLabel": "Roles",
       "columns": {
         "role": "Role",
-        "kind": "Held by",
+        "kind": "Kind",
         "scope": "Scope",
         "permissions": "Permissions",
-        "heldBy": "Principals",
+        "heldBy": "Held by",
         "origin": "Origin",
         "actions": "Actions"
       },
       "kind": {
-        "human": "People",
-        "agent": "Agents"
+        "human": "human",
+        "agent": "agent"
       },
       "scope": {
-        "org": "Organization",
-        "workspace": "Workspace"
+        "org": "organization",
+        "workspace": "workspace"
       },
       "origin": {
-        "builtIn": "Built in",
-        "createdBy": "Created by {name}",
-        "custom": "Custom"
+        "builtIn": "built-in",
+        "createdBy": "{name} · {date}",
+        "createdAt": "{date}"
       },
       "noPermissions": "No permissions",
       "empty": "This organization has no roles.",
@@ -336,6 +401,66 @@
         "open": "View permission catalogue",
         "lead": "A permission is a named bundle of capabilities. A role allows a permission when it allows every capability in it.",
         "covers": "{count} capabilities"
+      },
+      "badge": "postgres · iam",
+      "heldBy": {
+        "people": "{count, plural, one {# person} other {# people}}",
+        "agents": "{count, plural, one {# agent} other {# agents}}",
+        "nobody": "nobody"
+      },
+      "more": "+{count} more",
+      "view": "View",
+      "edit": "Edit",
+      "duplicate": "Duplicate",
+      "delete": "Delete",
+      "deleteBuiltIn": "Built-in roles cannot be deleted",
+      "deleteHeld": "{count, plural, one {Reassign the # holder first} other {Reassign the # holders first}}",
+      "note": "A role is a permission set, nothing more. An agent’s effective permission is its roles ∩ its operator’s grants ∩ the policy bundle ∩ the kill switches. A role can widen what an agent may ask for, never what its operator may.",
+      "filters": {
+        "kind": "Kind",
+        "scope": "Scope",
+        "origin": "Origin"
+      },
+      "originFilter": {
+        "builtIn": "built-in",
+        "custom": "custom"
+      },
+      "noMatch": "No role matches this search.",
+      "editor": {
+        "createTitle": "Create a role",
+        "editTitle": "Edit role",
+        "viewTitle": "Built-in role",
+        "name": "Role name",
+        "nameNewHint": "Immutable once created. Use the kind as the prefix: agent., org., workspace., svc.",
+        "nameHint": "Names are immutable. Duplicate the role to rename it.",
+        "description": "Description",
+        "descriptionFixed": "The description is set when the role is created.",
+        "kind": "Kind",
+        "kindHint": "Who can hold it. A custom role is held by agents, which assign_agent_role binds.",
+        "scope": "Scope",
+        "scopeHint": "An organization role applies everywhere. A workspace role is assigned in one workspace at a time.",
+        "permissions": "Permissions",
+        "selected": "{count} selected",
+        "readOnly": "built-in · read-only",
+        "holders": "{count, plural, one {Held by # principal} other {Held by # principals}}. Saving changes their effective permission at the next call, and nothing in flight is cut.",
+        "governed": "Saving is a governed action. It passes IAM and writes an audit record. org.* is the only wildcard and only org.owner carries it.",
+        "create": "Create role",
+        "save": "Save changes",
+        "saving": "Saving",
+        "creating": "Creating",
+        "duplicateAsCustom": "Duplicate as custom",
+        "cancel": "Cancel",
+        "close": "Close",
+        "copySuffix": ".copy"
+      },
+      "del": {
+        "title": "Delete role",
+        "body": "This removes {name} from IAM. Its definition and every grant it carried stay in the audit record.",
+        "held": "{count, plural, one {Held by # principal} other {Held by # principals}}. Reassign them first, because a role cannot be deleted out from under a holder.",
+        "free": "Nobody holds it. Deleting is a governed action and is recorded.",
+        "confirm": "Delete role",
+        "pending": "Deleting",
+        "cancel": "Cancel"
       }
     },
     "workspaces": {
@@ -343,8 +468,12 @@
       "tableLabel": "Workspaces",
       "columns": {
         "workspace": "Workspace",
-        "role": "Your role",
-        "status": "Status",
+        "mainRepo": "Main repo",
+        "productionBranch": "Production branch",
+        "linkedRepos": "Linked repos",
+        "agents": "Agents",
+        "owner": "Owner",
+        "governance": "Governance",
         "actions": "Actions"
       },
       "status": {
@@ -352,7 +481,14 @@
         "archived": "archived"
       },
       "noRole": "No membership",
-      "empty": "This organization has no workspaces."
+      "empty": "This organization has no workspaces.",
+      "governanceNotRecorded": "mode not recorded",
+      "retentionNotRecorded": "retention not recorded",
+      "namespace": "ns {namespace}",
+      "open": "Open",
+      "archived": "archived",
+      "note": "Changing which repository is main is an org-owner action with approval, recorded as a security event. A repository may be linked to more than one workspace, and it is main for at most one.",
+      "noMatch": "No workspace matches this search."
     },
     "modelFunding": {
       "title": "Model funding",
@@ -653,6 +789,141 @@
         "label": "Cost center",
         "none": "None",
         "hint": "Runs rolled up after this change are charged to the new label."
+      }
+    },
+    "page": {
+      "eyebrow": "Organization",
+      "description": "People, roles, workspaces, model routes, the data plane, and API keys.",
+      "title": "Organization"
+    },
+    "list": {
+      "search": "Search this list",
+      "all": "All · {filter}",
+      "rows": "Rows",
+      "range": "{from}–{to} of {total}",
+      "pager": "Pages of {list}",
+      "previous": "Previous",
+      "next": "Next"
+    },
+    "notRecorded": "not recorded",
+    "states": {
+      "loading": "Loading the organization",
+      "empty": {
+        "title": "This organization has no workspaces",
+        "body": "A workspace owns one main repo, one steering set, a set of agents, tool grants, and budgets. A workspace without a main repo cannot exist."
+      },
+      "error": {
+        "title": "Organization could not be loaded",
+        "answered": "The control plane answered",
+        "body": "Nothing was changed. Runs kept recording while this page was down. Frames are written by the collector on each host, not by Oxagen.",
+        "retry": "Try again",
+        "trace": "trace {trace} · region {region} · {at}",
+        "traceNotRecorded": "not recorded"
+      },
+      "denied": {
+        "title": "You cannot see this organization’s settings",
+        "bodyBefore": "Your roles on",
+        "bodyAfter": "do not include",
+        "needed": "org.admin (members, funding, and the data plane are owner-only)",
+        "grant": "An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+        "back": "Back to Fleet",
+        "signedIn": "Signed in as",
+        "neededLabel": "Needed",
+        "decidedBy": "Decided by",
+        "decider": "the organization role check on the server · deny wins over every allow"
+      },
+      "stub": {
+        "requestAccess": {
+          "open": "Request access",
+          "title": "Request access",
+          "body": "Request access would ask an owner of {org} to grant you org.admin, and the grant would land in the audit record. No capability records that request yet, so nothing is sent from here. Ask an owner to change your role on the People tab."
+        },
+        "incident": {
+          "open": "Open an incident",
+          "title": "Open an incident",
+          "body": "Open an incident would file one carrying the code and the instant below. No capability files incidents yet, so nothing is sent from here. Report it by hand with this line: {line}"
+        }
+      }
+    },
+    "dataPlane": {
+      "title": "Data plane",
+      "on": "{org} is on {mode}",
+      "modesLabel": "Deployment mode",
+      "modes": {
+        "shared": "Shared",
+        "dedicated": "Dedicated",
+        "firewall": "Behind the firewall"
+      },
+      "current": "current",
+      "preview": "Preview. This organization is on {mode}, so these facts describe what {other} would be.",
+      "about": {
+        "shared": "Tenant data on Oxagen’s shared plane, isolated by row-level security with no bypass setting.",
+        "dedicated": "Tenant data on a Postgres the organization controls, bound per organization and resolved at every call.",
+        "firewall": "The whole data plane inside the customer’s network, delivered as a signed bundle."
+      },
+      "facts": {
+        "binding": "Binding",
+        "postgres": "Postgres",
+        "objectStorage": "Object storage",
+        "kek": "Key-encryption key",
+        "attester": "Attester key",
+        "gateway": "Gateway",
+        "resolver": "Resolver",
+        "postgresHost": "Postgres host",
+        "postgresDatabase": "Postgres database",
+        "deployment": "Deployment",
+        "bundleVersion": "Bundle version",
+        "bundleSignature": "Bundle signature",
+        "containers": "Containers",
+        "airGapped": "Air-gapped mode",
+        "licence": "Licence",
+        "nextBundle": "Next bundle",
+        "outbound": "Outbound connections"
+      },
+      "status": {
+        "active": "active",
+        "degraded": "degraded",
+        "disabled": "disabled"
+      },
+      "sharedPostgres": "partitioned by org_id, row-level policies enforced",
+      "verified": "verified",
+      "rotated": "credentials rotated",
+      "neverVerified": "verification not recorded",
+      "schema": "schema {version}",
+      "requestChange": "Request a change of plane",
+      "rotateKeys": "Rotate keys",
+      "retention": {
+        "title": "Retention",
+        "frameBodies": "Frame bodies",
+        "runLedger": "Run ledger",
+        "frameRows": "Frame rows",
+        "controlPlaneAudit": "Control-plane audit",
+        "digestOnly": "digest_only mode",
+        "note": "Replay without bodies is a timeline, not a replay. The explanation promise depends on bodies, so keeping them is the default."
+      },
+      "isolation": {
+        "title": "Tenant isolation",
+        "badge": "postgres · {org}",
+        "rows": "Rows",
+        "workspaceScoping": "Workspace scoping",
+        "crossTenant": "Cross-tenant reads",
+        "platformCatalogs": "Platform catalogs",
+        "startupGuard": "Startup guard",
+        "rowsValue": "every tenant table carries org_id and row-level security is on with no bypass. The tenant boundary is the policy, and the policy is tested.",
+        "workspaceScopingValue": "every run, frame and record carries its workspace, set by the kernel, the only writer",
+        "crossTenantValue": "refused by the database itself, not by application code",
+        "platformCatalogsValue": "price books, tool schemas and connector definitions are platform tables, never tenant rows",
+        "startupGuardValue": "the app role may not be a superuser, may not hold BYPASSRLS, and row-level security may not be off, or the plane refuses to boot"
+      },
+      "stub": {
+        "plane": {
+          "title": "Request a change of plane",
+          "body": "A change of plane would be requested here and decided by Oxagen, then applied with set_data_plane. No capability records the request yet, so nothing is sent. The binding is set today through set_data_plane on the API, MCP or the CLI by an owner or an admin."
+        },
+        "rotate": {
+          "title": "Rotate keys",
+          "body": "Rotate keys would rotate this organization’s key-encryption key and land on Audit under Keys. No capability rotates it yet, so nothing is sent from here."
+        }
       }
     }
   }

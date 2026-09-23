@@ -1,270 +1,299 @@
-import { InvitationControls } from "./invitation-controls";
-// Organization › People (ARCHITECTURE.md §1.2): the organization's members and
-// its pending invitations from list_members {scope:"org"}, under the tabs that
-// link People and API keys. A refused or failed read replaces both sections;
-// the tabs stay. Each member's row carries the two writes on a membership —
-// change role and remove (WL-42) — which an Owner or an Admin makes and every
-// other role sees refused. An invitation is sent from the Pending invitations
-// section by the same two roles (#2964); it admits the person to the
-// organization and grants no workspace, and the table re-reads when one is
-// sent (`invite-dialog.tsx`).
+// Organization › People and Organization › Invitations (pages/organization.md):
+// the members and the pending invitations of `list_members {scope:"org"}`,
+// which the frame reads once and hands to both tabs.
+//
+// People: Person, Role, Workspaces, Two-factor, Last seen and Status, with
+// Open, Change role and Remove on each row, then Roles in use, which counts
+// the People table by role and takes each role's description from the role
+// catalogue. `list_members` records a member's name, email, role and join
+// date. It records no per-member workspaces, two-factor method or last sign-in,
+// and no organization two-factor policy, so those cells say "not recorded"
+// rather than a guess (macanderson/oxagen, the People issue this lane filed).
+// Every member on the roster holds a membership row, so Status reads "active".
+//
+// Invitations: Email, Role offered, Invited by, Sent and Expires, with Resend
+// and Revoke. The contract does not return who sent an invitation, so Invited
+// by says "not recorded".
 import { useTranslations } from "next-intl";
-import type { MemberList } from "@/data/contracts/org";
-import type { DataSource } from "@/data/ports";
-import type { Read } from "@/data/read";
-import type { OrgCtx, OrgRole } from "@/server/viewer";
-import { routes, type SafePath } from "@/shared/safe-path";
+import type { MemberList, RoleCatalog } from "@/data/contracts/org";
+import { routes } from "@/shared/safe-path";
+import { Badge } from "@/ui/badge";
 import {
+  buttonSecondary,
   mono,
   panel,
   panelBody,
   panelHeader,
   panelTitle,
 } from "@/ui/control-styles";
-import { cell, headCell } from "@/ui/table";
-import { OutcomePanel } from "@/ui/form-feedback";
+import { SafeLink } from "@/ui/navigation";
+import { cell, numericCell } from "@/ui/table";
+import { InvitationControls } from "./invitation-controls";
 import { InviteDialog } from "./invite-dialog";
+import { type ListRow, ListTable } from "./list-table";
 import { MemberRowActions } from "./member-row-actions";
-import { DateCell, emptyLine } from "./parts";
-import { OrganizationTabs } from "./tabs";
+import { DateCell, NotRecorded, note } from "./parts";
+import { DetailsDialog } from "./stub-dialog";
 
-/** The org roles the two membership handlers admit (INV-29). */
-const MEMBERSHIP_WRITERS: readonly OrgRole[] = ["owner", "admin"];
+type Member = MemberList["members"][number];
 
-export async function People({
-  ctx,
-  source,
-}: {
-  ctx: OrgCtx;
-  source: DataSource;
-}) {
-  const read = await source.org.members(ctx);
-  return <PeopleView orgSlug={ctx.orgSlug} orgRole={ctx.orgRole} read={read} />;
+function PersonCell({ member }: { member: Member }) {
+  return (
+    <>
+      <div className="font-semibold text-foreground">
+        {member.name ?? member.email}
+      </div>
+      <div className={`${mono} text-[11px] text-dim`}>{member.email}</div>
+    </>
+  );
 }
 
-/* The two lists are the mockup's `.panel` with a `.panel-h`, on the shared table recipe. */
-const table = "w-full text-left";
-
-function PeopleView({
-  orgSlug,
-  orgRole,
-  read,
-}: {
-  orgSlug: string;
-  orgRole: OrgRole;
-  read: Read<MemberList>;
-}) {
-  const t = useTranslations("organization");
+function MemberFacts({ member }: { member: Member }) {
+  const t = useTranslations("organization.people.member");
+  const tRole = useTranslations("organization.roles");
+  const term = "text-muted-foreground";
   return (
-    <div className="flex flex-col gap-6">
-      <OrganizationTabs org={orgSlug} current="people" />
-      {read.ok ? (
-        <>
-          <Members
-            members={read.value.members}
-            org={orgSlug}
-            writes={MEMBERSHIP_WRITERS.includes(orgRole)}
-            here={routes.people(orgSlug)}
-          />
-          <Invitations
-            invitations={read.value.invitations}
-            org={orgSlug}
-            writes={MEMBERSHIP_WRITERS.includes(orgRole)}
-            here={routes.people(orgSlug)}
-          />
-        </>
-      ) : read.reason === "denied" ? (
-        <OutcomePanel
-          tone="deny"
-          testId="people-denied"
-          title={t("denied.title")}
+    <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+      <dt className={term}>{t("email")}</dt>
+      <dd className={mono}>{member.email}</dd>
+      <dt className={term}>{t("role")}</dt>
+      <dd className={mono}>{tRole(member.role)}</dd>
+      <dt className={term}>{t("joined")}</dt>
+      <dd>
+        <DateCell iso={member.joinedAt} />
+      </dd>
+      <dt className={term}>{t("workspaces")}</dt>
+      <dd>
+        <NotRecorded />
+      </dd>
+      <dt className={term}>{t("twoFactor")}</dt>
+      <dd>
+        <NotRecorded />
+      </dd>
+      <dt className={term}>{t("lastSeen")}</dt>
+      <dd>
+        <NotRecorded />
+      </dd>
+      <dt className={term}>{t("id")}</dt>
+      <dd className={`${mono} select-all`}>{member.id}</dd>
+    </dl>
+  );
+}
+
+export function PeopleTab({
+  org,
+  members,
+  roles,
+}: {
+  org: string;
+  members: MemberList;
+  roles: RoleCatalog;
+}) {
+  const t = useTranslations("organization.people");
+  const tRole = useTranslations("organization.roles");
+  const here = routes.people(org);
+  const columns = [
+    { label: t("person") },
+    { label: t("role") },
+    { label: t("workspaces") },
+    { label: t("twoFactor") },
+    { label: t("lastSeen") },
+    { label: t("status") },
+    { label: t("actions") },
+  ];
+  const rows: ListRow[] = members.members.map((member) => ({
+    key: member.id,
+    rowId: member.id,
+    search: `${member.name ?? ""} ${member.email} ${member.role}`,
+    values: { status: "active" },
+    cells: [
+      <PersonCell key="person" member={member} />,
+      <span key="role" className={`${mono} text-[11.5px]`}>
+        {tRole(member.role)}
+      </span>,
+      <NotRecorded key="workspaces" />,
+      <NotRecorded key="twoFactor" />,
+      <NotRecorded key="lastSeen" />,
+      <Badge key="status" tone="allowed" data-status="active">
+        {t("statusActive")}
+      </Badge>,
+      <div key="actions" className="flex flex-wrap gap-2">
+        <DetailsDialog
+          open={t("open")}
+          title={t("member.title")}
+          subtitle={member.name ?? member.email}
+          testId={`member-${member.id}`}
         >
-          {t("denied.body", {
-            role: t(`roles.${orgRole}`),
-            permission: read.permission,
-          })}
-        </OutcomePanel>
-      ) : read.reason === "pending_approval" ? (
-        <OutcomePanel
-          tone="neutral"
-          testId="people-pending"
-          title={t("pending.title")}
-        >
-          {t("pending.body", { id: read.accessRequestId })}
-        </OutcomePanel>
-      ) : (
-        <OutcomePanel
-          tone="neutral"
-          testId="people-error"
-          title={t("error.title")}
-        >
-          {t("error.body", { status: read.status, code: read.code })}
-        </OutcomePanel>
-      )}
+          <MemberFacts member={member} />
+        </DetailsDialog>
+        <MemberRowActions org={org} member={member} allowed after={here} />
+      </div>,
+    ],
+  }));
+  return (
+    <div className="flex flex-col gap-3.5">
+      <section aria-labelledby="org-people" className={panel}>
+        <div className={panelHeader}>
+          <h2 id="org-people" className={panelTitle}>
+            {t("title")}
+          </h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone="quiet" dot={false} data-policy="two-factor">
+              {t("twoFactorPolicy")}
+            </Badge>
+            <InviteDialog
+              org={org}
+              pendingIds={members.invitations.map((i) => i.id)}
+              allowed
+              after={routes.organization(org, "invitations")}
+            />
+          </div>
+        </div>
+        <ListTable
+          label={t("tableLabel")}
+          columns={columns}
+          rows={rows}
+          filters={[
+            {
+              key: "status",
+              label: t("filters.status"),
+              options: [
+                { value: "active", label: t("statusActive") },
+                { value: "invited", label: t("statusInvited") },
+              ],
+            },
+          ]}
+          empty={members.members.length === 0 ? t("empty") : t("noMatch")}
+        />
+        <div className={panelBody}>
+          <p className={note}>{t("note")}</p>
+        </div>
+      </section>
+      <RolesInUse org={org} members={members} roles={roles} />
     </div>
   );
 }
 
-function Members({
-  members,
+/** The human roles the People table holds, with how many hold each. */
+function RolesInUse({
   org,
-  writes,
-  here,
+  members,
+  roles,
 }: {
-  members: MemberList["members"];
   org: string;
-  /** Whether this viewer's org role may change a role and remove a member. */
-  writes: boolean;
-  /** This page, reloaded after a membership changed. */
-  here: SafePath;
+  members: MemberList;
+  roles: RoleCatalog;
 }) {
-  const t = useTranslations("organization");
+  const t = useTranslations("organization.people.inUse");
+  const tRole = useTranslations("organization.roles");
+  const held = new Map<Member["role"], number>();
+  for (const member of members.members) {
+    held.set(member.role, (held.get(member.role) ?? 0) + 1);
+  }
+  const describe = (role: Member["role"]): string | null =>
+    roles.roles.find(
+      (entry) => entry.kind === "human" && entry.name.toLowerCase() === role,
+    )?.description ?? null;
+  const agentRoles = roles.roles.filter((role) => role.kind === "agent").length;
   return (
-    <section aria-labelledby="people-members" className={panel}>
+    <section aria-labelledby="org-roles-in-use" className={panel}>
       <div className={panelHeader}>
-        <h2 id="people-members" className={panelTitle}>
-          {t("people.title")}
+        <h2 id="org-roles-in-use" className={panelTitle}>
+          {t("title")}
         </h2>
+        <SafeLink to={routes.roles(org)} className={buttonSecondary}>
+          {t("manage")}
+        </SafeLink>
       </div>
-      {members.length === 0 ? (
-        <p className={`${emptyLine} ${panelBody}`}>{t("people.empty")}</p>
-      ) : (
-        <table className={table}>
-          <thead>
-            <tr className="border-b border-border">
-              <th scope="col" className={headCell}>
-                {t("people.person")}
-              </th>
-              <th scope="col" className={headCell}>
-                {t("people.role")}
-              </th>
-              <th scope="col" className={headCell}>
-                {t("people.joined")}
-              </th>
-              <th scope="col" className={headCell}>
-                {t("people.actions")}
-              </th>
+      <table aria-label={t("tableLabel")} className="w-full text-[13px]">
+        <thead className="sr-only">
+          <tr>
+            <th scope="col">{t("role")}</th>
+            <th scope="col">{t("holders")}</th>
+            <th scope="col">{t("description")}</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {[...held.entries()].map(([role, count]) => (
+            <tr key={role} data-role-in-use={role}>
+              <td className={`${cell} ${mono} text-[11.5px]`}>{tRole(role)}</td>
+              <td className={numericCell}>{count}</td>
+              <td className={`${cell} text-[11.5px] text-dim`}>
+                {describe(role) ?? t("noDescription")}
+              </td>
             </tr>
-          </thead>
-          <tbody>
-            {members.map((member) => (
-              <tr
-                key={member.id}
-                data-member={member.id}
-                className="border-b border-border transition-colors last:border-0 hover:bg-hl"
-              >
-                <td className={cell}>
-                  <div className="font-medium text-foreground">
-                    {member.name ?? member.email}
-                  </div>
-                  {member.name === null ? null : (
-                    <div className={`${mono} text-muted-foreground`}>
-                      {member.email}
-                    </div>
-                  )}
-                </td>
-                <td className={cell}>{t(`roles.${member.role}`)}</td>
-                <td className={cell}>
-                  <DateCell iso={member.joinedAt} />
-                </td>
-                <td className={cell}>
-                  <MemberRowActions
-                    org={org}
-                    member={member}
-                    allowed={writes}
-                    after={here}
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+          ))}
+        </tbody>
+      </table>
+      <p className={`${panelBody} text-[11.5px] text-dim`}>
+        {t("footer", { agents: agentRoles })}
+      </p>
     </section>
   );
 }
 
-function Invitations({
-  invitations,
+export function InvitationsTab({
   org,
-  writes,
-  here,
+  members,
 }: {
-  invitations: MemberList["invitations"];
   org: string;
-  /** Whether this viewer's org role may send an invitation. */
-  writes: boolean;
-  /** This page, re-read after an invitation was sent. */
-  here: SafePath;
+  members: MemberList;
 }) {
-  const t = useTranslations("organization");
+  const t = useTranslations("organization.invitations");
+  const tRole = useTranslations("organization.roles");
+  const columns = [
+    { label: t("email") },
+    { label: t("role") },
+    { label: t("invitedBy") },
+    { label: t("sent") },
+    { label: t("expires") },
+    { label: t("actions") },
+  ];
+  const rows: ListRow[] = members.invitations.map((invitation) => ({
+    key: invitation.id,
+    rowId: invitation.id,
+    search: `${invitation.email} ${invitation.role}`,
+    cells: [
+      <span key="email" className={`${mono} text-xs`}>
+        {invitation.email}
+      </span>,
+      <span key="role" className={`${mono} text-[11.5px]`}>
+        {tRole(invitation.role)}
+      </span>,
+      <NotRecorded key="by" />,
+      <DateCell key="sent" iso={invitation.invitedAt} />,
+      invitation.expiresAt === null ? (
+        <span key="expires">{t("never")}</span>
+      ) : (
+        <DateCell key="expires" iso={invitation.expiresAt} />
+      ),
+      <InvitationControls
+        key="actions"
+        org={org}
+        invitationId={invitation.id}
+        allowed
+      />,
+    ],
+  }));
   return (
-    <section aria-labelledby="people-invitations" className={panel}>
+    <section aria-labelledby="org-invitations" className={panel}>
       <div className={panelHeader}>
-        <h2 id="people-invitations" className={panelTitle}>
-          {t("invitations.title")}
+        <h2 id="org-invitations" className={panelTitle}>
+          {t("title")}
         </h2>
         <InviteDialog
           org={org}
-          pendingIds={invitations.map((invitation) => invitation.id)}
-          allowed={writes}
-          after={here}
+          pendingIds={members.invitations.map((i) => i.id)}
+          allowed
+          after={routes.organization(org, "invitations")}
         />
       </div>
-      {invitations.length === 0 ? (
-        <p className={`${emptyLine} ${panelBody}`}>{t("invitations.empty")}</p>
-      ) : (
-        <table className={table}>
-          <thead>
-            <tr className="border-b border-border">
-              <th scope="col" className={headCell}>
-                {t("invitations.email")}
-              </th>
-              <th scope="col" className={headCell}>
-                {t("invitations.role")}
-              </th>
-              <th scope="col" className={headCell}>
-                {t("invitations.sent")}
-              </th>
-              <th scope="col" className={headCell}>
-                {t("invitations.expires")}
-              </th>
-              <th scope="col" className={headCell}>
-                {t("invitations.actions")}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {invitations.map((invitation) => (
-              <tr
-                key={invitation.id}
-                data-invitation={invitation.id}
-                className="border-b border-border transition-colors last:border-0 hover:bg-hl"
-              >
-                <td className={`${cell} ${mono}`}>{invitation.email}</td>
-                <td className={cell}>{t(`roles.${invitation.role}`)}</td>
-                <td className={cell}>
-                  <DateCell iso={invitation.invitedAt} />
-                </td>
-                <td className={cell}>
-                  {invitation.expiresAt === null ? (
-                    t("invitations.never")
-                  ) : (
-                    <DateCell iso={invitation.expiresAt} />
-                  )}
-                </td>
-                <td className={cell}>
-                  <InvitationControls
-                    org={org}
-                    invitationId={invitation.id}
-                    allowed={writes}
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      <ListTable
+        label={t("tableLabel")}
+        columns={columns}
+        rows={rows}
+        empty={members.invitations.length === 0 ? t("empty") : t("noMatch")}
+      />
     </section>
   );
 }

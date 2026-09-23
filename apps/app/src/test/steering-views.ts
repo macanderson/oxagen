@@ -294,6 +294,7 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
       apiKeys: refuse,
       costCenters: refuse,
       modelCredential: refuse,
+      dataPlane: refuse,
       sso: refuse,
     },
     mandates: { list: refuse, get: refuse },

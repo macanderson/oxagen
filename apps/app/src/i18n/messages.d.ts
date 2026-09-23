@@ -2368,6 +2368,10 @@ type Messages = {
       apiKeys: string;
       modelFunding: string;
       sso: string;
+      invitations: string;
+      workspaces: string;
+      dataPlane: string;
+      costCenters: string;
     };
     roles: {
       owner: string;
@@ -2384,6 +2388,42 @@ type Messages = {
       joined: string;
       actions: string;
       empty: string;
+      twoFactorPolicy: string;
+      tableLabel: string;
+      workspaces: string;
+      twoFactor: string;
+      lastSeen: string;
+      status: string;
+      statusActive: string;
+      statusInvited: string;
+      note: string;
+      open: string;
+      noMatch: string;
+      filters: {
+        status: string;
+        twoFactor: string;
+      };
+      member: {
+        title: string;
+        email: string;
+        role: string;
+        joined: string;
+        workspaces: string;
+        twoFactor: string;
+        lastSeen: string;
+        status: string;
+        id: string;
+      };
+      inUse: {
+        title: string;
+        manage: string;
+        tableLabel: string;
+        role: string;
+        holders: string;
+        description: string;
+        noDescription: string;
+        footer: string;
+      };
     };
     actions: {
       readOnly: string;
@@ -2398,6 +2438,14 @@ type Messages = {
         mainRepoHint: string;
         permissions: string;
         roleNameHint: string;
+        productionBranch: string;
+        productionBranchHint: string;
+        productionBranchCreateHint: string;
+        retention: string;
+        retentionHint: string;
+        mainRepoFixed: string;
+        namespace: string;
+        namespaceHint: string;
       };
       createRole: {
         open: string;
@@ -2429,6 +2477,11 @@ type Messages = {
         title: string;
         confirm: string;
         pending: string;
+        facts: {
+          toolbelt: string;
+          budget: string;
+          agents: string;
+        };
       };
       governance: {
         heading: string;
@@ -2449,6 +2502,7 @@ type Messages = {
           refused: string;
           close: string;
         };
+        createHint: string;
       };
       archiveWorkspace: {
         open: string;
@@ -2520,6 +2574,9 @@ type Messages = {
       confirmBody: string;
       confirmRevoke: string;
       keepInvitation: string;
+      invitedBy: string;
+      tableLabel: string;
+      noMatch: string;
     };
     invite: {
       open: string;
@@ -2559,6 +2616,10 @@ type Messages = {
         expires: string;
         status: string;
         actions: string;
+        principal: string;
+        grants: string;
+        createdBy: string;
+        actions30d: string;
       };
       actions: {
         create: {
@@ -2647,22 +2708,26 @@ type Messages = {
         next: string;
       };
       emptyFiltered: string;
-    };
-    denied: {
       title: string;
-      body: string;
-    };
-    pending: {
-      title: string;
-      body: string;
-    };
-    error: {
-      title: string;
-      body: string;
+      caption: string;
+      badge: string;
+      note: string;
+      masked: string;
+      state: {
+        active: string;
+        expiring: string;
+        neverUsed: string;
+        expired: string;
+        revoked: string;
+      };
+      surfaces: {
+        title: string;
+        badge: string;
+        body: string;
+      };
     };
     roleCatalog: {
       title: string;
-      lead: string;
       enforcement: {
         enforced: string;
         recorded: string;
@@ -2688,7 +2753,7 @@ type Messages = {
       origin: {
         builtIn: string;
         createdBy: string;
-        custom: string;
+        createdAt: string;
       };
       noPermissions: string;
       empty: string;
@@ -2698,14 +2763,78 @@ type Messages = {
         lead: string;
         covers: string;
       };
+      badge: string;
+      heldBy: {
+        people: string;
+        agents: string;
+        nobody: string;
+      };
+      more: string;
+      view: string;
+      edit: string;
+      duplicate: string;
+      delete: string;
+      deleteBuiltIn: string;
+      deleteHeld: string;
+      note: string;
+      filters: {
+        kind: string;
+        scope: string;
+        origin: string;
+      };
+      originFilter: {
+        builtIn: string;
+        custom: string;
+      };
+      noMatch: string;
+      editor: {
+        createTitle: string;
+        editTitle: string;
+        viewTitle: string;
+        name: string;
+        nameNewHint: string;
+        nameHint: string;
+        description: string;
+        descriptionFixed: string;
+        kind: string;
+        kindHint: string;
+        scope: string;
+        scopeHint: string;
+        permissions: string;
+        selected: string;
+        readOnly: string;
+        holders: string;
+        governed: string;
+        create: string;
+        save: string;
+        saving: string;
+        creating: string;
+        duplicateAsCustom: string;
+        cancel: string;
+        close: string;
+        copySuffix: string;
+      };
+      del: {
+        title: string;
+        body: string;
+        held: string;
+        free: string;
+        confirm: string;
+        pending: string;
+        cancel: string;
+      };
     };
     workspaces: {
       title: string;
       tableLabel: string;
       columns: {
         workspace: string;
-        role: string;
-        status: string;
+        mainRepo: string;
+        productionBranch: string;
+        linkedRepos: string;
+        agents: string;
+        owner: string;
+        governance: string;
         actions: string;
       };
       status: {
@@ -2714,6 +2843,13 @@ type Messages = {
       };
       noRole: string;
       empty: string;
+      governanceNotRecorded: string;
+      retentionNotRecorded: string;
+      namespace: string;
+      open: string;
+      archived: string;
+      note: string;
+      noMatch: string;
     };
     modelFunding: {
       title: string;
@@ -3014,6 +3150,141 @@ type Messages = {
         label: string;
         none: string;
         hint: string;
+      };
+    };
+    page: {
+      eyebrow: string;
+      description: string;
+      title: string;
+    };
+    list: {
+      search: string;
+      all: string;
+      rows: string;
+      range: string;
+      pager: string;
+      previous: string;
+      next: string;
+    };
+    notRecorded: string;
+    states: {
+      loading: string;
+      empty: {
+        title: string;
+        body: string;
+      };
+      error: {
+        title: string;
+        answered: string;
+        body: string;
+        retry: string;
+        trace: string;
+        traceNotRecorded: string;
+      };
+      denied: {
+        title: string;
+        bodyBefore: string;
+        bodyAfter: string;
+        needed: string;
+        grant: string;
+        back: string;
+        signedIn: string;
+        neededLabel: string;
+        decidedBy: string;
+        decider: string;
+      };
+      stub: {
+        requestAccess: {
+          open: string;
+          title: string;
+          body: string;
+        };
+        incident: {
+          open: string;
+          title: string;
+          body: string;
+        };
+      };
+    };
+    dataPlane: {
+      title: string;
+      on: string;
+      modesLabel: string;
+      modes: {
+        shared: string;
+        dedicated: string;
+        firewall: string;
+      };
+      current: string;
+      preview: string;
+      about: {
+        shared: string;
+        dedicated: string;
+        firewall: string;
+      };
+      facts: {
+        binding: string;
+        postgres: string;
+        objectStorage: string;
+        kek: string;
+        attester: string;
+        gateway: string;
+        resolver: string;
+        postgresHost: string;
+        postgresDatabase: string;
+        deployment: string;
+        bundleVersion: string;
+        bundleSignature: string;
+        containers: string;
+        airGapped: string;
+        licence: string;
+        nextBundle: string;
+        outbound: string;
+      };
+      status: {
+        active: string;
+        degraded: string;
+        disabled: string;
+      };
+      sharedPostgres: string;
+      verified: string;
+      rotated: string;
+      neverVerified: string;
+      schema: string;
+      requestChange: string;
+      rotateKeys: string;
+      retention: {
+        title: string;
+        frameBodies: string;
+        runLedger: string;
+        frameRows: string;
+        controlPlaneAudit: string;
+        digestOnly: string;
+        note: string;
+      };
+      isolation: {
+        title: string;
+        badge: string;
+        rows: string;
+        workspaceScoping: string;
+        crossTenant: string;
+        platformCatalogs: string;
+        startupGuard: string;
+        rowsValue: string;
+        workspaceScopingValue: string;
+        crossTenantValue: string;
+        platformCatalogsValue: string;
+        startupGuardValue: string;
+      };
+      stub: {
+        plane: {
+          title: string;
+          body: string;
+        };
+        rotate: {
+          title: string;
+          body: string;
+        };
       };
     };
   };
