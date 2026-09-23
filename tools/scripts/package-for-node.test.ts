@@ -15,6 +15,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -96,5 +97,52 @@ describe("package-for-node.sh app", () => {
     expect(arm).not.toMatch(/--filter\s+@oxagen\/app\b/);
     expect(arm).not.toMatch(/--filter\s+@oxagen\/app-deprecated\b/);
     expect(arm).not.toMatch(/assemble_next\s+apps\//);
+  });
+});
+
+function engineManifest(prefix: string): { config_prefix: string } {
+  const tree = mkdtempSync(join(tmpdir(), "node-manifest-"));
+  const target = join(tree, "tools", "scripts", "package-for-node.sh");
+  try {
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, script);
+    execFileSync("bash", [target, "stella-serve"], {
+      env: { ...process.env, PARAMETER_PREFIX: prefix },
+      stdio: "pipe",
+    });
+    return JSON.parse(
+      readFileSync(
+        join(tree, "dist-deploy", "stella-serve", "oxagen-run.json"),
+        "utf8",
+      ),
+    ) as { config_prefix: string };
+  } finally {
+    rmSync(tree, { recursive: true, force: true });
+  }
+}
+
+describe("artifact configuration isolation", () => {
+  it("preserves the production default for existing deploys", () => {
+    expect(engineManifest("").config_prefix).toBe(
+      "/oxagen/production/stella-serve",
+    );
+  });
+
+  it("packages the isolated environment prefix without a production fallback", () => {
+    expect(engineManifest("/oxagen/staging").config_prefix).toBe(
+      "/oxagen/staging/stella-serve",
+    );
+  });
+
+  it("refuses a malformed prefix before producing an artifact", () => {
+    for (const prefix of [
+      "oxagen/staging",
+      "/oxagen//staging",
+      "/oxagen/../production",
+    ]) {
+      expect(() => engineManifest(prefix)).toThrow(
+        "PARAMETER_PREFIX must be an absolute SSM path",
+      );
+    }
   });
 });

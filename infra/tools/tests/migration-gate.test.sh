@@ -64,7 +64,7 @@ contains "$PIPE" "  migration-gate:" "pipeline.yml defines a migration-gate job"
 # The one line that makes every other line in this change matter. Without it
 # the gate still runs, still goes red, and still ships the deploy anyway.
 
-contains "$PIPE" "needs: [checks, test, migration-gate]" \
+contains "$PIPE" "needs: [checks, test, migration-gate, staging]" \
   "deploy-node waits on migration-gate — this is the ordering guarantee itself"
 
 # --- the gate asks all three stores ----------------------------------------

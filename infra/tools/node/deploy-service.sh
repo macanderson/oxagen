@@ -43,6 +43,8 @@ readonly REGION="${REGION:-us-east-1}"
 # /oxagen-app/*; switching the default here would break the old node's
 # containers on their next deploy with no permission to write anywhere.
 readonly LOG_DRIVER="${LOG_DRIVER:-json-file}"
+readonly LOG_GROUP_PREFIX="${LOG_GROUP_PREFIX:-/oxagen-app}"
+readonly EXTRA_CA_CERT="${EXTRA_CA_CERT:-}"
 readonly ROOT=/opt/oxagen/services
 readonly KEEP_RELEASES=3
 
@@ -303,12 +305,20 @@ start_container() {
     log_args=(
       --log-driver awslogs
       --log-opt "awslogs-region=$REGION"
-      --log-opt "awslogs-group=/oxagen-app/$SERVICE"
+      --log-opt "awslogs-group=$LOG_GROUP_PREFIX/$SERVICE"
       --log-opt awslogs-create-group=true
       --log-opt "awslogs-stream=$SERVICE"
     )
   else
     log_args=(--log-opt max-size=10m --log-opt max-file=3)
+  fi
+
+  local tls_args=()
+  if [[ -n ${EXTRA_CA_CERT:-} ]]; then
+    [[ $EXTRA_CA_CERT == /* && $EXTRA_CA_CERT != *,* && -f $EXTRA_CA_CERT && -r $EXTRA_CA_CERT ]] \
+      || fail "EXTRA_CA_CERT must name a readable absolute certificate file"
+    tls_args=(--mount "type=bind,source=$EXTRA_CA_CERT,target=/opt/oxagen/extra-ca.pem,readonly" \
+      -e NODE_EXTRA_CA_CERTS=/opt/oxagen/extra-ca.pem)
   fi
 
   docker run -d \
@@ -317,6 +327,7 @@ start_container() {
     --network host \
     --memory "$memory" \
     "${log_args[@]}" \
+    "${tls_args[@]}" \
     -e NODE_ENV=production \
     -e PORT="$port" \
     -e HOSTNAME=127.0.0.1 \
