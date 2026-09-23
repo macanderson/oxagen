@@ -3977,6 +3977,7 @@ type Messages = {
         not_captured: string;
       };
       incomplete: string;
+      loading: string;
     };
   };
   runOutcomes: {

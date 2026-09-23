@@ -1553,3 +1553,25 @@ describe("loading", () => {
     expect(main).toContainElement(screen.getByRole("status"));
   });
 });
+
+it("returns the Run page without waiting for connected provider evidence", async () => {
+  const { source } = runSource({
+    detail: readOk(runDetail()),
+    transcript: readOk(runTranscript()),
+  });
+  source.runs.work = vi.fn(() => new Promise<never>(() => {}));
+  const page = await Run({
+    ctx,
+    source,
+    runId: "tse_7k2m9q",
+    tab: "transcript",
+    zoom: null,
+    kinds: null,
+    frames: null,
+    body: null,
+    reads: null,
+    spine: null,
+  });
+  expect(page).toBeTruthy();
+  expect(source.runs.work).not.toHaveBeenCalled();
+});

@@ -1,7 +1,9 @@
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
-import type { RunWork } from "@/data/contracts/run-work";
-import type { Read } from "@/data/read";
+import type { RunWork as RunWorkView } from "@/data/contracts/run-work";
+import { PAGE_FAILURES, readError, type Read } from "@/data/read";
+import type { DataSource } from "@/data/ports";
+import type { WsCtx } from "@/server/viewer";
 import { parseGitHubUrl } from "@/shared/github-url";
 import { routes } from "@/shared/safe-path";
 import { GitHubLink, SafeLink } from "@/ui/navigation";
@@ -37,7 +39,7 @@ export function RunWorkSection({
   ws,
   runId,
 }: {
-  read: Read<RunWork>;
+  read: Read<RunWorkView>;
   org: string;
   ws: string;
   runId: string;
@@ -205,6 +207,41 @@ export function RunWorkSection({
           {t("incomplete")}
         </p>
       )}
+    </section>
+  );
+}
+
+/** Provider latency stays inside this section's streaming boundary. */
+export async function RunWork({
+  ctx,
+  source,
+  ...place
+}: {
+  ctx: WsCtx;
+  source: DataSource;
+  org: string;
+  ws: string;
+  runId: string;
+}) {
+  const read = await source.runs
+    .work(ctx, place.runId)
+    .catch(() =>
+      readError(PAGE_FAILURES.run.error.code, PAGE_FAILURES.run.error.status),
+    );
+  return <RunWorkSection read={read} {...place} />;
+}
+
+export function RunWorkLoading() {
+  const t = useTranslations("run.work");
+  return (
+    <section
+      className={`${panel} p-4`}
+      aria-label={t("title")}
+      aria-busy="true"
+    >
+      <p role="status" className="text-sm text-muted-foreground">
+        {t("loading")}
+      </p>
     </section>
   );
 }

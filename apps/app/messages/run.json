@@ -559,7 +559,8 @@
         "not_retained": "Digest recorded; bytes not retained",
         "not_captured": "Patch not captured"
       },
-      "incomplete": "Some work or provider evidence is unavailable or outside this read’s limits."
+      "incomplete": "Some work or provider evidence is unavailable or outside this read’s limits.",
+      "loading": "Reading work and CI evidence…"
     }
   }
 }

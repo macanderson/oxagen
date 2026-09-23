@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { useTranslations } from "next-intl";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { TranscriptZoom } from "@/data/contracts/run";
 import type { TranscriptKind } from "@/data/contracts/run";
 import { TRANSCRIPT_KINDS } from "@/data/contracts/run";
@@ -18,7 +18,7 @@ import { CostSection } from "./cost";
 import { FramesSection } from "./frames";
 import { RunSummary } from "./summary";
 import { RunHeader } from "./header";
-import { RunWorkSection } from "./work";
+import { RunWork, RunWorkLoading } from "./work";
 import { OutputsSpine } from "./outputs";
 import { ResolvedApprovalsPanel } from "./resolved-approvals";
 import { kindsParam, TranscriptSection } from "./transcript";
@@ -183,11 +183,6 @@ export async function Run({
     .catch(() =>
       readError(PAGE_FAILURES.run.error.code, PAGE_FAILURES.run.error.status),
     );
-  const work = source.runs
-    .work(ctx, detail.run.id)
-    .catch(() =>
-      readError(PAGE_FAILURES.run.error.code, PAGE_FAILURES.run.error.status),
-    );
   const outcomesPolicy = source.runs
     .outcomesSettings(ctx)
     .catch(() =>
@@ -277,7 +272,9 @@ export async function Run({
         org={place.org}
         ws={place.ws}
       />
-      <RunWorkSection read={await work} {...place} />
+      <Suspense fallback={<RunWorkLoading />}>
+        <RunWork ctx={ctx} source={source} {...place} />
+      </Suspense>
       <RunOutcomesConsent
         at={place}
         policy={await outcomesPolicy}
