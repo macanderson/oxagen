@@ -50,8 +50,8 @@ const nextConfig: NextConfig = {
   // Carried over from apps/app_deprecated/next.config.mjs: server-only packages
   // with native addons (ssh2, dockerode) and the lazy-loaded heavy workspace
   // package reached through instrumentation.ts and the kernel. Drop an entry
-  // only once no imported package needs it. blake3 and duckdb left with
-  // @oxagen/engram (ADR-144); nothing this app imports declares either.
+  // only once no imported package needs it. blake3, duckdb and duckdb's
+  // node-pre-gyp chain (nock, mock-aws-s3) left with @oxagen/engram (ADR-144).
   //
   // The @oxagen/* entry does not need a direct dependency here. A workspace
   // package resolves through its symlink to packages/<name>/src (TypeScript,
@@ -60,14 +60,7 @@ const nextConfig: NextConfig = {
   // @oxagen/agent directly, compiled packages/agent/src/*.ts into its server
   // chunks (deploy app.oxagen.sh, run 34668582680). Externalising it for real
   // would ship .ts files under node_modules, which Node refuses to load.
-  serverExternalPackages: [
-    "@oxagen/agent",
-    "@mapbox/node-pre-gyp",
-    "nock",
-    "mock-aws-s3",
-    "dockerode",
-    "ssh2",
-  ],
+  serverExternalPackages: ["@oxagen/agent", "dockerode", "ssh2"],
   // src/i18n/request.ts lists messages/ at runtime (a page lane adds a catalog
   // by adding a file). The read is hidden from Turbopack's tracer on purpose, so
   // the catalogs are shipped into the standalone output here, for every route.

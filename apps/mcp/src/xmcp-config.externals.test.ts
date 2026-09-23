@@ -2,16 +2,11 @@ import { describe, it, expect } from "vitest";
 import xmcpConfig from "../xmcp.config";
 
 /**
- * Guards the xmcp production build against re-bundling the native duckdb chain.
- *
- * rspack cannot statically bundle the `duckdb` addon or its
- * `@mapbox/node-pre-gyp` -> `node-gyp` toolchain: that toolchain ships
- * C#/HTML/`s3_setup.js` assets rspack cannot parse, and it dynamically
- * require()s aws-sdk / mock-aws-s3 / nock. duckdb is a dependency this app
- * declares directly (until ADR-144 it also arrived through @oxagen/engram).
- * So the bundler config externalizes the whole chain and it resolves from
- * node_modules at runtime. Dropping any entry below breaks `xmcp build` with
- * `Module parse failed` / `Module not found`, which this test catches first.
+ * Guards the xmcp bundler override: heavy runtime SDKs resolve from
+ * node_modules instead of being bundled, xmcp's forced zod alias is stripped,
+ * and `.js` imports map back to their TypeScript sources. Dropping an external
+ * breaks `xmcp build` or the 250MB function limit, which this test catches
+ * first.
  */
 
 interface FakeBundlerConfig {
@@ -47,28 +42,24 @@ function runExternal(request: string): string | undefined {
   return result;
 }
 
-describe("xmcp bundler externals — native duckdb chain", () => {
-  // Every package in the duckdb native-addon chain that rspack cannot bundle.
-  const nativeChain = [
-    "duckdb",
-    "@mapbox/node-pre-gyp",
-    "node-gyp",
-    "mock-aws-s3",
-    "aws-sdk",
-    "nock",
-  ];
+describe("xmcp bundler externals", () => {
+  // Heavy SDKs this app loads only at runtime.
+  const heavy = ["pdf-lib", "inngest", "neo4j-driver", "stripe", "better-auth"];
 
-  for (const pkg of nativeChain) {
+  for (const pkg of heavy) {
     it(`externalizes ${pkg} as a runtime commonjs require`, () => {
       expect(runExternal(pkg)).toBe(`commonjs ${pkg}`);
     });
 
     it(`externalizes sub-path imports of ${pkg}`, () => {
-      expect(runExternal(`${pkg}/lib/binding`)).toBe(
-        `commonjs ${pkg}/lib/binding`,
-      );
+      expect(runExternal(`${pkg}/lib/index`)).toBe(`commonjs ${pkg}/lib/index`);
     });
   }
+
+  it("no longer externalizes duckdb or its node-pre-gyp chain (ADR-144)", () => {
+    expect(runExternal("duckdb")).toBe(undefined);
+    expect(runExternal("@mapbox/node-pre-gyp")).toBe(undefined);
+  });
 
   it("strips xmcp's forced zod alias so better-auth can resolve zod v4", () => {
     // xmcp pins `zod`, `zod/v3` and `zod/v4-mini` to this app's zod v3.
@@ -119,7 +110,9 @@ describe("xmcp bundler externals — native duckdb chain", () => {
     );
     expect(runExternal("./context")).toBe(undefined);
     // A package whose name merely starts with a heavy prefix's letters must
-    // not be caught (word-boundary check on `duckdb` vs `duckdbx`).
-    expect(runExternal("duckdbx")).toBe(undefined);
+    // not be caught (word-boundary check on `ai` vs `aiohttp`, `stripe` vs
+    // `striped`).
+    expect(runExternal("aiohttp")).toBe(undefined);
+    expect(runExternal("striped")).toBe(undefined);
   });
 });
