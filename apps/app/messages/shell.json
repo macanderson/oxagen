@@ -40,7 +40,13 @@
       "ws": "Switch workspace",
       "current": "current",
       "denied": "You do not have permission to list these.",
-      "unavailable": "This list could not be loaded. Reload the page to try again."
+      "unavailable": "This list could not be loaded. Reload the page to try again.",
+      "searchOrgs": "Search organizations",
+      "noMatch": "Nothing matches “{query}”.",
+      "orgNote": "An organization owns a key-encryption key, a Postgres partition, a billing account, and optionally a dedicated data plane. You belong to {count} here.",
+      "orgMetaNotBacked": "The plan and the agent count of each organization are not recorded with this list yet.",
+      "wsMetaNotBacked": "The main repository, its branch and the agent count of each workspace are not recorded with this list yet.",
+      "createWorkspace": "Create a workspace"
     },
     "topbar": {
       "label": "Top bar",

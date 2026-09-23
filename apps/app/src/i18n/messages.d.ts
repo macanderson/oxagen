@@ -4271,6 +4271,12 @@ type Messages = {
       current: string;
       denied: string;
       unavailable: string;
+      searchOrgs: string;
+      noMatch: string;
+      orgNote: string;
+      orgMetaNotBacked: string;
+      wsMetaNotBacked: string;
+      createWorkspace: string;
     };
     topbar: {
       label: string;

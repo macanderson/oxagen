@@ -110,6 +110,9 @@ export const routes = {
     withQuery(mint("/cli/authorize"), query),
   /** Organization › People is the organization's root. */
   people: (org: string): SafePath => pathOf(org),
+  /** Organization › People, scrolled to its Workspaces section, where a workspace is created. */
+  orgWorkspaces: (org: string): SafePath =>
+    mint(`${pathOf(org)}#org-workspaces`),
   /** Organization › Roles: the roles and the permission catalogue (#2964). */
   roles: (org: string): SafePath => pathOf(org, "roles"),
   /**

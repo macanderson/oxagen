@@ -34,6 +34,7 @@ import { SidebarFoot, SidebarHeader, SidebarNav } from "./sidebar";
 import { useSidebarSections } from "./sidebar-sections";
 import { orgChoices, SwitcherDialog, workspaceChoices } from "./switchers";
 import { type ShellCounts, useShellCounts } from "./use-activity";
+import { routes } from "@/shared/safe-path";
 import { SafeLink } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 
@@ -385,6 +386,7 @@ export function ShellMobileNav({ data }: { data: ShellData }) {
       <SwitcherDialog
         title={t("switcher.org")}
         testId="more-org-switcher"
+        kind="org"
         current={data.org.slug}
         choices={orgChoices(data)}
         open={switcher === "org"}
@@ -396,6 +398,8 @@ export function ShellMobileNav({ data }: { data: ShellData }) {
         <SwitcherDialog
           title={t("switcher.ws")}
           testId="more-workspace-switcher"
+          kind="ws"
+          createHref={routes.orgWorkspaces(data.org.slug)}
           current={ws}
           choices={workspaceChoices(data)}
           open={switcher === "ws"}
