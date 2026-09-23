@@ -115,13 +115,13 @@ export function ListTable({
   const [texts, setTexts] = useState<ReadonlyMap<string, readonly string[]>>(
     () => new Map(),
   );
-  const body = useRef<HTMLTableSectionElement>(null);
+  const bodyRef = useRef<HTMLTableSectionElement>(null);
   const searchId = useId();
 
   /** What each row renders, read from the DOM; called from an event, never during render. */
   const measure = (): ReadonlyMap<string, readonly string[]> => {
     const next = new Map<string, readonly string[]>();
-    const tbody = body.current;
+    const tbody = bodyRef.current;
     if (tbody === null) return next;
     for (const tr of tbody.querySelectorAll<HTMLTableRowElement>(
       "tr[data-lt-key]",
@@ -291,7 +291,7 @@ export function ListTable({
               })}
             </tr>
           </thead>
-          <tbody ref={body}>
+          <tbody ref={bodyRef}>
             {order.map((row) => renderRow(row, shown.get(row.key) ?? null))}
             {hiddenRows.map((row) => renderRow(row, null))}
             {total === 0 ? (
