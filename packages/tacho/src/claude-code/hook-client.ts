@@ -264,6 +264,36 @@ export const FAIL_OPEN_HOOK_PATHS: readonly string[] = [
 ];
 
 /**
+ * A `PermissionRequest` answer is `decision: { behavior }`, not the
+ * `permissionDecision` string `PreToolUse` takes. Claude Code reads no
+ * opinion from the wrong shape and falls to its own prompt, which is how a
+ * mandate deny became inert on this path while the daemon was down. "ask"
+ * has no behavior here: the request is already the prompt, so `{}` lets it
+ * stand.
+ */
+function permissionRequestResponse(
+  decision: Evaluation["decision"],
+  ruleAllow: boolean,
+  reason: string,
+): Record<string, unknown> {
+  if (decision === "deny")
+    return {
+      hookSpecificOutput: {
+        hookEventName: "PermissionRequest",
+        decision: { behavior: "deny", message: reason },
+      },
+    };
+  if (ruleAllow)
+    return {
+      hookSpecificOutput: {
+        hookEventName: "PermissionRequest",
+        decision: { behavior: "allow" },
+      },
+    };
+  return {};
+}
+
+/**
  * Evaluate one tool-bearing event against the cached bundle, in whatever
  * shape that event's own hook answer takes. Shared by `PreToolUse`,
  * `PermissionRequest` and `SubagentStart` (Cursor's own permission event for
@@ -301,34 +331,38 @@ function evaluateToolPermission(
         : "deny"
       : evaluation.decision;
   const finalEvaluation: Evaluation = { ...evaluation, decision };
+  const ruleAllow =
+    decision === "allow" &&
+    evaluation.evaluated === "allow" &&
+    evaluation.rule !== undefined;
   const response =
-    decision === "deny"
-      ? {
-          hookSpecificOutput: {
-            hookEventName: eventName,
-            permissionDecision: "deny",
-            permissionDecisionReason: evaluation.reason,
-          },
-        }
-      : decision === "ask" && evaluation.rule !== undefined
+    eventName === "PermissionRequest"
+      ? permissionRequestResponse(decision, ruleAllow, evaluation.reason)
+      : decision === "deny"
         ? {
             hookSpecificOutput: {
               hookEventName: eventName,
-              permissionDecision: "ask",
+              permissionDecision: "deny",
               permissionDecisionReason: evaluation.reason,
             },
           }
-        : decision === "allow" &&
-            evaluation.evaluated === "allow" &&
-            evaluation.rule !== undefined
+        : decision === "ask" && evaluation.rule !== undefined
           ? {
               hookSpecificOutput: {
                 hookEventName: eventName,
-                permissionDecision: "allow",
+                permissionDecision: "ask",
                 permissionDecisionReason: evaluation.reason,
               },
             }
-          : {};
+          : ruleAllow
+            ? {
+                hookSpecificOutput: {
+                  hookEventName: eventName,
+                  permissionDecision: "allow",
+                  permissionDecisionReason: evaluation.reason,
+                },
+              }
+            : {};
   return {
     response,
     evaluation: finalEvaluation,

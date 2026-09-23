@@ -16,7 +16,7 @@ import { IntlProvider } from "@/test/intl";
 import { LINEAGE, publishedRecord, recordDetail } from "@/test/steering-views";
 import { KindPanel } from "./kind-panel";
 import { LineagePanel } from "./lineage-panel";
-import { ReadFailure } from "./read-failure";
+import { RecordReadFailure } from "./read-failure";
 import { Related } from "./related";
 import { useReviseFailure } from "./revise-failure";
 
@@ -143,11 +143,11 @@ describe("useReviseFailure › the reason the write gives", () => {
 
 // A panel whose own read did not answer replaces its body, never the page, so
 // the record still reads when the panel beside it could not be filled.
-describe("ReadFailure › the sentence a panel shows", () => {
+describe("RecordReadFailure › the sentence a panel shows", () => {
   it("names the permission a denied read needed", () => {
     render(
       <IntlProvider>
-        <ReadFailure
+        <RecordReadFailure
           read={{ ok: false, reason: "denied", permission: "steering.read" }}
           section="Related records"
         />
@@ -161,7 +161,7 @@ describe("ReadFailure › the sentence a panel shows", () => {
   it("names the access request a parked read is waiting on", () => {
     render(
       <IntlProvider>
-        <ReadFailure
+        <RecordReadFailure
           read={{
             ok: false,
             reason: "pending_approval",
@@ -179,7 +179,7 @@ describe("ReadFailure › the sentence a panel shows", () => {
   it("names the code an errored read answered", () => {
     render(
       <IntlProvider>
-        <ReadFailure
+        <RecordReadFailure
           read={readError("steering_unavailable", 503)}
           section="Related records"
         />

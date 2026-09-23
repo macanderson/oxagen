@@ -25,6 +25,7 @@
 // pull request is where a person decides.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen";
+import { OXAGEN_PR_LABELS } from "@oxagen/github";
 import {
   INIT_BRANCH,
   repositoryInitPrOpen,
@@ -318,6 +319,7 @@ export function createInitPrOpenHandler(
         title: "Add Oxagen to this repository",
         head: INIT_BRANCH,
         base,
+        labels: OXAGEN_PR_LABELS,
         body: [
           `Adds the \`.oxagen/\` tree to ${bound.fullName}, opened from Oxagen.`,
           "",

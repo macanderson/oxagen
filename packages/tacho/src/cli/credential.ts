@@ -1,15 +1,16 @@
 /**
- * `tacho credential`: the CLI face of the credential seam (ADR-138), and the
+ * `tacho credential`: the CLI face of the credential seam (ADR-143), and the
  * enrollment and unenrollment steps that move a vendor key between a harness
  * file and the gateway's custody.
  *
  *   - `tacho credential issue --harness claude-code` is what Claude Code runs
  *     as its `apiKeyHelper`. It prints one run token and nothing else. It
- *     asks the daemon, which mints and records the issue; if the daemon does
- *     not answer it mints from the signing key on disk so a harness is never
- *     left without a credential by a daemon restart, and it says so on
- *     stderr. It refuses when the gateway holds nothing for the provider: a
- *     token nobody can spend is a harness that finds out at its first call.
+ *     asks the daemon, which mints and records the issue. When the daemon
+ *     does not answer it prints no token and says why on stderr: the proxy
+ *     is the daemon, so a token minted around it would buy a model call that
+ *     cannot happen anyway. It refuses when the gateway holds nothing for
+ *     the provider: a token nobody can spend is a harness that finds out at
+ *     its first call.
  *   - `tacho credential status` says which providers are in custody, where
  *     each key came from and when, and whether each harness file points at
  *     the gateway. It never prints a secret.
@@ -23,12 +24,10 @@
  * run token and no gateway to spend it at.
  */
 import { existsSync } from "node:fs";
-import { join } from "node:path";
 import type {
   CredentialSource,
   HeldCredential,
 } from "../host/credential-store";
-import { readJsonFileIfExists } from "../host/fs";
 import { type HostFile, readHostFile } from "../host/host-file";
 import {
   HARNESS_PROVIDER,
@@ -37,6 +36,7 @@ import {
   type ModelCredentialHarnessState,
   type ModelCredentialState,
   modelCredentialBackupPath,
+  readCodexApiKeyMember,
   staticTokenStillGood,
 } from "../host/model-credential";
 
@@ -45,13 +45,16 @@ export {
   staticTokenStillGood,
 } from "../host/model-credential";
 import type { RunTokenPlacement, RunTokenProvider } from "../host/run-token";
-import { TACHO_HARNESS_LABELS } from "../wire";
+import {
+  BROKERABLE_HARNESSES,
+  isBrokerableHarness,
+  TACHO_HARNESS_LABELS,
+} from "../wire";
 import type { CliDeps } from "./deps";
 
-/** The harnesses whose model credential the gateway can broker. */
+/** The harnesses whose model credential the gateway can broker, off the route table. */
 export const MODEL_CREDENTIAL_HARNESSES: ModelCredentialHarness[] = [
-  "claude-code",
-  "codex",
+  ...BROKERABLE_HARNESSES,
 ];
 
 /**
@@ -84,7 +87,7 @@ export function brokerEnvVar(provider: RunTokenProvider): string {
 export function isCredentialHarness(
   harness: string,
 ): harness is ModelCredentialHarness {
-  return (MODEL_CREDENTIAL_HARNESSES as readonly string[]).includes(harness);
+  return isBrokerableHarness(harness);
 }
 
 interface IssueOptions {
@@ -130,6 +133,17 @@ export async function credentialIssue(
           : "tachod is not answering, so no run token is issued: the gateway it would be spent at is down. Run `tacho status`",
     };
   }
+  const issued = parseIssueAnswer(answer);
+  return issued.token !== undefined
+    ? { ok: true, token: issued.token, detail: issued.detail }
+    : { ok: false, detail: issued.detail };
+}
+
+/** The daemon's answer to `/credential/issue`: the token, or why there is none. */
+export function parseIssueAnswer(answer: { status: number; body: string }): {
+  token?: string;
+  detail: string;
+} {
   let parsed: { token?: unknown; error?: unknown } = {};
   try {
     parsed = JSON.parse(answer.body) as typeof parsed;
@@ -137,9 +151,8 @@ export async function credentialIssue(
     parsed = {};
   }
   if (answer.status === 200 && typeof parsed.token === "string")
-    return { ok: true, token: parsed.token, detail: "issued by tachod" };
+    return { token: parsed.token, detail: "issued by tachod" };
   return {
-    ok: false,
     detail:
       typeof parsed.error === "string"
         ? parsed.error
@@ -226,6 +239,8 @@ export function describeHarness(entry: ModelCredentialHarnessState): string {
       return `${label}: ${entry.file} is a symbolic link, so it was left alone; its own credential crosses the proxy`;
     case "no_file":
       return `${label}: no ${entry.file} yet; its own credential crosses the proxy`;
+    case "two_credentials":
+      return `${label}: ${entry.file} sets both ANTHROPIC_API_KEY and ANTHROPIC_AUTH_TOKEN in env, and the gateway holds one ${HARNESS_PROVIDER[entry.harness]} credential; remove one and run \`tacho enroll\` again. Its own credential crosses the proxy`;
     default:
       return `${label}: holds its own credential, which crosses the proxy (run \`tacho enroll\` to broker it)`;
   }
@@ -316,7 +331,7 @@ export async function brokerCredentials(
       await contract.read({ home: deps.home, harnesses: ["codex"] })
     ).harnesses[0];
     if (before?.reason !== "subscription_login") {
-      const current = codexFileToken(deps);
+      const current = readCodexApiKeyMember(deps.home);
       if (
         !staticTokenStillGood(current, host, deps.paths.runTokenKey, deps.now())
       ) {
@@ -398,21 +413,6 @@ export async function brokerCredentials(
   return { harnesses: state.harnesses, taken: takenNow, warnings };
 }
 
-/** The `OPENAI_API_KEY` member of Codex's auth.json, whatever it holds. */
-function codexFileToken(deps: CliDeps): string | undefined {
-  try {
-    // The same file the writer edits: `~/.codex/auth.json` under `home`.
-    const raw = readJsonFileIfExists(join(deps.home, ".codex", "auth.json"));
-    const value =
-      typeof raw === "object" && raw !== null
-        ? (raw as { OPENAI_API_KEY?: unknown }).OPENAI_API_KEY
-        : undefined;
-    return typeof value === "string" ? value : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 /** A static token for Codex, from the daemon and nowhere else. */
 async function issueStatic(
   harness: ModelCredentialHarness,
@@ -427,20 +427,7 @@ async function issueStatic(
       detail:
         "tachod did not answer, so no run token was issued; run `tacho enroll` again once tachod is up",
     };
-  let parsed: { token?: unknown; error?: unknown } = {};
-  try {
-    parsed = JSON.parse(answer.body) as typeof parsed;
-  } catch {
-    parsed = {};
-  }
-  if (answer.status === 200 && typeof parsed.token === "string")
-    return { token: parsed.token, detail: "issued by tachod" };
-  return {
-    detail:
-      typeof parsed.error === "string"
-        ? parsed.error
-        : `tachod refused to issue a run token (${answer.status})`,
-  };
+  return parseIssueAnswer(answer);
 }
 
 export interface RestoreOutcome {

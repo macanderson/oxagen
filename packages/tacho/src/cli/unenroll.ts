@@ -42,6 +42,7 @@ import {
 import { stripTachoSettings } from "../host/settings-writer";
 import { stripStellaHooks } from "../host/stella-writer";
 import { toProtocolTimestamp } from "../timestamp";
+import { MODEL_ROUTED_HARNESSES } from "../wire";
 import {
   type CliDeps,
   type CredentialOptions,
@@ -152,11 +153,9 @@ export async function revokeAndMark(
  * created after enrollment makes Stella ignore the `settings.json` Tacho
  * wrote to, without removing the hooks from it.
  */
-/** The harnesses the model base URL contract covers. */
+/** The harnesses the model base URL contract covers, off the route table. */
 export const MODEL_BASE_URL_HARNESSES: ModelBaseUrlHarness[] = [
-  "claude-code",
-  "codex",
-  "stella",
+  ...MODEL_ROUTED_HARNESSES,
 ];
 
 /**
@@ -410,7 +409,7 @@ async function unenrollLocked(
   }
 
   // First of all: each harness gets its vendor key back from custody and
-  // its run token or helper taken out (ADR-138), before the base URL goes
+  // its run token or helper taken out (ADR-143), before the base URL goes
   // and long before the daemon stops. A harness left with a run token and
   // no gateway has no credential at all.
   const credentials = await restoreCredentials(host, deps, "unenroll");
@@ -575,9 +574,14 @@ async function unenrollLocked(
       rmSync(dir, { recursive: true, force: true });
     }
     // The log is part of the local record: a purge that kept it left the
-    // one file most likely to name a repository path or a prompt.
+    // one file most likely to name a repository path or a prompt. The
+    // pending session ends hold sealed terminal batches, bodies included,
+    // that never reached the WAL, so they go with it (ADR-139).
     rmSync(deps.paths.log, { force: true });
-    deps.out("      WAL, spool, quarantine and the collector log purged");
+    rmSync(deps.paths.pendingEnds, { force: true });
+    deps.out(
+      "      WAL, spool, quarantine, pending session ends and the collector log purged",
+    );
   } else {
     deps.out(`      WAL kept at ${deps.paths.wal} (pass --purge to delete)`);
   }

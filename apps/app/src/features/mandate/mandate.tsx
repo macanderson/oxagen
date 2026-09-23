@@ -61,7 +61,7 @@ const STATUS_DOT: Record<MandateRow["status"], string> = {
   revoked: "bg-destructive",
 };
 
-function StatusBadge({ status }: { status: MandateRow["status"] }) {
+function MandateStatusBadge({ status }: { status: MandateRow["status"] }) {
   const t = useTranslations("mandate.status");
   return (
     <span
@@ -154,7 +154,7 @@ function Header({
           {mandate.id}
         </h1>
         <div className="flex flex-wrap items-center gap-3 pt-1 text-xs">
-          <StatusBadge status={mandate.status} />
+          <MandateStatusBadge status={mandate.status} />
           {mandate.grantedBy === null ? (
             <span className="text-muted-foreground">{t("notGranted")}</span>
           ) : (

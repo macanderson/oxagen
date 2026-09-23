@@ -57,7 +57,7 @@ export interface CollectorApi {
   /** Drop a gateway session's state when its connection closes. */
   mcpClose?: (sessionId: string) => void;
   /**
-   * Mint a run token for a brokered harness (ADR-138). `tacho credential
+   * Mint a run token for a brokered harness (ADR-143). `tacho credential
    * issue` calls this over the socket with the local bearer; Claude Code
    * runs that command as its `apiKeyHelper`. Absent on a daemon built
    * without the credential seam, in which case `/credential/issue` is a 404.

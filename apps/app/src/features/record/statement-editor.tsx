@@ -249,7 +249,7 @@ export function StatementEditor({
   pendingBranch,
 }: {
   at: RecordAt;
-  /** `.oxagen/rules/<lineage>.toml · statement`. */
+  /** `statement in .oxagen/rules/<lineage>.toml`. */
   path: string;
   /** The statement in force; null on a record whose file carries none. */
   statement: string | null;

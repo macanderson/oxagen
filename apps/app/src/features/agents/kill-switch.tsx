@@ -13,11 +13,13 @@
 // a run the harness has already stopped taking pause commands from.
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
+import type { OrgRole } from "@/server/viewer";
 import type { AgentPauseOutcome } from "./actions";
 import { pauseAgent } from "./actions";
 import { UNANSWERED, useActionFailure } from "./action-failure";
 import { buttonSecondary, inputBase } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
+import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 
 function Outcome({ pause }: { pause: AgentPauseOutcome }) {
@@ -57,15 +59,24 @@ export function AgentKillSwitch({
   agentId,
   agentKey,
   name,
+  orgRole,
 }: {
   org: string;
   ws: string;
   agentId: string;
   agentKey: string | null;
   name: string;
+  /**
+   * The viewer's organization role. `set_kill_switch` asserts an Owner or
+   * Admin (INV-29), so a viewer it would refuse sees the button disabled with
+   * the reason, the way the Run page's record writes do, not a dialog that
+   * ends in `org_role_required`.
+   */
+  orgRole: OrgRole;
 }) {
   const t = useTranslations("agents.actions.killSwitch");
   const failureText = useActionFailure();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
@@ -108,6 +119,27 @@ export function AgentKillSwitch({
     } finally {
       setPending(false);
     }
+  }
+
+  if (orgRole !== "owner" && orgRole !== "admin") {
+    return (
+      <span className="flex flex-col gap-1">
+        <button
+          type="button"
+          disabled
+          data-testid="agent-kill-switch-open"
+          className={buttonSecondary}
+        >
+          {t("open")}
+        </button>
+        <span
+          data-testid="agent-kill-switch-no-role"
+          className="max-w-prose text-xs text-muted-foreground"
+        >
+          {t("needsRole")}
+        </span>
+      </span>
+    );
   }
 
   return (
@@ -179,6 +211,20 @@ export function AgentKillSwitch({
               </p>
             )}
             <Outcome pause={outcome.pause} />
+            {/* The switch and the pause changed the record; the page still
+                shows the read from before. The same offer the Run page's
+                record dialogs make: re-read in place, and the tab stays put. */}
+            <button
+              type="button"
+              data-testid="agent-kill-switch-reread"
+              className={`${buttonSecondary} self-start`}
+              onClick={() => {
+                openChange(false);
+                navigate.refresh();
+              }}
+            >
+              {t("reread")}
+            </button>
           </div>
         )}
       </SheetDialog>

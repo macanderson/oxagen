@@ -14,6 +14,8 @@ import { agentRetire } from "@oxagen/oxagen/contracts/agent.retire";
 import { agentRoleAssign } from "@oxagen/oxagen/contracts/agent.role.assign";
 import { agentRoleRevoke } from "@oxagen/oxagen/contracts/agent.role.revoke";
 import { agentSuspend } from "@oxagen/oxagen/contracts/agent.suspend";
+import { costCenterList } from "@oxagen/oxagen/contracts/cost_center.list";
+import { costCenterSet } from "@oxagen/oxagen/contracts/cost_center.set";
 import { iamRoleList } from "@oxagen/oxagen/contracts/iam.role.list";
 import { killSwitchSet } from "@oxagen/oxagen/contracts/kill_switch.set";
 import { mandateRequest } from "@oxagen/oxagen/contracts/mandate.request";
@@ -314,6 +316,65 @@ export async function revokeAgentRole(
           revoked: result.value.revoked,
         },
       }
+    : result;
+}
+
+// ── Cost center ──────────────────────────────────────────────────────────────
+// The label this agent's spend is charged back to (ADR-142). `set_cost_center`
+// names the agent by SLUG and takes only a label on the organization's live
+// list, so the dialog offers that list rather than a text box, read on demand
+// through `list_cost_centers` the way the role picker reads its catalogue. The
+// handler admits an org Owner, Admin or Billing member; anyone else gets
+// `denied` with nothing written.
+
+/** One label the picker may offer. */
+export type CostCenterChoice = { id: string; label: string };
+
+/** The organization's live cost-center labels, by label. */
+export async function readCostCenters(
+  org: string,
+  ws: string,
+): Promise<ActionResult<CostCenterChoice[]>> {
+  const ctx = await requireViewer(org, ws);
+  const read = await kernelRead(ctx, {
+    contract: costCenterList,
+    input: {},
+    page: "agents",
+  });
+  const result = readToActionResult(read);
+  if (!result.ok) return result;
+  return {
+    ok: true,
+    value: result.value.costCenters.map((center) => ({
+      id: center.id,
+      label: center.label,
+    })),
+  };
+}
+
+/**
+ * Charges the agent to `label`, or clears its label with the empty string so
+ * it inherits the workspace's again. The handler stores the list's own
+ * spelling and answers it. Runs rolled up after the write are charged to the
+ * new label; runs already rolled up keep the label they had.
+ */
+export async function setAgentCostCenter(
+  org: string,
+  ws: string,
+  agentSlug: string,
+  label: string,
+): Promise<ActionResult<{ costCenter: string | null }>> {
+  const slug = agentSlug.trim();
+  if (slug === "") return refuseField("agent");
+  const ctx = await requireViewer(org, ws);
+  const trimmed = label.trim();
+  const result = await kernelWrite(ctx, costCenterSet, {
+    target: "agent",
+    agent: slug,
+    costCenter: trimmed === "" ? null : trimmed,
+  });
+  return result.ok
+    ? { ok: true, value: { costCenter: result.value.costCenter } }
     : result;
 }
 

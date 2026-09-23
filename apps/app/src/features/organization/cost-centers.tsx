@@ -1,7 +1,8 @@
 // Organization › Cost centers (ADR-142): the labels spend is charged back to,
 // each with how many agents and workspaces name it, and the label each live
-// workspace is charged to. An agent's label wins over its workspace's; agents
-// are charged through set_cost_center on the API, MCP or CLI.
+// workspace is charged to. An agent's label wins over its workspace's; an
+// agent is charged on its own page (features/agents/cost-center-controls.tsx)
+// or through set_cost_center on the API or MCP.
 import { useTranslations } from "next-intl";
 import type { CostCenterList, WorkspaceList } from "@/data/contracts/org";
 import type { DataSource } from "@/data/ports";

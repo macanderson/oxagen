@@ -13,7 +13,7 @@ import { eyebrow as eyebrowStyle } from "./control-styles";
 export type PageHeaderProps = {
   /** The translated `pages.*` title; the same string the page's generateMetadata returns. */
   title: string;
-  /** The scope line: `Workspace · <name>` on a workspace page, `Organization` on an organization page. */
+  /** The scope line: `Workspace <name>` on a workspace page, `Organization <name>` on an organization page. */
   eyebrow?: ReactNode;
   description?: ReactNode;
   /** Badges and facts that sit under the title (status, tier, owner). */

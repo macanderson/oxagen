@@ -278,6 +278,19 @@ export async function recordAssistantModelKey(
 }
 
 /**
+ * Take key material out of a message before it is stored or logged.
+ *
+ * The one shape an OpenRouter key has today, `sk-or-v1-<hex>`, is replaced
+ * wherever it appears. The same rule guards `OpenRouterProvisioningError` in
+ * `@oxagen/ai`; it is restated here because `@oxagen/ai` depends on this
+ * package, not the other way round. Both a vendor error and a caller's reason
+ * can quote the request that failed, and the request carried the key.
+ */
+export function scrubAssistantKeyMaterial(text: string): string {
+  return text.replace(/sk-or-v1-[A-Za-z0-9]+/g, "sk-or-v1-[redacted]");
+}
+
+/**
  * Record that a provisioning attempt failed, without a key to show for it.
  *
  * Deliberately NOT a row: a row in this table means "a key exists at the
@@ -296,7 +309,9 @@ export function logAssistantModelKeyFailure(
       orgId,
       phase,
       alert: "assistant_model_key_provision_failed",
-      err: err instanceof Error ? err.message : String(err),
+      err: scrubAssistantKeyMaterial(
+        err instanceof Error ? err.message : String(err),
+      ),
     },
     "assistant-model-key: provisioning failed — the organisation stays on the shared platform key",
   );
@@ -318,9 +333,9 @@ export async function markAssistantModelKeyDisabled(
   orgId: string,
   reason?: string,
 ): Promise<void> {
-  // tenancy: system bypass via withSystemDb (operator action — the caller is
-  // an operator or an offboarding job, not a request inside the organisation's
-  // scope) (see docs/specs/tenancy-rls/spec.md)
+  // tenancy: system bypass via withSystemDb; the update is filtered by orgId,
+  // and the caller is an operator or an offboarding job, not a request inside
+  // the organisation's scope (see docs/specs/tenancy-rls/spec.md)
   await withSystemDb((tx) =>
     tx
       .update(schema.assistantModelKeys)
@@ -328,7 +343,11 @@ export async function markAssistantModelKeyDisabled(
         status: "disabled",
         disabledAt: new Date(),
         updatedAt: new Date(),
-        ...(reason ? { lastError: reason.slice(0, 500) } : {}),
+        // The column comment promises a reason scrubbed of key material,
+        // and the writer is the one place that promise can be kept.
+        ...(reason
+          ? { lastError: scrubAssistantKeyMaterial(reason).slice(0, 500) }
+          : {}),
       })
       .where(eq(schema.assistantModelKeys.orgId, orgId)),
   );

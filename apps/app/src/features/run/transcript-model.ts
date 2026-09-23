@@ -175,8 +175,43 @@ function absorbEffects(
   return out;
 }
 
+/**
+ * The positions of every frame that carries a `callKey`, by key, in transcript
+ * order. Built once per `stepsOf` call so a keyed lookup (the close of a call,
+ * the duplicate seals of one) reads the few frames of that call rather than
+ * scanning forward through every frame after it.
+ */
+type ByCallKey = ReadonlyMap<string, readonly number[]>;
+
+function indexByCallKey(frames: readonly TranscriptEntry[]): ByCallKey {
+  const byKey = new Map<string, number[]>();
+  frames.forEach((frame, index) => {
+    if (frame.callKey === null) return;
+    const positions = byKey.get(frame.callKey);
+    if (positions === undefined) byKey.set(frame.callKey, [index]);
+    else positions.push(index);
+  });
+  return byKey;
+}
+
+/** The first frame of `type` after `i` that carries `callKey`, or null. */
+function closeOf(
+  frames: readonly TranscriptEntry[],
+  byKey: ByCallKey,
+  i: number,
+  callKey: string,
+  type: string,
+): number | null {
+  for (const j of byKey.get(callKey) ?? []) {
+    if (j <= i) continue;
+    if (frames[j]?.type === type) return j;
+  }
+  return null;
+}
+
 function stepPair(
   frames: readonly TranscriptEntry[],
+  byKey: ByCallKey,
   i: number,
   frame: TranscriptEntry,
 ): { indices: number[]; kind: TranscriptStep["kind"] } {
@@ -187,14 +222,8 @@ function stepPair(
         : MODEL_RESPONSE;
     const callKey = frame.callKey;
     if (callKey !== null) {
-      for (let j = i + 1; j < frames.length; j += 1) {
-        const next = frames[j];
-        if (next === undefined) break;
-        if (next.type === close && next.callKey === callKey) {
-          return { indices: [i, j], kind: "model" };
-        }
-      }
-      return { indices: [i], kind: "model" };
+      const j = closeOf(frames, byKey, i, callKey, close);
+      return { indices: j === null ? [i] : [i, j], kind: "model" };
     }
     const paired = frames[i + 1]?.type === close;
     return { indices: paired ? [i, i + 1] : [i], kind: "model" };
@@ -204,17 +233,11 @@ function stepPair(
       frame.type === TOOL_ENGINE_STARTED ? TOOL_ENGINE_COMPLETED : TOOL_CALL;
     const callKey = frame.callKey;
     if (callKey !== null) {
-      for (let j = i + 1; j < frames.length; j += 1) {
-        const next = frames[j];
-        if (next === undefined) break;
-        if (next.type === close && next.callKey === callKey) {
-          return {
-            indices: absorbEffects(frames, [i, j], callKey),
-            kind: "tool",
-          };
-        }
-      }
-      return { indices: [i], kind: "tool" };
+      const j = closeOf(frames, byKey, i, callKey, close);
+      return {
+        indices: j === null ? [i] : absorbEffects(frames, [i, j], callKey),
+        kind: "tool",
+      };
     }
     const indices = [i];
     for (let j = i + 1; j < frames.length; j += 1) {
@@ -307,11 +330,12 @@ function stepsOf(
 ): TranscriptStep[] {
   const steps: TranscriptStep[] = [];
   const claimed = new Set<number>();
+  const byKey = indexByCallKey(frames);
   for (let i = 0; i < frames.length; i += 1) {
     if (claimed.has(i)) continue;
     const first = frames[i];
     if (first === undefined) continue;
-    const { indices, kind } = stepPair(frames, i, first);
+    const { indices, kind } = stepPair(frames, byKey, i, first);
     // A wrapped session seals one tool call up to three times: once from the
     // PostToolUse hook, which carries the body, and once each from the OTel
     // log and the transcript tailer, which carry a digest and nothing else.
@@ -321,12 +345,9 @@ function stepsOf(
     // the copy that has something to read.
     if (kind === "tool" && first.callKey !== null) {
       const last = indices[indices.length - 1] ?? i;
-      for (let j = last + 1; j < frames.length; j += 1) {
-        const later = frames[j];
-        if (later === undefined || claimed.has(j)) continue;
-        if (later.kind === "tool_call" && later.callKey === first.callKey) {
-          indices.push(j);
-        }
+      for (const j of byKey.get(first.callKey) ?? []) {
+        if (j <= last || claimed.has(j)) continue;
+        if (frames[j]?.kind === "tool_call") indices.push(j);
       }
     }
     for (const index of indices) {

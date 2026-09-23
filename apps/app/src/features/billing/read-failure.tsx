@@ -6,7 +6,7 @@ import type { Read } from "@/data/read";
 
 type Failure = Exclude<Read<unknown>, { ok: true }>;
 
-export function ReadFailure({
+export function BillingReadFailure({
   read,
   section,
 }: {

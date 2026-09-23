@@ -35,12 +35,41 @@
  * reconciliation gap nobody sees. Pass `funding.modelKey` through
  * unconditionally.
  *
+ * A minted key is consulted only where the platform itself routes through
+ * OpenRouter (ADR-131 §9). On a gateway deployment the shared key answers and
+ * the minted-key row, if one exists, is never read: a client built on it
+ * would move the organisation off the gateway and out of its metering, which
+ * `OXAGEN_MODEL_PROVIDER` says never happens by itself.
+ *
  * Server-only: reads through `@oxagen/database`, which opens KMS envelopes.
  * Must be called inside a tenant scope.
  */
+import pino from "pino";
 import { loadModelCredential } from "@oxagen/database/model-credential";
 import { loadAssistantModelKey } from "@oxagen/database/assistant-model-key";
 import type { ModelCredential } from "./models";
+import { mintedKeysServeHere } from "./platform-provider";
+
+const logger = pino({ name: "ai.funding" });
+
+/**
+ * Said once per process. Every platform-funded turn on a gateway deployment
+ * takes this branch, and a line per turn would say nothing the first did not.
+ */
+let mintedKeysSkippedOnce = false;
+function noteMintedKeysSkipped(): void {
+  if (mintedKeysSkippedOnce) return;
+  mintedKeysSkippedOnce = true;
+  logger.info(
+    { platformProvider: "gateway" },
+    "assistant-model-key: minted keys are not consulted on a gateway deployment; the shared key serves every platform-funded turn (ADR-131 §9)",
+  );
+}
+
+/** Test seam: forget that the skip was already logged. */
+export function resetMintedKeyNoticeForTests(): void {
+  mintedKeysSkippedOnce = false;
+}
 
 /**
  * `platform`: Oxagen's key pays the vendor and the tokens are billed to the
@@ -84,6 +113,10 @@ export const PLATFORM_FUNDING: ModelFundingSource = { fundedBy: "platform" };
  * its own key onto Oxagen's billed key, which is the one direction this seam
  * must never err in. A caller that catches this and substitutes
  * PLATFORM_FUNDING has reintroduced that error.
+ *
+ * The minted key is asked for only where the platform provider is OpenRouter.
+ * A key the customer brought is answered on every deployment: it names its
+ * own provider, and the customer chose it.
  */
 export async function resolveModelFundingSource(
   orgId: string,
@@ -101,6 +134,11 @@ export async function resolveModelFundingSource(
       },
       keyHint: brought.keyHint,
     };
+  }
+
+  if (!mintedKeysServeHere()) {
+    noteMintedKeysSkipped();
+    return PLATFORM_FUNDING;
   }
 
   const minted = await loadAssistantModelKey(orgId);

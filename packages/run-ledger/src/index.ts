@@ -286,6 +286,7 @@ export {
   assertRunRowMatchesSpec,
   isExternalToolIdentity,
   isAdmissibleToolIdentity,
+  EXTERNAL_TOOL_PREFIXES,
   EXTERNAL_TOOL_SEGMENT_MAX,
   EXTERNAL_TOOL_IDENTITY_MAX,
   type RunSpecV2,

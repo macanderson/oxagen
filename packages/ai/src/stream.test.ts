@@ -3,6 +3,7 @@ import { CREDIT_REASONS } from "@oxagen/billing";
 
 // ── hoisted stubs ─────────────────────────────────────────────────────────────
 const mocks = vi.hoisted(() => ({
+  voidUsage: vi.fn(async () => true),
   recordSpend: vi.fn(),
   streamText: vi.fn(),
   insertTokenUsage: vi.fn(),
@@ -64,6 +65,7 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
       },
     ),
     recordSpend: mocks.recordSpend,
+    voidUsage: mocks.voidUsage,
   };
 });
 vi.mock("./models", () => ({
@@ -416,7 +418,7 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
     );
   });
 
-  it("does not report completion when credit-charge fails", async () => {
+  it("withholds onFinish when the credit charge fails; the staged usage is retried by the outbox", async () => {
     mocks.chargeUsageCredits.mockRejectedValueOnce(new Error("billing down"));
     let calledOnFinish = false;
     const result = streamAgentReply({
@@ -462,7 +464,7 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
     );
   });
 
-  it("does not report completion when durable persistence fails", async () => {
+  it("withholds onFinish when the settlement seam rejects; the staged usage is retried by the outbox", async () => {
     mocks.insertTokenUsage.mockRejectedValueOnce(new Error("CH down"));
     let calledOnFinish = false;
     const result = streamAgentReply({
@@ -881,7 +883,7 @@ describe("stream durable lifecycle", () => {
     expect(mocks.chargeUsageCredits).toHaveBeenCalledTimes(1);
     expect(onFinish).not.toHaveBeenCalled();
   });
-  it("does not invent usage for an interrupted first step", async () => {
+  it("does not invent usage for an interrupted first step, and voids the admission instead", async () => {
     streamAgentReply({
       fundedBy: "platform",
       chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
@@ -893,6 +895,61 @@ describe("stream durable lifecycle", () => {
     await options.onAbort({ steps: [] });
     expect(mocks.insertTokenUsage).not.toHaveBeenCalled();
     expect(mocks.chargeUsageCredits).not.toHaveBeenCalled();
+    // The admission would otherwise count as incomplete for ever.
+    expect(mocks.voidUsage).toHaveBeenCalledWith({
+      id: "00000000-0000-4000-8000-000000000099",
+      orgId: TELEMETRY.orgId,
+      workspaceId: TELEMETRY.workspaceId,
+      reason: "aborted_before_first_step",
+    });
+  });
+  it("voids the admission when the provider fails before the first step, once", async () => {
+    const onError = vi.fn();
+    streamAgentReply({
+      fundedBy: "platform",
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+      messages: MESSAGES,
+      telemetry: TELEMETRY,
+      onError,
+    });
+    const options = mocks.streamText.mock.calls[0]![0];
+    await options.prepareStep();
+    const error = { error: new Error("provider refused the request") };
+    await options.onError(error);
+    await options.onAbort({ steps: [] });
+    expect(mocks.voidUsage).toHaveBeenCalledTimes(1);
+    expect(mocks.voidUsage).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: "provider_error_before_first_step" }),
+    );
+    expect(mocks.insertTokenUsage).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith(error);
+  });
+  it("does not void an admission it settled", async () => {
+    streamAgentReply({
+      fundedBy: "platform",
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+      messages: MESSAGES,
+      telemetry: TELEMETRY,
+    });
+    const options = mocks.streamText.mock.calls[0]![0];
+    await options.prepareStep();
+    options.onStepEnd({
+      usage: { inputTokens: 50, outputTokens: 10, totalTokens: 60 },
+    });
+    await options.onError({ error: new Error("later step failed") });
+    expect(mocks.chargeUsageCredits).toHaveBeenCalledTimes(1);
+    expect(mocks.voidUsage).not.toHaveBeenCalled();
+  });
+  it("does not void before an admission exists", async () => {
+    streamAgentReply({
+      fundedBy: "platform",
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+      messages: MESSAGES,
+      telemetry: TELEMETRY,
+    });
+    const options = mocks.streamText.mock.calls[0]![0];
+    await options.onError({ error: new Error("failed before prepareStep") });
+    expect(mocks.voidUsage).not.toHaveBeenCalled();
   });
 });
 

@@ -77,6 +77,7 @@ export interface AgentGetResult {
     status: string;
     registeredAt: string;
     firstFrameAt: string | null;
+    costCenter: string | null;
   };
   credentials: AgentCredential[];
   roles: {
@@ -228,6 +229,7 @@ export async function agentStatus(
   writer.write(`  operator    ${identity.operatorId ?? "—"}`);
   writer.write(`  registered  ${identity.registeredAt}`);
   writer.write(`  first frame ${identity.firstFrameAt ?? "—"}`);
+  writer.write(`  cost center ${identity.costCenter ?? "—"}`);
   writer.write("");
   writer.write("Credentials:");
   if (result.credentials.length === 0) writer.write("  none");

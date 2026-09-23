@@ -4,6 +4,7 @@ import { z } from "zod";
 
 // ── hoisted stubs ─────────────────────────────────────────────────────────────
 const mocks = vi.hoisted(() => ({
+  voidUsage: vi.fn(async () => true),
   recordSpend: vi.fn(),
   generateObject: vi.fn(),
   insertTokenUsage: vi.fn(),
@@ -61,6 +62,7 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
       },
     ),
     recordSpend: mocks.recordSpend,
+    voidUsage: mocks.voidUsage,
   };
 });
 vi.mock("./models", () => ({
@@ -389,7 +391,7 @@ describe("generateObjectFor (@oxagen/ai)", () => {
     expect(chargeSucceeded).toBe(true);
   });
 
-  it("propagates durable persistence failure", async () => {
+  it("rejects when the settlement seam rejects after the usage is staged; the outbox retries it", async () => {
     mocks.insertTokenUsage.mockRejectedValueOnce(new Error("CH down"));
 
     await expect(
@@ -401,6 +403,43 @@ describe("generateObjectFor (@oxagen/ai)", () => {
         telemetry: TELEMETRY,
       }),
     ).rejects.toThrow("CH down");
+  });
+
+  it("voids the admission and rethrows when the provider call fails", async () => {
+    const billing = await import("@oxagen/billing");
+    mocks.generateObject.mockRejectedValueOnce(new Error("provider 503"));
+    await expect(
+      generateObjectFor({
+        fundedBy: "platform" as const,
+        chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+        schema: SCHEMA,
+        prompt: "resilient?",
+        telemetry: TELEMETRY,
+      }),
+    ).rejects.toThrow("provider 503");
+    expect(mocks.voidUsage).toHaveBeenCalledTimes(1);
+    expect(mocks.voidUsage).toHaveBeenCalledWith({
+      id: "00000000-0000-4000-8000-000000000099",
+      orgId: TELEMETRY.orgId,
+      workspaceId: TELEMETRY.workspaceId,
+      reason: "provider_call_failed",
+    });
+    expect(billing.finalizeUsage).not.toHaveBeenCalled();
+    expect(mocks.chargeUsageCredits).not.toHaveBeenCalled();
+  });
+
+  it("still surfaces the provider error when the void itself fails", async () => {
+    mocks.generateObject.mockRejectedValueOnce(new Error("provider 503"));
+    mocks.voidUsage.mockRejectedValueOnce(new Error("pg down"));
+    await expect(
+      generateObjectFor({
+        fundedBy: "platform" as const,
+        chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+        schema: SCHEMA,
+        prompt: "resilient?",
+        telemetry: TELEMETRY,
+      }),
+    ).rejects.toThrow("provider 503");
   });
 
   it("propagates hashPrompt failure", async () => {
@@ -417,7 +456,7 @@ describe("generateObjectFor (@oxagen/ai)", () => {
     ).rejects.toThrow("hash failure");
   });
 
-  it("propagates credit-charge failure", async () => {
+  it("rejects when the credit charge fails after the usage is staged; the outbox retries it", async () => {
     mocks.chargeUsageCredits.mockRejectedValueOnce(new Error("billing down"));
 
     await expect(

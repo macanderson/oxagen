@@ -113,9 +113,13 @@ function IdentityRows({
               {agent.operatorId === null ? (
                 <NotRecordedValue />
               ) : (
+                // `list_agents` carries the operator's id and no name yet, so
+                // the id is the label until it does; the card keeps it copyable.
                 <OperatorName
                   operator={{ id: agent.operatorId, name: null, kind: null }}
-                />
+                >
+                  <span className={mono}>{agent.operatorId}</span>
+                </OperatorName>
               )}
             </td>
             <td className={cell}>

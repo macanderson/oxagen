@@ -1744,7 +1744,7 @@ describe("request handler", () => {
     expect(await call("POST", "/elsewhere", "{}")).toMatchObject({
       status: 404,
     });
-    // A daemon booted without the credential seam (ADR-138) issues no run
+    // A daemon booted without the credential seam (ADR-143) issues no run
     // tokens, and says so as a 404 rather than a refusal a harness would
     // read as "the key is wrong".
     expect(

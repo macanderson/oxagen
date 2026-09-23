@@ -25,10 +25,7 @@ import {
 import { loadOrCreateDeviceKey } from "../host/device-key";
 import { ensureDir } from "../host/fs";
 import { acquireInstallLock } from "../host/install-lock";
-import {
-  type ModelBaseUrlHarness,
-  modelBaseUrlFile,
-} from "../host/model-base-url";
+import { modelBaseUrlFile } from "../host/model-base-url";
 import { mcpConfigShapeProblem } from "../host/mcp-config-writer";
 import { mergeStellaHooks, stellaHookPresence } from "../host/stella-writer";
 import {
@@ -47,6 +44,7 @@ import {
 import { toProtocolTimestamp } from "../timestamp";
 import {
   enrollmentResponseSchema,
+  isModelRoutedHarness,
   TACHO_BUNDLE_FEATURES,
   TACHO_HARNESS_LABELS,
   type TachoHarness,
@@ -87,7 +85,7 @@ export interface EnrollOptions extends CredentialOptions {
   /** Harnesses to hook (default: `["claude-code"]`). */
   harnesses?: TachoHarness[];
   /**
-   * How the routed harnesses' model credentials are held (ADR-138).
+   * How the routed harnesses' model credentials are held (ADR-143).
    * `brokered` (the default) takes each vendor key into the gateway's
    * custody and leaves the harness a run token; `passthrough` leaves the
    * key with the harness and puts back any the gateway holds.
@@ -1070,12 +1068,7 @@ export async function enrollLocked(
     // is listening and on which port, and never before: a base URL that
     // names a dead port stops the agent making any model call, which is a
     // worse machine than one whose model calls are not routed.
-    const routed = harnesses.filter(
-      (harness): harness is ModelBaseUrlHarness =>
-        harness === "claude-code" ||
-        harness === "codex" ||
-        harness === "stella",
-    );
+    const routed = harnesses.filter(isModelRoutedHarness);
     const stellaHome = dirname(deps.paths.stellaToml);
     if (
       deps.modelBaseUrls !== undefined &&
@@ -1143,7 +1136,7 @@ export async function enrollLocked(
             `model calls are not routed through Oxagen: ${error instanceof Error ? error.message : String(error)}`,
           );
         }
-        // The credential seam (ADR-138). Only once the base URL points at a
+        // The credential seam (ADR-143). Only once the base URL points at a
         // listening proxy: a harness holding a run token and no route to
         // the gateway that honours it has no credential at all.
         if (routedOk && writable.length > 0) {

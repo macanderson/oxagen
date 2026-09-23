@@ -101,10 +101,10 @@
           {
             "type": "string",
             "enum": [
-              "stella",
               "claude-code",
               "codex",
               "cursor",
+              "stella",
               "claude-agent-sdk",
               "custom"
             ]

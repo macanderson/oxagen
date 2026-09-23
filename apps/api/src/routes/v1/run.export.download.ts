@@ -8,46 +8,31 @@
 // tenant scope, and the response names its digest so a client can check the
 // bytes it received.
 import { Hono } from "hono";
-import { schema, withTenantDb } from "@oxagen/database";
 import {
   openRunExportDownload,
   type OpenRunExportDownloadDeps,
   runExportDownloadSecret,
 } from "@oxagen/handlers/lib/run-export-download";
+import { readRunExportRow } from "@oxagen/handlers/run.export.get";
 import { storage } from "@oxagen/storage";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { and, eq } from "drizzle-orm";
 import type { AppEnv } from "../../app";
 
-const defaultDeps: OpenRunExportDownloadDeps = {
+export const defaultDeps: OpenRunExportDownloadDeps = {
   secret: runExportDownloadSecret,
   nowSeconds: () => Math.floor(Date.now() / 1000),
+  // The same row read `get_run_export` answers from, inside the token's
+  // tenant scope: one select for both surfaces, so a column the status
+  // read gains is the one the download checks.
   readRow: (claims) =>
     runInTenantScope(
       { orgId: claims.orgId, workspaceId: claims.workspaceId },
-      async () => {
-        const t = schema.runExports;
-        const [row] = await withTenantDb((tx) =>
-          tx
-            .select({
-              runPublicId: t.runPublicId,
-              status: t.status,
-              bundleRef: t.bundleRef,
-              bundleDigest: t.bundleDigest,
-              bundleBytes: t.bundleBytes,
-            })
-            .from(t)
-            .where(
-              and(
-                eq(t.publicId, claims.exportId),
-                eq(t.orgId, claims.orgId),
-                eq(t.workspaceId, claims.workspaceId),
-              ),
-            )
-            .limit(1),
-        );
-        return row ?? null;
-      },
+      () =>
+        readRunExportRow({
+          orgId: claims.orgId,
+          workspaceId: claims.workspaceId,
+          exportId: claims.exportId,
+        }),
     ),
   getObject: (ref) => storage().get(ref),
 };

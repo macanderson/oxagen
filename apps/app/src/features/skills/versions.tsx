@@ -21,6 +21,7 @@ import {
   panelHeader,
   panelTitle,
 } from "@/ui/control-styles";
+import { Badge } from "@/ui/badge";
 import { FormAlert } from "@/ui/form-feedback";
 import { useFormatter } from "@/ui/formatter";
 import { PullRequestLink, useNavigate } from "@/ui/navigation";
@@ -216,20 +217,24 @@ export function SkillVersions({
           <ul className="divide-y divide-border">
             {configuration.versions.map((row) => (
               <li key={row.id} className={`${panelBody} flex flex-col gap-1`}>
-                <p className={mono}>
-                  {row.version}
-                  {configuration.current?.id === row.id
-                    ? ` · ${t("current")}`
-                    : ""}
+                <p className={`${mono} flex flex-wrap items-center gap-2`}>
+                  <span>{row.version}</span>
+                  {configuration.current?.id === row.id ? (
+                    <Badge tone="quiet">{t("current")}</Badge>
+                  ) : null}
                 </p>
-                <p className="text-xs text-muted-foreground">
-                  {format.dateTime(new Date(row.publishedAt), {
-                    dateStyle: "medium",
-                    timeStyle: "short",
-                  })}
-                  {row.pullRequestNumber === null
-                    ? ` · ${t("imported")}`
-                    : ` · ${t("pr", { number: row.pullRequestNumber })}`}
+                <p className="flex flex-wrap gap-x-3 text-xs text-muted-foreground">
+                  <span>
+                    {format.dateTime(new Date(row.publishedAt), {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    })}
+                  </span>
+                  <span>
+                    {row.pullRequestNumber === null
+                      ? t("imported")
+                      : t("pr", { number: row.pullRequestNumber })}
+                  </span>
                 </p>
                 <code className="break-all text-xs">{row.commitSha}</code>
                 <code className="break-all text-xs">{row.digest}</code>

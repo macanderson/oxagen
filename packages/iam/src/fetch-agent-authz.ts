@@ -24,7 +24,7 @@
 // per-capability deny policy, which cannot express "deny everything" for an
 // all-capability read — hence the throw here.
 
-import { withTenantDb } from "@oxagen/database";
+import { type Tx, withTenantDb } from "@oxagen/database";
 import { withRepeatableReadTenantDb } from "@oxagen/database/tenant";
 import type { AgentAuthzSnapshot } from "@oxagen/oxagen/iam";
 import {
@@ -116,11 +116,36 @@ export async function fetchAgentRunLiveAuthority(
 }
 
 /**
- * Read the current authority and flatten it into pure-resolver inputs.
+ * Read the current authority through the caller's transaction and flatten it
+ * into pure-resolver inputs.
  *
- * The flattened form is lossy on purpose — it is what the resolver consumes,
+ * The flattened form is lossy on purpose: it is what the resolver consumes,
  * not what a ceiling is pinned from. Anything that needs expiries or assignment
  * identity must use `fetchAgentRunLiveAuthority` instead.
+ *
+ * This is the read for a caller that already holds a tenant transaction, such
+ * as the control envelope every Tacho poll and ingest batch answers with.
+ * `withTenantDb` never reuses an ambient transaction, so a nested open there
+ * held one pool connection while it waited for a second. With a pool of 20,
+ * twenty concurrent polls could wait on each other until the acquire timeout.
+ */
+export async function fetchAgentRunAuthzIn(
+  tx: Tx,
+  args: FetchAgentRunAuthzArgs,
+): Promise<AgentAuthzSnapshot> {
+  const now = args.now ?? new Date();
+  return withUndefinedTableAlert(args, async () => {
+    const authority = await readLiveAuthority(tx, {
+      orgId: args.orgId,
+      workspaceId: args.workspaceId,
+      principalIds: principalIdsOf(args),
+    });
+    return liveResolverInputs(authority, now);
+  });
+}
+
+/**
+ * `fetchAgentRunAuthzIn` inside a transaction of its own.
  *
  * READ COMMITTED, unlike `fetchAgentRunLiveAuthority` above: this is the LEGACY
  * V1 delegated read (the A2A bridge and the turn driver), whose result feeds the
@@ -131,15 +156,5 @@ export async function fetchAgentRunLiveAuthority(
 export async function fetchAgentRunAuthz(
   args: FetchAgentRunAuthzArgs,
 ): Promise<AgentAuthzSnapshot> {
-  const now = args.now ?? new Date();
-  return withUndefinedTableAlert(args, async () => {
-    const authority = await withTenantDb((tx) =>
-      readLiveAuthority(tx, {
-        orgId: args.orgId,
-        workspaceId: args.workspaceId,
-        principalIds: principalIdsOf(args),
-      }),
-    );
-    return liveResolverInputs(authority, now);
-  });
+  return withTenantDb((tx) => fetchAgentRunAuthzIn(tx, args));
 }

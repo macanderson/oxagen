@@ -4,7 +4,8 @@
 **Mode:** sync
 **Scope:** workspace (Owner, Admin only)
 **Surfaces:** api, mcp, agent
-**Risk level:** medium
+**Risk level:** high
+**Agent approval:** required
 
 ## Intent
 
@@ -51,6 +52,8 @@ The merged policy, plus how far it reaches.
 ## Roles
 
 Owner and Admin only, at org or workspace level.
+
+An agent that asks for this write waits for a person, as it does for `update_mandate_limits`, `set_kill_switch`, and `set_approval_rule`. A session ceiling and a model allowlist are governance decisions, whether or not the gateway reads them yet.
 
 ## Side effects
 

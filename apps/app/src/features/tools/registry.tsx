@@ -37,7 +37,7 @@ import {
   StateDot,
   type Tone,
 } from "./parts";
-import { ReadFailure } from "./read-failure";
+import { ToolsReadFailure } from "./read-failure";
 import { Servers } from "./servers";
 import { ToolDialog } from "./tool-dialog";
 import {
@@ -337,7 +337,7 @@ export function Registry({
   const t = useTranslations("tools.registry");
   if (!read.ok) {
     return (
-      <ReadFailure
+      <ToolsReadFailure
         at={at}
         orgRole={orgRole}
         read={read}

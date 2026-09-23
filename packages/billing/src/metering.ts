@@ -487,10 +487,23 @@ export interface ChargeUsageArgs extends TokenUsageInput {
   reason: CreditReason;
 }
 
-/** Freeze pricing before queuing a debit so retries cannot pick up new terms. */
+/**
+ * Freeze pricing before queuing a debit so retries cannot pick up new terms.
+ *
+ * The snapshot is stored as JSON on the admission row and read back by the
+ * outbox's `settle`, so it carries exactly what `chargeUsageCredits` reads
+ * there: the frozen cost and markup, the ledger reason and reference, the
+ * model, and the token counts the charge log line names. The rate card is
+ * left out on purpose. It is a live object, and freezing `costUsd` is what
+ * makes a retry insensitive to a card change.
+ */
 export function snapshotUsageCharge(args: ChargeUsageArgs): ChargeUsageArgs {
-  return {
-    ...args,
+  const snapshot: ChargeUsageArgs = {
+    orgId: args.orgId,
+    model: args.model,
+    reason: args.reason,
+    inputTokens: args.inputTokens,
+    outputTokens: args.outputTokens,
     costUsd: args.costUsd ?? providerCostUsd(args, args.rateCard),
     markup:
       args.markup ??
@@ -498,6 +511,12 @@ export function snapshotUsageCharge(args: ChargeUsageArgs): ChargeUsageArgs {
         ? ASSISTANT_TOKEN_MARKUP
         : resolveMeterMarkup()),
   };
+  if (args.referenceId !== undefined) snapshot.referenceId = args.referenceId;
+  if (args.cachedTokens !== undefined)
+    snapshot.cachedTokens = args.cachedTokens;
+  if (args.cacheWriteTokens !== undefined)
+    snapshot.cacheWriteTokens = args.cacheWriteTokens;
+  return snapshot;
 }
 
 /** Charge an org for one metered TEXT (token) call. */

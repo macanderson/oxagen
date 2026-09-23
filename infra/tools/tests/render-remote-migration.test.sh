@@ -107,6 +107,18 @@ contains "$RUNNER" '${TIMED_OUT:-0} == 1' \
 lacks "$DRY" "oxagen-deploy-578673726240" "dry run: no hardcoded old-account bucket"
 lacks "$DRY" "__" "dry run: no placeholder survives"
 
+# Each invocation unpacks into its own directory on the node, named after its
+# object. With one shared /opt/oxagen/db, a status-only gate on main ran
+# `rm -rf` over the seed a concurrent apply had bind-mounted into its
+# container. The shared name still renders, into a directory of its own.
+contains "$DRY" "run_dir=/opt/oxagen/db/atlas-migrations" \
+  "dry run: the legacy object name unpacks into its own directory"
+contains "$UNIQUE" "run_dir=/opt/oxagen/db/atlas-migrations-abc123" \
+  "dry run: a per-run object unpacks into a per-run directory"
+lacks "$DRY" "/tmp/atlas.tgz" "dry run: the download is not a shared /tmp path either"
+contains "$DRY" "trap 'rm -rf \"\$run_dir\" \"\$run_dir.tgz\"' EXIT" \
+  "dry run: the node keeps nothing from a run"
+
 # The password is read on the node, never here.
 contains "$DRY" "set +x" "dry run: tracing is turned off around the secret"
 
@@ -120,6 +132,10 @@ APPLY=$(render_remote_migration \
 contains "$APPLY" "atlas migrate apply --env ci" "apply: applies"
 contains "$APPLY" "node /seed/src/platform-seed.mjs" "apply: seeds platform defaults"
 contains "$APPLY" "--env DATABASE_URL" "apply: passes credential by name"
+contains "$APPLY" "src=/opt/oxagen/db/atlas-migrations,dst=/seed" \
+  "apply: the seed container mounts this run's own directory"
+lacks "$APPLY" "src=/opt/oxagen/db,dst=/seed" \
+  "apply: the seed container does not mount the shared directory a gate can clear"
 # The apply is the run that actually meets the seed, so it is the one that must
 # carry the bypass. Asserted separately from the dry run because the two are
 # rendered down different branches.
@@ -290,6 +306,40 @@ contains "$RUNNER" "classify_ssm_online" \
   "runner: classifies the SSM lookup before deciding the node is dead"
 lacks "$RUNNER" '|| echo 0' \
   "runner: a denied SSM read is not rewritten as a count of zero"
+
+# --- how one status poll is read -------------------------------------------
+#
+# The poll used to send stderr to /dev/null and rewrite every non-zero exit as
+# Pending. A denied get-command-invocation then spent the full poll budget and
+# reported STILL RUNNING about a command it had never observed. Only the
+# window after send-command, when SSM has not yet registered the invocation,
+# is a pending answer; every other failure is unreadable, not a status.
+
+expect_word done "$(classify_invocation_poll 0 Success "")" \
+  "a finished command is done"
+expect_word done "$(classify_invocation_poll 0 Failed "")" \
+  "a failed command is done, and the verdict reads it"
+expect_word pending "$(classify_invocation_poll 0 InProgress "")" \
+  "InProgress keeps polling"
+expect_word pending "$(classify_invocation_poll 0 Pending "")" \
+  "Pending keeps polling"
+expect_word pending "$(classify_invocation_poll 0 Delayed "")" \
+  "Delayed keeps polling"
+expect_word pending "$(classify_invocation_poll 254 "" \
+  "An error occurred (InvocationDoesNotExist) when calling the GetCommandInvocation operation")" \
+  "an invocation SSM has not registered yet is pending"
+expect_word unreadable "$(classify_invocation_poll 254 "" \
+  "An error occurred (AccessDeniedException) when calling the GetCommandInvocation operation")" \
+  "AccessDenied is unreadable, not pending"
+expect_word unreadable "$(classify_invocation_poll 255 "" "")" \
+  "a failed poll with no message is unreadable"
+
+contains "$RUNNER" "classify_invocation_poll" \
+  "runner: classifies each poll before reading it as a status"
+lacks "$RUNNER" '|| echo Pending' \
+  "runner: a failed poll is not rewritten as Pending"
+contains "$RUNNER" "Do NOT re-run this script. Watch the command instead" \
+  "runner: an unreadable poll forbids the dangerous next step"
 
 FAILED_MSG=$(verdict_stderr Failed 0 cmd-2 i-abc us-east-1 600)
 contains "$FAILED_MSG" "FAILED" "failed: says so"

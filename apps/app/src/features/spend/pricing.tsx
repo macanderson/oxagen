@@ -24,7 +24,7 @@ import { formatCount } from "@/ui/money-format";
 import { Instant } from "./figures";
 import { PriceDialog } from "./price-dialog";
 import { RemoveRateDialog } from "./remove-rate-dialog";
-import { ReadFailure } from "./states";
+import { SpendReadFailure } from "./states";
 import { Empty, HeaderCell, Panel } from "./tables";
 import type { SpendAt } from "./view";
 
@@ -118,7 +118,7 @@ function UnpricedSection({
   const t = useTranslations("spend.pricing");
   const locale = useLocale();
   const format = useFormatter();
-  if (!read.ok) return <ReadFailure read={read} />;
+  if (!read.ok) return <SpendReadFailure read={read} />;
   const { models, since } = read.value;
   // Nothing unpriced is the good case and gets one quiet line, never an empty
   // box competing with the book below it for attention.
@@ -246,7 +246,7 @@ function PriceBookSection({
   if (!read.ok) {
     return (
       <div className="flex flex-col gap-2">
-        <ReadFailure read={read} />
+        <SpendReadFailure read={read} />
         <div className="flex justify-end">
           <PriceDialog at={at} />
         </div>

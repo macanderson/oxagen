@@ -45,6 +45,7 @@ import {
   assertProductionBase,
   type SteeringRepository,
 } from "./context.steering.github";
+import { OXAGEN_PR_LABELS } from "@oxagen/github";
 import {
   GOVERNANCE_PATH,
   parseGovernanceMode,
@@ -177,6 +178,7 @@ export function createOpenContextPrHandler(
           head: branch,
           base: repo.defaultBranch,
           body: prBody(stamped),
+          labels: OXAGEN_PR_LABELS,
         }));
       row = await deps.store.updateProposal(
         row.id,

@@ -138,6 +138,8 @@ type Messages = {
         registered: string;
         firstFrame: string;
         noFrame: string;
+        costCenter: string;
+        inherited: string;
       };
       roles: {
         title: string;
@@ -468,6 +470,17 @@ type Messages = {
         agentScope: string;
         link: string;
       };
+      costCenter: {
+        open: string;
+        title: string;
+        body: string;
+        field: string;
+        none: string;
+        loading: string;
+        empty: string;
+        confirm: string;
+        pending: string;
+      };
     };
     actions: {
       rotate: {
@@ -509,6 +522,8 @@ type Messages = {
         reason: string;
         confirm: string;
         pending: string;
+        needsRole: string;
+        reread: string;
         unchanged: string;
         outcome: {
           paused: string;
@@ -1816,11 +1831,6 @@ type Messages = {
         none: string;
         more: string;
         moreBasis: string;
-      };
-      spend: {
-        title: string;
-        unavailable: string;
-        coverage: string;
       };
     };
     approvals: {

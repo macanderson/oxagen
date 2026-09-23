@@ -3,7 +3,7 @@
 // get_record (ADR-061): a `cta_` id reads the append; anything else reads the
 // record, from its file on the production branch first and from the registry
 // mirror only when there is no file to read (see context.record.source.ts).
-import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
+import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
   contextRecordsGet,
   type ContextRecordsGetOutput,
@@ -14,8 +14,9 @@ import type {
   PublishedSharingScope,
 } from "@oxagen/oxagen/contracts/context.steering.shared";
 import {
-  readRecordFromRepo,
   type RecordFileRead,
+  recordNotFound,
+  resolveRecordById,
 } from "./context.record.source";
 import { steeringDeps, type SteeringDeps } from "./context.steering.deps";
 import type { PublishedRecordRow } from "./context.steering.store";
@@ -34,7 +35,7 @@ export function createGetRecordHandler(
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
     if (input.recordId.startsWith("cta_")) {
       const row = await deps.store.findAppend(scope, input.recordId);
-      if (!row) throw notFound(input.recordId);
+      if (!row) throw recordNotFound(input.recordId);
       const proposal = row.proposalId
         ? await deps.store.findProposalById(row.proposalId)
         : null;
@@ -55,18 +56,11 @@ export function createGetRecordHandler(
       };
     }
 
-    const found = await deps.store.findRecord(scope, input.recordId);
-    // The lineage is the file's name, so a `ctr_` id can only reach a file
-    // through the mirror that knows which lineage it is. Anything else IS a
-    // lineage and reaches the file directly — which is what lets a record
-    // whose mirror row is gone still be read back.
-    const lineageId =
-      found?.record.slug ??
-      (input.recordId.startsWith("ctr_") ? null : input.recordId);
-    const fileRead = lineageId
-      ? await readRecordFromRepo(deps.github, scope, lineageId)
-      : null;
-    if (!found && !fileRead) throw notFound(input.recordId);
+    const {
+      mirrored: found,
+      lineageId,
+      fileRead,
+    } = await resolveRecordById(deps, scope, input.recordId);
 
     const effect = lineageId
       ? await deps.store.recordEffect(scope, lineageId)
@@ -119,7 +113,7 @@ function detailRecord(
     ? publishedRecordView(row)
     : null;
   if (!fileRead) {
-    if (!mirrored) throw notFound("record");
+    if (!mirrored) throw recordNotFound("record");
     return mirrored;
   }
   const { file } = fileRead;
@@ -150,14 +144,6 @@ function detailRecord(
       : (mirrored?.publishedAt ?? null),
     updatedAt: mirrored?.updatedAt ?? null,
   };
-}
-
-function notFound(id: string): HandlerError {
-  return new HandlerError({
-    code: "not_found",
-    reason: "record_not_found",
-    message: `No record ${id} in this workspace`,
-  });
 }
 
 export const getRecordHandler = createGetRecordHandler(steeringDeps());

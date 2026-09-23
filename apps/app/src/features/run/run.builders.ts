@@ -511,9 +511,10 @@ type RunReads = {
   /**
    * The spine above the tabs, read with the page and not with a tab. A test
    * that says nothing about it gets a run that produced nothing, so a test
-   * about the header or a tab is not also a test about the spine.
+   * about the header or a tab is not also a test about the spine. A function
+   * answers the read itself, which is how a test hands a read that throws.
    */
-  outputs?: Read<RunOutputs>;
+  outputs?: Read<RunOutputs> | (() => Promise<Read<RunOutputs>>);
   /** Only read when the Cost tab is open; refused when absent. */
   cost?: Read<RunCost>;
   /** Only read when the Frames tab has a frame body open; refused when absent. */
@@ -595,7 +596,11 @@ export function runSource(reads: RunReads) {
         );
       },
       chain: answer("chain", reads.chain),
-      outputs: answer("outputs", reads.outputs ?? readOk(runOutputs())),
+      outputs: (...args: unknown[]) => {
+        calls.outputs.push(args);
+        const asked = reads.outputs ?? readOk(runOutputs());
+        return typeof asked === "function" ? asked() : Promise.resolve(asked);
+      },
     },
     approvals: {
       pending: answer("approvals", reads.approvals),

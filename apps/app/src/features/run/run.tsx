@@ -6,6 +6,7 @@ import type { TranscriptKind } from "@/data/contracts/run";
 import { TRANSCRIPT_KINDS } from "@/data/contracts/run";
 import type { MandateRow } from "@/data/contracts/mandates";
 import type { DataSource } from "@/data/ports";
+import { PAGE_FAILURES, readError } from "@/data/read";
 import { ApprovalsPanel } from "@/features/fleet";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
@@ -171,7 +172,14 @@ export async function Run({
   // Read with the page and not with a tab, because the spine is what the page
   // is for. Started here and awaited after the section, so the two reads
   // overlap rather than queue: the spine costs the page no extra round trip.
-  const outputs = source.runs.outputs(ctx, detail.run.id);
+  // A section read that throws would leave this promise's rejection with no
+  // listener, so a thrown outputs read folds to the Run page's own read
+  // error and the spine says the read failed.
+  const outputs = source.runs
+    .outputs(ctx, detail.run.id)
+    .catch(() =>
+      readError(PAGE_FAILURES.run.error.code, PAGE_FAILURES.run.error.status),
+    );
   let section: ReactNode;
   switch (selected) {
     case "transcript":

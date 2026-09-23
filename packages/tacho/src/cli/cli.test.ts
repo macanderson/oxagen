@@ -82,6 +82,7 @@ import {
   credentialStatus,
   describeHarness,
   parseCredentialMode,
+  parseIssueAnswer,
   restoreCredentials,
 } from "./credential";
 import { detect } from "./detect";
@@ -1399,8 +1400,13 @@ describe("enroll → status → unenroll", () => {
     expect(d.requests).toEqual([]);
     expect(readHostFile(d.paths.hostFile)?.revoked_at).toBe(marked);
     // With a token the pending revoke is made, and only then does host.json go.
+    // A deferred session end that never reached the WAL holds run content,
+    // so the purge takes it with the WAL.
+    writeSensitiveFileAtomic(d.paths.pendingEnds, "[]");
     const second = await unenroll({ token: "t", purge: true }, d);
     expect(second.revoked).toBe(true);
+    expect(existsSync(d.paths.pendingEnds)).toBe(false);
+    expect(d.lines.join("\n")).toContain("pending session ends");
     expect(d.requests.map((r) => r.url)).toEqual([
       "https://api.example.test/v1/acme/core/tacho/enrollments/revoke",
     ]);
@@ -2998,7 +3004,7 @@ describe("cursor", () => {
   });
 });
 
-describe("brokered credentials (ADR-138)", () => {
+describe("brokered credentials (ADR-143)", () => {
   const ANTHROPIC_KEY = "sk-ant-api03-FAKE-ENROLL-CUSTODY-0001";
   const OPENAI_KEY = "sk-proj-FAKE-ENROLL-CUSTODY-0002";
 
@@ -3680,6 +3686,28 @@ describe("brokered credentials (ADR-138)", () => {
     expect(
       describeHarness({ ...base, harness: "claude-code", brokered: false }),
     ).toContain("holds its own credential");
+    expect(
+      describeHarness({
+        ...base,
+        harness: "claude-code",
+        brokered: false,
+        reason: "two_credentials",
+      }),
+    ).toContain("sets both ANTHROPIC_API_KEY and ANTHROPIC_AUTH_TOKEN");
+    // The one parser both `credential issue` and enroll's static mint read.
+    expect(
+      parseIssueAnswer({ status: 200, body: '{"token":"oxrt_x"}' }),
+    ).toEqual({ token: "oxrt_x", detail: "issued by tachod" });
+    expect(parseIssueAnswer({ status: 200, body: "{}" }).detail).toBe(
+      "tachod answered without a run token",
+    );
+    expect(
+      parseIssueAnswer({ status: 403, body: '{"error":"host is paused"}' })
+        .detail,
+    ).toBe("host is paused");
+    expect(parseIssueAnswer({ status: 500, body: "nope" }).detail).toBe(
+      "tachod refused to issue a run token (500)",
+    );
 
     // Status on a machine with nothing in custody and no contract wired.
     const d = brokeredDeps();

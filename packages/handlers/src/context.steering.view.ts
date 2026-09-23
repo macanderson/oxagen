@@ -144,6 +144,10 @@ export function contextPrView(
   };
 }
 
+/** Every line of a statement inside one Markdown block quote. */
+const blockquote = (text: string) =>
+  `> ${text.trim().replace(/\r?\n/g, "\n> ")}`;
+
 const bullets = (items: readonly string[]) =>
   items.length > 0 ? items.map((i) => `- \`${i}\``).join("\n") : "- none";
 
@@ -169,7 +173,7 @@ export function prBody(row: ProposalRow): string {
     "",
     `**kind** \`${row.kind}\` · **force** \`${row.force}\`${effect} · **scope** \`${row.sharingScope}\``,
     "",
-    `> ${row.statement}`,
+    blockquote(row.statement),
     "",
     "### Rationale",
     "",

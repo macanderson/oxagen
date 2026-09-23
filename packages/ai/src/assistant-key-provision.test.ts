@@ -21,6 +21,12 @@ const mocks = vi.hoisted(() => ({
   // a class declaration is not hoisted past `vi.mock`.
   AssistantModelKeyExistsError: class AssistantModelKeyExistsError extends Error {},
   AssistantModelKeyKekUnsetError: class AssistantModelKeyKekUnsetError extends Error {},
+  /** What `OXAGEN_MODEL_PROVIDER` names in the deployment under test. */
+  platformProvider: "openrouter" as "gateway" | "openrouter",
+}));
+
+vi.mock("./platform-provider", () => ({
+  mintedKeysServeHere: () => mocks.platformProvider === "openrouter",
 }));
 
 vi.mock("./openrouter-provisioning", async () => {
@@ -60,6 +66,7 @@ const MINTED = {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.order.length = 0;
+  mocks.platformProvider = "openrouter";
   vi.stubEnv("OPENROUTER_MANAGEMENT_KEY", "sk-or-v1-management");
   vi.stubEnv("OPENROUTER_ORG_KEY_DAILY_LIMIT_USD", "25");
 
@@ -155,6 +162,20 @@ describe("ensureAssistantModelKey — not provisioning is not an error", () => {
       reason: "disabled",
     });
     expect(mocks.order).toEqual([]);
+  });
+
+  it("is off on a gateway deployment, even with a management key set (ADR-131 §9)", async () => {
+    // A minted key is an OpenRouter key. Where the platform routes through
+    // the gateway, `resolveModelFundingSource` never consults it, so minting
+    // one would hold a spendable secret no turn can use. No read, no vendor
+    // call, no warning: the same shape as an unset management key.
+    mocks.platformProvider = "gateway";
+    await expect(ensureAssistantModelKey(ARGS)).resolves.toEqual({
+      provisioned: false,
+      reason: "disabled",
+    });
+    expect(mocks.order).toEqual([]);
+    expect(mocks.logAssistantModelKeyFailure).not.toHaveBeenCalled();
   });
 
   it("costs one indexed read and no vendor call when the organisation already has a key", async () => {
