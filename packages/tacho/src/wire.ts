@@ -5,6 +5,7 @@
  * shapes; `packages/oxagen` re-exports these for its contracts.
  */
 import { z } from "zod";
+import { SHA256_DIGEST_PATTERN } from "./digest";
 import { TACHO_RUNTIMES, tachoEventSchema, type TachoEvent } from "./envelope";
 
 export const TACHO_BATCH_SCHEMA = "tacho.batch.v1" as const;
@@ -187,6 +188,18 @@ export const BUNDLE_FEATURE_INDEPENDENT_MODELS = "models_independent" as const;
 export const BUNDLE_FEATURE_HOOK_FAIL_OPEN = "hook_fail_open" as const;
 
 /**
+ * The host can parse `context.manifest`: the assembler's account of every
+ * steering candidate the bundle's `context.system` was assembled from, and
+ * why each was included or cut (ADR-093, ADR-144). Gated for the same reason
+ * `gateway_tools` is: `context` is strict, so a host built before the field
+ * would reject the whole mandate. A host that advertises it seals the
+ * manifest into each session's chain as a `steering.manifest` frame at
+ * `SessionStart`, beside the `oxagen.context_digest` attribute it already
+ * writes, so the run record says which records the agent saw.
+ */
+export const BUNDLE_FEATURE_STEERING_MANIFEST = "steering_manifest" as const;
+
+/**
  * Every bundle feature the host in *this* tree can parse, which is what it
  * advertises. One list, read by the daemon's health report and by enrollment,
  * so a field added to `policyBundleSchema` is advertised from the one place
@@ -198,6 +211,7 @@ export const TACHO_BUNDLE_FEATURES = [
   BUNDLE_FEATURE_MODEL_ALLOWLIST,
   BUNDLE_FEATURE_INDEPENDENT_MODELS,
   BUNDLE_FEATURE_HOOK_FAIL_OPEN,
+  BUNDLE_FEATURE_STEERING_MANIFEST,
 ] as const;
 
 export type TachoBundleFeature = (typeof TACHO_BUNDLE_FEATURES)[number];
@@ -572,6 +586,79 @@ export type DeliveredCommandResponse = z.output<
   typeof deliveredCommandResponseSchema
 >;
 
+/** The forces a steering item carries, in the order the assembler ranks them. */
+export const steeringForceSchema = z.enum(["must", "should", "may", "info"]);
+
+/** The source families a steering item comes from (ADR-093 §2, plus `steer`). */
+export const steeringItemKindSchema = z.enum([
+  "record",
+  "steer",
+  "skill",
+  "memory",
+  "ontology",
+  "policy",
+  "instruction",
+]);
+
+/** Why the assembler cut an item. */
+export const steeringCutReasonSchema = z.enum(["tier", "budget", "superseded"]);
+
+export const steeringManifestItemSchema = z
+  .object({
+    id: z.string().min(1).max(256),
+    kind: steeringItemKindSchema,
+    force: steeringForceSchema,
+    recorded_at: z.string().max(64),
+    tokens: z.number().int().nonnegative(),
+    outcome: z.enum(["included", "cut"]),
+    reason: steeringCutReasonSchema.optional(),
+    superseded_by: z.string().min(1).max(256).optional(),
+  })
+  .strict();
+
+export const STEERING_MANIFEST_SCHEMA = "oxagen.steering.manifest/1" as const;
+
+/**
+ * The assembler's manifest (ADR-093): every candidate for the bundle's
+ * `context.system`, in rank order, with what happened to it. This is the
+ * leaf's own copy of the shape `@oxagen/steering-assembler` produces, the
+ * way the usage-telemetry schema is carried (H7): the control plane checks
+ * what it signs against this, and `packages/handlers` holds the test that
+ * keeps the two in step.
+ */
+export const steeringManifestSchema = z
+  .object({
+    schema: z.literal(STEERING_MANIFEST_SCHEMA),
+    delivers: z.array(steeringForceSchema).max(4),
+    budget_tokens: z.number().int().nonnegative(),
+    spent_tokens: z.number().int().nonnegative(),
+    included: z.number().int().nonnegative(),
+    cut: z.number().int().nonnegative(),
+    text_digest: z.string().regex(SHA256_DIGEST_PATTERN).nullable(),
+    items: z.array(steeringManifestItemSchema).max(2_000),
+  })
+  .strict();
+
+export type SteeringManifest = z.output<typeof steeringManifestSchema>;
+export type SteeringManifestItem = z.output<typeof steeringManifestItemSchema>;
+
+/**
+ * The body of a `steering.manifest` frame: the bundle's manifest, the bundle
+ * it came from, and the steers the host delivered beside the prefix at that
+ * boundary, each appended as an included `steer` item. The host ranks
+ * nothing; it reports what it delivered.
+ */
+export const steeringManifestFrameSchema = steeringManifestSchema
+  .extend({
+    bundle_version: z.number().int().nonnegative(),
+    bundle_etag: z.string().min(1),
+  })
+  .strict();
+
+export type SteeringManifestFrame = z.output<
+  typeof steeringManifestFrameSchema
+>;
+
 /** The signed policy bundle a host caches (spec section 7.1). */
 export const policyBundleSchema = z
   .object({
@@ -613,7 +700,16 @@ export const policyBundleSchema = z
         mode: z.enum(["observed", "enforced"]),
       })
       .strict(),
-    context: z.object({ system: z.string().max(16_384).nullable() }).strict(),
+    context: z
+      .object({
+        system: z.string().max(16_384).nullable(),
+        /**
+         * Emitted only to a host that advertised
+         * `BUNDLE_FEATURE_STEERING_MANIFEST`; see that constant.
+         */
+        manifest: steeringManifestSchema.optional(),
+      })
+      .strict(),
     retention: z
       .object({
         mode: z.enum(["digest_only", "content_exact"]),

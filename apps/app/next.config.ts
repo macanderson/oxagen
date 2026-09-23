@@ -48,39 +48,19 @@ const nextConfig: NextConfig = {
     "@oxagen/ui",
   ],
   // Carried over from apps/app_deprecated/next.config.mjs: server-only packages
-  // with native addons (blake3, duckdb, ssh2, dockerode) and the lazy-loaded heavy
-  // workspace packages reached through instrumentation.ts and the kernel. Drop an
-  // entry only once no imported package needs it.
+  // with native addons (ssh2, dockerode) and the lazy-loaded heavy workspace
+  // package reached through instrumentation.ts and the kernel. Drop an entry
+  // only once no imported package needs it. blake3, duckdb and duckdb's
+  // node-pre-gyp chain (nock, mock-aws-s3) left with @oxagen/engram (ADR-144).
   //
-  // The two @oxagen/* entries do not need a direct dependency here. A workspace
+  // The @oxagen/* entry does not need a direct dependency here. A workspace
   // package resolves through its symlink to packages/<name>/src (TypeScript,
   // outside node_modules), and Turbopack bundles such a module whatever this list
   // says: the deprecated app's production build, which did depend on
   // @oxagen/agent directly, compiled packages/agent/src/*.ts into its server
   // chunks (deploy app.oxagen.sh, run 34668582680). Externalising it for real
   // would ship .ts files under node_modules, which Node refuses to load.
-  serverExternalPackages: [
-    "@oxagen/agent",
-    "@oxagen/engram",
-    "blake3",
-    "duckdb",
-    "@mapbox/node-pre-gyp",
-    "nock",
-    "mock-aws-s3",
-    "dockerode",
-    "ssh2",
-  ],
-  // Turbopack's NodePreGypConfigReference parser needs `napi_versions` in a
-  // package's `binary` field; blake3 and duckdb omit it and fail the build even
-  // though they are external. Aliasing them to a throwing stub keeps Turbopack
-  // out of their package.json. At runtime @oxagen/engram falls back to SHA-256
-  // when blake3 is unavailable, and duckdb is only reached through externals.
-  turbopack: {
-    resolveAlias: {
-      blake3: "./native-addon-stub.js",
-      duckdb: "./native-addon-stub.js",
-    },
-  },
+  serverExternalPackages: ["@oxagen/agent", "dockerode", "ssh2"],
   // src/i18n/request.ts lists messages/ at runtime (a page lane adds a catalog
   // by adding a file). The read is hidden from Turbopack's tracer on purpose, so
   // the catalogs are shipped into the standalone output here, for every route.

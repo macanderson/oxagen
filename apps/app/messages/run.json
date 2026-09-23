@@ -19,6 +19,9 @@
     "facts": {
       "operator": "Operator",
       "model": "Model",
+      "harness": "Harness",
+      "harnessVersion": "Version {version}",
+      "harnessVersionNotRecorded": "Harness version not recorded.",
       "machine": "Machine",
       "noMachineOnLedger": "The evidence ledger records no host for a run.",
       "operatorKind": {
@@ -487,7 +490,7 @@
       "locator": "The ledger recorded this change without its path.",
       "reviewApproval": "Review the approval",
       "gateHint": "The run is stopped here until someone answers.",
-      "empty": "Nothing recorded. This run read nothing and changed nothing.",
+      "empty": "No file or output evidence was captured for this run. Recorded frames may still contain activity.",
       "footer": "Ordered by the frames, not by kind. A read is a mark, never a change. A gate sits where it stopped the run.",
       "cut": "This run produced more than one read carries, so the spine ends early.",
       "kind": {
