@@ -20,5 +20,3 @@ export { PageRecord } from "./page-record";
 export { readExportStatus } from "./account-actions";
 export { handleExportDownload } from "./export-download";
 export { readExportObject } from "./export-storage";
-
-export { openApprovals } from "./shell-actions";
