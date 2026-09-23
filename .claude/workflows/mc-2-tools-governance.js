@@ -12,8 +12,9 @@ export const meta = {
 
 // ---------------------------------------------------------------------------
 // Shared preamble. Every mc-* workflow carries an identical copy because a
-// workflow script cannot import another file. Edit docs/mission-control/
-// BUILD-CHUNKS.md §"Workflow shape" when you change it, and change every copy.
+// workflow script cannot import another file. Edit
+// oxagen-roadmap:docs/oxagen/mission-control/BUILD-CHUNKS.md §"Workflow shape"
+// when you change it, and change every copy.
 // ---------------------------------------------------------------------------
 
 const RULES = `
@@ -35,11 +36,12 @@ HARD RULES for this repository. Restate them to any subagent you spawn.
 `
 
 const CONTEXT = `
+oxagen-roadmap:<path> means <path> in https://github.com/macanderson/oxagen-roadmap (the build plan, the gap inventory, and the product spec moved there on 2026-09-23, #3895). Read it from a checkout beside this repository (~/Projects/oxagen-roadmap, or ../oxagen-roadmap in a cloud session); a change to those files is a pull request in that repository.
 CONTEXT you must read before editing (paths relative to the repo root):
-- docs/mission-control/BUILD-CHUNKS.md: the session plan and the corrected gap facts. Your session's section names your lane and what is already built.
+- oxagen-roadmap:docs/oxagen/mission-control/BUILD-CHUNKS.md: the session plan and the corrected gap facts. Your session's section names your lane and what is already built.
 - docs/audits/2026-09-19-mission-control-gap-inventory-review.md: why the older gap inventory is stale. Do not rebuild anything §1 there marks Built.
 - apps/app/ARCHITECTURE.md §1.2 (the page set and what each page reads), §3 (viewer, kernel, ports, mappers, SSE, not recorded), §4 (invariants), §6 (testing).
-- docs/specs/mission-control/spec.md §14 (the page table), and the section your lane names.
+- oxagen-roadmap:docs/mission-control-spec.md §14 (the page table), and the section your lane names.
 - apps/app/capability-ui-map.json: the enforced binding of every app-layer capability to a page and a proof. Diff against it first, the spec second.
 The app: routes under apps/app/src/app/[org]/..., feature lanes under apps/app/src/features/<page>/, view models under apps/app/src/data/contracts/, live adapters and mappers under apps/app/src/data/live/, the UI kit under apps/app/src/ui/ imported as @/ui/<name>, messages under apps/app/messages/. Server writes go through the kernel seam in apps/app/src/server/kernel.ts, never a raw invoke.
 `
@@ -158,8 +160,8 @@ TASK: Integrate session ${session.id} (${session.title}) into one PR.
 1. git fetch origin && git worktree add ${wt(session.id)} -b mc/${session.id} ${base}; push -u.
 2. git merge (never rebase) each verified lane commit: ${built.map(b => `${b.head_sha} (refs/heads/${b.branch})`).join(', ')}. Verify each fetched remote branch still points to its reported SHA before merging; stop on a mismatch. Resolve conflicts in messages, capability-ui-map.json, data/contracts, and ports by keeping both lanes' hunks. ${cfg.mergeMain ? 'Then merge origin/main.' : ''}
    Lane summaries: ${JSON.stringify(built.map(b => ({ lane: b.lane, branch: b.branch, summary: b.summary, gaps: b.open_gaps, deviations: b.spec_deviations })))}
-3. Read the combined diff once, end to end, against docs/mission-control/BUILD-CHUNKS.md §${session.id} and the spec sections it names. Fix anything missing or inconsistent. Run the generators whose --check would fail (gen:messages, docs:schemas) and commit their output. Update apps/app/e2e/routes.ts for any new route.
-4. Update apps/app/ARCHITECTURE.md §1.2 rows the session changes, and tick the session's "Done when" boxes in docs/mission-control/BUILD-CHUNKS.md that are now true. Commit and push.
+3. Read the combined diff once, end to end, against oxagen-roadmap:docs/oxagen/mission-control/BUILD-CHUNKS.md §${session.id} and the spec sections it names. Fix anything missing or inconsistent. Run the generators whose --check would fail (gen:messages, docs:schemas) and commit their output. Update apps/app/e2e/routes.ts for any new route.
+4. Update apps/app/ARCHITECTURE.md §1.2 rows the session changes, and tick the session's "Done when" boxes in oxagen-roadmap:docs/oxagen/mission-control/BUILD-CHUNKS.md that are now true. Commit and push.
 5. Open a PR against main, ready for review, titled "${session.prTitle}". Body per .github/PULL_REQUEST_TEMPLATE.md: what ships and each defect that rode along, exactly one issue line (Closes #N only when the issue's whole DoD is done, otherwise Refs #N, otherwise the closes-nothing label), vision alignment, checklist, verification. ${session.issueHint} Then add the one-line "Landed in PR <url>" note under the session's heading in BUILD-CHUNKS.md, commit, and push.
 6. Watch CI. A conflicting PR gets no run, so merge main. Fix every failure and push, up to four rounds. Report exactly what still fails if red. Do not merge the PR.
 7. Remove the lane worktrees (git worktree remove, then prune). Keep the integration worktree.
@@ -276,5 +278,5 @@ const session = {
   ],
 }
 
-const result = await runSession(session, 'docs/specs/mission-control/spec.md §14 Tools row, §6.4 tool RBAC, §6.8 credential broker, §6.9 approval rules and mandates, §6.11 kill switches; issues #2970 and #2957; ADR-059, ADR-070, ADR-102, ADR-108')
+const result = await runSession(session, 'oxagen-roadmap:docs/mission-control-spec.md §14 Tools row, §6.4 tool RBAC, §6.8 credential broker, §6.9 approval rules and mandates, §6.11 kill switches; issues #2970 and #2957; ADR-059, ADR-070, ADR-102, ADR-108')
 return result

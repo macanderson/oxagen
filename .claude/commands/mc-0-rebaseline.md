@@ -6,7 +6,9 @@ description: Rev1 app session 0: re-baseline the gap record at head, record the 
 
 Run this session first. It corrects the record every later session reads and closes two integrity holes in the parity gate.
 
-Read `docs/mission-control/BUILD-CHUNKS.md` first. Its section for this session lists the lanes, what is already built on main, and the "Done when" boxes. The workflow sandbox has no filesystem access, so you scout inline, then hand the facts to the workflow.
+Read `oxagen-roadmap:docs/oxagen/mission-control/BUILD-CHUNKS.md` first. Its section for this session lists the lanes, what is already built on main, and the "Done when" boxes. The workflow sandbox has no filesystem access, so you scout inline, then hand the facts to the workflow.
+
+`oxagen-roadmap:<path>` means `<path>` in https://github.com/macanderson/oxagen-roadmap. Check it out beside this repository (`~/Projects/oxagen-roadmap`, or `../oxagen-roadmap` in a cloud session). The build plan, the gap inventory, and the product spec moved there on 2026-09-23 (#3895).
 
 ## Before you run it
 

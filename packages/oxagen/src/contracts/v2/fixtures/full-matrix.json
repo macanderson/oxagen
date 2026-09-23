@@ -12,20 +12,14 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Organization"
-      ],
+      "screens": ["Organization"],
       "renderFns": [
         {
           "fn": "pOrganization",
           "line": 6003
         }
       ],
-      "tables": [
-        "auth.accounts",
-        "org.organizations",
-        "org.data_planes"
-      ],
+      "tables": ["auth.accounts", "org.organizations", "org.data_planes"],
       "milestone": "M0"
     },
     {
@@ -40,18 +34,14 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Organization"
-      ],
+      "screens": ["Organization"],
       "renderFns": [
         {
           "fn": "pOrganization",
           "line": 6003
         }
       ],
-      "tables": [
-        "tools.policy_versions"
-      ],
+      "tables": ["tools.policy_versions"],
       "milestone": "M2"
     },
     {
@@ -70,9 +60,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Organization"
-      ],
+      "screens": ["Organization"],
       "renderFns": [
         {
           "fn": "pOrganization",
@@ -104,9 +92,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Organization"
-      ],
+      "screens": ["Organization"],
       "renderFns": [
         {
           "fn": "pOrganization",
@@ -132,9 +118,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Organization"
-      ],
+      "screens": ["Organization"],
       "renderFns": [
         {
           "fn": "pOrganization",
@@ -162,9 +146,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Organization"
-      ],
+      "screens": ["Organization"],
       "renderFns": [
         {
           "fn": "pOrganization",
@@ -194,19 +176,14 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Organization"
-      ],
+      "screens": ["Organization"],
       "renderFns": [
         {
           "fn": "pOrganization",
           "line": 6003
         }
       ],
-      "tables": [
-        "wrk.workspaces",
-        "wrk.workspace_users"
-      ],
+      "tables": ["wrk.workspaces", "wrk.workspace_users"],
       "milestone": "M4"
     },
     {
@@ -233,9 +210,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Organization"
-      ],
+      "screens": ["Organization"],
       "renderFns": [
         {
           "fn": "pOrganization",
@@ -266,19 +241,14 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Organization"
-      ],
+      "screens": ["Organization"],
       "renderFns": [
         {
           "fn": "pOrganization",
           "line": 6003
         }
       ],
-      "tables": [
-        "wrk.workspaces",
-        "wrk.workspace_users"
-      ],
+      "tables": ["wrk.workspaces", "wrk.workspace_users"],
       "milestone": "M0"
     },
     {
@@ -293,18 +263,14 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Organization"
-      ],
+      "screens": ["Organization"],
       "renderFns": [
         {
           "fn": "pOrganization",
           "line": 6003
         }
       ],
-      "tables": [
-        "org.data_planes"
-      ],
+      "tables": ["org.data_planes"],
       "milestone": "M0"
     },
     {
@@ -319,19 +285,14 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Organization"
-      ],
+      "screens": ["Organization"],
       "renderFns": [
         {
           "fn": "pOrganization",
           "line": 6003
         }
       ],
-      "tables": [
-        "org.data_planes",
-        "control.approvals"
-      ],
+      "tables": ["org.data_planes", "control.approvals"],
       "milestone": "M2"
     },
     {
@@ -346,10 +307,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Organization",
-        "Agents"
-      ],
+      "screens": ["Organization", "Agents"],
       "renderFns": [
         {
           "fn": "pOrganization",
@@ -387,10 +345,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Organization",
-        "Agents"
-      ],
+      "screens": ["Organization", "Agents"],
       "renderFns": [
         {
           "fn": "pOrganization",
@@ -428,10 +383,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Organization",
-        "Agents"
-      ],
+      "screens": ["Organization", "Agents"],
       "renderFns": [
         {
           "fn": "pOrganization",
@@ -477,10 +429,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Organization",
-        "Agents"
-      ],
+      "screens": ["Organization", "Agents"],
       "renderFns": [
         {
           "fn": "pOrganization",
@@ -503,9 +452,7 @@
           "line": 2980
         }
       ],
-      "tables": [
-        "cost.fx_rates"
-      ],
+      "tables": ["cost.fx_rates"],
       "milestone": "M4"
     },
     {
@@ -532,10 +479,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Organization",
-        "Agents"
-      ],
+      "screens": ["Organization", "Agents"],
       "renderFns": [
         {
           "fn": "pOrganization",
@@ -573,10 +517,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Organization",
-        "Agents"
-      ],
+      "screens": ["Organization", "Agents"],
       "renderFns": [
         {
           "fn": "pOrganization",
@@ -599,10 +540,7 @@
           "line": 2980
         }
       ],
-      "tables": [
-        "iam.principals",
-        "iam.principal_role_assignments"
-      ],
+      "tables": ["iam.principals", "iam.principal_role_assignments"],
       "milestone": "M4"
     },
     {
@@ -621,10 +559,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Organization",
-        "Agents"
-      ],
+      "screens": ["Organization", "Agents"],
       "renderFns": [
         {
           "fn": "pOrganization",
@@ -668,10 +603,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Organization",
-        "Agents"
-      ],
+      "screens": ["Organization", "Agents"],
       "renderFns": [
         {
           "fn": "pOrganization",
@@ -713,10 +645,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Organization",
-        "Agents"
-      ],
+      "screens": ["Organization", "Agents"],
       "renderFns": [
         {
           "fn": "pOrganization",
@@ -753,10 +682,7 @@
       "does": "role's grants and resource scopes; `list_roles` is its read side, folded into `get_agent` and the Tools page",
       "absorbs": [],
       "unresolved": [],
-      "screens": [
-        "Organization",
-        "Agents"
-      ],
+      "screens": ["Organization", "Agents"],
       "renderFns": [
         {
           "fn": "pOrganization",
@@ -802,10 +728,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Fleet",
-        "Run"
-      ],
+      "screens": ["Fleet", "Run"],
       "renderFns": [
         {
           "fn": "pFleet",
@@ -831,10 +754,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Fleet",
-        "Run"
-      ],
+      "screens": ["Fleet", "Run"],
       "renderFns": [
         {
           "fn": "pFleet",
@@ -845,9 +765,7 @@
           "line": 3595
         }
       ],
-      "tables": [
-        "control.enrollments"
-      ],
+      "tables": ["control.enrollments"],
       "milestone": "M0"
     },
     {
@@ -862,10 +780,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Fleet",
-        "Run"
-      ],
+      "screens": ["Fleet", "Run"],
       "renderFns": [
         {
           "fn": "pFleet",
@@ -895,10 +810,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Fleet",
-        "Run"
-      ],
+      "screens": ["Fleet", "Run"],
       "renderFns": [
         {
           "fn": "pFleet",
@@ -909,9 +821,7 @@
           "line": 3595
         }
       ],
-      "tables": [
-        "tools.policy_versions"
-      ],
+      "tables": ["tools.policy_versions"],
       "milestone": "M2"
     },
     {
@@ -938,10 +848,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Fleet",
-        "Run"
-      ],
+      "screens": ["Fleet", "Run"],
       "renderFns": [
         {
           "fn": "pFleet",
@@ -967,10 +874,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Fleet",
-        "Run"
-      ],
+      "screens": ["Fleet", "Run"],
       "renderFns": [
         {
           "fn": "pFleet",
@@ -981,9 +885,7 @@
           "line": 3595
         }
       ],
-      "tables": [
-        "control.commands"
-      ],
+      "tables": ["control.commands"],
       "milestone": "M0"
     },
     {
@@ -998,10 +900,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Fleet",
-        "Run"
-      ],
+      "screens": ["Fleet", "Run"],
       "renderFns": [
         {
           "fn": "pFleet",
@@ -1012,9 +911,7 @@
           "line": 3595
         }
       ],
-      "tables": [
-        "control.commands"
-      ],
+      "tables": ["control.commands"],
       "milestone": "M0"
     },
     {
@@ -1033,10 +930,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Fleet",
-        "Run"
-      ],
+      "screens": ["Fleet", "Run"],
       "renderFns": [
         {
           "fn": "pFleet",
@@ -1070,10 +964,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Fleet",
-        "Run"
-      ],
+      "screens": ["Fleet", "Run"],
       "renderFns": [
         {
           "fn": "pFleet",
@@ -1094,10 +985,7 @@
       "does": "signed bundle with verifier",
       "absorbs": [],
       "unresolved": [],
-      "screens": [
-        "Fleet",
-        "Run"
-      ],
+      "screens": ["Fleet", "Run"],
       "renderFns": [
         {
           "fn": "pFleet",
@@ -1118,10 +1006,7 @@
       "does": "queue with the four-hop chain",
       "absorbs": [],
       "unresolved": [],
-      "screens": [
-        "Fleet",
-        "Run"
-      ],
+      "screens": ["Fleet", "Run"],
       "renderFns": [
         {
           "fn": "pFleet",
@@ -1132,9 +1017,7 @@
           "line": 3595
         }
       ],
-      "tables": [
-        "control.approvals"
-      ],
+      "tables": ["control.approvals"],
       "milestone": "M2"
     },
     {
@@ -1153,10 +1036,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Fleet",
-        "Run"
-      ],
+      "screens": ["Fleet", "Run"],
       "renderFns": [
         {
           "fn": "pFleet",
@@ -1167,9 +1047,7 @@
           "line": 3595
         }
       ],
-      "tables": [
-        "control.approvals"
-      ],
+      "tables": ["control.approvals"],
       "milestone": "M2"
     },
     {
@@ -1179,10 +1057,7 @@
       "does": "message to `@<agent-slug>`, `@agents`, or a run id, with a delivery mode; reaches `applied` at the model request that carried it (\u00a77.3, \u00a77.6)",
       "absorbs": [],
       "unresolved": [],
-      "screens": [
-        "Fleet",
-        "Run"
-      ],
+      "screens": ["Fleet", "Run"],
       "renderFns": [
         {
           "fn": "pFleet",
@@ -1203,10 +1078,7 @@
       "does": "sent and received, with delivery outcome",
       "absorbs": [],
       "unresolved": [],
-      "screens": [
-        "Fleet",
-        "Run"
-      ],
+      "screens": ["Fleet", "Run"],
       "renderFns": [
         {
           "fn": "pFleet",
@@ -1236,9 +1108,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Tools"
-      ],
+      "screens": ["Tools"],
       "renderFns": [
         {
           "fn": "pTools",
@@ -1264,9 +1134,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Tools"
-      ],
+      "screens": ["Tools"],
       "renderFns": [
         {
           "fn": "pTools",
@@ -1300,9 +1168,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Tools"
-      ],
+      "screens": ["Tools"],
       "renderFns": [
         {
           "fn": "pTools",
@@ -1336,9 +1202,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Tools"
-      ],
+      "screens": ["Tools"],
       "renderFns": [
         {
           "fn": "pTools",
@@ -1360,9 +1224,7 @@
       "does": "accept an observed output schema",
       "absorbs": [],
       "unresolved": [],
-      "screens": [
-        "Tools"
-      ],
+      "screens": ["Tools"],
       "renderFns": [
         {
           "fn": "pTools",
@@ -1392,9 +1254,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Tools"
-      ],
+      "screens": ["Tools"],
       "renderFns": [
         {
           "fn": "pTools",
@@ -1416,9 +1276,7 @@
       "does": "belt definitions meta-tool",
       "absorbs": [],
       "unresolved": [],
-      "screens": [
-        "Tools"
-      ],
+      "screens": ["Tools"],
       "renderFns": [
         {
           "fn": "pTools",
@@ -1464,9 +1322,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Tools"
-      ],
+      "screens": ["Tools"],
       "renderFns": [
         {
           "fn": "pTools",
@@ -1512,18 +1368,14 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Tools"
-      ],
+      "screens": ["Tools"],
       "renderFns": [
         {
           "fn": "pTools",
           "line": 5122
         }
       ],
-      "tables": [
-        "tools.connections"
-      ],
+      "tables": ["tools.connections"],
       "milestone": "M0"
     },
     {
@@ -1546,18 +1398,14 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Tools"
-      ],
+      "screens": ["Tools"],
       "renderFns": [
         {
           "fn": "pTools",
           "line": 5122
         }
       ],
-      "tables": [
-        "tools.connections"
-      ],
+      "tables": ["tools.connections"],
       "milestone": "M0"
     },
     {
@@ -1567,9 +1415,7 @@
       "does": "bounded authority for a consequence tag to an agent",
       "absorbs": [],
       "unresolved": [],
-      "screens": [
-        "Tools"
-      ],
+      "screens": ["Tools"],
       "renderFns": [
         {
           "fn": "pTools",
@@ -1591,9 +1437,7 @@
       "does": "the customer's approval and auto-approval rules, as a policy version",
       "absorbs": [],
       "unresolved": [],
-      "screens": [
-        "Tools"
-      ],
+      "screens": ["Tools"],
       "renderFns": [
         {
           "fn": "pTools",
@@ -1614,19 +1458,14 @@
       "does": "",
       "absorbs": [],
       "unresolved": [],
-      "screens": [
-        "Tools"
-      ],
+      "screens": ["Tools"],
       "renderFns": [
         {
           "fn": "pTools",
           "line": 5122
         }
       ],
-      "tables": [
-        "tools.mandates",
-        "tools.mandate_ledger"
-      ],
+      "tables": ["tools.mandates", "tools.mandate_ledger"],
       "milestone": "M2"
     },
     {
@@ -1636,19 +1475,14 @@
       "does": "ledger view",
       "absorbs": [],
       "unresolved": [],
-      "screens": [
-        "Tools"
-      ],
+      "screens": ["Tools"],
       "renderFns": [
         {
           "fn": "pTools",
           "line": 5122
         }
       ],
-      "tables": [
-        "tools.mandates",
-        "tools.mandate_ledger"
-      ],
+      "tables": ["tools.mandates", "tools.mandate_ledger"],
       "milestone": "M2"
     },
     {
@@ -1658,19 +1492,14 @@
       "does": "new policy version with tests",
       "absorbs": [],
       "unresolved": [],
-      "screens": [
-        "Tools"
-      ],
+      "screens": ["Tools"],
       "renderFns": [
         {
           "fn": "pTools",
           "line": 5122
         }
       ],
-      "tables": [
-        "tools.tool_versions",
-        "tools.policy_versions"
-      ],
+      "tables": ["tools.tool_versions", "tools.policy_versions"],
       "milestone": "M2"
     },
     {
@@ -1680,19 +1509,14 @@
       "does": "replay a version against history",
       "absorbs": [],
       "unresolved": [],
-      "screens": [
-        "Tools"
-      ],
+      "screens": ["Tools"],
       "renderFns": [
         {
           "fn": "pTools",
           "line": 5122
         }
       ],
-      "tables": [
-        "tools.tool_versions",
-        "tools.policy_versions"
-      ],
+      "tables": ["tools.tool_versions", "tools.policy_versions"],
       "milestone": "M2"
     },
     {
@@ -1702,9 +1526,7 @@
       "does": "any level",
       "absorbs": [],
       "unresolved": [],
-      "screens": [
-        "Tools"
-      ],
+      "screens": ["Tools"],
       "renderFns": [
         {
           "fn": "pTools",
@@ -1730,9 +1552,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Ontology"
-      ],
+      "screens": ["Ontology"],
       "renderFns": [
         {
           "fn": "pOntology",
@@ -1763,18 +1583,14 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Ontology"
-      ],
+      "screens": ["Ontology"],
       "renderFns": [
         {
           "fn": "pOntology",
           "line": 5306
         }
       ],
-      "tables": [
-        "wrk.repositories"
-      ],
+      "tables": ["wrk.repositories"],
       "milestone": "M4"
     },
     {
@@ -1797,18 +1613,14 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Ontology"
-      ],
+      "screens": ["Ontology"],
       "renderFns": [
         {
           "fn": "pOntology",
           "line": 5306
         }
       ],
-      "tables": [
-        "wrk.repositories"
-      ],
+      "tables": ["wrk.repositories"],
       "milestone": "M4"
     },
     {
@@ -1827,9 +1639,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Ontology"
-      ],
+      "screens": ["Ontology"],
       "renderFns": [
         {
           "fn": "pOntology",
@@ -1867,9 +1677,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Ontology"
-      ],
+      "screens": ["Ontology"],
       "renderFns": [
         {
           "fn": "pOntology",
@@ -1895,9 +1703,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Ontology"
-      ],
+      "screens": ["Ontology"],
       "renderFns": [
         {
           "fn": "pOntology",
@@ -1939,9 +1745,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Ontology"
-      ],
+      "screens": ["Ontology"],
       "renderFns": [
         {
           "fn": "pOntology",
@@ -1987,19 +1791,14 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Ontology"
-      ],
+      "screens": ["Ontology"],
       "renderFns": [
         {
           "fn": "pOntology",
           "line": 5306
         }
       ],
-      "tables": [
-        "tools.tool_versions",
-        "tools.policy_versions"
-      ],
+      "tables": ["tools.tool_versions", "tools.policy_versions"],
       "milestone": "M4"
     },
     {
@@ -2034,19 +1833,14 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Ontology"
-      ],
+      "screens": ["Ontology"],
       "renderFns": [
         {
           "fn": "pOntology",
           "line": 5306
         }
       ],
-      "tables": [
-        "tools.tool_versions",
-        "tools.policy_versions"
-      ],
+      "tables": ["tools.tool_versions", "tools.policy_versions"],
       "milestone": "M4"
     },
     {
@@ -2089,9 +1883,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Ontology"
-      ],
+      "screens": ["Ontology"],
       "renderFns": [
         {
           "fn": "pOntology",
@@ -2125,9 +1917,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Ontology"
-      ],
+      "screens": ["Ontology"],
       "renderFns": [
         {
           "fn": "pOntology",
@@ -2153,9 +1943,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Ontology"
-      ],
+      "screens": ["Ontology"],
       "renderFns": [
         {
           "fn": "pOntology",
@@ -2181,9 +1969,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Ontology"
-      ],
+      "screens": ["Ontology"],
       "renderFns": [
         {
           "fn": "pOntology",
@@ -2221,9 +2007,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Steering"
-      ],
+      "screens": ["Steering"],
       "renderFns": [
         {
           "fn": "pSteering",
@@ -2240,9 +2024,7 @@
       "does": "",
       "absorbs": [],
       "unresolved": [],
-      "screens": [
-        "Steering"
-      ],
+      "screens": ["Steering"],
       "renderFns": [
         {
           "fn": "pSteering",
@@ -2276,9 +2058,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Steering"
-      ],
+      "screens": ["Steering"],
       "renderFns": [
         {
           "fn": "pSteering",
@@ -2304,9 +2084,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Steering"
-      ],
+      "screens": ["Steering"],
       "renderFns": [
         {
           "fn": "pSteering",
@@ -2328,9 +2106,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Steering"
-      ],
+      "screens": ["Steering"],
       "renderFns": [
         {
           "fn": "pSteering",
@@ -2365,9 +2141,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Steering"
-      ],
+      "screens": ["Steering"],
       "renderFns": [
         {
           "fn": "pSteering",
@@ -2389,9 +2163,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Steering"
-      ],
+      "screens": ["Steering"],
       "renderFns": [
         {
           "fn": "pSteering",
@@ -2413,9 +2185,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Steering"
-      ],
+      "screens": ["Steering"],
       "renderFns": [
         {
           "fn": "pSteering",
@@ -2437,9 +2207,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Steering"
-      ],
+      "screens": ["Steering"],
       "renderFns": [
         {
           "fn": "pSteering",
@@ -2469,10 +2237,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Spend",
-        "Billing"
-      ],
+      "screens": ["Spend", "Billing"],
       "renderFns": [
         {
           "fn": "pSpend",
@@ -2498,10 +2263,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Spend",
-        "Billing"
-      ],
+      "screens": ["Spend", "Billing"],
       "renderFns": [
         {
           "fn": "pSpend",
@@ -2522,10 +2284,7 @@
       "does": "matched, variance, exceptions",
       "absorbs": [],
       "unresolved": [],
-      "screens": [
-        "Spend",
-        "Billing"
-      ],
+      "screens": ["Spend", "Billing"],
       "renderFns": [
         {
           "fn": "pSpend",
@@ -2536,9 +2295,7 @@
           "line": 6132
         }
       ],
-      "tables": [
-        "cost.reconciliations"
-      ],
+      "tables": ["cost.reconciliations"],
       "milestone": "M5"
     },
     {
@@ -2548,10 +2305,7 @@
       "does": "",
       "absorbs": [],
       "unresolved": [],
-      "screens": [
-        "Spend",
-        "Billing"
-      ],
+      "screens": ["Spend", "Billing"],
       "renderFns": [
         {
           "fn": "pSpend",
@@ -2593,10 +2347,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Spend",
-        "Billing"
-      ],
+      "screens": ["Spend", "Billing"],
       "renderFns": [
         {
           "fn": "pSpend",
@@ -2607,9 +2358,7 @@
           "line": 6132
         }
       ],
-      "tables": [
-        "billing.budgets"
-      ],
+      "tables": ["billing.budgets"],
       "milestone": "M2"
     },
     {
@@ -2636,10 +2385,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Spend",
-        "Billing"
-      ],
+      "screens": ["Spend", "Billing"],
       "renderFns": [
         {
           "fn": "pSpend",
@@ -2660,10 +2406,7 @@
       "does": "platform or customer key",
       "absorbs": [],
       "unresolved": [],
-      "screens": [
-        "Spend",
-        "Billing"
-      ],
+      "screens": ["Spend", "Billing"],
       "renderFns": [
         {
           "fn": "pSpend",
@@ -2689,10 +2432,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Spend",
-        "Billing"
-      ],
+      "screens": ["Spend", "Billing"],
       "renderFns": [
         {
           "fn": "pSpend",
@@ -2703,10 +2443,7 @@
           "line": 6132
         }
       ],
-      "tables": [
-        "control.event_subscriptions",
-        "billing.subscriptions"
-      ],
+      "tables": ["control.event_subscriptions", "billing.subscriptions"],
       "milestone": "M0"
     },
     {
@@ -2725,10 +2462,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Spend",
-        "Billing"
-      ],
+      "screens": ["Spend", "Billing"],
       "renderFns": [
         {
           "fn": "pSpend",
@@ -2739,10 +2473,7 @@
           "line": 6132
         }
       ],
-      "tables": [
-        "control.event_subscriptions",
-        "billing.subscriptions"
-      ],
+      "tables": ["control.event_subscriptions", "billing.subscriptions"],
       "milestone": "M0"
     },
     {
@@ -2761,9 +2492,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Audit"
-      ],
+      "screens": ["Audit"],
       "renderFns": [
         {
           "fn": "pAudit",
@@ -2789,19 +2518,14 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Audit"
-      ],
+      "screens": ["Audit"],
       "renderFns": [
         {
           "fn": "pAudit",
           "line": 6515
         }
       ],
-      "tables": [
-        "org.organizations",
-        "org.data_planes"
-      ],
+      "tables": ["org.organizations", "org.data_planes"],
       "milestone": "M0"
     },
     {
@@ -2816,18 +2540,14 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Audit"
-      ],
+      "screens": ["Audit"],
       "renderFns": [
         {
           "fn": "pAudit",
           "line": 6515
         }
       ],
-      "tables": [
-        "org.data_planes"
-      ],
+      "tables": ["org.data_planes"],
       "milestone": "M0"
     },
     {
@@ -2837,18 +2557,14 @@
       "does": "",
       "absorbs": [],
       "unresolved": [],
-      "screens": [
-        "Audit"
-      ],
+      "screens": ["Audit"],
       "renderFns": [
         {
           "fn": "pAudit",
           "line": 6515
         }
       ],
-      "tables": [
-        "audit.legal_holds"
-      ],
+      "tables": ["audit.legal_holds"],
       "milestone": "M5"
     },
     {
@@ -2858,19 +2574,14 @@
       "does": "tamper, probes, chain breaks, mandate exceptions",
       "absorbs": [],
       "unresolved": [],
-      "screens": [
-        "Audit"
-      ],
+      "screens": ["Audit"],
       "renderFns": [
         {
           "fn": "pAudit",
           "line": 6515
         }
       ],
-      "tables": [
-        "tools.mandates",
-        "tools.mandate_ledger"
-      ],
+      "tables": ["tools.mandates", "tools.mandate_ledger"],
       "milestone": "M2"
     },
     {
@@ -2880,9 +2591,7 @@
       "does": "event kinds, filters, delivery mode; returns the unique endpoint (\u00a77.7)",
       "absorbs": [],
       "unresolved": [],
-      "screens": [
-        "Audit"
-      ],
+      "screens": ["Audit"],
       "renderFns": [
         {
           "fn": "pAudit",
@@ -2903,9 +2612,7 @@
       "does": "with delivery health and dead letters",
       "absorbs": [],
       "unresolved": [],
-      "screens": [
-        "Audit"
-      ],
+      "screens": ["Audit"],
       "renderFns": [
         {
           "fn": "pAudit",
@@ -2939,9 +2646,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Organization"
-      ],
+      "screens": ["Organization"],
       "renderFns": [
         {
           "fn": "pOrganization",
@@ -2987,9 +2692,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Organization"
-      ],
+      "screens": ["Organization"],
       "renderFns": [
         {
           "fn": "pOrganization",
@@ -3027,9 +2730,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Organization"
-      ],
+      "screens": ["Organization"],
       "renderFns": [
         {
           "fn": "pOrganization",
@@ -3051,9 +2752,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Organization"
-      ],
+      "screens": ["Organization"],
       "renderFns": [
         {
           "fn": "pOrganization",
@@ -3075,9 +2774,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Organization"
-      ],
+      "screens": ["Organization"],
       "renderFns": [
         {
           "fn": "pOrganization",
@@ -3099,9 +2796,7 @@
         }
       ],
       "unresolved": [],
-      "screens": [
-        "Organization"
-      ],
+      "screens": ["Organization"],
       "renderFns": [
         {
           "fn": "pOrganization",
@@ -3155,12 +2850,7 @@
     {
       "screen": "Fleet",
       "job": "Every run, live and recent, with its enforcement tier, replay grade, cost so far, and pending approvals",
-      "actions": [
-        "pause",
-        "resume",
-        "cancel",
-        "open"
-      ]
+      "actions": ["pause", "resume", "cancel", "open"]
     },
     {
       "screen": "Run",
@@ -3216,11 +2906,7 @@
     {
       "screen": "Steering",
       "job": "Published records, proposals, open Context PRs, effect metrics, and retirement candidates",
-      "actions": [
-        "open Context PR",
-        "review",
-        "retire"
-      ]
+      "actions": ["open Context PR", "review", "retire"]
     },
     {
       "screen": "Spend",
@@ -3246,18 +2932,12 @@
     {
       "screen": "Billing",
       "job": "Governed-action usage, the retention meter, plan, and invoices",
-      "actions": [
-        "change plan"
-      ]
+      "actions": ["change plan"]
     },
     {
       "screen": "Audit",
       "job": "Control-plane audit events, data plane, key rotation, legal holds, and exports",
-      "actions": [
-        "export",
-        "hold",
-        "rotate"
-      ]
+      "actions": ["export", "hold", "rotate"]
     }
   ],
   "MILESTONES": [

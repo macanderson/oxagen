@@ -4,10 +4,10 @@
 |---|---|
 | **Status** | Review |
 | **Date** | 2026-09-19 |
-| **Reviewed** | `docs/mission-control/GAP-INVENTORY.md`, committed at `3985213` (PR #3386, 2026-09-18 19:19 PDT) |
+| **Reviewed** | `oxagen-roadmap:docs/oxagen/mission-control/GAP-INVENTORY.md`, committed at `3985213` (PR #3386, 2026-09-18 19:19 PDT) |
 | **Read against** | `origin/main` at `cc8f0b8` (2026-09-19) |
 | **Method** | Six reviewers, each told to refute rather than confirm. Five took one page cluster each and checked every row against `apps/app/src`, `apps/app/capability-ui-map.json`, `packages/oxagen/src/contracts`, and `packages/handlers/src/register.ts`. The sixth attacked the framing: target set, cut list, issue references, priorities, scorecard, and method. A seventh mapped backend readiness for every capability the gaps touch. No suite was run. |
-| **Follow-on** | `docs/mission-control/BUILD-CHUNKS.md` carries the corrected gap list as six build sessions |
+| **Follow-on** | `oxagen-roadmap:docs/oxagen/mission-control/BUILD-CHUNKS.md` carries the corrected gap list as six build sessions |
 
 ## Verdict
 
