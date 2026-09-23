@@ -45,6 +45,8 @@ describe("getSession", () => {
       session: { id: "s1" },
     });
     await expect(getSession()).resolves.toEqual({
+      // A session older than auth_method records none.
+      authMethod: null,
       user: {
         id: "u1",
         email: "a@b.c",
@@ -55,6 +57,22 @@ describe("getSession", () => {
       },
     });
     expect(api.getSession).toHaveBeenCalledWith({ headers: requestHeaders });
+  });
+
+  it("carries how the session was established, for the require-SSO gate", async () => {
+    api.getSession.mockResolvedValue({
+      user: {
+        id: "u1",
+        email: "a@acme.example",
+        name: "A",
+        image: null,
+        emailVerified: true,
+      },
+      session: { id: "s1", authMethod: "sso:acme-okta" },
+    });
+    await expect(getSession()).resolves.toMatchObject({
+      authMethod: "sso:acme-okta",
+    });
   });
 
   it("returns null when Better Auth has no session (negative)", async () => {

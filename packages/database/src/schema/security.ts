@@ -147,7 +147,8 @@ export type NewSecurityEvent = typeof securityEvents.$inferInsert;
 // ---------------------------------------------------------------------------
 // security.org_security_policy — org-level security configuration.
 //
-// One row per org (upsertable). Tracks MFA enforcement policy (CC6.1/CC6.2).
+// One row per org (upsertable). Tracks MFA enforcement policy (CC6.1/CC6.2)
+// and the "require SSO" switch.
 // The table is mutable (orgs can change policy) but all mutations are audited
 // via security_events (security.mfa_policy_updated).
 // ---------------------------------------------------------------------------
@@ -160,6 +161,11 @@ export const orgSecurityPolicy = securitySchema.table("org_security_policy", {
   // How many hours a member can access the org after MFA is required before
   // they are forced to enroll. 0 = immediate enforcement.
   mfaGraceHours: integer("mfa_grace_hours").notNull().default(48),
+  // When true, members reach the org only through a session established by
+  // one of the org's SSO providers, and password sign-in is refused for the
+  // provider's email domain. Owners are exempt so an IdP outage cannot lock
+  // the org out (ADR-145). Mutations emit security.sso.policy_updated.
+  ssoRequired: boolean("sso_required").notNull().default(false),
   updatedById: uuid("updated_by_id"),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
     .notNull()
