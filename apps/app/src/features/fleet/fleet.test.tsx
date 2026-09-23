@@ -129,6 +129,17 @@ const RUNS = [
 ];
 const PARKED = approvalItem({ id: "apr_parked", runId: "arun_parked" });
 
+/** One `list_agents` page with its cursor, for the roster's walk. */
+function pageValue(
+  keys: string[],
+  identities: number,
+  nextCursor: string | null,
+) {
+  const read = agentPage(keys, identities);
+  if (!read.ok) throw new Error("agentPage answers a page");
+  return { ...read.value, nextCursor };
+}
+
 async function renderFleet(
   reads: Parameters<typeof fleetSource>[0],
   cursor: string | null = null,
@@ -187,6 +198,63 @@ describe("Fleet reads", () => {
     expect(calls.runs).toEqual([[ctx, { cursor: "c1" }]]);
     expect(calls.approvals).toEqual([[ctx, { runId: null }]]);
     expect(calls.agents).toEqual([[ctx, { cursor: null }]]);
+  });
+
+  it("reads every page of the workspace's agents, so Steer lists all of them", async () => {
+    const pages: Record<string, ReturnType<typeof agentPage>> = {
+      first: {
+        ok: true,
+        value: pageValue(["acme.core.release-bot"], 3, "a2"),
+      },
+      a2: {
+        ok: true,
+        value: pageValue(["acme.core.docs", "acme.core.triage"], 3, null),
+      },
+    };
+    const { calls } = await renderFleet({
+      runs: runPage(RUNS),
+      approvals: approvalQueue([PARKED]),
+      agents: (cursor) => pages[cursor ?? "first"] ?? readError("x", 500),
+    });
+    expect(calls.agents).toEqual([
+      [ctx, { cursor: null }],
+      [ctx, { cursor: "a2" }],
+    ]);
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("fleet-steer"));
+    expect(screen.getByTestId("steer-selected")).toHaveTextContent(
+      "Agents · 3 of 3 selected",
+    );
+    expect(screen.queryByTestId("steer-unlisted")).toBeNull();
+    // arun_parked is the docs agent's run, and its call is parked.
+    expect(
+      screen
+        .getByRole("checkbox", { name: "Steer acme.core.docs" })
+        .closest("label"),
+    ).toHaveTextContent("parked for approval");
+  });
+
+  it("says the steer list stopped when a later agents page failed (negative)", async () => {
+    const { calls } = await renderFleet({
+      runs: runPage(RUNS),
+      approvals: NO_APPROVALS,
+      agents: (cursor) =>
+        cursor === null
+          ? {
+              ok: true,
+              value: pageValue(["acme.core.release-bot"], 3, "a2"),
+            }
+          : readError("agent_index_unavailable", 503),
+    });
+    expect(calls.agents).toHaveLength(2);
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("fleet-steer"));
+    expect(screen.getByTestId("steer-selected")).toHaveTextContent(
+      "Agents · 1 of 3 selected",
+    );
+    expect(screen.getByTestId("steer-unlisted")).toHaveTextContent(
+      "The list stops after 1 agent. 2 more are not listed",
+    );
   });
 });
 
@@ -411,6 +479,31 @@ describe("the Runs panel", () => {
     expect(within(row("tse_live")).getByTestId("row-pause")).toHaveAttribute(
       "data-touch-target",
     );
+    expect(
+      within(row("tse_live")).getByRole("link", { name: "tse_live" }),
+    ).toHaveAttribute("data-touch-target");
+    // The search box is 44px tall on a phone, as every other control is.
+    expect(screen.getByRole("searchbox").className).toContain(
+      "max-md:min-h-11",
+    );
+  });
+
+  it("stacks the four tiles two by two on a phone, as the design does", async () => {
+    await loaded();
+    expect(
+      screen.getByRole("region", { name: "Fleet summary" }).className,
+    ).toContain("max-md:grid-cols-2");
+  });
+
+  it("draws the Tokens sort where the design has it, disabled until runs carry tokens (G3)", async () => {
+    await loaded();
+    const sort = screen.getByTestId("sort-tokens");
+    expect(sort).toBeDisabled();
+    expect(sort).toHaveAccessibleName("Sort by Tokens");
+    expect(sort).toHaveAttribute(
+      "title",
+      "Runs carry no token figure yet, so there is nothing to sort.",
+    );
   });
 
   it("reads a live run with a parked call as parked for approval, and resolves it on the Run page", async () => {
@@ -450,6 +543,15 @@ describe("the Runs panel", () => {
       "Recorded as a control.pause frame under run.pause.",
     );
     expect(dialog).toHaveAttribute("aria-modal", "true");
+    // The design's header x, labelled Close, beside the footer's Cancel.
+    expect(
+      within(dialog)
+        .getByRole("button", { name: "Close" })
+        .closest("[data-sheet-header]"),
+    ).not.toBeNull();
+    expect(
+      within(dialog).getByRole("button", { name: "Cancel" }),
+    ).toBeInTheDocument();
     await user.type(
       within(dialog).getByLabelText(
         "Reason — the model reads this on resume, so write it for the agent",
@@ -466,11 +568,13 @@ describe("the Runs panel", () => {
       "pause",
       "Holding for finance",
     );
-    expect(
-      await screen.findByText(
-        "Pause queued for tse_live. It takes effect at the next boundary.",
-      ),
-    ).toBeInTheDocument();
+    const queued = await screen.findByText(
+      "Pause queued for tse_live. It takes effect at the next boundary.",
+    );
+    expect(queued.closest("[data-toast]")).toHaveAttribute(
+      "data-tone",
+      "approval",
+    );
     expect(refresh).toHaveBeenCalled();
   });
 
@@ -518,9 +622,18 @@ describe("the Runs panel", () => {
       "core-platform",
       "arun_sealed",
     );
-    expect(
-      await screen.findByText("Export bundle queued for arun_sealed."),
-    ).toBeInTheDocument();
+    // The design confirms with a toast in the page's polite live region.
+    const toast = await screen.findByText(
+      "Export bundle queued for arun_sealed.",
+    );
+    expect(toast.closest("[data-toast]")).toHaveAttribute(
+      "data-tone",
+      "allowed",
+    );
+    expect(screen.getByTestId("runs-toasts")).toHaveAttribute(
+      "aria-live",
+      "polite",
+    );
     expect(push).not.toHaveBeenCalled();
   });
 
@@ -533,11 +646,13 @@ describe("the Runs panel", () => {
     await loaded();
     const user = userEvent.setup();
     await user.click(within(row("arun_halted")).getByTestId("row-export"));
-    expect(
-      await screen.findByText(
-        /The export bundle for arun_halted was not queued/,
-      ),
-    ).toBeInTheDocument();
+    const failed = await screen.findByText(
+      /The export bundle for arun_halted was not queued/,
+    );
+    expect(failed.closest("[data-toast]")).toHaveAttribute(
+      "data-tone",
+      "failed",
+    );
   });
 });
 
@@ -658,6 +773,8 @@ describe("not-loaded states", () => {
       /^trace and region not recorded · \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}Z$/,
     );
     expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
+    // The design's errorState glyph: a circle with an exclamation mark.
+    expect(error.querySelector("svg.lucide-circle-alert")).not.toBeNull();
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Try again" }));
     expect(refresh).toHaveBeenCalledOnce();
@@ -666,6 +783,21 @@ describe("not-loaded states", () => {
     expect(within(dialog).getByLabelText("Subject")).toHaveValue(
       "503 run_index_unavailable",
     );
+    expect(
+      within(within(dialog).getByLabelText("Severity"))
+        .getAllByRole("option")
+        .map((option) => option.textContent),
+    ).toEqual([
+      "critical — money moved that Oxagen did not govern",
+      "warning",
+      "info",
+    ]);
+    expect(
+      within(dialog).getByRole("button", { name: "Close" }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("button", { name: "Cancel" }),
+    ).toBeInTheDocument();
     const attach = within(dialog).getByRole("list", { name: "Attach" });
     expect(
       within(attach)

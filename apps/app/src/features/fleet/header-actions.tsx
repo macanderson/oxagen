@@ -18,7 +18,10 @@ export function FleetHeaderActions({
   workspace,
   agents,
   agentsRead,
+  agentTotal,
+  agentsComplete,
   runs,
+  parkedRunIds,
   canCommand,
 }: {
   org: string;
@@ -28,7 +31,13 @@ export function FleetHeaderActions({
   agents: FleetAgent[];
   /** False when the agents read failed, so the dialog can say why it is empty. */
   agentsRead: boolean;
+  /** Identities in the workspace (`list_agents` totals); null when the read failed. */
+  agentTotal: number | null;
+  /** False when the roster stopped before the workspace's last agent. */
+  agentsComplete: boolean;
   runs: RunRow[];
+  /** Live runs with a call parked for approval. */
+  parkedRunIds: string[];
   canCommand: boolean;
 }) {
   const t = useTranslations("fleet.actions");
@@ -59,7 +68,10 @@ export function FleetHeaderActions({
           workspace={workspace}
           agents={agents}
           agentsRead={agentsRead}
+          agentTotal={agentTotal}
+          agentsComplete={agentsComplete}
           runs={runs}
+          parkedRunIds={parkedRunIds}
           canCommand={canCommand}
           onClose={() => {
             setOpen(false);

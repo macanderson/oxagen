@@ -9,7 +9,7 @@
 // the read failed in UTC (a failed read carries neither, #3841), and the denied
 // state's "Decided by" says the policy was not recorded (a refusal carries only
 // the permission it needed, #3841).
-import { Lock, Table2, TriangleAlert } from "lucide-react";
+import { CircleAlert, Lock, Table2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import { routes } from "@/shared/safe-path";
@@ -127,7 +127,7 @@ export function FleetError({
   return (
     <StateWrap
       testId="fleet-error"
-      icon={<TriangleAlert className="size-5" />}
+      icon={<CircleAlert className="size-5" />}
       iconTone="failed"
       title={t("title")}
       actions={

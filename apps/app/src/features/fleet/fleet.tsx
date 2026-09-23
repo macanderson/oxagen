@@ -11,7 +11,9 @@
 // so either failing says so on its tile and leaves the rest of the page up.
 import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
+import type { AgentPage } from "@/data/contracts/agents";
 import type { DataSource } from "@/data/ports";
+import type { Read } from "@/data/read";
 import { getAuthUser } from "@/features/auth";
 import type { WsCtx } from "@/server/viewer";
 import { canCommandRun } from "@/shared/run-command-roles";
@@ -19,6 +21,48 @@ import { PageHeader } from "@/ui/page-header";
 import { type FleetAgent, FleetBoard } from "./board";
 import { FleetHeaderActions } from "./header-actions";
 import { FleetDenied, FleetEmpty, FleetError, FleetPending } from "./states";
+import { parkedRunIds } from "./view";
+
+/**
+ * How many `list_agents` pages the steer dialog reads: 20 of 50, a thousand
+ * agents. A workspace past that is listed to the thousandth and the dialog
+ * says the list stopped, so a steer to "All" never silently leaves agents out.
+ */
+const AGENT_PAGES_MAX = 20;
+
+type AgentRoster = Read<AgentPage & { complete: boolean }>;
+
+/**
+ * Every agent in the workspace, page by page. The steer dialog pre-selects
+ * every agent and counts "N of M" against the workspace total, so one page
+ * of 50 would steer part of a larger workspace while the tile beside it
+ * counts all of it. A later page that fails stops the walk and the roster
+ * says it is incomplete; only the first page's failure fails the read.
+ */
+async function readAgentRoster(
+  ctx: WsCtx,
+  source: DataSource,
+): Promise<AgentRoster> {
+  const first = await source.agents.list(ctx, { cursor: null });
+  if (!first.ok) return first;
+  const agents = [...first.value.agents];
+  let next = first.value.nextCursor;
+  for (let page = 1; next !== null && page < AGENT_PAGES_MAX; page += 1) {
+    const read = await source.agents.list(ctx, { cursor: next });
+    if (!read.ok) break;
+    agents.push(...read.value.agents);
+    next = read.value.nextCursor;
+  }
+  return {
+    ok: true,
+    value: {
+      agents,
+      nextCursor: next,
+      totals: first.value.totals,
+      complete: next === null,
+    },
+  };
+}
 
 async function readFleet(
   ctx: WsCtx,
@@ -28,7 +72,7 @@ async function readFleet(
   const [runs, approvals, agents] = await Promise.all([
     source.runs.list(ctx, { cursor }),
     source.approvals.pending(ctx, { runId: null }),
-    source.agents.list(ctx, { cursor: null }),
+    readAgentRoster(ctx, source),
   ]);
   // The approval clocks and the error line start from the instant the reads
   // returned; a component may not read a clock while it renders.
@@ -90,6 +134,7 @@ export async function Fleet({
       )
     : [];
   const canCommand = canCommandRun(ctx.orgRole, ctx.wsRole);
+  const parked = approvals.ok ? [...parkedRunIds(approvals.value.items)] : [];
   return (
     <>
       <FleetHeader
@@ -101,7 +146,10 @@ export async function Fleet({
             workspace={ctx.wsName}
             agents={roster}
             agentsRead={agents.ok}
+            agentTotal={agents.ok ? agents.value.totals.identities : null}
+            agentsComplete={agents.ok && agents.value.complete}
             runs={runs.value.runs}
+            parkedRunIds={parked}
             canCommand={canCommand}
           />
         }

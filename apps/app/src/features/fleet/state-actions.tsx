@@ -68,6 +68,8 @@ export function OpenIncident({
         onOpenChange={setOpen}
         title={t("title")}
         testId="incident-dialog"
+        headerClose
+        closeLabel={t("cancel")}
         footer={
           <button
             type="button"
@@ -86,7 +88,7 @@ export function OpenIncident({
           <input
             id={subjectId}
             defaultValue={`${String(status)} ${code}`}
-            className={`${inputBase} max-md:text-base`}
+            className={`${inputBase} max-md:min-h-11 max-md:text-base`}
           />
           <label htmlFor={severityId} className="text-xs font-medium">
             {t("severity")}
@@ -94,7 +96,7 @@ export function OpenIncident({
           <select
             id={severityId}
             defaultValue="warning"
-            className={`${inputBase} max-md:text-base`}
+            className={`${inputBase} max-md:min-h-11 max-md:text-base`}
           >
             {(["critical", "warning", "info"] as const).map((sev) => (
               <option key={sev} value={sev}>
@@ -164,6 +166,8 @@ export function RequestAccess({
         onOpenChange={setOpen}
         title={t("title")}
         testId="request-access-dialog"
+        headerClose
+        closeLabel={t("cancel")}
         footer={
           <button
             type="button"
@@ -183,7 +187,7 @@ export function RequestAccess({
             id={roleId}
             readOnly
             value={denied("neededValue", { permission, ws })}
-            className={`${inputBase} font-mono max-md:text-base`}
+            className={`${inputBase} font-mono max-md:min-h-11 max-md:text-base`}
           />
           <label htmlFor={whyId} className="text-xs font-medium">
             {t("why")}
@@ -191,7 +195,7 @@ export function RequestAccess({
           <textarea
             id={whyId}
             rows={3}
-            className={`${inputBase} resize-y max-md:text-base`}
+            className={`${inputBase} resize-y max-md:min-h-11 max-md:text-base`}
           />
           <p className="text-xs text-muted-foreground">{t("note")}</p>
           <p

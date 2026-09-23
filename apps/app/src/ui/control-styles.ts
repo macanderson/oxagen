@@ -81,6 +81,11 @@ export const statTerm =
 export const statValue =
   "text-[23px] font-bold leading-[1.15] tracking-[-0.02em] tabular-nums";
 export const statNote = "mt-[3px] text-[11.5px] text-muted-foreground";
-/** `.grid.g4 { grid-template-columns:repeat(auto-fit,minmax(175px,1fr)); gap:14px }` */
+/**
+ * `.grid.g4 { grid-template-columns:repeat(auto-fit,minmax(175px,1fr)); gap:14px }`,
+ * and on a phone `#viewport.phone .g4 { grid-template-columns:1fr 1fr }`: two
+ * 175px tiles and the gap need 364px, wider than a 390px phone's content, so
+ * auto-fit alone would stack the strip one tile per row.
+ */
 export const statStrip =
-  "grid gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(175px,1fr))]";
+  "grid gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(175px,1fr))] max-md:grid-cols-2";

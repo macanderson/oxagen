@@ -19,6 +19,8 @@
       "hint": "Every agent in {workspace}, selected by default. Steering the fleet is a grant you hold by role, not a default.",
       "noAgents": "No agent in this workspace carries a key yet, so there is nobody to steer.",
       "agentsUnread": "The workspace's agents could not be read, so there is nobody to pick.",
+      "keyless": "{count, plural, one {# agent carries no key, so a steer cannot reach it.} other {# agents carry no key, so a steer cannot reach them.}}",
+      "stopped": "The list stops after {listed, plural, one {# agent} other {# agents}}. {count, plural, one {# more is} other {# more are}} not listed, so a steer does not reach {count, plural, one {it} other {them}}.",
       "text": "Steering text",
       "delivery": "Delivery",
       "boundary": "At the boundary",
@@ -155,6 +157,7 @@
       "rows": "Rows",
       "rowsAll": "All",
       "sortBy": "Sort by {column}",
+      "tokensUnsorted": "Runs carry no token figure yet, so there is nothing to sort.",
       "columns": {
         "run": "Run",
         "agent": "Agent",
@@ -196,7 +199,6 @@
       "resolve": "Resolve",
       "export": "Export",
       "rowAction": "{action} {run}",
-      "exporting": "Queueing the export bundle for {run}.",
       "exportQueued": "Export bundle queued for {run}.",
       "exportFailed": "The export bundle for {run} was not queued. {reason}"
     },
@@ -251,6 +253,7 @@
       "why": "Why",
       "note": "Granting a role is a governed action. It will appear in the audit record with the granter’s name, your name, and this reason.",
       "send": "Send the request",
+      "cancel": "Cancel",
       "unbacked": "Oxagen records no access request yet, so this cannot be sent. Ask an organization owner to grant {permission} on {ws}; the grant lands in the audit record."
     },
     "incident": {
@@ -258,12 +261,13 @@
       "subject": "Subject",
       "severity": "Severity",
       "severities": {
-        "critical": "critical",
+        "critical": "critical — money moved that Oxagen did not govern",
         "warning": "warning",
         "info": "info"
       },
       "attach": "Attach",
       "raise": "Raise it",
+      "cancel": "Cancel",
       "unbacked": "Oxagen has no record to raise an incident in yet, so this cannot be sent. Report {status} {code} at {at} to whoever runs this deployment."
     }
   }

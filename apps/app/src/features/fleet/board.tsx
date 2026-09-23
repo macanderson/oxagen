@@ -53,6 +53,7 @@ import { ReplayGradeBadge } from "@/ui/replay-grade";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { StatusBadge } from "@/ui/status-badge";
 import { cell, headCell, numericCell } from "@/ui/table";
+import { ToastStack, useToasts } from "@/ui/toast";
 import { dispatchRunCommand, exportFleetRun } from "./actions";
 import { Clock } from "./clock";
 import {
@@ -81,8 +82,6 @@ import {
 export type FleetAgent = { agentKey: string };
 
 type Place = { org: string; ws: string };
-
-type Notice = { tone: "ok" | "error"; text: string } | null;
 
 // ── Tiles ────────────────────────────────────────────────────────────────
 
@@ -423,7 +422,7 @@ function ListBar({
         onChange={(event) => {
           setQuery({ ...query, search: event.target.value, page: 1 });
         }}
-        className={`${inputBase} min-w-36 flex-[1_1_200px] py-1.5 max-md:text-base`}
+        className={`${inputBase} min-w-36 flex-[1_1_200px] py-1.5 max-md:min-h-11 max-md:text-base`}
       />
       {FACETS.map((facet) => {
         const label = t(`columns.${facet}`);
@@ -525,14 +524,19 @@ function Pager({
         {range}
       </span>
       {cursor === null ? null : (
-        <SafeLink to={routes.fleet(org, ws)} className={linkText}>
+        <SafeLink
+          to={routes.fleet(org, ws)}
+          data-touch-target=""
+          className={`${linkText} inline-flex items-center`}
+        >
           {t("newest")}
         </SafeLink>
       )}
       {nextCursor === null ? null : (
         <SafeLink
           to={routes.fleet(org, ws, { cursor: nextCursor })}
-          className={linkText}
+          data-touch-target=""
+          className={`${linkText} inline-flex items-center`}
         >
           {t("older")}
         </SafeLink>
@@ -638,7 +642,8 @@ function RunRowView({
           onClick={(event) => {
             event.stopPropagation();
           }}
-          className={`${mono} block truncate text-[12px] text-muted-foreground hover:text-foreground`}
+          data-touch-target=""
+          className={`${mono} block truncate text-[12px] text-muted-foreground hover:text-foreground max-md:leading-[44px]`}
         >
           {run.id}
         </SafeLink>
@@ -847,6 +852,7 @@ function PauseDialog({
       }}
       title={t("title")}
       closeLabel={t("cancel")}
+      headerClose
       testId="pause-dialog"
       footerNote={t.rich("footer", {
         mono: (chunks) => <span className={mono}>{chunks}</span>,
@@ -955,7 +961,7 @@ export function FleetBoard({
     page: 1,
   });
   const [pausing, setPausing] = useState<RunRow | null>(null);
-  const [notice, setNotice] = useState<Notice>(null);
+  const { toasts, toast } = useToasts();
   const [exportingId, setExportingId] = useState<string | null>(null);
   const [, startExport] = useTransition();
 
@@ -981,29 +987,23 @@ export function FleetBoard({
 
   function exportRow(run: RunRow) {
     setExportingId(run.id);
-    setNotice({ tone: "ok", text: t("exporting", { run: run.id }) });
     startExport(async () => {
       try {
         const result = await exportFleetRun(org, ws, run.id);
-        setNotice(
-          result.ok
-            ? { tone: "ok", text: t("exportQueued", { run: run.id }) }
-            : {
-                tone: "error",
-                text: t("exportFailed", {
-                  run: run.id,
-                  reason: failureText(result),
-                }),
-              },
-        );
+        if (result.ok) toast(t("exportQueued", { run: run.id }));
+        else
+          toast(
+            t("exportFailed", { run: run.id, reason: failureText(result) }),
+            "failed",
+          );
       } catch {
-        setNotice({
-          tone: "error",
-          text: t("exportFailed", {
+        toast(
+          t("exportFailed", {
             run: run.id,
             reason: failureText(UNANSWERED),
           }),
-        });
+          "failed",
+        );
       } finally {
         setExportingId(null);
       }
@@ -1032,17 +1032,6 @@ export function FleetBoard({
           />
         </div>
         <ListBar query={query} setQuery={setQuery} words={words} />
-        <p
-          aria-live="polite"
-          data-testid="runs-notice"
-          className={
-            notice === null
-              ? "sr-only"
-              : `border-b border-border px-4 py-2 text-xs ${notice.tone === "error" ? "text-error-ink" : "text-muted-foreground"}`
-          }
-        >
-          {notice?.text ?? ""}
-        </p>
         <div className="min-w-0 overflow-x-auto">
           <table
             aria-labelledby="fleet-runs"
@@ -1055,14 +1044,30 @@ export function FleetBoard({
                   const key = column.key;
                   const align =
                     column.numeric === true ? "text-right" : "text-left";
+                  // The design's Tokens header sorts. list_runs carries no
+                  // token figure yet (G3, #3834), so every cell reads "not
+                  // recorded" and there is no order to put them in. The
+                  // control is drawn where the design has it, disabled, and
+                  // its hover says why.
                   if (key === "tokens")
                     return (
                       <th
                         key={key}
                         scope="col"
+                        aria-sort="none"
                         className={`${headCell} ${align}`}
                       >
-                        {label}
+                        <button
+                          type="button"
+                          disabled
+                          data-testid="sort-tokens"
+                          aria-label={t("sortBy", { column: label })}
+                          title={t("tokensUnsorted")}
+                          className="inline-flex cursor-not-allowed items-center gap-1 uppercase tracking-[inherit]"
+                        >
+                          {label}
+                          <ArrowUpDown aria-hidden className="size-3" />
+                        </button>
                       </th>
                     );
                   const sorted = query.sort?.key === key ? query.sort.dir : 0;
@@ -1144,6 +1149,8 @@ export function FleetBoard({
           nextCursor={nextCursor}
         />
       </section>
+      {/* The design confirms an export or a queued pause with a toast. */}
+      <ToastStack toasts={toasts} testId="runs-toasts" />
       <PauseDialog
         run={pausing}
         canCommand={canCommand}
@@ -1154,7 +1161,7 @@ export function FleetBoard({
         }}
         onQueued={(run) => {
           setPausing(null);
-          setNotice({ tone: "ok", text: pauseT("queued", { run: run.id }) });
+          toast(pauseT("queued", { run: run.id }), "approval");
           navigate.refresh();
         }}
       />

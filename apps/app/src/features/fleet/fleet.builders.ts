@@ -120,8 +120,11 @@ export function agentPage(
 type FleetReads = {
   runs: Read<RunPage>;
   approvals: Read<ApprovalQueue>;
-  /** The workspace's agents; an empty page when absent. */
-  agents?: Read<AgentPage>;
+  /**
+   * The workspace's agents; an empty page when absent. A function answers
+   * each page by the cursor it was asked for, for the roster's walk.
+   */
+  agents?: Read<AgentPage> | ((cursor: string | null) => Read<AgentPage>);
 };
 
 /** A DataSource answering Fleet's reads; `calls` records their arguments. */
@@ -163,7 +166,12 @@ export function fleetSource(reads: FleetReads) {
     agents: {
       list: (...args) => {
         calls.agents.push(args);
-        return Promise.resolve(reads.agents ?? agentPage([]));
+        const agents = reads.agents;
+        return Promise.resolve(
+          typeof agents === "function"
+            ? agents(args[1].cursor)
+            : (agents ?? agentPage([])),
+        );
       },
       get: refuse,
       toolbelt: refuse,

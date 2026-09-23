@@ -1862,6 +1862,8 @@ type Messages = {
       hint: string;
       noAgents: string;
       agentsUnread: string;
+      keyless: string;
+      stopped: string;
       text: string;
       delivery: string;
       boundary: string;
@@ -1998,6 +2000,7 @@ type Messages = {
       rows: string;
       rowsAll: string;
       sortBy: string;
+      tokensUnsorted: string;
       columns: {
         run: string;
         agent: string;
@@ -2039,7 +2042,6 @@ type Messages = {
       resolve: string;
       export: string;
       rowAction: string;
-      exporting: string;
       exportQueued: string;
       exportFailed: string;
     };
@@ -2094,6 +2096,7 @@ type Messages = {
       why: string;
       note: string;
       send: string;
+      cancel: string;
       unbacked: string;
     };
     incident: {
@@ -2107,6 +2110,7 @@ type Messages = {
       };
       attach: string;
       raise: string;
+      cancel: string;
       unbacked: string;
     };
   };
@@ -2366,7 +2370,8 @@ type Messages = {
         badge: string;
         title: string;
         body: string;
-        open: string;
+        dismiss: string;
+        agentNotRecorded: string;
       };
     };
     register: {

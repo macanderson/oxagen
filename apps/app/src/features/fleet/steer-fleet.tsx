@@ -48,7 +48,10 @@ export function SteerFleetDialog({
   workspace,
   agents,
   agentsRead,
+  agentTotal,
+  agentsComplete,
   runs,
+  parkedRunIds,
   canCommand,
   onClose,
 }: {
@@ -57,11 +60,18 @@ export function SteerFleetDialog({
   workspace: string;
   agents: FleetAgent[];
   agentsRead: boolean;
+  /** Identities in the workspace, the M of "N of M selected"; null when unread. */
+  agentTotal: number | null;
+  /** False when the roster stopped before the workspace's last agent. */
+  agentsComplete: boolean;
   runs: RunRow[];
+  /** Live runs with a call parked for approval, which read "parked for approval". */
+  parkedRunIds: readonly string[];
   canCommand: boolean;
   onClose: () => void;
 }) {
   const t = useTranslations("fleet.steer");
+  const runWords = useTranslations("fleet.runs");
   const command = useTranslations("run.commands");
   const failureText = useActionFailure();
   const navigate = useNavigate();
@@ -75,6 +85,11 @@ export function SteerFleetDialog({
   const [receipt, setReceipt] = useState<FleetSteer | null>(null);
   const [pending, startTransition] = useTransition();
   const live = liveRunByAgent(runs);
+  const parked = new Set(parkedRunIds);
+  const total = agentTotal ?? agents.length;
+  // Agents the list cannot show: past where the roster stopped, or with no
+  // agent key, which a steer cannot address.
+  const unlisted = Math.max(0, total - agents.length);
   const picked = agents.filter((agent) => selected.has(agent.agentKey));
   const inFlight = picked.filter((agent) => live.has(agent.agentKey)).length;
   const blocked = !canCommand || picked.length === 0 || text.trim() === "";
@@ -117,6 +132,9 @@ export function SteerFleetDialog({
       testId="steer-fleet-dialog"
       {...(receipt === null
         ? {
+            // The footer reads Cancel, so the header's x is the one "Close".
+            // The receipt's footer is Close itself, so it draws no x.
+            headerClose: true,
             closeLabel: t("cancel"),
             footerNote: (
               <span data-testid="steer-summary">
@@ -172,12 +190,13 @@ export function SteerFleetDialog({
               >
                 {t("agents", {
                   selected: picked.length,
-                  total: agents.length,
+                  total,
                 })}
               </span>
               <span className="flex gap-1.5">
                 <button
                   type="button"
+                  data-touch-target=""
                   className={`${buttonSecondary} px-2 py-0.5 text-xs`}
                   onClick={() => {
                     setSelected(new Set(agents.map((agent) => agent.agentKey)));
@@ -187,6 +206,7 @@ export function SteerFleetDialog({
                 </button>
                 <button
                   type="button"
+                  data-touch-target=""
                   className={`${buttonSecondary} px-2 py-0.5 text-xs`}
                   onClick={() => {
                     setSelected(new Set());
@@ -236,6 +256,14 @@ export function SteerFleetDialog({
                         </span>
                         {run === undefined ? (
                           <Badge tone="quiet">{t("idle")}</Badge>
+                        ) : parked.has(run.id) ? (
+                          <Badge
+                            tone="approval"
+                            dot={false}
+                            data-status="parked"
+                          >
+                            {runWords("parked")}
+                          </Badge>
                         ) : (
                           <StatusBadge
                             status={run.status}
@@ -248,6 +276,16 @@ export function SteerFleetDialog({
                   );
                 })}
               </ul>
+            )}
+            {unlisted === 0 ? null : (
+              <p
+                data-testid="steer-unlisted"
+                className="text-xs text-muted-foreground"
+              >
+                {agentsComplete
+                  ? t("keyless", { count: unlisted })
+                  : t("stopped", { listed: agents.length, count: unlisted })}
+              </p>
             )}
             <p className="text-xs text-muted-foreground">
               {t("hint", { workspace })}
@@ -265,7 +303,7 @@ export function SteerFleetDialog({
               onChange={(event) => {
                 setText(event.target.value);
               }}
-              className={`${inputBase} resize-y max-md:text-base`}
+              className={`${inputBase} resize-y max-md:min-h-11 max-md:text-base`}
             />
           </div>
           <div className="flex flex-col gap-1.5">

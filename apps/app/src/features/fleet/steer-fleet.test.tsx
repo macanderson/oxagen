@@ -47,7 +47,10 @@ function renderDialog(
         workspace="Core platform"
         agents={AGENTS}
         agentsRead
+        agentTotal={AGENTS.length}
+        agentsComplete
         runs={RUNS}
+        parkedRunIds={[]}
         canCommand
         onClose={onClose}
         {...over}
@@ -200,10 +203,58 @@ describe("Steer the fleet", () => {
   });
 
   it("says why the list is empty when the agents could not be read (negative)", () => {
-    renderDialog({ agents: [], agentsRead: false });
+    renderDialog({ agents: [], agentsRead: false, agentTotal: null });
     expect(dialog()).toHaveTextContent(
       "The workspace's agents could not be read, so there is nobody to pick.",
     );
+  });
+
+  it("reads a parked run as parked for approval, not live", () => {
+    renderDialog({ parkedRunIds: ["tse_live"] });
+    const release = screen
+      .getByRole("checkbox", { name: "Steer acme.core.release-bot" })
+      .closest("label");
+    expect(release).toHaveTextContent("parked for approval");
+    expect(release?.querySelector('[data-status="parked"]')).not.toBeNull();
+  });
+
+  it("counts the workspace's agents, not the ones listed, and says which a steer cannot reach", () => {
+    renderDialog({ agentTotal: 3 });
+    expect(screen.getByTestId("steer-selected")).toHaveTextContent(
+      "Agents · 2 of 3 selected",
+    );
+    expect(screen.getByTestId("steer-unlisted")).toHaveTextContent(
+      "1 agent carries no key, so a steer cannot reach it.",
+    );
+  });
+
+  it("says where the list stopped when the roster is incomplete (negative)", () => {
+    renderDialog({ agentTotal: 64, agentsComplete: false });
+    expect(screen.getByTestId("steer-unlisted")).toHaveTextContent(
+      "The list stops after 2 agents. 62 more are not listed, so a steer does not reach them.",
+    );
+  });
+
+  it("draws no unlisted line when every agent is listed", () => {
+    renderDialog();
+    expect(screen.queryByTestId("steer-unlisted")).toBeNull();
+  });
+
+  it("closes from the header's x, labelled Close", async () => {
+    const { onClose } = renderDialog();
+    const user = userEvent.setup();
+    const close = screen.getByRole("button", { name: "Close" });
+    expect(close.closest("[data-sheet-header]")).not.toBeNull();
+    await user.click(close);
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("gives All and None the phone's touch target", () => {
+    renderDialog();
+    for (const name of ["All", "None"])
+      expect(screen.getByRole("button", { name })).toHaveAttribute(
+        "data-touch-target",
+      );
   });
 
   it("closes on Cancel", async () => {
