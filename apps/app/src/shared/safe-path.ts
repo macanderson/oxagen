@@ -75,6 +75,29 @@ const AGENT_SECTION_ALIASES: Readonly<Record<string, string>> = {
 };
 
 /** Every route the app navigates to; each builder returns a SafePath. */
+/**
+ * The path segments each Steering tab or shelf id lands on, old ids included
+ * (roadmap pages/steering.md, "Old URLs still land").
+ */
+const STEERING_SEGMENTS: Readonly<Record<string, readonly string[]>> = {
+  library: ["library"],
+  records: ["records"],
+  instructions: ["instructions"],
+  skills: ["skills"],
+  memory: ["memory"],
+  ontology: ["ontology"],
+  assignments: ["assignments"],
+  deliveries: ["assignments"],
+  gates: ["gates"],
+  policy: ["gates"],
+  settings: ["gates"],
+  freshness: ["gates"],
+  proposals: ["proposals"],
+  prs: ["proposals", "prs"],
+  compiler: ["compiler"],
+  preview: ["compiler"],
+};
+
 export const routes = {
   root: (): SafePath => ROOT,
   login: (next?: SafePath): SafePath =>
@@ -291,12 +314,12 @@ export const routes = {
       finding: view.finding,
     }),
   /**
-   * Skills, the Skills tab of Steering (MC spec §10.7); `cursor` opens a later
-   * page of the inventory. `/{org}/{ws}/skills` redirects here.
+   * Skills, the Skills shelf of the Steering library (roadmap pages/skills.md);
+   * `cursor` opens a later page of the inventory. `/{org}/{ws}/skills`
+   * redirects here.
    */
   skills: (org: string, ws: string, q?: { cursor: string }): SafePath =>
-    withQuery(pathOf(org, ws, "steering"), {
-      tab: "skills",
+    withQuery(pathOf(org, ws, "steering", "skills"), {
       cursor: q?.cursor,
     }),
   /**
@@ -331,27 +354,44 @@ export const routes = {
     tab === undefined
       ? pathOf(org, ws, "repositories")
       : pathOf(org, ws, "repositories", tab),
-  /** Steering filters, a selected proposal, and a Skills inventory cursor. */
+  /**
+   * Steering (roadmap pages/steering.md): the five tabs and the Library
+   * shelves are path segments, `/steering/<tab>` or `/steering/<shelf>`, and
+   * the Context PRs segment of Proposals is `/steering/proposals/prs`. A tab
+   * id written before the rename still maps to where it lives now: `policy`,
+   * `settings` and `freshness` are Gates, `deliveries` is Assignments,
+   * `preview` is the Compiler and `prs` is the Context PRs segment. Filters, a
+   * page offset, a selected proposal and a Skills cursor stay query values.
+   */
   steering: (
     org: string,
     ws: string,
     q: {
       tab?: string;
+      /** The agent the Compiler assembles for; only with `tab: "compiler"`. */
+      agent?: string;
       kind?: string;
       offset?: string;
       proposal?: string;
       cursor?: string;
       view?: string;
     } = {},
-  ): SafePath =>
-    withQuery(pathOf(org, ws, "steering"), {
-      tab: q.tab,
+  ): SafePath => {
+    const segments =
+      q.tab !== undefined && Object.hasOwn(STEERING_SEGMENTS, q.tab)
+        ? [...(STEERING_SEGMENTS[q.tab] ?? [])]
+        : [];
+    if (segments[0] === "compiler" && q.agent !== undefined) {
+      segments.push(q.agent);
+    }
+    return withQuery(pathOf(org, ws, "steering", ...segments), {
       kind: q.kind,
       offset: q.offset,
       proposal: q.proposal,
       cursor: q.cursor,
       view: q.view,
-    }),
+    });
+  },
   /**
    * One published record, by its lineage (#3395). The lineage is a file stem
    * under `.oxagen/rules/`, so it reaches here from the repository rather
