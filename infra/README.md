@@ -16,6 +16,82 @@ Managed with [OpenTofu](https://opentofu.org). `stacks/`'s state lives in
 `s3://oxagen-tfstate-578673726240` with locking in the `oxagen-tflock`
 DynamoDB table, both of which predate this repository.
 
+## Isolated staging
+
+`infra/stacks-new/staging` owns the staging VPC, Aurora database, app node,
+artifact bucket, and `/oxagen/staging` configuration. It uses the
+`infra/modules/isolated-environment` module. Its state key is
+`environments/staging/terraform.tfstate`. Applying this stack does not apply
+`stacks-new/oxagen` or `stacks-new/ci-deploy`.
+
+```bash
+tofu -chdir=infra/stacks-new/staging init
+tofu -chdir=infra/stacks-new/staging plan -out=staging.plan
+tofu -chdir=infra/stacks-new/staging apply staging.plan
+```
+
+Inspect the account and plan before applying. The configured account is
+`916294258235`. The staging instance is `oxagen-staging-app`, and the Postgres
+cluster is `oxagen-staging-postgres`. Its database is `oxagen`. A first plan
+creates resources. A later plan should describe only the intended change.
+
+The Staging workflow migrates these stores, builds each service with staging
+browser URLs, deploys it through `oxagen-staging-deploy-service`, and probes
+its public endpoints. It records the source commit and artifact versions in
+`s3://oxagen-staging-deploy-916294258235/_deploy/release.json`. Read that record
+alongside the workflow run when establishing which release was exercised.
+A successful HTTP response alone does not establish a release identity.
+
+Staging generates its own database, auth, encryption, and engine credentials.
+It has no production records. The staging setup reuses a verified Stripe sandbox key with its own webhook
+signing secret. Model calls use an authorized shared Gateway key and write
+usage to the staging stores. OAuth is disabled through a preview-only build
+option. Inngest runs its own pinned development server on the staging node,
+following the [Inngest Docker guidance](https://www.inngest.com/docs/local-development).
+These provider choices are specific to staging. Supply separate provider
+credentials for a customer deployment. The build registry still reports
+missing database, billing, or model credentials before building.
+
+## Customer account deployment
+
+This is an Oxagen-operated deployment into a customer-owned AWS account.
+The module and runbook have not been exercised in a second account. The
+available account has no AWS Organizations membership, so no second account
+was available to validate that claim.
+
+1. Obtain an IAM role in the customer's account and confirm its account ID
+   with `aws sts get-caller-identity`. Select a region and three availability
+   zones with the pinned ARM Amazon Linux AMI available.
+2. Bootstrap an encrypted, versioned Terraform state bucket and lock table
+   in that account. Use `infra/stacks-new/bootstrap` as the reference. Keep
+   the customer's state and credentials separate from the hosted platform.
+3. Create a root stack that calls `infra/modules/isolated-environment`.
+   Supply the account ID, region, three availability zones, pinned AMI,
+   unused VPC CIDR, environment slug such as `customer-prod`, DNS suffix,
+   hosted zone ID, GitHub OIDC provider ARN, and exact OIDC subjects for the
+   repository and GitHub environment that will deploy it. Use
+   `infra/stacks-new/staging` as the root-stack example. Configure its S3
+   backend with the customer's state bucket and a distinct state key.
+4. Apply the plan and retain its outputs. Adapt the Staging workflow to the
+   output node name, deploy bucket, deploy role, deploy document, parameter
+   prefix, and service hostnames. Its hardcoded staging database check must
+   name the new cluster before migrations can run.
+5. Supply the customer's provider credentials through their Parameter Store
+   prefix. The required build keys come from `packages/config/src/registry.ts`.
+   The customer supplies OAuth applications, Stripe sandbox or billing
+   credentials, Inngest configuration, and model credentials as applicable.
+6. Run the migrations and deployment in that account. Verify the public
+   endpoints, the source commit, and artifact versions. Exercise the three
+   browser flows against the new environment before handing it over.
+
+AWS holds the stores, encrypted configuration, and deployment artifacts in
+that account. Model requests still reach the configured model providers or
+AI Gateway. Inngest, Stripe, OAuth providers, and any configured connector
+remain external subprocessors. Selecting a customer account does not make
+those services local. An Oxagen operator with the supplied AWS role can
+access whatever that role permits, including application records and
+secrets. Revoke or narrow the role to change that access.
+
 ## Why one account
 
 Separate AWS accounts under an Organization isolate harder. They also need a
@@ -374,3 +450,13 @@ Confirm the SNS subscription before relying on notification delivery. Verify
 `TachoIngress5xx` under `Oxagen/API`, then inspect the alarm state history and
 confirm an alert arrives during a controlled canary. A filter-pattern test
 validates selection without creating log records or changing alarm state.
+
+Staging email is captured by Mailpit on the node. It has no outbound relay.
+SMTP and the inbox bind only to loopback. STARTTLS remains required, and Node
+trusts the staging certificate through a read-only certificate mount rather
+than disabling TLS verification. Use an SSM port-forwarding session to port
+8025 to read verification links. The inbox is capped at 500 messages and is
+lost when its container is recreated. The local certificate lasts 365 days;
+replace its certificate and key, restart Mailpit, and redeploy the services
+before it expires. Customer stacks keep `capture_email = false` and supply
+an operational SMTP provider.
