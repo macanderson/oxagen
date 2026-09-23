@@ -38,6 +38,9 @@ const AgentRow = z.object({
   agentKey: z.string().min(1).nullable(),
   harness: AgentHarness,
   operatorId: PublicId.nullable(),
+  principalId: PublicId.nullable().optional(),
+  credentials: Count.optional(),
+  hosts: Count.optional(),
   status: AgentStatus,
   runs30d: Count,
   /** Priced wrapped sessions in the last 30 days, with the basis the harness reported. */

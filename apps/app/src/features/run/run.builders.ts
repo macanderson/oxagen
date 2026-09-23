@@ -22,6 +22,7 @@ import type {
 import type { MandateList } from "@/data/contracts/mandates";
 import type { RunRow } from "@/data/contracts/runs";
 import type { DataSource } from "@/data/ports";
+import type { AgentDetail } from "@/data/contracts/agents";
 import { type Read, readOk } from "@/data/read";
 
 /** The instant every Run test renders at. */
@@ -516,31 +517,52 @@ type RunReads = {
    * answers the read itself, which is how a test hands a read that throws.
    */
   outputs?: Read<RunOutputs> | (() => Promise<Read<RunOutputs>>);
-  /** Only read when the Cost tab is open; refused when absent. */
+  /**
+   * Read with the page: the stat row, the Spend by area panel and the Cost
+   * tab's count. A test that says nothing about it gets the default rollup.
+   */
   cost?: Read<RunCost>;
-  /** Only read when the Frames tab has a frame body open; refused when absent. */
+  /** Only read when the Governed actions tab has a frame body open; refused when absent. */
   frameBody?: Read<RunFrameBody>;
   /**
-   * Only read when the Transcript tab is open, or when the Cost tab reads the
-   * run's per-turn ledger for the waterfall. A function answers per zoom level,
-   * which is how a Cost-tab test hands one transcript for `turns` and another
-   * for `steps`.
+   * The whole-run transcript is read with the page (the Prompts figure, the
+   * Policy and Context tabs and their counts); the Transcript tab reads it
+   * again only through pressed chips, and the Cost tab reads it per zoom
+   * level for the waterfall. A function answers per zoom level, which is how
+   * a Cost-tab test hands one transcript for `turns` and another for
+   * `steps`. A test that says nothing about it gets one step.
    */
   transcript?:
     | Read<RunTranscript>
     | ((zoom: TranscriptZoom) => Read<RunTranscript>);
   /** Only read when the Chain and seal tab is open; refused when absent. */
   chain?: Read<RunChain>;
-  /** Only read when the Approvals tab is open; refused when absent. */
+  /**
+   * Read with the page for the Governed actions count, and drawn on that
+   * tab. A test that says nothing about them gets an empty queue.
+   */
   approvals?: Read<ApprovalQueue>;
-  /** Only read when the Approvals tab is open; refused when absent (#3153). */
+  /** As `approvals`, for the calls already decided (#3153). */
   resolvedApprovals?: Read<ResolvedApprovalItem[]>;
+  /**
+   * get_agent for the agent the run names, read with the page for the
+   * header's agent card and harness. A test that says nothing about it gets
+   * a refusal, so the header says the harness was not recorded.
+   */
+  agent?: Read<AgentDetail>;
   /**
    * Only read when a parked call on this run names a mandate, the same rule
    * Fleet follows; refused when absent, which is what a run whose approvals
    * drew on none must not reach.
    */
   mandates?: Read<MandateList>;
+};
+
+/** The agent read a test left out: refused, so nothing about the agent is invented. */
+const AGENT_UNREAD: Read<AgentDetail> = {
+  ok: false,
+  reason: "denied",
+  permission: "agent.read",
 };
 
 /** A DataSource answering the Run page's reads; `calls` records their arguments. */
@@ -555,6 +577,7 @@ export function runSource(reads: RunReads) {
     chain: unknown[][];
     mandates: unknown[][];
     outputs: unknown[][];
+    agent: unknown[][];
   } = {
     get: [],
     frameBody: [],
@@ -565,6 +588,7 @@ export function runSource(reads: RunReads) {
     chain: [],
     mandates: [],
     outputs: [],
+    agent: [],
   };
   const refuse = () => Promise.reject(new Error("not a Run read"));
   const answer = <T>(
@@ -585,13 +609,10 @@ export function runSource(reads: RunReads) {
       list: refuse,
       get: answer("get", reads.detail),
       frameBody: answer("frameBody", reads.frameBody),
-      cost: answer("cost", reads.cost),
+      cost: answer("cost", reads.cost ?? readOk(runCost())),
       transcript: (ctx, runId, zoom, q) => {
         calls.transcript.push([ctx, runId, zoom, { kinds: q?.kinds ?? [] }]);
-        const asked = reads.transcript;
-        if (asked === undefined) {
-          return Promise.reject(new Error("transcript was not expected"));
-        }
+        const asked = reads.transcript ?? readOk(runTranscript());
         return Promise.resolve(
           typeof asked === "function" ? asked(zoom) : asked,
         );
@@ -604,10 +625,21 @@ export function runSource(reads: RunReads) {
       },
     },
     approvals: {
-      pending: answer("approvals", reads.approvals),
-      resolved: answer("resolvedApprovals", reads.resolvedApprovals),
+      pending: answer(
+        "approvals",
+        reads.approvals ?? readOk({ items: [], more: false }),
+      ),
+      resolved: answer(
+        "resolvedApprovals",
+        reads.resolvedApprovals ?? readOk([]),
+      ),
     },
-    agents: { list: refuse, get: refuse, toolbelt: refuse, incidents: refuse },
+    agents: {
+      list: refuse,
+      get: answer("agent", reads.agent ?? AGENT_UNREAD),
+      toolbelt: refuse,
+      incidents: refuse,
+    },
     billing: {
       plan: refuse,
       usageCredits: refuse,
@@ -646,6 +678,7 @@ export function runSource(reads: RunReads) {
       proposals: refuse,
       contextPr: refuse,
       freshness: refuse,
+      deliveries: refuse,
     },
     tools: {
       versions: refuse,

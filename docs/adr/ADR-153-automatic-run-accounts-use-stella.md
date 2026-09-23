@@ -13,7 +13,7 @@ Model selection, funding, credit admission and charging use the existing organiz
 
 `runEnrichmentEnabled` in workspace settings defaults to true. The existing settings capability and role gate control it. The job checks it before model calls and before publishing. Turning it off hides generated names and summaries in run reads, so the UI displays the run ID. It does not turn off Stella chat, recording, deterministic repository and output evidence, metering, or harness identity.
 
-The schema adds nullable `summary_input_digest` and `summary_observed_at` columns to both run stores. Deploy migration 20260923070000 before registering the new jobs. Existing runs are eligible for the initial sweep. The existing manual summarize action queues the same enrichment event; its sealed/body-retention admission remains unchanged.
+The schema adds nullable `summary_input_digest` and `summary_observed_at` columns to both run stores. Deploy migration 20260923233000 before registering the new jobs. Existing runs are eligible for the initial sweep. The existing manual summarize action queues the same enrichment event; its sealed/body-retention admission remains unchanged.
 
 The sweep processes up to five hundred rows per store per pass. A backlog takes multiple passes. Derived accounts expose their generation time. They do not claim to cover actions or messages the recorder never retained.
 

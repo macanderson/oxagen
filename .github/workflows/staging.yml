@@ -1,7 +1,12 @@
 name: Staging
 
+# Staging is one environment with one database, so only main's pipeline and a
+# manual dispatch deploy to it. A pull request never does: it would migrate and
+# deploy unmerged code over the commit production is waiting to verify, and it
+# would share the concurrency group below with main. GitHub keeps one pending
+# run per group, so each pull request push evicted main's pending run, and every
+# production deploy then skipped (b18c1bffc, run 35836454693).
 on:
-  pull_request:
   workflow_dispatch:
   workflow_call:
 
@@ -9,8 +14,12 @@ permissions:
   contents: read
   id-token: write
 
+# A newer pending run replaces an older one, which is the right outcome here:
+# the newest commit on main is the one production deploys next. The name moved
+# from isolated-staging so main does not queue behind pull request runs that
+# still hold the old group.
 concurrency:
-  group: isolated-staging
+  group: staging-environment
   cancel-in-progress: false
 
 env:
@@ -19,7 +28,6 @@ env:
 
 jobs:
   schema:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     environment: staging
     timeout-minutes: 30

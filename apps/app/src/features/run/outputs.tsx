@@ -190,7 +190,7 @@ function Frame({ seq, place }: { seq: string | null; place: Place }) {
   return (
     <SafeLink
       to={routes.run(place.org, place.ws, place.runId, {
-        tab: "frames",
+        tab: "actions",
         body: seq,
       })}
       title={t("frameTitle")}
@@ -274,7 +274,7 @@ function Node({ node, place }: { node: RunOutputNode; place: Place }) {
           <p className="flex flex-wrap items-center gap-2 pt-1 text-xs text-muted-foreground">
             <SafeLink
               to={routes.run(place.org, place.ws, place.runId, {
-                tab: "approvals",
+                tab: "actions",
               })}
               className={`${linkQuiet} font-medium text-info`}
             >
@@ -446,7 +446,7 @@ export function OutputsSpine({
 
       {nodes.length === 0 ? (
         <p className="border-l-2 border-dashed border-border py-2.5 pl-3 text-sm text-muted-foreground">
-          {t("empty")}
+          {complete ? t("empty") : t("cut")}
         </p>
       ) : (
         <ol className="flex flex-col">

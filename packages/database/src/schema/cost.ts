@@ -96,7 +96,12 @@ export type CostBasis = (typeof COST_BASES)[number];
 // rollup's word for a run no witness reported on (App. A.7).
 export const RUN_VERDICTS = [...PROOF_VERDICTS, "none"] as const;
 
-export const ENFORCEMENT_TIERS = ["gateway", "harness", "observe"] as const;
+export const ENFORCEMENT_TIERS = [
+  "contained",
+  "gateway",
+  "harness",
+  "observe",
+] as const;
 export const REPLAY_GRADES = ["inspect", "view", "fork", "retry"] as const;
 
 /** The levels a daily total is grouped by (spec §12.7). */

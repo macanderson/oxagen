@@ -1,7 +1,7 @@
 # ADR-043: Excise the agent runtime — Oxagen governs agents, it does not run them
 
 - **Status:** Accepted; amended 2026-09-18 by ADR-096 (one sentence, see the
-  amendment at the end); amended 2026-09-19 by ADR-102 (cms marketing lead
+  amendment at the end); amended 2026-09-19 by ADR-154 (cms marketing lead
   gate restored, see the second amendment)
 - **Date:** 2026-09-07
 - **Owners:** platform
@@ -143,7 +143,7 @@ request a harness made and assembles nothing.
 
 ## Amendment 2026-09-19: marketing `cms.*` is restored
 
-Maintainer decision of 2026-09-19, recorded in ADR-102. The website lead
+Maintainer decision of 2026-09-19, recorded in ADR-154. The website lead
 forms (demo / contact and the field-manual ebook gate) still POST to
 `/v1/cms/leads`. Dropping `cms.*` with the runtime cut left those forms
 posting into auth middleware (401) and the CORS allowlist without a
