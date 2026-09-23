@@ -21,6 +21,7 @@ import type {
   IssueRunTokenAnswer,
   IssueRunTokenRequest,
 } from "./credential-issuer";
+import type { GithubLeaseInput } from "./github-proxy";
 import type { GatewayHttpResponse } from "./mcp-gateway";
 
 export interface HookEnvelope {
@@ -35,6 +36,8 @@ export interface HookEnvelope {
 
 /** What the daemon exposes to the listener; the daemon implements it. */
 export interface CollectorApi {
+  githubLease?: (input: GithubLeaseInput) => { status: number; body: unknown };
+  githubProxy?: (req: IncomingMessage, res: ServerResponse) => Promise<void>;
   localToken: string;
   enrollmentId: string;
   handleHook: (envelope: HookEnvelope) => Promise<Record<string, unknown>>;
@@ -164,6 +167,19 @@ export function createRequestHandler(
           return;
         }
       }
+      if (url.pathname.startsWith("/github/") && api.githubProxy) {
+        try {
+          await api.githubProxy(req, res);
+        } catch (error) {
+          log(
+            `GitHub proxy failed: ${error instanceof Error ? error.name : "unknown"}`,
+          );
+          if (!res.headersSent)
+            send(res, 500, { error: "GitHub custody is unavailable" });
+          else res.destroy();
+        }
+        return;
+      }
       if (!authorized(req, api.localToken)) {
         send(res, 401, { error: "local bearer required" });
         return;
@@ -211,6 +227,15 @@ export function createRequestHandler(
           parsed = raw.length === 0 ? {} : JSON.parse(raw);
         } catch {
           send(res, 400, { error: "invalid JSON" });
+          return;
+        }
+        if (path === "/github-lease") {
+          const answer = api.githubLease?.(parsed as GithubLeaseInput);
+          send(
+            res,
+            answer?.status ?? 404,
+            answer?.body ?? { error: "GitHub custody is unavailable" },
+          );
           return;
         }
         if (path === "/credential/issue") {
