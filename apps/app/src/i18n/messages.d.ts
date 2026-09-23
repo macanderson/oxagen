@@ -5303,13 +5303,14 @@ type Messages = {
     };
     tabs: {
       label: string;
-      registry: string;
-      connections: string;
+      tools: string;
+      toolbelts: string;
+      providers: string;
+      policy: string;
       switches: string;
-      mandates: string;
+      atLeast: string;
       switchesOn: string;
       switchesOnAtLeast: string;
-      autoapprovals: string;
     };
     gate: {
       open: string;
@@ -5319,7 +5320,6 @@ type Messages = {
     };
     registry: {
       title: string;
-      lead: string;
       categories: string;
       allCategories: string;
       categoriesNote: string;
@@ -5330,12 +5330,9 @@ type Messages = {
       noTags: string;
       emptyCategory: string;
       gateNote: string;
-      empty: {
-        title: string;
-        body: string;
-      };
       columns: {
         version: string;
+        provider: string;
         category: string;
         hazard: string;
         gate: string;
@@ -5343,6 +5340,8 @@ type Messages = {
         financial: string;
         origin: string;
         digest: string;
+        toolbelts: string;
+        agents: string;
         calls: string;
       };
       names: {
@@ -5366,12 +5365,36 @@ type Messages = {
         org_tenant: string;
         third_party: string;
       };
-      financial: {
-        yes: string;
-      };
       origin: {
         declared: string;
         imported: string;
+      };
+      caption: string;
+      emptyRegistry: string;
+      observedNotBacked: string;
+      shown: string;
+      shownOf: string;
+      declaredSource: {
+        builtin: string;
+        custom: string;
+        mcp: string;
+        foundry: string;
+      };
+      categoriesDialog: {
+        open: string;
+        title: string;
+        lead: string;
+        tags: {
+          moves_money: string;
+          destroys_data: string;
+          alters_production: string;
+          communicates_externally: string;
+          changes_access: string;
+          changes_entitlement: string;
+        };
+        decides: string;
+        note: string;
+        close: string;
       };
     };
     tool: {
@@ -5417,19 +5440,53 @@ type Messages = {
     };
     import: {
       open: string;
+      openAdd: string;
       title: string;
-      body: string;
-      serverId: string;
+      subtitle: string;
+      reviewTitle: string;
+      reviewSubtitle: string;
+      classifyTitle: string;
+      steps: {
+        label: string;
+        s1: string;
+        s2: string;
+        s3: string;
+      };
+      provider: string;
+      newProvider: string;
+      name: string;
+      nameHint: string;
+      endpoint: string;
+      endpointHint: string;
+      wire: string;
+      wireHint: string;
+      auth: string;
+      authStrategies: {
+        none: string;
+        bearer: string;
+        header: string;
+      };
+      authConfig: string;
+      authConfigHint: string;
+      authConfigPlaceholder: string;
+      connectNote: string;
+      connect: string;
+      pending: string;
+      back: string;
+      classify: string;
+      cancel: string;
       tools: string;
       toolsHint: string;
-      confirm: string;
-      pending: string;
+      nothingListed: string;
+      listed: string;
+      selected: string;
+      allPins: string;
+      grantsNothingTitle: string;
+      grantsNothing: string;
+      importAll: string;
+      importCount: string;
+      importing: string;
       done: string;
-      serverIdPlaceholder: string;
-      serverPick: string;
-      serverPickHint: string;
-      serverFallbackHint: string;
-      serverNone: string;
     };
     connections: {
       title: string;
@@ -5443,8 +5500,8 @@ type Messages = {
       };
       columns: {
         grant: string;
-        server: string;
-        run: string;
+        toolVersion: string;
+        agentRun: string;
         connection: string;
         scope: string;
         ttl: string;
@@ -5554,14 +5611,11 @@ type Messages = {
         pending: string;
         done: string;
       };
+      fromProvider: string;
     };
     switches: {
-      title: string;
-      lead: string;
-      generation: string;
       classHeading: string;
       scopedHeading: string;
-      empty: string;
       truncated: string;
       allowing: string;
       denying: string;
@@ -5630,8 +5684,56 @@ type Messages = {
         confirmAllow: string;
         pending: string;
         unchanged: string;
+        allowing: string;
+        denying: string;
+        toggleDeny: string;
+        toggleAllow: string;
       };
-      noNames: string;
+      generationBadge: string;
+      classTitle: string;
+      reach: {
+        class: string;
+        org: string;
+        workspace: string;
+        tool_server: string;
+        tool_version: string;
+        connection: string;
+        agent: string;
+        operator: string;
+      };
+      unbacked: {
+        irreversible: string;
+        egress: string;
+        note: string;
+      };
+      edit: {
+        open: string;
+        title: string;
+        reason: string;
+        note: string;
+        confirm: string;
+      };
+      remove: {
+        open: string;
+        title: string;
+        note: string;
+        refused: string;
+        confirm: string;
+      };
+      create: {
+        open: string;
+        title: string;
+        scope: string;
+        scopes: {
+          agent: string;
+          device: string;
+          operator: string;
+        };
+        target: string;
+        why: string;
+        note: string;
+        confirm: string;
+      };
     };
     failure: {
       back: string;
@@ -5805,21 +5907,6 @@ type Messages = {
         title: string;
         body: string;
       };
-      tiles: {
-        label: string;
-        on: {
-          title: string;
-          basis: string;
-        };
-        released: {
-          title: string;
-          basis: string;
-        };
-        held: {
-          title: string;
-          basis: string;
-        };
-      };
       columns: {
         rule: string;
         appliesTo: string;
@@ -5897,55 +5984,259 @@ type Messages = {
         tool_scope_changed: string;
       };
     };
-    servers: {
+    notBacked: string;
+    header: {
+      newTool: string;
+      wizard: {
+        title: string;
+        subtitle: string;
+        note: string;
+        confirm: string;
+        steps: {
+          describe: string;
+          recommend: string;
+          manifest: string;
+          code: string;
+          pr: string;
+        };
+      };
+    };
+    empty: {
       title: string;
-      lead: string;
-      empty: {
+      body: string;
+    };
+    state: {
+      back: string;
+      denied: {
+        title: string;
+        body: string;
+        request: string;
+        signedIn: string;
+        needed: string;
+        neededValue: string;
+        decidedBy: string;
+        decidedByValue: string;
+      };
+      requestAccess: {
+        title: string;
+        role: string;
+        rolePlaceholder: string;
+        why: string;
+        note: string;
+        confirm: string;
+      };
+      pending: {
         title: string;
         body: string;
       };
-      columns: {
-        server: string;
-        transport: string;
-        endpoint: string;
-        health: string;
-        checked: string;
-        tools: string;
+      error: {
+        title: string;
+        body: string;
+        retry: string;
+        incident: string;
       };
+      incident: {
+        title: string;
+        subject: string;
+        subjectPlaceholder: string;
+        severity: string;
+        severities: {
+          critical: string;
+          warning: string;
+          info: string;
+        };
+        note: string;
+        confirm: string;
+      };
+    };
+    providers: {
+      title: string;
+      caption: string;
+      captionPartial: string;
+      empty: string;
+      columns: {
+        provider: string;
+        transport: string;
+        tools: string;
+        toolbelts: string;
+        agents: string;
+        health: string;
+        connection: string;
+        authorization: string;
+        lastImport: string;
+        actions: string;
+      };
+      transportNote: string;
+      attentionNotBacked: string;
+      open: string;
+      openNamed: string;
+      wireLine: string;
+      atLeast: string;
+      pinned: string;
       health: {
         healthy: string;
         degraded: string;
         unreachable: string;
         unknown: string;
       };
-      transport: {
-        "streamable-http": string;
-        sse: string;
-        stdio: string;
-      };
-      unknownNote: string;
-      register: {
+      remove: {
         open: string;
         title: string;
-        body: string;
-        name: string;
-        nameHint: string;
-        transport: string;
-        transportHint: string;
-        endpoint: string;
-        endpointHint: string;
-        authStrategy: string;
-        authConfig: string;
-        authConfigHint: string;
-        authConfigPlaceholder: string;
+        cancel: string;
         confirm: string;
         pending: string;
+        stops: string;
+        kept: string;
+        switchNote: string;
+        notFound: string;
+      };
+      reimport: {
+        open: string;
+        pending: string;
         done: string;
-        doneHealth: {
-          healthy: string;
+      };
+      edit: {
+        open: string;
+        title: string;
+        endpoint: string;
+        transport: string;
+        wire: string;
+        connection: string;
+        hint: string;
+        note: string;
+        confirm: string;
+      };
+      oauth: {
+        open: string;
+        title: string;
+        clientId: string;
+        clientSecret: string;
+        authUrl: string;
+        scopes: string;
+        redirect: string;
+        redirectHint: string;
+        refusal: string;
+        note: string;
+        confirm: string;
+      };
+      drill: {
+        subtitle: string;
+        healthWarning: {
           degraded: string;
           unreachable: string;
         };
+        facts: {
+          system: string;
+          transport: string;
+          registryName: string;
+          schemas: string;
+          versions: string;
+          toolbelts: string;
+          agents: string;
+          lastImport: string;
+          lastCheck: string;
+        };
+        transportLine: string;
+        schemas: string;
+        atLeast: string;
+        authTitle: string;
+        authNotBacked: string;
+        keyInstead: string;
+        keyTitle: string;
+        keyNote: string;
+        keyConfirm: string;
+        toolsTitle: string;
+        noTools: string;
+        partial: string;
+        columns: {
+          version: string;
+          hazard: string;
+          gate: string;
+          agents: string;
+          calls: string;
+        };
+      };
+    };
+    toolbelts: {
+      title: string;
+      caption: string;
+      notBacked: string;
+      note: string;
+      new: {
+        open: string;
+        title: string;
+        name: string;
+        purpose: string;
+        owner: string;
+        ownerHint: string;
+        note: string;
+        confirm: string;
+      };
+      assignments: {
+        title: string;
+        caption: string;
+        notBacked: string;
+        agents: string;
+      };
+    };
+    policy: {
+      versions: {
+        title: string;
+        notBacked: string;
+        note: string;
+        draft: {
+          open: string;
+          title: string;
+          basedOn: string;
+          whatChanged: string;
+          note: string;
+          confirm: string;
+        };
+      };
+      where: {
+        title: string;
+        caption: string;
+        terms: {
+          store: string;
+          regulated: string;
+          compiledFrom: string;
+          readBy: string;
+          writes: string;
+        };
+        values: {
+          store: string;
+          regulated: string;
+          compiledFrom: string;
+          readBy: string;
+          writes: string;
+        };
+      };
+      conditions: {
+        title: string;
+        items: {
+          toolVersion: string;
+          risk: string;
+          sideEffect: string;
+          egress: string;
+          financialClass: string;
+          amountByPath: string;
+          counterparty: string;
+          repository: string;
+          pathPrefix: string;
+          recipientDomain: string;
+          taint: string;
+          timeWindow: string;
+          rate: string;
+          sequence: string;
+          operatorRole: string;
+          enforcementTier: string;
+          budgetPosition: string;
+          mandatePosition: string;
+        };
+      };
+      sequence: {
+        title: string;
+        plain: string;
       };
     };
   };

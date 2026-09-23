@@ -21,16 +21,12 @@ import {
   KILL_SWITCH_KINDS,
 } from "@/data/contracts/tools";
 import { routes } from "@/shared/safe-path";
-import {
-  buttonPrimary,
-  buttonSecondary,
-  inputBase,
-  mono,
-} from "@/ui/control-styles";
+import { buttonSecondary, inputBase, mono } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { UNANSWERED, useActionFailure } from "./action-failure";
+import { buttonDanger } from "./buttons";
 import { flipKillSwitch } from "./actions";
 import {
   SELF_TARGETED_KINDS,
@@ -43,6 +39,8 @@ export function FlipControls({
   at,
   denyGeneration,
   existing,
+  fixed,
+  label,
   members,
 }: {
   at: ToolsAt;
@@ -50,13 +48,21 @@ export function FlipControls({
   /**
    * The card's switch, or null when the section header opened the dialog.
    *
-   * This one prop settles everything else: where the control sits (the header
-   * or a card), which way the flip goes, and therefore how it is styled — so
-   * there is no second prop to disagree with it. The header carries the page's
-   * one gold action; gold is identity, never state, so a card's control stays
-   * secondary whichever way its switch is pointing.
+   * With `fixed`, this one prop settles everything else: where the control
+   * sits (the header or a card), which way the flip goes, and how it is drawn.
+   * The header's control is the danger button "Flip a kill switch"; a card's
+   * is a `role=switch` toggle whose checked state is the record's.
    */
   existing: KillSwitch | null;
+  /**
+   * A card with no row yet: the organization, workspace and class switches
+   * ship with the workspace and are on the page before anyone flips them. The
+   * level and target are fixed; `ref` is null at the two self-targeted levels,
+   * where the viewer supplies the target.
+   */
+  fixed?: { kind: KillSwitch["target"]["kind"]; ref: string | null };
+  /** What a card's toggle names: the switch, as its heading reads. */
+  label?: string;
   /**
    * The org's members, to submit an operator switch's target as the `usr_…`
    * public id `set_kill_switch` now resolves (#3147), rather than asking for
@@ -76,13 +82,13 @@ export function FlipControls({
   /** The kernel answered `changed: false`: the switch was already that way. */
   const [unchanged, setUnchanged] = useState(false);
   const [kind, setKind] = useState<KillSwitch["target"]["kind"]>(
-    existing?.target.kind ?? "class",
+    existing?.target.kind ?? fixed?.kind ?? "class",
   );
 
   /** A card flips the other way; the header dialog always denies. */
   const turningOn = existing === null ? true : !existing.on;
-  /** The header's control, and only the header's, is the page's gold action. */
-  const fromHeader = existing === null;
+  /** The header's control, which asks for the level and the target. */
+  const fromHeader = existing === null && fixed === undefined;
   /**
    * Which counter this flip advances. A card has a record and the record says
    * what scope it was written under; the header has none, so the scope comes
@@ -115,9 +121,11 @@ export function FlipControls({
         target:
           existing !== null
             ? existing.target.ref
-            : SELF_TARGETED_KINDS.has(chosen)
-              ? null
-              : textValue(form, "target"),
+            : fixed !== undefined
+              ? fixed.ref
+              : SELF_TARGETED_KINDS.has(chosen)
+                ? null
+                : textValue(form, "target"),
         on: turningOn,
         reason: textValue(form, "reason"),
       });
@@ -146,22 +154,55 @@ export function FlipControls({
 
   return (
     <>
-      <button
-        type="button"
-        data-testid={
-          fromHeader ? "tools-flip-open" : `tools-flip-${existing.id}`
-        }
-        className={fromHeader ? buttonPrimary : buttonSecondary}
-        onClick={() => {
-          setOpen(true);
-        }}
-      >
-        {fromHeader
-          ? t("openHeader")
-          : turningOn
-            ? t("openDeny")
-            : t("openAllow")}
-      </button>
+      {fromHeader ? (
+        <button
+          type="button"
+          data-testid="tools-flip-open"
+          className={buttonDanger}
+          onClick={() => {
+            setOpen(true);
+          }}
+        >
+          {t("openHeader")}
+        </button>
+      ) : (
+        // The card's toggle: its checked state is the record's (denying is
+        // on), and pressing it opens the confirmation rather than flipping,
+        // because the blast radius is stated before anything changes.
+        <button
+          type="button"
+          role="switch"
+          aria-checked={!turningOn}
+          aria-label={t(turningOn ? "toggleDeny" : "toggleAllow", {
+            name: label ?? kinds(kind),
+          })}
+          data-testid={`tools-flip-${existing?.id ?? `${kind}-${fixed?.ref ?? "self"}`}`}
+          className="group inline-flex min-h-8 items-center gap-2 rounded-md px-1 text-xs font-medium text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:min-h-11"
+          onClick={() => {
+            setOpen(true);
+          }}
+        >
+          <span
+            aria-hidden="true"
+            className={`relative inline-flex h-4 w-8 flex-none items-center rounded-full border transition-colors ${
+              turningOn
+                ? "border-border bg-muted"
+                : "border-destructive/60 bg-destructive/15"
+            }`}
+          >
+            <span
+              className={`absolute size-3 rounded-full transition-transform motion-reduce:transition-none ${
+                turningOn
+                  ? "translate-x-0.5 bg-muted-foreground"
+                  : "translate-x-[1.05rem] bg-destructive"
+              }`}
+            />
+          </span>
+          <span className={turningOn ? "" : "text-destructive"}>
+            {turningOn ? t("allowing") : t("denying")}
+          </span>
+        </button>
+      )}
       <SheetDialog
         open={open}
         onOpenChange={(next) => {
@@ -275,8 +316,10 @@ export function FlipControls({
             </>
           ) : (
             <p className="text-sm text-muted-foreground">
-              {kinds(existing.target.kind)} ·{" "}
-              <span className={`${mono} break-all`}>{existing.target.ref}</span>
+              {kinds(kind)} ·{" "}
+              <span className={`${mono} break-all`}>
+                {label ?? existing?.target.ref ?? kinds(kind)}
+              </span>
             </p>
           )}
 
