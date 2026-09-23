@@ -18,7 +18,7 @@ import {
   callsAuthority,
   mandateAuthority,
   mandateDetailRead,
-  mandateMovement,
+  mandateDraw,
   mandateRow,
 } from "@/test/mandate-views";
 import { mandateSource } from "./mandate.builders";
@@ -80,7 +80,7 @@ const agent = {
     name: "Invoice bot",
     description: null,
     agentKey: "a-intel.finops.invoice-bot",
-    harness: "claude_code",
+    harness: "claude-code",
     principalId: null,
     operatorId: null,
     status: "active",
@@ -104,6 +104,7 @@ async function renderMandate(
     as?: OrgRole;
     agent?: string | null;
     names?: Names;
+    viewerName?: string | null;
   } = {},
 ) {
   const { source, calls } = mandateSource(
@@ -115,12 +116,13 @@ async function renderMandate(
     source,
     mandate: options.mandate ?? "mnd_4f2a9c",
     agent: options.agent ?? null,
+    viewerName: options.viewerName ?? null,
   });
   const view = render(<IntlProvider>{element}</IntlProvider>);
   return { calls, ...view };
 }
 
-const movements = () => screen.getAllByTestId("ledger-movement");
+const draws = () => screen.getAllByTestId("ledger-draw");
 const tile = (id: string) => screen.getByTestId(id);
 
 // `cleanup()` runs whether or not the axe check passes, so one violation does
@@ -246,6 +248,44 @@ describe("Mandate › loaded", () => {
     );
   });
 
+  it("says the reservation is held by this call when one call holds it", async () => {
+    await renderMandate(
+      mandateDetailRead({
+        draws: [
+          mandateDraw({ state: "reserve", externalEffectRef: null }),
+          mandateDraw(),
+        ],
+      }),
+    );
+    const bar = screen.getByTestId("authority-bar");
+    expect(
+      within(bar).getByText("reserved by this call $180.00"),
+    ).toBeInTheDocument();
+    expect(within(bar).getByRole("img")).toHaveAccessibleName(
+      "$1,204.18 settled, $180.00 reserved by this call, $615.82 remaining of $2,000.00",
+    );
+  });
+
+  it("counts the calls that hold a reservation, and claims no count past the read bound", async () => {
+    const open = [
+      mandateDraw({ state: "reserve", externalEffectRef: null }),
+      mandateDraw({ state: "reserve", externalEffectRef: null }),
+    ];
+    await renderMandate(mandateDetailRead({ draws: open }));
+    expect(
+      within(screen.getByTestId("authority-bar")).getByText(
+        "reserved by 2 calls in flight $180.00",
+      ),
+    ).toBeInTheDocument();
+    cleanup();
+    await renderMandate(mandateDetailRead({ draws: open, readBound: 500 }));
+    expect(
+      within(screen.getByTestId("authority-bar")).getByText(
+        "reserved by calls in flight $180.00",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("lays the ledger out with the design's six columns and a receipt cell that says it is not recorded", async () => {
     await renderMandate(mandateDetailRead());
     const table = screen.getByRole("table", { name: "Draws on this mandate" });
@@ -254,23 +294,84 @@ describe("Mandate › loaded", () => {
         .getAllByRole("columnheader")
         .map((h) => h.textContent),
     ).toEqual(["When", "Call", "Amount", "State", "External id", "Receipt"]);
-    const [row] = movements();
+    const [row] = draws();
+    expect(row).toHaveTextContent("2026-09-04");
     expect(row).toHaveTextContent("pi_3QaL8f2Xk");
     expect(row).toHaveTextContent("settled");
-    const receipt = row?.querySelector('[data-state="not-backed"]');
-    expect(receipt).toHaveAttribute("data-gap", "G8");
+    const cells = row?.querySelectorAll("td") ?? [];
+    // The Call cell names what is missing (#3871), never the measure or a uuid.
+    expect(cells[1]).toHaveTextContent("tool version not recorded");
+    expect(
+      cells[1]?.querySelector('[data-state="not-backed"]'),
+    ).toHaveAttribute("data-gap", "tool-version");
+    expect(
+      cells[5]?.querySelector('[data-state="not-backed"]'),
+    ).toHaveAttribute("data-gap", "G8");
+  });
+
+  it("shows one row per call in the state it reached, with the time for today's draw", async () => {
+    await renderMandate(
+      mandateDetailRead({
+        draws: [
+          mandateDraw({
+            state: "reserve",
+            externalEffectRef: null,
+            at: "2026-09-16T09:31:08.000Z",
+          }),
+        ],
+      }),
+    );
+    const [row] = draws();
+    expect(row).toHaveAttribute("data-state", "reserve");
+    expect(row).toHaveTextContent("09:31:08");
+    // A reservation has no receipt yet: the design's dash, named for a reader.
+    const receipt = row?.querySelector('[data-state="no-receipt-yet"]');
+    expect(receipt).toHaveTextContent("—No receipt yet");
+  });
+
+  it("marks a draw counted in an earlier period, which the Settled tile leaves out", async () => {
+    await renderMandate(
+      mandateDetailRead({
+        draws: [mandateDraw(), mandateDraw({ periodKey: "2026-08" })],
+      }),
+    );
+    const [current, earlier] = draws();
+    expect(current?.querySelector('[data-state="earlier-period"]')).toBeNull();
+    expect(
+      earlier?.querySelector('[data-state="earlier-period"]'),
+    ).toHaveTextContent("counted in 2026-08");
+  });
+
+  it("names the measure on a draw that is not the one the tiles speak for", async () => {
+    await renderMandate(
+      mandateDetailRead({
+        mandate: mandateRow({
+          authority: [mandateAuthority(), callsAuthority()],
+        }),
+        draws: [
+          mandateDraw({
+            state: "reserve",
+            measure: "calls",
+            value: { kind: "count", count: "1", unit: "calls" },
+            externalEffectRef: null,
+            periodKey: "2026-09-16",
+          }),
+        ],
+      }),
+    );
+    expect(draws()[0]?.querySelectorAll("td")[2]).toHaveTextContent("calls");
   });
 
   it("says a reservation has no effect yet and a release has none, rather than a blank", async () => {
     await renderMandate(
       mandateDetailRead({
-        ledger: [
-          mandateMovement({ kind: "reserve", externalEffectRef: null }),
-          mandateMovement({ kind: "release", externalEffectRef: null }),
+        draws: [
+          mandateDraw({ state: "reserve", externalEffectRef: null }),
+          mandateDraw({ state: "release", externalEffectRef: null }),
         ],
       }),
     );
-    const [reserve, release] = movements();
+    const [reserve, release] = draws();
     expect(reserve).toHaveTextContent("no effect yet");
     expect(release).toHaveTextContent("released, no effect");
   });
@@ -278,27 +379,27 @@ describe("Mandate › loaded", () => {
   it("searches, facets on State, and pages the ledger with a range line", async () => {
     const user = userEvent.setup({ delay: null });
     const ledger = Array.from({ length: 12 }, (_, index) =>
-      mandateMovement({
+      mandateDraw({
         externalEffectRef: `pi_${String(index).padStart(2, "0")}`,
-        kind: index % 3 === 0 ? "reserve" : "settle",
+        state: index % 3 === 0 ? "reserve" : "settle",
       }),
     );
-    await renderMandate(mandateDetailRead({ ledger }));
-    expect(movements()).toHaveLength(10);
+    await renderMandate(mandateDetailRead({ draws: ledger }));
+    expect(draws()).toHaveLength(10);
     expect(screen.getByTestId("ledger-range")).toHaveTextContent("1–10 of 12");
     await user.click(screen.getByRole("button", { name: "Next page" }));
-    expect(movements()).toHaveLength(2);
+    expect(draws()).toHaveLength(2);
     expect(screen.getByTestId("ledger-range")).toHaveTextContent("11–12 of 12");
     await user.selectOptions(
       screen.getByRole("combobox", { name: "State" }),
       "reserve",
     );
-    expect(movements()).toHaveLength(4);
+    expect(draws()).toHaveLength(4);
     await user.type(
       screen.getByRole("searchbox", { name: "Search this list" }),
       "pi_03",
     );
-    expect(movements()).toHaveLength(1);
+    expect(draws()).toHaveLength(1);
     await user.clear(
       screen.getByRole("searchbox", { name: "Search this list" }),
     );
@@ -311,8 +412,8 @@ describe("Mandate › loaded", () => {
 
   it("offers 5, 10, 25, 50 and All rows", async () => {
     const user = userEvent.setup({ delay: null });
-    const ledger = Array.from({ length: 7 }, () => mandateMovement());
-    await renderMandate(mandateDetailRead({ ledger }));
+    const ledger = Array.from({ length: 7 }, () => mandateDraw());
+    await renderMandate(mandateDetailRead({ draws: ledger }));
     const rows = screen.getByRole("combobox", { name: "Rows" });
     expect(
       within(rows)
@@ -320,14 +421,14 @@ describe("Mandate › loaded", () => {
         .map((o) => o.textContent),
     ).toEqual(["5", "10", "25", "50", "All"]);
     await user.selectOptions(rows, "5");
-    expect(movements()).toHaveLength(5);
+    expect(draws()).toHaveLength(5);
     await user.selectOptions(rows, "0");
-    expect(movements()).toHaveLength(7);
+    expect(draws()).toHaveLength(7);
   });
 
   it("states the read bound above the table when the answer filled it", async () => {
     await renderMandate(mandateDetailRead({ readBound: 500 }));
-    expect(screen.getByText(/The newest 500 movements/)).toBeInTheDocument();
+    expect(screen.getByText(/newest 500 ledger movements/)).toBeInTheDocument();
   });
 
   it("fills the grant panel in the design's order, with the agent card and the granter's role at grant", async () => {
@@ -351,6 +452,13 @@ describe("Mandate › loaded", () => {
     expect(
       within(grant).getByText("a-intel.finops.invoice-bot"),
     ).toBeInTheDocument();
+    // The harness from get_agent; that read answers no runs or spend.
+    expect(grant).toHaveTextContent(
+      "Claude Code · runs and spend not read here",
+    );
+    expect(within(grant).getByTestId("valid-window")).toHaveTextContent(
+      "2026-09-01 → 2026-12-30",
+    );
     expect(within(grant).getByTestId("granted-by")).toHaveTextContent(
       "Priya Natarajan · Billing at grant",
     );
@@ -458,31 +566,38 @@ describe("Mandate › routes", () => {
 });
 
 describe("Mandate › empty", () => {
-  it("says the mandate has never been drawn on, in the design's words, with no action in the state", async () => {
-    await renderMandate(mandateDetailRead({ ledger: [] }));
+  it("replaces the page body with the design's state and no actions", async () => {
+    await renderMandate(mandateDetailRead({ draws: [] }));
     const empty = screen.getByTestId("mandate-empty");
     expect(
       within(empty).getByRole("heading", {
+        level: 1,
         name: "This mandate has never been drawn on",
       }),
     ).toBeInTheDocument();
     expect(empty).toHaveTextContent(
       "It is active and its ledger is empty. Remaining authority equals the full period limit.",
     );
-    expect(within(empty).queryByRole("button")).not.toBeInTheDocument();
+    // The state is the body: no header, no tiles, no table, no action.
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("mandate-tiles")).not.toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 
   it("does not call an undrawn limit authority on a mandate that is not in effect", async () => {
     await renderMandate(
       mandateDetailRead({
-        ledger: [],
+        draws: [],
         mandate: mandateRow({ status: "expired" }),
       }),
     );
     expect(screen.getByTestId("mandate-empty")).toHaveTextContent(
       "This mandate is not in effect now, so its undrawn limit authorizes nothing.",
     );
+    // Not the design's "it is active" state, so the header stays.
+    expect(
+      screen.getByRole("heading", { level: 1, name: "mnd_4f2a9c" }),
+    ).toBeInTheDocument();
   });
 });
 
@@ -545,7 +660,7 @@ describe("Mandate › access denied", () => {
     const user = userEvent.setup({ delay: null });
     await renderMandate(
       { ok: false, reason: "denied", permission: "org.billing" },
-      { as: "member" },
+      { as: "member", viewerName: "Marcus Bell" },
     );
     const denied = screen.getByTestId("mandate-denied");
     expect(
@@ -565,9 +680,15 @@ describe("Mandate › access denied", () => {
     expect(
       [...denied.querySelectorAll("dt")].map((dt) => dt.textContent),
     ).toEqual(["Signed in as", "Needed", "Decided by"]);
+    expect(within(denied).getByTestId("signed-in-as")).toHaveTextContent(
+      "Marcus Bell · workspace.member · core-platform",
+    );
     expect(denied).toHaveTextContent("Deny wins over every allow.");
     // The header goes with the body: a refused reader is not told the id.
-    expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
+    expect(screen.queryByText("mnd_4f2a9c")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      "You cannot see this mandate",
+    );
     await user.click(
       within(denied).getByRole("button", { name: "Request access" }),
     );

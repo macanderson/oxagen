@@ -1,14 +1,6 @@
 {
   "mandate": {
     "eyebrow": "Mandate",
-    "roles": {
-      "owner": "Owner",
-      "admin": "Admin",
-      "member": "Member",
-      "billing": "Billing",
-      "compliance": "Compliance",
-      "viewer": "Viewer"
-    },
     "loading": "Loading this mandate",
     "grantedBy": "granted by {name}",
     "notGranted": "not granted",
@@ -47,12 +39,17 @@
       "of": "of {limit}",
       "ofMoney": "of {limit} {currency}",
       "settled": "settled {value}",
-      "reserved": "reserved by calls in flight {value}",
+      "reserved": "reserved by {by} {value}",
       "remaining": "remaining {value}",
       "share": "({share})",
       "label": "{settled} settled, {remaining} remaining of {limit}",
-      "labelReserved": "{settled} settled, {reserved} reserved by calls in flight, {remaining} remaining of {limit}",
-      "overLimit": "Drawn authority is past this limit. Lowering a limit under authority already drawn does this, and the settled and reserved figures say where it sits."
+      "labelReserved": "{settled} settled, {reserved} reserved by {by}, {remaining} remaining of {limit}",
+      "overLimit": "Drawn authority is past this limit. Lowering a limit under authority already drawn does this, and the settled and reserved figures say where it sits.",
+      "by": {
+        "one": "this call",
+        "many": "{count} calls in flight",
+        "unknown": "calls in flight"
+      }
     },
     "ledger": {
       "title": "Ledger",
@@ -87,11 +84,14 @@
       "releasedNoEffect": "released, no effect",
       "notRecorded": "not recorded",
       "filteredEmpty": "No draw matches this search",
-      "readBound": "The newest {shown} movements, which is the most this page reads at once. This mandate has recorded at least that many, and this page cannot tell you whether it has recorded more.",
-      "footnote": "Not recorded yet: the tool version each call named, and a receipt frame for each draw. The Call column names the measure the draw counted.",
+      "readBound": "Read from the newest {shown} ledger movements, the most this page reads at once. This mandate has recorded at least that many, and this page cannot tell you whether it has recorded more.",
+      "footnote": "Not recorded yet: the tool version each call named, and a receipt frame for each draw.",
       "empty": "This mandate has never been drawn on",
       "emptyBodyEffective": "It is active and its ledger is empty. Remaining authority equals the full period limit.",
-      "emptyBody": "Its ledger is empty. This mandate is not in effect now, so its undrawn limit authorizes nothing."
+      "emptyBody": "Its ledger is empty. This mandate is not in effect now, so its undrawn limit authorizes nothing.",
+      "callNotRecorded": "tool version not recorded",
+      "noReceiptYet": "No receipt yet",
+      "earlierPeriod": "counted in {period}"
     },
     "grant": {
       "title": "Grant",
@@ -120,7 +120,8 @@
       "approvalConsequenceRoles": "approvers the roles accountable for the consequence",
       "approvalNone": "no call on this mandate waits for a person",
       "valid": "Valid",
-      "validWindow": "{from} → {to}"
+      "validWindow": "{from} → {to}",
+      "agentActivityNotBacked": "runs and spend not read here"
     },
     "exceptions": {
       "title": "Ledger",
@@ -139,8 +140,7 @@
         "approvalAbove": "Approval above ({unit})",
         "approvalHint": "A call above this parks for a human, and no rule elsewhere can release it.",
         "validTo": "Valid to",
-        "validToHint": "The last day the mandate may be drawn on. Leave it blank to keep the window.",
-        "note": "Lowering a ceiling below what is already reserved does not claw the reservation back. It applies from the next call. A field left blank keeps what is stored.",
+        "note": "Lowering a ceiling below what is already reserved does not claw the reservation back; it applies from the next call. A field left blank keeps what is stored.",
         "windows": {
           "daily": "day",
           "weekly": "week",
@@ -187,6 +187,12 @@
         "invalid": "Something in the form is not a value this write accepts. Nothing was changed.",
         "pendingApproval": "This write is waiting for approval. Access request {accessRequestId}.",
         "unavailable": "This write could not be answered: {code}. Nothing was changed."
+      },
+      "outcome": {
+        "limits": "<id>{mandate}</id> has its new limits. They apply from the next call.",
+        "revoked": "<id>{mandate}</id> is revoked.",
+        "declined": "<id>{mandate}</id> is declined.",
+        "audit": "Open the audit record"
       }
     },
     "failure": {

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
 import { dataSource } from "@/data/source";
+import { getAuthUser } from "@/features/auth";
 import { Mandate, MandateLoading } from "@/features/mandate";
 import { requireViewer } from "@/server/viewer";
 
@@ -22,6 +23,10 @@ export default async function AgentMandatePage({
   const { org, ws, agent, tab, mandate } = await params;
   if (tab !== "mandates") notFound();
   const ctx = await requireViewer(org, ws);
+  // The denied state names the person it refused (*Signed in as*); the
+  // session is memoized for this request, so this reads nothing new.
+  const user = await getAuthUser();
+  const viewerName = user === null ? null : user.name || user.email;
   return (
     <main
       id="main"
@@ -33,6 +38,7 @@ export default async function AgentMandatePage({
           source={dataSource()}
           mandate={mandate}
           agent={agent}
+          viewerName={viewerName}
         />
       </Suspense>
     </main>

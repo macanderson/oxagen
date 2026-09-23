@@ -174,16 +174,33 @@ export function toMandateList(
   };
 }
 
+/** What a call's movements on one measure have reached: a release or a settlement closes it. */
+function stateOf(
+  kinds: ReadonlySet<"reserve" | "settle" | "release">,
+): "reserve" | "settle" | "release" {
+  if (kinds.has("settle")) return "settle";
+  if (kinds.has("release")) return "release";
+  return "reserve";
+}
+
 /**
  * `get_mandate` to the mandate page's record. The limits and the authority go
  * through the same row mapper the ledger tables read, so the figures on the
  * detail page and the figures in the two tables are one mapping.
  *
- * The ledger rows keep the measure's own form — micros under a currency, whole
- * units under a unit name — through the same `measureValue` the limits use, so
- * a movement and the limit it drew against are printed by the same rule. The
- * row's `id` and `toolCallId` are dropped rather than carried: both are raw
- * database uuids and INV-11 admits none into a view model (`MandateLedgerRow`
+ * **The ledger is folded into draws.** A call's reservation and the settlement
+ * or release that closes it are two movements of one draw, written with the
+ * same value (`closeReservations`, packages/rules/src/mandates.ts). The page
+ * lists draws, one per call and measure, in the state the call reached, so a
+ * settled call is one row reading settled rather than a settled row beside a
+ * reserved one that still reads reserved. The movements arrive newest first,
+ * so the first movement seen for a draw is its newest and orders it.
+ *
+ * Each draw keeps the measure's own form (micros under a currency, whole units
+ * under a unit name) through the same `measureValue` the limits use, so a draw
+ * and the limit it drew against are printed by the same rule. `toolCallId`
+ * groups the movements and goes no further: it is a raw database uuid, as is
+ * the row's `id`, and INV-11 admits neither into a view model (`MandateDraw`
  * carries the reasoning).
  */
 export function toMandateDetail(
@@ -191,6 +208,14 @@ export function toMandateDetail(
   ledgerLimit: number,
   asOf: Date = new Date(),
 ): z.input<typeof MandateDetail> {
+  type Row = DetailOut["ledger"][number];
+  const groups = new Map<string, { rows: Row[] }>();
+  for (const row of out.ledger) {
+    const key = `${row.toolCallId}\u0000${row.measure}`;
+    const group = groups.get(key);
+    if (group === undefined) groups.set(key, { rows: [row] });
+    else group.rows.push(row);
+  }
   return {
     asOf: asOf.toISOString(),
     // What the read can establish: the bound it asked for, when the answer
@@ -199,7 +224,14 @@ export function toMandateDetail(
     // has-more flag and no cursor to tell them apart (`MandateDetail.readBound`).
     readBound: out.ledger.length >= ledgerLimit ? ledgerLimit : null,
     mandate: toMandateRow(out.mandate),
-    ledger: out.ledger.map((row) => {
+    draws: [...groups.values()].map(({ rows }) => {
+      const state = stateOf(new Set(rows.map((r) => r.kind)));
+      // The movement that decided the state carries the figure and the
+      // effect; every movement of a draw records the same value.
+      const decisive = rows.find((r) => r.kind === state) ?? rows[0];
+      const newest = rows[0];
+      if (decisive === undefined || newest === undefined)
+        throw new Error("a draw with no movement");
       // The row's own `measureKind` (ADR-108) is the fact: stamped once
       // when the row was written and never re-derived, it survives a later
       // whole-record `limits` replacement that removes the measure, where
@@ -210,13 +242,19 @@ export function toMandateDetail(
       // row's own `unitOrCurrency`), a guess only for a row this old AND
       // whose measure is gone, never for one ADR-108 already resolved.
       const authorityKind =
-        row.measureKind ??
-        out.mandate.authority.find((a) => a.measure === row.measure)?.kind ??
-        legacyMeasureKindGuess(row.unitOrCurrency);
+        decisive.measureKind ??
+        out.mandate.authority.find((a) => a.measure === decisive.measure)
+          ?.kind ??
+        legacyMeasureKindGuess(decisive.unitOrCurrency);
+      const effect = rows.find((r) => r.kind === "settle")?.externalEffectId;
       return {
-        kind: row.kind,
-        measure: row.measure,
-        value: measureValue(row.value, row.unitOrCurrency, authorityKind),
+        state,
+        measure: decisive.measure,
+        value: measureValue(
+          decisive.value,
+          decisive.unitOrCurrency,
+          authorityKind,
+        ),
         // Empty means "nothing recorded" here, not "a value of no length".
         // `packages/rules/src/mandates.ts` stores whatever the tool's
         // configured effect-id path returned, an empty string included, and
@@ -226,11 +264,11 @@ export function toMandateDetail(
         // `record_unmappable` over one settlement, a ledger withheld
         // because one row named its transaction with nothing.
         externalEffectRef:
-          row.externalEffectId === null || row.externalEffectId.trim() === ""
+          effect === undefined || effect === null || effect.trim() === ""
             ? null
-            : row.externalEffectId,
-        periodKey: row.periodKey,
-        at: row.at,
+            : effect,
+        periodKey: decisive.periodKey,
+        at: newest.at,
       };
     }),
   };

@@ -6,20 +6,25 @@ import { describe, expect, it } from "vitest";
 import {
   callsAuthority,
   mandateAuthority,
-  mandateMovement,
+  mandateDraw,
   mandateRow,
 } from "@/test/mandate-views";
 import {
   editableOf,
   isDrawn,
   kindOf,
+  lastDayOf,
   ledgerPage,
   MANDATE_ID,
   mandateLink,
   measuresOf,
+  openCalls,
   thresholdOf,
   unitOf,
   unitsOf,
+  validDays,
+  whenOf,
+  zonedDay,
 } from "./view";
 
 describe("MANDATE_ID", () => {
@@ -140,11 +145,11 @@ describe("thresholdOf", () => {
 
 describe("ledgerPage", () => {
   const ledger = [
-    mandateMovement({ kind: "reserve", externalEffectRef: null }),
-    mandateMovement({ externalEffectRef: "pi_AAA" }),
-    mandateMovement({ externalEffectRef: "pi_BBB" }),
-    mandateMovement({ kind: "release", externalEffectRef: null }),
-    mandateMovement({ measure: "tax", externalEffectRef: "sp-1" }),
+    mandateDraw({ state: "reserve", externalEffectRef: null }),
+    mandateDraw({ externalEffectRef: "pi_AAA" }),
+    mandateDraw({ externalEffectRef: "pi_BBB" }),
+    mandateDraw({ state: "release", externalEffectRef: null }),
+    mandateDraw({ measure: "tax", externalEffectRef: "sp-1" }),
   ];
   const view = { search: "", state: null, size: 10, page: 0 } as const;
 
@@ -183,5 +188,81 @@ describe("ledgerPage", () => {
   it("reports an empty range when nothing matches", () => {
     const page = ledgerPage(ledger, { ...view, search: "zzz" });
     expect([page.from, page.to, page.total]).toEqual([0, 0, 0]);
+  });
+});
+
+describe("openCalls", () => {
+  const open = mandateDraw({ state: "reserve", externalEffectRef: null });
+  it("counts the draws on a measure still holding a reservation", () => {
+    expect(openCalls([open, mandateDraw()], "amount", null)).toBe(1);
+    expect(openCalls([open, open], "amount", null)).toBe(2);
+    expect(openCalls([open], "calls", null)).toBe(0);
+  });
+
+  it("claims no count when the read filled its bound (negative)", () => {
+    expect(openCalls([open], "amount", 500)).toBeNull();
+  });
+});
+
+describe("zonedDay and lastDayOf", () => {
+  it("reads the day an instant falls on in the viewer's zone, not UTC", () => {
+    expect(zonedDay("2026-09-01T02:00:00.000Z", "UTC")).toBe("2026-09-01");
+    expect(zonedDay("2026-09-01T02:00:00.000Z", "America/New_York")).toBe(
+      "2026-08-31",
+    );
+  });
+
+  it("names the last day before an exclusive end", () => {
+    expect(lastDayOf("2027-01-01T00:00:00.000Z", "UTC")).toBe("2026-12-31");
+    expect(lastDayOf("2026-12-31T23:59:59.999Z", "UTC")).toBe("2026-12-31");
+  });
+
+  it("answers nothing for a zone this runtime cannot read (negative)", () => {
+    expect(zonedDay("2026-09-01T00:00:00.000Z", "Mars/Olympus")).toBeNull();
+  });
+});
+
+describe("validDays", () => {
+  it("prints days when each end sits on a day boundary", () => {
+    expect(
+      validDays(
+        {
+          validFrom: "2026-09-01T00:00:00.000Z",
+          validTo: "2026-12-31T23:59:59.999Z",
+        },
+        "UTC",
+      ),
+    ).toEqual({ from: "2026-09-01", to: "2026-12-31" });
+  });
+
+  // The window is half-open. A mandate that ends at 14:00 has not given the
+  // rest of that day, so its end is not printed as a day.
+  it("leaves an end inside a day to be printed with its time (negative)", () => {
+    expect(
+      validDays(
+        {
+          validFrom: "2026-09-01T09:30:00.000Z",
+          validTo: "2026-12-31T14:00:00.000Z",
+        },
+        "UTC",
+      ),
+    ).toEqual({ from: null, to: null });
+  });
+});
+
+describe("whenOf", () => {
+  const asOf = "2026-09-11T12:00:00.000Z";
+  it("prints the time for a draw on the day the ledger was read", () => {
+    expect(whenOf("2026-09-11T09:31:08.000Z", asOf, "UTC")).toEqual({
+      kind: "time",
+      text: "09:31:08",
+    });
+  });
+
+  it("prints the day for an older draw", () => {
+    expect(whenOf("2026-09-04T08:40:19.000Z", asOf, "UTC")).toEqual({
+      kind: "day",
+      text: "2026-09-04",
+    });
   });
 });

@@ -17,10 +17,17 @@
 //     not name (`targetAllowed`), and an empty approvers list leaves the answer
 //     to the roles accountable for the consequence. Both are spelled out,
 //     because printing them as empty would say the opposite of what they mean.
-//   - The window is half-open, `[validFrom, validTo)`, as enforcement's is, so
-//     the end is printed with its time and not as a day.
+//   - The window is half-open, `[validFrom, validTo)`, as enforcement's is. It
+//     is printed as days, the design's `2026-09-01 → 2026-12-31`, when each end
+//     sits on a day boundary in the viewer's zone, and with its time when it
+//     does not, so a mandate ending at 14:00 is never shown as giving the rest
+//     of that day (`validDays`).
+//   - The agent card's line names the harness from `get_agent`. That read
+//     answers no 30-day runs or spend for one agent, so the card says so rather
+//     than print the list page's figures for a different read.
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
+import type { AgentDetail } from "@/data/contracts/agents";
 import type { MandateRow } from "@/data/contracts/mandates";
 import { routes } from "@/shared/safe-path";
 import { AgentCard } from "@/ui/agent-card";
@@ -31,15 +38,19 @@ import {
   panelHeader,
   panelTitle,
 } from "@/ui/control-styles";
-import { useFormatter } from "@/ui/formatter";
 import { MandateScope } from "@/ui/mandate-scope";
 import { useMeasureText } from "@/ui/measure";
 import { SafeLink } from "@/ui/navigation";
 import { NotBacked } from "./state";
+import { ValidWindow } from "./valid-window";
 import type { MandateAt } from "./view";
 
 /** The agent as the agent read resolved it, or null when that read did not answer. */
-export type GrantAgent = { agentKey: string | null; name: string } | null;
+export type GrantAgent = {
+  agentKey: string | null;
+  name: string;
+  harness: AgentDetail["identity"]["harness"];
+} | null;
 
 /** A principal id → the person's name, for the ids this page prints. */
 export type PeopleNames = Readonly<Record<string, string>>;
@@ -167,12 +178,7 @@ export function MandateGrant({
   at: MandateAt;
 }) {
   const t = useTranslations("mandate.grant");
-  const format = useFormatter();
-  const instant = (value: string) =>
-    format.dateTime(new Date(value), {
-      dateStyle: "medium",
-      timeStyle: "short",
-    });
+  const harness = useTranslations("agents.harness");
   return (
     <section
       aria-labelledby="mandate-grant"
@@ -196,7 +202,19 @@ export function MandateGrant({
               <AgentCard
                 agentKey={agent?.agentKey ?? mandate.agentSlug}
                 notRecorded={t("agentNotRecorded")}
-                sub={agent?.name ?? mandate.agentSlug}
+                sub={
+                  agent === null ? (
+                    mandate.agentSlug
+                  ) : (
+                    <>
+                      {harness(agent.harness)}
+                      {" · "}
+                      <NotBacked gap="agent-activity">
+                        {t("agentActivityNotBacked")}
+                      </NotBacked>
+                    </>
+                  )
+                }
               />
             </SafeLink>
           </Row>
@@ -241,10 +259,10 @@ export function MandateGrant({
             <Approval mandate={mandate} />
           </Row>
           <Row label={t("valid")}>
-            {t("validWindow", {
-              from: instant(mandate.validFrom),
-              to: instant(mandate.validTo),
-            })}
+            <ValidWindow
+              validFrom={mandate.validFrom}
+              validTo={mandate.validTo}
+            />
           </Row>
         </dl>
       </div>

@@ -15,15 +15,21 @@
 //
 // **A not-loaded state replaces the body, never the shell.** The header goes
 // with the body, because a header naming a mandate the reader may not see is
-// itself a disclosure.
+// itself a disclosure. The design's empty state replaces the body too, with no
+// actions: a mandate in effect whose ledger holds no draw. A mandate that is
+// not in effect keeps its header, because its empty ledger is not the design's
+// "it is active" and a draft still needs its Decline.
 import { notFound } from "next/navigation";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
-import type { OrgRole } from "@/data/contracts/common";
-import type { MandateDetail, MandateRow } from "@/data/contracts/mandates";
+import {
+  isEffective,
+  type MandateDetail,
+  type MandateRow,
+} from "@/data/contracts/mandates";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
-import type { WsCtx } from "@/server/viewer";
+import type { WsCtx, WsRole } from "@/server/viewer";
 import { Badge, type BadgeTone } from "@/ui/badge";
 import {
   eyebrow,
@@ -44,7 +50,7 @@ import { type GrantAgent, MandateGrant, type PeopleNames } from "./grant";
 import { MandateLedger } from "./ledger";
 import { MandateActions } from "./mandate-actions";
 import { MandateReadFailure } from "./read-failure";
-import { NotBacked } from "./state";
+import { NotBacked, StateWrap } from "./state";
 import {
   type MandateAt,
   MANDATE_ID,
@@ -200,11 +206,13 @@ function Header({
   at,
   readAt,
   people,
+  agentKey,
 }: {
   mandate: MandateRow;
   at: MandateAt;
   readAt: Date;
   people: PeopleNames;
+  agentKey: string | null;
 }) {
   const t = useTranslations("mandate");
   const granter =
@@ -247,6 +255,7 @@ function Header({
         ws={at.ws}
         mandate={mandate}
         here={mandateLink(at)}
+        agentKey={agentKey}
         now={readAt}
       />
     </header>
@@ -338,6 +347,14 @@ function Loaded({
   agent: GrantAgent;
   people: PeopleNames;
 }) {
+  // The design's empty state: a mandate in effect that has never been drawn on
+  // is the state alone, with no actions. `asOf` is the instant the ledger
+  // answered, so the judgement is a pure read of the answer.
+  if (
+    detail.draws.length === 0 &&
+    isEffective(detail.mandate, new Date(detail.asOf))
+  )
+    return <MandateNeverDrawn />;
   return (
     <div className="flex flex-col gap-4">
       <Header
@@ -345,6 +362,7 @@ function Loaded({
         at={at}
         readAt={readAt}
         people={people}
+        agentKey={agent?.agentKey ?? null}
       />
       <Tiles mandate={detail.mandate} />
       <div className="grid items-start gap-3.5 min-[1080px]:grid-cols-[minmax(0,1fr)_340px]">
@@ -360,6 +378,21 @@ function Loaded({
         </div>
       </div>
     </div>
+  );
+}
+
+/** The design's empty state, in place of the page body. */
+export function MandateNeverDrawn() {
+  const t = useTranslations("mandate.ledger");
+  return (
+    <StateWrap
+      kind="empty"
+      title={t("empty")}
+      headingLevel={1}
+      testId="mandate-empty"
+    >
+      {t("emptyBodyEffective")}
+    </StateWrap>
   );
 }
 
@@ -394,7 +427,11 @@ async function agentOf(
 ): Promise<GrantAgent> {
   const read = await source.agents.get(ctx, slug);
   return read.ok
-    ? { agentKey: read.value.identity.agentKey, name: read.value.identity.name }
+    ? {
+        agentKey: read.value.identity.agentKey,
+        name: read.value.identity.name,
+        harness: read.value.identity.harness,
+      }
     : null;
 }
 
@@ -403,9 +440,12 @@ export async function Mandate({
   source,
   mandate,
   agent = null,
+  viewerName = null,
 }: {
   ctx: WsCtx;
   source: DataSource;
+  /** The signed-in person's name (or email), for the denied state's *Signed in as*. */
+  viewerName?: string | null;
   /** The mandate's public id, as the URL names it. */
   mandate: string;
   /** The agent slug the nested route names; null on the flat route. */
@@ -418,10 +458,13 @@ export async function Mandate({
   const readAt = instantAfterRead();
   if (!read.ok) {
     if (read.reason === "error" && read.status === 404) notFound();
+    // Denied names the person it refused, as the design's *Signed in as*
+    // does: the name the route read from this request's session, the
+    // workspace role and the workspace.
     return (
       <Failure
         read={read}
-        orgRole={ctx.orgRole}
+        viewer={{ name: viewerName, wsRole: ctx.wsRole }}
         orgName={ctx.orgName}
         at={at}
         readAt={readAt.toISOString()}
@@ -448,13 +491,13 @@ export async function Mandate({
 
 function Failure({
   read,
-  orgRole,
+  viewer,
   orgName,
   at,
   readAt,
 }: {
   read: Exclude<Read<unknown>, { ok: true }>;
-  orgRole: OrgRole;
+  viewer: { name: string | null; wsRole: WsRole };
   orgName: string;
   at: MandateAt;
   readAt: string;
@@ -463,7 +506,7 @@ function Failure({
   return (
     <MandateReadFailure
       read={read}
-      orgRole={orgRole}
+      viewer={viewer}
       orgName={orgName}
       org={at.org}
       ws={at.ws}

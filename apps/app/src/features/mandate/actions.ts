@@ -47,10 +47,19 @@ export type LimitsDraft = {
   perPeriod: string;
   /** The mandate's own approval threshold on this measure. */
   approvalAbove: string;
-  /** The last day the mandate may be drawn on (`YYYY-MM-DD`); blank keeps the window. */
+  /**
+   * The last day the mandate may be drawn on (`YYYY-MM-DD`). The dialog opens
+   * it on the current last day; blank, or the day it opened with, keeps the
+   * window.
+   */
   validTo: string;
   /** What each field opened with, so an untouched one can be told from an edit. */
-  baseline: { perCall: string; perPeriod: string; approvalAbove: string };
+  baseline: {
+    perCall: string;
+    perPeriod: string;
+    approvalAbove: string;
+    validTo: string;
+  };
 };
 
 type Kind = "money" | "count";
@@ -101,7 +110,12 @@ export async function changeMandateLimits(
   ws: string,
   draft: LimitsDraft,
 ): Promise<ActionResult<{ mandateId: string; status: string }>> {
-  const validTo = draft.validTo.trim();
+  // A prefilled day nobody changed is an echo, not an edit: sending it would
+  // move the stored end to the end of that day in this viewer's zone, which
+  // widens or narrows a window granted to a different instant.
+  const typedValidTo = draft.validTo.trim();
+  const validTo =
+    typedValidTo === draft.baseline.validTo.trim() ? "" : typedValidTo;
   // `2027-02-31` matches the date shape and `Date.UTC` rolls it into March, so
   // the day must round-trip as the day it claims to be.
   if (validTo !== "" && !isCalendarDay(validTo)) return refuse("validTo");

@@ -3,23 +3,29 @@
 // why two calls cannot both fit under one remaining limit, then the table of
 // every draw.
 //
-// A mandate that has never been drawn on shows the design's empty state in
-// place of the bar and the table, and says remaining authority equals the full
-// period limit only when that is true: enforcement honours only an active
-// mandate inside its half-open window (`isEffective`), so a draft, revoked,
-// expired or not-yet-started mandate has no remaining authority however much of
-// its limit is undrawn.
+// A mandate in effect that has never been drawn on shows the design's empty
+// state in place of the whole page body (mandate.tsx). One that is not in
+// effect keeps its header and this panel, which says the undrawn limit
+// authorizes nothing: enforcement honours only an active mandate inside its
+// half-open window (`isEffective`), so a draft, revoked, expired or
+// not-yet-started mandate has no remaining authority however much of its limit
+// is undrawn, and a draft still needs its Decline.
 import { useTranslations } from "next-intl";
-import { isEffective, type MandateDetail } from "@/data/contracts/mandates";
+import type { MandateDetail } from "@/data/contracts/mandates";
 import { panel, panelBody, panelHeader, panelTitle } from "@/ui/control-styles";
 import { AuthorityBar } from "./authority-bar";
 import { LedgerTable } from "./ledger-table";
 import { NotBacked, StateWrap } from "./state";
+import { measuresOf, openCalls } from "./view";
 
 export function MandateLedger({ detail }: { detail: MandateDetail }) {
   const t = useTranslations("mandate.ledger");
-  const bars = detail.mandate.authority.filter(
+  const { mandate, draws } = detail;
+  const bars = mandate.authority.filter(
     (a) => a.perPeriod !== null && a.settledRatio !== null,
+  );
+  const periodKeys = Object.fromEntries(
+    mandate.authority.map((a) => [a.measure, a.periodKey]),
   );
   return (
     <section
@@ -32,18 +38,14 @@ export function MandateLedger({ detail }: { detail: MandateDetail }) {
           {t("title")}
         </h2>
       </div>
-      {detail.ledger.length === 0 ? (
+      {draws.length === 0 ? (
         <StateWrap
           kind="empty"
           title={t("empty")}
           headingLevel={3}
           testId="mandate-empty"
         >
-          {/* Deriving a Date from the answer's own `asOf` is a pure read of a
-              prop, not a clock read in render. */}
-          {isEffective(detail.mandate, new Date(detail.asOf))
-            ? t("emptyBodyEffective")
-            : t("emptyBody")}
+          {t("emptyBody")}
         </StateWrap>
       ) : (
         <>
@@ -55,6 +57,11 @@ export function MandateLedger({ detail }: { detail: MandateDetail }) {
                 key={authority.measure}
                 authority={authority}
                 named={bars.length > 1}
+                openCalls={openCalls(
+                  draws,
+                  authority.measure,
+                  detail.readBound,
+                )}
               />
             ))}
             <p className="text-[11.5px] text-dim">{t("concurrency")}</p>
@@ -67,7 +74,12 @@ export function MandateLedger({ detail }: { detail: MandateDetail }) {
               {t("readBound", { shown: String(detail.readBound) })}
             </p>
           )}
-          <LedgerTable ledger={detail.ledger} />
+          <LedgerTable
+            draws={draws}
+            asOf={detail.asOf}
+            primary={measuresOf(mandate).primary?.measure ?? null}
+            periodKeys={periodKeys}
+          />
           <div className="border-t border-border px-4 py-2.5">
             <NotBacked gap="G8" block>
               {t("footnote")}

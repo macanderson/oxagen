@@ -102,7 +102,7 @@ type LedgerOutput = MandateGetOutput["ledger"][number];
 /**
  * One ledger row as `get_mandate` answers it. `id` and `toolCallId` are raw
  * uuids in the contract, which is why the view model drops both
- * (`MandateLedgerRow`); they are here because the mapper's input carries them and
+ * (`MandateDraw`); they are here because the mapper's input carries them and
  * a fixture that left them out would not be the shape under test.
  */
 export function ledgerOutput(

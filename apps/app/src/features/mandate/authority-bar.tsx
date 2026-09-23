@@ -7,10 +7,10 @@
 // read one record and nothing here sums anything.
 //
 // A reservation is drawn only while one is held. The design labels it
-// "reserved by this call" because its approval card speaks for one call; this
-// page speaks for the mandate, and the ledger cannot tell one open reservation
-// from several, so the legend says "reserved by calls in flight", which is true
-// in both cases.
+// "reserved by this call". That is true when exactly one call holds a
+// reservation, so the legend says it then, names the count when several do,
+// and says "reserved by calls in flight" when the read filled its bound and an
+// older open reservation may be missing from it (`openCalls`).
 //
 // A limit lowered under authority already drawn leaves the drawn figures above
 // the limit. The settled segment takes what it measures and the reservation
@@ -26,8 +26,11 @@ import { isDrawn, unitOf } from "./view";
 export function AuthorityBar({
   authority,
   named,
+  openCalls,
 }: {
   authority: MandateAuthority;
+  /** How many calls hold a reservation on this measure; null when the read cannot say. */
+  openCalls: number | null;
   /** Whether to name the measure beside the heading: true when the page draws more than one bar. */
   named: boolean;
 }) {
@@ -43,10 +46,17 @@ export function AuthorityBar({
     ? Math.min(Math.max(0, reservedRatio), 1 - settledWidth)
     : 0;
   const left = remaining === null ? text(perPeriod) : text(remaining);
+  const by =
+    openCalls === 1
+      ? t("by.one")
+      : openCalls === null || openCalls === 0
+        ? t("by.unknown")
+        : t("by.many", { count: String(openCalls) });
   const label = showReserved
     ? t("labelReserved", {
         settled: text(authority.settled),
         reserved: text(authority.reserved),
+        by,
         remaining: left,
         limit: text(perPeriod),
       })
@@ -110,7 +120,7 @@ export function AuthorityBar({
               aria-hidden="true"
               className="block size-[9px] rounded-[3px] bg-info"
             />
-            {t("reserved", { value: text(authority.reserved) })}
+            {t("reserved", { by, value: text(authority.reserved) })}
             <span className="text-dim">
               {t("share", { share: formatRatio(reservedRatio, locale) })}
             </span>

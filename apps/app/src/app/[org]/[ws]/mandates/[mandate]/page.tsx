@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
 import { dataSource } from "@/data/source";
+import { getAuthUser } from "@/features/auth";
 import { Mandate, MandateLoading } from "@/features/mandate";
 import { requireViewer } from "@/server/viewer";
 
@@ -24,13 +25,22 @@ export default async function MandatePage({
 }: PageProps<"/[org]/[ws]/mandates/[mandate]">) {
   const { org, ws, mandate } = await params;
   const ctx = await requireViewer(org, ws);
+  // The denied state names the person it refused (*Signed in as*); the
+  // session is memoized for this request, so this reads nothing new.
+  const user = await getAuthUser();
+  const viewerName = user === null ? null : user.name || user.email;
   return (
     <main
       id="main"
       className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10"
     >
       <Suspense fallback={<MandateLoading />}>
-        <Mandate ctx={ctx} source={dataSource()} mandate={mandate} />
+        <Mandate
+          ctx={ctx}
+          source={dataSource()}
+          mandate={mandate}
+          viewerName={viewerName}
+        />
       </Suspense>
     </main>
   );

@@ -14,6 +14,8 @@ const ICONS = {
   denied: { Icon: Lock, tone: "text-warning border-warning/40" },
 } as const;
 
+const HEADINGS = { 1: "h1", 2: "h2", 3: "h3" } as const;
+
 export function StateWrap({
   kind,
   title,
@@ -25,7 +27,8 @@ export function StateWrap({
 }: {
   kind: keyof typeof ICONS;
   title: string;
-  headingLevel?: 2 | 3;
+  /** 1 when the state replaces the page body, so the page keeps one h1. */
+  headingLevel?: 1 | 2 | 3;
   testId: string;
   /** The one paragraph under the heading. */
   children: ReactNode;
@@ -34,7 +37,7 @@ export function StateWrap({
   below?: ReactNode;
 }) {
   const { Icon, tone } = ICONS[kind];
-  const Heading = headingLevel === 2 ? "h2" : "h3";
+  const Heading = HEADINGS[headingLevel];
   return (
     <div
       data-testid={testId}

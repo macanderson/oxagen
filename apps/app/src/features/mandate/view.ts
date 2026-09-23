@@ -12,14 +12,20 @@
 // search cannot move a figure in a tile.
 import type {
   MandateAuthority,
-  MandateLedgerRow,
+  MandateDraw,
   MandateMovement,
   MandateRow,
   MeasureValue,
 } from "@/data/contracts/mandates";
+import {
+  endOfZonedDay,
+  startOfNextZonedDay,
+  startOfZonedDay,
+  supportsTimeZone,
+} from "@/shared/calendar-day";
 import { pathOf, routes, type SafePath } from "@/shared/safe-path";
 
-/** The movement states the facet offers, in the order a draw moves through them. */
+/** The draw states the facet offers, in the order a draw moves through them. */
 export const MOVEMENT_STATES: readonly MandateMovement[] = [
   "reserve",
   "settle",
@@ -156,7 +162,7 @@ export function thresholdOf(
 export type LedgerView = {
   /** The search text as typed; blank matches every row. */
   search: string;
-  /** The movement state the facet narrows to; null for every state. */
+  /** The draw state the facet narrows to; null for every state. */
   state: MandateMovement | null;
   /** Rows per page; 0 is All. The toolbar offers `PAGE_SIZES`. */
   size: number;
@@ -165,11 +171,11 @@ export type LedgerView = {
 };
 
 /**
- * Whether a movement answers the search. It matches the measure and the
- * external effect reference, the only two strings on a row a person could be
- * looking for, case-insensitively and on the value as recorded.
+ * Whether a draw answers the search. It matches the measure and the external
+ * effect reference, the only two strings on a row a person could be looking
+ * for, case-insensitively and on the value as recorded.
  */
-function matches(row: MandateLedgerRow, search: string): boolean {
+function matches(row: MandateDraw, search: string): boolean {
   const needle = search.trim().toLowerCase();
   if (needle === "") return true;
   return (
@@ -180,8 +186,8 @@ function matches(row: MandateLedgerRow, search: string): boolean {
 }
 
 export type LedgerPage = {
-  rows: readonly MandateLedgerRow[];
-  /** How many movements the search and the facet left, before paging. */
+  rows: readonly MandateDraw[];
+  /** How many draws the search and the facet left, before paging. */
   total: number;
   /** The zero-based page shown, clamped to the pages that exist. */
   page: number;
@@ -193,12 +199,12 @@ export type LedgerPage = {
 
 /** The rows this view shows, and what it is a page of. */
 export function ledgerPage(
-  ledger: readonly MandateLedgerRow[],
+  draws: readonly MandateDraw[],
   view: LedgerView,
 ): LedgerPage {
-  const selected = ledger.filter(
+  const selected = draws.filter(
     (row) =>
-      (view.state === null || row.kind === view.state) &&
+      (view.state === null || row.state === view.state) &&
       matches(row, view.search),
   );
   const total = selected.length;
@@ -215,4 +221,107 @@ export function ledgerPage(
     from: rows.length === 0 ? 0 : start + 1,
     to: start + rows.length,
   };
+}
+
+/**
+ * How many calls hold a reservation on a measure now, or null when the read
+ * cannot say. The bar names one open reservation "reserved by this call", as
+ * the design does, and more than one "reserved by N calls in flight"; a read
+ * that filled its bound may be missing an older open draw, so it answers null
+ * and the bar keeps the words that are true either way.
+ */
+export function openCalls(
+  draws: readonly MandateDraw[],
+  measure: string,
+  readBound: number | null,
+): number | null {
+  if (readBound !== null) return null;
+  return draws.filter((d) => d.measure === measure && d.state === "reserve")
+    .length;
+}
+
+/**
+ * The calendar day an instant falls on in a zone, as `YYYY-MM-DD`: the form the
+ * design prints and `<input type="date">` takes. Null for a zone this runtime
+ * cannot read, so a caller falls back to the formatter rather than guessing UTC.
+ */
+export function zonedDay(instant: string, timeZone: string): string | null {
+  if (!supportsTimeZone(timeZone)) return null;
+  const at = Date.parse(instant);
+  if (Number.isNaN(at)) return null;
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(at));
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === type)?.value;
+  const [year, month, day] = [part("year"), part("month"), part("day")];
+  if (year === undefined || month === undefined || day === undefined)
+    return null;
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * The last day a mandate may be drawn on: the day holding the last instant
+ * before its exclusive `validTo`. It prefills the edit dialog's Valid to, and
+ * `changeMandateLimits` turns a picked day back into that day's end.
+ */
+export function lastDayOf(validTo: string, timeZone: string): string | null {
+  const at = Date.parse(validTo);
+  if (Number.isNaN(at)) return null;
+  return zonedDay(new Date(at - 1).toISOString(), timeZone);
+}
+
+/**
+ * The validity window as the design prints it, `2026-09-01 → 2026-12-31`, when
+ * each end sits on a day boundary in the viewer's zone, so that a day names it
+ * exactly. An end that falls inside a day is null, and the caller prints its
+ * date and time: enforcement's window is half-open (`isEffective`), and a
+ * mandate that ends at 14:00 has not given the rest of that day.
+ */
+export function validDays(
+  mandate: Pick<MandateRow, "validFrom" | "validTo">,
+  timeZone: string,
+): { from: string | null; to: string | null } {
+  const fromDay = zonedDay(mandate.validFrom, timeZone);
+  const from =
+    fromDay !== null &&
+    startOfZonedDay(fromDay, timeZone) ===
+      new Date(Date.parse(mandate.validFrom)).toISOString()
+      ? fromDay
+      : null;
+  const toDay = lastDayOf(mandate.validTo, timeZone);
+  const end = new Date(Date.parse(mandate.validTo)).toISOString();
+  const to =
+    toDay !== null &&
+    (endOfZonedDay(toDay, timeZone) === end ||
+      startOfNextZonedDay(toDay, timeZone) === end)
+      ? toDay
+      : null;
+  return { from, to };
+}
+
+/**
+ * The design's When cell: the time for a draw on the day the page read the
+ * ledger (`09:31:08`), the day for an older one (`2026-09-04`). Null for a zone
+ * this runtime cannot read.
+ */
+export function whenOf(
+  at: string,
+  asOf: string,
+  timeZone: string,
+): { kind: "time" | "day"; text: string } | null {
+  const day = zonedDay(at, timeZone);
+  if (day === null) return null;
+  if (day !== zonedDay(asOf, timeZone)) return { kind: "day", text: day };
+  const text = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).format(new Date(Date.parse(at)));
+  return { kind: "time", text };
 }

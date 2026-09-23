@@ -14,8 +14,8 @@
 // read path returns neither, so the line names the instant the read failed and
 // says the trace is not recorded.
 import { useTranslations } from "next-intl";
-import type { OrgRole } from "@/data/contracts/common";
 import type { Read } from "@/data/read";
+import type { WsRole } from "@/server/viewer";
 import { routes, type SafePath } from "@/shared/safe-path";
 import { buttonPrimary, buttonSecondary, mono } from "@/ui/control-styles";
 import { OutcomePanel } from "@/ui/form-feedback";
@@ -27,7 +27,7 @@ type Failure = Exclude<Read<unknown>, { ok: true }>;
 
 export function MandateReadFailure({
   read,
-  orgRole,
+  viewer,
   orgName,
   org,
   ws,
@@ -35,7 +35,8 @@ export function MandateReadFailure({
   readAt,
 }: {
   read: Failure;
-  orgRole: OrgRole;
+  /** Who was refused: the session's name and the workspace role, for *Signed in as*. */
+  viewer: { name: string | null; wsRole: WsRole };
   orgName: string;
   org: string;
   ws: string;
@@ -45,13 +46,13 @@ export function MandateReadFailure({
   readAt: string;
 }) {
   const t = useTranslations("mandate.failure");
-  const roles = useTranslations("mandate.roles");
   switch (read.reason) {
     case "denied":
       return (
         <StateWrap
           kind="denied"
           title={t("denied.title")}
+          headingLevel={1}
           testId="mandate-denied"
           actions={
             <>
@@ -73,8 +74,16 @@ export function MandateReadFailure({
           below={
             <dl className="mt-5 grid max-w-[420px] grid-cols-[auto_1fr] gap-x-4 gap-y-[7px] text-left text-[12.5px]">
               <dt className="text-dim">{t("denied.signedIn")}</dt>
-              <dd className="m-0">
-                {roles(orgRole)} · <span className={mono}>{ws}</span>
+              <dd className="m-0" data-testid="signed-in-as">
+                {viewer.name === null ? null : (
+                  <>
+                    {viewer.name}
+                    {" · "}
+                  </>
+                )}
+                <span className={mono}>{`workspace.${viewer.wsRole}`}</span>
+                {" · "}
+                <span className={mono}>{ws}</span>
               </dd>
               <dt className="text-dim">{t("denied.needed")}</dt>
               <dd className="m-0">
@@ -108,6 +117,7 @@ export function MandateReadFailure({
         <StateWrap
           kind="error"
           title={t("error.title")}
+          headingLevel={1}
           testId="mandate-error"
           actions={
             <>

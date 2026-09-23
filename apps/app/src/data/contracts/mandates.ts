@@ -178,23 +178,29 @@ export const MandateMovement = z.enum(["reserve", "settle", "release"]);
 export type MandateMovement = z.infer<typeof MandateMovement>;
 
 /**
- * One row of `tools.mandate_ledger` as the mandate page shows it.
+ * One draw on the mandate as the page shows it: a call's movements on one
+ * measure, folded into the state the call has reached. The ledger records a
+ * draw as a reservation at decision time and then exactly one settlement or
+ * release of the same value (`closeReservations`, `packages/rules/src/
+ * mandates.ts`), so a table of movements would list a settled call twice and
+ * keep a `reserved` badge on money that has since settled. The mapper groups
+ * the movements by call and measure, and the state is the last one the call
+ * reached.
  *
  * **It carries no identifier, and that is the constraint rather than an
  * omission.** The ledger row's `id` and `tool_call_id` are raw uuids
  * (`packages/database/src/schema/tools.ts`), `get_mandate` passes them through
  * as recorded, and INV-11 keeps a raw database id out of every view model —
  * which is the same rule as CLAUDE.md's: a uuid is not a name a person can
- * read. So the view model drops both, the table keys its rows by position, and
- * the *Call* column names the measure the movement drew. The tool version the
- * call named is not recoverable from any read the app may make: the schema's
- * own comment says `control.tool_calls` is not in the tree, so nothing resolves
- * `tool_call_id` to a tool. The page says so under the table rather than
- * printing a uuid or leaving the column blank.
+ * read. So the mapper groups on `toolCallId` and drops it, and the table keys
+ * its rows by position. The tool version the call named is not recoverable
+ * from any read the app may make (#3871), so the *Call* cell says so rather
+ * than printing a uuid or leaving the column blank.
  */
-export const MandateLedgerRow = z.object({
-  kind: MandateMovement,
-  /** The measure the movement drew, as the mandate's limits name it. */
+export const MandateDraw = z.object({
+  /** The state the call reached: reserved, then settled or released. */
+  state: MandateMovement,
+  /** The measure the call drew, as the mandate's limits name it. */
   measure: z.string().min(1),
   value: MeasureValue,
   /**
@@ -211,17 +217,18 @@ export const MandateLedgerRow = z.object({
    * that any later raw uuid could hide behind.
    */
   externalEffectRef: z.string().min(1).nullable(),
-  /** The accounting window the movement was counted in, as the ledger keys it. */
+  /** The accounting window the draw was counted in, as the ledger keys it. */
   periodKey: z.string().min(1),
+  /** When the call reached its state: the newest of its movements. */
   at: Instant,
 });
-export type MandateLedgerRow = z.infer<typeof MandateLedgerRow>;
+export type MandateDraw = z.infer<typeof MandateDraw>;
 
 /**
  * One mandate and its ledger: the page's whole record (`get_mandate`).
  *
  * **`readBound` is what the read can establish, and its name says so.** It is
- * the `ledgerLimit` the read asked for, set when the answer filled it and null
+ * the `ledgerLimit` the read asked for, in movements, set when the answer filled it and null
  * when the answer came back short. It is deliberately **not** called
  * `truncatedAt`, and the copy above the table does not say older movements exist:
  * `get_mandate` takes a bound and no cursor, so a ledger of exactly the bound is
@@ -238,8 +245,8 @@ export type MandateLedgerRow = z.infer<typeof MandateLedgerRow>;
  */
 export const MandateDetail = z.object({
   mandate: MandateRow,
-  /** Newest movement first, as `get_mandate` orders them. */
-  ledger: z.array(MandateLedgerRow),
+  /** One row per call and measure, newest first, as `get_mandate` orders the movements. */
+  draws: z.array(MandateDraw),
   asOf: Instant,
   readBound: z.number().int().positive().nullable(),
 });

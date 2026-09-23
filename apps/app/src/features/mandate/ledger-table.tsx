@@ -1,28 +1,32 @@
 "use client";
 // The ledger table (the design's table under the remaining-authority bar):
-// every draw on this mandate, with a search, a facet on State, a rows-per-page
-// choice and a pager, all over the rows the page already read (view.ts says why
-// that is the contract's shape).
+// every draw on this mandate, one row per call and measure in the state the
+// call reached, with a search, a facet on State, a rows-per-page choice and a
+// pager, all over the draws the page already read (view.ts says why that is
+// the contract's shape).
 //
 // **State is a dot and a word.** A reservation, a settlement and a release are
 // three facts about money, and a reader must be able to tell them apart in
 // greyscale; the hue sits on the dot and the word carries the meaning.
 //
 // **Two cells say what is not recorded rather than filling in.** The ledger
-// records the call by a raw id that no read resolves to a tool version, so the
-// Call column names the measure the draw counted; and no read carries a receipt
-// frame, so no receipt opens from this table. Each is a `NotBacked` cell and the
-// footnote names both gaps, so nothing prints a uuid or a zero in their place.
-import { useTranslations } from "next-intl";
+// records the call by a raw id that no read resolves to a tool version (#3871),
+// so the Call cell says the tool version is not recorded; and no read carries a
+// receipt frame (#3869), so a settled or released draw's Receipt cell says the
+// receipt is not recorded. A reservation has no receipt yet and shows the
+// design's dash. Nothing prints a uuid or a zero in their place.
+//
+// **A draw from an earlier window is marked.** The Settled tile counts this
+// period (`periodKey`), and the table lists the newest draws across every
+// period, so a settled row from an earlier window says so under its date rather
+// than reading as part of a total it is not in.
+import { useTimeZone, useTranslations } from "next-intl";
 import { useId, useState } from "react";
-import type {
-  MandateLedgerRow,
-  MandateMovement,
-} from "@/data/contracts/mandates";
+import type { MandateDraw, MandateMovement } from "@/data/contracts/mandates";
 import { Badge, type BadgeTone } from "@/ui/badge";
 import { inputBase, mono } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
-import { Measure } from "@/ui/measure";
+import { Measure, NamedMeasure } from "@/ui/measure";
 import { cell, numericCell, Table } from "@/ui/table";
 import { NotBacked } from "./state";
 import {
@@ -32,6 +36,7 @@ import {
   MOVEMENT_STATES,
   PAGE_SIZES,
   type PageSize,
+  whenOf,
 } from "./view";
 
 /** The design's badge per state: settled reads allowed, reserved approval, released denied. */
@@ -51,7 +56,7 @@ function pageWindow(current: number, pages: number): number[] {
   return Array.from({ length: end - start }, (_, index) => start + index);
 }
 
-function ExternalCell({ row }: { row: MandateLedgerRow }) {
+function ExternalCell({ row }: { row: MandateDraw }) {
   const t = useTranslations("mandate.ledger");
   if (row.externalEffectRef !== null)
     return (
@@ -62,21 +67,65 @@ function ExternalCell({ row }: { row: MandateLedgerRow }) {
   // A reservation has caused no effect yet and a release never will; only a
   // settlement without a reference is a missing fact.
   const key =
-    row.kind === "reserve"
+    row.state === "reserve"
       ? "noEffectYet"
-      : row.kind === "release"
+      : row.state === "release"
         ? "releasedNoEffect"
         : "notRecorded";
   return <span className="text-xs text-muted-foreground">{t(key)}</span>;
 }
 
-export function LedgerTable({
-  ledger,
+/** The design's When cell: the time for today's draw, the day for an older one. */
+function WhenCell({
+  row,
+  asOf,
+  current,
 }: {
-  ledger: readonly MandateLedgerRow[];
+  row: MandateDraw;
+  asOf: string;
+  current: boolean;
 }) {
   const t = useTranslations("mandate.ledger");
   const format = useFormatter();
+  const timeZone = useTimeZone();
+  const when = timeZone === undefined ? null : whenOf(row.at, asOf, timeZone);
+  return (
+    <>
+      <time dateTime={row.at} className={`${mono} text-[11.5px]`}>
+        {when === null
+          ? format.dateTime(new Date(row.at), {
+              dateStyle: "medium",
+              timeStyle: "medium",
+            })
+          : when.text}
+      </time>
+      {current ? null : (
+        <span
+          data-state="earlier-period"
+          className="block text-[11px] text-muted-foreground"
+        >
+          {t("earlierPeriod", { period: row.periodKey })}
+        </span>
+      )}
+    </>
+  );
+}
+
+export function LedgerTable({
+  draws,
+  asOf,
+  primary,
+  periodKeys,
+}: {
+  draws: readonly MandateDraw[];
+  /** When the ledger answered: a draw on that day shows its time. */
+  asOf: string;
+  /** The measure the tiles speak for; a draw on another measure is named. */
+  primary: string | null;
+  /** The window each measure's authority counts now, by measure. */
+  periodKeys: Readonly<Record<string, string>>;
+}) {
+  const t = useTranslations("mandate.ledger");
   const id = useId();
   const [view, setView] = useState<LedgerView>({
     search: "",
@@ -84,7 +133,7 @@ export function LedgerTable({
     size: DEFAULT_PAGE_SIZE,
     page: 0,
   });
-  const page = ledgerPage(ledger, view);
+  const page = ledgerPage(draws, view);
   const columns = [
     { label: t("columns.when") },
     { label: t("columns.call") },
@@ -165,35 +214,48 @@ export function LedgerTable({
         <Table label={t("label")} columns={columns}>
           {page.rows.map((row, index) => (
             <tr
-              // The ledger row carries no public id and a raw uuid never
-              // reaches a view model, so the key is the row's place in a list
-              // the server ordered.
-              key={`${row.at}-${row.kind}-${row.measure}-${String(page.from + index)}`}
-              data-testid="ledger-movement"
-              data-state={row.kind}
+              // A draw carries no public id and a raw uuid never reaches a
+              // view model, so the key is the row's place in a list the
+              // server ordered.
+              key={`${row.at}-${row.state}-${row.measure}-${String(page.from + index)}`}
+              data-testid="ledger-draw"
+              data-state={row.state}
             >
               <td className={`${cell} whitespace-nowrap`}>
-                <span className={`${mono} text-[11.5px]`}>
-                  {format.dateTime(new Date(row.at), {
-                    dateStyle: "medium",
-                    timeStyle: "short",
-                  })}
-                </span>
+                <WhenCell
+                  row={row}
+                  asOf={asOf}
+                  current={periodKeys[row.measure] === row.periodKey}
+                />
               </td>
               <td className={cell}>
-                <span className={`${mono} text-[11.5px]`}>{row.measure}</span>
+                <NotBacked gap="tool-version">{t("callNotRecorded")}</NotBacked>
               </td>
               <td className={numericCell}>
-                <Measure value={row.value} />
+                {row.measure === primary ? (
+                  <Measure value={row.value} />
+                ) : (
+                  <NamedMeasure measure={row.measure} value={row.value} />
+                )}
               </td>
               <td className={cell}>
-                <Badge tone={TONE[row.kind]}>{t(`kind.${row.kind}`)}</Badge>
+                <Badge tone={TONE[row.state]}>{t(`kind.${row.state}`)}</Badge>
               </td>
               <td className={cell}>
                 <ExternalCell row={row} />
               </td>
               <td className={cell}>
-                <NotBacked gap="G8">{t("notRecorded")}</NotBacked>
+                {row.state === "reserve" ? (
+                  <span
+                    data-state="no-receipt-yet"
+                    className="text-muted-foreground"
+                  >
+                    <span aria-hidden="true">—</span>
+                    <span className="sr-only">{t("noReceiptYet")}</span>
+                  </span>
+                ) : (
+                  <NotBacked gap="G8">{t("notRecorded")}</NotBacked>
+                )}
               </td>
             </tr>
           ))}

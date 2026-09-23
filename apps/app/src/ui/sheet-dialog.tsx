@@ -4,6 +4,7 @@
 // a drag handle, over a scrim, closed by a full-width footer button
 // (src/ui/phone.css keys on the data attributes set here).
 import { Dialog } from "@base-ui/react/dialog";
+import { X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { createContext, type ReactNode, use, useState } from "react";
 import { createPortal } from "react-dom";
@@ -41,6 +42,7 @@ export function SheetDialog({
   footer,
   closeLabel,
   wide = false,
+  headerClose = false,
   dismissible = true,
   testId,
   children,
@@ -59,6 +61,8 @@ export function SheetDialog({
   closeLabel?: string;
   /** The mockup's dialog width (600px) for editors that need two columns. */
   wide?: boolean;
+  /** Draw the mockup's labelled × in the header beside the footer's dismiss button. */
+  headerClose?: boolean;
   testId: string;
   children: ReactNode;
 }) {
@@ -77,21 +81,40 @@ export function SheetDialog({
           className="fixed inset-0 z-50 bg-overlay-scrim"
         />
         <Dialog.Popup
+          // Base UI sets the role and traps focus but writes no aria-modal, so
+          // a screen reader is told here that the page behind is inert.
+          aria-modal="true"
           data-sheet=""
           data-testid={testId}
           className={`fixed left-1/2 top-[12vh] z-50 flex max-h-[76dvh] w-[calc(100%-1.5rem)] -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-dialog-border bg-dialog-bg text-dialog-fg shadow-2xl ${wide ? "max-w-[600px]" : "max-w-md"}`}
         >
           <SheetHandle />
           <div
-            className={`border-b border-border px-4 pt-4 ${tabs ? "pb-0" : "pb-3"}`}
+            className={`flex items-start gap-3 border-b border-border px-4 pt-4 ${tabs ? "pb-0" : "pb-3"}`}
           >
-            <Dialog.Title className="text-base font-semibold">
-              {title}
-            </Dialog.Title>
-            {subtitle ? (
-              <Dialog.Description className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
-                {subtitle}
-              </Dialog.Description>
+            <div className="min-w-0 flex-1">
+              <Dialog.Title className="text-base font-semibold">
+                {title}
+              </Dialog.Title>
+              {subtitle ? (
+                <Dialog.Description className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
+                  {subtitle}
+                </Dialog.Description>
+              ) : null}
+            </div>
+            {/* The mockup's header close: a labelled ×, beside the footer's
+                Cancel, so the dialog can be left from where it is read. Opt-in,
+                so a dialog whose footer already reads "Close" keeps one control
+                by that name. */}
+            {headerClose ? (
+              <Dialog.Close
+                disabled={!dismissible}
+                aria-label={t("close")}
+                data-touch-target=""
+                className="grid size-8 shrink-0 place-items-center rounded-md border border-border text-muted-foreground hover:bg-hl hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-45"
+              >
+                <X aria-hidden="true" className="size-3.5" />
+              </Dialog.Close>
             ) : null}
           </div>
           {tabs ? <div className="px-4">{tabs}</div> : null}

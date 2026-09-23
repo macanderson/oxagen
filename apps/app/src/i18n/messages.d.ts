@@ -1986,14 +1986,6 @@ type Messages = {
   };
   mandate: {
     eyebrow: string;
-    roles: {
-      owner: string;
-      admin: string;
-      member: string;
-      billing: string;
-      compliance: string;
-      viewer: string;
-    };
     loading: string;
     grantedBy: string;
     notGranted: string;
@@ -2038,6 +2030,11 @@ type Messages = {
       label: string;
       labelReserved: string;
       overLimit: string;
+      by: {
+        one: string;
+        many: string;
+        unknown: string;
+      };
     };
     ledger: {
       title: string;
@@ -2077,6 +2074,9 @@ type Messages = {
       empty: string;
       emptyBodyEffective: string;
       emptyBody: string;
+      callNotRecorded: string;
+      noReceiptYet: string;
+      earlierPeriod: string;
     };
     grant: {
       title: string;
@@ -2106,6 +2106,7 @@ type Messages = {
       approvalNone: string;
       valid: string;
       validWindow: string;
+      agentActivityNotBacked: string;
     };
     exceptions: {
       title: string;
@@ -2124,7 +2125,6 @@ type Messages = {
         approvalAbove: string;
         approvalHint: string;
         validTo: string;
-        validToHint: string;
         note: string;
         windows: {
           daily: string;
@@ -2172,6 +2172,12 @@ type Messages = {
         invalid: string;
         pendingApproval: string;
         unavailable: string;
+      };
+      outcome: {
+        limits: string;
+        revoked: string;
+        declined: string;
+        audit: string;
       };
     };
     failure: {

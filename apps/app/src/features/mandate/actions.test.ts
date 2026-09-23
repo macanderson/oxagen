@@ -123,6 +123,7 @@ const OPENED = {
   perCall: "250.00",
   perPeriod: "2000.00",
   approvalAbove: "100.00",
+  validTo: "2026-12-31",
 };
 
 /** The dialog submitted untouched: every field still its prefill. */
@@ -130,7 +131,6 @@ const untouched = {
   mandateId: MANDATE_ID,
   measure: "amount",
   ...OPENED,
-  validTo: "",
   baseline: OPENED,
 };
 
@@ -164,7 +164,12 @@ describe("changeMandateLimits", () => {
       perPeriod: "80",
       approvalAbove: "",
       validTo: "",
-      baseline: { perCall: "", perPeriod: "50", approvalAbove: "" },
+      baseline: {
+        perCall: "",
+        perPeriod: "50",
+        approvalAbove: "",
+        validTo: "",
+      },
     });
     expect(written()).toEqual({
       mandateId: MANDATE_ID,
@@ -218,6 +223,21 @@ describe("changeMandateLimits", () => {
     expect(Date.parse(input.validTo)).toBe(
       Date.parse("2027-03-31T23:59:59.999Z"),
     );
+  });
+
+  // The dialog opens Valid to on the current last day. Sending that day back
+  // would move the stored end to the close of the day in this viewer's zone,
+  // a different instant from the one the grant stored.
+  it("reads a prefilled Valid to nobody changed as no edit", async () => {
+    kernelAnswers({ timezone: "UTC" });
+    await changeMandateLimits("a-intel", "core-platform", {
+      ...untouched,
+      perPeriod: "900",
+    });
+    expect(written()).toEqual({
+      mandateId: MANDATE_ID,
+      limitChanges: { amount: { perPeriod: "900000000" } },
+    });
   });
 
   it("refuses a submission that changed nothing, before any write (negative)", async () => {

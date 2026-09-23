@@ -9,7 +9,13 @@
 // copy of that prefill, so the action can send only what the operator changed
 // (ADR-102). The cases below prove the two halves meet; what the action does
 // with them is pinned in actions.test.ts.
-import { cleanup, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MandateRow } from "@/data/contracts/mandates";
@@ -41,8 +47,8 @@ const mandate = mandateRow({
 const NOW = new Date("2026-10-01T00:00:00.000Z");
 const here = routes.mandate("acme", "core-platform", mandate.id);
 
-function draw(row: MandateRow = mandate, now: Date = NOW) {
-  render(
+function actions(row: MandateRow, now: Date) {
+  return (
     <IntlProvider>
       <MandateActions
         org="acme"
@@ -50,9 +56,14 @@ function draw(row: MandateRow = mandate, now: Date = NOW) {
         mandate={row}
         now={now}
         here={here}
+        agentKey="a-intel.finops.invoice-bot"
       />
-    </IntlProvider>,
+    </IntlProvider>
   );
+}
+
+function draw(row: MandateRow = mandate, now: Date = NOW) {
+  return render(actions(row, now));
 }
 
 const editDialog = () => screen.getByTestId("change-limits");
@@ -65,10 +76,13 @@ async function click(name: string) {
   return user;
 }
 
+// Valid to opens on the last day before the fixture's exclusive end,
+// 2026-12-31T00:00Z, in the provider's zone (UTC).
 const PREFILLED = {
   perCall: "250.00",
   perPeriod: "2000.00",
   approvalAbove: "100.00",
+  validTo: "2026-12-30",
 };
 
 beforeEach(() => {
@@ -111,7 +125,9 @@ describe("mandateedit", () => {
     await click("Change limits");
     const form = editDialog();
     expect(within(form).getByText("Edit mnd_4f2a9c")).toBeInTheDocument();
-    expect(within(form).getByText("invoice-bot")).toBeInTheDocument();
+    expect(
+      within(form).getByText("a-intel.finops.invoice-bot"),
+    ).toBeInTheDocument();
     expect(within(form).getByLabelText("Per call (USD)")).toHaveValue("250.00");
     expect(within(form).getByLabelText("Per month (USD)")).toHaveValue(
       "2000.00",
@@ -119,13 +135,18 @@ describe("mandateedit", () => {
     expect(within(form).getByLabelText("Approval above (USD)")).toHaveValue(
       "100.00",
     );
-    expect(within(form).getByLabelText("Valid to")).toHaveValue("");
+    expect(within(form).getByLabelText("Valid to")).toHaveValue("2026-12-30");
     expect(form).toHaveTextContent(
       "A call above this parks for a human, and no rule elsewhere can release it.",
     );
     expect(form).toHaveTextContent(
-      "Lowering a ceiling below what is already reserved does not claw the reservation back. It applies from the next call.",
+      "Lowering a ceiling below what is already reserved does not claw the reservation back; it applies from the next call.",
     );
+    // The design's header close, labelled, beside the footer's Cancel.
+    expect(
+      within(form).getByRole("button", { name: "Close" }),
+    ).toBeInTheDocument();
+    expect(form).toHaveAttribute("aria-modal", "true");
     expect(
       within(form).getByRole("button", { name: "Cancel" }),
     ).toBeInTheDocument();
@@ -146,7 +167,6 @@ describe("mandateedit", () => {
       mandateId: mandate.id,
       measure: "amount",
       ...PREFILLED,
-      validTo: "",
       baseline: PREFILLED,
     });
   });
@@ -157,7 +177,9 @@ describe("mandateedit", () => {
     const form = editDialog();
     await user.clear(within(form).getByLabelText("Per month (USD)"));
     await user.type(within(form).getByLabelText("Per month (USD)"), "1500");
-    await user.type(within(form).getByLabelText("Valid to"), "2027-03-31");
+    fireEvent.change(within(form).getByLabelText("Valid to"), {
+      target: { value: "2027-03-31" },
+    });
     await user.click(within(form).getByRole("button", { name: "Save" }));
     expect(changeMandateLimits).toHaveBeenCalledWith("acme", "core-platform", {
       mandateId: mandate.id,
@@ -168,6 +190,15 @@ describe("mandateedit", () => {
       baseline: PREFILLED,
     });
     expect(router.replace).toHaveBeenCalledWith(here);
+    // The write that landed says so: the mandate, and where it is recorded.
+    const outcome = screen.getByTestId("mandate-outcome");
+    expect(outcome).toHaveAttribute("role", "status");
+    expect(outcome).toHaveTextContent(
+      "mnd_4f2a9c has its new limits. They apply from the next call. Open the audit record",
+    );
+    expect(
+      within(outcome).getByRole("link", { name: "Open the audit record" }),
+    ).toHaveAttribute("href", "/acme/audit?capability=update_mandate_limits");
   });
 
   it("edits the calls cap in calls when that is the mandate's only limit", async () => {
@@ -222,7 +253,7 @@ describe("mandaterevoke", () => {
     const form = revokeDialog();
     expect(within(form).getByText("Revoke mnd_4f2a9c?")).toBeInTheDocument();
     expect(within(form).getByTestId("revoke-warning")).toHaveTextContent(
-      "invoice-bot can move no money after this. $180.00 is reserved, and a call that has not dispatched gives its share back now. $1,204.18 already settled and stays on the ledger.",
+      "a-intel.finops.invoice-bot can move no money after this. $180.00 is reserved, and a call that has not dispatched gives its share back now. $1,204.18 already settled and stays on the ledger.",
     );
     expect(form).toHaveTextContent(
       "The ledger is kept, never deleted. A revoked mandate still answers for every draw it made.",
@@ -230,14 +261,18 @@ describe("mandaterevoke", () => {
     expect(
       within(form).getByRole("button", { name: "Cancel" }),
     ).toBeInTheDocument();
+    // The design draws the confirmation as a danger button, not gold.
+    const confirm = within(form).getByRole("button", { name: "Revoke it" });
+    expect(confirm.className).toContain("text-error-ink");
+    expect(confirm.className).not.toContain("bg-button-primary-bg");
     expect(
-      within(form).getByRole("button", { name: "Revoke it" }),
+      within(form).getByRole("button", { name: "Close" }),
     ).toBeInTheDocument();
     await expectNoAxe(document.body);
   });
 
-  it("revokes this mandate with the reason written, then reloads the page", async () => {
-    draw();
+  it("revokes this mandate with the reason written, then reloads the page and says so", async () => {
+    const view = draw();
     const user = await click("Revoke");
     const form = revokeDialog();
     await user.type(within(form).getByLabelText("Reason"), "vendor offboarded");
@@ -247,6 +282,14 @@ describe("mandaterevoke", () => {
       reason: "vendor offboarded",
     });
     expect(router.replace).toHaveBeenCalledWith(here);
+    // The refreshed record reads revoked: the buttons go and the line stays.
+    view.rerender(actions(mandateRow({ status: "revoked" }), NOW));
+    expect(
+      screen.queryByRole("button", { name: "Revoke" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("mandate-outcome")).toHaveTextContent(
+      "mnd_4f2a9c is revoked.",
+    );
   });
 
   it("declines a draft and claims nothing about money", async () => {

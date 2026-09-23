@@ -4,26 +4,55 @@
 // carry the id of the mandate the route names, so neither can act on another.
 //
 // **No gold on the page.** The design gives the page body no gold action:
-// Change limits is an ordinary button and Revoke a danger one. The primary
-// button of an open dialog is the only gold (Save, and Revoke it).
+// Change limits is an ordinary button and Revoke a danger one. Save is the
+// edit dialog's gold; Revoke it is drawn as a danger button, as the design
+// draws it, because an irreversible write is not the screen's identity.
+//
+// **A write that lands says so.** The dialog closes, the page reads the record
+// again, and a line under the actions names the mandate, what it now is, and
+// where the change is recorded (the Audit page, filtered to the capability).
+// The line lives in `MandateActions`, which stays mounted across the refresh,
+// so it survives a revoke that removes the buttons it came from.
 //
 // Neither control is hidden from a reader whose roles cannot make the write.
 // Hiding a button is not a gate. The handlers hold the gate (actions.ts), and a
 // reader told why the write was refused has learned something.
-import { useTranslations } from "next-intl";
+import { LoaderCircle } from "lucide-react";
+import { useTimeZone, useTranslations } from "next-intl";
 import { type ReactNode, type SyntheticEvent, useId, useState } from "react";
 import { isChangeable, type MandateRow } from "@/data/contracts/mandates";
-import type { SafePath } from "@/shared/safe-path";
-import { buttonDanger, buttonSecondary, inputBase } from "@/ui/control-styles";
+import { routes, type SafePath } from "@/shared/safe-path";
+import {
+  buttonDanger,
+  buttonSecondary,
+  inputBase,
+  linkText,
+  mono,
+} from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useMeasureText } from "@/ui/measure";
-import { useNavigate } from "@/ui/navigation";
+import { SafeLink, useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { UNANSWERED, useActionFailure } from "./action-failure";
 import { changeMandateLimits, revokeMandate } from "./actions";
-import { editableOf, measuresOf, thresholdOf, unitOf } from "./view";
+import { editableOf, lastDayOf, measuresOf, thresholdOf, unitOf } from "./view";
 
-type Place = { org: string; ws: string; mandate: MandateRow; here: SafePath };
+/** What a write that landed did, for the line under the actions. */
+type Outcome = {
+  kind: "limits" | "revoked" | "declined";
+  mandate: string;
+  capability: "update_mandate_limits" | "revoke_mandate";
+};
+
+type Place = {
+  org: string;
+  ws: string;
+  mandate: MandateRow;
+  here: SafePath;
+  /** The agent's key (`org.ws.slug`), which the dialogs name; null when the agent read did not answer. */
+  agentKey: string | null;
+  done: (outcome: Outcome) => void;
+};
 
 // 16px on a phone, as the design's inputs are, so iOS does not zoom the sheet.
 const field = `${inputBase} max-md:min-h-11 max-md:text-base`;
@@ -77,8 +106,9 @@ function Note({ children }: { children: ReactNode }) {
  * dialog was open (ADR-102). A field left blank keeps what is stored: removing a
  * limit is a whole-record write over the API.
  */
-function ChangeLimits({ org, ws, mandate, here }: Place) {
+function ChangeLimits({ org, ws, mandate, here, agentKey, done }: Place) {
   const t = useTranslations("mandate.actions.limits");
+  const timeZone = useTimeZone();
   const failureText = useActionFailure();
   const navigate = useNavigate();
   const formId = useId();
@@ -93,6 +123,13 @@ function ChangeLimits({ org, ws, mandate, here }: Place) {
     perCall: editableOf(primary.perCall),
     perPeriod: editableOf(primary.perPeriod),
     approvalAbove: threshold === null ? "" : editableOf(threshold.value),
+    // The last day the mandate may be drawn on, in the zone this app draws
+    // dates in. Blank when the zone is unknown: a guessed zone would prefill
+    // a day the window does not end on.
+    validTo:
+      timeZone === undefined
+        ? ""
+        : (lastDayOf(mandate.validTo, timeZone) ?? ""),
   };
   const id = (name: string) => `${formId}-${name}`;
 
@@ -114,10 +151,16 @@ function ChangeLimits({ org, ws, mandate, here }: Place) {
           perCall: text(form, "baselinePerCall"),
           perPeriod: text(form, "baselinePerPeriod"),
           approvalAbove: text(form, "baselineApprovalAbove"),
+          validTo: text(form, "baselineValidTo"),
         },
       });
       if (result.ok) {
         setOpen(false);
+        done({
+          kind: "limits",
+          mandate: result.value.mandateId,
+          capability: "update_mandate_limits",
+        });
         navigate.replace(here);
       } else {
         setFailure(failureText(result));
@@ -147,8 +190,9 @@ function ChangeLimits({ org, ws, mandate, here }: Place) {
           if (!next) setFailure(null);
         }}
         title={t("title", { mandate: mandate.id })}
-        subtitle={mandate.agentSlug}
+        subtitle={agentKey ?? mandate.agentSlug}
         closeLabel={t("cancel")}
+        headerClose
         testId="change-limits"
         footer={
           <SubmitButton
@@ -219,16 +263,18 @@ function ChangeLimits({ org, ws, mandate, here }: Place) {
               defaultValue={defaults.approvalAbove}
             />
           </Field>
-          <Field
-            id={id("validTo")}
-            label={t("validTo")}
-            hint={t("validToHint")}
-          >
+          <Field id={id("validTo")} label={t("validTo")}>
             <input
               id={id("validTo")}
               name="validTo"
               type="date"
+              defaultValue={defaults.validTo}
               className={field}
+            />
+            <input
+              type="hidden"
+              name="baselineValidTo"
+              defaultValue={defaults.validTo}
             />
           </Field>
           <Note>{t("note")}</Note>
@@ -247,7 +293,7 @@ function ChangeLimits({ org, ws, mandate, here }: Place) {
  * in effect, so its dialog declines a request instead and claims nothing about
  * money.
  */
-function Revoke({ org, ws, mandate, here }: Place) {
+function Revoke({ org, ws, mandate, here, agentKey, done }: Place) {
   const t = useTranslations("mandate.actions.revoke");
   const d = useTranslations("mandate.actions.revoke.draft");
   const measureText = useMeasureText();
@@ -273,6 +319,11 @@ function Revoke({ org, ws, mandate, here }: Place) {
       });
       if (result.ok) {
         setOpen(false);
+        done({
+          kind: isDraft ? "declined" : "revoked",
+          mandate: result.value.mandateId,
+          capability: "revoke_mandate",
+        });
         navigate.replace(here);
       } else {
         setFailure(failureText(result));
@@ -284,6 +335,7 @@ function Revoke({ org, ws, mandate, here }: Place) {
     }
   }
 
+  const confirm = isDraft ? d("confirm") : t("confirm");
   return (
     <>
       <button
@@ -307,15 +359,31 @@ function Revoke({ org, ws, mandate, here }: Place) {
             : t("title", { mandate: mandate.id })
         }
         closeLabel={t("cancel")}
+        headerClose
         testId="revoke-mandate"
         footer={
-          <SubmitButton
+          // The design draws the confirmation as a danger button, not gold:
+          // it ends the agent's authority, and gold is identity, never a
+          // warning (SubmitButton draws only gold or secondary).
+          <button
+            type="submit"
             form={formId}
-            fullWidth={false}
-            pending={pending}
-            label={isDraft ? d("confirm") : t("confirm")}
-            pendingLabel={isDraft ? d("pending") : t("pending")}
-          />
+            data-touch-target=""
+            aria-disabled={pending || undefined}
+            className={buttonDanger}
+          >
+            {pending ? (
+              <>
+                <LoaderCircle
+                  aria-hidden
+                  className="size-4 animate-spin motion-reduce:animate-none"
+                />
+                <span>{isDraft ? d("pending") : t("pending")}</span>
+              </>
+            ) : (
+              confirm
+            )}
+          </button>
         }
       >
         <form
@@ -332,7 +400,7 @@ function Revoke({ org, ws, mandate, here }: Place) {
                 className="rounded-[10px] border border-critical/45 bg-critical/10 px-3.5 py-2.5 text-[12.5px] text-foreground"
               >
                 <b className="text-critical">
-                  {t("warnTitle", { agent: mandate.agentSlug })}
+                  {t("warnTitle", { agent: agentKey ?? mandate.agentSlug })}
                 </b>{" "}
                 {primary === null
                   ? t("warnNoMeasure")
@@ -367,6 +435,29 @@ function Revoke({ org, ws, mandate, here }: Place) {
   );
 }
 
+/** The line a landed write leaves: the mandate, what it now is, and where the change is recorded. */
+function OutcomeLine({ org, outcome }: { org: string; outcome: Outcome }) {
+  const t = useTranslations("mandate.actions.outcome");
+  return (
+    <p
+      role="status"
+      data-testid="mandate-outcome"
+      className="text-xs text-muted-foreground sm:text-right"
+    >
+      {t.rich(outcome.kind, {
+        mandate: outcome.mandate,
+        id: (chunks) => <span className={mono}>{chunks}</span>,
+      })}{" "}
+      <SafeLink
+        to={routes.audit(org, { capability: outcome.capability })}
+        className={linkText}
+      >
+        {t("audit")}
+      </SafeLink>
+    </p>
+  );
+}
+
 /**
  * The header's actions, each offered only where its handler will accept it.
  *
@@ -380,18 +471,28 @@ function Revoke({ org, ws, mandate, here }: Place) {
  * `now` is the instant the server read the mandate, passed down so the server
  * render and the hydration agree on whether Change limits exists.
  */
-export function MandateActions(place: Place & { now: Date }) {
+export function MandateActions(place: Omit<Place, "done"> & { now: Date }) {
   const t = useTranslations("mandate.actions");
   const { mandate, now } = place;
-  if (mandate.status !== "active" && mandate.status !== "draft") return null;
+  const [outcome, setOutcome] = useState<Outcome | null>(null);
+  const writable = mandate.status === "active" || mandate.status === "draft";
+  if (!writable && outcome === null) return null;
+  const withDone = { ...place, done: setOutcome };
   return (
-    <div
-      role="group"
-      aria-label={t("label")}
-      className="flex shrink-0 flex-wrap items-center gap-2"
-    >
-      {isChangeable(mandate, now) ? <ChangeLimits {...place} /> : null}
-      <Revoke {...place} />
+    <div className="flex shrink-0 flex-col gap-2 sm:items-end">
+      {writable ? (
+        <div
+          role="group"
+          aria-label={t("label")}
+          className="flex flex-wrap items-center gap-2"
+        >
+          {isChangeable(mandate, now) ? <ChangeLimits {...withDone} /> : null}
+          <Revoke {...withDone} />
+        </div>
+      ) : null}
+      {outcome === null ? null : (
+        <OutcomeLine org={place.org} outcome={outcome} />
+      )}
     </div>
   );
 }
