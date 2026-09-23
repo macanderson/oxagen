@@ -9,6 +9,7 @@ export const [contextLabelsBackfill] = createFunction(
   { id: "context/labels-backfill", retries: 3, concurrency: { limit: 1 } },
   { cron: "*/5 * * * *" },
   async ({ step }) => {
+    // tenancy: Global repair scans missing labels only; each write re-enters its stored org/workspace scope.
     const records = await step.run("find-missing-labels", () =>
       withSystemDb((tx) =>
         tx
