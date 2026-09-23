@@ -11,7 +11,10 @@ Your retention review needs the deletion mechanism beside the period. These are 
 | ClickHouse usage events | One year | Table TTL in [0019](../../packages/telemetry/src/migrations/0019_usage_events.sql). |
 | Durable token usage | 365 days | Table TTL in [0029](../../packages/telemetry/src/migrations/0029_durable_token_usage.sql). |
 | Error events | 90 days | Table TTL in [0020](../../packages/telemetry/src/migrations/0020_error_events.sql). |
-| Claude telemetry and run summaries | One year and two years respectively | TTLs in [0006](../../packages/telemetry/src/migrations/0006_claude_telemetry.sql) and [0007](../../packages/telemetry/src/migrations/0007_claude_sessions.sql). The older erasure processor comment saying these have no TTL is stale. TTL is not subject-specific erasure. |
+| Claude telemetry | Two years | [0007](../../packages/telemetry/src/migrations/0007_claude_sessions.sql) drops the earlier `agent_executions` table and creates `claude_sessions`. Records include user email, working directory, Git branch, up to 1,000 characters of the first prompt, and 500 characters of assistant text. TTL is not subject-specific erasure. |
+| Observed graph labels | One year | [0013](../../packages/telemetry/src/migrations/0013_graph_observed_labels.sql) retains ingestion-derived labels and property keys. |
+| Schema conformance events | 90 days | [0014](../../packages/telemetry/src/migrations/0014_schema_conformance_events.sql) retains node identifiers and validation errors. |
+| Memory changes | 365 days | [0016](../../packages/telemetry/src/migrations/0016_memory_changes.sql) retains memory references and change metadata. |
 | Execution logs and generic events | 90 days | TTLs in the [base schema](../../packages/telemetry/src/schema.sql). |
 | Tool invocations | 180 days | TTL in the [base schema](../../packages/telemetry/src/schema.sql). |
 | Token usage, skill loads, router outcomes, evaluation results, and evaluation item results | 365 days | [Base schema](../../packages/telemetry/src/schema.sql) and [evaluation item migration](../../packages/telemetry/src/migrations/0020_eval_item_results.sql). Evaluation items include free-text outputs and rationales. |
