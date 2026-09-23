@@ -1,0 +1,298 @@
+// The pieces the Runtimes pages are drawn from (mockup `pRuntimes()`,
+// `rtDetail()`, `rtHealth()` and `tierLadder()`): a titled panel with a count
+// badge, a stat tile, the not-recorded value, the health badge, the platform
+// and harness words, and the tier ladder. Presentational; each takes
+// translated text or reads its own namespace.
+import { useTranslations } from "next-intl";
+import { Fragment, type ReactNode } from "react";
+import type {
+  RuntimeEnrollment,
+  RuntimePlatform,
+} from "@/data/contracts/runtimes";
+import { Badge, type BadgeTone } from "@/ui/badge";
+import {
+  mono,
+  panel,
+  panelBody,
+  panelHeader,
+  panelTitle,
+  statNote,
+  statTerm,
+  statTile,
+  statValue,
+} from "@/ui/control-styles";
+
+/**
+ * Which backend gap a not-recorded value stands for. Each key is one GitHub
+ * issue on macanderson/oxagen, carried as `data-gap` so a reader of the DOM
+ * can find the change that fills it.
+ */
+export const GAPS = {
+  /** A host row per machine, and the host kind: enrollment is per agent. */
+  host: "#3811",
+  /** The tier rolled up per host from the per-run values. */
+  tier: "#3812",
+  /** The collector's telemetry gap count over 24 hours. */
+  gaps: "#3813",
+  /** The settings file the installer wrote, read back at check-in. */
+  hooks: "#3813",
+  /** The frame chain's last checkpoint per host. */
+  checkpoint: "#3812",
+  /** Starting a smoke session on a host from the console. */
+  smoke: "#3814",
+} as const;
+export type GapKey = keyof typeof GAPS;
+
+/** A value no store records yet, with the gap that would record it. */
+export function NotBacked({
+  gap,
+  children,
+}: {
+  gap: GapKey;
+  /** What to say instead of the default "not recorded". */
+  children?: ReactNode;
+}) {
+  const t = useTranslations("runtimes");
+  return (
+    <span
+      data-not-backed={gap}
+      data-gap={GAPS[gap]}
+      className="text-muted-foreground"
+    >
+      {children ?? t("notRecorded")}
+    </span>
+  );
+}
+
+/** `.panel` with a flat `.panel-h`, its title, and an optional count badge. */
+export function Panel({
+  id,
+  title,
+  titleNode,
+  count,
+  aside,
+  children,
+}: {
+  /** The heading's id, unique on the page. */
+  id: string;
+  title: string;
+  /** A header richer than the title alone (the host panel's subtitle); the h2 still carries `title`. */
+  titleNode?: ReactNode;
+  count?: number;
+  /** A badge or control at the header's right edge. */
+  aside?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section aria-labelledby={id} className={`${panel} flex flex-col`}>
+      <div className={panelHeader}>
+        <div className="min-w-0 flex-1">
+          <h2 id={id} className={panelTitle}>
+            {title}
+          </h2>
+          {titleNode}
+        </div>
+        {count === undefined ? null : (
+          <Badge tone="quiet" dot={false} data-testid={`${id}-count`}>
+            {String(count)}
+          </Badge>
+        )}
+        {aside}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/** `.panel-b .note`: a fact about the section, set off by the gold rule. */
+export function Note({ children }: { children: ReactNode }) {
+  return (
+    <div className={panelBody}>
+      <p className="border-l-2 border-accent-text pl-3 text-[13px] text-muted-foreground">
+        {children}
+      </p>
+    </div>
+  );
+}
+
+export function Tile({
+  term,
+  value,
+  basis,
+  testId,
+}: {
+  term: string;
+  value: ReactNode;
+  basis: string;
+  testId: string;
+}) {
+  return (
+    <dl data-testid={testId} className={statTile}>
+      <dt className={statTerm}>{term}</dt>
+      <dd className={statValue}>{value}</dd>
+      <dd className={statNote}>{basis}</dd>
+    </dl>
+  );
+}
+
+/** A key-value list (`dl.kv`), the host panel's body. */
+export function Facts({
+  rows,
+}: {
+  rows: readonly { term: string; value: ReactNode; testId: string }[];
+}) {
+  return (
+    <dl className="grid grid-cols-1 gap-x-6 gap-y-1.5 text-[13px] sm:grid-cols-[minmax(8rem,auto)_1fr]">
+      {rows.map((row) => (
+        <Fragment key={row.term}>
+          <dt className="text-muted-foreground">{row.term}</dt>
+          <dd
+            data-testid={row.testId}
+            className="min-w-0 break-words pb-2 sm:pb-0"
+          >
+            {row.value}
+          </dd>
+        </Fragment>
+      ))}
+    </dl>
+  );
+}
+
+/** A second line under a value, in the muted ink. */
+export function Sub({
+  children,
+  monoFace = false,
+}: {
+  children: ReactNode;
+  monoFace?: boolean;
+}) {
+  return (
+    <span
+      className={`block text-xs text-muted-foreground ${monoFace ? mono : ""}`}
+    >
+      {children}
+    </span>
+  );
+}
+
+export type Health = RuntimeEnrollment["status"] | "expired";
+
+/**
+ * The enrollment's recorded status, or `expired` when its expiry has passed
+ * and nothing revoked it. `tacho-host.ts` refuses a revoked host and then an
+ * expired one, so a status that read only the stored word would call a host
+ * active while every request it makes is refused.
+ */
+export function healthOf(host: RuntimeEnrollment, now: number): Health {
+  if (host.status === "revoked") return "revoked";
+  if (Date.parse(host.expiresAt) <= now) return "expired";
+  return host.status;
+}
+
+const HEALTH_TONE: Record<Health, BadgeTone> = {
+  active: "allowed",
+  paused: "approval",
+  suspended: "denied",
+  revoked: "quiet",
+  expired: "quiet",
+};
+
+/** `rtHealth()`: a dot and a word, so the state survives greyscale. */
+export function HealthBadge({ health }: { health: Health }) {
+  const t = useTranslations("runtimes.health");
+  return (
+    <Badge tone={HEALTH_TONE[health]} data-health={health}>
+      {t(health)}
+    </Badge>
+  );
+}
+
+export function PlatformName({ platform }: { platform: RuntimePlatform }) {
+  const t = useTranslations("runtimes.platform");
+  return t(platform);
+}
+
+const HARNESS_NAMES = [
+  "claude-code",
+  "codex",
+  "cursor",
+  "stella",
+  "claude-agent-sdk",
+  "custom",
+] as const;
+type HarnessName = (typeof HARNESS_NAMES)[number];
+
+function isHarnessName(value: string): value is HarnessName {
+  return (HARNESS_NAMES as readonly string[]).includes(value);
+}
+
+/**
+ * The harnesses the daemon reported, each by its product name, with the
+ * Claude Code version recorded at enrollment beside Claude Code. A name this
+ * build does not know is printed as the daemon sent it.
+ */
+export function HarnessNames({ host }: { host: RuntimeEnrollment }) {
+  const t = useTranslations("runtimes.harness");
+  if (host.harnesses.length === 0)
+    return <span className="text-muted-foreground">{t("none")}</span>;
+  return (
+    <span className="flex flex-col gap-0.5">
+      {host.harnesses.map((harness) => (
+        <span key={harness}>
+          {isHarnessName(harness) ? t(harness) : harness}
+          {harness === "claude-code" && host.claudeVersionAtEnroll !== null ? (
+            <span className={`${mono} ml-1 text-muted-foreground`}>
+              {host.claudeVersionAtEnroll}
+            </span>
+          ) : null}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/** Where the harness sends its model calls, as last reported, or not reported. */
+export function ModelSurface({ host }: { host: RuntimeEnrollment }) {
+  const t = useTranslations("runtimes.modelSurface");
+  if (host.modelRoute === null)
+    return <span className="text-muted-foreground">{t("unreported")}</span>;
+  return (
+    <span>
+      {t(host.modelRoute)}
+      {host.shadowedBy === null ? null : (
+        <Sub monoFace>{t("shadowed", { file: host.shadowedBy })}</Sub>
+      )}
+    </span>
+  );
+}
+
+const RUNGS = ["observe", "harness", "gateway", "contained"] as const;
+
+/**
+ * `tierLadder(null)`: the four rungs in order, each with what it needs and
+ * what it earns. No rung is marked current: a tier is a run's, and this page
+ * reads no run.
+ */
+export function TierLadder() {
+  const t = useTranslations("runtimes.ladder");
+  return (
+    <ol
+      aria-label={t("label")}
+      data-testid="tier-ladder"
+      className="grid overflow-hidden rounded-[10px] border border-border sm:grid-cols-2 lg:grid-cols-4"
+    >
+      {RUNGS.map((rung) => (
+        <li
+          key={rung}
+          data-rung={rung}
+          className="border-border px-3.5 py-3 text-xs text-muted-foreground max-lg:border-b lg:border-r lg:last:border-r-0"
+        >
+          <b className={`${mono} mb-1 block text-[13px] text-foreground`}>
+            {rung}
+          </b>
+          {t(rung)}
+        </li>
+      ))}
+    </ol>
+  );
+}

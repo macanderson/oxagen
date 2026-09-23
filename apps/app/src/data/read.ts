@@ -51,6 +51,7 @@ export type PageKey =
   | "mandates"
   | "tools"
   | "repositories"
+  | "runtimes"
   | "shell";
 
 type PageFailure = {
@@ -135,5 +136,9 @@ export const PAGE_FAILURES = {
   },
   // The shell's one read fails with the control plane and needs organization
   // membership alone.
+  runtimes: {
+    error: { code: "collector_unreachable", status: 503 },
+    permission: "runtime.read",
+  },
   shell: { error: CONTROL_PLANE_DOWN, permission: "org.read" },
 } as const satisfies Record<PageKey, PageFailure>;

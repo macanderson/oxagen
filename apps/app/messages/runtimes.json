@@ -1,0 +1,188 @@
+{
+  "runtimes": {
+    "page": {
+      "eyebrow": "{workspace}",
+      "description": "The hosts agents run on, and what each host’s seam earns.",
+      "enroll": "Enroll a runtime",
+      "loading": "Reading the runtimes of this workspace"
+    },
+    "notRecorded": "not recorded",
+    "tiles": {
+      "runtimes": "Runtimes",
+      "runtimesBasis": "{count, plural, one {# agent enrollment recorded; no host row yet} other {# agent enrollments recorded; no host row yet}}",
+      "agentsHosted": "Agents hosted",
+      "agentsHostedBasis": "a host is shared; its hooks see every one of them",
+      "highestTier": "Highest tier earned",
+      "highestTierBasis": "computed per run from what was actually routed",
+      "degraded": "Degraded",
+      "degradedBasis": "a gap is a hole in the record, not a failed run"
+    },
+    "hosts": {
+      "title": "Enrolled hosts",
+      "record": "Oxagen records an enrollment per agent, so each row is one agent on one machine, and two agents on one workstation read as two rows. The host itself, its kind, the tier rolled up per host, the telemetry gaps in 24 hours, the hooks written and the last checkpoint are not recorded yet.",
+      "more": "The first {count} enrollments are listed. More are recorded than this page reads.",
+      "columns": {
+        "runtime": "Runtime",
+        "kind": "Kind",
+        "harness": "Harness",
+        "modelSurface": "Model surface",
+        "tier": "Tier",
+        "agents": "Agents",
+        "collector": "Collector",
+        "hooks": "Hooks",
+        "health": "Health",
+        "checkpoint": "Last checkpoint"
+      },
+      "open": "Open {hostname}",
+      "agentsNone": "enrolled, nothing assigned",
+      "collector": "tachod {version}",
+      "gaps": "gaps in 24h not recorded",
+      "hookCount": "count not recorded",
+      "note": "The tier is a property of the seam, not of the agent: two agents on one host earn the same tier, and the same agent moved to a weaker host earns less. It is computed per run from what was actually routed and is never upgraded after the fact."
+    },
+    "hooksReport": {
+      "ok": "the daemon reports its hooks in place",
+      "missing": "the daemon reports its hooks removed",
+      "unreported": "the daemon has not reported its hooks"
+    },
+    "modelSurface": {
+      "loopback": "loopback proxy",
+      "direct": "provider direct",
+      "unreported": "not reported",
+      "shadowed": "overridden by {file}"
+    },
+    "health": {
+      "active": "active",
+      "paused": "paused",
+      "suspended": "suspended",
+      "revoked": "revoked",
+      "expired": "expired"
+    },
+    "platform": {
+      "darwin": "macOS",
+      "linux": "Linux",
+      "win32": "Windows"
+    },
+    "harness": {
+      "claude-code": "Claude Code",
+      "codex": "Codex CLI",
+      "cursor": "Cursor",
+      "stella": "Stella",
+      "claude-agent-sdk": "Claude Agent SDK",
+      "custom": "Custom harness",
+      "none": "none reported"
+    },
+    "ladder": {
+      "title": "The tier ladder",
+      "label": "The tier ladder",
+      "observe": "Recorded only. No hook is installed and nothing is delivered.",
+      "harness": "Hooks installed. Steering is delivered and the four blocking hook events can refuse: client-attested and fail-open.",
+      "gateway": "Model and MCP traffic routed through the gateway. Metering observed, budgets enforced on routed traffic.",
+      "contained": "The agent runs under an OS sandbox whose only egress is the gateway. The only tier that earns the word enforced.",
+      "note": "Only <code>contained</code> earns the word enforced. On <code>observe</code> nothing is delivered and nothing can refuse, which is why an agent with no runtime still has an identity and a toolbelt and receives no steering."
+    },
+    "empty": {
+      "title": "No runtime is enrolled",
+      "body": "Until a host enrolls, an agent has an identity and a toolbelt but no hook is installed. Its runs are graded <code>observe</code>, and no report can say more.",
+      "cli": "Show the CLI path"
+    },
+    "cli": {
+      "title": "Enroll from the CLI",
+      "body": "Run this on the host, in the repository the agent works in. It enrolls the machine under the agent's key and installs its hooks.",
+      "command": "oxagen agent enroll",
+      "note": "Nothing on this page installs a hook. Enrollment runs on the host itself."
+    },
+    "error": {
+      "title": "Runtimes could not be loaded",
+      "body": "The control plane answered <c>{code}</c>. Nothing was changed. Runs kept recording while this page was down. Frames are written by the collector on each host, not by Oxagen.",
+      "retry": "Try again",
+      "incident": "Open an incident",
+      "trace": "{status} {code} · read at {at}"
+    },
+    "denied": {
+      "title": "You cannot see the runtimes of this workspace",
+      "body": "Your roles on <b>{org}</b> do not include <code>{permission}</code>. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+      "request": "Request access",
+      "back": "Back to Fleet",
+      "signedIn": "Signed in as",
+      "signedInValue": "{orgRole} on the organization · {wsRole} on this workspace",
+      "needed": "Needed",
+      "neededValue": "{permission} on {workspace}",
+      "decidedBy": "Decided by",
+      "decidedByValue": "Oxagen IAM · deny wins over every allow"
+    },
+    "pending": {
+      "title": "Access to the runtimes of this workspace is waiting for approval",
+      "body": "Access request {request}"
+    },
+    "stub": {
+      "requestTitle": "Request access",
+      "requestBody": "A request would ask an organization owner for {permission} and record the grant in the audit record with both your names. No capability records a request yet, so ask an owner directly. Owners grant roles on the Roles page.",
+      "requestLink": "Open Roles",
+      "incidentTitle": "Open an incident",
+      "incidentBody": "An incident would record this failure, the code {code} and when it happened, for the people who run this workspace. No capability opens an incident from the console yet. Send the code to your organization owner.",
+      "smokeTitle": "Run a smoke session",
+      "smokeBody": "A smoke session would run one turn on {hostname}, recorded like any other run, so you can see the hooks answer. No capability starts a session on a host from the console yet. Run one turn of the agent on the host itself."
+    },
+    "detail": {
+      "back": "← All runtimes",
+      "subtitle": "{platform} · run as {osUser} · kind not recorded",
+      "facts": {
+        "workspace": "Workspace",
+        "owner": "Owner",
+        "harness": "Harness",
+        "collector": "Collector",
+        "hookBinary": "Hook binary",
+        "hooksWritten": "Hooks written",
+        "modelSurface": "Model surface",
+        "settings": "Settings",
+        "tierEarned": "Tier earned",
+        "checkpoint": "Last checkpoint"
+      },
+      "collectorGaps": "telemetry gaps in the last 24h not recorded",
+      "hookBinary": "tacho-hook {version}",
+      "hookEnforce": "fails closed against its cached bundle",
+      "hookObserve": "allows when its bundle is stale, because this host is in observe mode",
+      "hooksWrittenBasis": "The hook list is not read back from the settings file yet.",
+      "modelLoopback": "the harness config names the loopback proxy, as the daemon last reported it",
+      "modelDirect": "model traffic goes from the harness to its provider; routing it is the gateway tier",
+      "tierBasis": "computed per run from what was actually routed",
+      "agents": {
+        "title": "Agents on this host",
+        "columns": {
+          "agent": "Agent",
+          "operator": "Operator",
+          "tier": "Tier",
+          "principal": "Principal",
+          "runs": "Runs 30d"
+        },
+        "none": "This host is enrolled and no agent is assigned to it. It records nothing until one runs here.",
+        "unknown": "not among this workspace's identities",
+        "note": "Every agent here is seen through the same hooks and earns the same tier. An agent’s identity, its steering and its toolbelt are its own; only the seam is shared."
+      },
+      "rollback": {
+        "title": "Rollback",
+        "command": "oxagen agent unenroll {agent} \\\n  --host {id}",
+        "note": "If hooks are stripped by hand instead, the next run records <code>hooks_removed</code> and the tier falls to <code>observe</code>. It is never upgraded after the fact.",
+        "smoke": "Run a smoke session",
+        "unenroll": "Unenroll"
+      }
+    },
+    "unenroll": {
+      "title": "Unenroll {hostname}?",
+      "body": "Calls this enrollment routes through Oxagen are refused from now on. Sessions on the host are denied at their next boundary, once the collector reads the new status.",
+      "scope": "This revokes the enrollment of {agent} on this machine. Another agent enrolled on the same machine keeps its own.",
+      "keep": "Keep it enrolled",
+      "confirm": "Unenroll it",
+      "pending": "Unenrolling",
+      "failure": {
+        "denied": "Your roles do not let you unenroll a host. An organization Owner or Admin can. Nothing was changed.",
+        "notFound": "This enrollment no longer exists. Nothing was changed.",
+        "refused": "This write was refused: {code}. Nothing was changed.",
+        "invalid": "This enrollment id is not one the write accepts. Nothing was changed.",
+        "pendingApproval": "This write is waiting for approval. Access request {accessRequestId}.",
+        "unavailable": "This write could not be answered: {code}. Nothing was changed."
+      }
+    }
+  }
+}
