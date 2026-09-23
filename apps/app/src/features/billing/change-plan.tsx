@@ -121,7 +121,7 @@ function PlanForm({
       </label>
       <input type="hidden" name="planSlug" value={slug} />
       <input type="hidden" name="interval" value={interval} />
-      <p className="border-l-2 border-primary/60 pl-3 text-[12.5px] text-muted-foreground">
+      <p className="border-l-2 border-gold/60 pl-3 text-[12.5px] text-muted-foreground">
         {t("changePlan.note")}
       </p>
       <p className="text-xs text-muted-foreground">

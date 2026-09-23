@@ -121,14 +121,14 @@ export type UsageCredits = z.infer<typeof UsageCredits>;
 /**
  * Evidence retention (pages/billing.md, the Retained evidence tile, line and
  * meter): the months every paid plan includes, the published price per
- * GB-month beyond them, whether this organization has opted into paying for
- * that, and the volume it holds. `storedGb` is null until an accounting job
- * measures it; null is printed "not recorded", never a zero.
+ * GB-month beyond them, and whether this organization has opted into paying
+ * for that. The volume the organization holds has no field: the contract
+ * reports only the volume beyond the included window, and no job measures
+ * even that yet, so the page prints "not recorded" for it.
  */
 export const EvidenceRetention = z.object({
   includedMonths: z.number().int().positive(),
   perGbMonth: Money,
   extendedRetentionEnabled: z.boolean(),
-  storedGb: z.number().nonnegative().nullable(),
 });
 export type EvidenceRetention = z.infer<typeof EvidenceRetention>;

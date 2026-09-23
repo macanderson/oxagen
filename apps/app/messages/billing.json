@@ -66,7 +66,6 @@
         "retention": "{months} months included · {held}",
         "retentionExtended": "{months} months included · {held} · extended retention on",
         "heldNotRecorded": "GB held not recorded",
-        "held": "{size} held",
         "discount": "no onboarding offer is recorded for this organization",
         "total": "rounded to cents once, half-even"
       }

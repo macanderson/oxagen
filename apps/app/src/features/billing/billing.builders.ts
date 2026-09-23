@@ -1,10 +1,12 @@
 // Typed Billing values for the Billing component tests (ARCHITECTURE.md §5): a
 // subscription, a prepaid bucket, a Free bucket with no card, an invoice-billed
-// bucket, a negotiated and a published-tier rate, invoice rows and a
-// DataSource that answers the five Billing reads with what a test hands it.
+// bucket, a negotiated and a published-tier rate, the retention terms, invoice
+// rows and a DataSource that answers the six Billing reads with what a test
+// hands it.
 // Importable from tests only.
 import type {
   ContractRate,
+  EvidenceRetention,
   GauBucket,
   InvoicePage,
   InvoiceRow,
@@ -124,6 +126,18 @@ export const PUBLISHED_BUILD: ContractRate = {
   effectiveTo: null,
 };
 
+/** The published retention terms: 12 months included, $0.08 a GB-month beyond, not opted in. */
+export function evidenceRetention(
+  overrides: Partial<EvidenceRetention> = {},
+): EvidenceRetention {
+  return {
+    includedMonths: 12,
+    perGbMonth: { micros: "80000", currency: "USD" },
+    extendedRetentionEnabled: false,
+    ...overrides,
+  };
+}
+
 /** A usage credit balance of 4,200 credits — $42.00 at 1 credit = $0.01. */
 export function usageCredits(balanceCredits = 4200): UsageCredits {
   return {
@@ -161,12 +175,13 @@ export type BillingReads = {
   plan: Read<PlanCard>;
   bucket: Read<GauBucket>;
   rate: Read<ContractRate>;
+  retention: Read<EvidenceRetention>;
   invoices: Read<InvoicePage>;
   usageCredits: Read<UsageCredits>;
 };
 
 /**
- * A DataSource answering the five Billing reads; `calls` records their
+ * A DataSource answering the six Billing reads; `calls` records their
  * arguments. `newestInvoices`, apart from `BillingReads`, is what the page's
  * second `invoices(ctx, { cursor: null })` read answers when the URL asks for
  * an older page than the newest: the tiles and This month roll up that
@@ -185,6 +200,7 @@ export function billingSource(
     plan: readOk({ subscription: SUBSCRIPTION }),
     bucket: readOk(prepaidBucket()),
     rate: readOk(contractRate()),
+    retention: readOk(evidenceRetention()),
     invoices: invoicePage([invoiceRow()]),
     usageCredits: readOk(usageCredits()),
     ...readOverrides,
@@ -193,6 +209,7 @@ export function billingSource(
     plan: [],
     bucket: [],
     rate: [],
+    retention: [],
     invoices: [],
     usageCredits: [],
   };
@@ -228,6 +245,10 @@ export function billingSource(
       contractRate: (...args) => {
         calls.rate.push(args);
         return Promise.resolve(reads.rate);
+      },
+      retention: (...args) => {
+        calls.retention.push(args);
+        return Promise.resolve(reads.retention);
       },
       invoices: (...args) => {
         calls.invoices.push(args);

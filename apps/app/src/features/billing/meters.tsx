@@ -3,9 +3,10 @@
 // bucket, the billable unit. Sealed runs with a model call, runs Oxagen halted
 // before any model call and runs of the in-app agent have no read in this
 // release (the cost.run_totals rollup, spec §12.6), so each prints "not
-// recorded" rather than a zero. Retained evidence prints the volume
-// get_evidence_retention reports, which is "not recorded" until a job
-// measures it. Under the table: the note the design gives, the billing mode
+// recorded" rather than a zero. Retained evidence has no volume on record
+// either (get_evidence_retention carries only the volume beyond the included
+// window, unmeasured), so it too says "not recorded", with the included
+// window beside it. Under the table: the note the design gives, the billing mode
 // (prepaid or invoice), and the Free-tier rule for a prepaid organization at
 // zero with no card (spec §4.2, ADR-055 §6). Counts only; no money renders
 // here (INV-25).
@@ -14,7 +15,7 @@ import type { ReactNode } from "react";
 import type { EvidenceRetention, GauBucket } from "@/data/contracts/billing";
 import type { Read } from "@/data/read";
 import { linkText, panelBody } from "@/ui/control-styles";
-import { formatByteSize, formatCount } from "@/ui/money-format";
+import { formatCount } from "@/ui/money-format";
 import { cell, numericCell, Table } from "@/ui/table";
 import { BillingReadFailure } from "./read-failure";
 import { NotRecordedValue, PanelNote, Section, useDate } from "./section";
@@ -105,10 +106,7 @@ export function Meters({
     );
   } else {
     const r = retention.value;
-    retainedValue =
-      r.storedGb === null
-        ? notRecorded
-        : formatByteSize(Math.round(r.storedGb * 1e9), locale);
+    retainedValue = notRecorded;
     retainedNote = t("meters.retainedNote", {
       months: count(r.includedMonths),
     });

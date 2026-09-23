@@ -166,8 +166,9 @@ export function toInvoicePage(
  * prices a GB-month in dollars as a number; it is read back through its
  * decimal text into micros, so no float carries the price (INV-09). A price
  * that text cannot hold as micros fails the view model's parse and the page
- * says so. The volume is copied only when the contract says it was measured:
- * `storedGbMeasured: false` is an absence, and null says so.
+ * says so. The stored volume is not mapped: the contract carries the volume
+ * beyond the included window, not the volume held, and the page's Retained
+ * evidence figure is the latter.
  */
 export function toEvidenceRetention(
   out: ContractOutput<typeof billingEvidenceRetention>,
@@ -179,6 +180,5 @@ export function toEvidenceRetention(
       currency: "USD",
     },
     extendedRetentionEnabled: out.extendedRetentionEnabled,
-    storedGb: out.storedGbMeasured ? out.storedGbBeyondIncluded : null,
   };
 }

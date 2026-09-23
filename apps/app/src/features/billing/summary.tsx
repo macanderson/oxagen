@@ -21,7 +21,7 @@ import {
   statTile,
   statValue,
 } from "@/ui/control-styles";
-import { formatByteSize, formatCount } from "@/ui/money-format";
+import { formatCount } from "@/ui/money-format";
 import { BillingReadFailure } from "./read-failure";
 import { NotRecordedValue, useDate } from "./section";
 import type { Statement } from "./statement";
@@ -139,11 +139,7 @@ function RetainedTile({ retention }: { retention: Read<EvidenceRetention> }) {
         months: formatCount(r.includedMonths, locale),
       })}
     >
-      {r.storedGb === null ? (
-        <NotRecordedValue>{t("notRecorded")}</NotRecordedValue>
-      ) : (
-        formatByteSize(Math.round(r.storedGb * 1e9), locale)
-      )}
+      <NotRecordedValue>{t("notRecorded")}</NotRecordedValue>
     </Tile>
   );
 }

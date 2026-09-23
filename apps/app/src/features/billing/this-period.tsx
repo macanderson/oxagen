@@ -13,7 +13,7 @@ import type { Money as MoneyValue } from "@/data/contracts/money";
 import type { Read } from "@/data/read";
 import { Badge } from "@/ui/badge";
 import { Money } from "@/ui/money";
-import { formatByteSize, formatCount } from "@/ui/money-format";
+import { formatCount } from "@/ui/money-format";
 import { cell, numericCell, Table } from "@/ui/table";
 import { BillingReadFailure } from "./read-failure";
 import { NotRecordedValue, Section } from "./section";
@@ -63,18 +63,6 @@ export function StatementAmount({ value }: { value: MoneyValue | null }) {
   return <Money value={value} />;
 }
 
-/** How much evidence the organization holds, or that nothing has measured it. */
-export function useHeld(): (retention: EvidenceRetention) => string {
-  const t = useTranslations("billing.thisPeriod.basis");
-  const locale = useLocale();
-  return (retention) =>
-    retention.storedGb === null
-      ? t("heldNotRecorded")
-      : t("held", {
-          size: formatByteSize(Math.round(retention.storedGb * 1e9), locale),
-        });
-}
-
 function Line({
   name,
   line,
@@ -107,7 +95,6 @@ export function ThisPeriod({
 }) {
   const t = useTranslations("billing");
   const locale = useLocale();
-  const held = useHeld();
   const title = t("thisPeriod.title");
   const badge = <Badge tone="quiet">{t("thisPeriod.badge")}</Badge>;
   const failed = (read: Failed) => (
@@ -167,7 +154,10 @@ export function ThisPeriod({
             r.extendedRetentionEnabled
               ? "thisPeriod.basis.retentionExtended"
               : "thisPeriod.basis.retention",
-            { months: count(r.includedMonths), held: held(r) },
+            {
+              months: count(r.includedMonths),
+              held: t("thisPeriod.basis.heldNotRecorded"),
+            },
           )}
           amount={<StatementAmount value={s.retentionAmount} />}
         />
