@@ -9,13 +9,14 @@ import shellMessages from "../../../messages/shell.json";
 import { approvalItem, shellData, shellWorkspace } from "./shell.builders";
 import type { ShellData } from "./shell-data";
 
-const { shellSource, ApprovalsPanel } = vi.hoisted(() => ({
+const { shellSource, ApprovalCardAlone } = vi.hoisted(() => ({
   shellSource: vi.fn(),
-  ApprovalsPanel: vi.fn((_props: unknown) => null),
+  ApprovalCardAlone: vi.fn((_props: unknown) => null),
 }));
 vi.mock("./source", () => ({ shellSource }));
-// The card is the Fleet lane's; the chrome only renders it once per parked call.
-vi.mock("@/features/fleet", () => ({ ApprovalsPanel }));
+// The card is the Fleet lane's; the chrome only renders it once per parked
+// call, alone, with no Fleet panel (heading, parked count, grid) around it.
+vi.mock("@/features/fleet", () => ({ ApprovalCardAlone }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 
@@ -188,8 +189,9 @@ describe("ShellChrome", () => {
     }> = await ShellChrome({ ctx, source: {} as never });
     const cards = element.props.children.props.cards;
     expect(Object.keys(cards)).toEqual([item.id]);
+    expect(cards[item.id]?.type).toBe(ApprovalCardAlone);
     expect(cards[item.id]?.props).toMatchObject({
-      approvals: readOk({ items: [item], more: false }),
+      item,
       mandates,
       now: 1,
       org: "acme",

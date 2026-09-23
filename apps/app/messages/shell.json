@@ -306,9 +306,22 @@
       "gone": "That approval is no longer listed.",
       "empty": "Nothing is waiting on a human.",
       "emptyDetail": "A call parks here when policy returns <code>approve</code>. Denials never park; they end the call and are free.",
-      "rowNotBacked": "A parked call does not record its amount, risk, side effect, taint or task yet, so the rows name the tool, the agent and the workspace.",
+      "rowNotBacked": "A parked call's risk is recorded, but list_approvals does not return it yet, and no amount, side effect, taint or task is recorded, so the rows name the tool, the agent and the workspace.",
       "truncated": "Oxagen read the first {count} workspaces of this organization. Calls parked in the rest are not counted here.",
-      "note": "A resolution mints a single-use approval token bound to the call digest, the agent, the run, and an expiry. It cannot be replayed on a second call. On expiry the call ends and the reason reaches the model."
+      "note": "A resolution mints a single-use approval token bound to the call digest, the agent, the run, and an expiry. It cannot be replayed on a second call. On expiry the call ends and the reason reaches the model.",
+      "interjectionNotBacked": "An open interjection is not recorded yet, so this list holds approvals only.",
+      "resolvedCard": {
+        "chain": "Chain",
+        "who": "Who asked",
+        "agent": "Which agent",
+        "action": "Which action",
+        "rule": "Which rule",
+        "resolution": "Resolution",
+        "resolvedAt": "Resolved at",
+        "resolvedBy": "Resolved by",
+        "notRecorded": "not recorded",
+        "openRun": "Open run"
+      }
     },
     "notifications": {
       "title": "Notifications",

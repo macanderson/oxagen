@@ -4535,6 +4535,19 @@ type Messages = {
       rowNotBacked: string;
       truncated: string;
       note: string;
+      interjectionNotBacked: string;
+      resolvedCard: {
+        chain: string;
+        who: string;
+        agent: string;
+        action: string;
+        rule: string;
+        resolution: string;
+        resolvedAt: string;
+        resolvedBy: string;
+        notRecorded: string;
+        openRun: string;
+      };
     };
     notifications: {
       title: string;

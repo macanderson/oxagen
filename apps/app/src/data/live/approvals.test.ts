@@ -188,7 +188,10 @@ describe("approvals.resolved (#3153)", () => {
           id: "apr_q8t1",
           runId: "arun_7k2m9q",
           tool: "stripe__create_payment",
+          agentKey: null,
           requester: null,
+          rule: null,
+          mandateId: null,
           createdAt: "2026-09-18T10:00:00.000Z",
           expiresAt: "2026-09-18T10:05:00.000Z",
           resolvedAt: "2026-09-18T10:00:01.000Z",
@@ -279,6 +282,32 @@ describe("approvals.resolved (#3153)", () => {
         contract: agentApprovalListResolved,
         input: { since: "2026-09-23T00:00:00.000Z", limit: 100 },
         page: "shell",
+      });
+    });
+
+    it("carries the chain's agent, rule and mandate so the drawer's resolved row can name them", async () => {
+      kernelRead.mockResolvedValueOnce(
+        readOk({
+          items: [
+            {
+              ...resolvedItem,
+              mandateId: "mnd_7K2ETQ4",
+              chain: {
+                agentKey: "acme.core.release-manager",
+                rule: "mandate:mnd_7K2ETQ4:human_above:usd",
+              },
+            },
+          ],
+          nextCursor: null,
+        }),
+      );
+      const out = await approvals.resolvedSince(ctx, {
+        since: "2026-09-23T00:00:00.000Z",
+      });
+      expect(out.ok && out.value.items[0]).toMatchObject({
+        agentKey: "acme.core.release-manager",
+        rule: "mandate:mnd_7K2ETQ4:human_above:usd",
+        mandateId: "mnd_7K2ETQ4",
       });
     });
 

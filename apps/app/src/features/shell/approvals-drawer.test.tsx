@@ -141,7 +141,9 @@ function waiting(): ShellData {
                 id: "apr_03K5RS8F3J",
                 runId: null,
                 tool: "salesforce__send_email@1",
+                agentKey: "acme.core.support-bot",
                 requester: null,
+                rule: "mandate:mnd_7K2ETQ4:human_above:usd",
                 createdAt: "2026-09-23T08:00:00Z",
                 expiresAt: "2026-09-23T08:10:00Z",
                 resolvedAt: "2026-09-23T08:02:00Z",
@@ -305,6 +307,18 @@ describe("the drawer", () => {
     expect(within(aside).getByTestId("resolved-row")).toHaveTextContent(
       "approved",
     );
+    expect(within(aside).getByTestId("resolved-row")).toHaveTextContent(
+      "support-bot · Core platform",
+    );
+    // No interjection is recorded, and the list says so rather than implying none is open.
+    expect(
+      within(aside).getByTestId("interjection-not-backed"),
+    ).toHaveTextContent(
+      "An open interjection is not recorded yet, so this list holds approvals only.",
+    );
+    expect(
+      within(aside).getByTestId("interjection-not-backed"),
+    ).toHaveAttribute("data-gap");
     expect(aside).toHaveTextContent(
       "A resolution mints a single-use approval token bound to the call digest, the agent, the run, and an expiry.",
     );
@@ -327,6 +341,67 @@ describe("the drawer", () => {
       within(drawer()).getByRole("button", { name: "All approvals" }),
     );
     expect(within(drawer()).getAllByTestId("approval-row")).toHaveLength(3);
+  });
+
+  it("opens a resolved row onto its chain, resolution and resolver, with nothing left to decide", async () => {
+    const user = userEvent.setup();
+    renderShell(waiting(), cards);
+    await user.click(button());
+    await user.click(
+      within(drawer()).getByRole("button", {
+        name: "Open approval apr_03K5RS8F3J",
+      }),
+    );
+    const card = within(drawer()).getByTestId("resolved-card");
+    expect(card).toHaveTextContent("salesforce__send_email@1");
+    expect(card).toHaveTextContent("Which agentacme.core.support-bot");
+    expect(card).toHaveTextContent(
+      "Which rulemandate:mnd_7K2ETQ4:human_above:usd",
+    );
+    expect(card).toHaveTextContent("Who askednot recorded");
+    expect(card).toHaveTextContent("Resolutionapproved");
+    expect(card).toHaveTextContent("Resolved byuser:usr_01K3F8QB7R");
+    expect(card.querySelector("time")).toHaveAttribute(
+      "dateTime",
+      "2026-09-23T08:02:00Z",
+    );
+    expect(
+      within(card).queryByRole("button", { name: /Approve|Deny/ }),
+    ).toBeNull();
+    await user.click(
+      within(drawer()).getByRole("button", { name: "All approvals" }),
+    );
+    expect(within(drawer()).getAllByTestId("resolved-row")).toHaveLength(1);
+  });
+
+  it("gives a countdown under two minutes the warning tone, and none above it", async () => {
+    const user = userEvent.setup();
+    renderShell(
+      shellData({
+        approvals: {
+          workspaces: [
+            shellWorkspace({
+              pending: readOk({
+                items: [
+                  approvalItem({ id: "apr_05K5RS8F3J", expiresAt: soon(1) }),
+                  approvalItem({ id: "apr_06K5RS8F3J", expiresAt: soon(9) }),
+                ],
+                more: false,
+              }),
+            }),
+          ],
+          truncated: false,
+          readAt: Date.now(),
+        },
+      }),
+    );
+    await user.click(button());
+    const soonest = drawer().querySelector('[data-countdown="apr_05K5RS8F3J"]');
+    const later = drawer().querySelector('[data-countdown="apr_06K5RS8F3J"]');
+    expect(soonest).toHaveAttribute("data-warn");
+    expect(soonest).toHaveClass("text-warning");
+    expect(later).not.toHaveAttribute("data-warn");
+    expect(later).toHaveClass("text-info");
   });
 
   it("says a call is no longer listed when its card is gone (negative)", async () => {

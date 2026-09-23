@@ -249,3 +249,41 @@ export function ApprovalsPanel({
     </section>
   );
 }
+
+/**
+ * One approval card with no panel around it: the approvals drawer's selected
+ * card (mockup `apdBody()` draws `approvalCard(a)` alone under "‹ All
+ * approvals"). No heading, no parked count and no two-column grid, so the
+ * drawer carries one "Approvals" heading and the card takes the drawer's full
+ * width. The card and its decision are the same component Fleet and Run draw,
+ * so Approve and Deny are the same governed write.
+ */
+export function ApprovalCardAlone({
+  item,
+  mandates,
+  now,
+  org,
+  ws,
+}: {
+  item: ApprovalItem;
+  /** The mandates the workspace's parked calls drew on, by public id. */
+  mandates: ReadonlyMap<string, MandateRow>;
+  now: number;
+} & Place) {
+  return (
+    <ul data-testid="approval-card-alone" className="flex flex-col">
+      <ApprovalCard
+        item={item}
+        mandate={
+          item.mandateId === null
+            ? null
+            : (mandates.get(item.mandateId) ?? null)
+        }
+        now={now}
+        org={org}
+        ws={ws}
+        on="fleet"
+      />
+    </ul>
+  );
+}

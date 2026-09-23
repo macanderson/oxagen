@@ -10,19 +10,28 @@
 // handed in by approval id, so Approve and Deny here are the same governed
 // write (`resolve_approval`, its IAM check in the handler) as on Fleet and Run.
 //
-// A parked call records its tool, its agent, its run and its expiry. It does
-// not record an amount, a risk, a side effect, a taint or the run's task, so a
-// row draws none of them and one line says so (#3848). An interjection
-// has no record either (#3849), so the list holds approvals only.
+// A resolved row opens too: the same chain, with the resolution, when it was
+// made and by whom, and no decision to take.
+//
+// A countdown under two minutes takes the warning tone, as the mockup's
+// `.apsm-clk.warn` does. A parked call's risk and fired rules are in
+// `agent.approval_requests`, but `list_approvals` does not return the risk,
+// and no amount, side effect, taint or task is recorded, so a row draws none
+// of them, the critical border (risk critical, irreversible or tainted) has
+// nothing to read, and one line says so (#3848). An interjection has no
+// record (#3849), so the list holds approvals only and a line says that too.
 import { ChevronLeft, ShieldCheck, X } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { useFormatter } from "@/ui/formatter";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import type {
   ApprovalItem,
   ResolvedApprovalItem,
 } from "@/data/contracts/approvals";
 import { Badge } from "@/ui/badge";
-import { buttonSecondary } from "@/ui/control-styles";
+import { buttonSecondary, linkText, mono } from "@/ui/control-styles";
+import { SafeLink } from "@/ui/navigation";
+import { routes } from "@/shared/safe-path";
 import { ReadFailure } from "@/ui/read-failure";
 import type { ShellData } from "./shell-data";
 import { useShellState } from "./shell-state";
@@ -30,6 +39,10 @@ import { orgWaiting } from "./use-activity";
 
 /** The issues that own what a row cannot show, carried as data attributes only. */
 const ROW_GAP = "#3848";
+const INTERJECTION_GAP = "#3849";
+
+/** Under two minutes left, a countdown takes the warning tone (mockup `sec<120`). */
+export const WARN_BELOW_SECONDS = 120;
 
 /** `m:ss` until `at`, or null once it has passed. */
 export function countdown(at: number, now: number): string | null {
@@ -89,7 +102,9 @@ function PendingRow({
   onOpen: () => void;
 }) {
   const t = useTranslations("shell.approvals");
-  const left = countdown(Date.parse(item.expiresAt), now);
+  const at = Date.parse(item.expiresAt);
+  const left = countdown(at, now);
+  const warn = left !== null && at - now < WARN_BELOW_SECONDS * 1000;
   const agent = shortAgent(item.agentKey);
   return (
     <li>
@@ -111,7 +126,10 @@ function PendingRow({
         </span>
         <span
           data-countdown={item.id}
-          className="flex-none font-mono text-[13px] font-semibold text-info"
+          data-warn={warn ? "" : undefined}
+          className={`flex-none font-mono text-[13px] font-semibold ${
+            warn ? "text-warning" : "text-info"
+          }`}
         >
           {left ?? t("expired")}
         </span>
@@ -123,29 +141,112 @@ function PendingRow({
 function ResolvedRow({
   item,
   wsName,
+  onOpen,
 }: {
   item: ResolvedApprovalItem;
   wsName: string;
+  onOpen: () => void;
 }) {
   const t = useTranslations("shell.approvals");
+  const agent = shortAgent(item.agentKey ?? null);
   return (
-    <li
-      data-testid="resolved-row"
-      className="flex items-start gap-2.5 rounded-xl border border-border bg-card px-3 py-2.5 text-card-foreground opacity-80"
-    >
-      <Glyph />
-      <span className="min-w-0 flex-1">
-        <b className="block break-all font-mono text-[13px] font-semibold">
-          {item.tool}
-        </b>
-        <span className="block text-xs text-muted-foreground">{wsName}</span>
-      </span>
-      <span className="flex-none">
-        <Badge tone={item.resolution === "approved" ? "allowed" : "denied"}>
-          {t(`resolution.${item.resolution}`)}
-        </Badge>
-      </span>
+    <li>
+      <button
+        type="button"
+        data-testid="resolved-row"
+        aria-label={t("openApproval", { id: item.id })}
+        onClick={onOpen}
+        className="flex w-full items-start gap-2.5 rounded-xl border border-border bg-card px-3 py-2.5 text-left text-card-foreground opacity-80 transition-colors hover:border-ring focus-visible:outline-2 focus-visible:outline-ring"
+      >
+        <Glyph />
+        <span className="min-w-0 flex-1">
+          <b className="block break-all font-mono text-[13px] font-semibold">
+            {item.tool}
+          </b>
+          <span className="block text-xs text-muted-foreground">
+            {[agent, wsName].filter((part) => part !== null).join(" · ")}
+          </span>
+        </span>
+        <span className="flex-none">
+          <Badge tone={item.resolution === "approved" ? "allowed" : "denied"}>
+            {t(`resolution.${item.resolution}`)}
+          </Badge>
+        </span>
+      </button>
     </li>
+  );
+}
+
+/**
+ * A resolved call, opened from its row: the chain the card draws, then the
+ * resolution, when it was made and by whom. There is nothing left to decide,
+ * so there is no decision footer.
+ */
+function ResolvedCard({
+  item,
+  org,
+  ws,
+}: {
+  item: ResolvedApprovalItem;
+  org: string;
+  ws: string;
+}) {
+  const t = useTranslations("shell.approvals.resolvedCard");
+  const tr = useTranslations("shell.approvals");
+  const format = useFormatter();
+  const recorded = (value: string | null | undefined) =>
+    value === null || value === undefined ? (
+      <dd className="text-muted-foreground">{t("notRecorded")}</dd>
+    ) : (
+      <dd className={`${mono} break-all`}>{value}</dd>
+    );
+  return (
+    <div
+      data-testid="resolved-card"
+      className="flex min-w-0 flex-col gap-2 rounded-lg border border-border p-3"
+    >
+      <p className={`${mono} break-all font-semibold`}>{item.tool}</p>
+      <dl
+        aria-label={t("chain")}
+        className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs"
+      >
+        <dt className="text-muted-foreground">{t("who")}</dt>
+        {recorded(item.requester)}
+        <dt className="text-muted-foreground">{t("agent")}</dt>
+        {recorded(item.agentKey)}
+        <dt className="text-muted-foreground">{t("action")}</dt>
+        <dd className={`${mono} break-all`}>{item.tool}</dd>
+        <dt className="text-muted-foreground">{t("rule")}</dt>
+        {recorded(item.rule)}
+        <dt className="text-muted-foreground">{t("resolution")}</dt>
+        <dd>
+          <Badge tone={item.resolution === "approved" ? "allowed" : "denied"}>
+            {tr(`resolution.${item.resolution}`)}
+          </Badge>
+        </dd>
+        <dt className="text-muted-foreground">{t("resolvedAt")}</dt>
+        <dd>
+          <time dateTime={item.resolvedAt} className={mono}>
+            {format.dateTime(new Date(item.resolvedAt), {
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+              hourCycle: "h23",
+            })}
+          </time>
+        </dd>
+        <dt className="text-muted-foreground">{t("resolvedBy")}</dt>
+        {recorded(item.resolvedBy)}
+      </dl>
+      {item.runId === null ? null : (
+        <SafeLink
+          to={routes.run(org, ws, item.runId)}
+          className={`${linkText} self-start text-xs`}
+        >
+          {t("openRun")}
+        </SafeLink>
+      )}
+    </div>
   );
 }
 
@@ -162,7 +263,11 @@ export function ApprovalsDrawer({
 }) {
   const t = useTranslations("shell.approvals");
   const { approvalsOpen, setApprovalsOpen } = useShellState();
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<
+    | { kind: "pending"; id: string }
+    | { kind: "resolved"; item: ResolvedApprovalItem; slug: string }
+    | null
+  >(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const now = useTicking(data.approvals.readAt, approvalsOpen);
@@ -201,9 +306,17 @@ export function ApprovalsDrawer({
   );
   const resolved = data.approvals.workspaces.flatMap((w) =>
     w.resolved.ok
-      ? w.resolved.value.items.map((item) => ({ item, wsName: w.name }))
+      ? w.resolved.value.items.map((item) => ({
+          item,
+          wsName: w.name,
+          slug: w.slug,
+        }))
       : [],
   );
+  const open = (next: NonNullable<typeof selected>) => {
+    setSelected(next);
+    if (bodyRef.current) bodyRef.current.scrollTop = 0;
+  };
   const resolvedMore = data.approvals.workspaces.some(
     (w) => w.resolved.ok && w.resolved.value.more,
   );
@@ -271,8 +384,16 @@ export function ApprovalsDrawer({
                 <ChevronLeft aria-hidden="true" className="size-3.5" />
                 {t("all")}
               </button>
-              {cards[selected] ?? (
-                <p className="text-sm text-muted-foreground">{t("gone")}</p>
+              {selected.kind === "resolved" ? (
+                <ResolvedCard
+                  item={selected.item}
+                  org={data.org.slug}
+                  ws={selected.slug}
+                />
+              ) : (
+                (cards[selected.id] ?? (
+                  <p className="text-sm text-muted-foreground">{t("gone")}</p>
+                ))
               )}
             </>
           ) : (
@@ -297,8 +418,7 @@ export function ApprovalsDrawer({
                         wsName={wsName}
                         now={now}
                         onOpen={() => {
-                          setSelected(item.id);
-                          if (bodyRef.current) bodyRef.current.scrollTop = 0;
+                          open({ kind: "pending", id: item.id });
                         }}
                       />
                     ))}
@@ -325,6 +445,13 @@ export function ApprovalsDrawer({
                   </p>
                 </div>
               )}
+              <p
+                data-testid="interjection-not-backed"
+                data-gap={INTERJECTION_GAP}
+                className="mt-2 text-xs text-muted-foreground"
+              >
+                {t("interjectionNotBacked")}
+              </p>
               {data.approvals.truncated ? (
                 <p
                   data-testid="apdrawer-truncated"
@@ -341,8 +468,15 @@ export function ApprovalsDrawer({
                     })}
                   </p>
                   <ul className="flex flex-col gap-2">
-                    {resolved.map(({ item, wsName }) => (
-                      <ResolvedRow key={item.id} item={item} wsName={wsName} />
+                    {resolved.map(({ item, wsName, slug }) => (
+                      <ResolvedRow
+                        key={item.id}
+                        item={item}
+                        wsName={wsName}
+                        onOpen={() => {
+                          open({ kind: "resolved", item, slug });
+                        }}
+                      />
                     ))}
                   </ul>
                 </>
