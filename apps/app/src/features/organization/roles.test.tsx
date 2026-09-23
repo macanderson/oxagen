@@ -1,18 +1,17 @@
 // @vitest-environment jsdom
-// Organization › Roles over org.roles: the tabs, each role with what it
-// allows and where it came from, the permission catalogue, the line that says
-// whether Oxagen resolves these grants for this organization, the writes an
-// owner is offered and a member is not, and the denied and error states that
-// replace the sections. Every state is checked with axe. Beside them, the IdP
-// group mappings over org.sso: one editor per provider for an owner, a
-// read-only table for a member, a pointer to Single sign-on with no provider,
-// and a refused SSO read that leaves the roles in place.
+// Organization › Roles (pages/organization-roles.md): the Roles panel with its
+// store badge and Create role, the Kind, Scope and Origin filters, one row per
+// role with its kind, scope, permission chips ("+N more" past four), Held by
+// and Origin, View or Edit, Duplicate and Delete (disabled for a built-in or a
+// held role), the note, and the line that says whether Oxagen resolves these
+// grants for this organization's tier. Beside them, the IdP group mappings
+// over org.sso, which have no other home. Every render is checked with axe.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { RoleCatalog } from "@/data/contracts/org";
-import type { OrgRole } from "@/server/viewer";
+import type { RoleCatalog, SsoSettings } from "@/data/contracts/org";
+import type { Read } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 
@@ -24,129 +23,47 @@ vi.mock("next/link", () => ({
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
-vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
-vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
+vi.mock("./actions", () => ({
+  createRole: vi.fn(),
+  deleteRole: vi.fn(),
+  setRolePermissions: vi.fn(),
+}));
+vi.mock("./sso-actions", () => ({ setSsoGroupRoles: vi.fn() }));
 
-const { OrgCtx } = await import("@/server/viewer");
-const { unsafeMint } = await import("@/server/viewer.testing");
-const { readError, readOk } = await import("@/data/read");
+const { readOk } = await import("@/data/read");
 const { permissionEntry, roleCatalog, roleRow, ssoProvider, ssoSettings } =
   await import("./organization.builders");
-const { Roles } = await import("./roles");
+const { RolesTab } = await import("./roles");
 
-afterEach(() => {
-  cleanup();
-});
-
-type Read = Parameters<typeof Roles>[0]["source"]["org"]["roles"];
-type SsoRead = Parameters<typeof Roles>[0]["source"]["org"]["sso"];
-
-async function renderRoles(
-  read: Awaited<ReturnType<Read>>,
-  orgRole: OrgRole = "owner",
-  ssoRead: Awaited<ReturnType<SsoRead>> = readOk(
-    ssoSettings({ providers: [] }),
-  ),
-) {
-  const ctx = unsafeMint(OrgCtx, {
-    userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
-    orgId: "7a000000-0000-4000-8000-0000000000a1",
-    orgSlug: "acme",
-    orgName: "Acme Robotics",
-    orgRole,
-  });
-  const roles = vi.fn<Read>().mockResolvedValue(read);
-  const sso = vi.fn<SsoRead>().mockResolvedValue(ssoRead);
-  const source = {
-    pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
-    shell: { context: vi.fn(), preferences: vi.fn() },
-    billing: {
-      plan: vi.fn(),
-      usageCredits: vi.fn(),
-      bucket: vi.fn(),
-      contractRate: vi.fn(),
-      invoices: vi.fn(),
-    },
-    runs: {
-      list: vi.fn(),
-      get: vi.fn(),
-      frameBody: vi.fn(),
-      cost: vi.fn(),
-      transcript: vi.fn(),
-      chain: vi.fn(),
-      outputs: vi.fn(),
-    },
-    approvals: { pending: vi.fn(), resolved: vi.fn() },
-    agents: {
-      list: vi.fn(),
-      get: vi.fn(),
-      toolbelt: vi.fn(),
-      incidents: vi.fn(),
-    },
-    spend: {
-      byGroup: vi.fn(),
-      fleet: vi.fn(),
-      drill: vi.fn(),
-      waste: vi.fn(),
-      gatewayPolicy: vi.fn(),
-      budgets: vi.fn(),
-      findings: vi.fn(),
-      findingEvidence: vi.fn(),
-      priceBook: vi.fn(),
-      unpricedModels: vi.fn(),
-    },
-    onboarding: { state: vi.fn(), firstFrame: vi.fn() },
-    org: {
-      members: vi.fn(),
-      roles,
-      workspaces: vi.fn(),
-      apiKeys: vi.fn(),
-      costCenters: vi.fn(),
-      modelCredential: vi.fn(),
-      dataPlane: vi.fn(),
-      sso,
-    },
-    mandates: { list: vi.fn(), get: vi.fn() },
-    audit: { events: vi.fn(), exportEvents: vi.fn() },
-    skills: { inventory: vi.fn(), configuration: vi.fn() },
-    steering: {
-      records: vi.fn(),
-      record: vi.fn(),
-      proposals: vi.fn(),
-      contextPr: vi.fn(),
-      freshness: vi.fn(),
-      deliveries: vi.fn(),
-    },
-    tools: {
-      versions: vi.fn(),
-      grants: vi.fn(),
-      killSwitches: vi.fn(),
-      approvalRules: vi.fn(),
-      connections: vi.fn(),
-      mcpServers: vi.fn(),
-    },
-  };
-  const view = render(
-    <IntlProvider>{await Roles({ ctx, source })}</IntlProvider>,
-  );
-  expect(roles).toHaveBeenCalledWith(ctx);
-  expect(sso).toHaveBeenCalledWith(ctx);
-  await expectNoAxe(view.container);
-  return view;
-}
+afterEach(cleanup);
 
 const catalog: RoleCatalog = roleCatalog({
   roles: [
-    roleRow(),
+    roleRow({
+      permissions: [
+        "run.read",
+        "budget.set",
+        "agent.read",
+        "agent.register",
+        "agent.suspend",
+        "steering.read",
+      ],
+    }),
     roleRow({
       id: "rol_9z8y7x6w5v4t3s2r1q0p9n",
-      name: "Owner",
-      description: null,
+      name: "org.owner",
+      description: "everything, including the data plane and funding",
       scope: "org",
       kind: "human",
       builtIn: true,
-      permissions: ["run.read", "budget.set"],
-      heldBy: 3,
+      permissions: ["org.*"],
+      heldBy: 2,
+      createdBy: null,
+    }),
+    roleRow({
+      id: "rol_free00000000000000000",
+      name: "agent.finance.pay",
+      heldBy: 0,
       createdBy: null,
     }),
   ],
@@ -161,103 +78,149 @@ const catalog: RoleCatalog = roleCatalog({
   ],
 });
 
-describe("tabs", () => {
-  it("link People, Roles and API keys by URL, Roles marked as the current page", async () => {
-    await renderRoles(readOk(catalog));
-    const tabs = screen.getByRole("navigation", { name: "Organization" });
-    expect(within(tabs).getByRole("link", { name: "People" })).toHaveAttribute(
-      "href",
-      "/acme",
+async function renderRoles(
+  value: RoleCatalog = catalog,
+  sso: Read<SsoSettings> = readOk(ssoSettings({ providers: [] })),
+) {
+  const view = render(
+    <IntlProvider>
+      <RolesTab org="acme" catalog={value} sso={sso} />
+    </IntlProvider>,
+  );
+  await expectNoAxe(view.container);
+  return view;
+}
+
+function rowOf(id: string): HTMLElement {
+  const row = document.querySelector<HTMLElement>(`[data-row="${id}"]`);
+  if (row === null) throw new Error(`no row ${id}`);
+  return row;
+}
+
+describe("the Roles panel", () => {
+  it("carries the store badge, the gold Create role and the three filters", async () => {
+    await renderRoles();
+    const panel = screen.getByRole("region", { name: "Roles" });
+    expect(within(panel).getByText("postgres · iam")).toBeInTheDocument();
+    expect(
+      within(panel).getByRole("button", { name: "Create role" }),
+    ).toHaveClass("bg-button-primary-bg");
+    for (const filter of ["Kind", "Scope", "Origin"]) {
+      expect(within(panel).getByLabelText(filter)).toBeInTheDocument();
+    }
+    expect(within(panel).getByLabelText("Rows")).toBeInTheDocument();
+  });
+
+  it("names the columns in the design's order", async () => {
+    await renderRoles();
+    const headers = screen
+      .getAllByRole("columnheader")
+      .map((header) => header.textContent);
+    expect(headers.slice(0, 6)).toEqual([
+      "Role",
+      "Kind",
+      "Scope",
+      "Permissions",
+      "Held by",
+      "Origin",
+    ]);
+  });
+
+  it("prints four permission chips and folds the rest into +N more", async () => {
+    await renderRoles();
+    const row = rowOf("rol_7k2m9q4x8r1t5v3w6y0z2a");
+    expect(row).toHaveTextContent("run.read");
+    expect(row).toHaveTextContent("agent.register");
+    expect(row).not.toHaveTextContent("agent.suspend");
+    expect(row).toHaveTextContent("+2 more");
+  });
+
+  it("says who holds a role in its own unit, or nobody", async () => {
+    await renderRoles();
+    expect(rowOf("rol_7k2m9q4x8r1t5v3w6y0z2a")).toHaveTextContent("2 agents");
+    expect(rowOf("rol_9z8y7x6w5v4t3s2r1q0p9n")).toHaveTextContent("2 people");
+    expect(rowOf("rol_free00000000000000000")).toHaveTextContent("nobody");
+  });
+
+  it("prints built-in, or who created a custom role and when", async () => {
+    await renderRoles();
+    expect(rowOf("rol_9z8y7x6w5v4t3s2r1q0p9n")).toHaveTextContent("built-in");
+    expect(rowOf("rol_7k2m9q4x8r1t5v3w6y0z2a")).toHaveTextContent(
+      "Priya Natarajan · Aug 30, 2026",
     );
-    const roles = within(tabs).getByRole("link", { name: "Roles" });
-    expect(roles).toHaveAttribute("href", "/acme/roles");
-    expect(roles).toHaveAttribute("aria-current", "page");
-    expect(
-      within(tabs).getByRole("link", { name: "API keys" }),
-    ).toHaveAttribute("href", "/acme/api-keys");
-  });
-});
-
-describe("ok", () => {
-  it("lists each role with what it allows, who holds it and where it came from", async () => {
-    await renderRoles(readOk(catalog));
-    const section = screen.getByRole("region", { name: "Roles" });
-    const [custom, builtIn] = within(section).getAllByRole("row").slice(1);
-    expect(custom).toHaveAttribute("data-role", "rol_7k2m9q4x8r1t5v3w6y0z2a");
-    expect(custom).toHaveTextContent("agent.release");
-    expect(custom).toHaveTextContent("run.read");
-    expect(custom).toHaveTextContent("Agents");
-    expect(custom).toHaveTextContent("Workspace");
-    expect(custom).toHaveTextContent("Created by Priya Natarajan");
-    expect(builtIn).toHaveTextContent("Owner");
-    expect(builtIn).toHaveTextContent("People");
-    expect(builtIn).toHaveTextContent("Organization");
-    expect(builtIn).toHaveTextContent("Built in");
   });
 
-  it("offers the editor on a custom role and nothing on a built-in one (negative)", async () => {
-    await renderRoles(readOk(catalog));
-    const section = screen.getByRole("region", { name: "Roles" });
-    const [custom, builtIn] = within(section).getAllByRole("row").slice(1);
-    expect(custom).toHaveTextContent("Edit");
-    expect(custom).toHaveTextContent("Delete");
-    expect(builtIn).not.toHaveTextContent("Edit");
-    expect(builtIn).not.toHaveTextContent("Delete");
+  it("offers View on a built-in role and Edit on a custom one, Duplicate on both", async () => {
+    await renderRoles();
+    const builtIn = rowOf("rol_9z8y7x6w5v4t3s2r1q0p9n");
+    const custom = rowOf("rol_7k2m9q4x8r1t5v3w6y0z2a");
+    expect(within(builtIn).getByRole("button", { name: "View" })).toBeEnabled();
+    expect(within(builtIn).queryByRole("button", { name: "Edit" })).toBeNull();
+    expect(within(custom).getByRole("button", { name: "Edit" })).toBeEnabled();
     expect(
-      screen.getByRole("button", { name: "Create role" }),
+      within(builtIn).getByRole("button", { name: "Duplicate" }),
+    ).toBeEnabled();
+  });
+
+  it("disables Delete on a built-in or held role and offers it on a free one (negative)", async () => {
+    await renderRoles();
+    expect(
+      within(rowOf("rol_9z8y7x6w5v4t3s2r1q0p9n")).getByRole("button", {
+        name: "Delete: Built-in roles cannot be deleted",
+      }),
+    ).toBeDisabled();
+    expect(
+      within(rowOf("rol_7k2m9q4x8r1t5v3w6y0z2a")).getByRole("button", {
+        name: "Delete: Reassign the 2 holders first",
+      }),
+    ).toBeDisabled();
+    expect(
+      within(rowOf("rol_free00000000000000000")).getByRole("button", {
+        name: "Delete",
+      }),
+    ).toBeEnabled();
+  });
+
+  it("filters by kind", async () => {
+    await renderRoles();
+    await userEvent.selectOptions(screen.getByLabelText("Kind"), "human");
+    expect(document.querySelectorAll("[data-row]")).toHaveLength(1);
+    expect(rowOf("rol_9z8y7x6w5v4t3s2r1q0p9n")).toBeInTheDocument();
+  });
+
+  it("carries the note beneath the table", async () => {
+    await renderRoles();
+    expect(
+      screen.getByText(/A role is a permission set, nothing more\./),
     ).toBeInTheDocument();
   });
 
-  it("opens the catalogue a role is written in, with what each permission covers", async () => {
-    await renderRoles(readOk(catalog));
+  it("says so in place of the table when the organization has no role", async () => {
+    await renderRoles(roleCatalog({ roles: [] }));
     expect(
-      screen.queryByRole("dialog", { name: "Permission catalogue" }),
-    ).toBeNull();
-    await userEvent.click(
-      screen.getByRole("button", { name: "View permission catalogue" }),
-    );
-    const section = await screen.findByRole("dialog", {
-      name: "Permission catalogue",
-    });
-    expect(section).toHaveTextContent("Runs");
-    expect(section).toHaveTextContent("Money");
-    const entry = section.querySelector('[data-permission="run.read"]');
-    expect(entry).toHaveTextContent(
-      "Read runs, their approvals and the commands sent to them",
-    );
-    expect(entry).toHaveTextContent("3 capabilities");
+      screen.getByText("This organization has no roles."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("table", { name: "Roles" })).toBeNull();
   });
 });
 
 describe("whether these grants are resolved", () => {
   it("says Oxagen checks them for an organization the resolver runs for", async () => {
-    await renderRoles(readOk(catalog));
-    const line = screen
-      .getByRole("region", { name: "Roles" })
-      .querySelector('[data-enforced="true"]');
-    expect(line).toHaveTextContent(
+    await renderRoles();
+    expect(document.querySelector('[data-enforced="true"]')).toHaveTextContent(
       "Oxagen checks these grants on governed calls.",
     );
   });
 
-  it("says a person's grants are recorded and an agent's are enforced, for a tier the resolver skips, and still offers the editor", async () => {
+  it("says a person's grants are recorded and an agent's enforced on a tier the resolver skips, and still offers the editor", async () => {
     await renderRoles(
-      readOk(
-        roleCatalog({
-          ...catalog,
-          enforcement: { tier: "free", enforced: false },
-        }),
-      ),
+      roleCatalog({
+        ...catalog,
+        enforcement: { tier: "free", enforced: false },
+      }),
     );
-    const line = screen
-      .getByRole("region", { name: "Roles" })
-      .querySelector('[data-enforced="false"]');
+    const line = document.querySelector('[data-enforced="false"]');
     expect(line).toHaveTextContent("recorded for people, enforced for agents");
-    expect(line).toHaveTextContent("free");
-    // checkIAM resolves an agent principal BEFORE the tier fast-path
-    // (packages/iam/src/check-iam.ts), so the older wording — every governed
-    // action allowed whatever a role says — was false for exactly the roles
-    // this page edits.
     expect(line).toHaveTextContent("checked on every tier");
     // No control on this page is gated on a tier (maintainer decision, 2026-09-15).
     expect(
@@ -266,117 +229,30 @@ describe("whether these grants are resolved", () => {
   });
 });
 
-describe("empty", () => {
-  it("says so in place of the table", async () => {
-    await renderRoles(readOk(roleCatalog({ roles: [] })));
-    expect(
-      screen.getByText("This organization has no roles."),
-    ).toBeInTheDocument();
-    expect(screen.queryByRole("table")).toBeNull();
-  });
-});
-
-describe("a viewer who cannot write", () => {
-  it("names who can and offers no write control (negative)", async () => {
-    await renderRoles(readOk(catalog), "member");
-    expect(
-      screen.getByText("An owner or an admin makes these changes."),
-    ).toBeInTheDocument();
-    // Reading the catalogue is the one button a member keeps.
-    expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual([
-      "View permission catalogue",
-    ]);
-  });
-});
-
-describe("a read that did not list", () => {
-  it("denied: says which permission is needed, keeps the tabs and lists nothing (negative)", async () => {
-    await renderRoles({
-      ok: false,
-      reason: "denied",
-      permission: "org.admin",
-    });
-    expect(screen.getByText(/org.admin/)).toHaveAttribute(
-      "data-reason",
-      "denied",
-    );
-    expect(screen.queryByRole("table")).toBeNull();
-    expect(
-      screen.getByRole("navigation", { name: "Organization" }),
-    ).toBeInTheDocument();
-  });
-
-  it("error: names the code and lists nothing (negative)", async () => {
-    await renderRoles(readError("control_plane_unavailable", 503));
-    expect(screen.getByText(/control_plane_unavailable/)).toHaveAttribute(
-      "data-reason",
-      "error",
-    );
-    expect(screen.queryByRole("table")).toBeNull();
-  });
-});
-
 describe("IdP group mappings", () => {
   it("points to Single sign-on when the organization has no provider", async () => {
-    await renderRoles(readOk(catalog));
+    await renderRoles();
     const section = screen.getByRole("region", { name: "IdP group mappings" });
     expect(
       within(section).getByRole("link", {
         name: "Add one on the Single sign-on tab.",
       }),
     ).toHaveAttribute("href", "/acme/sso");
-    expect(within(section).queryByRole("table")).toBeNull();
   });
 
-  it("offers an owner one editor per provider, with the mapped rows", async () => {
-    await renderRoles(readOk(catalog), "owner", readOk(ssoSettings()));
-    const section = screen.getByRole("region", { name: "IdP group mappings" });
-    expect(section).toHaveTextContent("Acme Okta (acme.com)");
-    expect(
-      within(section).getByRole("textbox", { name: "Group name, row 1" }),
-    ).toHaveValue("oxagen-admins");
-    expect(
-      within(section).getByRole("button", { name: "Save mappings" }),
-    ).toBeInTheDocument();
-  });
-
-  it("shows a member the mappings with no control (negative)", async () => {
+  it("offers one editor per provider, with the mapped rows", async () => {
     await renderRoles(
-      readOk(roleCatalog({ roles: [] })),
-      "member",
+      catalog,
       readOk(ssoSettings({ providers: [ssoProvider()] })),
     );
     const section = screen.getByRole("region", { name: "IdP group mappings" });
-    expect(section).toHaveTextContent("oxagen-admins");
-    expect(section).toHaveTextContent("Admin");
-    expect(within(section).queryByRole("textbox")).toBeNull();
-    expect(within(section).queryByRole("button")).toBeNull();
-  });
-
-  it("shows an owner on a plan without SSO the mappings read-only, with the plan notice (negative)", async () => {
-    await renderRoles(
-      readOk(catalog),
-      "owner",
-      readOk(ssoSettings({ entitled: false })),
-    );
-    const section = screen.getByRole("region", { name: "IdP group mappings" });
-    expect(section).toHaveTextContent("oxagen-admins");
-    expect(within(section).getByTestId("sso-plan-notice")).toHaveTextContent(
-      "Single sign-on is part of the Enterprise plan.",
-    );
     expect(
-      within(section).getByRole("link", {
-        name: "Change the plan on Billing.",
-      }),
-    ).toHaveAttribute("href", "/acme/billing");
-    expect(within(section).queryByRole("textbox")).toBeNull();
-    expect(
-      within(section).queryByRole("button", { name: "Save mappings" }),
-    ).toBeNull();
+      within(section).getByRole("textbox", { name: "Group name, row 1" }),
+    ).toHaveValue("oxagen-admins");
   });
 
   it("says a refused SSO read in its own section and keeps the roles (negative)", async () => {
-    await renderRoles(readOk(catalog), "owner", {
+    await renderRoles(catalog, {
       ok: false,
       reason: "denied",
       permission: "list_sso_providers",

@@ -441,7 +441,7 @@
         "scopeHint": "An organization role applies everywhere. A workspace role is assigned in one workspace at a time.",
         "permissions": "Permissions",
         "selected": "{count} selected",
-        "readOnly": "built-in · read-only",
+        "readOnly": "read-only",
         "holders": "{count, plural, one {Held by # principal} other {Held by # principals}}. Saving changes their effective permission at the next call, and nothing in flight is cut.",
         "governed": "Saving is a governed action. It passes IAM and writes an audit record. org.* is the only wildcard and only org.owner carries it.",
         "create": "Create role",
