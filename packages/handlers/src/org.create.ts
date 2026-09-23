@@ -67,6 +67,9 @@ export const organizationCreateHandler: CapabilityHandler<
   if (existing) throw slugTaken();
 
   try {
+    // tenancy: system bypass via withSystemDb (bootstrap — writes the new org's
+    // root rows and reads every namespace to keep it globally unique; no tenant
+    // scope exists for an org that does not exist yet)
     const created = await withSystemDb(async (tx) => {
       // Derive the immutable, globally-unique namespace from the slug, avoiding
       // any namespace already taken. The unique index is the authoritative guard
