@@ -26,6 +26,7 @@
 import type { PolicyBundle } from "@oxagen/tacho";
 import {
   definitionBudget,
+  definitionContainment,
   parseAgentDefinitionSource,
 } from "@oxagen/oxagen/agent-definition-source";
 
@@ -146,11 +147,27 @@ export function budgetDocFromVersion(version: {
   config: unknown;
   definitionSource?: string | null;
 }): AgentBudgetDoc | undefined {
-  return definitionBudget(
-    version.definitionSource == null
-      ? version.config
-      : parseAgentDefinitionSource(version.definitionSource),
-  );
+  return definitionBudget(definitionDoc(version));
+}
+
+/**
+ * The active version's `[containment]` table (ADR-152), read by the same
+ * source-over-config rule as the budget.
+ */
+export function containmentFromVersion(version: {
+  config: unknown;
+  definitionSource?: string | null;
+}): { required: true } | undefined {
+  return definitionContainment(definitionDoc(version));
+}
+
+function definitionDoc(version: {
+  config: unknown;
+  definitionSource?: string | null;
+}): unknown {
+  return version.definitionSource == null
+    ? version.config
+    : parseAgentDefinitionSource(version.definitionSource);
 }
 
 function microsToUsd(micros: number): number {

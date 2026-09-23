@@ -403,6 +403,13 @@ export interface GovernanceChangeDetail {
  * adding a named interface, never by reaching for `Record<string, unknown>`:
  * an audit reader has to be able to know what a row means.
  */
+export interface RunOutcomesPolicyChangeDetail {
+  feature: "run_outcomes";
+  change: "customer_consent" | "platform_access";
+  enabled: boolean;
+  reason: string | null;
+}
+
 /**
  * Evidence recorded on an SSO provider's lifecycle events
  * (`sso.provider_created`, `sso.domain_verified`, `sso.provider_updated`,
@@ -534,6 +541,7 @@ export type SecurityEventDetail =
   | ScimGroupDetail
   | ScimRequestDeniedDetail
   | CredentialRevocationDetail
+  | RunOutcomesPolicyChangeDetail
   | ApprovalRuleInvalidationDetail
   | GovernanceChangeDetail
   | SsoProviderChangeDetail

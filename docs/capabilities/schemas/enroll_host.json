@@ -703,6 +703,18 @@
             ],
             "additionalProperties": false
           },
+          "containment": {
+            "type": "object",
+            "properties": {
+              "required": {
+                "const": true
+              }
+            },
+            "required": [
+              "required"
+            ],
+            "additionalProperties": false
+          },
           "signature": {
             "type": "object",
             "properties": {

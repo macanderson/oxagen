@@ -1440,6 +1440,15 @@
     },
     {
       "domain": "run",
+      "name": "get_run_outcomes_settings",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "run",
       "name": "get_run_outputs",
       "reads": [],
       "surfaces": [
@@ -1463,6 +1472,15 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "run",
+      "name": "get_run_work",
+      "reads": [],
+      "surfaces": [
+        "api"
       ],
       "writes": []
     },
@@ -3341,6 +3359,22 @@
       "writes": []
     },
     {
+      "domain": "run",
+      "name": "set_run_outcomes_access",
+      "reads": [],
+      "surfaces": [],
+      "writes": []
+    },
+    {
+      "domain": "run",
+      "name": "set_run_outcomes_settings",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "secret",
       "name": "set_secret_value",
       "reads": [],
@@ -3892,7 +3926,7 @@
       "writes": []
     }
   ],
-  "contentHash": "85bab8db3df87e0cf0ee2b44a170c68d617cdf2dd2a38443d22c03a2e21bc4dc",
+  "contentHash": "afb4b152b61d4918231be400848633e304a54352820dd4b1a9b44060f51fef00",
   "domains": [
     {
       "name": "agent",
