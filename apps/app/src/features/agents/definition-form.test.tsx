@@ -46,6 +46,9 @@ const ledger = (mandates: MandateRow[]): MandateList => ({
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  // The draft is shared with the source editor through sessionStorage
+  // (draft-store.ts), so one test's edit would otherwise open the next.
+  window.sessionStorage.clear();
 });
 
 function renderForm(
@@ -95,6 +98,7 @@ async function committedSource(): Promise<string> {
       });
     },
   );
+  await userEvent.type(screen.getByLabelText(/Summary/), "Budget");
   await userEvent.click(
     screen.getByRole("button", { name: "Commit and open a pull request" }),
   );
@@ -126,9 +130,11 @@ describe("DefinitionForm", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
     const sheet = await screen.findByTestId("commit-definition");
+    // The sheet shows the draft against the file it started from, as a diff.
     expect(sheet).toHaveTextContent(
-      "1 lines added and 1 removed against the file you started from.",
+      "The draft against the file it started from: .oxagen/agents/release-bot.toml, +1 −1",
     );
+    expect(sheet).toHaveTextContent('+name = "Releases"');
     commitAgentDefinition.mockResolvedValue({
       ok: true,
       value: {
@@ -140,6 +146,7 @@ describe("DefinitionForm", () => {
         },
       },
     });
+    await userEvent.type(screen.getByLabelText(/Summary/), "Rename");
     await userEvent.click(
       screen.getByRole("button", { name: "Commit and open a pull request" }),
     );
@@ -150,7 +157,7 @@ describe("DefinitionForm", () => {
       {
         agentId: "agt_releasebot",
         branch: "agents/release-bot",
-        message: "",
+        message: "Rename",
         source: DEFINITION_SOURCE.replace(
           'name = "Release bot"',
           'name = "Releases"',
@@ -194,6 +201,7 @@ describe("DefinitionForm", () => {
         });
       },
     );
+    await userEvent.type(screen.getByLabelText(/Summary/), "Tools");
     await userEvent.click(
       screen.getByRole("button", { name: "Commit and open a pull request" }),
     );

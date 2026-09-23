@@ -22,22 +22,22 @@ const memory = new Map<string, string>();
 
 function read(key: string): string | null {
   try {
-    const value = window.sessionStorage.getItem(PREFIX + key);
-    if (value !== null) return value;
+    return window.sessionStorage.getItem(PREFIX + key);
   } catch {
-    // Storage refused: fall back to this tab's memory.
+    // Storage refused: this tab's memory holds the draft instead.
+    return memory.get(key) ?? null;
   }
-  return memory.get(key) ?? null;
 }
 
 function write(key: string, value: string | null) {
-  if (value === null) memory.delete(key);
-  else memory.set(key, value);
   try {
     if (value === null) window.sessionStorage.removeItem(PREFIX + key);
     else window.sessionStorage.setItem(PREFIX + key, value);
+    memory.delete(key);
   } catch {
-    // Storage refused: the memory copy above is the draft.
+    // Storage refused: keep the draft in this tab's memory.
+    if (value === null) memory.delete(key);
+    else memory.set(key, value);
   }
   for (const listener of listeners) listener();
 }
