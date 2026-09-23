@@ -10,7 +10,7 @@ const CLASSES = [
   "reasoning",
 ] as const;
 
-export function reportedTokens(
+function reportedTokens(
   entries: readonly TranscriptEntry[],
 ): TranscriptUsage | null {
   const values = entries.flatMap((entry) => (entry.usage ? [entry.usage] : []));
