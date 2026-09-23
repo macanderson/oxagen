@@ -1,9 +1,19 @@
 /** Builders shared by the host and collector tests. Not part of the public surface. */
-import { createPublicKey, generateKeyPairSync, sign } from "node:crypto";
-import { mkdtempSync } from "node:fs";
+import {
+  createHash,
+  createPublicKey,
+  generateKeyPairSync,
+  sign,
+} from "node:crypto";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { jcs, type JsonValue } from "../digest";
+import type {
+  CodexAppServer,
+  CodexRpcAnswer,
+  CodexRpcRequest,
+} from "./codex-app-server";
 import type { PolicyBundle } from "../wire";
 import { generateDeviceKey } from "./device-key";
 import { HOST_FILE_SCHEMA, type HostFile } from "./host-file";
@@ -166,5 +176,140 @@ export function testHostFile(
     expires_at: "2027-03-09T00:00:00.000Z",
     revoked_at: null,
     ...overrides,
+  };
+}
+
+/**
+ * A stand-in for `codex app-server` that keeps a trust table in memory and
+ * answers `hooks/list` from a `hooks.json` on disk, the way Codex 0.155 does.
+ *
+ * It exists because the defect it guards was invisible to a stub that only
+ * recorded calls: enrollment wrote the hooks file, reported success, and
+ * every hook was skipped. A fake that derives each hook's key from the file
+ * and reports `trusted` only once a matching hash has been written makes a
+ * test fail for the same reason the real machine did.
+ */
+export interface FakeCodexAppServer {
+  hooksPath: string;
+  server: CodexAppServer;
+  /** `hooks.state` as the fake's config holds it, keyed as Codex keys it. */
+  trusted: Map<string, string>;
+  /** Every request the fake was asked to answer, in order. */
+  requests: CodexRpcRequest[];
+  /** Make every later exchange fail, as an absent `codex` binary does. */
+  breakWith: (problem: string | undefined) => void;
+}
+
+/** Codex's key for one hook: the file, the snake_case event, and its position. */
+function fakeHookKey(
+  path: string,
+  event: string,
+  group: number,
+  index: number,
+): string {
+  const snake = event.replace(/(?<!^)([A-Z])/g, "_$1").toLowerCase();
+  return `${path}:${snake}:${group}:${index}`;
+}
+
+export function fakeCodexAppServer(hooksPath: string): FakeCodexAppServer {
+  const trusted = new Map<string, string>();
+  const requests: CodexRpcRequest[] = [];
+  let broken: string | undefined;
+
+  // Stands in for Codex's digest, whose input is undocumented. All the code
+  // under test needs of it is that it changes when the hook does.
+  const hashOf = (hook: unknown): string =>
+    `sha256:${createHash("sha256").update(JSON.stringify(hook)).digest("hex")}`;
+
+  const listHooks = (): unknown => {
+    let document: Record<string, unknown>;
+    try {
+      document = JSON.parse(readFileSync(hooksPath, "utf8")) as Record<
+        string,
+        unknown
+      >;
+    } catch {
+      return { data: [{ hooks: [] }] };
+    }
+    const events = (document["hooks"] ?? {}) as Record<string, unknown>;
+    const hooks: unknown[] = [];
+    for (const [event, groups] of Object.entries(events)) {
+      if (!Array.isArray(groups)) continue;
+      groups.forEach((group, groupIndex) => {
+        const entries = (group as { hooks?: unknown[] }).hooks ?? [];
+        entries.forEach((entry, index) => {
+          const key = fakeHookKey(hooksPath, event, groupIndex, index);
+          const currentHash = hashOf(entry);
+          const recorded = trusted.get(key);
+          hooks.push({
+            key,
+            currentHash,
+            trustStatus:
+              recorded === currentHash
+                ? "trusted"
+                : recorded === undefined
+                  ? "untrusted"
+                  : "modified",
+            isManaged: false,
+            enabled: true,
+            eventName: event.charAt(0).toLowerCase() + event.slice(1),
+            sourcePath: hooksPath,
+            command: (entry as { command?: string }).command ?? "",
+          });
+        });
+      });
+    }
+    return { data: [{ hooks }] };
+  };
+
+  const write = (params: unknown): CodexRpcAnswer => {
+    const { keyPath, mergeStrategy, value } = (params ?? {}) as {
+      keyPath?: string;
+      mergeStrategy?: string;
+      value?: unknown;
+    };
+    if (keyPath === "hooks.state" && mergeStrategy === "upsert") {
+      for (const [key, record] of Object.entries(
+        (value ?? {}) as Record<string, { trusted_hash?: string }>,
+      ))
+        if (record.trusted_hash !== undefined)
+          trusted.set(key, record.trusted_hash);
+      return { result: {} };
+    }
+    const single = /^hooks\.state\.(".*")$/.exec(keyPath ?? "");
+    if (single !== null && mergeStrategy === "upsert") {
+      const hash = (value as { trusted_hash?: string } | undefined)
+        ?.trusted_hash;
+      if (typeof hash === "string")
+        trusted.set(JSON.parse(single[1] as string) as string, hash);
+      return { result: {} };
+    }
+    if (single !== null && mergeStrategy === "replace" && value === null) {
+      trusted.delete(JSON.parse(single[1] as string) as string);
+      return { result: {} };
+    }
+    return { error: { code: -32602, message: `unexpected write ${keyPath}` } };
+  };
+
+  return {
+    hooksPath,
+    trusted,
+    requests,
+    breakWith: (problem) => {
+      broken = problem;
+    },
+    server: async (incoming) => {
+      requests.push(...incoming);
+      if (broken !== undefined) return { answers: [], problem: broken };
+      return {
+        answers: incoming.map((request) =>
+          request.method === "hooks/list"
+            ? { result: listHooks() }
+            : request.method === "config/value/write"
+              ? write(request.params)
+              : { error: { code: -32601, message: "unknown method" } },
+        ),
+      };
+    },
   };
 }
