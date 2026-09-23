@@ -1176,8 +1176,13 @@ describe("shipper", () => {
     // tachod starts a drain from its interval tick, from a tick a caller
     // drives, and from stop(), and nothing stopped two of them reading the
     // same unshipped tail while the first one's ingest was still awaited.
-    // Both sent it, and the control plane saw `144, 145, 144, 145`: seq 144
-    // following seq 145 on a chain that was dense in the WAL.
+    // Both sent it, so the control plane saw seq 144 arrive after seq 145 on
+    // a chain that was dense in the WAL (#3782).
+    //
+    // Each drain stops after one batch here, because the stub reports the
+    // rate window as spent. Without that, the first drain's own loop would
+    // ship the late events and the second drain would find nothing to do,
+    // so a drain() that merely shared the one in flight would still pass.
     const paths = scratchPaths();
     const wal = new Wal(paths.wal);
     const events = minimalSession();
@@ -1194,6 +1199,9 @@ describe("shipper", () => {
         ingest: async (batch) => {
           await held;
           ingested.push(...batch);
+          // A spent window ends each drain after this batch. resetAtMs 0
+          // keeps ready() true, because the clock below reads 0.
+          s.noteRateLimit({ remaining: 0, resetAtMs: 0 });
           return okResponse(batch);
         },
       },
@@ -1202,15 +1210,18 @@ describe("shipper", () => {
     );
 
     const a = s.drain();
-    // Let the first drain read the WAL and park on its ingest request.
+    // Let the first drain reach its ingest request.
     await new Promise((resolve) => setTimeout(resolve, 20));
     // Written after the first drain read the WAL, so only a later read ships
-    // it. The second drain has to wait for the first and still find it.
+    // it. The second drain has to wait for the first, then ship it itself.
     wal.append(events.slice(split));
     const b = s.drain();
     await new Promise((resolve) => setTimeout(resolve, 20));
     release?.();
-    await Promise.all([a, b]);
+    const [first, second] = await Promise.all([a, b]);
+
+    expect(first.shipped).toBe(split);
+    expect(second.shipped).toBe(events.length - split);
 
     const ids = ingested.map((event) => event.event_id_idem);
     expect(new Set(ids).size).toBe(ids.length);
