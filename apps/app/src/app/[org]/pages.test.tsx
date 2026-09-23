@@ -123,7 +123,10 @@ vi.mock("@/features/agents", () => ({
   AgentSource,
   AgentsCreate: () => null,
 }));
-vi.mock("@/features/steering", () => ({
+// The view parser and link builder stay real: the route redirects a legacy
+// `?tab=` URL to its path segment with them.
+vi.mock("@/features/steering", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/steering")>()),
   Steering,
   SteeringCreate: (props: { searchParams: Record<string, string> }) => (
     <p data-testid="steering-create" data-tab={props.searchParams.tab} />
@@ -164,10 +167,14 @@ vi.mock("@/features/organization/api-key-actions", () => ({
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
-// The Skills route only moves to the Steering tab; the redirect throws, as
-// Next's does, with the target in its message.
+// The Skills route only moves to the Steering tab, and the Steering route moves
+// a legacy `?tab=` URL to its path; each redirect throws, as Next's does, with
+// the target in its message.
 vi.mock("@/shared/navigation", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/shared/navigation")>()),
+  redirectTo: (path: string) => {
+    throw new Error(`REDIRECT ${path}`);
+  },
   permanentRedirectTo: (path: string) => {
     throw new Error(`REDIRECT ${path}`);
   },
@@ -308,7 +315,7 @@ describe("the Steering page", () => {
     requireViewer.mockResolvedValue(ctx);
     await expectPageTitle(
       await STEERING(),
-      routeProps(SEGMENTS, { tab: "prs", proposal: "prp_1" }),
+      routeProps(SEGMENTS, { proposal: "prp_1" }),
       title("steering"),
     );
     expect(requireViewer).toHaveBeenCalledWith(...WS);
@@ -316,17 +323,25 @@ describe("the Steering page", () => {
     expect(Steering.mock.calls[0]?.[0]).toEqual({
       ctx,
       source,
-      searchParams: { tab: "prs", proposal: "prp_1" },
+      searchParams: { proposal: "prp_1" },
     });
-    expect(screen.getByTestId("steering-body")).toHaveAttribute(
-      "data-tab",
-      "prs",
-    );
-    expect(screen.getByTestId("steering-create")).toHaveAttribute(
-      "data-tab",
-      "prs",
-    );
+    expect(screen.getByTestId("steering-body")).toBeInTheDocument();
+    expect(screen.getByTestId("steering-create")).toBeInTheDocument();
     expect(screen.queryByTestId("not-recorded")).toBeNull();
+  });
+
+  it("moves a legacy ?tab= URL to the tab's path segment and keeps the selected proposal", async () => {
+    requireViewer.mockResolvedValue({
+      orgSlug: "acme",
+      wsSlug: "core-platform",
+    });
+    const { default: page } = await STEERING();
+    await expect(
+      page(routeProps(SEGMENTS, { tab: "prs", proposal: "prp_1" })),
+    ).rejects.toThrow(
+      /^REDIRECT \/acme\/core-platform\/steering\/proposals\b.*prp_1/,
+    );
+    expect(Steering).not.toHaveBeenCalled();
   });
 });
 

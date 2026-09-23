@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import type { RunWork } from "@/data/contracts/run-work";
 import { readError, readOk } from "@/data/read";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { RunWorkSection } from "./work-ci";
 vi.mock("next/link", () => ({
@@ -93,8 +94,8 @@ const value: RunWork = {
   complete: false,
   warnings: ["ci_check_limit"],
 };
-it("puts failed CI beside actionable checkout and PR evidence without claiming authorship", () => {
-  render(
+it("puts failed CI beside actionable checkout and PR evidence without claiming authorship", async () => {
+  const { container } = render(
     <IntlProvider>
       <RunWorkSection
         read={readOk(value)}
@@ -121,6 +122,7 @@ it("puts failed CI beside actionable checkout and PR evidence without claiming a
   expect(
     screen.getByText(/Digest recorded; bytes not retained/),
   ).toBeInTheDocument();
+  await expectNoAxe(container);
 });
 it("does not substitute zero work for an unavailable read", () => {
   render(

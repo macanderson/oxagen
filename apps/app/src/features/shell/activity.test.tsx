@@ -15,6 +15,7 @@ import {
   it,
   vi,
 } from "vitest";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import shellMessages from "../../../messages/shell.json";
 import { ActivityButtons, ShellActivityProvider } from "./activity";
 import { shellData } from "./shell.builders";
@@ -112,7 +113,7 @@ function renderButtons() {
 
 describe("activity badges with the drawers closed", () => {
   it("show the idle approval count and unread dot without the detailed read", async () => {
-    renderButtons();
+    const { container } = renderButtons();
     expect(await screen.findByLabelText("2 unread notifications")).toBeTruthy();
     expect(
       screen.getByRole("button", { name: "Approvals" }).textContent,
@@ -122,6 +123,7 @@ describe("activity badges with the drawers closed", () => {
       "acme",
       "core-platform",
     );
+    await expectNoAxe(container);
   });
 
   it("render no dot when nothing is unread", async () => {
