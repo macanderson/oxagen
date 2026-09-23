@@ -315,6 +315,15 @@
       "writes": []
     },
     {
+      "domain": "tacho",
+      "name": "create_github_token",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "org",
       "name": "create_org",
       "reads": [],
@@ -3848,7 +3857,7 @@
       "writes": []
     }
   ],
-  "contentHash": "e4e7b7ddc18611c0fd3f277d3314ecde065072acb27b5ea49ac28aa85a3b7621",
+  "contentHash": "b9dea9ef050e91d28c3aa39dba46261398c48df69b7f27b74a13450a8ca0244b",
   "domains": [
     {
       "name": "agent",
@@ -8308,6 +8317,12 @@
           "type": "text"
         },
         {
+          "name": "label",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
           "name": "statement",
           "nullable": false,
           "primaryKey": false,
@@ -8672,6 +8687,12 @@
         {
           "name": "title",
           "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "label",
+          "nullable": true,
           "primaryKey": false,
           "type": "text"
         },

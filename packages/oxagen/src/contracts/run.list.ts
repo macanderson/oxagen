@@ -201,6 +201,7 @@ export const runItemSchema = z
     frames: z.number().int().nonnegative(),
     /** Null until the rollup has priced the run's frames after its seal. */
     cost: runCostSchema.nullable(),
+    reportedCost: runCostSchema.nullable().optional(),
     /** The goal a ledger run was admitted for; tacho records none. */
     taskRef: z.string().nullable(),
     /** RFC 3339. */

@@ -1,3 +1,4 @@
+import { contextLabelsBackfill } from "./functions/context.labels-backfill";
 import { billingDunningSweep } from "./functions/billing.dunning-sweep";
 import { billingUsageDelivery } from "./functions/billing.usage-delivery";
 import { billingGauClose } from "./functions/billing.gau-close";
@@ -54,6 +55,7 @@ import {
 // between the abstract DurableFunction interface and Inngest's internal Like type.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const functions: any[] = [
+  contextLabelsBackfill,
   billingDunningSweep,
   billingGauClose,
   billingUsageDelivery,

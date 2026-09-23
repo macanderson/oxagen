@@ -40,6 +40,7 @@ const FIXED_EXPIRES_MS = Date.parse(FIXED_EXPIRES_AT);
 import {
   createAppInstallationToken,
   getInstallationToken,
+  revokeInstallationToken,
   __tokenCache,
 } from "../app-auth";
 
@@ -331,5 +332,105 @@ describe("getInstallationToken", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(second.token).toBe("ghs_new");
+  });
+});
+
+describe("scoped installation tokens", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    __tokenCache.clear();
+  });
+
+  it("sends the repository and permission scope in the mint body", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(makeTokenResponse("ghs_scoped", FIXED_EXPIRES_AT));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await createAppInstallationToken({
+      appId: "12345",
+      privateKey,
+      installationId: 11111,
+      repositoryIds: [42],
+      permissions: { contents: "write" },
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({
+      repository_ids: [42],
+      permissions: { contents: "write" },
+    });
+  });
+
+  it("keeps different immutable repository sets apart in the token cache", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(makeTokenResponse("ghs_a", FIXED_EXPIRES_AT))
+      .mockResolvedValueOnce(makeTokenResponse("ghs_b", FIXED_EXPIRES_AT));
+    vi.stubGlobal("fetch", fetchMock);
+    const args = {
+      appId: "12345",
+      privateKey,
+      installationId: 11111,
+      now: () => 1_000_000_000,
+    };
+    expect(
+      (await getInstallationToken({ ...args, repositoryIds: [42, 43] })).token,
+    ).toBe("ghs_a");
+    expect(
+      (await getInstallationToken({ ...args, repositoryIds: [44] })).token,
+    ).toBe("ghs_b");
+    expect(
+      (await getInstallationToken({ ...args, repositoryIds: [43, 42] })).token,
+    ).toBe("ghs_a");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("sends no body when no scope is given", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(makeTokenResponse("ghs_plain", FIXED_EXPIRES_AT));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await createAppInstallationToken({
+      appId: "12345",
+      privateKey,
+      installationId: 11111,
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(init.body).toBeUndefined();
+  });
+});
+
+describe("revokeInstallationToken", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("DELETEs the token and treats 204 and 401 as revoked", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(makeResponse(null, 204))
+      .mockResolvedValueOnce(makeResponse(null, 401));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await revokeInstallationToken({ token: "ghs_x" });
+    await revokeInstallationToken({ token: "ghs_x" });
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://api.github.com/installation/token");
+    expect(init.method).toBe("DELETE");
+    expect((init.headers as Record<string, string>).Authorization).toBe(
+      "Bearer ghs_x",
+    );
+  });
+
+  it("throws on any other status", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce(makeResponse(null, 500)),
+    );
+    await expect(revokeInstallationToken({ token: "ghs_x" })).rejects.toThrow(
+      /revoke failed \(500\)/,
+    );
   });
 });
