@@ -33,26 +33,39 @@ describe("agent definition source validation", () => {
       }),
     );
   });
-  it.each([
-    "nan",
-    "inf",
-    "-inf",
-    "0",
-    "-1",
-    "1.5",
-    '"100"',
-    "true",
-    "9007199254740992",
-  ])("refuses present invalid budget scalar %s", (value) => {
-    for (const key of ["per_run_micros", "per_day_micros"])
+  it.each(["nan", "inf", "-inf", "0", "-1", "1.5", '"100"', "true"])(
+    "refuses present invalid budget scalar %s",
+    (value) => {
+      for (const key of ["per_run_micros", "per_day_micros"])
+        expect(() =>
+          parseAgentDefinitionSource(`budget = { ${key} = ${value} }`),
+        ).toThrow(
+          expect.objectContaining({
+            code: "conflict",
+            reason: "invalid_definition_budget",
+          }),
+        );
+    },
+  );
+  it("rejects unsafe integers at both the TOML boundary and budget reader", () => {
+    for (const key of ["per_run_micros", "per_day_micros"]) {
       expect(() =>
-        parseAgentDefinitionSource(`budget = { ${key} = ${value} }`),
+        parseAgentDefinitionSource(`budget = { ${key} = 9007199254740992 }`),
+      ).toThrow(
+        expect.objectContaining({
+          code: "conflict",
+          reason: "invalid_definition_source",
+        }),
+      );
+      expect(() =>
+        definitionBudget({ budget: { [key]: Number.MAX_SAFE_INTEGER + 1 } }),
       ).toThrow(
         expect.objectContaining({
           code: "conflict",
           reason: "invalid_definition_budget",
         }),
       );
+    }
   });
   it("rejects malformed budget tables and tool lists", () => {
     expect(() => parseAgentDefinitionSource('budget = "none"')).toThrow(
