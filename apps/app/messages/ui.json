@@ -4,7 +4,8 @@
       "home": "Oxagen home"
     },
     "dialog": {
-      "close": "Close"
+      "close": "Close",
+      "dismiss": "Close the dialog"
     },
     "record": {
       "kinds": {
@@ -117,6 +118,20 @@
       "name": "Source name",
       "hint": "Enter to apply. Escape to cancel. This updates the name in the source.",
       "invalid": "Use a valid lowercase name with hyphens, and check that the source can be read."
+    },
+    "list": {
+      "search": "Search this list",
+      "filterBy": "Filter by {column}",
+      "all": "All · {column}",
+      "rows": "Rows",
+      "allRows": "All",
+      "noMatch": "No rows match.",
+      "pager": "Pages",
+      "range": "{from}–{to} of {total}",
+      "rangeEmpty": "0 of 0",
+      "previous": "Previous page",
+      "next": "Next page",
+      "page": "Page {page}"
     },
     "listTable": {
       "search": "Search this list",

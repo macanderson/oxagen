@@ -90,6 +90,7 @@ const source = {
     proposals: vi.fn(),
     contextPr: vi.fn(),
     freshness: vi.fn(),
+    hub: vi.fn(),
     deliveries: vi.fn(),
   },
   tools: {
@@ -100,6 +101,7 @@ const source = {
     connections: vi.fn(),
     mcpServers: vi.fn(),
   },
+  runtimes: { list: vi.fn(), agents: vi.fn() },
 };
 
 const acme = { slug: "acme", name: "Acme Robotics" };

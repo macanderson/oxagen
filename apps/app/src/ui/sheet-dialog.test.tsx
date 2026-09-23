@@ -45,4 +45,35 @@ describe("SheetDialog dismissal", () => {
     await user.click(screen.getByRole("button", { name: "Close" }));
     expect(change).toHaveBeenCalledWith(false);
   });
+  it("draws the header × only when asked, and it closes the dialog", async () => {
+    const change = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <IntlProvider>
+        <SheetDialog
+          open
+          headerClose
+          onOpenChange={change}
+          title="Governance"
+          testId="with-x"
+        >
+          <p>Pick one</p>
+        </SheetDialog>
+      </IntlProvider>,
+    );
+    await user.click(screen.getByRole("button", { name: "Close the dialog" }));
+    expect(change).toHaveBeenCalledWith(false);
+  });
+  it("draws no header × by default (negative)", () => {
+    render(
+      <IntlProvider>
+        <SheetDialog open onOpenChange={vi.fn()} title="Plain" testId="plain">
+          <p>Ready</p>
+        </SheetDialog>
+      </IntlProvider>,
+    );
+    expect(
+      screen.queryByRole("button", { name: "Close the dialog" }),
+    ).toBeNull();
+  });
 });
