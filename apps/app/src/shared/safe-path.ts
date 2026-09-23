@@ -165,7 +165,7 @@ export const routes = {
             "agents",
             agent,
             Object.hasOwn(AGENT_SECTION_ALIASES, q.tab)
-              ? AGENT_SECTION_ALIASES[q.tab]!
+              ? (AGENT_SECTION_ALIASES[q.tab] ?? q.tab)
               : q.tab,
           ),
       {
