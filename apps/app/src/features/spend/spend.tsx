@@ -23,6 +23,7 @@ import { FindingEvidenceSection, FindingsSection } from "./findings";
 import { PricingSection } from "./pricing";
 import { SpendReadFailure, SpendEmpty } from "./states";
 import { BudgetsTable, GroupTable } from "./tables";
+import { TokensSection } from "./tokens";
 import { SpendTabs } from "./tabs";
 import { WasteSection } from "./waste";
 import {
@@ -104,6 +105,8 @@ async function body(
         </>
       );
     }
+    case "agent":
+    case "model":
     case "operator":
     case "tool":
     case "task": {
@@ -134,23 +137,16 @@ async function body(
         </>
       );
     }
-    case "agent": {
-      const [agents, models] = await Promise.all([
-        source.spend.byGroup(ctx, "agent", period),
-        source.spend.byGroup(ctx, "model", period),
-      ]);
-      if (!agents.ok) return <SpendReadFailure read={agents} />;
-      if (!models.ok) return <SpendReadFailure read={models} />;
+    case "tokens": {
+      const report = await source.spend.byGroup(ctx, "model", period);
+      if (!report.ok) return <SpendReadFailure read={report} />;
       return (
         <>
-          <SpendStrip total={agents.value.total} period={period} />
-          {isEmpty(agents.value) ? (
+          <SpendStrip total={report.value.total} period={period} />
+          {isEmpty(report.value) ? (
             <SpendEmpty at={at} />
           ) : (
-            <>
-              <GroupTable kind="agent" rows={agents.value.rows} at={at} />
-              <GroupTable kind="model" rows={models.value.rows} at={at} />
-            </>
+            <TokensSection report={report.value} />
           )}
         </>
       );

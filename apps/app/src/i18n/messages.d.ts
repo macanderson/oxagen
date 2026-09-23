@@ -4311,6 +4311,8 @@ type Messages = {
       waste: string;
       budgets: string;
       pricing: string;
+      model: string;
+      tokens: string;
     };
     actions: {
       exportReport: string;
@@ -4749,6 +4751,25 @@ type Messages = {
         denied: string;
         failed: string;
       };
+    };
+    tokens: {
+      title: string;
+      note: string;
+      class: string;
+      count: string;
+      share: string;
+      input_uncached: string;
+      cache_read: string;
+      cache_write: string;
+      output: string;
+      reasoning: string;
+      total: string;
+      cacheHit: string;
+      cacheNote: string;
+      byModel: string;
+      model: string;
+      basis: string;
+      empty: string;
     };
   };
   steering: {
