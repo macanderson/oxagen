@@ -193,6 +193,24 @@ describe("the context-record wizard: describe", () => {
     expect(primary().disabled).toBe(true);
   });
 
+  it("derives a slug from the name and preserves a manually edited slug", async () => {
+    mount();
+    await screen.findByTestId("wizard-desc");
+    const name = screen.getByLabelText<HTMLInputElement>(t("describe.name"));
+    const slug = screen.getByLabelText<HTMLInputElement>(t("describe.slug"), {
+      exact: false,
+    });
+    fireEvent.change(name, { target: { value: "release-checklist!" } });
+    fireEvent.blur(name);
+    expect(name.value).toBe("Release Checklist");
+    expect(slug.value).toBe("release-checklist");
+    fireEvent.change(slug, { target: { value: "custom / release!" } });
+    fireEvent.blur(slug);
+    expect(slug.value).toBe("custom-release");
+    fireEvent.change(name, { target: { value: "Deployment Plan" } });
+    expect(slug.value).toBe("custom-release");
+  });
+
   it("fills the description from a suggestion", async () => {
     mount();
     await screen.findByTestId("wizard-desc");
@@ -375,6 +393,7 @@ describe("the context-record wizard: pull request", () => {
     expect(proposeRecord).toHaveBeenCalledWith("acme", "core-platform", {
       record: {
         lineageId: LINEAGE,
+        label: "Ctx Core Do Not Re Read",
         kind: "rule",
         force: "must",
         sharingScope: "workspace",

@@ -530,6 +530,8 @@ const tachoColumns = {
     machineSnapshot: sql<unknown>`to_jsonb(${sql.identifier(getTableName(sessions))})->'machine_snapshot'`,
     modelInitial: sessions.modelInitial,
     modelFinal: sessions.modelFinal,
+    totalCostMicros: sessions.totalCostMicros,
+    costBasis: sessions.costBasis,
   },
   operatorPublicId: schema.principals.publicId,
   operatorKind: schema.principals.kind,
@@ -717,6 +719,8 @@ export type TachoSessionColumns = GeneratedSummaryColumns & {
   /** The model the session started on and the one it ended on; either may be unrecorded. */
   modelInitial: string | null;
   modelFinal: string | null;
+  totalCostMicros?: number;
+  costBasis?: string | null;
   /** Written by the seal at `agent_stop`; null while the session is open. */
   replayGrade: string | null;
   completenessGaps: unknown;
@@ -1046,6 +1050,15 @@ export function toTachoRunItem(
     steps: session.numModelCalls + session.numToolCalls,
     frames: session.seqCount,
     cost: rollupCost(totals),
+    reportedCost:
+      Number.isSafeInteger(session.totalCostMicros) &&
+      ((session.totalCostMicros ?? 0) > 0 || session.costBasis != null)
+        ? {
+            micros: microsString(session.totalCostMicros ?? 0),
+            currency: "USD",
+            basis: "client_attested",
+          }
+        : null,
     taskRef: null,
     startedAt: session.startedAt.toISOString(),
     sealedAt: session.sealedAt?.toISOString() ?? null,

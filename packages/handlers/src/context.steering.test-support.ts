@@ -7,6 +7,7 @@
 // reaches GitHub — never the shape of a fixture.
 import type { CapabilityContext } from "@oxagen/oxagen";
 import type { SecurityEventInput } from "@oxagen/telemetry";
+import { contextRecordLabel } from "@oxagen/oxagen/context-record-label";
 import type { SteeringDeps } from "./context.steering.deps";
 import type {
   SteeringGitHub,
@@ -362,6 +363,11 @@ export class MemoryStore implements SteeringStore {
     );
     const classification = {
       title: proposal.title ?? proposal.statement,
+      label:
+        proposal.label ??
+        existing?.label ??
+        proposal.title ??
+        contextRecordLabel(proposal.lineageId),
       status: "active",
       kind: proposal.kind,
       force: proposal.force,

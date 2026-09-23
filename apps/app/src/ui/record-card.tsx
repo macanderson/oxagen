@@ -20,6 +20,7 @@ export function RecordCard({
   constraintEffect,
   sharingScope,
   lineage,
+  label,
   statement,
   badge,
   children,
@@ -30,6 +31,7 @@ export function RecordCard({
   constraintEffect: ConstraintEffect | null;
   sharingScope: SharingScope;
   lineage: string;
+  label?: string;
   statement: string;
   /** The record's state, beside its classification. */
   badge?: ReactNode;
@@ -61,6 +63,7 @@ export function RecordCard({
           </span>
         )}
       </div>
+      {label ? <h3 className="text-sm font-semibold">{label}</h3> : null}
       <p className="text-sm font-medium text-foreground">{statement}</p>
       <dl className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
         <div data-term="scope" className="flex gap-1">

@@ -87,6 +87,9 @@
             "title": {
               "type": "string"
             },
+            "label": {
+              "type": "string"
+            },
             "kind": {
               "anyOf": [
                 {

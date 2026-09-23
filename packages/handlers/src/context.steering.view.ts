@@ -1,5 +1,6 @@
 // context.steering.view.ts — rows to contract views (ADR-061). Every field a
 // view carries comes from a column or is null; nothing is invented here.
+import { contextRecordLabel } from "@oxagen/oxagen/context-record-label";
 import type { ContextPr } from "@oxagen/oxagen/contracts/context.pr.open";
 import {
   CHECK_NAMES,
@@ -62,6 +63,7 @@ export function publishedRecordView(
     id: row.publicId,
     lineageId: row.slug,
     title: row.title,
+    label: row.label ?? contextRecordLabel(row.slug),
     kind: (row.kind as RecordKind | null) ?? null,
     force: (row.force as RecordForce | null) ?? null,
     constraintEffect: (row.constraintEffect as ConstraintEffect | null) ?? null,

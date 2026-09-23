@@ -42,6 +42,9 @@ export function Header({
         <span aria-hidden="true"> · </span>
         <span>{t("record")}</span>
       </nav>
+      {record.label ? (
+        <p className="text-lg font-semibold">{record.label}</p>
+      ) : null}
       <div className="flex items-start gap-4">
         {record.kind === null ? null : <KindGlyph kind={record.kind} />}
         <h1 className="min-w-0 max-w-[62ch] text-2xl font-semibold leading-snug text-foreground sm:text-[28px]">
