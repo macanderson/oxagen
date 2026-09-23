@@ -3839,7 +3839,7 @@
       "writes": []
     }
   ],
-  "contentHash": "a982ed304038d899af0277ff95b73a1e4068964e90eb4b8d536c7cf3ace63fe9",
+  "contentHash": "10232b3ebc9af0bc514fe5d8c785845cade1132a09ef148c83b1fa66741a307e",
   "domains": [
     {
       "name": "agent",
@@ -8275,6 +8275,12 @@
         },
         {
           "name": "title",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "label",
           "nullable": true,
           "primaryKey": false,
           "type": "text"

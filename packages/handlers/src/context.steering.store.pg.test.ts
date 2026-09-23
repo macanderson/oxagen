@@ -25,6 +25,9 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
   // move the ledger the publish test asserts from zero. Cleaned up with the
   // rest below.
   const concurrentWorkspace = crypto.randomUUID();
+  // The label test merges three times: a workspace of its own, for the same
+  // reason.
+  const labelWorkspace = crypto.randomUUID();
   const scope = { orgId, workspaceId };
   const concurrentScope = { orgId, workspaceId: concurrentWorkspace };
   const userId = crypto.randomUUID();
@@ -42,6 +45,7 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
             workspaceId,
             otherWorkspace,
             concurrentWorkspace,
+            labelWorkspace,
           ]),
         );
       const ids = records.map((r) => r.id);
@@ -67,6 +71,7 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
             workspaceId,
             otherWorkspace,
             concurrentWorkspace,
+            labelWorkspace,
           ]),
         );
       await tx
@@ -76,6 +81,7 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
             workspaceId,
             otherWorkspace,
             concurrentWorkspace,
+            labelWorkspace,
           ]),
         );
     });
@@ -417,6 +423,62 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
         statement: "Cache the first read.",
       },
     ]);
+  });
+
+  it("keeps a record's label when a later proposal gives only a title, and changes it when one gives a label", async () => {
+    const where = { orgId, workspaceId: labelWorkspace };
+    const labelLineage = `ctx.g3771.${tag}`;
+    const mergeWith = async (over: Partial<ProposalRow>, n: number) => {
+      const proposal = await proposeIn(where, {
+        lineageId: labelLineage,
+        ...over,
+      });
+      const opened = await runInTenantScope(where, () =>
+        store.updateProposal(
+          proposal.id,
+          {
+            status: "checks_passed",
+            repository: "a-intel/platform",
+            baseRef: "main",
+            branch: `context/${labelLineage}`,
+            path: `.oxagen/rules/${labelLineage}.toml`,
+            prNumber: 600 + n,
+            prUrl: `https://github.com/a-intel/platform/pull/${600 + n}`,
+            headSha: `abc${n}`,
+            stampedRecordId: `rec_l${n}`,
+            recordHash: `sha256:${String(n).repeat(64)}`,
+          },
+          ["proposed"],
+        ),
+      );
+      await runInTenantScope(where, () =>
+        store.publishMerge({
+          scope: where,
+          proposal: opened,
+          body: `schema = "context-record/v0.1"\n# ${n}\n`,
+          checksum: String(n).repeat(64),
+          commitSha: `9a${n}f0ab`,
+          path: opened.path!,
+          mergedAt: new Date(),
+          mergedByUserId: userId,
+          policyVersion: "governance:team",
+        }),
+      );
+      return (await runInTenantScope(where, () =>
+        store.findRecord(where, labelLineage),
+      ))!.record;
+    };
+
+    expect(
+      await mergeWith({ title: "Changelog reads", label: "Read once" }, 1),
+    ).toMatchObject({ title: "Changelog reads", label: "Read once" });
+    expect(await mergeWith({ title: "Changelog reads v2" }, 2)).toMatchObject({
+      title: "Changelog reads v2",
+      label: "Read once",
+    });
+    expect(
+      await mergeWith({ label: "Read the changelog once" }, 3),
+    ).toMatchObject({ label: "Read the changelog once" });
   });
 
   it("keeps one open PR per lineage through the partial unique index", async () => {
