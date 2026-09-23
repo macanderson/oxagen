@@ -11,7 +11,7 @@
  * encoded request past `TACHO_MAX_REQUEST_BYTES`, and a bisected half carries
  * exactly the bodies of the events in it.
  */
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { TachoEvent } from "../envelope";
 import {
@@ -100,6 +100,13 @@ export interface ShipperOptions {
   minBackoffMs?: number;
   maxBackoffMs?: number;
   /**
+   * A fraction in [0, 1) that spreads a blind backoff by up to a fifth of
+   * itself. The daemon passes `Math.random`, so a fleet of hosts that lost the
+   * control plane together does not come back in step. Absent, the backoff
+   * is exact, which is what a test pinning the schedule wants.
+   */
+  jitter?: () => number;
+  /**
    * This host's current enrollment id. Events recorded under a PREVIOUS
    * enrollment can never be accepted — the control plane rejects a whole batch
    * with 403 "event names another host" if any event in it names a different
@@ -158,6 +165,30 @@ const SESSION_OWNED_ELSEWHERE = "session belongs to another host";
 function sessionOwnedElsewhere(error: ControlError): boolean {
   return error.status === 403 && error.body.includes(SESSION_OWNED_ELSEWHERE);
 }
+
+/**
+ * Whether a refusal is about one session that cannot land yet: a subagent
+ * chain whose root session the control plane has not recorded. The root is
+ * usually further back in the queue, so the batch is not wrong, it is early,
+ * and holding every other session behind it until the root arrives is the
+ * stall this avoids.
+ */
+const ROOT_SESSION_UNRECORDED = "root_session_unrecorded";
+function sessionNotReady(error: ControlError): boolean {
+  return error.status === 409 && error.body.includes(ROOT_SESSION_UNRECORDED);
+}
+
+/**
+ * How many events in a row may be quarantined before the shipper treats the
+ * refusals as the control plane's fault rather than the events'. A server
+ * regression that answers 400 to everything would otherwise bisect the whole
+ * backlog into quarantine, event by event, and mark it shipped.
+ */
+export const MAX_CONSECUTIVE_QUARANTINES = 25;
+
+/** How long a session that cannot land yet is left out, doubling to the cap. */
+const PARKED_SESSION_MIN_MS = 5_000;
+const PARKED_SESSION_MAX_MS = 10 * 60_000;
 export function serverRequestedWaitMs(error: ControlError): number | undefined {
   if (error.status !== 429 && error.status !== 503) return undefined;
   const hint = error.rateLimit;
@@ -191,6 +222,17 @@ export class Shipper {
    * restart one refusal finds each session again.
    */
   private readonly foreignSessions = new Set<string>();
+  /**
+   * Sessions left out of batches until a time, with the wait that set it:
+   * a subagent chain whose root has not landed. In memory only; a restart
+   * finds each one again with one refusal.
+   */
+  private readonly parkedSessions = new Map<
+    string,
+    { until: number; waitMs: number }
+  >();
+  /** Events quarantined since the last batch the control plane accepted. */
+  private consecutiveQuarantines = 0;
   /** The drain in flight, so a second caller waits instead of racing it. */
   private draining: Promise<ShipResult> | undefined;
   lastSuccessAt: number | undefined;
@@ -245,8 +287,11 @@ export class Shipper {
     // A 503 names a wait too, but backpressure that keeps coming is the store
     // degrading, so the backoff still escalates and the server's number is
     // only a floor: never come back sooner than it asked.
+    const spread = Math.floor(
+      this.backoffMs * 0.2 * (this.options.jitter?.() ?? 0),
+    );
     this.nextAttemptAt =
-      this.options.now() + Math.max(this.backoffMs, told ?? 0);
+      this.options.now() + Math.max(this.backoffMs + spread, told ?? 0);
     this.backoffMs = Math.min(
       this.backoffMs * 2,
       this.options.maxBackoffMs ?? 60_000,
@@ -261,15 +306,26 @@ export class Shipper {
     this.lastRateLimit = hint;
   }
 
-  private quarantine(event: TachoEvent, reason: string): void {
-    this.stash(event, reason);
+  private quarantine(
+    event: TachoEvent,
+    reason: string,
+    body?: TachoBody,
+  ): void {
+    this.stash(event, reason, body);
     this.options.log(
       `quarantined ${event.session_uuid}#${event.seq}: ${reason}`,
     );
   }
 
-  /** Quarantine without a log line, for callers that log one line per batch. */
-  private stash(event: TachoEvent, reason: string): void {
+  /**
+   * Quarantine without a log line, for callers that log one line per batch.
+   *
+   * The body goes with the event. Marking the event shipped lets compaction
+   * delete the WAL's body file, and a quarantine that kept only the event
+   * would then be the record of a prompt or a tool result with the content
+   * gone for good.
+   */
+  private stash(event: TachoEvent, reason: string, body?: TachoBody): void {
     const path = join(
       this.options.quarantineDir,
       `${event.session_uuid}-${String(event.seq).padStart(8, "0")}.json`,
@@ -277,10 +333,37 @@ export class Shipper {
     if (!existsSync(path)) {
       writeSensitiveFileAtomic(
         path,
-        JSON.stringify({ reason, event }, null, 2),
+        JSON.stringify(
+          { reason, event, ...(body !== undefined ? { body } : {}) },
+          null,
+          2,
+        ),
       );
     }
     this.options.wal.markShipped(event.session_uuid, event.seq);
+  }
+
+  /** Add a body to a quarantine record that was written without one. */
+  private stashBodyBeside(event: TachoEvent, body: TachoBody): void {
+    const path = join(
+      this.options.quarantineDir,
+      `${event.session_uuid}-${String(event.seq).padStart(8, "0")}.json`,
+    );
+    try {
+      const record = JSON.parse(readFileSync(path, "utf8")) as Record<
+        string,
+        unknown
+      >;
+      if (record["body"] !== undefined) return;
+      writeSensitiveFileAtomic(
+        path,
+        JSON.stringify({ ...record, body }, null, 2),
+      );
+    } catch (error) {
+      this.options.log(
+        `could not keep the body of quarantined ${event.session_uuid}#${event.seq}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   private markShipped(events: readonly TachoEvent[]): void {
@@ -374,6 +457,10 @@ export class Shipper {
   ): Promise<ShipResult> {
     if (!this.ready())
       return { shipped: 0, quarantined: 0, reachable: this.reachable };
+    for (const [session, parked] of this.parkedSessions) {
+      if (this.options.now() >= parked.until) continue;
+      excludedSessions.add(session);
+    }
     const batch = this.options.wal.unshipped(TACHO_MAX_BATCH, excludedSessions);
     if (batch.length === 0)
       return { shipped: 0, quarantined: 0, reachable: this.reachable };
@@ -565,6 +652,9 @@ export class Shipper {
       );
       this.markShipped(batch);
       this.succeed();
+      this.consecutiveQuarantines = 0;
+      for (const session of new Set(batch.map((e) => e.session_uuid)))
+        this.parkedSessions.delete(session);
       if (response.chain_breaks.length > 0)
         this.options.onChainBreak?.(response.chain_breaks);
       if (
@@ -579,17 +669,29 @@ export class Shipper {
         this.fail(error);
         return { shipped: 0, quarantined: 0, reachable: false };
       }
-      if (error instanceof ControlError && error.status === 413) {
-        // The request was too large, which retrying cannot change. Bisect
-        // until it fits. A lone event that is still too large ships without
-        // its body, so the event and its chain survive, and is quarantined
-        // only if the event alone is refused.
+      if (
+        error instanceof ControlError &&
+        (error.status === 400 || error.status === 413 || error.status === 422)
+      ) {
+        // A lone event refused with its body is offered once more without
+        // it before anything is quarantined. For a 413 the request was too
+        // large; for a 400 or 422 the body may be what the route objects to
+        // (a redaction detector, a content type). Either way the event and
+        // its chain survive, and only an event refused on its own goes to
+        // quarantine, with its body kept beside it.
         const head = batch[0] as TachoEvent;
         if (batch.length === 1 && bodies.has(head.event_id_idem)) {
           this.options.log(
-            `shipping ${head.session_uuid}#${head.seq} without its body: request too large`,
+            `shipping ${head.session_uuid}#${head.seq} without its body: refused with it (${String(error.status)})`,
           );
-          return this.shipBatch(batch, new Map());
+          const bare = await this.shipBatch(batch, new Map());
+          if (bare.quarantined > 0) {
+            // Refused without the body too: the quarantine record written
+            // below the retry holds the event alone, so add the body back.
+            const body = bodies.get(head.event_id_idem);
+            if (body !== undefined) this.stashBodyBeside(head, body);
+          }
+          return bare;
         }
       }
       if (
@@ -611,11 +713,48 @@ export class Shipper {
         // on its own is quarantined rather than retried, which is the same
         // answer this path already gives a malformed event.
         if (batch.length === 1) {
-          this.quarantine(batch[0] as TachoEvent, error.body.slice(0, 512));
+          if (this.consecutiveQuarantines >= MAX_CONSECUTIVE_QUARANTINES) {
+            // Too many refusals in a row to be the events' fault. Keep the
+            // event, back off, and let a fixed control plane take it.
+            this.fail(error);
+            this.options.log(
+              `ingest refused ${String(this.consecutiveQuarantines)} events in a row; holding the rest instead of quarantining them: ${this.lastError ?? "unknown"}`,
+            );
+            return { shipped: 0, quarantined: 0, reachable: true };
+          }
+          this.consecutiveQuarantines += 1;
+          const head = batch[0] as TachoEvent;
+          this.quarantine(
+            head,
+            error.body.slice(0, 512),
+            bodies.get(head.event_id_idem),
+          );
           this.succeed();
           return { shipped: 0, quarantined: 1, reachable: true };
         }
         return this.bisect(batch, bodies);
+      }
+      if (error instanceof ControlError && sessionNotReady(error)) {
+        // One session is early, not wrong. Bisect to it, leave it out for a
+        // while, and ship every other session behind it now.
+        const sessions = new Set(batch.map((e) => e.session_uuid));
+        if (sessions.size > 1) return this.bisect(batch, bodies);
+        const session = (batch[0] as TachoEvent).session_uuid;
+        const previous = this.parkedSessions.get(session);
+        const waitMs = Math.min(
+          (previous?.waitMs ?? PARKED_SESSION_MIN_MS / 2) * 2,
+          PARKED_SESSION_MAX_MS,
+        );
+        this.parkedSessions.set(session, {
+          until: this.options.now() + waitMs,
+          waitMs,
+        });
+        this.options.log(
+          `session ${session} waits ${String(Math.round(waitMs / 1000))}s for its root session to land; other sessions keep shipping`,
+        );
+        // Nothing moved in this batch; the caller's next pass leaves the
+        // session out and ships the rest.
+        return { shipped: 0, quarantined: 0, reachable: true };
       }
       if (error instanceof ControlError && sessionOwnedElsewhere(error)) {
         // Unlike a revoked key, this 403 is about one session, and retrying

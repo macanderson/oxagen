@@ -34,6 +34,7 @@ const exportEvents = vi.fn();
 const preferences = vi.fn<DataSource["shell"]["preferences"]>();
 const resolveViewer = vi.fn();
 const source: DataSource = {
+  runtimes: { list: refuse, agents: refuse },
   pretenant: { orgs: refuse, workspaces: refuse },
   shell: { context: refuse, preferences },
   runs: {
@@ -52,6 +53,7 @@ const source: DataSource = {
   billing: {
     plan: refuse,
     usageCredits: refuse,
+    retention: refuse,
     bucket: refuse,
     contractRate: refuse,
     invoices: refuse,

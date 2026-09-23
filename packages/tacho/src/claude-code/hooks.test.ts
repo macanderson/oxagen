@@ -704,4 +704,48 @@ describe("compaction summaries", () => {
     expect(event?.content?.digest).toBe(digestBytes(retained));
     expect(JSON.stringify(event)).not.toContain(secret);
   });
+
+  it("carries PreToolUse's agent_message as a preceding oxagen:message, then the tool_requested", () => {
+    const drafts = hook("PreToolUse", {
+      tool_name: "Bash",
+      tool_input: { command: "ls" },
+      tool_use_id: "toolu_5",
+      agent_message: "Listing the directory now.",
+    });
+    expect(drafts.map((d) => d.kind)).toEqual([
+      "oxagen:message",
+      "tool_requested",
+    ]);
+    const [message, toolRequested] = drafts;
+    expect(message?.hook_event_name).toBe("PreToolUse");
+    expect(message?.content?.bytes).toEqual(
+      new TextEncoder().encode("Listing the directory now."),
+    );
+    expect(message?.body).toMatchObject({ response_length: 26 });
+    expect(toolRequested?.kind).toBe("tool_requested");
+  });
+
+  it("drops no message and adds no attribute when PreToolUse carries no agent_message", () => {
+    const drafts = hook("PreToolUse", {
+      tool_name: "Bash",
+      tool_input: { command: "ls" },
+      tool_use_id: "toolu_6",
+    });
+    expect(drafts.map((d) => d.kind)).toEqual(["tool_requested"]);
+    expect(drafts[0]?.attrs["hook.agent_message"]).toBeUndefined();
+  });
+
+  it("promotes text to content only on AgentResponse", () => {
+    const [agentResponse] = hook("AgentResponse", { text: "final answer" });
+    expect(agentResponse?.attrs["hook.text"]).toBeUndefined();
+    expect(agentResponse?.content?.bytes).toEqual(
+      new TextEncoder().encode("final answer"),
+    );
+
+    // A different event's `text` member is an ordinary leftover attribute,
+    // not silently dropped and not promoted to content.
+    const [notification] = hook("SomeUnknownEvent", { text: "not a reply" });
+    expect(notification?.kind).toBe("oxagen:notification");
+    expect(notification?.attrs["hook.text"]).toBe("not a reply");
+  });
 });

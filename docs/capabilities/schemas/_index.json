@@ -1,5 +1,5 @@
 {
-  "generatedCount": 370,
+  "generatedCount": 373,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -154,6 +154,16 @@
       "name": "authorize_cli",
       "domain": "auth",
       "surfaces": [],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "authorize_issue_provider",
+      "domain": "run",
+      "surfaces": [
+        "api"
+      ],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1567,6 +1577,16 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_run_issue_providers",
+      "domain": "run",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -3746,6 +3766,16 @@
         "mcp",
         "cli",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "start_issue_authorization",
+      "domain": "run",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],

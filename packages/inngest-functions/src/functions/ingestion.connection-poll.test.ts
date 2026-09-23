@@ -291,3 +291,20 @@ describe("poll batch boundary", () => {
     },
   );
 });
+
+it("refuses issue-only connections even when a poll event is sent directly", async () => {
+  setupDb(
+    {
+      cursor: {},
+      consecutive_failure_count: 0,
+      status: "connected",
+      delivery_config: { runOutcomesOnly: true },
+    },
+    ["issue"],
+  );
+  expect(
+    await capturedHandler!({ event: { data: eventData }, step: makeStep() }),
+  ).toEqual({ skipped: true, reason: "not_connected" });
+  expect(mocks.resolveConnectionAuth).not.toHaveBeenCalled();
+  expect(sentEvents).toEqual([]);
+});

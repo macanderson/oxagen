@@ -1,16 +1,16 @@
 // INV-25 (ARCHITECTURE.md §3.9, §4): on the Billing page money renders only in
-// the summary tiles (the contracted rate per 1,000 GAU and the open invoice
-// total), This month's rollup of the invoices, the invoices, the price list,
-// the Change plan dialog's plan prices, the purchase form's total and — from
-// WL-67, the second meter — the usage credit balance and its top-up. The
-// bucket meter and the auto top-up control print GAU counts only. Three
-// readings of the tree:
+// the summary tiles, This period's statement (pages/billing.md), the
+// invoices, the price list, the purchase form's total and — from WL-67, the
+// second meter — the token balance and its top-up. The Change plan dialog
+// prints each plan's price as <option> text through formatMoney, since an
+// <option> holds no markup. The meters and the auto top-up control print
+// counts only. Three readings of the tree:
 //   - `<Money` JSX under src/features/billing/** appears in summary.tsx,
-//     this-month.tsx, invoices.tsx, price-list.tsx, change-plan.tsx,
+//     this-period.tsx, invoices.tsx, price-list.tsx, change-plan.tsx,
 //     purchase-form.tsx and usage-credits.tsx alone;
 //   - of the zod view models src/data/contracts/billing.ts exports, only
-//     ContractRate, InvoicePage and UsageCredits reach `Money`, directly or
-//     through a local schema;
+//     ContractRate, EvidenceRetention, InvoicePage and UsageCredits reach
+//     `Money`, directly or through a local schema;
 //   - src/data/live/mappers/billing.ts never names get_subscription's token
 //     cost, and names its credit balance only inside `toUsageCredits`, the one
 //     mapper that is allowed to read it. Elsewhere in the file — in
@@ -38,7 +38,7 @@ const PROBES = "src/test/arch/probes/billing-units";
 
 const MONEY_COMPONENTS: ReadonlySet<string> = new Set([
   "summary.tsx",
-  "this-month.tsx",
+  "this-period.tsx",
   "invoices.tsx",
   "price-list.tsx",
   "change-plan.tsx",
@@ -47,6 +47,7 @@ const MONEY_COMPONENTS: ReadonlySet<string> = new Set([
 ]);
 const MONEY_VIEW_MODELS: ReadonlySet<string> = new Set([
   "ContractRate",
+  "EvidenceRetention",
   "InvoicePage",
   "UsageCredits",
 ]);
@@ -174,7 +175,7 @@ describe("billing units", () => {
     ).toEqual([]);
   });
 
-  it("gives a Money to no billing view model but ContractRate and InvoicePage", () => {
+  it("gives a Money to no billing view model but ContractRate, EvidenceRetention, InvoicePage and UsageCredits", () => {
     expect(viewModelViolations(readSource(CONTRACTS_FILE))).toEqual([]);
   });
 

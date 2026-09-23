@@ -1,5 +1,5 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { writeHostFile } from "../host/host-file";
 import {
@@ -1180,5 +1180,145 @@ describe("Codex approval translation", () => {
       post: async () => ({ status: 200, body: JSON.stringify(response) }),
     });
     expect(JSON.parse(result.stdout)).toEqual(response);
+  });
+
+  it("sends the same hook_id on the live request and the spool fallback, and stamps received_at at the start", async () => {
+    const paths = scratchPaths();
+    const signer = bundleSigner();
+    writeHostFile(
+      paths.hostFile,
+      testHostFile(signer, signer.sign(unsignedBundle())),
+    );
+    const seen: Array<Parameters<typeof postUnix>[0]> = [];
+    let now = Date.parse("2026-09-23T00:00:00.000Z");
+    const result = await runTachoHook({
+      paths,
+      env: {},
+      stdin: PRE,
+      hookId: "hook_fixed_1",
+      now: () => now,
+      post: async (options) => {
+        seen.push(options);
+        // The daemon received it live; the response times out on this
+        // process's own side well after the hook actually arrived.
+        now += 600_000;
+        throw new Error("response timeout");
+      },
+    });
+    expect(result.path).toBe("local");
+    const live = JSON.parse(seen[0]?.body ?? "{}") as { hook_id: string };
+    expect(live.hook_id).toBe("hook_fixed_1");
+    const [file] = readdirSync(paths.spool);
+    const spooled = JSON.parse(
+      readFileSync(join(paths.spool, file as string), "utf8"),
+    ) as { hook_id: string; received_at: string };
+    expect(spooled.hook_id).toBe("hook_fixed_1");
+    // Stamped when the hook arrived (before the 600s the daemon post spent
+    // failing), not after the timeout that followed it.
+    expect(spooled.received_at).toBe("2026-09-23T00:00:00.000Z");
+  });
+
+  it("still answers the local decision when the spool write itself fails", async () => {
+    const paths = scratchPaths();
+    const signer = bundleSigner();
+    writeHostFile(
+      paths.hostFile,
+      testHostFile(
+        signer,
+        signer.sign(
+          unsignedBundle({
+            permissions: { allow: [], deny: ["Bash"], ask: [] },
+          }),
+        ),
+      ),
+    );
+    // A file, not a directory, at the spool path: `ensureDir` throws EEXIST
+    // the same way a permission error or a full disk would.
+    mkdirSync(dirname(paths.spool), { recursive: true });
+    writeFileSync(paths.spool, "not a directory");
+    const result = await runTachoHook({
+      paths,
+      env: {},
+      stdin: PRE,
+      post: async () => {
+        throw new Error("daemon unreachable");
+      },
+    });
+    // The local deny still answers; a spool failure does not turn it into a
+    // silent allow or an unhandled rejection.
+    expect(result.path).toBe("local");
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      hookSpecificOutput: { permissionDecision: "deny" },
+    });
+    expect(result.stderr).toContain("daemon unreachable");
+    expect(result.stderr).toContain("also failed to spool for replay");
+  });
+
+  it("quarantines a payload that is not JSON, bounded and answered as invalid", async () => {
+    const paths = scratchPaths();
+    const result = await runTachoHook({
+      paths,
+      env: {},
+      stdin: "not json at all",
+      hookId: "hook_bad_json",
+    });
+    expect(result.path).toBe("invalid");
+    const [file] = readdirSync(paths.quarantine);
+    expect(file).toContain("hook_bad_json");
+    const quarantined = JSON.parse(
+      readFileSync(join(paths.quarantine, file as string), "utf8"),
+    ) as { schema: string; raw: string; reason: string };
+    expect(quarantined.schema).toBe("tacho.quarantined-hook-payload.v1");
+    expect(quarantined.raw).toBe("not json at all");
+    expect(quarantined.reason).toContain("not JSON");
+  });
+
+  it("quarantines JSON that does not read as a hook payload", async () => {
+    const paths = scratchPaths();
+    const result = await runTachoHook({
+      paths,
+      env: {},
+      stdin: "{}",
+      hookId: "hook_bad_shape",
+    });
+    expect(result.path).toBe("invalid");
+    const [file] = readdirSync(paths.quarantine);
+    expect(file).toContain("hook_bad_shape");
+    const quarantined = JSON.parse(
+      readFileSync(join(paths.quarantine, file as string), "utf8"),
+    ) as { schema: string; raw: string };
+    expect(quarantined.schema).toBe("tacho.quarantined-hook-payload.v1");
+    expect(JSON.parse(quarantined.raw)).toEqual({});
+  });
+
+  it("keeps the PermissionRequest client budget strictly under the harness's own timeout", async () => {
+    const paths = scratchPaths();
+    const signer = bundleSigner();
+    writeHostFile(
+      paths.hostFile,
+      testHostFile(signer, signer.sign(unsignedBundle())),
+    );
+    const seen: Array<Parameters<typeof postUnix>[0]> = [];
+    await runTachoHook({
+      paths,
+      env: {},
+      stdin: JSON.stringify({
+        session_id: "s",
+        hook_event_name: "PermissionRequest",
+        tool_name: "Bash",
+        tool_input: { command: "git push" },
+        cwd: "/repo",
+      }),
+      post: async (options) => {
+        seen.push(options);
+        return { status: 200, body: "{}" };
+      },
+    });
+    // Claude Code's own PermissionRequest timeout is 600s
+    // (`COMMAND_HOOK_TIMEOUTS_S.PermissionRequest`). Equalling it left no
+    // room for this process to answer locally before the harness gave up on
+    // the hook command itself.
+    expect(seen[0]?.responseTimeoutMs).toBeLessThan(600_000);
+    expect(seen[0]?.responseTimeoutMs).toBeGreaterThan(0);
   });
 });

@@ -1,3 +1,6 @@
+import { runIssueProvidersGet } from "./run.issue.providers.get";
+import { runIssueAuthorizationComplete } from "./run.issue.authorization.complete";
+import { runIssueAuthorizationBegin } from "./run.issue.authorization.begin";
 import { runOutcomesSettingsGet } from "./run.outcomes.settings.get";
 import { runOutcomesSettingsSet } from "./run.outcomes.settings.set";
 import { runOutcomesAccessSet } from "./run.outcomes.access.set";
@@ -984,6 +987,9 @@ export {
 // Annotated wide on purpose: the inferred tuple type of ~350 contracts exceeds
 // what the compiler will serialize into a declaration file.
 export const contracts: readonly CapabilityDeclaration[] = [
+  runIssueAuthorizationBegin,
+  runIssueAuthorizationComplete,
+  runIssueProvidersGet,
   runOutcomesSettingsGet,
   runOutcomesSettingsSet,
   runOutcomesAccessSet,
@@ -1360,3 +1366,9 @@ export const contracts: readonly CapabilityDeclaration[] = [
 export * from "./run.outcomes.settings.get";
 export * from "./run.outcomes.settings.set";
 export * from "./run.outcomes.access.set";
+
+export * from "./run.issue.authorization.begin";
+
+export * from "./run.issue.authorization.complete";
+
+export * from "./run.issue.providers.get";

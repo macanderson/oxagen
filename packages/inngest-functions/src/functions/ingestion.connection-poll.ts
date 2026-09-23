@@ -77,9 +77,10 @@ export const [ingestionConnectionPoll] = createFunction(
 
     // ── Step 1: Load mapped record types + current cursor ────────────────────
     const loaded = await step.run("load-connection", async () => {
+      // tenancy: the worker loads one connection filtered by the event orgId.
       const rows = await withSystemDb(async (tx) => {
         const conn = await tx.execute(sql`
-          SELECT cursor, consecutive_failure_count, status
+          SELECT cursor, consecutive_failure_count, status, delivery_config
           FROM   ingestion.source_connections
           WHERE  id = ${connectionId}::uuid AND org_id = ${orgId}::uuid
           AND    deleted_at IS NULL
@@ -96,6 +97,7 @@ export const [ingestionConnectionPoll] = createFunction(
             cursor: Record<string, unknown> | null;
             consecutive_failure_count: number;
             status: string;
+            delivery_config?: Record<string, unknown> | null;
           }>,
           mappings: Array.from(mappings) as Array<{
             source_record_type: string;
@@ -104,7 +106,10 @@ export const [ingestionConnectionPoll] = createFunction(
       });
       const conn = rows.conn[0];
       return {
-        found: !!conn && conn.status === "connected",
+        found:
+          !!conn &&
+          conn.status === "connected" &&
+          conn.delivery_config?.["runOutcomesOnly"] !== true,
         cursorMap: conn?.cursor ?? {},
         consecutiveFailureCount: conn?.consecutive_failure_count ?? 0,
         recordTypes: rows.mappings.map((m) => m.source_record_type),
