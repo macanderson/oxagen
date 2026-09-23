@@ -191,6 +191,35 @@ export function SteeringEmpty({ repository }: { repository: string | null }) {
   );
 }
 
+/**
+ * A tab's own empty state (Assignments, Proposals, the Compiler): the same
+ * frame, with the copy and the one action its spec names. Whether that action
+ * is gold is the caller's; the header gives up its gold on every empty state.
+ */
+export function TabEmpty({
+  testId,
+  title,
+  action,
+  children,
+}: {
+  testId: string;
+  title: string;
+  action: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <StateFrame
+      testId={testId}
+      tone="neutral"
+      icon={<TableGlyph />}
+      title={title}
+      actions={action}
+    >
+      {children}
+    </StateFrame>
+  );
+}
+
 export function SteeringFailure({
   read,
   org,

@@ -26,6 +26,7 @@ import { LibraryAll } from "./library-all";
 import { readLibrary } from "./library-read";
 import { SteeringEmpty, SteeringFailure } from "./page-state";
 import { type ShelfCounts, ShelfRow } from "./shelves";
+import { bodyTakesHeaderGold } from "./tab-primary";
 import { SteeringTabs } from "./tabs";
 import { AssignmentsTab } from "./tabs/assignments";
 import { CompilerTab } from "./tabs/compiler";
@@ -53,6 +54,7 @@ async function Body({
   view,
   at,
   pr,
+  published,
 }: {
   ctx: WsCtx;
   source: DataSource;
@@ -60,16 +62,24 @@ async function Body({
   at: SteeringAt;
   /** The selected Context PR, when the hub read it. */
   pr: Read<ContextPr> | null;
+  /** Records in force, from the hub's own read. */
+  published: number;
 }) {
   // The async bodies are awaited here rather than rendered as elements, so
   // each read runs before the hub returns and a test renders the result.
   switch (view.tab) {
     case "assignments":
-      return await AssignmentsTab({ ctx, source });
+      return await AssignmentsTab({ ctx, source, at });
     case "gates":
-      return await GatesTab({ ctx, source });
+      return await GatesTab({ ctx, source, at });
     case "compiler":
-      return <CompilerTab agent={view.agent} />;
+      return await CompilerTab({
+        ctx,
+        source,
+        at,
+        agent: view.agent,
+        published,
+      });
     case "proposals":
       return await ProposalsTab({
         ctx,
@@ -200,14 +210,16 @@ export async function Steering({
   // The All shelf reads the whole list, in the assembler's order; every other
   // view needs only the count. The selected Context PR is read here, beside
   // them, because its state decides whether the header keeps the gold.
-  const [library, hub, pr] = await Promise.all([
+  const [library, hub, pr, agents] = await Promise.all([
     onAll
       ? readLibrary(ctx, source)
       : source.steering.records(ctx, { kind: null, offset: 0 }),
     source.steering.hub(ctx),
-    view.segment === "prs" && view.proposal !== null
+    view.tab === "proposals" && view.proposal !== null
       ? source.steering.contextPr(ctx, view.proposal)
       : null,
+    // The Assignments count: the agents set up for steering (./agents-read.ts).
+    source.agents.list(ctx, { cursor: null }),
   ]);
   if (!library.ok) {
     // The denied state names who is signed in; the session is memoized per
@@ -226,6 +238,15 @@ export async function Steering({
   const mergeable = pr?.ok === true && pr.value.status === "checks_passed";
   const governance = hub.ok ? hub.value.governance : null;
   const records = library.value.total;
+  // A tab body whose own state holds the gold, or holds none (an empty
+  // state), takes it from the header (./tab-primary.ts).
+  const bodyGold = await bodyTakesHeaderGold({
+    ctx,
+    source,
+    view,
+    published: records,
+    pr,
+  });
   // Records is the one shelf a read counts today; the rest print "not
   // recorded" until the steering registry reads them (./library-all.tsx).
   const shelves: ShelfCounts = {
@@ -253,10 +274,12 @@ export async function Steering({
             workspace={ctx.wsName}
             governance={governance}
           />
-          {empty ? null : (
+          {empty || bodyGold === "empty" ? null : (
             <SteeringCreate
               view={view}
-              primary={!tabHoldsPrimary(view, mergeable)}
+              primary={
+                !tabHoldsPrimary(view, mergeable) && bodyGold !== "primary"
+              }
             />
           )}
         </>,
@@ -266,6 +289,7 @@ export async function Steering({
         current={view.tab}
         counts={{
           library: records,
+          assignments: agents.ok ? agents.value.totals.enrolled : null,
           proposals: hub.ok ? hub.value.proposalsWaiting : null,
         }}
       />
@@ -287,7 +311,7 @@ export async function Steering({
         ) : onAll ? (
           <LibraryAll at={at} page={library.value} />
         ) : (
-          await Body({ ctx, source, view, at, pr })
+          await Body({ ctx, source, view, at, pr, published: records })
         )}
       </div>
     </div>

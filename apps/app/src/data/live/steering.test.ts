@@ -282,7 +282,10 @@ describe("steering.hub", () => {
   /** Answers each contract the hub reads with what the case hands it. */
   function answer(
     by: Partial<
-      Record<"repos" | "tree" | "all" | "merged" | "rejected", unknown>
+      Record<
+        "repos" | "tree" | "all" | "merged" | "rejected" | "proposed",
+        unknown
+      >
     >,
   ) {
     kernelRead.mockImplementation(
@@ -303,9 +306,10 @@ describe("steering.hub", () => {
             all: 15,
             merged: 4,
             rejected: 2,
+            proposed: 3,
           };
           return (
-            by[key as "all" | "merged" | "rejected"] ??
+            by[key as "all" | "merged" | "rejected" | "proposed"] ??
             readOk({ proposals: [], total: totals[key] })
           );
         }
@@ -325,6 +329,7 @@ describe("steering.hub", () => {
           mode: "regulated",
         },
         proposalsWaiting: 9,
+        segments: { candidates: 15, prs: 6 },
       }),
     );
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
@@ -374,5 +379,24 @@ describe("steering.hub", () => {
     answer({ rejected: readError("record_index_unavailable", 503) });
     const read = await steering.hub(ctx);
     expect(read.ok && read.value.proposalsWaiting).toBeNull();
+    expect(read.ok && read.value.segments).toBeNull();
+  });
+
+  it("counts the Candidates segment as every proposal and Context PRs as the waiting ones with a pull request", async () => {
+    answer({});
+    const read = await steering.hub(ctx);
+    expect(read.ok && read.value.segments).toEqual({ candidates: 15, prs: 6 });
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: contextProposalList,
+      input: { limit: 1, offset: 0, status: "proposed" },
+      page: "steering",
+    });
+  });
+
+  it("prints no segment counts when the proposed count fails, and keeps the waiting count (negative)", async () => {
+    answer({ proposed: readError("record_index_unavailable", 503) });
+    const read = await steering.hub(ctx);
+    expect(read.ok && read.value.segments).toBeNull();
+    expect(read.ok && read.value.proposalsWaiting).toBe(9);
   });
 });

@@ -318,5 +318,12 @@ export const SteeringHub = z.object({
   ]),
   /** Proposals not merged and not dismissed: candidates plus open Context PRs. */
   proposalsWaiting: Count.nullable(),
+  /**
+   * The Proposals segment counts (roadmap pages/steering-proposals.md): every
+   * proposal the Candidates list holds, and the Context PRs still open (every
+   * proposal less the ones with no pull request, the merged and the
+   * dismissed). Null when any count failed, like `proposalsWaiting`.
+   */
+  segments: z.object({ candidates: Count, prs: Count }).nullable(),
 });
 export type SteeringHub = z.infer<typeof SteeringHub>;

@@ -237,6 +237,7 @@ export function steeringHub(overrides: Partial<SteeringHub> = {}): SteeringHub {
   return {
     governance: { state: "read", repository: "acme/platform", mode: "team" },
     proposalsWaiting: 3,
+    segments: { candidates: 4, prs: 2 },
     ...overrides,
   };
 }

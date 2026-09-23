@@ -195,7 +195,7 @@ export const steering: DataSource["steering"] = {
    * partial difference would print a number nobody counted.
    */
   async hub(ctx) {
-    const count = (status?: "merged" | "rejected") =>
+    const count = (status?: "proposed" | "merged" | "rejected") =>
       kernelRead(ctx, {
         contract: contextProposalList,
         input: { limit: 1, offset: 0, ...(status ? { status } : {}) },
@@ -225,11 +225,12 @@ export const steering: DataSource["steering"] = {
           }
         : { state: "unread", code: failureCode(tree) };
     };
-    const [mode, all, merged, rejected] = await Promise.all([
+    const [mode, all, merged, rejected, proposed] = await Promise.all([
       governance(),
       count(),
       count("merged"),
       count("rejected"),
+      count("proposed"),
     ]);
     const proposalsWaiting =
       all.ok && merged.ok && rejected.ok
@@ -238,9 +239,18 @@ export const steering: DataSource["steering"] = {
             all.value.total - merged.value.total - rejected.value.total,
           )
         : null;
+    // The open Context PRs are the waiting proposals less the ones with no
+    // pull request yet; the Candidates segment lists every proposal.
+    const segments =
+      all.ok && proposed.ok && proposalsWaiting !== null
+        ? {
+            candidates: all.value.total,
+            prs: Math.max(0, proposalsWaiting - proposed.value.total),
+          }
+        : null;
     return parsed(
       SteeringHub,
-      { governance: mode, proposalsWaiting },
+      { governance: mode, proposalsWaiting, segments },
       ctx.orgId,
       "hub",
     );
