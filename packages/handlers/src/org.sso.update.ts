@@ -42,7 +42,7 @@ function notFound(providerId: string): HandlerError {
 
 /**
  * update_sso_provider: change a provider's display name, groups claim or
- * protocol settings (ADR-144).
+ * protocol settings (ADR-145).
  *
  * A secret left out of `config` keeps the sealed token already stored: the
  * stored config is parsed, never opened, and `sealSsoConfig` skips a value
@@ -62,7 +62,7 @@ export const orgSsoUpdateHandler: CapabilityHandler<
     { ...ctx, userId: actorUserId },
     { org: ["Owner", "Admin"] },
   );
-  // Setting SSO up is part of the Enterprise plan (ADR-144).
+  // Setting SSO up is part of the Enterprise plan (ADR-145).
   await requireSsoEntitlement(ctx);
 
   // tenancy: the provider is read by providerId and filtered by orgId =

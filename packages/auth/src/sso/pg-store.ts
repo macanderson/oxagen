@@ -1,5 +1,5 @@
 /**
- * The Postgres side of an SSO sign-in's role mapping (ADR-144): reads the
+ * The Postgres side of an SSO sign-in's role mapping (ADR-145): reads the
  * group → role table and writes the person's org role.
  *
  * tenancy: system bypass via withSystemDb. The sign-in request that calls

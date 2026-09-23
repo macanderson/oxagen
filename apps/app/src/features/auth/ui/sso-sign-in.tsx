@@ -1,5 +1,5 @@
 "use client";
-// Enterprise single sign-on entry on /login (ADR-144). A button opens a small
+// Enterprise single sign-on entry on /login (ADR-145). A button opens a small
 // form that asks for the work email; Better Auth finds the organization's
 // identity provider by the email's domain and sends the browser there, and the
 // provider returns it to `callbackURL`, the same destination the password form

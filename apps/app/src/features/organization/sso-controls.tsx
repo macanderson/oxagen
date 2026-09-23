@@ -1,5 +1,5 @@
 "use client";
-// The single sign-on page's smaller writes (ADR-144): copy a value the admin
+// The single sign-on page's smaller writes (ADR-145): copy a value the admin
 // pastes elsewhere, check a provider's DNS record, delete a provider after an
 // in-page confirm, and require SSO. Each write re-reads the page it changed,
 // so what shows next comes from the kernel rather than from this state.

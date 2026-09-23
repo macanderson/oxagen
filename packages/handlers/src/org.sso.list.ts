@@ -18,7 +18,7 @@ import {
 
 /**
  * list_sso_providers: the organisation's identity providers, their
- * group-to-role tables and the SSO requirement (ADR-144).
+ * group-to-role tables and the SSO requirement (ADR-145).
  *
  * Each view is built from the stored row through `redactSsoConfig`, so a
  * secret is reported as set or not set and never read.

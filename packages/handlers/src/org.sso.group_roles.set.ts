@@ -10,7 +10,7 @@ import { logger } from "./logger";
 
 /**
  * set_sso_group_roles: replace a provider's IdP group to organisation role
- * table (ADR-144).
+ * table (ADR-145).
  *
  * The rows sent are the rows kept: the old table is deleted and the new one
  * inserted in one transaction, so a sign-in never sees half of each.
@@ -27,7 +27,7 @@ export const orgSsoGroupRolesSetHandler: CapabilityHandler<
     { ...ctx, userId: actorUserId },
     { org: ["Owner", "Admin"] },
   );
-  // Setting SSO up is part of the Enterprise plan (ADR-144).
+  // Setting SSO up is part of the Enterprise plan (ADR-145).
   await requireSsoEntitlement(ctx);
 
   // tenancy: the provider lookup, delete and insert are all filtered by

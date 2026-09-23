@@ -1,4 +1,4 @@
-# ADR-144: Enterprise SSO behind Better Auth
+# ADR-145: Enterprise SSO behind Better Auth
 
 Status: Accepted
 

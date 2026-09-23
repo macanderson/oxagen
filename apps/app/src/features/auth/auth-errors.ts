@@ -13,7 +13,7 @@
 // round-trip failures arrive as `?error=` codes of their own (invalid_provider,
 // discovery_failed, invalid_saml_response …), distinct from the social ones.
 // SSO_REQUIRED is Oxagen's own code: the password sign-in hook in
-// packages/auth refuses an email whose organization requires SSO (ADR-144).
+// packages/auth refuses an email whose organization requires SSO (ADR-145).
 
 export type AuthOutcomeKey =
   | "wrongCredentials"

@@ -164,7 +164,7 @@ export const orgSecurityPolicy = securitySchema.table("org_security_policy", {
   // When true, members reach the org only through a session established by
   // one of the org's SSO providers, and password sign-in is refused for the
   // provider's email domain. Owners are exempt so an IdP outage cannot lock
-  // the org out (ADR-144). Mutations emit security.sso.policy_updated.
+  // the org out (ADR-145). Mutations emit security.sso.policy_updated.
   ssoRequired: boolean("sso_required").notNull().default(false),
   updatedById: uuid("updated_by_id"),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })

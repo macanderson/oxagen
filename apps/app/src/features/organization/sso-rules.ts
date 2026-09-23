@@ -5,7 +5,7 @@
 // refuses.
 //
 // No `owner` in the roles: ownership is transferred by a person, never minted
-// by an identity provider (ADR-144).
+// by an identity provider (ADR-145).
 import type { SsoMappableRole, SsoProtocol } from "@/data/contracts/org";
 
 export const SSO_PROTOCOLS: readonly SsoProtocol[] = ["oidc", "saml"];

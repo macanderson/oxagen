@@ -17,7 +17,7 @@ function render() {
 }
 
 describe("Organization action refusal", () => {
-  it("names a deleted identity provider rather than printing its code (ADR-144)", () => {
+  it("names a deleted identity provider rather than printing its code (ADR-145)", () => {
     const word = render();
     expect(
       word({

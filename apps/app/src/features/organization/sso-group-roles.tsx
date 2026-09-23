@@ -1,5 +1,5 @@
 "use client";
-// One identity provider's table of IdP group to organization role (ADR-144),
+// One identity provider's table of IdP group to organization role (ADR-145),
 // on the Roles page. Rows are added and removed here and saved together:
 // `set_sso_group_roles` replaces the whole table, so Save sends every row the
 // editor holds and nothing else.

@@ -4,7 +4,7 @@ import { ssoProviderIdSchema, ssoProviderViewSchema } from "./org.sso.shared";
 
 /**
  * verify_sso_domain: prove the organisation owns the provider's email domain
- * by looking up the DNS TXT record the provider view names (ADR-144).
+ * by looking up the DNS TXT record the provider view names (ADR-145).
  *
  * The provider signs nobody in until this succeeds. A missing record is a
  * `conflict` whose message names the record to publish, so the admin can fix

@@ -4,7 +4,7 @@ import { ssoProviderIdSchema } from "./org.sso.shared";
 
 /**
  * delete_sso_provider: remove an identity provider and its group-to-role
- * table (ADR-144).
+ * table (ADR-145).
  *
  * When SSO is required and this was the organisation's last verified
  * provider, the same transaction turns the requirement off, so nobody is left

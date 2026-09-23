@@ -4,7 +4,7 @@ import { ssoPolicyViewSchema } from "./org.sso.shared";
 
 /**
  * set_sso_policy: require SSO for the organisation, or stop requiring it
- * (ADR-144).
+ * (ADR-145).
  *
  * Turning the requirement on needs at least one provider whose domain is
  * verified, or nobody could meet it. Owners stay exempt so an IdP outage

@@ -1,5 +1,5 @@
 /**
- * SSO sign-in, end to end, against a mock OIDC provider (ADR-144).
+ * SSO sign-in, end to end, against a mock OIDC provider (ADR-145).
  *
  * This is the proof the feature works: a real Better Auth instance with the
  * SSO plugin exactly as auth.ts configures it (buildSsoPlugin, the disabled

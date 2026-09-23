@@ -191,7 +191,7 @@ export const org: DataSource["org"] = {
     );
   },
 
-  // The organisation's identity providers and its SSO policy (ADR-144):
+  // The organisation's identity providers and its SSO policy (ADR-145):
   // org-scoped, Owner-or-Admin in its handler, no secret in the answer.
   async sso(ctx) {
     const read = await kernelRead(ctx, {

@@ -12,7 +12,7 @@ vi.mock("@oxagen/database/sso-secrets", async (importOriginal) => {
   };
 });
 
-// The plan behind the Enterprise check (ADR-144).
+// The plan behind the Enterprise check (ADR-145).
 const plan = vi.hoisted(() => ({ resolveOrgTier: vi.fn() }));
 vi.mock("@oxagen/billing", () => ({
   canAccessSSO: (tier: string) => tier === "enterprise",

@@ -1,6 +1,6 @@
 /**
  * An SSO provider signs people in only for its own verified email domain
- * (ADR-144).
+ * (ADR-145).
  *
  * The @better-auth/sso plugin's just-in-time path creates a user, or links an
  * account into one, for whatever email the identity provider asserts. It

@@ -51,7 +51,7 @@ describe("drizzleAdapter schema map", () => {
     // and both 500 every auth request when they do.
     ["rateLimits", "schema.rateLimitTable"],
     ["twoFactors", "schema.twoFactorTable"],
-    // The SSO plugin's "ssoProvider" model (ADR-144).
+    // The SSO plugin's "ssoProvider" model (ADR-145).
     ["ssoProviders", "schema.ssoProviderTable"],
   ])("maps the plural model key %s → %s", (modelKey, table) => {
     expect(

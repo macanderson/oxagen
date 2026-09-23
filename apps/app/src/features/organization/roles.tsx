@@ -6,7 +6,7 @@
 // record does not carry. A refused or failed read replaces the sections; the
 // tabs stay.
 //
-// Beside the catalogue sit the IdP group mappings (ADR-144): for each single
+// Beside the catalogue sit the IdP group mappings (ADR-145): for each single
 // sign-on provider, which organization role each identity provider group
 // grants. They come from the SSO read, so a refused or failed SSO read says so
 // in that section alone and leaves the roles in place.

@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * Shared wire schemas for enterprise SSO (ADR-144). Not a capability itself:
+ * Shared wire schemas for enterprise SSO (ADR-145). Not a capability itself:
  * the org.sso.* contracts, the auth package's sign-in provisioner and the app
  * all import from here, so no surface can drift on what a provider, a mapping
  * or a role looks like.
@@ -21,7 +21,7 @@ export type SsoProtocolName = z.infer<typeof ssoProtocolSchema>;
  * `admin`, `compliance` and `billing` are the organisation IAM roles.
  * `member` is membership with no organisation-wide role, which is what an
  * invitation grants. `owner` is absent on purpose: ownership is transferred by
- * a person, never minted by an identity provider (ADR-144).
+ * a person, never minted by an identity provider (ADR-145).
  */
 export const SSO_MAPPABLE_ROLES = [
   "admin",

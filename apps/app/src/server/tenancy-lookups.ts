@@ -278,7 +278,7 @@ export const systemLookups: SystemLookups = {
     const policy = rows[0];
     if (!policy) return null;
     if (!policy.ssoRequired) return { ssoRequired: false, providerIds: [] };
-    // Require SSO applies only while the plan includes SSO (ADR-144). After a
+    // Require SSO applies only while the plan includes SSO (ADR-145). After a
     // downgrade SSO sign-in is refused, so the gate must stop asking for it or
     // every member but the Owners is locked out.
     if (!canAccessSSO(await resolveOrgTier(orgId))) {

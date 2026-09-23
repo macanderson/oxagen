@@ -10,7 +10,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("sso") };
 }
 
-// Organization › Single sign-on (ADR-144): the organisation's identity
+// Organization › Single sign-on (ADR-145): the organisation's identity
 // providers, the DNS records that prove their domains, and whether members
 // must sign in through one. Org-scoped, so the page resolves the organization
 // viewer and nothing else.

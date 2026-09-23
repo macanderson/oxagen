@@ -232,7 +232,7 @@ const trustedOrigins: string[] = [
 // The pure, unit-tested implementation lives in ./oauth-proxy-config.
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
-// Enterprise SSO (ADR-144) — @better-auth/sso over OIDC and SAML.
+// Enterprise SSO (ADR-145) — @better-auth/sso over OIDC and SAML.
 //
 // Providers are registered per organisation through the org.sso.* capabilities
 // (IAM-gated, audited, secrets sealed with the KMS envelope); the plugin's own
@@ -487,7 +487,7 @@ export const auth = betterAuth({
     // How the session was established ("sso:<providerId>", "password",
     // "social:<provider>", "other"). Set by session.create.before below and
     // never by a client. The app's org gate reads it to enforce an
-    // organisation's "require SSO" policy (ADR-144).
+    // organisation's "require SSO" policy (ADR-145).
     additionalFields: {
       authMethod: { type: "string", required: false, input: false },
     },

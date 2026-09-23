@@ -1,5 +1,5 @@
 /**
- * Whether an organisation's plan includes single sign-on (ADR-144: SSO is an
+ * Whether an organisation's plan includes single sign-on (ADR-145: SSO is an
  * Enterprise feature). The sign-in side reads it twice:
  *   - an SSO sign-in into an organisation without it is refused, so a
  *     downgrade turns SSO off rather than leaving it half on;

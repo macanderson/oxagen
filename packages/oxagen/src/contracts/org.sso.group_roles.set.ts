@@ -22,7 +22,7 @@ export const ssoGroupRoleMappingsSchema = z
 
 /**
  * set_sso_group_roles: replace a provider's table of IdP group to
- * organisation role (ADR-144).
+ * organisation role (ADR-145).
  *
  * The table is replaced whole: the rows sent are the rows kept. At sign-in
  * the highest-ranked role any of a person's groups maps to wins, and a person
