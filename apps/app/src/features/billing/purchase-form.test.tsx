@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
-// Buy governed action units: the quantity picker steps by the contracted block
+// Buy governed actions: the quantity picker steps by the contracted block
 // size and prices the quantity at the contracted rate, the form hands the
 // purchase action the organization, the block size and the quantity, and each
 // refusal the action returns is said in words. A Free organization with no
 // saved card is offered the purchase; an admin sees who can buy; an
-// invoice-billed organization sees no form. Axe checks every state.
+// invoice-billed organization is told it does not buy blocks. Axe checks every state.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -58,9 +58,9 @@ function renderForm({
 }
 
 const region = () =>
-  screen.getByRole("region", { name: "Buy governed action units" });
+  screen.getByRole("region", { name: "Buy governed actions" });
 const picker = () =>
-  screen.getByRole("spinbutton", { name: "Governed action units" });
+  screen.getByRole("spinbutton", { name: "Governed actions" });
 const total = () => {
   const found = region().querySelector('[data-fact="total"] dd');
   if (found === null) throw new Error("no total");
@@ -91,7 +91,7 @@ describe("PurchaseForm", () => {
     expect(picker()).toHaveAttribute("step", "10000");
     expect(picker()).toHaveAttribute("min", "10000");
     expect(picker()).toHaveAttribute("max", "1000000");
-    expect(region()).toHaveTextContent("in blocks of 10,000 GAU");
+    expect(region()).toHaveTextContent("in blocks of 10,000");
     expect(total()).toHaveTextContent(/^\$32\.10$/);
     expect(within(region()).getAllByTestId("money")).toHaveLength(1);
     await setQuantity("30000");
@@ -154,17 +154,17 @@ describe("PurchaseForm", () => {
         code: "quantity_above_max",
         field: "quantityGau",
       },
-      "You can buy at most 1,000,000 GAU at once.",
+      "You can buy at most 1,000,000 governed actions at once.",
     ],
     [
       "denied",
       { ok: false, reason: "denied", code: "forbidden" },
-      "Your role cannot buy governed action units. An owner or a billing member can.",
+      "Your role cannot buy governed actions. An owner or a billing member can.",
     ],
     [
       "conflict",
       { ok: false, reason: "conflict", code: "invoice_billed" },
-      "This organization is billed by invoice, so it does not buy units in blocks.",
+      "This organization is billed by invoice, so it does not buy governed actions in blocks.",
     ],
     [
       "unavailable",
@@ -204,12 +204,12 @@ describe("PurchaseForm", () => {
   it("offers a Free organization with no saved card and nothing left the purchase, under the anchor the bucket meter links to, saying Checkout saves the card", () => {
     renderForm({ bucket: readOk(freeNoCardBucket()) });
     expect(freeNoCardBucket().remainingGau).toBe(0);
-    const heading = document.getElementById("buy-governed-action-units");
-    expect(heading).toHaveTextContent("Buy governed action units");
+    const heading = document.getElementById("billing-buy");
+    expect(heading).toHaveTextContent("Buy governed actions");
     expect(region()).toHaveAttribute("aria-labelledby", heading?.id);
     expect(picker()).toBeEnabled();
     expect(region().querySelector("[data-saves-card]")).toHaveTextContent(
-      /^Checkout saves your card; auto top-up runs from then on$/,
+      /^Checkout saves your card\. Auto top-up runs from then on\.$/,
     );
     expect(
       screen.getByRole("button", { name: "Continue to Checkout" }),
@@ -225,18 +225,21 @@ describe("PurchaseForm", () => {
     renderForm({ allowed: false });
     expect(region()).toHaveAttribute("data-state", "denied");
     expect(region()).toHaveTextContent(
-      "An owner or a billing member can buy governed action units.",
+      "An owner or a billing member can buy governed actions.",
     );
     expect(screen.queryByRole("spinbutton")).toBeNull();
     expect(screen.queryByRole("button")).toBeNull();
     expect(within(region()).queryByTestId("money")).toBeNull();
   });
 
-  it("is not drawn for an invoice-billed organization (negative)", () => {
+  it("tells an invoice-billed organization it does not buy blocks, with no form (negative)", () => {
     renderForm({ bucket: readOk(invoiceBucket()) });
-    expect(
-      screen.queryByRole("region", { name: "Buy governed action units" }),
-    ).toBeNull();
+    expect(region()).toHaveAttribute("data-state", "invoice");
+    expect(region()).toHaveTextContent(
+      "This organization is billed by invoice, so it does not buy governed actions in blocks.",
+    );
+    expect(screen.queryByRole("spinbutton")).toBeNull();
+    expect(screen.queryByRole("button")).toBeNull();
   });
 
   it.each([
@@ -257,7 +260,7 @@ describe("PurchaseForm", () => {
   ])("is not drawn when %s (negative)", (_case, reads) => {
     renderForm(reads);
     expect(
-      screen.queryByRole("region", { name: "Buy governed action units" }),
+      screen.queryByRole("region", { name: "Buy governed actions" }),
     ).toBeNull();
   });
 });

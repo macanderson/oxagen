@@ -22,22 +22,35 @@
  *              and seq is dense.
  *     export   the exact exported segment bytes match the signed
  *              archive_segment_digest, authenticating the projection.
- *     digest   not carried: the export holds a projection of the stored row,
- *              and the hash was taken over the full envelope.
+ *     digest   from format 3, the frame carries `event`, the sealed Tacho
+ *              event rebuilt from its stored row: sha256(JCS(event without
+ *              hash)) = hash, and every member the frame shows beside it is
+ *              what `wrappedFrameOf` reads from that event. A frame whose
+ *              event the export could not rebuild, and every wrapped frame
+ *              of a format-1 or format-2 bundle, is `not carried`.
  *
  * And over the bundle: the frame count, the RFC 6962 Merkle root over every
  * frame digest, each attempt's root against its signed attestation, each
  * Ed25519 signature and key id, each ledger attempt's `event_stream_digest`
  * fold, and the redaction summary against the frames it summarises.
  */
-import { digestBytes, digestJcs, type JsonValue } from "../digest";
+import { hashEvent } from "../chain";
+import { digestBytes, digestJcs, jcs, type JsonValue } from "../digest";
 import { keyIdForPublicKey } from "../host/key-id";
 import { type Attestation, verifyAttestation } from "./attestation";
 import { merkleRoot } from "./merkle";
 
-/** Version 2 added `redactions.json` and each attempt's stream digest. */
-export const RUN_EXPORT_FORMAT = "oxagen.run-export/2";
-const ACCEPTED_FORMATS = new Set(["oxagen.run-export/1", RUN_EXPORT_FORMAT]);
+/**
+ * Version 2 added `redactions.json` and each attempt's stream digest.
+ * Version 3 added `event` to a wrapped frame, so its hash is recomputed.
+ */
+export const RUN_EXPORT_FORMAT = "oxagen.run-export/3";
+const FORMAT_1 = "oxagen.run-export/1";
+const ACCEPTED_FORMATS = new Set([
+  FORMAT_1,
+  "oxagen.run-export/2",
+  RUN_EXPORT_FORMAT,
+]);
 
 export const RUN_EXPORT_REDACTIONS_FORMAT = "oxagen.run-export.redactions/1";
 
@@ -122,6 +135,51 @@ export function normalizeInstant(value: string): string {
   }
   const instant = new Date(`${day}T${time}.${ms}${offset}`);
   return Number.isNaN(instant.getTime()) ? value : instant.toISOString();
+}
+
+/**
+ * A wrapped frame as the bundle writes it: what the Run page shows of the
+ * event, then the event itself. `bytesRef` is where the control plane kept
+ * the frame's body, a server fact the event does not hold, so the export
+ * passes it separately and the verifier reads it back off the frame.
+ *
+ * The export and both verifiers build the frame with this rule, so a member
+ * edited beside the event no longer matches what the event says.
+ */
+export function wrappedFrameOf(
+  event: Record<string, JsonValue | undefined>,
+  bytesRef: string | null,
+): Record<string, JsonValue> {
+  const body = asRecord(event["body"]) ?? {};
+  const content = asRecord(event["content"]);
+  const turn = asRecord(event["turn"]);
+  const text = (value: JsonValue | undefined) =>
+    typeof value === "string" ? value : "";
+  const count = (value: JsonValue | undefined) =>
+    typeof value === "number" ? value : null;
+  return {
+    event_id: event["event_id"] ?? null,
+    seq: event["seq"] ?? null,
+    ts: event["ts"] ?? null,
+    kind: event["kind"] ?? null,
+    prev_hash: event["prev_hash"] ?? null,
+    hash: event["hash"] ?? null,
+    content: {
+      digest: content?.["digest"] ?? null,
+      bytes_ref: bytesRef,
+      redactions: content?.["redactions"] ?? [],
+    },
+    body: event["body"] ?? null,
+    tool_name: text(body["tool_name"]),
+    tool_status: text(body["tool_status"]),
+    tool_use_id: text(body["tool_use_id"]),
+    model: text(body["model"]),
+    provider: text(body["provider"]),
+    policy_decision: text(body["policy_decision"]),
+    cost_usd_micros: count(body["cost_usd_micros"]),
+    turn_seq: count(turn?.["turn_seq"]),
+    event: event as JsonValue,
+  };
 }
 
 const WITHHELD_BODY = "frame_body";
@@ -249,6 +307,64 @@ function safeDigestJcs(value: JsonValue): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * A wrapped frame's own check. Without `event` there is nothing to hash.
+ * With it, the event must hash to the frame's `hash`, and the frame must
+ * show exactly what `wrappedFrameOf` reads from that event.
+ */
+function checkWrappedFrame(
+  frame: Envelope,
+  attemptId: string,
+): {
+  digest: CheckState;
+  reasons: string[];
+} {
+  if (frame["event"] === undefined || frame["event"] === null) {
+    return { digest: "not_carried", reasons: [] };
+  }
+  const event = asRecord(frame["event"]);
+  if (!event) {
+    return { digest: "broken", reasons: ["event is not a JSON object"] };
+  }
+  const reasons: string[] = [];
+  // A wrapped run's one attempt is its session, so every event must be one
+  // of that session's: a frame from another chain does not belong here.
+  if (event["session_uuid"] !== attemptId) {
+    reasons.push(
+      `the event belongs to session ${String(event["session_uuid"])}, not ${attemptId}`,
+    );
+  }
+  let recomputed: string | null;
+  try {
+    recomputed = hashEvent(event);
+  } catch {
+    recomputed = null;
+  }
+  if (recomputed !== frame["hash"]) {
+    reasons.push("the event does not hash to hash");
+  }
+  const content = asRecord(frame["content"]);
+  const bytesRef =
+    typeof content?.["bytes_ref"] === "string" ? content["bytes_ref"] : null;
+  const expected = wrappedFrameOf(event, bytesRef);
+  const differs = [
+    ...new Set([...Object.keys(expected), ...Object.keys(frame)]),
+  ]
+    .filter((name) => name !== "event")
+    .filter((name) => {
+      const shown = frame[name];
+      const read = expected[name];
+      if (shown === undefined || read === undefined) return true;
+      return jcs(shown) !== jcs(read);
+    })
+    .sort();
+  if (differs.length > 0) {
+    const verb = differs.length === 1 ? "differs" : "differ";
+    reasons.push(`${differs.join(", ")} ${verb} from the hashed event`);
+  }
+  return { digest: reasons.length > 0 ? "broken" : "held", reasons };
 }
 
 /** A ledger envelope's own checks: payload, event digest. */
@@ -420,7 +536,9 @@ export function verifyRunExport(files: RunExportFiles): RunExportVerification {
           ],
         });
       } else {
-        digest = "not_carried";
+        const own = checkWrappedFrame(frame, attempt.attempt_id);
+        digest = own.digest;
+        reasons.push(...own.reasons);
         const rawSeq = frame["seq"];
         seq = typeof rawSeq === "number" ? rawSeq : null;
         const expectedPrev: string | null =
@@ -585,7 +703,7 @@ export function verifyRunExport(files: RunExportFiles): RunExportVerification {
         "redactions.json does not match what the frames record",
       );
     }
-  } else if (manifest.format === RUN_EXPORT_FORMAT) {
+  } else if (manifest.format !== FORMAT_1) {
     hold("redactions", false, "", "redactions.json is missing");
   }
 

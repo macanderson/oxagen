@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   definitionBudget,
+  definitionContainment,
   parseAgentDefinitionSource,
 } from "./agent-definition-source";
 
@@ -84,6 +85,35 @@ describe("agent definition source validation", () => {
     );
     expect(() => definitionBudget({ budget: { per_run_micros: NaN } })).toThrow(
       /positive safe integer/,
+    );
+  });
+});
+
+describe("the containment table (ADR-152)", () => {
+  it("reads required = true as the requirement and false or absent as none", () => {
+    expect(
+      definitionContainment(
+        parseAgentDefinitionSource("[containment]\nrequired = true"),
+      ),
+    ).toEqual({ required: true });
+    expect(
+      definitionContainment(
+        parseAgentDefinitionSource("[containment]\nrequired = false"),
+      ),
+    ).toBeUndefined();
+    expect(
+      definitionContainment(parseAgentDefinitionSource('slug = "agent"')),
+    ).toBeUndefined();
+  });
+  it.each([
+    '[containment]\nrequired = "true"',
+    "[containment]\nrequired = 1",
+    '[containment]\nrequired = true\nimage = "x"',
+    'containment = "required"',
+    "[containment]",
+  ])("refuses %s", (source) => {
+    expect(() => parseAgentDefinitionSource(source)).toThrow(
+      expect.objectContaining({ reason: "invalid_definition_source" }),
     );
   });
 });

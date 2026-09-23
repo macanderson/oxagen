@@ -259,6 +259,8 @@ export const runItemSchema = z
       })
       .nullable()
       .optional(),
+    /** False when the workspace turned automatic run names and summaries off (ADR-153). */
+    enrichmentEnabled: z.boolean().optional(),
     /** The generated name; null until `summarize_run` wrote one. */
     name: z.string().nullable(),
     summary: runSummarySchema.nullable(),

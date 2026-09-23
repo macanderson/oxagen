@@ -22,10 +22,10 @@ pnpm dev                     # starts Docker + migrations + all apps
 `main` is a shared, contested branch worked in parallel by multiple humans and coding agents. **Never commit or push directly to `main`.** Test suites run in CI on every push and PR (not in git hooks), so pushing is cheap — push early and often.
 
 1. **Start from a fresh, synced `main`:** `git fetch origin`; if `origin/main` is ahead, `git switch main && git rebase origin/main` (resolve conflicts) before cutting your branch.
-2. **Cut a branch and push it immediately:** `git switch -c <type>/<slug> && git push -u origin <type>/<slug>`. Use a `git worktree` for any large body of work: `git worktree add ../oxagen-<slug> -b <branch>`.
+2. **Cut a branch and push it immediately:** `git switch -c <type>/<slug> && git push -u origin <type>/<slug>`. Use a `git worktree` for any large body of work: `git worktree add ~/Projects/.worktrees/oxagen/<slug> -b <branch>`.
 3. **Commit frequently, push regularly.** Small increments at every meaningful step. A pushed work-in-progress branch beats a perfect change sitting on your disk.
 4. **Open a PR against `main`** — a draft early on is fine. The PR is where CI runs the full gate and where the work gets reviewed and merged.
-5. **Before marking the PR ready:** push the final commit and inspect its CI results (`gh pr checks`).
+5. **Watch the PR until it merges.** Poll it every 60 seconds, fix each CI job the moment it fails, and resolve conflicts as they appear. `CLAUDE.md` under Pull request monitoring has the commands.
 
 Other rules:
 

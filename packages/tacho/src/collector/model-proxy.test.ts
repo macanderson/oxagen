@@ -2485,6 +2485,7 @@ describe("the wire and the host file", () => {
       "models_independent",
       "hook_fail_open",
       "steering_manifest",
+      "containment",
     ]);
   });
 

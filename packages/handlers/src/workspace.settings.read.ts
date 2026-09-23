@@ -1,3 +1,4 @@
+import { runEnrichmentEnabled } from "@oxagen/oxagen/run-enrichment";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
   workspaceSettingsRead,
@@ -38,6 +39,7 @@ export function mapWorkspaceSettingsRow(row: {
       overrides.success ? overrides.data : {},
     ),
     steering: readGatePolicy(row.settings),
+    runEnrichmentEnabled: runEnrichmentEnabled(row.settings),
   };
 }
 

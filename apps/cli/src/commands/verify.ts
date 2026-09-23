@@ -141,7 +141,7 @@ export function formatVerification(result: RunExportVerification): string[] {
   ).length;
   if (notCarried > 0) {
     lines.push(
-      `  Digest not carried on ${plural(notCarried, "wrapped (tse_) frame")}. A wrapped frame was hashed over its full envelope, and the bundle holds a projection of it. For these frames, only the links and the Merkle root can be checked.`,
+      `  Digest not carried on ${plural(notCarried, "wrapped (tse_) frame")}. A wrapped frame is hashed over its full event, and the bundle does not hold that event for these frames: an export before format 3 never did, and a format-3 export leaves it out when the stored row cannot be proven to rebuild it. For these frames, only the links and the Merkle root can be checked.`,
     );
   }
 

@@ -96,6 +96,31 @@ export function divMicros(value: Money, count: number): Money | null {
   };
 }
 
+/** Micros in one cent. */
+const MICROS_PER_CENT = BigInt(10_000);
+
+/**
+ * `value` rounded to whole cents, half to even (banker's rounding), exact at
+ * any magnitude. A statement total is rounded once, here, after its lines are
+ * summed at full precision (pages/billing.md, This period).
+ */
+export function roundToCentsHalfEven(value: Money): Money {
+  const micros = toBigInt(value.micros);
+  const negative = micros < BigInt(0);
+  const magnitude = negative ? -micros : micros;
+  let cents = magnitude / MICROS_PER_CENT;
+  const rest = magnitude % MICROS_PER_CENT;
+  const half = MICROS_PER_CENT / BigInt(2);
+  if (rest > half || (rest === half && cents % BigInt(2) === BigInt(1))) {
+    cents += BigInt(1);
+  }
+  const rounded = cents * MICROS_PER_CENT;
+  return {
+    micros: (negative && rounded !== BigInt(0) ? -rounded : rounded).toString(),
+    currency: value.currency,
+  };
+}
+
 /**
  * The largest of `values`, or null when there is none or they carry more than
  * one currency: the peak of a series of days is only a figure within one.

@@ -34,6 +34,7 @@ const { resolveHostMandate, signBundle, unsignedBundle } = await import(
 );
 const { policyBundleSchema } = await import("@oxagen/oxagen/tacho/schemas");
 const {
+  BUNDLE_FEATURE_CONTAINMENT,
   BUNDLE_FEATURE_GATEWAY_TOOLS,
   BUNDLE_FEATURE_MODEL_ALLOWLIST,
   BUNDLE_FEATURE_INDEPENDENT_MODELS,
@@ -527,5 +528,89 @@ describe("the active definition budget on the signed bundle", () => {
     expect((await resolveHostMandate(tx, ctx, governedHost())).budget).toEqual({
       mode: "observed",
     });
+  });
+
+  it("reads a containment requirement from the active definition", async () => {
+    const { tx } = budgetTransaction(
+      'slug = "review"\n[containment]\nrequired = true\n',
+    );
+    const mandate = await resolveHostMandate(tx, ctx, governedHost());
+    expect(mandate.containment).toEqual({ required: true });
+    expect(mandate.invalidDefinition).toBeUndefined();
+  });
+
+  it("reads required = false as no requirement", async () => {
+    const { tx } = budgetTransaction("[containment]\nrequired = false\n");
+    expect(
+      (await resolveHostMandate(tx, ctx, governedHost())).containment,
+    ).toBeUndefined();
+  });
+
+  it.each([
+    '[containment]\nrequired = "yes"\n',
+    '[containment]\nrequired = true\ntier = "gateway"\n',
+    'containment = "required"\n',
+  ])(
+    "suspends governed actions for an invalid containment table: %s",
+    async (source) => {
+      const { tx } = budgetTransaction(source);
+      const mandate = await resolveHostMandate(tx, ctx, governedHost());
+      expect(mandate.invalidDefinition).toBe(true);
+      expect(mandate.containment).toBeUndefined();
+    },
+  );
+});
+
+describe("a mandate that requires the contained tier (ADR-152)", () => {
+  const REQUIRES = { ...NO_MANDATE, containment: { required: true as const } };
+  function withMandate(
+    features: string[],
+    mandate: Parameters<typeof unsignedBundle>[4],
+  ) {
+    return unsignedBundle(
+      host(features),
+      { org: 1, workspace: 1 },
+      { mode: "digest_only", classes: [] },
+      STEERING,
+      mandate,
+      NOW,
+    );
+  }
+
+  it("signs the requirement for a host that can read it", () => {
+    const result = withMandate(
+      [...CURRENT, BUNDLE_FEATURE_CONTAINMENT],
+      REQUIRES,
+    );
+    expect(result.containment).toEqual({ required: true });
+    expect(result.host_status).toBe("active");
+    expect(
+      policyBundleSchema.parse({
+        ...result,
+        signature: { key_id: "k", alg: "ed25519", sig: "s" },
+      }).containment,
+    ).toEqual({ required: true });
+  });
+
+  it("suspends a host that cannot read it instead of dropping it", () => {
+    const result = withMandate(CURRENT, REQUIRES);
+    expect(result.containment).toBeUndefined();
+    expect(result.host_status).toBe("suspended");
+  });
+
+  it("states nothing when the mandate requires nothing", () => {
+    const result = withMandate(
+      [...CURRENT, BUNDLE_FEATURE_CONTAINMENT],
+      NO_MANDATE,
+    );
+    expect(result).not.toHaveProperty("containment");
+    expect(result.host_status).toBe("active");
+  });
+
+  it("changes the etag when the requirement changes", () => {
+    const features = [...CURRENT, BUNDLE_FEATURE_CONTAINMENT];
+    expect(withMandate(features, REQUIRES).etag).not.toBe(
+      withMandate(features, NO_MANDATE).etag,
+    );
   });
 });
