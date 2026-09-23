@@ -214,7 +214,12 @@ export function stringListAttr(hcl, key) {
  * once — a chain of four is exactly the case where fixing one at a time and
  * re-running is the slow way to find out about the other three.
  */
-export function inspect({ monitoring, alarms, observability }) {
+export function inspect({
+  monitoring,
+  alarms,
+  observability,
+  appName = "oxagen-app",
+}) {
   const problems = [];
 
   const format = stringAttr(monitoring, "docker_event_format");
@@ -224,7 +229,10 @@ export function inspect({ monitoring, alarms, observability }) {
     );
   }
 
-  const agentGroup = stringAttr(monitoring, "log_group_name");
+  const agentGroup = stringAttr(monitoring, "log_group_name")?.replaceAll(
+    "${var.name}",
+    appName,
+  );
   if (!agentGroup) {
     problems.push(
       `${MONITORING_TF}: the CloudWatch agent config declares no log_group_name for the docker-events file, so the collector's lines never leave the node.`,
@@ -372,7 +380,16 @@ export function inspect({ monitoring, alarms, observability }) {
 
 export function run(root = repoRoot) {
   const read = (rel) => readFileSync(join(root, rel), "utf8");
+  const appModule = /module "app" \{([\s\S]*?)^\}/m.exec(
+    read("infra/stacks-new/oxagen/main.tf"),
+  )?.[1];
+  const appName = appModule && stringAttr(appModule, "name");
+  if (!appName)
+    return [
+      "Production app module has no literal name; resolve its log prefix before checking the alarm chain.",
+    ];
   return inspect({
+    appName,
     monitoring: read(MONITORING_TF),
     alarms: read(ALARMS_TF),
     observability: read(OBSERVABILITY_TF),

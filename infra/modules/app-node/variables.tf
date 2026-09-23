@@ -111,3 +111,9 @@ variable "ami_id" {
   description = "AMI for this instance. Pinned deliberately; see the note above."
   type        = string
 }
+
+variable "bootstrap_artifact_access" {
+  description = "Grant artifact reads before the first boot. Existing nodes receive this grant from ci-deploy."
+  type        = bool
+  default     = false
+}
