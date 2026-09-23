@@ -857,7 +857,7 @@
     "propose_agent": {
       "route": "/[org]/[ws]/agents",
       "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
-      "entry": "Agent IAM › New agent, and ⌘K Create › Agent: the agent wizard's pull request step (features/create/agent-wizard.tsx, features/create/actions.ts)",
+      "entry": "Agents › New agent, and ⌘K Create › Agent: the agent wizard's pull request step (features/create/agent-wizard.tsx, features/create/actions.ts); Agents › Register an agent opens the same pull request from its dialog (features/agents/register-agent.tsx, features/agents/actions.ts)",
       "proof": "apps/app/src/features/create/agent-wizard.test.tsx",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session-wizard-agent"
