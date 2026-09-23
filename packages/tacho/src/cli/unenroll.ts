@@ -21,6 +21,7 @@ import {
 import { dirname } from "node:path";
 import { acquireInstallLock } from "../host/install-lock";
 import { stripClaudeDesktopConfig } from "../host/claude-desktop-writer";
+import { untrustCodexHooks } from "../host/codex-hook-trust";
 import { stripCodexHooks } from "../host/codex-writer";
 import {
   cursorDocumentIsVestigial,
@@ -200,12 +201,13 @@ export async function restoreModelBaseUrlsFor(
   return { restored, failed };
 }
 
-export function stripEnrollmentHooks(
+export async function stripEnrollmentHooks(
   host:
-    | Pick<
+    | (Pick<
         HostFile,
         "host_enrollment_id" | "displaced_env" | "displaced_mcp_servers"
-      >
+      > &
+        Partial<Pick<HostFile, "hook_command" | "harnesses">>)
     | undefined,
   deps: CliDeps,
   /**
@@ -216,9 +218,13 @@ export function stripEnrollmentHooks(
    * restore it byte for byte.
    */
   settle = false,
-): {
+): Promise<{
   settingsChanged: boolean;
   codexChanged: boolean;
+  /** How many of Codex's `hooks.state` trust records were removed. */
+  codexUntrusted: number;
+  /** Why the trust records could not be removed, when none were. */
+  codexTrustProblem?: string;
   /** The Cursor hooks files Tacho's entries were removed from. */
   cursorChanged: string[];
   /** The Stella files Tacho's hooks were removed from. */
@@ -234,7 +240,7 @@ export function stripEnrollmentHooks(
    * as it is.
    */
   failed: string[];
-} {
+}> {
   const failed: string[] = [];
   const attempt = (path: string, run: () => void) => {
     try {
@@ -276,6 +282,27 @@ export function stripEnrollmentHooks(
         cursorChanged.push(path);
       }
     });
+  }
+  // Codex's trust records live in `config.toml`, keyed by each hook's
+  // position in `hooks.json`, and Codex stops reporting a hook the moment
+  // its definition is gone. So the records come out first, while Codex can
+  // still name them; stripping the file first would leave them behind with
+  // nothing on the machine that says whose they were.
+  let codexUntrusted = 0;
+  // Not a failure worth stopping for: a leftover record names a hook that no
+  // longer exists, which Codex ignores. It is reported so the operator can
+  // tidy it by hand if they care.
+  let codexTrustProblem: string | undefined;
+  if (host?.harnesses?.includes("codex") && host.hook_command !== undefined) {
+    const untrust = await untrustCodexHooks({
+      appServer: deps.codexAppServer,
+      hooksPath: deps.paths.codexHooks,
+      hookCommand: host.hook_command,
+      enrollmentId: host.host_enrollment_id,
+    });
+    codexUntrusted = untrust.removed.length;
+    if (untrust.problem !== undefined && untrust.removed.length === 0)
+      codexTrustProblem = untrust.problem;
   }
   let codexChanged = false;
   attempt(deps.paths.codexHooks, () => {
@@ -344,6 +371,8 @@ export function stripEnrollmentHooks(
   return {
     settingsChanged,
     codexChanged,
+    codexUntrusted,
+    ...(codexTrustProblem === undefined ? {} : { codexTrustProblem }),
     cursorChanged,
     stellaChanged,
     claudeDesktopChanged,
@@ -453,7 +482,7 @@ async function unenrollLocked(
   deps.out(`[1/4] Removing Tacho hooks from ${deps.paths.claudeSettings}`);
   // Not settled while a base URL is still in a file: the receipt is what the
   // retry needs to put the original back.
-  const stripped = stripEnrollmentHooks(
+  const stripped = await stripEnrollmentHooks(
     host ?? read.salvaged,
     deps,
     baseUrls.failed.length === 0,
@@ -465,6 +494,19 @@ async function unenrollLocked(
   }
   if (stripped.codexChanged) {
     deps.out(`      removed from ${deps.paths.codexHooks} too`);
+  }
+  if (stripped.codexUntrusted > 0) {
+    deps.out(
+      `      ${stripped.codexUntrusted} trust ${stripped.codexUntrusted === 1 ? "record" : "records"} removed from Codex's config`,
+    );
+  }
+  // Left behind, a record names a hook that no longer exists and Codex ignores
+  // it. Worth a line so an operator clearing the machine by hand knows it is
+  // there; not worth marking the unenrollment incomplete.
+  if (stripped.codexTrustProblem !== undefined) {
+    warnings.push(
+      `Codex's hook trust records could not be removed: ${stripped.codexTrustProblem}. They name hooks that are now gone, so Codex ignores them; delete the \`[hooks.state]\` entries in ~/.codex/config.toml to tidy up.`,
+    );
   }
   for (const path of stripped.cursorChanged) {
     deps.out(`      removed from ${path} too`);
