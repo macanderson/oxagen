@@ -5,7 +5,7 @@ import { hostEnrollmentIdSchema } from "../tacho/schemas";
 export const containedMeasurementSchema = z
   .object({
     profile: z.literal("oxagen-linux-docker-v1"),
-    containerId: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+    containerId: z.string().regex(/^[a-f0-9]{64}$/),
     imageDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
     configurationDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
     gatewayOnlyEgress: z.literal(true),
