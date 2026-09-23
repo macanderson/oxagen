@@ -66,7 +66,7 @@ export async function handleAuditExport(
     case "ok":
       break;
   }
-  const { offset: _offset, ...filters } = parsed;
+  const { offset: _offset, rows: _rows, ...filters } = parsed;
   // The same window the page reads over, resolved in the viewer's zone here so
   // the file carries the rows the reader is looking at (auditWindow).
   const source = deps.dataSource();

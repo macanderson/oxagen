@@ -6,4 +6,4 @@
 export { Audit, AuditSkeleton } from "./audit";
 export { AuditHeaderAction } from "./header-action";
 export { handleAuditExport } from "./export";
-export { type AuditSegmentTab, auditTabOf } from "./tabs";
+export { auditTabOf } from "./tabs";

@@ -14,7 +14,7 @@ export const AUDIT_TABS = [
 export type AuditTab = (typeof AUDIT_TABS)[number];
 
 /** The tabs that are segments of their own: every tab but Events. */
-export type AuditSegmentTab = Exclude<AuditTab, "events">;
+type AuditSegmentTab = Exclude<AuditTab, "events">;
 
 /** The tab a route segment names, or null when it names none. */
 export function auditTabOf(segment: string): AuditSegmentTab | null {

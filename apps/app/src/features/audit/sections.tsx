@@ -30,13 +30,7 @@ import { AUDIT_GAPS } from "./gaps";
 type GapKey = keyof typeof AUDIT_GAPS;
 
 /** The one sentence a panel with no store behind it renders in place of its rows. */
-export function NotBacked({
-  gap,
-  children,
-}: {
-  gap: GapKey;
-  children: string;
-}) {
+function NotBacked({ gap, children }: { gap: GapKey; children: string }) {
   return (
     <p
       data-testid="audit-not-recorded"

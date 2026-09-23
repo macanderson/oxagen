@@ -18,7 +18,7 @@ import { DownloadLink } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 
 /** The issue a dialog's missing write is tracked in, as a data attribute only. */
-export type Gap = { issue: string };
+type Gap = { issue: string };
 
 function DialogButton({
   label,

@@ -149,7 +149,10 @@ describe("handleAuditExport", () => {
     });
   });
 
-  it("exports the whole record without reading a zone when no day is filtered", async () => {
+  it("exports the page's Range window, ending now, without reading a zone when no day is filtered", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(
+      Date.parse("2026-09-16T12:00:00.000Z"),
+    );
     await handleAuditExport(request("?outcome=deny"), context, deps);
     expect(exportEvents).toHaveBeenCalledWith(ctx, {
       format: "csv",
@@ -157,10 +160,16 @@ describe("handleAuditExport", () => {
       outcome: "deny",
       actor: null,
       capability: null,
-      since: null,
+      since: "2026-08-17T12:00:00.000Z",
       until: null,
     });
+    await handleAuditExport(request("?range=48h"), context, deps);
+    expect(exportEvents).toHaveBeenLastCalledWith(
+      ctx,
+      expect.objectContaining({ since: "2026-09-14T12:00:00.000Z" }),
+    );
     expect(preferences).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
   });
 
   it("exports CSV when the request names no format the contract knows (negative)", async () => {

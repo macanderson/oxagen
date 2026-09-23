@@ -39,6 +39,7 @@ import { cell, Table } from "@/ui/table";
 import { CsvDialog } from "./dialogs";
 import { FilterSelect } from "./filter-select";
 import { AUDIT_OUTCOMES, auditQueryParams } from "./filters";
+import { AUDIT_GAPS } from "./gaps";
 
 /** An actor the record names, as the filter and the table print them. */
 export type AuditActor = { id: string; name: string };
@@ -237,7 +238,11 @@ function Filters({ org, query }: { org: string; query: AuditQuery }) {
       {query.range === "30d" ? null : (
         <input type="hidden" name="range" value={query.range} />
       )}
-      <span className="flex flex-col gap-0.5 text-xs text-muted-foreground">
+      <span
+        data-testid="audit-not-recorded"
+        data-issue={AUDIT_GAPS.events.issue}
+        className="flex flex-col gap-0.5 text-xs text-muted-foreground"
+      >
         <span id={searchNote}>{t("searchNotRecorded")}</span>
         <span id="audit-severity-note">{t("severityNotRecorded")}</span>
       </span>

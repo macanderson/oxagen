@@ -101,7 +101,6 @@
       "money": "Money moved without a receipt",
       "title": "Incidents",
       "caption": "raised by the policy engine, the gateway and the verifier",
-      "raise": "Open an incident",
       "notRecorded": "Incidents are not listed for the organization yet. The incident read answers one workspace at a time, and no write opens, assigns or resolves an incident."
     },
     "incident": {

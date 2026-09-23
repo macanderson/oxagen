@@ -796,7 +796,6 @@ type Messages = {
       money: string;
       title: string;
       caption: string;
-      raise: string;
       notRecorded: string;
     };
     incident: {
