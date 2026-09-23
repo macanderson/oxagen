@@ -121,6 +121,7 @@ function QuantityPicker({
         label={t("submit")}
         pendingLabel={t("submitting")}
         fullWidth={false}
+        secondary
         className="self-start"
       />
     </SafeForm>
@@ -146,7 +147,7 @@ export function PurchaseForm({
   if (!bucket.ok || bucket.value.mode !== "prepaid" || !rate.ok) return null;
   return (
     <Section
-      id="buy-governed-action-units"
+      id="billing-buy"
       title={t("title")}
       data-state={allowed ? "ok" : "denied"}
     >

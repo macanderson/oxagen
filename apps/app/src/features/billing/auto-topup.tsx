@@ -162,6 +162,7 @@ function AutoTopupControl({
               label={t("save")}
               pendingLabel={t("saving")}
               fullWidth={false}
+              secondary
             />
             {outcome === "saved" ? (
               <p role="status" className="text-sm">

@@ -1,21 +1,23 @@
-// Meters (pages/billing.md): the two meters Oxagen charges on and the figures
-// it reports beside them. Governed action units are used against this month's
-// bucket (included + purchased + carried), printed as stored — a negative
-// remainder reads "overdrawn by N". Other governed actions are reported and
-// never priced; nothing records them yet, so they print "not recorded"
-// rather than a zero. Usage credits are the in-app AI usage balance,
-// printed as a count. Under the table: the billing mode (prepaid or invoice),
-// and the Free-tier rule for a prepaid organization at zero with no card
-// (spec §4.2, ADR-055 §6). Counts only; no money renders here (INV-25).
+// Meters (pages/billing.md): the one priced meter and the meters reported
+// beside it. Governed actions lead: the count used this period against the
+// bucket, the billable unit. Sealed runs with a model call, runs Oxagen halted
+// before any model call and runs of the in-app agent have no read in this
+// release (the cost.run_totals rollup, spec §12.6), so each prints "not
+// recorded" rather than a zero. Retained evidence prints the volume
+// get_evidence_retention reports, which is "not recorded" until a job
+// measures it. Under the table: the note the design gives, the billing mode
+// (prepaid or invoice), and the Free-tier rule for a prepaid organization at
+// zero with no card (spec §4.2, ADR-055 §6). Counts only; no money renders
+// here (INV-25).
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
-import type { GauBucket, UsageCredits } from "@/data/contracts/billing";
+import type { EvidenceRetention, GauBucket } from "@/data/contracts/billing";
 import type { Read } from "@/data/read";
-import { linkText } from "@/ui/control-styles";
-import { formatCount } from "@/ui/money-format";
-import { cell, Table } from "@/ui/table";
+import { linkText, panelBody } from "@/ui/control-styles";
+import { formatByteSize, formatCount } from "@/ui/money-format";
+import { cell, numericCell, Table } from "@/ui/table";
 import { BillingReadFailure } from "./read-failure";
-import { Section, useDate } from "./section";
+import { NotRecordedValue, PanelNote, Section, useDate } from "./section";
 
 function Row({
   name,
@@ -31,8 +33,8 @@ function Row({
   return (
     <tr data-meter={name}>
       <td className={cell}>{meter}</td>
-      <td className={`${cell} tabular-nums`}>{value}</td>
-      <td className={`${cell} text-xs text-muted-foreground`}>{note}</td>
+      <td className={numericCell}>{value}</td>
+      <td className={`${cell} text-[11.5px] text-muted-foreground`}>{note}</td>
     </tr>
   );
 }
@@ -40,12 +42,12 @@ function Row({
 function Mode({ bucket }: { bucket: GauBucket }) {
   const t = useTranslations("billing");
   const locale = useLocale();
-  const gau = (count: number) =>
-    t("units.gau", { count: formatCount(count, locale) });
+  const governed = (count: number) =>
+    t("units.governed", { count: formatCount(count, locale) });
   const { invoice, autoTopup } = bucket;
   if (invoice === null) {
     return (
-      <p data-mode="prepaid" className="text-sm text-muted-foreground">
+      <p data-mode="prepaid" className="text-[12.5px] text-muted-foreground">
         {autoTopup?.paymentMethod === null
           ? t("mode.prepaidNoCard")
           : t("mode.prepaid")}
@@ -53,13 +55,13 @@ function Mode({ bucket }: { bucket: GauBucket }) {
     );
   }
   return (
-    <div data-mode="invoice" className="flex flex-col gap-1 text-sm">
+    <div data-mode="invoice" className="flex flex-col gap-1 text-[12.5px]">
       <p className="text-muted-foreground">
         {t("mode.invoice", { max: formatCount(invoice.gauMax, locale) })}
       </p>
       <p data-fact="uninvoiced" className="text-muted-foreground">
-        {t("mode.uninvoiced")}: {gau(invoice.uninvoicedGau)} ·{" "}
-        {t("mode.invoiced")}: {gau(invoice.invoicedThisPeriodGau)}
+        {t("mode.uninvoiced")}: {governed(invoice.uninvoicedGau)}.{" "}
+        {t("mode.invoiced")}: {governed(invoice.invoicedThisPeriodGau)}.
       </p>
       {invoice.pastDue ? (
         <p data-past-due="" className="font-medium text-foreground">
@@ -72,41 +74,43 @@ function Mode({ bucket }: { bucket: GauBucket }) {
 
 export function Meters({
   bucket,
-  credits,
+  retention,
 }: {
   bucket: Read<GauBucket>;
-  credits: Read<UsageCredits>;
+  retention: Read<EvidenceRetention>;
 }) {
   const t = useTranslations("billing");
   const locale = useLocale();
   const date = useDate();
   const title = t("meters.title");
   const count = (n: number) => formatCount(n, locale);
-  const notRecorded = (
-    <span data-recorded="false" className="text-muted-foreground">
-      {t("notRecorded")}
-    </span>
-  );
+  const notRecorded = <NotRecordedValue>{t("notRecorded")}</NotRecordedValue>;
   const b = bucket.ok ? bucket.value : null;
-  let gauValue: ReactNode;
-  let gauNote: ReactNode = null;
+  let governedValue: ReactNode;
+  let governedNote: ReactNode = null;
   if (!bucket.ok) {
-    gauValue = <BillingReadFailure read={bucket} section={t("meters.gau")} />;
+    governedValue = (
+      <BillingReadFailure read={bucket} section={t("meters.governed")} />
+    );
   } else {
     const v = bucket.value;
-    gauValue = t("meters.gauValue", {
-      used: count(v.usedGau),
-      total: count(v.includedGau + v.purchasedGau + v.carriedGau),
-    });
-    gauNote = t("meters.gauNote", {
-      period: t("range", {
-        start: date(v.period.start),
-        end: date(v.period.end),
-      }),
-      remaining:
-        v.remainingGau < 0
-          ? t("meters.overdrawn", { count: count(-v.remainingGau) })
-          : t("meters.remaining", { count: count(v.remainingGau) }),
+    governedValue = count(v.usedGau);
+    governedNote = t("meters.governedNote", { included: count(v.includedGau) });
+  }
+  let retainedValue: ReactNode;
+  let retainedNote: ReactNode = null;
+  if (!retention.ok) {
+    retainedValue = (
+      <BillingReadFailure read={retention} section={t("meters.retained")} />
+    );
+  } else {
+    const r = retention.value;
+    retainedValue =
+      r.storedGb === null
+        ? notRecorded
+        : formatByteSize(Math.round(r.storedGb * 1e9), locale);
+    retainedNote = t("meters.retainedNote", {
+      months: count(r.includedMonths),
     });
   }
   // A prepaid organization at or below zero with no saved card: the Free-tier
@@ -119,57 +123,71 @@ export function Meters({
       ? b
       : null;
   return (
-    <Section id="billing-meters" title={title}>
+    <Section id="billing-meters" title={title} flush>
       <Table
         label={title}
         columns={[
           { label: t("meters.columns.meter") },
-          { label: t("meters.columns.thisMonth") },
+          { label: t("meters.columns.thisPeriod"), numeric: true },
           { label: t("meters.columns.note") },
         ]}
       >
         <Row
-          name="gau"
-          meter={t("meters.gau")}
-          value={gauValue}
-          note={gauNote}
+          name="governed"
+          meter={t("meters.governed")}
+          value={governedValue}
+          note={governedNote}
         />
         <Row
-          name="other"
-          meter={t("meters.other")}
+          name="sealed"
+          meter={t("meters.sealed")}
           value={notRecorded}
-          note={t("meters.otherNote")}
+          note={t("meters.sealedNote")}
         />
         <Row
-          name="credits"
-          meter={t("meters.credits")}
-          value={
-            credits.ok ? (
-              t("meters.creditsValue", {
-                count: count(credits.value.balanceCredits),
-              })
-            ) : (
-              <BillingReadFailure
-                read={credits}
-                section={t("meters.credits")}
-              />
-            )
-          }
-          note={t("meters.creditsNote")}
+          name="retained"
+          meter={t("meters.retained")}
+          value={retainedValue}
+          note={retainedNote}
+        />
+        <Row
+          name="halted"
+          meter={t("meters.halted")}
+          value={notRecorded}
+          note={t("meters.free")}
+        />
+        <Row
+          name="in-app"
+          meter={t("meters.inApp")}
+          value={notRecorded}
+          note={t("meters.free")}
         />
       </Table>
-      {b === null ? null : <Mode bucket={b} />}
-      {exhausted === null ? null : (
-        <p data-exhausted="" className="text-sm font-medium text-foreground">
-          {t.rich("meters.exhaustedNoCard", {
-            date: date(exhausted.period.end),
-            link: (chunks) => (
-              <a href="#buy-governed-action-units" className={linkText}>
-                {chunks}
-              </a>
-            ),
-          })}
-        </p>
+      <PanelNote>{t("meters.note")}</PanelNote>
+      {b === null ? null : (
+        <div className={`${panelBody} flex flex-col gap-2 pt-0`}>
+          {b.remainingGau < 0 ? (
+            <p data-overdrawn="" className="text-[12.5px] text-foreground">
+              {t("meters.overdrawn", { count: count(-b.remainingGau) })}
+            </p>
+          ) : null}
+          <Mode bucket={b} />
+          {exhausted === null ? null : (
+            <p
+              data-exhausted=""
+              className="text-[12.5px] font-medium text-foreground"
+            >
+              {t.rich("meters.exhaustedNoCard", {
+                date: date(exhausted.period.end),
+                link: (chunks) => (
+                  <a href="#billing-buy" className={linkText}>
+                    {chunks}
+                  </a>
+                ),
+              })}
+            </p>
+          )}
+        </div>
       )}
     </Section>
   );

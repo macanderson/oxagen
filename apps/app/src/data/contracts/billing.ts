@@ -1,11 +1,12 @@
 // The Billing page's view models (ARCHITECTURE.md §1.4, §3.9), from
-// get_subscription, get_gau_bucket, get_contract_rate and list_invoices. On the
+// get_subscription, get_gau_bucket, get_contract_rate, get_evidence_retention
+// and list_invoices. On the
 // governed action meter every figure except the contracted rate, the block
 // price and an invoice's amounts is a GAU count or a date; the second meter,
 // in-app AI usage credits, carries its balance's face value. Only
-// ContractRate, InvoicePage and UsageCredits reach a Money (INV-25,
-// src/test/arch/billing-units.test.ts). Token usage and stored evidence volume
-// have no view model (§1.4).
+// ContractRate, EvidenceRetention, InvoicePage and UsageCredits reach a Money
+// (INV-25, src/test/arch/billing-units.test.ts). Token usage has no view model
+// (§1.4); stored evidence volume is null until a job measures it.
 import { z } from "zod";
 import { PublicId } from "./common";
 import { Money } from "./money";
@@ -116,3 +117,18 @@ export const UsageCredits = z.object({
   balance: Money,
 });
 export type UsageCredits = z.infer<typeof UsageCredits>;
+
+/**
+ * Evidence retention (pages/billing.md, the Retained evidence tile, line and
+ * meter): the months every paid plan includes, the published price per
+ * GB-month beyond them, whether this organization has opted into paying for
+ * that, and the volume it holds. `storedGb` is null until an accounting job
+ * measures it; null is printed "not recorded", never a zero.
+ */
+export const EvidenceRetention = z.object({
+  includedMonths: z.number().int().positive(),
+  perGbMonth: Money,
+  extendedRetentionEnabled: z.boolean(),
+  storedGb: z.number().nonnegative().nullable(),
+});
+export type EvidenceRetention = z.infer<typeof EvidenceRetention>;

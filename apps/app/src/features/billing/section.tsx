@@ -1,13 +1,17 @@
-// The frame every Billing section shares: a region named by its heading, the
-// term-and-value list its facts print in, and the one date style the page
-// uses.
+// The frame every Billing panel shares (the mockup's `.panel`, `.panel-h` and
+// `.panel-b`): a region named by its heading, an optional badge beside the
+// heading, a body, the term-and-value list its facts print in, and the one
+// date style the page uses. A panel whose body is a table sets `flush`, so the
+// table meets the panel's edges the way the mockup draws it.
 import type { ComponentProps, ReactNode } from "react";
-import { panel } from "@/ui/control-styles";
+import { panel, panelBody, panelHeader, panelTitle } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
 
 export function Section({
   id,
   title,
+  badge,
+  flush = false,
   children,
   ...rest
 }: Omit<
@@ -18,18 +22,40 @@ export function Section({
   id: string;
   /** The translated section title. */
   title: string;
+  /** A badge beside the heading: what the panel's figures come from. */
+  badge?: ReactNode;
+  /** The body is a table that runs to the panel's edges. */
+  flush?: boolean;
 }) {
   return (
     <section
       aria-labelledby={id}
-      className={`${panel} flex flex-col gap-3 p-5`}
+      className={`${panel} flex flex-col`}
       {...rest}
     >
-      <h2 id={id} className="text-base font-semibold text-foreground">
-        {title}
-      </h2>
-      {children}
+      <div className={panelHeader}>
+        <h2 id={id} className={panelTitle}>
+          {title}
+        </h2>
+        {badge}
+      </div>
+      <div
+        className={flush ? "flex flex-col" : `${panelBody} flex flex-col gap-3`}
+      >
+        {children}
+      </div>
     </section>
+  );
+}
+
+/** A panel's closing note under its table (the mockup's `.panel-b .note`). */
+export function PanelNote({ children }: { children: ReactNode }) {
+  return (
+    <div className={panelBody}>
+      <p className="border-l-2 border-primary/60 pl-3 text-[12.5px] text-muted-foreground">
+        {children}
+      </p>
+    </div>
   );
 }
 
@@ -58,6 +84,15 @@ export function Fact({
         {children}
       </dd>
     </div>
+  );
+}
+
+/** A figure nothing records yet: it says so, and never prints a zero in its place. */
+export function NotRecordedValue({ children }: { children: ReactNode }) {
+  return (
+    <span data-recorded="false" className="text-muted-foreground">
+      {children}
+    </span>
   );
 }
 

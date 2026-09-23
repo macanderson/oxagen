@@ -1,24 +1,31 @@
 // The four tiles at the top of Billing (pages/billing.md, "Summary tiles"):
-// the plan, this month's governed action units, the contracted rate and what
-// is due. Each prints one figure and one basis line, and each figure is a
-// rollup of a section below it — the bucket in Meters, the terms in the price
-// list, the open rows of Invoices — never a number typed twice. One of the
-// files money renders in (INV-25): the rate per 1,000 GAU and the open total.
-import { statNote, statTerm, statTile, statValue } from "@/ui/control-styles";
+// the plan, the governed actions past the included allowance this period,
+// the evidence retained, and what is due at the period's end. Each prints one
+// figure and one basis line, and each figure is a rollup of a section below
+// it: the governed actions and the amount due are statement.ts's, the same
+// derivation This period prints, and the retained evidence is the figure the
+// Retained evidence meter prints. One of the files money renders in (INV-25):
+// the block price in the governed-action basis and the amount due.
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type {
   ContractRate,
-  GauBucket,
-  InvoicePage,
+  EvidenceRetention,
   PlanCard,
 } from "@/data/contracts/billing";
-import { mulMicros, sumMoney } from "@/data/contracts/money";
 import type { Read } from "@/data/read";
-import { Money } from "@/ui/money";
-import { formatCount } from "@/ui/money-format";
+import {
+  statNote,
+  statStrip,
+  statTerm,
+  statTile,
+  statValue,
+} from "@/ui/control-styles";
+import { formatByteSize, formatCount } from "@/ui/money-format";
 import { BillingReadFailure } from "./read-failure";
-import { useDate } from "./section";
+import { NotRecordedValue, useDate } from "./section";
+import type { Statement } from "./statement";
+import { ChargeBasis, StatementAmount } from "./this-period";
 
 function Tile({
   name,
@@ -77,153 +84,122 @@ function PlanTile({
   // negotiated Enterprise agreement).
   return (
     <Tile name="plan" term={term} note={t("tiles.planNone")}>
-      {rate.ok ? t(`tiers.${rate.value.tier}`) : t("notRecorded")}
+      {rate.ok ? (
+        t(`tiers.${rate.value.tier}`)
+      ) : (
+        <NotRecordedValue>{t("notRecorded")}</NotRecordedValue>
+      )}
     </Tile>
   );
 }
 
-function GauTile({ bucket }: { bucket: Read<GauBucket> }) {
+function GovernedTile({ statement }: { statement: Read<Statement> }) {
   const t = useTranslations("billing");
   const locale = useLocale();
-  const term = t("tiles.gau");
-  if (!bucket.ok) {
+  const term = t("tiles.governed");
+  if (!statement.ok) {
     return (
-      <Tile name="gau" term={term} note={null}>
-        <BillingReadFailure read={bucket} section={term} />
+      <Tile name="governed" term={term} note={null}>
+        <BillingReadFailure read={statement} section={term} />
       </Tile>
     );
   }
-  const b = bucket.value;
-  const count = (n: number) => formatCount(n, locale);
+  const s = statement.value;
   return (
     <Tile
-      name="gau"
+      name="governed"
       term={term}
-      data-remaining={b.remainingGau}
-      note={t("tiles.gauNote", {
-        used: count(b.usedGau),
-        included: count(b.includedGau),
-        purchased: count(b.purchasedGau),
-        carried: count(b.carriedGau),
+      data-count={s.aboveIncluded}
+      note={t.rich("tiles.governedNote", {
+        basis: () => <ChargeBasis charge={s.charge} included={s.includedGau} />,
       })}
     >
-      {b.remainingGau < 0
-        ? t("tiles.overdrawn", { count: count(-b.remainingGau) })
-        : count(b.remainingGau)}
+      {formatCount(s.aboveIncluded, locale)}
     </Tile>
   );
 }
 
-function RateTile({ rate }: { rate: Read<ContractRate> }) {
+function RetainedTile({ retention }: { retention: Read<EvidenceRetention> }) {
   const t = useTranslations("billing");
-  const date = useDate();
-  const term = t("tiles.rate");
-  if (!rate.ok) {
+  const locale = useLocale();
+  const term = t("tiles.retained");
+  if (!retention.ok) {
     return (
-      <Tile name="rate" term={term} note={null}>
-        <BillingReadFailure read={rate} section={term} />
+      <Tile name="retained" term={term} note={null}>
+        <BillingReadFailure read={retention} section={term} />
       </Tile>
     );
   }
-  const r = rate.value;
-  let source: string;
-  if (r.source === "published_tier")
-    source = t("rate.published", { tier: t(`tiers.${r.tier}`) });
-  else if (r.agreementRef === null) source = t("rate.negotiatedNoRef");
-  else source = t("rate.negotiated", { ref: r.agreementRef });
+  const r = retention.value;
   return (
     <Tile
-      name="rate"
+      name="retained"
       term={term}
-      data-block-size={r.blockSizeGau}
-      data-source={r.source}
-      note={`${source} · ${date(r.effectiveFrom)}`}
+      note={t("tiles.retainedNote", {
+        months: formatCount(r.includedMonths, locale),
+      })}
     >
-      <span className="inline-flex flex-wrap items-baseline gap-x-1.5">
-        <Money value={mulMicros(r.ratePerGau, 1000)} />
-        <span className="text-xs font-normal text-muted-foreground">
-          {t("tiles.perThousand")}
-        </span>
-      </span>
+      {r.storedGb === null ? (
+        <NotRecordedValue>{t("notRecorded")}</NotRecordedValue>
+      ) : (
+        formatByteSize(Math.round(r.storedGb * 1e9), locale)
+      )}
     </Tile>
   );
 }
 
 function DueTile({
-  invoices,
-  bucket,
+  statement,
+  periodEnd,
 }: {
-  invoices: Read<InvoicePage>;
-  bucket: Read<GauBucket>;
+  statement: Read<Statement>;
+  /** The bucket month's end, when the bucket was read. */
+  periodEnd: string | null;
 }) {
   const t = useTranslations("billing");
   const date = useDate();
-  const term = t("tiles.due");
-  if (!invoices.ok) {
+  const term = t("tiles.due", {
+    date: periodEnd === null ? t("notRecorded") : date(periodEnd),
+  });
+  if (!statement.ok) {
     return (
       <Tile name="due" term={term} note={null}>
-        <BillingReadFailure read={invoices} section={term} />
+        <BillingReadFailure read={statement} section={term} />
       </Tile>
     );
   }
-  const open = invoices.value.items.filter((row) => row.status === "open");
-  if (open.length === 0) {
-    return (
-      <Tile
-        name="due"
-        term={term}
-        note={
-          bucket.ok
-            ? t("tiles.nextInvoice", { date: date(bucket.value.period.end) })
-            : null
-        }
-      >
-        {t("tiles.nothingDue")}
-      </Tile>
-    );
-  }
-  const total = sumMoney(open.map((row) => row.amountDue));
+  const s = statement.value;
   return (
     <Tile
       name="due"
       term={term}
-      data-open={open.length}
-      note={
-        total === null
-          ? t("tiles.mixedCurrency")
-          : t("tiles.dueNote", {
-              count: open.length,
-              currency: total.currency.toUpperCase(),
-            })
-      }
+      note={t("tiles.dueNote", { currency: s.currency.toUpperCase() })}
     >
-      {total === null ? t("notRecorded") : <Money value={total} />}
+      <StatementAmount value={s.total} />
     </Tile>
   );
 }
 
 export function SummaryTiles({
   plan,
-  bucket,
   rate,
-  invoices,
+  retention,
+  statement,
+  periodEnd,
 }: {
   plan: Read<PlanCard>;
-  bucket: Read<GauBucket>;
   rate: Read<ContractRate>;
-  /** The newest invoices page, whatever page the Invoices section shows. */
-  invoices: Read<InvoicePage>;
+  retention: Read<EvidenceRetention>;
+  statement: Read<Statement>;
+  periodEnd: string | null;
 }) {
   const t = useTranslations("billing");
   return (
-    <dl
-      aria-label={t("tiles.label")}
-      className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
-    >
+    <dl aria-label={t("tiles.label")} className={statStrip}>
       <PlanTile plan={plan} rate={rate} />
-      <GauTile bucket={bucket} />
-      <RateTile rate={rate} />
-      <DueTile invoices={invoices} bucket={bucket} />
+      <GovernedTile statement={statement} />
+      <RetainedTile retention={retention} />
+      <DueTile statement={statement} periodEnd={periodEnd} />
     </dl>
   );
 }

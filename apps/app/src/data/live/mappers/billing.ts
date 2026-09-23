@@ -6,19 +6,25 @@
 // only from the contracted per-GAU rate and the invoice amounts, in the
 // currency the contract names.
 import type { billingContractRateGet } from "@oxagen/oxagen/contracts/billing.contract_rate.get";
+import type { billingEvidenceRetention } from "@oxagen/oxagen/contracts/billing.evidence_retention";
 import type { billingGauBucketGet } from "@oxagen/oxagen/contracts/billing.gau_bucket.get";
 import type { billingInvoiceList } from "@oxagen/oxagen/contracts/billing.invoice.list";
 import type { billingSubscriptionRead } from "@oxagen/oxagen/contracts/billing.subscription.read";
 import type { z } from "zod";
 import type {
   ContractRate,
+  EvidenceRetention,
   GauBucket,
   InvoicePage,
   PlanCard,
   UsageCredits,
 } from "@/data/contracts/billing";
 import type { Money } from "@/data/contracts/money";
-import { moneyFromMicros, mulMicros } from "@/data/contracts/money";
+import {
+  microsFromDecimal,
+  moneyFromMicros,
+  mulMicros,
+} from "@/data/contracts/money";
 import type { ContractOutput } from "@/server/kernel";
 
 export function toPlanCard(
@@ -152,5 +158,27 @@ export function toInvoicePage(
       };
     }),
     nextCursor: out.nextCursor,
+  };
+}
+
+/**
+ * get_evidence_retention (pages/billing.md, Retained evidence). The contract
+ * prices a GB-month in dollars as a number; it is read back through its
+ * decimal text into micros, so no float carries the price (INV-09). A price
+ * that text cannot hold as micros fails the view model's parse and the page
+ * says so. The volume is copied only when the contract says it was measured:
+ * `storedGbMeasured: false` is an absence, and null says so.
+ */
+export function toEvidenceRetention(
+  out: ContractOutput<typeof billingEvidenceRetention>,
+): z.input<typeof EvidenceRetention> {
+  return {
+    includedMonths: out.includedMonths,
+    perGbMonth: {
+      micros: microsFromDecimal(String(out.usdPerGbMonth)) ?? "",
+      currency: "USD",
+    },
+    extendedRetentionEnabled: out.extendedRetentionEnabled,
+    storedGb: out.storedGbMeasured ? out.storedGbBeyondIncluded : null,
   };
 }

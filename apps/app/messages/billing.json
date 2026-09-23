@@ -1,18 +1,18 @@
 {
   "billing": {
     "units": {
-      "gau": "{count} GAU"
+      "governed": "{count} governed actions"
     },
     "range": "{start} – {end}",
     "notRecorded": "not recorded",
     "header": {
       "eyebrow": "Organization",
-      "description": "What {org} pays Oxagen. Your agents' own model and tool spend is on the Spend page; the two are kept apart on purpose."
+      "description": "What {org} pays Oxagen."
     },
     "checkout": {
-      "success": "Checkout finished. The governed action units you bought are added to the bucket once Stripe confirms the payment.",
+      "success": "Checkout finished. The governed actions you bought are added to this period once Stripe confirms the payment.",
       "cancel": "Checkout was cancelled. Nothing was charged.",
-      "credits": "Checkout finished. The usage credits you bought are added to the balance once Stripe confirms the payment.",
+      "credits": "Checkout finished. The top-up is added to the token balance once Stripe confirms the payment.",
       "plan": "Checkout finished. The new plan applies once Stripe confirms the subscription."
     },
     "tiers": {
@@ -25,76 +25,79 @@
       "month": "monthly",
       "year": "yearly"
     },
+    "chargeBasis": {
+      "blocks": "{blocks} blocks × <price></price> · {included} included",
+      "bought": "{count} bought at <rate></rate> each · {included} included",
+      "overage": "{count} at <rate></rate> each · {included} included"
+    },
     "tiles": {
-      "label": "This month at a glance",
+      "label": "Billing this period",
       "plan": "Plan",
       "planMonth": "monthly, cancel any time",
       "planYear": "yearly, cancel any time",
       "planNone": "no subscription",
-      "gau": "GAU this month",
-      "gauNote": "{used} used of {included} included + {purchased} purchased + {carried} carried",
-      "overdrawn": "overdrawn by {count}",
-      "rate": "Contracted rate",
-      "perThousand": "per 1,000 GAU",
-      "due": "Due",
-      "dueNote": "{count, plural, one {# open invoice} other {# open invoices}} · {currency}",
-      "nothingDue": "Nothing due",
-      "nextInvoice": "next invoice {date}",
-      "mixedCurrency": "open invoices in more than one currency"
+      "governed": "Governed actions this period",
+      "governedNote": "above the included allowance · <basis></basis>",
+      "retained": "Retained evidence",
+      "retainedNote": "{months} months included",
+      "due": "Due {date}",
+      "dueNote": "{currency} · after the onboarding discount"
     },
-    "thisMonth": {
-      "title": "This month",
+    "thisPeriod": {
+      "title": "This period",
+      "badge": "Stripe invoices, Oxagen meter",
       "columns": {
         "line": "Line",
         "basis": "Basis",
         "amount": "Amount"
       },
       "lines": {
+        "governed": "Governed actions 1 – {count}",
+        "governedNone": "Governed actions",
         "plan": "Plan",
-        "blocks": "Blocks bought through Checkout",
-        "topups": "Auto top-ups",
-        "overage": "Invoiced overage",
-        "tax": "Tax",
+        "tokens": "Tokens",
+        "retention": "Evidence retention",
+        "discount": "Onboarding discount",
         "total": "Total"
       },
       "basis": {
-        "plan": "{plan}, billed {interval}",
-        "planNone": "no subscription",
-        "invoices": "{count, plural, =0 {no invoices} one {# invoice} other {# invoices}}",
-        "tax": "added by Stripe on each invoice, not itemised here",
-        "total": "the lines above, as Stripe invoiced them"
-      },
-      "none": "none",
-      "empty": "Nothing billed yet this month. The free tier is every feature and {count} GAU a month.",
-      "partial": "This month continues on the next page of invoices, so the total covers this page only.",
-      "mixedCurrency": "invoices in more than one currency"
+        "plan": "{plan}, billed {interval} · {count, plural, =0 {not invoiced yet this period} one {# Stripe invoice} other {# Stripe invoices}}",
+        "tokens": "reported at zero · the customer’s own model spend is on Spend",
+        "retention": "{months} months included · {held}",
+        "retentionExtended": "{months} months included · {held} · extended retention on",
+        "heldNotRecorded": "GB held not recorded",
+        "held": "{size} held",
+        "discount": "no onboarding offer is recorded for this organization",
+        "total": "rounded to cents once, half-even"
+      }
     },
     "meters": {
       "title": "Meters",
       "columns": {
         "meter": "Meter",
-        "thisMonth": "This month",
+        "thisPeriod": "This period",
         "note": "Note"
       },
-      "gau": "Governed action units",
-      "gauValue": "{used} of {total} GAU",
-      "gauNote": "{period} · {remaining} · resolve_approval is the only billable governed action, one GAU each",
-      "remaining": "{count} left",
-      "overdrawn": "overdrawn by {count}",
-      "other": "Other governed actions",
-      "otherNote": "reported, never priced",
-      "credits": "Usage credits",
-      "creditsValue": "{count} credits",
-      "creditsNote": "balance for in-app AI usage; 1 credit = $0.01",
+      "governed": "Governed actions",
+      "governedNote": "the billable unit · {included} included this month",
+      "sealed": "Sealed runs with at least one model call",
+      "sealedNote": "reported, not priced",
+      "retained": "Retained evidence",
+      "retainedNote": "{months} months included",
+      "halted": "Runs Oxagen halted before any model call",
+      "inApp": "Runs of the in-app agent",
+      "free": "free",
+      "note": "One priced meter: the governed action, a call Oxagen decided, delivered and recorded. Runs, tokens and retained evidence are reported so the price can move later without rewriting the meter.",
+      "overdrawn": "{count} past what this period holds",
       "exhaustedNoCard": "<link>Add a payment method</link> to keep governing this month, or your allowance renews on {date}"
     },
     "mode": {
-      "prepaid": "Prepaid — governed actions stop when the bucket is empty unless auto top-up refills it",
-      "prepaidNoCard": "Prepaid — governed actions stop when the bucket is empty unless auto top-up refills it — add a payment method to keep governing past the allowance, or wait for the next month",
-      "invoice": "Invoice billing — usage is never capped; overage is invoiced at period end, or once {max} governed action units accrue",
-      "uninvoiced": "Uninvoiced this period",
+      "prepaid": "Prepaid. Governed actions stop when this period's allowance runs out, unless auto top-up buys more.",
+      "prepaidNoCard": "Prepaid. Governed actions stop when this period's allowance runs out. Add a payment method to keep governing past it, or wait for the next month.",
+      "invoice": "Invoice billing. Governed actions are never capped. Overage is invoiced at period end, or once {max} governed actions accrue.",
+      "uninvoiced": "Not invoiced yet this period",
       "invoiced": "Invoiced this period",
-      "pastDue": "Payment past due: an interim or period-close invoice is open. Governing continues; pay it from Invoices."
+      "pastDue": "Payment past due: an interim or period-close invoice is open. Governing continues. Pay it from Invoices."
     },
     "invoices": {
       "title": "Invoices",
@@ -102,22 +105,16 @@
       "columns": {
         "invoice": "Invoice",
         "period": "Period",
-        "kind": "Charged for",
+        "governed": "Governed actions",
         "amount": "Amount",
         "status": "Status",
         "paid": "Paid",
-        "link": "Stripe"
+        "link": "Open in Stripe"
       },
       "unnumbered": "not assigned",
-      "view": "Open in Stripe",
+      "view": "Open in Stripe ↗",
+      "viewLabel": "Open invoice {number} on stripe.com in a new tab",
       "unpublished": "not published",
-      "kinds": {
-        "subscription": "Subscription",
-        "gau_purchase": "Block purchase",
-        "gau_auto_topup": "Auto top-up",
-        "gau_interim": "Interim",
-        "gau_period_close": "Period close"
-      },
       "statuses": {
         "open": "open",
         "paid": "paid",
@@ -129,33 +126,37 @@
       "newest": "Newest invoices"
     },
     "priceList": {
-      "title": "The price list",
-      "governed": "Governed actions",
-      "inApp": "In-app AI usage",
+      "title": "Price list",
       "free": "Free",
-      "freeTerms": "{count} GAU a month",
-      "perMonth": "a month with {count} GAU",
-      "enterprise": "Enterprise",
-      "enterpriseTerms": "negotiated per contract",
-      "list": "List rate",
-      "perThousand": "per 1,000 GAU",
-      "blocks": "Blocks",
-      "blockTerms": "{count} GAU for",
-      "bands": "Volume bands, per 1,000 GAU by annual volume",
-      "credit": "Usage credit",
-      "creditTerms": "one credit is",
-      "calls": "Each in-app model call",
-      "callsTerms": "provider cost times the meter markup",
-      "grant": "Signup grant",
-      "packs": "Credit packs",
-      "packsTerms": "from",
-      "everyFeature": "Every feature is on for every tier."
+      "freeTerms": "every governance feature, {count} governed actions a month",
+      "blocks": "Governed actions, blocks of {count}",
+      "blocksTerms": "<price></price> per block at the published rate",
+      "negotiated": "Negotiated agreement",
+      "negotiatedTerms": "the same four figures, per organization",
+      "invoice": "Invoice billing",
+      "invoiceTerms": "never capped · overage invoiced at the contracted rate at period end",
+      "retention": "Evidence retention",
+      "retentionTerms": "{months} months included on paid plans, then <price></price> per GB-month",
+      "tokens": "Tokens Oxagen buys for you",
+      "tokensTerms": "at cost, no markup, capped",
+      "enterprise": "Enterprise, annual",
+      "enterpriseTerms": "negotiated per organization",
+      "footer": "No credits, no resellers, and no revenue dashboard. The free tier is the whole product, limited by retention and seats, never by features or volume. Upgrading is a governance decision, not a volume accident."
+    },
+    "billableUnits": {
+      "title": "Billable units",
+      "priced": "Priced",
+      "pricedBody": "A governed action: a call Oxagen decided, delivered and recorded, with its receipt in the chain.",
+      "reported": "Reported",
+      "reportedBody": "Sealed runs, tokens by class, retained evidence: secondary meters, never priced.",
+      "free": "Free",
+      "freeBody": "Denials, runs Oxagen halted before a model call, runs of the in-app agent. You never pay for Oxagen saying no."
     },
     "autoTopup": {
       "title": "Auto top-up",
-      "enabled": "Top up automatically when the bucket is empty",
+      "enabled": "Buy more automatically when this period's allowance runs out",
       "blocks": "Blocks per top-up",
-      "perTopup": "= {count} GAU per top-up",
+      "perTopup": "= {count} governed actions per top-up",
       "readOnly": "An owner or admin can change auto top-up.",
       "save": "Save",
       "saving": "Saving…",
@@ -164,7 +165,7 @@
       "failed": "Auto top-up could not be saved. Try again.",
       "savedCard": "charged to {brand} ····{last4}",
       "savedCardUnlabelled": "charged to the saved payment method",
-      "noCard": "no saved payment method — your next purchase saves one, and auto top-up runs from then on",
+      "noCard": "No saved payment method. Your next purchase saves one, and auto top-up runs from then on.",
       "attempt": {
         "none": "No auto top-up has run this month.",
         "paid": "Last top-up {date}: paid",
@@ -173,82 +174,114 @@
       }
     },
     "purchase": {
-      "title": "Buy governed action units",
-      "quantity": "Governed action units",
-      "step": "in blocks of {count} GAU",
+      "title": "Buy governed actions",
+      "quantity": "Governed actions",
+      "step": "in blocks of {count}",
       "total": "Total at your contracted rate",
       "wholeBlocks": "Choose a whole number of blocks to see the total",
-      "savesCard": "Checkout saves your card; auto top-up runs from then on",
+      "savesCard": "Checkout saves your card. Auto top-up runs from then on.",
       "submit": "Continue to Checkout",
       "submitting": "Opening Checkout…",
-      "denied": "An owner or a billing member can buy governed action units.",
+      "denied": "An owner or a billing member can buy governed actions.",
       "errors": {
         "invalid": "Choose a whole number of blocks.",
-        "aboveMax": "You can buy at most {max} GAU at once.",
-        "denied": "Your role cannot buy governed action units. An owner or a billing member can.",
-        "conflict": "This organization is billed by invoice, so it does not buy units in blocks.",
+        "aboveMax": "You can buy at most {max} governed actions at once.",
+        "denied": "Your role cannot buy governed actions. An owner or a billing member can.",
+        "conflict": "This organization is billed by invoice, so it does not buy governed actions in blocks.",
         "unavailable": "Checkout could not be opened. Nothing was charged."
       }
     },
     "usageCredits": {
-      "title": "Usage credits",
+      "title": "Token balance",
       "balance": "Balance",
-      "faceValue": "Face value",
-      "credits": "{count} credits",
-      "basis": "Credits pay for the in-app agent's model calls at provider cost times the published markup. 1 credit = $0.01.",
-      "exhausted": "The in-app agent's platform-paid turns stop until a top-up lands.",
+      "basis": "Pays for the tokens Oxagen buys for the in-app agent, at cost with no markup. The balance is the cap.",
+      "exhausted": "The in-app agent's turns on Oxagen's model key stop until a top-up lands.",
       "presets": "Preset top-up amounts",
       "amount": "Top-up amount",
       "min": "whole dollars, at least ${min}",
       "submit": "Continue to Checkout",
       "submitting": "Opening Checkout…",
-      "denied": "An owner or a billing member can top up usage credits.",
-      "planDenied": "Usage credits need a Build plan or above. Subscribe first and the top-up opens here.",
+      "denied": "An owner or a billing member can top up the token balance.",
+      "planDenied": "A top-up needs a Build plan or above. Subscribe first and the top-up opens here.",
       "errors": {
         "invalid": "Enter a whole dollar amount of at least ${min}.",
-        "denied": "Your role cannot top up usage credits. An owner or a billing member can.",
+        "denied": "Your role cannot top up the token balance. An owner or a billing member can.",
         "unavailable": "Checkout could not be opened. Nothing was charged."
       }
-    },
-    "whatCounts": {
-      "title": "What counts",
-      "gau": "Billed in GAU",
-      "gauBody": "resolve_approval, one GAU each.",
-      "credits": "Billed in usage credits",
-      "creditsBody": "each model call the in-app agent makes, at provider cost times the meter markup.",
-      "free": "Free",
-      "freeBody": "membership writes and every governed action other than resolve_approval."
     },
     "changePlan": {
       "open": "Change plan",
       "title": "Change plan",
-      "lede": "Build and Scale are billed through Stripe Checkout, which shows the amount due before anything is charged.",
       "plan": "Plan",
-      "interval": "Billed",
-      "perMonth": "a month",
-      "perYear": "a year",
-      "includes": "{count} GAU a month",
-      "enterprise": "Enterprise is negotiated per contract; its terms are set on your agreement, not here.",
-      "submit": "Continue to Checkout",
+      "perMonth": "{tier}, {price} a month",
+      "perYear": "{tier}, {price} a year",
+      "enterpriseOption": "Enterprise, annual, negotiated per organization",
+      "note": "The free tier is in every plan: an included monthly allowance of governed actions and every governance feature on. Enterprise adds a dedicated data plane or behind-the-firewall deployment, and support with an SLA.",
+      "checkout": "Stripe Checkout shows the amount due before anything is charged.",
+      "enterprise": "Enterprise is negotiated per organization. Its terms are set on your agreement, not here.",
+      "submit": "Change plan",
       "submitting": "Opening Checkout…",
+      "cancel": "Cancel",
       "denied": "An owner or a billing member can change the plan.",
-      "subscribed": "This organization already has a {plan} subscription. Changing an existing subscription is not in the app yet: it would swap the plan in Stripe from the next renewal.",
+      "subscribed": "This organization already has a {plan} subscription. Changing a running subscription is not in the app yet. It would swap the plan in Stripe from the next renewal.",
       "errors": {
-        "invalid": "Choose a plan and how it is billed.",
+        "invalid": "Choose a plan.",
         "denied": "Your role cannot change the plan. An owner or a billing member can.",
         "conflict": "This organization already has an active subscription, so Checkout cannot start a second one.",
         "unavailable": "Checkout could not be opened. Nothing was charged."
       }
     },
-    "rate": {
-      "published": "Published {tier} rate",
-      "negotiated": "Negotiated agreement {ref}",
-      "negotiatedNoRef": "Negotiated agreement"
-    },
     "failure": {
-      "denied": "You cannot see {section} for this organization. Your role does not include {permission}; an organization owner can grant it.",
+      "denied": "You cannot see {section} for this organization. Your role does not include {permission}. An organization owner can grant it.",
       "pendingApproval": "Access to {section} is waiting for approval, request {accessRequestId}.",
       "error": "{section} could not be loaded: the billing service answered {code}. Nothing was charged."
+    },
+    "state": {
+      "loading": "Loading billing",
+      "empty": {
+        "title": "Nothing billable yet",
+        "body": "You pay per governed action: a call Oxagen decided, delivered and recorded. The free tier has every governance feature on, an included monthly allowance, thirty days of evidence and three seats.",
+        "back": "Back to Fleet"
+      },
+      "error": {
+        "title": "Billing could not be loaded",
+        "body": "The control plane answered <code>{status} {errorCode}</code>. Nothing was changed. Runs kept recording while this page was down. Frames are written by the collector on each host, not by Oxagen.",
+        "retry": "Try again",
+        "incident": "Open an incident",
+        "trace": "trace not recorded · region not recorded · {at}"
+      },
+      "denied": {
+        "title": "You cannot see billing",
+        "body": "Your roles on <b>{org}</b> do not include <code>{permission}</code> (plan and invoices are readable only by a finance role). An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
+        "request": "Request access",
+        "back": "Back to Fleet",
+        "signedIn": "Signed in as",
+        "needed": "Needed",
+        "decidedBy": "Decided by",
+        "decidedByValue": "the organization's roles · deny wins over every allow"
+      },
+      "pending": {
+        "title": "Access to billing is waiting for approval",
+        "body": "Request {request} is waiting on an organization owner."
+      },
+      "requestAccess": {
+        "title": "Request access",
+        "body": "Asking for a role from this page is not in Oxagen yet. It would send an organization owner a request for {permission} with your reason, and the grant would land in the audit record with both your names.",
+        "now": "Until then, ask an owner to give you the billing role on the Organization page."
+      },
+      "incident": {
+        "title": "Open an incident",
+        "body": "Filing an incident from this page is not in Oxagen yet. It would record one against the billing service with the code {code} and the time {at} attached.",
+        "now": "Until then, report the code and the time to your Oxagen contact."
+      }
+    },
+    "roles": {
+      "owner": "owner",
+      "admin": "admin",
+      "member": "member",
+      "billing": "billing",
+      "compliance": "compliance",
+      "viewer": "viewer"
     }
   }
 }

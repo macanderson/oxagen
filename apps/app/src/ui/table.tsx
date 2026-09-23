@@ -9,7 +9,12 @@
 // cannot fall off it.
 import type { ReactNode } from "react";
 
-type TableColumn = { label: string; numeric?: boolean };
+type TableColumn = {
+  label: string;
+  numeric?: boolean;
+  /** The header names the column to assistive tech and the phone card, and draws nothing (a link column). */
+  hidden?: boolean;
+};
 
 /** `th,td { padding:9px 12px; vertical-align:middle }` */
 export const cell = "px-3 py-[9px] align-middle";
@@ -48,7 +53,11 @@ export function Table({
                 scope="col"
                 className={`${headCell} ${column.numeric === true ? "text-right" : "text-left"}`}
               >
-                {column.label}
+                {column.hidden === true ? (
+                  <span className="sr-only">{column.label}</span>
+                ) : (
+                  column.label
+                )}
               </th>
             ))}
           </tr>

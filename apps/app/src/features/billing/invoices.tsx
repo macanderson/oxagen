@@ -1,18 +1,28 @@
 // Invoices (§1.4, §3.9 contracts; pages/billing.md): one cursor page, newest
-// first, each with its number, period, what it charged for, the amount, its
-// status, what was paid, and the Stripe-hosted page that collects it. One of the two places money
-// renders (INV-25).
+// first, each with its number, period, the governed actions it charged for,
+// the amount, its status as a dot and a word, what was paid, and the
+// Stripe-hosted page that collects it. list_invoices carries no governed-action
+// count per invoice yet, so that column says "not recorded" rather than a
+// figure. One of the files money renders in (INV-25).
 import { useTranslations } from "next-intl";
 import type { InvoicePage, InvoiceRow } from "@/data/contracts/billing";
 import type { Read } from "@/data/read";
 import { parseHostedInvoiceUrl } from "@/shared/invoice-url";
 import { routes } from "@/shared/safe-path";
-import { linkText } from "@/ui/control-styles";
+import { Badge, type BadgeTone } from "@/ui/badge";
+import { linkText, mono, panelBody } from "@/ui/control-styles";
 import { Money } from "@/ui/money";
 import { HostedInvoiceLink, SafeLink } from "@/ui/navigation";
 import { cell, numericCell, Table } from "@/ui/table";
 import { BillingReadFailure } from "./read-failure";
-import { Section, useDate } from "./section";
+import { NotRecordedValue, Section, useDate } from "./section";
+
+const STATUS_TONE: Record<InvoiceRow["status"], BadgeTone> = {
+  paid: "allowed",
+  open: "approval",
+  uncollectible: "failed",
+  void: "quiet",
+};
 
 function InvoiceLine({ row }: { row: InvoiceRow }) {
   const t = useTranslations("billing");
@@ -21,28 +31,39 @@ function InvoiceLine({ row }: { row: InvoiceRow }) {
     row.hostedInvoiceUrl === null
       ? null
       : parseHostedInvoiceUrl(row.hostedInvoiceUrl);
+  const number = row.number ?? t("invoices.unnumbered");
   return (
     <tr data-kind={row.kind} data-status={row.status}>
-      <td className={cell}>{row.number ?? t("invoices.unnumbered")}</td>
+      <td className={`${cell} ${mono}`}>{number}</td>
       <td className={cell}>
         {t("range", {
           start: date(row.periodStart),
           end: date(row.periodEnd),
         })}
       </td>
-      <td className={cell}>{t(`invoices.kinds.${row.kind}`)}</td>
+      <td className={numericCell}>
+        <NotRecordedValue>{t("notRecorded")}</NotRecordedValue>
+      </td>
       <td className={numericCell}>
         <Money value={row.amountDue} />
       </td>
-      <td className={cell}>{t(`invoices.statuses.${row.status}`)}</td>
+      <td className={cell}>
+        <Badge tone={STATUS_TONE[row.status]}>
+          {t(`invoices.statuses.${row.status}`)}
+        </Badge>
+      </td>
       <td className={numericCell}>
         <Money value={row.amountPaid} />
       </td>
       <td className={cell}>
         {url === null ? (
-          t("invoices.unpublished")
+          <NotRecordedValue>{t("invoices.unpublished")}</NotRecordedValue>
         ) : (
-          <HostedInvoiceLink to={url} className={linkText}>
+          <HostedInvoiceLink
+            to={url}
+            className={linkText}
+            aria-label={t("invoices.viewLabel", { number })}
+          >
             {t("invoices.view")}
           </HostedInvoiceLink>
         )}
@@ -71,30 +92,36 @@ export function Invoices({
     );
   }
   const { items, nextCursor } = invoices.value;
-  return (
-    <Section id="billing-invoices" title={title}>
-      {items.length === 0 ? (
+  if (items.length === 0 && cursor === null) {
+    return (
+      <Section id="billing-invoices" title={title}>
         <p className="text-sm text-muted-foreground">{t("empty")}</p>
-      ) : (
-        <Table
-          label={title}
-          columns={[
-            { label: t("columns.invoice") },
-            { label: t("columns.period") },
-            { label: t("columns.kind") },
-            { label: t("columns.amount"), numeric: true },
-            { label: t("columns.status") },
-            { label: t("columns.paid"), numeric: true },
-            { label: t("columns.link") },
-          ]}
-        >
-          {items.map((row) => (
-            <InvoiceLine key={row.id} row={row} />
-          ))}
-        </Table>
-      )}
+      </Section>
+    );
+  }
+  return (
+    <Section id="billing-invoices" title={title} flush>
+      <Table
+        label={title}
+        columns={[
+          { label: t("columns.invoice") },
+          { label: t("columns.period") },
+          { label: t("columns.governed"), numeric: true },
+          { label: t("columns.amount"), numeric: true },
+          { label: t("columns.status") },
+          { label: t("columns.paid"), numeric: true },
+          { label: t("columns.link"), hidden: true },
+        ]}
+      >
+        {items.map((row) => (
+          <InvoiceLine key={row.id} row={row} />
+        ))}
+      </Table>
       {cursor === null && nextCursor === null ? null : (
-        <nav aria-label={t("pager")} className="flex gap-4 text-sm">
+        <nav
+          aria-label={t("pager")}
+          className={`${panelBody} flex gap-4 text-sm`}
+        >
           {cursor === null ? null : (
             <SafeLink to={routes.billing(org)} className={linkText}>
               {t("newest")}

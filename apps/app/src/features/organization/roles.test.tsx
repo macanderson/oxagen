@@ -63,6 +63,7 @@ async function renderRoles(
     billing: {
       plan: vi.fn(),
       usageCredits: vi.fn(),
+      retention: vi.fn(),
       bucket: vi.fn(),
       contractRate: vi.fn(),
       invoices: vi.fn(),
