@@ -4,6 +4,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 // Vercel AI Gateway (@ai-sdk/gateway) and must not expose vendor SDKs or
 // ClickHouse internals to callers.
 const mocks = vi.hoisted(() => ({
+  voidUsage: vi.fn(async () => true),
   recordSpend: vi.fn(),
   embed: vi.fn(),
   embedMany: vi.fn(),
@@ -78,6 +79,7 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
       },
     ),
     recordSpend: mocks.recordSpend,
+    voidUsage: mocks.voidUsage,
   };
 });
 vi.mock("@oxagen/telemetry", async (importOriginal) => {
@@ -161,7 +163,7 @@ describe("embedText (@oxagen/ai)", () => {
     expect(row.output_tokens).toBe(0);
   });
 
-  it("propagates telemetry persistence failure", async () => {
+  it("rejects when the settlement seam rejects after the usage is staged; the outbox retries it", async () => {
     mocks.insertTokenUsage.mockRejectedValueOnce(new Error("clickhouse down"));
     await expect(
       embedText("resilient", {
@@ -173,6 +175,21 @@ describe("embedText (@oxagen/ai)", () => {
         },
       }),
     ).rejects.toThrow("clickhouse down");
+  });
+
+  it("voids the admission and rethrows when the provider call fails", async () => {
+    mocks.embed.mockRejectedValueOnce(new Error("gateway 502"));
+    await expect(
+      embedText("resilient", { telemetry: BASE_TELEMETRY }),
+    ).rejects.toThrow("gateway 502");
+    expect(mocks.voidUsage).toHaveBeenCalledWith({
+      id: "00000000-0000-4000-8000-000000000099",
+      orgId: BASE_TELEMETRY.orgId,
+      workspaceId: BASE_TELEMETRY.workspaceId,
+      reason: "provider_call_failed",
+    });
+    expect(mocks.insertTokenUsage).not.toHaveBeenCalled();
+    expect(mocks.chargeUsageCredits).not.toHaveBeenCalled();
   });
 
   it("debits credits via chargeUsageCredits exactly once with the correct fields", async () => {
@@ -240,7 +257,7 @@ describe("embedText (@oxagen/ai)", () => {
     expect(chargeSucceeded).toBe(true);
   });
 
-  it("propagates credit-charge persistence failure", async () => {
+  it("rejects when the credit charge fails after the usage is staged; the outbox retries it", async () => {
     mocks.chargeUsageCredits.mockRejectedValueOnce(new Error("billing down"));
     await expect(
       embedText("resilient", { telemetry: BASE_TELEMETRY }),

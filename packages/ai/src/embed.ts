@@ -7,7 +7,11 @@ import {
   hashPrompt,
   type Surface,
 } from "@oxagen/telemetry";
-import { admitTokenUsage, recordTokenUsage } from "./record-token-usage";
+import {
+  admitTokenUsage,
+  recordTokenUsage,
+  voidTokenUsage,
+} from "./record-token-usage";
 import { providerCostUsdMicros, CREDIT_REASONS } from "@oxagen/billing";
 
 const logger = pino({
@@ -121,6 +125,27 @@ async function meterEmbeddingCall(params: {
  * Embedding several texts at once? Use {@link embedMany}: it is one round trip
  * and one metered call instead of N of each.
  */
+/**
+ * A provider call that threw reported no usage. Close the admission so it
+ * stops counting as incomplete; the provider error is what the caller sees.
+ */
+async function voidEmbeddingAdmission(
+  usageId: string,
+  opts: EmbedTextOpts,
+): Promise<void> {
+  await voidTokenUsage(
+    usageId,
+    opts.telemetry.orgId,
+    opts.telemetry.workspaceId,
+    "provider_call_failed",
+  ).catch((err: unknown) => {
+    logger.error(
+      { err, usageId, alert: "billing_usage_void_failed" },
+      "Embedding admission could not be voided; it stays counted as incomplete",
+    );
+  });
+}
+
 export async function embedText(
   text: string,
   opts: EmbedTextOpts,
@@ -134,7 +159,12 @@ export async function embedText(
     opts.telemetry.workspaceId,
   );
 
-  const { embedding, usage } = await embed({ model, value: text });
+  const { embedding, usage } = await embed({ model, value: text }).catch(
+    async (err: unknown) => {
+      await voidEmbeddingAdmission(usageId, opts);
+      throw err;
+    },
+  );
 
   // Warn when the AI SDK embedding response omits usage (gateway outage, partial
   // response, or SDK version skew) so the billing gap is visible in logs rather
@@ -190,6 +220,9 @@ export async function embedMany(
   const { embeddings, usage } = await embedManyThroughGateway({
     model,
     values: texts,
+  }).catch(async (err: unknown) => {
+    await voidEmbeddingAdmission(usageId, opts);
+    throw err;
   });
 
   if (!usage) {

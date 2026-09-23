@@ -6,10 +6,10 @@
 #
 # Exits 0 when Aurora is at the head of `packages/database/atlas/migrations`,
 # 1 when it is behind, 2 when the check could not be made. Reads only — it
-# never applies anything. Applying stays manual, through the `DB Migrate
-# (manual)` workflow or `infra/tools/run-db-migrations.sh --apply`, with a
-# human reading the pending list first (CLAUDE.md, "Apply production
-# migrations through the manual workflows. Deployment does not apply them.").
+# never applies anything. Applying stays manual: `run-db-migrations.sh --apply`
+# from a laptop, or the `DB Migrate (manual)` dispatch that runs the same
+# script, with a human reading the pending list first (CLAUDE.md: "Deployment
+# applies none of them.").
 #
 # WHY THIS EXISTS (#1275)
 #
@@ -30,12 +30,12 @@
 # HOW IT ASKS
 #
 # Aurora's security group admits 5432 from the app node's security group and
-# nothing else, so a hosted runner cannot connect and `db-migrate.yml`'s
-# reachability guard always refuses for `target: production` (oxagen#2652). The
-# one path that reaches it is `run-db-migrations.sh`, which resolves the cluster
+# nothing else, so a hosted runner cannot connect (oxagen#2652). The one path
+# that reaches it is `run-db-migrations.sh`, which resolves the cluster
 # endpoint locally and sends `atlas migrate status --env ci` to the node over
-# SSM. Called with no `--apply` that script is a dry run by construction: it
-# prints the pending list and changes nothing.
+# SSM; `db-migrate.yml`'s production job runs that script too. Called with no
+# `--apply` that script is a dry run by construction: it prints the pending
+# list and changes nothing.
 #
 # This script therefore adds no new access path and no new credential. It calls
 # that script in its existing read-only mode and classifies what comes back.
@@ -170,7 +170,7 @@ classify_atlas_status() {
 
   echo "::error::Postgres is behind this repository: ${pending:-some} of $declared migrations pending."
   atlas_pending_files "$file" | sed 's/^/::error::  pending: /'
-  echo "::error::Postgres: apply with the DB Migrate (manual) workflow — read its pending list first."
+  echo "::error::Postgres: apply with infra/tools/run-db-migrations.sh packages/database --apply from a laptop with AWS credentials, on a checkout of origin/main, or with the DB Migrate (manual) workflow, which runs the same script. Read the pending list first."
   return 1
 }
 

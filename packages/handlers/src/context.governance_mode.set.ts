@@ -29,6 +29,7 @@
 // convenience over doing it by hand — and, unlike doing it by hand, it leaves
 // `steering.governance_overridden` behind. That record is the whole point.
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
+import { OXAGEN_PR_LABELS } from "@oxagen/github";
 import {
   contextGovernanceModeSet,
   GOVERNANCE_BRANCH,
@@ -43,7 +44,10 @@ import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { getPrincipalAttribution, runInTenantScope } from "@oxagen/tenancy";
 import { and, eq } from "drizzle-orm";
 import { steeringDeps, type SteeringDeps } from "./context.steering.deps";
-import type { SteeringRepository } from "./context.steering.github";
+import {
+  githubRefused,
+  type SteeringRepository,
+} from "./context.steering.github";
 import { parseGovernanceMode } from "./context.steering.policy";
 import { logger } from "./logger";
 
@@ -114,16 +118,6 @@ async function resolveTargetWorkspace(
     });
   }
   return { id: target.id, name: target.name };
-}
-
-/** Wrap a GitHub refusal as `conflict: github_refused` with GitHub's own message. */
-function githubRefused(err: unknown): HandlerError {
-  if (err instanceof HandlerError) return err;
-  return new HandlerError({
-    code: "conflict",
-    reason: "github_refused",
-    message: err instanceof Error ? err.message : String(err),
-  });
 }
 
 export function makeSetGovernanceModeHandler(
@@ -291,6 +285,7 @@ export function makeSetGovernanceModeHandler(
                   head: GOVERNANCE_BRANCH,
                   base: repo.defaultBranch,
                   body: PR_BODY,
+                  labels: OXAGEN_PR_LABELS,
                 })),
                 reused: false,
               };

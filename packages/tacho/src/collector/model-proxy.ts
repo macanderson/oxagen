@@ -124,6 +124,7 @@ import {
   TACHO_RUN_TOKEN_ATTR,
   type TachoCredentialBasis,
   type TachoHarness,
+  defaultHarnessForProvider,
 } from "../wire";
 import { GUARD_MESSAGES, guardLoopbackRequest } from "./loopback-guard";
 import { modelVerdict } from "./model-allowlist";
@@ -195,7 +196,7 @@ export type ModelRefusalCode =
   | CredentialRefusalCode;
 
 /**
- * The credential seam's refusals (ADR-138). The four `run_token_*` codes are
+ * The credential seam's refusals (ADR-143). The four `run_token_*` codes are
  * the token codec's own. `run_token_required`: the provider is brokered on
  * this host and the call brought no credential at all. `foreign_credential`:
  * the provider is brokered and the call brought a vendor credential of its
@@ -216,7 +217,7 @@ export interface ModelProxyPolicy {
 }
 
 /**
- * The credential seam (ADR-138): what the gateway holds in custody for a
+ * The credential seam (ADR-143): what the gateway holds in custody for a
  * provider, and how it checks the run token a harness presents in place of
  * a vendor key. A provider with nothing in custody is `harness_held`, and its
  * calls cross as they always did. A provider with a credential in custody is
@@ -516,7 +517,7 @@ const CREDENTIAL_MESSAGES: Record<CredentialRefusalCode, string> = {
   run_token_required:
     "This machine brokers model credentials through the Oxagen gateway, and this call carried none. Run `tacho enroll` again to point the harness at the gateway's run tokens.",
   foreign_credential:
-    "This machine brokers model credentials through the Oxagen gateway, and this call brought its own. Unset the provider's API key in the shell (ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN or OPENAI_API_KEY); the gateway supplies the credential.",
+    "This machine brokers model credentials through the Oxagen gateway, and this call brought its own. Unset the provider's API key (ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN or OPENAI_API_KEY) in the shell and in the env block of any .claude/settings.json or .claude/settings.local.json the harness reads; the gateway supplies the credential.",
   credential_unavailable:
     "The run token is valid, but the Oxagen gateway holds no credential for this model provider. Run `tacho enroll` again, or `tacho credential status` to see what is in custody.",
 };
@@ -553,7 +554,7 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
   }
 
   function harnessFor(provider: ModelProvider): TachoHarness {
-    return provider === "anthropic" ? "claude-code" : "codex";
+    return defaultHarnessForProvider(provider);
   }
 
   function correlate(
@@ -581,6 +582,24 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
       const known = deps.registry.get(id);
       if (known !== undefined && !known.sealed && !known.pendingTerminal)
         return { record: known, how };
+      if (known !== undefined) {
+        // The record is sealed, or its terminal is waiting to land. `get`
+        // prefers an open record, but a pending one reads as open to it, so
+        // another harness's live record for the same id is looked for by
+        // hand before the call is filed on the host's own chain: `ensure`
+        // would hand back the closed record and seal a frame after its
+        // terminal.
+        const open = deps.registry
+          .list()
+          .find(
+            (record) =>
+              record.harnessSessionId === id &&
+              !record.sealed &&
+              !record.pendingTerminal,
+          );
+        if (open !== undefined) return { record: open, how };
+        return { how: "session_closed" };
+      }
       // Seen here before any hook named it: open it as ambient, the way a
       // session first seen through OTel is opened, and let the hook adopt it.
       const { record } = deps.registry.ensure(id, { harness, ambient: true });

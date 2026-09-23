@@ -313,6 +313,11 @@ import { skillSearchPreviewRoute } from "./routes/v1/skill.search.preview";
 import { skillListRoute } from "./routes/v1/skill.list";
 import { skillProposeRoute } from "./routes/v1/skill.propose";
 import { spendStatementExportRoute } from "./routes/v1/spend.statement.export";
+import { spendCostCenterStatementExportRoute } from "./routes/v1/spend.cost_center_statement.export";
+import { costCenterListRoute } from "./routes/v1/cost_center.list";
+import { costCenterCreateRoute } from "./routes/v1/cost_center.create";
+import { costCenterDeleteRoute } from "./routes/v1/cost_center.delete";
+import { costCenterSetRoute } from "./routes/v1/cost_center.set";
 import { findingListRoute } from "./routes/v1/finding.list";
 import { findingEvidenceGetRoute } from "./routes/v1/finding.evidence.get";
 import { findingFixRecordRoute } from "./routes/v1/finding.fix.record";
@@ -383,6 +388,26 @@ app.route("/v1/cms", cmsRoute);
 // auditor fetches the bundle with the link alone. The signed, expiring token
 // in the query is the boundary. Mounted before the auth-gated /v1 groups for
 // the same reason as /v1/auth/cli above.
+//
+// The IP-keyed pre-auth ceiling sits above the mount because Hono runs
+// middleware in registration order, and a limiter registered after the route
+// would not wrap it. IP only: the URL carries no Authorization header, so a
+// credential bucket would pool every caller into one counter. `methods: "all"`
+// because the route is a GET and the limiter counts POST alone by default.
+// Each hit streams a whole bundle, so the ceiling is well under the ingest
+// one; an attributable caller gets 300 downloads a minute, and an
+// unattributable one skips the counter rather than sharing a bucket, the same
+// rule as every other pre-auth mount.
+app.use(
+  "/v1/run-exports/download",
+  distributedRateLimiter({
+    keyPrefix: "run-export-preauth-ip",
+    max: 300,
+    bucketKey: trustedClientIpBucketKey,
+    methods: "all",
+    storeErrorPolicy: "degrade-to-local",
+  }),
+);
 app.route("/v1/run-exports/download", runExportDownloadRoute);
 
 // Shared pre-authentication ceilings for credential stuffing on Stella intake.
@@ -687,6 +712,17 @@ orgScoped.route("/spend", spendGetRoute);
 orgScoped.route("/spend/drill", spendDrillRoute);
 orgScoped.route("/spend/waste", spendWasteListRoute);
 orgScoped.route("/spend/statement/export", spendStatementExportRoute);
+// Cost-center chargeback (ADR-142). The list, create, delete, and statement
+// are organization-level (`scoped: false`). Set writes the active workspace or
+// one of its agents.
+orgScoped.route(
+  "/spend/cost-center-statement/export",
+  spendCostCenterStatementExportRoute,
+);
+orgScoped.route("/spend/cost-centers", costCenterListRoute);
+orgScoped.route("/spend/cost-centers/create", costCenterCreateRoute);
+orgScoped.route("/spend/cost-centers/delete", costCenterDeleteRoute);
+orgScoped.route("/spend/cost-centers/set", costCenterSetRoute);
 // The skills a workspace's harness sessions reported at start (#3098): a
 // noBillingGate read of tacho.sessions.
 orgScoped.route("/configurations/clone", configurationCloneGetRoute);

@@ -2,12 +2,34 @@ import {
   enforceExternalDecisionRules,
   type AuthorizeExternalCapabilityResult,
 } from "@oxagen/oxagen/kernel";
-import { DecisionRuleApprovalRequiredError } from "@oxagen/rules";
+import {
+  DecisionRuleApprovalRequiredError,
+  DecisionRuleDeniedError,
+} from "@oxagen/rules";
 import { runInTenantScope } from "@oxagen/tenancy";
 import type { CapabilityContext } from "../types";
 import type { ApprovalRequiredEvent } from "./materialize-tools";
 import { createApprovalRequest, waitForApproval } from "./approval";
 import { externalApproval } from "./external-approval";
+
+/**
+ * A person answered the rule's approval request with no.
+ *
+ * Distinct from the approval-required error the rule raised, which a surface
+ * reads as "open the approval flow". Re-raising that after a refusal sent the
+ * caller back to the flow the person had just closed. A refusal is a denial
+ * in the same shape a `deny` rule produces, so every surface that already
+ * shows a denied call shows this one the same way, naming the rule.
+ */
+function refusedByPerson(
+  required: DecisionRuleApprovalRequiredError,
+): DecisionRuleDeniedError {
+  return new DecisionRuleDeniedError({
+    effect: "deny",
+    ruleId: required.verdict.ruleId,
+    description: `a person refused the approval this rule requires. ${required.verdict.description}`,
+  });
+}
 
 /** One invocation owns its approval proof; it is never a standing external-tool grant. */
 export function externalDecisionCheck(args: {
@@ -72,15 +94,14 @@ export function externalDecisionCheck(args: {
               await check();
               return;
             }
-            if (approval.status === "pending") {
-              args.onApprovalRequired({
-                approvalId: approval.approvalId,
-                capability: args.name,
-                inputPreview: args.input,
-                riskLevel: "high",
-                expiresAt: approval.expiresAt.toISOString(),
-              });
-            }
+            if (approval.status === "refused") throw refusedByPerson(error);
+            args.onApprovalRequired({
+              approvalId: approval.approvalId,
+              capability: args.name,
+              inputPreview: args.input,
+              riskLevel: "high",
+              expiresAt: approval.expiresAt.toISOString(),
+            });
             throw error;
           }
           const ttlMs = 5 * 60_000;
@@ -105,6 +126,7 @@ export function externalDecisionCheck(args: {
             expiresAt,
           });
           const resolution = await waitForApproval(approvalId);
+          if (resolution.resolution === "denied") throw refusedByPerson(error);
           if (
             resolution.resolution !== "approved" ||
             Date.now() >= Date.parse(expiresAt)

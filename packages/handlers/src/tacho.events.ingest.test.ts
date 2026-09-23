@@ -23,7 +23,7 @@ const mocks = vi.hoisted(() => ({
   sendEvent: vi.fn(),
   bodyPut: vi.fn(),
   recordProofFrames: vi.fn(),
-  fetchAgentRunAuthz: vi.fn(),
+  fetchAgentRunAuthzIn: vi.fn(),
 }));
 
 vi.mock("./lib/proof", () => ({
@@ -61,13 +61,14 @@ vi.mock("./lib/onboarding", () => ({
 
 // The tool-RBAC half of the mandate (`resolveHostMandate`), which runs only
 // for a host that names an agent principal. It reads live authority through
-// its own `withTenantDb`, which this file has already replaced with a fake
-// carrying the ingest tables and not the IAM ones. These cases are about what
-// ingest records, so the snapshot is stubbed empty; the resolution itself is
-// covered in `packages/iam` and the mapping in `lib/tacho-mandate.test.ts`.
-vi.mock("@oxagen/iam", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@oxagen/iam")>();
-  return { ...original, fetchAgentRunAuthz: mocks.fetchAgentRunAuthz };
+// the ingest transaction, and this file's fake carries the ingest tables and
+// not the IAM ones. These cases are about what ingest records, so the
+// snapshot is stubbed empty; the resolution itself is covered in
+// `packages/iam` and the mapping in `lib/tacho-mandate.test.ts`.
+vi.mock("@oxagen/iam/fetch-agent-authz", async (importOriginal) => {
+  const original =
+    await importOriginal<typeof import("@oxagen/iam/fetch-agent-authz")>();
+  return { ...original, fetchAgentRunAuthzIn: mocks.fetchAgentRunAuthzIn };
 });
 
 vi.mock("@oxagen/billing", () => ({ recordSpend: mocks.recordSpend }));
@@ -831,7 +832,7 @@ beforeEach(() => {
   mocks.recordSpend.mockResolvedValue(undefined);
   mocks.sendEvent.mockResolvedValue(undefined);
   mocks.recordProofFrames.mockResolvedValue({ written: 0, witnessRunIds: [] });
-  mocks.fetchAgentRunAuthz.mockResolvedValue({
+  mocks.fetchAgentRunAuthzIn.mockResolvedValue({
     roles: [],
     roleGrants: [],
     grants: [],
@@ -1524,6 +1525,20 @@ describe("ingest_tacho_events", () => {
     expect(db.sessions.get(SESSION)).toMatchObject({
       agentId: "agent-uuid",
       agentPrincipalId: "agent-principal-uuid",
+    });
+    // The mandate's authority read runs through the ingest transaction, not
+    // a second one of its own: the first argument is this fixture's tx.
+    expect(mocks.fetchAgentRunAuthzIn).toHaveBeenCalledTimes(1);
+    const [authzTx, authzArgs] = mocks.fetchAgentRunAuthzIn.mock.calls[0] as [
+      Record<string, unknown>,
+      Record<string, unknown>,
+    ];
+    expect(authzTx).toHaveProperty("query");
+    expect(authzArgs).toMatchObject({
+      orgId: CONTEXT.orgId,
+      workspaceId: CONTEXT.workspaceId,
+      agentPrincipalId: "agent-principal-uuid",
+      humanPrincipalId: null,
     });
   });
 

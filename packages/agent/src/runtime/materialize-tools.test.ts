@@ -1014,12 +1014,14 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
       expect.objectContaining({ status: "failed", error_class: "IamDenied" }),
     );
     expect(emitExternalCapabilityOutcome).toHaveBeenCalledOnce();
+    // The re-check after the wait is a policy deny like the first, and the
+    // one audit row carries that code rather than nothing.
     expect(emitExternalCapabilityOutcome).toHaveBeenCalledWith(
       `mcp.${MCP_SERVER.id}.list_pull_requests`,
       CTX,
       "deny",
       expect.any(Number),
-      undefined,
+      expect.objectContaining({ code: "authz_denied" }),
     );
   });
 
@@ -1103,7 +1105,45 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
     expect(typeof result).toBe("string");
     expect(result as string).toMatch(/blocked by workspace policy/i);
     expect(result as string).toContain("workspace_policy_deny");
+    // The one audit row names the policy deny, not a generic refusal.
+    expect(emitExternalCapabilityOutcome).toHaveBeenCalledOnce();
+    expect(emitExternalCapabilityOutcome).toHaveBeenCalledWith(
+      `mcp.${MCP_SERVER.id}.list_pull_requests`,
+      CTX,
+      "deny",
+      expect.any(Number),
+      expect.objectContaining({ code: "authz_denied" }),
+    );
   });
+
+  it.each([
+    ["iam_check_error", "authz_check_error"],
+    ["decision_not_persisted", "authz_decision_not_persisted"],
+  ])(
+    "audits the kernel's own %s denial under %s, apart from a policy deny",
+    async (reason, code) => {
+      vi.mocked(authorizeExternalCapability).mockResolvedValueOnce({
+        allowed: false,
+        outcome: "deny",
+        reason,
+        decision: null,
+      });
+      const { tools } = await materializeTools(CTX);
+      const t = tools[`mcp_${MCP_SERVER.id}_list_pull_requests`] as {
+        execute?: (i: unknown) => Promise<unknown>;
+      };
+      const result = await t.execute!({});
+      expect(fakeExecute).not.toHaveBeenCalled();
+      expect(result as string).toContain(reason);
+      expect(emitExternalCapabilityOutcome).toHaveBeenCalledWith(
+        `mcp.${MCP_SERVER.id}.list_pull_requests`,
+        CTX,
+        "deny",
+        expect.any(Number),
+        expect.objectContaining({ code }),
+      );
+    },
+  );
 
   it("meters a denied invocation as status=denied in insertToolInvocation (GAP-4 + instrument-everything)", async () => {
     vi.mocked(authorizeExternalCapability).mockResolvedValueOnce({
@@ -1391,6 +1431,15 @@ describe("materializeTools — kill switches (spec §6.11)", () => {
     )?.[0] as Record<string, unknown>;
     expect(call.status).toBe("failed");
     expect(call.error_class).toBe("KillSwitchDeniedError");
+    // A thrown switch is not a policy deny, and the audit row says which.
+    expect(emitExternalCapabilityOutcome).toHaveBeenCalledOnce();
+    expect(emitExternalCapabilityOutcome).toHaveBeenCalledWith(
+      capabilityId,
+      CTX,
+      "deny",
+      expect.any(Number),
+      expect.objectContaining({ code: "kill_switch_denied" }),
+    );
   });
 
   /** A gate that finds `capabilityId` open on its first call and switched from the second on. */
@@ -1596,6 +1645,14 @@ describe("materializeTools — first-use consent gate", () => {
     expect(fakeExecute).not.toHaveBeenCalled();
     expect(typeof result).toBe("string");
     expect(result as string).toMatch(/consent denied/i);
+    // A person saying no is audited as consent, not as a policy deny.
+    expect(emitExternalCapabilityOutcome).toHaveBeenLastCalledWith(
+      `mcp.${MCP_SERVER.id}.list_pull_requests`,
+      CHAT_CTX,
+      "deny",
+      expect.any(Number),
+      expect.objectContaining({ code: "consent_denied" }),
+    );
   });
 
   it("short-circuits without prompting when an active denied grant exists", async () => {

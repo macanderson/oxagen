@@ -56,6 +56,7 @@ function pricedRun(): RunTotalsRecord {
     agentPrincipalId: null,
     agentKey: "acme.core.cc",
     taskRef: null,
+    costCenter: null,
     startedAt: new Date("2026-09-10T09:59:00.000Z"),
     sealedAt: null,
     turns: 1,

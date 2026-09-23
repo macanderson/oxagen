@@ -110,6 +110,16 @@
                   "type": "null"
                 }
               ]
+            },
+            "costCenter": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           },
           "required": [
@@ -119,7 +129,8 @@
             "namespace",
             "name",
             "role",
-            "archivedAt"
+            "archivedAt",
+            "costCenter"
           ],
           "additionalProperties": false
         }

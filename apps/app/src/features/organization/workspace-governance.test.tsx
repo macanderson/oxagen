@@ -40,6 +40,7 @@ const workspace: Workspace = {
   slug: "platform",
   role: "Admin",
   archivedAt: null,
+  costCenter: null,
 };
 
 const edited = vi.mocked(editWorkspace);

@@ -521,6 +521,9 @@ const tachoColumns = {
     // FROM-clause entry for table \"tacho\"" (the join list has no such
     // alias). `sql.identifier` prints the one name postgres accepts here.
     // JSON lookup remains safe before the additive column migration.
+    // This depends on `tachoSessionsSelect` reading `.from(sessions)` with
+    // no alias: under `alias()` or inside a subquery the bare table name is
+    // no longer a FROM-clause entry and Postgres rejects the reference.
     machineSnapshot: sql<unknown>`to_jsonb(${sql.identifier(getTableName(sessions))})->'machine_snapshot'`,
     modelInitial: sessions.modelInitial,
     modelFinal: sessions.modelFinal,

@@ -1,6 +1,7 @@
 // The Spend page body (#2962, #2963; ARCHITECTURE.md §1.2): the open costed
 // findings the page leads with and one finding's evidence, the cost rollup for
-// the current month by operator, agent (with the models beside it) and tool,
+// the current month by operator, agent (with the models beside it), tool, task
+// and cost center (ADR-142),
 // wasted spend by cause, the configured ceilings, one key's drill, and the
 // price book with the models it cannot price. Every
 // read is a noBillingGate kernel read through the spend port; the first read
@@ -13,13 +14,14 @@ import type { DataSource } from "@/data/ports";
 import { PageRecord } from "@/features/shell";
 import type { WsCtx } from "@/server/viewer";
 import { BudgetDialog } from "./budget-dialog";
+import { CostCenterTable } from "./cost-centers";
 import { DrillSection } from "./drill";
 import { ExportDialog } from "./export-dialog";
 import { SpendStrip } from "./figures";
 import { GatewayPolicySection } from "./gateway-policy";
 import { FindingEvidenceSection, FindingsSection } from "./findings";
 import { PricingSection } from "./pricing";
-import { ReadFailure, SpendEmpty } from "./states";
+import { SpendReadFailure, SpendEmpty } from "./states";
 import { BudgetsTable, GroupTable } from "./tables";
 import { SpendTabs } from "./tabs";
 import { WasteSection } from "./waste";
@@ -75,7 +77,7 @@ async function body(
     return drill.ok ? (
       <DrillSection drill={drill.value} at={at} />
     ) : (
-      <ReadFailure read={drill} />
+      <SpendReadFailure read={drill} />
     );
   }
   const period = monthToDate(today);
@@ -86,15 +88,15 @@ async function body(
         return evidence.ok ? (
           <FindingEvidenceSection evidence={evidence.value} at={at} />
         ) : (
-          <ReadFailure read={evidence} />
+          <SpendReadFailure read={evidence} />
         );
       }
       const [report, findings] = await Promise.all([
         source.spend.byGroup(ctx, "operator", period),
         source.spend.findings(ctx),
       ]);
-      if (!report.ok) return <ReadFailure read={report} />;
-      if (!findings.ok) return <ReadFailure read={findings} />;
+      if (!report.ok) return <SpendReadFailure read={report} />;
+      if (!findings.ok) return <SpendReadFailure read={findings} />;
       return (
         <>
           <SpendStrip total={report.value.total} period={period} />
@@ -103,9 +105,10 @@ async function body(
       );
     }
     case "operator":
-    case "tool": {
+    case "tool":
+    case "task": {
       const report = await source.spend.byGroup(ctx, view.tab, period);
-      if (!report.ok) return <ReadFailure read={report} />;
+      if (!report.ok) return <SpendReadFailure read={report} />;
       return (
         <>
           <SpendStrip total={report.value.total} period={period} />
@@ -117,13 +120,27 @@ async function body(
         </>
       );
     }
+    case "cost_center": {
+      const report = await source.spend.byGroup(ctx, "cost_center", period);
+      if (!report.ok) return <ReadFailure read={report} />;
+      return (
+        <>
+          <SpendStrip total={report.value.total} period={period} />
+          {isEmpty(report.value) ? (
+            <SpendEmpty at={at} />
+          ) : (
+            <CostCenterTable report={report.value} />
+          )}
+        </>
+      );
+    }
     case "agent": {
       const [agents, models] = await Promise.all([
         source.spend.byGroup(ctx, "agent", period),
         source.spend.byGroup(ctx, "model", period),
       ]);
-      if (!agents.ok) return <ReadFailure read={agents} />;
-      if (!models.ok) return <ReadFailure read={models} />;
+      if (!agents.ok) return <SpendReadFailure read={agents} />;
+      if (!models.ok) return <SpendReadFailure read={models} />;
       return (
         <>
           <SpendStrip total={agents.value.total} period={period} />
@@ -143,8 +160,8 @@ async function body(
         source.spend.byGroup(ctx, "operator", period),
         source.spend.waste(ctx, period),
       ]);
-      if (!report.ok) return <ReadFailure read={report} />;
-      if (!waste.ok) return <ReadFailure read={waste} />;
+      if (!report.ok) return <SpendReadFailure read={report} />;
+      if (!waste.ok) return <SpendReadFailure read={waste} />;
       return (
         <>
           <SpendStrip total={report.value.total} period={period} />
@@ -158,8 +175,8 @@ async function body(
         source.spend.budgets(ctx),
         source.spend.gatewayPolicy(ctx),
       ]);
-      if (!report.ok) return <ReadFailure read={report} />;
-      if (!budgets.ok) return <ReadFailure read={budgets} />;
+      if (!report.ok) return <SpendReadFailure read={report} />;
+      if (!budgets.ok) return <SpendReadFailure read={budgets} />;
       return (
         <>
           <SpendStrip total={report.value.total} period={period} />
@@ -174,7 +191,7 @@ async function body(
               canEdit={ctx.wsRole === "owner" || ctx.wsRole === "admin"}
             />
           ) : (
-            <ReadFailure read={gateway} />
+            <SpendReadFailure read={gateway} />
           )}
         </>
       );

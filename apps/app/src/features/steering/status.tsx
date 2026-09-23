@@ -17,7 +17,7 @@ const TONE: Record<ProposalStatus, BadgeTone> = {
   rejected: "denied",
 };
 
-export function StatusBadge({ status }: { status: ProposalStatus }) {
+export function ProposalStatusBadge({ status }: { status: ProposalStatus }) {
   const t = useTranslations("steering.status");
   return (
     <Badge tone={TONE[status]} data-status={status}>

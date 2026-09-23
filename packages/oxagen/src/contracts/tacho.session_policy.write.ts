@@ -14,9 +14,15 @@ export const tachoSessionPolicyWrite = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "docs", "mcp", "unit", "app"],
   scoped: true,
+  // `requiresApproval: true`, like `update_mandate_limits`, `set_kill_switch`
+  // and `set_approval_rule`: an agent that asks to raise its own session
+  // ceiling or widen the models it may call waits for a person. The gateway
+  // reads none of this yet, but the record it writes is a governance
+  // decision, and the approval gate is set by what the write means, not by
+  // what enforces it today.
   agent: {
-    requiresApproval: false,
-    riskLevel: "medium",
+    requiresApproval: true,
+    riskLevel: "high",
     category: "workspace",
   },
   sensitivity: "medium",

@@ -189,7 +189,6 @@
     "f97b948d74d31ed131eb7b5beada349fb6dbbc8460fc84af6114e7c5fd5560ce"
   ],
   "packages/agent/src/handlers/_agent-identity.test-support.ts": [
-    "16a6bac53dc0b0b0ed80f9abf060b88e9d058e91ec22e98aa5a197be486aa12e",
     "240e18b458734b6aa34a3a7cd18448bad7e87e649b3eb40529808aaaa772380f",
     "36dcb301f0f7534f2ef9657a12518110d433f2f07195938e5dcb41c2e5c042a9",
     "60b608509dc5a5ed3639db4ca73436fcc793cef860f471b95c17bab2bc1f1a02",
@@ -233,10 +232,8 @@
   "packages/billing/src/cost-rollup-store.ts": [
     "1d7835a3f8a80971c63deee100dd4de517aa6938678fbceaf150cf8166f3721a",
     "1ee5f38f35fe739e8ac1efa34af47e28a821c86a881fae73393022d71d863c9a",
-    "219583105a5d7fe300add6a484ebad0677fe27d1e6d8a7329f33699cd2378c69",
     "332212c09205841688d4b8039e22ec98d1c62335a5eaa7841dfa4d00b8faf7c5",
     "4e8d5fadc40c9f490d7d7d55aab3893fbb22c097ef31b480f5a6cde10a5e05e0",
-    "5c71b1ef28d8c7309604ad722ba8ac0beb6461b2c81cf1a0d6a39df24682fc49",
     "6a58633ba207b123c416f774d6026257d97ed6dcc73c34c242d4a5d3fff94c90",
     "77659d9261e6cfe51c3b6968b5332357c50fda6622853302aecc7b27448b7b6d",
     "a3ff9b63c072cea115b4f3da13c9a3a627464d682ba920654285980048e123bf",
@@ -318,7 +315,6 @@
   ],
   "packages/database/src/assistant-model-key.ts": [
     "12321fecdaa539e3d009cf97cc41f6d0b4e70614a1cab583d0828844b7ff8508",
-    "3de91ee078ffe8daada43058db306e47b02e4855899f66238c071ac6e1abd3b7",
     "aeed9c292ec4240159db70408bbbeacb902c7ccf2968486c0017a9ba0e7caa6b"
   ],
   "packages/database/src/data-plane-resolver.ts": [
@@ -453,7 +449,6 @@
     "227d0d9b070349e49e0cb69c4a9d5b9236ce3751b5b039aa35eda4238eefaa8a"
   ],
   "packages/handlers/src/workspace.list.ts": [
-    "69a7fa711e42fef208ec12ec055377f4c6cb3614888e6e19aff85bfeb753fed3",
     "d7e4566da24d1f9f949416657cfe9ff926a4f31ebbb9af31462e419c7bb79fb5"
   ],
   "packages/iam/src/machine-key-scope.ts": [

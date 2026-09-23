@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { PgDialect } from "drizzle-orm/pg-core";
+import { NonRetriableError } from "@oxagen/functions";
 
 const mocks = vi.hoisted(() => ({
   execute: vi.fn(),
@@ -96,8 +97,18 @@ describe("audit partition maintenance cron", () => {
         },
       },
     ]);
-    await expect(handler({ step })).rejects.toBeInstanceOf(
+    // The failure is final: a retry would skip the same step again, so the
+    // durable runner is told not to. The typed error rides as the cause.
+    const failure = await handler({ step }).then(
+      () => null,
+      (err: unknown) => err,
+    );
+    expect(failure).toBeInstanceOf(NonRetriableError);
+    expect((failure as NonRetriableError).cause).toBeInstanceOf(
       AuditPartitionMaintenanceError,
+    );
+    expect((failure as NonRetriableError).message).toContain(
+      "security_events_2026_09 (create, P0001)",
     );
     // The months that succeeded are reported before the run fails.
     expect(mocks.info).toHaveBeenCalledTimes(1);

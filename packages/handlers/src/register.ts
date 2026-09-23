@@ -1297,6 +1297,36 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .spendStatementHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "export_cost_center_statement",
+    async () =>
+      (await import("./spend.cost_center_statement.export"))
+        .spendCostCenterStatementHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_cost_centers",
+    async () =>
+      (await import("./cost_center.list"))
+        .costCenterListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "create_cost_center",
+    async () =>
+      (await import("./cost_center.create"))
+        .costCenterCreateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "delete_cost_center",
+    async () =>
+      (await import("./cost_center.delete"))
+        .costCenterDeleteHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "set_cost_center",
+    async () =>
+      (await import("./cost_center.set"))
+        .costCenterSetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "list_findings",
     async () =>
       (await import("./finding.list"))

@@ -7,7 +7,14 @@ import {
   providerFromModelId,
   type Surface,
 } from "@oxagen/telemetry";
-import { admitTokenUsage, recordTokenUsage } from "./record-token-usage";
+import {
+  admitTokenUsage,
+  recordTokenUsage,
+  voidTokenUsage,
+} from "./record-token-usage";
+import pino from "pino";
+
+const logger = pino({ name: "ai.generate-object" });
 import { providerCostUsdMicros, type CreditReason } from "@oxagen/billing";
 import { defaultModel, modelIdOf } from "./models";
 import {
@@ -162,10 +169,14 @@ export interface GenerateObjectResult<T> {
  * AI SDK `generateObject` primitive, with full telemetry instrumentation.
  *
  * After generation the function records:
- * - A durable delivery row and its credit debit in one Postgres transaction.
- * - A scheduled worker delivers the usage to ClickHouse.
+ * - The usage row, staged durably on the admission before settlement.
+ * - The credit debit and the spend counter, in one Postgres transaction.
+ * - A scheduled worker then delivers the usage to ClickHouse.
  *
- * Admission failure refuses the provider call. Settlement failure propagates.
+ * Admission failure refuses the provider call. A provider call that throws
+ * voids the admission and rethrows. A settlement failure after the usage is
+ * staged is rethrown to the caller and retried by the usage outbox, so the
+ * caller sees the error and the usage is still charged.
  *
  * @example
  * ```ts
@@ -257,26 +268,46 @@ export async function generateObjectFor<T>(
     args.telemetry.orgId,
     args.telemetry.workspaceId,
   );
-  const result = await withOutputBudgetRetry(
-    (maxOutputTokens) =>
-      generateObject({
-        model,
-        schema: args.schema,
-        system: args.system,
-        temperature: args.temperature ?? 0,
-        ...(args.abortSignal ? { abortSignal: args.abortSignal } : {}),
-        ...(args.maxRetries !== undefined
-          ? { maxRetries: args.maxRetries }
-          : {}),
-        // Spread rather than passed as undefined: a call site that does not set
-        // a cap must send no max_tokens at all, exactly as before.
-        ...(maxOutputTokens !== undefined ? { maxOutputTokens } : {}),
-        ...(args.messages
-          ? { messages: args.messages }
-          : { prompt: args.prompt ?? "" }),
-      }),
-    args.maxOutputTokens,
-  );
+  let result;
+  try {
+    result = await withOutputBudgetRetry(
+      (maxOutputTokens) =>
+        generateObject({
+          model,
+          schema: args.schema,
+          system: args.system,
+          temperature: args.temperature ?? 0,
+          ...(args.abortSignal ? { abortSignal: args.abortSignal } : {}),
+          ...(args.maxRetries !== undefined
+            ? { maxRetries: args.maxRetries }
+            : {}),
+          // Spread rather than passed as undefined: a call site that does not set
+          // a cap must send no max_tokens at all, exactly as before.
+          ...(maxOutputTokens !== undefined ? { maxOutputTokens } : {}),
+          ...(args.messages
+            ? { messages: args.messages }
+            : { prompt: args.prompt ?? "" }),
+        }),
+      args.maxOutputTokens,
+    );
+  } catch (err) {
+    // The budget retry has already made its one further attempt by the time
+    // this is reached, so the admission is voided exactly once, for the call
+    // that finally failed. The provider error is the one the caller sees; a
+    // failed void is logged, and the row then stays counted as incomplete.
+    await voidTokenUsage(
+      usageId,
+      args.telemetry.orgId,
+      args.telemetry.workspaceId,
+      "provider_call_failed",
+    ).catch((voidErr: unknown) => {
+      logger.error(
+        { err: voidErr, usageId, alert: "billing_usage_void_failed" },
+        "Usage admission could not be voided; it stays counted as incomplete",
+      );
+    });
+    throw err;
+  }
 
   const durationMs = Date.now() - startedAt;
   // AI SDK v6: usage fields renamed to inputTokens/outputTokens.

@@ -48,7 +48,8 @@
           "agent",
           "model",
           "tool",
-          "task"
+          "task",
+          "cost_center"
         ]
       }
     },
@@ -85,7 +86,8 @@
           "agent",
           "model",
           "tool",
-          "task"
+          "task",
+          "cost_center"
         ]
       },
       "total": {

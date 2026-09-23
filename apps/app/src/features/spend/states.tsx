@@ -12,7 +12,7 @@ type Failed = Extract<Read<never>, { ok: false }>;
 
 const box = `${panel} flex flex-col gap-2 p-6`;
 
-export function ReadFailure({ read }: { read: Failed }) {
+export function SpendReadFailure({ read }: { read: Failed }) {
   const t = useTranslations("spend");
   switch (read.reason) {
     case "denied":

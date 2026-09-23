@@ -261,6 +261,37 @@ describe("get_run_outputs — a ledger run", () => {
     expect(out.tally).toEqual({ artifacts: 0, reads: 0, gates: 0 });
     expect(out.complete).toBe(true);
   });
+
+  const changes = (count: number) =>
+    Array.from({ length: count }, (_, i) =>
+      event(i + 1, {
+        eventType: "change.recorded",
+        payload: {
+          path_locator_public_id: "rpl_0123456789abcdefghjkmn",
+          change_kind: "modify",
+          before_digest: `sha256:${"c".repeat(64)}`,
+          after_digest: `sha256:${"d".repeat(64)}`,
+        },
+      }),
+    );
+
+  it("says a spine that ends exactly at the cap is complete", async () => {
+    const outputs = harness({ events: changes(RUN_OUTPUT_NODE_MAX) });
+
+    const out = await outputs({ runId: LEDGER_ID }, ctx());
+
+    expect(out.nodes).toHaveLength(RUN_OUTPUT_NODE_MAX);
+    expect(out.complete).toBe(true);
+  });
+
+  it("says a spine cut at its cap is a prefix", async () => {
+    const outputs = harness({ events: changes(RUN_OUTPUT_NODE_MAX + 1) });
+
+    const out = await outputs({ runId: LEDGER_ID }, ctx());
+
+    expect(out.nodes).toHaveLength(RUN_OUTPUT_NODE_MAX);
+    expect(out.complete).toBe(false);
+  });
 });
 
 describe("get_run_outputs — a run that produced nothing", () => {

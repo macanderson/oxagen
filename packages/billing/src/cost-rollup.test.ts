@@ -10,6 +10,7 @@ import {
   type RunMeta,
   type RunTotalsRecord,
   type TokenCounts,
+  UNASSIGNED_COST_CENTER_KEY,
   ZERO_TOKENS,
 } from "./cost-rollup";
 import type { PriceEntry } from "./price-book";
@@ -74,6 +75,7 @@ const meta: RunMeta = {
   agentPrincipalId: "pr-agent",
   agentKey: "acme.core.cc",
   taskRef: null,
+  costCenter: null,
   startedAt: new Date("2026-09-14T09:59:00.000Z"),
   sealedAt: new Date("2026-09-14T10:05:00.000Z"),
   turns: 2,
@@ -477,6 +479,47 @@ describe("dailyTotalsFromRuns", () => {
     ]);
     expect(rows.find((r) => r.groupKind === "agent")!.costMicros).toBe(null);
     expect(rows.some((r) => r.groupKind === "model")).toBe(false);
+  });
+});
+
+describe("the cost-center level (ADR-142)", () => {
+  // Three agents over two centers and one unlabelled agent, on one day.
+  const at = (runId: string, agentKey: string, costCenter: string | null) =>
+    rollupRun({
+      meta: { ...meta, runId, agentKey, costCenter },
+      book: BOOK,
+      toolCalls: [],
+      modelCalls: [frame()],
+    });
+  const runs = [
+    at("tse_a1", "acme.core.alpha", "ENG-1001"),
+    at("tse_a2", "acme.core.alpha", "ENG-1001"),
+    at("tse_b1", "acme.core.beta", "MKT-2002"),
+    at("tse_c1", "acme.core.gamma", null),
+  ];
+
+  it("puts every run in exactly one group, so the level sums to the run total", () => {
+    const centers = dailyTotalsFromRuns(runs).filter(
+      (r) => r.groupKind === "cost_center",
+    );
+    expect(centers.map((r) => [r.groupKey, r.runs]).sort()).toEqual([
+      ["ENG-1001", 2],
+      ["MKT-2002", 1],
+      [UNASSIGNED_COST_CENTER_KEY, 1],
+    ]);
+    const levelTotal = centers.reduce((sum, r) => sum + r.costMicros!, 0n);
+    const runTotal = runs.reduce((sum, r) => sum + r.costMicros!, 0n);
+    expect(levelTotal).toBe(runTotal);
+    expect(centers.every((r) => r.costBasis === "gateway_observed")).toBe(true);
+  });
+
+  it("keeps the unlabelled share as its own row instead of dropping it", () => {
+    const none = dailyTotalsFromRuns(runs).find(
+      (r) =>
+        r.groupKind === "cost_center" &&
+        r.groupKey === UNASSIGNED_COST_CENTER_KEY,
+    )!;
+    expect(none.costMicros).toBe(runs[3]!.costMicros);
   });
 });
 

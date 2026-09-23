@@ -403,7 +403,7 @@ export function postgresCommandStore(tx: Tx): CommandStore {
       if (run.cancelled)
         throw refused(
           "run_cancelled",
-          "Cancelled evidence ingress cannot be resumed",
+          `The run was cancelled. Its evidence ingress cannot be ${command}d`,
         );
       if (!["pending", "running"].includes(run.status))
         throw refused("run_sealed", "The run has ended");
@@ -465,8 +465,10 @@ export function postgresCommandStore(tx: Tx): CommandStore {
     }) => {
       const run = await lockRunForControl(tx, scope, publicId);
       if (!run) throw notFound("run_not_found");
-      if (!["pending", "running"].includes(run.status))
-        throw refused("run_sealed", "The run has ended");
+      // The receipt first, then the status: `cancelRunInTransaction` sets
+      // `cancelRequested` and the status becomes `cancelled` when the
+      // producer seals, so a cancel retried after that seal must find its
+      // receipt rather than a `run_sealed` refusal.
       if (run.cancelled) {
         const [existing] = await tx
           .select({ publicId: commands.publicId })
@@ -485,6 +487,8 @@ export function postgresCommandStore(tx: Tx): CommandStore {
           .limit(1);
         if (existing) return existing.publicId;
       }
+      if (!["pending", "running"].includes(run.status))
+        throw refused("run_sealed", "The run has ended");
       await cancelRunInTransaction(tx, run.id, now);
       await revokeRunTokens(tx, scope, run.id, now);
       const [receipt] = await tx

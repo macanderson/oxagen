@@ -144,6 +144,10 @@ export function contextPrView(
   };
 }
 
+/** Every line of a statement inside one Markdown block quote. */
+const blockquote = (text: string) =>
+  `> ${text.trim().replace(/\r?\n/g, "\n> ")}`;
+
 const bullets = (items: readonly string[]) =>
   items.length > 0 ? items.map((i) => `- \`${i}\``).join("\n") : "- none";
 

@@ -438,6 +438,18 @@ describe("markAssistantModelKeyDisabled", () => {
     expect(set["lastError"]).toBe("offboarded");
   });
 
+  it("scrubs key material out of the reason before it is stored", async () => {
+    // `last_error` promises a reason scrubbed by the writer. A caller
+    // quoting the vendor's response can quote the key the request carried.
+    await markAssistantModelKeyDisabled(
+      ORG,
+      "vendor refused sk-or-v1-abc123DEF456 with 401",
+    );
+    expect(mocks.updateSet.mock.calls[0]![0]["lastError"]).toBe(
+      "vendor refused sk-or-v1-[redacted] with 401",
+    );
+  });
+
   it("bounds the reason, so a stack trace cannot fill the column", async () => {
     await markAssistantModelKeyDisabled(ORG, "x".repeat(2000));
     expect(String(mocks.updateSet.mock.calls[0]![0]["lastError"])).toHaveLength(
@@ -515,6 +527,17 @@ describe("logAssistantModelKeyFailure", () => {
       err: "upstream 503",
     });
     expect(mocks.insertValues).not.toHaveBeenCalled();
+  });
+
+  it("scrubs key material out of the logged failure", () => {
+    logAssistantModelKeyFailure(
+      ORG,
+      new Error("PUT /keys sk-or-v1-abc123DEF456 refused"),
+      "store",
+    );
+    expect(mocks.error.mock.calls[0]![0].err).toBe(
+      "PUT /keys sk-or-v1-[redacted] refused",
+    );
   });
 
   it("handles a thrown non-Error without throwing itself", () => {

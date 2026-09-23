@@ -20,9 +20,36 @@ interface CacheEntry {
 
 const _cache = new Map<string, CacheEntry>();
 
+// A narrowed token is a different token: a cached full-grant token must never
+// answer a request that asked for one repository, and a narrowed one must never
+// answer a request that asked for the whole installation.
 function cacheKey(args: AppInstallationTokenArgs): string {
   const host = args.baseUrl ?? DEFAULT_BASE_URL;
-  return `${host}|${args.appId}|${args.installationId}`;
+  const narrowing = JSON.stringify(narrowingBody(args) ?? null);
+  return `${host}|${args.appId}|${args.installationId}|${narrowing}`;
+}
+
+function narrowingBody(
+  args: AppInstallationTokenArgs,
+):
+  | { repositories?: string[]; permissions?: Record<string, string> }
+  | undefined {
+  const repositories = args.repositories?.length
+    ? [...args.repositories].sort()
+    : undefined;
+  const permissions =
+    args.permissions && Object.keys(args.permissions).length > 0
+      ? Object.fromEntries(
+          Object.entries(args.permissions).sort(([a], [b]) =>
+            a.localeCompare(b),
+          ),
+        )
+      : undefined;
+  if (repositories === undefined && permissions === undefined) return undefined;
+  return {
+    ...(repositories !== undefined ? { repositories } : {}),
+    ...(permissions !== undefined ? { permissions } : {}),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -73,6 +100,18 @@ export interface AppInstallationTokenArgs {
   baseUrl?: string;
   /** Injectable clock (returns ms since epoch). Defaults to `Date.now`. */
   now?: () => number;
+  /**
+   * Repository names (without owner) the token may reach. Omitted, the token
+   * carries every repository the installation covers. GitHub refuses a name
+   * the installation does not include.
+   */
+  repositories?: string[];
+  /**
+   * Permission scopes the token may hold, as `{ contents: "read" }`. Omitted,
+   * the token carries the installation's full grant. A scope may only be
+   * narrowed below the installation's, never widened.
+   */
+  permissions?: Record<string, string>;
 }
 
 export interface InstallationTokenResult {
@@ -100,6 +139,7 @@ export async function createAppInstallationToken(
   const now = args.now ?? (() => Date.now());
   const baseUrl = (args.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, "");
   const jwt = buildJwt(args.appId, args.privateKey, now());
+  const narrowing = narrowingBody(args);
 
   const res = await fetch(
     `${baseUrl}/app/installations/${args.installationId}/access_tokens`,
@@ -111,6 +151,7 @@ export async function createAppInstallationToken(
         "X-GitHub-Api-Version": "2022-11-28",
         "Content-Type": "application/json",
       },
+      ...(narrowing !== undefined ? { body: JSON.stringify(narrowing) } : {}),
     },
   );
 

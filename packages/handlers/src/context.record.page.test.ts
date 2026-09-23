@@ -319,4 +319,30 @@ describe("revise_context_record", () => {
       ),
     ).rejects.toMatchObject({ code: "not_found" });
   });
+
+  // The id becomes the file's path when the mirror has no row for it, so
+  // only the proposal contract's lineage shape may reach the repository.
+  it.each(["../evil", "Bad.Case", "ctx/review", "ctx.review-"])(
+    "404s %s without reading the repository",
+    async (recordId) => {
+      const h = harness();
+      const read = vi.spyOn(h.github, "readFile");
+      await expect(
+        createReviseRecordHandler(h)(
+          { recordId, statement: "Anything." },
+          ctx(),
+        ),
+      ).rejects.toMatchObject({
+        code: "not_found",
+        reason: "record_not_found",
+      });
+      await expect(
+        createGetRecordHandler(h)({ recordId }, ctx()),
+      ).rejects.toMatchObject({
+        code: "not_found",
+        reason: "record_not_found",
+      });
+      expect(read).not.toHaveBeenCalled();
+    },
+  );
 });

@@ -121,6 +121,22 @@ describe("Agent header and tabs", () => {
     expect(within(header).queryByRole("link")).toBeNull();
   });
 
+  it("draws the kill switch disabled with its reason for an organization Member (negative)", async () => {
+    await renderAgent(
+      { get: readOk(agentDetail()) },
+      null,
+      null,
+      unsafeMint(WsCtx, { ...CTX_FIELDS, orgRole: "member" }),
+    );
+    const header = region("Agent identity");
+    expect(
+      within(header).getByRole("button", { name: "Kill switch" }),
+    ).toBeDisabled();
+    expect(
+      within(header).getByTestId("agent-kill-switch-no-role"),
+    ).toHaveTextContent("Owner or Admin");
+  });
+
   it("links the seven sections a store backs, and no Runs tab (negative)", async () => {
     await renderAgent({ get: readOk(agentDetail()) });
     const links = within(
@@ -254,6 +270,38 @@ describe("Agent header and tabs", () => {
 });
 
 describe("Identity", () => {
+  // set_cost_center admits an org Owner, Admin or Billing member (ADR-142),
+  // so Billing sees the control the role writes deny it, and a Member sees
+  // the label alone.
+  it("draws the cost center and offers the change to a billing member", async () => {
+    await renderAgent(
+      { get: readOk(agentDetail({ identity: { costCenter: "ENG-1001" } })) },
+      null,
+      null,
+      unsafeMint(WsCtx, { ...CTX_FIELDS, orgRole: "billing" }),
+    );
+    const identity = region("Identity");
+    expect(identity).toHaveTextContent("Cost centerENG-1001");
+    expect(
+      within(identity).getByRole("button", { name: "Change cost center" }),
+    ).toBeInTheDocument();
+    expect(within(region("Roles")).queryAllByRole("button")).toEqual([]);
+  });
+
+  it("says the label is inherited and offers no change to a member (negative)", async () => {
+    await renderAgent(
+      { get: readOk(agentDetail()) },
+      null,
+      null,
+      unsafeMint(WsCtx, { ...CTX_FIELDS, orgRole: "member" }),
+    );
+    const identity = region("Identity");
+    expect(identity).toHaveTextContent(
+      "Cost centerInherited from the workspace",
+    );
+    expect(within(identity).queryAllByRole("button")).toEqual([]);
+  });
+
   // assign_agent_role and revoke_agent_role are org Owner or Admin writes
   // their handlers check, and a retired principal holds no authority to
   // change, so the panel offers a control neither reader could use.

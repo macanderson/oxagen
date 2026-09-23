@@ -12,6 +12,7 @@ const { invoke, requireViewer, kernelRead } = vi.hoisted(() => ({
   requireViewer: vi.fn(),
   kernelRead: vi.fn(),
 }));
+import { costCenterList } from "@oxagen/oxagen/contracts/cost_center.list";
 import { iamRoleList } from "@oxagen/oxagen/contracts/iam.role.list";
 
 vi.mock("@oxagen/oxagen", async (importOriginal) => ({
@@ -44,6 +45,8 @@ const {
   issueAgentEnrollmentToken,
   pauseAgent,
   readAssignableRoles,
+  readCostCenters,
+  setAgentCostCenter,
   requestMandate,
   retireAgent,
   revokeAgentRole,
@@ -1106,6 +1109,120 @@ describe("readAssignableRoles", () => {
       reason: "denied",
       code: "org.admin",
     });
+  });
+});
+
+describe("readCostCenters", () => {
+  it("offers the organization's live labels, by public id and label", async () => {
+    kernelRead.mockResolvedValue({
+      ok: true,
+      value: {
+        costCenters: [
+          {
+            id: "cct_eng",
+            label: "ENG-1001",
+            description: "Platform",
+            agents: 2,
+            workspaces: 1,
+          },
+          {
+            id: "cct_ops",
+            label: "OPS-2",
+            description: null,
+            agents: 0,
+            workspaces: 0,
+          },
+        ],
+      },
+    });
+    expect(await readCostCenters("acme", "core-platform")).toEqual({
+      ok: true,
+      value: [
+        { id: "cct_eng", label: "ENG-1001" },
+        { id: "cct_ops", label: "OPS-2" },
+      ],
+    });
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: costCenterList,
+      input: {},
+      page: "agents",
+    });
+  });
+
+  it("returns a refused read as denied (negative)", async () => {
+    kernelRead.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      permission: "spend.cost_center.list",
+    });
+    expect(await readCostCenters("acme", "core-platform")).toMatchObject({
+      ok: false,
+      reason: "denied",
+    });
+  });
+});
+
+describe("setAgentCostCenter", () => {
+  it("charges the agent by slug to the label and answers the stored spelling", async () => {
+    invoke.mockResolvedValue({
+      target: "agent",
+      id: "agt_releasebot",
+      costCenter: "ENG-1001",
+    });
+    expect(
+      await setAgentCostCenter(
+        "acme",
+        "core-platform",
+        "release-bot",
+        " eng-1001 ",
+      ),
+    ).toEqual({ ok: true, value: { costCenter: "ENG-1001" } });
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    expect(invoke).toHaveBeenCalledWith(
+      "set_cost_center",
+      { target: "agent", agent: "release-bot", costCenter: "eng-1001" },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("clears the label when the box is empty, so the agent inherits the workspace's", async () => {
+    invoke.mockResolvedValue({
+      target: "agent",
+      id: "agt_releasebot",
+      costCenter: null,
+    });
+    expect(
+      await setAgentCostCenter("acme", "core-platform", "release-bot", ""),
+    ).toEqual({ ok: true, value: { costCenter: null } });
+    expect(invoke).toHaveBeenCalledWith(
+      "set_cost_center",
+      { target: "agent", agent: "release-bot", costCenter: null },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("refuses a blank agent before the kernel runs (negative)", async () => {
+    expect(
+      await setAgentCostCenter("acme", "core-platform", " ", "ENG-1001"),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "agent",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("returns a denial as denied (negative)", async () => {
+    invoke.mockRejectedValue(denied("set_cost_center"));
+    expect(
+      await setAgentCostCenter(
+        "acme",
+        "core-platform",
+        "release-bot",
+        "ENG-1001",
+      ),
+    ).toMatchObject({ ok: false, reason: "denied" });
   });
 });
 

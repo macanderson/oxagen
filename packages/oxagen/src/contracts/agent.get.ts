@@ -19,6 +19,7 @@ import {
   tachoPlatformSchema,
 } from "../tacho/schemas";
 import { agentHarnessSchema, agentIdentityStatusSchema } from "./agent.list";
+import { costCenterLabelSchema } from "./cost_center.shared";
 
 const instant = z.string().datetime({ offset: true });
 
@@ -131,6 +132,8 @@ export const agentGet = registerCapability({
           registeredAt: instant,
           /** The start of the earliest run either store recorded for the agent; null before the first. */
           firstFrameAt: instant.nullable(),
+          /** The cost-center label the agent's spend is charged to (ADR-142), or null when it inherits the workspace's. */
+          costCenter: costCenterLabelSchema.nullable(),
         })
         .strict(),
       credentials: z.array(agentCredentialSchema),

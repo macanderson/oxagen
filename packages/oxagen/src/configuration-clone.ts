@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { WRAPPED_HARNESSES } from "@oxagen/tacho";
 
 export const configurationKindSchema = z.enum(["agent", "skill", "record"]);
 export type ConfigurationKind = z.infer<typeof configurationKindSchema>;
@@ -17,15 +18,11 @@ export const configurationCloneDraftSchema = z
           .strict(),
       )
       .max(16),
+    // The four wrapped harnesses come from the one list that names them
+    // (ADR-101), so a harness added there is a harness a clone can carry. The
+    // two others are the connected shapes a registered agent may declare.
     harness: z
-      .enum([
-        "stella",
-        "claude-code",
-        "codex",
-        "cursor",
-        "claude-agent-sdk",
-        "custom",
-      ])
+      .enum([...WRAPPED_HARNESSES, "claude-agent-sdk", "custom"])
       .nullable(),
   })
   .strict();

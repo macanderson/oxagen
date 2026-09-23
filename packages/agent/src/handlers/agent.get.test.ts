@@ -38,6 +38,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         name: "Alpha",
         harness: "stella",
         status: "active",
+        costCenter: "ENG-1001",
       });
       await support.seedCredential(tenant, alpha, { name: "live" });
       await support.seedCredential(tenant, alpha, {
@@ -122,6 +123,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         principalId: alpha.principalPublicId,
         operatorId: tenant.userPublicId,
         status: "enrolled",
+        costCenter: "ENG-1001",
       });
       // The earliest run either store recorded, the window ignored.
       expect(out.identity.firstFrameAt).not.toBeNull();
@@ -159,6 +161,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(out.identity.operatorId).toBeNull();
       expect(out.identity.status).toBe("unenrolled");
       expect(out.identity.firstFrameAt).toBeNull();
+      expect(out.identity.costCenter).toBeNull();
       expect(out.roles).toEqual([]);
       expect(out.definition).toBeNull();
     });

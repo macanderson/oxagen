@@ -14,7 +14,7 @@ import type { Read } from "@/data/read";
 import { linkText } from "@/ui/control-styles";
 import { formatCount } from "@/ui/money-format";
 import { cell, Table } from "@/ui/table";
-import { ReadFailure } from "./read-failure";
+import { BillingReadFailure } from "./read-failure";
 import { Section, useDate } from "./section";
 
 function Row({
@@ -91,7 +91,7 @@ export function Meters({
   let gauValue: ReactNode;
   let gauNote: ReactNode = null;
   if (!bucket.ok) {
-    gauValue = <ReadFailure read={bucket} section={t("meters.gau")} />;
+    gauValue = <BillingReadFailure read={bucket} section={t("meters.gau")} />;
   } else {
     const v = bucket.value;
     gauValue = t("meters.gauValue", {
@@ -149,7 +149,10 @@ export function Meters({
                 count: count(credits.value.balanceCredits),
               })
             ) : (
-              <ReadFailure read={credits} section={t("meters.credits")} />
+              <BillingReadFailure
+                read={credits}
+                section={t("meters.credits")}
+              />
             )
           }
           note={t("meters.creditsNote")}

@@ -146,7 +146,9 @@ function operatorFact(
       >
         {run.operatorName ??
           (run.operatorKind === null ? (
-            <NoValue />
+            // An id with no name and no kind is still a recorded operator:
+            // the id is the label, never "not recorded".
+            <span className={mono}>{run.operatorId}</span>
           ) : (
             kindLabel(run.operatorKind)
           ))}
@@ -248,7 +250,27 @@ export function RunHeader({
           <AgentCard
             agentKey={run.agentKey}
             notRecorded={t("notRecorded")}
-            sub={run.operatorName ?? run.operatorId ?? t("notRecorded")}
+            sub={
+              run.operatorId === null && run.operatorName === null ? (
+                t("notRecorded")
+              ) : (
+                <OperatorName
+                  testId="run-agent-operator"
+                  operator={{
+                    id: run.operatorId,
+                    name: run.operatorName,
+                    kind: run.operatorKind,
+                  }}
+                >
+                  {run.operatorName ??
+                    (run.operatorKind === null ? (
+                      <span className={mono}>{run.operatorId}</span>
+                    ) : (
+                      t(`facts.operatorKind.${run.operatorKind}`)
+                    ))}
+                </OperatorName>
+              )
+            }
           />
           <RunControls
             org={org}

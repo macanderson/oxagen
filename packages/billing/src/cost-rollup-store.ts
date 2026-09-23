@@ -24,7 +24,18 @@ import {
   MODEL_CALL_EVENT_TYPES,
   TOOL_CALL_EVENT_TYPES,
 } from "@oxagen/run-ledger";
-import { and, asc, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  gte,
+  inArray,
+  isNull,
+  lt,
+  or,
+  sql,
+  type AnyColumn,
+} from "drizzle-orm";
 import {
   dailyTotalsFromRuns,
   rollupRun,
@@ -57,6 +68,27 @@ const principals = schema.principals;
 const totals = schema.runTotals;
 const daily = schema.dailyTotals;
 
+const centers = schema.costCenters;
+
+/**
+ * The run's cost center: the agent's label when it names a live row of the
+ * organization's list, else the workspace's on the same terms, else null
+ * (ADR-142). A soft-deleted label claims no new rollup, and the row's own
+ * spelling is what the rollup records, so `eng-1001` on an agent reads as the
+ * list's `ENG-1001`.
+ */
+function resolvedCostCenter(
+  orgId: AnyColumn,
+  agentLabel: AnyColumn,
+  workspaceLabel: AnyColumn,
+) {
+  const live = (label: AnyColumn) =>
+    sql`(select ${centers.label}::text from ${centers} where ${centers.orgId} = ${orgId} and ${centers.label} = ${label} and ${centers.deletedAt} is null limit 1)`;
+  return sql<
+    string | null
+  >`coalesce(${live(agentLabel)}, ${live(workspaceLabel)})`;
+}
+
 /** What a rollup needs to know about a run before it reads the frames. */
 interface RunSource {
   meta: RunMeta;
@@ -84,6 +116,9 @@ function grade(value: string | null): RunMeta["replayGrade"] {
  */
 async function loadRunSource(publicId: string): Promise<RunSource | null> {
   if (publicId.startsWith("arun_")) {
+    // tenancy: the scheduled rollup job runs outside a tenant scope and finds
+    // the run by its globally unique public id; the orgId it answers comes
+    // from the run row, and the cost-center subquery is filtered by that orgId.
     const rows = await withSystemDb((tx) =>
       tx
         .select({
@@ -97,6 +132,11 @@ async function loadRunSource(publicId: string): Promise<RunSource | null> {
           workspaceNamespace: schema.workspaces.namespace,
           agentSlug: schema.agents.slug,
           goal: sql<string | null>`${runs.spec}->>'goal'`,
+          costCenter: resolvedCostCenter(
+            runs.orgId,
+            schema.agents.costCenter,
+            schema.workspaces.costCenter,
+          ),
           createdAt: runs.createdAt,
           startedAt: runs.startedAt,
           sealedAt: sql<Date | null>`(select max(${seals.sealedAt}) from ${seals} where ${seals.runId} = ${runs.id})`,
@@ -149,6 +189,7 @@ async function loadRunSource(publicId: string): Promise<RunSource | null> {
             ? `${row.orgNamespace}.${row.workspaceNamespace}.${row.agentSlug}`
             : null,
         taskRef: row.goal,
+        costCenter: row.costCenter,
         startedAt: row.startedAt ?? row.createdAt,
         sealedAt,
         turns: row.opaqueModelCalls === 0 ? row.turnIndexes : null,
@@ -161,6 +202,9 @@ async function loadRunSource(publicId: string): Promise<RunSource | null> {
   }
 
   if (publicId.startsWith("tse_")) {
+    // tenancy: the scheduled rollup job runs outside a tenant scope and finds
+    // the session by its globally unique public id; the agent join and the
+    // cost-center subquery are filtered by the session's own orgId.
     const rows = await withSystemDb((tx) =>
       tx
         .select({
@@ -177,8 +221,26 @@ async function loadRunSource(publicId: string): Promise<RunSource | null> {
           numApiRetries: sessions.numApiRetries,
           enforcementTier: sessions.enforcementTier,
           replayGrade: sessions.replayGrade,
+          costCenter: resolvedCostCenter(
+            sessions.orgId,
+            schema.agents.costCenter,
+            schema.workspaces.costCenter,
+          ),
         })
         .from(sessions)
+        .leftJoin(
+          schema.workspaces,
+          eq(schema.workspaces.id, sessions.workspaceId),
+        )
+        // A wrapped agent is known by its principal; the agent row, deleted or
+        // not, is what carries its cost center.
+        .leftJoin(
+          schema.agents,
+          and(
+            eq(schema.agents.principalId, sessions.agentPrincipalId),
+            eq(schema.agents.orgId, sessions.orgId),
+          ),
+        )
         .leftJoin(
           principals,
           and(
@@ -207,6 +269,7 @@ async function loadRunSource(publicId: string): Promise<RunSource | null> {
         agentPrincipalId: row.agentPrincipalId,
         agentKey: row.agentKey,
         taskRef: null,
+        costCenter: row.costCenter,
         startedAt: row.startedAt,
         sealedAt: row.sealedAt,
         turns: row.numTurns,
@@ -307,6 +370,7 @@ export function runTotalsRowToRecord(row: Row): RunTotalsRecord {
     agentPrincipalId: row.agentPrincipalId,
     agentKey: row.agentKey,
     taskRef: row.taskRef,
+    costCenter: row.costCenter,
     startedAt: row.startedAt,
     sealedAt: row.sealedAt,
     turns: row.turns,
@@ -435,6 +499,7 @@ export async function upsertRunTotals(
     agentPrincipalId: record.agentPrincipalId,
     agentKey: record.agentKey,
     taskRef: record.taskRef,
+    costCenter: record.costCenter,
     startedAt: record.startedAt,
     sealedAt: record.sealedAt,
     turns: record.turns,
@@ -548,13 +613,15 @@ export async function rebuildRunTotals(
       deps.readWitnessedRun(scope, publicId),
     ]);
   // A witness run is a run of its own whose cost belongs to the worker's
-  // operator (spec §8.5 "Stamping"), so its row names that operator.
+  // operator (spec §8.5 "Stamping"), so its row names that operator, and is
+  // charged back to the worker's cost center for the same reason.
   const worker = workerId === null ? null : await deps.loadRunSource(workerId);
   const meta = worker
     ? {
         ...source.meta,
         operatorPrincipalId: worker.meta.operatorPrincipalId,
         operatorKey: worker.meta.operatorKey,
+        costCenter: worker.meta.costCenter,
       }
     : source.meta;
   const record = rollupRun({
@@ -818,4 +885,90 @@ export async function listWorkspacesWithRuns(args: {
       .from(totals)
       .where(and(gte(totals.startedAt, start), lt(totals.startedAt, next))),
   );
+}
+
+/** One row of {@link listRunsWithUnassignedCostCenter}, and the cursor for the page after it. */
+export interface UnassignedCostCenterRun {
+  runId: string;
+  orgId: string;
+  workspaceId: string;
+  /** RFC 3339, millisecond precision. */
+  startedAt: string;
+}
+
+/**
+ * Rolled-up runs charged to no cost center whose agent, or failing that
+ * whose workspace, now names a live label (ADR-142). Oldest first.
+ *
+ * These are the rows a rebuild would move out of the unassigned line: a
+ * `cost.run_totals` row written before the column existed, or before the
+ * agent or workspace was charged to a label. The seal-time rollup and the
+ * nightly sweep never revisit them, because their `rolled_up_at` postdates
+ * their seal, so `db:backfill-cost-centers` lists them here and asks the
+ * rollup job to rebuild each one. A row whose label was cleared again since
+ * is not listed: the coalesce below is the same resolution the rollup makes,
+ * so a run this lists is a run the rebuild will charge.
+ *
+ * The agent is found by its principal, the way the tacho rollup finds it, so
+ * a ledger run and a wrapped run resolve alike, and a deleted agent's row
+ * still carries its label. Only rows with a null `cost_center` are listed:
+ * moving a run from one label to another is a policy ADR-142 has not
+ * decided, and a backfill that did it silently would rewrite a closed
+ * month's statement.
+ *
+ * `after` is the last row of the previous page, at millisecond precision for
+ * the reason {@link listRunsWithIncompleteCost} gives. `orgId` narrows the
+ * pass to one organization.
+ */
+export async function listRunsWithUnassignedCostCenter(args: {
+  limit: number;
+  after?: UnassignedCostCenterRun;
+  orgId?: string;
+}): Promise<UnassignedCostCenterRun[]> {
+  const startedMs = sql<Date>`date_trunc('milliseconds', ${totals.startedAt})`;
+  const resolved = resolvedCostCenter(
+    totals.orgId,
+    schema.agents.costCenter,
+    schema.workspaces.costCenter,
+  );
+  // tenancy: the backfill runs outside a tenant scope and reads every
+  // organization's run rows, oldest first, or one organization's when asked;
+  // each joined label is filtered by the row's own orgId inside
+  // resolvedCostCenter, so no row reads another organization's list.
+  return withSystemDb(async (tx) => {
+    const rows = await tx
+      .select({
+        runId: totals.runId,
+        orgId: totals.orgId,
+        workspaceId: totals.workspaceId,
+        startedAt: totals.startedAt,
+      })
+      .from(totals)
+      .leftJoin(schema.workspaces, eq(schema.workspaces.id, totals.workspaceId))
+      .leftJoin(
+        schema.agents,
+        and(
+          eq(schema.agents.principalId, totals.agentPrincipalId),
+          eq(schema.agents.orgId, totals.orgId),
+        ),
+      )
+      .where(
+        and(
+          isNull(totals.costCenter),
+          sql`${resolved} is not null`,
+          args.orgId === undefined ? undefined : eq(totals.orgId, args.orgId),
+          args.after === undefined
+            ? undefined
+            : sql`(${startedMs}, ${totals.runId}) > (${args.after.startedAt}::timestamptz, ${args.after.runId})`,
+        ),
+      )
+      .orderBy(asc(startedMs), asc(totals.runId))
+      .limit(args.limit);
+    return rows.map((r) => ({
+      runId: r.runId,
+      orgId: r.orgId,
+      workspaceId: r.workspaceId,
+      startedAt: r.startedAt.toISOString(),
+    }));
+  });
 }

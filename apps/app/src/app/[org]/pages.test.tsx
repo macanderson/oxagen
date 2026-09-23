@@ -42,6 +42,7 @@ const {
   FleetSpendTiles,
   Roles,
   Workspaces,
+  CostCenters,
   OnboardingGate,
   Skills,
   SkillsLoading,
@@ -82,6 +83,7 @@ const {
     )),
     Roles: vi.fn((_props: Record<string, unknown>) => null),
     Workspaces: vi.fn((_props: Record<string, unknown>) => null),
+    CostCenters: vi.fn((_props: Record<string, unknown>) => null),
     // The gate's own states are its component test; here it only has to render.
     OnboardingGate: vi.fn((_props: Record<string, unknown>) => (
       <p data-testid="onboarding-gate" />
@@ -132,6 +134,7 @@ vi.mock("@/features/organization", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/features/organization")>()),
   Roles,
   Workspaces,
+  CostCenters,
 }));
 vi.mock("@/features/onboarding", () => ({ OnboardingGate }));
 vi.mock("@/features/skills", () => ({ Skills, SkillsLoading }));
@@ -193,7 +196,7 @@ const SKILLS = () => import("./[ws]/skills/page");
 const TOOLS: Load = () => import("./[ws]/tools/page");
 const STEERING: Load = () => import("./[ws]/steering/page");
 
-const FLEET: Load = () => import("./[ws]/page");
+const FLEET: Load = () => import("./[ws]/(fleet)/page");
 const AGENTS: Load = () => import("./[ws]/agents/page");
 const AGENT: Load = () => import("./[ws]/agents/[agent]/page");
 const AGENT_SOURCE: Load = () => import("./[ws]/agents/[agent]/source/page");
@@ -215,7 +218,7 @@ describe("the Tools page", () => {
       title("tools"),
     );
     expect(requireViewer).toHaveBeenCalledWith(...WS);
-    expect(page).toHaveTextContent("Workspace · Core platform");
+    expect(page).toHaveTextContent("Workspace Core platform");
     expect(Tools).toHaveBeenCalledOnce();
     expect(Tools.mock.calls[0]?.[0]).toEqual({
       ctx: viewer,
@@ -608,6 +611,7 @@ const wsRow = (slug: string, name: string) => ({
   name,
   role: "Owner",
   archivedAt: null,
+  costCenter: null,
 });
 
 describe("Organization › API keys", () => {

@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 import { withSystemDb } from "@oxagen/database";
+import { NonRetriableError } from "@oxagen/functions";
 import { createFunction } from "../create-function";
 import { logger } from "../logger";
 
@@ -75,11 +76,15 @@ export const [securityAuditPartitionRollover] = createFunction(
       if (result.hasSkippedPartitions) {
         // The transaction has committed, so the work that succeeded is durable.
         // Fail the run afterwards: a skipped partition is a defect to look at.
+        // Non-retriable, because a retry would run maintenance again and skip
+        // the same step for the same reason, three more times, before the run
+        // failed for the person who has to read it.
         logger.error(
           { skipped: result.skipped },
           "Audit partition maintenance skipped work",
         );
-        throw new AuditPartitionMaintenanceError(result.skipped);
+        const skipped = new AuditPartitionMaintenanceError(result.skipped);
+        throw new NonRetriableError(skipped.message, { cause: skipped });
       }
       return result;
     }),

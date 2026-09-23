@@ -203,8 +203,31 @@ describe("export status", () => {
     expect(screen.getByTestId("export-read-failure")).toHaveTextContent(
       "This export is not in this workspace.",
     );
-    expect(screen.getByTestId("export-check-again")).toBeTruthy();
+    // Another read would get the same answer, so none is offered.
+    expect(screen.queryByTestId("export-check-again")).toBeNull();
     expect(screen.queryByTestId("export-download")).toBeNull();
+  });
+
+  it("offers Check again when the read itself could not be served, and reads once more on it", async () => {
+    readRunExport.mockResolvedValue({
+      ok: false,
+      reason: "unavailable",
+      code: "export_store_unreachable",
+    });
+    const { user } = await queueExport();
+    await advance(EXPORT_POLL_FIRST_MS);
+    expect(screen.getByTestId("export-read-failure")).toHaveTextContent(
+      "export_store_unreachable",
+    );
+    const reads = readRunExport.mock.calls.length;
+    readRunExport.mockResolvedValue(READY);
+    await user.click(screen.getByTestId("export-check-again"));
+    await advance(0);
+    expect(readRunExport).toHaveBeenCalledTimes(reads + 1);
+    expect(screen.getByTestId("export-download")).toHaveAttribute(
+      "href",
+      URL_READY,
+    );
   });
 
   it("does not link a download URL off the signed download path (negative)", async () => {

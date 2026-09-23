@@ -19,11 +19,13 @@ const router = { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() };
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 const setBudgetAction = vi.fn();
 const exportStatementAction = vi.fn();
+const exportCostCenterStatementAction = vi.fn();
 const recordFindingFixAction = vi.fn();
 const dismissFindingAction = vi.fn();
 vi.mock("./actions", () => ({
   setBudgetAction,
   exportStatementAction,
+  exportCostCenterStatementAction,
   recordFindingFixAction,
   dismissFindingAction,
 }));
@@ -51,6 +53,7 @@ beforeEach(() => {
   router.refresh.mockReset();
   setBudgetAction.mockReset();
   exportStatementAction.mockReset();
+  exportCostCenterStatementAction.mockReset();
   recordFindingFixAction.mockReset();
   dismissFindingAction.mockReset();
 });
@@ -217,6 +220,67 @@ describe("Export report", () => {
     expect(
       await screen.findByText(
         "Your roles on this organization do not let you export this workspace’s spend.",
+      ),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("Export the chargeback statement", () => {
+  it("saves the organization's statement by cost center when that is picked", async () => {
+    const createObjectURL = vi.fn(() => "blob:chargeback");
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal("URL", { ...URL, createObjectURL, revokeObjectURL });
+    const saved: string[] = [];
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(function (this: HTMLAnchorElement) {
+        saved.push(this.download);
+      });
+    exportCostCenterStatementAction.mockResolvedValue({
+      ok: true,
+      value: {
+        filename: "cost-center-statement-2026-09.csv",
+        content: "line,cost_center\n",
+      },
+    });
+    renderWithIntl(<ExportDialog at={at} month="2026-09" />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Export report" }),
+    );
+    await userEvent.click(
+      screen.getByRole("radio", { name: /Organization by cost center/ }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Download the CSV" }),
+    );
+    await waitFor(() => {
+      expect(click).toHaveBeenCalledOnce();
+    });
+    expect(exportCostCenterStatementAction).toHaveBeenCalledWith(at, "2026-09");
+    expect(exportStatementAction).not.toHaveBeenCalled();
+    expect(saved).toEqual(["cost-center-statement-2026-09.csv"]);
+    click.mockRestore();
+  });
+
+  it("says who may export it when the organization refuses (negative)", async () => {
+    exportCostCenterStatementAction.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      code: "authz_denied",
+    });
+    renderWithIntl(<ExportDialog at={at} month="2026-09" />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Export report" }),
+    );
+    await userEvent.click(
+      screen.getByRole("radio", { name: /Organization by cost center/ }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Download the CSV" }),
+    );
+    expect(
+      await screen.findByText(
+        "Only an organization Owner, Admin or Billing member can export the chargeback statement.",
       ),
     ).toBeInTheDocument();
   });

@@ -31,6 +31,7 @@ const row = {
   principalStatus: "active",
   principalUpdatedAt: new Date("2026-09-13T10:00:00.000Z"),
   operatorPublicId: "usr_0123456789abcdefghjkmn",
+  costCenter: null,
 };
 
 describe("list_agents cursor", () => {

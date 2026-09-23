@@ -1,8 +1,8 @@
 /**
  * `export_statement`: the monthly statement for this workspace as CSV
  * (Mission Control spec §12.9 "Monthly statement", App. E; ADR-060). One line
- * per group at every level (operator, agent, model, tool, task) with the
- * month's calls, runs, cost in micros and, on that one line, the cost in
+ * per group at every level (operator, agent, model, tool, task, cost center)
+ * with the month's calls, runs, cost in micros and, on that one line, the cost in
  * cents rounded half to even (spec §12.3: rounding to cents happens once, at
  * the statement line). Every line names its basis.
  *
@@ -32,7 +32,7 @@ export const spendStatementExport = registerCapability({
   name: "export_statement",
   domain: "spend",
   description:
-    "Export this workspace's monthly spend statement as CSV: one line per operator, agent, model, tool and task with runs, calls, cost in micros and in cents rounded half to even once, the basis, and proven and accepted spend kept apart.",
+    "Export this workspace's monthly spend statement as CSV: one line per operator, agent, model, tool, task and cost center (spend with no cost center on its own line) with runs, calls, cost in micros and in cents rounded half to even once, the basis, and proven and accepted spend kept apart.",
   mode: "sync",
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
