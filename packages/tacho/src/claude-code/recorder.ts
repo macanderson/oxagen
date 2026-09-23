@@ -924,18 +924,23 @@ export class SessionRecorder {
     }
     const out: TachoEvent[] = [];
     for (const draft of drafts) {
-      const sealed = this.sealHookDraft(draft, env, ts);
-      if (sealed !== undefined) out.push(sealed);
+      out.push(...this.sealHookDraft(draft, env, ts));
     }
     return out;
   }
 
-  /** The event this draft seals, or undefined for a call the chain holds. */
+  /**
+   * The events this draft seals, in chain order. Empty for a call the chain
+   * already holds. A `turn_start` on an open turn first seals the `turn_end`
+   * that closes it; that event must be returned too, or its seq is spent on
+   * an event that never reaches the WAL and the chain has a gap.
+   */
   private sealHookDraft(
     draft: HookDraft,
     env: Record<string, string | undefined>,
     ts: string,
-  ): TachoEvent | undefined {
+  ): TachoEvent[] {
+    const out: TachoEvent[] = [];
     this.absorbContext(draft.context);
     this.absorbHost(draft.host);
     if (this.envSnapshot === undefined) {
@@ -959,10 +964,12 @@ export class SessionRecorder {
     }
     if (draft.kind === "turn_start") {
       if (this.turnOpen) {
-        this.seal(
-          "turn_end",
-          {},
-          { ts, source: "collector", hook_event_name: "UserPromptSubmit" },
+        out.push(
+          this.seal(
+            "turn_end",
+            {},
+            { ts, source: "collector", hook_event_name: "UserPromptSubmit" },
+          ),
         );
       }
       this.turnSeq += 1;
@@ -980,7 +987,7 @@ export class SessionRecorder {
     const duplicate = sighting.attrs;
     if (duplicate === undefined) {
       sighting.commit();
-      return undefined;
+      return out;
     }
     const event = this.seal(draft.kind, body, {
       ts,
@@ -1002,7 +1009,8 @@ export class SessionRecorder {
       this.stopped = true;
       this.turnOpen = false;
     }
-    return event;
+    out.push(event);
+    return out;
   }
 
   /** Ingest one OTLP/HTTP JSON payload. Records for other sessions are ignored. */
