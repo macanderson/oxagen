@@ -167,7 +167,10 @@ describe("Mandate › loaded", () => {
           mandateMovement({
             kind: "reserve",
             externalEffectRef: null,
-            value: { kind: "money", money: { micros: "2450000000", currency: "USD" } },
+            value: {
+              kind: "money",
+              money: { micros: "2450000000", currency: "USD" },
+            },
           }),
         ],
       }),
@@ -187,11 +190,9 @@ describe("Mandate › loaded", () => {
 
   it("links to the agent the record names, since the route carries no agent", async () => {
     await renderMandate(mandateDetailRead());
-    expect(
-      screen.getByRole("link", { name: "invoice-bot" }),
-    ).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "invoice-bot" })).toHaveAttribute(
       "href",
-      "/a-intel/core-platform/agents/invoice-bot?tab=mandates",
+      "/a-intel/core-platform/agents/invoice-bot/permissions",
     );
   });
 
@@ -302,9 +303,9 @@ describe("Mandate › loaded", () => {
           }),
         }),
       );
-      expect(document.querySelector('[data-approval="none"]')).toHaveTextContent(
-        "no call on this mandate waits for a person",
-      );
+      expect(
+        document.querySelector('[data-approval="none"]'),
+      ).toHaveTextContent("no call on this mandate waits for a person");
       // Not merely hidden: an approver list beside "nothing waits" would be the
       // same claim in two minds.
       expect(document.querySelector('[data-approval="approvers"]')).toBeNull();

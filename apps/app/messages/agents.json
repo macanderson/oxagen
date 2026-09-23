@@ -41,7 +41,10 @@
         "runs": "Runs 30d",
         "spend": "Spend 30d",
         "incidents": "Incidents",
-        "actions": "Actions"
+        "actions": "Actions",
+        "principal": "Principal",
+        "hosts": "Active or paused hosts",
+        "credentials": "Active credentials"
       },
       "basisNotRecorded": "basis not recorded",
       "edit": "Edit",
@@ -56,7 +59,12 @@
       },
       "create": {
         "newAgent": "New agent",
-        "register": "Register an agent"
+        "wrap": "Wrap an agent"
+      },
+      "views": {
+        "label": "Agent views",
+        "composition": "Composition",
+        "operations": "Operations"
       }
     },
     "detail": {
@@ -65,11 +73,12 @@
         "label": "Agent sections",
         "identity": "Identity",
         "toolbelt": "Toolbelt",
-        "enrollment": "Enrollment",
-        "incidents": "Tamper incidents",
-        "definition": "Configuration",
-        "mandates": "Mandates",
-        "budgets": "Budgets"
+        "definition": "Definition",
+        "overview": "Overview",
+        "steering": "Steering",
+        "runtime": "Runtime",
+        "permissions": "Permissions",
+        "activity": "Activity"
       },
       "identity": {
         "title": "Identity",
@@ -424,6 +433,22 @@
         "empty": "This organization has no cost centers. Add one on the Organization page, then charge this agent to it here.",
         "confirm": "Save",
         "pending": "Saving"
+      },
+      "overview": {
+        "title": "Composition",
+        "lead": "The identity, authority, hosts, and definition recorded for this agent.",
+        "principal": "Principal",
+        "operator": "Operator",
+        "hosts": "Recorded hosts",
+        "roles": "Assigned roles",
+        "definition": "Definition file",
+        "unavailable": "Not recorded",
+        "composition": "Agent composition"
+      },
+      "steering": {
+        "title": "Steering",
+        "lead": "Browse the existing steering library and assignments. An assembled agent preview is not available on this page.",
+        "open": "Open Steering"
       }
     },
     "actions": {

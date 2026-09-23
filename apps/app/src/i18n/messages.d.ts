@@ -97,6 +97,9 @@ type Messages = {
         spend: string;
         incidents: string;
         actions: string;
+        principal: string;
+        hosts: string;
+        credentials: string;
       };
       basisNotRecorded: string;
       edit: string;
@@ -111,7 +114,12 @@ type Messages = {
       };
       create: {
         newAgent: string;
-        register: string;
+        wrap: string;
+      };
+      views: {
+        label: string;
+        composition: string;
+        operations: string;
       };
     };
     detail: {
@@ -120,11 +128,12 @@ type Messages = {
         label: string;
         identity: string;
         toolbelt: string;
-        enrollment: string;
-        incidents: string;
         definition: string;
-        mandates: string;
-        budgets: string;
+        overview: string;
+        steering: string;
+        runtime: string;
+        permissions: string;
+        activity: string;
       };
       identity: {
         title: string;
@@ -479,6 +488,22 @@ type Messages = {
         empty: string;
         confirm: string;
         pending: string;
+      };
+      overview: {
+        title: string;
+        lead: string;
+        principal: string;
+        operator: string;
+        hosts: string;
+        roles: string;
+        definition: string;
+        unavailable: string;
+        composition: string;
+      };
+      steering: {
+        title: string;
+        lead: string;
+        open: string;
       };
     };
     actions: {
