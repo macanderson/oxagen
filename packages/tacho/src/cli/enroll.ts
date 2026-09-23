@@ -66,7 +66,12 @@ import {
   restoreCredentials,
 } from "./credential";
 import { restoreGithubRepositories } from "./github";
-import { revokeAndMark, stripEnrollmentHooks } from "./unenroll";
+import {
+  disarmGateway,
+  revokeOnControlPlane,
+  stopGateway,
+  stripEnrollmentHooks,
+} from "./unenroll";
 
 export interface EnrollOptions extends CredentialOptions {
   /**
@@ -93,6 +98,33 @@ export interface EnrollOptions extends CredentialOptions {
    * key with the harness and puts back any the gateway holds.
    */
   credentials?: CredentialMode;
+  /** Enroll even when running as root (`--allow-root`). */
+  allowRoot?: boolean;
+}
+
+/**
+ * Who the process runs as, for the root guard. Only the real CLI passes it
+ * (`main.ts`): a test runs as whoever runs the suite, root in a container
+ * included, and is not refused for it.
+ */
+export interface RunsAs {
+  getuid?: () => number | undefined;
+}
+
+/**
+ * Why `tacho <command>` must not run as root, or undefined when it may.
+ * `sudo tacho enroll` on macOS kept the user's HOME, so it wrote root-owned
+ * 0600 files into it that the user's own agents then could not read, and
+ * bootstrapped the service into root's session instead of theirs.
+ */
+export function rootRefusal(
+  command: "enroll" | "reassign",
+  deps: Pick<CliDeps, "env" | "home"> & RunsAs,
+  allowRoot: boolean | undefined,
+): string | undefined {
+  if (allowRoot === true || deps.getuid?.() !== 0) return undefined;
+  const user = deps.env["SUDO_USER"] ?? "<user>";
+  return `tacho ${command} is running as root, which would write root-owned files into ${deps.home} and install tachod for root. Run it as the user whose agents it governs, without sudo or as \`sudo -u ${user} tacho ${command}\`, or pass --allow-root if root's own agents are the ones to govern.`;
 }
 
 /**
@@ -291,6 +323,19 @@ function sameArgv(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((part, i) => part === b[i]);
 }
 
+/** What the hooks and the managed settings document are rendered from. */
+function hookInstallConfig(host: HostFile, deps: CliDeps): HookInstallConfig {
+  return {
+    enrollmentId: host.host_enrollment_id,
+    hookCommand: host.hook_command,
+    port: host.port,
+    localToken: host.local_token,
+    ...(deps.env["TACHO_HOME"] !== undefined
+      ? { tachoHome: deps.env["TACHO_HOME"] }
+      : {}),
+  };
+}
+
 /**
  * Everything that would stop a harness file being written, found before
  * anything is minted: a file that is not valid JSON, valid JSON of the wrong
@@ -354,9 +399,15 @@ export function harnessFileProblems(
  */
 export async function enroll(
   options: EnrollOptions,
-  deps: CliDeps,
+  deps: CliDeps & RunsAs,
 ): Promise<EnrollResult> {
-  if (options.printManaged === true) return enrollLocked(options, deps);
+  const asRoot = rootRefusal("enroll", deps, options.allowRoot);
+  if (asRoot !== undefined) {
+    deps.err(asRoot);
+    return { ok: false, warnings: [] };
+  }
+  // `--print-managed` too: it mints, writes host.json and installs the
+  // service like any enroll, so it must not interleave with another.
   const lock = acquireInstallLock(deps.paths.root, deps.now);
   if ("heldBy" in lock) {
     deps.err(
@@ -376,16 +427,94 @@ export async function enrollLocked(
   options: EnrollOptions,
   deps: CliDeps,
 ): Promise<EnrollResult> {
+  const addition: PendingAddition = {};
+  let result: EnrollResult = { ok: false, warnings: [] };
+  try {
+    result = await enrollSteps(options, deps, addition);
+  } finally {
+    // Set only between a harness addition's revoke and the new enrollment
+    // reaching host.json: whatever stopped it in between, returned or
+    // thrown, left a host with no enrollment to run as.
+    if (addition.revoked !== undefined)
+      await abandonAddition(addition, options, deps, result.warnings);
+  }
+  return result;
+}
+
+/** A harness addition that has revoked the live enrollment and not yet replaced it. */
+interface PendingAddition {
+  revoked?: HostFile;
+  harnesses?: TachoHarness[];
+}
+
+/**
+ * A harness addition revoked the live enrollment and then could not enroll
+ * again (refused, offline, a bundle that does not verify). Until the control
+ * plane can supersede an enrollment in one step, the host is left
+ * unenrolled rather than half enrolled, the way a failed `reassign` leaves
+ * it: the gateway comes out of the harness files while tachod still serves
+ * it, and then the service goes, since it would keep running on a revoked
+ * key. host.json stays marked retired, so the next `enroll` takes the fresh
+ * path.
+ */
+async function abandonAddition(
+  addition: PendingAddition,
+  options: EnrollOptions,
+  deps: CliDeps,
+  warnings: string[],
+): Promise<void> {
+  const revoked = addition.revoked as HostFile;
+  const own: string[] = [];
+  const stopped = await stopGateway(revoked, deps, own);
+  for (const warning of own) deps.err(`warning: ${warning}`);
+  warnings.push(...own);
+  const harnesses = (addition.harnesses ?? revoked.harnesses).join(",");
+  deps.err(
+    `Adding a harness failed after revoking ${revoked.host_enrollment_id}; this host is now unenrolled (host.json kept, marked retired)${stopped ? " and tachod was stopped" : ""}. Run \`tacho enroll --harness ${harnesses} --org ${revoked.org_slug} --workspace ${revoked.workspace_slug} --api-url ${options.apiUrl ?? revoked.api_url}\` once the cause is fixed.`,
+  );
+}
+
+async function enrollSteps(
+  options: EnrollOptions,
+  deps: CliDeps,
+  addition: PendingAddition,
+): Promise<EnrollResult> {
   const warnings: string[] = [];
   const step = (n: number, text: string) => deps.out(`[${n}/6] ${text}`);
 
   const existing = readHostFile(deps.paths.hostFile);
   let host: HostFile;
   let harnesses: TachoHarness[] = options.harnesses ?? ["claude-code"];
+  // A revoke from the fleet page reaches this machine as host_status, never
+  // as revoked_at. Re-applying that enrollment re-armed hooks and base URLs
+  // the control plane then denied, so it is refused, not repaired.
+  const fleetRevoked =
+    existing !== undefined &&
+    existing.revoked_at === null &&
+    existing.host_status === "revoked";
+  if (fleetRevoked && options.force !== true) {
+    deps.err(
+      `This host's enrollment ${existing.host_enrollment_id} was revoked on the control plane, so its hooks are not applied again. Run \`tacho unenroll\` to remove it, or \`tacho enroll --force\` to enroll this machine again.`,
+    );
+    return { ok: false, warnings };
+  }
   const live =
     existing !== undefined &&
     existing.revoked_at === null &&
+    !fleetRevoked &&
     options.force !== true;
+  // An enrolled host only needs its document rendered: nothing is minted,
+  // written or installed for it.
+  if (options.printManaged === true && live) {
+    deps.out(
+      `Already enrolled as ${existing.agent_key} (${existing.host_enrollment_id}); rendering its managed settings. Pass --force to enroll again.`,
+    );
+    const managedSettings = renderManagedSettings(
+      hookInstallConfig(existing, deps),
+    );
+    deps.out(JSON.stringify(managedSettings, null, 2));
+    return { ok: true, host: existing, managedSettings, warnings };
+  }
   // Harnesses named on a live enrollment that it does not hook yet. Adding
   // one is a change to the control plane's host record (`tacho.hosts.
   // harnesses`), which only an enrollment writes, so it goes through a
@@ -518,7 +647,7 @@ export async function enrollLocked(
       }
       credentials = resolved.credentials;
     }
-    const custodyFailures = restoreGithubRepositories(existing, deps);
+    const custodyFailures = restoreGithubRepositories(existing, deps, warnings);
     if (custodyFailures.length > 0) {
       for (const failure of custodyFailures) deps.err(failure);
       return { ok: false, warnings: [...warnings, ...custodyFailures] };
@@ -540,15 +669,32 @@ export async function enrollLocked(
       deps.out(
         `      adding ${added.join(", ")} to ${existing.agent_key}: revoking ${existing.host_enrollment_id} and enrolling again for ${harnesses.join(", ")} so the control plane's host record follows (device key, port and local token kept)`,
       );
-      await revokeAndMark(
+      // Only a revoke the control plane confirmed is marked, and only then
+      // is anything changed. Marking one it refused (a token that is not an
+      // org admin's, a network blip) retired an enrollment that was still
+      // live, and the mint after it failed for the same reason.
+      const refused: string[] = [];
+      const revoked = await revokeOnControlPlane(
         existing,
         {
           token: credentials.token,
           reason: `tacho enroll --harness ${harnesses.join(",")}`,
         },
         deps,
-        warnings,
+        refused,
       );
+      if (!revoked) {
+        deps.err(
+          `Cannot add ${added.join(", ")}: ${existing.host_enrollment_id} could not be revoked (${refused.join("; ")}), so nothing was changed; this host still reports as ${existing.agent_key} for ${existing.harnesses.join(", ")}.`,
+        );
+        return { ok: false, warnings: [...warnings, ...refused] };
+      }
+      writeHostFile(deps.paths.hostFile, {
+        ...existing,
+        revoked_at: toProtocolTimestamp(deps.now()),
+      });
+      addition.revoked = existing;
+      addition.harnesses = harnesses;
       await stripEnrollmentHooks(existing, deps);
     }
 
@@ -789,20 +935,43 @@ export async function enrollLocked(
       }
     }
     writeHostFile(deps.paths.hostFile, host);
+    delete addition.revoked;
     deps.out(
       `      enrolled as ${host.agent_key} (${host.host_enrollment_id}); bundle v${host.bundle.version}, mode ${host.bundle.mode}`,
     );
+    // `--force` over a live enrollment mints a second one beside it; left
+    // alone, the first one's host key stayed valid for the rest of its term
+    // with nothing on this machine that remembered it. Best effort: the new
+    // enrollment stands either way.
+    if (
+      options.force === true &&
+      existing !== undefined &&
+      existing.revoked_at === null &&
+      !fleetRevoked &&
+      existing.host_enrollment_id !== host.host_enrollment_id
+    ) {
+      const problems: string[] = [];
+      const revoked = await revokeOnControlPlane(
+        existing,
+        {
+          ...(options.token !== undefined ? { token: options.token } : {}),
+          reason: "tacho enroll --force",
+        },
+        deps,
+        problems,
+      );
+      if (revoked)
+        deps.out(
+          `      previous enrollment ${existing.host_enrollment_id} revoked`,
+        );
+      else
+        warnings.push(
+          `the previous enrollment ${existing.host_enrollment_id} could not be revoked (${problems.join("; ")}); its host key stays valid until ${existing.expires_at} unless an operator revokes it from the fleet page`,
+        );
+    }
   }
 
-  const hookConfig: HookInstallConfig = {
-    enrollmentId: host.host_enrollment_id,
-    hookCommand: host.hook_command,
-    port: host.port,
-    localToken: host.local_token,
-    ...(deps.env["TACHO_HOME"] !== undefined
-      ? { tachoHome: deps.env["TACHO_HOME"] }
-      : {}),
-  };
+  const hookConfig = hookInstallConfig(host, deps);
 
   step(
     4,
@@ -1086,6 +1255,9 @@ export async function enrollLocked(
       );
     else deps.out(`      stella ${stella.version ?? "?"} at ${stella.path}`);
   }
+  // Asked for and never answered: the hooks post to nothing, so exit 0
+  // would tell the desktop app the machine is covered when it is not.
+  let serviceDown = false;
   if (options.service !== false) {
     let healthy = false;
     let gateway: { listening?: boolean; port?: number } | undefined;
@@ -1202,9 +1374,38 @@ export async function enrollLocked(
           }
         }
       } else {
-        warnings.push(
-          "the model proxy is not listening, so no model base URL was written and model calls are not routed through Oxagen. Run `tacho enroll` again once tachod is up",
-        );
+        // A re-enroll finds the previous enrollment's base URL and helper
+        // still in the files, naming a port nothing listens on now, so they
+        // come out rather than being reported as never written.
+        let pointing: string[] = [];
+        try {
+          const state = await deps.modelBaseUrls.read({
+            home: deps.home,
+            stellaHome,
+            port: host.port,
+            harnesses: routed,
+          });
+          pointing = state.harnesses
+            .filter((entry) => entry.ours)
+            .map((entry) => entry.file);
+        } catch (error) {
+          warnings.push(
+            `could not read the model base URLs: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+        if (pointing.length === 0) {
+          warnings.push(
+            "the model proxy is not listening, so no model base URL was written and model calls are not routed through Oxagen. Run `tacho enroll` again once tachod is up",
+          );
+        } else if (await disarmGateway(host, deps, warnings)) {
+          warnings.push(
+            `the model proxy is not listening, so the model base URL was taken out of ${pointing.join(", ")} and model calls are not routed through Oxagen. Run \`tacho enroll\` again once tachod is up`,
+          );
+        } else {
+          warnings.push(
+            `the model proxy is not listening and the model base URL could not be taken out of ${pointing.join(", ")}, so those model calls fail until tachod is up. Fix the file named above, or run \`tacho enroll\` again once tachod is up`,
+          );
+        }
       }
     }
     if (healthy)
@@ -1213,10 +1414,12 @@ export async function enrollLocked(
           ? `      tachod healthy on 127.0.0.1:${host.port}`
           : `      tachod healthy on 127.0.0.1:${host.port} and ${deps.paths.socket}`,
       );
-    else
+    else {
+      serviceDown = true;
       warnings.push(
         `tachod did not answer on 127.0.0.1:${host.port}; check ${deps.paths.log}`,
       );
+    }
   }
   if (!existsSync(deps.paths.deviceKey))
     warnings.push("device key missing after enrollment");
@@ -1226,13 +1429,17 @@ export async function enrollLocked(
     deps.err(
       `This machine is enrolled as ${host.agent_key}, but ${listLabels(unhooked)} ${unhooked.length === 1 ? "is" : "are"} not hooked (see the warnings above). Fix that and run \`tacho enroll\` again; nothing already written is repeated.`,
     );
+  } else if (serviceDown) {
+    deps.err(
+      `This machine is enrolled as ${host.agent_key}, but tachod is not running (see the warnings above), so nothing is recorded yet. Start it and run \`tacho enroll\` again.`,
+    );
   } else {
     deps.out(
       `Done. This machine reports to Oxagen as ${host.agent_key}; every ${listLabels(hooked)} session from now on is recorded${host.bundle.mode === "enforce" ? " and gated" : " (observe mode)"}.`,
     );
   }
   return {
-    ok: unhooked.length === 0,
+    ok: unhooked.length === 0 && !serviceDown,
     ...(unhooked.length > 0 ? { unhooked } : {}),
     host,
     ...(managedSettings !== undefined ? { managedSettings } : {}),

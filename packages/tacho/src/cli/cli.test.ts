@@ -1335,7 +1335,7 @@ describe("enroll → status → unenroll", () => {
     expect(rogue.errors[0]).toContain("does not verify");
   });
 
-  it("warns instead of failing when the service or claude are missing, and prints managed settings", async () => {
+  it("warns when claude is missing, fails when tachod never answers, and prints managed settings", async () => {
     const d = deps({
       claude: () => ({}),
       daemonGet: async () => undefined,
@@ -1353,7 +1353,11 @@ describe("enroll → status → unenroll", () => {
       },
       d,
     );
-    expect(result.ok).toBe(true);
+    // Enrolled, but the hooks post to a daemon that is not there: exit 0
+    // told the desktop app the machine was covered.
+    expect(result.ok).toBe(false);
+    expect(result.host).toBeDefined();
+    expect(d.errors.at(-1)).toContain("tachod is not running");
     expect(result.warnings.join("\n")).toContain("service install failed");
     expect(result.warnings.join("\n")).toContain("not on PATH");
     expect(result.warnings.join("\n")).toContain("did not answer");

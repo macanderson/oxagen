@@ -3,7 +3,8 @@
  * `oxagen tacho <command>` in the platform CLI delegates here with its own
  * credentials.
  */
-import { Command } from "commander";
+import { readFileSync } from "node:fs";
+import { Command, InvalidArgumentError } from "commander";
 import { runHookProcess } from "../claude-code/hook-process";
 import { runDaemonProcess } from "../collector/run";
 import {
@@ -17,7 +18,7 @@ import {
   credentialStatus,
   parseCredentialMode,
 } from "./credential";
-import { defaultCliDeps, isNativeBuild } from "./deps";
+import { type CliDeps, defaultCliDeps, isNativeBuild } from "./deps";
 import { detect } from "./detect";
 import { enroll, parseHarnesses } from "./enroll";
 import { exportCommand } from "./export";
@@ -28,9 +29,55 @@ import { status } from "./status";
 import { unenroll } from "./unenroll";
 import { verify } from "./verify";
 
+/**
+ * `--port`: a whole number tachod may listen on without privilege. host.json
+ * accepts 1024 to 65535, so anything else written by enroll made every
+ * later read of it throw.
+ */
+export function parsePort(value: string): number {
+  const port = Number(value);
+  if (!/^\d+$/.test(value) || port < 1024 || port > 65535)
+    throw new InvalidArgumentError(
+      "expected a whole number from 1024 to 65535",
+    );
+  return port;
+}
+
+/**
+ * The operator token from `--token` or `--token-stdin`. A token on the
+ * command line is in the process list and the shell history, so it still
+ * works and draws a warning.
+ */
+export function tokenOption(
+  opts: Record<string, unknown>,
+  err: (line: string) => void,
+  readStdin: () => string = () => readFileSync(0, "utf8"),
+): string | undefined {
+  const flag = opts["token"] as string | undefined;
+  if (opts["tokenStdin"] !== true) {
+    if (flag !== undefined)
+      err(
+        "warning: --token leaves the token in the process list and your shell history; pipe it to --token-stdin instead, or run `oxagen login`",
+      );
+    return flag;
+  }
+  if (flag !== undefined)
+    throw new Error("pass --token or --token-stdin, not both");
+  const token = readStdin().trim();
+  if (token.length === 0)
+    throw new Error("--token-stdin read no token from stdin");
+  return token;
+}
+
 export function buildTachoProgram(): Command {
   const program = new Command();
   const deps = defaultCliDeps();
+  // Only the real CLI knows who it runs as; `enroll` and `reassign` refuse
+  // root without --allow-root.
+  const asUser: CliDeps & { getuid: () => number | undefined } = {
+    ...deps,
+    getuid: () => process.getuid?.(),
+  };
   program
     .name("tacho")
     .description(
@@ -64,10 +111,11 @@ export function buildTachoProgram(): Command {
       "Enroll this machine: device key, host API key, tachod service, harness hooks",
     )
     .option("--token <apiKey>", "Oxagen API token (or run `oxagen login`)")
+    .option("--token-stdin", "Read the Oxagen API token from stdin")
     .option("--org <slug>", "Organization slug")
     .option("--workspace <slug>", "Workspace slug")
     .option("--api-url <url>", "Oxagen API base URL")
-    .option("--port <n>", "Loopback port for tachod", (v) => Number(v))
+    .option("--port <n>", "Loopback port for tachod (1024 to 65535)", parsePort)
     .option("--no-service", "Do not install the user service")
     .option("--managed", "Also print the managed settings document for MDM")
     .option(
@@ -89,6 +137,7 @@ export function buildTachoProgram(): Command {
       "brokered (default): the gateway holds each model vendor key and the harness holds a run token; passthrough: the harness keeps its own key",
     )
     .option("--verify", "Run a headless Claude Code turn afterwards")
+    .option("--allow-root", "Enroll even when running as root")
     .action(async (opts: Record<string, unknown>) => {
       const harness = opts["harness"] as string | undefined;
       const result = await enroll(
@@ -96,7 +145,7 @@ export function buildTachoProgram(): Command {
           credentials: parseCredentialMode(
             opts["credentials"] as string | undefined,
           ),
-          token: opts["token"] as string | undefined,
+          token: tokenOption(opts, deps.err),
           org: opts["org"] as string | undefined,
           workspace: opts["workspace"] as string | undefined,
           apiUrl: opts["apiUrl"] as string | undefined,
@@ -106,11 +155,12 @@ export function buildTachoProgram(): Command {
           printManaged: opts["printManaged"] as boolean | undefined,
           validityDays: opts["validityDays"] as number | undefined,
           force: opts["force"] as boolean | undefined,
+          allowRoot: opts["allowRoot"] as boolean | undefined,
           ...(harness !== undefined
             ? { harnesses: parseHarnesses(harness) }
             : {}),
         },
-        deps,
+        asUser,
       );
       if (!result.ok) {
         process.exitCode = 1;
@@ -230,6 +280,7 @@ export function buildTachoProgram(): Command {
       "Remove the hooks and the service, revoke the enrollment, delete the host key",
     )
     .option("--token <apiKey>", "Operator token for the server-side revoke")
+    .option("--token-stdin", "Read the operator token from stdin")
     .option("--org <slug>")
     .option("--workspace <slug>")
     .option("--purge", "Also delete the local WAL, spool, and quarantine")
@@ -237,7 +288,7 @@ export function buildTachoProgram(): Command {
     .action(async (opts: Record<string, unknown>) => {
       const result = await unenroll(
         {
-          token: opts["token"] as string | undefined,
+          token: tokenOption(opts, deps.err),
           org: opts["org"] as string | undefined,
           workspace: opts["workspace"] as string | undefined,
           purge: opts["purge"] as boolean | undefined,
@@ -256,26 +307,29 @@ export function buildTachoProgram(): Command {
     .option("--workspace <slug>", "Workspace slug to report to")
     .option("--org <slug>", "Organization slug (default: the current one)")
     .option("--token <apiKey>", "Oxagen API token (or run `oxagen login`)")
+    .option("--token-stdin", "Read the Oxagen API token from stdin")
     .option("--api-url <url>", "Oxagen API base URL")
     .option(
       "--harness <list>",
       "Replace the harness list (default: keep the current one)",
     )
     .option("--reason <text>", "Reason recorded with the revoke")
+    .option("--allow-root", "Reassign even when running as root")
     .action(async (opts: Record<string, unknown>) => {
       const harness = opts["harness"] as string | undefined;
       const result = await reassign(
         {
-          token: opts["token"] as string | undefined,
+          token: tokenOption(opts, deps.err),
           org: opts["org"] as string | undefined,
           workspace: opts["workspace"] as string | undefined,
           apiUrl: opts["apiUrl"] as string | undefined,
           reason: opts["reason"] as string | undefined,
+          allowRoot: opts["allowRoot"] as boolean | undefined,
           ...(harness !== undefined
             ? { harnesses: parseHarnesses(harness) }
             : {}),
         },
-        deps,
+        asUser,
       );
       if (!result.ok) process.exitCode = 1;
     });
