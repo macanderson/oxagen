@@ -17,6 +17,7 @@ import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { nth } from "@/test/nth";
+import { phoneWidth } from "@/test/phone";
 import {
   enrollment,
   runtimeAgent,
@@ -62,21 +63,26 @@ const ctx = unsafeMint(WsCtx, {
   wsRole: "member",
 });
 
-async function renderList(reads: Parameters<typeof runtimesSource>[0]) {
+async function renderList(
+  reads: Parameters<typeof runtimesSource>[0],
+  options: { container?: HTMLElement } = {},
+) {
   const { source, calls } = runtimesSource(reads);
   const element = await Runtimes({
     ctx,
     source,
     org: "acme",
     ws: "core-platform",
+    viewerName: "Marcus Bell",
   });
-  render(<IntlProvider>{element}</IntlProvider>);
+  render(<IntlProvider>{element}</IntlProvider>, options);
   return calls;
 }
 
 async function renderDetail(
   reads: Parameters<typeof runtimesSource>[0],
   runtime = enrollment().id,
+  options: { container?: HTMLElement } = {},
 ) {
   const { source, calls } = runtimesSource(reads);
   const element = await Runtime({
@@ -85,8 +91,9 @@ async function renderDetail(
     org: "acme",
     ws: "core-platform",
     runtime,
+    viewerName: "Marcus Bell",
   });
-  render(<IntlProvider>{element}</IntlProvider>);
+  render(<IntlProvider>{element}</IntlProvider>, options);
   return calls;
 }
 
@@ -188,9 +195,8 @@ describe("Runtimes, loaded", () => {
       "Health",
       "Last checkpoint",
     ]);
-    expect(within(hosts).getByTestId("runtimes-record")).toHaveTextContent(
-      "each row is one agent on one machine",
-    );
+    // Nothing but the table and the note: the spec draws no paragraph above it.
+    expect(within(hosts).queryByTestId("runtimes-record")).toBeNull();
     expect(hosts).toHaveTextContent(
       "The tier is a property of the seam, not of the agent: two agents on one host earn the same tier, and the same agent moved to a weaker host earns less. It is computed per run from what was actually routed and is never upgraded after the fact.",
     );
@@ -217,6 +223,10 @@ describe("Runtimes, loaded", () => {
       "href",
       "/acme/core-platform/runtimes/tch_mbellmbp16aaaaaaaaaaaaa",
     );
+    // The row opens the runtime: the link is stretched over the whole row.
+    expect(row).toHaveClass("relative", "cursor-pointer");
+    expect(link.className).toContain("after:absolute");
+    expect(link.className).toContain("after:inset-0");
     expect(cells[0]).toHaveTextContent("macOS");
     expect(
       nth(cells, 1, "cell").querySelector("[data-not-backed]"),
@@ -226,12 +236,20 @@ describe("Runtimes, loaded", () => {
     expect(
       nth(cells, 4, "cell").querySelector("[data-not-backed]"),
     ).toHaveAttribute("data-gap", "#3817");
-    expect(cells[5]).toHaveTextContent("acme.core.release-manager");
+    // The count, then the key under it.
+    expect(cells[5]).toHaveTextContent(/^1acme\.core\.release-manager$/);
     expect(cells[6]).toHaveTextContent("tachod 1.6.2");
     expect(cells[6]).toHaveTextContent("gaps in 24h not recorded");
-    expect(cells[7]).toHaveTextContent("count not recorded");
-    expect(cells[7]).toHaveTextContent("the daemon reports its hooks in place");
-    expect(cells[8]).toHaveTextContent("active");
+    expect(cells[7]).toHaveTextContent(/^count not recorded$/);
+    // Healthy and degraded come from the 24-hour gap count (#3818); an
+    // enrolled host's health is not recorded, never a green word.
+    const health = nth(cells, 8, "cell").querySelector("[data-health]");
+    expect(health).toHaveAttribute("data-health", "not_recorded");
+    expect(health?.querySelector("[data-not-backed]")).toHaveAttribute(
+      "data-gap",
+      "#3818",
+    );
+    expect(cells[8]).toHaveTextContent(/^not recorded$/);
     expect(
       nth(cells, 9, "cell").querySelector("[data-not-backed]"),
     ).toHaveAttribute("data-gap", "#3817");
@@ -259,12 +277,14 @@ describe("Runtimes, loaded", () => {
     );
     expect(cells[2]).toHaveTextContent("none reported");
     expect(cells[3]).toHaveTextContent("not reported");
-    expect(cells[5]).toHaveTextContent("enrolled, nothing assigned");
-    expect(cells[6]).toHaveTextContent("not recorded");
-    expect(cells[7]).toHaveTextContent("the daemon reports its hooks removed");
-    expect(
-      nth(cells, 8, "cell").querySelector("[data-health]"),
-    ).toHaveAttribute("data-health", "expired");
+    expect(cells[5]).toHaveTextContent(/^0enrolled, nothing assigned$/);
+    // A daemon that has not reported yet is not a backend gap: no data-gap.
+    const collector = nth(cells, 6, "cell");
+    expect(collector.firstElementChild).toHaveTextContent("not reported yet");
+    expect(collector.firstElementChild).not.toHaveAttribute("data-gap");
+    const health = nth(cells, 8, "cell").querySelector("[data-health]");
+    expect(health).toHaveAttribute("data-health", "not_enrolled");
+    expect(health).toHaveTextContent("not enrolled");
     expect(screen.getByTestId("runtimes-more")).toHaveTextContent(
       "The first 1 enrollments are listed.",
     );
@@ -290,7 +310,6 @@ describe("Runtimes, loaded", () => {
     expect(cells[3]).toHaveTextContent(
       "overridden by /etc/managed-settings.json",
     );
-    expect(cells[7]).toHaveTextContent("the daemon has not reported its hooks");
   });
 });
 
@@ -328,11 +347,15 @@ describe("Runtimes, not loaded", () => {
       }),
     ).toBeInTheDocument();
     expect(error).toHaveTextContent(
-      "The control plane answered collector_unreachable. Nothing was changed. Runs kept recording while this page was down. Frames are written by the collector on each host, not by Oxagen.",
+      "The control plane answered 503 collector_unreachable. Nothing was changed. Runs kept recording while this page was down. Frames are written by the collector on each host, not by Oxagen.",
     );
-    expect(screen.getByTestId("runtimes-trace")).toHaveTextContent(
-      /^503 collector_unreachable · read at \d{4}-\d{2}-\d{2}T/,
+    // The kernel's error carries no trace id or region (#3841).
+    const trace = screen.getByTestId("runtimes-trace");
+    expect(trace).toHaveTextContent(
+      /^trace not recorded · region not recorded · \d{4}-\d{2}-\d{2}T/,
     );
+    for (const gap of trace.querySelectorAll("[data-not-backed]"))
+      expect(gap).toHaveAttribute("data-gap", "#3841");
     fireEvent.click(within(error).getByRole("button", { name: "Try again" }));
     expect(refresh).toHaveBeenCalledOnce();
     fireEvent.click(
@@ -363,8 +386,16 @@ describe("Runtimes, not loaded", () => {
         .getAllByRole("term")
         .map((dt) => dt.textContent),
     ).toEqual(["Signed in as", "Needed", "Decided by"]);
-    expect(denied).toHaveTextContent(
-      "owner on the organization · member on this workspace",
+    expect(screen.getByTestId("runtimes-signed-in")).toHaveTextContent(
+      "Marcus Bell · owner on the organization · member on this workspace",
+    );
+    const decided = screen.getByTestId("runtimes-decided-by");
+    expect(decided).toHaveTextContent(
+      "policy not recorded · deny wins over every allow",
+    );
+    expect(decided.querySelector("[data-not-backed]")).toHaveAttribute(
+      "data-gap",
+      "#3841",
     );
     expect(
       within(denied).getByRole("link", { name: "Back to Fleet" }),
@@ -417,8 +448,15 @@ describe("One runtime", () => {
       "/acme/core-platform/runtimes",
     );
     const host = screen.getByRole("region", { name: "mbell-mbp-16" });
-    expect(host).toHaveTextContent("macOS · run as mbell · kind not recorded");
-    expect(within(host).getByText("active")).toBeInTheDocument();
+    const subtitle = screen.getByTestId("runtime-subtitle");
+    expect(subtitle).toHaveTextContent(
+      "kind not recorded · macOS · started by not recorded",
+    );
+    for (const gap of subtitle.querySelectorAll("[data-not-backed]"))
+      expect(gap).toHaveAttribute("data-gap", "#3816");
+    expect(host.querySelector("[data-health]")).toHaveTextContent(
+      "health not recorded",
+    );
     expect(
       within(host)
         .getAllByRole("term")
@@ -442,7 +480,7 @@ describe("One runtime", () => {
       "tachod 1.6.2telemetry gaps in the last 24h not recorded",
     );
     expect(screen.getByTestId("fact-hook-binary")).toHaveTextContent(
-      "tacho-hook 1.6.2fails closed against its cached bundle",
+      "tacho-hook 1.6.2 · fails closed against its cached bundle",
     );
     expect(screen.getByTestId("fact-model-surface")).toHaveTextContent(
       "the harness config names the loopback proxy",
@@ -517,7 +555,7 @@ describe("One runtime", () => {
     );
   });
 
-  it("marks an agent the workspace does not list, and hides Unenroll on a revoked host", async () => {
+  it("marks an agent the workspace does not list, and keeps Unenroll on a revoked host, which the write answers idempotently", async () => {
     await renderDetail({
       list: runtimeList([
         enrollment({
@@ -532,7 +570,14 @@ describe("One runtime", () => {
     const row = screen.getByTestId("runtime-agent-row");
     expect(within(row).queryByRole("link")).toBeNull();
     expect(row).toHaveTextContent("not among this workspace's identities");
-    expect(screen.queryByRole("button", { name: "Unenroll" })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Unenroll" }),
+    ).toBeInTheDocument();
+    expect(
+      screen
+        .getByRole("region", { name: "mbell-mbp-16" })
+        .querySelector("[data-health]"),
+    ).toHaveTextContent("not enrolled");
     expect(screen.getByTestId("runtime-unenroll-command")).toHaveTextContent(
       "oxagen agent unenroll release-manager",
     );
@@ -584,6 +629,9 @@ describe("One runtime", () => {
       within(dialog).getByRole("heading", { name: "Unenroll mbell-mbp-16?" }),
     ).toBeInTheDocument();
     expect(dialog).toHaveTextContent(
+      "Calls routed through Oxagen are refused from this host from now on. The hooks stay on the host until the rollback command runs there",
+    );
+    expect(screen.getByTestId("runtime-unenroll-warn")).toHaveTextContent(
       "This revokes the enrollment of acme.core.release-manager on this machine.",
     );
     expect(
@@ -657,5 +705,63 @@ describe("One runtime", () => {
     ).toHaveTextContent(
       "This write could not be answered: action_failed. Nothing was changed.",
     );
+  });
+});
+
+describe("A daemon that has not reported", () => {
+  it("prints not reported yet for the collector and the hook, with no gap", async () => {
+    await renderDetail({
+      list: runtimeList([enrollment({ collectorVersion: null })]),
+    });
+    for (const id of ["fact-collector", "fact-hook-binary"]) {
+      const fact = screen.getByTestId(id);
+      expect(fact.firstElementChild).toHaveTextContent("not reported yet");
+      expect(fact.firstElementChild).not.toHaveAttribute("data-gap");
+    }
+  });
+});
+
+describe("Runtimes on a phone", () => {
+  // runtimes.md, Mobile: touch targets are 44 px or larger, and the ladder
+  // keeps the mockup's two columns at 390 px.
+  it("keeps the row links and every control a 44px touch target, and the ladder two to a row", async () => {
+    const phone = phoneWidth();
+    try {
+      await renderList(
+        { list: runtimeList([enrollment()]) },
+        { container: phone.container },
+      );
+      const link = within(phone.container).getByRole("link", {
+        name: "Open mbell-mbp-16",
+      });
+      expect(link).toHaveAttribute("data-touch-target");
+      const targets = phone.container.querySelectorAll("[data-touch-target]");
+      expect(targets.length).toBeGreaterThan(1);
+      for (const target of targets)
+        expect(getComputedStyle(target).minHeight).toBe("44px");
+      const ladder = within(phone.container).getByTestId("tier-ladder");
+      expect(ladder).toHaveClass("grid-cols-2", "lg:grid-cols-4");
+    } finally {
+      phone.restore();
+    }
+  });
+
+  it("makes the agent row's link a 44px target that opens the agent from the whole row", async () => {
+    const phone = phoneWidth();
+    try {
+      await renderDetail(
+        { list: runtimeList([enrollment()]) },
+        enrollment().id,
+        { container: phone.container },
+      );
+      const row = within(phone.container).getByTestId("runtime-agent-row");
+      expect(row).toHaveClass("relative", "cursor-pointer");
+      const link = within(row).getByRole("link");
+      expect(link).toHaveAttribute("data-touch-target");
+      expect(getComputedStyle(link).minHeight).toBe("44px");
+      expect(link.className).toContain("after:inset-0");
+    } finally {
+      phone.restore();
+    }
   });
 });

@@ -4234,6 +4234,7 @@ type Messages = {
       loading: string;
     };
     notRecorded: string;
+    notReported: string;
     tiles: {
       runtimes: string;
       runtimesBasis: string;
@@ -4246,7 +4247,6 @@ type Messages = {
     };
     hosts: {
       title: string;
-      record: string;
       more: string;
       columns: {
         runtime: string;
@@ -4267,11 +4267,6 @@ type Messages = {
       hookCount: string;
       note: string;
     };
-    hooksReport: {
-      ok: string;
-      missing: string;
-      unreported: string;
-    };
     modelSurface: {
       loopback: string;
       direct: string;
@@ -4279,11 +4274,7 @@ type Messages = {
       shadowed: string;
     };
     health: {
-      active: string;
-      paused: string;
-      suspended: string;
-      revoked: string;
-      expired: string;
+      notEnrolled: string;
     };
     platform: {
       darwin: string;
@@ -4325,6 +4316,7 @@ type Messages = {
       retry: string;
       incident: string;
       trace: string;
+      regionUnrecorded: string;
     };
     denied: {
       title: string;
@@ -4337,6 +4329,7 @@ type Messages = {
       neededValue: string;
       decidedBy: string;
       decidedByValue: string;
+      policyUnrecorded: string;
     };
     pending: {
       title: string;
@@ -4354,6 +4347,8 @@ type Messages = {
     detail: {
       back: string;
       subtitle: string;
+      kindUnrecorded: string;
+      healthUnrecorded: string;
       facts: {
         workspace: string;
         owner: string;
@@ -4367,10 +4362,8 @@ type Messages = {
         checkpoint: string;
       };
       collectorGaps: string;
-      hookBinary: string;
       hookEnforce: string;
       hookObserve: string;
-      hooksWrittenBasis: string;
       modelLoopback: string;
       modelDirect: string;
       tierBasis: string;

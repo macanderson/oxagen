@@ -9,7 +9,7 @@ import type {
   RuntimeEnrollment,
   RuntimePlatform,
 } from "@/data/contracts/runtimes";
-import { Badge, type BadgeTone } from "@/ui/badge";
+import { Badge } from "@/ui/badge";
 import {
   mono,
   panel,
@@ -40,6 +40,8 @@ const GAPS = {
   checkpoint: "#3817",
   /** Starting a smoke session on a host from the console. */
   smoke: "#3819",
+  /** The trace id of a failed read and the policy id that refused one. */
+  decision: "#3841",
 } as const;
 type GapKey = keyof typeof GAPS;
 
@@ -175,35 +177,45 @@ export function Sub({
   );
 }
 
-type Health = RuntimeEnrollment["status"] | "expired";
-
 /**
- * The enrollment's recorded status, or `expired` when its expiry has passed
- * and nothing revoked it. `tacho-host.ts` refuses a revoked host and then an
- * expired one, so a status that read only the stored word would call a host
- * active while every request it makes is refused.
+ * Whether the enrollment still stands: not revoked, and not past its expiry.
+ * `tacho-host.ts` refuses a revoked host and then an expired one, so a check
+ * that read only the stored word would call a host enrolled while every
+ * request it makes is refused.
  */
-export function healthOf(host: RuntimeEnrollment, now: number): Health {
-  if (host.status === "revoked") return "revoked";
-  if (Date.parse(host.expiresAt) <= now) return "expired";
-  return host.status;
+export function isEnrolled(host: RuntimeEnrollment, now: number): boolean {
+  return host.status !== "revoked" && Date.parse(host.expiresAt) > now;
 }
 
-const HEALTH_TONE: Record<Health, BadgeTone> = {
-  active: "allowed",
-  paused: "approval",
-  suspended: "denied",
-  revoked: "quiet",
-  expired: "quiet",
-};
-
-/** `rtHealth()`: a dot and a word, so the state survives greyscale. */
-export function HealthBadge({ health }: { health: Health }) {
+/**
+ * `rtHealth()`, in the design's three words: healthy, degraded and not
+ * enrolled. A revoked or expired enrollment is not enrolled, a dot and a word
+ * so the state survives greyscale. Healthy and degraded are judged from the
+ * collector's telemetry gaps in 24 hours, which nothing records (#3818), so an
+ * enrolled host's health is not recorded rather than a green word the record
+ * cannot back.
+ */
+export function HealthBadge({
+  host,
+  now,
+  children,
+}: {
+  host: RuntimeEnrollment;
+  now: number;
+  /** What to say for an enrolled host instead of the default "not recorded". */
+  children?: ReactNode;
+}) {
   const t = useTranslations("runtimes.health");
+  if (!isEnrolled(host, now))
+    return (
+      <Badge tone="quiet" data-health="not_enrolled">
+        {t("notEnrolled")}
+      </Badge>
+    );
   return (
-    <Badge tone={HEALTH_TONE[health]} data-health={health}>
-      {t(health)}
-    </Badge>
+    <span data-health="not_recorded">
+      <NotBacked gap="gaps">{children}</NotBacked>
+    </span>
   );
 }
 
@@ -270,8 +282,8 @@ const RUNGS = ["observe", "harness", "gateway", "contained"] as const;
 
 /**
  * `tierLadder(null)`: the four rungs in order, each with what it needs and
- * what it earns. No rung is marked current: a tier is a run's, and this page
- * reads no run.
+ * what it earns, two to a row on a phone and four on a wide screen. No rung is
+ * marked current: a tier is a run's, and this page reads no run.
  */
 export function TierLadder() {
   const t = useTranslations("runtimes.ladder");
@@ -279,13 +291,13 @@ export function TierLadder() {
     <ol
       aria-label={t("label")}
       data-testid="tier-ladder"
-      className="grid overflow-hidden rounded-[10px] border border-border sm:grid-cols-2 lg:grid-cols-4"
+      className="grid grid-cols-2 gap-px overflow-hidden rounded-[10px] border border-border bg-border lg:grid-cols-4"
     >
       {RUNGS.map((rung) => (
         <li
           key={rung}
           data-rung={rung}
-          className="border-border px-3.5 py-3 text-xs text-muted-foreground max-lg:border-b lg:border-r lg:last:border-r-0"
+          className="bg-card px-3.5 py-3 text-xs text-muted-foreground"
         >
           <b className={`${mono} mb-1 block text-[13px] text-foreground`}>
             {rung}

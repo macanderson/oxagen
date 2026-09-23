@@ -281,8 +281,19 @@ export function Unenroll({
             void confirm();
           }}
         >
-          <p>{t("body")}</p>
-          <p className="text-muted-foreground">{t("scope", { agent })}</p>
+          {/* The mockup's `DLG_EXT.unenroll`: a note, then the warn line. The
+              note keeps the mockup's first sentence and replaces its second,
+              because a revoke on the control plane leaves the hooks on the
+              host; only `tacho unenroll` on the host strips them. */}
+          <p className="border-l-2 border-accent-text pl-3 text-muted-foreground">
+            {t("body")}
+          </p>
+          <p
+            data-testid="runtime-unenroll-warn"
+            className="rounded-[10px] border border-critical/45 bg-critical/10 px-3.5 py-2.5 text-[12.5px] text-foreground"
+          >
+            {t("scope", { agent })}
+          </p>
           {failure === null ? null : (
             <FormAlert testId="runtime-unenroll-failure">{failure}</FormAlert>
           )}

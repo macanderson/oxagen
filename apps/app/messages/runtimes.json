@@ -7,6 +7,7 @@
       "loading": "Reading the runtimes of this workspace"
     },
     "notRecorded": "not recorded",
+    "notReported": "not reported yet",
     "tiles": {
       "runtimes": "Runtimes",
       "runtimesBasis": "{count, plural, one {# agent enrollment recorded; no host row yet} other {# agent enrollments recorded; no host row yet}}",
@@ -19,7 +20,6 @@
     },
     "hosts": {
       "title": "Enrolled hosts",
-      "record": "Oxagen records an enrollment per agent, so each row is one agent on one machine, and two agents on one workstation read as two rows. The host itself, its kind, the tier rolled up per host, the telemetry gaps in 24 hours, the hooks written and the last checkpoint are not recorded yet.",
       "more": "The first {count} enrollments are listed. More are recorded than this page reads.",
       "columns": {
         "runtime": "Runtime",
@@ -40,11 +40,6 @@
       "hookCount": "count not recorded",
       "note": "The tier is a property of the seam, not of the agent: two agents on one host earn the same tier, and the same agent moved to a weaker host earns less. It is computed per run from what was actually routed and is never upgraded after the fact."
     },
-    "hooksReport": {
-      "ok": "the daemon reports its hooks in place",
-      "missing": "the daemon reports its hooks removed",
-      "unreported": "the daemon has not reported its hooks"
-    },
     "modelSurface": {
       "loopback": "loopback proxy",
       "direct": "provider direct",
@@ -52,11 +47,7 @@
       "shadowed": "overridden by {file}"
     },
     "health": {
-      "active": "active",
-      "paused": "paused",
-      "suspended": "suspended",
-      "revoked": "revoked",
-      "expired": "expired"
+      "notEnrolled": "not enrolled"
     },
     "platform": {
       "darwin": "macOS",
@@ -97,7 +88,8 @@
       "body": "The control plane answered <c>{code}</c>. Nothing was changed. Runs kept recording while this page was down. Frames are written by the collector on each host, not by Oxagen.",
       "retry": "Try again",
       "incident": "Open an incident",
-      "trace": "{status} {code} · read at {at}"
+      "trace": "trace <trace>id</trace> · <region>region</region> · {at}",
+      "regionUnrecorded": "region not recorded"
     },
     "denied": {
       "title": "You cannot see the runtimes of this workspace",
@@ -105,11 +97,12 @@
       "request": "Request access",
       "back": "Back to Fleet",
       "signedIn": "Signed in as",
-      "signedInValue": "{orgRole} on the organization · {wsRole} on this workspace",
+      "signedInValue": "{name} · <code>{orgRole}</code> on the organization · <code>{wsRole}</code> on this workspace",
       "needed": "Needed",
       "neededValue": "{permission} on {workspace}",
       "decidedBy": "Decided by",
-      "decidedByValue": "Oxagen IAM · deny wins over every allow"
+      "decidedByValue": "<policy>policy</policy> · deny wins over every allow",
+      "policyUnrecorded": "policy not recorded"
     },
     "pending": {
       "title": "Access to the runtimes of this workspace is waiting for approval",
@@ -126,7 +119,9 @@
     },
     "detail": {
       "back": "← All runtimes",
-      "subtitle": "{platform} · run as {osUser} · kind not recorded",
+      "subtitle": "<kind>kind</kind> · {platform} · started by <who>who</who>",
+      "kindUnrecorded": "kind not recorded",
+      "healthUnrecorded": "health not recorded",
       "facts": {
         "workspace": "Workspace",
         "owner": "Owner",
@@ -140,10 +135,8 @@
         "checkpoint": "Last checkpoint"
       },
       "collectorGaps": "telemetry gaps in the last 24h not recorded",
-      "hookBinary": "tacho-hook {version}",
-      "hookEnforce": "fails closed against its cached bundle",
-      "hookObserve": "allows when its bundle is stale, because this host is in observe mode",
-      "hooksWrittenBasis": "The hook list is not read back from the settings file yet.",
+      "hookEnforce": "tacho-hook {version} · fails closed against its cached bundle",
+      "hookObserve": "tacho-hook {version} · allows when its bundle is stale, because this host is in observe mode",
       "modelLoopback": "the harness config names the loopback proxy, as the daemon last reported it",
       "modelDirect": "model traffic goes from the harness to its provider; routing it is the gateway tier",
       "tierBasis": "computed per run from what was actually routed",
@@ -170,7 +163,7 @@
     },
     "unenroll": {
       "title": "Unenroll {hostname}?",
-      "body": "Calls this enrollment routes through Oxagen are refused from now on. Sessions on the host are denied at their next boundary, once the collector reads the new status.",
+      "body": "Calls routed through Oxagen are refused from this host from now on. The hooks stay on the host until the rollback command runs there, and they refuse each call once the collector reads the new status.",
       "scope": "This revokes the enrollment of {agent} on this machine. Another agent enrolled on the same machine keeps its own.",
       "keep": "Keep it enrolled",
       "confirm": "Unenroll it",

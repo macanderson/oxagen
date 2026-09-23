@@ -28,7 +28,6 @@ import {
   Facts,
   HarnessNames,
   HealthBadge,
-  healthOf,
   ModelSurface,
   NotBacked,
   Note,
@@ -37,11 +36,6 @@ import {
 } from "./parts";
 import { RuntimesHeader } from "./runtimes";
 import { RuntimesFailure } from "./states";
-
-function hooksReportKey(ok: boolean | null) {
-  if (ok === null) return "unreported" as const;
-  return ok ? ("ok" as const) : ("missing" as const);
-}
 
 function HostPanel({
   host,
@@ -74,7 +68,7 @@ function HostPanel({
       value: (
         <>
           {host.collectorVersion === null ? (
-            <NotBacked gap="gaps" />
+            <span className="text-muted-foreground">{t("notReported")}</span>
           ) : (
             <span className={mono}>
               {t("hosts.collector", { version: host.collectorVersion })}
@@ -89,30 +83,27 @@ function HostPanel({
     },
     {
       term: t("detail.facts.hookBinary"),
+      // The hook ships with the collector, so it carries the collector's
+      // version. An observe-mode host allows on a stale bundle, so "fails
+      // closed" is printed only for enforce mode.
       value:
         host.collectorVersion === null ? (
-          <NotBacked gap="gaps" />
+          <span className="text-muted-foreground">{t("notReported")}</span>
         ) : (
           <span className={mono}>
-            {t("detail.hookBinary", { version: host.collectorVersion })}
-            <Sub>
-              {host.mode === "enforce"
-                ? t("detail.hookEnforce")
-                : t("detail.hookObserve")}
-            </Sub>
+            {t(
+              host.mode === "enforce"
+                ? "detail.hookEnforce"
+                : "detail.hookObserve",
+              { version: host.collectorVersion },
+            )}
           </span>
         ),
       testId: "fact-hook-binary",
     },
     {
       term: t("detail.facts.hooksWritten"),
-      value: (
-        <>
-          <NotBacked gap="hooks" />
-          <Sub>{t("detail.hooksWrittenBasis")}</Sub>
-          <Sub>{t(`hooksReport.${hooksReportKey(host.hooksOk)}`)}</Sub>
-        </>
-      ),
+      value: <NotBacked gap="hooks" />,
       testId: "fact-hooks-written",
     },
     {
@@ -157,14 +148,24 @@ function HostPanel({
       id="runtime-host"
       title={host.hostname}
       titleNode={
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          {t("detail.subtitle", {
+        <p
+          data-testid="runtime-subtitle"
+          className="mt-0.5 text-xs text-muted-foreground"
+        >
+          {t.rich("detail.subtitle", {
             platform: t(`platform.${host.platform}`),
-            osUser: host.osUser,
+            kind: () => (
+              <NotBacked gap="host">{t("detail.kindUnrecorded")}</NotBacked>
+            ),
+            who: () => <NotBacked gap="host" />,
           })}
         </p>
       }
-      aside={<HealthBadge health={healthOf(host, now)} />}
+      aside={
+        <HealthBadge host={host} now={now}>
+          {t("detail.healthUnrecorded")}
+        </HealthBadge>
+      }
     >
       <div className={panelBody}>
         <Facts rows={facts} />
@@ -194,20 +195,26 @@ function AgentRow({
     />
   );
   return (
-    <tr data-testid="runtime-agent-row">
+    // A row opens the agent: the card's link is stretched over the row, and
+    // the operator cell sits above it so its identity card still opens.
+    <tr
+      data-testid="runtime-agent-row"
+      className={agent === null ? undefined : "relative cursor-pointer"}
+    >
       <td className={cell}>
         {agent === null ? (
           card
         ) : (
           <SafeLink
             to={routes.agent(org, ws, agent.slug)}
-            className="rounded-sm focus-visible:outline-2 focus-visible:outline-ring"
+            data-touch-target=""
+            className="inline-flex items-center rounded-sm after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-ring"
           >
             {card}
           </SafeLink>
         )}
       </td>
-      <td className={cell}>
+      <td className={`${cell} relative z-[1]`}>
         {agent === null || agent.operatorId === null ? (
           <span className="text-muted-foreground">{t("notRecorded")}</span>
         ) : (
@@ -300,17 +307,14 @@ function RollbackPanel({
   agent,
   org,
   ws,
-  now,
 }: {
   host: RuntimeEnrollment;
   agent: string;
   org: string;
   ws: string;
-  now: number;
 }) {
   const t = useTranslations("runtimes.detail.rollback");
   const code = (chunks: ReactNode) => <code className={mono}>{chunks}</code>;
-  const revoked = healthOf(host, now) === "revoked";
   return (
     <Panel id="runtime-rollback" title={t("title")}>
       <div className={`${panelBody} flex flex-col gap-3`}>
@@ -325,15 +329,15 @@ function RollbackPanel({
         </p>
         <div className="flex flex-wrap gap-2">
           <SmokeSession hostname={host.hostname} />
-          {revoked ? null : (
-            <Unenroll
-              org={org}
-              ws={ws}
-              runtimeId={host.id}
-              hostname={host.hostname}
-              agent={host.agentKey}
-            />
-          )}
+          {/* Offered on a revoked host too: the write is idempotent, and a
+              second revoke sweeps any key the first left behind. */}
+          <Unenroll
+            org={org}
+            ws={ws}
+            runtimeId={host.id}
+            hostname={host.hostname}
+            agent={host.agentKey}
+          />
         </div>
       </div>
     </Panel>
@@ -382,7 +386,6 @@ function RuntimeLoaded({
           }
           org={org}
           ws={ws}
-          now={now}
         />
       </div>
     </>
@@ -408,12 +411,15 @@ export async function Runtime({
   org,
   ws,
   runtime,
+  viewerName,
 }: {
   ctx: WsCtx;
   source: DataSource;
   org: string;
   ws: string;
   runtime: string;
+  /** The signed-in person's name or email, for the access-denied state. */
+  viewerName: string;
 }) {
   const read = await readRuntime(ctx, source, runtime);
   if (read.state === "failed")
@@ -426,6 +432,7 @@ export async function Runtime({
         wsSlug={ctx.wsSlug}
         orgRole={ctx.orgRole}
         wsRole={ctx.wsRole}
+        viewerName={viewerName}
         readAt={new Date(read.now).toISOString()}
       />
     );

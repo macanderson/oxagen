@@ -2,8 +2,9 @@
 // mockup's `.state-wrap`: an icon, a title, the sentences, the actions. Error,
 // access denied and waiting-for-approval replace the page body, header
 // included; the shell around it stays. Empty keeps the header, because the
-// header's Enroll a runtime is the way in.
-import { Inbox, Lock, TriangleAlert } from "lucide-react";
+// header's Enroll a runtime is the way in. The icons are the mockup's: a
+// framed panel for empty, a circled exclamation for error, a lock for denied.
+import { CircleAlert, Lock, PanelTop } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type { OrgRole } from "@/data/contracts/common";
@@ -11,6 +12,7 @@ import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
 import { buttonSecondary, mono } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
+import { NotBacked } from "./parts";
 import {
   CliPath,
   EnrollRuntime,
@@ -33,7 +35,7 @@ function StateWrap({
   children: ReactNode;
 }) {
   const Icon =
-    tone === "failed" ? TriangleAlert : tone === "denied" ? Lock : Inbox;
+    tone === "failed" ? CircleAlert : tone === "denied" ? Lock : PanelTop;
   const ring =
     tone === "failed"
       ? "border-error/40 text-error-ink"
@@ -97,6 +99,7 @@ export function RuntimesFailure({
   wsSlug,
   orgRole,
   wsRole,
+  viewerName,
   readAt,
 }: {
   read: Failure;
@@ -106,6 +109,8 @@ export function RuntimesFailure({
   wsSlug: string;
   orgRole: OrgRole;
   wsRole: string;
+  /** The signed-in person's name, or their email when the account has no name. */
+  viewerName: string;
   /** The instant the read returned, formatted by the caller. */
   readAt: string;
 }) {
@@ -149,7 +154,14 @@ export function RuntimesFailure({
           </div>
           <dl className="mt-5 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-left text-[13px]">
             <dt className="text-muted-foreground">{t("denied.signedIn")}</dt>
-            <dd>{t("denied.signedInValue", { orgRole, wsRole })}</dd>
+            <dd data-testid="runtimes-signed-in">
+              {t.rich("denied.signedInValue", {
+                name: viewerName,
+                orgRole,
+                wsRole,
+                code: (chunks) => <code className={mono}>{chunks}</code>,
+              })}
+            </dd>
             <dt className="text-muted-foreground">{t("denied.needed")}</dt>
             <dd className={mono}>
               {t("denied.neededValue", {
@@ -158,7 +170,15 @@ export function RuntimesFailure({
               })}
             </dd>
             <dt className="text-muted-foreground">{t("denied.decidedBy")}</dt>
-            <dd>{t("denied.decidedByValue")}</dd>
+            <dd data-testid="runtimes-decided-by">
+              {t.rich("denied.decidedByValue", {
+                policy: () => (
+                  <NotBacked gap="decision">
+                    {t("denied.policyUnrecorded")}
+                  </NotBacked>
+                ),
+              })}
+            </dd>
           </dl>
         </StateWrap>
       );
@@ -183,7 +203,7 @@ export function RuntimesFailure({
         >
           <p className={body}>
             {t.rich("error.body", {
-              code: read.code,
+              code: `${read.status} ${read.code}`,
               c: (chunks) => <code className={code}>{chunks}</code>,
             })}
           </p>
@@ -195,10 +215,14 @@ export function RuntimesFailure({
             data-testid="runtimes-trace"
             className={`${mono} mt-4 text-[11.5px] text-dim`}
           >
-            {t("error.trace", {
-              status: String(read.status),
-              code: read.code,
+            {t.rich("error.trace", {
               at: readAt,
+              trace: () => <NotBacked gap="decision" />,
+              region: () => (
+                <NotBacked gap="decision">
+                  {t("error.regionUnrecorded")}
+                </NotBacked>
+              ),
             })}
           </p>
         </StateWrap>

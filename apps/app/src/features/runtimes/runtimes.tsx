@@ -3,11 +3,12 @@
 //
 // What the record carries today is an enrollment per agent
 // (`list_tacho_hosts`): one agent key on one machine. The page lists those rows
-// and says so, rather than grouping them by hostname into a host the record
-// does not hold. Every element the spec draws from a host row that does not
-// exist (the kind, the tier rolled up per host, the telemetry gaps in 24
-// hours, the hooks written, the last checkpoint, and the counts over hosts)
-// renders as not recorded, carrying the gap that would record it.
+// rather than grouping them by hostname into a host the record does not hold.
+// Every element the spec draws from a host row that does not exist (the kind,
+// the tier rolled up per host, the telemetry gaps in 24 hours and the health
+// judged from them, the hooks written, the last checkpoint, and the counts
+// over hosts) renders as not recorded, carrying the gap that would record it.
+// A row opens the runtime: the hostname is the link, stretched over the row.
 //
 // States: the route's loading.tsx replaces the body while the read is in
 // flight; a refused or failed read replaces the body, header included; a
@@ -27,7 +28,6 @@ import { EnrollRuntime } from "./controls";
 import {
   HarnessNames,
   HealthBadge,
-  healthOf,
   ModelSurface,
   NotBacked,
   Note,
@@ -105,11 +105,6 @@ function StatStrip({ list }: { list: RuntimeList }) {
   );
 }
 
-function hooksReportKey(ok: boolean | null) {
-  if (ok === null) return "unreported" as const;
-  return ok ? ("ok" as const) : ("missing" as const);
-}
-
 function HostRow({
   host,
   org,
@@ -123,12 +118,17 @@ function HostRow({
 }) {
   const t = useTranslations("runtimes");
   return (
-    <tr data-testid="runtime-row" data-runtime={host.id}>
+    <tr
+      data-testid="runtime-row"
+      data-runtime={host.id}
+      className="relative cursor-pointer"
+    >
       <td className={cell}>
         <SafeLink
           to={routes.runtime(org, ws, host.id)}
           aria-label={t("hosts.open", { hostname: host.hostname })}
-          className="rounded-sm font-medium focus-visible:outline-2 focus-visible:outline-ring"
+          data-touch-target=""
+          className="inline-flex items-center rounded-sm font-medium after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-ring"
         >
           {host.hostname}
         </SafeLink>
@@ -148,16 +148,22 @@ function HostRow({
       <td className={cell}>
         <NotBacked gap="tier" />
       </td>
-      <td className={cell}>
+      <td className={cell} data-testid="runtime-agents">
         {host.agentKey === "" ? (
-          <span className="text-muted-foreground">{t("hosts.agentsNone")}</span>
+          <>
+            <span className={`${mono} text-muted-foreground`}>0</span>
+            <Sub>{t("hosts.agentsNone")}</Sub>
+          </>
         ) : (
-          <span className={`${mono} text-xs`}>{host.agentKey}</span>
+          <>
+            <span className={mono}>1</span>
+            <Sub monoFace>{host.agentKey}</Sub>
+          </>
         )}
       </td>
       <td className={cell}>
         {host.collectorVersion === null ? (
-          <NotBacked gap="gaps">{t("notRecorded")}</NotBacked>
+          <span className="text-muted-foreground">{t("notReported")}</span>
         ) : (
           <span className={`${mono} text-xs`}>
             {t("hosts.collector", { version: host.collectorVersion })}
@@ -169,10 +175,9 @@ function HostRow({
       </td>
       <td className={cell}>
         <NotBacked gap="hooks">{t("hosts.hookCount")}</NotBacked>
-        <Sub>{t(`hooksReport.${hooksReportKey(host.hooksOk)}`)}</Sub>
       </td>
       <td className={cell}>
-        <HealthBadge health={healthOf(host, now)} />
+        <HealthBadge host={host} now={now} />
       </td>
       <td className={cell}>
         <NotBacked gap="checkpoint" />
@@ -200,13 +205,6 @@ function EnrolledHosts({
       title={t("title")}
       count={list.enrollments.length}
     >
-      <p
-        data-testid="runtimes-record"
-        data-not-backed="host"
-        className={`${panelBody} border-b border-border text-[13px] text-muted-foreground`}
-      >
-        {t("record")}
-      </p>
       <Table
         label={t("title")}
         columns={[
@@ -285,11 +283,14 @@ export async function Runtimes({
   source,
   org,
   ws,
+  viewerName,
 }: {
   ctx: WsCtx;
   source: DataSource;
   org: string;
   ws: string;
+  /** The signed-in person's name or email, for the access-denied state. */
+  viewerName: string;
 }) {
   const { read, now } = await readRuntimes(ctx, source);
   if (!read.ok)
@@ -302,6 +303,7 @@ export async function Runtimes({
         wsSlug={ctx.wsSlug}
         orgRole={ctx.orgRole}
         wsRole={ctx.wsRole}
+        viewerName={viewerName}
         readAt={new Date(now).toISOString()}
       />
     );

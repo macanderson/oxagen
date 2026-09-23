@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { dataSource } from "@/data/source";
+import { getAuthUser } from "@/features/auth";
 import { Runtime } from "@/features/runtimes";
 import { requireViewer } from "@/server/viewer";
 
@@ -18,6 +19,10 @@ export default async function RuntimePage({
 }) {
   const { org, ws, runtime } = await params;
   const ctx = await requireViewer(org, ws);
+  // requireViewer admitted a session, so the memoized user is present; the
+  // access-denied state names the person by it, as the mockup's does.
+  const user = await getAuthUser();
+  const viewerName = user === null ? "" : user.name || user.email;
   return (
     <main
       id="main"
@@ -29,6 +34,7 @@ export default async function RuntimePage({
         org={org}
         ws={ws}
         runtime={runtime}
+        viewerName={viewerName}
       />
     </main>
   );
