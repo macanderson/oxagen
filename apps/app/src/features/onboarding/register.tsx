@@ -493,6 +493,7 @@ function Waiting({
                 host: (chunks) => <span className={mono}>{chunks}</span>,
               })}
         </p>
+        {/* Not backed until #3901 lands. */}
         <p
           data-testid="not-backed"
           data-element="collector-log"

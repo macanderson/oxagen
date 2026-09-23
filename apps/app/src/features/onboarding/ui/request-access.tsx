@@ -30,6 +30,7 @@ export function RequestAccess({ permission }: { permission: string }) {
         title={t("dialogTitle")}
         testId="request-access-dialog"
       >
+        {/* Not backed until #3820 lands. */}
         <p
           data-testid="not-backed"
           data-element="request-access"

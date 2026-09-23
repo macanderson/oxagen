@@ -247,6 +247,7 @@ function Download({
       >
         {t("button", { os: t(`os.${os}`) })}
       </button>
+      {/* Not backed until #3897 lands. */}
       <p
         id={`${ids}-unpublished`}
         data-testid="not-backed"
@@ -485,6 +486,7 @@ export function WrapAgent({
                 agentId={agentId}
                 prefix={credentialPrefix}
               />
+              {/* Not backed until #3898 lands. */}
               <p
                 data-testid="not-backed"
                 data-element="sdk-package"

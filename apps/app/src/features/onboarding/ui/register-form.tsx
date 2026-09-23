@@ -238,6 +238,7 @@ export function RegisterAgentForm({
             <p id={`${tierId}-hint`} className={hint}>
               {t("tierHint")}
             </p>
+            {/* Not backed until #3900 lands. */}
             <p
               id={`${tierId}-unsent`}
               data-testid="not-backed"
