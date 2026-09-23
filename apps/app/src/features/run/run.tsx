@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { useTranslations } from "next-intl";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { TranscriptZoom } from "@/data/contracts/run";
 import type { TranscriptKind } from "@/data/contracts/run";
 import { TRANSCRIPT_KINDS } from "@/data/contracts/run";
@@ -14,6 +14,7 @@ import type { RunRow } from "@/data/contracts/runs";
 import type { DataSource } from "@/data/ports";
 import { PAGE_FAILURES, type Read, readError } from "@/data/read";
 import { ApprovalsPanel } from "@/features/fleet";
+import { RunOutcomesConsent } from "@/features/run-outcomes";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
 import { panel } from "@/ui/control-styles";
@@ -35,6 +36,7 @@ import {
 import { StatRow, SummaryPanel } from "./stats";
 import { kindsParam, TranscriptSection } from "./transcript";
 import { ChangesPanel, SpendByArea } from "./work";
+import { RunWork, RunWorkLoading, readRunWork } from "./work-ci";
 
 /** The seven tabs, in the spec's order (pages/run.md). */
 const TABS = [
@@ -302,6 +304,17 @@ export async function Run({
       source.approvals.resolved(ctx, { runId: run.id }),
       agentSlug === null ? null : source.agents.get(ctx, agentSlug),
     ]);
+  // The consent read is started here and awaited in the render, so it
+  // overlaps the section read below rather than queueing behind it.
+  const outcomesPolicy = source.runs
+    .outcomesSettings(ctx)
+    .catch(() =>
+      readError(PAGE_FAILURES.run.error.code, PAGE_FAILURES.run.error.status),
+    );
+  // Started, never awaited here: provider latency (GitHub PRs, CI, diffs)
+  // streams inside the work section's Suspense boundary and cannot hold the
+  // rest of the page.
+  const work = readRunWork(ctx, source, run.id);
   let section: ReactNode;
   switch (selected) {
     case "transcript":
@@ -387,6 +400,14 @@ export async function Run({
         wsRole={ctx.wsRole}
         org={place.org}
         ws={place.ws}
+      />
+      <Suspense fallback={<RunWorkLoading />}>
+        <RunWork read={work} {...place} />
+      </Suspense>
+      <RunOutcomesConsent
+        at={place}
+        policy={await outcomesPolicy}
+        canManage={ctx.orgRole === "owner" || ctx.orgRole === "admin"}
       />
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">

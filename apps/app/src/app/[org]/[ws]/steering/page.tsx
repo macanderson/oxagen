@@ -7,8 +7,8 @@ import {
   parseSteeringView,
   steeringLink,
 } from "@/features/steering";
-import { redirectTo } from "@/shared/navigation";
 import { requireViewer } from "@/server/viewer";
+import { redirectTo } from "@/shared/navigation";
 import { firstParam } from "@/shared/safe-path";
 import { PageHeader } from "@/ui/page-header";
 

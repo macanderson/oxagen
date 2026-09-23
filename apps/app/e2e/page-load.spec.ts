@@ -61,9 +61,9 @@ for (const row of SIGNED_IN_ROUTES) {
       .info()
       .attach("phone", { path: phonePath, contentType: "image/png" });
     if (row.titleKey === "steering") {
-      // Sections are path segments, and cacheComponents keeps the section
-      // navigated away from mounted but hidden, so its tab strip is still in
-      // the DOM. Only the visible strip is the page a person sees.
+      // Each tab is its own route segment, and with Cache Components the page
+      // navigated away from stays mounted but hidden, so its tab bar is still
+      // in the DOM. Only the visible bar is the one the person is using.
       const freshness = page.locator('[data-tab="freshness"]:visible');
       await freshness.click();
       await expect(freshness).toHaveAttribute("aria-current", "page");

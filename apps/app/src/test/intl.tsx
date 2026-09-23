@@ -19,6 +19,7 @@ import onboarding from "../../messages/onboarding.json";
 import organization from "../../messages/organization.json";
 import record from "../../messages/record.json";
 import run from "../../messages/run.json";
+import runOutcomes from "../../messages/run-outcomes.json";
 import shell from "../../messages/shell.json";
 import skills from "../../messages/skills.json";
 import steering from "../../messages/steering.json";
@@ -41,6 +42,7 @@ export const messages = {
   ...organization,
   ...record,
   ...run,
+  ...runOutcomes,
   ...shell,
   ...skills,
   ...steering,

@@ -25,6 +25,7 @@ import {
 } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import en from "../../../messages/en.json";
+import createMessages from "../../../messages/create.json";
 import shellMessages from "../../../messages/shell.json";
 import uiMessages from "../../../messages/ui.json";
 
@@ -151,6 +152,7 @@ function renderShell(data: ShellData) {
         ...en,
         ...shellMessages,
         ...uiMessages,
+        ...createMessages,
       }}
     >
       <ShellClient data={data} />
@@ -175,8 +177,7 @@ describe("the shell on /{org}/{ws}", () => {
     // What it opens is a dialog, and it says so before it is pressed.
     expect(launcher).toHaveAttribute("aria-haspopup", "dialog");
     expect(screen.getByTestId("assistant-flyout")).toHaveAttribute("inert");
-    // The bell is back with the shell activity layer; its drawer stays shut
-    // until it is pressed. The nav counts are still dropped.
+    // The bell and nav counts are still dropped.
     expect(
       screen.getByRole("button", { name: /^Notifications/ }),
     ).toBeInTheDocument();
@@ -397,7 +398,7 @@ describe("command menu", () => {
     const user = userEvent.setup();
     renderShell(shellData());
     await user.click(
-      screen.getByRole("button", { name: "Search or run an action" }),
+      screen.getByRole("button", { name: shellMessages.shell.topbar.search }),
     );
     const menu = await screen.findByTestId("command-menu");
     const input = within(menu).getByRole("combobox");

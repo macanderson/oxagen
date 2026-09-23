@@ -11,11 +11,16 @@ import {
 } from "react";
 import { useTranslations } from "next-intl";
 import { Bell, CheckCheck } from "lucide-react";
-import { readShellActivity, markShellNotification } from "./activity-actions";
+import {
+  readShellActivity,
+  readShellNavCounts,
+  readShellUnreadCount,
+  markShellNotification,
+} from "./activity-actions";
 import { useShellState } from "./shell-state";
 import { useSidebarSections } from "./sidebar";
 import type { ShellData } from "./shell-data";
-import { ApprovalsPanel } from "@/features/fleet";
+import { ApprovalsPanel } from "@/features/fleet/client";
 import { readOk } from "@/data/read";
 import { routes, sanitizeNext } from "@/shared/safe-path";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -26,6 +31,11 @@ import { buttonSecondary } from "@/ui/control-styles";
 type Activity = Awaited<ReturnType<typeof readShellActivity>>;
 type ActivityState = {
   read: Activity | null;
+  counts: Awaited<ReturnType<typeof readShellNavCounts>> | null;
+  /** Unread notifications in the current scope, from the idle poll; null until read or when refused. */
+  unread: number | null;
+  /** Whether a drawer is open, so the detailed read is the one being kept current. */
+  detailed: boolean;
   failed: boolean;
   refresh: () => Promise<void>;
 };
@@ -43,6 +53,16 @@ export function ShellActivityProvider({
   children: ReactNode;
 }) {
   const { ws } = useSidebarSections(data);
+  const { approvalsOpen, notificationsOpen } = useShellState();
+  const drawerOpen = approvalsOpen || notificationsOpen;
+  const [navCounts, setNavCounts] = useState<{
+    key: string;
+    read: Awaited<ReturnType<typeof readShellNavCounts>>;
+  } | null>(null);
+  const [unread, setUnread] = useState<{
+    key: string;
+    count: number | null;
+  } | null>(null);
   const [result, setResult] = useState<{ key: string; read: Activity } | null>(
     null,
   );
@@ -61,6 +81,7 @@ export function ShellActivityProvider({
     }
   }, [data.org.slug, ws, key]);
   useEffect(() => {
+    if (!drawerOpen) return;
     let stopped = false;
     let timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
@@ -76,10 +97,63 @@ export function ShellActivityProvider({
       generationRef.current += 1;
       clearTimeout(timer);
     };
-  }, [refresh]);
+  }, [refresh, drawerOpen]);
+  // The idle poll keeps the sidebar counts and both topbar badges current while
+  // the drawers are closed: one count read and one unread read in the current
+  // scope, never the drawer's read across every workspace.
+  useEffect(() => {
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      await Promise.all([
+        ws
+          ? readShellNavCounts(data.org.slug, ws).then(
+              (read) => {
+                if (!stopped) setNavCounts({ key, read });
+              },
+              () => {
+                if (!stopped) setNavCounts(null);
+              },
+            )
+          : null,
+        readShellUnreadCount(data.org.slug, ws).then(
+          (read) => {
+            if (!stopped)
+              setUnread({
+                key,
+                count: read.ok ? read.value.unreadCount : null,
+              });
+          },
+          () => {
+            if (!stopped) setUnread(null);
+          },
+        ),
+      ]);
+      if (!stopped)
+        timer = setTimeout(() => {
+          void poll();
+        }, 30_000);
+    };
+    void poll();
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
+  }, [data.org.slug, ws, key]);
+  const counts = navCounts?.key === key ? navCounts.read : null;
   const read = result?.key === key ? result.read : null;
+  const unreadCount = unread?.key === key ? unread.count : null;
   return (
-    <ActivityContext value={{ read, failed, refresh }}>
+    <ActivityContext
+      value={{
+        read,
+        counts,
+        unread: unreadCount,
+        detailed: drawerOpen,
+        failed,
+        refresh,
+      }}
+    >
       {children}
     </ActivityContext>
   );
@@ -89,17 +163,26 @@ export function ActivityButtons() {
   const t = useTranslations("shell.activity");
   const state = useShellActivity();
   const { setApprovalsOpen, setNotificationsOpen } = useShellState();
-  const value = state?.read?.ok ? state.read.value : null;
-  const count = value?.workspaces.reduce(
-    (n, w) => n + (w.pending.ok ? w.pending.value.items.length : 0),
-    0,
-  );
+  // An open drawer keeps the detailed read current, so the badges read it. A
+  // closed drawer stops that read, and a detailed value left from an earlier
+  // opening would freeze, so the badges read the idle poll instead.
+  const value = state?.detailed && state.read?.ok ? state.read.value : null;
+  const idleApprovals =
+    state?.counts?.ok && state.counts.value.approvals !== null
+      ? state.counts.value.approvals
+      : undefined;
+  const count = value
+    ? value.workspaces.reduce(
+        (n, w) => n + (w.pending.ok ? w.pending.value.items.length : 0),
+        0,
+      )
+    : idleApprovals;
   const incomplete = value?.workspaces.some(
     (w) => !w.pending.ok || w.pending.value.more,
   );
   const unread = value
     ? value.notifications.items.filter((n) => n.notification.unread).length
-    : null;
+    : (state?.unread ?? null);
   return (
     <>
       <button
@@ -181,7 +264,16 @@ export function ActivityDrawers({ data }: { data: ShellData }) {
   const status = !read ? (
     <p role="status">{t("loading")}</p>
   ) : !read.ok ? (
-    <ReadFailure read={read} section={t("approvals")} />
+    <ReadFailure
+      read={
+        read.reason === "denied"
+          ? { ok: false, reason: "denied", permission: read.code }
+          : read.reason === "pending_approval"
+            ? read
+            : { ok: false, reason: "error", code: read.code, status: 503 }
+      }
+      section={t("approvals")}
+    />
   ) : null;
   return (
     <>

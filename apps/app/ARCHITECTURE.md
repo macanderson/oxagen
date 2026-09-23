@@ -1301,3 +1301,11 @@ The billing amendment itself changed, beyond the above: §0 items 2, 8 and 9; §
 | M1–M9 | 14 journeys; INV-20 forbade a parameterized smoke; no pay path; seed served deleted journeys; e2e coverage collection; WL-03 incomplete; no a11y gate; manifest demands an e2e per capability; no title oracle | Accepted; carried into §5, §6, INV-20, INV-26, WL-03, WL-49–48, WL-50, WL-51. |
 | I1–I15 | `inviteeCtx` minted an `OrgCtx`; `SystemLookups` kept table reads contracts cover; CLI approve path; INV-03 subpaths; INV-05 denylist; `z.output<>` → `unknown`; INV-14 vs plain `Error`; fabricated zeros; INV-19 file selection; INV-13 CLI flow; INV-01 api routes; static cap; deletion order; guards vanish for 26 PRs; kernel imports what its layer forbids | Accepted; carried into §2, §3.1, §3.2, §3.4, §3.7, §3.8, INV-01, INV-03, INV-05, INV-08, INV-13, INV-14, INV-19, WL-05, WL-21, WL-22, WL-46. |
 | N-GAU | Who may buy GAUs | Every tier, including Free: a block is a unit purchase at the org's contracted rate, not a credit pack; the credits Free-tier gate (`entitlements.ts:125-127`) stays on the credits path the app no longer uses. In openQuestions for ratification. |
+
+### Shell activity boundaries
+
+The shell drawers reuse the typed data ports in `features/shell/activity-actions.ts`. That server action resolves each viewer before reading a port and returns an explicit `ActionResult`. The layer rule admits `data/source` only from this action module, so the drawer keeps the existing approval and mandate mapping without copying it.
+
+`features/fleet/client.ts` is the public client entry for the shared approvals panel. Client drawers import it instead of the server barrel. The entry exports only client-compatible components.
+
+`features/shell/client.ts` is the shell's public client entry. It exports `openApprovals`, which Fleet's waiting tile calls to open the approvals drawer. The shell barrel reaches server modules, so a client component that imports it pulls `next/headers` into the browser bundle and fails the build.

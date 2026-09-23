@@ -55,6 +55,9 @@ vi.mock("next/navigation", () => ({
     throw new Error("NEXT_NOT_FOUND");
   },
 }));
+vi.mock("../run-outcomes/actions", () => ({
+  setRunOutcomesConsentAction: vi.fn(),
+}));
 vi.mock("./actions", () => ({
   haltRun: vi.fn(),
   steerRun: vi.fn(),
@@ -1925,4 +1928,28 @@ describe("loading", () => {
     expect(main).toContainElement(screen.getByRole("heading", { name: "Run" }));
     expect(main).toContainElement(screen.getByRole("status"));
   });
+});
+
+it("returns the Run page without waiting for connected provider evidence", async () => {
+  const { source } = runSource({
+    detail: readOk(runDetail()),
+    transcript: readOk(runTranscript()),
+  });
+  const work = vi.fn(() => new Promise<never>(() => {}));
+  source.runs.work = work;
+  const page = await Run({
+    ctx,
+    source,
+    runId: "tse_7k2m9q",
+    tab: "transcript",
+    zoom: null,
+    kinds: null,
+    frames: null,
+    body: null,
+    reads: null,
+    spine: null,
+  });
+  // The read has started and never answers, yet the page has returned.
+  expect(page).toBeTruthy();
+  expect(work).toHaveBeenCalledOnce();
 });

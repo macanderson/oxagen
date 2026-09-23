@@ -223,7 +223,8 @@ enforce or record it:
   loopback proxy that forwards a request a harness made (ADR-094). The
   contained tier (`oxagen run -- <agent>`, an OS sandbox whose only egress is the
   gateway) is that launcher, aimed at CI, headless runs, cloud runners and managed
-  devices, and it is not built yet.
+  devices. Its first profile is a measured Docker container on Linux (ADR-152),
+  and the control plane, not the launcher, decides that a run was contained.
 - New capabilities or tool surfaces that bypass typed contracts, IAM/entitlement
   gates, or metering ("just this once" untyped/unmetered paths).
 - Agent answers or UI surfaces that present ungrounded, citation-free output where

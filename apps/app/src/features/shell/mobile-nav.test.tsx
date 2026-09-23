@@ -26,6 +26,7 @@ import { readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { phoneWidth } from "@/test/phone";
 import en from "../../../messages/en.json";
+import createMessages from "../../../messages/create.json";
 import shellMessages from "../../../messages/shell.json";
 import uiMessages from "../../../messages/ui.json";
 import { shellData } from "./shell.builders";
@@ -112,6 +113,7 @@ function renderPhone(data: ShellData, page: ReactNode = null) {
         ...en,
         ...shellMessages,
         ...uiMessages,
+        ...createMessages,
       }}
     >
       <ShellClient data={data} />
@@ -290,7 +292,7 @@ describe("the other dialogs on a phone", () => {
     const user = userEvent.setup();
     renderPhone(shellData());
     await user.click(
-      screen.getByRole("button", { name: "Search or run an action" }),
+      screen.getByRole("button", { name: shellMessages.shell.topbar.search }),
     );
     const menu = await screen.findByTestId("command-menu");
     expect(menu).toHaveAttribute("data-sheet");
@@ -419,6 +421,7 @@ describe("card tables", () => {
           ...en,
           ...shellMessages,
           ...uiMessages,
+          ...createMessages,
         }}
       >
         <ShellClient data={shellData()} />

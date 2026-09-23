@@ -9,8 +9,8 @@ import {
   steeringLink,
   steeringPathParams,
 } from "@/features/steering";
-import { redirectTo } from "@/shared/navigation";
 import { requireViewer } from "@/server/viewer";
+import { redirectTo } from "@/shared/navigation";
 import { firstParam } from "@/shared/safe-path";
 import { PageHeader } from "@/ui/page-header";
 
@@ -27,7 +27,7 @@ export default async function SteeringSectionPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { org, ws, view: segments } = await params;
-  const section = segments[0] ?? "";
+  const [section = "", shelf] = segments;
   const allowed = [
     "library",
     "proposals",
@@ -42,13 +42,13 @@ export default async function SteeringSectionPage({
   if (
     !allowed.includes(section) ||
     segments.length > 2 ||
-    (segments.length === 2 && !["library"].includes(section))
+    (segments.length === 2 && section !== "library")
   )
     notFound();
   if (
     section === "library" &&
-    segments[1] &&
-    !["all", "records", "skills", "memory"].includes(segments[1])
+    shelf &&
+    !["all", "records", "skills", "memory"].includes(shelf)
   )
     notFound();
   const ctx = await requireViewer(org, ws);
