@@ -20,6 +20,8 @@ Artifacts carry the target Parameter Store prefix. Staging builds resolve the pr
 
 Staging must pass its schema migrations, deployment, and public endpoint checks for the same commit before production deploys that commit. A release record carries that commit and the artifact versions. Availability and release identity are separate checks.
 
+Only main's pipeline and a manual dispatch deploy staging. A pull request does not. One staging database cannot hold several branches' migrations, and a pull request run in staging's concurrency group evicted main's pending run, which skipped every production deploy on 2026-09-23.
+
 ## Consequences
 
 Staging has recurring AWS infrastructure cost and an independent database migration history. Its stores can be reset without changing production. Integration-dependent features need staging credentials from their providers.

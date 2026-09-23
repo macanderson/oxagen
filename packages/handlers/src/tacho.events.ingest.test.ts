@@ -302,6 +302,7 @@ function forgedGatewaySession(
 }
 
 interface FakeDb {
+  activeDefinition?: string;
   hosts: Array<Record<string, unknown>>;
   principals: Array<Record<string, unknown>>;
   principalLookups: ReturnType<typeof vi.fn>;
@@ -626,8 +627,18 @@ function wire(db: FakeDb): void {
           // publishes no agent version and stores no decision rules, so the
           // envelope carries the empty permission set and the observed
           // budget; `tacho-host-bundle.test.ts` covers a mandate that is not.
-          agents: { findFirst: async () => undefined },
-          agentVersions: { findFirst: async () => undefined },
+          agents: {
+            findFirst: async () =>
+              db.activeDefinition === undefined
+                ? undefined
+                : { activeVersionId: "version-active" },
+          },
+          agentVersions: {
+            findFirst: async () =>
+              db.activeDefinition === undefined
+                ? undefined
+                : { config: {}, definitionSource: db.activeDefinition },
+          },
           workspaces: { findFirst: async () => undefined },
         },
         // Two reads share `select`, told apart by the table. The steering
@@ -901,6 +912,26 @@ describe("ingest_tacho_events", () => {
       eventHash: next.event.hash,
     });
   });
+
+  it.each(["[budget", "budget = { per_run_micros = nan }"])(
+    "accepts evidence while an invalid active definition suspends actions: %s",
+    async (source) => {
+      const db = fakeDb();
+      db.hosts[0]!["agentId"] = "agent-budget";
+      db.activeDefinition = source;
+      wire(db);
+      const events = session();
+      const output = await tachoEventsIngestHandler(batch(events), CONTEXT);
+      expect(output.accepted).toBe(events.length);
+      expect(output.control.host_status).toBe("suspended");
+      expect(db.sessions.size).toBe(1);
+      expect(mocks.insertTachoEvents).toHaveBeenCalled();
+      expect(db.hosts[0]!["status"]).toBe("active");
+      db.activeDefinition = "budget = { per_run_micros = 2000000 }";
+      const repaired = await tachoEventsIngestHandler(batch(events), CONTEXT);
+      expect(repaired.control.host_status).toBe("active");
+    },
+  );
 
   it("accepts a verified session, rolls it up, and answers the control envelope", async () => {
     const db = fakeDb();

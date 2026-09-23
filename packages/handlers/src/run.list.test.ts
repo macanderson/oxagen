@@ -1016,6 +1016,39 @@ describe("a run row names who ran it, on what, with which model", () => {
     expect((await list({ limit: 50 }, ctx())).runs[0]?.model).toBeNull();
   });
 
+  it("preserves the recorded harness version separately from the model", async () => {
+    const { list } = handlerOver(
+      [],
+      [
+        tachoSession({
+          publicId: "tse_harness",
+          session: {
+            harness: "codex",
+            harnessVersion: "0.115.0",
+            runtime: "codex",
+          },
+        }),
+      ],
+    );
+    expect((await list({ limit: 50 }, ctx())).runs[0]?.harness).toEqual({
+      name: "codex",
+      version: "0.115.0",
+      runtime: "codex",
+    });
+    const missing = handlerOver(
+      [],
+      [
+        tachoSession({
+          publicId: "tse_missing",
+          session: { harnessVersion: null },
+        }),
+      ],
+    );
+    expect(
+      (await missing.list({ limit: 50 }, ctx())).runs[0]?.harness?.version,
+    ).toBeNull();
+  });
+
   it("answers a null machine when the session names no host (negative)", async () => {
     const { list } = handlerOver(
       [],

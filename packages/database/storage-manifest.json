@@ -1496,6 +1496,16 @@
     },
     {
       "domain": "context",
+      "name": "get_steering_deliveries",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "context",
       "name": "get_steering_freshness",
       "reads": [],
       "surfaces": [
@@ -3838,7 +3848,7 @@
       "writes": []
     }
   ],
-  "contentHash": "aaea4e01e86608c4c326c66e46345aea4fae2e25d41293d7ca237cbc99d2786b",
+  "contentHash": "f8da0a804e94edbd71686a4e77f0796fd1f6739f29c3c290400911c505552ab6",
   "domains": [
     {
       "name": "agent",
