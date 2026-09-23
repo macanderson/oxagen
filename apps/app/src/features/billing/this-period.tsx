@@ -86,8 +86,8 @@ export function ThisPeriod({
   });
   const rows: ListRow[] = [
     line("governed", [
-      s.pricedCount > 0
-        ? t("thisPeriod.lines.governed", { count: count(s.pricedCount) })
+      s.governedCount > 0
+        ? t("thisPeriod.lines.governed", { count: count(s.governedCount) })
         : t("thisPeriod.lines.governedNone"),
       <ChargeBasis key="basis" charge={s.charge} included={s.includedGau} />,
       <Money key="amount" value={s.governedAmount} />,

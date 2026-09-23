@@ -274,7 +274,7 @@ describe("summary tiles", () => {
   it("prints the governed actions the first line priced, with the blocks and the allowance as its basis", async () => {
     await renderBilling();
     expect(tile("governed")).toHaveTextContent(
-      "Governed actions this period1,590,000above the included allowance · 159 blocks × $32.10 · 250,000 included",
+      "Governed actions this period1,587,838above the included allowance · 159 blocks × $32.10 · 250,000 included",
     );
   });
 
@@ -324,9 +324,11 @@ describe("figures reconcile", () => {
 
   it("rolls the tiles up from the lines of This period", async () => {
     await renderBilling();
-    // The line is labelled with the count it priced: 159 blocks of 10,000.
+    // The line is labelled with the actions used above the allowance:
+    // 1,837,838 used less 250,000 included, as the design prints it. The 159
+    // blocks of 10,000 stay in the basis and the amount.
     expect(row("data-line", "governed")).toHaveTextContent(
-      "Governed actions 1 – 1,590,000",
+      "Governed actions 1 – 1,587,838",
     );
     // Blocks × block price is the line's amount: 159 × $32.10 = $5,103.90.
     expect(row("data-line", "governed")).toHaveTextContent("$5,103.90");

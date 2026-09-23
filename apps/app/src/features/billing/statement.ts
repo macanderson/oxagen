@@ -9,9 +9,14 @@
 // mode, the governed actions bought this period (blocks × block price when the
 // purchase is whole blocks at today's block size); in invoice mode, the
 // overage past the allowance and what was carried in, at the per-action rate.
-// The line is labelled with the count it priced, and the Governed actions
-// tile prints that same count: one number in both places, never a second
-// derivation (pages/billing.md, "headers are rollups"). Tokens are reported at zero:
+// The line is labelled with the governed actions taken above the included
+// allowance and what was carried in, and the Governed actions tile prints that
+// same count: one number in both places, never a second derivation
+// (pages/billing.md, "headers are rollups"). In invoice mode that count is the
+// overage the line prices. In prepaid mode the line prices the blocks bought,
+// which the basis names, and the count is the actions those blocks paid for so
+// far: used less included less carried, so the tile plus the allowance and the
+// carried actions equals the Governed actions meter. Tokens are reported at zero:
 // Oxagen does not price them. Evidence retention is zero while the
 // organization has not opted into extended retention, because nothing accrues
 // until it does (get_evidence_retention); once it has, the amount is not
@@ -41,10 +46,11 @@ export type GovernedCharge =
 
 export type Statement = {
   /**
-   * The governed actions the line priced: its label's "1 – N" and the figure
-   * on the Governed actions tile. Never negative.
+   * The governed actions taken above the included allowance and what was
+   * carried in: its label's "1 – N" and the figure on the Governed actions
+   * tile. Never negative.
    */
-  pricedCount: number;
+  governedCount: number;
   includedGau: number;
   charge: GovernedCharge;
   governedAmount: Money;
@@ -89,15 +95,14 @@ function chargeAmount(charge: GovernedCharge): Money {
   }
 }
 
-/** The governed actions a charge priced. */
-function pricedCount(charge: GovernedCharge, blockSizeGau: number): number {
-  switch (charge.kind) {
-    case "blocks":
-      return charge.blocks * blockSizeGau;
-    case "bought":
-    case "overage":
-      return charge.count;
-  }
+/**
+ * The governed actions above the allowance. Invoice mode prices exactly
+ * these, so the count is the charge's. Prepaid mode prices the blocks bought,
+ * not the actions taken, so the count comes from the meter.
+ */
+function governedCount(bucket: GauBucket, charge: GovernedCharge): number {
+  if (charge.kind === "overage") return charge.count;
+  return Math.max(0, bucket.usedGau - bucket.includedGau - bucket.carriedGau);
 }
 
 export function statementFor({
@@ -129,7 +134,7 @@ export function statementFor({
   const recorded = lines.filter((line): line is Money => line !== null);
   const sum = recorded.length === lines.length ? sumMoney(recorded) : null;
   return {
-    pricedCount: pricedCount(charge, rate.blockSizeGau),
+    governedCount: governedCount(bucket, charge),
     includedGau: bucket.includedGau,
     charge,
     governedAmount,

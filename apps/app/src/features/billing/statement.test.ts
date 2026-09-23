@@ -26,14 +26,16 @@ const blocksBucket = prepaidBucket({
 });
 
 describe("statementFor", () => {
-  it("prices whole blocks bought this period at the block price, and labels the line with the actions it priced", () => {
+  it("prices whole blocks bought this period at the block price, and labels the line with the actions used above the allowance", () => {
     const s = statementFor({
       bucket: blocksBucket,
       rate: contractRate(),
       retention: evidenceRetention(),
       discount: ZERO,
     });
-    expect(s.pricedCount).toBe(1_590_000);
+    // 1,837,838 used less 250,000 included: the design's 1,587,838, not the
+    // 1,590,000 the 159 blocks paid for.
+    expect(s.governedCount).toBe(1_587_838);
     expect(s.charge).toEqual({
       kind: "blocks",
       blocks: 159,
@@ -59,7 +61,8 @@ describe("statementFor", () => {
       count: 5_000,
       rate: usd("3210"),
     });
-    expect(s.pricedCount).toBe(5_000);
+    // 18,200 used is under the 50,000 allowance and 1,200 carried.
+    expect(s.governedCount).toBe(0);
     expect(s.governedAmount).toEqual(usd("16050000"));
   });
 
@@ -75,7 +78,7 @@ describe("statementFor", () => {
       count: 112_500,
       rate: usd("5000"),
     });
-    expect(s.pricedCount).toBe(112_500);
+    expect(s.governedCount).toBe(112_500);
     expect(s.governedAmount).toEqual(usd("562500000"));
   });
 
@@ -86,7 +89,7 @@ describe("statementFor", () => {
       retention: evidenceRetention(),
       discount: ZERO,
     });
-    expect(s.pricedCount).toBe(102_500);
+    expect(s.governedCount).toBe(102_500);
   });
 
   it("never reports a negative count under the allowance (negative)", () => {
@@ -96,7 +99,7 @@ describe("statementFor", () => {
       retention: evidenceRetention(),
       discount: ZERO,
     });
-    expect(under.pricedCount).toBe(0);
+    expect(under.governedCount).toBe(0);
     expect(under.charge).toMatchObject({ kind: "overage", count: 0 });
     expect(under.governedAmount).toEqual(ZERO);
   });

@@ -81,12 +81,12 @@ function GovernedTile({ statement: s }: { statement: Statement }) {
     <Tile
       name="governed"
       term={t("tiles.governed")}
-      data-count={s.pricedCount}
+      data-count={s.governedCount}
       note={t.rich("tiles.governedNote", {
         basis: () => <ChargeBasis charge={s.charge} included={s.includedGau} />,
       })}
     >
-      {formatCount(s.pricedCount, locale)}
+      {formatCount(s.governedCount, locale)}
     </Tile>
   );
 }

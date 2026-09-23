@@ -124,17 +124,18 @@ describe("a purchase that is not whole blocks", () => {
   it("prices the line at the per-action rate, and the tile prints the count the line is labelled with", () => {
     renderStatement(
       statementFor({
-        bucket: prepaidBucket({ purchasedGau: 5_000 }),
+        bucket: prepaidBucket({ purchasedGau: 5_000, usedGau: 53_700 }),
         rate: contractRate(),
         retention: evidenceRetention(),
         discount: null,
       }),
     );
-    // 5,000 at $0.00321 = $16.05.
+    // 5,000 at $0.00321 = $16.05. The count is 53,700 used less 50,000
+    // included less 1,200 carried.
     expect(line("governed")).toHaveTextContent(
-      "Governed actions 1 – 5,0005,000 bought at $0.00321 each · 50,000 included$16.05",
+      "Governed actions 1 – 2,5005,000 bought at $0.00321 each · 50,000 included$16.05",
     );
-    expect(tile("governed").querySelector("dd")).toHaveTextContent(/^5,000$/);
+    expect(tile("governed").querySelector("dd")).toHaveTextContent(/^2,500$/);
     expect(tile("governed")).toHaveTextContent(
       "5,000 bought at $0.00321 each · 50,000 included",
     );
