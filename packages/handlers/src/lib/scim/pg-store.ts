@@ -12,7 +12,7 @@
 //   - `metadata.scim_deleted_at` marks a person the identity provider deleted,
 //     so GET answers 404 for them until a POST provisions them again.
 import { and, count, eq, inArray, isNull, ne, sql } from "drizzle-orm";
-import { schema, type Tx } from "@oxagen/database";
+import { operatorUserJoin, schema, type Tx } from "@oxagen/database";
 import {
   applyMappedOrgRoleInTx,
   isOrgOwner,
@@ -100,10 +100,11 @@ export function createPgScimStore(
     updatedAt:
       r.principalUpdatedAt > r.updatedAt ? r.principalUpdatedAt : r.updatedAt,
   });
+  // Read with `.innerJoin(schema.users, operatorUserJoin)`, the relations
+  // seam, which carries the `kind = 'human'` filter; this adds the fence.
   const orgUsers = () =>
     and(
       eq(schema.principals.orgId, orgId),
-      eq(schema.principals.kind, "human"),
       isNull(schema.principals.workspaceId),
       isNull(schema.users.deletedAt),
       notScimDeleted,
@@ -175,7 +176,7 @@ export function createPgScimStore(
       const [row] = await tx
         .select(userColumns)
         .from(schema.principals)
-        .innerJoin(schema.users, eq(schema.users.id, schema.principals.parentUserId))
+        .innerJoin(schema.users, operatorUserJoin)
         .where(and(orgUsers(), eq(schema.users.id, userId)))
         .limit(1);
       return row ? toRow(row) : null;
@@ -185,7 +186,7 @@ export function createPgScimStore(
       const [row] = await tx
         .select(userColumns)
         .from(schema.principals)
-        .innerJoin(schema.users, eq(schema.users.id, schema.principals.parentUserId))
+        .innerJoin(schema.users, operatorUserJoin)
         .where(and(orgUsers(), eq(schema.users.email, email.toLowerCase())))
         .limit(1);
       return row ? toRow(row) : null;
@@ -196,7 +197,7 @@ export function createPgScimStore(
       const [total] = await tx
         .select({ n: count() })
         .from(schema.principals)
-        .innerJoin(schema.users, eq(schema.users.id, schema.principals.parentUserId))
+        .innerJoin(schema.users, operatorUserJoin)
         .where(where);
       const rows =
         limit === 0
@@ -204,10 +205,7 @@ export function createPgScimStore(
           : await tx
               .select(userColumns)
               .from(schema.principals)
-              .innerJoin(
-                schema.users,
-                eq(schema.users.id, schema.principals.parentUserId),
-              )
+              .innerJoin(schema.users, operatorUserJoin)
               .where(where)
               .orderBy(schema.users.createdAt, schema.users.id)
               .offset(offset)
