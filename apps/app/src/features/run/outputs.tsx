@@ -226,7 +226,7 @@ function keyedByOccurrence<T>(
     const base = label(item);
     const n = seen.get(base) ?? 0;
     seen.set(base, n + 1);
-    return { item, key: `${base}#${n}` };
+    return { item, key: `${base}#${String(n)}` };
   });
 }
 

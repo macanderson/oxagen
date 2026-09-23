@@ -67,7 +67,7 @@ import { __resetTrustedProxyHopsForTests } from "../lib/context";
 
 const PATH = "/v1/run-exports/download?token=not-a-real-token";
 
-/** Count the limiter's Postgres upsert as `count`, recording the bucket keys. */
+/** Count the limiter's Postgres upsert as `count`, recording its bucket keys. */
 function countAs(count: number): string[] {
   const keys: string[] = [];
   mocks.withSystemDb.mockImplementation(
@@ -75,7 +75,14 @@ function countAs(count: number): string[] {
       fn({
         execute: vi.fn().mockImplementation(async (query: unknown) => {
           const key = (query as { queryChunks?: unknown[] }).queryChunks?.at(1);
-          if (typeof key === "string") keys.push(key);
+          // Other system writes can share the connection (a window sweep
+          // carries a timestamp in the same position), so record only the
+          // limiter's own bucket keys.
+          if (
+            typeof key === "string" &&
+            key.startsWith("run-export-preauth-ip:")
+          )
+            keys.push(key);
           return [{ count }];
         }),
       }),
