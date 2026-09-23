@@ -1,37 +1,17 @@
 {
   "run": {
-    "eyebrow": "Run",
     "notRecorded": "not recorded",
-    "basisNotRecorded": "basis not recorded",
     "noSummary": "No summary yet. Open the transcript to review recorded prompts, model calls, and tools.",
     "source": {
       "ledger": "recorded in the evidence ledger",
       "tacho": "recorded by a wrapped agent"
     },
-    "figures": {
-      "cost": "Cost",
-      "turns": "Turns",
-      "steps": "Steps",
-      "frames": "Frames",
-      "started": "Started",
-      "sealed": "Sealed"
-    },
     "facts": {
-      "operator": "Operator",
-      "model": "Model",
-      "harness": "Harness",
-      "harnessVersion": "Version {version}",
-      "harnessVersionNotRecorded": "Harness version not recorded.",
-      "machine": "Machine",
-      "noMachineOnLedger": "The evidence ledger records no host for a run.",
       "operatorKind": {
         "human": "A person, name not recorded",
         "agent": "An agent, not a person",
         "service": "A service, not a person"
-      },
-      "machineNotRecorded": "Session machine facts not recorded.",
-      "machineRecorded": "Recorded in this session: {facts}",
-      "machineEnrollment": "Enrollment hostname and facts: {facts}"
+      }
     },
     "resolvedApprovals": {
       "title": "Resolved",
@@ -46,9 +26,18 @@
     "tabs": {
       "label": "Run sections",
       "transcript": "Transcript",
-      "frames": "Frames",
+      "issues": "Issues",
+      "actions": "Governed actions",
       "cost": "Cost",
-      "approvals": "Approvals"
+      "policy": "Policy",
+      "context": "Context",
+      "chain": "Chain and seal",
+      "atLeast": "{count}+",
+      "status": {
+        "live": "live",
+        "sealed": "sealed",
+        "halted": "halted"
+      }
     },
     "transcript": {
       "title": "Transcript",
@@ -472,7 +461,6 @@
       }
     },
     "loading": "Loading this run",
-    "unnamedRun": "Untitled run",
     "outputs": {
       "label": "What this run produced",
       "title": "What this run produced, in the order it happened",
@@ -528,6 +516,94 @@
       "output": "Output",
       "reasoning": "Reasoning (within output)",
       "coverage": "Counts cover loaded frames. Missing counts remain unknown. Cache reads are input too. These counts do not identify which input content was useful."
+    },
+    "header": {
+      "chips": "Run identity",
+      "harnessNotRecorded": "harness not recorded",
+      "rig": "Rig",
+      "versionNotCaptured": "version not captured",
+      "harnessVersion": "version {version}",
+      "effortNotCaptured": "effort not captured",
+      "checkout": "Checkout",
+      "repoNotCaptured": "repository and branch not captured",
+      "noPullRequest": "no pull request",
+      "pathNotCaptured": "path not captured",
+      "derived": "derived",
+      "noMachine": "machine not recorded",
+      "started": "started",
+      "sealed": "sealed",
+      "running": "still running",
+      "by": "by",
+      "paused": "Ingress is paused. The agent takes no new step until you resume it.",
+      "copy": "Copy",
+      "copyLabel": "Copy {text}",
+      "copied": "Copied",
+      "copyFailed": "Copy failed. Select the text and copy it.",
+      "modelNotRecorded": "model not recorded",
+      "noMachineOnLedger": "The evidence ledger records no host for a run.",
+      "machineNotRecorded": "Session machine facts not recorded.",
+      "machineRecorded": "Recorded in this session: {facts}",
+      "machineEnrollment": "Enrollment hostname and facts: {facts}"
+    },
+    "summary": {
+      "title": "Summary",
+      "check": "Check it against the frames"
+    },
+    "stats": {
+      "label": "Run figures",
+      "tokens": "Tokens",
+      "prompts": "Prompts",
+      "cost": "Cost",
+      "wasted": "Wasted",
+      "wallClock": "Wall clock",
+      "cacheHit": "Cache hit",
+      "tokensNote": "{output} output",
+      "promptsCut": "at least this many",
+      "wastedNote": "derived from the productive share",
+      "running": "still running",
+      "noRollup": "no rollup yet"
+    },
+    "issues": {
+      "title": "Issues",
+      "reference": "Reference",
+      "relation": "Relation",
+      "task": "Task the run was started on",
+      "empty": "This run names no issue.",
+      "note": "The record keeps one task reference per run. Links to other issues are not captured."
+    },
+    "policy": {
+      "title": "Policy decisions",
+      "frame": "Frame",
+      "call": "Call",
+      "outcome": "Outcome",
+      "type": "Decision type",
+      "empty": "No policy decision was recorded on this run.",
+      "cut": "The transcript read stopped short, so later decisions are missing here.",
+      "at": "Into the run"
+    },
+    "context": {
+      "title": "Recalled context",
+      "frame": "Frame",
+      "what": "Recalled",
+      "at": "Into the run",
+      "empty": "This run recorded no recall.",
+      "cut": "The transcript read stopped short, so later recalls are missing here."
+    },
+    "work": {
+      "label": "The work",
+      "changes": "Changes",
+      "pullRequest": "Pull request",
+      "noPullRequest": "none recorded",
+      "commits": "Commits",
+      "diff": "Diff",
+      "diffStat": "{added} added, {removed} removed in {files, plural, one {# file} other {# files}}",
+      "noDiff": "no file change recorded",
+      "openDiff": "Open the diff in the transcript",
+      "more": "{count} more in the outputs",
+      "spend": "Spend by area",
+      "toolCalls": "Tool calls",
+      "noSpend": "No cost rollup yet. It is built after the run seals.",
+      "callCount": "{count, plural, one {# call} other {# calls}}"
     }
   }
 }

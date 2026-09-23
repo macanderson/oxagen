@@ -1,10 +1,5 @@
-// Tool servers (lane: connections; mockup `tools.md`, the Registry tab's
-// server list): the MCP servers registered in this workspace, with the health
-// the last check recorded and how many tools each one pins.
-//
-// It sits under the registry rather than in a tab of its own, because a server
-// is where a tool version came from: the import control above takes a server's
-// pins into the registry, and a tool server kill switch names a row here.
+// The Providers roster: registered MCP endpoints, their last recorded health,
+// and discovered tool pins. Registration sits beside connections and grants.
 //
 // Two honest notes the record forces. A server written by a plugin install
 // carries transport `sse` and health `unknown`, and the page prints that word
@@ -92,7 +87,7 @@ export function Servers({
         at={at}
         orgRole={orgRole}
         read={read}
-        retry={toolsLink(at, { tab: "registry" })}
+        retry={toolsLink(at, { tab: "connections" })}
       />
     );
   }

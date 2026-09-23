@@ -28,6 +28,9 @@ export function toAgentPage(out: AgentListOutput): z.input<typeof AgentPage> {
       agentKey: item.agentKey,
       harness: item.harness,
       operatorId: item.operatorId,
+      principalId: item.principalId,
+      credentials: item.credentials,
+      hosts: item.hosts,
       status: item.status,
       runs30d: item.runs30d,
       spend30d:

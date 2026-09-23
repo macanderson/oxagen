@@ -191,6 +191,8 @@ export class Shipper {
    * restart one refusal finds each session again.
    */
   private readonly foreignSessions = new Set<string>();
+  /** The drain in flight, so a second caller waits instead of racing it. */
+  private draining: Promise<ShipResult> | undefined;
   lastSuccessAt: number | undefined;
   lastError: string | undefined;
 
@@ -662,8 +664,30 @@ export class Shipper {
     return true;
   }
 
-  /** Ship until the WAL is drained, the window is spent, or a failure stops the loop. */
+  /**
+   * Ship until the WAL is drained, the window is spent, or a failure stops the loop.
+   *
+   * One drain runs at a time. Two concurrent drains read the same unshipped
+   * batch before either marks it shipped, so the control plane receives a
+   * window of frames twice and the chain reads as broken (#3782). The daemon
+   * reaches this from its interval tick, from a caller's `tick()`, and from
+   * `stop()`, and none of those waits on the others. A caller that arrives
+   * during a drain waits for it, then drains whatever was appended since.
+   */
   async drain(): Promise<ShipResult> {
+    while (this.draining !== undefined) {
+      await this.draining.catch(() => undefined);
+    }
+    const run = this.drainLoop();
+    this.draining = run;
+    try {
+      return await run;
+    } finally {
+      if (this.draining === run) this.draining = undefined;
+    }
+  }
+
+  private async drainLoop(): Promise<ShipResult> {
     const total: ShipResult = {
       shipped: 0,
       quarantined: 0,
