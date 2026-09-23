@@ -1,112 +1,75 @@
 import { describe, expect, it } from "vitest";
-import { parseSteeringView, steeringLink } from "./view";
-
+import { parseSteeringView, steeringLink, steeringPathParams } from "./view";
 const AT = { org: "acme", ws: "core-platform" };
 
-describe("parseSteeringView", () => {
-  it("opens Records, every kind, the first page, nothing selected, for an empty query", () => {
+describe("Steering routes", () => {
+  it("opens the whole Library by default", () => {
     expect(parseSteeringView({})).toEqual({
-      tab: "records",
+      tab: "library",
+      shelf: "all",
       kind: null,
       offset: 0,
       proposal: null,
       cursor: null,
+      section: "candidates",
     });
   });
-
-  it("reads a kind and an offset on Records", () => {
-    expect(parseSteeringView({ kind: "constraint", offset: "50" })).toEqual({
-      tab: "records",
-      kind: "constraint",
-      offset: 50,
-      proposal: null,
-      cursor: null,
-    });
+  it.each([
+    ["records", "library", "records"],
+    ["skills", "library", "skills"],
+    ["memory", "library", "memory"],
+    ["settings", "freshness", "all"],
+    ["prs", "proposals", "all"],
+  ])("keeps the meaning of the legacy %s link", (legacy, tab, shelf) => {
+    expect(parseSteeringView({ tab: legacy })).toMatchObject({ tab, shelf });
   });
-
-  it("opens Skills with the inventory page the URL names", () => {
-    expect(parseSteeringView({ tab: "skills", cursor: "c2" })).toEqual({
-      tab: "skills",
-      kind: null,
-      offset: 0,
-      proposal: null,
+  it("retains inventory cursors, record kinds and selected PRs on their sections", () => {
+    expect(parseSteeringView({ tab: "skills", cursor: "c2" })).toMatchObject({
       cursor: "c2",
     });
-  });
-
-  it("opens Settings from its URL without carrying another tab's selection", () => {
     expect(
-      parseSteeringView({
-        tab: "settings",
-        kind: "constraint",
-        proposal: "prp_1",
-        cursor: "c2",
-      }),
-    ).toEqual({
-      tab: "settings",
-      kind: null,
-      offset: 0,
-      proposal: null,
-      cursor: null,
-    });
-    expect(steeringLink(AT, { tab: "settings" })).toBe(
-      "/acme/core-platform/steering?tab=settings",
-    );
-  });
-
-  it("reads the selected proposal on Context PRs, from the first value of a repeated param", () => {
+      parseSteeringView({ kind: "constraint", offset: "50" }),
+    ).toMatchObject({ shelf: "records", kind: "constraint", offset: 50 });
     expect(
-      parseSteeringView({ tab: "prs", proposal: ["prp_01k5ru4a", "prp_x"] }),
-    ).toMatchObject({ tab: "prs", proposal: "prp_01k5ru4a" });
+      parseSteeringView({ tab: "prs", proposal: ["prp_1", "prp_2"] }),
+    ).toMatchObject({ section: "prs", proposal: "prp_1" });
   });
-
   it.each([
-    ["an unknown tab", { tab: "effect" }, { tab: "records" }],
-    ["an unknown kind", { kind: "directive" }, { kind: null }],
-    ["a kind off Records", { tab: "proposals", kind: "rule" }, { kind: null }],
-    ["a negative offset", { offset: "-50" }, { offset: 0 }],
-    ["a padded offset", { offset: "050" }, { offset: 0 }],
+    [{ tab: "unknown" }, { tab: "library" }],
+    [{ tab: "library", shelf: "unknown" }, { shelf: "all" }],
     [
-      "an offset past the pages a list holds",
-      { offset: "10000000" },
-      { offset: 0 },
+      { tab: "freshness", kind: "rule", proposal: "prp_1", cursor: "c2" },
+      { kind: null, proposal: null, cursor: null },
     ],
-    ["a proposal off Context PRs", { proposal: "prp_1" }, { proposal: null }],
-    ["a cursor off Skills", { cursor: "c2" }, { cursor: null }],
-    ["an empty cursor", { tab: "skills", cursor: "" }, { cursor: null }],
-    [
-      "a cursor longer than a URL carries",
-      { tab: "skills", cursor: "c".repeat(513) },
-      { cursor: null },
-    ],
-    [
-      "a malformed proposal",
-      { tab: "prs", proposal: "prp_1/../x" },
-      { proposal: null },
-    ],
-    [
-      "another kind of id",
-      { tab: "prs", proposal: "ctr_1" },
-      { proposal: null },
-    ],
-  ])("falls back for %s (negative)", (_case, params, expected) => {
-    expect(parseSteeringView(params)).toMatchObject(expected);
+    [{ offset: "050" }, { offset: 0 }],
+    [{ offset: "-1" }, { offset: 0 }],
+    [{ tab: "prs", proposal: "prp_1/../x" }, { proposal: null }],
+    [{ tab: "skills", cursor: "c".repeat(513) }, { cursor: null }],
+  ])("rejects invalid or unrelated selections", (query, expected) => {
+    expect(parseSteeringView(query)).toMatchObject(expected);
   });
-});
-
-describe("steeringLink", () => {
-  it("leaves the defaults off the query", () => {
-    expect(steeringLink(AT, { tab: "records", kind: null, offset: 0 })).toBe(
-      "/acme/core-platform/steering",
-    );
-  });
-
-  it("carries the tab, the kind, the offset and the proposal", () => {
+  it("uses path sections and preserves query filters", () => {
     expect(steeringLink(AT, { tab: "records", kind: "rule", offset: 50 })).toBe(
-      "/acme/core-platform/steering?kind=rule&offset=50",
+      "/acme/core-platform/steering/library/records?kind=rule&offset=50",
     );
     expect(steeringLink(AT, { tab: "prs", proposal: "prp_1" })).toBe(
-      "/acme/core-platform/steering?tab=prs&proposal=prp_1",
+      "/acme/core-platform/steering/proposals?proposal=prp_1&section=prs",
     );
+    expect(
+      steeringLink(AT, { tab: "skills", cursor: "next", view: "search" }),
+    ).toBe(
+      "/acme/core-platform/steering/library/skills?cursor=next&view=search",
+    );
+  });
+  it("gives path selectors priority over conflicting legacy queries", () => {
+    expect(
+      parseSteeringView(
+        steeringPathParams(["library", "skills"], {
+          tab: "freshness",
+          shelf: "records",
+          cursor: "next",
+        }),
+      ),
+    ).toMatchObject({ tab: "library", shelf: "skills", cursor: "next" });
   });
 });

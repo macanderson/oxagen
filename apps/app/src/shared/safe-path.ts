@@ -299,27 +299,37 @@ export const routes = {
     tab === undefined
       ? pathOf(org, ws, "repositories")
       : pathOf(org, ws, "repositories", tab),
-  /** Steering filters, a selected proposal, and a Skills inventory cursor. */
+  /** Canonical Steering sections, with legacy query links retained for redirects. */
   steering: (
     org: string,
     ws: string,
     q: {
       tab?: string;
+      shelf?: string;
+      section?: string;
       kind?: string;
       offset?: string;
       proposal?: string;
       cursor?: string;
       view?: string;
     } = {},
-  ): SafePath =>
-    withQuery(pathOf(org, ws, "steering"), {
-      tab: q.tab,
+  ): SafePath => {
+    const canonical = ["library", "proposals", "freshness"].includes(
+      q.tab ?? "",
+    );
+    const segments = canonical ? [q.tab!] : [];
+    if (q.tab === "library" && q.shelf && q.shelf !== "all")
+      segments.push(q.shelf);
+    return withQuery(pathOf(org, ws, "steering", ...segments), {
+      tab: canonical ? undefined : q.tab,
       kind: q.kind,
       offset: q.offset,
       proposal: q.proposal,
       cursor: q.cursor,
       view: q.view,
-    }),
+      section: q.section,
+    });
+  },
   /**
    * One published record, by its lineage (#3395). The lineage is a file stem
    * under `.oxagen/rules/`, so it reaches here from the repository rather

@@ -512,6 +512,8 @@
         "blocked": "blocked",
         "withheld": "withheld"
       }
-    }
+    },
+    "summaryTitle": "Summary",
+    "summaryFrames": "Check against recorded frames"
   }
 }

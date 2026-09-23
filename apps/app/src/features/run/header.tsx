@@ -11,7 +11,6 @@ import {
   statValue,
 } from "@/ui/control-styles";
 import { EnforcementTierBadge } from "@/ui/enforcement-tier";
-import { GeneratedSummary } from "@/ui/generated-summary";
 import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
 import { StatusBadge } from "@/ui/status-badge";
@@ -237,13 +236,6 @@ export function RunHeader({
           )}
           {run.taskRef === null ? null : (
             <p className="text-sm">{run.taskRef}</p>
-          )}
-          {run.summary === null ? (
-            <p className="max-w-prose text-sm text-muted-foreground">
-              {t("noSummary")}
-            </p>
-          ) : (
-            <GeneratedSummary summary={run.summary} layout="block" />
           )}
         </div>
         <div className="flex flex-col gap-3 lg:items-end">

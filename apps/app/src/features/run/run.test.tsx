@@ -161,13 +161,25 @@ describe("header", () => {
       detail: ok(runDetail()),
       transcript: ok(runTranscript()),
     });
-    const heading = screen.getByRole("heading", { level: 2 });
+    const heading = screen.getByRole("heading", {
+      level: 2,
+      name: /Cut the 3.2 release branch|ENG-4121 cut the 3.2 release|Unnamed run/,
+    });
     expect(heading).toHaveTextContent("Cut the 3.2 release branch");
     expect(screen.getByText("tse_7k2m9q")).toBeTruthy();
     const summary = screen.getByTestId("generated-summary");
     expect(summary).toHaveTextContent("Cut release/3.2 from main");
     expect(summary).toHaveTextContent("generated");
     expect(summary).toHaveTextContent("Written by z-ai/glm-flash-latest on");
+    expect(
+      within(screen.getByRole("region", { name: "Summary" })).getByTestId(
+        "generated-summary",
+      ),
+    ).toBe(summary);
+    expect(screen.getByTestId("run-output-sidebar")).toBeVisible();
+    expect(
+      screen.getByRole("link", { name: "Check against recorded frames" }),
+    ).toHaveAttribute("href", "/acme/core-platform/runs/tse_7k2m9q?tab=frames");
     await expectNoAxe(container);
   });
 
@@ -176,9 +188,12 @@ describe("header", () => {
       detail: ok(runDetail({ run: runRow({ name: null, summary: null }) })),
       transcript: ok(runTranscript()),
     });
-    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
-      "ENG-4121 cut the 3.2 release",
-    );
+    expect(
+      screen.getByRole("heading", {
+        level: 2,
+        name: /Cut the 3.2 release branch|ENG-4121 cut the 3.2 release|Unnamed run/,
+      }),
+    ).toHaveTextContent("ENG-4121 cut the 3.2 release");
     expect(screen.queryByTestId("generated-summary")).toBeNull();
     expect(
       screen.getByText(/No summary yet\. Open the transcript/),

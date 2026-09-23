@@ -3929,6 +3929,8 @@ type Messages = {
         withheld: string;
       };
     };
+    summaryTitle: string;
+    summaryFrames: string;
   };
   shell: {
     skipToContent: string;
@@ -4754,11 +4756,10 @@ type Messages = {
   steering: {
     tabs: {
       label: string;
-      records: string;
-      skills: string;
       proposals: string;
-      prs: string;
       settings: string;
+      library: string;
+      freshness: string;
     };
     failure: {
       denied: string;
@@ -4939,6 +4940,20 @@ type Messages = {
       skill: string;
       record: string;
     };
+    library: {
+      label: string;
+      all: string;
+      records: string;
+      skills: string;
+      memory: string;
+    };
+    proposalSections: {
+      label: string;
+      candidates: string;
+      prs: string;
+    };
+    description: string;
+    governance: string;
   };
   tools: {
     eyebrow: string;
