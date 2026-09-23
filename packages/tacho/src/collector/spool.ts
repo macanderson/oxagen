@@ -662,8 +662,31 @@ export class Shipper {
     return true;
   }
 
-  /** Ship until the WAL is drained, the window is spent, or a failure stops the loop. */
-  async drain(): Promise<ShipResult> {
+  /**
+   * The drain in flight, or the settled tail of the last one. A new drain
+   * starts only after it.
+   */
+  private drainTail: Promise<unknown> = Promise.resolve();
+
+  /**
+   * Ship until the WAL is drained, the window is spent, or a failure stops the loop.
+   *
+   * Drains run one at a time. The daemon starts one from its interval tick,
+   * from a tick a caller drives, and from `stop()`, and these overlap. A batch
+   * stays unshipped in the WAL from `unshipped()` until `markShipped()`, with
+   * the body read and the ingest request awaited in between. Two drains in
+   * that window read the same tail and both send it, so the control plane
+   * received `…143, 144, 145, 144, 145` and saw seq 144 follow seq 145. A
+   * caller that arrives mid-drain waits for it and then drains again, so it
+   * still ships what was appended after the first drain last read the WAL.
+   */
+  drain(): Promise<ShipResult> {
+    const run = this.drainTail.then(() => this.drainLoop());
+    this.drainTail = run.catch(() => undefined);
+    return run;
+  }
+
+  private async drainLoop(): Promise<ShipResult> {
     const total: ShipResult = {
       shipped: 0,
       quarantined: 0,
