@@ -89,13 +89,15 @@ async function renderFrame(
   const body = vi.fn(() => <p data-testid="tab-body">tab</p>);
   const view = render(
     <IntlProvider>
-      {await OrganizationFrame({
-        ctx,
-        source,
-        current: "people",
-        retry: "/acme" as never,
-        children: body,
-      })}
+      {
+        await OrganizationFrame({
+          ctx,
+          source,
+          current: "people",
+          retry: "/acme" as never,
+          children: body,
+        })
+      }
     </IntlProvider>,
   );
   await expectNoAxe(view.container);
@@ -106,7 +108,10 @@ const loaded = {
   members: readOk(roster),
   roles: readOk(
     roleCatalog({
-      roles: [roleRow(), roleRow({ id: "rol_2", name: "Owner", kind: "human" })],
+      roles: [
+        roleRow(),
+        roleRow({ id: "rol_2", name: "Owner", kind: "human" }),
+      ],
     }),
   ),
   workspaces: readOk({
@@ -206,17 +211,20 @@ describe("access denied", () => {
       );
       expect(denied).toHaveTextContent("Needed");
       expect(denied).toHaveTextContent("Decided by");
-      expect(screen.queryByRole("heading", { level: 1, name: "Acme Robotics" }))
-        .toBeNull();
+      expect(
+        screen.queryByRole("heading", { level: 1, name: "Acme Robotics" }),
+      ).toBeNull();
     },
   );
 
   it("opens Request access as a dialog that says nothing was sent", async () => {
     await renderFrame("member", { workspaces: loaded.workspaces });
-    await userEvent.click(screen.getByRole("button", { name: "Request access" }));
-    expect(
-      screen.getByTestId("organization-request-access"),
-    ).toHaveTextContent("nothing is sent from here");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Request access" }),
+    );
+    expect(screen.getByTestId("organization-request-access")).toHaveTextContent(
+      "nothing is sent from here",
+    );
   });
 
   it("draws the denied state when a read is refused", async () => {
@@ -244,10 +252,9 @@ describe("error", () => {
     expect(error).toHaveTextContent(
       "The control plane answered 503 control_plane_unavailable. Nothing was changed. Runs kept recording while this page was down. Frames are written by the collector on each host, not by Oxagen.",
     );
-    expect(within(error).getByRole("link", { name: "Try again" })).toHaveAttribute(
-      "href",
-      "/acme",
-    );
+    expect(
+      within(error).getByRole("link", { name: "Try again" }),
+    ).toHaveAttribute("href", "/acme");
     expect(screen.getByTestId("organization-error-trace")).toHaveTextContent(
       /trace not recorded · region not recorded · \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}Z/,
     );
@@ -265,9 +272,7 @@ describe("empty", () => {
     const { body } = await renderFrame("owner", {
       ...loaded,
       workspaces: readOk({
-        workspaces: [
-          workspaceRow({ archivedAt: "2026-01-01T00:00:00.000Z" }),
-        ],
+        workspaces: [workspaceRow({ archivedAt: "2026-01-01T00:00:00.000Z" })],
       }),
     });
     expect(body).not.toHaveBeenCalled();
@@ -281,7 +286,26 @@ describe("empty", () => {
       "A workspace owns one main repo, one steering set, a set of agents, tool grants, and budgets. A workspace without a main repo cannot exist.",
     );
     expect(
-      within(empty).getByRole("button", { name: "Create a workspace" }).className,
+      within(empty).getByRole("button", { name: "Create a workspace" })
+        .className,
     ).toContain("bg-button-primary-bg");
+  });
+});
+
+describe("loading", () => {
+  it("holds the body with four tile blocks and a panel of seven rows, no figure and no zero", async () => {
+    const { OrganizationSkeleton } = await import("./states");
+    const view = render(
+      <IntlProvider>
+        <OrganizationSkeleton />
+      </IntlProvider>,
+    );
+    const skeleton = screen.getByTestId("organization-loading");
+    expect(skeleton).toHaveAttribute("role", "status");
+    expect(skeleton).toHaveAttribute("aria-busy", "true");
+    expect(skeleton.querySelectorAll('[data-skeleton="tile"]')).toHaveLength(4);
+    expect(skeleton.querySelectorAll('[data-skeleton="row"]')).toHaveLength(7);
+    expect(skeleton).not.toHaveTextContent(/\d/);
+    await expectNoAxe(view.container);
   });
 });
