@@ -1,8 +1,9 @@
 // The billing port on the kernel (ARCHITECTURE.md §3.3, §3.9): the Billing
-// page's five reads, each a noBillingGate kernelRead mapped into its view
+// page's six reads, each a noBillingGate kernelRead mapped into its view
 // model and parsed at the boundary.
 import "server-only";
 import { billingContractRateGet } from "@oxagen/oxagen/contracts/billing.contract_rate.get";
+import { billingEvidenceRetention } from "@oxagen/oxagen/contracts/billing.evidence_retention";
 import { billingGauBucketGet } from "@oxagen/oxagen/contracts/billing.gau_bucket.get";
 import { billingInvoiceList } from "@oxagen/oxagen/contracts/billing.invoice.list";
 import { billingSubscriptionRead } from "@oxagen/oxagen/contracts/billing.subscription.read";
@@ -10,6 +11,7 @@ import { captureError } from "@oxagen/telemetry";
 import type { z } from "zod";
 import {
   ContractRate,
+  EvidenceRetention,
   GauBucket,
   InvoicePage,
   PlanCard,
@@ -20,6 +22,7 @@ import { type Read, readError, readOk } from "@/data/read";
 import { kernelRead } from "@/server/kernel";
 import {
   toContractRate,
+  toEvidenceRetention,
   toGauBucket,
   toInvoicePage,
   toPlanCard,
@@ -96,6 +99,21 @@ export const billing: DataSource["billing"] = {
           toContractRate(read.value),
           ctx.orgId,
           "contractRate",
+        )
+      : read;
+  },
+  async retention(ctx) {
+    const read = await kernelRead(ctx, {
+      contract: billingEvidenceRetention,
+      input: {},
+      page: "billing",
+    });
+    return read.ok
+      ? parsed(
+          EvidenceRetention,
+          toEvidenceRetention(read.value),
+          ctx.orgId,
+          "retention",
         )
       : read;
   },

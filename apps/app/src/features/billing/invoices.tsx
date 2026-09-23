@@ -1,54 +1,72 @@
-// Invoices (§1.4, §3.9 contracts; pages/billing.md): one cursor page, newest
-// first, each with its number, period, what it charged for, the amount, its
-// status, what was paid, and the Stripe-hosted page that collects it. One of the two places money
-// renders (INV-25).
+// Invoices (§1.4, §3.9 contracts; pages/billing.md): newest first, each with
+// its number, its period (the month, as the design prints it), the governed
+// actions it charged for, the amount, its status as a dot and a word, the day
+// it was paid, and the Stripe-hosted page that collects it. list_invoices
+// carries neither a governed-action count nor a paid date per invoice yet
+// (#3840), so those two columns say "not recorded" rather than a figure. The
+// table carries the design's list controls (@/ui/list-table) over the page the
+// read returned, 50 invoices. Only an organization with more than that sees
+// the older-and-newest links beneath it, the one way to reach the rest until
+// the read returns them all. One of the files money renders in (INV-25).
 import { useTranslations } from "next-intl";
 import type { InvoicePage, InvoiceRow } from "@/data/contracts/billing";
-import type { Read } from "@/data/read";
 import { parseHostedInvoiceUrl } from "@/shared/invoice-url";
 import { routes } from "@/shared/safe-path";
-import { linkText } from "@/ui/control-styles";
+import { Badge, type BadgeTone } from "@/ui/badge";
+import { linkText, mono, panelBody } from "@/ui/control-styles";
+import { type ListRow, ListTable } from "@/ui/list-table";
 import { Money } from "@/ui/money";
 import { HostedInvoiceLink, SafeLink } from "@/ui/navigation";
-import { cell, numericCell, Table } from "@/ui/table";
-import { BillingReadFailure } from "./read-failure";
-import { Section, useDate } from "./section";
+import { cell } from "@/ui/table";
+import { NotRecordedValue, Section, usePeriod } from "./section";
 
-function InvoiceLine({ row }: { row: InvoiceRow }) {
+const STATUS_TONE: Record<InvoiceRow["status"], BadgeTone> = {
+  paid: "allowed",
+  open: "approval",
+  uncollectible: "failed",
+  void: "quiet",
+};
+
+function useInvoiceRow(): (row: InvoiceRow) => ListRow {
   const t = useTranslations("billing");
-  const date = useDate();
-  const url =
-    row.hostedInvoiceUrl === null
-      ? null
-      : parseHostedInvoiceUrl(row.hostedInvoiceUrl);
-  return (
-    <tr data-kind={row.kind} data-status={row.status}>
-      <td className={cell}>{row.number ?? t("invoices.unnumbered")}</td>
-      <td className={cell}>
-        {t("range", {
-          start: date(row.periodStart),
-          end: date(row.periodEnd),
-        })}
-      </td>
-      <td className={cell}>{t(`invoices.kinds.${row.kind}`)}</td>
-      <td className={numericCell}>
-        <Money value={row.amountDue} />
-      </td>
-      <td className={cell}>{t(`invoices.statuses.${row.status}`)}</td>
-      <td className={numericCell}>
-        <Money value={row.amountPaid} />
-      </td>
-      <td className={cell}>
-        {url === null ? (
-          t("invoices.unpublished")
+  const period = usePeriod();
+  const notRecorded = <NotRecordedValue>{t("notRecorded")}</NotRecordedValue>;
+  return (row) => {
+    const url =
+      row.hostedInvoiceUrl === null
+        ? null
+        : parseHostedInvoiceUrl(row.hostedInvoiceUrl);
+    const number = row.number ?? t("invoices.unnumbered");
+    return {
+      key: row.id,
+      data: { "data-kind": row.kind, "data-status": row.status },
+      cells: [
+        number,
+        period(row.periodStart, row.periodEnd),
+        notRecorded,
+        <Money key="amount" value={row.amountDue} />,
+        <Badge key="status" tone={STATUS_TONE[row.status]}>
+          {t(`invoices.statuses.${row.status}`)}
+        </Badge>,
+        notRecorded,
+        url === null ? (
+          <NotRecordedValue key="link">
+            {t("invoices.unpublished")}
+          </NotRecordedValue>
         ) : (
-          <HostedInvoiceLink to={url} className={linkText}>
+          <HostedInvoiceLink
+            key="link"
+            to={url}
+            data-touch-target=""
+            className={`${linkText} max-md:inline-flex max-md:items-center`}
+            aria-label={t("invoices.viewLabel", { number })}
+          >
             {t("invoices.view")}
           </HostedInvoiceLink>
-        )}
-      </td>
-    </tr>
-  );
+        ),
+      ],
+    };
+  };
 }
 
 export function Invoices({
@@ -56,45 +74,42 @@ export function Invoices({
   cursor,
   org,
 }: {
-  invoices: Read<InvoicePage>;
+  invoices: InvoicePage;
   /** The page on screen; null is the newest. */
   cursor: string | null;
   org: string;
 }) {
   const t = useTranslations("billing.invoices");
+  const toRow = useInvoiceRow();
   const title = t("title");
-  if (!invoices.ok) {
+  const { items, nextCursor } = invoices;
+  if (items.length === 0 && cursor === null) {
     return (
       <Section id="billing-invoices" title={title}>
-        <BillingReadFailure read={invoices} section={title} />
+        <p className="text-sm text-muted-foreground">{t("empty")}</p>
       </Section>
     );
   }
-  const { items, nextCursor } = invoices.value;
   return (
-    <Section id="billing-invoices" title={title}>
-      {items.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t("empty")}</p>
-      ) : (
-        <Table
-          label={title}
-          columns={[
-            { label: t("columns.invoice") },
-            { label: t("columns.period") },
-            { label: t("columns.kind") },
-            { label: t("columns.amount"), numeric: true },
-            { label: t("columns.status") },
-            { label: t("columns.paid"), numeric: true },
-            { label: t("columns.link") },
-          ]}
-        >
-          {items.map((row) => (
-            <InvoiceLine key={row.id} row={row} />
-          ))}
-        </Table>
-      )}
+    <Section id="billing-invoices" title={title} flush>
+      <ListTable
+        label={title}
+        columns={[
+          { label: t("columns.invoice"), className: `${cell} ${mono}` },
+          { label: t("columns.period") },
+          { label: t("columns.governed"), numeric: true },
+          { label: t("columns.amount"), numeric: true },
+          { label: t("columns.status") },
+          { label: t("columns.paid") },
+          { label: t("columns.link"), hidden: true },
+        ]}
+        rows={items.map(toRow)}
+      />
       {cursor === null && nextCursor === null ? null : (
-        <nav aria-label={t("pager")} className="flex gap-4 text-sm">
+        <nav
+          aria-label={t("pager")}
+          className={`${panelBody} flex gap-4 text-sm`}
+        >
           {cursor === null ? null : (
             <SafeLink to={routes.billing(org)} className={linkText}>
               {t("newest")}
