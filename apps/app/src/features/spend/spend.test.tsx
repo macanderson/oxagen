@@ -90,6 +90,14 @@ const row = (key: string, over: Partial<SpendReport["rows"][number]> = {}) => ({
   ...figure(),
   key,
   provider: null,
+  tokens: {
+    input_uncached: 120,
+    cache_read: 80,
+    cache_write_5m: 10,
+    cache_write_1h: 5,
+    output: 40,
+    reasoning: 20,
+  },
   operator: null,
   ...over,
 });
@@ -302,27 +310,27 @@ describe("Spend › By operator", () => {
 });
 
 describe("Spend › By agent and By tool", () => {
-  it("reads agents and models; a model row names its provider and opens no drill", async () => {
-    byGroup.mockImplementation((_ctx, groupBy) =>
-      Promise.resolve(
-        groupBy === "agent"
-          ? report([row("acme/core-platform/triage")])
-          : report([
-              row("claude-sonnet-5", { provider: "anthropic" }),
-              row("unpriced-model", { cost: cost("100", "estimated") }),
-            ]),
-      ),
-    );
+  it("opens the agent drill from the agent tab without reading models", async () => {
+    byGroup.mockResolvedValue(report([row("acme/core-platform/triage")]));
     await renderSpend({ tab: "agent" });
-
-    expect(byGroup).toHaveBeenCalledWith(ctx, "agent", PERIOD);
-    expect(byGroup).toHaveBeenCalledWith(ctx, "model", PERIOD);
+    expect(byGroup).toHaveBeenCalledExactlyOnceWith(ctx, "agent", PERIOD);
     expect(
       within(rowOf("acme/core-platform/triage")).getByRole("link"),
     ).toHaveAttribute(
       "href",
       "/acme/core-platform/spend?tab=agent&drill=acme%2Fcore-platform%2Ftriage",
     );
+  });
+
+  it("resurfaces the existing model rollup on its own tab with recorded cost basis", async () => {
+    byGroup.mockResolvedValue(
+      report([
+        row("claude-sonnet-5", { provider: "anthropic" }),
+        row("unpriced-model", { cost: cost("100", "estimated") }),
+      ]),
+    );
+    await renderSpend({ tab: "model" });
+    expect(byGroup).toHaveBeenCalledExactlyOnceWith(ctx, "model", PERIOD);
     const model = rowOf("claude-sonnet-5");
     expect(within(model).queryByRole("link")).toBeNull();
     expect(model).toHaveTextContent("anthropic");
@@ -330,6 +338,41 @@ describe("Spend › By agent and By tool", () => {
     expect(
       rowOf("unpriced-model").querySelector("[data-basis]"),
     ).toHaveTextContent("estimated");
+  });
+
+  it("resurfaces recorded token classes without guessing their costs", async () => {
+    byGroup.mockResolvedValue(report([row("model-a"), row("model-b")]));
+    await renderSpend({ tab: "tokens" });
+    expect(byGroup).toHaveBeenCalledExactlyOnceWith(ctx, "model", PERIOD);
+    const table = screen.getByRole("table", { name: "By token class" });
+    expect(within(table).getByText("550")).toBeVisible();
+    expect(within(table).getByText("240")).toBeVisible();
+    expect(within(table).getByText("30")).toBeVisible();
+    expect(
+      screen.getByText(/does not split cost by token class/),
+    ).toBeVisible();
+    expect(screen.getByText(/40%/)).toBeVisible();
+  });
+
+  it("keeps a missing token share unknown when recorded counts are zero", async () => {
+    byGroup.mockResolvedValue(
+      report([
+        row("model-a", {
+          tokens: {
+            input_uncached: 0,
+            cache_read: 0,
+            cache_write_5m: 0,
+            cache_write_1h: 0,
+            output: 0,
+            reasoning: 0,
+          },
+        }),
+      ]),
+    );
+    await renderSpend({ tab: "tokens" });
+    const table = screen.getByRole("table", { name: "By token class" });
+    expect(within(table).getAllByText("not recorded")).toHaveLength(5);
+    expect(screen.queryByText("NaN%")).toBeNull();
   });
 
   it("names the empty table of a level no run named", async () => {
@@ -341,20 +384,17 @@ describe("Spend › By agent and By tool", () => {
     ).toBeInTheDocument();
   });
 
-  it("replaces the body when the models read fails after the agents read answered (negative)", async () => {
-    byGroup.mockImplementation((_ctx, groupBy) =>
-      Promise.resolve(
-        groupBy === "agent"
-          ? report([row("acme/core-platform/triage")])
-          : readError("rollup_rebuild_in_progress", 504),
-      ),
-    );
-    await renderSpend({ tab: "agent" });
-    expect(
-      screen.getByRole("heading", { name: "Spend could not be loaded" }),
-    ).toBeInTheDocument();
-    expect(screen.queryByRole("table")).toBeNull();
-  });
+  it.each(["model", "tokens"])(
+    "shows the refusal on the %s tab",
+    async (tab) => {
+      byGroup.mockResolvedValue(readError("rollup_rebuild_in_progress", 504));
+      await renderSpend({ tab });
+      expect(
+        screen.getByRole("heading", { name: "Spend could not be loaded" }),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole("table")).toBeNull();
+    },
+  );
 });
 
 describe("Spend › Wasted spend", () => {
@@ -839,9 +879,9 @@ describe("Spend › Findings", () => {
     expect(
       screen.getByText("Calls the counterfactual prices").closest("div"),
     ).toHaveTextContent("2,980 of 3,106");
-    expect(screen.getByText("Tokens").closest("div")).toHaveTextContent(
-      "41,200 measured · 1,900 counterfactual",
-    );
+    expect(
+      screen.getByText("Tokens", { selector: "dt" }).closest("div"),
+    ).toHaveTextContent("41,200 measured · 1,900 counterfactual");
     expect(
       screen.getByText("What the cited calls cost").closest("div"),
     ).toHaveTextContent("$1,030.40");
