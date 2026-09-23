@@ -100,16 +100,16 @@ describe("RevokeHost", () => {
       value: { revokedAt: "2026-09-20T09:00:00.000Z" },
     });
     renderRevoke();
-    // A table of identical "Revoke" buttons is only usable if each one names
+    // A table of identical "Unenroll" buttons is only usable if each one names
     // the row it acts on.
-    const dialog = await open("Revoke build-01", "revoke-host-dialog");
-    expect(dialog).toHaveTextContent("Revoke build-01");
+    const dialog = await open("Unenroll build-01", "revoke-host-dialog");
+    expect(dialog).toHaveTextContent("Unenroll build-01");
     await userEvent.type(
       within(dialog).getByLabelText("Reason"),
       "laptop returned",
     );
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Revoke" }),
+      within(dialog).getByRole("button", { name: "Unenroll" }),
     );
     expect(revokeHostEnrollment).toHaveBeenCalledWith(
       "acme",
@@ -126,9 +126,9 @@ describe("RevokeHost", () => {
       value: { revokedAt: "2026-09-20T09:00:00.000Z" },
     });
     renderRevoke();
-    const dialog = await open("Revoke build-01", "revoke-host-dialog");
+    const dialog = await open("Unenroll build-01", "revoke-host-dialog");
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Revoke" }),
+      within(dialog).getByRole("button", { name: "Unenroll" }),
     );
     expect(revokeHostEnrollment).toHaveBeenCalledWith(
       "acme",
@@ -141,9 +141,9 @@ describe("RevokeHost", () => {
   it("names a refusal in the dialog and navigates nowhere (negative)", async () => {
     revokeHostEnrollment.mockResolvedValue(DENIED);
     renderRevoke();
-    const dialog = await open("Revoke build-01", "revoke-host-dialog");
+    const dialog = await open("Unenroll build-01", "revoke-host-dialog");
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Revoke" }),
+      within(dialog).getByRole("button", { name: "Unenroll" }),
     );
     expect(await screen.findByTestId("revoke-host-failure")).toHaveTextContent(
       "Your organization role does not allow this change",
@@ -154,9 +154,9 @@ describe("RevokeHost", () => {
   it("names a write that threw before it answered (negative)", async () => {
     revokeHostEnrollment.mockRejectedValue(new Error("socket closed"));
     renderRevoke();
-    const dialog = await open("Revoke build-01", "revoke-host-dialog");
+    const dialog = await open("Unenroll build-01", "revoke-host-dialog");
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Revoke" }),
+      within(dialog).getByRole("button", { name: "Unenroll" }),
     );
     expect(
       await screen.findByTestId("revoke-host-failure"),
@@ -169,7 +169,7 @@ describe("EnrollHost", () => {
   it("mints the token and shows it once, with its expiry and the command", async () => {
     issueAgentEnrollmentToken.mockResolvedValue({ ok: true, value: TOKEN });
     renderEnroll();
-    const dialog = await open("Enroll a host", "enroll-host-dialog");
+    const dialog = await open("Show the CLI path", "enroll-host-dialog");
     expect(dialog).toHaveTextContent("Enroll a host under Release bot");
     await userEvent.click(
       within(dialog).getByRole("button", { name: "Mint a token" }),
@@ -198,7 +198,7 @@ describe("EnrollHost", () => {
     const writeText = stubClipboard(() => Promise.resolve());
     issueAgentEnrollmentToken.mockResolvedValue({ ok: true, value: TOKEN });
     renderEnroll();
-    const dialog = await open("Enroll a host", "enroll-host-dialog");
+    const dialog = await open("Show the CLI path", "enroll-host-dialog");
     await userEvent.click(
       within(dialog).getByRole("button", { name: "Mint a token" }),
     );
@@ -214,7 +214,7 @@ describe("EnrollHost", () => {
     stubClipboard(() => Promise.reject(new Error("not allowed")));
     issueAgentEnrollmentToken.mockResolvedValue({ ok: true, value: TOKEN });
     renderEnroll();
-    const dialog = await open("Enroll a host", "enroll-host-dialog");
+    const dialog = await open("Show the CLI path", "enroll-host-dialog");
     await userEvent.click(
       within(dialog).getByRole("button", { name: "Mint a token" }),
     );
@@ -235,7 +235,7 @@ describe("EnrollHost", () => {
   it("names a refusal and mints nothing (negative)", async () => {
     issueAgentEnrollmentToken.mockResolvedValue(DENIED);
     renderEnroll();
-    const dialog = await open("Enroll a host", "enroll-host-dialog");
+    const dialog = await open("Show the CLI path", "enroll-host-dialog");
     await userEvent.click(
       within(dialog).getByRole("button", { name: "Mint a token" }),
     );
@@ -248,7 +248,7 @@ describe("EnrollHost", () => {
   it("forgets the token when the dialog closes (negative)", async () => {
     issueAgentEnrollmentToken.mockResolvedValue({ ok: true, value: TOKEN });
     renderEnroll();
-    const dialog = await open("Enroll a host", "enroll-host-dialog");
+    const dialog = await open("Show the CLI path", "enroll-host-dialog");
     await userEvent.click(
       within(dialog).getByRole("button", { name: "Mint a token" }),
     );
@@ -256,7 +256,7 @@ describe("EnrollHost", () => {
     await userEvent.click(
       within(dialog).getByRole("button", { name: "Close" }),
     );
-    await open("Enroll a host", "enroll-host-dialog");
+    await open("Show the CLI path", "enroll-host-dialog");
     expect(screen.queryByTestId("enrollment-token")).not.toBeInTheDocument();
   });
 });
