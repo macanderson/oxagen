@@ -76,6 +76,8 @@ export function createGetSteeringFreshnessHandler(
           connection === null
             ? null
             : {
+                // Absent from an injected reader that predates it: GitHub.
+                provider: connection.provider ?? ("github" as const),
                 fullName:
                   connection.source === "binding"
                     ? connection.approvedFullName
@@ -102,6 +104,7 @@ export function createGetSteeringFreshnessHandler(
       headCommits: publication?.commitShas ?? [],
       publishedAt: publication?.publishedAt.toISOString() ?? null,
       repository: binding?.fullName ?? null,
+      provider: binding?.provider ?? null,
       defaultBranch: binding?.defaultRef ?? null,
       policy: readGatePolicy(settings),
     };

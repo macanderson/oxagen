@@ -61,12 +61,15 @@ export async function readMainRepositoryProvider(scope: {
 export async function readSteeringConnection(scope: {
   orgId: string;
   workspaceId: string;
-}): Promise<SteeringConnection | null> {
-  if ((await readMainRepositoryProvider(scope)) !== "gitlab")
-    return readGitHubConnection(scope);
+}): Promise<(SteeringConnection & { provider?: SteeringProvider }) | null> {
+  if ((await readMainRepositoryProvider(scope)) !== "gitlab") {
+    const github = await readGitHubConnection(scope);
+    return github ? { ...github, provider: "github" } : null;
+  }
   const connection = await readGitLabConnection(scope);
   return connection
     ? {
+        provider: "gitlab",
         source: "binding",
         owner: connection.owner,
         repo: connection.repo,
