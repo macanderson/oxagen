@@ -3848,7 +3848,7 @@
       "writes": []
     }
   ],
-  "contentHash": "d68d6c479b31f974e7d3910fdb1c917639bff76bbffa81bff21919cd780d457e",
+  "contentHash": "e4e7b7ddc18611c0fd3f277d3314ecde065072acb27b5ea49ac28aa85a3b7621",
   "domains": [
     {
       "name": "agent",
@@ -7296,6 +7296,12 @@
         },
         {
           "name": "summary_observed_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "summary_observed_revision",
           "nullable": true,
           "primaryKey": false,
           "type": "timestamp with time zone"
@@ -21854,6 +21860,12 @@
         },
         {
           "name": "summary_observed_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "summary_observed_revision",
           "nullable": true,
           "primaryKey": false,
           "type": "timestamp with time zone"

@@ -2,7 +2,7 @@ import { schema, withTenantDb, withSystemDb } from "@oxagen/database";
 import { runEnrichmentEnabled } from "@oxagen/oxagen/run-enrichment";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { and, asc, eq, gt, isNull, like, lt, or, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, like, lt, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { digestBytes } from "@oxagen/tacho";
 import { createFunction, MAX_BATCH_SIZE } from "../create-function";
@@ -25,6 +25,55 @@ const narrativeSchema = z.object({
   name: z.string().trim().min(1).max(80),
   summary: z.string().trim().min(1).max(1600),
 });
+
+/**
+ * The workspaces whose runs the sweep may enrich: not archived, and with the
+ * setting on. It mirrors `runEnrichmentEnabled`, which treats any value but
+ * `false` as on, so the sweep never queues a run the job would then refuse.
+ */
+export function enrichableWorkspace() {
+  return and(
+    isNull(schema.workspaces.archivedAt),
+    sql`(${schema.workspaces.settings} -> 'runEnrichmentEnabled') IS DISTINCT FROM 'false'::jsonb`,
+  );
+}
+
+/**
+ * The runs a sweep queues. A run is due when it was never observed, when its
+ * row changed after the revision the last read saw, or when its last read
+ * found bodies missing and five minutes have passed. The revision comparison
+ * is exact, so a write that commits after the read is caught even when its
+ * transaction timestamp predates the read.
+ */
+export function dueForEnrichment(
+  table: typeof schema.tachoSessions | typeof schema.agentRuns,
+  now: Date,
+) {
+  return or(
+    isNull(table.summaryObservedAt),
+    isNull(table.summaryObservedRevision),
+    sql`${table.updatedAt} IS DISTINCT FROM ${table.summaryObservedRevision}`,
+    and(
+      like(table.summaryInputDigest, "partial:%"),
+      lt(table.summaryObservedAt, new Date(now.getTime() - 5 * 60_000)),
+    ),
+  );
+}
+
+/**
+ * The dedup id for one sweep event. It holds while the run's state holds, so
+ * every sweep that re-selects a run whose job is still in flight sends the
+ * same id and the provider drops the copy. A finished job moves
+ * `summary_observed_at`, and a new write moves `updated_at`, so either gives
+ * the next sweep a fresh id.
+ */
+export function enrichmentEventId(row: {
+  runPublicId: string;
+  revision: string;
+  observedAt: string | null;
+}): string {
+  return `run-enrich:${row.runPublicId}:${row.revision}:${row.observedAt ?? "never"}`;
+}
 
 /** Match the root-session and V2 predicates used by get_run. */
 export function readableEnrichmentRun(
@@ -81,7 +130,10 @@ export const [runEnrich] = createFunction(
       inScope(() =>
         withTenantDb(async (tx) => {
           const [workspace] = await tx
-            .select({ settings: schema.workspaces.settings })
+            .select({
+              settings: schema.workspaces.settings,
+              archivedAt: schema.workspaces.archivedAt,
+            })
             .from(schema.workspaces)
             .where(
               and(
@@ -90,21 +142,36 @@ export const [runEnrich] = createFunction(
               ),
             )
             .limit(1);
+          // An archived workspace refuses settings writes, so its operator
+          // could not turn this off; it is never charged for.
           return (
-            workspace !== undefined && runEnrichmentEnabled(workspace.settings)
+            workspace !== undefined &&
+            workspace.archivedAt == null &&
+            runEnrichmentEnabled(workspace.settings)
           );
         }),
       );
     const observedAt = await step.run("snapshot-time", () =>
       new Date().toISOString(),
     );
-    async function markObserved(digest?: string, retryMissing = false) {
+    // The revision is kept as Postgres text and cast back, so the stored value
+    // equals updated_at to the microsecond rather than to a JS Date's millisecond.
+    const revisionValue = (revision: string | null) =>
+      sql`${revision}::timestamptz`;
+    async function markObserved(
+      digest?: string,
+      retryMissing = false,
+      revision?: string | null,
+    ) {
       await inScope(() =>
         withTenantDb((tx) =>
           tx
             .update(table)
             .set({
               summaryObservedAt: new Date(observedAt),
+              ...(revision === undefined
+                ? {}
+                : { summaryObservedRevision: revisionValue(revision) }),
               ...(digest
                 ? {
                     summaryInputDigest: retryMissing
@@ -123,9 +190,15 @@ export const [runEnrich] = createFunction(
     }
     const collected = await step.run("read-record", () =>
       inScope(async () => {
+        // Read the row's revision before its frames: a write that lands after
+        // this point moves updated_at away from it and brings the run back.
         const [previous] = await withTenantDb((tx) =>
           tx
-            .select({ digest: table.summaryInputDigest, name: table.name })
+            .select({
+              digest: table.summaryInputDigest,
+              name: table.name,
+              revision: sql<string | null>`${table.updatedAt}::text`,
+            })
             .from(table)
             .where(where)
             .limit(1),
@@ -160,6 +233,7 @@ export const [runEnrich] = createFunction(
         });
         return {
           ...facts,
+          revision: previous.revision ?? null,
           manifest: manifest.ref,
           unchanged:
             (previous?.digest === transcript.digest ||
@@ -171,7 +245,11 @@ export const [runEnrich] = createFunction(
     if (!collected) return { status: "not_found" };
     if (collected.unchanged || collected.retained === 0) {
       await step.run("no-generation", () =>
-        markObserved(collected.digest, collected.unavailable > 0),
+        markObserved(
+          collected.digest,
+          collected.unavailable > 0,
+          collected.revision,
+        ),
       );
       return { status: collected.unchanged ? "unchanged" : "no_retained_text" };
     }
@@ -247,6 +325,7 @@ export const [runEnrich] = createFunction(
                   ? `partial:${collected.digest}`
                   : collected.digest,
               summaryObservedAt: new Date(observedAt),
+              summaryObservedRevision: revisionValue(collected.revision),
             })
             .where(where),
         ),
@@ -268,6 +347,7 @@ export const [runEnrichmentSweep] = createFunction(
     // tenancy: global scheduling reads tenant IDs only; each enrichment runs in that tenant scope.
     const pending = await step.run("pending", () =>
       withSystemDb(async (tx) => {
+        const now = new Date();
         const rows = [];
         for (const table of [schema.tachoSessions, schema.agentRuns]) {
           rows.push(
@@ -276,22 +356,19 @@ export const [runEnrichmentSweep] = createFunction(
                 orgId: table.orgId,
                 workspaceId: table.workspaceId,
                 runPublicId: table.publicId,
+                revision: sql<string>`${table.updatedAt}::text`,
+                observedAt: sql<string | null>`${table.summaryObservedAt}::text`,
               })
               .from(table)
+              .innerJoin(
+                schema.workspaces,
+                eq(schema.workspaces.id, table.workspaceId),
+              )
               .where(
                 and(
                   readableEnrichmentRun(table),
-                  or(
-                    isNull(table.summaryObservedAt),
-                    gt(table.updatedAt, table.summaryObservedAt),
-                    and(
-                      like(table.summaryInputDigest, "partial:%"),
-                      lt(
-                        table.summaryObservedAt,
-                        new Date(Date.now() - 5 * 60_000),
-                      ),
-                    ),
-                  ),
+                  enrichableWorkspace(),
+                  dueForEnrichment(table, now),
                 ),
               )
               .orderBy(
@@ -308,7 +385,15 @@ export const [runEnrichmentSweep] = createFunction(
     if (pending.length)
       await step.sendEvent(
         "enrich",
-        pending.map((data) => ({ name: RUN_ENRICH_EVENT, data })),
+        pending.map(({ revision, observedAt, ...data }) => ({
+          name: RUN_ENRICH_EVENT,
+          data,
+          id: enrichmentEventId({
+            runPublicId: data.runPublicId,
+            revision,
+            observedAt,
+          }),
+        })),
       );
     logger.info(
       { runs: pending.length },

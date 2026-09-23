@@ -3,7 +3,10 @@ import { digestBytes } from "@oxagen/tacho";
 import { tachoFrame } from "@oxagen/run-ledger";
 const state = vi.hoisted(() => ({
   enabled: true,
+  archived: false,
   readable: true,
+  sweepRows: [] as Record<string, unknown>[],
+  sent: [] as unknown[],
   digest: null as string | null,
   writes: [] as Record<string, unknown>[],
   call: vi.fn(),
@@ -34,6 +37,20 @@ vi.mock("@oxagen/database", async (original) => {
   const actual = await original<typeof import("@oxagen/database")>();
   return {
     ...actual,
+    withSystemDb: async (fn: (tx: unknown) => unknown) =>
+      fn({
+        select: () => ({
+          from: () => ({
+            innerJoin: () => ({
+              where: () => ({
+                orderBy: () => ({
+                  limit: async () => state.sweepRows.splice(0),
+                }),
+              }),
+            }),
+          }),
+        }),
+      }),
     withTenantDb: async (fn: (tx: unknown) => unknown) =>
       fn({
         select: () => ({
@@ -41,13 +58,19 @@ vi.mock("@oxagen/database", async (original) => {
             where: () => ({
               limit: async () =>
                 table === actual.schema.workspaces
-                  ? [{ settings: { runEnrichmentEnabled: state.enabled } }]
+                  ? [
+                      {
+                        settings: { runEnrichmentEnabled: state.enabled },
+                        archivedAt: state.archived ? new Date() : null,
+                      },
+                    ]
                   : !state.readable
                     ? []
                     : [
                         {
                           digest: state.digest,
                           name: state.digest ? "Prior account" : null,
+                          revision: "2026-09-23 10:00:00.123456+00",
                         },
                       ],
             }),
@@ -128,6 +151,9 @@ const run = () =>
   });
 beforeEach(() => {
   state.enabled = true;
+  state.archived = false;
+  state.sweepRows = [];
+  state.sent = [];
   state.readable = true;
   state.digest = null;
   state.writes = [];
@@ -204,4 +230,70 @@ it("rejects an ineligible queued run before replaying an older durable read step
   ).toEqual({ status: "not_found" });
   expect(replay).not.toHaveBeenCalled();
   expect(state.call).not.toHaveBeenCalled();
+});
+
+it("does not charge for a run in an archived workspace", async () => {
+  state.archived = true;
+  expect(await run()).toEqual({ status: "disabled" });
+  expect(state.call).not.toHaveBeenCalled();
+});
+
+it("records the row revision the read saw, to the microsecond", async () => {
+  const { PgDialect } = await import("drizzle-orm/pg-core");
+  expect(await run()).toMatchObject({ status: "generated" });
+  const revision = state.writes.at(-1)!.summaryObservedRevision;
+  const query = new PgDialect().sqlToQuery(revision as never);
+  expect(query.sql).toContain("::timestamptz");
+  expect(query.params).toEqual(["2026-09-23 10:00:00.123456+00"]);
+});
+
+it("sweeps a run whose row changed after the observed revision, and skips archived or disabled workspaces", async () => {
+  const { dueForEnrichment, enrichableWorkspace } = await import(
+    "./run.enrich"
+  );
+  const { schema } = await import("@oxagen/database");
+  const { PgDialect } = await import("drizzle-orm/pg-core");
+  const dialect = new PgDialect();
+  const due = dialect.sqlToQuery(
+    dueForEnrichment(schema.tachoSessions, new Date())!,
+  ).sql;
+  expect(due).toContain(
+    '"updated_at" IS DISTINCT FROM "tacho"."sessions"."summary_observed_revision"',
+  );
+  const workspace = dialect.sqlToQuery(enrichableWorkspace()!).sql;
+  expect(workspace).toContain('"archived_at" is null');
+  expect(workspace).toContain("IS DISTINCT FROM 'false'::jsonb");
+});
+
+it("gives a run the same event id on every sweep until its job finishes or the row changes", async () => {
+  const row = {
+    orgId: data.orgId,
+    workspaceId: data.workspaceId,
+    runPublicId: data.runPublicId,
+    revision: "2026-09-23 10:00:00.123456+00",
+    observedAt: null,
+  };
+  const sweep = async () => {
+    state.sweepRows = [{ ...row }];
+    await state.handlers.get("sweep")!({
+      step: {
+        run: (_name: string, fn: () => unknown) => fn(),
+        sendEvent: async (_label: string, events: unknown) => {
+          state.sent.push(...(events as unknown[]));
+        },
+      },
+    });
+  };
+  await sweep();
+  await sweep();
+  const [first, second] = state.sent as { id: string; data: unknown }[];
+  expect(first!.id).toBe(second!.id);
+  expect(first!.data).toEqual(data);
+  const { enrichmentEventId } = await import("./run.enrich");
+  expect(
+    enrichmentEventId({ ...row, observedAt: "2026-09-23 10:05:00+00" }),
+  ).not.toBe(first!.id);
+  expect(
+    enrichmentEventId({ ...row, revision: "2026-09-23 10:00:01+00" }),
+  ).not.toBe(first!.id);
 });
