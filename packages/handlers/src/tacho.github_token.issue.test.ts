@@ -3,11 +3,20 @@ import type { Tx } from "@oxagen/database";
 import { PgDialect } from "drizzle-orm/pg-core";
 import type { SQL } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ resolve: vi.fn(), db: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  resolve: vi.fn(),
+  db: vi.fn(),
+  role: vi.fn(),
+  actingUser: vi.fn(),
+}));
 vi.mock("@oxagen/database", async (original) => ({
   ...(await original<typeof import("@oxagen/database")>()),
   withTenantDb: mocks.db,
   withOrgDb: mocks.db,
+}));
+vi.mock("@oxagen/iam/org-role", () => ({
+  assertOrgRole: mocks.role,
+  resolveActingUserId: mocks.actingUser,
 }));
 vi.mock("./lib/tacho-host", () => ({ resolveEnrolledHost: mocks.resolve }));
 vi.mock("./logger", () => ({ logger: { info: vi.fn(), error: vi.fn() } }));
@@ -52,6 +61,8 @@ function deps() {
 }
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.role.mockResolvedValue("Owner");
+  mocks.actingUser.mockResolvedValue("operator");
   mocks.resolve.mockResolvedValue({ status: "active" });
   mocks.db.mockImplementation(async (fn: (tx: unknown) => unknown) => fn({}));
 });
@@ -96,6 +107,18 @@ describe("repository-scoped GitHub credentials", () => {
     await expect(
       createTachoGithubTokenIssueHandler(d)(input, ctx),
     ).rejects.toThrow("wrong host key");
+    expect(d.mint).not.toHaveBeenCalled();
+  });
+  it("refuses a host whose key creator no longer holds the declared role", async () => {
+    const d = deps();
+    mocks.role.mockRejectedValue(new Error("role removed"));
+    await expect(
+      createTachoGithubTokenIssueHandler(d)(input, ctx),
+    ).rejects.toThrow("role removed");
+    expect(mocks.role).toHaveBeenCalledWith(
+      { ...ctx, userId: "operator" },
+      { org: ["Owner", "Admin"] },
+    );
     expect(d.mint).not.toHaveBeenCalled();
   });
   it.each(["paused", "suspended", "revoked"])(

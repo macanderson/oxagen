@@ -8,6 +8,7 @@
 // it never names the installation, for the reason `bind_main_repository`
 // gives (ADR-027).
 import type { CapabilityHandler } from "@oxagen/oxagen";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { HandlerError } from "@oxagen/oxagen";
 import {
   tachoGithubTokenIssue,
@@ -166,6 +167,11 @@ export function createTachoGithubTokenIssueHandler(
         message: `The binding for ${repo.fullName} carries no usable GitHub repository id`,
       });
     }
+    const actingUserId = await resolveActingUserId(ctx);
+    await assertOrgRole(
+      { ...ctx, userId: actingUserId },
+      { org: ["Owner", "Admin"] },
+    );
     const installation = await deps.installation(scope);
     if (!installation) {
       throw new HandlerError({
