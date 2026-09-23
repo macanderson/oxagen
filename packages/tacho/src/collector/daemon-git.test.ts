@@ -654,6 +654,62 @@ describe("the daemon's git seam", () => {
     );
   });
 
+  it("retries a sibling's reconciliation that a failed write stopped the tick before reaching", async () => {
+    // The reverse order of the case above. The ending session is reached
+    // first and its write throws, which ends the apply loop. The sibling's
+    // git read had already been taken off the queue and answered, so unless
+    // the failure puts it back, its reconciliation waits for a hook that may
+    // never come.
+    const handle = await boot(
+      fakeGit(() => REPO_ANSWERS, []),
+      () => 1_000,
+    );
+    await handle.api.handleHook(hook("SessionStart"));
+    await handle.api.handleHook(hook("SessionEnd"));
+    await handle.api.handleHook(hook("SessionStart", { session_id: SIBLING }));
+    await handle.api.handleHook(hook("Stop", { session_id: SIBLING }));
+    const sibling = handle.registry.get(SIBLING)!.recorder.sessionUuid;
+    const endingChain = handle.registry.get(SESSION)!.recorder.sessionUuid;
+    const append = handle.wal.append.bind(handle.wal);
+    let failed = false;
+    const fault = vi
+      .spyOn(handle.wal, "append")
+      .mockImplementation((events, bodies) => {
+        if (
+          !failed &&
+          events.some(
+            (event) =>
+              event.kind === "oxagen:worktree_reconciled" &&
+              event.session_uuid === endingChain,
+          )
+        ) {
+          failed = true;
+          throw Object.assign(new Error("event disk full"), { code: "ENOSPC" });
+        }
+        append(events, bodies);
+      });
+    await handle.tick();
+    expect(failed).toBe(true);
+    // The loop stopped at the failure, so the sibling was never sealed.
+    expect(
+      handle.wal
+        .read(sibling)
+        .filter((event) => event.kind === "oxagen:worktree_reconciled"),
+    ).toHaveLength(0);
+    fault.mockRestore();
+    // The clock has not moved, so this retry is not the fifteen-second
+    // throttle expiring: the failure put both reads back, eligible now.
+    await handle.tick();
+    for (const uuid of [sibling, endingChain]) {
+      const frames = handle.wal.read(uuid);
+      expect(
+        frames.filter((event) => event.kind === "oxagen:worktree_reconciled"),
+      ).toHaveLength(1);
+      expect(seqs(frames)).toEqual(positions(frames));
+    }
+    expect(handle.registry.get(SESSION)?.sealed).toBe(true);
+  });
+
   it("refuses a checkpoint for a session whose terminal is stuck behind a WAL failure", async () => {
     // `sealed` reports `false` for the whole pending window (its terminal
     // is not durable yet), but that must not reopen the chain to a

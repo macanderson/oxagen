@@ -1491,6 +1491,28 @@ async function initializeDaemon(
     };
   }
 
+  /** One session's git read, answered and waiting to be applied. */
+  interface GitReadFound {
+    session: SessionRecord;
+    /**
+     * The directory these facts were read from.
+     *
+     * The probes are asynchronous now, and a hook can move a session to
+     * another repository while they run. `found` holds the mutable
+     * `SessionRecord`, so without this the apply step would write one
+     * repository's head and branch onto a session already working in
+     * another, and could seal its reconciliation there too. The read is
+     * discarded instead when the session has moved.
+     */
+    cwd: string;
+    ending?: HookEnvelope;
+    // Absent for a repository with no commit yet, which has no HEAD to
+    // describe but does have a worktree to reconcile.
+    facts?: GitFacts;
+    changes?: GitWorkingTreeChange[];
+    snapshot?: WorktreeSnapshot;
+  }
+
   /**
    * Do the pending git reads, then apply what they found.
    *
@@ -1505,26 +1527,7 @@ async function initializeDaemon(
       .filter(gitReadDue)
       .slice(0, GIT_READS_PER_TICK);
     if (work.length === 0) return;
-    const found: Array<{
-      session: SessionRecord;
-      /**
-       * The directory these facts were read from.
-       *
-       * The probes are asynchronous now, and a hook can move a session to
-       * another repository while they run. `found` holds the mutable
-       * `SessionRecord`, so without this the apply step would write one
-       * repository's head and branch onto a session already working in
-       * another, and could seal its reconciliation there too. The read is
-       * discarded instead when the session has moved.
-       */
-      cwd: string;
-      ending?: HookEnvelope;
-      // Absent for a repository with no commit yet, which has no HEAD to
-      // describe but does have a worktree to reconcile.
-      facts?: GitFacts;
-      changes?: GitWorkingTreeChange[];
-      snapshot?: WorktreeSnapshot;
-    }> = [];
+    const found: GitReadFound[] = [];
     for (const harnessSessionId of work) {
       const want = gitPending.get(harnessSessionId);
       gitPending.delete(harnessSessionId);
@@ -1619,33 +1622,72 @@ async function initializeDaemon(
     }
     if (found.length === 0) return;
     await serial.run(async () => {
-      for (const { session, cwd, facts, changes, snapshot, ending } of found) {
-        if (session.sealed) continue;
-        // The session moved while the probe ran, so this answer describes a
-        // repository it is no longer in. A later turn reads the new one.
-        if (session.cwd !== cwd) {
-          if (ending !== undefined)
-            requestGitRead(session.recorder.sessionUuid, {
-              force: true,
-              reconcile: true,
-            });
-          continue;
-        }
-        if (facts !== undefined)
-          session.recorder.noteContext(gitContextOf(facts));
-        if (changes !== undefined)
-          recordReconciliation(session, changes, snapshot);
-        if (
-          ending !== undefined &&
-          pendingSessionEnds.get(session.recorder.sessionUuid) === ending
-        ) {
-          await recordHookOutcome(ending, session.recorder.sessionUuid);
-          persistState();
-          pendingSessionEnds.delete(session.recorder.sessionUuid);
-          persistPendingEnds();
+      for (const [index, entry] of found.entries()) {
+        try {
+          await applyGitRead(entry);
+        } catch (error) {
+          // A write failed, and the loop stops here rather than carry on. The
+          // terminal path's recovery restores the whole registry, which
+          // detaches the `SessionRecord`s this loop still holds for the
+          // sessions after this one. Those sessions' reads were taken off
+          // `gitPending` when the drain began and have not been applied, so
+          // they go back on it. Dropping them would leave a reconciliation
+          // the probes already paid for waiting on a hook that may never
+          // come. The uuid survives a restore, so it is safe to read here.
+          for (const rest of found.slice(index + 1))
+            if (rest.changes !== undefined || rest.ending !== undefined)
+              requeueReconciliation(rest.session.recorder.sessionUuid);
+          throw error;
         }
       }
     });
+  }
+
+  /** Apply one session's git read: its context, reconciliation and end. */
+  async function applyGitRead({
+    session,
+    cwd,
+    facts,
+    changes,
+    snapshot,
+    ending,
+  }: GitReadFound): Promise<void> {
+    if (session.sealed) return;
+    // The session moved while the probe ran, so this answer describes a
+    // repository it is no longer in. A later turn reads the new one.
+    if (session.cwd !== cwd) {
+      if (ending !== undefined)
+        requestGitRead(session.recorder.sessionUuid, {
+          force: true,
+          reconcile: true,
+        });
+      return;
+    }
+    if (facts !== undefined) session.recorder.noteContext(gitContextOf(facts));
+    if (changes !== undefined) recordReconciliation(session, changes, snapshot);
+    if (
+      ending !== undefined &&
+      pendingSessionEnds.get(session.recorder.sessionUuid) === ending
+    ) {
+      await recordHookOutcome(ending, session.recorder.sessionUuid);
+      persistState();
+      pendingSessionEnds.delete(session.recorder.sessionUuid);
+      persistPendingEnds();
+    }
+  }
+
+  /**
+   * Put a session's reconciliation back on the queue, eligible on the next
+   * drain.
+   *
+   * The throttle stamp comes off with it. It was set when the probes ran, on
+   * the assumption that the frame would land. The frame did not land, so the
+   * stamp would hold the retry back fifteen seconds for a reconciliation
+   * that never happened.
+   */
+  function requeueReconciliation(sessionUuid: string): void {
+    lastReconcileAt.delete(sessionUuid);
+    requestGitRead(sessionUuid, { force: true, reconcile: true });
   }
 
   /**
@@ -1700,10 +1742,7 @@ async function initializeDaemon(
       // The lane's own handler requeues the sessions with a pending end. This
       // one covers a session that is only reconciling, whose read was taken
       // off `gitPending` before the write was attempted.
-      requestGitRead(session.recorder.sessionUuid, {
-        force: true,
-        reconcile: true,
-      });
+      requeueReconciliation(session.recorder.sessionUuid);
       throw error;
     }
   }
