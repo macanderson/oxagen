@@ -51,6 +51,8 @@ export async function handleExportDownload(
       return refusal(404, "not_found");
     case "mfa_enroll":
       return refusal(403, "mfa_required");
+    case "sso_required":
+      return refusal(403, "sso_required");
     // The organization was reached by a slug it used to have. Falling through
     // to the read would spend the stale slug: `readStatus` resolves the viewer
     // a second time, and that resolution can only redirect through the

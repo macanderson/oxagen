@@ -172,7 +172,7 @@ async function reassignLocked(
   );
 
   deps.out("[2/3] Removing the old enrollment's hooks");
-  for (const failure of stripEnrollmentHooks(host, deps).failed)
+  for (const failure of (await stripEnrollmentHooks(host, deps)).failed)
     warnings.push(`could not clean ${failure}`);
 
   deps.out(`[3/3] Enrolling in ${org}/${workspace}`);

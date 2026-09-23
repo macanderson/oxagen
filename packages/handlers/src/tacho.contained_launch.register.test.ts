@@ -25,7 +25,7 @@ const HOST = "tch_0123456789abcdefghjkmn";
 const input = {
   host_enrollment_id: HOST,
   session_uuid: "11111111-1111-4111-8111-111111111111",
-  genesis_hash: "a".repeat(64),
+  genesis_hash: `sha256:${"a".repeat(64)}`,
   measurement: {
     profile: "oxagen-linux-docker-v1" as const,
     containerId: "b".repeat(64),
@@ -123,7 +123,7 @@ describe("authenticated containment receipts", () => {
       { org: ["Owner", "Admin"] },
     );
     await expect(
-      handler({ ...input, genesis_hash: "e".repeat(64) }, ctx),
+      handler({ ...input, genesis_hash: `sha256:${"e".repeat(64)}` }, ctx),
     ).rejects.toMatchObject({ code: "conflict" });
     await expect(
       handler(

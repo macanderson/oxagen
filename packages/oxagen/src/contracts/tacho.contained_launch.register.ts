@@ -5,7 +5,7 @@ import { hostEnrollmentIdSchema } from "../tacho/schemas";
 export const containedMeasurementSchema = z
   .object({
     profile: z.literal("oxagen-linux-docker-v1"),
-    containerId: z.string().regex(/^[a-f0-9]{64}$/),
+    containerId: z.string().regex(/^sha256:[a-f0-9]{64}$/),
     imageDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
     configurationDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
     gatewayOnlyEgress: z.literal(true),
@@ -32,7 +32,7 @@ export const tachoContainedLaunchRegister = registerCapability({
     .object({
       host_enrollment_id: hostEnrollmentIdSchema,
       session_uuid: z.string().uuid(),
-      genesis_hash: z.string().regex(/^[a-f0-9]{64}$/),
+      genesis_hash: z.string().regex(/^sha256:[a-f0-9]{64}$/),
       measurement: containedMeasurementSchema,
     })
     .strict(),

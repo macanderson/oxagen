@@ -215,6 +215,9 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // ADR-053: the organisation's model-vendor key. Org-only, read through
   // withTenantDb — nothing resolves through it, so RLS is the filter here.
   { table: "org.model_credentials", policyClass: "org_only" },
+  // SSO group → role mappings (ADR-145). auth.sso_providers is absent on
+  // purpose: it is a Better Auth table read before any tenant scope exists.
+  { table: "org.sso_group_roles", policyClass: "org_only" },
   { table: "org.assistant_model_keys", policyClass: "org_only" },
   // The onboarding gate (#2967): one row per organization, org_id is the
   // primary key and there is no workspace_id (the gate's workspace is a plain
