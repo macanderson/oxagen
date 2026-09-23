@@ -4759,6 +4759,7 @@ type Messages = {
       proposals: string;
       prs: string;
       settings: string;
+      deliveries: string;
     };
     failure: {
       denied: string;
@@ -4938,6 +4939,30 @@ type Messages = {
     create: {
       skill: string;
       record: string;
+    };
+    deliveries: {
+      title: string;
+      lead: string;
+      empty: string;
+      sample: string;
+      truncated: string;
+      run: string;
+      included: string;
+      cut: string;
+      budgetCuts: string;
+      tokens: string;
+      unreached: string;
+      unreachedLead: string;
+      record: string;
+      runs: string;
+      reason: string;
+      noUnreached: string;
+      reasons: {
+        budget: string;
+        tier: string;
+        superseded: string;
+        unknown: string;
+      };
     };
   };
   tools: {

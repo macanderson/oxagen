@@ -623,3 +623,5 @@ after the registered name separately when their contract uses a dotted stem.
 | [update_skill_config](skill.config.update.md) | [skill.config.update.ts](../../packages/oxagen/src/contracts/skill.config.update.ts) | api, mcp |
 | [preview_skill_search](skill.search.preview.md) | [skill.search.preview.ts](../../packages/oxagen/src/contracts/skill.search.preview.ts) | api |
 | [summarize_skill_search](skill.search.summarize.md) | [skill.search.summarize.ts](../../packages/oxagen/src/contracts/skill.search.summarize.ts) | mcp |
+
+- [get_steering_deliveries](./context.steering.deliveries.md): included and cut records per run.

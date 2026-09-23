@@ -7,6 +7,7 @@ import { contextPrGet } from "@oxagen/oxagen/contracts/context.pr.get";
 import { contextProposalList } from "@oxagen/oxagen/contracts/context.proposal.list";
 import { contextRecordsGet } from "@oxagen/oxagen/contracts/context.records.get";
 import { contextRecordsList } from "@oxagen/oxagen/contracts/context.records.list";
+import { contextSteeringDeliveries } from "@oxagen/oxagen/contracts/context.steering.deliveries";
 import { contextSteeringFreshness } from "@oxagen/oxagen/contracts/context.steering.freshness";
 import { captureError } from "@oxagen/telemetry";
 import type { z } from "zod";
@@ -17,6 +18,7 @@ import {
   RecordPage,
   STEERING_PAGE,
   SteeringFreshness,
+  SteeringDeliveries,
 } from "@/data/contracts/steering";
 import type { DataSource } from "@/data/ports";
 import { type Read, readError, readOk } from "@/data/read";
@@ -48,6 +50,16 @@ function parsed<T>(
 }
 
 export const steering: DataSource["steering"] = {
+  async deliveries(ctx) {
+    const read = await kernelRead(ctx, {
+      contract: contextSteeringDeliveries,
+      input: { days: 7, limit: 50 },
+      page: "steering",
+    });
+    return read.ok
+      ? parsed(SteeringDeliveries, read.value, ctx.orgId, "deliveries")
+      : read;
+  },
   async records(ctx, q) {
     const read = await kernelRead(ctx, {
       contract: contextRecordsList,

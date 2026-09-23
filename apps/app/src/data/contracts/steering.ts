@@ -244,3 +244,30 @@ export const RecordDetail = z.object({
   prUrl: z.string().min(1).nullable(),
 });
 export type RecordDetail = z.infer<typeof RecordDetail>;
+
+export const SteeringDeliveries = z.object({
+  runs: z.array(
+    z.object({
+      sessionUuid: z.string().uuid(),
+      ts: z.string(),
+      harness: z.string(),
+      agentKey: z.string(),
+      recordsIncluded: Count,
+      recordsCut: Count,
+      recordsCutForBudget: Count,
+      budgetTokens: Count,
+      spentTokens: Count,
+    }),
+  ),
+  undelivered: z.array(
+    z.object({
+      recordId: z.string(),
+      runs: Count,
+      lastReason: z.string(),
+      lastSeen: z.string(),
+    }),
+  ),
+  scanned: Count,
+  truncated: z.boolean(),
+});
+export type SteeringDeliveries = z.infer<typeof SteeringDeliveries>;

@@ -102,6 +102,7 @@ async function renderWorkspaces(
       proposals: vi.fn(),
       contextPr: vi.fn(),
       freshness: vi.fn(),
+      deliveries: vi.fn(),
     },
     tools: {
       versions: vi.fn(),

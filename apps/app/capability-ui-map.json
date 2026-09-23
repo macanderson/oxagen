@@ -1270,6 +1270,14 @@
       "proof": "apps/app/src/features/spend/dialogs.test.tsx",
       "verifiedAt": "2026-09-22",
       "verifiedBy": "session-1a3727fe-cost-centers"
+    },
+    "get_steering_deliveries": {
+      "route": "/[org]/[ws]/steering?tab=deliveries",
+      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
+      "entry": "Delivery tab showing included and cut records per recorded run",
+      "proof": "apps/app/src/features/steering/steering.test.tsx",
+      "verifiedAt": "2026-09-22",
+      "verifiedBy": "steering-rescue-ci"
     }
   }
 }

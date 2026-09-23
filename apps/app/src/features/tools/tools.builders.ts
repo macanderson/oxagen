@@ -226,6 +226,7 @@ export function toolsSource(reads: ToolsReads) {
       proposals: refuse,
       contextPr: refuse,
       freshness: refuse,
+      deliveries: refuse,
     },
     tools: {
       versions: answer(reads.versions, "versions"),
