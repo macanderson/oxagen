@@ -12,6 +12,7 @@ import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { UNANSWERED, useActionFailure } from "./action-failure";
+import { buttonDanger } from "./parts";
 import {
   retireAgent,
   rotateAgentCredential,
@@ -33,6 +34,7 @@ function WriteDialog<O>({
   write,
   onDone,
   done,
+  danger = false,
 }: {
   copy: Copy;
   testId: string;
@@ -41,6 +43,8 @@ function WriteDialog<O>({
   onDone: (value: O) => boolean;
   /** What the dialog shows once the write answered ok and stayed open. */
   done?: (value: O) => ReactNode;
+  /** A write that ends something draws its opener in the danger ink (`.btn.danger`). */
+  danger?: boolean;
 }) {
   const failureText = useActionFailure();
   const [open, setOpen] = useState(false);
@@ -80,7 +84,7 @@ function WriteDialog<O>({
     <>
       <button
         type="button"
-        className={buttonSecondary}
+        className={danger ? buttonDanger : buttonSecondary}
         onClick={() => {
           setOpen(true);
         }}
@@ -140,9 +144,12 @@ export function RetireAgent({
   agentId,
   name,
   after,
+  danger = false,
 }: Target & {
   /** The identities list, reloaded once the agent is retired. */
   after: SafePath;
+  /** The agent's header draws it in the danger ink; the list's row does not. */
+  danger?: boolean;
 }) {
   const navigate = useNavigate();
   const copy = useCopy("retire", name);
@@ -150,6 +157,7 @@ export function RetireAgent({
     <WriteDialog
       copy={copy}
       testId="retire-agent"
+      danger={danger}
       write={() => retireAgent(org, ws, agentId)}
       onDone={() => {
         navigate.replace(after);
@@ -210,6 +218,7 @@ export function AgentActions({
         key={suspendKey}
         copy={suspendCopy}
         testId={`${suspendKey}-agent`}
+        danger={!suspended}
         write={() => setAgentSuspended(org, ws, agentId, !suspended)}
         onDone={() => {
           navigate.replace(here);
@@ -222,6 +231,7 @@ export function AgentActions({
         agentId={agentId}
         name={name}
         after={list}
+        danger
       />
     </>
   );
