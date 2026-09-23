@@ -3,6 +3,7 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq, isNull, notInArray } from "drizzle-orm";
 import { HandlerError } from "@oxagen/oxagen";
 import { resolveGitHubToken } from "./lib/github-token";
+import { repositoryHostUnsupported } from "./repository.bound";
 import type { SkillScope } from "./skill-config.store";
 
 export type SkillRepository = {
@@ -23,6 +24,7 @@ export async function readSkillRepositoryBinding(scope: SkillScope) {
     const [row] = await tx
       .select({
         bindingId: binding.id,
+        provider: head.provider,
         connectionId: head.connectionId,
         repositoryId: binding.providerRepositoryId,
         owner: binding.providerOwner,
@@ -42,7 +44,6 @@ export async function readSkillRepositoryBinding(scope: SkillScope) {
           eq(binding.workspaceId, scope.workspaceId),
           eq(connection.orgId, scope.orgId),
           eq(connection.workspaceId, scope.workspaceId),
-          eq(head.provider, "github"),
           isNull(connection.deletedAt),
           notInArray(connection.status, ["deleting", "deleted"]),
         ),
@@ -65,6 +66,10 @@ export function createSkillRepositoryResolver(deps: {
         message:
           "Bind the workspace's main repository before configuring skills",
       });
+    // Skill configuration writes through a GitHub App installation. A GitLab
+    // main project is refused by name rather than reported as unbound (#3762).
+    if (bound.provider !== "github")
+      throw repositoryHostUnsupported(bound.fullName);
     const github = deps.client(
       await deps.token({ ...scope, connectionId: bound.connectionId }),
     );

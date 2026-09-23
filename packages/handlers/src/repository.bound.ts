@@ -25,6 +25,8 @@ type Scope = { orgId: string; workspaceId: string };
 export interface BoundRepository {
   headId: string;
   role: "main" | "linked";
+  /** The host the binding names; the table's CHECK admits these two. */
+  provider: "github" | "gitlab";
   connectionId: string;
   providerRepositoryId: string;
   bindingRowId: string;
@@ -59,6 +61,7 @@ export async function selectBoundRepository(
     .select({
       headId: schema.repositoryBindingHeads.id,
       role: schema.repositoryBindingHeads.role,
+      provider: schema.repositoryBindingHeads.provider,
       connectionId: schema.repositoryBindingHeads.connectionId,
       providerRepositoryId: schema.repositoryBindingHeads.providerRepositoryId,
       bindingRowId: schema.repositoryBindings.id,
@@ -90,7 +93,24 @@ export async function selectBoundRepository(
     ...row,
     // The table's CHECK admits only these two.
     role: row.role === "main" ? "main" : "linked",
+    provider: row.provider === "gitlab" ? "gitlab" : "github",
   };
+}
+
+/**
+ * The refusal for a GitLab binding reaching a capability that reads or writes
+ * through a GitHub App installation (#3762). `get_repository_tree`,
+ * `set_production_branch` and `open_init_pr` have no GitLab implementation
+ * yet; refusing by name is better than answering `github_not_connected` for a
+ * workspace that never meant to connect GitHub, or reading a GitHub repository
+ * that happens to share the project's owner and name.
+ */
+export function repositoryHostUnsupported(fullName: string): HandlerError {
+  return new HandlerError({
+    code: "conflict",
+    reason: "repository_host_unsupported",
+    message: `${fullName} is a GitLab project. This action supports GitHub repositories only today; Context PRs, bindings and steering publication work on GitLab.`,
+  });
 }
 
 /** The bound repository, or `not_found: repository_not_linked`. */
@@ -102,6 +122,8 @@ export async function readBoundRepository(
     selectBoundRepository(tx, scope, bindingId),
   );
   if (!bound) throw repositoryNotLinked(bindingId);
+  if (bound.provider !== "github")
+    throw repositoryHostUnsupported(bound.fullName);
   return bound;
 }
 
