@@ -291,6 +291,16 @@ const PRICES: NonNullable<PolicyBundle["model_prices"]> = [
     cache_read: 125_000,
     cache_write: 1_250_000,
   },
+  // A model is priced by its own row or its row plus a date stamp, never by
+  // another model's prefix, so Codex's model needs a row of its own.
+  {
+    provider: "openai",
+    model: "gpt-5-codex",
+    input: 1_250_000,
+    output: 10_000_000,
+    cache_read: 125_000,
+    cache_write: 1_250_000,
+  },
 ];
 
 const ANTHROPIC_EVENTS = [

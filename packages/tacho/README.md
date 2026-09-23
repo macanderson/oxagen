@@ -87,8 +87,11 @@ recorded as a chained `telemetry_gap`, never as a blocked action.
 It serves a second loopback listener, on the port after the collector's unless
 `host.json` pins `model_proxy_port`, and forwards each request to the vendor.
 The prompt goes from your machine to the vendor you chose. Oxagen receives a
-frame: digests, token counts, latency and status, never a body. The vendor
-credential stays on the machine and is never written to a frame or a log.
+frame for each call: digests, token counts, latency and status. The request
+and response bodies go with it only when the workspace's retention mode is
+`content_exact`; under `digest_only`, the default, the frame carries their
+digests and no body. The vendor credential stays on the machine and is never
+written to a frame or a log.
 
 | Harness | File and key | Value written | Logins covered |
 |---|---|---|---|
@@ -196,8 +199,11 @@ What standing in the path gives you:
 - **An enforced session budget.** With `budget.mode: enforced`, a session whose
   observed spend reached `budget.session_limit_usd` has its next call refused
   with a 403 in the vendor's error shape, and the refusal is sealed as a
-  `policy_decision`. Prices arrive in the signed bundle as `model_prices`. The
-  mode and ceiling come from the agent's published `per_run_micros` mandate.
+  `policy_decision`. A call in flight holds its ceiling (its request bytes as
+  input and its output cap) against the limit until it settles, so parallel
+  calls cannot all pass on the same settled figure. Prices arrive in the
+  signed bundle as `model_prices`. The mode and ceiling come from the agent's
+  published `per_run_micros` mandate.
   A per-day ceiling is recorded but not enforced for wrapped sessions.
 - **A model allowlist.** The workspace explicitly enables lists through
   `update_tacho_session_policy`. This decision is independent of the agent's
@@ -218,10 +224,11 @@ A session is on the `gateway` tier only when the proxy saw a model call for it
 
 **Which session a call belongs to.** In order: the `x-oxagen-session` header
 (read and removed, never forwarded), the harness's own header
-(`X-Claude-Code-Session-Id`, Codex's `session-id`), the session id inside an
-Anthropic `metadata.user_id`, then the one live session of that harness when
-there is exactly one. A call that matches none is sealed on the daemon's chain
-and marked `unattributed`.
+(`X-Claude-Code-Session-Id`, Codex's `session_id` or `conversation_id`), the
+session id inside an Anthropic `metadata.user_id`, the `prompt_cache_key` of a
+Responses call when it names a session the host already knows, then the one
+live session of that harness when there is exactly one. A call that matches
+none is sealed on the daemon's chain and marked `unattributed`.
 
 **What fails open and what fails closed.** A fault of Oxagen's never stops a
 call: an unpriced model costs the budget nothing (`observed_unpriced`), an
@@ -305,8 +312,9 @@ the design is in `docs/specs/mission-control/spec.md` §7 and §10.5, the phases
   Messages and OpenAI Responses passthrough with streaming, enrollment writes the
   base URL) and an MCP aggregator that re-serves the harness's existing MCP servers
   with the displace-and-restore logic in `src/host/mcp-config-writer.ts`. The
-  proxy forwards prompt bodies to the vendor only. No prompt body is sent to
-  Oxagen's servers, and the vendor credential stays on the machine. Metering
+  proxy forwards prompt bodies to the vendor, and to Oxagen's servers only
+  when the workspace's retention mode is `content_exact`; otherwise only their
+  digests go up. The vendor credential stays on the machine. Metering
   becomes observed, `session_limit_usd` is enforced, and `interrupt` becomes real.
   Enrollment writes a base URL only after the daemon is confirmed listening, and
   unenroll restores every file it touched before it stops the daemon. Both OpenAI
