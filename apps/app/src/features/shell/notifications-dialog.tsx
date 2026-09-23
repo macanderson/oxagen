@@ -2,8 +2,10 @@
 // The bell's dialog (mockup `DLG notifs`, `notifsBody()`): the viewer's newest
 // notifications, each with its kind's glyph, an unread dot, the title, the
 // body, the §7.7 event it came from and when. The footer names the read and
-// the unread count, and marks every listed row read. On a phone it rises as a
-// bottom sheet like every dialog.
+// the unread count ("not recorded" when the feed could not say, never 0), and
+// marks every listed row read. The receipt says how many rows it marked, that
+// each mark is recorded, and how many unread rows past the list it left alone.
+// On a phone it rises as a bottom sheet like every dialog.
 import {
   AlertTriangle,
   CheckCheck,
@@ -63,6 +65,10 @@ export function NotificationsDialog({ data }: { data: ShellData }) {
   const { feed } = useShellCounts(data);
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const [receipt, setReceipt] = useState<{
+    marked: number;
+    left: number;
+  } | null>(null);
   const items = feed?.ok ? feed.value.items : [];
   const unread = feed?.ok ? feed.value.unread : null;
   const unreadIds = items.filter((n) => n.unread).map((n) => n.id);
@@ -77,10 +83,17 @@ export function NotificationsDialog({ data }: { data: ShellData }) {
     if (ws === null || pending) return;
     setPending(true);
     setFailure(null);
+    setReceipt(null);
     try {
       const result = await markNotificationsRead(data.org.slug, ws, unreadIds);
-      if (result.ok) navigate.refresh();
-      else
+      if (result.ok) {
+        const { marked } = result.value;
+        setReceipt({
+          marked,
+          left: unread === null ? 0 : Math.max(0, unread - unreadIds.length),
+        });
+        navigate.refresh();
+      } else
         setFailure(
           result.reason === "denied" ? t("markDenied") : t("markFailed"),
         );
@@ -100,10 +113,14 @@ export function NotificationsDialog({ data }: { data: ShellData }) {
       footer={
         <>
           <p className="mr-auto min-w-0 flex-1 basis-60 text-left text-xs text-muted-foreground">
-            {t.rich("footer", {
-              count: unread === null ? "0" : String(unread),
-              code: (chunks) => <span className="font-mono">{chunks}</span>,
-            })}
+            {unread === null
+              ? t.rich("footerUnknown", {
+                  code: (chunks) => <span className="font-mono">{chunks}</span>,
+                })
+              : t.rich("footer", {
+                  count: String(unread),
+                  code: (chunks) => <span className="font-mono">{chunks}</span>,
+                })}
           </p>
           {unreadIds.length > 0 && ws !== null ? (
             <button
@@ -168,6 +185,18 @@ export function NotificationsDialog({ data }: { data: ShellData }) {
             </li>
           ))}
         </ul>
+      )}
+      {receipt === null ? null : (
+        <p
+          role="status"
+          data-testid="mark-receipt"
+          className="mt-2 text-xs text-muted-foreground"
+        >
+          {t("marked", { count: receipt.marked })}
+          {receipt.left > 0
+            ? ` ${t("markedLeft", { count: receipt.left })}`
+            : null}
+        </p>
       )}
       {failure === null ? null : (
         <p role="alert" className="mt-2 text-xs text-destructive">

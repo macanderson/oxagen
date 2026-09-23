@@ -4242,6 +4242,8 @@ type Messages = {
         reachable: string;
         notBacked: string;
       };
+      countNotRecorded: string;
+      countNotRecordedShort: string;
     };
     nav: {
       fleet: string;
@@ -4543,6 +4545,9 @@ type Messages = {
       empty: string;
       noWorkspace: string;
       unread: string;
+      footerUnknown: string;
+      marked: string;
+      markedLeft: string;
     };
     denied: {
       workspace: string;

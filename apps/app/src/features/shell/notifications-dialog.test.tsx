@@ -24,7 +24,7 @@ import {
   it,
   vi,
 } from "vitest";
-import { readOk } from "@/data/read";
+import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import en from "../../../messages/en.json";
 import shellMessages from "../../../messages/shell.json";
@@ -210,6 +210,43 @@ describe("the notifications dialog", () => {
     await waitFor(() => {
       expect(nav.refresh).toHaveBeenCalled();
     });
+    expect(within(dialog).getByTestId("mark-receipt")).toHaveTextContent(
+      "Marked 1 read. Reading a notification is itself recorded, so the audit record shows who saw what.",
+    );
+  });
+
+  it("says how many unread rows past the list it left unread", async () => {
+    const user = userEvent.setup();
+    markNotificationsRead.mockResolvedValue({ ok: true, value: { marked: 1 } });
+    renderShell(
+      shellData({
+        feed: readOk({
+          items: [row("ntf_01K5", true), row("ntf_02K5", false)],
+          unread: 4,
+        }),
+      }),
+    );
+    await user.click(bell());
+    const dialog = await screen.findByRole("dialog", { name: "Notifications" });
+    await user.click(
+      within(dialog).getByRole("button", { name: "Mark all read" }),
+    );
+    expect(await within(dialog).findByTestId("mark-receipt")).toHaveTextContent(
+      "3 older unread notifications are not listed here and stay unread.",
+    );
+  });
+
+  it("never prints 0 unread when the unread count could not be read (negative)", async () => {
+    const user = userEvent.setup();
+    renderShell(
+      shellData({
+        feed: { ok: false, reason: "error", code: "down", status: 503 },
+      }),
+    );
+    await user.click(bell());
+    const dialog = await screen.findByRole("dialog", { name: "Notifications" });
+    expect(dialog).toHaveTextContent("unread count not recorded");
+    expect(dialog).not.toHaveTextContent("0 unread");
   });
 
   it("says so when the write is refused, and does not refresh as if it worked (negative)", async () => {
@@ -280,6 +317,42 @@ describe("the open workspace's own reads", () => {
       within(main).getByRole("link", { name: /^Audit/ }),
     ).toHaveAccessibleName("Audit, 2 waiting");
   });
+
+  it.each([
+    [
+      "answered no figure",
+      readOk({ approvals: 0, proposals: null, incidents: null }),
+    ],
+    ["failed", readError("control_plane_unavailable", 503)],
+  ])(
+    "say the Steering and Audit counts are not recorded when the read %s, never zero (negative)",
+    async (_why, counts) => {
+      renderShell(shellData({ feed }));
+      act(() => {
+        render(
+          <WorkspaceActivitySync
+            activity={{
+              slug: "core-platform",
+              counts,
+              feed: readOk({ items: [], unread: 0 }),
+            }}
+          />,
+        );
+      });
+      const main = screen.getByRole("navigation", { name: "Main" });
+      await waitFor(() => {
+        expect(
+          within(main).getByRole("link", { name: /^Steering/ }),
+        ).toHaveAccessibleName("Steering, count not recorded");
+      });
+      expect(
+        within(main).getByRole("link", { name: /^Audit/ }),
+      ).toHaveAccessibleName("Audit, count not recorded");
+      expect(
+        main.querySelector('[data-count="audit"]')?.textContent,
+      ).not.toMatch(/0/);
+    },
+  );
 
   it("are ignored when they belong to another workspace (negative)", () => {
     renderShell(shellData({ feed }));

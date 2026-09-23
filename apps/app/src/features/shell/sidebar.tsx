@@ -29,17 +29,14 @@ const FOOT_GAP = "#3851";
 function navCount(
   key: NavKey,
   counts: ShellCounts,
-): { value: number; hot: boolean } | null {
-  const value =
-    key === "fleet"
-      ? counts.fleet
-      : key === "steering"
-        ? counts.steering
-        : key === "audit"
-          ? counts.audit
-          : null;
+): { value: number | null; hot: boolean } | null {
+  if (key !== "fleet" && key !== "steering" && key !== "audit") return null;
+  const hot = key !== "steering";
+  // A read that landed without a figure says so; it never reads as zero.
+  if (counts.unrecorded.includes(key)) return { value: null, hot };
+  const value = counts[key];
   if (value === null || value <= 0) return null;
-  return { value, hot: key !== "steering" };
+  return { value, hot };
 }
 
 export function SidebarNav({
@@ -67,8 +64,8 @@ export function SidebarNav({
             {section.items.map((item) => {
               const Icon = NAV_ICONS[item.key];
               const current = isNavItemCurrent(item.key, pathname);
-              // Null is "the read could not say", and draws nothing rather
-              // than a zero.
+              // Nothing waiting draws nothing; a count the read could not
+              // give draws "?" and says it is not recorded.
               const waiting = navCount(item.key, counts);
               return (
                 <li key={item.key}>
@@ -88,7 +85,19 @@ export function SidebarNav({
                       className="size-4 flex-none opacity-85"
                     />
                     <span className="flex-1">{t(`nav.${item.key}`)}</span>
-                    {waiting === null ? null : (
+                    {waiting === null ? null : waiting.value === null ? (
+                      <span
+                        data-count={item.key}
+                        data-count-unrecorded=""
+                        title={t("sidebar.countNotRecorded")}
+                        className="rounded-[5px] border border-dashed border-border bg-card px-[5px] font-mono text-[10.5px] text-sidebar-nav-label-fg"
+                      >
+                        <span aria-hidden="true">?</span>
+                        <span className="sr-only">
+                          {t("sidebar.countNotRecordedShort")}
+                        </span>
+                      </span>
+                    ) : (
                       <span
                         data-count={item.key}
                         className={`rounded-[5px] border bg-card px-[5px] font-mono text-[10.5px] ${

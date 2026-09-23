@@ -15,7 +15,9 @@
         "offline": "offline",
         "reachable": "The control plane answered when this page loaded, and the browser is online.",
         "notBacked": "Agent count and data plane are not recorded for the organization yet."
-      }
+      },
+      "countNotRecorded": "The count could not be read when this page loaded.",
+      "countNotRecordedShort": ", count not recorded"
     },
     "nav": {
       "fleet": "Fleet",
@@ -316,7 +318,10 @@
       "markFailed": "The notifications could not be marked. Try again.",
       "empty": "No notifications.",
       "noWorkspace": "Notifications are read in a workspace, and this organization has none you can open.",
-      "unread": "Unread."
+      "unread": "Unread.",
+      "footerUnknown": "<code>list_notifications</code> · unread count not recorded · every kind here maps to a frame kind or an audit event, never to something invented for a bell.",
+      "marked": "Marked {count} read. Reading a notification is itself recorded, so the audit record shows who saw what.",
+      "markedLeft": "{count} older unread notifications are not listed here and stay unread."
     },
     "denied": {
       "workspace": "You cannot see this workspace",

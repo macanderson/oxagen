@@ -1358,7 +1358,7 @@
     "get_nav_counts": {
       "route": "/[org]/[ws]",
       "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
-      "entry": "every workspace page: the workspace layout reads get_nav_counts for the workspace in the URL and the chrome draws the sidebar's Steering and Audit counts and the phone's More count from it (features/shell/workspace-activity.tsx, features/shell/activity-store.ts, features/shell/sidebar.tsx, data/live/shell.ts)",
+      "entry": "every workspace page: the workspace layout reads get_nav_counts (open steering proposals, open severity-10 incidents) for the workspace in the URL and the chrome draws the sidebar's Steering and Audit counts, or \"?\" when the read gave no figure, and the phone's More count from it (features/shell/workspace-activity.tsx, features/shell/activity-store.ts, features/shell/sidebar.tsx, data/live/shell.ts)",
       "testid": "shell-workspace",
       "proof": "apps/app/src/features/shell/notifications-dialog.test.tsx",
       "verifiedAt": "2026-09-23",
