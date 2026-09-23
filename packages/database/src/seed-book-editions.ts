@@ -11,7 +11,7 @@
  *
  * The two HTML files are generated. The text lives in
  * seed-assets/books/manuscript/, and `pnpm book:build` writes both editions
- * and the migration that carries them to production (ADR-109). Do not edit
+ * and the migration that carries them to production (ADR-155). Do not edit
  * field-manual.html or page-flip-reader.html by hand.
  *
  * Direct-run entrypoint: `tsx packages/database/src/seed-book-editions.ts`

@@ -1,15 +1,16 @@
-# ADR-109: The book has one manuscript, and its editions and migration are generated
+# ADR-155: The book has one manuscript, and its editions and migration are generated
 
 - **Status:** Accepted
 - **Date:** 2026-09-19
 - **Owners:** marketing, platform
-- **Related:** ADR-102 (the restored ebook lead gate and `cms.book_editions`);
+- **Related:** ADR-154 (the restored ebook lead gate and `cms.book_editions`);
   ADR-043 (the cut that dropped `cms` and took both editions offline for twelve
   days); the migrations `20260919131000_seed_cms_book_editions.sql`,
   `20260919150000_update_page_flip_reader_edition.sql`, and
   `20260920130000_book_second_edition.sql`
 - **Numbering:** 109. ADR-104 to ADR-108 were taken on `main` while this branch
-  was open
+  was open. Renumbered to 155 on 2026-09-23, because ADR-109 had been
+  merged twice.
 - **Delivered by:** `packages/database/seed-assets/books/manuscript/`,
   `tools/scripts/build-book-editions.mjs`, and
   `tools/scripts/build-book-editions.test.ts`
@@ -77,7 +78,7 @@ change of that size made by hand, three times, would not have stayed consistent.
   timestamp, rebuild, and keep the old file. Atlas refuses a changed checksum
   on an applied migration, so the old file cannot be regenerated in place.
 - Each content migration embeds both editions, about 650 KB. That is the cost of
-  production taking its data only from migrations, and ADR-102 already accepted
+  production taking its data only from migrations, and ADR-154 already accepted
   it.
 - The generated editions are committed. The seed reads them at run time and has
   no build step, and a reviewer can open the file a reader will get.

@@ -1,4 +1,4 @@
-# ADR-128: Local ARP checkpoints prepare external runs
+# ADR-157: Local ARP checkpoints prepare external runs
 
 Status: Accepted
 Date: 2026-09-19

@@ -1,9 +1,9 @@
-# ADR-111: Website leads sync to Attio after the row commits, with the outcome on the row
+# ADR-156: Website leads sync to Attio after the row commits, with the outcome on the row
 
 - **Status:** Accepted
 - **Date:** 2026-09-19
 - **Owners:** platform
-- **Related:** ADR-102 (the cms lead gate); ADR-043 (Oxagen governs agents,
+- **Related:** ADR-154 (the cms lead gate); ADR-043 (Oxagen governs agents,
   it does not run them: this is a marketing seam, not a capability)
 - **Delivered by:** `apps/api/src/lib/cms/attio.ts` (the client),
   `apps/api/src/lib/cms/crm-sync.ts` (the sync and the backfill query),
@@ -65,7 +65,7 @@ the entry, never reset it, or the good leads restart the sequence.
 ## Consequences
 
 - The sync is unmetered, unaudited and outside the capability kernel. It is
-  a marketing seam like `/v1/cms/*` itself (ADR-102) and `/v1/telemetry`,
+  a marketing seam like `/v1/cms/*` itself (ADR-154) and `/v1/telemetry`,
   not an agent capability, so it has no contract, MCP tool or CLI command.
 - A sync that fails after the response is not retried by anything but the
   backfill. That is a deliberate trade against option 2: Inngest has been the
