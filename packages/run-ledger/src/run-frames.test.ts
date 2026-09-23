@@ -157,6 +157,35 @@ describe("run frame projection", () => {
     expect(tachoFrame(tachoRow(9, "agent_start")).body).toEqual(NO_BODY);
   });
 
+  it("reads a harness-reported agent message as a response, and leaves other messages single", () => {
+    const digest = `sha256:${"e".repeat(64)}`;
+    const reply = tachoFrame(
+      tachoRow(10, "oxagen:message", {
+        contentDigest: digest,
+        bytesRef: "evb:v1:k:" + "e".repeat(64),
+        body: JSON.stringify({
+          last_assistant_message_digest: digest,
+          response_length: 12,
+          message_final: true,
+        }),
+      }),
+    );
+    expect(reply.phase).toBe("response");
+    const prompt = tachoFrame(
+      tachoRow(11, "oxagen:message", {
+        body: JSON.stringify({ prompt_digest: digest, prompt_length: 3 }),
+      }),
+    );
+    expect(prompt.phase).toBe("single");
+    const delta = tachoFrame(
+      tachoRow(12, "oxagen:message", {
+        body: JSON.stringify({ response_digest: digest }),
+      }),
+    );
+    expect(delta.phase).toBe("single");
+    expect(tachoFrame(tachoRow(13, "oxagen:message")).phase).toBe("single");
+  });
+
   it("names a stage for every wrapped kind and reads the ClickHouse timestamp as UTC", () => {
     expect(tachoStage("llm_call")).toBe("model");
     expect(tachoStage("steering.manifest")).toBe("model");

@@ -601,9 +601,12 @@ export function normalizeHook(
         draft(
           "oxagen:message",
           {
+            // `last_assistant_message_digest`, not `response_digest`: this
+            // is the agent's whole message, which is what the Run page reads
+            // a reply from, and not a streamed fragment of one.
             ...(text !== undefined
               ? {
-                  response_digest: digestText(text),
+                  last_assistant_message_digest: digestText(text),
                   response_length: text.length,
                 }
               : {}),

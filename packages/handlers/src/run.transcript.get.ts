@@ -282,7 +282,13 @@ export function boundaryHalves(fold: TranscriptFold): {
   response: RunFrame | null;
 } {
   const { opening } = fold;
-  const slot = BOUNDARY_HALF[opening.type];
+  // An agent message a harness reported on its own (`tachoFramePhase`) is
+  // what came back, and it is read as that half the way a `turn_end` is.
+  const slot =
+    BOUNDARY_HALF[opening.type] ??
+    (opening.type === "oxagen:message" && opening.phase === "response"
+      ? "response"
+      : undefined);
   if (slot === undefined || opening.body.bodyRef === null) {
     return { request: fold.request, response: fold.response };
   }

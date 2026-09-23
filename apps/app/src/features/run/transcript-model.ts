@@ -411,7 +411,12 @@ export function buildTranscript(
       frames,
       steps: stepsOf(frames, start),
       prompt: textOf(frames, "turn_start", false),
-      reply: textOf(frames, "turn_end", true),
+      // A harness that reports the agent's message apart from the turn's end
+      // (Cursor) can close the turn before the message lands; the message
+      // frame is then the only copy, and it is still this turn's reply.
+      reply:
+        textOf(frames, "turn_end", true) ??
+        textOf(frames, "oxagen:message", true),
     });
     start = index + 1;
   });

@@ -385,6 +385,31 @@ export function tachoPhase(kind: string): FramePhase {
   return TACHO_PHASES[kind] ?? "single";
 }
 
+/**
+ * The half a wrapped frame records, read from its body where the kind alone
+ * does not say.
+ *
+ * An `oxagen:message` that names `last_assistant_message_digest` is the
+ * agent's own message, reported by a harness that sends it apart from the
+ * turn's end (Cursor's `afterAgentResponse`). It is what came back, so it is a
+ * response, and the transcript read gives it a half the page can show. Every
+ * other `oxagen:message` (a prompt line from a transcript, a streamed delta)
+ * stays a single frame: the turn already shows the prompt, and a delta is a
+ * fragment of a message rather than the message.
+ */
+function tachoFramePhase(kind: string, payload: unknown): FramePhase {
+  if (
+    kind === "oxagen:message" &&
+    typeof payload === "object" &&
+    payload !== null &&
+    typeof (payload as Record<string, unknown>)[
+      "last_assistant_message_digest"
+    ] === "string"
+  )
+    return "response";
+  return tachoPhase(kind);
+}
+
 /** The stage a wrapped kind belongs to (tacho spec §6.1 kinds). */
 export function tachoStage(kind: string): string {
   switch (kind) {
@@ -535,7 +560,7 @@ export function tachoFrame(row: TachoFrameRowLike): RunFrame {
     body,
     costMicros: row.costUsdMicros,
     turnIndex: row.turnSeq,
-    phase: tachoPhase(row.kind),
+    phase: tachoFramePhase(row.kind, payload),
     identity: {
       tool: blank(row.toolName),
       toolStatus: blank(row.toolStatus),

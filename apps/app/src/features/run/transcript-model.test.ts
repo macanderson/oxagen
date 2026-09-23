@@ -69,6 +69,40 @@ describe("buildTranscript", () => {
     expect(flat).toHaveLength(1);
   });
 
+  it("reads the reply from the agent's reported message when the turn closed without one", () => {
+    // Cursor reports the agent's message apart from `stop`. When `stop`
+    // lands first, the turn_end carries no body and the message frame is
+    // the only copy of the reply.
+    const cursor = buildTranscript([
+      transcriptEntry({
+        seq: "1",
+        type: "turn_start",
+        kind: "frame",
+        turn: 1,
+        request: transcriptBody({ seq: "1", text: "Fix the build." }),
+        response: null,
+      }),
+      transcriptEntry({
+        seq: "2",
+        type: "turn_end",
+        kind: "frame",
+        turn: 1,
+        request: null,
+        response: null,
+      }),
+      transcriptEntry({
+        seq: "3",
+        type: "oxagen:message",
+        kind: "frame",
+        turn: 1,
+        request: null,
+        response: transcriptBody({ seq: "3", text: "The build is fixed." }),
+      }),
+    ]);
+    expect(cursor[0]?.prompt).toBe("Fix the build.");
+    expect(cursor[0]?.reply).toBe("The build is fixed.");
+  });
+
   it("leaves the prompt null rather than guessing when turn_start carries both halves (negative)", () => {
     // soleBody (module-private) is what `prompt`/`reply` read a body through:
     // an entry carrying both halves refuses rather than picking one, so a
