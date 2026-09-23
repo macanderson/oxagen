@@ -953,6 +953,20 @@ jobs:
           role-to-assume: arn:aws:iam::916294258235:role/gha-deploy-oxagen-platform
           aws-region: us-east-1
 
+      # Installed before either apply, because both need it. A Postgres apply
+      # runs run-db-migrations.sh --apply, which bundles the platform seed with
+      # tools/scripts/build-platform-seed.mjs, and that script imports esbuild.
+      # db-migrate.ts needs the workspace too. The gate cannot know which store
+      # is behind until it asks, so the install is unconditional.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
       # Postgres first, and without the tunnels: it needs neither. Aurora is
       # reached by sending Atlas to the node over SSM, which
       # run-db-migrations.sh does for both status and apply.
@@ -985,18 +999,7 @@ jobs:
       # The store apply runs only when a store is behind (1). Unknown (2) is
       # never applied to (#3036). These steps are store-migrate.yml's apply
       # path, which that workflow's header explains.
-      - uses: actions/setup-node@v4
-        if: steps.stores.outputs.code == '1'
-        with:
-          node-version-file: .node-version
-
-      - uses: pnpm/action-setup@v4
-        if: steps.stores.outputs.code == '1'
-
-      - name: Install
-        if: steps.stores.outputs.code == '1'
-        run: pnpm install --frozen-lockfile
-
+      #
       # db-migrate.ts takes its ClickHouse lock in the same Aurora database the
       # Postgres migrations use. Hosted runners cannot reach Aurora, so this
       # forwards through the node.

@@ -150,6 +150,22 @@ else
   else
     fail "db-migrate.ts must run only when the stores answered behind (1), got guard: $store_guard"
   fi
+  # A Postgres apply bundles the platform seed with esbuild, so the workspace
+  # must be installed first, and without a guard: a Postgres-only migration
+  # leaves the store check at 0, and an install keyed on it never runs.
+  install_line=$(printf '%s\n' "$GATE" | awk '/pnpm install --frozen-lockfile/ { print NR; exit }')
+  pg_line=$(printf '%s\n' "$GATE" | awk '/apply-postgres-migrations\.sh/ { print NR; exit }')
+  install_guard=$(printf '%s\n' "$GATE" | awk '/pnpm install --frozen-lockfile/ { print prev; exit } { prev = $0 }')
+  if [[ -z $install_line || -z $pg_line ]]; then
+    fail "the gate never installs the workspace, and a Postgres apply cannot bundle the seed without it"
+  elif (( install_line > pg_line )); then
+    fail "the gate installs the workspace after the Postgres apply, which needs it to bundle the seed"
+  elif [[ $install_guard == *"if:"* ]]; then
+    fail "the workspace install is conditional, got guard: $install_guard"
+  else
+    pass
+  fi
+
   contains "$GATE" "id: stores_after" "a store apply is followed by a fresh check"
   contains "$GATE" "steps.stores_after.outputs.code || steps.stores.outputs.code" \
     "the decision reads the re-check, not the apply's exit code"
