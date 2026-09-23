@@ -35,7 +35,7 @@ Every figure is counted from a store that exists or is `null` with the reason on
 | `items[].harness` | `"stella" \| "claude-code" \| "codex" \| "cursor" \| "claude-agent-sdk" \| "custom"` | |
 | `items[].principalId` | `string \| null` | `prn_…`; null on a row that predates Agent RBAC. |
 | `items[].operatorId` | `string \| null` | `usr_…` of the person the agent acts for. |
-| `items[].operatorName` | `string \| null` | That person's display name; null when there is no operator. |
+| `items[].operatorName` | `string \| null` | That person's display name (`auth.users.display_name`); null when there is no operator or they set none. |
 | `items[].status` | `"unenrolled" \| "enrolled" \| "suspended" \| "retired"` | Derived as above. |
 | `items[].tier` | `null` | Not recorded on the identity. |
 | `items[].enforcementTier` | `"contained" \| "gateway" \| "harness" \| "observe" \| null` | The tier the latest root wrapped session recorded; null when none was recorded. |

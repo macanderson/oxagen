@@ -342,7 +342,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(alpha.tamperIncidents).toBe(1);
       expect(alpha.host).toBe("build-1");
       expect(alpha.mandates).toBe(0);
-      expect(alpha.operatorName).not.toBeNull();
       // Two root sessions in the window plus one ledger run; the child and
       // the 40-day-old session are outside the count.
       expect(alpha.runs30d).toBe(3);

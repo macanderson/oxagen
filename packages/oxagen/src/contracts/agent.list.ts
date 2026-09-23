@@ -69,7 +69,7 @@ export const agentListItem = z
     principalId: z.string().nullable(),
     /** `usr_…` of the person the agent acts for (`principals.parent_user_id`); null when none. */
     operatorId: z.string().nullable(),
-    /** The operator's display name (`auth.users.name`); null when there is no operator. */
+    /** The operator's display name (`auth.users.display_name`); null when there is no operator. */
     operatorName: z.string().nullable(),
     status: agentIdentityStatusSchema,
     /** The model tier the definition names. No store records it on the identity row: null. */

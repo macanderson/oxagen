@@ -10,6 +10,7 @@
 // attaches an IAM role to the agent's delegated principal, or detaches one.
 import { agentCredentialRotate } from "@oxagen/oxagen/contracts/agent.credential.rotate";
 import { agentDefinitionCommit } from "@oxagen/oxagen/contracts/agent.definition.commit";
+import { agentPropose } from "@oxagen/oxagen/contracts/agent.propose";
 import { agentRetire } from "@oxagen/oxagen/contracts/agent.retire";
 import { agentRoleAssign } from "@oxagen/oxagen/contracts/agent.role.assign";
 import { agentRoleRevoke } from "@oxagen/oxagen/contracts/agent.role.revoke";
@@ -27,6 +28,15 @@ import {
   listOf,
   mandateLimitsOf,
 } from "@/data/contracts/mandates";
+import { getTranslations } from "next-intl/server";
+import {
+  AGENT_HARNESSES,
+  type AgentHarness,
+  draftAgentDefinition,
+  isAgentSlug,
+  MODEL_TIERS,
+  type ModelTier,
+} from "@/features/create";
 import type { ActionResult } from "@/server/kernel";
 import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
 import { requireViewer, viewerTimeZone } from "@/server/viewer";
@@ -68,6 +78,62 @@ export async function setAgentSuspended(
   const result = await kernelWrite(ctx, agentSuspend, { agentId, suspended });
   return result.ok
     ? { ok: true, value: { status: result.value.status } }
+    : result;
+}
+
+/** What the Register an agent dialog collects. */
+export type RegisterDraft = { slug: string; harness: string; tier: string };
+
+/**
+ * Register an agent from the Agents list: opens the Context PR that adds
+ * `.oxagen/agents/<slug>.toml` and the generated harness file beside it,
+ * through propose_agent, and writes no Postgres row (agents.md, Register an
+ * agent). The definition is the agent wizard's draft for a slug, a harness and
+ * a model tier, so the two entry points write the same file; the wizard lets
+ * the operator edit it first, this dialog does not. propose_agent runs its six
+ * checks before anything reaches GitHub, and a failed check comes back as
+ * `conflict` with `agent_check_<name>` and nothing written.
+ */
+export async function registerAgent(
+  org: string,
+  ws: string,
+  draft: RegisterDraft,
+): Promise<
+  ActionResult<{ path: string; pullRequest: { number: number; url: string } }>
+> {
+  const slug = draft.slug.trim();
+  if (!isAgentSlug(slug)) return refuseField("slug");
+  const harness = AGENT_HARNESSES.find((h) => h === draft.harness);
+  if (harness === undefined) return refuseField("harness");
+  const tier = MODEL_TIERS.find((m) => m === draft.tier);
+  if (tier === undefined) return refuseField("tier");
+  const ctx = await requireViewer(org, ws);
+  const t = await getTranslations("createAgent.definition.file");
+  const source = draftAgentDefinition({
+    slug,
+    desc: "",
+    tier: tier satisfies ModelTier,
+    harness: harness satisfies AgentHarness,
+    belt: [],
+    copy: {
+      header: t("header"),
+      placeholder: t("placeholder"),
+      stayInside: t("stayInside"),
+    },
+  });
+  const result = await kernelWrite(ctx, agentPropose, {
+    slug,
+    harness,
+    source,
+  });
+  return result.ok
+    ? {
+        ok: true,
+        value: {
+          path: result.value.path,
+          pullRequest: result.value.pullRequest,
+        },
+      }
     : result;
 }
 

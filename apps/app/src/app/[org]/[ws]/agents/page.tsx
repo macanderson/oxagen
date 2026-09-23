@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
+import { Suspense } from "react";
 import { dataSource } from "@/data/source";
-import { Agents, AgentsCreate } from "@/features/agents";
+import { Agents, AgentsCreate, AgentsLoading } from "@/features/agents";
 import { requireViewer } from "@/server/viewer";
 import { firstParam } from "@/shared/safe-path";
 import { PageHeader } from "@/ui/page-header";
@@ -11,6 +12,11 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("agents") };
 }
 
+// The column set (Composition or Operations) is the table's own session
+// state, not a query parameter, so a link here always lands on Composition
+// (mockups/pages/agents.md, Functionality). While the read is in flight the
+// body is the skeleton and the shell stays; a state with nothing to list
+// replaces the body, header included, as the design draws it.
 export default async function AgentsPage({
   params,
   searchParams,
@@ -20,24 +26,28 @@ export default async function AgentsPage({
 }) {
   const { org, ws } = await params;
   const ctx = await requireViewer(org, ws);
-  const { cursor, view } = await searchParams;
-  const t = await getTranslations("pages");
+  const { cursor } = await searchParams;
+  const t = await getTranslations();
   return (
     <main
       id="main"
       className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10"
     >
-      <PageHeader
-        eyebrow={t("workspaceEyebrow", { workspace: ctx.wsName })}
-        title={t("agents")}
-        actions={<AgentsCreate org={org} ws={ws} />}
-      />
-      <Agents
-        ctx={ctx}
-        source={dataSource()}
-        cursor={firstParam(cursor) ?? null}
-        view={firstParam(view) === "operations" ? "operations" : "composition"}
-      />
+      <Suspense fallback={<AgentsLoading />}>
+        <Agents
+          ctx={ctx}
+          source={dataSource()}
+          cursor={firstParam(cursor) ?? null}
+          header={
+            <PageHeader
+              eyebrow={ctx.wsName}
+              title={t("pages.agents")}
+              description={t("agents.list.description")}
+              actions={<AgentsCreate org={org} ws={ws} />}
+            />
+          }
+        />
+      </Suspense>
     </main>
   );
 }

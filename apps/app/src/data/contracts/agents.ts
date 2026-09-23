@@ -2,12 +2,12 @@
 // the identities list from `list_agents`, one agent from `get_agent`, its
 // computed toolbelt from `get_agent_toolbelt` and its incidents from
 // `list_incidents`. A field is nullable exactly where the contract may not have
-// recorded it (§3.4). The contract fields no store records today (tier, belt
-// size, proven runs, mandates) have no view field: an unbacked slice renders
-// nothing (§3.6).
+// recorded it (§3.4). The contract fields no store records today (model tier,
+// belt size, proven runs) have no view field.
 import { z } from "zod";
 import { PublicId } from "./common";
 import { Cost } from "./money";
+import { EnforcementTier } from "./runs";
 
 const Instant = z.iso.datetime({ offset: true });
 const Count = z.number().int().nonnegative();
@@ -34,18 +34,29 @@ const AgentRow = z.object({
   id: PublicId,
   slug: z.string().min(1),
   name: z.string().min(1),
+  /** What the agent is for; null when the definition wrote none. */
+  description: z.string().nullable(),
   /** `org_ns.ws_ns.slug` (ADR-024). */
   agentKey: z.string().min(1).nullable(),
   harness: AgentHarness,
   operatorId: PublicId.nullable(),
-  principalId: PublicId.nullable().optional(),
-  credentials: Count.optional(),
-  hosts: Count.optional(),
+  operatorName: z.string().nullable(),
+  principalId: PublicId.nullable(),
+  credentials: Count,
+  hosts: Count,
+  /** The live host seen most recently; null when none is live. */
+  host: z.string().nullable(),
   status: AgentStatus,
+  /** The tier the latest wrapped session recorded; null when none was. */
+  enforcementTier: EnforcementTier.nullable(),
   runs30d: Count,
   /** Priced wrapped sessions in the last 30 days, with the basis the harness reported. */
   spend30d: Cost.nullable(),
+  /** Active mandates the principal holds; null on a row with no principal. */
+  mandates: Count.nullable(),
   incidents: Count,
+  /** Open incidents of a tamper kind: the set the tile and the Audit page count. */
+  tamperIncidents: Count,
 });
 
 export const AgentPage = z.object({
@@ -55,6 +66,8 @@ export const AgentPage = z.object({
   totals: z.object({
     identities: Count,
     enrolled: Count,
+    /** Agents in the workspace holding at least one active mandate. */
+    holdingMandate: Count.nullable(),
     tamperIncidents: Count,
   }),
 });

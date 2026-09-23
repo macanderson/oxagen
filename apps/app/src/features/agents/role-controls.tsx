@@ -15,7 +15,7 @@
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useEffect, useRef, useState } from "react";
 import type { ActionResult } from "@/server/kernel";
-import { routes } from "@/shared/safe-path";
+import { routes, type SafePath } from "@/shared/safe-path";
 import { buttonSecondary, inputBase } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
@@ -52,7 +52,19 @@ type Catalogue =
 
 const ASSIGN = "assign-role";
 
-export function AssignRole({ org, ws, agentId, agentSlug }: RoleTarget) {
+export function AssignRole({
+  org,
+  ws,
+  agentId,
+  agentSlug,
+  label,
+  after,
+}: RoleTarget & {
+  /** The trigger's words where the page names it differently: the list's row action reads "Roles". */
+  label?: string;
+  /** Where to reload once the role is assigned; the agent's Permissions tab by default. */
+  after?: SafePath;
+}) {
   const t = useTranslations("agents.detail.roles.assign");
   const failureText = useActionFailure();
   const navigate = useNavigate();
@@ -96,7 +108,7 @@ export function AssignRole({ org, ws, agentId, agentSlug }: RoleTarget) {
       if (result.ok) {
         setOpen(false);
         navigate.replace(
-          routes.agent(org, ws, agentSlug, { tab: "permissions" }),
+          after ?? routes.agent(org, ws, agentSlug, { tab: "permissions" }),
         );
       } else {
         setFailure(failureText(result));
@@ -119,7 +131,7 @@ export function AssignRole({ org, ws, agentId, agentSlug }: RoleTarget) {
           setOpen(true);
         }}
       >
-        {t("open")}
+        {label ?? t("open")}
       </button>
       <SheetDialog
         open={open}

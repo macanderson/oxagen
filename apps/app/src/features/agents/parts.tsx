@@ -70,18 +70,23 @@ export function Tile({
   title,
   value,
   basis,
+  critical = false,
 }: {
   title: string;
-  value: string;
-  basis: string;
+  value: ReactNode;
+  basis: ReactNode;
+  /** The critical hue on the figure (`.stat .v.crit`), for a count that is a problem when it is not zero. */
+  critical?: boolean;
 }) {
   return (
-    <dl
-      data-testid="tile"
-      className={statTile}
-    >
+    <dl data-testid="tile" className={statTile}>
       <dt className={statTerm}>{title}</dt>
-      <dd className={statValue}>{value}</dd>
+      <dd
+        data-critical={critical ? "true" : undefined}
+        className={`${statValue} ${critical ? "text-critical" : ""}`}
+      >
+        {value}
+      </dd>
       <dd className={statNote}>{basis}</dd>
     </dl>
   );

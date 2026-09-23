@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 import { type ReactNode, type SyntheticEvent, useState } from "react";
 import type { ActionResult } from "@/server/kernel";
 import type { SafePath } from "@/shared/safe-path";
-import { buttonSecondary, mono } from "@/ui/control-styles";
+import { buttonDanger, buttonSecondary, mono } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -33,9 +33,12 @@ function WriteDialog<O>({
   write,
   onDone,
   done,
+  danger = false,
 }: {
   copy: Copy;
   testId: string;
+  /** Draws the trigger as `.btn.danger`, for a write that ends something. */
+  danger?: boolean;
   write: () => Promise<ActionResult<O>>;
   /** Runs after the write answered ok; returning true closes the dialog. */
   onDone: (value: O) => boolean;
@@ -80,7 +83,7 @@ function WriteDialog<O>({
     <>
       <button
         type="button"
-        className={buttonSecondary}
+        className={danger ? buttonDanger : buttonSecondary}
         onClick={() => {
           setOpen(true);
         }}
@@ -140,15 +143,19 @@ export function RetireAgent({
   agentId,
   name,
   after,
+  danger = false,
 }: Target & {
-  /** The identities list, reloaded once the agent is retired. */
+  /** The agents list, reloaded once the agent is retired. */
   after: SafePath;
+  /** The list's row action is `.btn.danger`; the agent page's header keeps the plain button. */
+  danger?: boolean;
 }) {
   const navigate = useNavigate();
   const copy = useCopy("retire", name);
   return (
     <WriteDialog
       copy={copy}
+      danger={danger}
       testId="retire-agent"
       write={() => retireAgent(org, ws, agentId)}
       onDone={() => {

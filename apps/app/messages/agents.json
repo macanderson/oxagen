@@ -16,55 +16,149 @@
       "retired": "retired"
     },
     "list": {
+      "description": "Every actor in this workspace and what it is made of.",
       "tiles": {
-        "label": "Identities summary",
-        "identities": {
-          "title": "Identities here",
-          "basis": "registered in this workspace"
+        "label": "Agents summary",
+        "agentsHere": {
+          "title": "Agents here",
+          "basis": "organization count not recorded · {listed} listed below"
         },
         "enrolled": {
           "title": "Enrolled",
-          "basis": "of {count} registered"
+          "notYet": "{count} not yet enrolled",
+          "observe": "{count} listed here on the observe tier"
+        },
+        "mandate": {
+          "title": "Holding a mandate",
+          "holder": "{key} · in {workspace}",
+          "more": "{count} more in {workspace}",
+          "none": "no agent holds one"
         },
         "tamper": {
           "title": "Tamper incidents",
-          "basis": "open, on this workspace's hosts"
+          "open": "{count} open in {workspace}",
+          "none": "none open in {workspace}"
         }
       },
       "title": "Registered in {workspace}",
-      "tableLabel": "Agent identities",
+      "lead": {
+        "composition": "Each row names the reusable objects this agent holds a reference to.",
+        "operations": "Each row is what this agent did and what it cost over the last 30 days."
+      },
+      "source": ".oxagen/agents/ @",
+      "views": {
+        "label": "Columns",
+        "composition": "Composition",
+        "operations": "Operations"
+      },
+      "tableLabel": "Agents registered in {workspace}",
       "columns": {
-        "identity": "Identity",
+        "agent": "Agent",
+        "purpose": "Purpose",
+        "owner": "Owner",
+        "steering": "Steering",
+        "toolbelt": "Toolbelt",
+        "runtime": "Runtime",
+        "principal": "Principal",
+        "health": "Health",
+        "activity": "Activity",
         "harness": "Harness",
         "operator": "Operator",
         "status": "Status",
+        "tier": "Tier",
+        "belt": "Belt",
         "runs": "Runs 30d",
         "spend": "Spend 30d",
+        "tokens": "Tokens 30d",
+        "mandates": "Mandates",
         "incidents": "Incidents",
-        "actions": "Actions",
-        "principal": "Principal",
-        "hosts": "Active or paused hosts",
-        "credentials": "Active credentials"
+        "actions": "Row actions"
+      },
+      "cells": {
+        "runs30d": "runs 30d",
+        "principalPending": "prn_pending",
+        "none": "—"
+      },
+      "health": {
+        "tamper": "tamper",
+        "notEnrolled": "not enrolled",
+        "observe": "observe",
+        "healthy": "healthy",
+        "tamperWhy": "{count, plural, one {# open incident} other {# open incidents}}",
+        "notEnrolledWhy": "no hook is installed, so its runs are recorded only",
+        "observeWhy": "enrolled, and nothing is delivered or refused yet",
+        "healthyWhy": "frames arriving, chain intact"
+      },
+      "controls": {
+        "search": "Search this list",
+        "facetAll": "All · {column}",
+        "facetLabel": "Filter by {column}",
+        "rows": "Rows",
+        "all": "All",
+        "range": "{from}-{to} of {total}",
+        "pager": "Pages",
+        "previous": "Previous page",
+        "next": "Next page",
+        "page": "Page {page}",
+        "sortBy": "Sort by {column}",
+        "noMatch": "No agent matches this search.",
+        "cursor": "Agents beyond this page"
       },
       "basisNotRecorded": "basis not recorded",
       "edit": "Edit",
-      "pager": "Identities pages",
-      "first": "First identities",
-      "next": "More identities",
+      "roles": "Roles",
+      "more": "More agents",
+      "first": "First agents",
+      "footer": "An agent has one principal and runs on one runtime. Its steering, its toolbelts and its tools are workspace objects it refers to, so changing one changes every agent that refers to it.",
       "empty": {
-        "title": "No identities registered in {workspace}",
-        "body": "An agent's identity lives in Postgres; its definition is a file in .oxagen/agents/ in the workspace repository.",
-        "register": "Register one from the repository it works in:",
-        "command": "oxagen agent register"
+        "title": "No agent registered in {workspace}",
+        "body": "An agent's identity lives in Postgres. Its definition is a file in <mono>.oxagen/agents/</mono> in the main repo. Registering one opens a Context PR, and nothing is written to Postgres first."
       },
       "create": {
         "newAgent": "New agent",
-        "wrap": "Wrap an agent"
+        "register": "Register an agent",
+        "wrap": "Wrap Claude Code"
       },
-      "views": {
-        "label": "Agent views",
-        "composition": "Composition",
-        "operations": "Operations"
+      "register": {
+        "title": "Register an agent",
+        "slug": "Slug",
+        "slugHint": "Lowercase words joined by hyphens, at most 18 characters. It becomes the last part of the agent key and never changes.",
+        "avatar": "Avatar",
+        "avatarHint": "The definition carries no avatar yet, so the agent shows these initials.",
+        "harness": "Harness",
+        "tier": "Model tier",
+        "note": "This does not write Postgres. It opens a Context PR that adds <mono>{path}</mono> and the generated harness file beside it. The agent gets its principal when it registers from where it runs, after the merge.",
+        "cancel": "Cancel",
+        "confirm": "Open the Context PR",
+        "pending": "Opening the Context PR",
+        "done": "Pull request #{number} opened. The agent exists when it merges.",
+        "open": "Open the pull request",
+        "close": "Close",
+        "invalidSlug": "Use lowercase letters, digits and single hyphens, at most 18 characters."
+      },
+      "states": {
+        "loading": "Loading agents",
+        "error": {
+          "title": "Agents could not be loaded",
+          "body": "The control plane answered <mono>{status} {code}</mono>. Nothing was changed. Runs kept recording while this page was down. Frames are written by the collector on each host, not by Oxagen.",
+          "retry": "Try again",
+          "readAt": "read at {at}"
+        },
+        "denied": {
+          "title": "You cannot see the agents in this workspace",
+          "body": "Your roles on <strong>{org}</strong> do not include <mono>{permission} on {ws}</mono>. An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
+          "back": "Back to Fleet",
+          "signedIn": "Signed in as",
+          "signedInValue": "workspace.{role} · {ws}",
+          "needed": "Needed",
+          "neededValue": "{permission} on {ws}",
+          "decidedBy": "Decided by",
+          "decidedByValue": "the workspace's decision rules · deny wins over every allow"
+        },
+        "pending": {
+          "title": "Access to the agents in this workspace is waiting for approval",
+          "body": "Access request {request}"
+        }
       }
     },
     "detail": {
@@ -636,6 +730,12 @@
       "retired": "This agent is retired, so it cannot be given a mandate: its principal is suspended and authority granted now could never be drawn. The mandates recorded for it stay listed.",
       "noneEffectiveUpcoming": "No mandate recorded for this agent is in effect yet, so it cannot carry a consequence. A mandate granted below has not reached the date it starts on; any others are a request awaiting a decision, or history.",
       "startsOn": "starts {date}"
+    },
+    "tier": {
+      "contained": "contained",
+      "gateway": "gateway",
+      "harness": "harness",
+      "observe": "observe"
     }
   }
 }

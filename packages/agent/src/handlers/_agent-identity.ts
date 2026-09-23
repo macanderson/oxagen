@@ -59,7 +59,7 @@ const identityColumns = {
   principalStatus: schema.principals.status,
   principalUpdatedAt: schema.principals.updatedAt,
   operatorPublicId: schema.users.publicId,
-  operatorName: schema.users.name,
+  operatorName: schema.users.displayName,
   costCenter: schema.agents.costCenter,
 } as const;
 
@@ -229,7 +229,11 @@ export async function latestLiveHostByAgentKey(
         inArray(h.status, [...HOST_LIVE_STATUSES]),
       ),
     )
-    .orderBy(h.agentKey, sql`${h.lastSeenAt} desc nulls last`, desc(h.createdAt));
+    .orderBy(
+      h.agentKey,
+      sql`${h.lastSeenAt} desc nulls last`,
+      desc(h.createdAt),
+    );
   return new Map(rows.map((r) => [r.agentKey, r.hostname]));
 }
 
