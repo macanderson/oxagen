@@ -86,13 +86,12 @@ describe("organization activity", () => {
     await readShellNavCounts("org", "two");
     expect(fake.viewer).toHaveBeenCalledWith("org", "two");
     expect(fake.read).toHaveBeenCalledOnce();
+    const navCountsContract: unknown = expect.objectContaining({
+      name: "get_nav_counts",
+    });
     expect(fake.read).toHaveBeenCalledWith(
       { org: "org", ws: "two" },
-      expect.objectContaining({
-        contract: expect.objectContaining({
-          name: "get_nav_counts",
-        }) as unknown,
-      }),
+      expect.objectContaining({ contract: navCountsContract }),
     );
     expect(fake.context).not.toHaveBeenCalled();
     expect(fake.pending).not.toHaveBeenCalled();
