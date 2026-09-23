@@ -4587,7 +4587,6 @@ type Messages = {
     };
   };
   spend: {
-    period: string;
     notRecorded: string;
     basisNotRecorded: string;
     basis: {
@@ -4599,42 +4598,37 @@ type Messages = {
     tabs: {
       label: string;
       findings: string;
+      tokens: string;
+      coaching: string;
       operator: string;
       agent: string;
+      model: string;
       tool: string;
-      task: string;
-      cost_center: string;
       waste: string;
       budgets: string;
+      task: string;
+      cost_center: string;
       pricing: string;
-      model: string;
-      tokens: string;
     };
     actions: {
       exportReport: string;
       setBudget: string;
     };
     findings: {
-      eyebrow: string;
-      heroTitle: string;
-      saving: string;
-      savingNote: string;
-      share: string;
-      shareNote: string;
-      annualised: string;
-      annualisedNote: string;
-      spend: string;
-      spendNote: string;
       strip: {
         label: string;
         tail: string;
       };
-      facts: string;
+      facts: {
+        findings: string;
+        operators: string;
+        high: string;
+        medium: string;
+        evidence: string;
+      };
       note: string;
-      list: string;
       emptyTitle: string;
       empty: string;
-      rank: string;
       kind: {
         cache_writes_never_read: string;
         duplicate_tool_calls: string;
@@ -4651,15 +4645,8 @@ type Messages = {
         high: string;
         medium: string;
       };
-      why: string;
-      fixLabel: string;
-      cites: string;
-      shareOfIdentified: string;
-      shareUnknown: string;
       evidence: {
         open: string;
-        eyebrow: string;
-        back: string;
         atStake: string;
         atStakeNote: string;
         confidence: string;
@@ -4668,7 +4655,6 @@ type Messages = {
         coveredNote: string;
         tokens: string;
         tokensValue: string;
-        tokensNote: string;
         measured: string;
         counterfactual: string;
         runs: string;
@@ -4680,6 +4666,9 @@ type Messages = {
           counterfactual: string;
         };
         note: string;
+        title: string;
+        window: string;
+        to: string;
       };
       fix: {
         open: string;
@@ -4711,46 +4700,96 @@ type Messages = {
         codeDraft: string;
       };
       costData: string;
-    };
-    strip: {
-      spend: string;
-      runs: string;
-      runsNote: string;
-      calls: string;
-      callsNote: string;
-      coverage: string;
-      coverageNote: string;
-      missing: string;
-      available: string;
+      hero: string;
+      heroShare: string;
+      heroWindow: string;
+      heroYearStart: string;
+      heroYearEnd: string;
+      attributionMissing: string;
+      evidenceLine: string;
+      atStake: string;
+      atStakeUnknown: string;
+      list: string;
+      filters: {
+        label: string;
+        level: string;
+        confidence: string;
+        sort: string;
+        rows: string;
+        all: string;
+        sorts: {
+          rank: string;
+          savingDesc: string;
+          savingAsc: string;
+          kind: string;
+        };
+        none: string;
+      };
+      pager: {
+        label: string;
+        range: string;
+        previous: string;
+        next: string;
+      };
     };
     columns: {
-      provider: string;
+      operator: string;
+      role: string;
+      agents: string;
       runs: string;
-      calls: string;
       spend: string;
+      tokens: string;
+      cacheHit: string;
+      savings: string;
+      budgetPosition: string;
+      agent: string;
+      perRun: string;
+      trend: string;
+      model: string;
+      providerKey: string;
+      modelCalls: string;
+      cacheHitRate: string;
+      basis: string;
+      tool: string;
+      server: string;
+      calls: string;
+      cumulative: string;
       share: string;
+      perCall: string;
+      perRunMoney: string;
+      frames: string;
+      noFinding: string;
+      findings: string;
+      shareOfSpend: string;
     };
     groups: {
       operator: {
         unnamed: string;
         title: string;
-        key: string;
         empty: string;
+        note: string;
+        budgetMissing: string;
       };
       agent: {
         title: string;
-        key: string;
         empty: string;
+        note: string;
+        trendMissing: string;
       };
       model: {
         title: string;
-        key: string;
-        empty: string;
+        note: string;
+        routes: string;
+        footer: string;
+        keyMissing: string;
+        total: string;
+        totalNote: string;
       };
       tool: {
         title: string;
-        key: string;
         empty: string;
+        note: string;
+        framesMissing: string;
       };
       task: {
         title: string;
@@ -4768,16 +4807,37 @@ type Messages = {
     };
     waste: {
       wasted: string;
+      currency: string;
       share: string;
+      shareNote: string;
       runsWithWaste: string;
+      runsNote: string;
       largestCause: string;
+      largestNote: string;
       noCause: string;
       byCause: string;
-      none: string;
-      proof: string;
+      causeRuns: string;
       cause: {
         cache_write_never_read: string;
       };
+      why: {
+        cache_write_never_read: string;
+      };
+      designCause: {
+        cacheMisses: string;
+        correctivePrompts: string;
+        retryLoops: string;
+        contextBloat: string;
+        idleWhileParked: string;
+        haltedEarly: string;
+      };
+      causesMissing: string;
+      runs: string;
+      note: string;
+      runAmountMissing: string;
+      none: string;
+      openRun: string;
+      showFrames: string;
     };
     budgets: {
       title: string;
@@ -4785,7 +4845,6 @@ type Messages = {
       scopeColumn: string;
       periodColumn: string;
       limitColumn: string;
-      spentColumn: string;
       positionColumn: string;
       scope: {
         org: string;
@@ -4803,6 +4862,12 @@ type Messages = {
         threshold_95: string;
         exceeded: string;
       };
+      usedColumn: string;
+      modeColumn: string;
+      hard: string;
+      positionLabel: string;
+      note: string;
+      scopesMissing: string;
     };
     pricing: {
       class: {
@@ -4930,39 +4995,60 @@ type Messages = {
       };
     };
     drill: {
-      title: {
+      kind: {
         operator: string;
         agent: string;
         tool: string;
       };
-      back: string;
-      perCall: string;
-      perRun: string;
-      share: string;
+      crumbLabel: string;
+      crumb: string;
+      counts: string;
+      openAgent: string;
+      export: string;
+      exportTitle: string;
+      exportBody: string;
+      savings: string;
+      noSaving: string;
+      findingsFailed: string;
+      direct: string;
+      attributedMissing: string;
+      tiles: {
+        spend: string;
+        tokens: string;
+        cacheHit: string;
+        observed: string;
+        wasted: string;
+        productive: string;
+        runs: string;
+        modelCalls: string;
+        budget: string;
+        agentBudget: string;
+        trend: string;
+        toolDefinitions: string;
+        perRun: string;
+        calls: string;
+        perCall: string;
+        avgPerRun: string;
+        resultBody: string;
+        repeatCalls: string;
+        retries: string;
+      };
       byDay: string;
-      day: string;
-      tools: string;
+      peak: string;
+      on: string;
+      average: string;
+      sparkline: string;
+      cross: {
+        tool: string;
+        agent: string;
+        operator: string;
+        model: string;
+      };
+      crossMissing: string;
       toolsEmpty: string;
-    };
-    failure: {
-      denied: {
-        title: string;
-        body: string;
-      };
-      pending: {
-        title: string;
-        body: string;
-      };
-      error: {
-        title: string;
-        body: string;
-        code: string;
-      };
-    };
-    empty: {
-      title: string;
-      body: string;
-      back: string;
+      findings: string;
+      noFindings: string;
+      share: string;
     };
     budgetDialog: {
       title: string;
@@ -5055,22 +5141,139 @@ type Messages = {
       mode: string;
     };
     tokens: {
-      title: string;
-      note: string;
-      class: string;
-      count: string;
-      share: string;
-      input_uncached: string;
-      cache_read: string;
-      cache_write: string;
-      output: string;
-      reasoning: string;
-      total: string;
+      byClass: string;
+      classTotal: string;
       cacheHit: string;
-      cacheNote: string;
-      byModel: string;
-      model: string;
-      basis: string;
+      cacheHitNote: string;
+      cacheWriteShare: string;
+      effectiveInput: string;
+      unmapped: string;
+      costByClassMissing: string;
+      unmappedMissing: string;
+      columns: {
+        class: string;
+        tokens: string;
+        share: string;
+        cost: string;
+        agent: string;
+        runs: string;
+        perRun: string;
+        cacheHit: string;
+        toolDefs: string;
+        context: string;
+        toolResults: string;
+        reasoning: string;
+        basis: string;
+      };
+      composition: string;
+      compositionMissing: string;
+      parts: {
+        conversation: string;
+        toolResults: string;
+        contextFrames: string;
+        toolDefinitions: string;
+        steering: string;
+        system: string;
+        output: string;
+        reasoning: string;
+      };
+      byHarness: string;
+      harnessMissing: string;
+      byAgent: string;
+      agentNote: string;
+    };
+    notBacked: {
+      lead: string;
+    };
+    header: {
+      description: string;
+    };
+    summary: {
+      label: string;
+      spend: string;
+      currency: string;
+      tokens: string;
+      cache: string;
+      cacheNotRecorded: string;
+      observed: string;
+      observedNote: string;
+      wasted: string;
+      wastedShare: string;
+    };
+    states: {
+      loading: string;
+      empty: {
+        title: string;
+        body: string;
+        back: string;
+      };
+      denied: {
+        title: string;
+        needed: string;
+        body: string;
+        bodyEnd: string;
+        request: string;
+        requestTitle: string;
+        requestBody: string;
+        back: string;
+        signedInAs: string;
+        roles: string;
+        neededLabel: string;
+        decidedByLabel: string;
+        decidedBy: string;
+      };
+      pending: {
+        title: string;
+        body: string;
+      };
+      error: {
+        title: string;
+        bodyStart: string;
+        bodyEnd: string;
+        retry: string;
+        incident: string;
+        incidentTitle: string;
+        incidentBody: string;
+        trace: string;
+      };
+      section: {
+        denied: string;
+        error: string;
+      };
+    };
+    coaching: {
+      title: string;
+      notBacked: string;
+      agents: string;
+      operators: string;
+      agentSignals: {
+        narrowBelt: string;
+        stablePrefix: string;
+        pageResults: string;
+        contextBudget: string;
+        lightModel: string;
+        retryStorms: string;
+        oneTurnCache: string;
+      };
+      operatorSignals: {
+        grants: string;
+        reRead: string;
+        onePrompt: string;
+        publishSteering: string;
+        resizeBudget: string;
+        selfReported: string;
+      };
+    };
+    toolChart: {
+      metric: {
+        cumulative: string;
+        perRun: string;
+        perCall: string;
+      };
+      switcher: string;
+      label: string;
+      empty: string;
+      footer: string;
     };
   };
   steering: {

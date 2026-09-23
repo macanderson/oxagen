@@ -507,7 +507,7 @@ describe("runs table", () => {
     );
     expect(
       within(caveat).getByRole("link", { name: "Open Spend" }),
-    ).toHaveAttribute("href", "/acme/core-platform/spend?tab=findings");
+    ).toHaveAttribute("href", "/acme/core-platform/spend");
   });
 
   it("counts one such run in the singular", async () => {
