@@ -38,6 +38,7 @@ HARD RULES (restate them to any subagent you spawn):
 - A capability given an "app" layer needs its apps/app/capability-ui-map.json binding and a component or action test as proof (check:ui-parity --strict).
 - No fourth Playwright spec. New routes go in apps/app/e2e/routes.ts for page-load.
 - Read DEREGISTERED.md before removing a feature's files.
+- Never edit, commit to, or add files in the oxagen-roadmap clone. The spec and audit prompt are fixed. A deviation you cannot avoid is not written into the spec: list it under deviations in your result, and the auditor marks its check FAIL.
 - Plain-noun headings: no comma, mid-dot or not/never contrast in a heading or label; subtext under a heading is one sentence or nothing. Exactly one gold action per screen.
 - Open PRs that overlap this work (read their diffs with the GitHub MCP pull_request_read tool, loaded via ToolSearch, on macanderson/oxagen): #3776 "resurface existing Fleet, Run and Steering functions" and #3777 "resurface shell activity and organization sections". Do not duplicate what they add; build compatibly with them and name any overlap in your result.
 `
