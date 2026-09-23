@@ -47,7 +47,7 @@ async function renderAgents(
   cursor: string | null = null,
 ) {
   const { source, calls } = agentsSource(reads);
-  const element = await Agents({ ctx, source, cursor });
+  const element = await Agents({ ctx, source, cursor, view: "operations" });
   render(<IntlProvider>{element}</IntlProvider>);
   return calls;
 }
@@ -62,6 +62,33 @@ afterEach(async () => {
 });
 
 describe("Agents", () => {
+  it("defaults to Composition and shows only recorded principal and host counts", async () => {
+    const { source } = agentsSource({
+      list: agentPage([
+        agentRow({ principalId: "prn_1", hosts: 2, credentials: 3 }),
+      ]),
+    });
+    render(
+      <IntlProvider>
+        {await Agents({ ctx, source, cursor: null })}
+      </IntlProvider>,
+    );
+    expect(screen.getByRole("link", { name: "Composition" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    const cells = within(screen.getByTestId("agent-row")).getAllByRole("cell");
+    expect(cells.slice(1, 4).map((cell) => cell.textContent)).toEqual([
+      "prn_1",
+      "2",
+      "3",
+    ]);
+    expect(screen.getByRole("link", { name: "Operations" })).toHaveAttribute(
+      "href",
+      "/acme/core-platform/agents?view=operations",
+    );
+  });
+
   it("reads one identities page at the URL's cursor", async () => {
     const calls = await renderAgents({ list: agentPage([]) }, "c1");
     expect(calls.list).toEqual([[ctx, { cursor: "c1" }]]);
@@ -100,7 +127,7 @@ describe("Agents", () => {
     ]);
     expect(within(row).getByRole("link", { name: "Edit" })).toHaveAttribute(
       "href",
-      "/acme/core-platform/agents/release-bot?tab=definition",
+      "/acme/core-platform/agents/release-bot/definition",
     );
     expect(
       within(row).getByRole("button", { name: "Deregister" }),
@@ -172,19 +199,24 @@ describe("Agents", () => {
     expect(within(pager).getAllByRole("link")).toHaveLength(1);
     expect(
       within(pager).getByRole("link", { name: "More identities" }),
-    ).toHaveAttribute("href", "/acme/core-platform/agents?cursor=c2");
+    ).toHaveAttribute(
+      "href",
+      "/acme/core-platform/agents?cursor=c2&view=operations",
+    );
     cleanup();
 
     await renderAgents({ list: agentPage([], null) }, "c2");
     expect(screen.queryByTestId("agents-empty")).toBeNull();
     expect(
       screen.getByRole("link", { name: "First identities" }),
-    ).toHaveAttribute("href", "/acme/core-platform/agents");
+    ).toHaveAttribute("href", "/acme/core-platform/agents?view=operations");
   });
 
   it("draws no pager for a single page (negative)", async () => {
     await renderAgents({ list: agentPage([agentRow()]) });
-    expect(screen.queryByRole("navigation")).toBeNull();
+    expect(
+      screen.queryByRole("navigation", { name: "Identities pages" }),
+    ).toBeNull();
   });
 
   it("names the permission a denied read needed, with no tiles (negative)", async () => {

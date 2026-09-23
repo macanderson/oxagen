@@ -1,16 +1,3 @@
-// One agent (ARCHITECTURE.md §1.2 Agents row, #2956; mockup `pAgent`): the
-// identity card with its status and the writes on it, then one section chosen
-// by `?tab=`. Six sections have a store behind them: Identity (get_agent),
-// Toolbelt (get_agent_toolbelt), Enrollment (get_agent's hosts), Tamper
-// incidents (list_incidents), Configuration (get_agent's cached commit)
-// and Mandates (list_mandates narrowed to this agent, #2957). Only the chosen
-// section makes its own read.
-//
-// Budgets is the mockup's seventh, drawn read-only (#2953). `get_spend_budget`
-// has no agent scope, so the tab shows the organization and workspace ceilings
-// this agent runs under and says plainly that no per-agent ceiling exists,
-// rather than drawing a figure no store holds. The mockup's Runs tab still has
-// no contract that reads runs per agent, so it is not drawn (§3.6).
 import { notFound } from "next/navigation";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
@@ -27,22 +14,30 @@ import { AgentActions } from "./agent-actions";
 import { BudgetSection } from "./budget-panel";
 import { DefinitionSection } from "./definition";
 import { EnrollmentSection } from "./enrollment";
-import { IdentitySection } from "./identity";
+import { IdentitySection, Roles } from "./identity";
 import { IncidentsSection } from "./incidents";
 import { AgentKillSwitch } from "./kill-switch";
 import { MandatesSection } from "./mandates";
-import { AgentStatusBadge } from "./parts";
+import { AgentStatusBadge, Facts, Panel } from "./parts";
 import { ToolbeltSection } from "./toolbelt";
 
 const TABS = [
+  "overview",
   "identity",
+  "steering",
   "toolbelt",
-  "enrollment",
-  "budgets",
-  "incidents",
+  "runtime",
+  "permissions",
+  "activity",
   "definition",
-  "mandates",
 ] as const;
+const ALIASES: Record<string, string> = {
+  enrollment: "runtime",
+  budgets: "permissions",
+  mandates: "permissions",
+  incidents: "activity",
+  runs: "activity",
+};
 type Tab = (typeof TABS)[number];
 
 type Place = { org: string; ws: string; agent: string };
@@ -119,7 +114,7 @@ function Tabs({ selected, org, ws, agent }: { selected: Tab } & Place) {
             <SafeLink
               to={routes.agent(org, ws, agent, { tab })}
               aria-current={tab === selected ? "page" : undefined}
-              className="inline-flex min-h-10 items-center border-b-2 border-transparent px-3 text-sm font-medium text-muted-foreground hover:text-foreground aria-[current=page]:border-foreground aria-[current=page]:text-foreground"
+              className="inline-flex min-h-11 items-center border-b-2 border-transparent px-3 text-sm font-medium text-muted-foreground hover:text-foreground aria-[current=page]:border-foreground aria-[current=page]:text-foreground"
             >
               {t(tab)}
             </SafeLink>
@@ -151,12 +146,18 @@ export async function Agent({
   source: DataSource;
   /** The agent's slug or public id, as the URL names it. */
   agent: string;
-  /** `?tab=`; anything but a section's name opens Identity. */
+  /** Canonical section or a retained link alias. */
   tab: string | null;
   /** `?cursor=`, a later page of the incidents. */
   cursor: string | null;
 }) {
-  const selected = TABS.find((name) => name === tab) ?? "identity";
+  const canonical =
+    tab === null
+      ? "overview"
+      : Object.hasOwn(ALIASES, tab)
+        ? ALIASES[tab]
+        : tab;
+  const selected = TABS.find((name) => name === canonical) ?? "overview";
   const { read, now } = await readAgent(ctx, source, agent);
   if (!read.ok) {
     if (read.reason === "error" && read.status === 404) notFound();
@@ -175,6 +176,7 @@ export async function Agent({
       body = (
         <IdentitySection
           detail={detail}
+          showRoles={false}
           now={now}
           // assign_agent_role and revoke_agent_role are org Owner or Admin
           // writes (INV-29, checked in their handlers), and a retired
@@ -218,7 +220,7 @@ export async function Agent({
         />
       );
       break;
-    case "enrollment":
+    case "runtime":
       body = (
         <EnrollmentSection
           hosts={detail.hosts}
@@ -234,15 +236,7 @@ export async function Agent({
         />
       );
       break;
-    case "budgets":
-      body = (
-        <BudgetSection
-          read={await source.spend.budgets(ctx)}
-          spend={routes.spend(place.org, place.ws, { tab: "budgets" })}
-        />
-      );
-      break;
-    case "incidents":
+    case "activity":
       body = (
         <IncidentsSection
           read={await source.agents.incidents(ctx, identity.id, { cursor })}
@@ -251,18 +245,44 @@ export async function Agent({
         />
       );
       break;
-    case "mandates":
+    case "permissions":
       body = (
-        <MandatesSection
-          read={await source.mandates.list(ctx, { agentId: identity.id })}
-          orgRole={ctx.orgRole}
-          agentStatus={identity.status}
-          org={place.org}
-          ws={place.ws}
-          agentId={identity.id}
-          agentSlug={identity.slug}
-        />
+        <div className="flex flex-col gap-4">
+          <Roles
+            roles={detail.roles}
+            manage={
+              (ctx.orgRole === "owner" || ctx.orgRole === "admin") &&
+              identity.status !== "retired"
+                ? {
+                    org: place.org,
+                    ws: place.ws,
+                    agentId: identity.id,
+                    agentSlug: identity.slug,
+                  }
+                : null
+            }
+          />
+          <BudgetSection
+            read={await source.spend.budgets(ctx)}
+            spend={routes.spend(place.org, place.ws, { tab: "budgets" })}
+          />
+          <MandatesSection
+            read={await source.mandates.list(ctx, { agentId: identity.id })}
+            orgRole={ctx.orgRole}
+            agentStatus={identity.status}
+            org={place.org}
+            ws={place.ws}
+            agentId={identity.id}
+            agentSlug={identity.slug}
+          />
+        </div>
       );
+      break;
+    case "overview":
+      body = <Overview detail={detail} {...place} />;
+      break;
+    case "steering":
+      body = <SteeringLink {...place} />;
       break;
     case "definition":
       body = (
@@ -290,5 +310,68 @@ export async function Agent({
       <Tabs selected={selected} {...place} />
       {body}
     </div>
+  );
+}
+
+function Overview({ detail, org, ws, agent }: { detail: AgentDetail } & Place) {
+  const t = useTranslations("agents.detail.overview");
+  const sections = [
+    "identity",
+    "steering",
+    "toolbelt",
+    "runtime",
+    "permissions",
+    "activity",
+    "definition",
+  ] as const;
+  const labels = useTranslations("agents.detail.tabs");
+  return (
+    <Panel id="agent-overview" title={t("title")} lead={t("lead")}>
+      <Facts
+        rows={[
+          {
+            term: t("principal"),
+            value: detail.identity.principalId ?? t("unavailable"),
+          },
+          {
+            term: t("operator"),
+            value: detail.identity.operatorId ?? t("unavailable"),
+          },
+          { term: t("hosts"), value: detail.hosts.length },
+          { term: t("roles"), value: detail.roles.length },
+          {
+            term: t("definition"),
+            value: detail.definition?.path ?? t("unavailable"),
+          },
+        ]}
+      />
+      <nav
+        aria-label={t("composition")}
+        className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+      >
+        {sections.map((tab) => (
+          <SafeLink
+            key={tab}
+            to={routes.agent(org, ws, agent, { tab })}
+            className={`${panel} min-h-11 p-4 text-sm underline underline-offset-4`}
+          >
+            {labels(tab)}
+          </SafeLink>
+        ))}
+      </nav>
+    </Panel>
+  );
+}
+function SteeringLink({ org, ws }: Place) {
+  const t = useTranslations("agents.detail.steering");
+  return (
+    <Panel id="agent-steering" title={t("title")} lead={t("lead")}>
+      <SafeLink
+        to={routes.steering(org, ws)}
+        className="text-sm underline underline-offset-4"
+      >
+        {t("open")}
+      </SafeLink>
+    </Panel>
   );
 }

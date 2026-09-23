@@ -98,6 +98,9 @@ type Messages = {
         spend: string;
         incidents: string;
         actions: string;
+        principal: string;
+        hosts: string;
+        credentials: string;
       };
       basisNotRecorded: string;
       edit: string;
@@ -112,7 +115,12 @@ type Messages = {
       };
       create: {
         newAgent: string;
-        register: string;
+        wrap: string;
+      };
+      views: {
+        label: string;
+        composition: string;
+        operations: string;
       };
     };
     detail: {
@@ -121,11 +129,12 @@ type Messages = {
         label: string;
         identity: string;
         toolbelt: string;
-        enrollment: string;
-        incidents: string;
         definition: string;
-        mandates: string;
-        budgets: string;
+        overview: string;
+        steering: string;
+        runtime: string;
+        permissions: string;
+        activity: string;
       };
       identity: {
         title: string;
@@ -480,6 +489,22 @@ type Messages = {
         empty: string;
         confirm: string;
         pending: string;
+      };
+      overview: {
+        title: string;
+        lead: string;
+        principal: string;
+        operator: string;
+        hosts: string;
+        roles: string;
+        definition: string;
+        unavailable: string;
+        composition: string;
+      };
+      steering: {
+        title: string;
+        lead: string;
+        open: string;
       };
     };
     actions: {
@@ -3592,38 +3617,18 @@ type Messages = {
     };
   };
   run: {
-    eyebrow: string;
     notRecorded: string;
-    basisNotRecorded: string;
     noSummary: string;
     source: {
       ledger: string;
       tacho: string;
     };
-    figures: {
-      cost: string;
-      turns: string;
-      steps: string;
-      frames: string;
-      started: string;
-      sealed: string;
-    };
     facts: {
-      operator: string;
-      model: string;
-      harness: string;
-      harnessVersion: string;
-      harnessVersionNotRecorded: string;
-      machine: string;
-      noMachineOnLedger: string;
       operatorKind: {
         human: string;
         agent: string;
         service: string;
       };
-      machineNotRecorded: string;
-      machineRecorded: string;
-      machineEnrollment: string;
     };
     resolvedApprovals: {
       title: string;
@@ -3638,9 +3643,18 @@ type Messages = {
     tabs: {
       label: string;
       transcript: string;
-      frames: string;
+      issues: string;
+      actions: string;
       cost: string;
-      approvals: string;
+      policy: string;
+      context: string;
+      chain: string;
+      atLeast: string;
+      status: {
+        live: string;
+        sealed: string;
+        halted: string;
+      };
     };
     transcript: {
       title: string;
@@ -4064,7 +4078,6 @@ type Messages = {
       };
     };
     loading: string;
-    unnamedRun: string;
     outputs: {
       label: string;
       title: string;
@@ -4108,8 +4121,94 @@ type Messages = {
         withheld: string;
       };
     };
-    summaryTitle: string;
-    summaryFrames: string;
+    header: {
+      chips: string;
+      harnessNotRecorded: string;
+      rig: string;
+      versionNotCaptured: string;
+      harnessVersion: string;
+      effortNotCaptured: string;
+      checkout: string;
+      repoNotCaptured: string;
+      noPullRequest: string;
+      pathNotCaptured: string;
+      derived: string;
+      noMachine: string;
+      started: string;
+      sealed: string;
+      running: string;
+      by: string;
+      paused: string;
+      copy: string;
+      copyLabel: string;
+      copied: string;
+      copyFailed: string;
+      modelNotRecorded: string;
+      noMachineOnLedger: string;
+      machineNotRecorded: string;
+      machineRecorded: string;
+      machineEnrollment: string;
+    };
+    summary: {
+      title: string;
+      check: string;
+    };
+    stats: {
+      label: string;
+      tokens: string;
+      prompts: string;
+      cost: string;
+      wasted: string;
+      wallClock: string;
+      cacheHit: string;
+      tokensNote: string;
+      promptsCut: string;
+      wastedNote: string;
+      running: string;
+      noRollup: string;
+    };
+    issues: {
+      title: string;
+      reference: string;
+      relation: string;
+      task: string;
+      empty: string;
+      note: string;
+    };
+    policy: {
+      title: string;
+      frame: string;
+      call: string;
+      outcome: string;
+      type: string;
+      empty: string;
+      cut: string;
+      at: string;
+    };
+    context: {
+      title: string;
+      frame: string;
+      what: string;
+      at: string;
+      empty: string;
+      cut: string;
+    };
+    work: {
+      label: string;
+      changes: string;
+      pullRequest: string;
+      noPullRequest: string;
+      commits: string;
+      diff: string;
+      diffStat: string;
+      noDiff: string;
+      openDiff: string;
+      more: string;
+      spend: string;
+      toolCalls: string;
+      noSpend: string;
+      callCount: string;
+    };
   };
   shell: {
     skipToContent: string;
@@ -4929,6 +5028,8 @@ type Messages = {
       sessionLimit: string;
       sessionLimitHint: string;
       modelAllow: string;
+      permitNoModels: string;
+      enforcementRequested: string;
       modelAllowHint: string;
       modelDeny: string;
       modelDenyHint: string;
@@ -4941,17 +5042,21 @@ type Messages = {
       allowlist: string;
       denylist: string;
       reach: {
+        unknown: string;
         none: string;
         stored: string;
       };
       errors: {
         sessionLimitInvalid: string;
         modelPatternInvalid: string;
+        modelListRequired: string;
       };
       alert: {
         denied: string;
         failed: string;
       };
+      enforced: string;
+      mode: string;
     };
     tokens: {
       title: string;
