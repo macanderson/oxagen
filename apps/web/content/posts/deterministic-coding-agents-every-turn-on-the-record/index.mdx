@@ -1,6 +1,6 @@
 ---
-title: "Deterministic Coding Agents: Every Turn on the Record"
-description: "A coding agent changed your tree and nobody can replay how. What the research says about execution feedback, sampling variance, and turns you can audit"
+title: "Deterministic coding agents: every turn on the record"
+description: "A coding agent changed your code and no one can replay how. What the research says about feedback from running code, random sampling, and turns you can audit."
 date: 2026-09-09
 authors:
   - Oxagen Research
@@ -16,43 +16,41 @@ tags:
 draft: false
 ---
 
-An agent touched fourteen files overnight. The diff is on the branch and the tests are green. Someone asks the obvious question in review: why did it change that file? Nobody can answer. The reasoning is gone, the tool calls are gone, and the only artifact left is the output.
+An agent changed fourteen files overnight. The diff is on the branch and the tests pass. In review, someone asks why the agent changed one of those files. No one can answer. The agent's reasoning and tool calls were not saved. Only the output is left.
 
-Run the agent again on the same ticket and it produces a different patch. Now the review question has no answer even in principle, because there is no run to go back to.
+If you run the agent again on the same ticket, it writes a different patch. So there is no earlier run to go back to, and the question has no answer at all.
 
-This is a solvable problem, and it is not solved by making the model deterministic. It is solved by making the run replayable and the turn auditable. The research on what makes coding agents work in the first place points at the same artifacts that review needs, which is a convenient accident worth taking advantage of.
+This problem can be solved. The fix is not to make the model deterministic, meaning it gives the same output every time. The fix is to record the run so a person can replay it and check each turn. The research on what makes coding agents work points to the same records that review needs. So one set of records can serve both.
 
-## The loop that works is an execution feedback loop
+## Coding agents improve when they get the results of running their code
 
-Every result that moved code repair forward has the same ingredient: an external, executable verdict fed back into the model.
+The results that moved code repair forward share one ingredient. A program runs the code, and the result goes back to the model.
 
-Chen and colleagues showed this with Self-Debugging, where a model inspects execution results and explains its own code back to itself, a technique they compare to rubber duck debugging. It gained 2 to 3% on the Spider text-to-SQL benchmark, with a 9% gain on the hardest difficulty level, and up to 12% on TransCoder and MBPP when unit tests were available.[^1] The interesting part is the sample efficiency: the loop matched baselines that generated over ten times as many candidates.[^1]
+Chen and colleagues showed this with Self-Debugging. In it, a model reads the results of running its code and explains the code back to itself. They compare this to rubber duck debugging, where you explain code out loud to find the bug. It gained 2 to 3% on the Spider text-to-SQL benchmark, with a 9% gain on the hardest difficulty level. It gained up to 12% on TransCoder and MBPP when unit tests were available.[^1] It also needed fewer tries. It matched baselines that generated over ten times as many candidates.[^1]
 
-Xia and Zhang pushed the same idea into automated program repair with ChatRepair, which interleaves patch generation with immediate test feedback instead of the traditional generate-then-validate batch. It fixed 162 of 337 bugs at roughly $0.42 each, and learned from failed attempts as well as successful ones.[^2] Reflexion generalised the pattern beyond code, storing verbal reflections on failed attempts in memory, and reported 91% pass@1 on HumanEval against 80% for the prior result.[^3]
+Xia and Zhang applied the same idea to automated program repair with ChatRepair. The older method generates a batch of patches and then tests them. ChatRepair tests each patch right away and gives the result to the model before the next try. It fixed 162 of 337 bugs at roughly $0.42 each. It learned from failed attempts as well as successful ones.[^2] Reflexion used the pattern outside code. It stored written notes on failed attempts in memory. On HumanEval, 91% of problems passed on the first answer (pass@1), against 80% for the prior result.[^3]
 
-Read those three together and the mechanism is clear. The model is not getting smarter between attempts. It is getting information: an exit code, a stack trace, a diff that did not apply. That information exists as concrete artifacts at a specific point in time, and most agent implementations discard it the moment the loop moves on.
-
-Those discarded artifacts are exactly what a reviewer would want.
+Read together, these three papers show the mechanism. The model does not get smarter between attempts. It gets new information: an exit code, a stack trace, or a diff that did not apply. That information exists as concrete records at one point in time. Most agent setups throw it away as soon as the loop moves on. Those are the records a reviewer would want.
 
 <Flow
-  title="The loop every repair result shares"
+  title="The loop each repair result shares"
   steps={[
-    { label: "Generate", detail: "A candidate patch" },
-    { label: "Execute", detail: "Run the tests against the tree" },
-    { label: "Verdict", detail: "Exit code, stack trace, the hunk that failed", emph: true },
-    { label: "Revise", detail: "The next attempt reads the verdict" },
+    { label: "Generate", detail: "The model writes a candidate patch" },
+    { label: "Execute", detail: "Run the tests against the code" },
+    { label: "Result", detail: "Exit code, stack trace, the part of the patch that failed", emph: true },
+    { label: "Revise", detail: "The next attempt reads the result" },
   ]}
-  loop="repeat until the gate passes"
-  caption="Self-Debugging, ChatRepair, and Reflexion all feed an executable verdict back into the model. Step 3 is the artifact most harnesses throw away."
+  loop="repeat until the tests pass"
+  caption="Self-Debugging, ChatRepair, and Reflexion all give the result of running the code back to the model. Most tools that run agents throw away the record from step 3."
 />
 
-## Sampling is where the determinism goes
+## Random sampling makes the output change from one run to the next
 
-The benchmark literature has been transparent about this for five years, in the metric itself.
+Benchmark papers have reported this for five years, in the metric they use.
 
-Codex scored 28.8% pass@1 on HumanEval and 70.2% pass@100.[^4] The gap between those numbers is not a footnote, it is most of the measured capability. A large share of what a model can do is available only through repeated sampling. In a benchmark you keep the sample that passed. In your repository you keep the sample that ran, and you have no oracle telling you it was the good one.
+Codex solved 28.8% of HumanEval problems with one sample (pass@1). It solved 70.2% when it could take 100 samples and count a problem solved if any passed (pass@100).[^4] Most of the measured skill sits in the gap between those two numbers. Much of what a model can do shows up only when you sample it many times. In a benchmark, you keep the sample that passed. In your repository, you keep the sample that ran. Nothing tells you whether it was the good one.
 
-Turning the temperature down does not close this. Ouyang and colleagues studied 829 code generation problems across three benchmarks and found that the proportion of tasks producing no identical test output across repeated requests was 75.76% on CodeContests, 51.00% on APPS, and 47.56% on HumanEval.[^5] They also found that setting temperature to zero reduces nondeterminism without eliminating it.[^5] Same prompt, same model, same repository, different patch.
+Temperature is the setting that controls how random the model's choices are. Lowering it does not fix this. Ouyang and colleagues sent the same requests many times across 829 code generation problems in three benchmarks. The share of tasks with no identical test output across the repeated requests was 75.76% on CodeContests, 51.00% on APPS, and 47.56% on HumanEval.[^5] They also found that setting temperature to zero reduces this variation but does not remove it.[^5] The same prompt, model, and repository can still produce a different patch.
 
 <Bars
   title="Tasks with no identical test output across repeated requests"
@@ -64,73 +62,71 @@ Turning the temperature down does not close this. Ouyang and colleagues studied 
     { label: "APPS", value: 51, display: "51.00%" },
     { label: "HumanEval", value: 47.56 },
   ]}
-  caption="Source: Ouyang, Zhang, Harman, and Wang (2023), across 829 code generation problems. Setting temperature to zero reduces the nondeterminism without removing it."
+  caption="Source: Ouyang, Zhang, Harman, and Wang (2023), across 829 code generation problems. Setting temperature to zero reduces the variation but does not remove it."
 />
 
-So nondeterminism is not a defect to engineer away at the model layer. It is a property of the system, and the engineering response is to record which sample you got rather than to pretend you can predict it.
+So the variation comes with the system, and changing the model cannot engineer it away. You cannot predict which sample you will get. So record the one you got.
 
-## Nondeterminism has a review cost, and it compounds
+## Output that changes between runs makes review harder in three ways
 
-Three costs, each concrete.
+First, you cannot narrow down a decision you cannot reproduce. A common way to debug is to run again with one thing changed, and repeat until you find the cause. This is called bisecting. It only works if the earlier run stays the same. If the agent writes a different patch each time, each step measures the random sampling instead of your change.
 
-You cannot bisect a decision you cannot reproduce. Standard debugging practice is to narrow a failure by running again with one thing changed. That technique requires the previous run to be a fixed point. If running the agent again produces a different patch, every step of the bisection is measuring the sampler instead of the change you made.
+Second, the tests that grade the agent can also change between runs. Luo and colleagues did the first large study of flaky tests, which pass or fail without any code change. They examined 201 commits that fixed flaky tests across 51 open-source projects. The most common causes were async waits, concurrency, and test order dependence.[^6] When both the agent and its tests vary, one passing result is a matter of chance in two ways.
 
-The grader is nondeterministic too. Luo and colleagues carried out the first extensive study of flaky tests, examining 201 commits that fixed flaky tests across 51 open-source projects, and catalogued the root causes: async waits, concurrency, and test order dependence dominate.[^6] Put a nondeterministic author in front of a nondeterministic grader and a green gate becomes a sample from a distribution, twice over.
+Third, a passing result shows less than it seems. Yu and colleagues studied SWE-Bench. In 345 patches, the tests from the original pull request never covered the failure. Those patches were marked as passing but were wrong.[^7] So a claim that the tests passed needs its evidence attached before anyone trusts it.
 
-And a passing gate is a weaker claim than it looks. Yu and colleagues found 345 patches in SWE-Bench that were marked as passing but were wrong, because the tests attached to the original pull request never covered the failure mode.[^7] "Tests passed" is a claim that needs its evidence attached, not a boolean to be trusted on sight.
+<Callout kind="note" title="The goal is a run you can replay">Today, a model cannot be made to reproduce its output bit for bit, and waiting for that is not a plan. You can audit a run when someone else can see what was asked, what was done, and what the result was. This holds even if a new sample would produce a different patch.</Callout>
 
-<Callout kind="note" title="The target is replayability, not identical bytes">Bit-for-bit reproduction of a model's output is not currently achievable, and waiting for it is not a plan. A run is auditable when a third party can see exactly what was asked, what was done, and what the verdict was, even if re-sampling would produce a different patch.</Callout>
+## What a turn record should contain
 
-## What an auditable turn looks like
+Review needs four nested records: the run, the turn, the tool call, and the gate result. A gate result is the pass or fail of a required check, such as the unit tests. Each record is added to the end of a log and never edited. This design is called event sourcing. Each event stays fixed once it is written, and you rebuild the current state by replaying the log. So the log is the audit trail. You do not have to keep a second record in step with it.
 
-The structure that survives contact with real review is four nested records, appended and never edited: session, turn, tool call, and gate result. Event sourcing is the right shape here for a boring reason. If every event is immutable and state is derived by replaying the log, then the log is the audit trail rather than a second artifact you have to keep in sync with one.
-
-A single turn record, reduced to what actually gets asked in review:
+Here is one turn record, cut down to the fields review asks about:
 
 ```json
 {
-  "session": "s_01J8QK4M2ZT",
+  "run": "r_01J8QK4M2ZT",
   "turn": 7,
   "model": "claude-opus-5",
   "prompt_sha256": "9f2c1ab0…",
   "tool_calls": [
     { "seq": 1, "name": "read_file", "path": "src/billing/grants.ts", "result_sha256": "1a7b…" },
     { "seq": 2, "name": "apply_patch", "diff_sha256": "c40e…", "files": 2, "added": 31, "removed": 4 },
-    { "seq": 3, "name": "run_tests", "cmd": "pnpm --filter billing test:unit -- grants.test.ts", "exit": 0 }
+    { "seq": 3, "name": "run_tests", "cmd": "pnpm --filter billing test:unit grants.test.ts", "exit": 0 }
   ],
   "gate": { "name": "unit", "verdict": "pass", "log_sha256": "77d1…" }
 }
 ```
 
-Hashes rather than payloads keeps the record small and still verifiable, but only if everyone hashes the same logical record the same way. That is what RFC 8785, the JSON Canonicalization Scheme, standardises: a deterministic serialisation, property ordering, and encoding so that a JSON document has one canonical form suitable for signing and hashing.[^8] Without a canonicalisation rule, two services that agree on the content will disagree on the digest, and the audit trail quietly stops verifying.
+The record stores hashes instead of full content. A hash is a short fingerprint computed from the content, and it changes when the content changes. Hashes keep the record small, and anyone can still check it. But this only works if every service hashes the same record in the same way. RFC 8785, the JSON Canonicalization Scheme, sets that rule. It fixes the serialization, the property order, and the encoding, so a JSON document has one standard form for signing and hashing.[^8] Without such a rule, two services can agree on the content and still compute different hashes. Then the audit trail stops checking out, and nothing warns you.
 
-Here is what each layer pins, and the review question it answers:
+Here is what each record holds, and the review question it answers:
 
-| Record | What it pins | What review can now ask |
+| Record | What it holds | What review can now ask |
 |---|---|---|
-| Session | Principal, repository, branch, model id, toolchain versions | Who ran this, against what, with which tools |
-| Turn | Prompt hash, sampling parameters, timestamp | What was asked, and under what settings |
-| Tool call | Name, arguments, output hash, exit code | What the agent actually did to the tree |
-| Diff | Content hash, file count, lines added and removed | What changed, and how large the blast radius was |
-| Gate result | Command, verdict, log hash | Whether "it passed" has evidence behind it |
+| Run | The agent's identity, repository, branch, model id, tool versions | Who ran this, on what code, with which tools |
+| Turn | Prompt hash, sampling settings, timestamp | What was asked, and with which settings |
+| Tool call | Name, arguments, output hash, exit code | What the agent did to the code |
+| Diff | Content hash, file count, lines added and removed | What changed, and how much code it touched |
+| Gate result | Command, result, log hash | Whether "it passed" has evidence behind it |
 
-Note that none of these require the model to be deterministic. They require the harness to be honest.
+None of these records needs the model to give the same output each time. They need the tool that runs the agent to record what happened in full.
 
-## The parts you can actually pin
+## Which parts of a run you can hold fixed
 
-Some of the run is reproducible, and it is worth separating that from the part that is not.
+Some parts of a run can be reproduced and some cannot. It helps to separate them.
 
-The pinnable parts are the toolchain version, the container image, the repository commit, the prompt text, the model identifier, the sampling parameters, and the recorded input and output of every tool call. Record those and a colleague can replay the same sequence of actions against the same tree, even if a fresh generation would diverge.
+You can hold fixed the toolchain version, the container image, the repository commit, the prompt text, the model identifier, the sampling settings, and the recorded input and output of every tool call. If you record those, a colleague can replay the same actions on the same code. This works even if a new generation would come out different.
 
-The software supply chain has been down this road. Lamb and Zacchiroli describe reproducible builds as the practice of getting bit-for-bit identical results from the same source, and are direct about how hard it is in real projects: timestamps, build paths, and ordering all leak into outputs.[^9] The value is not aesthetic. It is that a third party can verify a binary corresponds to its source, rather than trusting whoever built it. Coding agents cannot reach bit-for-bit today, but the goal transfers exactly: someone other than the author must be able to check the claim.
+Software supply chains faced this problem first. Lamb and Zacchiroli describe reproducible builds: you build the same source and get bit-for-bit identical output. They say plainly that this is hard in real projects. Timestamps, build paths, and ordering all leak into the output.[^9] The benefit is practical. A third party can check that a binary matches its source instead of trusting whoever built it. Coding agents cannot reach bit-for-bit output today. But the same goal applies: someone other than the author must be able to check the claim.
 
-There is also a design lever. SWE-agent's argument is that the agent-computer interface determines what an agent can do at all, and their purpose-built interface for navigation, editing, and testing produced a 12.5% pass@1 on SWE-bench where non-interactive approaches did far worse.[^10] A finite, designed action vocabulary is also a finite, loggable one. You cannot record an unbounded set of shell improvisations as cleanly as a fixed set of named tools.
+Design also matters. The agent-computer interface is the set of commands an agent uses to work with the computer. The SWE-agent authors argue that this interface decides what an agent can do at all. Their interface had purpose-built commands for navigation, editing, and testing. It reached 12.5% pass@1 on SWE-bench, where non-interactive approaches did far worse.[^10] A fixed set of named tools is also easy to log. An open-ended stream of shell commands is harder to record cleanly.
 
-Agentless makes the sharper version of the point. Xia and colleagues replaced the agent loop with three fixed phases, localise, repair, and validate, and resolved 32.00% of SWE-bench Lite at about $0.70 per issue, ahead of the open-source agents of the time.[^11] A pipeline with fixed stages is trivially easier to replay than an open-ended loop. That is not an argument against agents. It is evidence that reproducibility and capability are not opposites, and that reaching for an autonomous loop should be a decision you can justify rather than a default.
+Agentless goes further. Xia and colleagues replaced the agent loop with three fixed steps: find the fault, repair it, and validate the fix. It resolved 32.00% of SWE-bench Lite at about $0.70 per issue. That was ahead of the open-source agents of the time.[^11] A pipeline with fixed steps is much easier to replay than an open-ended loop. This result does not argue against agents. It shows that a system can be both reproducible and capable. So pick an open-ended agent loop for a reason you can explain, and not by default.
 
-## Where this meets Oxagen
+## How Oxagen records a coding agent's run
 
-Oxagen is the control plane for the agents you run. It does not run them, and it cannot make a model's sampling deterministic. What it does is keep the record complete. Every run is recorded frame by frame, each frame hash-chained to the one before it, and the seal signs the whole run, so anyone with the export can check a turn rather than take it on trust. The coding agent sits on the other side of that seam: it does the work and emits the frames, and Oxagen binds each step to the agent's mandate and the rule that answered its request. The honest claim is narrow and useful. You still get a different patch on a second run, but you can always say exactly what happened on the run you shipped.
+Oxagen is the agent control plane for the agents you run. It does not run them. It cannot make a model's samples come out the same. It keeps the record complete. Oxagen records each run frame by frame. A frame is one recorded event in a run. Each frame carries a hash of the frame before it, so a changed frame breaks the chain. When the run ends, Oxagen signs the whole run, which is called the seal. Anyone with the export can then check a turn instead of taking it on trust. The coding agent does the work and sends the frames. Oxagen ties each step to the agent's mandate (its access, budget, tools, and rules) and to the rule that answered its request. The claim is narrow. A second run can still give a different patch. But you can say exactly what happened on the run you shipped.
 
 [^1]: Chen, X., Lin, M., Schärli, N., & Zhou, D. (2023). *Teaching Large Language Models to Self-Debug.* ICLR 2024. https://arxiv.org/abs/2304.05128
 [^2]: Xia, C. S., & Zhang, L. (2023). *Keep the Conversation Going: Fixing 162 out of 337 bugs for $0.42 each using ChatGPT.* ISSTA 2024. https://arxiv.org/abs/2304.00385

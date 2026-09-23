@@ -26,7 +26,7 @@ import {
   statValue,
 } from "@/ui/control-styles";
 import { formatCount } from "@/ui/money-format";
-import { NotRecordedValue, useDate } from "./section";
+import { NotRecordedValue, isoDate } from "./section";
 import type { Statement } from "./statement";
 import { ChargeBasis, StatementAmount } from "./this-period";
 
@@ -116,7 +116,7 @@ function DueTile({
   periodEnd: string;
 }) {
   const t = useTranslations("billing");
-  const date = useDate();
+  const date = isoDate;
   return (
     <Tile
       name="due"

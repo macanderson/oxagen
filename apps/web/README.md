@@ -30,13 +30,25 @@ committed.
   Every animation that would otherwise run forever (a figure's `.dg-loop`, the
   terminal replay) is started and stopped by an IntersectionObserver, so a page
   of them costs nothing below the fold.
-- `index.html`, the marketing one-pager: the hero with a spend rollup, the
-  four mandate clauses (access, record, budget and rules, equipment) each with its own figure, the
-  wrap section with the site's one terminal, a `#field-manual` section with the
-  ebook lead-capture form, and the "Get a demo" lead form.
+- `index.html`, the marketing one-pager: the hero with a spend rollup and the
+  supported-agent logos, the operator's five steps (with tasks marked coming
+  soon), the four mandate clauses (access, record, budget and rules,
+  equipment) each with its own figure, the supported-agents section with the
+  site's one terminal and a short support matrix, a `#field-manual` section
+  with the ebook lead-capture form, and the "Get a demo" lead form.
 - `products/oxagen/`, the product page: a routed request in the hero, then one
-  figure per ranked feature. It carries its own copy of the nav, drawer and
-  footer markup.
+  figure per ranked feature, and the full support matrix at `#support`. It
+  carries its own copy of the nav, drawer and footer markup.
+- The support matrix (Claude Code, Codex, Cursor, Stella) is the same table on
+  both pages, the home page showing six of its rows. Each cell is read from
+  `packages/tacho` (the harness adapters, `wire.ts`, the hook handler) and
+  ADR-078, ADR-101, ADR-141 and ADR-143. When one of those changes what a
+  harness can do, change both tables. Support is drawn by shape (solid, half,
+  empty disc), never by colour, and the third-party marks are drawn in
+  `currentColor`; only Stella's asterisk keeps its gold.
+- The prose standard for every page is plain words, one idea per sentence, and
+  cause before effect, on top of the `clear-prose` and `oxagen-branding`
+  skills.
 - The copy on both pages comes from the Oxagen message bank and the
   `oxagen-branding` skill (the live lines and the four mandate clauses). The figures are drawn in HTML and inline SVG, never
   screenshots, and each one shows a different mechanism, so the two pages do

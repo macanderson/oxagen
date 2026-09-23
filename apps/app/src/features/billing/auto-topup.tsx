@@ -14,7 +14,7 @@ import { inputBase } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { formatCount } from "@/ui/money-format";
 import { setAutoTopup } from "./actions";
-import { Section, useDate } from "./section";
+import { Section, isoDate } from "./section";
 
 type AutoTopupState = NonNullable<GauBucket["autoTopup"]>;
 type Outcome = "saved" | "invalidBlocks" | "denied" | "failed";
@@ -57,7 +57,7 @@ function AutoTopupControl({
 }) {
   const t = useTranslations("billing.autoTopup");
   const locale = useLocale();
-  const date = useDate();
+  const date = isoDate;
   const [enabled, setEnabled] = useState(state.enabled);
   const [blocks, setBlocks] = useState(state.blocks);
   const [outcome, setOutcome] = useState<Outcome | null>(null);

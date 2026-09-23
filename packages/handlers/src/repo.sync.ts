@@ -1,3 +1,4 @@
+import { HandlerError } from "@oxagen/oxagen/handler-error";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { repoSync } from "@oxagen/oxagen/contracts/repo.sync";
 import { schema, withTenantDb } from "@oxagen/database";
@@ -67,6 +68,15 @@ export const repoSyncHandler: CapabilityHandler<typeof repoSync> = async (
     });
   }
 
+  if (
+    (row.deliveryConfig as Record<string, unknown> | null)?.[
+      "runOutcomesOnly"
+    ] === true
+  )
+    throw new HandlerError({
+      code: "forbidden",
+      reason: "issue_connection_not_ingestible",
+    });
   const deliveryConfig = (row.deliveryConfig ?? {}) as DeliveryConfig;
   const syncMethod =
     deliveryConfig.syncMethod ?? row.deliveryMethod ?? "manual";

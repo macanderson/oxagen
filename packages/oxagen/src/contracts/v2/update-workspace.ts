@@ -131,9 +131,11 @@ export const updateWorkspace = defineTool({
     steering: workspaceSettingsWrite.input.shape.steering,
 
     /**
-     * Carried by reference from `update_workspace_settings`: whether Stella
-     * names and summarizes captured runs on organization credits. Omitted,
-     * the setting is unchanged. It never touches recorded evidence.
+     * Whether Stella may name and summarize this workspace's captured runs,
+     * carried by reference from `update_workspace_settings` (#3773). It is a
+     * governance choice about what leaves the record for a model to read, so
+     * it sits with the other workspace settings rather than on a tool of its
+     * own.
      */
     runEnrichmentEnabled:
       workspaceSettingsWrite.input.shape.runEnrichmentEnabled,

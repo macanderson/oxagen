@@ -346,7 +346,8 @@ describe("tachod and the transcript", () => {
     writeFileSync(transcript, `${lines.slice(0, 20).join("\n")}\n`);
     await handle.tick();
     const uuid = handle.registry.get(SESSION_ID)?.recorder.sessionUuid ?? "";
-    const before = handle.wal.read(uuid).length;
+    const beforeEvents = handle.wal.read(uuid);
+    const before = beforeEvents.length;
     expect(before).toBeGreaterThan(1);
 
     // A restart: the cursor is on disk, so nothing is sealed twice.
@@ -363,7 +364,19 @@ describe("tachod and the transcript", () => {
     });
     handles.push(restarted);
     await restarted.tick();
-    expect(restarted.wal.read(uuid).length).toBe(before);
+    // The restart itself is recorded: a gap for the window the daemon was not
+    // listening, and the checkpoint that signs the head it moved. Nothing from the
+    // transcript is sealed a second time.
+    const recorded = (events: readonly { kind: string }[]) =>
+      events.filter(
+        (e) => e.kind !== "telemetry_gap" && e.kind !== "checkpoint",
+      ).length;
+    const afterRestart = restarted.wal.read(uuid);
+    expect(recorded(afterRestart)).toBe(recorded(beforeEvents));
+    expect(afterRestart.slice(before).map((e) => e.kind)).toEqual([
+      "telemetry_gap",
+      "checkpoint",
+    ]);
 
     // The rest lands before SessionEnd seals the chain, and the sealed
     // session is drained once more. The cursor stays as a tombstone until
@@ -385,11 +398,14 @@ describe("tachod and the transcript", () => {
     await restarted.tick();
     await restarted.tick();
     await restarted.tick();
+    // A sealed session's transcript is still watched until it has been quiet
+    // for `sealedIdleMs`, because the last message is often written after
+    // SessionEnd; its cursor is kept meanwhile.
     expect(
       restarted.transcriptTailer.state().cursors[
         `claude-code:claude-code ${SESSION_ID}`
-      ]?.drained,
-    ).toBe(true);
+      ],
+    ).toBeDefined();
     // No tick after the drain appends the transcript to the sealed chain again.
     expect(restarted.wal.read(uuid).length).toBe(chain.length);
   });
