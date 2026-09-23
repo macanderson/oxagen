@@ -1,7 +1,7 @@
 "use client";
 import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
-import { openApprovals } from "@/features/shell";
+import { openApprovals } from "@/features/shell/client";
 
 export function ApprovalsEntry({ children }: { children?: ReactNode }) {
   const t = useTranslations("fleet.stats.waiting");

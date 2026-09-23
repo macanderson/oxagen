@@ -1307,3 +1307,5 @@ The billing amendment itself changed, beyond the above: §0 items 2, 8 and 9; §
 The shell drawers reuse the typed data ports in `features/shell/activity-actions.ts`. That server action resolves each viewer before reading a port and returns an explicit `ActionResult`. The layer rule admits `data/source` only from this action module, so the drawer keeps the existing approval and mandate mapping without copying it.
 
 `features/fleet/client.ts` is the public client entry for the shared approvals panel. Client drawers import it instead of the server barrel. The entry exports only client-compatible components.
+
+`features/shell/client.ts` is the shell's public client entry. Fleet's waiting tile imports `openApprovals` from it to open the approvals drawer. The shell barrel re-exports the landing redirect and the export route, which reach the database, so a client import of the barrel would put them in the browser bundle.
