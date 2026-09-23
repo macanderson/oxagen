@@ -48,6 +48,7 @@ import {
 } from "./tacho-gateway-columns";
 import {
   type AgentBudgetDoc,
+  budgetDocFromVersion,
   deriveBundleBudget,
   mapMandateToBundlePermissions,
 } from "./tacho-mandate";
@@ -355,9 +356,9 @@ function hookFailOpen(host: TachoHostRow): { hook_fail_open?: string[] } {
 
 /**
  * The agent-definition `budget` table off the host's agent's ACTIVE version
- * config (`agent.propose.ts`'s own reading of the same doc), or `undefined`
- * when the host names no agent, the agent has no published version, or the
- * config carries no `budget` table at all.
+ * definition source, with config as a fallback for legacy versions. It is
+ * undefined when the host names no agent, has no active version, or declares
+ * no budget.
  */
 async function readAgentBudgetDoc(
   tx: TachoTx,
@@ -371,21 +372,9 @@ async function readAgentBudgetDoc(
   if (!agent?.activeVersionId) return undefined;
   const version = (await tx.query.agentVersions.findFirst({
     where: eq(schema.agentVersions.id, agent.activeVersionId),
-    columns: { config: true },
-  })) as { config: unknown } | undefined;
-  const config = version?.config;
-  const budgetTable =
-    typeof config === "object" && config !== null
-      ? (config as Record<string, unknown>)["budget"]
-      : undefined;
-  if (typeof budgetTable !== "object" || budgetTable === null) return undefined;
-  const table = budgetTable as Record<string, unknown>;
-  const perRunMicros = table["per_run_micros"];
-  const perDayMicros = table["per_day_micros"];
-  return {
-    ...(typeof perRunMicros === "number" ? { perRunMicros } : {}),
-    ...(typeof perDayMicros === "number" ? { perDayMicros } : {}),
-  };
+    columns: { config: true, definitionSource: true },
+  })) as { config: unknown; definitionSource: string | null } | undefined;
+  return version === undefined ? undefined : budgetDocFromVersion(version);
 }
 
 /**
@@ -401,7 +390,7 @@ async function readAgentBudgetDoc(
  * `register_agent` runs), the workspace's decision rules still apply either
  * way (they govern the workspace, not one agent's own grants), and the
  * budget stays `observed` when the host names no agent, the agent has no
- * published version, or its config carries no budget table.
+ * published version, or its active definition carries no budget table.
  */
 export async function resolveHostMandate(
   tx: TachoTx,
