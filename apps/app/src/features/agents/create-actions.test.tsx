@@ -1,17 +1,41 @@
 // @vitest-environment jsdom
-// Agent IAM's header: New agent opens the agent wizard over the page, and
-// Register an agent is a separate link to the flow that wraps an agent that
-// already runs. The two stay distinct, and only New agent is gold.
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+// The Agents header's actions (mockups/pages/agents.md, Header): New agent
+// opens the agent wizard over the page; Register an agent opens its dialog,
+// which opens a Context PR through `registerAgent` and writes no row; Wrap
+// Claude Code leaves for the Register Agent gate and is the one gold action.
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import type { ReactNode } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CREATE_EVENT, createRequestOf } from "@/shared/create";
-import { routes } from "@/shared/safe-path";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider, translator } from "@/test/intl";
 import { buttonPrimary, buttonSecondary } from "@/ui/control-styles";
-import { AgentsCreate } from "./create-actions";
 
-const t = translator("agents.list.create");
+const { registerAgent } = vi.hoisted(() => ({ registerAgent: vi.fn() }));
+vi.mock("next/link", () => ({
+  default: ({ children, ...rest }: { children: ReactNode; href: string }) => (
+    <a {...rest}>{children}</a>
+  ),
+}));
+vi.mock("./actions", () => ({ registerAgent }));
+vi.mock("@/features/create", () => ({
+  AGENT_HARNESSES: ["claude-code", "codex", "cursor", "stella"],
+  MODEL_TIERS: ["complex", "light"],
+}));
+
+const { AgentsCreate } = await import("./create-actions");
+const t = translator("agents.list.register");
+
+beforeEach(() => {
+  registerAgent.mockReset();
+});
 
 afterEach(async () => {
   try {
@@ -29,26 +53,137 @@ function mount() {
   );
 }
 
+function openRegister() {
+  fireEvent.click(screen.getByRole("button", { name: "Register an agent" }));
+  return screen.getByTestId("register-agent");
+}
+
 describe("AgentsCreate", () => {
-  it("opens the agent wizard from New agent, with wrapping as the primary action", () => {
+  it("opens the agent wizard from New agent, a plain button", () => {
     const seen = vi.fn((event: Event) => createRequestOf(event));
     window.addEventListener(CREATE_EVENT, seen);
     mount();
-    const button = screen.getByRole("button", { name: t("newAgent") });
+    const button = screen.getByRole("button", { name: "New agent" });
     expect(button.className).toBe(buttonSecondary);
     fireEvent.click(button);
     expect(seen.mock.results[0]?.value).toEqual({ kind: "agent" });
     window.removeEventListener(CREATE_EVENT, seen);
   });
 
-  it("links Register an agent to its own flow, not to the wizard", () => {
+  it("sends Wrap Claude Code to the Register Agent gate, not to a dialog", () => {
     mount();
-    const link = screen.getByTestId("agents-register");
-    expect(link.textContent).toBe(t("wrap"));
-    expect(link.getAttribute("href")).toBe(
-      routes.register("acme", "core-platform", "name"),
+    const wrap = screen.getByTestId("agents-wrap");
+    expect(wrap.textContent).toBe("Wrap Claude Code");
+    expect(wrap.getAttribute("href")).toBe("/acme/core-platform/register/name");
+    expect(wrap.className).toBe(buttonPrimary);
+  });
+});
+
+describe("Register an agent", () => {
+  it("asks for a slug, shows the avatar, a harness and a model tier, over the note that it opens a Context PR", () => {
+    mount();
+    const dialog = openRegister();
+    expect(within(dialog).getByText("Register an agent")).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("Slug")).toBeInTheDocument();
+    expect(within(dialog).getByText("Avatar")).toBeInTheDocument();
+    expect(
+      within(dialog)
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual([
+      "Harness",
+      "Claude Code",
+      "Codex",
+      "Cursor",
+      "Stella",
+      "complex",
+      "light",
+    ]);
+    fireEvent.change(within(dialog).getByLabelText("Slug"), {
+      target: { value: "perf-watch" },
+    });
+    expect(dialog).toHaveTextContent(
+      "This does not write Postgres. It opens a Context PR that adds .oxagen/agents/perf-watch.toml and the generated harness file beside it.",
     );
-    expect(link.className).toBe(buttonPrimary);
-    expect(document.querySelectorAll('[data-create="agent"]')).toHaveLength(1);
+    expect(
+      within(dialog).getByRole("button", { name: "Cancel" }),
+    ).toBeInTheDocument();
+  });
+
+  it("opens the Context PR with the slug, harness and tier chosen, and links the pull request", async () => {
+    registerAgent.mockResolvedValue({
+      ok: true,
+      value: {
+        path: ".oxagen/agents/perf-watch.toml",
+        pullRequest: {
+          number: 526,
+          url: "https://github.com/acme/platform/pull/526",
+        },
+      },
+    });
+    mount();
+    const dialog = openRegister();
+    fireEvent.change(within(dialog).getByLabelText("Slug"), {
+      target: { value: "perf-watch" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("Harness"), {
+      target: { value: "cursor" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("Model tier"), {
+      target: { value: "light" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: t("confirm") }));
+    await waitFor(() => {
+      expect(registerAgent).toHaveBeenCalledWith("acme", "core-platform", {
+        slug: "perf-watch",
+        harness: "cursor",
+        tier: "light",
+      });
+    });
+    expect(
+      await within(dialog).findByText(
+        "Pull request #526 opened. The agent exists when it merges.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("link", { name: "Open the pull request" }),
+    ).toHaveAttribute("href", "https://github.com/acme/platform/pull/526");
+  });
+
+  it("refuses a slug the contract would refuse, before anything is sent (negative)", async () => {
+    mount();
+    const dialog = openRegister();
+    const slug = within(dialog).getByLabelText("Slug");
+    fireEvent.change(slug, { target: { value: "perf--watch" } });
+    fireEvent.change(within(dialog).getByLabelText("Harness"), {
+      target: { value: "codex" },
+    });
+    expect(slug).toHaveAttribute("aria-invalid", "true");
+    fireEvent.click(within(dialog).getByRole("button", { name: t("confirm") }));
+    expect(
+      await within(dialog).findByTestId("register-agent-failure"),
+    ).toHaveTextContent(t("invalidSlug"));
+    expect(registerAgent).not.toHaveBeenCalled();
+  });
+
+  it("names a refusal and opens nothing (negative)", async () => {
+    registerAgent.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      permission: "propose_agent",
+    });
+    mount();
+    const dialog = openRegister();
+    fireEvent.change(within(dialog).getByLabelText("Slug"), {
+      target: { value: "perf-watch" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("Harness"), {
+      target: { value: "codex" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: t("confirm") }));
+    expect(
+      await within(dialog).findByTestId("register-agent-failure"),
+    ).toBeInTheDocument();
+    expect(within(dialog).queryByRole("link")).toBeNull();
   });
 });

@@ -20,6 +20,14 @@ vi.mock("@oxagen/oxagen", async (importOriginal) => ({
   invoke,
 }));
 vi.mock("@oxagen/telemetry", () => ({ captureError: vi.fn() }));
+// registerAgent drafts the wizard's file with the catalog's comment lines.
+vi.mock("next-intl/server", async () => {
+  const { translator } = await import("@/test/intl");
+  return {
+    getTranslations: (namespace: string) =>
+      Promise.resolve(translator(namespace)),
+  };
+});
 vi.mock("@oxagen/handlers/register", () => ({}));
 vi.mock("@oxagen/agent/register", () => ({}));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
@@ -46,6 +54,7 @@ const {
   pauseAgent,
   readAssignableRoles,
   readCostCenters,
+  registerAgent,
   setAgentCostCenter,
   requestMandate,
   retireAgent,
@@ -527,6 +536,73 @@ describe("commitAgentDefinition", () => {
   });
 });
 
+describe("registerAgent", () => {
+  const OPENED = {
+    slug: "perf-watch",
+    agentKey: "acme.core.perf-watch",
+    path: ".oxagen/agents/perf-watch.toml",
+    generatedPath: ".claude/agents/perf-watch.md",
+    branch: "agents/perf-watch",
+    repository: "acme/platform",
+    baseRef: "main",
+    digest: `sha256:${"a".repeat(64)}`,
+    checks: [],
+    commitSha: "c0ffee",
+    pullRequest: {
+      number: 526,
+      url: "https://github.com/acme/platform/pull/526",
+    },
+  };
+  const draft = { slug: " perf-watch ", harness: "cursor", tier: "light" };
+
+  it("opens the Context PR with the wizard's file for the slug, harness and tier, and returns the pull request", async () => {
+    invoke.mockResolvedValue(OPENED);
+    expect(await registerAgent("acme", "core-platform", draft)).toEqual({
+      ok: true,
+      value: {
+        path: ".oxagen/agents/perf-watch.toml",
+        pullRequest: {
+          number: 526,
+          url: "https://github.com/acme/platform/pull/526",
+        },
+      },
+    });
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    const [name, input, context] = invoke.mock.calls[0] ?? [];
+    expect(name).toBe("propose_agent");
+    expect(context).toEqual(expect.objectContaining(TENANT));
+    expect(input).toMatchObject({ slug: "perf-watch", harness: "cursor" });
+    const source = (input as { source: string }).source;
+    expect(source).toContain('slug = "perf-watch"');
+    expect(source).toContain('model_tier = "light"');
+    expect(source).toContain("[harness.cursor]");
+    expect(source).toContain("# .oxagen/agents/perf-watch.toml");
+  });
+
+  it.each([
+    ["a slug with capitals", { slug: "Perf-Watch" }, "slug"],
+    ["a slug over 18 characters", { slug: "a-very-long-agent-slug" }, "slug"],
+    ["a harness off the list", { harness: "vim" }, "harness"],
+    ["a tier off the list", { tier: "heavy" }, "tier"],
+  ])(
+    "refuses %s before the kernel runs (negative)",
+    async (_what, change, field) => {
+      expect(
+        await registerAgent("acme", "core-platform", { ...draft, ...change }),
+      ).toEqual({ ok: false, reason: "invalid", code: "invalid_input", field });
+      expect(invoke).not.toHaveBeenCalled();
+      expect(requireViewer).not.toHaveBeenCalled();
+    },
+  );
+
+  it("returns a denial as denied (negative)", async () => {
+    invoke.mockRejectedValue(denied("propose_agent"));
+    expect(
+      await registerAgent("acme", "core-platform", draft),
+    ).toMatchObject({ ok: false, reason: "denied" });
+  });
+});
+
 describe("a person the workspace refuses", () => {
   it.each([
     [
@@ -535,6 +611,15 @@ describe("a person the workspace refuses", () => {
     ],
     ["setAgentSuspended", () => setAgentSuspended("acme", "x", "agt_a", true)],
     ["retireAgent", () => retireAgent("acme", "x", "agt_a")],
+    [
+      "registerAgent",
+      () =>
+        registerAgent("acme", "x", {
+          slug: "perf-watch",
+          harness: "cursor",
+          tier: "light",
+        }),
+    ],
     [
       "commitAgentDefinition",
       () =>
