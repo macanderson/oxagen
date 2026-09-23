@@ -290,7 +290,7 @@ const PLATFORM_NAMED_ROWS: Readonly<
     "@oxagen/oxagen/skill-frontmatter": ["readSkillFrontmatter"],
   },
   // The org gate's Require SSO lookup asks one question of billing: does the
-  // organisation's plan include SSO (ADR-142). The same single tier read the
+  // organisation's plan include SSO (ADR-144). The same single tier read the
   // kernel's gates use, and nothing else from the package.
   "src/server/tenancy-lookups.ts": {
     "@oxagen/billing": ["canAccessSSO", "resolveOrgTier"],

@@ -1,5 +1,5 @@
 /**
- * "Require SSO" at sign-in, and the session's auth method (ADR-142).
+ * "Require SSO" at sign-in, and the session's auth method (ADR-144).
  *
  * An organisation that turns on security.org_security_policy.sso_required
  * wants its people to arrive through its identity provider. Two places hold

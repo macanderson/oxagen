@@ -1,5 +1,5 @@
 "use client";
-// Add or edit one identity provider (ADR-142). The fields follow the
+// Add or edit one identity provider (ADR-144). The fields follow the
 // protocol: OIDC takes an issuer URL, a client ID and a client secret; SAML
 // takes the IdP's entity ID, its SSO URL, its signing certificate and an
 // optional SP private key.

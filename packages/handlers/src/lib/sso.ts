@@ -1,5 +1,5 @@
 /**
- * Helpers shared by the org.sso.* handlers (ADR-142): the OIDC discovery read,
+ * Helpers shared by the org.sso.* handlers (ADR-144): the OIDC discovery read,
  * the allowlisted config builders, the sealing step and the provider view.
  *
  * The configs built here are what the @better-auth/sso plugin parses on every
@@ -105,7 +105,7 @@ export async function ssoEntitled(
 
 /**
  * Refuse a write that sets SSO up when the organisation is not on the
- * Enterprise plan (ADR-142). Call it after the org-role check.
+ * Enterprise plan (ADR-144). Call it after the org-role check.
  *
  * Only writes that add or strengthen SSO call this. Listing providers,
  * deleting one and turning Require SSO off stay open, so an organisation

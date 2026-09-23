@@ -1,6 +1,6 @@
 # Single sign-on
 
-This guide sets up single sign-on (SSO) for an Oxagen organization. People from your email domain sign in through your identity provider (IdP), and the groups the IdP sends decide their organization role. Oxagen supports OIDC and SAML 2.0. [ADR-142](../adr/ADR-142-enterprise-sso-behind-better-auth.md) records how it is built.
+This guide sets up single sign-on (SSO) for an Oxagen organization. People from your email domain sign in through your identity provider (IdP), and the groups the IdP sends decide their organization role. Oxagen supports OIDC and SAML 2.0. [ADR-144](../adr/ADR-144-enterprise-sso-behind-better-auth.md) records how it is built.
 
 ## Before you start
 

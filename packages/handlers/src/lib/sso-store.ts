@@ -1,5 +1,5 @@
 /**
- * The queries behind the org.sso.* handlers (ADR-142). Every function takes
+ * The queries behind the org.sso.* handlers (ADR-144). Every function takes
  * the transaction its caller opened and pins `orgId` in every predicate.
  *
  * The callers open that transaction with withSystemDb, and each call site

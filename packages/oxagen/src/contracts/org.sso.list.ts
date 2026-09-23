@@ -4,7 +4,7 @@ import { ssoPolicyViewSchema, ssoProviderViewSchema } from "./org.sso.shared";
 
 /**
  * list_sso_providers: the organisation's identity providers, each with its
- * group-to-role table, and whether SSO is required (ADR-142).
+ * group-to-role table, and whether SSO is required (ADR-144).
  *
  * No secret leaves: the view says whether a client secret or an SP private
  * key is stored, never what it is. The callback URL and, for SAML, the SP

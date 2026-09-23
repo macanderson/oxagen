@@ -2879,31 +2879,6 @@ type Messages = {
         domainPlaceholder: string;
         issuerPlaceholder: string;
         certPlaceholder: string;
-    costCenters: {
-      title: string;
-      lead: string;
-      empty: string;
-      labelsTable: string;
-      workspacesTable: string;
-      noDescription: string;
-      none: string;
-      columns: {
-        label: string;
-        description: string;
-        agents: string;
-        workspaces: string;
-        workspace: string;
-        costCenter: string;
-        actions: string;
-      };
-      add: {
-        open: string;
-        title: string;
-        confirm: string;
-        pending: string;
-        label: string;
-        labelHint: string;
-        description: string;
       };
       delete: {
         open: string;
@@ -2967,6 +2942,37 @@ type Messages = {
       failure: {
         groupRequired: string;
         groupDuplicate: string;
+      };
+    };
+    costCenters: {
+      title: string;
+      lead: string;
+      empty: string;
+      labelsTable: string;
+      workspacesTable: string;
+      noDescription: string;
+      none: string;
+      columns: {
+        label: string;
+        description: string;
+        agents: string;
+        workspaces: string;
+        workspace: string;
+        costCenter: string;
+        actions: string;
+      };
+      add: {
+        open: string;
+        title: string;
+        confirm: string;
+        pending: string;
+        label: string;
+        labelHint: string;
+        description: string;
+      };
+      delete: {
+        open: string;
+        title: string;
         confirm: string;
         pending: string;
         body: string;

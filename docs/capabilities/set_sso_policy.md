@@ -12,7 +12,7 @@ Contract: `packages/oxagen/src/contracts/org.sso.policy.set.ts`
 Handler: `packages/handlers/src/org.sso.policy.set.ts`
 API: `PUT /v1/:org/:workspace/org/sso/policy`
 MCP: `apps/mcp/src/tools/org.sso.policy.set.ts`
-Decision record: [ADR-142](../adr/ADR-142-enterprise-sso-behind-better-auth.md)
+Decision record: [ADR-144](../adr/ADR-144-enterprise-sso-behind-better-auth.md)
 
 ## Intent
 

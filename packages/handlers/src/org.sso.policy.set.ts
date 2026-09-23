@@ -13,7 +13,7 @@ import { logger } from "./logger";
 
 /**
  * set_sso_policy: require SSO for the organisation, or stop requiring it
- * (ADR-142).
+ * (ADR-144).
  *
  * Turning it on needs a provider whose domain is verified, checked in the
  * same transaction as the write, so a provider deleted a moment earlier
@@ -31,7 +31,7 @@ export const orgSsoPolicySetHandler: CapabilityHandler<
     { ...ctx, userId: actorUserId },
     { org: ["Owner", "Admin"] },
   );
-  // Requiring SSO is part of the Enterprise plan (ADR-142). Turning it off
+  // Requiring SSO is part of the Enterprise plan (ADR-144). Turning it off
   // stays open, so an organisation that left the plan is not held to it.
   if (input.ssoRequired) await requireSsoEntitlement(ctx);
 

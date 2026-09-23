@@ -1,5 +1,5 @@
 /**
- * "Require SSO" at sign-in, as a Better Auth plugin (ADR-142).
+ * "Require SSO" at sign-in, as a Better Auth plugin (ADR-144).
  *
  * A password sign-in, or a Google/GitHub sign-in, for an email whose domain
  * belongs to an organisation that requires SSO is refused, unless the person

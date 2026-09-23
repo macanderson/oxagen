@@ -186,13 +186,13 @@ export const GrantableOrgRole = z.enum([
 ]);
 export type GrantableOrgRole = z.infer<typeof GrantableOrgRole>;
 
-/** The two protocols an organisation's identity provider can speak (ADR-142). */
+/** The two protocols an organisation's identity provider can speak (ADR-144). */
 export const SsoProtocol = z.enum(["oidc", "saml"]);
 export type SsoProtocol = z.infer<typeof SsoProtocol>;
 
 /**
  * The roles an IdP group may grant. No `owner`: ownership is transferred by a
- * person, never minted by an identity provider (ADR-142).
+ * person, never minted by an identity provider (ADR-144).
  */
 export const SsoMappableRole = z.enum([
   "admin",

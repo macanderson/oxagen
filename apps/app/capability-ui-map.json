@@ -1284,6 +1284,7 @@
       "proof": "apps/app/src/features/organization/sso.test.tsx",
       "verifiedAt": "2026-09-22",
       "verifiedBy": "session-enterprise-sso"
+    },
     "list_cost_centers": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/page.tsx",

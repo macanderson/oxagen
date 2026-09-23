@@ -1,5 +1,5 @@
 /**
- * What an SSO sign-in grants (ADR-142).
+ * What an SSO sign-in grants (ADR-144).
  *
  * The @better-auth/sso plugin calls `provisionUser` after it has verified the
  * identity provider's assertion and found or created the user, and before it

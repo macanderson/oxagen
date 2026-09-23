@@ -11,7 +11,7 @@ import { capabilityContext } from "../../lib/context";
 import type { AppEnv } from "../../app";
 
 /**
- * Combined enterprise-SSO route (ADR-142), mounted at
+ * Combined enterprise-SSO route (ADR-144), mounted at
  * `/v1/:org_slug/:workspace_slug/org/sso`. One file covers the seven
  * capabilities, as `org.model_credential.ts` does for its four. Each handler
  * parses the contract input, builds the kernel context, and invokes with

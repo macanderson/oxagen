@@ -19,7 +19,7 @@ vi.mock("./lib/sso-store", () => ({
   upsertOrgSsoRequired: mocks.upsertRequired,
 }));
 
-// The plan behind the Enterprise check (ADR-142). Enterprise by default, so
+// The plan behind the Enterprise check (ADR-144). Enterprise by default, so
 // each case tests its own behaviour; the refusal case sets another tier.
 const plan = vi.hoisted(() => ({ resolveOrgTier: vi.fn() }));
 vi.mock("@oxagen/billing", () => ({

@@ -609,6 +609,8 @@
       "failure": {
         "groupRequired": "Enter a group name.",
         "groupDuplicate": "This group already has a row. Give each group one role."
+      }
+    },
     "costCenters": {
       "title": "Cost centers",
       "lead": "Spend is charged to the agent's cost center, or to its workspace's when the agent names none. Spend with neither is shown on Spend as its own row.",

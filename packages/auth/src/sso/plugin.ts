@@ -1,5 +1,5 @@
 /**
- * The @better-auth/sso plugin as Oxagen configures it (ADR-142). auth.ts and
+ * The @better-auth/sso plugin as Oxagen configures it (ADR-144). auth.ts and
  * the sign-in proof test both build it here, so the test signs in through the
  * configuration production runs.
  */

@@ -1,4 +1,4 @@
-// Require-SSO gate: pure decision logic, the sibling of mfa-gate.ts (ADR-142).
+// Require-SSO gate: pure decision logic, the sibling of mfa-gate.ts (ADR-144).
 //
 // An organization that set security.org_security_policy.sso_required admits a
 // member only through a session one of ITS verified SSO providers established.

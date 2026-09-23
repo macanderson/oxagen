@@ -134,7 +134,7 @@ export const sessions = authSchema.table(
     // SSO sign-in, otherwise "password", "social:<provider>" or "other".
     // Written once by the session.create.before hook in packages/auth and
     // never by a client (input:false). The org gate reads it to enforce an
-    // organisation's "require SSO" policy (ADR-142). NULL on sessions created
+    // organisation's "require SSO" policy (ADR-144). NULL on sessions created
     // before the column existed, which the gate treats as not SSO.
     authMethod: text("auth_method"),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
@@ -280,7 +280,7 @@ export const twoFactorTable = authSchema.table(
   }),
 );
 
-// ── Enterprise SSO providers (ADR-142) ───────────────────────────────────────
+// ── Enterprise SSO providers (ADR-144) ───────────────────────────────────────
 //
 // One row per OIDC or SAML identity provider an organisation registers. The
 // @better-auth/sso plugin reads this table through the Drizzle adapter as its

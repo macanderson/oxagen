@@ -10,7 +10,7 @@ import {
 
 /**
  * update_sso_provider: change a provider's display name, groups claim or
- * protocol settings (ADR-142).
+ * protocol settings (ADR-144).
  *
  * A secret left out of `config` keeps the sealed value already stored. The
  * domain cannot change, because verification binds the provider to it: to

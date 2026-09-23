@@ -41,7 +41,7 @@ export function refineSsoIssuer(
 
 /**
  * create_sso_provider: register an OIDC or SAML identity provider for one
- * email domain (ADR-142).
+ * email domain (ADR-144).
  *
  * For OIDC the handler reads the issuer's discovery document now, so sign-in
  * never has to. Every secret (the OIDC client secret, the SAML SP private

@@ -1,6 +1,6 @@
 /**
  * Envelope encryption for the secrets inside an SSO provider's configuration
- * (ADR-142).
+ * (ADR-144).
  *
  * `auth.sso_providers.oidc_config` and `saml_config` are JSON text that the
  * @better-auth/sso plugin parses on every sign-in. The plugin has no decrypt

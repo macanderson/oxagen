@@ -376,7 +376,7 @@ describe("auth module — import and betterAuth config", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Enterprise SSO wiring (ADR-142)
+// Enterprise SSO wiring (ADR-144)
 // ---------------------------------------------------------------------------
 
 describe("enterprise SSO wiring", () => {

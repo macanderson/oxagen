@@ -221,7 +221,7 @@ export const SECURITY_EVENT_TYPES = [
   // that "every governance change" and "every skipped review" are each one
   // event-type filter and neither answer is missing rows.
   "steering.governance_overridden",
-  // Enterprise SSO (ADR-142). Provider lifecycle, in order: an org admin
+  // Enterprise SSO (ADR-144). Provider lifecycle, in order: an org admin
   // registers an OIDC or SAML provider, proves the email domain with a DNS
   // TXT record, edits it, removes it. Emitted by the org.sso.* handlers.
   "sso.provider_created",

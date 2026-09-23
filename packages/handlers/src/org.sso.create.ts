@@ -22,7 +22,7 @@ import { logger } from "./logger";
 
 /**
  * create_sso_provider: register an OIDC or SAML identity provider for one
- * email domain (ADR-142).
+ * email domain (ADR-144).
  *
  * Order matters:
  *   1. The org-role check.
@@ -46,7 +46,7 @@ export const orgSsoCreateHandler: CapabilityHandler<
     { ...ctx, userId: actorUserId },
     { org: ["Owner", "Admin"] },
   );
-  // Setting SSO up is part of the Enterprise plan (ADR-142).
+  // Setting SSO up is part of the Enterprise plan (ADR-144).
   await requireSsoEntitlement(ctx);
 
   refuseSealedSsoInput(

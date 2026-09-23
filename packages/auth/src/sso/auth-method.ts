@@ -1,6 +1,6 @@
 /**
  * How a session was established, recorded on `auth.sessions.auth_method` by
- * the session.create.before hook in auth.ts (ADR-142). Pure, so the sign-in
+ * the session.create.before hook in auth.ts (ADR-144). Pure, so the sign-in
  * proof test and the hook share it without a database.
  */
 

@@ -571,7 +571,7 @@ export type {
   ModelCredentialVerification,
 } from "./org.model_credential.shared";
 
-// Shared enterprise-SSO wire schemas (ADR-142, not capabilities themselves),
+// Shared enterprise-SSO wire schemas (ADR-144, not capabilities themselves),
 // re-exported so the app, the API route and the MCP tools import one shape.
 export {
   ssoDomainSchema,

@@ -1,4 +1,4 @@
--- Enterprise SSO behind Better Auth's @better-auth/sso plugin (ADR-142).
+-- Enterprise SSO behind Better Auth's @better-auth/sso plugin (ADR-144).
 --
 -- 1. auth.sso_providers: one row per OIDC or SAML identity provider an
 --    organisation registers. The plugin reads it as its "ssoProvider" model.

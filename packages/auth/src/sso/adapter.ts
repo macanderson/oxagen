@@ -1,6 +1,6 @@
 /**
  * The Better Auth adapter wrapper that lets the @better-auth/sso plugin read
- * sealed provider secrets (ADR-142).
+ * sealed provider secrets (ADR-144).
  *
  * The plugin reads `ssoProvider` rows through `ctx.context.adapter` and
  * `JSON.parse`s their oidcConfig / samlConfig text. Oxagen stores every secret

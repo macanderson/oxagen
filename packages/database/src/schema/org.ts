@@ -541,7 +541,7 @@ export const onboardingState = orgSchema.table(
   }),
 );
 
-// ── SSO group → role mappings (ADR-142) ──────────────────────────────────────
+// ── SSO group → role mappings (ADR-144) ──────────────────────────────────────
 //
 // The table an org admin edits on the Roles page: one row per identity-provider
 // group that grants an organisation role. On every SSO sign-in the groups the

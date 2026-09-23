@@ -14,7 +14,7 @@ import { logger } from "./logger";
 
 /**
  * delete_sso_provider: remove an identity provider and its group-to-role
- * table (ADR-142).
+ * table (ADR-144).
  *
  * When SSO is required and no verified provider remains, the requirement is
  * turned off in the same transaction as the delete. Otherwise every member

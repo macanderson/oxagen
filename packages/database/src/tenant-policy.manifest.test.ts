@@ -250,7 +250,7 @@ describe("tenant policy manifest", () => {
     // session policy. The gateway does not read it yet; the table is in the
     // manifest because it carries org_id, not because anything enforces it.
     // 118 as of org.sso_group_roles, the IdP group → org role table
-    // (ADR-142).
+    // (ADR-144).
     expect(POLICY_MANIFEST.length).toBe(118);
   });
 

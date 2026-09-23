@@ -12,7 +12,7 @@ Contract: `packages/oxagen/src/contracts/org.sso.verify_domain.ts`
 Handler: `packages/handlers/src/org.sso.verify_domain.ts`
 API: `POST /v1/:org/:workspace/org/sso/providers/:providerId/verify-domain`
 MCP: `apps/mcp/src/tools/org.sso.verify_domain.ts`
-Decision record: [ADR-142](../adr/ADR-142-enterprise-sso-behind-better-auth.md)
+Decision record: [ADR-144](../adr/ADR-144-enterprise-sso-behind-better-auth.md)
 
 ## Intent
 

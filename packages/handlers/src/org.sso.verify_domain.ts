@@ -43,7 +43,7 @@ async function publishedTxtValues(name: string): Promise<string[]> {
 
 /**
  * verify_sso_domain: mark a provider's domain verified once the DNS TXT
- * record its view names is published (ADR-142).
+ * record its view names is published (ADR-144).
  *
  * The match is exact: the record name is `_oxagen-sso.<domain>` and one of
  * its TXT values must equal `oxagen-sso-verification=<token>`. A miss is a
@@ -62,7 +62,7 @@ export const orgSsoVerifyDomainHandler: CapabilityHandler<
     { ...ctx, userId: actorUserId },
     { org: ["Owner", "Admin"] },
   );
-  // Setting SSO up is part of the Enterprise plan (ADR-142).
+  // Setting SSO up is part of the Enterprise plan (ADR-144).
   await requireSsoEntitlement(ctx);
 
   // tenancy: the provider is read by providerId and filtered by orgId =

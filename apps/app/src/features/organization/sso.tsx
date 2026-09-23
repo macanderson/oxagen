@@ -1,4 +1,4 @@
-// Organization › Single sign-on (ADR-142): the organisation's OIDC and SAML
+// Organization › Single sign-on (ADR-144): the organisation's OIDC and SAML
 // identity providers, the DNS record that proves each one's email domain, the
 // URLs the admin pastes into the identity provider, and whether members must
 // sign in through one.

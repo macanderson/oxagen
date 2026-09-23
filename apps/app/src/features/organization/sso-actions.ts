@@ -1,6 +1,6 @@
 "use server";
 // The writes on Organization › Single sign-on and the IdP group mappings on
-// Roles (ADR-142): register a provider, change it, delete it, prove its
+// Roles (ADR-144): register a provider, change it, delete it, prove its
 // domain, require SSO, and replace a provider's group-to-role table. All are
 // organisation-scoped, `noBillingGate`, and Owner-or-Admin in their handler:
 // anyone else is answered `denied` with nothing changed.

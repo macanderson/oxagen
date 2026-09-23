@@ -110,7 +110,7 @@ export const authClient: ReturnType<typeof createAuthClient> & PluginActions =
         },
       }),
       // ssoClient exposes authClient.signIn.sso for enterprise single sign-on
-      // (the server plugin is registered in auth.ts, ADR-142).
+      // (the server plugin is registered in auth.ts, ADR-144).
       ssoClient(),
     ],
   }) as unknown as ReturnType<typeof createAuthClient> & PluginActions;

@@ -32,59 +32,31 @@ const WORDS = {
     repository_not_installed: "repositoryNotInstalled",
     main_repo_claimed: "mainRepoClaimed",
     repository_linked_elsewhere: "repositoryLinkedElsewhere",
+    // Deleting a provider another admin already removed (ADR-144).
+    sso_provider_not_found: "ssoProviderNotFound",
   },
 } as const;
 
 export function useActionFailure(): (failure: ActionFailure) => string {
   const t = useTranslations("organization.actions.failure");
   return (failure) => {
-    switch (failure.reason) {
-      case "denied":
-      case "not_found":
-      case "conflict":
-        switch (failure.code) {
-          case "org_role_required":
-            return t("orgRoleRequired");
-          case "no_principal":
-            return t("noPrincipal");
-          case "delegation_ceiling_exceeded":
-            return t("delegationCeiling");
-          case "role_exists":
-            return t("roleExists");
-          case "role_not_found":
-            return t("roleNotFound");
-          case "role_in_use":
-            return t("roleInUse");
-          case "system_role_readonly":
-            return t("systemRoleReadonly");
-          case "slug_taken":
-            return t("slugTaken");
-          case "workspace_not_found":
-            return t("workspaceNotFound");
-          case "already_archived":
-            return t("alreadyArchived");
-          case "workspace_has_agents":
-            return t("workspaceHasAgents");
-          // The five ways `create_workspace` can refuse the main repository
-          // (MC spec §10.1): the org never connected GitHub, the App is not on
-          // that owner, the installation cannot see the repository, another
-          // workspace already steers by it, or another workspace has linked it.
-          case "github_not_authorized":
-            return t("githubNotAuthorized");
-          case "installation_unreachable":
-            return t("installationUnreachable");
-          case "repository_not_installed":
-            return t("repositoryNotInstalled");
-          case "main_repo_claimed":
-            return t("mainRepoClaimed");
-          case "repository_linked_elsewhere":
-            return t("repositoryLinkedElsewhere");
-          // Deleting a provider another admin already removed (ADR-142).
-          case "sso_provider_not_found":
-            return t("ssoProviderNotFound");
-          default:
-            return t("refused", { code: failure.code });
-        }
+    // A main repository the action could not split into `owner/name`, or
+    // one whose owner or name the contract's GitHub-shaped schema refused,
+    // is named as such: "refused as invalid" would leave the one field a
+    // person has to fix unnamed. The field, not only the code, says so.
+    if (
+      failure.reason === "invalid" &&
+      (failure.code === "repository_unparsable" ||
+        failure.field?.startsWith("mainRepo") === true)
+    ) {
+      return t("repositoryUnparsable");
+    }
+    const reading = readFailure(WORDS, failure);
+    switch (reading.kind) {
+      case "named":
+        return t(reading.key);
+      case "refused":
+        return t("refused", { code: reading.code });
       case "invalid":
         return t("invalid");
       case "pendingApproval":

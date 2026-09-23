@@ -128,7 +128,7 @@ export const routes = {
   modelFunding: (org: string): SafePath => pathOf(org, "model-funding"),
   /**
    * Organization › Single sign-on: the organisation's identity providers,
-   * their domain proofs, and whether SSO is required (ADR-142).
+   * their domain proofs, and whether SSO is required (ADR-144).
    */
   sso: (org: string): SafePath => pathOf(org, "sso"),
   /** Fleet; `cursor` opens a later page of its runs table. */
