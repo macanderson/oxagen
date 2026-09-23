@@ -28,19 +28,21 @@ export function EnrichmentSwitch({
           type="checkbox"
           checked={enabled}
           disabled={!canEdit || pending}
-          onChange={async (event) => {
+          onChange={(event) => {
             const next = event.target.checked;
             setPending(true);
             setFailure(null);
-            try {
-              const result = await setRunEnrichment(org, ws, next);
-              if (result.ok) navigate.refresh();
-              else setFailure(failureText(result));
-            } catch {
-              setFailure(failureText(UNANSWERED));
-            } finally {
-              setPending(false);
-            }
+            void (async () => {
+              try {
+                const result = await setRunEnrichment(org, ws, next);
+                if (result.ok) navigate.refresh();
+                else setFailure(failureText(result));
+              } catch {
+                setFailure(failureText(UNANSWERED));
+              } finally {
+                setPending(false);
+              }
+            })();
           }}
         />
         {t("label")}

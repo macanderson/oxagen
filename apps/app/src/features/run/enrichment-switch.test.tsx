@@ -28,9 +28,9 @@ describe("automatic run names and summaries", () => {
   it("writes an explicit false, then rereads server state", async () => {
     show();
     await userEvent.click(screen.getByRole("checkbox"));
-    await waitFor(() =>
-      expect(write).toHaveBeenCalledWith("acme", "core", false),
-    );
+    await waitFor(() => {
+      expect(write).toHaveBeenCalledWith("acme", "core", false);
+    });
     expect(refresh).toHaveBeenCalled();
   });
   it("shows the workspace setting read-only to a member", () => {
