@@ -72,6 +72,8 @@ export interface FakeGauStore {
   settlements: Row[];
   reversals: Row[];
   paymentMethods: Row[];
+  /** billing.gau_ledger (ADR-158): one row per billed governed action. */
+  ledger: Row[];
   log: StatementLog[];
 }
 
@@ -81,11 +83,17 @@ export function makeFakeGauStore(): FakeGauStore {
     settlements: [],
     reversals: [],
     paymentMethods: [],
+    ledger: [],
     log: [],
   };
 }
 
-type TableName = "buckets" | "settlements" | "reversals" | "paymentMethods";
+type TableName =
+  | "buckets"
+  | "settlements"
+  | "reversals"
+  | "paymentMethods"
+  | "ledger";
 
 function columnKeys(table: Parameters<typeof getTableColumns>[0]) {
   return new Map<unknown, string>(
@@ -96,6 +104,7 @@ const bucketKeys = columnKeys(schema.gauBuckets);
 const settlementKeys = columnKeys(schema.gauSettlements);
 const reversalKeys = columnKeys(schema.gauReversals);
 const paymentMethodKeys = columnKeys(schema.paymentMethods);
+const ledgerKeys = columnKeys(schema.gauLedger);
 /** `used_gau` → `usedGau`, for the `excluded.<column>` reference a SET carries. */
 const bucketKeyByName = new Map<string, string>(
   Object.entries(getTableColumns(schema.gauBuckets)).map(([k, c]) => [
@@ -109,6 +118,7 @@ function tableName(table: unknown): TableName {
   if (table === schema.gauSettlements) return "settlements";
   if (table === schema.gauReversals) return "reversals";
   if (table === schema.paymentMethods) return "paymentMethods";
+  if (table === schema.gauLedger) return "ledger";
   throw new Error("fake tx: unexpected table");
 }
 
@@ -207,6 +217,21 @@ function assertChecks(t: TableName, row: Row): void {
       throw new Error(
         "fake tx: violates gau_reversals_pending_consistency_check",
       );
+    }
+    return;
+  }
+  if (t === "ledger") {
+    if (!Number.isInteger(row.units) || (row.units as number) <= 0) {
+      throw new Error("fake tx: violates gau_ledger_units_positive");
+    }
+    if (!["kernel", "tacho", "external_tool"].includes(row.source as string)) {
+      throw new Error("fake tx: violates gau_ledger_source_check");
+    }
+    if (row.capability == null && row.toolName == null) {
+      throw new Error("fake tx: violates gau_ledger_subject_check");
+    }
+    if (typeof row.bucketId !== "string") {
+      throw new Error("fake tx: gau_ledger.bucket_id is NOT NULL");
     }
     return;
   }
@@ -309,6 +334,7 @@ export function fakeGauExecutor(store: FakeGauStore) {
     settlements: store.settlements,
     reversals: store.reversals,
     paymentMethods: store.paymentMethods,
+    ledger: store.ledger,
   };
   const keysFor = (t: TableName) =>
     t === "buckets"
@@ -317,7 +343,85 @@ export function fakeGauExecutor(store: FakeGauStore) {
         ? settlementKeys
         : t === "reversals"
           ? reversalKeys
-          : paymentMethodKeys;
+          : t === "ledger"
+            ? ledgerKeys
+            : paymentMethodKeys;
+
+  /**
+   * `INSERT INTO billing.gau_ledger … VALUES (…), (…) ON CONFLICT (org_id,
+   * idempotency_key) DO NOTHING RETURNING …`. The only statement shape the
+   * ledger writer issues, so it is the only one modelled: a single-row
+   * insert, a bare insert or any other arbiter throws. Two rows with one key
+   * in the same statement raise in Postgres (a command cannot affect a row a
+   * second time), so they raise here too.
+   */
+  const ledgerInsert = (input: Row | Row[]) => {
+    if (!Array.isArray(input)) {
+      throw new Error("fake tx: the ledger writer inserts an array of rows");
+    }
+    const refuse = () => {
+      throw new Error("fake tx: ledger insert must be ON CONFLICT DO NOTHING");
+    };
+    return {
+      returning: refuse,
+      then: refuse,
+      onConflictDoNothing: (conflict: { target: unknown }) => {
+        const target = Array.isArray(conflict.target)
+          ? conflict.target
+          : [conflict.target];
+        if (
+          target.length !== 2 ||
+          target[0] !== schema.gauLedger.orgId ||
+          target[1] !== schema.gauLedger.idempotencyKey
+        ) {
+          throw new Error(
+            "fake tx: ledger arbiter is not (org_id, idempotency_key)",
+          );
+        }
+        const run = (): Row[] => {
+          const keys = new Set<string>();
+          for (const v of input) {
+            const k = `${v.orgId as string}|${v.idempotencyKey as string}`;
+            if (keys.has(k)) {
+              throw new Error(
+                "fake tx: ON CONFLICT DO UPDATE command cannot affect row a second time",
+              );
+            }
+            keys.add(k);
+          }
+          const out: Row[] = [];
+          for (const v of input) {
+            const dup = store.ledger.some(
+              (r) =>
+                r.orgId === v.orgId && r.idempotencyKey === v.idempotencyKey,
+            );
+            store.log.push({ op: "insert", table: "ledger", values: v });
+            if (dup) continue;
+            const row: Row = { id: crypto.randomUUID(), ...v };
+            assertChecks("ledger", row);
+            store.ledger.push(row);
+            out.push(row);
+          }
+          return out;
+        };
+        return {
+          returning: (cols?: Record<string, unknown>) =>
+            Promise.resolve(
+              run().map((row) => {
+                if (!cols) return { ...row };
+                const o: Row = {};
+                for (const [alias, col] of Object.entries(cols)) {
+                  o[alias] = valueOf(row, col, ledgerKeys);
+                }
+                return o;
+              }),
+            ),
+          then: <R>(onFulfilled: (v: Row[]) => R) =>
+            Promise.resolve(run()).then(onFulfilled),
+        };
+      },
+    };
+  };
 
   return {
     query: {
@@ -391,8 +495,15 @@ export function fakeGauExecutor(store: FakeGauStore) {
     }),
 
     insert: (table: unknown) => ({
-      values: (v: Row) => {
+      values: (input: Row | Row[]) => {
         const t = tableName(table);
+        if (t === "ledger") return ledgerInsert(input);
+        if (Array.isArray(input)) {
+          throw new Error(
+            "fake tx: multi-row insert is modelled only for the ledger",
+          );
+        }
+        const v = input;
         const insertRow = (): Row => {
           const row: Row = {
             id: crypto.randomUUID(),

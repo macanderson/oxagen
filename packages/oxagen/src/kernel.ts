@@ -15,6 +15,7 @@ import { getCapability, listCapabilities } from "./registry";
 import { pluginForContract } from "./plugins/registry";
 import { runInTenantScope, runWithPrincipal } from "@oxagen/tenancy";
 import { AsyncLocalStorage } from "node:async_hooks";
+import { randomUUID } from "node:crypto";
 import { trace, SpanStatusCode, SpanKind } from "@opentelemetry/api";
 
 // Matches runInTenantScope's own uuid guard: we only enter a tenant scope when
@@ -110,6 +111,28 @@ export interface GovernedActionRecord {
   runId: string | null;
   requestId: string;
   /**
+   * The agent that acted: the agent-run's agent (`agt_…`), or the deployed
+   * agent a pre-run invocation acts as. Null for a person or an API key.
+   */
+  agentId: string | null;
+  /**
+   * The human the action is attributed to: the person who started the agent's
+   * run, the person a deployed-agent invocation is authorised by, or the
+   * signed-in user. Null for machine-to-machine traffic with no delegator.
+   */
+  operatorUserId: string | null;
+  /**
+   * The model's tool-call id when this invocation answers an agent's tool call
+   * (`CapabilityContext.toolCallId`). Null otherwise.
+   */
+  toolCallId: string | null;
+  /**
+   * The key the ledger deduplicates on (ADR-158). Derived from the tool-call
+   * id or the lifecycle idempotency key when the invocation has one, so a
+   * retried tool call bills once; otherwise unique to this invocation.
+   */
+  idempotencyKey: string;
+  /**
    * Governed actions this invocation is worth. One for every contract that
    * does not declare a `meter` block; see {@link CapabilityDeclaration.meter}
    * for the bulk-write case. Always >= 1.
@@ -201,6 +224,46 @@ export function governedActionUnits(
   const raw = (output as Record<string, unknown>)[meter.unitsFrom];
   if (typeof raw !== "number" || !Number.isFinite(raw) || raw <= 0) return 1;
   return Math.max(1, Math.ceil(raw / per));
+}
+
+/**
+ * The ledger's dedup key for one kernel invocation (ADR-158).
+ *
+ * A retry must bill once, so the key is taken from whatever names the logical
+ * action rather than the attempt at it:
+ *
+ *   - a tool call: the model's tool-call id, qualified by the run or turn it
+ *     belongs to, because a provider's id is unique within a conversation and
+ *     promised nothing beyond it;
+ *   - a lifecycle execution: its idempotency key, which the caller already
+ *     guarantees is stable across redeliveries.
+ *
+ * Anything else has no stable name for its logical action, so the key is
+ * unique to this invocation and nothing is deduplicated. That is the
+ * pre-ledger behaviour, and it is the safe direction: a shared key would
+ * silently drop a second, distinct action.
+ */
+export function governedActionIdempotencyKey(
+  capability: string,
+  ctx: Pick<
+    CapabilityContext,
+    "toolCallId" | "runId" | "executionStepId" | "messageId" | "agentRun"
+  >,
+  opts: Pick<InvokeOptions, "runId" | "execution">,
+): string {
+  if (ctx.toolCallId) {
+    const scope =
+      opts.runId ??
+      ctx.runId ??
+      ctx.agentRun?.runId ??
+      ctx.executionStepId ??
+      ctx.messageId ??
+      "-";
+    return `kernel:tool:${scope}:${ctx.toolCallId}`;
+  }
+  const lifecycleKey = opts.execution?.idempotencyKey;
+  if (lifecycleKey) return `kernel:lifecycle:${capability}:${lifecycleKey}`;
+  return `kernel:inv:${randomUUID()}`;
 }
 
 // ── Budget admission gate (injected at bootstrap) ────────────────────────────
@@ -1790,8 +1853,22 @@ async function _invokeCoreInner(
       principalId: actingPrincipal?.id ?? null,
       principalKind: actingPrincipal?.kind ?? null,
       userId: ctx.userId,
-      runId: ctx.executionStepId ?? null,
+      runId:
+        opts.runId ??
+        ctx.runId ??
+        ctx.agentRun?.runId ??
+        ctx.executionStepId ??
+        null,
       requestId: ctx.requestId,
+      agentId:
+        ctx.agentRun?.agentId ?? ctx.deployedAgentInvocation?.agentId ?? null,
+      operatorUserId:
+        ctx.agentRun?.humanPrincipal?.id ??
+        ctx.deployedAgentInvocation?.initiatingPrincipal.id ??
+        ctx.userId ??
+        null,
+      toolCallId: ctx.toolCallId ?? null,
+      idempotencyKey: governedActionIdempotencyKey(canonical, ctx, opts),
       actions: governedActionUnits(
         (cap as { meter?: { unitsFrom: string; unitsPerAction: number } })
           .meter,

@@ -104,7 +104,9 @@ const {
   RETENTION_USD_PER_GB_MONTH,
   actionPeriodStart,
   recordGovernedAction,
+  recordGovernedActions,
 } = await import("./action-metering");
+const { governedActionEntry } = await import("./gau-ledger");
 const { logger } = await import("./logger");
 
 let store: FakeGauStore;
@@ -358,16 +360,136 @@ describe("recordGovernedAction", () => {
     expect(mocks.readOrgBillingSettings).toHaveBeenCalledWith(ORG);
   });
 
-  it("runs the debit on the transaction withTenantDb opened for it, as one upsert", async () => {
+  it("runs the debit on the transaction withTenantDb opened for it: the bucket lock, the ledger row, the debit", async () => {
     await record(1);
-    const upsert = store.log.find((s) => s.op === "upsert");
-    expect(upsert).toMatchObject({
+    const writes = store.log
+      .filter((s) => s.op !== "select")
+      .map((s) => `${s.op}:${s.table}`);
+    expect(writes).toEqual([
+      "upsert:buckets",
+      "insert:ledger",
+      "update:buckets",
+    ]);
+    // The upsert only creates or locks the row; the debit is the UPDATE that
+    // adds exactly the units that landed on the ledger.
+    expect(store.log.find((s) => s.op === "upsert")).toMatchObject({
       table: "buckets",
-      values: { orgId: ORG, usedGau: 1, purchasedGau: 0 },
+      values: { orgId: ORG, usedGau: 0, purchasedGau: 0 },
     });
     // The debit is the one tenant transaction a prepaid org inside its
     // allowance opens; nothing else on the recorder path writes.
     expect(txs).toHaveLength(1);
+  });
+
+  // ── ADR-158: the ledger ──────────────────────────────────────────────────
+
+  it("writes one ledger row per action, on the bucket it debited, with the entry's attribution", async () => {
+    const result = await recordGovernedAction({
+      orgId: ORG,
+      actions: 2,
+      capability: "resolve_approval",
+      runId: "arun_1",
+      entry: governedActionEntry({
+        idempotencyKey: "kernel:tool:arun_1:call_1",
+        source: "kernel",
+        units: 2,
+        occurredAt: NOW,
+        capability: "resolve_approval",
+        surface: "agent",
+        workspaceId: "00000000-0000-0000-0000-0000000000b1",
+        agentId: "agt_1",
+        operatorUserId: "usr_1",
+        runId: "arun_1",
+        toolCallId: "call_1",
+      }),
+      now: NOW,
+    });
+    expect(store.ledger).toHaveLength(1);
+    expect(store.ledger[0]).toMatchObject({
+      orgId: ORG,
+      bucketId: result.bucket.id,
+      idempotencyKey: "kernel:tool:arun_1:call_1",
+      source: "kernel",
+      capability: "resolve_approval",
+      attributedWorkspaceId: "00000000-0000-0000-0000-0000000000b1",
+      agentId: "agt_1",
+      operatorUserId: "usr_1",
+      runId: "arun_1",
+      toolCallId: "call_1",
+      units: 2,
+      billedAt: NOW,
+    });
+    expect(result.billedUnits).toBe(2);
+    expect(result.bucket.usedGau).toBe(2);
+  });
+
+  it("bills a retried action once: the second call finds its key and debits nothing", async () => {
+    const entry = governedActionEntry({
+      idempotencyKey: "kernel:tool:arun_1:call_1",
+      source: "kernel",
+      units: 1,
+      occurredAt: NOW,
+      capability: "resolve_approval",
+    });
+    const args = {
+      orgId: ORG,
+      actions: 1,
+      capability: "resolve_approval",
+      entry,
+      now: NOW,
+    };
+    await recordGovernedAction(args);
+    const retry = await recordGovernedAction(args);
+    expect(retry.billedUnits).toBe(0);
+    expect(retry.duplicates).toBe(1);
+    expect(retry.bucket.usedGau).toBe(1);
+    expect(store.ledger).toHaveLength(1);
+  });
+
+  it("the bucket's used_gau equals the sum of its ledger rows across a batch with a duplicate", async () => {
+    const at = (key: string, units: number) =>
+      governedActionEntry({
+        idempotencyKey: key,
+        source: "tacho",
+        units,
+        occurredAt: NOW,
+        toolName: "Bash",
+      });
+    await recordGovernedActions({
+      orgId: ORG,
+      entries: [at("tacho:s1:t1", 1), at("tacho:s1:t2", 1)],
+      label: "tacho:tool_calls",
+      now: NOW,
+    });
+    const second = await recordGovernedActions({
+      orgId: ORG,
+      // t2 is a re-sent tool call; t3 is new; t3 twice in one batch is one.
+      entries: [
+        at("tacho:s1:t2", 1),
+        at("tacho:s1:t3", 1),
+        at("tacho:s1:t3", 1),
+      ],
+      label: "tacho:tool_calls",
+      now: NOW,
+    });
+    expect(second.billedUnits).toBe(1);
+    expect(second.duplicates).toBe(2);
+    const sum = store.ledger.reduce((n, r) => n + (r.units as number), 0);
+    expect(sum).toBe(3);
+    expect(store.buckets[0]?.usedGau).toBe(sum);
+  });
+
+  it("a call with no entry still writes a ledger row, with a key unique to the call", async () => {
+    await record(1);
+    await record(1);
+    expect(store.ledger).toHaveLength(2);
+    expect(store.ledger[0]?.idempotencyKey).not.toBe(
+      store.ledger[1]?.idempotencyKey,
+    );
+    expect(store.ledger[0]).toMatchObject({
+      source: "kernel",
+      capability: "resolve_approval",
+    });
   });
 
   it("uses the subscription's period from periodFor, not the calendar month", async () => {
@@ -427,7 +549,8 @@ describe("recordGovernedAction", () => {
       topupSeq: 0,
     });
     expect(mocks.readDefaultPaymentMethod).toHaveBeenCalledWith(ORG);
-    expect(store.log.filter((s) => s.op === "update")).toHaveLength(0);
+    // The one UPDATE is the debit itself; no claim touched the bucket.
+    expect(store.log.filter((s) => s.op === "update")).toHaveLength(1);
     expect(mocks.billingProvider).not.toHaveBeenCalled();
   });
 
@@ -476,8 +599,10 @@ describe("recordGovernedAction", () => {
     const ops = store.log
       .filter((s) => s.op !== "select")
       .map((s) => `${s.op}:${s.table}`);
-    expect(ops.slice(0, 3)).toEqual([
+    expect(ops.slice(0, 5)).toEqual([
       "upsert:buckets",
+      "insert:ledger",
+      "update:buckets",
       "update:buckets",
       "insert:settlements",
     ]);

@@ -43,6 +43,7 @@ export {
   type GauSubscriptionPeriod,
 } from "./contract-terms";
 export * from "./gau-bucket";
+export * from "./gau-ledger";
 export * from "./gau-reversals";
 export * from "./gau-settlements";
 export * from "./plan-allowance";

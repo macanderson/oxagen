@@ -24,18 +24,23 @@
  * docs/specs/governed-action-metering.md §4.
  */
 
+import { randomUUID } from "node:crypto";
 import { withTenantDb } from "@oxagen/database";
 import type { PlanTier } from "@oxagen/oxagen/types";
 import { readOrgBillingSettings } from "./billing-settings";
 import { resolveGauEntitlement } from "./contract-terms";
 import { ensureStripeCustomer } from "./customers";
 import {
-  ensureCurrentBucket,
   periodFor,
   remainingGau,
   uninvoicedGau,
   type GauBucketRow,
 } from "./gau-bucket";
+import {
+  debitWithLedger,
+  governedActionEntry,
+  type GovernedActionEntry,
+} from "./gau-ledger";
 import {
   claimAutoTopup,
   claimInterimInvoice,
@@ -218,6 +223,13 @@ export interface RecordActionArgs {
   capability: string;
   /** The run this action belongs to. Metadata only, never a billing unit. */
   runId?: string | null;
+  /**
+   * The ledger row for this action (ADR-158). Absent only for a caller that
+   * predates the ledger; the recorder then writes a row with the capability
+   * and run it was given and a key unique to this call, so nothing is
+   * deduplicated and nothing goes unrecorded.
+   */
+  entry?: GovernedActionEntry;
   now?: Date;
 }
 
@@ -228,6 +240,10 @@ export interface RecordActionResult {
   remainingGau: number;
   /** The organisation's billing mode at the time of the debit. */
   mode: "prepaid" | "invoice";
+  /** Units this call added to the bucket: 0 when every entry was already on the ledger. */
+  billedUnits: number;
+  /** Entries whose idempotency key was already on the ledger. */
+  duplicates: number;
   /** The auto top-up episode this action claimed, as claimed, or null when none was. */
   autoTopup: GauSettlementRow | null;
   /** The interim invoice this action's threshold crossing claimed, as claimed, or null. */
@@ -237,12 +253,51 @@ export interface RecordActionResult {
 /**
  * Record one governed action (or a batch of them, for a contract that declares
  * a `meter` block) against the organisation's month bucket
- * (ARCHITECTURE.md §3.9 item 8).
+ * (ARCHITECTURE.md §3.9 item 8). The single-action form of
+ * {@link recordGovernedActions}, kept for the kernel recorder.
+ */
+export async function recordGovernedAction(
+  args: RecordActionArgs,
+): Promise<RecordActionResult> {
+  const now = args.now ?? new Date();
+  const actions = Math.max(1, Math.floor(args.actions));
+  const entry =
+    args.entry ??
+    governedActionEntry({
+      idempotencyKey: `kernel:inv:${randomUUID()}`,
+      source: "kernel",
+      units: actions,
+      occurredAt: now,
+      capability: args.capability,
+      runId: args.runId ?? null,
+    });
+  return recordGovernedActions({
+    orgId: args.orgId,
+    entries: [{ ...entry, units: actions }],
+    now,
+    label: args.capability,
+  });
+}
+
+export interface RecordActionsArgs {
+  orgId: string;
+  /** The actions to record. Duplicates of rows already on the ledger bill nothing. */
+  entries: readonly GovernedActionEntry[];
+  /** Logged: the capability, or a summary such as `tacho:tool_calls`. */
+  label: string;
+  now?: Date;
+}
+
+/**
+ * Record governed actions against the organisation's month bucket and its
+ * ledger (ADR-055, ADR-158).
  *
  *   a. Resolve the terms, the settings and the period.
- *   b. Debit: `ensureCurrentBucket(tx, …)` — the lazy create and the debit as
- *      one upsert in its own transaction, so the count lands whatever happens
- *      after it. The returned row is the input to c.
+ *   b. Debit: `debitWithLedger` writes one `billing.gau_ledger` row per entry
+ *      that is not already there and adds exactly those units to the month
+ *      bucket, in one transaction of its own, so the count lands whatever
+ *      happens after it. Duplicates — a retried tool call, a re-sent Tacho
+ *      batch — insert nothing and debit nothing.
  *   c. Prepaid, at `remaining ≤ 0`, with auto top-up on and a saved default
  *      card: claim at most one auto top-up episode (`claimAutoTopup`, its own
  *      transaction, committed before any provider call), then run the
@@ -256,17 +311,19 @@ export interface RecordActionResult {
  *      same sequence for the customer `ensureStripeCustomer` resolves,
  *      collected from the org's default card or emailed when it has none.
  *
- * Runs inside the tenant scope the kernel re-entered for it. The kernel calls
- * it once per completed top-level governed invocation and catches anything it
- * throws, so the debit runs exactly once per invocation; everything after the
- * debit is caught here so a claim that fails cannot surface as a broken
- * request whose work is already done.
+ * Steps c and d run only when this call billed something: when every entry was
+ * a duplicate, the call that first recorded them already ran them.
+ *
+ * Runs inside the tenant scope of its caller. Everything after the debit is
+ * caught here so a claim that fails cannot surface as a broken request whose
+ * work is already done; the debit itself throws, so a caller that can retry
+ * (a Tacho batch the host will re-send) can, and the ledger makes the retry
+ * safe.
  */
-export async function recordGovernedAction(
-  args: RecordActionArgs,
+export async function recordGovernedActions(
+  args: RecordActionsArgs,
 ): Promise<RecordActionResult> {
   const start = Date.now();
-  const actions = Math.max(1, Math.floor(args.actions));
   const now = args.now ?? new Date();
 
   // a. Resolve.
@@ -279,13 +336,13 @@ export async function recordGovernedAction(
     : "prepaid";
   const period = periodFor(subscription, now);
 
-  // b. Debit, one statement.
-  const bucket = await withTenantDb((tx) =>
-    ensureCurrentBucket(tx, args.orgId, {
+  // b. Debit and itemise, one transaction.
+  const { bucket, billedUnits, duplicates } = await withTenantDb((tx) =>
+    debitWithLedger(tx, args.orgId, {
       period,
       terms,
-      usedDelta: actions,
-      purchasedDelta: 0,
+      entries: args.entries,
+      billedAt: now,
     }),
   );
   const remaining = remainingGau(bucket);
@@ -293,6 +350,19 @@ export async function recordGovernedAction(
   let autoTopup: GauSettlementRow | null = null;
   let interimInvoice: GauSettlementRow | null = null;
   try {
+    if (billedUnits === 0) {
+      // Every entry was already on the ledger; the call that recorded them
+      // ran the settlement steps.
+      return {
+        bucket,
+        remainingGau: remaining,
+        mode,
+        billedUnits,
+        duplicates,
+        autoTopup,
+        interimInvoice,
+      };
+    }
     // c. Prepaid: at most one auto top-up episode at a time.
     if (mode === "prepaid" && remaining <= 0 && settings.autoTopupEnabled) {
       const card = await readDefaultPaymentMethod(args.orgId);
@@ -339,8 +409,8 @@ export async function recordGovernedAction(
     logger.error(
       {
         orgId: args.orgId,
-        capability: args.capability,
-        actions,
+        label: args.label,
+        billedUnits,
         bucketId: bucket.id,
         remainingGau: remaining,
         mode,
@@ -353,8 +423,10 @@ export async function recordGovernedAction(
   logger.info(
     {
       orgId: args.orgId,
-      capability: args.capability,
-      actions,
+      label: args.label,
+      entries: args.entries.length,
+      billedUnits,
+      duplicates,
       bucketId: bucket.id,
       periodStart: period.start.toISOString(),
       includedGau: bucket.includedGau,
@@ -367,11 +439,18 @@ export async function recordGovernedAction(
       termsSource: terms.source,
       autoTopupSettlementId: autoTopup?.id ?? null,
       interimInvoiceSettlementId: interimInvoice?.id ?? null,
-      runId: args.runId ?? null,
       durationMs: Date.now() - start,
     },
     "billing: governed action recorded",
   );
 
-  return { bucket, remainingGau: remaining, mode, autoTopup, interimInvoice };
+  return {
+    bucket,
+    remainingGau: remaining,
+    mode,
+    billedUnits,
+    duplicates,
+    autoTopup,
+    interimInvoice,
+  };
 }

@@ -1167,6 +1167,210 @@ export const gauReversals = billingSchema.table(
   }),
 );
 
+// ── gau_ledger ───────────────────────────────────────────────────────────────
+//
+// ADR-158: one row per billed governed action, written in the same
+// transaction that adds its units to the month bucket's `used_gau`. The bucket
+// is the balance the gate reads; this is the itemisation behind it, so a
+// statement or an invoice line can be cited down to the agent, the operator
+// and the tool call, and `SUM(units)` over a bucket's rows equals the units
+// the ledger added to that bucket.
+//
+// `idempotency_key` is what makes a retried action bill once: the insert is
+// `ON CONFLICT (org_id, idempotency_key) DO NOTHING`, and only the rows that
+// actually inserted are debited. Keys are namespaced by source
+// (`kernel:…`, `tacho:…`, `tool:…`), built in gau-ledger.ts.
+//
+// The attribution columns are recorded facts, not tenancy keys. The workspace
+// is `attributed_workspace_id` rather than `workspace_id` on purpose: this is
+// an org-wide money record, read whole for a statement, and a `workspace_id`
+// column would make it a workspace-scoped RLS table that hides rows from the
+// organisation's own billing reads.
+//
+// No updated_* columns: append-only. No public_id (reached through a
+// statement, never addressed on its own).
+export const gauLedger = billingSchema.table(
+  "gau_ledger",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    // FK → org.organizations.id. No cascade: a money record holds its
+    // organization in place, as gau_settlements does.
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id),
+    // FK → billing.gau_buckets.id: the month bucket these units were added to.
+    bucketId: uuid("bucket_id")
+      .notNull()
+      .references(() => gauBuckets.id),
+    idempotencyKey: text("idempotency_key").notNull(),
+    // CHECK: source IN ('kernel','tacho','external_tool').
+    //   kernel        — a top-level kernel invoke() (ADR-052 §3.1)
+    //   tacho         — a tool call a wrapped harness made and Tacho allowed
+    //   external_tool — an external MCP tool call Oxagen authorised
+    source: text("source").notNull(),
+    /** Canonical capability name, for a kernel action. */
+    capability: text("capability"),
+    /** The tool the agent called, for a tool-call action (`Bash`, `mcp__github__…`). */
+    toolName: text("tool_name"),
+    /** The MCP server behind the tool, when the tool is an MCP tool. */
+    mcpServer: text("mcp_server"),
+    /** api, mcp, app, agent, runner or tacho. */
+    surface: text("surface"),
+    /** claude-code, codex, cursor or stella, for a wrapped-harness tool call. */
+    harness: text("harness"),
+    attributedWorkspaceId: uuid("attributed_workspace_id"),
+    /** Agent public id (agt_…) or the Tacho agent key. */
+    agentId: text("agent_id"),
+    /** The IAM principal that acted. */
+    principalId: text("principal_id"),
+    principalKind: text("principal_kind"),
+    /** The human operator the action is attributed to. */
+    operatorUserId: text("operator_user_id"),
+    runId: text("run_id"),
+    /** Tacho session uuid, for a wrapped-harness tool call. */
+    sessionId: text("session_id"),
+    /** The model's tool-call id, or the harness's tool-use id. */
+    toolCallId: text("tool_call_id"),
+    requestId: text("request_id"),
+    units: integer("units").notNull(),
+    /** When the action happened, as its source reported it. */
+    occurredAt: timestamp("occurred_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    /**
+     * When the units were added to the bucket. Statements select on this, so a
+     * statement and the invoices for the same period count the same units: a
+     * tool call recorded on the 1st for an event on the 31st debits the new
+     * month's bucket, and appears on the new month's statement.
+     */
+    billedAt: timestamp("billed_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    // The dedup arbiter.
+    orgIdempotencyIdx: uniqueIndex("gau_ledger_org_idempotency_idx").on(
+      t.orgId,
+      t.idempotencyKey,
+    ),
+    // Statements: WHERE org_id AND billed_at in [from, to).
+    orgBilledIdx: index("gau_ledger_org_billed_idx").on(t.orgId, t.billedAt),
+    // Reconciliation against the bucket.
+    bucketIdx: index("gau_ledger_bucket_idx").on(t.bucketId),
+    sourceCheck: check(
+      "gau_ledger_source_check",
+      sql`${t.source} IN ('kernel','tacho','external_tool')`,
+    ),
+    unitsCheck: check("gau_ledger_units_positive", sql`${t.units} > 0`),
+    // Every row names what was billed.
+    subjectCheck: check(
+      "gau_ledger_subject_check",
+      sql`${t.capability} IS NOT NULL OR ${t.toolName} IS NOT NULL`,
+    ),
+  }),
+);
+
+// ── prepaid_orders ───────────────────────────────────────────────────────────
+//
+// ADR-158: an enterprise order paid in advance on a Stripe invoice. One order
+// can carry up to three lines: the platform licence for a period, prepaid
+// governed action units, and prepaid usage credits for the in-app assistant.
+// A platform operator issues it (`issue_prepaid_invoice`, platformOnly); the
+// units and the credits are granted when the invoice is paid, or when it is
+// issued for an order marked `grant_on = 'issue'`. `units_granted_at` and
+// `credits_granted_at` are the grant's idempotency fence.
+//
+// No public_id (internal; the invoice number is the customer-facing reference).
+export const prepaidOrders = billingSchema.table(
+  "prepaid_orders",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    // FK → org.organizations.id. No cascade: a money record.
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id),
+    /** The signed agreement this order is under, printed on the invoice. */
+    agreementRef: text("agreement_ref"),
+    /** The customer's purchase order number, printed on the invoice. */
+    poNumber: text("po_number"),
+    currency: text("currency").notNull().default("usd"),
+    licenceCents: bigint("licence_cents", { mode: "number" })
+      .notNull()
+      .default(sql`0`),
+    licencePeriodStart: timestamp("licence_period_start", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    licencePeriodEnd: timestamp("licence_period_end", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    gauQuantity: bigint("gau_quantity", { mode: "number" })
+      .notNull()
+      .default(sql`0`),
+    /** The contracted rate the units are sold at, recorded at issue. */
+    ratePerGauMicros: bigint("rate_per_gau_micros", { mode: "bigint" })
+      .notNull()
+      .default(sql`0`),
+    creditCents: bigint("credit_cents", { mode: "number" })
+      .notNull()
+      .default(sql`0`),
+    // CHECK: grant_on IN ('paid','issue').
+    grantOn: text("grant_on").notNull().default("paid"),
+    // CHECK: status IN ('draft','open','paid','void','uncollectible').
+    status: text("status").notNull().default("draft"),
+    daysUntilDue: integer("days_until_due").notNull().default(30),
+    memo: text("memo"),
+    stripeInvoiceId: text("stripe_invoice_id"),
+    /** The bucket the prepaid units were added to. */
+    grantedBucketId: uuid("granted_bucket_id").references(() => gauBuckets.id),
+    unitsGrantedAt: timestamp("units_granted_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    creditsGrantedAt: timestamp("credits_granted_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    /** The operator run's request id (createPlatformOperatorContext). */
+    issuedByRequestId: text("issued_by_request_id"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    paidAt: timestamp("paid_at", { withTimezone: true, mode: "date" }),
+  },
+  (t) => ({
+    stripeInvoiceIdx: uniqueIndex("prepaid_orders_stripe_invoice_idx")
+      .on(t.stripeInvoiceId)
+      .where(sql`${t.stripeInvoiceId} IS NOT NULL`),
+    orgCreatedIdx: index("prepaid_orders_org_created_idx").on(
+      t.orgId,
+      t.createdAt,
+    ),
+    statusCheck: check(
+      "prepaid_orders_status_check",
+      sql`${t.status} IN ('draft','open','paid','void','uncollectible')`,
+    ),
+    grantOnCheck: check(
+      "prepaid_orders_grant_on_check",
+      sql`${t.grantOn} IN ('paid','issue')`,
+    ),
+    amountsCheck: check(
+      "prepaid_orders_amounts_check",
+      sql`${t.licenceCents} >= 0 AND ${t.gauQuantity} >= 0 AND ${t.ratePerGauMicros} >= 0 AND ${t.creditCents} >= 0 AND ${t.licenceCents} + ${t.gauQuantity} + ${t.creditCents} > 0 AND (${t.gauQuantity} * ${t.ratePerGauMicros}) % 10000 = 0 AND ${t.daysUntilDue} BETWEEN 0 AND 365`,
+    ),
+    // A licence line names its period; a period with no licence line is noise.
+    licencePeriodCheck: check(
+      "prepaid_orders_licence_period_check",
+      sql`(${t.licencePeriodStart} IS NULL) = (${t.licencePeriodEnd} IS NULL) AND (${t.licencePeriodEnd} IS NULL OR ${t.licencePeriodEnd} > ${t.licencePeriodStart}) AND (${t.licenceCents} = 0 OR ${t.licencePeriodStart} IS NOT NULL)`,
+    ),
+  }),
+);
+
 /** Delivery and settlement state for one provider operation. Not an analytics store. */
 export const usageOutbox = billingSchema.table(
   "usage_outbox",
