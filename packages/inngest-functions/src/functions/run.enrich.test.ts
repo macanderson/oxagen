@@ -3,6 +3,7 @@ import { digestBytes } from "@oxagen/tacho";
 import { tachoFrame } from "@oxagen/run-ledger";
 const state = vi.hoisted(() => ({
   enabled: true,
+  readable: true,
   digest: null as string | null,
   writes: [] as Record<string, unknown>[],
   call: vi.fn(),
@@ -41,12 +42,14 @@ vi.mock("@oxagen/database", async (original) => {
               limit: async () =>
                 table === actual.schema.workspaces
                   ? [{ settings: { runEnrichmentEnabled: state.enabled } }]
-                  : [
-                      {
-                        digest: state.digest,
-                        name: state.digest ? "Prior account" : null,
-                      },
-                    ],
+                  : !state.readable
+                    ? []
+                    : [
+                        {
+                          digest: state.digest,
+                          name: state.digest ? "Prior account" : null,
+                        },
+                      ],
             }),
           }),
         }),
@@ -125,8 +128,10 @@ const run = () =>
   });
 beforeEach(() => {
   state.enabled = true;
+  state.readable = true;
   state.digest = null;
   state.writes = [];
+  state.bodies.clear();
   state.call.mockReset();
   state.call.mockResolvedValue({
     text: JSON.stringify({
@@ -165,4 +170,24 @@ it("registers enrichment under the adapter limits and serializes each organizati
   expect(config.batchEvents?.maxSize).toBeLessThanOrEqual(5);
   expect(config.concurrency).toEqual({ limit: 1, key: "event.data.orgId" });
   expect(config.batchEvents?.key).toContain("event.data.runPublicId");
+});
+
+it("does not charge for queued child sessions or legacy rows absent from the readable selection", async () => {
+  state.readable = false;
+  expect(await run()).toEqual({ status: "not_found" });
+  expect(state.call).not.toHaveBeenCalled();
+  expect(state.bodies.size).toBe(0);
+});
+
+it("uses root Tacho and V2 ledger predicates for enrichment eligibility", async () => {
+  const { readableEnrichmentRun } = await import("./run.enrich");
+  const { schema } = await import("@oxagen/database");
+  const { PgDialect } = await import("drizzle-orm/pg-core");
+  const dialect = new PgDialect();
+  expect(
+    dialect.sqlToQuery(readableEnrichmentRun(schema.tachoSessions)).sql,
+  ).toContain('"parent_session_uuid" is null');
+  const ledger = dialect.sqlToQuery(readableEnrichmentRun(schema.agentRuns));
+  expect(ledger.sql).toContain('"spec_version" =');
+  expect(ledger.params).toEqual([2]);
 });

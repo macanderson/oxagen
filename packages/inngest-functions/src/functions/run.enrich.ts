@@ -26,6 +26,15 @@ const narrativeSchema = z.object({
   summary: z.string().trim().min(1).max(1600),
 });
 
+/** Match the root-session and V2 predicates used by get_run. */
+export function readableEnrichmentRun(
+  table: typeof schema.tachoSessions | typeof schema.agentRuns,
+) {
+  return table === schema.tachoSessions
+    ? isNull(schema.tachoSessions.parentSessionUuid)
+    : eq(schema.agentRuns.specVersion, 2);
+}
+
 export const [runEnrich] = createFunction(
   {
     id: "run.enrich",
@@ -49,6 +58,7 @@ export const [runEnrich] = createFunction(
       ? schema.tachoSessions
       : schema.agentRuns;
     const where = and(
+      readableEnrichmentRun(table),
       eq(table.orgId, scope.orgId),
       eq(table.workspaceId, scope.workspaceId),
       eq(table.publicId, data.runPublicId),
@@ -99,18 +109,19 @@ export const [runEnrich] = createFunction(
     }
     const collected = await step.run("read-record", () =>
       inScope(async () => {
-        const record = await resolveRunRecord(scope, data.runPublicId);
-        if (!record) return null;
-        const frames = await readRunFrames(scope, record);
-        const transcript = await collectRunText(scope, frames, (s, ref) =>
-          evidenceStore().getBody(s, ref),
-        );
         const [previous] = await withTenantDb((tx) =>
           tx
             .select({ digest: table.summaryInputDigest, name: table.name })
             .from(table)
             .where(where)
             .limit(1),
+        );
+        if (!previous) return null;
+        const record = await resolveRunRecord(scope, data.runPublicId);
+        if (!record) return null;
+        const frames = await readRunFrames(scope, record);
+        const transcript = await collectRunText(scope, frames, (s, ref) =>
+          evidenceStore().getBody(s, ref),
         );
         const { chunks, ...facts } = transcript;
         const refs: string[] = [];
@@ -254,14 +265,17 @@ export const [runEnrichmentSweep] = createFunction(
               })
               .from(table)
               .where(
-                or(
-                  isNull(table.summaryObservedAt),
-                  gt(table.updatedAt, table.summaryObservedAt),
-                  and(
-                    like(table.summaryInputDigest, "partial:%"),
-                    lt(
-                      table.summaryObservedAt,
-                      new Date(Date.now() - 5 * 60_000),
+                and(
+                  readableEnrichmentRun(table),
+                  or(
+                    isNull(table.summaryObservedAt),
+                    gt(table.updatedAt, table.summaryObservedAt),
+                    and(
+                      like(table.summaryInputDigest, "partial:%"),
+                      lt(
+                        table.summaryObservedAt,
+                        new Date(Date.now() - 5 * 60_000),
+                      ),
                     ),
                   ),
                 ),
