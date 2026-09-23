@@ -212,6 +212,24 @@ function Stat({ stat }: { stat: RunOutputNode["stat"] }) {
   );
 }
 
+/**
+ * React keys that stay unique when two items share a label: the label plus
+ * how many times it appeared before. A key on the label alone merges the
+ * repeats; a key on the array index is what the lint rule refuses.
+ */
+function keyedByOccurrence<T>(
+  items: readonly T[],
+  label: (item: T) => string,
+): { item: T; key: string }[] {
+  const seen = new Map<string, number>();
+  return items.map((item) => {
+    const base = label(item);
+    const n = seen.get(base) ?? 0;
+    seen.set(base, n + 1);
+    return { item, key: `${base}#${n}` };
+  });
+}
+
 function Node({ node, place }: { node: RunOutputNode; place: Place }) {
   const t = useTranslations("run.outputs");
   const soft = node.kind === "would";
@@ -300,14 +318,16 @@ function ReadMark({
       />
       <span className="min-w-0 flex-1">
         {t("readMark")}{" "}
-        {shown.map((name, i) => (
-          // Keyed by position: two reads of one path are two reads, and a
-          // key on the name would collapse them into one.
-          <span key={i}>
-            {i === 0 ? null : ", "}
-            <b className={`${mono} font-medium break-all`}>{name}</b>
-          </span>
-        ))}
+        {keyedByOccurrence(shown, (name) => name).map(
+          ({ item: name, key }, i) => (
+            // Two reads of one path are two reads, so the key carries how
+            // many times the name appeared before it.
+            <span key={key}>
+              {i === 0 ? null : ", "}
+              <b className={`${mono} font-medium break-all`}>{name}</b>
+            </span>
+          ),
+        )}
         {rest > 0 ? (
           <>
             {" "}
@@ -351,10 +371,13 @@ function NodeGroup({
   return (
     <li>
       <ol className="flex flex-col">
-        {items.map((node, i) => (
-          // Keyed by position: two changes to one path with no seq are two
-          // rows, and a key on the name would merge them.
-          <Node key={i} node={node} place={place} />
+        {keyedByOccurrence(
+          items,
+          (node) => `${node.kind}:${node.seq ?? "none"}:${node.name}`,
+        ).map(({ item: node, key }) => (
+          // Two changes to one path with no seq are two rows, so the key
+          // carries how many times that identity appeared before it.
+          <Node key={key} node={node} place={place} />
         ))}
         {group.items.length > FOLD_OVER ? (
           <li className="flex items-baseline gap-3 border-l-2 border-dotted border-border py-1.5 pl-3 text-xs text-muted-foreground">

@@ -117,7 +117,7 @@ describe("AgentKillSwitch", () => {
     expect(screen.queryByTestId("agent-kill-switch-dialog")).toBeNull();
   });
 
-  it("draws the switch disabled with the reason for a viewer below Owner or Admin (negative)", async () => {
+  it("draws the switch disabled with the reason for a viewer below Owner or Admin (negative)", () => {
     renderSwitch("acme.core.release-bot", "member");
     expect(screen.getByRole("button", { name: "Kill switch" })).toBeDisabled();
     expect(screen.getByTestId("agent-kill-switch-no-role")).toHaveTextContent(
@@ -126,7 +126,7 @@ describe("AgentKillSwitch", () => {
     expect(pauseAgent).not.toHaveBeenCalled();
   });
 
-  it("offers the switch to an Admin", async () => {
+  it("offers the switch to an Admin", () => {
     renderSwitch("acme.core.release-bot", "admin");
     expect(screen.getByRole("button", { name: "Kill switch" })).toBeEnabled();
     expect(screen.queryByTestId("agent-kill-switch-no-role")).toBeNull();
