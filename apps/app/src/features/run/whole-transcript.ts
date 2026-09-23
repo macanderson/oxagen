@@ -23,7 +23,7 @@ import type { WsCtx } from "@/server/viewer";
  * contract's frame cap (10,000), so a run the read can fold at all is read to
  * its end, and a run past it stops here and says so.
  */
-export const WHOLE_TRANSCRIPT_PAGES = 50;
+const WHOLE_TRANSCRIPT_PAGES = 50;
 
 /**
  * Whether a transcript holds the whole run: the read folded every frame

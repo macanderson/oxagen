@@ -10,11 +10,7 @@ import { readError, readOk, type Read } from "@/data/read";
 import { WsCtx } from "@/server/viewer";
 import { unsafeMint } from "@/server/viewer.testing";
 import { runTranscript, transcriptEntry } from "./run.builders";
-import {
-  isWhole,
-  readWholeTranscript,
-  WHOLE_TRANSCRIPT_PAGES,
-} from "./whole-transcript";
+import { isWhole, readWholeTranscript } from "./whole-transcript";
 
 const ctx = unsafeMint(WsCtx, {
   userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
@@ -72,7 +68,9 @@ describe("readWholeTranscript", () => {
       readOk(page(0, TRANSCRIPT_ENTRY_DEFAULT, "more")),
     );
     const read = await readWholeTranscript(source, ctx, "tse_1", "steps");
-    expect(transcript).toHaveBeenCalledTimes(WHOLE_TRANSCRIPT_PAGES);
+    // The reader's page bound: the contract's 10,000-frame cap at the default
+    // page size.
+    expect(transcript).toHaveBeenCalledTimes(50);
     expect(read.ok && isWhole(read.value)).toBe(false);
   });
 
