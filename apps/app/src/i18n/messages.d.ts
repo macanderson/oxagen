@@ -4235,12 +4235,20 @@ type Messages = {
         workspace: string;
         organization: string;
       };
+      waiting: string;
+      foot: {
+        connected: string;
+        offline: string;
+        reachable: string;
+        notBacked: string;
+      };
     };
     nav: {
       fleet: string;
       agents: string;
       tools: string;
       steering: string;
+      runtimes: string;
       repositories: string;
       spend: string;
       organization: string;
@@ -4265,6 +4273,11 @@ type Messages = {
       search: string;
       searchShortcut: string;
       userMenu: string;
+      notifications: string;
+      notificationsUnread: string;
+      unread: string;
+      approvals: string;
+      approvalsWaiting: string;
     };
     userMenu: {
       profile: string;
@@ -4305,6 +4318,23 @@ type Messages = {
       };
       more: string;
       waiting: string;
+      incidents: string;
+      tileWaiting: string;
+      sub: {
+        steering: string;
+        runtimes: string;
+        repositories: string;
+        organization: string;
+        billing: string;
+        audit: string;
+      };
+      assistant: string;
+      assistantSub: string;
+      search: string;
+      searchSub: string;
+      notifications: string;
+      notificationsSub: string;
+      account: string;
     };
     drawer: {
       title: string;
@@ -4482,6 +4512,37 @@ type Messages = {
       denied: string;
       failed: string;
       photoPlaceholder: string;
+    };
+    approvals: {
+      title: string;
+      waiting: string;
+      close: string;
+      waitingOnYou: string;
+      resolvedToday: string;
+      openApproval: string;
+      expired: string;
+      resolution: {
+        approved: string;
+        denied: string;
+        expired: string;
+      };
+      all: string;
+      gone: string;
+      empty: string;
+      emptyDetail: string;
+      rowNotBacked: string;
+      truncated: string;
+      note: string;
+    };
+    notifications: {
+      title: string;
+      footer: string;
+      markAll: string;
+      markDenied: string;
+      markFailed: string;
+      empty: string;
+      noWorkspace: string;
+      unread: string;
     };
   };
   skills: {

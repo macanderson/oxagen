@@ -28,7 +28,7 @@ import { phoneWidth } from "@/test/phone";
 import en from "../../../messages/en.json";
 import shellMessages from "../../../messages/shell.json";
 import uiMessages from "../../../messages/ui.json";
-import { shellData } from "./shell.builders";
+import { approvalItem, shellData, shellWorkspace } from "./shell.builders";
 import { ShellClient } from "./shell-client";
 import type { ShellData } from "./shell-data";
 
@@ -175,29 +175,68 @@ describe("thumb bar", () => {
     );
   });
 
-  it("counts the approvals waiting on the Fleet slot and nowhere else", () => {
-    renderPhone(shellData({ fleetWaiting: 3 }));
+  const waitingIn = (count: number) =>
+    shellData({
+      approvals: {
+        workspaces: [
+          shellWorkspace({
+            pending: readOk({
+              items: Array.from({ length: count }, (_, i) =>
+                approvalItem({ id: `apr_0${String(i)}` }),
+              ),
+              more: false,
+            }),
+          }),
+        ],
+        truncated: false,
+        readAt: 0,
+      },
+    });
+
+  it("counts the approvals waiting in this workspace on the Fleet slot and nowhere else", () => {
+    renderPhone(waitingIn(3));
     const [fleet, ...rest] = slots();
     expect(fleet).toHaveAccessibleName("Fleet, 3 approvals waiting");
     expect(fleet?.querySelector("[data-count]")).toHaveAttribute(
       "data-count",
       "3",
     );
-    // Agents, Tools and Spend point at NotRecorded pages; More holds no waiting work in rev1.
+    // More carries Audit's critical incidents, which no store records yet.
     for (const slot of rest)
       expect(slot.querySelector("[data-count]")).toBeNull();
   });
 
-  it.each([0, null])(
-    "shows no count when %s approvals wait or the count is not read (negative)",
-    (fleetWaiting) => {
-      renderPhone(shellData({ fleetWaiting }));
-      expect(
-        screen.getByTestId("mobile-nav").querySelector("[data-count]"),
-      ).toBeNull();
-      expect(slots()[0]).toHaveAccessibleName("Fleet");
-    },
-  );
+  it("shows no count when nothing waits (negative)", () => {
+    renderPhone(waitingIn(0));
+    expect(
+      screen.getByTestId("mobile-nav").querySelector("[data-count]"),
+    ).toBeNull();
+    expect(slots()[0]).toHaveAccessibleName("Fleet");
+  });
+
+  it("shows no count when the workspace's queue could not be read, never a zero (negative)", () => {
+    renderPhone(
+      shellData({
+        approvals: {
+          workspaces: [
+            shellWorkspace({
+              pending: {
+                ok: false,
+                reason: "error",
+                code: "run_index_unavailable",
+                status: 503,
+              },
+            }),
+          ],
+          truncated: false,
+          readAt: 0,
+        },
+      }),
+    );
+    expect(
+      screen.getByTestId("mobile-nav").querySelector("[data-count]"),
+    ).toBeNull();
+  });
 
   it.each([
     ["/acme/core-platform", "fleet"],
@@ -206,6 +245,7 @@ describe("thumb bar", () => {
     ["/acme/core-platform/tools", "tools"],
     ["/acme/core-platform/spend", "spend"],
     ["/acme/core-platform/steering", "more"],
+    ["/acme/core-platform/runtimes", "more"],
     ["/acme/core-platform/repositories", "more"],
     ["/acme/billing", "more"],
     ["/acme/api-keys", "more"],
@@ -230,13 +270,15 @@ describe("thumb bar", () => {
     expect(
       within(sheet)
         .getAllByRole("link")
-        .map((l) => l.textContent),
+        .map((l) => l.querySelector("b")?.textContent),
     ).toEqual(["Organization", "Billing", "Audit"]);
+    // With no workspace there is none to switch to.
+    expect(within(sheet).queryByTestId("more-switch-ws")).toBeNull();
   });
 });
 
 describe("More sheet", () => {
-  it("rises as a bottom sheet carrying Steering, Repositories, Organization, Billing and Audit", async () => {
+  it("rises as a bottom sheet carrying Steering, Runtimes, Repositories, Organization, Billing and Audit, each with its line", async () => {
     const user = userEvent.setup();
     renderPhone(shellData());
     const more = screen.getByRole("button", { name: "More" });
@@ -246,11 +288,21 @@ describe("More sheet", () => {
     expect(more).toHaveAttribute("aria-expanded", "true");
     const links = within(sheet).getAllByRole("link");
     expect(links.map((l) => [l.textContent, l.getAttribute("href")])).toEqual([
-      ["Steering", "/acme/core-platform/steering"],
-      ["Repositories", "/acme/core-platform/repositories"],
-      ["Organization", "/acme"],
-      ["Billing", "/acme/billing"],
-      ["Audit", "/acme/audit"],
+      [
+        "Steeringlibrary, assignments, gates, proposals, compiler",
+        "/acme/core-platform/steering",
+      ],
+      [
+        "Runtimeshosts, harnesses, hooks, tiers",
+        "/acme/core-platform/runtimes",
+      ],
+      [
+        "Repositoriesbindings, working copies, changes",
+        "/acme/core-platform/repositories",
+      ],
+      ["Organizationpeople, workspaces, funding", "/acme"],
+      ["Billingplan, meters, invoices", "/acme/billing"],
+      ["Auditevents, incidents, holds", "/acme/audit"],
     ]);
     for (const link of links) expect(style(link).minHeight).toBe("44px");
 
@@ -267,10 +319,60 @@ describe("More sheet", () => {
     expect(style(close).minHeight).toBe("44px");
     expect(document.querySelector("[data-scrim]")).not.toBeNull();
 
-    await user.click(within(sheet).getByRole("link", { name: "Billing" }));
+    await user.click(within(sheet).getByRole("link", { name: /^Billing/ }));
     await waitFor(() => {
       expect(screen.queryByRole("dialog", { name: "More" })).toBeNull();
     });
+  });
+
+  it("carries the assistant, search, notifications, the account and both switchers", async () => {
+    const user = userEvent.setup();
+    renderPhone(shellData());
+    await user.click(screen.getByRole("button", { name: "More" }));
+    const sheet = await screen.findByRole("dialog", { name: "More" });
+    expect(
+      [
+        "more-assistant",
+        "more-search",
+        "more-notifications",
+        "more-account",
+        "more-switch-org",
+        "more-switch-ws",
+      ].map((id) => within(sheet).getByTestId(id).textContent),
+    ).toEqual([
+      "Assistantask about a run, or change something",
+      "Searchor run an action",
+      "Notifications0 unread",
+      "AccountMarcus Bell",
+      "Switch organizationAcme Robotics",
+      "Switch workspaceCore platform",
+    ]);
+    for (const id of ["more-search", "more-switch-ws"])
+      expect(style(within(sheet).getByTestId(id)).minHeight).toBe("44px");
+  });
+
+  it("closes itself before opening the dialog a tile names, so two sheets never stack", async () => {
+    const user = userEvent.setup();
+    renderPhone(shellData());
+    await user.click(screen.getByRole("button", { name: "More" }));
+    let sheet = await screen.findByRole("dialog", { name: "More" });
+    await user.click(within(sheet).getByTestId("more-switch-ws"));
+    const switcher = await screen.findByRole("dialog", {
+      name: "Switch workspace",
+    });
+    expect(
+      within(switcher).getByRole("link", { name: /Core platform/ }),
+    ).toHaveAttribute("aria-current", "true");
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "More" })).toBeNull();
+    });
+    await user.click(within(switcher).getByRole("button", { name: "Close" }));
+    await user.click(screen.getByRole("button", { name: "More" }));
+    sheet = await screen.findByRole("dialog", { name: "More" });
+    await user.click(within(sheet).getByTestId("more-notifications"));
+    expect(
+      await screen.findByRole("dialog", { name: "Notifications" }),
+    ).toBeInTheDocument();
   });
 
   it("closes from its footer button", async () => {
@@ -289,14 +391,16 @@ describe("the other dialogs on a phone", () => {
   it("the command menu rises as a sheet and its input is 16 px", async () => {
     const user = userEvent.setup();
     renderPhone(shellData());
-    await user.click(screen.getByRole("button", { name: "Go to a page" }));
+    await user.click(
+      screen.getByRole("button", { name: "Search or run an action" }),
+    );
     const menu = await screen.findByTestId("command-menu");
     expect(menu).toHaveAttribute("data-sheet");
     expect(menu.querySelector("[data-sheet-handle]")).not.toBeNull();
     expect(style(within(menu).getByRole("combobox")).fontSize).toBe("16px");
   });
 
-  it("the drawer opens over a scrim with the sidebar's eight links", async () => {
+  it("the drawer opens over a scrim with the sidebar's ten links", async () => {
     const user = userEvent.setup();
     renderPhone(shellData());
     expect(document.querySelector("[data-scrim]")).toBeNull();
@@ -307,7 +411,7 @@ describe("the other dialogs on a phone", () => {
       within(drawer)
         .getByRole("navigation", { name: "Main" })
         .querySelectorAll("a"),
-    ).toHaveLength(9);
+    ).toHaveLength(10);
   });
 
   // The rail that carries the launcher is `hidden md:flex`, so without this a

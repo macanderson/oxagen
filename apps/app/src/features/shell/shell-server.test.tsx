@@ -6,13 +6,16 @@ import { isValidElement, type ReactElement, type ReactNode, use } from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import shellMessages from "../../../messages/shell.json";
-import { shellData } from "./shell.builders";
+import { approvalItem, shellData, shellWorkspace } from "./shell.builders";
 import type { ShellData } from "./shell-data";
 
-const { shellSource } = vi.hoisted(() => ({
-  shellSource: vi.fn(() => Promise.resolve(shellData())),
+const { shellSource, ApprovalsPanel } = vi.hoisted(() => ({
+  shellSource: vi.fn(),
+  ApprovalsPanel: vi.fn((_props: unknown) => null),
 }));
 vi.mock("./source", () => ({ shellSource }));
+// The card is the Fleet lane's; the chrome only renders it once per parked call.
+vi.mock("@/features/fleet", () => ({ ApprovalsPanel }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 
@@ -43,6 +46,10 @@ afterEach(async () => {
 
 describe("ShellChrome", () => {
   it("hands the client shell what the source read for the layout's context", async () => {
+    shellSource.mockResolvedValue({
+      data: shellData(),
+      cards: { mandates: new Map() },
+    });
     const { ShellChrome } = await import("./shell-chrome");
     const { OrgCtx } = await import("@/server/viewer");
     const { unsafeMint } = await import("@/server/viewer.testing");
@@ -55,7 +62,12 @@ describe("ShellChrome", () => {
     });
     const source = {
       pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
-      shell: { context: vi.fn(), preferences: vi.fn() },
+      shell: {
+        context: vi.fn(),
+        preferences: vi.fn(),
+        counts: vi.fn(),
+        notifications: vi.fn(),
+      },
       billing: {
         plan: vi.fn(),
         usageCredits: vi.fn(),
@@ -72,7 +84,11 @@ describe("ShellChrome", () => {
         chain: vi.fn(),
         outputs: vi.fn(),
       },
-      approvals: { pending: vi.fn(), resolved: vi.fn() },
+      approvals: {
+        pending: vi.fn(),
+        resolved: vi.fn(),
+        resolvedSince: vi.fn(),
+      },
       agents: {
         list: vi.fn(),
         get: vi.fn(),
@@ -135,6 +151,50 @@ describe("ShellChrome", () => {
     expect(isValidElement(element.props.children)).toBe(true);
     expect(element.props.children.props.data).toEqual(shellData());
     expect(shellSource).toHaveBeenCalledWith(ctx, source);
+  });
+
+  it("renders the Fleet lane's card once per parked call, with that workspace's mandates", async () => {
+    const { ShellChrome } = await import("./shell-chrome");
+    const { OrgCtx } = await import("@/server/viewer");
+    const { unsafeMint } = await import("@/server/viewer.testing");
+    const { readOk } = await import("@/data/read");
+    const mandates = new Map([["mnd_7K2ETQ4", { id: "mnd_7K2ETQ4" }]]);
+    const item = approvalItem({ mandateId: "mnd_7K2ETQ4" });
+    shellSource.mockResolvedValue({
+      data: shellData({
+        approvals: {
+          workspaces: [
+            shellWorkspace({
+              slug: "finops",
+              name: "FinOps",
+              pending: readOk({ items: [item], more: false }),
+            }),
+          ],
+          truncated: false,
+          readAt: 1,
+        },
+      }),
+      cards: { mandates: new Map([["finops", mandates]]) },
+    });
+    const ctx = unsafeMint(OrgCtx, {
+      userId: "usr_marcusbell",
+      orgId: "7a000000-0000-4000-8000-0000000000a1",
+      orgSlug: "acme",
+      orgName: "Acme Robotics",
+      orgRole: "owner",
+    });
+    const element: ReactElement<{
+      children: ReactElement<{ cards: Record<string, ReactElement> }>;
+    }> = await ShellChrome({ ctx, source: {} as never });
+    const cards = element.props.children.props.cards;
+    expect(Object.keys(cards)).toEqual([item.id]);
+    expect(cards[item.id]?.props).toMatchObject({
+      approvals: readOk({ items: [item], more: false }),
+      mandates,
+      now: 1,
+      org: "acme",
+      ws: "finops",
+    });
   });
 });
 

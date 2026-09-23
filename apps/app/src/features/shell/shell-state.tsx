@@ -11,6 +11,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { subscribeApprovals } from "@/shared/approvals-drawer";
 import type { Theme } from "./theme";
 import { useTheme } from "./use-theme";
 
@@ -24,6 +25,12 @@ export const ACCOUNT_TABS = [
 export type AccountTab = (typeof ACCOUNT_TABS)[number];
 
 type ShellState = {
+  /** The approvals drawer (`#apdrawer`), opened from the topbar or by a page through `openApprovals()`. */
+  approvalsOpen: boolean;
+  setApprovalsOpen: (open: boolean) => void;
+  /** The notifications dialog behind the bell. */
+  notificationsOpen: boolean;
+  setNotificationsOpen: (open: boolean) => void;
   commandOpen: boolean;
   setCommandOpen: (open: boolean) => void;
   drawerOpen: boolean;
@@ -71,6 +78,17 @@ function isCommandShortcut(
 }
 
 export function ShellStateProvider({ children }: { children: ReactNode }) {
+  const [approvalsOpen, setApprovalsOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  // A page opens the drawer through `@/shared/approvals-drawer` (Fleet's
+  // "Waiting on a human" tile), because a page never imports the shell.
+  useEffect(
+    () =>
+      subscribeApprovals(() => {
+        setApprovalsOpen(true);
+      }),
+    [],
+  );
   const [commandOpen, setCommandOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
@@ -106,6 +124,10 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<ShellState>(
     () => ({
+      approvalsOpen,
+      setApprovalsOpen,
+      notificationsOpen,
+      setNotificationsOpen,
       commandOpen,
       setCommandOpen,
       drawerOpen,
@@ -125,6 +147,8 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
       themeRevision,
     }),
     [
+      approvalsOpen,
+      notificationsOpen,
       commandOpen,
       drawerOpen,
       accountOpen,

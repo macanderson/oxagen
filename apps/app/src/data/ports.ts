@@ -53,6 +53,8 @@ import type {
 import type { RunPage } from "./contracts/runs";
 import type {
   OrgChoice,
+  NavCounts,
+  NotificationFeed,
   ShellContext,
   ViewerPreferences,
   WorkspaceChoice,
@@ -118,6 +120,17 @@ export interface DataSource {
      * features/shell/viewer-clock.tsx and features/audit/filters.ts.
      */
     preferences(ctx: OrgCtx): Promise<Read<ViewerPreferences>>;
+    /**
+     * get_nav_counts, what waits on a person in one workspace: the sidebar's
+     * Fleet, Steering and Audit counts and the topbar's approvals badge;
+     * caller: features/shell/activity-actions.ts.
+     */
+    counts(ctx: WsCtx): Promise<Read<NavCounts>>;
+    /**
+     * list_notifications, the viewer's newest rows and the unread count the
+     * bell's dot reads; caller: features/shell/activity-actions.ts.
+     */
+    notifications(ctx: WsCtx): Promise<Read<NotificationFeed>>;
   };
   /**
    * The Billing page's five noBillingGate reads, each Owner, Admin or Billing
@@ -207,6 +220,15 @@ export interface DataSource {
       ctx: WsCtx,
       q: { runId: string },
     ): Promise<Read<ResolvedApprovalItem[]>>;
+    /**
+     * list_resolved_approvals since an instant, one page: the approvals
+     * drawer's "N resolved today" (mockup `apdBody()`), with `more` set when
+     * the page did not reach the end; caller: features/shell/activity-actions.ts.
+     */
+    resolvedSince(
+      ctx: WsCtx,
+      q: { since: string },
+    ): Promise<Read<{ items: ResolvedApprovalItem[]; more: boolean }>>;
   };
   /**
    * The Agents pages (#2956), each read by the agent's public id or slug:

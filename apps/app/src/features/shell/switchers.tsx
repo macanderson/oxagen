@@ -33,6 +33,76 @@ function Tile({ text, mono }: { text: string; mono?: boolean }) {
   );
 }
 
+/** The dialog a switcher opens: what `shell.context` read, the current choice marked. */
+export function SwitcherDialog({
+  title,
+  testId,
+  current,
+  choices,
+  open,
+  onOpenChange,
+}: {
+  title: string;
+  testId: string;
+  current: string;
+  choices: Read<Choice[]>;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const t = useTranslations("shell.switcher");
+  return (
+    <SheetDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={title}
+      testId={`${testId}-dialog`}
+    >
+      {choices.ok ? (
+        <ul className="flex flex-col gap-1">
+          {choices.value.map((choice) => {
+            const isCurrent = choice.slug === current;
+            return (
+              <li key={choice.slug}>
+                <SafeLink
+                  to={choice.href}
+                  data-touch-target=""
+                  aria-current={isCurrent ? "true" : undefined}
+                  onClick={() => {
+                    onOpenChange(false);
+                  }}
+                  className="flex items-center gap-3 rounded-md px-3 py-2 hover:bg-accent hover:text-accent-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                >
+                  <span className="min-w-0 flex-1">
+                    <b className="block truncate text-sm font-semibold">
+                      {choice.name}
+                    </b>
+                    <span className="block truncate font-mono text-[11px] text-muted-foreground">
+                      {choice.slug}
+                    </span>
+                  </span>
+                  {isCurrent ? (
+                    <span className="text-xs text-muted-foreground">
+                      {t("current")}
+                    </span>
+                  ) : null}
+                </SafeLink>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p
+          role="status"
+          data-read={choices.reason}
+          className="text-sm text-muted-foreground"
+        >
+          {choices.reason === "denied" ? t("denied") : t("unavailable")}
+        </p>
+      )}
+    </SheetDialog>
+  );
+}
+
 function Switcher({
   title,
   testId,
@@ -46,7 +116,6 @@ function Switcher({
   choices: Read<Choice[]>;
   children: ReactNode;
 }) {
-  const t = useTranslations("shell.switcher");
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -67,63 +136,22 @@ function Switcher({
           className="size-3.5 flex-none text-muted-foreground"
         />
       </button>
-      <SheetDialog
+      <SwitcherDialog
+        title={title}
+        testId={testId}
+        current={current}
+        choices={choices}
         open={open}
         onOpenChange={setOpen}
-        title={title}
-        testId={`${testId}-dialog`}
-      >
-        {choices.ok ? (
-          <ul className="flex flex-col gap-1">
-            {choices.value.map((choice) => {
-              const isCurrent = choice.slug === current;
-              return (
-                <li key={choice.slug}>
-                  <SafeLink
-                    to={choice.href}
-                    data-touch-target=""
-                    aria-current={isCurrent ? "true" : undefined}
-                    onClick={() => {
-                      setOpen(false);
-                    }}
-                    className="flex items-center gap-3 rounded-md px-3 py-2 hover:bg-accent hover:text-accent-foreground focus-visible:outline-2 focus-visible:outline-ring"
-                  >
-                    <span className="min-w-0 flex-1">
-                      <b className="block truncate text-sm font-semibold">
-                        {choice.name}
-                      </b>
-                      <span className="block truncate font-mono text-[11px] text-muted-foreground">
-                        {choice.slug}
-                      </span>
-                    </span>
-                    {isCurrent ? (
-                      <span className="text-xs text-muted-foreground">
-                        {t("current")}
-                      </span>
-                    ) : null}
-                  </SafeLink>
-                </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <p
-            role="status"
-            data-read={choices.reason}
-            className="text-sm text-muted-foreground"
-          >
-            {choices.reason === "denied" ? t("denied") : t("unavailable")}
-          </p>
-        )}
-      </SheetDialog>
+      />
     </>
   );
 }
 
-export function OrgSwitcher({ data }: { data: ShellData }) {
-  const t = useTranslations("shell.switcher");
-  const { org, context } = data;
-  const choices: Read<Choice[]> = context.ok
+/** The organizations the viewer belongs to, each linking to its Organization page. */
+export function orgChoices(data: ShellData): Read<Choice[]> {
+  const { context } = data;
+  return context.ok
     ? {
         ok: true,
         value: context.value.orgs.map((o) => ({
@@ -132,6 +160,26 @@ export function OrgSwitcher({ data }: { data: ShellData }) {
         })),
       }
     : context;
+}
+
+/** The organization's workspaces the viewer belongs to, each linking to its Fleet. */
+export function workspaceChoices(data: ShellData): Read<Choice[]> {
+  const { org, context } = data;
+  return context.ok
+    ? {
+        ok: true,
+        value: context.value.workspaces.map((w) => ({
+          ...w,
+          href: routes.fleet(org.slug, w.slug),
+        })),
+      }
+    : context;
+}
+
+export function OrgSwitcher({ data }: { data: ShellData }) {
+  const t = useTranslations("shell.switcher");
+  const { org } = data;
+  const choices = orgChoices(data);
   return (
     <Switcher
       title={t("org")}
@@ -160,16 +208,7 @@ export function WorkspaceSwitcher({
 }) {
   const t = useTranslations("shell.switcher");
   if (ws === null) return null;
-  const { org, context } = data;
-  const choices: Read<Choice[]> = context.ok
-    ? {
-        ok: true,
-        value: context.value.workspaces.map((w) => ({
-          ...w,
-          href: routes.fleet(org.slug, w.slug),
-        })),
-      }
-    : context;
+  const choices = workspaceChoices(data);
   const name = choices.ok
     ? (choices.value.find((w) => w.slug === ws)?.name ?? ws)
     : ws;

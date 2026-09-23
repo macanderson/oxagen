@@ -10,6 +10,9 @@ export { Landing } from "./landing";
 export { ShellChrome } from "./shell-chrome";
 export { ShellFrame } from "./shell-frame";
 export { ViewerClock } from "./viewer-clock";
+// The workspace layout renders it: the sidebar's counts and the bell's feed for
+// the workspace in the URL, published to the chrome.
+export { ShellWorkspace } from "./workspace-activity";
 // Rendered by a page, not a layout: the record it is showing, so the assistant
 // is asked about what is on screen rather than about what the URL implies.
 export { PageRecord } from "./page-record";

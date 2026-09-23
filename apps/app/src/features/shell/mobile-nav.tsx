@@ -1,38 +1,162 @@
 "use client";
 // The phone shell's navigation (ARCHITECTURE.md §1.2; mockup `mobileNav` and
-// its More sheet): a fixed five-slot thumb bar — Fleet, Agents, Tools, Spend,
-// More — with a count only where something waits on a person, the More sheet
-// carrying the rest of the sidebar, and the drawer the top bar's menu button
-// opens over a scrim. The Agents, Tools and Spend slots point at NotRecorded
-// pages for the whole of rev1 and are kept deliberately: the bar is the phone's
-// only navigation, and a four-slot bar would change again at every lane.
+// `DLG_EXT.more`): a fixed five-slot thumb bar (Fleet, Agents, Tools, Spend,
+// More) with a count only where something waits on a person, the More sheet
+// carrying the rest of the sidebar, the assistant, search, notifications, the
+// account and the two switchers, and the drawer the top bar's menu button
+// opens over a scrim.
 import { Dialog } from "@base-ui/react/dialog";
-import { Ellipsis, X } from "lucide-react";
+import {
+  ArrowLeftRight,
+  Bell,
+  Building,
+  Ellipsis,
+  type LucideIcon,
+  Search,
+  Sparkles,
+  UserRound,
+  X,
+} from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import {
   isMoreCurrent,
   isNavItemCurrent,
   MORE_SHEET,
   type NavItem,
+  type NavKey,
   THUMB_SLOTS,
 } from "./nav";
 import { NAV_ICONS } from "./nav-icons";
 import type { ShellData } from "./shell-data";
 import { useShellState } from "./shell-state";
-import { AssistantLauncher } from "./assistant-launcher";
-import { SidebarHeader, SidebarNav, useSidebarSections } from "./sidebar";
+import { SidebarFoot, SidebarHeader, SidebarNav } from "./sidebar";
+import { useSidebarSections } from "./sidebar-sections";
+import { orgChoices, SwitcherDialog, workspaceChoices } from "./switchers";
+import { type ShellCounts, useShellCounts } from "./use-activity";
 import { SafeLink } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 
 const slotClass =
   "relative flex min-h-13 flex-col items-center justify-center gap-1 rounded-lg px-1 text-[10.5px] font-semibold focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring aria-[current=page]:text-app-topbar-fg";
 
+/** `.mn .ct.hot`: the slot's count, in the approval ink. */
+function SlotCount({ count, label }: { count: number; label: string }) {
+  return (
+    <span
+      data-count={count}
+      className="absolute left-[calc(50%+6px)] top-0.5 min-w-[18px] rounded-full border border-info/40 bg-app-panel-bg px-1 text-center font-mono text-[10px] text-info"
+    >
+      <span aria-hidden="true">{count}</span>
+      <span className="sr-only">{label}</span>
+    </span>
+  );
+}
+
+/** The keys the More sheet carries, each with its own line under the name. */
+type MoreKey =
+  | "steering"
+  | "runtimes"
+  | "repositories"
+  | "organization"
+  | "billing"
+  | "audit";
+
+function isMoreKey(key: NavKey): key is MoreKey {
+  return (
+    key === "steering" ||
+    key === "runtimes" ||
+    key === "repositories" ||
+    key === "organization" ||
+    key === "billing" ||
+    key === "audit"
+  );
+}
+
+/** What waits in a More tile's page: Steering's proposals and Audit's critical incidents. */
+function tileCount(key: NavKey, counts: ShellCounts): number | null {
+  const value =
+    key === "steering"
+      ? counts.steering
+      : key === "audit"
+        ? counts.audit
+        : null;
+  return value !== null && value > 0 ? value : null;
+}
+
+/** `.mtile`: an icon, a name, one line under it, and a count where something waits. */
+function Tile({
+  icon: Icon,
+  label,
+  sub,
+  count = null,
+  countLabel = "",
+}: {
+  icon: LucideIcon;
+  label: string;
+  sub: string;
+  count?: number | null;
+  countLabel?: string;
+}) {
+  return (
+    <>
+      <span className="grid size-7 flex-none place-items-center rounded-lg border border-border bg-muted text-muted-foreground">
+        <Icon aria-hidden="true" className="size-4" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <b className="block truncate text-sm font-semibold">{label}</b>
+        <span className="block truncate text-xs font-normal text-muted-foreground">
+          {sub}
+        </span>
+      </span>
+      {count === null ? null : (
+        <span className="flex-none rounded-[5px] border border-info/40 px-[5px] font-mono text-[10.5px] text-info">
+          <span aria-hidden="true">{count}</span>
+          <span className="sr-only">{countLabel}</span>
+        </span>
+      )}
+    </>
+  );
+}
+
+const tileClass =
+  "flex min-h-14 w-full items-center gap-2.5 rounded-xl border border-border bg-card px-2.5 py-2 text-left text-card-foreground focus-visible:outline-2 focus-visible:outline-ring";
+
+function TileButton({
+  onClick,
+  testId,
+  children,
+}: {
+  onClick: () => void;
+  testId: string;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      data-touch-target=""
+      data-testid={testId}
+      onClick={onClick}
+      className={tileClass}
+    >
+      {children}
+    </button>
+  );
+}
+
 /** The thumb bar and its More sheet, over the sidebar's items for the current URL. */
 export function ShellMobileNav({ data }: { data: ShellData }) {
   const t = useTranslations("shell");
-  const { sections, pathname } = useSidebarSections(data);
+  const { sections, pathname, ws } = useSidebarSections(data);
+  const counts = useShellCounts(data);
+  const {
+    setCommandOpen,
+    setNotificationsOpen,
+    setAssistantOpen,
+    openAccount,
+  } = useShellState();
   const [moreOpen, setMoreOpen] = useState(false);
+  const [switcher, setSwitcher] = useState<"org" | "ws" | null>(null);
   const items = new Map<string, NavItem>(
     sections.flatMap((s) => s.items).map((item) => [item.key, item]),
   );
@@ -43,11 +167,27 @@ export function ShellMobileNav({ data }: { data: ShellData }) {
   });
   const more = MORE_SHEET.flatMap((key) => {
     const item = items.get(key);
-    return item === undefined ? [] : [item];
+    return item === undefined || !isMoreKey(item.key)
+      ? []
+      : [{ key: item.key, href: item.href }];
   });
   const close = () => {
     setMoreOpen(false);
   };
+  /** Close the sheet, then open what the tile names, so two sheets never stack. */
+  const then = (open: () => void) => () => {
+    close();
+    open();
+  };
+  const unread = counts.feed?.ok ? counts.feed.value.unread : null;
+  const wsName =
+    ws === null
+      ? null
+      : data.context.ok
+        ? (data.context.value.workspaces.find((w) => w.slug === ws)?.name ?? ws)
+        : ws;
+  const moreWaiting =
+    counts.audit !== null && counts.audit > 0 ? counts.audit : null;
   return (
     <>
       <nav
@@ -59,7 +199,7 @@ export function ShellMobileNav({ data }: { data: ShellData }) {
         {slots.map(({ key, href }) => {
           const Icon = NAV_ICONS[key];
           const current = isNavItemCurrent(key, pathname);
-          const waiting = key === "fleet" ? data.fleetWaiting : null;
+          const waiting = key === "fleet" ? counts.fleet : null;
           return (
             <SafeLink
               key={key}
@@ -72,16 +212,11 @@ export function ShellMobileNav({ data }: { data: ShellData }) {
               <Icon aria-hidden="true" className="size-5" />
               <span>{t(`mobileNav.slots.${key}`)}</span>
               {waiting !== null && waiting > 0 ? (
-                <span
-                  data-count={waiting}
-                  className="absolute left-[calc(50%+6px)] top-0.5 min-w-[18px] rounded-full border border-border bg-app-panel-bg px-1 text-center font-mono text-[10px] text-foreground"
-                >
-                  <span aria-hidden="true">{waiting}</span>
-                  <span className="sr-only">
-                    {/* The name reads "Fleet, 3 approvals waiting". */}
-                    {t("mobileNav.waiting", { count: waiting })}
-                  </span>
-                </span>
+                // The name reads "Fleet, 3 approvals waiting".
+                <SlotCount
+                  count={waiting}
+                  label={t("mobileNav.waiting", { count: waiting })}
+                />
               ) : null}
             </SafeLink>
           );
@@ -92,7 +227,9 @@ export function ShellMobileNav({ data }: { data: ShellData }) {
           data-touch-target=""
           aria-haspopup="dialog"
           aria-expanded={moreOpen}
-          aria-current={isMoreCurrent(pathname) ? "page" : undefined}
+          aria-current={
+            isMoreCurrent(pathname) || moreOpen ? "page" : undefined
+          }
           onClick={() => {
             setMoreOpen(true);
           }}
@@ -100,6 +237,12 @@ export function ShellMobileNav({ data }: { data: ShellData }) {
         >
           <Ellipsis aria-hidden="true" className="size-5" />
           <span>{t("mobileNav.more")}</span>
+          {moreWaiting === null ? null : (
+            <SlotCount
+              count={moreWaiting}
+              label={t("mobileNav.incidents", { count: moreWaiting })}
+            />
+          )}
         </button>
       </nav>
       <SheetDialog
@@ -110,7 +253,7 @@ export function ShellMobileNav({ data }: { data: ShellData }) {
       >
         <ul className="grid grid-cols-2 gap-2">
           {more.map((item) => {
-            const Icon = NAV_ICONS[item.key];
+            const count = tileCount(item.key, counts);
             return (
               <li key={item.key}>
                 <SafeLink
@@ -120,25 +263,154 @@ export function ShellMobileNav({ data }: { data: ShellData }) {
                     isNavItemCurrent(item.key, pathname) ? "page" : undefined
                   }
                   onClick={close}
-                  className="flex min-h-14 items-center gap-2.5 rounded-xl border border-border bg-card px-2.5 py-2 text-sm font-semibold text-card-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                  className={tileClass}
                 >
-                  <span className="grid size-7 flex-none place-items-center rounded-lg border border-border bg-muted text-muted-foreground">
-                    <Icon aria-hidden="true" className="size-4" />
-                  </span>
-                  {t(`nav.${item.key}`)}
+                  <Tile
+                    icon={NAV_ICONS[item.key]}
+                    label={t(`nav.${item.key}`)}
+                    sub={t(`mobileNav.sub.${item.key}`)}
+                    count={count}
+                    countLabel={
+                      count === null
+                        ? ""
+                        : t("mobileNav.tileWaiting", { count })
+                    }
+                  />
                 </SafeLink>
               </li>
             );
           })}
         </ul>
+        <hr className="my-3 border-border" />
+        <ul className="grid grid-cols-2 gap-2">
+          <li>
+            <TileButton
+              testId="more-assistant"
+              onClick={then(() => {
+                setAssistantOpen(true);
+              })}
+            >
+              <Tile
+                icon={Sparkles}
+                label={t("mobileNav.assistant")}
+                sub={t("mobileNav.assistantSub")}
+              />
+            </TileButton>
+          </li>
+          <li>
+            <TileButton
+              testId="more-search"
+              onClick={then(() => {
+                setCommandOpen(true);
+              })}
+            >
+              <Tile
+                icon={Search}
+                label={t("mobileNav.search")}
+                sub={t("mobileNav.searchSub")}
+              />
+            </TileButton>
+          </li>
+          <li>
+            <TileButton
+              testId="more-notifications"
+              onClick={then(() => {
+                setNotificationsOpen(true);
+              })}
+            >
+              <Tile
+                icon={Bell}
+                label={t("mobileNav.notifications")}
+                sub={
+                  unread === null
+                    ? t("mobileNav.notificationsSub")
+                    : t("topbar.unread", { count: unread })
+                }
+                count={unread !== null && unread > 0 ? unread : null}
+                countLabel={
+                  unread === null ? "" : t("topbar.unread", { count: unread })
+                }
+              />
+            </TileButton>
+          </li>
+          <li>
+            <TileButton
+              testId="more-account"
+              onClick={then(() => {
+                openAccount("profile");
+              })}
+            >
+              <Tile
+                icon={UserRound}
+                label={t("mobileNav.account")}
+                sub={data.viewer.name ?? data.viewer.email}
+              />
+            </TileButton>
+          </li>
+        </ul>
+        <hr className="my-3 border-border" />
+        <ul className="grid grid-cols-1 gap-2">
+          <li>
+            <TileButton
+              testId="more-switch-org"
+              onClick={then(() => {
+                setSwitcher("org");
+              })}
+            >
+              <Tile
+                icon={Building}
+                label={t("switcher.org")}
+                sub={data.org.name}
+              />
+            </TileButton>
+          </li>
+          {ws === null || wsName === null ? null : (
+            <li>
+              <TileButton
+                testId="more-switch-ws"
+                onClick={then(() => {
+                  setSwitcher("ws");
+                })}
+              >
+                <Tile
+                  icon={ArrowLeftRight}
+                  label={t("switcher.ws")}
+                  sub={wsName}
+                />
+              </TileButton>
+            </li>
+          )}
+        </ul>
       </SheetDialog>
+      <SwitcherDialog
+        title={t("switcher.org")}
+        testId="more-org-switcher"
+        current={data.org.slug}
+        choices={orgChoices(data)}
+        open={switcher === "org"}
+        onOpenChange={(open) => {
+          setSwitcher(open ? "org" : null);
+        }}
+      />
+      {ws === null ? null : (
+        <SwitcherDialog
+          title={t("switcher.ws")}
+          testId="more-workspace-switcher"
+          current={ws}
+          choices={workspaceChoices(data)}
+          open={switcher === "ws"}
+          onOpenChange={(open) => {
+            setSwitcher(open ? "ws" : null);
+          }}
+        />
+      )}
     </>
   );
 }
 
 /**
  * The phone drawer: the whole sidebar over a scrim, opened from the top bar's
- * menu button — the rail's foot included, so the assistant launcher a phone
+ * menu button, the rail's foot included, so the assistant launcher a phone
  * cannot reach in the `hidden md:flex` rail is reachable here (ADR-026).
  */
 export function NavDrawer({ data }: { data: ShellData }) {
@@ -170,9 +442,7 @@ export function NavDrawer({ data }: { data: ShellData }) {
           </div>
           <SidebarHeader data={data} />
           <SidebarNav data={data} onNavigate={close} />
-          <div className="mt-auto px-2.5">
-            <AssistantLauncher onNavigate={close} />
-          </div>
+          <SidebarFoot onNavigate={close} />
         </Dialog.Popup>
       </Dialog.Portal>
     </Dialog.Root>

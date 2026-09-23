@@ -30,7 +30,8 @@ describe("messages/shell.json", () => {
   it("names every nav key", () => {
     for (const key of [...WORKSPACE_NAV, ...ORG_NAV, ...ORG_PAGE_NAV])
       expect(messages.nav).toHaveProperty(key);
-    expect(messages.nav.agents).toBe("Agent IAM");
+    expect(messages.nav.agents).toBe("Agents");
+    expect(messages.nav.runtimes).toBe("Runtimes");
     expect(Object.keys(messages.mobileNav.slots)).toEqual([...THUMB_SLOTS]);
   });
 
@@ -41,14 +42,14 @@ describe("messages/shell.json", () => {
     expect(JSON.stringify(shell)).not.toMatch(/ontology/i);
   });
 
-  it("carries no catalog for the chrome rev1 does not render", () => {
-    // Notifications, nav counts and the command menu's runs, actions and
-    // questions (ARCHITECTURE.md §1.2). The Account dialog and the assistant
-    // are no longer on that list: spec App. F folds the four account pages
-    // into the dialog, and #2968 is the lane that puts the in-app agent back —
-    // both render, and both write (update_profile, ask_assistant).
+  it("carries a catalog only for the chrome that renders", () => {
+    // The command menu's runs and questions stay off the list (ARCHITECTURE.md
+    // §1.2). The Account dialog and the assistant render and write
+    // (update_profile, ask_assistant); the rev1 design put the approvals
+    // drawer and the bell back in the top bar (fleet.md "Shell").
     expect(Object.keys(messages).sort()).toEqual([
       "account",
+      "approvals",
       "assistant",
       "avatar",
       "commands",
@@ -56,6 +57,7 @@ describe("messages/shell.json", () => {
       "loading",
       "mobileNav",
       "nav",
+      "notifications",
       "sidebar",
       "skipToContent",
       "switcher",

@@ -1,13 +1,16 @@
 "use client";
 // The top bar (mockup `topbar()`): phone menu, breadcrumbs, the ⌘K search
-// button and the user menu.
-import { Menu, Search } from "lucide-react";
+// button, the bell, the approvals button left of the avatar, and the user
+// menu. There is no assistant button here: the launcher lives at the foot of
+// the sidebar.
+import { Bell, Menu, Search, ShieldCheck } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Fragment } from "react";
 import { breadcrumbs, parseShellPath } from "./nav";
 import type { ShellData } from "./shell-data";
 import { useShellState } from "./shell-state";
+import { type OrgWaiting, useShellCounts } from "./use-activity";
 import { UserMenu } from "./user-menu";
 import { SafeLink } from "@/ui/navigation";
 
@@ -34,12 +37,15 @@ function Breadcrumbs({ data }: { data: ShellData }) {
           return (
             <Fragment key={`${String(i)}-${label}`}>
               {i > 0 ? (
-                <li aria-hidden="true" className="text-muted-foreground">
+                <li
+                  aria-hidden="true"
+                  className="hidden text-muted-foreground md:block"
+                >
                   /
                 </li>
               ) : null}
               <li
-                className={`truncate ${i < crumbs.length - 2 ? "hidden sm:block" : ""} ${mono ? "font-mono text-[13px]" : ""}`}
+                className={`truncate ${i < crumbs.length - 1 ? "hidden md:block" : ""} ${mono ? "font-mono text-[13px]" : ""}`}
               >
                 {crumb.href === null ? (
                   <span
@@ -65,10 +71,24 @@ function Breadcrumbs({ data }: { data: ShellData }) {
   );
 }
 
+/** The badge text: the count, "99+" past two digits, and "+" when a read stopped short. */
+function waitingText(waiting: OrgWaiting): string {
+  const shown = waiting.count > 99 ? "99+" : String(waiting.count);
+  return waiting.partial && waiting.count <= 99 ? `${shown}+` : shown;
+}
+
 export function Topbar({ data }: { data: ShellData }) {
   const t = useTranslations("shell.topbar");
   const tShell = useTranslations("shell");
-  const { setCommandOpen, setDrawerOpen } = useShellState();
+  const {
+    setCommandOpen,
+    setDrawerOpen,
+    approvalsOpen,
+    setApprovalsOpen,
+    setNotificationsOpen,
+  } = useShellState();
+  const { waiting, feed } = useShellCounts(data);
+  const unread = feed?.ok ? feed.value.unread : null;
   return (
     <header
       aria-label={t("label")}
@@ -108,6 +128,58 @@ export function Topbar({ data }: { data: ShellData }) {
         >
           {t("searchShortcut")}
         </kbd>
+      </button>
+      <button
+        type="button"
+        data-testid="notifications-button"
+        data-touch-target=""
+        aria-haspopup="dialog"
+        aria-label={
+          unread === null
+            ? t("notifications")
+            : t("notificationsUnread", { count: unread })
+        }
+        onClick={() => {
+          setNotificationsOpen(true);
+        }}
+        className={iconButton}
+      >
+        <Bell aria-hidden="true" className="size-4" />
+        {unread !== null && unread > 0 ? (
+          <span
+            aria-hidden="true"
+            data-testid="unread-dot"
+            className="absolute right-1.5 top-1.5 size-[7px] rounded-full border border-app-topbar-bg bg-info"
+          />
+        ) : null}
+      </button>
+      <button
+        type="button"
+        id="apdrawer-button"
+        data-testid="approvals-button"
+        data-touch-target=""
+        aria-controls="apdrawer"
+        aria-pressed={approvalsOpen}
+        aria-label={
+          waiting === null
+            ? t("approvals")
+            : t("approvalsWaiting", { count: waitingText(waiting) })
+        }
+        onClick={() => {
+          setApprovalsOpen(!approvalsOpen);
+        }}
+        className={iconButton}
+      >
+        <ShieldCheck aria-hidden="true" className="size-4" />
+        {waiting !== null && waiting.count > 0 ? (
+          <span
+            aria-hidden="true"
+            data-testid="approvals-count"
+            className="absolute -right-1.5 -top-1.5 min-w-[18px] rounded-full border border-app-topbar-bg bg-info px-1 text-center font-mono text-[10px] font-semibold leading-4 text-info-foreground"
+          >
+            {waitingText(waiting)}
+          </span>
+        ) : null}
       </button>
       <UserMenu data={data} />
     </header>

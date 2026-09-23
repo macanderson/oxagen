@@ -8,13 +8,21 @@
       "sections": {
         "workspace": "Workspace",
         "organization": "Organization"
+      },
+      "waiting": ", {count} waiting",
+      "foot": {
+        "connected": "connected",
+        "offline": "offline",
+        "reachable": "The control plane answered when this page loaded, and the browser is online.",
+        "notBacked": "Agent count and data plane are not recorded for the organization yet."
       }
     },
     "nav": {
       "fleet": "Fleet",
-      "agents": "Agent IAM",
+      "agents": "Agents",
       "tools": "Tools",
       "steering": "Steering",
+      "runtimes": "Runtimes",
       "repositories": "Repositories",
       "spend": "Spend",
       "organization": "Organization",
@@ -36,14 +44,19 @@
       "label": "Top bar",
       "menu": "Open navigation",
       "breadcrumbs": "Breadcrumb",
-      "search": "Go to a page",
+      "search": "Search or run an action",
       "searchShortcut": "⌘K",
-      "userMenu": "User menu for {name}"
+      "userMenu": "User menu for {name}",
+      "notifications": "Notifications",
+      "notificationsUnread": "Notifications, {count} unread",
+      "unread": "{count} unread",
+      "approvals": "Approvals",
+      "approvalsWaiting": "Approvals, {count} waiting"
     },
     "userMenu": {
       "profile": "Account",
       "preferences": "Preferences",
-      "security": "Security and devices",
+      "security": "Security and sessions",
       "privacy": "Privacy and data",
       "switchTheme": "Switch theme",
       "themeNow": "now {theme, select, light {Paper} dark {Ink} other {system}}",
@@ -78,7 +91,24 @@
         "spend": "Spend"
       },
       "more": "More",
-      "waiting": ", {count, plural, one {# approval waiting} other {# approvals waiting}}"
+      "waiting": ", {count, plural, one {# approval waiting} other {# approvals waiting}}",
+      "incidents": ", {count, plural, one {# critical incident open} other {# critical incidents open}}",
+      "tileWaiting": "{count} waiting",
+      "sub": {
+        "steering": "library, assignments, gates, proposals, compiler",
+        "runtimes": "hosts, harnesses, hooks, tiers",
+        "repositories": "bindings, working copies, changes",
+        "organization": "people, workspaces, funding",
+        "billing": "plan, meters, invoices",
+        "audit": "events, incidents, holds"
+      },
+      "assistant": "Assistant",
+      "assistantSub": "ask about a run, or change something",
+      "search": "Search",
+      "searchSub": "or run an action",
+      "notifications": "Notifications",
+      "notificationsSub": "the feed could not be read",
+      "account": "Account"
     },
     "drawer": {
       "title": "Navigation",
@@ -256,6 +286,37 @@
       "denied": "You do not have permission to change this profile.",
       "failed": "That could not be saved. Try again.",
       "photoPlaceholder": "https://"
+    },
+    "approvals": {
+      "title": "Approvals",
+      "waiting": "{count} waiting",
+      "close": "Close approvals",
+      "waitingOnYou": "{count} waiting on you",
+      "resolvedToday": "{count} resolved today",
+      "openApproval": "Open approval {id}",
+      "expired": "expired",
+      "resolution": {
+        "approved": "approved",
+        "denied": "denied",
+        "expired": "expired"
+      },
+      "all": "All approvals",
+      "gone": "That approval is no longer listed.",
+      "empty": "Nothing is waiting on a human.",
+      "emptyDetail": "A call parks here when policy returns <code>approve</code>. Denials never park; they end the call and are free.",
+      "rowNotBacked": "A parked call does not record its amount, risk, side effect, taint or task yet, so the rows name the tool, the agent and the workspace.",
+      "truncated": "Oxagen read the first {count} workspaces of this organization. Calls parked in the rest are not counted here.",
+      "note": "A resolution mints a single-use approval token bound to the call digest, the agent, the run, and an expiry. It cannot be replayed on a second call. On expiry the call ends and the reason reaches the model."
+    },
+    "notifications": {
+      "title": "Notifications",
+      "footer": "<code>list_notifications</code> · {count} unread · every kind here maps to a frame kind or an audit event, never to something invented for a bell.",
+      "markAll": "Mark all read",
+      "markDenied": "You do not have permission to mark these notifications.",
+      "markFailed": "The notifications could not be marked. Try again.",
+      "empty": "No notifications.",
+      "noWorkspace": "Notifications are read in a workspace, and this organization has none you can open.",
+      "unread": "Unread."
     }
   }
 }

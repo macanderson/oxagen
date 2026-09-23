@@ -3,7 +3,8 @@
 // read. Importable from tests only: `testOnlyTarget` in src/test/arch/layers.ts
 // refuses every production edge to a `*.builders` module.
 import { readOk } from "@/data/read";
-import type { ShellData } from "./shell-data";
+import type { ApprovalItem } from "@/data/contracts/approvals";
+import type { ShellData, WorkspaceApprovals } from "./shell-data";
 
 const SHELL_VIEWER = {
   name: "Marcus Bell",
@@ -33,7 +34,47 @@ export function shellData(overrides: Partial<ShellData> = {}): ShellData {
     org: SHELL_ORG,
     viewer: SHELL_VIEWER,
     context: SHELL_CONTEXT,
-    fleetWaiting: null,
+    approvals: {
+      workspaces: [shellWorkspace()],
+      truncated: false,
+      readAt: SHELL_NOW,
+    },
+    feed: readOk({ items: [], unread: 0 }),
+    ...overrides,
+  };
+}
+
+/** The instant the builders' reads were made: 2026-09-23 09:31:08Z. */
+export const SHELL_NOW = Date.parse("2026-09-23T09:31:08Z");
+
+/** One parked call, ten minutes from the read, with any field overridden. */
+export function approvalItem(
+  overrides: Partial<ApprovalItem> = {},
+): ApprovalItem {
+  return {
+    id: "apr_01K5RS8F3J",
+    runId: "run_01K5RS7M2E",
+    tool: "github__create_release@2",
+    agentKey: "acme.core.release-manager",
+    requester: "usr_01K3F8QB7R",
+    mandateId: null,
+    rule: "role_grant:rg_0093",
+    autoEligibility: null,
+    createdAt: "2026-09-23T09:24:20Z",
+    expiresAt: "2026-09-23T09:40:20Z",
+    ...overrides,
+  };
+}
+
+/** One workspace's share of the drawer: nothing parked, nothing resolved, unless overridden. */
+export function shellWorkspace(
+  overrides: Partial<WorkspaceApprovals> = {},
+): WorkspaceApprovals {
+  return {
+    slug: "core-platform",
+    name: "Core platform",
+    pending: readOk({ items: [], more: false }),
+    resolved: readOk({ items: [], more: false }),
     ...overrides,
   };
 }

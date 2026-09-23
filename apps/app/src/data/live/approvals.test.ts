@@ -259,4 +259,60 @@ describe("approvals.resolved (#3153)", () => {
     );
     expect(captureError).toHaveBeenCalledOnce();
   });
+
+  describe("resolvedSince", () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it("reads one page since the instant, under the shell's page key", async () => {
+      kernelRead.mockResolvedValueOnce(
+        readOk({ items: [resolvedItem], nextCursor: null }),
+      );
+      const out = await approvals.resolvedSince(ctx, {
+        since: "2026-09-23T00:00:00.000Z",
+      });
+      expect(out.ok && out.value.items.map((i) => i.id)).toEqual(["apr_q8t1"]);
+      expect(out.ok && out.value.more).toBe(false);
+      expect(kernelRead).toHaveBeenCalledOnce();
+      expect(kernelRead).toHaveBeenCalledWith(ctx, {
+        contract: agentApprovalListResolved,
+        input: { since: "2026-09-23T00:00:00.000Z", limit: 100 },
+        page: "shell",
+      });
+    });
+
+    it("marks more when the page stopped short of the end, and does not walk on", async () => {
+      kernelRead.mockResolvedValue(
+        readOk({ items: [resolvedItem], nextCursor: "c2" }),
+      );
+      const out = await approvals.resolvedSince(ctx, {
+        since: "2026-09-23T00:00:00.000Z",
+      });
+      expect(out.ok && out.value.more).toBe(true);
+      expect(kernelRead).toHaveBeenCalledOnce();
+    });
+
+    it("passes a refusal through (negative)", async () => {
+      const denied = {
+        ok: false as const,
+        reason: "denied" as const,
+        permission: "workspace.read",
+      };
+      kernelRead.mockResolvedValue(denied);
+      expect(
+        await approvals.resolvedSince(ctx, { since: "2026-09-23T00:00:00Z" }),
+      ).toEqual(denied);
+    });
+
+    it("answers record_unmappable and reports once for a record the view refuses (negative)", async () => {
+      kernelRead.mockResolvedValue(
+        readOk({ items: [{ ...resolvedItem, tool: "" }], nextCursor: null }),
+      );
+      expect(
+        await approvals.resolvedSince(ctx, { since: "2026-09-23T00:00:00Z" }),
+      ).toEqual(readError("record_unmappable", 502));
+      expect(captureError).toHaveBeenCalledOnce();
+    });
+  });
 });
