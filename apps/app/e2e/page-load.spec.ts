@@ -61,11 +61,11 @@ for (const row of SIGNED_IN_ROUTES) {
       .info()
       .attach("phone", { path: phonePath, contentType: "image/png" });
     if (row.titleKey === "steering") {
-      await page.locator('[data-tab="freshness"]').click();
-      await expect(page.locator('[data-tab="freshness"]')).toHaveAttribute(
-        "aria-current",
-        "page",
-      );
+      // Next keeps the page it navigated away from mounted but hidden, so the
+      // tab bar is in the DOM twice after the click; only the shown one counts.
+      const freshness = page.locator('[data-tab="freshness"]:visible');
+      await freshness.click();
+      await expect(freshness).toHaveAttribute("aria-current", "page");
       await expect(page).toHaveURL(/\/steering\/freshness(?:\?|$)/);
       await page.setViewportSize({ width: 1280, height: 720 });
       await page.screenshot({

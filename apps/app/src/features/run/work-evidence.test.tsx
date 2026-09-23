@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import type { RunWork as RunWorkView } from "@/data/contracts/run-work";
 import { type Read, readError, readOk } from "@/data/read";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { runDetail, runSource } from "./run.builders";
 vi.mock("next/link", () => ({
@@ -119,10 +120,10 @@ async function renderWork(read: Read<RunWorkView>) {
     ws: "app",
     runId: value.runId,
   });
-  render(<IntlProvider>{element}</IntlProvider>);
+  return render(<IntlProvider>{element}</IntlProvider>).container;
 }
 it("puts failed CI beside actionable checkout and PR evidence without claiming authorship", async () => {
-  await renderWork(readOk(value));
+  const container = await renderWork(readOk(value));
   expect(
     screen.getByRole("heading", { name: "1 failing check" }),
   ).toBeInTheDocument();
@@ -140,9 +141,11 @@ it("puts failed CI beside actionable checkout and PR evidence without claiming a
   expect(
     screen.getByText(/Digest recorded; bytes not retained/),
   ).toBeInTheDocument();
+  await expectNoAxe(container);
 });
 it("does not substitute zero work for an unavailable read", async () => {
-  await renderWork(readError("unavailable", 503));
+  const container = await renderWork(readError("unavailable", 503));
   expect(screen.queryByTestId("run-work")).toBeNull();
   expect(screen.getByText(/unavailable/)).toBeInTheDocument();
+  await expectNoAxe(container);
 });

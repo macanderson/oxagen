@@ -55,6 +55,13 @@ vi.mock("next/navigation", () => ({
     throw new Error("NEXT_NOT_FOUND");
   },
 }));
+// RunWork is an async server component the page streams inside <Suspense>.
+// This file renders the page on the client, where an async child suspends the
+// whole tree, so it stands in here; work-evidence.test.tsx covers it.
+vi.mock("./work-evidence", () => ({
+  RunWork: () => <div data-testid="run-work-slot" />,
+  RunWorkLoading: () => null,
+}));
 vi.mock("../run-outcomes/actions", () => ({
   setRunOutcomesConsentAction: vi.fn(),
 }));
