@@ -351,19 +351,16 @@ export const routes = {
       view?: string;
     } = {},
   ): SafePath => {
-    const canonical = [
-      "library",
-      "proposals",
-      "freshness",
-      "deliveries",
-    ].includes(
-      q.tab ?? "",
-    );
-    const segments = canonical ? [q.tab!] : [];
+    const canonical =
+      q.tab !== undefined &&
+      ["library", "proposals", "freshness", "deliveries"].includes(q.tab)
+        ? q.tab
+        : null;
+    const segments = canonical === null ? [] : [canonical];
     if (q.tab === "library" && q.shelf && q.shelf !== "all")
       segments.push(q.shelf);
     return withQuery(pathOf(org, ws, "steering", ...segments), {
-      tab: canonical ? undefined : q.tab,
+      tab: canonical === null ? q.tab : undefined,
       kind: q.kind,
       offset: q.offset,
       proposal: q.proposal,

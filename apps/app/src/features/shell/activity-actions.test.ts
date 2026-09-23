@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+type Viewer = { org: string; ws: string | null };
+type KernelCall = { contract: { name: string }; input?: unknown };
 const fake = vi.hoisted(() => ({
   viewer: vi.fn(),
-  read: vi.fn(),
+  read: vi.fn<(ctx: Viewer, call: KernelCall) => Promise<unknown>>(),
   write: vi.fn(),
   context: vi.fn(),
   pending: vi.fn(),
@@ -41,13 +43,18 @@ const notification = (publicId: string) => ({
   createdAt: "2026-09-23T00:00:00Z",
 });
 const ok = <T>(value: T) => ({ ok: true, value });
+const readsMade = () =>
+  fake.read.mock.calls.map(([ctx, call]) => [
+    ctx,
+    call.contract.name,
+    call.input,
+  ]);
 
 beforeEach(() => {
   vi.resetAllMocks();
-  fake.viewer.mockImplementation(async (org: string, ws?: string) => ({
-    org,
-    ws: ws ?? null,
-  }));
+  fake.viewer.mockImplementation((org: string, ws?: string) =>
+    Promise.resolve({ org, ws: ws ?? null }),
+  );
   fake.context.mockResolvedValue(
     ok({
       orgs: [],
@@ -61,24 +68,23 @@ beforeEach(() => {
   fake.mandates.mockResolvedValue(
     ok({ mandates: [], asOf: "2026-09-23T00:00:00Z", truncatedAt: null }),
   );
-  fake.read.mockImplementation(
-    async (
-      ctx: { ws: string | null },
-      call: { contract: { name: string } },
-    ) => {
-      if (call.contract.name === "list_notifications")
-        return ok({
+  fake.read.mockImplementation((ctx, call) => {
+    if (call.contract.name === "list_notifications")
+      return Promise.resolve(
+        ok({
           notifications: [
             notification("shared"),
             ...(ctx.ws ? [notification(ctx.ws)] : []),
           ],
           unreadCount: ctx.ws ? 2 : 1,
-        });
-      if (call.contract.name === "get_nav_counts")
-        return ok({ approvals: 0, proposals: null, incidents: null });
-      return ok({ items: [], nextCursor: null });
-    },
-  );
+        }),
+      );
+    if (call.contract.name === "get_nav_counts")
+      return Promise.resolve(
+        ok({ approvals: 0, proposals: null, incidents: null }),
+      );
+    return Promise.resolve(ok({ items: [], nextCursor: null }));
+  });
   fake.write.mockResolvedValue(ok({ ok: true }));
 });
 
@@ -86,31 +92,24 @@ describe("organization activity", () => {
   it("reads only the selected workspace count for idle navigation", async () => {
     await readShellNavCounts("org", "two");
     expect(fake.viewer).toHaveBeenCalledWith("org", "two");
-    expect(fake.read).toHaveBeenCalledOnce();
-    expect(fake.read).toHaveBeenCalledWith(
-      { org: "org", ws: "two" },
-      expect.objectContaining({
-        contract: expect.objectContaining({ name: "get_nav_counts" }),
-      }),
-    );
+    expect(readsMade()).toEqual([
+      [{ org: "org", ws: "two" }, "get_nav_counts", {}],
+    ]);
     expect(fake.context).not.toHaveBeenCalled();
     expect(fake.pending).not.toHaveBeenCalled();
     expect(fake.mandates).not.toHaveBeenCalled();
   });
   it("reads the unread count once in the current scope for the idle badge", async () => {
     const result = await readShellUnreadCount("org", "two");
-    expect(result).toEqual(
-      ok({ notifications: expect.any(Array), unreadCount: 2 }),
-    );
+    expect(result.ok ? result.value.unreadCount : null).toBe(2);
     expect(fake.viewer.mock.calls).toEqual([["org", "two"]]);
-    expect(fake.read).toHaveBeenCalledOnce();
-    expect(fake.read).toHaveBeenCalledWith(
-      { org: "org", ws: "two" },
-      expect.objectContaining({
-        contract: expect.objectContaining({ name: "list_notifications" }),
-        input: { limit: 1, unreadOnly: true },
-      }),
-    );
+    expect(readsMade()).toEqual([
+      [
+        { org: "org", ws: "two" },
+        "list_notifications",
+        { limit: 1, unreadOnly: true },
+      ],
+    ]);
     expect(fake.context).not.toHaveBeenCalled();
   });
   it("reads the organization's unread count on a page outside any workspace", async () => {
@@ -140,11 +139,11 @@ describe("organization activity", () => {
   });
 
   it("does not present a refused workspace read as an empty notification inbox", async () => {
-    fake.read.mockImplementation(async () => ({
+    fake.read.mockResolvedValue({
       ok: false,
       reason: "denied",
       permission: "notification.read",
-    }));
+    });
     const result = await readShellActivity("org", "one");
     expect(result.ok).toBe(true);
     if (!result.ok) return;

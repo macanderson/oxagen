@@ -1,5 +1,5 @@
 import { useTranslations } from "next-intl";
-import type { ReactNode } from "react";
+import { use, type ReactNode } from "react";
 import type { RunWork as RunWorkView } from "@/data/contracts/run-work";
 import { PAGE_FAILURES, readError, type Read } from "@/data/read";
 import type { DataSource } from "@/data/ports";
@@ -50,7 +50,13 @@ export function RunWorkSection({
   const failures = value.pullRequests.flatMap((pr) =>
     (pr.ci?.runs ?? [])
       .filter((check) => check.conclusion && FAILURE.has(check.conclusion))
-      .map((check) => ({ pr, check })),
+      // A check name repeats across workflow runs, so its position among this
+      // pull request's failures completes the key.
+      .map((check, position) => ({
+        pr,
+        check,
+        key: `${pr.repository.url}/${String(pr.number)}/${check.name}/${String(position)}`,
+      })),
   );
   return (
     <section
@@ -71,8 +77,8 @@ export function RunWorkSection({
             {t("failedChecks", { count: failures.length })}
           </h3>
           <ul className="mt-2 space-y-2 text-sm">
-            {failures.map(({ pr, check }, index) => (
-              <li key={`${pr.repository.url}/${pr.number}/${index}`}>
+            {failures.map(({ pr, check, key }) => (
+              <li key={key}>
                 <ProviderLink url={check.url}>{check.name}</ProviderLink>
                 {" · "}
                 <ProviderLink url={pr.url}>
@@ -131,7 +137,7 @@ export function RunWorkSection({
           ) : (
             <ul className="mt-2 space-y-3">
               {value.pullRequests.map((pr) => (
-                <li key={`${pr.repository.url}/${pr.number}`}>
+                <li key={`${pr.repository.url}/${String(pr.number)}`}>
                   <ProviderLink url={pr.url}>
                     {pr.repository.owner}/{pr.repository.name} #{pr.number}:{" "}
                     {pr.title}
@@ -211,24 +217,34 @@ export function RunWorkSection({
   );
 }
 
-/** Provider latency stays inside this section's streaming boundary. */
-export async function RunWork({
-  ctx,
-  source,
+/** Starts the section's read without waiting on it; a failed read renders as a read failure. */
+export function readRunWork(
+  ctx: WsCtx,
+  source: DataSource,
+  runId: string,
+): Promise<Read<RunWorkView>> {
+  return source.runs
+    .work(ctx, runId)
+    .catch(() =>
+      readError(PAGE_FAILURES.run.error.code, PAGE_FAILURES.run.error.status),
+    );
+}
+
+/**
+ * Provider latency stays inside this section's streaming boundary. The page
+ * starts the read once and hands this component the promise, so a re-render
+ * resumes the same read instead of starting another and suspending again.
+ */
+export function RunWork({
+  read,
   ...place
 }: {
-  ctx: WsCtx;
-  source: DataSource;
+  read: Promise<Read<RunWorkView>>;
   org: string;
   ws: string;
   runId: string;
 }) {
-  const read = await source.runs
-    .work(ctx, place.runId)
-    .catch(() =>
-      readError(PAGE_FAILURES.run.error.code, PAGE_FAILURES.run.error.status),
-    );
-  return <RunWorkSection read={read} {...place} />;
+  return <RunWorkSection read={use(read)} {...place} />;
 }
 
 export function RunWorkLoading() {

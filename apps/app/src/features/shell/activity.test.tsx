@@ -77,10 +77,20 @@ function Opener() {
   const { setApprovalsOpen } = useShellState();
   return (
     <>
-      <button type="button" onClick={() => setApprovalsOpen(true)}>
+      <button
+        type="button"
+        onClick={() => {
+          setApprovalsOpen(true);
+        }}
+      >
         open drawer
       </button>
-      <button type="button" onClick={() => setApprovalsOpen(false)}>
+      <button
+        type="button"
+        onClick={() => {
+          setApprovalsOpen(false);
+        }}
+      >
         close drawer
       </button>
     </>
@@ -117,9 +127,9 @@ describe("activity badges with the drawers closed", () => {
   it("render no dot when nothing is unread", async () => {
     actions.readShellUnreadCount.mockResolvedValue(unread(0));
     renderButtons();
-    await waitFor(() =>
-      expect(actions.readShellUnreadCount).toHaveBeenCalled(),
-    );
+    await waitFor(() => {
+      expect(actions.readShellUnreadCount).toHaveBeenCalled();
+    });
     expect(screen.queryByLabelText(/unread notifications/)).toBeNull();
   });
 
@@ -129,18 +139,18 @@ describe("activity badges with the drawers closed", () => {
     await screen.findByLabelText("2 unread notifications");
 
     await user.click(screen.getByRole("button", { name: "open drawer" }));
-    await waitFor(() =>
+    await waitFor(() => {
       expect(
         screen.getByRole("button", { name: "Approvals" }).textContent,
-      ).toContain("1"),
-    );
+      ).toContain("1");
+    });
 
     await user.click(screen.getByRole("button", { name: "close drawer" }));
-    await waitFor(() =>
+    await waitFor(() => {
       expect(
         screen.getByRole("button", { name: "Approvals" }).textContent,
-      ).toContain("3"),
-    );
+      ).toContain("3");
+    });
     expect(screen.getByLabelText("2 unread notifications")).toBeTruthy();
   });
 

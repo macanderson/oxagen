@@ -55,7 +55,7 @@ export function parseSteeringView(params: Params): SteeringView {
     "library";
   const rawShelf =
     firstParam(params.shelf) ??
-    (LIBRARY_SHELVES.includes(rawTab as LibraryShelf)
+    (LIBRARY_SHELVES.some((shelf) => shelf === rawTab)
       ? rawTab
       : firstParam(params.kind) !== undefined
         ? "records"

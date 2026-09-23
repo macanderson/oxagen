@@ -41,7 +41,7 @@ export const runRepositorySchema = z
     host: z.string(),
     owner: z.string(),
     name: z.string(),
-    url: z.string().url(),
+    url: z.url(),
     connected: z.boolean(),
   })
   .strict();
@@ -89,7 +89,7 @@ export const runWorkPrSchema = z
   .object({
     repository: runRepositorySchema,
     number: z.number().int(),
-    url: z.string().url(),
+    url: z.url(),
     title: z.string(),
     state: z.enum(["open", "closed", "merged"]),
     headSha: z.string().nullable(),

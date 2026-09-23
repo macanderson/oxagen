@@ -36,7 +36,7 @@ import {
 import { StatRow, SummaryPanel } from "./stats";
 import { kindsParam, TranscriptSection } from "./transcript";
 import { ChangesPanel, SpendByArea } from "./work";
-import { RunWork, RunWorkLoading } from "./work-ci";
+import { RunWork, RunWorkLoading, readRunWork } from "./work-ci";
 
 /** The seven tabs, in the spec's order (pages/run.md). */
 const TABS = [
@@ -311,6 +311,10 @@ export async function Run({
     .catch(() =>
       readError(PAGE_FAILURES.run.error.code, PAGE_FAILURES.run.error.status),
     );
+  // Started, never awaited here: provider latency (GitHub PRs, CI, diffs)
+  // streams inside the work section's Suspense boundary and cannot hold the
+  // rest of the page.
+  const work = readRunWork(ctx, source, run.id);
   let section: ReactNode;
   switch (selected) {
     case "transcript":
@@ -398,7 +402,7 @@ export async function Run({
         ws={place.ws}
       />
       <Suspense fallback={<RunWorkLoading />}>
-        <RunWork ctx={ctx} source={source} {...place} />
+        <RunWork read={work} {...place} />
       </Suspense>
       <RunOutcomesConsent
         at={place}

@@ -11,13 +11,15 @@ export function CopyLocation({ path }: { path: string }) {
       <button
         type="button"
         className={`${buttonSecondary} min-h-11 px-3 text-xs`}
-        onClick={async () => {
-          try {
-            await navigator.clipboard.writeText(path);
-            setState("copied");
-          } catch {
-            setState("failed");
-          }
+        onClick={() => {
+          navigator.clipboard.writeText(path).then(
+            () => {
+              setState("copied");
+            },
+            () => {
+              setState("failed");
+            },
+          );
         }}
       >
         {t("copyLocation")}
