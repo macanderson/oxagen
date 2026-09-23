@@ -142,3 +142,24 @@ export async function readShellNavCounts(
     }),
   );
 }
+
+/**
+ * The notification badge's idle read: one list in the viewer's current scope.
+ * A workspace read also answers organization-level rows (the notifications RLS
+ * policy admits `workspace_id IS NULL`), so the count covers what the viewer
+ * sees here without the drawer's read across every workspace.
+ */
+export async function readShellUnreadCount(
+  org: string,
+  ws: string | null,
+): Promise<ActionResult<ContractOutput<typeof notificationsList>>> {
+  const ctx =
+    ws === null ? await requireViewer(org) : await requireViewer(org, ws);
+  return readToActionResult(
+    await kernelRead(ctx, {
+      contract: notificationsList,
+      input: { limit: 1, unreadOnly: true },
+      page: "shell",
+    }),
+  );
+}

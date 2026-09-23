@@ -11,7 +11,7 @@ import {
   useMemo,
   useState,
 } from "react";
-import { subscribeApprovals } from "@/shared/approvals-drawer";
+import { subscribeApprovals } from "./shell-actions";
 import type { Theme } from "./theme";
 import { useTheme } from "./use-theme";
 

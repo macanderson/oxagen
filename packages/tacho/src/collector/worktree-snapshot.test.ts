@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
   readWorktreeSnapshot,
@@ -101,5 +104,79 @@ it("reports omitted untracked patches when tracked bytes exactly exhaust the cap
   expect(result).toMatchObject({
     complete: false,
     limitations: ["untracked_content_omitted"],
+  });
+});
+
+describe("worktree changes during capture", () => {
+  it("marks the snapshot partial when the changed-path set moves between reads", async () => {
+    const underlying = fake("diff --git a/a b/a\n");
+    let statuses = 0;
+    const exec = vi.fn(async (command: string, args: string[]) =>
+      args.includes("status")
+        ? {
+            status: 0,
+            stdout: statuses++ === 0 ? "" : "? formatter-output.ts\0",
+            stderr: "",
+          }
+        : underlying(command, args),
+    );
+    const result = await readWorktreeSnapshot(exec, "/repo");
+    expect(result).toMatchObject({
+      complete: false,
+      limitations: ["worktree_changed_during_capture"],
+    });
+  });
+
+  it("marks the snapshot partial when an already modified file is edited again mid-capture", async () => {
+    const root = mkdtempSync(join(tmpdir(), "tacho-worktree-"));
+    try {
+      const file = join(root, "src.ts");
+      writeFileSync(file, "one\n");
+      const record = "1 .M N... 100644 100644 100644 aaa bbb src.ts\0";
+      const exec = vi.fn(async (_command: string, args: string[]) => {
+        let stdout = "";
+        if (args.includes("--show-toplevel")) stdout = `${root}\n`;
+        else if (args.includes("rev-parse")) stdout = "a".repeat(40);
+        else if (args.includes("status")) stdout = record;
+        else if (args.includes("diff")) {
+          // A formatter rewrites the file while the diff is being read: the
+          // status record is unchanged, only the file's bytes and times move.
+          writeFileSync(file, "one\ntwo\nthree\n");
+          utimesSync(file, new Date(), new Date(Date.now() + 5_000));
+          stdout = "diff --git a/src.ts b/src.ts\n";
+        }
+        return { status: 0, stdout, stderr: "" };
+      });
+      const result = await readWorktreeSnapshot(exec, root);
+      expect(result?.complete).toBe(false);
+      expect(result?.limitations).toContain("worktree_changed_during_capture");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps a still worktree complete", async () => {
+    const underlying = fake("diff --git a/a b/a\n");
+    const exec = vi.fn(async (command: string, args: string[]) =>
+      args.includes("status")
+        ? { status: 0, stdout: "? stable.ts\0", stderr: "" }
+        : underlying(command, args),
+    );
+    const result = await readWorktreeSnapshot(exec, "/repo");
+    expect(result).toMatchObject({ complete: true, limitations: [] });
+  });
+
+  it("does not claim a stable tree when the state cannot be read", async () => {
+    const underlying = fake("diff --git a/a b/a\n");
+    const exec = vi.fn(async (command: string, args: string[]) =>
+      args.includes("status")
+        ? { status: 128, stdout: "", stderr: "fatal" }
+        : underlying(command, args),
+    );
+    const result = await readWorktreeSnapshot(exec, "/repo");
+    expect(result).toMatchObject({
+      complete: false,
+      limitations: ["worktree_state_unverified"],
+    });
   });
 });

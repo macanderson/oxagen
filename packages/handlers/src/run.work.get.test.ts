@@ -10,8 +10,7 @@ import {
 const role = vi.hoisted(() => ({ current: "Owner" as string | null }));
 vi.mock("@oxagen/database", async (original) => ({
   ...(await original<typeof import("@oxagen/database")>()),
-  withOrgDb: (fn: (tx: ReturnType<typeof roleTx>) => unknown) =>
-    fn(roleTx(role.current)),
+  withOrgDb: (fn: (tx: ReturnType<typeof roleTx>) => unknown) => fn(roleTx(role.current)),
   withTenantDb: (fn: (tx: ReturnType<typeof roleTx>) => unknown) =>
     fn(roleTx(role.current)),
 }));
@@ -55,9 +54,7 @@ describe("get_run_work", () => {
   it("denies viewers before reading checkout or provider evidence", async () => {
     role.current = "Viewer";
     const { handler, deps } = setup();
-    await expect(handler({ runId: RUN_ID }, ctx())).rejects.toMatchObject({
-      code: "forbidden",
-    });
+    await expect(handler({ runId: RUN_ID }, ctx())).rejects.toMatchObject({ code: "forbidden" });
     expect(deps.contexts).not.toHaveBeenCalled();
     expect(deps.repositories).not.toHaveBeenCalled();
     expect(deps.pullRequests).not.toHaveBeenCalled();

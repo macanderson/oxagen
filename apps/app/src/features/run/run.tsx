@@ -39,7 +39,7 @@ import {
 import { StatRow, SummaryPanel } from "./stats";
 import { kindsParam, TranscriptSection } from "./transcript";
 import { ChangesPanel, SpendByArea } from "./work";
-import { RunWork, RunWorkLoading } from "./work-evidence";
+import { RunWork, RunWorkLoading, readRunWork } from "./work-ci";
 
 /** The seven tabs, in the spec's order (pages/run.md). */
 const TABS = [
@@ -289,7 +289,7 @@ export async function Run({
   // the Policy and Context tabs and their counts, and the Transcript tab too
   // when no chip is pressed.
   const agentSlug = run.agentKey?.split(".").at(-1) ?? null;
-  const [outputs, everything, cost, pending, resolved, agent, policy] =
+  const [outputs, everything, cost, pending, resolved, agent] =
     await Promise.all([
       // A thrown outputs read folds to the Run page's own read error, so
       // the spine says the read failed rather than the page throwing.
@@ -306,15 +306,18 @@ export async function Run({
       readApprovals(source, ctx, run.id, now),
       source.approvals.resolved(ctx, { runId: run.id }),
       agentSlug === null ? null : source.agents.get(ctx, agentSlug),
-      source.runs
-        .outcomesSettings(ctx)
-        .catch(() =>
-          readError(
-            PAGE_FAILURES.run.error.code,
-            PAGE_FAILURES.run.error.status,
-          ),
-        ),
     ]);
+  // The consent read is started here and awaited in the render, so it
+  // overlaps the section read below rather than queueing behind it.
+  const outcomesPolicy = source.runs
+    .outcomesSettings(ctx)
+    .catch(() =>
+      readError(PAGE_FAILURES.run.error.code, PAGE_FAILURES.run.error.status),
+    );
+  // Started, never awaited here: provider latency (GitHub PRs, CI, diffs)
+  // streams inside the work section's Suspense boundary and cannot hold the
+  // rest of the page.
+  const work = readRunWork(ctx, source, run.id);
   const canManageOutcomes = ctx.orgRole === "owner" || ctx.orgRole === "admin";
   let section: ReactNode;
   switch (selected) {
@@ -387,6 +390,7 @@ export async function Run({
       section = <ChainSection read={await source.runs.chain(ctx, run.id)} />;
       break;
   }
+  const outcomes = await outcomesPolicy;
   return (
     <div className="flex flex-col gap-6">
       <RunHeader
@@ -403,17 +407,17 @@ export async function Run({
         ws={place.ws}
       />
       <Suspense fallback={<RunWorkLoading />}>
-        <RunWork ctx={ctx} source={source} {...place} />
+        <RunWork read={work} {...place} />
       </Suspense>
       <RunOutcomesConsent
         at={place}
-        policy={policy}
+        policy={outcomes}
         canManage={canManageOutcomes}
       />
       <RunIssueConnections
         at={place}
         runId={run.id}
-        enabled={policy.ok && policy.value.effectiveEnabled}
+        enabled={outcomes.ok && outcomes.value.effectiveEnabled}
         canManage={canManageOutcomes}
       />
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">

@@ -47,7 +47,7 @@ export default async function SteeringSectionPage({
     notFound();
   if (
     section === "library" &&
-    shelf !== undefined &&
+    shelf &&
     !["all", "records", "skills", "memory"].includes(shelf)
   )
     notFound();

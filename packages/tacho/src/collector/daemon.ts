@@ -5,6 +5,12 @@
  * a side effect is injectable so the whole daemon runs in a test against a
  * fake control plane and a scratch `TACHO_HOME`.
  */
+import { createContainedRunner } from "../contained/runner";
+import {
+  readWorktreeSnapshot,
+  type WorktreeSnapshot,
+} from "./worktree-snapshot";
+import { jsonContent } from "../evidence/frame-body";
 import {
   readWorktreeSnapshot,
   type WorktreeSnapshot,
@@ -687,9 +693,13 @@ async function initializeDaemon(
     };
   }
 
+  // Bound once the contained runner exists below. Until then no session is
+  // one the launcher started, which is the fail-closed answer.
+  let launchedContained: (harnessSessionId: string) => boolean = () => false;
   function policy(): PolicyView {
     const current = host as HostFile;
     return {
+      launchedContained: (id) => launchedContained(id),
       bundle: current.bundle,
       verified: bundleVerified,
       mandateConfirmedAt,
@@ -2226,6 +2236,32 @@ async function initializeDaemon(
     log,
   });
 
+  const contained = createContainedRunner({
+    host: () => host,
+    registry,
+    genesis: (uuid) => wal.read(uuid)[0]?.hash,
+    hook: (envelope) => serial.run(() => handleHookInner(envelope)),
+    record,
+    model: modelProxy,
+    modelPort: () => modelProxyListener.port(),
+    issueCredential: (harness) =>
+      issueRunToken(
+        { harness },
+        {
+          key: runTokenKey,
+          store: credentialStore,
+          host: () => host,
+          hostRecorder: () => hostRecorder,
+          record,
+          now,
+          log,
+        },
+      ),
+    fetch: options.fetch ?? ((input, init) => fetch(input, init)),
+    log,
+  });
+  launchedContained = contained.launched;
+
   /**
    * The real interrupt. A pause, cancel or kill already stops the session at
    * its next hook boundary; here it also cuts the model calls that are in
@@ -2247,6 +2283,8 @@ async function initializeDaemon(
           : registry.live();
       for (const target of targets) {
         if (target === undefined) continue;
+        if (command.command === "cancel" || command.command === "kill")
+          contained.stop(target.recorder.sessionUuid);
         const cut = modelProxy.abortSession(
           target.recorder.sessionUuid,
           command.reason ?? `operator ${command.command}`,
@@ -2309,6 +2347,7 @@ async function initializeDaemon(
   });
 
   const api: CollectorApi = {
+    runContained: contained.run,
     githubLease: (input) => githubProxy.issue(input),
     githubProxy: (req, res) => githubProxy.handle(req, res),
     localToken: host.local_token,

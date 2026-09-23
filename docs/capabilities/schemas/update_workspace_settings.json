@@ -92,6 +92,9 @@
           }
         },
         "additionalProperties": false
+      },
+      "runEnrichmentEnabled": {
+        "type": "boolean"
       }
     },
     "additionalProperties": false
@@ -159,6 +162,9 @@
           "blockStaleRuns"
         ],
         "additionalProperties": false
+      },
+      "runEnrichmentEnabled": {
+        "type": "boolean"
       }
     },
     "required": [

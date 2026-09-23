@@ -28,7 +28,10 @@ vi.mock("./models", () => ({
 
 import { APICallError } from "@ai-sdk/provider";
 import { AssistantModelKeyLimitError } from "./assistant-model-key-limit";
-import { selectModelForOrg } from "./select-model-for-org";
+import {
+  selectModelForOrg,
+  selectModelFromFunding,
+} from "./select-model-for-org";
 
 /** The two entry points the middleware wraps, as a test drives them. */
 type Callable = {
@@ -272,4 +275,18 @@ describe("selectModelForOrg", () => {
     );
     expect(mocks.selectModel).not.toHaveBeenCalled();
   });
+});
+
+it("builds from one existing funding snapshot without resolving changed settings again", () => {
+  const selection = selectModelFromFunding(
+    ORG,
+    { fundedBy: "org", modelKey: BROUGHT_KEY, keyHint: "test" },
+    { tier: "fast" },
+  );
+  expect(mocks.resolveModelFundingSource).not.toHaveBeenCalled();
+  expect(mocks.selectModel).toHaveBeenCalledWith({
+    tier: "fast",
+    credential: BROUGHT_KEY,
+  });
+  expect(selection.fundedBy).toBe("org");
 });

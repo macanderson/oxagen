@@ -61,8 +61,9 @@ for (const row of SIGNED_IN_ROUTES) {
       .info()
       .attach("phone", { path: phonePath, contentType: "image/png" });
     if (row.titleKey === "steering") {
-      // Next keeps the page it navigated away from mounted but hidden, so the
-      // tab bar is in the DOM twice after the click; only the shown one counts.
+      // Each tab is its own route segment, and with Cache Components the page
+      // navigated away from stays mounted but hidden, so its tab bar is still
+      // in the DOM. Only the visible bar is the one the person is using.
       const freshness = page.locator('[data-tab="freshness"]:visible');
       await freshness.click();
       await expect(freshness).toHaveAttribute("aria-current", "page");
