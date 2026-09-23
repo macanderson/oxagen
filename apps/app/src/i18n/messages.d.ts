@@ -4907,6 +4907,8 @@ type Messages = {
       sessionLimit: string;
       sessionLimitHint: string;
       modelAllow: string;
+      permitNoModels: string;
+      enforcementRequested: string;
       modelAllowHint: string;
       modelDeny: string;
       modelDenyHint: string;
@@ -4919,17 +4921,21 @@ type Messages = {
       allowlist: string;
       denylist: string;
       reach: {
+        unknown: string;
         none: string;
         stored: string;
       };
       errors: {
         sessionLimitInvalid: string;
         modelPatternInvalid: string;
+        modelListRequired: string;
       };
       alert: {
         denied: string;
         failed: string;
       };
+      enforced: string;
+      mode: string;
     };
     tokens: {
       title: string;
