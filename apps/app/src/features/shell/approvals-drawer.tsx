@@ -265,7 +265,7 @@ export function ApprovalsDrawer({
                 className={`${buttonSecondary} mb-3`}
                 onClick={() => {
                   setSelected(null);
-                  bodyRef.current?.scrollTo({ top: 0 });
+                  if (bodyRef.current) bodyRef.current.scrollTop = 0;
                 }}
               >
                 <ChevronLeft aria-hidden="true" className="size-3.5" />
@@ -298,7 +298,7 @@ export function ApprovalsDrawer({
                         now={now}
                         onOpen={() => {
                           setSelected(item.id);
-                          bodyRef.current?.scrollTo({ top: 0 });
+                          if (bodyRef.current) bodyRef.current.scrollTop = 0;
                         }}
                       />
                     ))}
