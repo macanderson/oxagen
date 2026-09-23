@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
-// Change plan (pages/billing.md, the `plan` dialog): the Change plan button
-// opens it; an allowed viewer sees Build and Scale priced monthly, and
-// switching to yearly shows the annual prices; submitting hands the action
-// the organization, the plan slug and the interval; each refusal the action
-// returns is said in words; a blocked viewer sees the sentence the block
-// names and no form. Axe checks every state (INV-26).
+// Change plan (pages/billing.md, the `plan` dialog): the gold Change plan
+// button opens it; an allowed viewer sees a Plan select with Build and Scale
+// each billed monthly or yearly at its price, and Enterprise listed but not
+// selectable; the design's note; and Change plan in the footer beside Cancel.
+// Submitting hands the action the organization, the plan slug and the
+// interval; each refusal the action returns is said in words; a blocked
+// viewer sees the sentence the block names and no form. Axe checks every
+// state (INV-26).
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -28,14 +30,12 @@ const PLANS: readonly PlanOption[] = [
     tier: "build",
     monthly: { micros: "199000000", currency: "USD" },
     annual: { micros: "1990000000", currency: "USD" },
-    includedGauPerMonth: 50000,
   },
   {
     slug: "scale-v2",
     tier: "scale",
     monthly: { micros: "999000000", currency: "USD" },
     annual: { micros: "9990000000", currency: "USD" },
-    includedGauPerMonth: 300000,
   },
 ];
 
@@ -53,11 +53,8 @@ async function openDialog(blocked: PlanChangeBlock | null = null) {
   return screen.getByRole("dialog", { name: "Change plan" });
 }
 
-const planLabel = (tier: "build" | "scale") => {
-  const found = document.querySelector<HTMLElement>(`[data-plan="${tier}"]`);
-  if (found === null) throw new Error(`no ${tier} label`);
-  return found;
-};
+const submit = (dialog: HTMLElement) =>
+  within(dialog).getByRole("button", { name: "Change plan" });
 
 beforeEach(() => {
   startPlanChange.mockReset();
@@ -78,43 +75,69 @@ describe("the Change plan button", () => {
     await userEvent.click(screen.getByRole("button", { name: "Change plan" }));
     expect(screen.getByRole("dialog", { name: "Change plan" })).toBeVisible();
   });
+
+  it("is the gold action", () => {
+    renderChangePlan();
+    expect(screen.getByTestId("change-plan").className).toContain(
+      "bg-button-primary-bg",
+    );
+  });
 });
 
 describe("an allowed viewer", () => {
-  it("sees Build and Scale, each with its included GAU and monthly price", async () => {
-    await openDialog();
-    expect(planLabel("build")).toHaveTextContent(
-      "Build50,000 GAU a month$199.00 a month",
-    );
-    expect(planLabel("scale")).toHaveTextContent(
-      "Scale300,000 GAU a month$999.00 a month",
-    );
-    expect(screen.getByRole("radio", { name: /Build/ })).toBeChecked();
-  });
-
-  it("shows the annual price once billed yearly is chosen", async () => {
-    await openDialog();
-    await userEvent.click(screen.getByRole("radio", { name: "yearly" }));
-    expect(planLabel("build")).toHaveTextContent("$1,990.00 a year");
-    expect(planLabel("scale")).toHaveTextContent("$9,990.00 a year");
-  });
-
-  it("names Enterprise as negotiated, off the form", async () => {
-    await openDialog();
+  it("picks from Build and Scale, monthly or yearly at its price, with Enterprise listed but not selectable", async () => {
+    const dialog = await openDialog();
+    const select = within(dialog).getByRole("combobox", { name: "Plan" });
     expect(
-      screen.getByText(/Enterprise is negotiated per contract/),
-    ).toBeInTheDocument();
-    expect(screen.queryByText("Enterprise")).toBeNull();
+      within(select)
+        .getAllByRole("option")
+        .map((option) => [
+          option.textContent,
+          (option as HTMLOptionElement).disabled,
+        ]),
+    ).toEqual([
+      ["Build, $199.00 a month", false],
+      ["Build, $1,990.00 a year", false],
+      ["Scale, $999.00 a month", false],
+      ["Scale, $9,990.00 a year", false],
+      ["Enterprise, annual, negotiated per organization", true],
+    ]);
+    expect(select).toHaveValue("build-v2:month");
+  });
+
+  it("carries the design's note and no paragraph beyond it", async () => {
+    const dialog = await openDialog();
+    expect(dialog).toHaveTextContent(
+      "The free tier is in every plan: an included monthly allowance of governed actions and every governance feature on. Enterprise adds a dedicated data plane or behind-the-firewall deployment, and support with an SLA.",
+    );
+    // 995ee8a24 dropped the Checkout-and-Enterprise paragraph the design does
+    // not draw; the form holds the select and the note alone.
+    expect(within(dialog).getByRole("form").querySelectorAll("p")).toHaveLength(
+      1,
+    );
+    expect(dialog).not.toHaveTextContent(
+      "Stripe Checkout shows the amount due",
+    );
+  });
+
+  it("puts Cancel and Change plan in the footer", async () => {
+    const dialog = await openDialog();
+    const footer = dialog.querySelector("[data-sheet-footer]") as HTMLElement;
+    expect(
+      within(footer)
+        .getAllByRole("button")
+        .map((button) => button.textContent),
+    ).toEqual(["Cancel", "Change plan"]);
   });
 
   it("hands the action the organization, the chosen plan and interval", async () => {
     startPlanChange.mockResolvedValue(null);
-    await openDialog();
-    await userEvent.click(screen.getByRole("radio", { name: /Scale/ }));
-    await userEvent.click(screen.getByRole("radio", { name: "yearly" }));
-    await userEvent.click(
-      screen.getByRole("button", { name: "Continue to Checkout" }),
+    const dialog = await openDialog();
+    await userEvent.selectOptions(
+      within(dialog).getByRole("combobox", { name: "Plan" }),
+      "scale-v2:year",
     );
+    await userEvent.click(submit(dialog));
     expect(startPlanChange).toHaveBeenCalledOnce();
     const [org, prev, form] = startPlanChange.mock.calls[0] ?? [];
     expect([org, prev]).toEqual(["acme", null]);
@@ -132,7 +155,7 @@ describe("an allowed viewer", () => {
         code: "invalid_input",
         field: "planSlug",
       },
-      "Choose a plan and how it is billed.",
+      "Choose a plan.",
     ],
     [
       "denied",
@@ -153,10 +176,8 @@ describe("an allowed viewer", () => {
     "says why a plan change was refused: %s (negative)",
     async (_case, result, copy) => {
       startPlanChange.mockResolvedValue(result);
-      await openDialog();
-      await userEvent.click(
-        screen.getByRole("button", { name: "Continue to Checkout" }),
-      );
+      const dialog = await openDialog();
+      await userEvent.click(submit(dialog));
       expect(await screen.findByTestId("plan-error")).toHaveTextContent(copy);
     },
   );
@@ -168,18 +189,33 @@ describe("a viewer the page blocks", () => {
     expect(dialog).toHaveTextContent(
       "An owner or a billing member can change the plan.",
     );
-    expect(within(dialog).queryByRole("radio")).toBeNull();
+    expect(within(dialog).queryByRole("combobox")).toBeNull();
     expect(
-      within(dialog).queryByRole("button", { name: "Continue to Checkout" }),
+      within(dialog).queryByRole("button", { name: "Change plan" }),
     ).toBeNull();
   });
 
-  it("names the existing subscription and no form for blocked: { kind: 'subscribed', plan }", async () => {
-    const dialog = await openDialog({ kind: "subscribed", plan: "build" });
+  it("names the existing subscription and says what the product would do, with no form", async () => {
+    const dialog = await openDialog({
+      kind: "subscribed",
+      plan: "build-v2",
+      tier: "build",
+    });
     expect(dialog).toHaveTextContent(
-      "This organization already has a build subscription. Changing an existing subscription is not in the app yet: it would swap the plan in Stripe from the next renewal.",
+      "This organization already has a Build subscription. Changing a running subscription is not in the app yet. It would swap the plan in Stripe from the next renewal.",
     );
-    expect(within(dialog).queryByRole("radio")).toBeNull();
+    expect(within(dialog).queryByRole("combobox")).toBeNull();
     expect(startPlanChange).not.toHaveBeenCalled();
+  });
+
+  it("names the subscription by its Stripe plan when no tier is known", async () => {
+    const dialog = await openDialog({
+      kind: "subscribed",
+      plan: "legacy-team-2025",
+      tier: null,
+    });
+    expect(dialog).toHaveTextContent(
+      "This organization already has a legacy-team-2025 subscription.",
+    );
   });
 });

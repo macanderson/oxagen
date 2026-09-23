@@ -1,6 +1,6 @@
 # Compliance pack
 
-Use this pack to review how Oxagen handles identity, governed actions, credentials, and the record. It describes source at `7245b8825` on 2026-09-22. A source reference establishes implementation, not deployment or operating effectiveness.
+Use this pack to review how Oxagen handles identity, governed actions, credentials, and the record. It describes source at `1ddd6967e` on 2026-09-23. A source reference establishes implementation, not deployment or operating effectiveness.
 
 - [Security overview](security-overview.md): boundaries, controls, and known limits.
 - [Subprocessors](subprocessors.md): data recipients and deployment-dependent choices.
