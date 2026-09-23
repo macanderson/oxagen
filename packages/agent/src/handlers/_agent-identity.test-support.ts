@@ -143,6 +143,8 @@ export async function seedAgent(
   },
 ): Promise<SeededAgent> {
   const workspaceId = over.workspaceId ?? tenant.workspaceId;
+  // tenancy: test fixture seeding outside any request. Every row is scoped to
+  // the seeded tenant's orgId and workspaceId, and cleanupTenants removes it.
   return withSystemDb(async (tx) => {
     let principal: { id: string; publicId: string } | null = null;
     if (over.principalStatus !== null) {
