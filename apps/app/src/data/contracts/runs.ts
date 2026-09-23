@@ -182,6 +182,14 @@ export const RunRow = z.object({
   cost: Cost.nullable(),
   model: RunModel.nullable(),
   machine: RunMachine.nullable(),
+  harness: z
+    .object({
+      name: z.string(),
+      version: z.string().nullable(),
+      runtime: z.string().nullable(),
+    })
+    .nullable()
+    .optional(),
   taskRef: z.string().nullable(),
   /** The generated name; null until `summarize_run` wrote one. */
   name: z.string().min(1).nullable(),

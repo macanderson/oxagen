@@ -1,0 +1,166 @@
+name: Staging
+
+# Staging is one environment with one database, so only main's pipeline and a
+# manual dispatch deploy to it. A pull request never does: it would migrate and
+# deploy unmerged code over the commit production is waiting to verify, and it
+# would share the concurrency group below with main. GitHub keeps one pending
+# run per group, so each pull request push evicted main's pending run, and every
+# production deploy then skipped (b18c1bffc, run 35836454693).
+on:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+  id-token: write
+
+# A newer pending run replaces an older one, which is the right outcome here:
+# the newest commit on main is the one production deploys next. The name moved
+# from isolated-staging so main does not queue behind pull request runs that
+# still hold the old group.
+concurrency:
+  group: staging-environment
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+  PARAMETER_PREFIX: /oxagen/staging
+
+jobs:
+  schema:
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/pnpm-install
+      - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          role-to-assume: arn:aws:iam::916294258235:role/oxagen-staging-deploy
+          aws-region: us-east-1
+      - uses: ariga/setup-atlas@v0
+        with:
+          version: v1.2.2
+      - uses: ./.github/actions/open-store-tunnels
+        id: stores
+        with:
+          node-name: oxagen-staging-app
+          parameter-prefix: /oxagen/staging
+      - name: Open the isolated Postgres tunnel
+        env:
+          INSTANCE: ${{ steps.stores.outputs.instance }}
+        run: |
+          set -euo pipefail
+          COORDINATOR_URL=$(aws ssm get-parameter --name /oxagen/staging/DATABASE_URL --with-decryption --query Parameter.Value --output text)
+          echo "::add-mask::$COORDINATOR_URL"
+          export COORDINATOR_URL
+          node --input-type=module <<'NODE'
+          import { appendFileSync, writeFileSync } from 'node:fs';
+          import { coordinatorTunnel } from './tools/scripts/store-migrate-coordinator.mjs';
+          const { host, port, url } = coordinatorTunnel(process.env.COORDINATOR_URL);
+          if (!host.startsWith('oxagen-staging-postgres.')) throw new Error('Refusing a database outside the staging cluster');
+          console.log(`Staging migration target: ${host}/oxagen`);
+          console.log(`::add-mask::${url}`);
+          appendFileSync(process.env.GITHUB_ENV, `DATABASE_URL=${url}\n`);
+          writeFileSync('/tmp/staging-postgres.json', JSON.stringify({ host: [host], portNumber: [port], localPortNumber: ['15432'] }));
+          NODE
+          host=$(jq -r '.host[0]' /tmp/staging-postgres.json)
+          printf '127.0.0.1 %s\n' "$host" | sudo tee -a /etc/hosts >/dev/null
+          aws ssm start-session --target "$INSTANCE" \
+            --document-name AWS-StartPortForwardingSessionToRemoteHost \
+            --parameters file:///tmp/staging-postgres.json > /tmp/staging-postgres.log 2>&1 &
+          for _ in $(seq 1 30); do
+            if timeout 1 bash -c 'cat < /dev/null > /dev/tcp/127.0.0.1/15432' 2>/dev/null; then exit 0; fi
+            sleep 2
+          done
+          echo '::error::Staging Postgres tunnel did not open'
+          exit 1
+      - name: Migrate and seed isolated stores
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tools/scripts/init-postgres.sql
+          pnpm --filter @oxagen/database exec atlas migrate apply --env ci
+          DB_MIGRATE_STORES=clickhouse,neo4j pnpm exec tsx tools/scripts/db-migrate.ts
+          pnpm exec tsx tools/scripts/seed-platform.ts
+          pnpm --filter @oxagen/database exec atlas migrate status --env ci
+
+  deploy:
+    needs: schema
+    runs-on: ubuntu-24.04-arm
+    environment: staging
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        service: [stella-serve, api, app, mcp, docs]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/pnpm-install
+      - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          role-to-assume: arn:aws:iam::916294258235:role/oxagen-staging-deploy
+          aws-region: us-east-1
+      - name: Resolve staging build configuration
+        if: matrix.service != 'stella-serve'
+        env:
+          SERVICE: ${{ matrix.service }}
+        run: |
+          set -euo pipefail
+          aws ssm get-parameters-by-path --path "$PARAMETER_PREFIX" --recursive --with-decryption \
+            --query 'Parameters[].{Name:Name,Value:Value}' --output json \
+          | pnpm exec tsx tools/scripts/build-env.ts --service "$SERVICE" --env preview --without-oauth \
+              --prefix "$PARAMETER_PREFIX" --out "$RUNNER_TEMP/build-env"
+      - name: Package the staging service
+        env:
+          SERVICE: ${{ matrix.service }}
+        run: |
+          set -euo pipefail
+          if [ -f "$RUNNER_TEMP/build-env" ]; then
+            set -a
+            . "$RUNNER_TEMP/build-env"
+            set +a
+          fi
+          tools/scripts/package-for-node.sh "$SERVICE"
+      - uses: ./.github/actions/ship-to-node
+        with:
+          service: ${{ matrix.service }}
+          directory: dist-deploy/${{ matrix.service }}
+          hostname: ${{ matrix.service != 'stella-serve' && format('{0}.staging.oxagen.sh', matrix.service) || '' }}
+          deploy-bucket: oxagen-staging-deploy-916294258235
+          node-name: oxagen-staging-app
+          document-name: oxagen-staging-deploy-service
+          source-commit: ${{ github.sha }}
+
+  verify:
+    needs: deploy
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          role-to-assume: arn:aws:iam::916294258235:role/oxagen-staging-deploy
+          aws-region: us-east-1
+      - name: Verify endpoints and record the deployed commit
+        env:
+          SOURCE_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error https://api.staging.oxagen.sh/health >/dev/null
+          curl --fail --silent --show-error https://app.staging.oxagen.sh/login >/dev/null
+          curl --fail --silent --show-error https://mcp.staging.oxagen.sh/health >/dev/null
+          curl --fail --silent --show-error https://docs.staging.oxagen.sh/ >/dev/null
+          : > /tmp/staging-artifacts.ndjson
+          for service in stella-serve api app mcp docs; do
+            aws s3api head-object --bucket oxagen-staging-deploy-916294258235 \
+              --key "_deploy/$service-standalone.tgz" > /tmp/staging-object.json
+            jq -e --arg commit "$SOURCE_COMMIT" '.Metadata["source-commit"] == $commit' /tmp/staging-object.json >/dev/null
+            jq --arg service "$service" '{service:$service,version:.VersionId,modified:.LastModified,commit:.Metadata["source-commit"]}' /tmp/staging-object.json >> /tmp/staging-artifacts.ndjson
+          done
+          jq -s . /tmp/staging-artifacts.ndjson > /tmp/staging-artifacts.json
+          jq -n --arg commit "$SOURCE_COMMIT" --slurpfile artifacts /tmp/staging-artifacts.json \
+            '{commit:$commit,artifacts:$artifacts[0]}' > /tmp/staging-release.json
+          aws s3 cp /tmp/staging-release.json s3://oxagen-staging-deploy-916294258235/_deploy/release.json --only-show-errors
+          printf 'Staging verified commit %s\n' "$SOURCE_COMMIT" >> "$GITHUB_STEP_SUMMARY"

@@ -39,7 +39,6 @@ const config: XmcpConfig = {
 
     // Keep heavy packages out of the bundle to stay under the Vercel 250MB
     // serverless function size limit. These fall into three groups:
-    //   - native addons rspack cannot parse (duckdb + its node-pre-gyp chain)
     //   - a large lib loaded lazily via `await import()` in a handler
     //     (pdf-lib, for `export_conversation`'s PDF rendering path)
     //   - SDKs used only at runtime (inngest, ai, neo4j-driver, stripe,
@@ -59,21 +58,8 @@ const config: XmcpConfig = {
     // and docx are no longer pulled in by anything under apps/mcp and were
     // dropped from this list and from package.json.
     const heavyPackages = [
-      // duckdb is a native CJS addon, pulled into this build transitively:
-      //   src/middleware.ts -> @oxagen/agent register/handlers
-      //   -> agent.trace.get.ts -> @oxagen/engram barrel
-      //   -> store/index.ts -> store/duckdb-adapter.ts.
-      // Its node-pre-gyp/node-gyp toolchain ships non-JS assets rspack cannot
-      // parse (C# Find-VisualStudio.cs, HTML, s3_setup.js) and dynamically
-      // require()s aws-sdk/mock-aws-s3/nock. Externalize the whole chain so it
-      // resolves from node_modules at runtime — mirrors the identical externals
-      // already declared in apps/app/next.config.mjs.
-      "duckdb",
-      "@mapbox/node-pre-gyp",
-      "node-gyp",
-      "mock-aws-s3",
-      "aws-sdk",
-      "nock",
+      // duckdb and its node-pre-gyp chain left this list with @oxagen/engram
+      // (ADR-144): nothing this app imports reaches them any more.
       "pdf-lib",
       "inngest",
       "neo4j-driver",

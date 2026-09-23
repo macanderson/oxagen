@@ -95,6 +95,29 @@ export async function liveSignInSocial(input: {
   return fail(reply) ?? { ok: true };
 }
 
+/**
+ * Enterprise single sign-on. Better Auth finds the organization's identity
+ * provider by the email's domain, and on success its client sends the browser
+ * to that provider, which returns it to `callbackURL`. A refusal (no provider
+ * for the domain, a domain not yet verified) comes back without leaving the
+ * page.
+ */
+export async function liveSignInSso(input: {
+  email: string;
+  callbackURL: SafePath;
+}): Promise<ClientAuthResult> {
+  const reply: BetterAuthReply = await (await client()).signIn.sso({
+    email: input.email,
+    callbackURL: input.callbackURL,
+    // The SSO plugin appends `?error=<code>` to this URL without checking for
+    // a query it already has, so it must be a bare path: "/login?next=/x"
+    // would come back as next="/x?error=…". The destination is lost on an
+    // identity-provider failure, and the code alone tells the form it was SSO.
+    errorCallbackURL: routes.login(),
+  });
+  return fail(reply) ?? { ok: true };
+}
+
 export function rememberPendingNext(next: SafePath): void {
   try {
     sessionStorage.setItem(PENDING_NEXT_KEY, next);

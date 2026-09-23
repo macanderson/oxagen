@@ -104,6 +104,8 @@ When the deciding grant's effect is require approval, the kernel refuses the cal
 
 Review members on the organization page and inspect membership events through `query_audit_log`. The former Access Reviews screen is not part of the current app.
 
-## SSO and directory sync
+## Single sign-on
 
-SSO (SAML 2.0 or OIDC) and SCIM 2.0 directory sync are not available. Contact success@oxagen.sh if your organization requires SSO or automated provisioning.
+An Owner or Admin can register an OIDC or SAML 2.0 identity provider on **Organization › Single sign-on** and map IdP groups to organization roles on **Organization › Roles**. Each SSO sign-in replaces the person's organization role with the highest role their groups map to, and never changes an Owner. See [Single sign-on](/docs/governance/sso).
+
+SCIM directory sync is not available. Removing someone from the IdP stops their next SSO sign-in but does not end an existing session or revoke their API keys.

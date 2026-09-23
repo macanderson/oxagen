@@ -31,6 +31,6 @@ Follow these entry points to inspect the current implementation. Counts, package
 
 The accepted design separates model-readable steering from deterministic gates. Read [the steering design](../specs/steering/README.md), [gateway spec](../specs/gateway/spec.md), and [Tacho spec](../specs/tacho/README.md) for the design and its implementation boundaries.
 
-Inspect [Tacho](../../packages/tacho/src/), [context-provider](../../packages/context-provider/src/), and [the kernel](../../packages/oxagen/src/kernel.ts) to establish what a checkout implements. Describe enforcement only for the traffic routed through the relevant gate. A design phase or an old PR status does not prove that enforcement is deployed.
+Inspect [Tacho](../../packages/tacho/src/), [the steering assembler](../../packages/steering-assembler/src/), and [the kernel](../../packages/oxagen/src/kernel.ts) to establish what a checkout implements. Describe enforcement only for the traffic routed through the relevant gate. A design phase or an old PR status does not prove that enforcement is deployed.
 
 The former generated frontend, backend, data, and dependency maps were removed because they described retired routes, packages, and schemas. This index links their maintained sources.

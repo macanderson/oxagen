@@ -314,6 +314,7 @@ export function agentsSource(reads: AgentReads) {
       apiKeys: refuse,
       costCenters: refuse,
       modelCredential: refuse,
+      sso: refuse,
     },
     audit: { events: refuse, exportEvents: refuse },
     skills: { inventory: refuse, configuration: refuse },
@@ -323,6 +324,7 @@ export function agentsSource(reads: AgentReads) {
       proposals: refuse,
       contextPr: refuse,
       freshness: refuse,
+      deliveries: refuse,
     },
     tools: {
       versions: refuse,

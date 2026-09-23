@@ -2,7 +2,7 @@
 
 Use a signed checkpoint to carry selected files, task context, and a reference to a recorded turn into another harness. Agent Run Protocol (ARP) builds on Context Graph Protocol (CGP) for context frames and Oxagen's existing record formats for source evidence. The local ARP slice captures a stopped workspace and prepares a fresh workspace for Claude Code, Codex, Cursor, or Stella. You choose the destination harness explicitly.
 
-ARP does not launch an agent. You review the prepared files and start the destination harness yourself. The decision follows [ADR-128](../adr/ADR-128-local-arp-checkpoints-prepare-external-runs.md) and the [runtime boundary](../adr/ADR-043-runtime-excision.md).
+ARP does not launch an agent. You review the prepared files and start the destination harness yourself. The decision follows [ADR-157](../adr/ADR-157-local-arp-checkpoints-prepare-external-runs.md) and the [runtime boundary](../adr/ADR-043-runtime-excision.md).
 
 ## Build on CGP
 

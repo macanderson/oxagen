@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const client = {
-  signIn: { email: vi.fn(), social: vi.fn() },
+  signIn: { email: vi.fn(), social: vi.fn(), sso: vi.fn() },
   signUp: { email: vi.fn() },
   twoFactor: { verifyTotp: vi.fn(), verifyBackupCode: vi.fn() },
 };
@@ -14,6 +14,7 @@ const { routes } = await import("@/shared/safe-path");
 beforeEach(() => {
   client.signIn.email.mockReset();
   client.signIn.social.mockReset();
+  client.signIn.sso.mockReset();
   client.signUp.email.mockReset();
   client.twoFactor.verifyTotp.mockReset();
   client.twoFactor.verifyBackupCode.mockReset();
@@ -97,6 +98,48 @@ describe("liveVerifyTwoFactor", () => {
       ok: false,
       outcome: "codeWrong",
     });
+  });
+});
+
+describe("liveSignInSso", () => {
+  it("starts SSO with the email and destination, and a bare login error URL", async () => {
+    client.signIn.sso.mockResolvedValue({
+      data: { url: "https://idp.acme.example/authorize", redirect: true },
+      error: null,
+    });
+    await expect(
+      auth.liveSignInSso({
+        email: "m@acme.example",
+        callbackURL: routes.fleet("acme", "core"),
+      }),
+    ).resolves.toEqual({ ok: true });
+    expect(client.signIn.sso).toHaveBeenCalledWith({
+      email: "m@acme.example",
+      callbackURL: "/acme/core",
+      // The plugin appends "?error=" blindly, so the error URL carries no query.
+      errorCallbackURL: "/login",
+    });
+  });
+
+  it("maps the plugin's refusals", async () => {
+    client.signIn.sso.mockResolvedValue({
+      error: { status: 404, message: "No provider found for the issuer" },
+    });
+    await expect(
+      auth.liveSignInSso({
+        email: "m@nowhere.example",
+        callbackURL: routes.root(),
+      }),
+    ).resolves.toEqual({ ok: false, outcome: "ssoNoProvider" });
+    client.signIn.sso.mockResolvedValue({
+      error: { status: 401, message: "Provider domain has not been verified" },
+    });
+    await expect(
+      auth.liveSignInSso({
+        email: "m@acme.example",
+        callbackURL: routes.root(),
+      }),
+    ).resolves.toEqual({ ok: false, outcome: "ssoDomainUnverified" });
   });
 });
 

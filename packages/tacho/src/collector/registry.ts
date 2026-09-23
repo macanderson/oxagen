@@ -90,6 +90,8 @@ export interface QueuedPrompt {
   deliveryMode: TachoDeliveryMode | null;
   degradedReason: string | null;
   expiresAt: string | null;
+  /** When the operator issued it. Absent in files written before the field. */
+  issuedAt?: string;
   /**
    * The model proxy cut an in-flight call to deliver this sooner (a steer
    * delivered as `interrupt` on a session whose model traffic is routed).

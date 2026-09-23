@@ -211,6 +211,20 @@ resource "aws_cloudwatch_metric_alarm" "container_restart_loop" {
     expect(inspect(good)).toEqual([]);
   });
 
+  it("resolves the module log prefix and catches a production node rename", () => {
+    const parameterized = {
+      ...good,
+      monitoring: good.monitoring.replace(
+        "/oxagen-app/docker-events",
+        "/${var.name}/docker-events",
+      ),
+    };
+    expect(inspect({ ...parameterized, appName: "oxagen-app" })).toEqual([]);
+    expect(
+      inspect({ ...parameterized, appName: "renamed-app" }).join("\n"),
+    ).toMatch(/watches a group nothing writes to/);
+  });
+
   // Each case below is a real, plausible edit that leaves valid Terraform and a
   // plan with no diff worth questioning, and silently stops the alarm counting.
   it("catches the collector format losing the token the filter matches", () => {
