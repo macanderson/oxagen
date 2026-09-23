@@ -64,6 +64,8 @@ The narrowing is a primitive, not a run path. `resolveGitHubToken` still asks fo
 
 ### The run-scoped mint
 
+ADR-151 replaced the placement below. The installation token stays in the host daemon's Git proxy and never reaches `GH_TOKEN`, `GITHUB_TOKEN`, or a credential helper's answer. The harness's Git sees only a local lease. The mint is `create_github_token`. Each `git_push` frame records `oxagen.credential_basis`, and a brokered push also carries a `token_use` frame. The bullets keep the original design for its reasoning.
+
 - **Where the App's private key lives.** Unchanged: the server-side environment ADR-088 describes, never distributed to a host.
 - **How a run authorizes minting.** The enrolled host already carries an `api_key` and, where the gateway applies, a `gateway_api_key` (`host.json`, `packages/tacho/src/host/host-file.ts`). A new capability, minting a token scoped to one run and one repository, takes the host's key and the session identity the model proxy already correlates as its authorization, and reads the installation id from the workspace's `source_connections` row the way `resolveGitHubToken` does. The ledger's own `create_run_token` (`packages/handlers/src/run.token.issue.ts`) shows the authorization shape: a run-scoped key row with a `purpose`, a run id, and an attempt id, refused for an API-key caller and for a sealed attempt.
 - **What scopes the token.** The `repositories` list names the one repository the run's workspace binds, and `permissions` names the narrowest set the run's actions need, `contents: read` and `pull_requests: write` for a run that opens a pull request. Both ride the existing mint body. The one-hour GitHub expiry is the ceiling; the capability asks for no longer.
