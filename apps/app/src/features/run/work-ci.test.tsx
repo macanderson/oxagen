@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import type { RunWork } from "@/data/contracts/run-work";
 import { readError, readOk } from "@/data/read";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { RunWorkSection } from "./work-ci";
 vi.mock("next/link", () => ({
@@ -14,7 +15,14 @@ vi.mock("next/link", () => ({
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
-afterEach(cleanup);
+// INV-26: every test ends in a state axe accepts, then unmounts.
+afterEach(async () => {
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
+});
 const repo = {
   host: "github.com",
   owner: "acme",

@@ -4,13 +4,9 @@ import { Terminal } from "lucide-react";
 const MARKS: Readonly<Record<string, string>> = {
   "claude-code": "claude-code",
   "claude-agent-sdk": "claude-desktop",
-  "claude-sdk": "claude-desktop",
   "claude-desktop": "claude-desktop",
-  claude: "claude-desktop",
   codex: "codex",
-  "codex-cli": "codex",
   cursor: "cursor",
-  chatgpt: "chatgpt",
   stella: "stella",
 };
 
@@ -26,7 +22,9 @@ export function HarnessIcon({
   size = 24,
   className = "",
 }: HarnessIconProps) {
-  const key = harness?.trim().toLowerCase().replace(/[ _]+/g, "-") ?? "";
+  // Only a canonical recorded harness gets a mark. An alias or a custom name
+  // keeps the generic icon, so the mark never claims more than the record does.
+  const key = harness ?? "";
   const mark = MARKS[key];
   const style = { width: size, height: size };
   if (!mark) {

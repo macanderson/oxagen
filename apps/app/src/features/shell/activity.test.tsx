@@ -16,6 +16,7 @@ import {
   vi,
 } from "vitest";
 import shellMessages from "../../../messages/shell.json";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { ActivityButtons, ShellActivityProvider } from "./activity";
 import { shellData } from "./shell.builders";
 import { ShellStateProvider, useShellState } from "./shell-state";
@@ -68,9 +69,14 @@ beforeEach(() => {
   );
 });
 
-afterEach(() => {
-  cleanup();
+// INV-26: every test ends in a state axe accepts, then unmounts.
+afterEach(async () => {
   vi.useRealTimers();
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
 });
 
 function Opener() {
