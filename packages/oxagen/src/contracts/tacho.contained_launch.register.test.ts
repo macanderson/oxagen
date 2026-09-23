@@ -24,6 +24,12 @@ describe("contained launch contract", () => {
       { extra: true },
       { measurement: { ...input.measurement, profile: "unrestricted" } },
       { measurement: { ...input.measurement, readOnlyHooks: false } },
+      {
+        measurement: {
+          ...input.measurement,
+          containerId: `sha256:${"b".repeat(64)}`,
+        },
+      },
     ])
       expect(contract.input.safeParse({ ...input, ...patch }).success).toBe(
         false,
