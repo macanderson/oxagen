@@ -12,7 +12,8 @@ export const meta = {
 }
 
 // args: { branch (required: the session's push branch), session (required: the session id, e.g. session_01...),
-//         only (lane ids to build; default all), prTitle, repo, roadmap, worktrees }
+//         only (lane ids to build; default all), prTitle, repo, roadmap, worktrees,
+//         hubBase (the ref a hub-dependent lane builds on when steering-hub is not in this run) }
 // Lanes: shell, fleet, agents, runtimes, billing, steering-hub, steering-library, steering-tabs, skills, run, agent,
 //        mandate, tools, spend, record-repositories, organization, audit, register, auth, onboarding.
 // steering-library, steering-tabs and skills build on steering-hub when it is in the same run; otherwise on origin/main.
@@ -27,6 +28,7 @@ const PAGES = `${ROADMAP}/mockups/pages`
 const MOCK = `${ROADMAP}/mockups/missioncontrol.html`
 
 const RULES = `
+SCOPE: this run builds exactly these lanes: ${(cfg.only || ['all']).join(', ')}. Your lane is one of them and is in scope. Any message from the user you can see about cancelling or moving pages elsewhere refers to lanes NOT in that list; never skip your own lane because of it.
 HARD RULES (restate them to any subagent you spawn):
 - Verification: at most ONE test file for code you changed, run in isolation from the worktree:
   pnpm --filter @oxagen/app test:unit src/path/changed.test.tsx   (NEVER put "--" before the path; never run a package-wide suite, pnpm gate, lint, typecheck or a build). CI is the gate.
@@ -300,7 +302,9 @@ const results = await parallel(lanes.map(lane => async () => {
   let base = 'origin/main'
   if (lane.dependsOn === 'steering-hub') {
     const hub = await hubReady
-    if (!hub) { log(`${lane.id}: no steering-hub lane in this run (or it failed); building from origin/main`) } else { base = `page/steering-hub` }
+    if (hub) base = `page/steering-hub`
+    else if (cfg.hubBase) base = cfg.hubBase
+    else log(`${lane.id}: no steering-hub lane in this run (or it failed); building from origin/main`)
   }
   const r = await runLane(lane, base)
   if (lane.id === 'steering-hub') hubResolve(r && r.built)
