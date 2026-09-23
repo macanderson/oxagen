@@ -132,6 +132,7 @@ async function invitationInviter(
   orgId: string,
   userId: string,
 ): Promise<{ name: string | null; role: string | null }> {
+  // tenancy: pre-scope read of one auth.users row, filtered by the inviter's userId stored on the invitation; only the display name leaves.
   const users = await withSystemDb((tx) =>
     tx
       .select({ displayName: schema.users.displayName })
@@ -142,6 +143,7 @@ async function invitationInviter(
   const stored = users[0]?.displayName?.trim();
   const name = stored ? stored : null;
   if (name === null) return { name: null, role: null };
+  // tenancy: pre-scope membership read filtered by the invitation's orgId and the inviter's userId; only the role leaves.
   const memberships = await withSystemDb((tx) =>
     tx
       .select({ role: schema.orgUsers.role })
@@ -355,6 +357,7 @@ export const systemLookups: SystemLookups = {
   },
 
   async invitationByToken(token) {
+    // tenancy: pre-scope read filtered by the unguessable invitation token before any orgId is known; the token is the credential.
     const rows = await withSystemDb((tx) =>
       tx
         .select({
