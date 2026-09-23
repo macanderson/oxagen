@@ -84,6 +84,7 @@ import {
   resolveEnrolledHost,
   tachoDenied,
   touchHost,
+  unstorableBatch,
 } from "./lib/tacho-host";
 import {
   type BodyRejection,
@@ -860,9 +861,20 @@ function terminalPatch(
   return patch;
 }
 
+// A batch whose own values Postgres refuses fails the same way on every retry,
+// so it is answered as a refused input the shipper can bisect, never as a 500
+// it retries for ever (`unstorableBatch` in ./lib/tacho-host.ts).
 export const tachoEventsIngestHandler: CapabilityHandler<
   typeof tachoEventsIngest
-> = async (input, ctx) => {
+> = (input, ctx) =>
+  ingestBatch(input, ctx).catch((err: unknown) => {
+    throw unstorableBatch("ingest_tacho_events", err) ?? err;
+  });
+
+const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
+  input,
+  ctx,
+) => {
   const now = new Date();
   const capability = "ingest_tacho_events";
 

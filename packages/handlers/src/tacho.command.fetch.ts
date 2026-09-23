@@ -2,20 +2,23 @@
 // reports what became of the commands it took — `received`, `acknowledged`,
 // `applied` with the frame it landed on, `expired` when the deadline passed
 // with no boundary reached, or `failed` with a detail — and receives the
-// queued ones with the control envelope.
+// queued ones, and any sent one it never acknowledged, with the control
+// envelope (`drainCommands` in ./lib/tacho-host.ts).
 //
 // An acknowledgement lands only on a row that has not reached a terminal
 // status: a row Oxagen already cancelled (superseded) or expired while it
 // was still `queued` stays as it is, and the report keeps what Oxagen
-// recorded. A row that left on the wire is the host's: the sweep never
-// touches it, so an acknowledgement that arrives after the clock passed
-// still lands (`expireCommands` in ./lib/tacho-host.ts). `applied` writes
-// the timestamps a report reads (`acknowledged_at`, `applied_at`) and the
-// frame sequence (`applied_at_seq`) that proves it.
+// recorded. It also only moves a row forward (`ackableOutcomes`): a late
+// `received` does not pull an `acknowledged` row back. A row that left on the
+// wire is the host's: the sweep leaves it for a grace past its expiry
+// (`COMMAND_ACK_GRACE_MS`), so an acknowledgement that arrives after the clock
+// passed still lands (`expireCommands` in ./lib/tacho-host.ts). `applied`
+// writes the timestamps a report reads (`acknowledged_at`, `applied_at`) and
+// the frame sequence (`applied_at_seq`) that proves it.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { tachoCommandFetch } from "@oxagen/oxagen/contracts/tacho.command.fetch";
 import { schema, withTenantDb } from "@oxagen/database";
-import { and, eq, notInArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import {
   controlEnvelope,
   resolveEnrolledHost,
@@ -24,6 +27,26 @@ import {
 
 type Ack =
   (typeof tachoCommandFetch.input)["_output"]["acknowledgements"][number];
+
+/** The open statuses, in the order a command moves through them. */
+const OPEN_OUTCOMES = [
+  "draft",
+  "queued",
+  "sent",
+  "received",
+  "acknowledged",
+] as const;
+
+/**
+ * The statuses a row may hold for this acknowledgement to land on it: every
+ * open status up to the asserted one, so a re-sent or reordered `received`
+ * cannot move an `acknowledged` row back. A terminal status lands on any
+ * open row.
+ */
+export function ackableOutcomes(status: Ack["status"]): string[] {
+  const at = (OPEN_OUTCOMES as readonly string[]).indexOf(status);
+  return at === -1 ? [...OPEN_OUTCOMES] : OPEN_OUTCOMES.slice(0, at + 1);
+}
 
 /** The columns one acknowledgement sets, by the status the host asserts. */
 export function ackPatch(
@@ -73,9 +96,10 @@ export const tachoCommandFetchHandler: CapabilityHandler<
           and(
             eq(schema.tachoControlCommands.publicId, ack.command_id),
             eq(schema.tachoControlCommands.hostId, host.id),
-            notInArray(schema.tachoControlCommands.outcome, [
-              ...schema.TACHO_COMMAND_TERMINAL_OUTCOMES,
-            ]),
+            inArray(
+              schema.tachoControlCommands.outcome,
+              ackableOutcomes(ack.status),
+            ),
           ),
         )
         .returning({ id: schema.tachoControlCommands.id });

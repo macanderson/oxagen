@@ -4,7 +4,7 @@
  * building the control envelope every machine response carries.
  */
 import { CapabilityError } from "@oxagen/oxagen/kernel";
-import { isHandlerError } from "@oxagen/oxagen/handler-error";
+import { HandlerError, isHandlerError } from "@oxagen/oxagen/handler-error";
 import { logger } from "../logger";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import {
@@ -119,6 +119,40 @@ export function tachoDenied(
   return new CapabilityError(capability, "authz_denied", message);
 }
 
+/** The refusal reason a revoked host's requests carry. */
+export const TACHO_HOST_REVOKED = "host_revoked";
+
+/**
+ * The refusal for a Postgres data error a batch's own values raised, or
+ * undefined for any other error: SQLSTATE class 22 (a value its column cannot
+ * hold, such as a figure past a 32-bit `integer`) or 23514 (a check
+ * constraint). The same batch raises it again on every retry, so it is
+ * answered as a refused input (400), which the host's shipper bisects down to
+ * the one event and quarantines (`spool.ts`). Answered as a 500 it was
+ * retried for ever and held back every frame behind it. Drizzle wraps the
+ * driver error, so the SQLSTATE is read down the cause chain, the way
+ * `isUniqueViolation` (@oxagen/database) reads it. The message names the
+ * SQLSTATE and never the statement, whose text carries the batch's values.
+ */
+export function unstorableBatch(
+  capability: string,
+  err: unknown,
+): CapabilityError | undefined {
+  let cur: unknown = err;
+  for (let depth = 0; cur != null && depth < 5; depth++) {
+    const { code, cause } = cur as { code?: unknown; cause?: unknown };
+    if (typeof code === "string" && /^(22[0-9A-Z]{3}|23514)$/.test(code)) {
+      return new CapabilityError(
+        capability,
+        "invalid_input",
+        `Unprocessable batch: Postgres refused a value in it (SQLSTATE ${code})`,
+      );
+    }
+    cur = cause;
+  }
+  return undefined;
+}
+
 /**
  * The enrolled host behind the calling API key, or a denial. Checks, in
  * order: an API key is present, it is live, its scope is the reserved
@@ -173,7 +207,14 @@ export async function resolveEnrolledHost(
     throw tachoDenied(capability, "Forbidden: unknown Tacho host");
   }
   if (host.status === "revoked") {
-    throw tachoDenied(capability, "Forbidden: Tacho host enrollment revoked");
+    // A `HandlerError`, so the 403 carries a `reason` the host can key on
+    // (apps/api/src/middleware/error.ts): a revocation never clears on a
+    // retry, and the host has to stop shipping rather than back off.
+    throw new HandlerError({
+      code: "forbidden",
+      reason: TACHO_HOST_REVOKED,
+      message: "Forbidden: Tacho host enrollment revoked",
+    });
   }
   if (host.expiresAt.getTime() <= Date.now()) {
     throw tachoDenied(capability, "Forbidden: Tacho host enrollment expired");
@@ -623,34 +664,68 @@ export function signBundle(
 }
 
 /**
- * Expire this host's `queued` commands whose expiry passed before a poll
- * drained them (spec §7.4 `expired`: "the expiry passed with no boundary
- * reached"). Runs on every control poll.
+ * How long a `sent` command waits for the host's first acknowledgement before
+ * it is offered again. The host acknowledges what it took on its next poll,
+ * seconds later, so a row still `sent` after this left on a response that
+ * never reached the host (a lost HTTP response, or a request that failed
+ * after the commit that marked it).
+ */
+export const COMMAND_REDELIVERY_LEASE_MS = 60_000;
+
+/**
+ * How long past its expiry a `sent` command the host never acknowledged stays
+ * the host's to settle. The host holds the deadline and answers `expired`
+ * itself, but its answer can be held up by an outage; after this the sweep
+ * settles the row so the report stops showing a delivery in flight.
+ */
+export const COMMAND_ACK_GRACE_MS = 60 * 60_000;
+
+/**
+ * Expire this host's commands whose expiry passed (spec §7.4 `expired`: "the
+ * expiry passed with no boundary reached"). Runs on every control poll.
  *
- * Only `queued` rows are swept: a row is Oxagen's until it leaves on the
- * wire, and the host's after. The host checks the deadline at receipt and
- * again at the boundary that would inject a steer, acknowledging `expired`
- * when it passed, so every acknowledgement it sends is true of the chain,
- * and it may arrive after the clock passed (a pause applied at receipt is
- * acknowledged on the next poll; an ingest in between must not turn that
- * row `expired` and make `fetch_commands` drop the `applied`).
- * `list_commands` derives `expired` under this same predicate and no wider;
- * a row the host holds and never acknowledges reads as recorded, with its
- * `expiresAt` for the interface to show.
+ * A `queued` row is swept as soon as its expiry passes: a row is Oxagen's
+ * until it leaves on the wire, and the host's after. The host checks the
+ * deadline at receipt and again at the boundary that would inject a steer,
+ * acknowledging `expired` when it passed, so every acknowledgement it sends
+ * is true of the chain, and it may arrive after the clock passed (a pause
+ * applied at receipt is acknowledged on the next poll; an ingest in between
+ * must not turn that row `expired` and make `fetch_commands` drop the
+ * `applied`).
+ *
+ * A `sent` row the host never acknowledged is swept only once
+ * {@link COMMAND_ACK_GRACE_MS} has passed since both its expiry and its last
+ * delivery. Without that a row whose response was lost read `sent` for ever.
+ * A row the host acknowledged in any way (`received`, `acknowledged`) is left
+ * for the host to settle. `list_commands` derives `expired` for `queued` rows
+ * only, so a `sent` row reads as recorded until a poll sweeps it.
  */
 export async function expireCommands(
   tx: TachoTx,
   host: TachoHostRow,
   now: Date,
 ): Promise<void> {
+  const graceCutoff = new Date(now.getTime() - COMMAND_ACK_GRACE_MS);
   await tx
     .update(schema.tachoControlCommands)
     .set({ outcome: "expired", updatedAt: now })
     .where(
       and(
         eq(schema.tachoControlCommands.hostId, host.id),
-        eq(schema.tachoControlCommands.outcome, "queued"),
-        lte(schema.tachoControlCommands.expiresAt, now),
+        or(
+          and(
+            eq(schema.tachoControlCommands.outcome, "queued"),
+            lte(schema.tachoControlCommands.expiresAt, now),
+          ),
+          and(
+            eq(schema.tachoControlCommands.outcome, "sent"),
+            lte(schema.tachoControlCommands.expiresAt, graceCutoff),
+            or(
+              isNull(schema.tachoControlCommands.deliveredAt),
+              lte(schema.tachoControlCommands.deliveredAt, graceCutoff),
+            ),
+          ),
+        ),
       ),
     );
 }
@@ -678,17 +753,55 @@ function toDeliveredCommand(row: ControlCommandRow): DeliveredCommand {
   };
 }
 
-/** Queued commands for a host, marked `sent` as they leave. */
+/**
+ * The rows a drain at `now` may hand the host: every `queued` row, and every
+ * `sent` row whose lease ({@link COMMAND_REDELIVERY_LEASE_MS}) ran out with
+ * no acknowledgement of any kind. A host that acknowledged a row moved it past
+ * `sent`, so it is never offered twice.
+ */
+function deliverable(now: Date) {
+  const leaseCutoff = new Date(now.getTime() - COMMAND_REDELIVERY_LEASE_MS);
+  return or(
+    eq(schema.tachoControlCommands.outcome, "queued"),
+    and(
+      eq(schema.tachoControlCommands.outcome, "sent"),
+      or(
+        isNull(schema.tachoControlCommands.deliveredAt),
+        lte(schema.tachoControlCommands.deliveredAt, leaseCutoff),
+      ),
+    ),
+  );
+}
+
+/**
+ * Queued commands for a host, marked `sent` as they leave, and `sent` ones
+ * offered again once their lease runs out unacknowledged.
+ *
+ * Delivery is at least once. Marking a row `sent` inside the transaction that
+ * builds the response used to make it at most once: a response the host never
+ * read lost the command for good, since a `sent` row was never selected
+ * again. The host may therefore see a command twice (its acknowledgement was
+ * delayed past the lease), so it has to key what it applies on the command id.
+ *
+ * Two drains for one host run one after the other. The advisory lock is taken
+ * before the read, so the second drain reads the rows the first one marked
+ * and leaves them for their lease; the relational reader has no `FOR UPDATE
+ * SKIP LOCKED`. The UPDATE repeats the predicate as well, so it never
+ * restamps a row another writer already moved.
+ */
 export async function drainCommands(
   tx: TachoTx,
   host: TachoHostRow,
   now: Date = new Date(),
 ): Promise<ControlEnvelope["commands"]> {
+  await tx.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtextextended(${`tacho_command_drain:${host.id}`}::text, 0))` as never,
+  );
   await expireCommands(tx, host, now);
   const rows = (await tx.query.tachoControlCommands.findMany({
     where: and(
       eq(schema.tachoControlCommands.hostId, host.id),
-      eq(schema.tachoControlCommands.outcome, "queued"),
+      deliverable(now),
       or(
         isNull(schema.tachoControlCommands.expiresAt),
         gt(schema.tachoControlCommands.expiresAt, now),
@@ -712,9 +825,12 @@ export async function drainCommands(
       .update(schema.tachoControlCommands)
       .set({ outcome: "sent", deliveredAt: now, updatedAt: now })
       .where(
-        inArray(
-          schema.tachoControlCommands.id,
-          rows.map((row) => row.id),
+        and(
+          inArray(
+            schema.tachoControlCommands.id,
+            rows.map((row) => row.id),
+          ),
+          deliverable(now),
         ),
       );
   }
