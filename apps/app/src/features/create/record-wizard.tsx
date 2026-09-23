@@ -12,6 +12,10 @@
 // record steers nothing until a person merges it. On success the page behind
 // the dialog moves to Steering · Context PRs with the new pull request
 // selected, so closing the wizard lands there (creation-spec §5).
+import {
+  contextRecordLabel,
+  contextRecordSlug,
+} from "@oxagen/oxagen/context-record-label";
 import { useTranslations } from "next-intl";
 import { type ReactNode, useEffect } from "react";
 import {
@@ -65,6 +69,8 @@ type Failure = Exclude<ActionResult<unknown>, { ok: true }>;
 
 type RecordDraft = {
   desc: string;
+  name: string | null;
+  slug: string | null;
   kind: RecordKind | null;
   force: RecordForce | null;
   effect: ConstraintEffect;
@@ -156,10 +162,17 @@ function recordOf(api: Api, ctx: CreateContext) {
   const seed = seedStatement(d.desc, d.kind);
   const statement = d.statement ?? seed;
   const sent = normalizeStatement(statement);
-  const lineageId = lineageOf(ctx.ws, d.desc);
+  const suggestedSlug =
+    d.name === null ? lineageOf(ctx.ws, d.desc) : contextRecordSlug(d.name);
+  const lineageId = d.slug === null ? suggestedSlug : contextRecordSlug(d.slug);
+  const label =
+    d.name === null
+      ? contextRecordLabel(lineageId)
+      : contextRecordLabel(d.name);
   const force = forceOf(kind, d.force);
   const choice: RecordChoice = {
     lineageId,
+    label,
     kind,
     force,
     ...(hasEffect(kind) ? { constraintEffect: d.effect } : {}),
@@ -174,14 +187,53 @@ function recordOf(api: Api, ctx: CreateContext) {
     edited: statement !== seed,
     path: `.oxagen/rules/${lineageId}.toml`,
     tokens: statementTokens(sent),
-    fits: sent !== "" && sent.length <= STATEMENT_MAX,
+    fits:
+      sent !== "" &&
+      sent.length <= STATEMENT_MAX &&
+      /^[a-z0-9][a-z0-9.-]*[a-z0-9]$/.test(lineageId) &&
+      (d.name === null || d.name.trim() !== ""),
   };
 }
 
-function DescribeStep({ api }: StepProps<RecordDraft>) {
+function DescribeStep({ api, ctx }: StepProps<RecordDraft>) {
   const t = useTranslations("createRecord.describe");
   return (
     <div className="flex flex-col gap-3 text-sm">
+      <label className="flex flex-col gap-1">
+        <span>{t("name")}</span>
+        <input
+          className={inputBase}
+          maxLength={200}
+          value={
+            api.draft.name ??
+            contextRecordLabel(lineageOf(ctx.ws, api.draft.desc))
+          }
+          onChange={(event) => api.update({ name: event.target.value })}
+          onBlur={() => {
+            if (api.draft.name?.trim())
+              api.update({ name: contextRecordLabel(api.draft.name) });
+          }}
+        />
+      </label>
+      <label className="flex flex-col gap-1">
+        <span>{t("slug")}</span>
+        <input
+          className={`${inputBase} ${mono}`}
+          maxLength={200}
+          value={
+            api.draft.slug ??
+            (api.draft.name === null
+              ? lineageOf(ctx.ws, api.draft.desc)
+              : contextRecordSlug(api.draft.name))
+          }
+          onChange={(event) => api.update({ slug: event.target.value })}
+          onBlur={() => {
+            if (api.draft.slug !== null)
+              api.update({ slug: contextRecordSlug(api.draft.slug) });
+          }}
+        />
+        <span className="text-xs text-muted-foreground">{t("slugHint")}</span>
+      </label>
       <DescriptionField
         api={api}
         placeholder={t("placeholder")}
@@ -393,6 +445,7 @@ function StatementStep({ api, ctx }: StepProps<RecordDraft>) {
             constraintEffect={record.choice.constraintEffect ?? null}
             sharingScope="workspace"
             lineage={record.choice.lineageId}
+            label={record.choice.label}
             statement={record.sent}
             badge={
               <span className="rounded-sm border border-dashed border-border px-1.5 py-0.5">
@@ -729,6 +782,8 @@ export const recordWizard: WizardKind<RecordDraft> = {
   need: "steering.write",
   init: (prefill) => ({
     desc: prefill?.description ?? "",
+    name: null,
+    slug: null,
     kind: null,
     force: null,
     effect: "forbid",

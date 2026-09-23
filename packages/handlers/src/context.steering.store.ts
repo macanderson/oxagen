@@ -12,6 +12,7 @@ import {
   schema,
   withTenantDb,
 } from "@oxagen/database";
+import { contextRecordLabel } from "@oxagen/oxagen/context-record-label";
 import { HandlerError } from "@oxagen/oxagen";
 import type {
   CheckResult,
@@ -84,7 +85,11 @@ type ProposalPatch = Partial<
   >
 >;
 
-export type PublishedRecordRow = typeof schema.contextRecords.$inferSelect & {
+export type PublishedRecordRow = Omit<
+  typeof schema.contextRecords.$inferSelect,
+  "label"
+> & {
+  label?: string | null;
   version: number | null;
   checksum: string | null;
 };
@@ -931,6 +936,7 @@ export const postgresSteeringStore: SteeringStore = {
         .select({
           id: schema.contextRecords.id,
           publicId: schema.contextRecords.publicId,
+          label: schema.contextRecords.label,
         })
         .from(schema.contextRecords)
         .where(
@@ -945,6 +951,10 @@ export const postgresSteeringStore: SteeringStore = {
 
       const classification = {
         title: proposal.title ?? proposal.statement,
+        label:
+          proposal.title ??
+          existing?.label ??
+          contextRecordLabel(proposal.lineageId),
         status: "active" as const,
         kind: proposal.kind,
         force: proposal.force,

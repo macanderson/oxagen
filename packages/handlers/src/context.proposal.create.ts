@@ -29,7 +29,7 @@ export function createProposeRecordHandler(
       ctx,
       {
         lineageId: input.record.lineageId,
-        title: input.record.title,
+        title: input.record.label ?? input.record.title,
         kind: input.record.kind,
         force: input.record.force,
         constraintEffect: input.record.constraintEffect ?? null,

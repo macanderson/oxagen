@@ -1377,6 +1377,7 @@ export const contextRecords = agentSchema.table(
     ...softDeleteMixin(),
     slug: citext("slug").notNull(),
     title: text("title").notNull(),
+    label: text("label"),
     // promote → active, retire → retired, supersede → superseded.
     status: text("status").notNull().default("active"),
     validUntil: timestamp("valid_until", { withTimezone: true, mode: "date" }),

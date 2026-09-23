@@ -78,6 +78,9 @@ describe("list_records", () => {
     const list = createListRecordsHandler(h);
     const all = await list(contextRecordsList.input.parse({}), ctx());
     expect(all.total).toBe(3);
+    expect(all.records.find((r) => r.lineageId === "ctx.a.rule")?.label).toBe(
+      "Ctx A Rule",
+    );
     expect(() => contextRecordsList.output.parse(all)).not.toThrow();
     const directPublish = all.records.find(
       (r) => r.lineageId === "ctx.direct-publish",

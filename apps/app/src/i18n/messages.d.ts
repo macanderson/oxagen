@@ -1606,6 +1606,9 @@ type Messages = {
       };
       noGrant: string;
       next: string;
+      name: string;
+      slug: string;
+      slugHint: string;
     };
     kind: {
       title: string;

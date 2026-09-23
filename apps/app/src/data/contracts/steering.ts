@@ -53,6 +53,7 @@ const PublishedRecord = z.object({
   /** The lineage the record or proposal is about: the file stem under .oxagen/rules/, not an id. */
   lineage: z.string().min(1),
   title: z.string(),
+  label: z.string().optional(),
   kind: RecordKind.nullable(),
   force: RecordForce.nullable(),
   constraintEffect: ConstraintEffect.nullable(),

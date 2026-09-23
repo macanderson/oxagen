@@ -32,6 +32,11 @@
         "minLength": 1,
         "description": "Human-readable record title"
       },
+      "label": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
       "body": {
         "type": "string",
         "minLength": 1,
