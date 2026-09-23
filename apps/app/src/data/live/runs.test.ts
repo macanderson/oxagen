@@ -115,6 +115,7 @@ describe("runs.list", () => {
             frames: 9,
             cost: null,
             model: viewModel,
+            harness: null,
             machine,
             taskRef: null,
             name: null,

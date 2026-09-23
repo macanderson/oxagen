@@ -78,6 +78,7 @@ export {
 } from "./column-probe";
 export { CONTEXT_VERSION_CLASSIFICATION_COLUMN } from "./schema/agent";
 export {
+  CONTAINED_LAUNCH_COLUMN,
   GATEWAY_CHAIN_COLUMN,
   HOST_GATEWAY_COLUMN,
   HOST_MODEL_BASE_URLS_COLUMN,

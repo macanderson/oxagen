@@ -336,6 +336,7 @@
       "empty": "This organization has no roles.",
       "catalog": {
         "title": "Permission catalogue",
+        "open": "View permission catalogue",
         "lead": "A permission is a named bundle of capabilities. A role allows a permission when it allows every capability in it.",
         "covers": "{count} capabilities"
       }

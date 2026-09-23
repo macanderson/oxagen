@@ -30,6 +30,7 @@ export default async function SteeringSectionPage({
     "library",
     "proposals",
     "freshness",
+    "deliveries",
     "records",
     "skills",
     "memory",
@@ -51,7 +52,9 @@ export default async function SteeringSectionPage({
   const ctx = await requireViewer(org, ws);
   const query = steeringPathParams(segments, await searchParams);
   const view = parseSteeringView(query);
-  if (!["library", "proposals", "freshness"].includes(segments[0]!))
+  if (
+    !["library", "proposals", "freshness", "deliveries"].includes(segments[0]!)
+  )
     redirect(
       steeringLink({ org, ws }, { ...view, view: firstParam(query.view) }),
     );

@@ -1532,6 +1532,16 @@
     },
     {
       "domain": "context",
+      "name": "get_steering_deliveries",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "context",
       "name": "get_steering_freshness",
       "reads": [],
       "surfaces": [
@@ -2758,6 +2768,15 @@
       "writes": []
     },
     {
+      "domain": "tacho",
+      "name": "register_contained_launch",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "register_mcp_server",
       "reads": [],
@@ -3890,7 +3909,7 @@
       "writes": []
     }
   ],
-  "contentHash": "401dd1654d57caef7c074fdd254eae00d11592560a5ceca160aef5e1076f0d2d",
+  "contentHash": "6bbbd25088d9b0999f169d09f85e032f1eda9aea0df213be6143303bf1ffd87a",
   "domains": [
     {
       "name": "agent",
@@ -4252,6 +4271,7 @@
       ],
       "tables": [
         "postgres:tacho.checkpoints",
+        "postgres:tacho.contained_launches",
         "postgres:tacho.control_commands",
         "postgres:tacho.enrollment_tokens",
         "postgres:tacho.gateway_chains",
@@ -4343,7 +4363,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 143
+      "tableCount": 144
     },
     {
       "domains": [
@@ -19493,6 +19513,70 @@
       "domain": "tacho",
       "id": "postgres:tacho.checkpoints",
       "name": "checkpoints",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "host_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "session_uuid",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "genesis_hash",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "measurement",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "registered_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "tacho",
+      "id": "postgres:tacho.contained_launches",
+      "name": "contained_launches",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true

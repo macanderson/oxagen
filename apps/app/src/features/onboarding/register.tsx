@@ -9,6 +9,7 @@ import { HarnessLabel } from "@/ui/harness-icon";
 // the page re-reads only while a host is enrolled, so an open page costs one
 // call per wait rather than one per tick.
 import "server-only";
+import { randomUUID } from "node:crypto";
 import { notFound } from "next/navigation";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
@@ -255,6 +256,7 @@ async function runStep({
   const provisional = openWindow(gate);
   return (
     <FirstFrameStep
+      pollRevision={randomUUID()}
       org={place.org}
       ws={place.ws}
       workspace={ctx.wsName}

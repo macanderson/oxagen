@@ -71,6 +71,7 @@ import { telemetryStellaIngest } from "./telemetry.stella.ingest";
 import { tachoEnrollmentCreate } from "./tacho.enrollment.create";
 import { tachoEnrollmentRevoke } from "./tacho.enrollment.revoke";
 import { tachoEventsIngest } from "./tacho.events.ingest";
+import { tachoContainedLaunchRegister } from "./tacho.contained_launch.register";
 import { tachoBundleGet } from "./tacho.bundle.get";
 import { tachoCommandDispatch } from "./tacho.command.dispatch";
 import { tachoCommandFetch } from "./tacho.command.fetch";
@@ -271,6 +272,7 @@ import { contextProposalDismiss } from "./context.proposal.dismiss";
 import { contextPrOpen } from "./context.pr.open";
 import { contextPrGet } from "./context.pr.get";
 import { contextPrMerge } from "./context.pr.merge";
+import { contextSteeringDeliveries } from "./context.steering.deliveries";
 import { contextSteeringFreshness } from "./context.steering.freshness";
 import { contextGovernanceModeSet } from "./context.governance_mode.set";
 import { connectionList } from "./connection.list";
@@ -680,6 +682,7 @@ export {
   tachoEnrollmentRevoke,
   tachoEventsIngest,
   tachoBundleGet,
+  tachoContainedLaunchRegister,
   tachoCommandDispatch,
   tachoCommandFetch,
   tachoCommandList,
@@ -847,6 +850,7 @@ export {
   contextRecordsList,
   contextRecordsGet,
   contextSteeringFreshness,
+  contextSteeringDeliveries,
   contextRecordsAppend,
   contextProposalCreate,
   contextProposalList,
@@ -1062,6 +1066,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   tachoEnrollmentRevoke,
   tachoEventsIngest,
   tachoBundleGet,
+  tachoContainedLaunchRegister,
   tachoCommandDispatch,
   tachoCommandFetch,
   tachoCommandList,
@@ -1228,6 +1233,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   contextRecordsList,
   contextRecordsGet,
   contextSteeringFreshness,
+  contextSteeringDeliveries,
   contextRecordsAppend,
   contextProposalCreate,
   contextProposalList,

@@ -33,7 +33,10 @@ import {
   unsignedBundle,
 } from "./tacho-host";
 import { hostGatewayColumnReady } from "./tacho-gateway-columns";
-import { readWorkspaceSteering } from "./tacho-steering";
+import {
+  readWorkspaceSteering,
+  type WorkspaceSteering,
+} from "./tacho-steering";
 import { logger } from "../logger";
 
 const TACHO_ENROLLMENT_SIGNING_SECRET_ENV = "TACHO_ENROLLMENT_SIGNING_SECRET";
@@ -153,8 +156,11 @@ interface MintedHostEnrollment {
   expiresAt: Date;
   denyGeneration: DenyGeneration;
   retention: Awaited<ReturnType<typeof readWorkspaceRetention>>;
-  /** The workspace's compiled steering, for the initial bundle (ADR-091). */
-  steering: string | null;
+  /**
+   * The workspace's assembled steering, for the initial bundle: the text and
+   * the manifest of what was included or cut (ADR-091, ADR-144).
+   */
+  steering: WorkspaceSteering;
   /** The host's mandate, for the initial bundle. Empty until `args.agent` names one. */
   mandate: HostMandate;
 }

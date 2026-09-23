@@ -8,6 +8,7 @@
 // read-only table for a member, a pointer to Single sign-on with no provider,
 // and a refused SSO read that leaves the roles in place.
 import { cleanup, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RoleCatalog } from "@/data/contracts/org";
@@ -115,6 +116,7 @@ async function renderRoles(
       proposals: vi.fn(),
       contextPr: vi.fn(),
       freshness: vi.fn(),
+      deliveries: vi.fn(),
     },
     tools: {
       versions: vi.fn(),
@@ -207,9 +209,15 @@ describe("ok", () => {
     ).toBeInTheDocument();
   });
 
-  it("prints the catalogue a role is written in, with what each permission covers", async () => {
+  it("opens the catalogue a role is written in, with what each permission covers", async () => {
     await renderRoles(readOk(catalog));
-    const section = screen.getByRole("region", {
+    expect(
+      screen.queryByRole("dialog", { name: "Permission catalogue" }),
+    ).toBeNull();
+    await userEvent.click(
+      screen.getByRole("button", { name: "View permission catalogue" }),
+    );
+    const section = await screen.findByRole("dialog", {
       name: "Permission catalogue",
     });
     expect(section).toHaveTextContent("Runs");
@@ -270,12 +278,15 @@ describe("empty", () => {
 });
 
 describe("a viewer who cannot write", () => {
-  it("names who can and offers no control (negative)", async () => {
+  it("names who can and offers no write control (negative)", async () => {
     await renderRoles(readOk(catalog), "member");
     expect(
       screen.getByText("An owner or an admin makes these changes."),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("button")).toBeNull();
+    // Reading the catalogue is the one button a member keeps.
+    expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual([
+      "View permission catalogue",
+    ]);
   });
 });
 

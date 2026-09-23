@@ -195,6 +195,136 @@
                         "type": "null"
                       }
                     ]
+                  },
+                  "manifest": {
+                    "type": "object",
+                    "properties": {
+                      "schema": {
+                        "const": "oxagen.steering.manifest/1"
+                      },
+                      "delivers": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "must",
+                            "should",
+                            "may",
+                            "info"
+                          ]
+                        },
+                        "maxItems": 4
+                      },
+                      "budget_tokens": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "spent_tokens": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "included": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "cut": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "text_digest": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
+                            },
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "record",
+                                "steer",
+                                "skill",
+                                "memory",
+                                "ontology",
+                                "policy",
+                                "instruction"
+                              ]
+                            },
+                            "force": {
+                              "type": "string",
+                              "enum": [
+                                "must",
+                                "should",
+                                "may",
+                                "info"
+                              ]
+                            },
+                            "recorded_at": {
+                              "type": "string",
+                              "maxLength": 64
+                            },
+                            "tokens": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "outcome": {
+                              "type": "string",
+                              "enum": [
+                                "included",
+                                "cut"
+                              ]
+                            },
+                            "reason": {
+                              "type": "string",
+                              "enum": [
+                                "tier",
+                                "budget",
+                                "superseded"
+                              ]
+                            },
+                            "superseded_by": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "kind",
+                            "force",
+                            "recorded_at",
+                            "tokens",
+                            "outcome"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "maxItems": 2000
+                      }
+                    },
+                    "required": [
+                      "schema",
+                      "delivers",
+                      "budget_tokens",
+                      "spent_tokens",
+                      "included",
+                      "cut",
+                      "text_digest",
+                      "items"
+                    ],
+                    "additionalProperties": false
                   }
                 },
                 "required": [

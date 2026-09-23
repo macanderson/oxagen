@@ -302,6 +302,7 @@ function forgedGatewaySession(
 }
 
 interface FakeDb {
+  activeDefinition?: string;
   hosts: Array<Record<string, unknown>>;
   principals: Array<Record<string, unknown>>;
   principalLookups: ReturnType<typeof vi.fn>;
@@ -345,6 +346,7 @@ interface FakeDb {
    * — the read returns values, and the row moves on under them.
    */
   advanceSeqCountOnRead: number | undefined;
+  containedLaunches: Array<{ sessionUuid: string; genesisHash: string }>;
   gatewayChains: Array<{
     chainSessionUuid: string;
     lastSeenAt: Date;
@@ -424,6 +426,7 @@ function fakeDb(): FakeDb {
     advanceSeqCountOnRead: undefined,
     pendingColumns: new Set<string>(),
     gatewayChains: [],
+    containedLaunches: [],
     retentionPolicy: undefined,
   };
 }
@@ -624,8 +627,18 @@ function wire(db: FakeDb): void {
           // publishes no agent version and stores no decision rules, so the
           // envelope carries the empty permission set and the observed
           // budget; `tacho-host-bundle.test.ts` covers a mandate that is not.
-          agents: { findFirst: async () => undefined },
-          agentVersions: { findFirst: async () => undefined },
+          agents: {
+            findFirst: async () =>
+              db.activeDefinition === undefined
+                ? undefined
+                : { activeVersionId: "version-active" },
+          },
+          agentVersions: {
+            findFirst: async () =>
+              db.activeDefinition === undefined
+                ? undefined
+                : { config: {}, definitionSource: db.activeDefinition },
+          },
           workspaces: { findFirst: async () => undefined },
         },
         // Two reads share `select`, told apart by the table. The steering
@@ -645,22 +658,24 @@ function wire(db: FakeDb): void {
             // each chain up by name — so a chain nobody served is still a
             // miss, which is the property these tests are about.
             where: async () =>
-              tableName(table) === "context_promotions"
-                ? [{ ledger: 0, steering: 0 }]
-                : tableName(table) === "session_files"
-                  ? // The rollup reads this session's existing rows to keep
-                    // one file on one row across batches, so the fixture
-                    // holds them rather than answering with another table's
-                    // shape.
-                    db.files.map((row) => ({
-                      path: row["path"],
-                      repoRelativePath: row["repoRelativePath"],
-                    }))
-                  : db.gatewayChains.map((row) => ({
-                      chain: row.chainSessionUuid,
-                      at: row.lastSeenAt,
-                      genesisHash: row.chainGenesisHash,
-                    })),
+              tableName(table) === "contained_launches"
+                ? db.containedLaunches
+                : tableName(table) === "context_promotions"
+                  ? [{ ledger: 0, steering: 0 }]
+                  : tableName(table) === "session_files"
+                    ? // The rollup reads this session's existing rows to keep
+                      // one file on one row across batches, so the fixture
+                      // holds them rather than answering with another table's
+                      // shape.
+                      db.files.map((row) => ({
+                        path: row["path"],
+                        repoRelativePath: row["repoRelativePath"],
+                      }))
+                    : db.gatewayChains.map((row) => ({
+                        chain: row.chainSessionUuid,
+                        at: row.lastSeenAt,
+                        genesisHash: row.chainGenesisHash,
+                      })),
             leftJoin: () => ({ where: async () => [] }),
           }),
         }),
@@ -897,6 +912,26 @@ describe("ingest_tacho_events", () => {
       eventHash: next.event.hash,
     });
   });
+
+  it.each(["[budget", "budget = { per_run_micros = nan }"])(
+    "accepts evidence while an invalid active definition suspends actions: %s",
+    async (source) => {
+      const db = fakeDb();
+      db.hosts[0]!["agentId"] = "agent-budget";
+      db.activeDefinition = source;
+      wire(db);
+      const events = session();
+      const output = await tachoEventsIngestHandler(batch(events), CONTEXT);
+      expect(output.accepted).toBe(events.length);
+      expect(output.control.host_status).toBe("suspended");
+      expect(db.sessions.size).toBe(1);
+      expect(mocks.insertTachoEvents).toHaveBeenCalled();
+      expect(db.hosts[0]!["status"]).toBe("active");
+      db.activeDefinition = "budget = { per_run_micros = 2000000 }";
+      const repaired = await tachoEventsIngestHandler(batch(events), CONTEXT);
+      expect(repaired.control.host_status).toBe("active");
+    },
+  );
 
   it("accepts a verified session, rolls it up, and answers the control envelope", async () => {
     const db = fakeDb();
@@ -3358,6 +3393,38 @@ describe("gateway attribution reaches the chain that carries the call", () => {
     expect(sessionUpdate?.values["enforcementTier"]).toBe("gateway");
     expect(db.sessions.get(SESSION)?.["enforcementTier"]).toBe("gateway");
   });
+
+  it.each(["matching", "mismatch", "no-traffic", "pending-migration"])(
+    "derives containment from a separate launch receipt: %s",
+    async (caseName) => {
+      const db = fakeDb();
+      const events = gatewayBatch();
+      const genesis = events[0]!.hash;
+      db.containedLaunches.push({
+        sessionUuid: SESSION,
+        genesisHash: caseName === "mismatch" ? "f".repeat(64) : genesis,
+      });
+      if (caseName !== "no-traffic") servedChain(db, events);
+      if (caseName === "pending-migration")
+        db.pendingColumns.add("tacho.contained_launches.genesis_hash");
+      wire(db);
+      await tachoEventsIngestHandler(
+        { schema: "tacho.batch.v1", host_enrollment_id: HOST_PUBLIC, events },
+        CONTEXT,
+      );
+      expect(db.sessions.get(SESSION)?.["enforcementTier"]).toBe(
+        caseName === "matching"
+          ? "contained"
+          : caseName === "no-traffic"
+            ? "observe"
+            : "gateway",
+      );
+      if (caseName === "matching")
+        expect(db.sessions.get(SESSION)?.["gatewayObservedAt"]).toBeInstanceOf(
+          Date,
+        );
+    },
+  );
 
   it("refuses a recorded session that has no genesis hash of its own", async () => {
     // A row that EXISTS and recorded no genesis is answered with nothing, not

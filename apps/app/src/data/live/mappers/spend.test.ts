@@ -84,6 +84,7 @@ describe("toSpendReport", () => {
     });
     const view = SpendReport.parse(toSpendReport(out));
     expect(view.total).toEqual(figure);
+    expect(view.rows[0]?.tokens).toEqual(tokens);
     expect(view.rows.map((row) => [row.key, row.provider, row.cost])).toEqual([
       ["claude-sonnet-5", "anthropic", priced],
       ["unpriced-model", null, null],

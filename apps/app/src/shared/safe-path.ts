@@ -327,9 +327,12 @@ export const routes = {
       view?: string;
     } = {},
   ): SafePath => {
-    const canonical = ["library", "proposals", "freshness"].includes(
-      q.tab ?? "",
-    );
+    const canonical = [
+      "library",
+      "proposals",
+      "freshness",
+      "deliveries",
+    ].includes(q.tab ?? "");
     const segments = canonical ? [q.tab!] : [];
     if (q.tab === "library" && q.shelf && q.shelf !== "all")
       segments.push(q.shelf);

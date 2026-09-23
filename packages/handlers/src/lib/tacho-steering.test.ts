@@ -1,21 +1,26 @@
 /**
- * The workspace's steering records, compiled into the bundle's
- * `context.system` (ADR-091). The text is part of the bundle etag, so it has
- * to be deterministic, and the host rejects the whole bundle past 16,384
- * characters, so it has to stay under that.
+ * The workspace's steering records, assembled into the bundle's
+ * `context.system` and `context.manifest` (ADR-091, ADR-093). The text is
+ * part of the bundle etag, so it has to be deterministic, and the host
+ * rejects the whole bundle past 16,384 characters, so it has to stay under
+ * that.
  */
 import { beforeEach, describe, expect, it } from "vitest";
 import { resetColumnProbesForTests, runOnPlane } from "@oxagen/database";
 import { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { policyBundleSchema } from "@oxagen/oxagen/tacho/schemas";
+import { steeringManifestSchema } from "@oxagen/tacho";
+import { STEERING_HEADER } from "@oxagen/steering-assembler";
 import {
+  CONTEXT_SYSTEM_BUDGET_TOKENS,
   CONTEXT_SYSTEM_MAX_CHARS,
   STEERING_CACHE_MAX_ENTRIES,
+  assembleWorkspaceSteering,
   classificationOf,
   clearSteeringCacheForTests,
-  compileSteering,
   readWorkspaceSteering,
+  recordCandidate,
   type SteeringRecord,
   type SteeringRow,
   type SteeringTx,
@@ -29,30 +34,72 @@ function rec(overrides: Partial<SteeringRecord>): SteeringRecord {
     force: "must",
     constraintEffect: null,
     statement: "Run the narrowest test that proves the change.",
+    activatedAt: "2026-09-10T00:00:00.000Z",
     ...overrides,
   };
 }
 
-describe("compileSteering", () => {
-  it("answers null when nothing steers, so a workspace without records gets the bundle it had before", () => {
-    expect(compileSteering([])).toBeNull();
+const assemble = (records: SteeringRecord[], budget?: number) =>
+  assembleWorkspaceSteering("org", "ws", records, budget);
+
+describe("recordCandidate", () => {
+  it("renders the line ADR-091 rendered, and reads the activation instant", () => {
     expect(
-      compileSteering([
-        rec({ force: "may" }),
-        rec({ force: "info" }),
-        rec({ force: null }),
-        rec({ statement: null }),
-        rec({ statement: "   " }),
-      ]),
-    ).toBeNull();
+      recordCandidate(
+        rec({
+          slug: "a-must",
+          kind: "constraint",
+          constraintEffect: "forbid",
+          statement: "Never A.",
+          activatedAt: new Date("2026-09-11T00:00:00.000Z"),
+        }),
+      ),
+    ).toEqual({
+      id: "a-must",
+      kind: "record",
+      force: "must",
+      body: "Never A. (constraint, forbid; a-must)",
+      recordedAt: "2026-09-11T00:00:00.000Z",
+    });
+    expect(recordCandidate(rec({ kind: null, activatedAt: null }))).toEqual({
+      id: "a-record",
+      kind: "record",
+      force: "must",
+      body: "Run the narrowest test that proves the change. (record; a-record)",
+      recordedAt: "",
+    });
+  });
+
+  it("answers null for a row that cannot steer", () => {
+    expect(recordCandidate(rec({ force: null }))).toBeNull();
+    expect(recordCandidate(rec({ force: "urgent" }))).toBeNull();
+    expect(recordCandidate(rec({ statement: null }))).toBeNull();
+    expect(recordCandidate(rec({ statement: "   " }))).toBeNull();
+  });
+});
+
+describe("assembleWorkspaceSteering", () => {
+  it("answers null text when nothing steers, so a workspace without records gets the bundle it had before", () => {
+    const empty = assemble([]);
+    expect(empty.text).toBeNull();
+    expect(empty.manifest).toMatchObject({ included: 0, cut: 0, items: [] });
+    // Rows that cannot steer are not candidates; may and info are, and the
+    // manifest says they were cut for their tier.
+    const quiet = assemble([
+      rec({ slug: "m", force: "may" }),
+      rec({ slug: "i", force: "info" }),
+      rec({ force: null }),
+      rec({ statement: null }),
+      rec({ statement: "   " }),
+    ]);
+    expect(quiet.text).toBeNull();
+    expect(quiet.manifest.items).toEqual([
+      expect.objectContaining({ id: "m", outcome: "cut", reason: "tier" }),
+      expect.objectContaining({ id: "i", outcome: "cut", reason: "tier" }),
+    ]);
   });
 
   it("delivers a record published through publish_context_record, now that the handler requires a classification (#3302)", () => {
-    // Before #3302, publish_context_record wrote only the body: kind, force
-    // and statement were all NULL, `rec({ force: null })` above is exactly
-    // that row, and compileSteering excludes it. The contract now requires
-    // kind, force and statement on every call, so the handler's write can
-    // only ever produce a row shaped like this one — and this one steers.
     const published = rec({
       slug: "no-bare-unwrap",
       kind: "rule",
@@ -60,53 +107,76 @@ describe("compileSteering", () => {
       statement:
         "Never unwrap a Result on runtime data without handling the error.",
     });
-    const text = compileSteering([published]);
-    expect(text).not.toBeNull();
+    const { text, manifest } = assemble([published]);
     expect(text).toContain("no-bare-unwrap");
     expect(text).toContain(published.statement);
+    expect(manifest.items).toEqual([
+      expect.objectContaining({ id: "no-bare-unwrap", outcome: "included" }),
+    ]);
   });
 
-  it("prints MUST before SHOULD, each sorted by slug, whatever order the rows arrive in", () => {
+  it("prints MUST before SHOULD, newest first within a tier, whatever order the rows arrive in", () => {
     const rows = [
-      rec({ slug: "b-should", force: "should", statement: "Prefer B." }),
-      rec({ slug: "z-must", statement: "Always Z." }),
+      rec({
+        slug: "b-should",
+        force: "should",
+        statement: "Prefer B.",
+        activatedAt: "2026-09-01T00:00:00Z",
+      }),
+      rec({
+        slug: "z-must",
+        statement: "Always Z.",
+        activatedAt: "2026-09-03T00:00:00Z",
+      }),
       rec({
         slug: "a-must",
         kind: "constraint",
         constraintEffect: "forbid",
         statement: "Never A.",
+        activatedAt: "2026-09-02T00:00:00Z",
       }),
-      rec({ slug: "a-should", force: "should", statement: "Prefer A." }),
+      rec({
+        slug: "a-should",
+        force: "should",
+        statement: "Prefer A.",
+        activatedAt: "2026-09-01T00:00:00Z",
+      }),
     ];
-    const text = compileSteering(rows)!;
-    expect(text.split("\n").slice(1)).toEqual([
+    const { text } = assemble(rows);
+    expect(text!.split("\n")).toEqual([
+      STEERING_HEADER,
       "",
       "MUST",
-      "- Never A. (constraint, forbid; a-must)",
       "- Always Z. (rule; z-must)",
+      "- Never A. (constraint, forbid; a-must)",
       "",
       "SHOULD",
       "- Prefer A. (rule; a-should)",
       "- Prefer B. (rule; b-should)",
     ]);
-    expect(compileSteering([...rows].reverse())).toBe(text);
+    expect(assemble([...rows].reverse())).toEqual(assemble(rows));
   });
 
-  it("leaves out whole records past the limit, SHOULD first, and says how many", () => {
+  it("names budget as the reason for every cut when a workspace holds more must records than the budget, and includes the same set twice", () => {
     const rows = Array.from({ length: 40 }, (_, i) =>
       rec({
         slug: `r-${String(i).padStart(2, "0")}`,
-        force: i < 5 ? "must" : "should",
         statement: `Statement ${i} ${"x".repeat(80)}.`,
+        activatedAt: `2026-09-${String((i % 28) + 1).padStart(2, "0")}T00:00:00Z`,
       }),
     );
-    const text = compileSteering(rows, 1_000)!;
-    expect(text.length).toBeLessThanOrEqual(1_000);
-    expect(text).toContain("(rule; r-00)");
-    expect(text).toContain("(rule; r-04)");
-    const kept = text.split("\n").filter((l) => l.startsWith("- ")).length;
-    expect(text).toMatch(new RegExp(`${40 - kept} more records were left out`));
-    expect(text).not.toContain("r-39");
+    const first = assemble(rows, 250);
+    const second = assemble([...rows].reverse(), 250);
+    expect(first.text!.length).toBeLessThanOrEqual(1_000);
+    expect(first.manifest.included).toBeGreaterThan(0);
+    expect(first.manifest.cut).toBeGreaterThan(0);
+    for (const item of first.manifest.items) {
+      if (item.outcome === "cut") expect(item.reason).toBe("budget");
+    }
+    expect(first.text).toMatch(
+      new RegExp(`${first.manifest.cut} more records were left out`),
+    );
+    expect(second).toEqual(first);
   });
 
   it("names a single omitted record in the singular", () => {
@@ -114,18 +184,41 @@ describe("compileSteering", () => {
       rec({ slug: "a", statement: "x".repeat(300) }),
       rec({ slug: "b", statement: "y".repeat(300) }),
     ];
-    const text = compileSteering(rows, 600)!;
+    const { text } = assemble(rows, 150);
     expect(text).toContain("1 more record was left out");
-    expect(text.length).toBeLessThanOrEqual(600);
+    expect(text!.length).toBeLessThanOrEqual(600);
   });
 
-  it("stays inside the host's limit at the default", () => {
+  it("stays inside the host's limit at the default budget", () => {
     const rows = Array.from({ length: 500 }, (_, i) =>
       rec({ slug: `r-${i}`, statement: "s".repeat(200) }),
     );
-    expect(compileSteering(rows)!.length).toBeLessThanOrEqual(
-      CONTEXT_SYSTEM_MAX_CHARS,
+    const { text, manifest } = assemble(rows);
+    expect(text!.length).toBeLessThanOrEqual(CONTEXT_SYSTEM_MAX_CHARS);
+    expect(manifest.budget_tokens).toBe(CONTEXT_SYSTEM_BUDGET_TOKENS);
+    expect(manifest.spent_tokens).toBeLessThanOrEqual(
+      CONTEXT_SYSTEM_BUDGET_TOKENS,
     );
+  });
+
+  // The leaf package carries its own copy of the manifest shape (H7), and
+  // this is what keeps the two in step: the assembler's output must parse
+  // under the schema the host seals it with.
+  it("produces a manifest the host's wire schema accepts", () => {
+    const { manifest } = assemble(
+      [
+        rec({ slug: "a" }),
+        rec({ slug: "b", force: "may" }),
+        rec({ slug: "c", statement: "z".repeat(5_000) }),
+      ],
+      300,
+    );
+    expect(steeringManifestSchema.parse(manifest)).toEqual(manifest);
+    expect(manifest.items.map((i) => i.reason ?? null)).toEqual([
+      null,
+      "budget",
+      "tier",
+    ]);
   });
 });
 
@@ -147,7 +240,7 @@ function fakeTx(db: {
   const ready = db.columns !== false;
   const steeringCount = () =>
     db.rows.filter((r) =>
-      ["must", "should"].includes(
+      ["must", "should", "may", "info"].includes(
         (ready ? r.versionForce : null) ?? r.recordForce ?? "",
       ),
     ).length;
@@ -239,6 +332,8 @@ function tableName(table: unknown): string {
 function row(overrides: Partial<SteeringRow>): SteeringRow {
   return {
     slug: "a-record",
+    activatedAt: new Date("2026-09-10T00:00:00.000Z"),
+    createdAt: new Date("2026-09-09T00:00:00.000Z"),
     versionKind: "rule",
     versionForce: "must",
     versionConstraintEffect: null,
@@ -272,6 +367,7 @@ describe("classificationOf", () => {
       force: "should",
       constraintEffect: null,
       statement: "Prefer small pull requests.",
+      activatedAt: new Date("2026-09-10T00:00:00.000Z"),
     });
   });
 
@@ -295,7 +391,14 @@ describe("classificationOf", () => {
       force: "must",
       constraintEffect: "forbid",
       statement: "Never force-push.",
+      activatedAt: new Date("2026-09-10T00:00:00.000Z"),
     });
+  });
+
+  it("takes the row's creation instant for a record that never activated", () => {
+    expect(classificationOf(row({ activatedAt: null })).activatedAt).toEqual(
+      new Date("2026-09-09T00:00:00.000Z"),
+    );
   });
 });
 
@@ -318,7 +421,7 @@ describe("readWorkspaceSteering", () => {
         }),
       ],
     });
-    const text = await readWorkspaceSteering(tx, "org", "ws");
+    const { text } = await readWorkspaceSteering(tx, "org", "ws");
     expect(text).toContain("- Ask before deleting data. (rule; a-record)");
     expect(text).not.toContain("stale copy");
     expect(calls).toEqual({ version: 1, records: 1 });
@@ -344,7 +447,7 @@ describe("readWorkspaceSteering", () => {
       }),
     ];
     const moved = await readWorkspaceSteering(tx, "org", "ws");
-    expect(moved).toContain("Prefer small pull requests.");
+    expect(moved.text).toContain("Prefer small pull requests.");
     expect(calls).toEqual({ version: 3, records: 2 });
   });
 
@@ -359,7 +462,7 @@ describe("readWorkspaceSteering", () => {
       };
       const { tx, calls } = fakeTx(db);
       const before = await readWorkspaceSteering(tx, "org", "ws");
-      expect(before).toContain("Ask before deleting data.");
+      expect(before.text).toContain("Ask before deleting data.");
       // publish_context_record changes the pin and classification together.
       // It appends no promotion, and the active record count stays at one.
       db.revisions = "version-2";
@@ -374,10 +477,10 @@ describe("readWorkspaceSteering", () => {
         }),
       ];
       const after = await readWorkspaceSteering(tx, "org", "ws");
-      expect(after).toContain(
+      expect(after.text).toContain(
         "Do not delete production data. (constraint, forbid;",
       );
-      expect(after).not.toContain("Ask before deleting data.");
+      expect(after.text).not.toContain("Ask before deleting data.");
       expect(await readWorkspaceSteering(tx, "org", "ws")).toBe(after);
       expect(calls).toEqual({ version: 3, records: 2 });
     },
@@ -387,27 +490,33 @@ describe("readWorkspaceSteering", () => {
     const db = { ledger: 2, rows: [row({}), row({ slug: "b-record" })] };
     const { tx, calls } = fakeTx(db);
     const before = await readWorkspaceSteering(tx, "org", "ws");
-    expect(before).toContain("b-record");
+    expect(before.text).toContain("b-record");
     db.rows = [row({})];
     const after = await readWorkspaceSteering(tx, "org", "ws");
-    expect(after).not.toContain("b-record");
+    expect(after.text).not.toContain("b-record");
     expect(calls).toEqual({ version: 2, records: 2 });
   });
 
   it("keeps one entry per workspace", async () => {
     const a = fakeTx({ ledger: 1, rows: [row({ versionStatement: "A." })] });
     const b = fakeTx({ ledger: 1, rows: [row({ versionStatement: "B." })] });
-    expect(await readWorkspaceSteering(a.tx, "org", "ws-a")).toContain("A.");
-    expect(await readWorkspaceSteering(b.tx, "org", "ws-b")).toContain("B.");
-    expect(await readWorkspaceSteering(a.tx, "org", "ws-a")).toContain("A.");
+    expect((await readWorkspaceSteering(a.tx, "org", "ws-a")).text).toContain(
+      "A.",
+    );
+    expect((await readWorkspaceSteering(b.tx, "org", "ws-b")).text).toContain(
+      "B.",
+    );
+    expect((await readWorkspaceSteering(a.tx, "org", "ws-a")).text).toContain(
+      "A.",
+    );
     expect(a.calls).toEqual({ version: 2, records: 1 });
     expect(b.calls).toEqual({ version: 1, records: 1 });
   });
 
   it("caches a workspace with nothing to say, too", async () => {
     const { tx, calls } = fakeTx({ ledger: 0, rows: [] });
-    expect(await readWorkspaceSteering(tx, "org", "ws")).toBeNull();
-    expect(await readWorkspaceSteering(tx, "org", "ws")).toBeNull();
+    expect((await readWorkspaceSteering(tx, "org", "ws")).text).toBeNull();
+    expect((await readWorkspaceSteering(tx, "org", "ws")).text).toBeNull();
     expect(calls).toEqual({ version: 2, records: 1 });
   });
 
@@ -451,14 +560,18 @@ describe("readWorkspaceSteering", () => {
     });
 
     expect(
-      await runOnPlane("plane-a", () =>
-        readWorkspaceSteering(before.tx, "org", "ws"),
-      ),
+      (
+        await runOnPlane("plane-a", () =>
+          readWorkspaceSteering(before.tx, "org", "ws"),
+        )
+      ).text,
     ).toContain("What the old plane says.");
     expect(
-      await runOnPlane("plane-b", () =>
-        readWorkspaceSteering(after.tx, "org", "ws"),
-      ),
+      (
+        await runOnPlane("plane-b", () =>
+          readWorkspaceSteering(after.tx, "org", "ws"),
+        )
+      ).text,
     ).toContain("What the new plane says.");
     // The second plane read its own rows rather than taking the first's entry.
     expect(after.calls).toEqual({ version: 1, records: 1 });
@@ -490,7 +603,7 @@ describe("readWorkspaceSteering", () => {
       });
       // fakeTx asserts the read took the un-joined path; the text proves it
       // used the only classification such a database can hold.
-      const text = await readWorkspaceSteering(tx, "org", "ws");
+      const { text } = await readWorkspaceSteering(tx, "org", "ws");
       expect(text).toContain("What the record row says.");
       expect(text).not.toContain("What the pinned version says.");
       expect(calls).toEqual({ version: 1, records: 1 });
@@ -502,7 +615,9 @@ describe("readWorkspaceSteering", () => {
         ledger: 1,
         rows: [row({ versionForce: "info", recordForce: "must" })],
       });
-      expect(await readWorkspaceSteering(tx, "org", "ws")).not.toBeNull();
+      expect(
+        (await readWorkspaceSteering(tx, "org", "ws")).text,
+      ).not.toBeNull();
     });
 
     it("probes once per call and caches the compiled text as usual", async () => {
@@ -530,9 +645,9 @@ describe("readWorkspaceSteering", () => {
           }),
         ],
       });
-      expect(await readWorkspaceSteering(pending.tx, "org", "ws")).toContain(
-        "What the record row says.",
-      );
+      expect(
+        (await readWorkspaceSteering(pending.tx, "org", "ws")).text,
+      ).toContain("What the record row says.");
 
       // The migration lands. Neither the ledger nor the record count moves, so
       // only the probe's answer in the cache key can invalidate the entry.
@@ -546,9 +661,9 @@ describe("readWorkspaceSteering", () => {
           }),
         ],
       });
-      expect(await readWorkspaceSteering(migrated.tx, "org", "ws")).toContain(
-        "What the pinned version says.",
-      );
+      expect(
+        (await readWorkspaceSteering(migrated.tx, "org", "ws")).text,
+      ).toContain("What the pinned version says.");
       expect(migrated.calls).toEqual({ version: 1, records: 1 });
     });
   });
@@ -568,23 +683,23 @@ describe("the bundle", () => {
     budget: { mode: "observed" as const },
   };
 
-  it("carries the compiled text in context.system, parses on the host, and moves the etag", () => {
-    const system = compileSteering([rec({})]);
+  it("carries the assembled text in context.system, parses on the host, and moves the etag", () => {
+    const steering = assemble([rec({})]);
     const steered = unsignedBundle(
       host,
       { org: 0, workspace: 0 },
       retention,
-      system,
+      steering,
       noMandate,
     );
     const plain = unsignedBundle(
       host,
       { org: 0, workspace: 0 },
       retention,
-      null,
+      assemble([]),
       noMandate,
     );
-    expect(steered.context.system).toBe(system);
+    expect(steered.context.system).toBe(steering.text);
     expect(plain.context.system).toBeNull();
     expect(steered.etag).not.toBe(plain.etag);
     const sig = { key_id: "k", alg: "ed25519" as const, sig: "s" };

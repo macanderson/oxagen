@@ -5,7 +5,8 @@
       "proposals": "Proposals",
       "settings": "Settings",
       "library": "Library",
-      "freshness": "Freshness"
+      "freshness": "Freshness",
+      "deliveries": "Delivery"
     },
     "failure": {
       "denied": "You cannot see {section} in this workspace. The roles you hold do not include {permission}. An owner can grant it.",
@@ -199,6 +200,30 @@
       "prs": "Context PRs"
     },
     "description": "Published records, observed skills, proposals and checkout freshness for this workspace.",
-    "governance": "Governance in Context PRs"
+    "governance": "Governance in Context PRs",
+    "deliveries": {
+      "title": "Steering delivery",
+      "lead": "The latest verified manifest for each recorded run in the last 7 days.",
+      "empty": "No steering manifests were recorded in this window. Older hosts may not report them.",
+      "sample": "Showing {shown} runs from {count} manifests.",
+      "truncated": "The window contains more than 2,000 manifests. These counts cover the newest 2,000.",
+      "run": "Run",
+      "included": "Included",
+      "cut": "Cut",
+      "budgetCuts": "Cut for budget",
+      "tokens": "Budget tokens used",
+      "unreached": "Records not included",
+      "unreachedLead": "These records were cut from every sampled manifest that considered them.",
+      "record": "Record",
+      "runs": "Runs",
+      "reason": "Latest reason",
+      "noUnreached": "Every candidate record appeared in at least one sampled manifest.",
+      "reasons": {
+        "budget": "Budget",
+        "tier": "Delivery tier",
+        "superseded": "Newer version",
+        "unknown": "Not recorded"
+      }
+    }
   }
 }

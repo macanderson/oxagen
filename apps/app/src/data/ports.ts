@@ -81,6 +81,7 @@ import type {
   RecordKind,
   RecordPage,
   SteeringFreshness,
+  SteeringDeliveries,
 } from "./contracts/steering";
 import type {
   ApprovalRuleSet,
@@ -382,6 +383,7 @@ export interface DataSource {
    * features/steering/steering.tsx and features/record/record.tsx.
    */
   steering: {
+    deliveries(ctx: WsCtx): Promise<Read<SteeringDeliveries>>;
     /** list_records, status active: one page of the records in force, of one kind or all */
     records(
       ctx: WsCtx,
