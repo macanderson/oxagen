@@ -1,7 +1,7 @@
 // gitlab-credential.ts — the GitLab project access token a workspace connected
 // (#3762), decrypted for one call and never logged.
 //
-// `connect_gitlab_project` stores the token and the webhook secret together as
+// `attach_gitlab_project` stores the token and the webhook secret together as
 // one encrypted payload in `ingestion.auth_credentials`, keyed by the GitLab
 // source connection. This module is the only reader. It answers only for a
 // live connection in the caller's workspace: a deleted, deleting or foreign

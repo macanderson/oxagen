@@ -1,5 +1,5 @@
 /**
- * `connect_gitlab_project`: connect one gitlab.com project to the workspace
+ * `attach_gitlab_project`: connect one gitlab.com project to the workspace
  * with a project access token (#3762).
  *
  * A GitLab token is not a GitHub App installation, so this is its own connect
@@ -46,8 +46,8 @@ export const gitlabProjectPathSchema = z
   .max(1024)
   .regex(/^[A-Za-z0-9_][A-Za-z0-9_.-]*(\/[A-Za-z0-9_][A-Za-z0-9_.-]*)+$/);
 
-export const repositoryGitlabConnect = registerCapability({
-  name: "connect_gitlab_project",
+export const repositoryGitlabAttach = registerCapability({
+  name: "attach_gitlab_project",
   domain: "repository",
   description:
     "Connect a gitlab.com project to the workspace with a project access token scoped to that project. The token is verified, encrypted and never returned; a project webhook for merge request events is registered when the token's role allows it. Connecting the same project again rotates the token.",
@@ -98,9 +98,9 @@ export const repositoryGitlabConnect = registerCapability({
     .strict(),
 });
 
-export type RepositoryGitlabConnectInput = z.output<
-  typeof repositoryGitlabConnect.input
+export type RepositoryGitlabAttachInput = z.output<
+  typeof repositoryGitlabAttach.input
 >;
-export type RepositoryGitlabConnectOutput = z.output<
-  typeof repositoryGitlabConnect.output
+export type RepositoryGitlabAttachOutput = z.output<
+  typeof repositoryGitlabAttach.output
 >;

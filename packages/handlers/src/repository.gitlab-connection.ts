@@ -18,7 +18,7 @@ import {
 
 const RETIRED_STATUSES = ["deleting", "deleted"] as const;
 
-/** What `connect_gitlab_project` records in a connection's `deliveryConfig`. */
+/** What `attach_gitlab_project` records in a connection's `deliveryConfig`. */
 export interface GitLabDeliveryConfig {
   /** GitLab's numeric project id, as text. The identity. */
   projectId: string;

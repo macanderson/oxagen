@@ -1878,6 +1878,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .repositoryInstallationAttachHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "attach_gitlab_project",
+    async () =>
+      (await import("./repository.gitlab.attach"))
+        .repositoryGitlabAttachHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "create_enrollment_token",
     async () =>
       (await import("./tacho.enrollment_token.create"))

@@ -1,6 +1,6 @@
 // audit-exempt: the kernel's capability.invoke_* audit records every connect; the security_events taxonomy has no repository-credential type yet, and the token itself is never logged or returned.
 //
-// repository.gitlab.connect.ts — `connect_gitlab_project` (#3762).
+// repository.gitlab.attach.ts — `attach_gitlab_project` (#3762).
 //
 // Flow:
 //   1. Role gate: org Owner or Admin (INV-29).
@@ -19,9 +19,9 @@ import { randomBytes } from "node:crypto";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen";
 import {
-  repositoryGitlabConnect,
-  type RepositoryGitlabConnectOutput,
-} from "@oxagen/oxagen/contracts/repository.gitlab.connect";
+  repositoryGitlabAttach,
+  type RepositoryGitlabAttachOutput,
+} from "@oxagen/oxagen/contracts/repository.gitlab.attach";
 import { createIngestionCryptoAdapter, encrypt } from "@oxagen/crypto";
 import { schema, withTenantDb } from "@oxagen/database";
 import {
@@ -59,7 +59,7 @@ const REFUSED_SCOPES = new Set([
   "manage_runner",
 ]);
 
-export interface GitLabConnectDeps {
+export interface GitLabAttachDeps {
   client: (token: string) => GitLabClient;
   /** Envelope-encrypt the credential JSON. */
   seal: (plaintext: string) => Promise<{ keyId: string; ciphertext: string }>;
@@ -69,7 +69,7 @@ export interface GitLabConnectDeps {
   webhookUrl: (connectionPublicId: string) => string;
 }
 
-export const gitlabConnectDeps: GitLabConnectDeps = {
+export const gitlabAttachDeps: GitLabAttachDeps = {
   client: (token) => createGitLabClient({ token }),
   async seal(plaintext) {
     const { adapter, keyId } = createIngestionCryptoAdapter();
@@ -166,10 +166,10 @@ export async function verifyProjectToken(
   return { project, expiresAt: token.expiresAt };
 }
 
-export function createGitLabConnectHandler(
-  deps: GitLabConnectDeps,
-): CapabilityHandler<typeof repositoryGitlabConnect> {
-  return async (input, ctx): Promise<RepositoryGitlabConnectOutput> => {
+export function createGitLabAttachHandler(
+  deps: GitLabAttachDeps,
+): CapabilityHandler<typeof repositoryGitlabAttach> {
+  return async (input, ctx): Promise<RepositoryGitlabAttachOutput> => {
     const actingUserId = await resolveActingUserId(ctx);
     await assertOrgRole(
       { ...ctx, userId: actingUserId },
@@ -253,7 +253,7 @@ export function createGitLabConnectHandler(
       return row;
     });
 
-    let webhook: RepositoryGitlabConnectOutput["webhook"];
+    let webhook: RepositoryGitlabAttachOutput["webhook"];
     if (config.webhookId !== null) {
       webhook = { status: "unchanged" };
     } else {
@@ -287,7 +287,7 @@ export function createGitLabConnectHandler(
         rotated: existing !== null,
         webhook: webhook.status,
       },
-      "repository.gitlab.connect: GitLab project connected",
+      "repository.gitlab.attach: GitLab project connected",
     );
 
     return {
@@ -311,7 +311,7 @@ export function createGitLabConnectHandler(
 async function keepWebhookSecret(
   scope: { orgId: string; workspaceId: string },
   connectionId: string,
-  deps: GitLabConnectDeps,
+  deps: GitLabAttachDeps,
 ): Promise<string> {
   const { resolveGitLabCredential } = await import("./lib/gitlab-credential");
   try {
@@ -322,5 +322,5 @@ async function keepWebhookSecret(
   }
 }
 
-export const repositoryGitlabConnectHandler =
-  createGitLabConnectHandler(gitlabConnectDeps);
+export const repositoryGitlabAttachHandler =
+  createGitLabAttachHandler(gitlabAttachDeps);

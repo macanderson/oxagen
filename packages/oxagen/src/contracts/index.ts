@@ -91,6 +91,7 @@ import { repositoryInitPrOpen } from "./repository.init_pr.open";
 import { repositoryInstallationList } from "./repository.installation.list";
 import { repositoryInstallationCandidates } from "./repository.installation.candidates";
 import { repositoryInstallationAttach } from "./repository.installation.attach";
+import { repositoryGitlabAttach } from "./repository.gitlab.attach";
 import { runList } from "./run.list";
 import { runCostGet } from "./run.cost";
 import { runOutputsGet } from "./run.outputs.get";
@@ -700,6 +701,7 @@ export {
   repositoryInstallationList,
   repositoryInstallationCandidates,
   repositoryInstallationAttach,
+  repositoryGitlabAttach,
   runList,
   runGet,
   runFrameBodyGet,
@@ -1076,6 +1078,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   repositoryInstallationList,
   repositoryInstallationCandidates,
   repositoryInstallationAttach,
+  repositoryGitlabAttach,
   runList,
   runGet,
   runFrameBodyGet,
