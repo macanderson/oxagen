@@ -2,7 +2,7 @@ name: CI
 
 on:
   pull_request:
-  # The merge queue (ADR-146). A pull request's own run tests it against the
+  # The merge queue (ADR-147). A pull request's own run tests it against the
   # main it last saw, and only the packages it touches. Two PRs that are each
   # green that way can still break main together: on 2026-09-23 #3739 and
   # #3745 both rewrote one helper and #3732 and #3739 both edited spend.tsx,
