@@ -24,6 +24,7 @@ import type {
 } from "./contracts/audit";
 import type {
   ContractRate,
+  EvidenceRetention,
   GauBucket,
   InvoicePage,
   PlanCard,
@@ -120,7 +121,7 @@ export interface DataSource {
     preferences(ctx: OrgCtx): Promise<Read<ViewerPreferences>>;
   };
   /**
-   * The Billing page's five noBillingGate reads, each Owner, Admin or Billing
+   * The Billing page's six noBillingGate reads, each Owner, Admin or Billing
    * (checked in its handler); caller: features/billing/billing.tsx.
    */
   billing: {
@@ -136,6 +137,8 @@ export interface DataSource {
     bucket(ctx: OrgCtx): Promise<Read<GauBucket>>;
     /** get_contract_rate */
     contractRate(ctx: OrgCtx): Promise<Read<ContractRate>>;
+    /** get_evidence_retention: the included window, its price, and the volume held once it is measured */
+    retention(ctx: OrgCtx): Promise<Read<EvidenceRetention>>;
     /** list_invoices, one cursor page, newest first */
     invoices(
       ctx: OrgCtx,

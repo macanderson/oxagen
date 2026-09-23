@@ -22,6 +22,15 @@ pricing model exists to avoid, and the way to avoid it is to make the state
 visible before the bill arrives. `noBillingGate: true` — reading your own
 retention posture is never a charge.
 
+## Where it is read
+
+The Billing page (`/[org]/billing`, `apps/app/src/data/live/billing.ts`) reads
+the included window and the per-GB-month price for its Retained evidence tile,
+Evidence retention line, Retained evidence meter and price list, and
+`extendedRetentionEnabled` to state that retention added nothing this period.
+It prints the evidence volume as not recorded: this capability reports only the
+volume beyond the included window, and nothing measures that yet.
+
 ## Input
 
 None (`{}`). Reads the caller's active org scope.

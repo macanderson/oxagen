@@ -33,7 +33,6 @@ const {
   requireViewer,
   Audit,
   Billing,
-  BillingActions,
   Fleet,
   Run,
   Agents,
@@ -61,8 +60,11 @@ const {
   return {
     requireViewer: vi.fn<(org: string, ws?: string) => Promise<unknown>>(),
     Audit: vi.fn((_props: Record<string, unknown>) => null),
-    Billing: vi.fn((_props: Record<string, unknown>) => null),
-    BillingActions: vi.fn((_props: Record<string, unknown>) => null),
+    // Billing draws its own header (a not-loaded state replaces it), so the
+    // stand-in draws the h1 from the title the route hands it.
+    Billing: vi.fn((props: Record<string, unknown>) => (
+      <h1>{String(props.title)}</h1>
+    )),
     Fleet: vi.fn(
       (props: Record<string, unknown> & { spendTiles?: ReactNode }) => (
         <>{props.spendTiles}</>
@@ -114,7 +116,12 @@ vi.mock("@/server/viewer", () => ({
   },
 }));
 vi.mock("@/features/audit", () => ({ Audit, AuditSkeleton: () => null }));
-vi.mock("@/features/billing", () => ({ Billing, BillingActions }));
+vi.mock("@/features/billing", () => ({ Billing }));
+// Billing names the signed-in person on its denied state; the session is Better
+// Auth's, so the stub answers with the name alone.
+vi.mock("@/server/session", () => ({
+  getAuthUser: () => Promise.resolve({ name: "Marcus Bell" }),
+}));
 vi.mock("@/features/fleet", () => ({ Fleet, FleetRegister: () => null }));
 vi.mock("@/features/run", () => ({ Run }));
 vi.mock("@/features/agents", () => ({
@@ -263,7 +270,7 @@ describe("the Audit page", () => {
 });
 
 describe("the Billing page", () => {
-  it("resolves the organization viewer, names the page once and hands the viewer, the data source, the checkout outcome and the invoices cursor to Billing", async () => {
+  it("resolves the organization viewer, names the page once and hands the viewer, the data source, the title, the signed-in name, the checkout outcome and the invoices cursor to Billing", async () => {
     const ctx = { orgSlug: "acme", orgName: "Acme Robotics" };
     requireViewer.mockResolvedValue(ctx);
     await expectPageTitle(
@@ -273,20 +280,16 @@ describe("the Billing page", () => {
     );
     expect(requireViewer).toHaveBeenCalledWith(...ORG);
     expect(Billing).toHaveBeenCalledOnce();
+    // Billing renders the header itself (eyebrow, subtext and Change plan),
+    // since its not-loaded states replace the header with the body.
     expect(Billing.mock.calls[0]?.[0]).toEqual({
       ctx,
       source,
+      title: title("billing"),
+      viewerName: "Marcus Bell",
       checkout: "success",
       cursor: "c2",
     });
-    // The header carries the eyebrow, the description and Change plan
-    // (pages/billing.md); the action reads the plan on its own.
-    expect(screen.getByText("Organization")).toBeInTheDocument();
-    expect(
-      screen.getByText(/What Acme Robotics pays Oxagen/),
-    ).toBeInTheDocument();
-    expect(BillingActions).toHaveBeenCalledOnce();
-    expect(BillingActions.mock.calls[0]?.[0]).toEqual({ ctx, source });
   });
 
   it("hands Billing no checkout outcome and the newest invoices when the URL carries neither", async () => {

@@ -17,6 +17,7 @@ export function mandateSource(read: Read<MandateDetail> | undefined) {
     billing: {
       plan: refuse,
       usageCredits: refuse,
+      retention: refuse,
       bucket: refuse,
       contractRate: refuse,
       invoices: refuse,

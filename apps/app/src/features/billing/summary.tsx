@@ -1,24 +1,34 @@
 // The four tiles at the top of Billing (pages/billing.md, "Summary tiles"):
-// the plan, this month's governed action units, the contracted rate and what
-// is due. Each prints one figure and one basis line, and each figure is a
-// rollup of a section below it — the bucket in Meters, the terms in the price
-// list, the open rows of Invoices — never a number typed twice. One of the
-// files money renders in (INV-25): the rate per 1,000 GAU and the open total.
-import { statNote, statTerm, statTile, statValue } from "@/ui/control-styles";
+// the plan, the governed actions priced this period (the count the first line
+// of This period is labelled with, so the tile and the line always agree),
+// the evidence retained, and what is due at the period's end. Each prints one
+// figure and one basis line, and each figure is a rollup of a section below
+// it: the governed actions and the amount due are statement.ts's, the same
+// derivation This period prints, and the retained evidence is the figure the
+// Retained evidence meter prints. What is due is the total after the
+// onboarding discount, and the discount has no store yet (#3845), so the Due
+// tile says "not recorded" under the design's basis rather than a sum that
+// left the discount out. Its date is the period's end as an ISO day, the way
+// the design prints it. One of the files money renders in (INV-25): the block
+// price in the governed-action basis and the amount due.
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type {
   ContractRate,
-  GauBucket,
-  InvoicePage,
+  EvidenceRetention,
   PlanCard,
 } from "@/data/contracts/billing";
-import { mulMicros, sumMoney } from "@/data/contracts/money";
-import type { Read } from "@/data/read";
-import { Money } from "@/ui/money";
+import {
+  statNote,
+  statStrip,
+  statTerm,
+  statTile,
+  statValue,
+} from "@/ui/control-styles";
 import { formatCount } from "@/ui/money-format";
-import { BillingReadFailure } from "./read-failure";
-import { useDate } from "./section";
+import { NotRecordedValue, useDate } from "./section";
+import type { Statement } from "./statement";
+import { ChargeBasis, StatementAmount } from "./this-period";
 
 function Tile({
   name,
@@ -41,189 +51,103 @@ function Tile({
   );
 }
 
-function PlanTile({
-  plan,
-  rate,
-}: {
-  plan: Read<PlanCard>;
-  rate: Read<ContractRate>;
-}) {
+function PlanTile({ plan, rate }: { plan: PlanCard; rate: ContractRate }) {
   const t = useTranslations("billing");
-  const term = t("tiles.plan");
-  if (!plan.ok) {
-    return (
-      <Tile name="plan" term={term} note={null}>
-        <BillingReadFailure read={plan} section={term} />
-      </Tile>
-    );
-  }
-  const { subscription } = plan.value;
-  if (subscription !== null) {
-    return (
-      <Tile
-        name="plan"
-        term={term}
-        note={
-          subscription.billingInterval === "year"
-            ? t("tiles.planYear")
-            : t("tiles.planMonth")
-        }
-      >
-        {subscription.plan}
-      </Tile>
-    );
-  }
-  // No subscription: the tier the terms resolve to names the plan (Free, or a
-  // negotiated Enterprise agreement).
+  const { subscription } = plan;
+  // The tier the terms resolve to names the plan for a person. The basis is
+  // how the subscription bills: yearly when Stripe says so, since printing
+  // "monthly" over an annual plan would state a term the record contradicts.
+  // With no subscription the plan is the tier the terms resolve to (Free, or
+  // a negotiated Enterprise agreement), and nothing bills it.
+  const note =
+    subscription === null
+      ? t("tiles.planNone")
+      : subscription.billingInterval === "year"
+        ? t("tiles.planYear")
+        : t("tiles.planMonth");
   return (
-    <Tile name="plan" term={term} note={t("tiles.planNone")}>
-      {rate.ok ? t(`tiers.${rate.value.tier}`) : t("notRecorded")}
+    <Tile name="plan" term={t("tiles.plan")} note={note}>
+      {t(`tiers.${rate.tier}`)}
     </Tile>
   );
 }
 
-function GauTile({ bucket }: { bucket: Read<GauBucket> }) {
+function GovernedTile({ statement: s }: { statement: Statement }) {
   const t = useTranslations("billing");
   const locale = useLocale();
-  const term = t("tiles.gau");
-  if (!bucket.ok) {
-    return (
-      <Tile name="gau" term={term} note={null}>
-        <BillingReadFailure read={bucket} section={term} />
-      </Tile>
-    );
-  }
-  const b = bucket.value;
-  const count = (n: number) => formatCount(n, locale);
+  // The count the first line of This period is labelled with: one number in
+  // both places, never a second derivation.
   return (
     <Tile
-      name="gau"
-      term={term}
-      data-remaining={b.remainingGau}
-      note={t("tiles.gauNote", {
-        used: count(b.usedGau),
-        included: count(b.includedGau),
-        purchased: count(b.purchasedGau),
-        carried: count(b.carriedGau),
+      name="governed"
+      term={t("tiles.governed")}
+      data-count={s.pricedCount}
+      note={t.rich("tiles.governedNote", {
+        basis: () => <ChargeBasis charge={s.charge} included={s.includedGau} />,
       })}
     >
-      {b.remainingGau < 0
-        ? t("tiles.overdrawn", { count: count(-b.remainingGau) })
-        : count(b.remainingGau)}
+      {formatCount(s.pricedCount, locale)}
     </Tile>
   );
 }
 
-function RateTile({ rate }: { rate: Read<ContractRate> }) {
+function RetainedTile({ retention }: { retention: EvidenceRetention }) {
   const t = useTranslations("billing");
-  const date = useDate();
-  const term = t("tiles.rate");
-  if (!rate.ok) {
-    return (
-      <Tile name="rate" term={term} note={null}>
-        <BillingReadFailure read={rate} section={term} />
-      </Tile>
-    );
-  }
-  const r = rate.value;
-  let source: string;
-  if (r.source === "published_tier")
-    source = t("rate.published", { tier: t(`tiers.${r.tier}`) });
-  else if (r.agreementRef === null) source = t("rate.negotiatedNoRef");
-  else source = t("rate.negotiated", { ref: r.agreementRef });
+  const locale = useLocale();
   return (
     <Tile
-      name="rate"
-      term={term}
-      data-block-size={r.blockSizeGau}
-      data-source={r.source}
-      note={`${source} · ${date(r.effectiveFrom)}`}
+      name="retained"
+      term={t("tiles.retained")}
+      note={t("tiles.retainedNote", {
+        months: formatCount(retention.includedMonths, locale),
+      })}
     >
-      <span className="inline-flex flex-wrap items-baseline gap-x-1.5">
-        <Money value={mulMicros(r.ratePerGau, 1000)} />
-        <span className="text-xs font-normal text-muted-foreground">
-          {t("tiles.perThousand")}
-        </span>
-      </span>
+      <NotRecordedValue>{t("notRecorded")}</NotRecordedValue>
     </Tile>
   );
 }
 
 function DueTile({
-  invoices,
-  bucket,
+  statement: s,
+  periodEnd,
 }: {
-  invoices: Read<InvoicePage>;
-  bucket: Read<GauBucket>;
+  statement: Statement;
+  /** The bucket month's end. */
+  periodEnd: string;
 }) {
   const t = useTranslations("billing");
   const date = useDate();
-  const term = t("tiles.due");
-  if (!invoices.ok) {
-    return (
-      <Tile name="due" term={term} note={null}>
-        <BillingReadFailure read={invoices} section={term} />
-      </Tile>
-    );
-  }
-  const open = invoices.value.items.filter((row) => row.status === "open");
-  if (open.length === 0) {
-    return (
-      <Tile
-        name="due"
-        term={term}
-        note={
-          bucket.ok
-            ? t("tiles.nextInvoice", { date: date(bucket.value.period.end) })
-            : null
-        }
-      >
-        {t("tiles.nothingDue")}
-      </Tile>
-    );
-  }
-  const total = sumMoney(open.map((row) => row.amountDue));
   return (
     <Tile
       name="due"
-      term={term}
-      data-open={open.length}
-      note={
-        total === null
-          ? t("tiles.mixedCurrency")
-          : t("tiles.dueNote", {
-              count: open.length,
-              currency: total.currency.toUpperCase(),
-            })
-      }
+      term={t("tiles.due", { date: date(periodEnd) })}
+      note={t("tiles.dueNote", { currency: s.currency.toUpperCase() })}
     >
-      {total === null ? t("notRecorded") : <Money value={total} />}
+      <StatementAmount value={s.total} />
     </Tile>
   );
 }
 
 export function SummaryTiles({
   plan,
-  bucket,
   rate,
-  invoices,
+  retention,
+  statement,
+  periodEnd,
 }: {
-  plan: Read<PlanCard>;
-  bucket: Read<GauBucket>;
-  rate: Read<ContractRate>;
-  /** The newest invoices page, whatever page the Invoices section shows. */
-  invoices: Read<InvoicePage>;
+  plan: PlanCard;
+  rate: ContractRate;
+  retention: EvidenceRetention;
+  statement: Statement;
+  periodEnd: string;
 }) {
   const t = useTranslations("billing");
   return (
-    <dl
-      aria-label={t("tiles.label")}
-      className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
-    >
+    <dl aria-label={t("tiles.label")} className={statStrip}>
       <PlanTile plan={plan} rate={rate} />
-      <GauTile bucket={bucket} />
-      <RateTile rate={rate} />
-      <DueTile invoices={invoices} bucket={bucket} />
+      <GovernedTile statement={statement} />
+      <RetainedTile retention={retention} />
+      <DueTile statement={statement} periodEnd={periodEnd} />
     </dl>
   );
 }
