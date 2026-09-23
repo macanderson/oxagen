@@ -56,15 +56,31 @@ A kernel invoke with no stable name for its logical action gets a key of its own
 
 The maintainer decided on 2026-09-23 that each tool call a wrapped harness makes and Tacho allows costs one governed action unit. Denials stay free, as ADR-052 requires. `ingest_tacho_events` records the units for the allowed tool calls in each batch, keyed on the session and the harness's tool-use id, so a batch the host re-sends bills nothing new.
 
+A frame bills when it is a `tool_call` sealed by the hook with `tool_status = ok`, for a server other than Oxagen's own MCP server (`isBillableToolCall`, `packages/handlers/src/tacho.events.ingest.ts`):
+
+- **The hook, not the OTel or transcript repeats.** The hook is where Tacho rules on the call. The repeats observed it.
+- **Completed, not rejected, cancelled or errored.** The same rule the kernel applies to a handler that throws.
+- **Not Oxagen's own MCP server.** That call runs `invoke()`, and the kernel already bills it.
+
+Denials never reach the post-tool hook. They seal a `policy_decision` or `token_denied` frame, so they are free by construction. A shell call that runs the `oxagen` CLI is two actions and bills twice: the tool call Tacho allowed and the capability the kernel ran.
+
+The ledger entries are built from every event in a batch, not only the frames past the recorded head, so a batch re-sent after a failure still bills the calls it carries. A billing failure fails the ingest request. The host keeps the batch until a 2xx and re-sends it, and the ledger deduplicates it. To make that safe, the control commands a response delivers are now drained after billing, in a transaction of their own, so a refused batch leaves them queued.
+
 The contract stays `noBillingGate: true`. The admission gate never refuses a recording, because refusing to record a run is refusing the evidence Oxagen exists to keep. A prepaid organisation that runs out through recorded tool calls is topped up from its saved card by the same step the kernel recorder runs. Otherwise its next server-side governed action is refused, and the host's cached policy bundle keeps deciding locally.
 
 External MCP tool calls that Oxagen authorises for an agent bill the same way. They run the GAU admission gate before the call, and each successful call records one unit with source `external_tool`.
 
-### 4. Statements cover any period longer than two days
+### 4. An in-app assistant shortfall is owed, not forgiven
+
+The in-app assistant is admitted when the organisation's usage-credit balance is above zero, and a turn can make up to 12 model calls. Before this decision `consumeCredits` clamped each debit to the balance left and dropped the rest, so the last turn before a balance ran out, and turns running at the same time, were partly unbilled. Now the unpaid remainder of a `consume_assistant_tokens` debit is kept as a debt, in the same per-reason carry the sub-credit remainder already uses (`org_billing_settings.meter_carry_micro_credits_by_reason`). The next charge under that reason collects it first. The next grant or top-up collects it before the balance mirror moves. The credit gate treats the balance less the debt as the balance. Lots are still never drawn below zero. This refines ADR-053 §3.
+
+The recall of workspace memory that opens each turn now runs inside the turn's frame (`runWithinEnclosingAction`, `packages/oxagen/src/kernel.ts`). It had run as a top-level invoke, so every turn cost one governed action unit, contrary to ADR-053, and an exhausted bucket silently switched recall off. A nested invoke also no longer meets the GAU admission gate, because it never draws a unit. The budget gate still applies to it.
+
+### 5. Statements cover any period longer than two days
 
 `get_billing_statement` and `export_billing_statement` produce a statement for a UTC week, month, quarter or year, or for a custom half-open window longer than 48 hours and no longer than 366 days. A statement carries the terms in force, governed action units by source, workspace, agent, operator and capability or tool, the month buckets it overlaps, the settlements, prepaid orders and invoices in the period, and the usage-credit movements with opening and closing balances. The CSV export itemises every ledger row. The HTML export is a printable document. `pnpm billing:statement` produces either for the platform operator.
 
-### 5. Enterprise orders are paid in advance on an invoice
+### 6. Enterprise orders are paid in advance on an invoice
 
 `billing.prepaid_orders` records an order a platform operator issues with `issue_prepaid_invoice` (platform-only). One order carries up to three lines on one Stripe invoice: the platform licence for a period, prepaid governed action units at the contracted rate, and prepaid usage credits for the in-app assistant. The units and credits are granted when the invoice is paid, or when it is issued for an order the operator marks `grant_on = 'issue'`. The grant is idempotent on the order. `set_contract_terms` (platform-only) writes the negotiated terms that `billing.contract_terms` previously received only by hand. A customer tops up at any time by card through `purchase_credits`, or the operator issues another prepaid order.
 
@@ -84,3 +100,5 @@ External MCP tool calls that Oxagen authorises for an agent bill the same way. T
 - The ledger grows by one row per billed action. At 25 million actions a year an organisation adds about 25 million rows a year to one table, indexed on `(org_id, billed_at)`. Partitioning by `billed_at` is the next step when a single organisation's volume makes the index expensive. Rows are retained as long as the invoices they support.
 - Bills for customers who run wrapped harnesses rise, because tool calls that were free now cost a unit each. Rates and allowances are unchanged, and the spec's run-class conversion needs re-deriving from production data.
 - Accrual on the kernel path stays best-effort after the action succeeds (ADR-052). Tacho accrual fails the ingest request instead, so the host re-sends the batch and the ledger deduplicates it.
+- A billing failure that never clears would hold a host's later batches behind the one it refuses, because the host retries until it gets a 2xx. A transient failure recovers on its own. No deterministic failure is known: the entry builder always names a subject, so the ledger's CHECK cannot refuse a row. If one appears, the fix is a sweep that rebuilds entries from `tacho_events` (the keys are deterministic, so a sweep cannot bill twice) and a bound on the retries.
+- Background work that charges `consume_assistant_tokens` (run summaries, schema reconciliation) now owes its shortfall at a zero balance as well, and a debt settled from a grant counts against the month's assistant spend cap when it is paid.

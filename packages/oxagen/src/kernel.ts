@@ -205,6 +205,19 @@ export function runOutsideGovernedAction<T>(fn: () => T): T {
 }
 
 /**
+ * Run `fn` as part of the governed action already in progress, so every
+ * `invoke()` it starts is nested: it never accrues a unit and never meets the
+ * GAU admission gate. The in-app agent's turn uses it for the steps that are
+ * part of the turn rather than a tool call the model made, such as recalling
+ * workspace memory before the first step (ADR-053: the turn is not a governed
+ * action). `run(true, fn)` for the reason {@link runOutsideGovernedAction}
+ * uses `run`: the store must hold across every await in `fn`.
+ */
+export function runWithinEnclosingAction<T>(fn: () => T): T {
+  return _governedActionScope.run(true, fn);
+}
+
+/**
  * How many governed actions one invocation is worth, from the contract's
  * `meter` block against the validated output (spec §7.2).
  *
@@ -1550,9 +1563,21 @@ async function _invokeCoreInner(
       // broke the connector Configure form). Unscoped capabilities are global,
       // read-only fetches — never metered AI turns — so skipping the gate for them
       // is correct as well as necessary.
+      //
+      // A nested invoke skips the GAU gate. It never accrues a unit (the
+      // recorder fires for the outermost invoke only), and the outermost one
+      // already passed this gate, so refusing the inner step against the
+      // bucket would fail a governed action halfway through for a unit it was
+      // never going to draw. The budget gate below still applies to it.
       const skipBilling =
         (cap as { noBillingGate?: boolean }).noBillingGate === true;
-      if (_billingGate !== null && ctx.orgId && !skipBilling && isScoped) {
+      if (
+        _billingGate !== null &&
+        ctx.orgId &&
+        !skipBilling &&
+        isScoped &&
+        isTopLevelAction
+      ) {
         await _billingGate(ctx.orgId);
       }
       // ── End billing admission gate ───────────────────────────────────────────
