@@ -1251,7 +1251,17 @@
       "entry": "/[org] Cost centers section, a workspace's Change control (features/organization/cost-center-controls.tsx)",
       "proof": "apps/app/src/features/organization/cost-centers.test.tsx",
       "verifiedAt": "2026-09-22",
-      "verifiedBy": "session-1a3727fe-cost-centers"
+      "verifiedBy": "session-1a3727fe-cost-centers",
+      "also": [
+        {
+          "route": "/[org]/[ws]/agents/[agent]",
+          "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
+          "entry": "/[org]/[ws]/agents/[agent] Identity tab, the agent's Change cost center control (features/agents/cost-center-controls.tsx)",
+          "proof": "apps/app/src/features/agents/cost-center-controls.test.tsx",
+          "verifiedAt": "2026-09-22",
+          "verifiedBy": "session-bc7cb966-agent-cost-center"
+        }
+      ]
     },
     "export_cost_center_statement": {
       "route": "/[org]/[ws]/spend",

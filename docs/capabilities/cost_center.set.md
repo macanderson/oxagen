@@ -1,6 +1,6 @@
 # set_cost_center
 
-Charge the active workspace, or one agent in it, back to a cost-center label, or clear the label (ADR-142). The label must be live on the organization's list. When the rollup next rolls a run up, it reads the agent's label first and the workspace's label second. Runs already rolled up keep the cost center they had.
+Charge the active workspace, or one agent in it, back to a cost-center label, or clear the label (ADR-142). The label must be live on the organization's list. When the rollup next rolls a run up, it reads the agent's label first and the workspace's label second. Runs already rolled up keep the cost center they had. An operator moves the runs that were rolled up with no cost center onto the label with `pnpm db:backfill-cost-centers`, which asks the rollup job to rebuild each one.
 
 ## Mode
 

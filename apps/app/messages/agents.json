@@ -81,7 +81,9 @@
         "status": "Status",
         "registered": "Registered",
         "firstFrame": "First frame",
-        "noFrame": "no frame yet"
+        "noFrame": "no frame yet",
+        "costCenter": "Cost center",
+        "inherited": "Inherited from the workspace"
       },
       "roles": {
         "title": "Roles",
@@ -411,6 +413,17 @@
         "empty": "No spend ceiling is set for this workspace or its organization.",
         "agentScope": "Oxagen records no ceiling for one agent. get_spend_budget reads the organization and workspace scopes only, so this agent is bounded by the rows above and by the per-run budget its definition sets. A per-agent ceiling waits on an ADR for the scopes billing.budgets accepts.",
         "link": "Set ceilings on Spend"
+      },
+      "costCenter": {
+        "open": "Change cost center",
+        "title": "Cost center for {name}",
+        "body": "Runs rolled up after this change are charged to the label you choose. Runs already rolled up keep the label they had.",
+        "field": "Cost center",
+        "none": "None (inherit the workspace's)",
+        "loading": "Reading the organization's cost centers.",
+        "empty": "This organization has no cost centers. Add one on the Organization page, then charge this agent to it here.",
+        "confirm": "Save",
+        "pending": "Saving"
       }
     },
     "actions": {

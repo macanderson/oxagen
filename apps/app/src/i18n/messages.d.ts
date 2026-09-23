@@ -137,6 +137,8 @@ type Messages = {
         registered: string;
         firstFrame: string;
         noFrame: string;
+        costCenter: string;
+        inherited: string;
       };
       roles: {
         title: string;
@@ -466,6 +468,17 @@ type Messages = {
         empty: string;
         agentScope: string;
         link: string;
+      };
+      costCenter: {
+        open: string;
+        title: string;
+        body: string;
+        field: string;
+        none: string;
+        loading: string;
+        empty: string;
+        confirm: string;
+        pending: string;
       };
     };
     actions: {

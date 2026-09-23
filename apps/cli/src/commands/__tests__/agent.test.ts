@@ -84,6 +84,7 @@ const AGENT: AgentGetResult = {
     status: "enrolled",
     registeredAt: "2026-09-13T10:00:00.000Z",
     firstFrameAt: null,
+    costCenter: null,
   },
   credentials: [
     {

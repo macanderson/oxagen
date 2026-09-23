@@ -69,6 +69,14 @@ function makeMutation(overrides: Partial<EntityMutation> = {}): EntityMutation {
 
 let neo4jUp = false;
 
+// 30s, not vitest's 5s default, on every test in this file. The first test
+// pays the driver's cold connection and the first Cypher plan on a CI Neo4j
+// that other suites share, and it timed out at 5020ms on a branch touching
+// nothing in this package while the two after it took 951ms and 2294ms. The
+// figure is the cost of the real store, not a slow assertion, and the hook
+// above already budgets for the same store at 60s.
+const NEO4J_TEST_TIMEOUT = 30_000;
+
 /**
  * Ensure the vector index `resolveEntity` Pass B queries
  * (`CALL db.index.vector.queryNodes('entity_node_embedding_index', ...)`) exists.
@@ -148,150 +156,160 @@ afterAll(async () => {
   }
 });
 
-describe("resolveEntity (integration, local Neo4j) — $orgId binding", () => {
-  it("re-delivering the same naturalKey+orgId matches the existing principal instead of creating a duplicate", async (ctx) => {
-    if (!neo4jUp) return ctx.skip();
+describe(
+  "resolveEntity (integration, local Neo4j) — $orgId binding",
+  { timeout: NEO4J_TEST_TIMEOUT },
+  () => {
+    it("re-delivering the same naturalKey+orgId matches the existing principal instead of creating a duplicate", async (ctx) => {
+      if (!neo4jUp) return ctx.skip();
 
-    const mutation = makeMutation();
+      const mutation = makeMutation();
 
-    // First delivery: no existing node → Pass A miss → Pass B (no candidates,
-    // embedText mocked) → a brand-new principal is created.
-    const first = await runInTenantScope(
-      { orgId: ORG_ID, workspaceId: WORKSPACE_ID },
-      () => resolveEntity(mutation, ORG_ID),
-    );
-    expect(first.action).toBe("created_principal");
-    expect(first.principalNodeId).toBeTruthy();
-
-    // Second delivery of the SAME naturalKey+orgId (e.g. a webhook retry).
-    // With $orgId correctly bound in Pass A's params, this MUST hit the
-    // exact-match fast path and update the existing node rather than falling
-    // through to Pass B and creating a duplicate.
-    const second = await runInTenantScope(
-      { orgId: ORG_ID, workspaceId: WORKSPACE_ID },
-      () => resolveEntity(mutation, ORG_ID),
-    );
-
-    expect(second.action).toBe("updated_principal");
-    expect(second.matchReason).toBe("natural_key_exact");
-    expect(second.principalNodeId).toBe(first.principalNodeId);
-
-    // Ground truth: exactly ONE node exists in the graph for this
-    // naturalKey+orgId — the regression manifested as N duplicate nodes, one
-    // per re-delivery.
-    const s = driver().session({ database: process.env.NEO4J_DATABASE });
-    try {
-      const countResult = await s.run(
-        `MATCH (n:EntityNode {naturalKey: $naturalKey, orgId: $orgId}) RETURN count(n) AS c`,
-        { naturalKey: NATURAL_KEY, orgId: ORG_ID },
+      // First delivery: no existing node → Pass A miss → Pass B (no candidates,
+      // embedText mocked) → a brand-new principal is created.
+      const first = await runInTenantScope(
+        { orgId: ORG_ID, workspaceId: WORKSPACE_ID },
+        () => resolveEntity(mutation, ORG_ID),
       );
-      const count = countResult.records[0]?.get("c");
-      expect(Number(count)).toBe(1);
-    } finally {
-      await s.close();
-    }
-  });
+      expect(first.action).toBe("created_principal");
+      expect(first.principalNodeId).toBeTruthy();
 
-  it("a different orgId with the SAME naturalKey is a separate principal (tenant isolation holds)", async (ctx) => {
-    if (!neo4jUp) return ctx.skip();
-
-    const otherOrgId = "00000000-0000-4000-8000-0000000da099";
-    const otherWorkspaceId = "00000000-0000-4000-8000-0000000da098";
-
-    try {
-      const mutation = makeMutation({ orgId: ORG_ID });
-      const home = await runInTenantScope(
+      // Second delivery of the SAME naturalKey+orgId (e.g. a webhook retry).
+      // With $orgId correctly bound in Pass A's params, this MUST hit the
+      // exact-match fast path and update the existing node rather than falling
+      // through to Pass B and creating a duplicate.
+      const second = await runInTenantScope(
         { orgId: ORG_ID, workspaceId: WORKSPACE_ID },
         () => resolveEntity(mutation, ORG_ID),
       );
 
-      const otherMutation = makeMutation({
-        orgId: otherOrgId,
-        workspaceId: otherWorkspaceId,
-      });
-      const other = await runInTenantScope(
-        { orgId: otherOrgId, workspaceId: otherWorkspaceId },
-        () => resolveEntity(otherMutation, otherOrgId),
-      );
+      expect(second.action).toBe("updated_principal");
+      expect(second.matchReason).toBe("natural_key_exact");
+      expect(second.principalNodeId).toBe(first.principalNodeId);
 
-      // Same naturalKey, different orgId → each org gets its own principal;
-      // Pass A must not leak a match across tenants.
-      expect(other.action).toBe("created_principal");
-      expect(other.principalNodeId).not.toBe(home.principalNodeId);
-    } finally {
+      // Ground truth: exactly ONE node exists in the graph for this
+      // naturalKey+orgId — the regression manifested as N duplicate nodes, one
+      // per re-delivery.
       const s = driver().session({ database: process.env.NEO4J_DATABASE });
       try {
-        await s.run(
-          `MATCH (n:EntityNode {naturalKey: $naturalKey, orgId: $orgId}) DETACH DELETE n`,
-          { naturalKey: NATURAL_KEY, orgId: otherOrgId },
+        const countResult = await s.run(
+          `MATCH (n:EntityNode {naturalKey: $naturalKey, orgId: $orgId}) RETURN count(n) AS c`,
+          { naturalKey: NATURAL_KEY, orgId: ORG_ID },
         );
+        const count = countResult.records[0]?.get("c");
+        expect(Number(count)).toBe(1);
       } finally {
         await s.close();
       }
-    }
-  });
-});
+    });
 
-describe("GitHub legacy identity (real Neo4j)", () => {
-  it("preserves a legacy node and its edge across backfill and repository rename", async (ctx) => {
-    if (!neo4jUp) return ctx.skip();
-    const originalUrl = "https://github.com/acme/old/issues/7";
-    const session = driver().session({ database: process.env.NEO4J_DATABASE });
-    try {
-      await session.run(
-        `MERGE (n:Task:EntityNode {naturalKey: $naturalKey, orgId: $orgId})
+    it("a different orgId with the SAME naturalKey is a separate principal (tenant isolation holds)", async (ctx) => {
+      if (!neo4jUp) return ctx.skip();
+
+      const otherOrgId = "00000000-0000-4000-8000-0000000da099";
+      const otherWorkspaceId = "00000000-0000-4000-8000-0000000da098";
+
+      try {
+        const mutation = makeMutation({ orgId: ORG_ID });
+        const home = await runInTenantScope(
+          { orgId: ORG_ID, workspaceId: WORKSPACE_ID },
+          () => resolveEntity(mutation, ORG_ID),
+        );
+
+        const otherMutation = makeMutation({
+          orgId: otherOrgId,
+          workspaceId: otherWorkspaceId,
+        });
+        const other = await runInTenantScope(
+          { orgId: otherOrgId, workspaceId: otherWorkspaceId },
+          () => resolveEntity(otherMutation, otherOrgId),
+        );
+
+        // Same naturalKey, different orgId → each org gets its own principal;
+        // Pass A must not leak a match across tenants.
+        expect(other.action).toBe("created_principal");
+        expect(other.principalNodeId).not.toBe(home.principalNodeId);
+      } finally {
+        const s = driver().session({ database: process.env.NEO4J_DATABASE });
+        try {
+          await s.run(
+            `MATCH (n:EntityNode {naturalKey: $naturalKey, orgId: $orgId}) DETACH DELETE n`,
+            { naturalKey: NATURAL_KEY, orgId: otherOrgId },
+          );
+        } finally {
+          await s.close();
+        }
+      }
+    });
+  },
+);
+
+describe(
+  "GitHub legacy identity (real Neo4j)",
+  { timeout: NEO4J_TEST_TIMEOUT },
+  () => {
+    it("preserves a legacy node and its edge across backfill and repository rename", async (ctx) => {
+      if (!neo4jUp) return ctx.skip();
+      const originalUrl = "https://github.com/acme/old/issues/7";
+      const session = driver().session({
+        database: process.env.NEO4J_DATABASE,
+      });
+      try {
+        await session.run(
+          `MERGE (n:Task:EntityNode {naturalKey: $naturalKey, orgId: $orgId})
         SET n.publicId = $legacyPublicId, n.workspaceId = $workspaceId,
             n.sourceRecordType = 'issue', n.properties = $properties, n.canonicalNaturalKey = null
         MERGE (n)-[:TEST_IDENTITY_LINK]->(n)`,
-        {
-          naturalKey: NATURAL_KEY,
-          orgId: ORG_ID,
-          workspaceId: WORKSPACE_ID,
-          legacyPublicId: LEGACY_PUBLIC_ID,
-          properties: JSON.stringify({ url: originalUrl }),
-        },
-      );
-      const canonical = "github:conn-oxa-2052:issue:id:101";
-      const mutation = makeMutation({
-        naturalKey: canonical,
-        legacyNaturalKey: NATURAL_KEY,
-        properties: { url: originalUrl },
-        sourceRef: {
-          connectorType: "github",
-          connectionId: "conn-oxa-2052",
-          externalId: "issue:id:101",
-          externalUrl: originalUrl,
-        },
-      });
-      for (const url of [
-        originalUrl,
-        "https://github.com/acme/renamed/issues/7",
-      ]) {
-        const result = await runInTenantScope(
-          { orgId: ORG_ID, workspaceId: WORKSPACE_ID },
-          () =>
-            resolveEntity(
-              {
-                ...mutation,
-                properties: { url },
-                sourceRef: { ...mutation.sourceRef, externalUrl: url },
-              },
-              ORG_ID,
-            ),
+          {
+            naturalKey: NATURAL_KEY,
+            orgId: ORG_ID,
+            workspaceId: WORKSPACE_ID,
+            legacyPublicId: LEGACY_PUBLIC_ID,
+            properties: JSON.stringify({ url: originalUrl }),
+          },
         );
-        expect(result.principalNodeId).toBe(LEGACY_PUBLIC_ID);
-        expect(result.action).toBe("updated_principal");
-      }
-      const result = await session.run(
-        `MATCH (n:EntityNode {naturalKey: $naturalKey, orgId: $orgId})-[r:TEST_IDENTITY_LINK]->(n)
+        const canonical = "github:conn-oxa-2052:issue:id:101";
+        const mutation = makeMutation({
+          naturalKey: canonical,
+          legacyNaturalKey: NATURAL_KEY,
+          properties: { url: originalUrl },
+          sourceRef: {
+            connectorType: "github",
+            connectionId: "conn-oxa-2052",
+            externalId: "issue:id:101",
+            externalUrl: originalUrl,
+          },
+        });
+        for (const url of [
+          originalUrl,
+          "https://github.com/acme/renamed/issues/7",
+        ]) {
+          const result = await runInTenantScope(
+            { orgId: ORG_ID, workspaceId: WORKSPACE_ID },
+            () =>
+              resolveEntity(
+                {
+                  ...mutation,
+                  properties: { url },
+                  sourceRef: { ...mutation.sourceRef, externalUrl: url },
+                },
+                ORG_ID,
+              ),
+          );
+          expect(result.principalNodeId).toBe(LEGACY_PUBLIC_ID);
+          expect(result.action).toBe("updated_principal");
+        }
+        const result = await session.run(
+          `MATCH (n:EntityNode {naturalKey: $naturalKey, orgId: $orgId})-[r:TEST_IDENTITY_LINK]->(n)
         RETURN n.canonicalNaturalKey AS canonical, count(r) AS edges`,
-        { naturalKey: NATURAL_KEY, orgId: ORG_ID },
-      );
-      expect(result.records).toHaveLength(1);
-      expect(result.records[0]?.get("canonical")).toBe(canonical);
-      expect(result.records[0]?.get("edges").toNumber()).toBe(1);
-    } finally {
-      await session.close();
-    }
-  });
-});
+          { naturalKey: NATURAL_KEY, orgId: ORG_ID },
+        );
+        expect(result.records).toHaveLength(1);
+        expect(result.records[0]?.get("canonical")).toBe(canonical);
+        expect(result.records[0]?.get("edges").toNumber()).toBe(1);
+      } finally {
+        await session.close();
+      }
+    });
+  },
+);

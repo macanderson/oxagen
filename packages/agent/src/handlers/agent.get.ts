@@ -244,6 +244,7 @@ export async function agentGetHandler(
         status: identityStatus(row, held),
         registeredAt: row.createdAt.toISOString(),
         firstFrameAt: iso(figures?.earliestStartedAt ?? null),
+        costCenter: row.costCenter,
       },
       credentials,
       roles,

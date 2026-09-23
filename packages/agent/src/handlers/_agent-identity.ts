@@ -37,6 +37,8 @@ export interface AgentIdentityRow {
   /** The principal's last write; a suspend or resume is one of them. */
   principalUpdatedAt: Date | null;
   operatorPublicId: string | null;
+  /** The label set through set_cost_center (ADR-142); null inherits the workspace's. */
+  costCenter: string | null;
 }
 
 const identityColumns = {
@@ -54,6 +56,7 @@ const identityColumns = {
   principalStatus: schema.principals.status,
   principalUpdatedAt: schema.principals.updatedAt,
   operatorPublicId: schema.users.publicId,
+  costCenter: schema.agents.costCenter,
 } as const;
 
 function identitySelect(tx: Tx) {
