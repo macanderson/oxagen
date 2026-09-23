@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import { Terminal } from "lucide-react";
 
 const MARKS: Readonly<Record<string, string>> = {
@@ -69,20 +68,6 @@ export function HarnessIcon({
           className="hidden size-full object-contain dark:block"
         />
       )}
-    </span>
-  );
-}
-
-export function HarnessLabel({
-  harness,
-  children,
-  className = "",
-  size = 24,
-}: HarnessIconProps & { children: ReactNode }) {
-  return (
-    <span className={`inline-flex items-center gap-2 ${className}`}>
-      <HarnessIcon harness={harness} size={size} />
-      <span>{children}</span>
     </span>
   );
 }
