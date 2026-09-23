@@ -124,54 +124,64 @@ describe("deleteCostCenter", () => {
 });
 
 describe("setWorkspaceCostCenter", () => {
-  it("charges the workspace it names to the label as the organization viewer", async () => {
+  // The Organization page offers Change on every live workspace, including
+  // ones the viewer is not a member of, so the action never resolves a
+  // workspace viewer: it runs under the org-only sentinel and names the
+  // workspace by public id.
+  const workspaceId = "wrk_0a1b2c3d4e5f6g7h8j9k0m";
+
+  it("lets a Billing member who is not in the workspace label it", async () => {
     invoke.mockResolvedValue({
       target: "workspace",
-      id: "wrk_1",
+      id: workspaceId,
       costCenter: "ENG-1001",
     });
     expect(
-      await setWorkspaceCostCenter(
-        "acme",
-        "wrk_0a1b2c3d4e5f6g7h8j9k0m",
-        "ENG-1001",
-      ),
+      await setWorkspaceCostCenter("acme", workspaceId, "ENG-1001"),
     ).toEqual({ ok: true, value: { costCenter: "ENG-1001" } });
-    // An org Billing member who is not in the workspace can still label it:
-    // the write runs in the organization's scope and names it by public id.
     expect(requireViewer).toHaveBeenCalledWith("acme");
     expect(invoke).toHaveBeenCalledWith(
       "set_cost_center",
-      {
-        target: "workspace",
-        workspace: "wrk_0a1b2c3d4e5f6g7h8j9k0m",
-        costCenter: "ENG-1001",
-      },
-      expect.objectContaining({ orgId: org.orgId }),
+      { target: "workspace", workspaceId, costCenter: "ENG-1001" },
+      expect.objectContaining({
+        orgId: org.orgId,
+        workspaceId: kernel.ORG_ONLY_WORKSPACE_ID,
+      }),
     );
   });
 
   it("clears the label when None is picked", async () => {
     invoke.mockResolvedValue({
       target: "workspace",
-      id: "wrk_1",
+      id: workspaceId,
       costCenter: null,
     });
-    expect(
-      await setWorkspaceCostCenter("acme", "wrk_0a1b2c3d4e5f6g7h8j9k0m", ""),
-    ).toEqual({
+    expect(await setWorkspaceCostCenter("acme", workspaceId, "")).toEqual({
       ok: true,
       value: { costCenter: null },
     });
     expect(invoke).toHaveBeenCalledWith(
       "set_cost_center",
-      {
-        target: "workspace",
-        workspace: "wrk_0a1b2c3d4e5f6g7h8j9k0m",
-        costCenter: null,
-      },
+      { target: "workspace", workspaceId, costCenter: null },
       expect.anything(),
     );
+  });
+
+  it("refuses an org Member with denied (negative)", async () => {
+    requireViewer.mockResolvedValue(
+      unsafeMint(OrgCtx, { ...org, orgRole: "member" }),
+    );
+    // The handler's assertOrgRole is what refuses an org Member.
+    invoke.mockRejectedValue(
+      new kernel.HandlerError({
+        code: "forbidden",
+        reason: "org_role_required",
+      }),
+    );
+    expect(
+      await setWorkspaceCostCenter("acme", workspaceId, "ENG-1001"),
+    ).toMatchObject({ ok: false, reason: "denied" });
+    expect(requireViewer).toHaveBeenCalledWith("acme");
   });
 
   it("answers an unknown label as not found (negative)", async () => {
@@ -182,11 +192,7 @@ describe("setWorkspaceCostCenter", () => {
       }),
     );
     expect(
-      await setWorkspaceCostCenter(
-        "acme",
-        "wrk_0a1b2c3d4e5f6g7h8j9k0m",
-        "GONE-1",
-      ),
+      await setWorkspaceCostCenter("acme", workspaceId, "GONE-1"),
     ).toMatchObject({ ok: false, reason: "not_found" });
   });
 });

@@ -3,8 +3,8 @@
 //
 // Each `select()` chain resolves at its terminal call (`limit`, `orderBy` or
 // `groupBy`) with the next entry of `selects`, in the order the handler reads.
-// Each `update()` chain records the table and the `.set()` values, and
-// resolves `returning()` with the next entry of `updates`. Each `insert()`
+// Each `update()` chain records the table, the `.set()` values and the
+// `.where()` condition, and resolves `returning()` with the next entry of `updates`. Each `insert()`
 // records its values and returns them as the stored row. The double imports
 // nothing from vitest, so this file stays plain source.
 export type TxDouble = ReturnType<typeof makeTx>;
@@ -16,7 +16,11 @@ export function makeTx(
   const updates = [...(opts.updates ?? [])];
   const calls = {
     selects: 0,
-    updates: [] as { table: unknown; values: Record<string, unknown> }[],
+    updates: [] as {
+      table: unknown;
+      values: Record<string, unknown>;
+      where?: unknown;
+    }[],
     inserts: [] as Record<string, unknown>[],
   };
   const nextSelect = async () => selects.shift() ?? [];
@@ -37,11 +41,13 @@ export function makeTx(
     },
     update: (table: unknown) => ({
       set: (values: Record<string, unknown>) => {
-        calls.updates.push({ table, values });
+        const call: (typeof calls.updates)[number] = { table, values };
+        calls.updates.push(call);
         return {
-          where: () => ({
-            returning: async () => updates.shift() ?? [],
-          }),
+          where: (condition: unknown) => {
+            call.where = condition;
+            return { returning: async () => updates.shift() ?? [] };
+          },
         };
       },
     }),

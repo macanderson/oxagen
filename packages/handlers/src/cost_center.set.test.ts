@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { schema } from "@oxagen/database";
+import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { costCenterSet } from "@oxagen/oxagen/contracts/cost_center.set";
 import { costCenterSetHandler } from "./cost_center.set";
 import { centerRow, makeTx, type TxDouble } from "./cost_center.test-support";
@@ -101,34 +104,6 @@ describe("set_cost_center", () => {
     });
   });
 
-  it("labels a workspace named by public id from the organization's scope", async () => {
-    // The Organization page calls this as the org viewer, whose scope carries
-    // the org-only workspace sentinel, not the workspace being labelled.
-    const orgScope = {
-      ...CTX,
-      workspaceId: "00000000-0000-0000-0000-000000000000",
-    };
-    const double = makeTx({
-      selects: [[centerRow({ label: "ENG-1001" })]],
-      updates: [[{ id: "wrk_0a1b2c3d4e5f6g7h8j9k0m" }]],
-    });
-    useTx(double);
-    const out = await costCenterSetHandler(
-      {
-        target: "workspace",
-        workspace: "wrk_0a1b2c3d4e5f6g7h8j9k0m",
-        costCenter: "ENG-1001",
-      },
-      orgScope,
-    );
-    expect(double.calls.updates[0]?.table).toBe(schema.workspaces);
-    expect(out).toEqual({
-      target: "workspace",
-      id: "wrk_0a1b2c3d4e5f6g7h8j9k0m",
-      costCenter: "ENG-1001",
-    });
-  });
-
   it("clears an agent's label with null without reading the list", async () => {
     const double = makeTx({ updates: [[{ id: "agt_1" }]] });
     useTx(double);
@@ -162,5 +137,56 @@ describe("set_cost_center", () => {
       code: "not_found",
       reason: "workspace_not_found",
     });
+  });
+
+  it("labels a workspace named by public id under the org-only sentinel", async () => {
+    // An org Billing member who is not in the workspace, or an org-level key:
+    // the row is matched on its public id and the org, never on ctx.workspaceId.
+    const double = makeTx({
+      selects: [[centerRow({ label: "ENG-1001" })]],
+      updates: [[{ id: "wrk_target" }]],
+    });
+    useTx(double);
+    const out = await costCenterSetHandler(
+      {
+        target: "workspace",
+        workspaceId: "wrk_target",
+        costCenter: "ENG-1001",
+      },
+      { ...CTX, workspaceId: ORG_ONLY_WORKSPACE_ID },
+    );
+    expect(roleGate.assertOrgRole).toHaveBeenCalledWith(
+      expect.objectContaining({ orgId: CTX.orgId }),
+      { org: ["Owner", "Admin", "Billing"] },
+    );
+    const where = new PgDialect().sqlToQuery(
+      double.calls.updates[0]?.where as SQL,
+    );
+    expect(where.sql).toContain('"public_id"');
+    expect(where.params).toEqual(["wrk_target", CTX.orgId]);
+    expect(out).toEqual({
+      target: "workspace",
+      id: "wrk_target",
+      costCenter: "ENG-1001",
+    });
+  });
+
+  it("refuses the sentinel with no workspace named before touching a row", async () => {
+    await expect(
+      costCenterSetHandler(
+        { target: "workspace", costCenter: "ENG-1001" },
+        { ...CTX, workspaceId: ORG_ONLY_WORKSPACE_ID },
+      ),
+    ).rejects.toMatchObject({
+      code: "not_found",
+      reason: "workspace_required",
+    });
+    await expect(
+      costCenterSetHandler(
+        { target: "agent", agent: "reviewer", costCenter: null },
+        { ...CTX, workspaceId: ORG_ONLY_WORKSPACE_ID },
+      ),
+    ).rejects.toMatchObject({ reason: "workspace_required" });
+    expect(mocks.withTenantDb).not.toHaveBeenCalled();
   });
 });
