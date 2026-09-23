@@ -1,7 +1,7 @@
 /**
  * `get_nav_counts`: the sidebar's three counts (MC spec App. E; mockups
  * `pages/shell.md`): Fleet = pending approvals, Steering = open proposals,
- * Audit = open critical incidents. Each count reads the store that owns it
+ * Audit = open critical incidents in the organization. Each count reads the store that owns it
  * (`agent.approval_requests`, `agent.context_proposals`, `tacho.incidents`).
  * A count is null only when its read answered no row, and a null renders as
  * "not recorded", never as a zero.
@@ -38,7 +38,7 @@ export const shellNavCountsGet = registerCapability({
       approvals: count,
       /** Steering proposals that have not merged and were not rejected. */
       proposals: count,
-      /** Unresolved incidents at severity 10. */
+      /** Unresolved incidents at severity 10 across the organization: Audit is an organization page. */
       incidents: count,
     })
     .strict(),

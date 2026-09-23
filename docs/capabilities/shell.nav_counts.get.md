@@ -1,6 +1,6 @@
 # get_nav_counts
 
-The sidebar's counts for a workspace (MC spec App. E): Fleet shows pending approvals, Steering shows open proposals, and Audit shows open critical incidents. The handler reads all three in one tenant-scoped transaction. A count is null only when its read answered no row, and the app renders a null as "not recorded", never as a zero.
+The sidebar's counts for a workspace (MC spec App. E): Fleet shows pending approvals, Steering shows open proposals, and Audit shows open critical incidents. The handler reads approvals and proposals for the workspace in one tenant-scoped transaction, and incidents for the organization through the org-wide seam (ADR-086). A count is null only when its read answered no row, and the app renders a null as "not recorded", never as a zero.
 
 ## Mode
 
@@ -24,4 +24,4 @@ None.
 |---|---|---|
 | `approvals` | integer or null | unresolved, unexpired approvals in this workspace — the predicate `list_approvals` pages on |
 | `proposals` | integer or null | steering proposals in `agent.context_proposals` that have not merged and were not rejected, the rows `list_proposals` returns |
-| `incidents` | integer or null | unresolved incidents at severity 10 in `tacho.incidents`, the rows `list_incidents` returns with `open: true` |
+| `incidents` | integer or null | unresolved incidents at severity 10 in `tacho.incidents` across the organization (Audit is an organization page), read through the org-wide seam |

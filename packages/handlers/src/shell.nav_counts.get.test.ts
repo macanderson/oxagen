@@ -62,7 +62,7 @@ const INCIDENTS = getTableName(schema.tachoIncidents);
 beforeEach(() => vi.clearAllMocks());
 
 describe("get_nav_counts", () => {
-  it("counts pending approvals, open proposals and open critical incidents in one transaction", async () => {
+  it("counts this workspace's pending approvals and open proposals, and the organization's open critical incidents", async () => {
     const { reads, out } = run({
       [APPROVALS]: [{ n: 3 }],
       [PROPOSALS]: [{ n: 2 }],
@@ -73,16 +73,18 @@ describe("get_nav_counts", () => {
       proposals: 2,
       incidents: 1,
     });
-    expect(mocks.withTenantDb).toHaveBeenCalledTimes(1);
+    // One tenant transaction for the workspace's two, one org-wide read for Audit.
+    expect(mocks.withTenantDb).toHaveBeenCalledTimes(2);
     expect(reads.map((r) => r.table)).toEqual([
       APPROVALS,
       PROPOSALS,
       INCIDENTS,
     ]);
-    for (const r of reads) {
-      expect(r.where).toMatch(/"org_id" = \$/);
-      expect(r.where).toMatch(/"workspace_id" = \$/);
-    }
+    for (const r of reads) expect(r.where).toMatch(/"org_id" = \$/);
+    expect(reads[0]?.where).toMatch(/"workspace_id" = \$/);
+    expect(reads[1]?.where).toMatch(/"workspace_id" = \$/);
+    // Audit is an organization page: its count is not narrowed to a workspace.
+    expect(reads[2]?.where).not.toMatch(/"workspace_id"/);
   });
 
   it("reads approvals on the list_approvals predicate", async () => {
@@ -103,7 +105,7 @@ describe("get_nav_counts", () => {
     );
   });
 
-  it("counts only unresolved incidents at severity 10", async () => {
+  it("counts only unresolved incidents at severity 10, across the organization", async () => {
     const { reads, out } = run({ [INCIDENTS]: [{ n: 0 }] });
     await out;
     const read = reads[2];
