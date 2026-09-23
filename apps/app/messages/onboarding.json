@@ -62,7 +62,7 @@
       },
       "firstRun": {
         "badge": "first run",
-        "title": "The first frame arrived",
+        "title": "One run so far.",
         "body": "This workspace recorded <run></run> when the gate opened. The tiles below read off the runs it has kept since.",
         "open": "Open the first run"
       }

@@ -1,83 +1,132 @@
-// Fleet (ARCHITECTURE.md §1.2): the two-tile stat strip, the approvals panel
-// and the runs table, from one list_runs page and the pending approvals. The
-// tiles count the same reads the sections render, so a figure can never
-// disagree with the rows under it.
+// Fleet (fleet.md in the roadmap's mockups): every run in the workspace, live
+// and recent. The header with Steer and Register Agent, the four summary tiles,
+// and the Runs panel, from one `list_runs` read, the pending approvals and the
+// workspace's agents. Approvals are decided in the shell's drawer; Fleet counts
+// them in one tile and opens the drawer from it.
 //
-// The mandate ledger is read only when a parked call names a mandate (#2957),
-// so a workspace whose approvals draw on none makes no third read, and a
-// viewer who may not read the ledger sees the cards without their bars.
+// A not-loaded state replaces the page body and never the shell. The runs
+// read decides it: a refusal is the access-denied state, a failure is the
+// error state, and a workspace with no runs on its newest page is the empty
+// state. The approvals and agents reads only feed a tile or the steer dialog,
+// so either failing says so on its tile and leaves the rest of the page up.
 import type { ReactNode } from "react";
-import type { MandateRow } from "@/data/contracts/mandates";
+import { useTranslations } from "next-intl";
 import type { DataSource } from "@/data/ports";
 import type { WsCtx } from "@/server/viewer";
 import { canCommandRun } from "@/shared/run-command-roles";
-import { ApprovalsPanel } from "./approvals-panel";
-import { RunsTable } from "./runs-table";
-import { StatStrip } from "./stat-strip";
+import { PageHeader } from "@/ui/page-header";
+import { type FleetAgent, FleetBoard } from "./board";
+import { FleetHeaderActions } from "./header-actions";
+import { FleetDenied, FleetEmpty, FleetError, FleetPending } from "./states";
 
 async function readFleet(
   ctx: WsCtx,
   source: DataSource,
   cursor: string | null,
 ) {
-  const [runs, approvals] = await Promise.all([
+  const [runs, approvals, agents] = await Promise.all([
     source.runs.list(ctx, { cursor }),
     source.approvals.pending(ctx, { runId: null }),
+    source.agents.list(ctx, { cursor: null }),
   ]);
-  const named =
-    approvals.ok &&
-    approvals.value.items.some((item) => item.mandateId !== null);
-  const mandates = new Map<string, MandateRow>();
-  if (named) {
-    const read = await source.mandates.list(ctx, { agentId: null });
-    if (read.ok)
-      for (const mandate of read.value.mandates)
-        mandates.set(mandate.id, mandate);
-  }
-  // The approval clocks start from the instant the reads returned.
-  return { runs, approvals, mandates, now: Date.now() };
+  // The approval clocks and the error line start from the instant the reads
+  // returned; a component may not read a clock while it renders.
+  return { runs, approvals, agents, now: Date.now() };
 }
 
 export async function Fleet({
   ctx,
   source,
   cursor,
-  spendTiles,
+  banners,
 }: {
   ctx: WsCtx;
   source: DataSource;
-  spendTiles?: ReactNode;
   /** The runs page the URL asked for; null is the newest. */
   cursor: string | null;
+  /** The onboarding banners the page draws under the header, when the gate has any. */
+  banners?: ReactNode;
 }) {
-  const { runs, approvals, mandates, now } = await readFleet(
-    ctx,
-    source,
-    cursor,
-  );
+  const { runs, approvals, agents, now } = await readFleet(ctx, source, cursor);
+  const org = ctx.orgSlug;
+  const ws = ctx.wsSlug;
+  if (!runs.ok) {
+    switch (runs.reason) {
+      case "denied":
+        return (
+          <FleetDenied
+            permission={runs.permission}
+            orgName={ctx.orgName}
+            orgRole={ctx.orgRole}
+            wsRole={ctx.wsRole}
+            org={org}
+            ws={ws}
+          />
+        );
+      case "pending_approval":
+        return <FleetPending accessRequestId={runs.accessRequestId} />;
+      case "error":
+        return (
+          <FleetError code={runs.code} status={runs.status} readAt={now} />
+        );
+    }
+  }
+  if (runs.value.runs.length === 0 && cursor === null) {
+    return <FleetEmpty workspace={ctx.wsName} org={org} ws={ws} />;
+  }
+  const roster: FleetAgent[] = agents.ok
+    ? agents.value.agents.flatMap((agent) =>
+        agent.agentKey === null ? [] : [{ agentKey: agent.agentKey }],
+      )
+    : [];
+  const canCommand = canCommandRun(ctx.orgRole, ctx.wsRole);
   return (
-    <div className="flex flex-col gap-3.5">
-      <StatStrip
-        runs={runs}
-        approvals={approvals}
-        now={now}
-        spendTiles={spendTiles}
-      />
-      <ApprovalsPanel
-        approvals={approvals}
-        mandates={mandates}
-        now={now}
-        org={ctx.orgSlug}
-        ws={ctx.wsSlug}
-      />
-      <RunsTable
-        runs={runs}
-        cursor={cursor}
+    <>
+      <FleetHeader
         workspace={ctx.wsName}
-        org={ctx.orgSlug}
-        ws={ctx.wsSlug}
-        canCommand={canCommandRun(ctx.orgRole, ctx.wsRole)}
+        actions={
+          <FleetHeaderActions
+            org={org}
+            ws={ws}
+            workspace={ctx.wsName}
+            agents={roster}
+            agentsRead={agents.ok}
+            runs={runs.value.runs}
+            canCommand={canCommand}
+          />
+        }
       />
-    </div>
+      {banners}
+      <FleetBoard
+        org={org}
+        ws={ws}
+        runs={runs.value.runs}
+        nextCursor={runs.value.nextCursor}
+        cursor={cursor}
+        approvals={approvals}
+        agentTotal={agents.ok ? agents.value.totals.identities : null}
+        now={now}
+        canCommand={canCommand}
+      />
+    </>
+  );
+}
+
+/** The page header: the workspace as the eyebrow, the page's title and what it holds. */
+function FleetHeader({
+  workspace,
+  actions,
+}: {
+  workspace: string;
+  actions: ReactNode;
+}) {
+  const t = useTranslations();
+  return (
+    <PageHeader
+      eyebrow={workspace}
+      title={t("pages.fleet")}
+      description={t("fleet.subtitle")}
+      actions={actions}
+    />
   );
 }

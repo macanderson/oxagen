@@ -1,9 +1,16 @@
 // @vitest-environment jsdom
-// Fleet over a fake DataSource: the two-tile stat strip, the approvals panel
-// and the runs table, each in its ok, empty, denied and error states, with an
-// axe check in every one. The tiles count the rows the sections render, and a
-// card whose parked call drew on a mandate carries the mandate bar.
-import { cleanup, render, screen, within } from "@testing-library/react";
+// Fleet over a fake DataSource, against fleet.md: the header and its two
+// actions, the four summary tiles and their basis lines, the Runs panel with
+// its chips, columns, row actions and list controls, and every not-loaded
+// state, with an axe check in every case. Each tile figure is recomputed from
+// the rows the table draws, so a tile that disagreed with its table fails.
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -11,11 +18,7 @@ import { readError } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import {
-  mandateAuthority,
-  mandateList,
-  mandateRow,
-} from "@/test/mandate-views";
-import {
+  agentPage,
   approvalItem,
   approvalQueue,
   fleetSource,
@@ -24,26 +27,30 @@ import {
   runRow,
 } from "./fleet.builders";
 
+const { push, refresh, dispatchRunCommand, exportFleetRun } = vi.hoisted(
+  () => ({
+    push: vi.fn(),
+    refresh: vi.fn(),
+    dispatchRunCommand: vi.fn(),
+    exportFleetRun: vi.fn(),
+  }),
+);
+
 vi.mock("next/link", () => ({
   default: ({ children, ...rest }: { children: ReactNode; href: string }) => (
     <a {...rest}>{children}</a>
   ),
 }));
-// The approval cards carry a decision control and the runs table draws the row
-// controls. Both are client components that read the app router: the decision
-// dialog to re-read the panel, the row controls to re-read the table after a
-// queued command. Fleet itself navigates with links.
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => ({ push, replace: vi.fn(), refresh }),
 }));
-// The three server actions are stubbed. The module's other exports are kept:
-// a "use server" module exports async functions alone, so the row's command
-// list sits in @/shared/row-commands and needs no stub.
 vi.mock("./actions", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./actions")>()),
   resolveApprovalAction: vi.fn(),
   readApprovalEligibility: vi.fn(),
-  dispatchRunCommand: vi.fn(),
+  steerFleet: vi.fn(),
+  dispatchRunCommand,
+  exportFleetRun,
 }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
@@ -71,32 +78,91 @@ const DENIED = {
 } as const;
 const DOWN = readError("run_index_unavailable", 503);
 const NO_APPROVALS = approvalQueue([]);
-const NO_RUNS = runPage([]);
+
+const usd = (
+  micros: string,
+  basis: "gateway_observed" | "client_attested" = "gateway_observed",
+) => ({ micros, currency: "USD", basis });
+
+/** A live wrapped run, a live run with a parked call, a sealed and a halted run. */
+const RUNS = [
+  runRow({
+    id: "tse_live",
+    source: "tacho",
+    status: "live",
+    enforcementTier: "gateway",
+    replayGrade: null,
+    harness: { name: "Claude Code", version: "2.1", runtime: "claude-code" },
+    cost: usd("4130000"),
+  }),
+  runRow({
+    id: "arun_parked",
+    status: "live",
+    agentKey: "acme.core.docs",
+    operatorName: "Priya Natarajan",
+    enforcementTier: "harness",
+    cost: usd("610000", "client_attested"),
+  }),
+  runRow({
+    id: "arun_sealed",
+    status: "sealed",
+    outcome: "completed",
+    enforcementTier: "harness",
+    replayGrade: "retry",
+    cost: usd("2870000"),
+    startedAt: new Date(NOW - 26 * 3600_000).toISOString(),
+  }),
+  runRow({
+    id: "arun_halted",
+    status: "halted",
+    outcome: "cancelled",
+    enforcementTier: "gateway",
+    cost: null,
+  }),
+];
+const PARKED = approvalItem({ id: "apr_parked", runId: "arun_parked" });
 
 async function renderFleet(
   reads: Parameters<typeof fleetSource>[0],
   cursor: string | null = null,
+  banners?: ReactNode,
 ) {
   const { source, calls } = fleetSource(reads);
-  const element = await Fleet({ ctx, source, cursor });
+  const element = await Fleet({ ctx, source, cursor, banners });
   const { container } = render(<IntlProvider>{element}</IntlProvider>);
   return { container, calls };
 }
 
-const strip = () => screen.queryByRole("region", { name: "Fleet summary" });
+const loaded = (over: Partial<Parameters<typeof fleetSource>[0]> = {}) =>
+  renderFleet({
+    runs: runPage(RUNS),
+    approvals: approvalQueue([PARKED]),
+    agents: agentPage(["acme.core.release-bot", "acme.core.docs"], 64),
+    ...over,
+  });
+
+const tiles = () => screen.getAllByTestId("tile");
 const tile = (title: string) => {
-  const found = screen
-    .getAllByTestId("tile")
-    .find((t) => within(t).queryByText(title) !== null);
+  const found = tiles().find((t) => t.firstElementChild?.textContent === title);
   if (found === undefined) throw new Error(`no ${title} tile`);
   return found;
 };
-const approvalsSection = () =>
-  screen.getByRole("region", { name: "Approvals" });
-const runsSection = () => screen.getByRole("region", { name: "Runs" });
+const waitingTile = () =>
+  screen.getByRole("button", { name: "Open approvals" });
+const runsPanel = () => screen.getByRole("region", { name: "Runs" });
+const rows = () => within(runsPanel()).getAllByTestId("run-row");
+const row = (id: string) => {
+  const found = rows().find((r) => within(r).queryByText(id) !== null);
+  if (found === undefined) throw new Error(`no row ${id}`);
+  return found;
+};
 
 beforeEach(() => {
   vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
+  push.mockReset();
+  refresh.mockReset();
+  dispatchRunCommand.mockReset();
+  exportFleetRun.mockReset();
 });
 
 afterEach(async () => {
@@ -106,675 +172,492 @@ afterEach(async () => {
 });
 
 describe("Fleet reads", () => {
-  it("reads one runs page at the URL's cursor and the workspace's pending approvals", async () => {
+  it("reads one runs page at the URL's cursor, the pending approvals and the workspace's agents", async () => {
     const { calls } = await renderFleet(
-      { runs: NO_RUNS, approvals: NO_APPROVALS },
+      { runs: runPage(RUNS), approvals: NO_APPROVALS },
       "c1",
     );
     expect(calls.runs).toEqual([[ctx, { cursor: "c1" }]]);
     expect(calls.approvals).toEqual([[ctx, { runId: null }]]);
+    expect(calls.agents).toEqual([[ctx, { cursor: null }]]);
   });
 });
 
-describe("stat strip", () => {
-  it("counts activity from the rows on the page", async () => {
-    await renderFleet({
-      runs: runPage([
-        runRow({ id: "arun_a1", status: "live" }),
-        runRow({ id: "arun_a2", status: "live", agentKey: "acme.core.docs" }),
-        runRow({ id: "arun_a3", status: "sealed", agentKey: null }),
-      ]),
-      approvals: approvalQueue([
-        approvalItem({
-          id: "apr_new",
-          createdAt: new Date(NOW - 30_000).toISOString(),
-        }),
-        approvalItem({ id: "apr_old" }),
-      ]),
-    });
-    // Two tiles of its own; the spend tiles are the page's (#2962).
-    expect(screen.getAllByTestId("tile")).toHaveLength(2);
-    expect(tile("Live runs")).toHaveTextContent(
-      "Live runs2of 2 agents in this workspace",
+describe("header", () => {
+  it("names the workspace, the page and what it holds, with Steer then Register Agent, neither gold", async () => {
+    await loaded();
+    const header = screen.getByRole("banner");
+    expect(header).toHaveTextContent("Core platform");
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Fleet" }),
+    ).toBeInTheDocument();
+    expect(header).toHaveTextContent(
+      "Every run in this workspace, live and recent.",
     );
-    expect(tile("Waiting on a human")).toHaveTextContent(
-      "Waiting on a human2oldest approval has waited 2:30 of 10:00",
+    const steer = screen.getByTestId("fleet-steer");
+    const register = screen.getByTestId("fleet-register");
+    expect(steer).toHaveTextContent("Steer");
+    expect(register).toHaveTextContent("Register Agent");
+    expect(register).toHaveAttribute(
+      "href",
+      "/acme/core-platform/register/name",
     );
+    expect(
+      steer.compareDocumentPosition(register) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    for (const action of [steer, register])
+      expect(action.className).not.toContain("bg-button-primary-bg");
   });
 
-  it("counts an empty workspace as zero and says nothing is parked", async () => {
-    await renderFleet({ runs: NO_RUNS, approvals: NO_APPROVALS });
-    expect(tile("Live runs")).toHaveTextContent(
-      "Live runs0of 0 agents in this workspace",
-    );
-    expect(tile("Waiting on a human")).toHaveTextContent(
-      "Waiting on a human0nothing is parked",
-    );
+  it("opens Steer the fleet from the header", async () => {
+    await loaded();
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("fleet-steer"));
+    expect(
+      screen.getByRole("dialog", { name: "Steer the fleet" }),
+    ).toBeInTheDocument();
   });
 
-  it("drops the tile whose read was denied and keeps the other (negative)", async () => {
-    await renderFleet({ runs: DENIED, approvals: NO_APPROVALS });
-    expect(screen.getAllByTestId("tile")).toHaveLength(1);
-    expect(strip()).not.toHaveTextContent("Live runs");
-    expect(strip()).toHaveTextContent("Waiting on a human");
+  it("draws the onboarding banners it is handed under the header", async () => {
+    await renderFleet(
+      { runs: runPage(RUNS), approvals: NO_APPROVALS },
+      null,
+      <p data-testid="banner">provisional</p>,
+    );
+    expect(screen.getByTestId("banner")).toBeInTheDocument();
   });
 
-  it("drops the tile whose read failed, and the whole strip when both did (negative)", async () => {
-    await renderFleet({ runs: runPage([runRow()]), approvals: DOWN });
-    expect(strip()).not.toHaveTextContent("Waiting on a human");
-    cleanup();
-    await renderFleet({ runs: DOWN, approvals: DENIED });
-    expect(strip()).toBeNull();
+  it("draws no approvals panel: approvals are decided in the drawer (negative)", async () => {
+    await loaded();
+    expect(screen.queryByRole("region", { name: "Approvals" })).toBeNull();
   });
 });
 
-describe("approvals panel", () => {
-  it("draws one card per pending approval with its four hops and expiry clock", async () => {
-    await renderFleet({
-      runs: NO_RUNS,
-      approvals: approvalQueue([
-        approvalItem(),
-        approvalItem({
-          id: "apr_r2",
-          runId: "arun_7k2m9q",
-          tool: "merge_pull_request",
-          agentKey: "acme.core.release-bot",
-          requester: null,
-          mandateId: "mnd_4f2a9c",
-          rule: "mandate:mnd_4f2a9c:human_above:amount",
-        }),
-      ]),
-      mandates: mandateList([mandateRow()]),
-    });
-    const section = approvalsSection();
-    expect(section).toHaveTextContent("2 parked");
-    const [first, second] = within(section).getAllByTestId("approval");
-    // Four hops, in the order the chain runs: who asked, which agent, which
-    // action, which rule. A hop the store does not record says so.
-    expect(first).toHaveTextContent(
-      "create_releaseWho askedusr_marcusbellWhich agentnot recordedWhich actioncreate_releaseWhich rulenot recorded",
+describe("summary tiles", () => {
+  it("draws four tiles, each one figure and one basis line, rolled up from the rows", async () => {
+    await loaded();
+    expect(tiles().map((t) => t.firstElementChild?.textContent)).toEqual([
+      "Live runs",
+      "Waiting on a human",
+      "Spend shown",
+      "Tokens shown",
+    ]);
+    // One live run: the other open run has a call parked, so it is waiting.
+    expect(tile("Live runs")).toHaveTextContent(
+      "Live runs1of 64 agents in this workspace",
     );
-    expect(first).toHaveTextContent("Times out in 7:30, then the call ends");
-    expect(within(first ?? section).queryByRole("link")).toBeNull();
-    expect(second).toHaveTextContent("Which agentacme.core.release-bot");
-    expect(second).toHaveTextContent("Who askednot recorded");
-    // The rule hop names the mandate, because a rule id of this form is only
-    // legible beside it.
-    expect(second).toHaveTextContent(
-      "Which rulemandate:mnd_4f2a9c:human_above:amount (under mandate mnd_4f2a9c)",
+    // 4.13 + 0.61 + 2.87; the halted run recorded no cost.
+    expect(tile("Spend shown")).toHaveTextContent("$7.61");
+    expect(screen.getByTestId("spend-basis")).toHaveTextContent(
+      "gateway_observed + client_attested · USD · 1 run has no cost recorded",
     );
-    expect(
-      within(second ?? section).getByRole("link", { name: "Open run" }),
-    ).toHaveAttribute("href", "/acme/core-platform/runs/arun_7k2m9q");
-  });
-
-  it("says no rule covered a call the auto-approval clause never judged", async () => {
-    await renderFleet({
-      runs: NO_RUNS,
-      approvals: approvalQueue([approvalItem()]),
-    });
-    expect(
-      within(approvalsSection()).getByTestId("eligibility"),
-    ).toHaveTextContent(
-      "No auto-approval rule covered this call, so it waited for a person.",
+    expect(tile("Tokens shown")).toHaveTextContent(
+      "Tokens shownnot recordedno cache figure recorded",
     );
   });
 
-  it("names the rule, its reasons and its floor when one judged the call and refused it", async () => {
-    await renderFleet({
-      runs: NO_RUNS,
-      approvals: approvalQueue([
-        approvalItem({
-          autoEligibility: {
-            ruleRef: "small-vendor-payments",
-            ok: false,
-            reasons: [
-              "measure_above_ceiling:amount",
-              "tainted_input",
-              "not_a_code",
-            ],
-            floor: true,
-          },
-        }),
-      ]),
-    });
-    const line = within(approvalsSection()).getByTestId("eligibility");
-    expect(line).toHaveTextContent(
-      "Rule small-vendor-payments did not release this call.",
+  it("opens the approvals drawer from the waiting tile, with the oldest wait off the live clock", async () => {
+    const opened = vi.fn();
+    window.addEventListener("oxagen:open-approvals", opened);
+    await loaded();
+    expect(waitingTile()).toHaveTextContent(
+      "Waiting on a human1oldest approval has waited 2:30 of 10:00 · open the drawer",
     );
-    expect(line).toHaveTextContent(
-      "The call is over the rule's ceiling on amount.",
-    );
-    expect(line).toHaveTextContent(
-      "The arguments derive from untrusted input.",
-    );
-    // A code this build has no copy for is printed as recorded rather than
-    // given a sentence written for another condition.
-    expect(line).toHaveTextContent("Recorded as not_a_code.");
-    expect(
-      within(approvalsSection()).getByTestId("eligibility-floor"),
-    ).toHaveTextContent("floor no rule can lift");
+    fireEvent.click(waitingTile());
+    expect(opened).toHaveBeenCalledOnce();
+    window.removeEventListener("oxagen:open-approvals", opened);
   });
 
-  // §6.9 part 3: a mandate's own approval rule outranks any workspace rule, so
-  // a call a rule would have released can still be parked.
-  it("says a rule would have released a call a mandate parked anyway", async () => {
-    await renderFleet({
-      runs: NO_RUNS,
-      approvals: approvalQueue([
-        approvalItem({
-          autoEligibility: {
-            ruleRef: "small-vendor-payments",
-            ok: true,
-            reasons: [],
-            floor: false,
-          },
-        }),
-      ]),
-    });
-    expect(
-      within(approvalsSection()).getByTestId("eligibility"),
-    ).toHaveTextContent(
-      "Rule small-vendor-payments would have released this call. A mandate asked for a person anyway.",
+  it("says nothing is parked on an empty queue", async () => {
+    await loaded({ approvals: NO_APPROVALS });
+    expect(waitingTile()).toHaveTextContent(
+      "0nothing is parked · open the drawer",
     );
   });
 
-  it("marks a count the read could not finish, on the tile and on the panel", async () => {
-    await renderFleet({
-      runs: NO_RUNS,
-      approvals: approvalQueue([approvalItem()], true),
-    });
-    expect(approvalsSection()).toHaveTextContent("1+ parked");
-    expect(screen.getByTestId("waiting-more")).toHaveTextContent(
+  it("marks a count the read could not finish", async () => {
+    await loaded({ approvals: approvalQueue([PARKED], true) });
+    expect(waitingTile()).toHaveTextContent("1+");
+    expect(waitingTile()).toHaveTextContent(
       "more are parked than this page read",
     );
   });
 
-  it("says nothing is waiting on a human when the queue is empty", async () => {
-    await renderFleet({ runs: NO_RUNS, approvals: NO_APPROVALS });
-    expect(approvalsSection()).toHaveTextContent(
-      "Nothing is waiting on a human.",
-    );
-    expect(within(approvalsSection()).queryAllByTestId("approval")).toEqual([]);
-  });
-
-  it("names the permission a denied read needed, with no cards (negative)", async () => {
-    await renderFleet({ runs: NO_RUNS, approvals: DENIED });
-    expect(approvalsSection()).toHaveTextContent(
-      "You cannot see Approvals in this workspace. Your roles do not include workspace.read",
-    );
-    expect(approvalsSection()).not.toHaveTextContent("parked");
-  });
-
-  it("names the code a failed read answered (negative)", async () => {
-    await renderFleet({ runs: NO_RUNS, approvals: DOWN });
-    expect(approvalsSection()).toHaveTextContent(
-      "Approvals could not be loaded: the control plane answered run_index_unavailable.",
-    );
-  });
-
-  it("carries the request id of an access request still waiting (negative)", async () => {
-    await renderFleet({
-      runs: NO_RUNS,
-      approvals: {
-        ok: false,
-        reason: "pending_approval",
-        accessRequestId: "acr_91",
-      },
+  it("names what the waiting and live tiles could not read, never a zero (negative)", async () => {
+    await loaded({
+      approvals: DENIED,
+      agents: { ok: false, reason: "denied", permission: "agent.read" },
     });
-    expect(approvalsSection()).toHaveTextContent(
-      "Access to Approvals is waiting for approval, request acr_91.",
+    expect(waitingTile()).toHaveTextContent(
+      "approvals not read: workspace.read",
     );
+    expect(tile("Live runs")).toHaveTextContent(
+      "the workspace's agents were not read",
+    );
+  });
+
+  it("changes Spend shown and Live runs with the filter chips", async () => {
+    await loaded();
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("chip-sealed"));
+    expect(screen.getByTestId("chip-sealed")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(tile("Spend shown")).toHaveTextContent("$2.87");
+    expect(screen.getByTestId("spend-basis")).toHaveTextContent(
+      "gateway_observed · USD",
+    );
+    expect(tile("Live runs")).toHaveTextContent("Live runs0");
+    expect(rows()).toHaveLength(1);
+    await user.click(screen.getByTestId("chip-parked"));
+    expect(rows().map((r) => r.dataset.state)).toEqual(["parked"]);
+    expect(screen.getByTestId("spend-basis")).toHaveTextContent(
+      "client_attested · USD",
+    );
+    await user.click(screen.getByTestId("chip-live"));
+    expect(rows().map((r) => r.dataset.state)).toEqual(["live", "parked"]);
   });
 });
 
-describe("runs table", () => {
-  it("draws a row per run: the task, agent identity, operator, status, tier, cost with its basis, frames, and start", async () => {
-    await renderFleet({
-      runs: runPage([runRow()]),
-      approvals: NO_APPROVALS,
-    });
-    const [row] = within(runsSection()).getAllByTestId("run-row");
-    const cells = within(row ?? runsSection()).getAllByRole("cell");
-    expect(cells.map((c) => c.textContent).slice(1)).toEqual([
-      "reacme.core.release-botevidence ledger",
-      "Marcus Bell",
-      "live",
-      "observed at the harness",
-      "$4.13gateway_observed",
-      "1,204",
-      "Sep 15, 2026, 8:00 AM",
-      // A live ledger run carries the recorded reason in place of controls:
-      // pause and resume govern evidence ingress, cancel revokes the run
-      // credentials, and steering needs a producer connection.
-      "View onlyPause refuses the next evidence batch. Resume reopens evidence ingress. Cancel revokes the run credentials. These controls do not stop the external process; steering needs a producer connection.",
-    ]);
-    // The run cell leads with what the run was, keeps the id under it, and
-    // labels the model's sentence so it cannot read as the record.
-    expect(cells[0]).toHaveTextContent("Cut the 3.2 release branch");
-    expect(cells[0]).toHaveTextContent("arun_7k2m9q");
-    expect(cells[0]).toHaveTextContent("ENG-4121 cut the 3.2 release");
-    expect(cells[0]).toHaveTextContent("Cut release/3.2 from main");
-    expect(cells[0]).toHaveTextContent("generated");
-    expect(cells[0]).toHaveTextContent("Written by z-ai/glm-flash-latest on");
-    expect(
-      within(runsSection()).getByRole("link", {
-        name: "Cut the 3.2 release branch",
-      }),
-    ).toHaveAttribute("href", "/acme/core-platform/runs/arun_7k2m9q");
-  });
-
-  it("heads a run without a generated name by its task reference", async () => {
-    await renderFleet({
-      runs: runPage([runRow({ name: null, summary: null })]),
-      approvals: NO_APPROVALS,
-    });
-    const [row] = within(runsSection()).getAllByTestId("run-row");
-    const cells = within(row ?? runsSection()).getAllByRole("cell");
-    expect(cells[0]).toHaveTextContent("ENG-4121 cut the 3.2 release");
-    expect(
-      within(row ?? runsSection()).queryByTestId("generated-summary"),
-    ).toBeNull();
-    expect(
-      within(runsSection()).getByRole("link", {
-        name: "ENG-4121 cut the 3.2 release",
-      }),
-    ).toHaveAttribute("href", "/acme/core-platform/runs/arun_7k2m9q");
-  });
-
-  it("reads 'not recorded' for a null operator, cost and agent, and never draws a pill beside the agent", async () => {
-    await renderFleet({
-      runs: runPage([
-        runRow({
-          source: "tacho",
-          agentKey: null,
-          operatorId: null,
-          operatorKind: null,
-          operatorName: null,
-          cost: null,
-          taskRef: null,
-        }),
-        runRow({
-          id: "arun_b2",
-          cost: { micros: "0", currency: "USD", basis: null },
-        }),
-      ]),
-      approvals: NO_APPROVALS,
-    });
-    const [unrecorded, noBasis] = within(runsSection()).getAllByTestId(
-      "run-row",
-    );
-    const cells = within(unrecorded ?? runsSection()).getAllByRole("cell");
-    expect(cells[1]).toHaveTextContent(/^not recordedwrapped agent$/);
-    expect(cells[2]).toHaveTextContent(/^not recorded$/);
-    expect(cells[5]).toHaveTextContent(/^not recorded$/);
-    expect(noBasis).toHaveTextContent("$0.00basis not recorded");
-    expect(runsSection()).not.toHaveTextContent(/trust/i);
-  });
-
-  it("reads the operator id when the record holds neither a name nor a kind for it", async () => {
-    await renderFleet({
-      runs: runPage([
-        runRow({
-          operatorName: null,
-          operatorKind: null,
-          operatorId: "prn_unknown_kind",
-        }),
-      ]),
-      approvals: NO_APPROVALS,
-    });
-    const [row] = within(runsSection()).getAllByTestId("run-row");
-    const cell = within(row ?? runsSection()).getAllByRole("cell")[2];
-    // An id is a recorded operator. "not recorded" is for a run with none.
-    expect(cell).toHaveTextContent(/^prn_unknown_kind$/);
-    expect(cell).not.toHaveTextContent("not recorded");
-  });
-
-  it("keeps unnamed operators apart by id without printing the id as a label", async () => {
-    await renderFleet({
-      runs: runPage([
-        runRow({
-          operatorName: null,
-          operatorKind: "service",
-          operatorId: "prn_service_alpha",
-        }),
-        runRow({
-          id: "arun_b2",
-          operatorName: null,
-          operatorKind: "service",
-          operatorId: "prn_service_beta",
-        }),
-      ]),
-      approvals: NO_APPROVALS,
-    });
-    const rows = within(runsSection()).getAllByTestId("run-row");
-    const first = within(rows[0] ?? runsSection()).getAllByRole("cell")[2];
-    const second = within(rows[1] ?? runsSection()).getAllByRole("cell")[2];
-    if (first === undefined || second === undefined)
-      throw new Error("expected two operator cells");
-    // The id is never printed as a label: each cell reads "Service" and the
-    // rows stay apart by the id the operator element carries, which the
-    // hover card shows on demand.
-    expect(first).toHaveTextContent(/^Service$/);
-    expect(second).toHaveTextContent(/^Service$/);
-    expect(screen.queryByText("prn_service_alpha")).toBeNull();
-    expect(
-      within(first).getByTestId("operator").getAttribute("data-operator-id"),
-    ).toBe("prn_service_alpha");
-    expect(
-      within(second).getByTestId("operator").getAttribute("data-operator-id"),
-    ).toBe("prn_service_beta");
-    await userEvent.hover(within(first).getByTestId("operator"));
-    expect(within(first).getByTestId("operator-card")).toHaveTextContent(
-      "prn_service_alpha",
-    );
-  });
-
-  it("omits proof, replay, and verdict columns from the operator table", async () => {
-    await renderFleet({ runs: runPage([runRow()]), approvals: NO_APPROVALS });
-    const headers = within(runsSection())
+describe("the Runs panel", () => {
+  it("heads the table with the design's columns, in order, and an unlabelled action column", async () => {
+    await loaded();
+    const heads = within(runsPanel())
       .getAllByRole("columnheader")
-      .map((header) => header.textContent);
-    expect(headers).toEqual([
+      .map((th) => th.textContent);
+    expect(heads).toEqual([
       "Run",
       "Agent",
       "Operator",
       "Status",
       "Tier",
+      "Replay",
+      "Tokens",
       "Cost",
       "Frames",
       "Started",
-      "Controls",
+      "",
     ]);
-    expect(runsSection()).not.toHaveTextContent(/witness|proven|flipped/);
   });
 
-  // A total over the cost column covers only the rows that carry a figure
-  // (#3304). The caveat counts the rows the page drew, and names no harness,
-  // because a row does not record one.
-  it("counts the rows with no recorded cost and links to Spend", async () => {
-    await renderFleet({
-      runs: runPage([
-        runRow({ id: "arun_c1", cost: null }),
-        runRow({ id: "arun_c2", cost: null }),
-        runRow({ id: "arun_c3" }),
-      ]),
-      approvals: NO_APPROVALS,
+  it("draws a row per run: id and task, agent and harness, operator, status, tier, replay, tokens, cost with its basis, frames", async () => {
+    await loaded();
+    const live = row("tse_live");
+    expect(live).toHaveTextContent("Cut the 3.2 release branch");
+    expect(live).toHaveTextContent("acme.core.release-bot");
+    expect(live).toHaveTextContent("Claude Code 2.1");
+    expect(live).toHaveTextContent("Marcus Bell");
+    expect(live).toHaveTextContent("gateway");
+    expect(within(live).getByTestId("row-tokens")).toHaveTextContent(
+      "not recorded",
+    );
+    expect(live).toHaveTextContent("$4.13gateway_observed");
+    expect(live).toHaveTextContent("1,204");
+    // A ledger run with no harness recorded names its source instead.
+    expect(row("arun_sealed")).toHaveTextContent("evidence ledger");
+    expect(row("arun_sealed")).toHaveTextContent("retry");
+    expect(row("arun_halted")).toHaveTextContent("cancelled");
+    expect(row("arun_halted")).toHaveTextContent("not recorded");
+  });
+
+  it("reads a live run with a parked call as parked for approval, and resolves it on the Run page", async () => {
+    await loaded();
+    const parked = row("arun_parked");
+    expect(parked).toHaveTextContent("parked for approval");
+    expect(within(parked).getByTestId("row-resolve")).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/arun_parked",
+    );
+  });
+
+  it("opens the Run page when a row is clicked", async () => {
+    await loaded();
+    fireEvent.click(row("arun_sealed"));
+    expect(push).toHaveBeenCalledWith("/acme/core-platform/runs/arun_sealed");
+  });
+
+  it("pauses a live run through the pause dialog and says the pause was queued", async () => {
+    dispatchRunCommand.mockResolvedValue({
+      ok: true,
+      value: { commandIds: ["tcm_1"] },
     });
-    const caveat = within(runsSection()).getByTestId("runs-unpriced");
-    expect(caveat).toHaveTextContent(
-      "2 runs on this page have no cost recorded. A total over this column leaves them out.",
+    await loaded();
+    const user = userEvent.setup();
+    await user.click(within(row("tse_live")).getByTestId("row-pause"));
+    expect(push).not.toHaveBeenCalled();
+    const dialog = screen.getByRole("dialog", { name: "Pause this run" });
+    expect(dialog).toHaveTextContent("Takes effect at the next boundary");
+    expect(dialog).toHaveTextContent("turn 34 · step 271 · frame 1204");
+    expect(dialog).toHaveTextContent(
+      "control.pause frame · operator authority",
+    );
+    expect(dialog).toHaveTextContent("Pause is not cancel.");
+    await user.type(
+      within(dialog).getByLabelText(
+        "Reason — the model reads this on resume, so write it for the agent",
+      ),
+      "Holding for finance",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Pause at the next boundary" }),
+    );
+    expect(dispatchRunCommand).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "tse_live",
+      "pause",
+      "Holding for finance",
     );
     expect(
-      within(caveat).getByRole("link", { name: "Open Spend" }),
-    ).toHaveAttribute("href", "/acme/core-platform/spend?tab=findings");
-  });
-
-  it("counts one such run in the singular", async () => {
-    await renderFleet({
-      runs: runPage([runRow({ cost: null })]),
-      approvals: NO_APPROVALS,
-    });
-    expect(
-      within(runsSection()).getByTestId("runs-unpriced"),
-    ).toHaveTextContent("1 run on this page has no cost recorded");
-  });
-
-  it("draws no cost caveat when every row carries a figure (negative)", async () => {
-    await renderFleet({ runs: runPage([runRow()]), approvals: NO_APPROVALS });
-    expect(within(runsSection()).queryByTestId("runs-unpriced")).toBeNull();
-  });
-
-  it("tells an empty workspace how its first run arrives, with the enroll command and no table", async () => {
-    await renderFleet({ runs: NO_RUNS, approvals: NO_APPROVALS });
-    expect(within(runsSection()).getByTestId("runs-empty")).toHaveTextContent(
-      "No runs yet in Core platform",
-    );
-    expect(
-      within(runsSection()).getByText("oxagen agent enroll"),
+      await screen.findByText(
+        "Pause queued for tse_live. It takes effect at the next boundary.",
+      ),
     ).toBeInTheDocument();
-    expect(within(runsSection()).queryByRole("table")).toBeNull();
+    expect(refresh).toHaveBeenCalled();
   });
 
-  it("links to the next page and, on a later page, back to the newest", async () => {
-    await renderFleet({
-      runs: runPage([runRow()], "c2"),
+  it("says why a ledger run cannot be paused and sends nothing (negative)", async () => {
+    await loaded({
+      runs: runPage([runRow({ id: "arun_ledger", source: "ledger" })]),
       approvals: NO_APPROVALS,
     });
-    const pager = within(runsSection()).getByRole("navigation", {
-      name: "Runs pages",
-    });
-    expect(
-      within(pager).getByRole("link", { name: "Older runs" }),
-    ).toHaveAttribute("href", "/acme/core-platform?cursor=c2");
-    expect(
-      within(pager).queryByRole("link", { name: "Newest runs" }),
-    ).toBeNull();
-    cleanup();
-    await renderFleet({ runs: NO_RUNS, approvals: NO_APPROVALS }, "c2");
-    expect(within(runsSection()).queryByTestId("runs-empty")).toBeNull();
-    expect(
-      within(runsSection()).getByRole("link", { name: "Newest runs" }),
-    ).toHaveAttribute("href", "/acme/core-platform");
-  });
-
-  it("draws no pager on a single page (negative)", async () => {
-    await renderFleet({ runs: runPage([runRow()]), approvals: NO_APPROVALS });
-    expect(within(runsSection()).queryByRole("navigation")).toBeNull();
-  });
-
-  it("names the permission a denied read needed, with no table (negative)", async () => {
-    await renderFleet({ runs: DENIED, approvals: NO_APPROVALS });
-    expect(runsSection()).toHaveTextContent(
-      "You cannot see Runs in this workspace.",
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("row-pause"));
+    expect(screen.getByTestId("pause-refusal")).toHaveTextContent(
+      "Pause refuses the next evidence batch",
     );
-    expect(within(runsSection()).queryByRole("table")).toBeNull();
-    expect(within(runsSection()).queryByTestId("runs-empty")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Pause at the next boundary" }),
+    ).toBeDisabled();
+    expect(dispatchRunCommand).not.toHaveBeenCalled();
   });
 
-  it("names the code a failed read answered, with no table (negative)", async () => {
+  it("names the refusal a pause came back with (negative)", async () => {
+    dispatchRunCommand.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      code: "observe_tier",
+    });
+    await loaded();
+    const user = userEvent.setup();
+    await user.click(within(row("tse_live")).getByTestId("row-pause"));
+    await user.click(
+      screen.getByRole("button", { name: "Pause at the next boundary" }),
+    );
+    expect(await screen.findByTestId("pause-failure")).toBeInTheDocument();
+  });
+
+  it("queues an export from a sealed row and says so", async () => {
+    exportFleetRun.mockResolvedValue({
+      ok: true,
+      value: { exportId: "rexp_1" },
+    });
+    await loaded();
+    const user = userEvent.setup();
+    await user.click(within(row("arun_sealed")).getByTestId("row-export"));
+    expect(exportFleetRun).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "arun_sealed",
+    );
+    expect(
+      await screen.findByText("Export bundle queued for arun_sealed."),
+    ).toBeInTheDocument();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("says an export was not queued when the handler refused it (negative)", async () => {
+    exportFleetRun.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      code: "org_role_required",
+    });
+    await loaded();
+    const user = userEvent.setup();
+    await user.click(within(row("arun_halted")).getByTestId("row-export"));
+    expect(
+      await screen.findByText(
+        /The export bundle for arun_halted was not queued/,
+      ),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("list controls", () => {
+  const many = Array.from({ length: 12 }, (_, i) =>
+    runRow({
+      id: `arun_${String(i).padStart(2, "0")}`,
+      status: "sealed",
+      outcome: "completed",
+      frames: 100 + i,
+      enforcementTier: i % 3 === 0 ? "gateway" : "harness",
+    }),
+  );
+
+  it("pages ten rows at a time, and says when the read stopped before the oldest run", async () => {
+    await loaded({ runs: runPage(many, "c2"), approvals: NO_APPROVALS });
+    expect(rows()).toHaveLength(10);
+    expect(screen.getByTestId("pager-range")).toHaveTextContent("1–10 of 12+");
+    expect(screen.getByRole("link", { name: "Older runs" })).toHaveAttribute(
+      "href",
+      "/acme/core-platform?cursor=c2",
+    );
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Next page" }));
+    expect(rows()).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Page 2" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    await user.selectOptions(screen.getByTestId("rows-per-page"), "5");
+    expect(rows()).toHaveLength(5);
+    expect(screen.getByTestId("pager-range")).toHaveTextContent("1–5 of 12+");
+  });
+
+  it("links back to the newest runs on a later read", async () => {
+    await renderFleet({ runs: runPage(many), approvals: NO_APPROVALS }, "c2");
+    expect(screen.getByRole("link", { name: "Newest runs" })).toHaveAttribute(
+      "href",
+      "/acme/core-platform",
+    );
+    expect(screen.getByTestId("pager-range")).toHaveTextContent("1–10 of 12");
+  });
+
+  it("searches, filters on a facet and sorts on a column", async () => {
+    await loaded({ runs: runPage(many), approvals: NO_APPROVALS });
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Search this list"), "arun_07");
+    expect(rows()).toHaveLength(1);
+    await user.clear(screen.getByLabelText("Search this list"));
+    await user.selectOptions(screen.getByTestId("facet-tier"), "gateway");
+    expect(rows()).toHaveLength(4);
+    expect(
+      within(screen.getByTestId("facet-status"))
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual(["All · Status", "completed"]);
+    await user.selectOptions(screen.getByTestId("facet-tier"), "");
+    const frames = screen.getByRole("button", { name: "Sort by Frames" });
+    await user.click(frames);
+    expect(frames.closest("th")).toHaveAttribute("aria-sort", "ascending");
+    expect(rows()[0]).toHaveTextContent("arun_00");
+    await user.click(frames);
+    expect(frames.closest("th")).toHaveAttribute("aria-sort", "descending");
+    expect(rows()[0]).toHaveTextContent("arun_11");
+  });
+
+  it("says no rows match when a search finds none (negative)", async () => {
+    await loaded({ runs: runPage(many), approvals: NO_APPROVALS });
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Search this list"), "zzz");
+    expect(runsPanel()).toHaveTextContent("No rows match.");
+    expect(screen.getByTestId("pager-range")).toHaveTextContent("0 of 0");
+  });
+});
+
+describe("not-loaded states", () => {
+  it("empty: says how a run arrives and offers Register Agent and Open Agents, with no header or table", async () => {
+    await renderFleet({ runs: runPage([]), approvals: NO_APPROVALS });
+    const empty = screen.getByTestId("fleet-empty");
+    expect(
+      within(empty).getByRole("heading", {
+        name: "No runs yet in Core platform",
+      }),
+    ).toBeInTheDocument();
+    expect(empty).toHaveTextContent(
+      "Nothing has reached Oxagen from this workspace. A run appears the moment a registered agent makes its first model call — you do not create runs here, agents do.",
+    );
+    expect(
+      within(empty).getByRole("link", { name: "Register Agent" }),
+    ).toHaveAttribute("href", "/acme/core-platform/register/name");
+    expect(
+      within(empty).getByRole("link", { name: "Open Agents" }),
+    ).toHaveAttribute("href", "/acme/core-platform/agents");
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
+    expect(screen.queryByRole("table")).toBeNull();
+  });
+
+  it("keeps the table on a later read that came back empty", async () => {
+    await renderFleet({ runs: runPage([]), approvals: NO_APPROVALS }, "c9");
+    expect(screen.queryByTestId("fleet-empty")).toBeNull();
+    expect(runsPanel()).toHaveTextContent("No rows match.");
+  });
+
+  it("error: names the code, offers Try again and Open an incident, and prints the failure line", async () => {
     await renderFleet({ runs: DOWN, approvals: NO_APPROVALS });
-    expect(runsSection()).toHaveTextContent(
-      "Runs could not be loaded: the control plane answered run_index_unavailable.",
-    );
-    expect(within(runsSection()).queryByRole("table")).toBeNull();
-  });
-});
-
-describe("Fleet approvals › the mandate bar", () => {
-  const parked = approvalItem({ mandateId: "mnd_4f2a9c" });
-
-  it("draws the bar of the mandate a parked call drew on", async () => {
-    const { container, calls } = await renderFleet({
-      runs: NO_RUNS,
-      approvals: approvalQueue([parked]),
-      mandates: mandateList([mandateRow()]),
-    });
-    expect(calls.mandates).toEqual([[ctx, { agentId: null }]]);
-    const bar = within(approvalsSection()).getByTestId("mandate-bar");
-    expect(bar).toHaveAttribute("data-measure", "amount");
-    expect(bar).toHaveTextContent("$615.82");
-    // The measure is on the card, not only in a data attribute: this panel is
-    // where a mandate draws one bar per measure.
-    expect(bar).toHaveTextContent("Remaining authority · amount · monthly");
-    expect(within(bar).getByRole("img")).toHaveAccessibleName(
-      "amount: $1,204.18 settled, $180.00 reserved by calls in flight, $615.82 remaining of $2,000.00",
-    );
-    await expectNoAxe(container);
-  });
-
-  it("says what the bar's figures are counted over, since a parked call can outlive a period", async () => {
-    await renderFleet({
-      runs: NO_RUNS,
-      approvals: approvalQueue([parked]),
-      mandates: mandateList([mandateRow()]),
-    });
+    const error = screen.getByTestId("fleet-error");
     expect(
-      within(approvalsSection()).getByTestId("mandate-period-basis"),
-    ).toHaveTextContent("A reservation this call made in an earlier period");
-  });
-
-  it("says nothing about a period on a card with no bar (negative)", async () => {
-    await renderFleet({
-      runs: NO_RUNS,
-      approvals: approvalQueue([approvalItem()]),
-    });
-    expect(
-      within(approvalsSection()).queryByTestId("mandate-period-basis"),
-    ).toBeNull();
-  });
-
-  it("reads no mandate at all when no parked call names one (negative)", async () => {
-    const { calls } = await renderFleet({
-      runs: NO_RUNS,
-      approvals: approvalQueue([approvalItem()]),
-    });
-    expect(calls.mandates).toEqual([]);
-    expect(within(approvalsSection()).queryByTestId("mandate-bar")).toBeNull();
-  });
-
-  it("draws the card without its bar when the ledger refuses the viewer (negative)", async () => {
-    const { container } = await renderFleet({
-      runs: NO_RUNS,
-      approvals: approvalQueue([parked]),
-      mandates: { ok: false, reason: "denied", permission: "org.billing" },
-    });
-    expect(
-      within(approvalsSection()).getByTestId("approval"),
+      within(error).getByRole("heading", {
+        name: "Fleet could not be loaded",
+      }),
     ).toBeInTheDocument();
-    expect(within(approvalsSection()).queryByTestId("mandate-bar")).toBeNull();
-    await expectNoAxe(container);
-  });
-
-  it("names a mandate the page did not read rather than drawing nothing (negative)", async () => {
-    const { container } = await renderFleet({
-      runs: NO_RUNS,
-      approvals: approvalQueue([approvalItem({ mandateId: "mnd_absent" })]),
-      mandates: mandateList([mandateRow()], 100),
-    });
-    const section = approvalsSection();
-    expect(within(section).queryByTestId("mandate-bar")).toBeNull();
-    expect(within(section).getByTestId("mandate-unread")).toHaveTextContent(
-      "Drew on mandate mnd_absent",
+    expect(error).toHaveTextContent(
+      "The control plane answered run_index_unavailable. Nothing was changed. Runs kept recording while this page was down. Frames are written by the collector on each host, not by Oxagen.",
     );
-    await expectNoAxe(container);
+    expect(screen.getByTestId("fleet-error-trace")).toHaveTextContent(
+      "503 run_index_unavailable ·",
+    );
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+    expect(refresh).toHaveBeenCalledOnce();
+    await user.click(screen.getByRole("button", { name: "Open an incident" }));
+    const dialog = screen.getByRole("dialog", { name: "Open an incident" });
+    expect(within(dialog).getByLabelText("Subject")).toHaveValue(
+      "503 run_index_unavailable",
+    );
+    expect(screen.getByTestId("incident-unbacked")).toHaveTextContent(
+      "cannot be sent",
+    );
+    expect(screen.getByRole("button", { name: "Raise it" })).toBeDisabled();
   });
 
-  it("names the mandate on a card the viewer may not read the ledger for (negative)", async () => {
-    await renderFleet({
-      runs: NO_RUNS,
-      approvals: approvalQueue([parked]),
-      mandates: { ok: false, reason: "denied", permission: "org.billing" },
-    });
+  it("access denied: names the permission, offers Request access and Back to Fleet, and says who is signed in", async () => {
+    await renderFleet({ runs: DENIED, approvals: NO_APPROVALS });
+    const denied = screen.getByTestId("fleet-denied");
     expect(
-      within(approvalsSection()).getByTestId("mandate-unread"),
-    ).toHaveTextContent("mnd_4f2a9c");
-  });
-
-  it("names no mandate on a card that drew on none (negative)", async () => {
-    await renderFleet({
-      runs: NO_RUNS,
-      approvals: approvalQueue([approvalItem()]),
-    });
-    expect(
-      within(approvalsSection()).queryByTestId("mandate-unread"),
-    ).toBeNull();
-  });
-
-  // A mandate limited per call only has no denominator, so every `MandateBar`
-  // draws nothing — and the card used to print a caveat about the period it
-  // was not counting, over that emptiness, while suppressing the fallback that
-  // would at least have named the mandate.
-  it("names a per-call-only mandate instead of drawing an empty card", async () => {
-    await renderFleet({
-      runs: NO_RUNS,
-      approvals: approvalQueue([parked]),
-      mandates: mandateList([
-        mandateRow({
-          authority: [
-            mandateAuthority({
-              perPeriod: null,
-              remaining: null,
-              settledRatio: null,
-              reservedRatio: null,
-            }),
-          ],
-        }),
-      ]),
-    });
-    const card = within(approvalsSection()).getByTestId("approval");
-    expect(within(card).queryByTestId("mandate-bar")).toBeNull();
-    expect(within(card).queryByTestId("mandate-period-basis")).toBeNull();
-    const line = within(card).getByTestId("mandate-per-call-only");
-    expect(line.textContent).toContain("mnd_4f2a9c");
-    expect(line.textContent).toContain("limits these per call only");
-    expect(line.textContent).toContain("$250.00");
-    expect(line.textContent).toContain("amount");
-  });
-
-  it("keeps the period caveat when a measure does have a period limit", async () => {
-    await renderFleet({
-      runs: NO_RUNS,
-      approvals: approvalQueue([parked]),
-      mandates: mandateList([mandateRow()]),
-    });
-    const card = within(approvalsSection()).getByTestId("approval");
-    expect(
-      within(card).getByTestId("mandate-period-basis"),
+      within(denied).getByRole("heading", {
+        name: "You cannot see this workspace",
+      }),
     ).toBeInTheDocument();
-    expect(within(card).queryByTestId("mandate-per-call-only")).toBeNull();
-  });
-
-  // A mandate's measures are a partition, not an either/or. Keying the
-  // fallback on "are there any bars" hid the per-call measures of a mandate
-  // that had one of each.
-  it("draws the bars and names the per-call-only measures beside them", async () => {
-    await renderFleet({
-      runs: NO_RUNS,
-      approvals: approvalQueue([parked]),
-      mandates: mandateList([
-        mandateRow({
-          authority: [
-            mandateAuthority(),
-            mandateAuthority({
-              measure: "tax",
-              perPeriod: null,
-              remaining: null,
-              settledRatio: null,
-              reservedRatio: null,
-            }),
-          ],
-        }),
-      ]),
-    });
-    const card = within(approvalsSection()).getByTestId("approval");
-    const bars = within(card).getAllByTestId("mandate-bar");
-    expect(bars).toHaveLength(1);
-    expect(bars[0]).toHaveAttribute("data-measure", "amount");
-    // The period caveat belongs to the bar, and the bar is there.
+    expect(denied).toHaveTextContent(
+      "Your roles on Acme Robotics do not include workspace.read on core-platform. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+    );
+    expect(denied).toHaveTextContent(
+      "Signed in asorg.owner · workspace.member · core-platform",
+    );
+    expect(denied).toHaveTextContent("Neededworkspace.read on core-platform");
+    expect(denied).toHaveTextContent(
+      "Decided bypolicy not recorded · deny wins over every allow",
+    );
     expect(
-      within(card).getByTestId("mandate-period-basis"),
-    ).toBeInTheDocument();
-    // And the measure with no period is named rather than dropped.
-    const line = within(card).getByTestId("mandate-per-call-only");
-    expect(line.textContent).toContain("tax");
-    expect(line.textContent).toContain("$250.00");
-    expect(line.textContent).not.toContain("amount");
+      within(denied).getByRole("link", { name: "Back to Fleet" }),
+    ).toHaveAttribute("href", "/acme/core-platform");
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Request access" }));
+    const dialog = screen.getByRole("dialog", { name: "Request access" });
+    expect(within(dialog).getByLabelText("Role requested")).toHaveValue(
+      "workspace.read on core-platform",
+    );
+    expect(screen.getByTestId("request-access-unbacked")).toHaveTextContent(
+      "cannot be sent",
+    );
+    expect(
+      screen.getByRole("button", { name: "Send the request" }),
+    ).toBeDisabled();
   });
-});
 
-it("places the page's spend tiles in the strip beside activity", async () => {
-  const { source } = fleetSource({ runs: NO_RUNS, approvals: NO_APPROVALS });
-  const element = await Fleet({
-    ctx,
-    source,
-    cursor: null,
-    spendTiles: <div>Recorded spend metrics</div>,
+  it("pending: carries the id of the access request still waiting", async () => {
+    await renderFleet({
+      runs: {
+        ok: false,
+        reason: "pending_approval",
+        accessRequestId: "acr_91",
+      },
+      approvals: NO_APPROVALS,
+    });
+    expect(screen.getByTestId("fleet-pending")).toHaveTextContent("acr_91");
   });
-  render(<IntlProvider>{element}</IntlProvider>);
-  expect(
-    within(screen.getByRole("region", { name: "Fleet summary" })).getByText(
-      "Recorded spend metrics",
-    ),
-  ).toBeInTheDocument();
 });
