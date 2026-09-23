@@ -1,0 +1,68 @@
+# File a P0 `deployment-failure` issue when main goes red or a production
+# deploy fails, and close it when main recovers.
+#
+# Mac set this on 2026-09-23 so failures show up in the issue list and their
+# rate can be tracked: filter on the `deployment-failure` label, or on
+# `deployment-failure:deploy` and `deployment-failure:main-red` for each kind.
+# An issue's open-to-close time is the time main took to recover.
+#
+# The rules (one issue per incident, what counts as green, out-of-order runs)
+# live in tools/scripts/deployment-failure-issue.mjs, where they are tested.
+#
+# ## Why workflow_run and not a job in pipeline.yml
+#
+# A job inside the pipeline cannot report the pipeline failing to start, and
+# it queues behind the same runners it is reporting on. workflow_run fires
+# once the CI run concludes, whatever the conclusion.
+#
+# ## Why no concurrency group
+#
+# GitHub keeps one pending run per group, so a burst of failures would evict
+# all but one report, which is the #2730 mistake again. Two runs that race
+# to file are deduplicated by the script instead.
+#
+# ## The P0 label and triage-guard
+#
+# SCR-005 reserves priority labels for the triage identity. This workflow's
+# P0 is Mac's standing decision for this one class of issue, and
+# triage-guard.yml exempts it. Issues created with GITHUB_TOKEN do not
+# trigger other workflows in any case.
+name: deployment-failure
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: A CI run id on main to record (replays a missed report)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+
+jobs:
+  record:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: |
+            tools/scripts/deployment-failure-issue.mjs
+            .node-version
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - name: Record the run
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.run_id || github.event.workflow_run.id }}
+        run: node tools/scripts/deployment-failure-issue.mjs
