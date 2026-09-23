@@ -46,3 +46,49 @@ describe("SheetDialog dismissal", () => {
     expect(change).toHaveBeenCalledWith(false);
   });
 });
+
+describe("SheetDialog as a modal", () => {
+  it("tells assistive technology it is modal", () => {
+    render(
+      <IntlProvider>
+        <SheetDialog open onOpenChange={vi.fn()} title="Modal" testId="modal">
+          <p>Body</p>
+        </SheetDialog>
+      </IntlProvider>,
+    );
+    expect(screen.getByRole("dialog")).toHaveAttribute("aria-modal", "true");
+  });
+
+  it("puts the footer note in the footer, before Close and the primary action", () => {
+    render(
+      <IntlProvider>
+        <SheetDialog
+          open
+          onOpenChange={vi.fn()}
+          title="Noted"
+          testId="noted"
+          footerNote="2 agents at the boundary"
+          footer={<button type="button">Steer</button>}
+        >
+          <p>Body</p>
+        </SheetDialog>
+      </IntlProvider>,
+    );
+    const footer = document.querySelector<HTMLElement>("[data-sheet-footer]");
+    if (!footer) throw new Error("Missing dialog footer");
+    const note = footer.querySelector("[data-footer-note]");
+    expect(note).toHaveTextContent("2 agents at the boundary");
+    expect(footer.firstElementChild).toBe(note);
+  });
+
+  it("draws no note element when none is given", () => {
+    render(
+      <IntlProvider>
+        <SheetDialog open onOpenChange={vi.fn()} title="Plain" testId="plain">
+          <p>Body</p>
+        </SheetDialog>
+      </IntlProvider>,
+    );
+    expect(document.querySelector("[data-footer-note]")).toBeNull();
+  });
+});

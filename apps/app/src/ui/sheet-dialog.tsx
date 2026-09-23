@@ -39,6 +39,7 @@ export function SheetDialog({
   subtitle,
   tabs,
   footer,
+  footerNote,
   closeLabel,
   wide = false,
   dismissible = true,
@@ -55,6 +56,13 @@ export function SheetDialog({
   tabs?: ReactNode;
   /** Actions drawn before the Close button; the primary action goes here. */
   footer?: ReactNode;
+  /**
+   * A line at the start of the footer, before Close and the primary action:
+   * what the action will record or whom it reaches (the mockup's footer
+   * `<span class="grow">`). On a phone it takes a line of its own above the
+   * buttons (src/ui/phone.css).
+   */
+  footerNote?: ReactNode;
   /** What the dismiss button says when "Close" is not the word, such as "Cancel" beside a Save. */
   closeLabel?: string;
   /** The mockup's dialog width (600px) for editors that need two columns. */
@@ -76,7 +84,11 @@ export function SheetDialog({
           data-scrim=""
           className="fixed inset-0 z-50 bg-overlay-scrim"
         />
+        {/* Base UI marks the popup role=dialog but never aria-modal. The
+            backdrop makes everything behind it inert, so the dialog is
+            modal and says so to assistive technology. */}
         <Dialog.Popup
+          aria-modal="true"
           data-sheet=""
           data-testid={testId}
           className={`fixed left-1/2 top-[12vh] z-50 flex max-h-[76dvh] w-[calc(100%-1.5rem)] -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-dialog-border bg-dialog-bg text-dialog-fg shadow-2xl ${wide ? "max-w-[600px]" : "max-w-md"}`}
@@ -103,8 +115,16 @@ export function SheetDialog({
               sits under the thumb (src/ui/phone.css). */}
           <div
             data-sheet-footer=""
-            className="flex flex-wrap justify-end gap-2 border-t border-border px-4 py-3"
+            className="flex flex-wrap items-center justify-end gap-2 border-t border-border px-4 py-3"
           >
+            {footerNote === undefined ? null : (
+              <span
+                data-footer-note=""
+                className="min-w-0 grow text-[12.5px] text-muted-foreground"
+              >
+                {footerNote}
+              </span>
+            )}
             <Dialog.Close
               disabled={!dismissible}
               data-touch-target=""
