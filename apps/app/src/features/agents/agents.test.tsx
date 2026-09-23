@@ -249,6 +249,21 @@ describe("Agents, loaded", () => {
       "42runs 30d",
       "EditRolesDeregister",
     ]);
+    // Each unbacked cell names the store it is waiting for.
+    const gaps = [...only(rows()).querySelectorAll("[data-gap]")].map((el) => [
+      el.getAttribute("data-gap"),
+      el.getAttribute("title"),
+    ]);
+    expect(gaps).toEqual([
+      [
+        "steering",
+        "No store records the steering assembled for each agent yet.",
+      ],
+      [
+        "toolbelt",
+        "No store records toolbelts or their assignments to agents yet.",
+      ],
+    ]);
   });
 
   it("reads Health in the spec's order and never says healthy without a recorded tier", async () => {

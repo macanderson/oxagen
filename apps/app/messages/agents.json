@@ -159,6 +159,14 @@
           "title": "Access to the agents in this workspace is waiting for approval",
           "body": "Access request {request}"
         }
+      },
+      "gaps": {
+        "steering": "No store records the steering assembled for each agent yet.",
+        "toolbelt": "No store records toolbelts or their assignments to agents yet.",
+        "tokens": "No per-agent token rollup or cache rate is recorded yet.",
+        "commit": "The commit of .oxagen/agents/ is not recorded on this read.",
+        "organization": "No organization-wide rollup of agents is recorded yet.",
+        "tier": "No wrapped session has recorded an enforcement tier for this agent yet."
       }
     },
     "detail": {

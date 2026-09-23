@@ -104,10 +104,31 @@ export function Instant({ at }: { at: string }) {
   );
 }
 
-/** A value the store did not record. */
-export function NotRecordedValue() {
+/** The backend gaps a list cell can name when it prints not recorded. */
+export type ListGap =
+  | "steering"
+  | "toolbelt"
+  | "tokens"
+  | "commit"
+  | "organization"
+  | "tier";
+
+/**
+ * A value the store did not record. With `gap`, the cell names the missing
+ * store on hover and carries it as `data-gap`, so an unbacked column says what
+ * it is waiting for rather than only that it is empty.
+ */
+export function NotRecordedValue({ gap }: { gap?: ListGap } = {}) {
   const t = useTranslations("agents");
-  return <span className="text-muted-foreground">{t("notRecorded")}</span>;
+  return (
+    <span
+      data-gap={gap}
+      title={gap === undefined ? undefined : t(`list.gaps.${gap}`)}
+      className="text-muted-foreground"
+    >
+      {t("notRecorded")}
+    </span>
+  );
 }
 
 const STATUS_DOT: Record<AgentStatus, string> = {

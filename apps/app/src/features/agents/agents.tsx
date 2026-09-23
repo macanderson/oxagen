@@ -48,6 +48,7 @@ const HOLDERS_NAMED = 3;
 
 function Tiles({ page, workspace }: { page: AgentPage; workspace: string }) {
   const t = useTranslations("agents.list.tiles");
+  const gaps = useTranslations("agents.list.gaps");
   const locale = useLocale();
   const count = (n: number) => formatCount(n, locale);
   const { totals, agents } = page;
@@ -64,7 +65,11 @@ function Tiles({ page, workspace }: { page: AgentPage; workspace: string }) {
       <Tile
         title={t("agentsHere.title")}
         value={count(totals.identities)}
-        basis={t("agentsHere.basis", { listed: count(totals.identities) })}
+        basis={
+          <span data-gap="organization" title={gaps("organization")}>
+            {t("agentsHere.basis", { listed: count(totals.identities) })}
+          </span>
+        }
       />
       <Tile
         title={t("enrolled.title")}

@@ -127,7 +127,7 @@ function Sub({ children }: { children: ReactNode }) {
 function HealthBadge({ row }: { row: AgentRow }) {
   const t = useTranslations("agents.list.health");
   const health = healthOf(row);
-  if (health === null) return <NotRecordedValue />;
+  if (health === null) return <NotRecordedValue gap="tier" />;
   const why =
     health === "tamper"
       ? t("tamperWhy", { count: row.tamperIncidents })
@@ -144,7 +144,7 @@ function HealthBadge({ row }: { row: AgentRow }) {
 
 function TierWord({ row }: { row: AgentRow }) {
   const t = useTranslations("agents.tier");
-  if (row.enforcementTier === null) return <NotRecordedValue />;
+  if (row.enforcementTier === null) return <NotRecordedValue gap="tier" />;
   return (
     <Badge tone="quiet" dot={false} mono data-tier={row.enforcementTier}>
       {t(row.enforcementTier)}
@@ -210,12 +210,12 @@ function useColumns(set: ColumnSet, org: string, ws: string): Column[] {
       {
         key: "steering",
         label: t("list.columns.steering"),
-        render: () => <NotRecordedValue />,
+        render: () => <NotRecordedValue gap="steering" />,
       },
       {
         key: "toolbelt",
         label: t("list.columns.toolbelt"),
-        render: () => <NotRecordedValue />,
+        render: () => <NotRecordedValue gap="toolbelt" />,
       },
       {
         key: "runtime",
@@ -228,7 +228,7 @@ function useColumns(set: ColumnSet, org: string, ws: string): Column[] {
             </span>
             <span className="block text-[10px] text-muted-foreground">
               {row.enforcementTier === null ? (
-                <NotRecordedValue />
+                <NotRecordedValue gap="tier" />
               ) : (
                 t(`tier.${row.enforcementTier}`)
               )}
@@ -305,7 +305,7 @@ function useColumns(set: ColumnSet, org: string, ws: string): Column[] {
       key: "belt",
       label: t("list.columns.belt"),
       numeric: true,
-      render: () => <NotRecordedValue />,
+      render: () => <NotRecordedValue gap="toolbelt" />,
     },
     {
       key: "runs",
@@ -334,7 +334,7 @@ function useColumns(set: ColumnSet, org: string, ws: string): Column[] {
       key: "tokens",
       label: t("list.columns.tokens"),
       numeric: true,
-      render: () => <NotRecordedValue />,
+      render: () => <NotRecordedValue gap="tokens" />,
     },
     {
       key: "mandates",
@@ -546,7 +546,7 @@ export function AgentsTable({
             ))}
           </div>
           <span className={`${mono} text-[11px] text-muted-foreground`}>
-            {t("list.source")} <NotRecordedValue />
+            {t("list.source")} <NotRecordedValue gap="commit" />
           </span>
         </div>
       </div>

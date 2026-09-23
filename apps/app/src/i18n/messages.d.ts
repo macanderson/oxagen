@@ -216,6 +216,14 @@ type Messages = {
           body: string;
         };
       };
+      gaps: {
+        steering: string;
+        toolbelt: string;
+        tokens: string;
+        commit: string;
+        organization: string;
+        tier: string;
+      };
     };
     detail: {
       header: string;
