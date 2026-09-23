@@ -1,0 +1,218 @@
+{
+  "name": "list_sso_providers",
+  "domain": "org",
+  "description": "List the organisation's SSO identity providers (OIDC or SAML) with their domain verification record, callback URL, group-to-role mappings, whether SSO is required, and whether the organisation's plan includes SSO (the Enterprise plan). Secrets are never returned; the view says only whether one is stored.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "providers": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "providerId": {
+              "type": "string"
+            },
+            "displayName": {
+              "type": "string"
+            },
+            "protocol": {
+              "type": "string",
+              "enum": [
+                "oidc",
+                "saml"
+              ]
+            },
+            "domain": {
+              "type": "string"
+            },
+            "domainVerified": {
+              "type": "boolean"
+            },
+            "issuer": {
+              "type": "string"
+            },
+            "groupsClaim": {
+              "type": "string"
+            },
+            "domainVerification": {
+              "type": "object",
+              "properties": {
+                "recordName": {
+                  "type": "string"
+                },
+                "recordValue": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "recordName",
+                "recordValue"
+              ],
+              "additionalProperties": false
+            },
+            "callbackUrl": {
+              "type": "string"
+            },
+            "spMetadataUrl": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "oidc": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "clientId": {
+                      "type": "string"
+                    },
+                    "clientSecretSet": {
+                      "type": "boolean"
+                    },
+                    "scopes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "clientId",
+                    "clientSecretSet",
+                    "scopes"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "saml": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "entryPoint": {
+                      "type": "string"
+                    },
+                    "spPrivateKeySet": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "entryPoint",
+                    "spPrivateKeySet"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "groupRoles": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "group": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "admin",
+                      "compliance",
+                      "billing",
+                      "member"
+                    ]
+                  }
+                },
+                "required": [
+                  "group",
+                  "role"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "createdAt": {
+              "type": "string"
+            },
+            "updatedAt": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "providerId",
+            "displayName",
+            "protocol",
+            "domain",
+            "domainVerified",
+            "issuer",
+            "groupsClaim",
+            "domainVerification",
+            "callbackUrl",
+            "spMetadataUrl",
+            "oidc",
+            "saml",
+            "groupRoles",
+            "createdAt",
+            "updatedAt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "policy": {
+        "type": "object",
+        "properties": {
+          "ssoRequired": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ssoRequired"
+        ],
+        "additionalProperties": false
+      },
+      "entitled": {
+        "type": "boolean",
+        "description": "Whether the organisation's plan includes SSO. Only the Enterprise plan does."
+      }
+    },
+    "required": [
+      "providers",
+      "policy",
+      "entitled"
+    ],
+    "additionalProperties": false
+  }
+}

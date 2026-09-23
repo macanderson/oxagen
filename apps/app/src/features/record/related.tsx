@@ -71,6 +71,7 @@ export function Related({
               constraintEffect={record.constraintEffect}
               sharingScope={record.sharingScope}
               lineage={record.lineage}
+              label={record.label}
               statement={record.statement ?? record.title}
             >
               <SafeLink

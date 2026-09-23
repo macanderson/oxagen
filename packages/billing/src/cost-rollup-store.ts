@@ -83,7 +83,7 @@ function resolvedCostCenter(
   workspaceLabel: AnyColumn,
 ) {
   const live = (label: AnyColumn) =>
-    sql`(select ${centers.label}::text from ${centers} where ${centers.orgId} = ${orgId} and ${centers.label} = ${label} and ${centers.deletedAt} is null limit 1)`;
+    sql`(select ${centers.label}::text from ${centers} where ${centers.orgId} = ${orgId} and ${centers.label} = ${label}::citext and ${centers.deletedAt} is null limit 1)`;
   return sql<
     string | null
   >`coalesce(${live(agentLabel)}, ${live(workspaceLabel)})`;
@@ -95,7 +95,7 @@ interface RunSource {
   frames: FrameRunRef;
 }
 
-const LEDGER_TIERS = new Set(["gateway", "harness", "observe"]);
+const LEDGER_TIERS = new Set(["contained", "gateway", "harness", "observe"]);
 const GRADES = new Set(["inspect", "view", "fork", "retry"]);
 
 function tier(value: string | null): RunMeta["enforcementTier"] {
@@ -531,13 +531,23 @@ export async function upsertRunTotals(
         ? null
         : record.productiveRatio.toFixed(8),
   };
+  // tenancy: the scheduled rollup job writes outside a tenant scope; the row
+  // carries the run's own orgId and workspaceId, and the conflict target is the
+  // run's globally unique public id, so no other organization's row is written.
   await withSystemDb((tx) =>
     tx
       .insert(totals)
       .values({ ...values, ...carried })
       .onConflictDoUpdate({
         target: totals.runId,
-        set: values,
+        // A run keeps the cost center it was first charged to (ADR-142): a
+        // reprice or a stale-seal rebuild of a closed month must not move its
+        // spend to the label the agent carries today. A null is filled, which
+        // is what the backfill relies on.
+        set: {
+          ...values,
+          costCenter: sql`coalesce(${totals.costCenter}, excluded.cost_center)`,
+        },
         setWhere: sql`NOT ${regressesToIncomplete()}`,
       }),
   );

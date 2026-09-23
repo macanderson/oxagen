@@ -201,6 +201,7 @@ export const runItemSchema = z
     frames: z.number().int().nonnegative(),
     /** Null until the rollup has priced the run's frames after its seal. */
     cost: runCostSchema.nullable(),
+    reportedCost: runCostSchema.nullable().optional(),
     /** The goal a ledger run was admitted for; tacho records none. */
     taskRef: z.string().nullable(),
     /** RFC 3339. */
@@ -249,6 +250,15 @@ export const runItemSchema = z
     model: runModelSchema.nullable(),
     /** The machine the run ran on; null for a ledger run. */
     machine: runMachineSchema.nullable(),
+    /** The recorded agent harness, independent of its model and wrapper. */
+    harness: z
+      .object({
+        name: z.string(),
+        version: z.string().nullable(),
+        runtime: z.string().nullable(),
+      })
+      .nullable()
+      .optional(),
     /** The generated name; null until `summarize_run` wrote one. */
     name: z.string().nullable(),
     summary: runSummarySchema.nullable(),

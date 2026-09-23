@@ -53,6 +53,7 @@ const PublishedRecord = z.object({
   /** The lineage the record or proposal is about: the file stem under .oxagen/rules/, not an id. */
   lineage: z.string().min(1),
   title: z.string(),
+  label: z.string().optional(),
   kind: RecordKind.nullable(),
   force: RecordForce.nullable(),
   constraintEffect: ConstraintEffect.nullable(),
@@ -244,3 +245,34 @@ export const RecordDetail = z.object({
   prUrl: z.string().min(1).nullable(),
 });
 export type RecordDetail = z.infer<typeof RecordDetail>;
+
+export const SteeringDeliveries = z.object({
+  runs: z.array(
+    z.object({
+      sessionUuid: z.uuid(),
+      ts: z.string(),
+      harness: z.string(),
+      agentKey: z.string(),
+      recordsIncluded: Count,
+      recordsCut: Count,
+      recordsCutForBudget: Count,
+      budgetTokens: Count,
+      spentTokens: Count,
+    }),
+  ),
+  undelivered: z.array(
+    z.object({
+      /**
+       * The record as the steering manifest named it. Oxagen neither mints nor
+       * validates it here, so it is a `…Ref`, not a `PublicId` (INV-11).
+       */
+      recordRef: z.string(),
+      runs: Count,
+      lastReason: z.string(),
+      lastSeen: z.string(),
+    }),
+  ),
+  scanned: Count,
+  truncated: z.boolean(),
+});
+export type SteeringDeliveries = z.infer<typeof SteeringDeliveries>;

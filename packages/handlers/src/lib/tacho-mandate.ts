@@ -24,6 +24,10 @@
  * never reads the clock; every caller resolves its inputs first.
  */
 import type { PolicyBundle } from "@oxagen/tacho";
+import {
+  definitionBudget,
+  parseAgentDefinitionSource,
+} from "@oxagen/oxagen/agent-definition-source";
 
 /** The harness's own three-value permission vocabulary (mcp-config, tacho's rule evaluator). */
 export type HarnessRuleEffect = "allow" | "deny" | "ask";
@@ -130,6 +134,23 @@ export function mapMandateToBundlePermissions(input: {
 export interface AgentBudgetDoc {
   perRunMicros?: number;
   perDayMicros?: number;
+}
+
+/**
+ * Read the active version's committed definition when it has one. The editor
+ * writes budget changes into TOML, while the commit handler copies the prior
+ * config unchanged. A present source therefore owns additions, edits, and
+ * removals. Only legacy versions without source fall back to config.
+ */
+export function budgetDocFromVersion(version: {
+  config: unknown;
+  definitionSource?: string | null;
+}): AgentBudgetDoc | undefined {
+  return definitionBudget(
+    version.definitionSource == null
+      ? version.config
+      : parseAgentDefinitionSource(version.definitionSource),
+  );
 }
 
 function microsToUsd(micros: number): number {

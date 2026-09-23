@@ -64,8 +64,15 @@ contains "$PIPE" "  migration-gate:" "pipeline.yml defines a migration-gate job"
 # The one line that makes every other line in this change matter. Without it
 # the gate still runs, still goes red, and still ships the deploy anyway.
 
-contains "$PIPE" "needs: [checks, test, migration-gate]" \
+contains "$PIPE" "needs: [checks, test, migration-gate, staging]" \
   "deploy-node waits on migration-gate — this is the ordering guarantee itself"
+
+# The gate writes to production, so it runs only after every check that could
+# reject the commit. Without this edge a commit that fails its tests would
+# still migrate prod.
+
+contains "$PIPE" "needs: [preflight, checks, test, staging]" \
+  "migration-gate applies only after checks, test and staging pass"
 
 # --- the gate asks all three stores ----------------------------------------
 #
@@ -73,12 +80,12 @@ contains "$PIPE" "needs: [checks, test, migration-gate]" \
 # the three would be a gate with a documented hole, and the store it is most
 # tempting to drop is Postgres, whose check is the one that did not exist.
 
-contains "$PIPE" "infra/tools/check-postgres-drift.sh" \
-  "the gate asks Postgres whether Aurora is at the head of the directory"
+contains "$PIPE" "infra/tools/apply-postgres-migrations.sh" \
+  "the gate brings Postgres to the head of the directory"
 contains "$PIPE" "infra/tools/check-store-drift.sh" \
   "the gate asks ClickHouse and Neo4j whether they carry the committed schema"
 
-for script in check-postgres-drift.sh check-store-drift.sh; do
+for script in apply-postgres-migrations.sh check-postgres-drift.sh check-store-drift.sh; do
   if [[ -x "$TOOLS/$script" || -f "$TOOLS/$script" ]]; then
     pass
   else
@@ -86,19 +93,23 @@ for script in check-postgres-drift.sh check-store-drift.sh; do
   fi
 done
 
-# --- the gate never applies ------------------------------------------------
+# --- the gate applies only through its guarded paths ----------------------
 #
-# The rule it must not break, stated in CLAUDE.md: production Postgres
-# migrations are applied by hand with run-db-migrations.sh, the stores through
-# store-migrate.yml, and "Deployment applies none of them." #3653 is the issue
-# filed when a generated workflow broke that rule. A gate that grew an apply would be the same mistake wearing a name
-# nobody would think to check.
+# Mac decided on 2026-09-23 that CI applies production migrations (#3653). The
+# gate applies, but only through two paths whose refusals are tested:
+#
+#   Postgres     apply-postgres-migrations.sh, which refuses an unreadable
+#                store and an empty revision table. Its own test holds that.
+#   the stores   db-migrate.ts, only when check-store-drift.sh answered behind
+#                (1), never on unknown (2), and always followed by a re-check.
+#
+# A raw `atlas migrate apply` or `run-db-migrations.sh --apply` in the gate
+# would skip the Postgres refusals, so neither may appear outside an echo.
 #
 # Scoped to the gate's own YAML block, because the file's prose discusses
 # applying at length and `manual-app-deploy` below it legitimately deploys.
 # Comments are then stripped, the same way check-postgres-drift.test.sh strips
-# them: a comment saying the gate must never apply would otherwise read as the
-# gate applying, and a test that fails on its own explanation gets deleted.
+# them, so a comment about applying never reads as the gate applying.
 #
 # Only whole comment lines are dropped, never a trailing `#`: the summary the
 # gate writes contains `echo "### Deploy blocked..."`, and cutting at the first
@@ -117,7 +128,7 @@ else
   pass
   case "$GATE" in
     *"migrate apply"*)
-      fail "the gate runs 'migrate apply' — deployment must not apply migrations (CLAUDE.md, #3653)" ;;
+      fail "the gate runs 'atlas migrate apply' itself — Postgres applies only through apply-postgres-migrations.sh" ;;
     *) pass ;;
   esac
   # Judged on the lines that run something. The blocked-deploy summary the
@@ -126,14 +137,38 @@ else
   GATE_COMMANDS=$(printf '%s\n' "$GATE" | awk '$1 != "echo"')
   case "$GATE_COMMANDS" in
     *"--apply"*)
-      fail "the gate passes --apply — deployment must not apply migrations (CLAUDE.md, #3653)" ;;
+      fail "the gate passes --apply itself — Postgres applies only through apply-postgres-migrations.sh" ;;
     *) pass ;;
   esac
-  case "$GATE" in
-    *"db-migrate.ts"*)
-      fail "the gate invokes the store migration runner — it is read-only by construction" ;;
-    *) pass ;;
-  esac
+
+  # The store runner's step, and the line before it, which must be its guard.
+  store_guard=$(printf '%s\n' "$GATE" | awk '/db-migrate\.ts/ { print prev } { prev = $0 }')
+  if [[ -z $store_guard ]]; then
+    fail "the gate never applies ClickHouse and Neo4j"
+  elif [[ $store_guard == *"steps.stores.outputs.code == '1'"* ]]; then
+    pass
+  else
+    fail "db-migrate.ts must run only when the stores answered behind (1), got guard: $store_guard"
+  fi
+  # A Postgres apply bundles the platform seed with esbuild, so the workspace
+  # must be installed first, and without a guard: a Postgres-only migration
+  # leaves the store check at 0, and an install keyed on it never runs.
+  install_line=$(printf '%s\n' "$GATE" | awk '/pnpm install --frozen-lockfile/ { print NR; exit }')
+  pg_line=$(printf '%s\n' "$GATE" | awk '/apply-postgres-migrations\.sh/ { print NR; exit }')
+  install_guard=$(printf '%s\n' "$GATE" | awk '/pnpm install --frozen-lockfile/ { print prev; exit } { prev = $0 }')
+  if [[ -z $install_line || -z $pg_line ]]; then
+    fail "the gate never installs the workspace, and a Postgres apply cannot bundle the seed without it"
+  elif (( install_line > pg_line )); then
+    fail "the gate installs the workspace after the Postgres apply, which needs it to bundle the seed"
+  elif [[ $install_guard == *"if:"* ]]; then
+    fail "the workspace install is conditional, got guard: $install_guard"
+  else
+    pass
+  fi
+
+  contains "$GATE" "id: stores_after" "a store apply is followed by a fresh check"
+  contains "$GATE" "steps.stores_after.outputs.code || steps.stores.outputs.code" \
+    "the decision reads the re-check, not the apply's exit code"
 
   # The gate must fail the run rather than merely annotate it. A step that
   # reports drift and exits 0 is the silent-success shape this whole family of

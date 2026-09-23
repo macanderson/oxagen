@@ -129,7 +129,7 @@ describe("AgentSource", () => {
       screen.getByRole("link", { name: "Back to the configuration" }),
     ).toHaveAttribute(
       "href",
-      "/acme/core-platform/agents/release-bot?tab=definition",
+      "/acme/core-platform/agents/release-bot/definition",
     );
   });
 

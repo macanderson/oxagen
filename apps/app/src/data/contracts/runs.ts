@@ -75,7 +75,12 @@ const ProofVerdict = z.enum([
  * command is refused: a page draws the controls disabled rather than offering
  * four that always fail.
  */
-export const EnforcementTier = z.enum(["gateway", "harness", "observe"]);
+export const EnforcementTier = z.enum([
+  "contained",
+  "gateway",
+  "harness",
+  "observe",
+]);
 export type EnforcementTier = z.infer<typeof EnforcementTier>;
 
 /**
@@ -117,7 +122,7 @@ const OperatorKind = z.enum(["human", "agent", "service"]);
  * recognises, because a wrong vendor or class reads as a fact the record does
  * not hold.
  */
-export const RunModel = z.object({
+const RunModel = z.object({
   /**
    * The model id exactly as the store recorded it — a vendor slug such as
    * `claude-sonnet-5`, not a record this platform issues. It is named `slug`
@@ -128,10 +133,9 @@ export const RunModel = z.object({
   provider: z.string().min(1).nullable(),
   tier: z.string().min(1).nullable(),
 });
-export type RunModel = z.infer<typeof RunModel>;
 
 /** The machine a wrapped agent ran on. Null for a ledger run, which names no host. */
-export const RunMachine = z.object({
+const RunMachine = z.object({
   recorded: z
     .object({
       platform: z.string().nullable(),
@@ -147,7 +151,6 @@ export const RunMachine = z.object({
   arch: z.string().min(1).nullable(),
   nodeVersion: z.string().min(1).nullable(),
 });
-export type RunMachine = z.infer<typeof RunMachine>;
 
 /**
  * Can a direct command reach this run? An `observe`-tier session only records
@@ -180,8 +183,17 @@ export const RunRow = z.object({
   steps: z.number().int().nonnegative(),
   frames: z.number().int().nonnegative(),
   cost: Cost.nullable(),
+  reportedCost: Cost.nullable().optional(),
   model: RunModel.nullable(),
   machine: RunMachine.nullable(),
+  harness: z
+    .object({
+      name: z.string(),
+      version: z.string().nullable(),
+      runtime: z.string().nullable(),
+    })
+    .nullable()
+    .optional(),
   taskRef: z.string().nullable(),
   /** The generated name; null until `summarize_run` wrote one. */
   name: z.string().min(1).nullable(),

@@ -95,11 +95,11 @@ function bundle(
         : null;
   const attestation = signAttestation(
     {
-      run_id: "run",
+      run_id: source === "ledger" ? "arun_1" : "tse_1",
       attempt_id: "att",
       frame_count: frames.length,
       merkle_root: root,
-      archive_segment_digest: digestBytes("x"),
+      archive_segment_digest: digestBytes(frames.map(jcs).join("\n")),
       enforcement_tier: "harness",
       completeness_gaps: [],
       replay_grade: null,
@@ -247,6 +247,23 @@ describe("verifyRunExport", () => {
     });
   });
 
+  it("holds a frames file an editor saved with one trailing newline", () => {
+    const files = bundle("ledger", ledgerFrames());
+    const saved = verifyRunExport({
+      ...files,
+      "frames.ndjson": `${files["frames.ndjson"]}\n`,
+    });
+    expect(saved.ok).toBe(true);
+    expect(saved.frames).toHaveLength(2);
+    // A second newline is a blank line, and a blank line is not a frame.
+    const blank = verifyRunExport({
+      ...files,
+      "frames.ndjson": `${files["frames.ndjson"]}\n\n`,
+    });
+    expect(blank.ok).toBe(false);
+    expect(blank.frames[2]?.reasons).toEqual(["line is not a JSON object"]);
+  });
+
   it("breaks the key and signature checks under a foreign key (negative)", () => {
     const files = bundle("ledger", ledgerFrames());
     const other = attesterKeyFromPem(
@@ -297,3 +314,62 @@ describe("normalizeInstant", () => {
     );
   });
 });
+
+describe("exported wrapped content", () => {
+  it.each(["body", "kind", "content"])(
+    "refuses a changed %s with original chain hashes",
+    (field) => {
+      const files = bundle("tacho", tachoFrames());
+      const lines = files["frames.ndjson"].split("\n");
+      const frame = JSON.parse(lines[0]!);
+      frame[field] = field === "kind" ? "changed" : { changed: true };
+      lines[0] = jcs(frame);
+      const result = verifyRunExport({
+        ...files,
+        "frames.ndjson": lines.join("\n"),
+      });
+      expect(result.ok).toBe(false);
+      expect(result.checks).toContainEqual(
+        expect.objectContaining({
+          name: "exported content att",
+          status: "broken",
+        }),
+      );
+    },
+  );
+
+  it("refuses a manifest naming a different run", () => {
+    const files = bundle("tacho", tachoFrames());
+    const manifest = JSON.parse(files["manifest.json"]);
+    manifest.run_id = "tse_other";
+    const result = verifyRunExport({
+      ...files,
+      "manifest.json": JSON.stringify(manifest),
+    });
+    expect(result.ok).toBe(false);
+    expect(result.checks).toContainEqual(
+      expect.objectContaining({ name: "run identity att", status: "broken" }),
+    );
+  });
+});
+
+it.each([undefined, "bogus", "ledger"])(
+  "rejects source %s when wrapped bytes change",
+  (source) => {
+    const files = bundle("tacho", tachoFrames());
+    const manifest = { ...JSON.parse(files["manifest.json"]), source };
+    const lines = files["frames.ndjson"].split("\n");
+    const frame = JSON.parse(lines[0]!);
+    frame.body = { changed: true };
+    lines[0] = jcs(frame);
+    const result = verifyRunExport({
+      ...files,
+      "manifest.json": JSON.stringify(manifest),
+      "frames.ndjson": lines.join("\n"),
+    });
+    expect(result.ok).toBe(false);
+    expect(result.checks).toContainEqual(
+      expect.objectContaining({ name: "source", status: "broken" }),
+    );
+  },
+);

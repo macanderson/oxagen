@@ -26,6 +26,7 @@ const ws = SEED.workspaceSlug;
 export const SIGNED_IN_ROUTES: readonly RouteRow[] = [
   { path: `/${org}/${ws}`, titleKey: "fleet" },
   { path: `/${org}/${ws}/agents`, titleKey: "agents" },
+  { path: `/${org}/${ws}/agents/e2e-agent/overview`, titleKey: "agent" },
   { path: `/${org}/${ws}/tools`, titleKey: "tools" },
   { path: `/${org}/${ws}/steering`, titleKey: "steering" },
   { path: `/${org}/${ws}/repositories`, titleKey: "repositories" },
@@ -34,6 +35,7 @@ export const SIGNED_IN_ROUTES: readonly RouteRow[] = [
   { path: `/${org}/roles`, titleKey: "roles" },
   { path: `/${org}/api-keys`, titleKey: "apiKeys" },
   { path: `/${org}/model-funding`, titleKey: "modelFunding" },
+  { path: `/${org}/sso`, titleKey: "sso" },
   { path: `/${org}/billing`, titleKey: "billing" },
   { path: `/${org}/audit`, titleKey: "audit" },
 ] as const;

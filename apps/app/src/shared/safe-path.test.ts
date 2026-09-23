@@ -161,6 +161,7 @@ describe("routes", () => {
     expect(routes.people("\\evil")).toBe("/%5Cevil");
     expect(routes.apiKeys("a/b")).toBe("/a%2Fb/api-keys");
     expect(routes.modelFunding("a/b")).toBe("/a%2Fb/model-funding");
+    expect(routes.sso("a/b")).toBe("/a%2Fb/sso");
   });
 
   it("carries Fleet's runs cursor as a query and builds a run's path", () => {
@@ -185,12 +186,24 @@ describe("routes", () => {
         tab: "incidents",
         cursor: "c2",
       }),
-    ).toBe("/acme/core-platform/agents/release-bot?tab=incidents&cursor=c2");
+    ).toBe("/acme/core-platform/agents/release-bot/activity?cursor=c2");
     expect(routes.agentSource("acme", "core-platform", "../evil")).toBe(
       "/acme/core-platform/agents/..%2Fevil/source",
     );
     expect(routes.run("acme", "core-platform", "../../evil")).toBe(
       "/acme/core-platform/runs/..%2F..%2Fevil",
+    );
+  });
+
+  it.each([
+    ["enrollment", "runtime"],
+    ["budgets", "permissions"],
+    ["mandates", "permissions"],
+    ["incidents", "activity"],
+    ["runs", "activity"],
+  ])("builds the canonical agent section for %s", (alias, canonical) => {
+    expect(routes.agent("acme", "core", "bot", { tab: alias })).toBe(
+      `/acme/core/agents/bot/${canonical}`,
     );
   });
 

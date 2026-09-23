@@ -102,6 +102,26 @@ export function ratioOfMicros(part: Money, whole: Money): number | null {
 }
 
 /**
+ * The part of `value` a `share` between 0 and 1 names: the Run page's wasted
+ * spend is its cost times the share the rollup did not count as productive.
+ * The share is rounded to a millionth and the micros are divided by BigInt, so
+ * the money stays exact and truncates toward zero. A share outside 0 to 1
+ * names no part of the value, so the answer is null and the caller shows the
+ * figure as missing.
+ */
+export function shareOfMicros(value: Money, share: number): Money | null {
+  if (!(share >= 0 && share <= 1)) return null;
+  const scaled = BigInt(Math.round(share * RATIO_SCALE));
+  return {
+    micros: (
+      (toBigInt(value.micros) * scaled) /
+      BigInt(RATIO_SCALE)
+    ).toString(),
+    currency: value.currency,
+  };
+}
+
+/**
  * The ISO 4217 codes this runtime knows, which is what "a currency code"
  * means. A mandate limit names either one of these or a unit of a count
  * (`schemas.ts`), and the two are told apart by membership here rather than by

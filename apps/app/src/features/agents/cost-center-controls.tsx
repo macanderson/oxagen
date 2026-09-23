@@ -93,7 +93,7 @@ export function ChargeAgent({
       const result = await setAgentCostCenter(org, ws, agentSlug, label);
       if (result.ok) {
         setOpen(false);
-        navigate.replace(routes.agent(org, ws, agentSlug));
+        navigate.replace(routes.agent(org, ws, agentSlug, { tab: "identity" }));
       } else {
         setFailure(failureText(result));
       }

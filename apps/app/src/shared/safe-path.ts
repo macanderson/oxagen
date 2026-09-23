@@ -66,6 +66,14 @@ function withQuery(
 const nextParam = (next: SafePath | undefined): string | undefined =>
   next === undefined || next === ROOT ? undefined : next;
 
+const AGENT_SECTION_ALIASES: Readonly<Record<string, string>> = {
+  enrollment: "runtime",
+  budgets: "permissions",
+  mandates: "permissions",
+  incidents: "activity",
+  runs: "activity",
+};
+
 /** Every route the app navigates to; each builder returns a SafePath. */
 export const routes = {
   root: (): SafePath => ROOT,
@@ -82,6 +90,9 @@ export const routes = {
       next: nextParam(next),
       error: error.trim() === "" ? undefined : error,
     }),
+  /** Where requireViewer sends a member whose organization requires SSO and whose session is not one (sso-gate.ts); outside `[org]`, so it cannot loop. */
+  ssoRequired: (next?: SafePath): SafePath =>
+    withQuery(mint("/login"), { next: nextParam(next), sso: "required" }),
   signup: (next?: SafePath): SafePath =>
     withQuery(mint("/signup"), { next: nextParam(next) }),
   verify: (q: { email: string; next?: SafePath }): SafePath =>
@@ -123,12 +134,21 @@ export const routes = {
    * calls (ADR-053 §2). Org-scoped — the key pays for every workspace.
    */
   modelFunding: (org: string): SafePath => pathOf(org, "model-funding"),
+  /**
+   * Organization › Single sign-on: the organisation's identity providers,
+   * their domain proofs, and whether SSO is required (ADR-145).
+   */
+  sso: (org: string): SafePath => pathOf(org, "sso"),
   /** Fleet; `cursor` opens a later page of its runs table. */
   fleet: (org: string, ws: string, q?: { cursor: string }): SafePath =>
     withQuery(pathOf(org, ws), { cursor: q?.cursor }),
   /** Agent IAM; `cursor` opens a later page of the identities table. */
-  agents: (org: string, ws: string, q?: { cursor: string }): SafePath =>
-    withQuery(pathOf(org, ws, "agents"), { cursor: q?.cursor }),
+  agents: (
+    org: string,
+    ws: string,
+    q?: { cursor?: string; view?: string },
+  ): SafePath =>
+    withQuery(pathOf(org, ws, "agents"), { cursor: q?.cursor, view: q?.view }),
   /** One agent; `tab` picks the section, `cursor` a later page of its incidents. */
   agent: (
     org: string,
@@ -136,10 +156,22 @@ export const routes = {
     agent: string,
     q?: { tab: string; cursor?: string },
   ): SafePath =>
-    withQuery(pathOf(org, ws, "agents", agent), {
-      tab: q?.tab,
-      cursor: q?.cursor,
-    }),
+    withQuery(
+      q?.tab === undefined
+        ? pathOf(org, ws, "agents", agent)
+        : pathOf(
+            org,
+            ws,
+            "agents",
+            agent,
+            Object.hasOwn(AGENT_SECTION_ALIASES, q.tab)
+              ? (AGENT_SECTION_ALIASES[q.tab] ?? q.tab)
+              : q.tab,
+          ),
+      {
+        cursor: q?.cursor,
+      },
+    ),
   /** The agent's definition file in the source editor. */
   agentSource: (org: string, ws: string, agent: string): SafePath =>
     pathOf(org, ws, "agents", agent, "source"),

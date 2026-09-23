@@ -220,6 +220,7 @@ describe("inbox", () => {
     expect(record.control.messages[1]).toEqual({
       id: "st",
       text: "use staging",
+      issuedAt: "2026-09-10T10:00:00.000Z",
       command: "steer",
       requestedMode: "interrupt",
       deliveryMode: "next_step",
@@ -1135,6 +1136,89 @@ describe("shipper", () => {
     await s.drain();
     expect(calls).toBeGreaterThan(0);
     expect(wal.stats().unshipped).toBe(0);
+  });
+
+  it("ships each event once when two drains overlap", async () => {
+    // The daemon's interval tick, a caller's tick() and stop() all drain, and
+    // none waits on the others. Two drains that both read the batch before
+    // either marked it shipped sent a window of frames twice (#3782).
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    wal.append(minimalSession());
+    const sent: number[] = [];
+    let release: (() => void) | undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const { s } = shipper(
+      wal,
+      {
+        ingest: async (batch) => {
+          sent.push(...batch.map((e) => e.seq));
+          await held;
+          return okResponse(batch);
+        },
+      },
+      paths.quarantine,
+      () => 0,
+    );
+    const first = s.drain();
+    const second = s.drain();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    release?.();
+    await Promise.all([first, second]);
+    expect(sent).toEqual([...new Set(sent)].sort((a, b) => a - b));
+    expect(sent.length).toBe(minimalSession().length);
+    expect(wal.stats().unshipped).toBe(0);
+  });
+
+  it("ships events appended mid-drain once, and the chain verifies", async () => {
+    // tachod starts a drain from its interval tick, from a tick a caller
+    // drives, and from stop(), and nothing stopped two of them reading the
+    // same unshipped tail while the first one's ingest was still awaited.
+    // Both sent it, and the control plane saw `144, 145, 144, 145`: seq 144
+    // following seq 145 on a chain that was dense in the WAL.
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    const split = Math.ceil(events.length / 2);
+    wal.append(events.slice(0, split));
+    let release: (() => void) | undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const ingested: TachoEvent[] = [];
+    const { s } = shipper(
+      wal,
+      {
+        ingest: async (batch) => {
+          await held;
+          ingested.push(...batch);
+          return okResponse(batch);
+        },
+      },
+      paths.quarantine,
+      () => 0,
+    );
+
+    const a = s.drain();
+    // Let the first drain read the WAL and park on its ingest request.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    // Written after the first drain read the WAL, so only a later read ships
+    // it. The second drain has to wait for the first and still find it.
+    wal.append(events.slice(split));
+    const b = s.drain();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    release?.();
+    await Promise.all([a, b]);
+
+    const ids = ingested.map((event) => event.event_id_idem);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids.length).toBe(events.length);
+    expect(wal.stats().unshipped).toBe(0);
+    expect(verifyChain(ingested, { expectGenesis: true }).violations).toEqual(
+      [],
+    );
   });
 
   it("backs off exponentially on transport failure and retries after a 5xx", async () => {

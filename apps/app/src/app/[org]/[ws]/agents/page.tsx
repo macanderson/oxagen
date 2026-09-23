@@ -14,10 +14,13 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function AgentsPage({
   params,
   searchParams,
-}: PageProps<"/[org]/[ws]/agents">) {
+}: {
+  params: Promise<{ org: string; ws: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { org, ws } = await params;
   const ctx = await requireViewer(org, ws);
-  const { cursor } = await searchParams;
+  const { cursor, view } = await searchParams;
   const t = await getTranslations("pages");
   return (
     <main
@@ -33,6 +36,7 @@ export default async function AgentsPage({
         ctx={ctx}
         source={dataSource()}
         cursor={firstParam(cursor) ?? null}
+        view={firstParam(view) === "operations" ? "operations" : "composition"}
       />
     </main>
   );

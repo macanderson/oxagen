@@ -15,8 +15,8 @@
     },
     "tabs": {
       "label": "Tools sections",
-      "registry": "Registry",
-      "connections": "Connections",
+      "registry": "Tools",
+      "connections": "Providers",
       "switches": "Kill switches",
       "mandates": "Mandates",
       "switchesOn": "{count, plural, one {# on} other {# on}}",
@@ -139,7 +139,7 @@
       "done": "{published, plural, =0 {No new version} one {# new version} other {# new versions}} · {unchanged, plural, =0 {nothing unchanged} one {# already registered} other {# already registered}}.",
       "serverIdPlaceholder": "mcs_…",
       "serverPick": "Pick a registered server",
-      "serverPickHint": "Every server registered in this workspace. Registering one is below the registry.",
+      "serverPickHint": "Pick a provider registered in this workspace. Add one on the Providers tab.",
       "serverFallbackHint": "The server roster could not be read, so the server is named by its id.",
       "serverNone": "No server is registered yet, so there is nothing to import from."
     },
@@ -610,14 +610,14 @@
       }
     },
     "servers": {
-      "title": "Tool servers",
-      "lead": "The MCP servers registered in this workspace. Importing takes a server's pinned tools into the registry above; the server row is what a tool server kill switch names.",
+      "title": "Providers",
+      "lead": "Providers registered through MCP in this workspace. Import their pinned tools to add versions to the registry.",
       "empty": {
-        "title": "No server is registered",
+        "title": "No provider is registered",
         "body": "Registering a server health checks its endpoint and records the tools it pins. Nothing reaches the registry until those tools are imported."
       },
       "columns": {
-        "server": "Server",
+        "server": "Provider",
         "transport": "Transport",
         "endpoint": "Endpoint",
         "health": "Health",
@@ -637,8 +637,8 @@
       },
       "unknownNote": "A server installed by a plugin is written with the SSE transport and no health check, so its health reads as not checked until one runs.",
       "register": {
-        "open": "Register a server",
-        "title": "Register an MCP server",
+        "open": "Register a provider",
+        "title": "Register a provider through MCP",
         "body": "Health checks the endpoint, encrypts any auth config and records the tools the server pins. Importing those tools into the registry is the next step.",
         "name": "Name",
         "nameHint": "Up to 120 characters.",
@@ -650,7 +650,7 @@
         "authConfig": "Auth config",
         "authConfigHint": "One name = value per line: the bearer token, or the header and its value. It is encrypted before storage and is not shown again.",
         "authConfigPlaceholder": "token = …",
-        "confirm": "Register server",
+        "confirm": "Register provider",
         "pending": "Registering…",
         "done": "{name} is registered as {id}, {health}, with {tools, plural, =0 {no pinned tool} one {# pinned tool} other {# pinned tools}}.",
         "doneHealth": {

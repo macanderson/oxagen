@@ -254,6 +254,15 @@ export const TranscriptDecision = z.object({
 });
 export type TranscriptDecision = z.infer<typeof TranscriptDecision>;
 
+export const TranscriptUsage = z.object({
+  inputUncached: Count.nullable(),
+  cacheRead: Count.nullable(),
+  cacheWrite: Count.nullable(),
+  output: Count.nullable(),
+  reasoning: Count.nullable(),
+});
+export type TranscriptUsage = z.infer<typeof TranscriptUsage>;
+
 export const TranscriptEntry = z.object({
   /** The frame that opens the entry. */
   seq: z.string().regex(/^\d+$/),
@@ -275,6 +284,7 @@ export const TranscriptEntry = z.object({
    * a `PublicId` (src/test/arch/public-ids.test.ts).
    */
   callKey: z.string().nullable(),
+  usage: TranscriptUsage.nullable().optional(),
   /** The chips this entry answers to. */
   kinds: z.array(TranscriptKind),
   request: TranscriptBody.nullable(),
@@ -335,7 +345,6 @@ const ChainCheckpoint = z.object({
   anchorRoot: z.string().nullable(),
   anchoredAt: z.iso.datetime({ offset: true }).nullable(),
 });
-/** @deregistered Retained with the chain UI under ADR-130. */
 export type ChainCheckpoint = z.infer<typeof ChainCheckpoint>;
 
 const COMPLETENESS_GAPS = [

@@ -1,3 +1,5 @@
+import { definitionBudget } from "@oxagen/oxagen/agent-definition-source";
+import { HandlerError } from "@oxagen/oxagen/handler-error";
 import { withTenantDb, schema } from "@oxagen/database";
 import { and, desc, eq } from "drizzle-orm";
 import { computeConfigChecksum } from "@oxagen/oxagen/interactive-agent";
@@ -52,6 +54,7 @@ export async function agentDefinitionPublishHandler(
         id: schema.agentVersions.id,
         isPublished: schema.agentVersions.isPublished,
         config: schema.agentVersions.config,
+        definitionSource: schema.agentVersions.definitionSource,
       })
       .from(schema.agentVersions)
       .where(
@@ -73,6 +76,15 @@ export async function agentDefinitionPublishHandler(
       );
     }
 
+    if (version.definitionSource != null) {
+      throw new HandlerError({
+        code: "conflict",
+        reason: "git_definition_requires_merge",
+        message:
+          "Merge the agent definition pull request to publish this version.",
+      });
+    }
+    definitionBudget(version.config);
     const checksum = computeConfigChecksum(version.config);
 
     await tx

@@ -25,6 +25,10 @@ import type { AttemptEventReadRecord } from "./run-store";
 import type { FrameBodyColumns } from "./frame-body";
 import {
   isTranscriptKind,
+  countsLlmCallUsage,
+  countsLlmCallSplit,
+  TACHO_METERING_ATTR,
+  TACHO_METERING_OBSERVED,
   TRANSCRIPT_KINDS,
   type Redaction,
   type TranscriptKind,
@@ -54,6 +58,53 @@ export interface FrameIdentity {
  */
 export type FramePhase = "request" | "response" | "single";
 
+export interface FrameUsage {
+  inputUncached: number | null;
+  cacheRead: number | null;
+  cacheWrite: number | null;
+  output: number | null;
+  reasoning: number | null;
+}
+
+export function addFrameUsage(
+  a: FrameUsage | null | undefined,
+  b: FrameUsage | null | undefined,
+): FrameUsage | null {
+  if (!a) return b ?? null;
+  if (!b) return a;
+  const sum = (x: number | null, y: number | null) =>
+    x === null ? y : y === null ? x : x + y;
+  return {
+    inputUncached: sum(a.inputUncached, b.inputUncached),
+    cacheRead: sum(a.cacheRead, b.cacheRead),
+    cacheWrite: sum(a.cacheWrite, b.cacheWrite),
+    output: sum(a.output, b.output),
+    reasoning: sum(a.reasoning, b.reasoning),
+  };
+}
+
+function usageFrom(body: unknown, ledger = false): FrameUsage | null {
+  const count = (key: string) => {
+    const value = numberField(body, key);
+    return value !== null && Number.isSafeInteger(value) && value >= 0
+      ? value
+      : null;
+  };
+  const input = count("input_tokens");
+  const cacheRead = count(ledger ? "cached_input_tokens" : "cache_read_tokens");
+  const usage = {
+    inputUncached:
+      ledger && input !== null && cacheRead !== null
+        ? Math.max(0, input - cacheRead)
+        : input,
+    cacheRead,
+    cacheWrite: count("cache_creation_tokens"),
+    output: count("output_tokens"),
+    reasoning: count("thinking_tokens"),
+  };
+  return Object.values(usage).every((value) => value === null) ? null : usage;
+}
+
 export interface RunFrame {
   /** The ledger's `run_seq` or the session's dense `seq`, decimal. */
   seq: string;
@@ -80,6 +131,8 @@ export interface RunFrame {
    * and wall time come from here (tacho `ttft_ms`, `api_duration_ms`).
    */
   timing: FrameTiming;
+  usage?: FrameUsage | null;
+  usageObserved?: boolean;
 }
 
 /** What a frame's receipt timed. Null where it timed nothing. */
@@ -259,6 +312,10 @@ export function ledgerPhase(eventType: string): FramePhase {
 /** A ledger event as a run frame. Ledger frames carry no cost record (§12). */
 export function ledgerFrame(event: AttemptEventReadRecord): RunFrame {
   return {
+    usage:
+      stepKindOfEventType(event.eventType) === "model_call"
+        ? usageFrom(event.payload, true)
+        : null,
     seq: event.runSeq,
     type: event.eventType,
     stage: event.stage,
@@ -289,6 +346,10 @@ export function ledgerFrame(event: AttemptEventReadRecord): RunFrame {
 
 /** The `tacho_events` columns the projection reads, as the telemetry seam returns them. */
 export interface TachoFrameRowLike {
+  body?: string;
+  source?: string;
+  fidelity?: string;
+  attrs?: Record<string, string>;
   seq: number;
   /** ClickHouse DateTime64 text. */
   ts: string;
@@ -339,6 +400,7 @@ export function tachoStage(kind: string): string {
     case "model.request":
     case "model.response":
     case "context.assembled":
+    case "steering.manifest":
       return "model";
     case "tool_requested":
     case "tool_call":
@@ -432,7 +494,38 @@ export function tachoFrame(row: TachoFrameRowLike): RunFrame {
           fidelity: ref === null ? "digest_only" : "full",
         };
   const model = blank(row.model);
+  let payload: unknown = null;
+  try {
+    payload = row.body ? JSON.parse(row.body) : null;
+  } catch {
+    /* Legacy malformed metadata carries no usage. */
+  }
+  const usageObserved =
+    row.kind === "llm_call" &&
+    row.source === "collector" &&
+    row.fidelity === "proxy" &&
+    row.attrs?.[TACHO_METERING_ATTR] === TACHO_METERING_OBSERVED;
+  const usageSource = {
+    kind: row.kind,
+    source: row.source ?? "",
+    attrs: row.attrs ?? {},
+  };
+  const counted = countsLlmCallUsage(usageSource);
+  const split = countsLlmCallSplit(usageSource);
+  let usage = usageObserved || counted || split ? usageFrom(payload) : null;
+  if (usage) {
+    if (!usageObserved && !counted) {
+      usage.inputUncached = null;
+      usage.cacheRead = null;
+      usage.cacheWrite = null;
+      usage.output = null;
+    }
+    if (!usageObserved && !split) usage.reasoning = null;
+    if (Object.values(usage).every((value) => value === null)) usage = null;
+  }
   return {
+    usage,
+    usageObserved,
     seq: String(row.seq),
     type: row.kind,
     stage: tachoStage(row.kind),
@@ -556,6 +649,9 @@ const RECALL_TYPES: ReadonlySet<string> = new Set([
   "context.frames_selected",
   "context.instructions_applied",
   "context.assembled",
+  // What the assembler put in front of a wrapped agent at its start, and
+  // what it cut (ADR-093).
+  "steering.manifest",
 ]);
 /** Tool outcomes that record a call that did not do what it was asked to. */
 const FAILED_OUTCOMES: ReadonlySet<string> = new Set([
@@ -634,6 +730,7 @@ export interface TranscriptFold {
   frames: number;
   /** Summed cost records of the folded frames; null when none carried one. */
   costMicros: number | null;
+  usage?: FrameUsage | null;
   request: RunFrame | null;
   response: RunFrame | null;
   /** The last decision frame folded into the entry; null when none was. */
@@ -708,6 +805,7 @@ function open(frame: RunFrame, kind: TranscriptEntryKind): TranscriptFold {
     kind,
     frames: 1,
     costMicros: frame.costMicros,
+    usage: frame.usage ?? null,
     request: isStep && frame.phase === "request" ? frame : null,
     response: isStep && frame.phase !== "request" ? frame : null,
     decision: decisionOf(frame),
@@ -728,6 +826,7 @@ function absorb(current: TranscriptFold, frame: RunFrame): void {
   current.endSeq = frame.seq;
   current.frames += 1;
   current.costMicros = addCost(current.costMicros, frame.costMicros);
+  current.usage = addFrameUsage(current.usage, frame.usage);
   if (stepKind(frame) !== null) {
     if (frame.phase === "request" && current.request === null) {
       current.request = frame;
@@ -753,6 +852,7 @@ function absorb(current: TranscriptFold, frame: RunFrame): void {
 function absorbPending(current: TranscriptFold, frame: RunFrame): void {
   current.frames += 1;
   current.costMicros = addCost(current.costMicros, frame.costMicros);
+  current.usage = addFrameUsage(current.usage, frame.usage);
   const decision = decisionOf(frame);
   if (decision !== null) current.decision = decision;
 }

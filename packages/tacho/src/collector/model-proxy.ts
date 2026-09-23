@@ -49,18 +49,17 @@
  * Open: a model with no price (the call is forwarded and costs the budget
  * nothing), an unreachable control plane (the cached bundle keeps deciding), a
  * response the meter cannot read (forwarded, recorded without usage), a call
- * no session can be found for (forwarded, recorded on the daemon's chain), and
+ * no session can be found for (still subject to model policy), and
  * a `beforeForward` that throws or stalls (the original request is sent).
  *
  * Closed: a session at its limit under an `enforced` budget, a model the
- * workspace's `models` policy refuses under that same mode, a paused or
+ * workspace's `models` policy refuses independently, a paused or
  * cancelled session, and a suspended or revoked host. Those are refused with
  * an error in the vendor's own shape and recorded as a `policy_decision`.
  *
- * The model check reads the model the request asks for, and a request whose
- * model this proxy cannot read is forwarded. An unreadable body is not
- * evidence of a forbidden model, and refusing on one would take out every
- * non-JSON call the proxy passes through untouched.
+ * An armed model policy refuses metered requests whose model cannot be read.
+ * Non-metered endpoints retain passthrough behavior. Model checks also apply
+ * when the request cannot be correlated to a session.
  *
  * The budget is checked when a call is admitted, so calls already in flight
  * finish and a session can end one turn past its limit. It is never checked
@@ -632,13 +631,13 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
    * `modelAmbiguous` says the request named more than one model, so no single
    * string describes what the vendor will run. That is refused under an
    * enforced mandate whatever the clauses say, because a model the proxy
-   * cannot pin is one it can neither check against the lists nor price against
-   * the ceiling. Absence permits, ambiguity does not.
+   * cannot pin is refused on a metered endpoint when model lists are armed.
    */
   function refusalFor(
     record: SessionRecord | undefined,
     model: string | undefined,
     modelAmbiguous: boolean,
+    requiresModel: boolean,
   ):
     | { code: ModelRefusalCode; message: string; source: "human" | "bundle" }
     | undefined {
@@ -650,45 +649,35 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
         source: "human",
       };
     }
-    if (record === undefined) return undefined;
-    if (record.control.cancelled !== null) {
+    if (record !== undefined && record.control.cancelled !== null) {
       return {
         code: "session_cancelled",
         message: `This session was cancelled by its Oxagen operator: ${record.control.cancelled}`,
         source: "human",
       };
     }
-    if (record.control.paused !== null) {
+    if (record !== undefined && record.control.paused !== null) {
       return {
         code: "session_paused",
         message: `This session is paused by its Oxagen operator: ${record.control.paused}. Model calls resume when the operator resumes it.`,
         source: "human",
       };
     }
-    const budget = view.bundle.budget;
-    // Both enforced clauses hang off the one mode, so a host either refuses on
-    // its mandate or it does not. The model check runs first: a model the
-    // workspace forbids is forbidden at any spend, and naming the budget for a
-    // call that was never allowed would send the operator to the wrong
-    // setting.
-    //
-    // `models` present is the second condition, and today it is never met:
-    // `unsignedBundle` signs no `models` clause, so both branches below are
-    // unreachable in the field and this proxy refuses no model. They are
-    // written and tested against the clause they will read when the control
-    // plane emits one. The mode alone must not open them — it is set from the
-    // agent's mandate budget (#3710), so a workspace that has never touched a
-    // model list would otherwise start refusing on a body it could not pin.
+    // Only an explicitly armed workspace policy produces a model clause.
+    // The agent's budget does not arm or disarm the workspace's decision.
     const models = view.bundle.models;
-    if (budget.mode === "enforced" && models !== undefined && modelAmbiguous) {
+    if (
+      models !== undefined &&
+      (modelAmbiguous || (requiresModel && model === undefined))
+    ) {
       return {
         code: "model_ambiguous",
         message:
-          "This request names more than one model, so Oxagen cannot say which one would run. Send one model per request.",
+          "Oxagen cannot identify one model in this request. Send a readable request naming exactly one model.",
         source: "bundle",
       };
     }
-    if (budget.mode === "enforced" && models !== undefined) {
+    if (models !== undefined) {
       const verdict = modelVerdict(models, model);
       if (verdict !== undefined) {
         const named = model ?? "the requested model";
@@ -702,6 +691,8 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
         };
       }
     }
+    if (record === undefined) return undefined;
+    const budget = view.bundle.budget;
     if (budget.mode === "enforced" && budget.session_limit_usd !== undefined) {
       const limit = usdToMicros(budget.session_limit_usd);
       const used = spendFor(record.recorder.sessionUuid);
@@ -948,7 +939,7 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     // paused whatever it presented. Then the credential seam's, which are the
     // host's own configuration and so read as `bundle` on the frame.
     const refusal =
-      refusalFor(record, askedModel, modelAmbiguous) ??
+      refusalFor(record, askedModel, modelAmbiguous, metered) ??
       (credential.refusal !== undefined
         ? {
             ...credential.refusal,

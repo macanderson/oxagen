@@ -37,6 +37,7 @@ import type {
   MemberList,
   ModelCredential,
   RoleCatalog,
+  SsoSettings,
   WorkspaceList,
 } from "./contracts/org";
 import type {
@@ -79,6 +80,7 @@ import type {
   RecordKind,
   RecordPage,
   SteeringFreshness,
+  SteeringDeliveries,
 } from "./contracts/steering";
 import type {
   ApprovalRuleSet,
@@ -340,6 +342,13 @@ export interface DataSource {
      * Org-scoped: the key pays for every workspace's assistant turns.
      */
     modelCredential(ctx: OrgCtx): Promise<Read<ModelCredential>>;
+    /**
+     * list_sso_providers — the organisation's identity providers, their
+     * domain proofs and group mappings, and whether SSO is required. No
+     * secret: a stored one is reported as set. Org-scoped; callers:
+     * features/organization/sso.tsx and roles.tsx.
+     */
+    sso(ctx: OrgCtx): Promise<Read<SsoSettings>>;
   };
   /**
    * The organization's audit record (#3097), both noBillingGate reads for an
@@ -371,6 +380,7 @@ export interface DataSource {
    * features/steering/steering.tsx and features/record/record.tsx.
    */
   steering: {
+    deliveries(ctx: WsCtx): Promise<Read<SteeringDeliveries>>;
     /** list_records, status active: one page of the records in force, of one kind or all */
     records(
       ctx: WsCtx,

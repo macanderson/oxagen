@@ -6,4 +6,5 @@ export { CostCenters } from "./cost-centers";
 export { ModelFunding } from "./model-funding";
 export { People } from "./people";
 export { Roles } from "./roles";
+export { Sso } from "./sso";
 export { Workspaces } from "./workspaces";

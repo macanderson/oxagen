@@ -486,6 +486,9 @@ const tachoColumns = {
     id: sessions.id,
     publicId: sessions.publicId,
     sessionUuid: sessions.sessionUuid,
+    harness: sessions.harness,
+    harnessVersion: sessions.harnessVersion,
+    runtime: sessions.runtime,
     agentKey: sessions.agentKey,
     outcome: sessions.outcome,
     numTurns: sessions.numTurns,
@@ -527,6 +530,8 @@ const tachoColumns = {
     machineSnapshot: sql<unknown>`to_jsonb(${sql.identifier(getTableName(sessions))})->'machine_snapshot'`,
     modelInitial: sessions.modelInitial,
     modelFinal: sessions.modelFinal,
+    totalCostMicros: sessions.totalCostMicros,
+    costBasis: sessions.costBasis,
   },
   operatorPublicId: schema.principals.publicId,
   operatorKind: schema.principals.kind,
@@ -695,6 +700,9 @@ export type RunCost = {
 type RunRollup = { cost: RunCost | null; verdict: RunItem["verdict"] };
 
 export type TachoSessionColumns = GeneratedSummaryColumns & {
+  harness?: string;
+  harnessVersion?: string | null;
+  runtime?: string;
   machineSnapshot?: unknown;
   /** `tacho.sessions.id`; foreign key for checkpoints and rollups. */
   id: string;
@@ -711,6 +719,8 @@ export type TachoSessionColumns = GeneratedSummaryColumns & {
   /** The model the session started on and the one it ended on; either may be unrecorded. */
   modelInitial: string | null;
   modelFinal: string | null;
+  totalCostMicros?: number;
+  costBasis?: string | null;
   /** Written by the seal at `agent_stop`; null while the session is open. */
   replayGrade: string | null;
   completenessGaps: unknown;
@@ -1040,6 +1050,15 @@ export function toTachoRunItem(
     steps: session.numModelCalls + session.numToolCalls,
     frames: session.seqCount,
     cost: rollupCost(totals),
+    reportedCost:
+      Number.isSafeInteger(session.totalCostMicros) &&
+      ((session.totalCostMicros ?? 0) > 0 || session.costBasis != null)
+        ? {
+            micros: microsString(session.totalCostMicros ?? 0),
+            currency: "USD",
+            basis: "client_attested",
+          }
+        : null,
     taskRef: null,
     startedAt: session.startedAt.toISOString(),
     sealedAt: session.sealedAt?.toISOString() ?? null,
@@ -1053,6 +1072,13 @@ export function toTachoRunItem(
     // only the one it started on.
     model: modelFactsOf(session.modelFinal ?? session.modelInitial),
     machine: toRunMachine(row.host, row.session.machineSnapshot),
+    harness: session.harness
+      ? {
+          name: session.harness,
+          version: blankToNull(session.harnessVersion ?? null),
+          runtime: session.runtime ?? null,
+        }
+      : null,
     // The model-written name when `summarize_run` has produced one, and the
     // derived title until then. A run always has something to be called.
     name: session.name ?? session.title ?? null,

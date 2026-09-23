@@ -108,6 +108,7 @@ import { promptSettingsReadRoute } from "./routes/v1/prompt.settings.read";
 import { promptSettingsWriteRoute } from "./routes/v1/prompt.settings.write";
 import { orgDataPlaneRoute } from "./routes/v1/org.data_plane";
 import { orgModelCredentialRoute } from "./routes/v1/org.model_credential";
+import { orgSsoRoute } from "./routes/v1/org.sso";
 import { orgSettingsReadRoute } from "./routes/v1/org.settings.read";
 import { orgSettingsWriteRoute } from "./routes/v1/org.settings.write";
 import { workspaceSettingsReadRoute } from "./routes/v1/workspace.settings.read";
@@ -198,6 +199,7 @@ import { contextRecordPromoteRoute } from "./routes/v1/context.record.promote";
 import { contextRecordsListRoute } from "./routes/v1/context.records.list";
 import { contextRecordsGetRoute } from "./routes/v1/context.records.get";
 import { contextRecordsAppendRoute } from "./routes/v1/context.records.append";
+import { contextSteeringDeliveriesRoute } from "./routes/v1/context.steering.deliveries";
 import { contextSteeringFreshnessRoute } from "./routes/v1/context.steering.freshness";
 import { contextProposalCreateRoute } from "./routes/v1/context.proposal.create";
 import { contextProposalListRoute } from "./routes/v1/context.proposal.list";
@@ -253,6 +255,7 @@ import { telemetryUsageRoute } from "./routes/v1/telemetry.usage";
 import { telemetryStellaEnrollRoute } from "./routes/v1/telemetry.stella.enroll";
 import { telemetryStellaIngestRoute } from "./routes/v1/telemetry.stella.ingest";
 import { cmsRoute } from "./routes/v1/cms";
+import { tachoContainedLaunchRegisterRoute } from "./routes/v1/tacho.contained_launch.register";
 import { tachoBundleGetRoute } from "./routes/v1/tacho.bundle.get";
 import { tachoCommandDispatchRoute } from "./routes/v1/tacho.command.dispatch";
 import { tachoCommandFetchRoute } from "./routes/v1/tacho.command.fetch";
@@ -610,8 +613,17 @@ const tachoControlLimiter = distributedRateLimiter({
 });
 tachoScoped.use("/bundle", tachoControlLimiter);
 tachoScoped.use("/commands", tachoControlLimiter);
+tachoScoped.use(
+  "/contained-launch",
+  distributedRateLimiter({
+    keyPrefix: "tacho-contained-launch",
+    max: TACHO_HOST_PER_MIN,
+    bucketKey: enrolledMachineBucketKey,
+  }),
+);
 tachoScoped.route("/", tachoEventsIngestRoute);
 tachoScoped.route("/", tachoBundleGetRoute);
+tachoScoped.route("/", tachoContainedLaunchRegisterRoute);
 tachoScoped.route("/", tachoCommandFetchRoute);
 app.route("/v1/tacho", tachoScoped);
 
@@ -928,6 +940,7 @@ orgScoped.route("/workspace/prompt-settings", promptSettingsWriteRoute);
 orgScoped.route("/org/settings", orgSettingsReadRoute);
 orgScoped.route("/org/data-plane", orgDataPlaneRoute);
 orgScoped.route("/org/model-credential", orgModelCredentialRoute);
+orgScoped.route("/org/sso", orgSsoRoute);
 orgScoped.route("/org/settings", orgSettingsWriteRoute);
 orgScoped.route("/workspace/settings", workspaceSettingsReadRoute);
 orgScoped.route("/workspace/settings", workspaceSettingsWriteRoute);
@@ -1027,6 +1040,7 @@ orgScoped.route("/context/records", contextRecordsListRoute);
 orgScoped.route("/context/records/get", contextRecordsGetRoute);
 orgScoped.route("/context/records/append", contextRecordsAppendRoute);
 orgScoped.route("/context/steering/freshness", contextSteeringFreshnessRoute);
+orgScoped.route("/context/steering/deliveries", contextSteeringDeliveriesRoute);
 orgScoped.route("/context/proposals", contextProposalListRoute);
 orgScoped.route("/context/proposals/create", contextProposalCreateRoute);
 orgScoped.route("/context/proposals/dismiss", contextProposalDismissRoute);

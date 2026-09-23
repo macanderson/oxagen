@@ -289,12 +289,26 @@ const PLATFORM_NAMED_ROWS: Readonly<
   "src/shared/skill-source-identity.ts": {
     "@oxagen/oxagen/skill-frontmatter": ["readSkillFrontmatter"],
   },
+  // The org gate's Require SSO lookup asks one question of billing: does the
+  // organisation's plan include SSO (ADR-145). The same single tier read the
+  // kernel's gates use, and nothing else from the package.
+  "src/server/tenancy-lookups.ts": {
+    "@oxagen/billing": ["canAccessSSO", "resolveOrgTier"],
+  },
   // Browser controls read the shared ceiling without loading the contract registry.
   "src/features/fleet/run-row-controls.tsx": {
     "@oxagen/oxagen/tacho/command-limits": ["COMMAND_REASON_MAX"],
   },
   "src/ui/command-failure.ts": {
     "@oxagen/oxagen/tacho/command-limits": ["COMMAND_REASON_MAX"],
+  },
+  // The record wizard shows the label and file name a slug will get, using
+  // the same pure functions the publish handler runs, so the preview matches.
+  "src/features/create/record-wizard.tsx": {
+    "@oxagen/oxagen/context-record-label": [
+      "contextRecordLabel",
+      "contextRecordSlug",
+    ],
   },
   "instrumentation.ts": {
     "@oxagen/telemetry": ["initTracer", "recordSecurityEvent"],

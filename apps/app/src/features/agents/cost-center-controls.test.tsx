@@ -28,7 +28,9 @@ const TARGET: CostCenterTarget = {
   agentName: "Release bot",
   costCenter: null,
 };
-const HERE = routes.agent("acme", "core-platform", "release-bot");
+const HERE = routes.agent("acme", "core-platform", "release-bot", {
+  tab: "identity",
+});
 const CENTERS = [
   { id: "cct_eng", label: "ENG-1001" },
   { id: "cct_ops", label: "OPS-2" },

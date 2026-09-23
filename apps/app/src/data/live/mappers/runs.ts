@@ -27,6 +27,7 @@ export function toRunRow(
     operatorKind: run.operatorKind,
     operatorName: run.operatorName,
     status: run.status,
+    reportedCost: run.reportedCost ?? null,
     outcome: run.outcome,
     turns: run.turns,
     steps: run.steps,
@@ -49,6 +50,7 @@ export function toRunRow(
             tier: run.model.tier,
           },
     machine: run.machine,
+    harness: run.harness ?? null,
     taskRef: run.taskRef,
     name: run.name,
     summary:

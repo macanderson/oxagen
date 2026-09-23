@@ -1,3 +1,4 @@
+import { contextRecordLabel } from "@oxagen/oxagen/context-record-label";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { contextRecordPublish } from "@oxagen/oxagen/contracts/context.record.publish";
@@ -81,6 +82,7 @@ export const contextRecordPublishHandler: CapabilityHandler<
           id: schema.contextRecords.id,
           publicId: schema.contextRecords.publicId,
           slug: schema.contextRecords.slug,
+          label: schema.contextRecords.label,
         })
         .from(schema.contextRecords)
         .where(
@@ -147,6 +149,7 @@ export const contextRecordPublishHandler: CapabilityHandler<
       id: string;
       publicId: string;
       slug: string;
+      label: string | null;
     },
     attempt = 1,
   ): Promise<{
@@ -244,6 +247,28 @@ export const contextRecordPublishHandler: CapabilityHandler<
       (latest.statement ?? null) === classification.statement;
 
     if (latest && unchanged) {
+      const label = input.label ?? existing.label ?? contextRecordLabel(slug);
+      if (label !== existing.label) {
+        await withTenantDb((tx) =>
+          tx
+            .update(schema.contextRecords)
+            .set({
+              label,
+              updatedAt: sql`now()`,
+              updatedById: ctx.userId ?? undefined,
+            })
+            .where(
+              and(
+                eq(schema.contextRecords.id, existing.id),
+                eq(schema.contextRecords.orgId, orgId),
+                eq(schema.contextRecords.workspaceId, workspaceId),
+                input.label === undefined
+                  ? isNull(schema.contextRecords.label)
+                  : undefined,
+              ),
+            ),
+        );
+      }
       logger.info(
         { slug, publicId: existing.publicId, workspaceId },
         "context.record.publish: idempotent — body and classification unchanged",
@@ -298,6 +323,9 @@ export const contextRecordPublishHandler: CapabilityHandler<
           .update(schema.contextRecords)
           .set({
             title: input.title,
+            label:
+              input.label ??
+              sql`coalesce(${schema.contextRecords.label}, ${contextRecordLabel(slug)})`,
             activeVersionId: versionRow.id,
             activatedByUserId: ctx.userId ?? undefined,
             activatedAt: sql`now()`,
@@ -366,6 +394,7 @@ export const contextRecordPublishHandler: CapabilityHandler<
           workspaceId,
           slug,
           title: input.title,
+          label: input.label ?? contextRecordLabel(slug),
           status: "active",
           ...classification,
           createdById: ctx.userId ?? undefined,
@@ -375,6 +404,7 @@ export const contextRecordPublishHandler: CapabilityHandler<
           id: schema.contextRecords.id,
           publicId: schema.contextRecords.publicId,
           slug: schema.contextRecords.slug,
+          label: schema.contextRecords.label,
         });
       if (!recordRow) {
         throw new Error(

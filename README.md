@@ -126,8 +126,7 @@ oxagen/
 │   ├── billing      Credit gate, usage metering, Stripe meter/ledger sync
 │   ├── database     Drizzle schemas + Atlas migrations (Postgres)
 │   ├── ontology     Neo4j schema, indexes, graph query layer
-│   ├── engram       Agent memory substrate (content-addressed, consolidated, decaying)
-│   ├── context-provider  Serves a workspace's memory as Context Graph Protocol frames
+│   ├── steering-assembler  The one assembler: ranks steering candidates, fits them to a budget, records the manifest
 │   ├── telemetry    ClickHouse client + event schemas + circuit breaker
 │   ├── tenancy      Tenant scoping (RLS seam) — withTenantDb / runInTenantScope / data planes
 │   ├── iam          Roles, permissions, policy seeds
@@ -278,7 +277,7 @@ CI runs lint, typecheck, unit tests, coverage, builds, contract checks, and inte
 | **Analytics** | ClickHouse | Append-only usage events → Stripe meters |
 | **Billing** | Stripe | Meters, ledgers, customer invoicing |
 | **Jobs** | Inngest | Durable workflows, retries, scheduling |
-| **Auth** | Better Auth | Passkeys, OAuth, org/workspace RBAC |
+| **Auth** | Better Auth | Email and password, Google and GitHub sign-in, TOTP two-factor, SSO over OIDC and SAML with IdP group mapping, org/workspace RBAC, database-backed rate limiting |
 | **Storage** | Vercel Blob via `@oxagen/storage` | Signed URLs, Postgres reference rows |
 | **Language** | TypeScript 6 | Strict mode, no `any` |
 | **Testing** | Vitest + Playwright | Unit + browser E2E |
@@ -415,6 +414,13 @@ gated on something else — a step buried in a job whose gating is about
 something adjacent is how the Stripe sync became unreachable for months without
 anybody noticing (#1371). The fifth row is the read-only check that notices
 when a committed store migration has not been applied.
+
+Production migrations are no longer one of those things. Since 2026-09-23 the
+`migration-gate` job in `pipeline.yml` applies pending Postgres, ClickHouse and
+Neo4j migrations on every push to `main`, re-checks all three stores, and holds
+`deploy-node` until they read current (#3653). The two migrate workflows below
+stay for the cases the gate refuses: an unreadable store, a Postgres revision
+table that lists every migration as pending, and an apply that failed.
 
 | Workflow | What it does | Safe default |
 | --- | --- | --- |

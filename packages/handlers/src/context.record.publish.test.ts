@@ -198,7 +198,30 @@ describe("context.record.publish handler", () => {
       published: false,
     });
     expect(mocks.insertedValues).toHaveLength(0);
-    expect(mocks.updateSets).toHaveLength(0);
+    expect(mocks.updateSets).toEqual([
+      expect.objectContaining({ label: "No Bare Unwrap" }),
+    ]);
+  });
+
+  it("keeps a chosen label on repeat ingestion unless a new label is supplied", async () => {
+    const existing = {
+      id: "record-uuid",
+      publicId: "ctr_1",
+      slug: "no-bare-unwrap",
+      label: "Runtime Error Handling",
+    };
+    queueSelects([existing], [LATEST_MATCHING]);
+    await contextRecordPublishHandler(INPUT, CTX);
+    expect(mocks.updateSets).toEqual([]);
+    queueSelects([existing], [LATEST_MATCHING]);
+    await contextRecordPublishHandler(
+      { ...INPUT, label: "Handle Runtime Errors" },
+      CTX,
+    );
+    expect(mocks.updateSets).toEqual([
+      expect.objectContaining({ label: "Handle Runtime Errors" }),
+    ]);
+    expect(mocks.insertedValues).toEqual([]);
   });
 
   it("publishes latest+1 when only the classification changed on an unchanged body", async () => {
