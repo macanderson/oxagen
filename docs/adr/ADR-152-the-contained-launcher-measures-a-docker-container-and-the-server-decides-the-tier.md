@@ -6,7 +6,8 @@
 - **Related:** ADR-043 (runtime excision), ADR-096 (the contained tier; this
   record makes its Phase 5 build choice), ADR-095 (the tier ladder), ADR-094
   (the gateway), ADR-143 (the gateway brokers the vendor credential), ADR-064
-  (the witness runner), #3772 (the server half), #3300 (Phase 5)
+  (the witness runner), ADR-151 (Git custody), #3772 (the server half),
+  #3300 (Phase 5)
 
 ## Context
 
@@ -126,10 +127,13 @@ the token (`DELETE /installation/token`), so it expires with the run rather
 than at GitHub's one-hour ceiling. The
 receipt's configuration digest covers the repository name, never the token.
 
-Minting the token from the workspace's own App installation on the server,
-the `issue_run_github_token` path in `docs/specs/credential-custody/spec.md`,
-is a later change. Today the operator mints it, for example with
-`actions/create-github-app-token`.
+Today the operator mints the token, for example with
+`actions/create-github-app-token`. ADR-151, merged the same day, mints one on
+the server from the workspace's own App installation and serves it through
+the daemon's Git proxy, so no operator handles it. The contained bridge does
+not route through that proxy yet: its lease is issued for a working
+directory and a loopback port the container does not share. #3815 moves the
+bridge onto it.
 
 ## What the launcher trusts
 
