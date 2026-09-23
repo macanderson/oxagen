@@ -276,6 +276,16 @@ export const transcriptDecisionSchema = z
   })
   .strict();
 
+export const transcriptUsageSchema = z
+  .object({
+    inputUncached: z.number().int().nonnegative().nullable(),
+    cacheRead: z.number().int().nonnegative().nullable(),
+    cacheWrite: z.number().int().nonnegative().nullable(),
+    output: z.number().int().nonnegative().nullable(),
+    reasoning: z.number().int().nonnegative().nullable(),
+  })
+  .strict();
+
 export const transcriptEntrySchema = z
   .object({
     /** The frame that opens the entry. */
@@ -303,6 +313,7 @@ export const transcriptEntrySchema = z
      * result under the request that made it.
      */
     callId: z.string().nullable(),
+    usage: transcriptUsageSchema.nullable().optional(),
     /** The chips this entry answers to, from the frames it folds. */
     kinds: z.array(transcriptKindSchema),
     /** What went out; null when the recording has only the terminal receipt. */

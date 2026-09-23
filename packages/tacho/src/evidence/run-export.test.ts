@@ -247,6 +247,23 @@ describe("verifyRunExport", () => {
     });
   });
 
+  it("holds a frames file an editor saved with one trailing newline", () => {
+    const files = bundle("ledger", ledgerFrames());
+    const saved = verifyRunExport({
+      ...files,
+      "frames.ndjson": `${files["frames.ndjson"]}\n`,
+    });
+    expect(saved.ok).toBe(true);
+    expect(saved.frames).toHaveLength(2);
+    // A second newline is a blank line, and a blank line is not a frame.
+    const blank = verifyRunExport({
+      ...files,
+      "frames.ndjson": `${files["frames.ndjson"]}\n\n`,
+    });
+    expect(blank.ok).toBe(false);
+    expect(blank.frames[2]?.reasons).toEqual(["line is not a JSON object"]);
+  });
+
   it("breaks the key and signature checks under a foreign key (negative)", () => {
     const files = bundle("ledger", ledgerFrames());
     const other = attesterKeyFromPem(

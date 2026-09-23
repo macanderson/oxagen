@@ -417,6 +417,27 @@ describe("the run export bundle", () => {
     expect(script.output).toMatch(/frame 1 .*held/);
   });
 
+  it("verifies a frames file an editor saved with one trailing newline", () => {
+    const bundle = buildRunExportBundle({
+      runId: "arun_5f0c2e9a1b7d4c3e8f6a02",
+      source: "ledger",
+      segments: [ledgerSegment()],
+      key,
+      now: new Date("2026-09-14T12:00:00.000Z"),
+    });
+    const files = unpack(bundle.bytes);
+    const frames = files["frames.ndjson"] as string;
+    const saved = runVerifier(
+      writeBundle({ ...files, "frames.ndjson": `${frames}\n` }),
+    );
+    expect(saved.ok).toBe(true);
+    expect(saved.output).toMatch(/^HELD /m);
+    const blank = runVerifier(
+      writeBundle({ ...files, "frames.ndjson": `${frames}\n\n` }),
+    );
+    expect(blank.ok).toBe(false);
+  });
+
   it("lists what the host redacted and what the bundle withholds by kind and count, never the value", () => {
     const bundle = buildRunExportBundle({
       runId: "arun_5f0c2e9a1b7d4c3e8f6a02",

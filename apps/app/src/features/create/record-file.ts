@@ -115,6 +115,7 @@ export function statementTokens(statement: string): number {
 /** The record propose_record is sent, minus the rationale. */
 export type RecordChoice = {
   lineageId: string;
+  label?: string;
   kind: RecordKind;
   force: RecordForce;
   constraintEffect?: ConstraintEffect;
@@ -131,6 +132,7 @@ export type RecordChoice = {
 export function choiceKey(choice: RecordChoice): string {
   return JSON.stringify([
     choice.lineageId,
+    choice.label ?? null,
     choice.kind,
     choice.force,
     choice.constraintEffect ?? null,

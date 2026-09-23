@@ -3848,7 +3848,7 @@
       "writes": []
     }
   ],
-  "contentHash": "f8da0a804e94edbd71686a4e77f0796fd1f6739f29c3c290400911c505552ab6",
+  "contentHash": "9c19de4102ed7789f4bdcf7ba777d5bcd480e7a7fbd303fa184976cbe7cd414f",
   "domains": [
     {
       "name": "agent",
@@ -8290,6 +8290,12 @@
           "type": "text"
         },
         {
+          "name": "label",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
           "name": "statement",
           "nullable": false,
           "primaryKey": false,
@@ -8654,6 +8660,12 @@
         {
           "name": "title",
           "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "label",
+          "nullable": true,
           "primaryKey": false,
           "type": "text"
         },

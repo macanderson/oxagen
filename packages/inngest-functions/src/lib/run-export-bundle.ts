@@ -150,7 +150,9 @@ const dir = process.argv[2] ?? ".";
 const read = (name) => readFileSync(join(dir, name), "utf8");
 const manifest = JSON.parse(read("manifest.json"));
 const attestation = JSON.parse(read("attestation.json"));
-const text = read("frames.ndjson");
+// One trailing newline ends the last line; it does not start a frame.
+const raw = read("frames.ndjson");
+const text = raw.endsWith("\\n") ? raw.slice(0, -1) : raw;
 const lines = text.length === 0 ? [] : text.split("\\n");
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest();
