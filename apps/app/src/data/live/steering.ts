@@ -3,36 +3,28 @@
 // kernelRead on the workspace ctx, mapped into its view model and parsed at
 // the boundary.
 import "server-only";
-import { agentMemoryList } from "@oxagen/oxagen/contracts/agent.memory.list";
 import { contextPrGet } from "@oxagen/oxagen/contracts/context.pr.get";
 import { contextProposalList } from "@oxagen/oxagen/contracts/context.proposal.list";
 import { contextRecordsGet } from "@oxagen/oxagen/contracts/context.records.get";
 import { contextRecordsList } from "@oxagen/oxagen/contracts/context.records.list";
 import { contextSteeringDeliveries } from "@oxagen/oxagen/contracts/context.steering.deliveries";
 import { contextSteeringFreshness } from "@oxagen/oxagen/contracts/context.steering.freshness";
-import { repositoryList } from "@oxagen/oxagen/contracts/repository.list";
-import { repositoryTreeGet } from "@oxagen/oxagen/contracts/repository.tree.get";
 import { captureError } from "@oxagen/telemetry";
 import type { z } from "zod";
 import {
   ContextPr,
-  MemoryPage,
-  OxagenTree,
   ProposalPage,
   RecordDetail,
   RecordPage,
   STEERING_PAGE,
   SteeringFreshness,
   SteeringDeliveries,
-  SteeringHub,
 } from "@/data/contracts/steering";
 import type { DataSource } from "@/data/ports";
 import { type Read, readError, readOk } from "@/data/read";
 import { kernelRead } from "@/server/kernel";
 import {
   toContextPr,
-  toMemoryPage,
-  toOxagenTree,
   toProposalPage,
   toRecordDetail,
   toRecordPage,
@@ -84,58 +76,7 @@ function withRecordRefs(value: unknown): unknown {
   };
 }
 
-/** A failed read's code, as the hub prints it beside a mode nobody read. */
-function failureCode(read: Exclude<Read<unknown>, { ok: true }>): string {
-  switch (read.reason) {
-    case "denied":
-      return "denied";
-    case "pending_approval":
-      return "pending_approval";
-    case "error":
-      return read.code;
-  }
-}
-
 export const steering: DataSource["steering"] = {
-  async memories(ctx, q) {
-    const read = await kernelRead(ctx, {
-      contract: agentMemoryList,
-      input: {
-        limit: q.limit,
-        offset: 0,
-        sort: "createdAt",
-        sortDir: "desc",
-      },
-      page: "steering",
-    });
-    return read.ok
-      ? parsed(MemoryPage, toMemoryPage(read.value), ctx.orgId, "memories")
-      : read;
-  },
-  /**
-   * The main repository's `.oxagen/` tree, read from GitHub now: the
-   * binding from list_repositories, then get_repository_tree on it. A
-   * refusal or failure of either read is the panel's own, and never the
-   * shelf's.
-   */
-  async tree(ctx) {
-    const bound = await kernelRead(ctx, {
-      contract: repositoryList,
-      input: {},
-      page: "steering",
-    });
-    if (!bound.ok) return bound;
-    const main = bound.value.repositories.find((repo) => repo.role === "main");
-    if (main === undefined) return readOk({ state: "unbound" });
-    const tree = await kernelRead(ctx, {
-      contract: repositoryTreeGet,
-      input: { bindingId: main.bindingId },
-      page: "steering",
-    });
-    return tree.ok
-      ? parsed(OxagenTree, toOxagenTree(tree.value), ctx.orgId, "tree")
-      : tree;
-  },
   async deliveries(ctx) {
     const read = await kernelRead(ctx, {
       contract: contextSteeringDeliveries,
@@ -156,7 +97,7 @@ export const steering: DataSource["steering"] = {
       contract: contextRecordsList,
       input: {
         status: "active",
-        limit: q.limit ?? STEERING_PAGE,
+        limit: STEERING_PAGE,
         offset: q.offset,
         ...(q.kind === null ? {} : { kind: q.kind }),
       },
@@ -223,80 +164,5 @@ export const steering: DataSource["steering"] = {
           "freshness",
         )
       : read;
-  },
-  /**
-   * The governance mode on the workspace's main repository, and the proposals
-   * a person still has to act on.
-   *
-   * The mode is the binding from list_repositories, then
-   * `.oxagen/rules/governance.toml` as get_repository_tree reads it from
-   * GitHub now. Nothing caches the mode (ADR-061 decision 1), so the chip
-   * reads the file the Context PR gate reads.
-   *
-   * The waiting count is every proposal, less the merged and the dismissed.
-   * list_proposals narrows by one status at a time, so this is three counts
-   * of one row each rather than five. It is null when any count failed: a
-   * partial difference would print a number nobody counted.
-   */
-  async hub(ctx) {
-    const count = (status?: "proposed" | "merged" | "rejected") =>
-      kernelRead(ctx, {
-        contract: contextProposalList,
-        input: { limit: 1, offset: 0, ...(status ? { status } : {}) },
-        page: "steering",
-      });
-    const governance = async (): Promise<SteeringHub["governance"]> => {
-      const bound = await kernelRead(ctx, {
-        contract: repositoryList,
-        input: {},
-        page: "steering",
-      });
-      if (!bound.ok) return { state: "unread", code: failureCode(bound) };
-      const main = bound.value.repositories.find(
-        (repo) => repo.role === "main",
-      );
-      if (main === undefined) return { state: "unbound" };
-      const tree = await kernelRead(ctx, {
-        contract: repositoryTreeGet,
-        input: { bindingId: main.bindingId },
-        page: "steering",
-      });
-      return tree.ok
-        ? {
-            state: "read",
-            repository: tree.value.fullName,
-            mode: tree.value.governanceMode,
-          }
-        : { state: "unread", code: failureCode(tree) };
-    };
-    const [mode, all, merged, rejected, proposed] = await Promise.all([
-      governance(),
-      count(),
-      count("merged"),
-      count("rejected"),
-      count("proposed"),
-    ]);
-    const proposalsWaiting =
-      all.ok && merged.ok && rejected.ok
-        ? Math.max(
-            0,
-            all.value.total - merged.value.total - rejected.value.total,
-          )
-        : null;
-    // The open Context PRs are the waiting proposals less the ones with no
-    // pull request yet; the Candidates segment lists every proposal.
-    const segments =
-      all.ok && proposed.ok && proposalsWaiting !== null
-        ? {
-            candidates: all.value.total,
-            prs: Math.max(0, proposalsWaiting - proposed.value.total),
-          }
-        : null;
-    return parsed(
-      SteeringHub,
-      { governance: mode, proposalsWaiting, segments },
-      ctx.orgId,
-      "hub",
-    );
   },
 };

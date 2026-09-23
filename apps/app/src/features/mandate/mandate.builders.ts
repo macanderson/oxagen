@@ -71,7 +71,6 @@ export function mandateSource(read: Read<MandateDetail> | undefined) {
       proposals: refuse,
       contextPr: refuse,
       freshness: refuse,
-      hub: refuse,
       deliveries: refuse,
     },
     tools: {
