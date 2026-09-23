@@ -111,6 +111,30 @@ describe("a Cursor turn", () => {
     }
   });
 
+  it("carries preToolUse's agent_message as a preceding message, never as the turn's reply", () => {
+    const { written, hook, textOf } = cursorChain("cursor-pretooluse-message");
+    hook({ hook_event_name: "sessionStart", session_id: ID });
+    hook({ hook_event_name: "beforeSubmitPrompt", prompt: "clean up" });
+    const fromPreToolUse = hook({
+      hook_event_name: "preToolUse",
+      tool_name: "Shell",
+      tool_input: { command: "ls" },
+      tool_use_id: "tu_1",
+      agent_message: "Listing the directory now.",
+    });
+    // A preceding oxagen:message, then the tool_requested it announced.
+    expect(fromPreToolUse.map((event) => event.kind)).toEqual([
+      "oxagen:message",
+      "tool_requested",
+    ]);
+    const message = fromPreToolUse[0];
+    expect(textOf(message)).toBe("Listing the directory now.");
+    expect(message?.hook_event_name).toBe("PreToolUse");
+    // It must not become the turn's reply: only an AgentResponse draft does.
+    const [end] = hook({ hook_event_name: "stop", status: "completed" });
+    expect(textOf(end)).toBeUndefined();
+  });
+
   it("closes an unanswered turn with the last message when the next prompt arrives first", () => {
     const { written, hook, textOf } = cursorChain("cursor-turn-reply-open");
     hook({ hook_event_name: "sessionStart", session_id: ID });
@@ -125,6 +149,54 @@ describe("a Cursor turn", () => {
     const end = hook({ hook_event_name: "stop", status: "completed" });
     expect(textOf(end[0])).toBeUndefined();
     expect(verifyChain(written).ok).toBe(true);
+  });
+
+  it("keeps an open turn's pending reply across a restart", () => {
+    const { chain, hook } = cursorChain("cursor-turn-reply-restart");
+    hook({ hook_event_name: "sessionStart", session_id: ID });
+    hook({ hook_event_name: "beforeSubmitPrompt", prompt: "fix the build" });
+    hook({ hook_event_name: "afterAgentResponse", text: "done" });
+    // A restart between the reply and the stop: a fresh recorder restores
+    // from the state the collector persisted, the way the daemon would.
+    const restored = new SessionRecorder({
+      context,
+      harnessSessionId: ID,
+      scope: "cursor-turn-reply-restart",
+      restore: chain.state(),
+    });
+    const [end] = restored.ingestHook(
+      translateCursorPayload({
+        conversation_id: ID,
+        generation_id: "gen-1",
+        model: "claude-sonnet",
+        cursor_version: "1.7.0",
+        hook_event_name: "stop",
+        status: "completed",
+        loop_count: 0,
+      }),
+      {},
+      at,
+    );
+    const body = restored
+      .takeBodies()
+      .find((candidate) => candidate.event_id_idem === end?.event_id_idem);
+    expect(body === undefined ? undefined : decoder.decode(body.bytes)).toBe(
+      "done",
+    );
+  });
+
+  it("puts an open turn's pending reply back on rollback", () => {
+    const { chain, hook, textOf } = cursorChain("cursor-turn-reply-rollback");
+    hook({ hook_event_name: "sessionStart", session_id: ID });
+    hook({ hook_event_name: "beforeSubmitPrompt", prompt: "one" });
+    hook({ hook_event_name: "afterAgentResponse", text: "first draft" });
+    const mark = chain.markChain();
+    // A second reply lands, then the write that had to follow it fails.
+    hook({ hook_event_name: "afterAgentResponse", text: "final answer" });
+    chain.rollbackChain(mark);
+    // The retry must see the reply the mark held, not the one undone with it.
+    const [end] = hook({ hook_event_name: "stop", status: "completed" });
+    expect(textOf(end)).toBe("first draft");
   });
 
   it("prefers the stop's own message when the harness sends one", () => {

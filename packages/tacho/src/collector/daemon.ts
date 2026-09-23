@@ -9,6 +9,7 @@ import {
   existsSync,
   readdirSync,
   readFileSync,
+  renameSync,
   statSync,
   unlinkSync,
   writeFileSync,
@@ -20,7 +21,11 @@ import { dirname, join } from "node:path";
 import { execFile, spawnSync } from "node:child_process";
 import { type ClaudeCodeContext, digestText } from "../claude-code/context";
 import { normalizeOtlp, type OtlpPayload } from "../claude-code/otel";
-import type { ChainMark, SessionRecorder } from "../claude-code/recorder";
+import type {
+  ChainMark,
+  RecorderState,
+  SessionRecorder,
+} from "../claude-code/recorder";
 import { tachoEventSchema, type TachoEvent } from "../envelope";
 import { type FrameBody, retentionAllows } from "../evidence/frame-body";
 import { verifyBundle } from "../host/bundle";
@@ -227,6 +232,9 @@ export interface DaemonHandle {
   stop: () => Promise<void>;
 }
 
+/** How many sealed events each recorder keeps in memory after a tick. */
+const RECORDER_EVENTS_KEPT = 64;
+
 interface SpoolFile {
   schema: "tacho.spool.v1";
   received_at: string;
@@ -235,6 +243,7 @@ interface SpoolFile {
   evaluation?: HookReplay["evaluation"];
   harness?: HookEnvelope["harness"];
   agent?: HookEnvelope["agent"];
+  hook_id?: HookEnvelope["hook_id"];
 }
 
 /**
@@ -320,6 +329,51 @@ class Serial {
     this.tail = next.catch(() => undefined);
     return next;
   }
+}
+
+/**
+ * Correct a restored recorder cursor against the WAL it is supposed to be
+ * standing on top of, before anything is sealed on top of it.
+ *
+ * `state.json` is written at tick end (`persistState`, gated on
+ * `stateDirty`), which is after the WAL append it answers for on the happy
+ * path but is not guaranteed to be: a crash between the two, or a `state.json`
+ * write that raced a WAL failure, can leave the persisted cursor behind what
+ * the log already holds. Restoring that stale cursor unchanged reseals at a
+ * seq the file already has, and ClickHouse's `ReplacingMergeTree` — keyed on
+ * seq — silently keeps the newer, wrong frame over the original. `Wal.append`
+ * now refuses that write outright, but refusing it at startup, once, with the
+ * cursor corrected, is what keeps the daemon booting instead of crash-looping
+ * on its own recovered state.
+ *
+ * `wal.lastEvent` reads from the tail of the file, not the whole thing, so
+ * this costs one small read per restored session rather than a full replay.
+ * A subagent's chain is its own session, in its own WAL file, so children are
+ * walked and corrected the same way, recursively.
+ */
+export function reconcileRestoredCursor(
+  state: RecorderState,
+  wal: Wal,
+  log: (line: string) => void,
+): void {
+  // Legacy states from a build before `sessionUuid` was persisted derive it
+  // from the harness session id at restore time, a step only the registry
+  // can take (it alone holds the seed and the scope). Nothing to correct
+  // here without it; the registry's own restore still runs.
+  if (state.sessionUuid !== undefined) {
+    const head = wal.lastEvent(state.sessionUuid);
+    if (head !== undefined && head.seq >= state.cursor.seq) {
+      log(
+        `restored cursor for session ${state.sessionUuid} was seq ${state.cursor.seq}; the WAL already holds through seq ${head.seq}, advancing to match`,
+      );
+      state.cursor = {
+        seq: head.seq + 1,
+        prevHash: head.hash as RecorderState["cursor"]["prevHash"],
+      };
+    }
+  }
+  for (const child of Object.values(state.children))
+    reconcileRestoredCursor(child.state, wal, log);
 }
 
 export async function startDaemon(
@@ -427,14 +481,40 @@ async function initializeDaemon(
         `chain gap written for session ${gap.session_uuid}: ${gap.kind} seq ${gap.seq} follows seq ${gap.after_seq}`,
       );
     },
+    (failure) => {
+      log(
+        `WAL event line unparseable for session ${failure.session_uuid}: ${failure.reason}`,
+      );
+    },
   );
+  // Only the daemon repairs a torn tail, and only once, before anything else
+  // touches the WAL: a reader building its own `Wal` (`tacho status`, `tacho
+  // export`) must never rewrite a file this process might still be writing
+  // to, and a live daemon's own writes only ever extend a file it already
+  // holds open through `append`, never race a repair of its own past tail.
+  for (const session of wal.sessions()) {
+    const outcome = wal.repairTail(session);
+    if (outcome !== "ok")
+      log(`WAL tail repair for session ${session}: ${outcome}`);
+  }
   const registry = new SessionRegistry({
     context,
     scope: host.host_enrollment_id,
     now,
   });
+  // Read before anything in this startup touches the file, so it names the
+  // previous process's last write — the moment its record of a live session
+  // stopped, whatever silently killed it. Used by the restart telemetry gap
+  // below.
+  const priorStateWrittenAt = existsSync(paths.daemonState)
+    ? statSync(paths.daemonState).mtimeMs
+    : undefined;
   const persisted = parseRegistryState(readJsonFileIfExists(paths.daemonState));
-  if (persisted !== undefined) registry.restore(persisted);
+  if (persisted !== undefined) {
+    for (const session of persisted.sessions)
+      reconcileRestoredCursor(session.recorder, wal, log);
+    registry.restore(persisted);
+  }
 
   // The daemon's own chain: host-level incidents, commands, and checkpoints
   // land here so every event the host emits belongs to a verifiable session.
@@ -593,6 +673,15 @@ async function initializeDaemon(
   });
 
   function persistState(): void {
+    // Commit the WAL bytes this cursor answers for before the cursor itself
+    // lands durably. `state.json` is read back at the next startup as a claim
+    // about where each session's chain stood; writing that claim before the
+    // bytes are fsynced is the ordering that let a crash leave the two
+    // disagreeing, which is what `reconcileRestoredCursor` now recovers from
+    // — but recovering from it is a fallback, not a reason to keep causing
+    // it. One flush per call, covering everything appended since the last
+    // one: a group commit, not an fsync per event.
+    wal.flush();
     writeSensitiveFileAtomic(
       paths.daemonState,
       JSON.stringify(registry.state()),
@@ -625,6 +714,69 @@ async function initializeDaemon(
       ),
     );
     stateDirty = true;
+  }
+
+  /**
+   * Every currently known session's chain position, so a caller that is
+   * about to seal events it may not be able to write can put every chain
+   * back if the write fails. `checkpoint` and `recordReconciliation` already
+   * do this by hand for the one or few sessions they touch; this covers a
+   * caller — `applyCommands`, `handleHookEvent`, OTel ingestion, the
+   * detector, the registry's sweep — whose sealing runs inside a call this
+   * file does not own, and so does not know in advance which sessions (out
+   * of everything the registry currently holds) it will touch. Marking and
+   * rolling back a chain the call never reaches costs nothing: the mark
+   * matches the chain's position exactly and the rollback is a no-op.
+   */
+  function markEveryChain(): Array<{
+    session: SessionRecord;
+    mark: ChainMark;
+  }> {
+    return registry
+      .list()
+      .map((session) => ({ session, mark: session.recorder.markChain() }));
+  }
+
+  function rollbackEveryChain(
+    marks: Array<{ session: SessionRecord; mark: ChainMark }>,
+  ): void {
+    for (const { session, mark } of [...marks].reverse())
+      session.recorder.rollbackChain(mark);
+  }
+
+  /**
+   * Run `seal`, record what it sealed, and roll every chain back to where
+   * this call found it if the WAL write throws.
+   *
+   * A seal moves a recorder's cursor in memory before the WAL write that
+   * follows it confirms the event landed. Without this, a write failure —
+   * a full disk, a stale seq `Wal.append` now refuses, a body write that
+   * throws — left the cursor standing on an event the log never durably
+   * held, and the next seal on that chain opened a gap no verifier could
+   * close. See `rollbackChain`'s own comment in `recorder.ts` for the fuller
+   * account. `applyCommands` is the one caller whose seal is asynchronous
+   * end to end; every other caller in this file marks and rolls back by
+   * hand, scoped to the one or few sessions it actually touches, because
+   * `markEveryChain` costs the whole registry and most of them do not need
+   * to pay it.
+   */
+  async function recordSealedAsync<T>(
+    seal: () => Promise<T>,
+    toRecorded: (result: T) => {
+      events: readonly TachoEvent[];
+      bodies?: readonly FrameBody[];
+    },
+  ): Promise<T> {
+    const marks = markEveryChain();
+    try {
+      const result = await seal();
+      const sealedRecord = toRecorded(result);
+      record(sealedRecord.events, sealedRecord.bodies ?? []);
+      return result;
+    } catch (error) {
+      rollbackEveryChain(marks);
+      throw error;
+    }
   }
 
   /**
@@ -981,22 +1133,25 @@ async function initializeDaemon(
     if (control.bundle_etag === host.bundle.etag) mandateConfirmedAt = now();
     else await refreshBundle();
     if (control.commands.length > 0) {
-      const result = await applyCommands(control.commands, {
-        registry,
-        hostRecorder: () => hostRecorder,
-        kill,
-        refreshBundle: async () => {
-          await refreshBundle();
-        },
-        onHostSuspended: (reason) => {
-          host = applyControlFacts(paths.hostFile, host, {
-            host_status: "suspended",
-          });
-          log(`host suspended by operator: ${reason}`);
-        },
-        now,
-      });
-      record(result.events);
+      const result = await recordSealedAsync(
+        () =>
+          applyCommands(control.commands, {
+            registry,
+            hostRecorder: () => hostRecorder,
+            kill,
+            refreshBundle: async () => {
+              await refreshBundle();
+            },
+            onHostSuspended: (reason) => {
+              host = applyControlFacts(paths.hostFile, host, {
+                host_status: "suspended",
+              });
+              log(`host suspended by operator: ${reason}`);
+            },
+            now,
+          }),
+        (result) => ({ events: result.events }),
+      );
       pendingAcks.push(...result.acknowledgements);
       interruptModelCalls(control.commands);
     }
@@ -1010,6 +1165,8 @@ async function initializeDaemon(
     // control plane 403s a batch containing any of them, and a 403 is
     // retryable, so without this the queue wedges forever.
     hostEnrollmentId: host.host_enrollment_id,
+    // Hosts that lost the control plane together do not retry in step.
+    jitter: Math.random,
     // Asked at ship time, not only at append time. A body appended under
     // `content_exact` can wait in the WAL through an outage and leave under a
     // mandate that has since narrowed to `digest_only`; the control plane
@@ -1245,6 +1402,7 @@ async function initializeDaemon(
     ...(file.env !== undefined ? { env: file.env } : {}),
     ...(file.harness !== undefined ? { harness: file.harness } : {}),
     ...(file.agent !== undefined ? { agent: file.agent } : {}),
+    ...(file.hook_id !== undefined ? { hook_id: file.hook_id } : {}),
     replay: {
       receivedAt: file.received_at,
       ...(file.evaluation !== undefined ? { evaluation: file.evaluation } : {}),
@@ -1785,24 +1943,38 @@ async function initializeDaemon(
       return {};
     }
     const before = pending === undefined ? undefined : registry.state();
-    const outcome = await handleHookEvent(
-      envelope.payload,
-      envelope.env ?? {},
-      {
-        registry,
-        policy,
-        refreshBundle: async () => {
-          await refreshBundle();
+    // Marked before the seal, not only before the write below: a session
+    // whose SessionEnd is pending takes a different path to the WAL
+    // (`flushPendingTerminal`, journaled and rolled back through its own
+    // `registry.restore`), but `handleHookEvent` itself can throw after
+    // sealing on one chain and before finishing another, and that failure
+    // has no rollback of its own.
+    const marks = markEveryChain();
+    let outcome: Awaited<ReturnType<typeof handleHookEvent>>;
+    try {
+      outcome = await handleHookEvent(
+        envelope.payload,
+        envelope.env ?? {},
+        {
+          registry,
+          policy,
+          refreshBundle: async () => {
+            await refreshBundle();
+          },
+          acknowledge: (ack) => {
+            pendingAcks.push(ack);
+          },
+          now,
         },
-        acknowledge: (ack) => {
-          pendingAcks.push(ack);
-        },
-        now,
-      },
-      envelope.replay,
-      envelope.harness,
-      envelope.agent,
-    );
+        envelope.replay,
+        envelope.harness,
+        envelope.agent,
+        envelope.hook_id,
+      );
+    } catch (error) {
+      rollbackEveryChain(marks);
+      throw error;
+    }
     if (pending !== undefined) {
       const state = registry.state();
       state.sessions = state.sessions.filter(
@@ -1846,7 +2018,14 @@ async function initializeDaemon(
         outcome.record.pendingTerminal = true;
       }
       flushPendingTerminal(pending.terminal);
-    } else record(outcome.events, outcome.bodies);
+    } else {
+      try {
+        record(outcome.events, outcome.bodies);
+      } catch (error) {
+        rollbackEveryChain(marks);
+        throw error;
+      }
+    }
     return outcome.response;
   }
 
@@ -1891,35 +2070,107 @@ async function initializeDaemon(
     stateDirty = true;
   }
 
+  /**
+   * At most this many spool files in one `drainSpool` call. A host whose
+   * daemon was down for a long stretch, or whose control plane is refusing
+   * every batch, can accumulate an unbounded backlog; unbounded is also what
+   * a stuck loop over `readdirSync`'s answer would cost per tick. The rest
+   * waits for the next call, which the daemon makes every tick.
+   */
+  const SPOOL_DRAIN_LIMIT = 200;
+
+  /**
+   * Whether a spool file will never process, on this attempt or any later
+   * one: malformed JSON, the wrong schema envelope, or a payload the hook
+   * schema refuses. Anything else (a WAL write that failed, a disk that is
+   * full, a control-plane call a handler made mid-hook) is transient, and the
+   * caller stops the drain rather than discarding the evidence.
+   */
+  function isPermanentSpoolRefusal(error: unknown): boolean {
+    return (
+      error instanceof SyntaxError ||
+      error instanceof z.ZodError ||
+      (error instanceof Error && error.message === "not a spool file")
+    );
+  }
+
+  function moveToFailedSpool(path: string, name: string, reason: string): void {
+    log(`spool file ${name} moved to spool/failed/: ${reason}`);
+    try {
+      ensureDir(join(paths.spool, "failed"));
+      renameSync(path, join(paths.spool, "failed", name));
+    } catch (error) {
+      log(
+        `spool file ${name} could not be moved to spool/failed/: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
   /** Replay what `tacho-hook` spooled while the daemon was down, in order. */
   async function drainSpool(): Promise<number> {
     const files = readdirSync(paths.spool)
       .filter((name) => name.endsWith(".json"))
-      .sort();
+      .sort()
+      .slice(0, SPOOL_DRAIN_LIMIT);
     if (files.length === 0) return 0;
     const gapped = new Map<string, string>();
+    // Unlinked only once every file this call touches is durably recorded
+    // (or durably set aside): unlinking as each file lands, as this used to,
+    // deleted a spool file even when its replay threw, so a hook a daemon
+    // outage had already spooled was lost a second time by the drain meant
+    // to recover it.
+    const succeeded: string[] = [];
+    let processed = 0;
     for (const name of files) {
       const path = join(paths.spool, name);
+      let file: SpoolFile;
       try {
-        const file = JSON.parse(readFileSync(path, "utf8")) as SpoolFile;
+        file = JSON.parse(readFileSync(path, "utf8")) as SpoolFile;
         if (file.schema !== "tacho.spool.v1")
           throw new Error("not a spool file");
-        const sessionId = (file.payload as { session_id?: string }).session_id;
-        if (sessionId !== undefined && !gapped.has(sessionId))
-          gapped.set(sessionId, file.received_at);
-        await handleHookInner(spoolEnvelope(file));
       } catch (error) {
-        log(
-          `spool file ${name} skipped: ${error instanceof Error ? error.message : String(error)}`,
+        moveToFailedSpool(
+          path,
+          name,
+          error instanceof Error ? error.message : String(error),
         );
+        processed += 1;
+        continue;
       }
-      unlinkSync(path);
+      const sessionId = (file.payload as { session_id?: string }).session_id;
+      if (sessionId !== undefined && !gapped.has(sessionId))
+        gapped.set(sessionId, file.received_at);
+      try {
+        await handleHookInner(spoolEnvelope(file));
+        succeeded.push(path);
+        processed += 1;
+      } catch (error) {
+        if (isPermanentSpoolRefusal(error)) {
+          moveToFailedSpool(
+            path,
+            name,
+            error instanceof Error ? error.message : String(error),
+          );
+          processed += 1;
+          continue;
+        }
+        // A transient failure: stop here and leave every file this call has
+        // not yet attempted, including this one, for the next drain.
+        log(
+          `spool drain stopped at ${name}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        break;
+      }
     }
-    // The http hooks of the same window were lost: chain the gap honestly.
+    // The http hooks of the same window were lost: chain the gap honestly,
+    // for every session this pass actually reached.
+    const gapMarks: Array<{ session: SessionRecord; mark: ChainMark }> = [];
     const gaps: TachoEvent[] = [];
     for (const [sessionId, firstAt] of gapped) {
       const session = registry.get(sessionId);
       if (session === undefined || session.sealed) continue;
+      const mark = session.recorder.markChain();
+      gapMarks.push({ session, mark });
       gaps.push(
         session.recorder.sealCollectorEvent("telemetry_gap", {
           gap_cause: "daemon_down",
@@ -1929,8 +2180,19 @@ async function initializeDaemon(
         }),
       );
     }
-    record(gaps);
-    return files.length;
+    try {
+      record(gaps);
+    } catch (error) {
+      rollbackEveryChain(gapMarks);
+      throw error;
+    }
+    // Commit the WAL before removing the on-disk evidence it is the only
+    // other copy of. A spool file is the sole record of a hook payload until
+    // its events are durable; unlinking it before a flush trades a crash
+    // that used to lose nothing for one that loses the payload outright.
+    wal.flush();
+    for (const path of succeeded) unlinkSync(path);
+    return processed;
   }
 
   /**
@@ -1977,6 +2239,19 @@ async function initializeDaemon(
     if (call.status === "rejected") seen.refused += 1;
     seen.lastSeenAt = toProtocolTimestamp(now());
     connected.set(call.client, seen);
+    // Only the host chain, not `markEveryChain`: this is the forward path a
+    // connected app waits on, and the comment above this function already
+    // explains why nothing here may cost more than the one chain it touches.
+    const mark = hostRecorder.markChain();
+    try {
+      recordHostGatewayEvent(call);
+    } catch (error) {
+      hostRecorder.rollbackChain(mark);
+      throw error;
+    }
+  }
+
+  function recordHostGatewayEvent(call: GatewayCallRecord): void {
     record(
       [
         hostRecorder.sealCollectorEvent(
@@ -2299,7 +2574,19 @@ async function initializeDaemon(
             log(
               `session ${sessionId} first seen through OTel; no hook stream yet`,
             );
-          record(session.recorder.ingestOtlp(payload as OtlpPayload));
+          const mark = session.recorder.markChain();
+          try {
+            record(session.recorder.ingestOtlp(payload as OtlpPayload));
+          } catch (error) {
+            // One session's WAL failure must not lose another's OTel signal:
+            // roll this chain back to where `ingestOtlp` found it and move on
+            // to the rest of the payload.
+            session.recorder.rollbackChain(mark);
+            log(
+              `OTel ingest not recorded for session ${sessionId}: ${error instanceof Error ? error.message : String(error)}`,
+            );
+            continue;
+          }
           for (const refusal of session.recorder.takeOtelRefusals())
             log(`OTel record not sealed for session ${sessionId}: ${refusal}`);
         }
@@ -2414,6 +2701,49 @@ async function initializeDaemon(
         session_start_source: "daemon",
       }),
     ]);
+  }
+
+  // A session recorded entirely over HTTP hooks (no spool file, because the
+  // daemon was reachable right up to the moment it died) leaves no trace of
+  // an outage anywhere on disk: the WAL simply stops. `drainSpool` already
+  // chains this gap for what a dead daemon forced onto the spool; this
+  // covers everything else a restart resumed, every session `persisted`
+  // named as live, with the downtime measured from the last time this
+  // process's predecessor wrote `state.json`.
+  if (persisted !== undefined && priorStateWrittenAt !== undefined) {
+    const restartMarks: Array<{ session: SessionRecord; mark: ChainMark }> = [];
+    const restartGaps: TachoEvent[] = [];
+    for (const session of registry.live()) {
+      if (session === hostRecord) continue;
+      // A session whose termination is still pending has a terminal event
+      // already computed and journaled at a fixed seq, waiting for the git
+      // lane or the next tick to retry it (`recordHookOutcome`'s own
+      // pending-terminal path). Sealing a gap on that chain first would
+      // claim the seq the journaled terminal is fixed to, and the retry
+      // would either be refused by the seq guard in `Wal.append` or land as
+      // a chain fork `appendRecovered` reports as a recovery conflict. This
+      // session's own gap is exactly what the pending terminal's retry
+      // already accounts for; nothing here would add information.
+      if (session.pendingTerminal) continue;
+      const mark = session.recorder.markChain();
+      restartMarks.push({ session, mark });
+      restartGaps.push(
+        session.recorder.sealCollectorEvent("telemetry_gap", {
+          gap_cause: "daemon_down",
+          gap_duration_ms: Math.max(0, Math.round(now() - priorStateWrittenAt)),
+          incident_kind: "telemetry_gap",
+          incident_severity: 1,
+        }),
+      );
+    }
+    try {
+      record(restartGaps);
+    } catch (error) {
+      rollbackEveryChain(restartMarks);
+      log(
+        `restart telemetry gap not recorded: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   ready(api);
@@ -2533,6 +2863,31 @@ async function initializeDaemon(
    * This is what the interval drives, and it is deliberately free of the git
    * lane: see {@link startGitReads}.
    */
+  /**
+   * Run one stage of `controlTick` in isolation: a throw is logged and
+   * swallowed rather than left to unwind the whole tick.
+   *
+   * `controlTick` used to run its stages as one `await` chain, so a throw
+   * from an early stage (the detector, the sweep, a checkpoint) skipped
+   * every stage after it — including `shipper.drain()` and `wal.compact`,
+   * every single tick, for as long as the failing stage kept failing. A host
+   * whose sweep or checkpoint started throwing stopped shipping anything at
+   * all, silently, rather than losing only the stage that was actually
+   * broken.
+   */
+  async function stage(
+    name: string,
+    run: () => void | Promise<void>,
+  ): Promise<void> {
+    try {
+      await run();
+    } catch (error) {
+      log(
+        `controlTick stage "${name}" failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
   async function controlTick(): Promise<void> {
     if (stopped) return;
     for (const session of registry.list()) {
@@ -2548,40 +2903,60 @@ async function initializeDaemon(
     // synchronous stretch that seals it, the property the gateway relies on
     // to record off-queue: a model or gateway call sealed on the host chain
     // during the scan must not be appended ahead of an earlier detector frame.
-    if (now() - lastDetect >= timers.detectorMs) {
-      lastDetect = now();
-      await detector.tick((events) => record(events));
-    }
-    await serial.run(async () => {
-      const t = now();
-      await drainSpool();
-      // transcript tailer: bounded per file per tick, asynchronous reads
-      await transcriptTailer.tick();
-      if (t - lastSweep >= timers.sweepMs) {
-        lastSweep = t;
-        record(
-          registry.sweep(isProcessAlive, timers.idleSessionMs, (session) =>
-            pendingSessionEnds.has(session.recorder.sessionUuid),
-          ),
-        );
-        registry.forgetSealed(timers.walRetainMs);
+    await stage("detector", async () => {
+      if (now() - lastDetect >= timers.detectorMs) {
+        lastDetect = now();
+        const marks = markEveryChain();
+        try {
+          await detector.tick((events) => record(events));
+        } catch (error) {
+          rollbackEveryChain(marks);
+          throw error;
+        }
       }
-      if (t - lastCheckpoint >= timers.checkpointMs) {
-        lastCheckpoint = t;
-        checkpoint();
-      }
-      if (stateDirty) persistState();
     });
+    await stage("spool, transcripts, sweep, checkpoint", () =>
+      serial.run(async () => {
+        const t = now();
+        await drainSpool();
+        // transcript tailer: bounded per file per tick, asynchronous reads
+        await transcriptTailer.tick();
+        if (t - lastSweep >= timers.sweepMs) {
+          lastSweep = t;
+          const marks = markEveryChain();
+          try {
+            record(
+              registry.sweep(isProcessAlive, timers.idleSessionMs, (session) =>
+                pendingSessionEnds.has(session.recorder.sessionUuid),
+              ),
+            );
+          } catch (error) {
+            rollbackEveryChain(marks);
+            throw error;
+          }
+          registry.forgetSealed(timers.walRetainMs);
+        }
+        if (t - lastCheckpoint >= timers.checkpointMs) {
+          lastCheckpoint = t;
+          checkpoint();
+        }
+        if (stateDirty) persistState();
+      }),
+    );
     // Refresh before draining, so a batch carrying bodies leaves under the
     // mandate the control plane holds now rather than the one cached before
     // an outage.
-    if (now() - lastRefresh >= timers.bundleRefreshMs) {
-      lastRefresh = now();
-      await refreshBundle();
-      await refreshUpstreams();
-    }
-    await shipper.drain();
-    await sendAcks();
+    await stage("bundle refresh", async () => {
+      if (now() - lastRefresh >= timers.bundleRefreshMs) {
+        lastRefresh = now();
+        await refreshBundle();
+        await refreshUpstreams();
+      }
+    });
+    await stage("ship", async () => {
+      await shipper.drain();
+    });
+    await stage("acks", () => sendAcks());
     // Started after the poll and awaited by nothing — both halves matter, and
     // they answer different halves of the same defect.
     //
@@ -2596,11 +2971,21 @@ async function initializeDaemon(
     // costs them one interval and nothing else — they are already asynchronous
     // and already land a batch or more after the tool frames they belong with.
     void startGitReads();
-    if (now() - lastCompact >= 60 * 60_000) {
-      lastCompact = now();
-      wal.compact(now(), timers.walRetainMs);
-      sweepQuarantine(now(), timers.walRetainMs);
-    }
+    await stage("compact", () => {
+      if (now() - lastCompact >= 60 * 60_000) {
+        lastCompact = now();
+        wal.compact(now(), timers.walRetainMs);
+        sweepQuarantine(now(), timers.walRetainMs);
+      }
+    });
+    // The WAL is the record; a recorder's in-memory list of what it sealed is
+    // only read inside one synchronous ingest (`everySealed`). Kept whole, it
+    // grew with every event of every session for the daemon's lifetime.
+    await stage("trim", () => {
+      for (const session of registry.list())
+        session.recorder.trimSealedEvents(RECORDER_EVENTS_KEPT);
+      hostRecorder.trimSealedEvents(RECORDER_EVENTS_KEPT);
+    });
   }
 
   /**
@@ -2737,6 +3122,13 @@ async function initializeDaemon(
       if (stopped) return;
       stopped = true;
       if (timer) clearInterval(timer);
+      // Persist now, before the potentially long wait below. `gitLane` can
+      // run for minutes (`startGitReads`'s own comment has the arithmetic),
+      // and a stop timeout that SIGKILLs this process mid-wait must not leave
+      // `state.json` any further behind the WAL than the last ordinary tick
+      // already left it. The finalize below persists again once the wait and
+      // the shutdown sequence after it are done.
+      persistState();
       // The lane may be mid-spawn. Its results are applied through `serial`, so
       // shutting down without waiting would race the finalize below and could
       // append a reconciliation after the host chain was sealed.

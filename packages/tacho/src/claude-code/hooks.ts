@@ -125,10 +125,14 @@ const PROMOTED = new Set([
   "subagent_result",
   // Message text, never an attribute. Attributes are stored as they arrive,
   // so text left there would skip the redaction and the retention mandate
-  // every body goes through. Cursor's `afterAgentResponse` carries the
-  // agent's message as `text`, and its `preToolUse` carries what the agent
-  // said before the call as `agent_message`.
-  "text",
+  // every body goes through. Cursor's `preToolUse` carries what the agent
+  // said before the call as `agent_message`, on every event that can carry
+  // it, so it is promoted globally. `text` is promoted only for
+  // `AgentResponse` (see `leftovers`): it is Cursor's name for the agent's
+  // whole message on that one event, but another harness's hook is free to
+  // use `text` for something ordinary, and promoting it everywhere would
+  // have skipped redaction for a field this adapter never meant to carry
+  // content.
   "agent_message",
 ]);
 
@@ -168,9 +172,12 @@ function attrValue(value: unknown): string {
 function leftovers(input: HookInput): Record<string, string> {
   const attrs: Record<string, string> = {};
   for (const [key, value] of Object.entries(input)) {
-    if (PROMOTED.has(key) || value === undefined) {
-      continue;
-    }
+    if (value === undefined) continue;
+    if (PROMOTED.has(key)) continue;
+    // `text` is promoted to content only on `AgentResponse` (Cursor's
+    // `afterAgentResponse`, handled below); on every other event it is an
+    // ordinary attribute like any leftover field.
+    if (key === "text" && input.hook_event_name === "AgentResponse") continue;
     attrs[`hook.${key}`] = attrValue(value);
   }
   return attrs;
@@ -406,13 +413,39 @@ export function normalizeHook(
       ];
     }
     case "PreToolUse": {
-      return [
+      // Cursor's `preToolUse` carries `agent_message`: what the agent said
+      // just before making this call, written once it decided to call the
+      // tool. It is promoted out of `attrs` (see `PROMOTED`) but was then
+      // dropped outright — the message the agent gave for its own action
+      // never reached the chain. A preceding `oxagen:message` carries it,
+      // the same frame Claude Code's `MessageDisplay` and Cursor's
+      // `AgentResponse` use for a message, so a reader finds the agent's
+      // words the same way regardless of which event reported them. This is
+      // never the turn's reply: `turnReply` only keys off an `AgentResponse`
+      // hook_event_name (see recorder.ts), and this draft's event name stays
+      // `PreToolUse`.
+      const agentMessage = str(input["agent_message"]);
+      const drafts: HookDraft[] = [];
+      if (agentMessage !== undefined) {
+        drafts.push(
+          draft(
+            "oxagen:message",
+            {
+              last_assistant_message_digest: digestText(agentMessage),
+              response_length: agentMessage.length,
+            },
+            { content: textContent(agentMessage) },
+          ),
+        );
+      }
+      drafts.push(
         draft(
           "tool_requested",
           toolFacts(input, options.sessionUuid),
           toolInputContent(input),
         ),
-      ];
+      );
+      return drafts;
     }
     case "PermissionRequest": {
       return [

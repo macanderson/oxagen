@@ -463,6 +463,22 @@ export class Detector {
       if (seen.reported || !advanced || now - seen.firstSeenAt < grace)
         continue;
       seen.reported = true;
+      // The incident names the session; on its own that was every event it
+      // got. Nothing walked the transcript, because nothing in the registry
+      // carried its path — the tailer only tails registered sessions. An
+      // ambient record (no hook stream, so no harness is claimed for it)
+      // with the transcript path is what lets the tailer pick it up on its
+      // next tick and read it from byte 0, the same way a hooked session's
+      // transcript is read. `ensure` is called after `seen.reported` is set,
+      // not before: registering it here (rather than at first sighting)
+      // keeps the earlier grace-period wait intact, and the very next
+      // detector tick sees a registered session at this id and stops
+      // tracking it as a sighting, which is the existing exit for a session
+      // the registry already knows.
+      this.deps.registry.ensure(transcript.sessionId, {
+        transcriptPath: transcript.path,
+        ambient: true,
+      });
       events.push(
         this.deps
           .hostRecorder()

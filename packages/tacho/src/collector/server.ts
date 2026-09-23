@@ -31,6 +31,12 @@ export interface HookEnvelope {
   harness?: TachoHarness;
   /** A custom agent's name (`tacho hook --agent`); wins over `harness`. */
   agent?: string;
+  /**
+   * The id `tacho-hook` gave this hook when it read stdin. The live request
+   * and a spool replay of the same hook carry the same id, so a hook the
+   * daemon answered after the client gave up is recorded once.
+   */
+  hook_id?: string;
 }
 
 /** What the daemon exposes to the listener; the daemon implements it. */
