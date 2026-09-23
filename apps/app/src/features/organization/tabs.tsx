@@ -1,5 +1,5 @@
-// The Organization pages' tabs (ARCHITECTURE.md §1.2): People, Roles, API keys
-// and Model funding are URL segments, so the tab survives a reload and a shared link. The
+// The Organization pages' tabs (ARCHITECTURE.md §1.2): People, Roles, API keys,
+// Model funding and Single sign-on are URL segments, so the tab survives a reload and a shared link. The
 // tabs stay when a section's read fails; only the section body is replaced.
 import { useTranslations } from "next-intl";
 import { routes } from "@/shared/safe-path";
@@ -12,7 +12,8 @@ export type OrganizationTab =
   | "modelFunding"
   | "invitations"
   | "workspaces"
-  | "costCenters";
+  | "costCenters"
+  | "sso";
 
 export function OrganizationTabs({
   org,
@@ -60,6 +61,11 @@ export function OrganizationTabs({
           to: routes.organization(org, "costCenters"),
           label: t("costCenters"),
           current: current === "costCenters",
+        },
+        {
+          to: routes.sso(org),
+          label: t("sso"),
+          current: current === "sso",
         },
       ]}
     />

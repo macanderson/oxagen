@@ -1,0 +1,3 @@
+- [2026-09-22] Give rescue worktrees their own frozen dependency install with scripts disabled; pnpm can auto-install during hooks and a node_modules symlink can mutate another tree. (source: reflections/2026-09-22-pr-rescue.md, agent: worktree-recovery)
+- [2026-09-22] Re-read the remote PR head before integration or push; an external author may still be working on a rescued branch. (source: reflections/2026-09-22-pr-rescue.md, agent: worktree-recovery)
+- [2026-09-22] Validate an unsigned format or source selector before it chooses a verification algorithm; otherwise an authenticated digest check can be skipped by changing metadata. (source: reflections/2026-09-22-pr-rescue.md, agent: worktree-recovery)

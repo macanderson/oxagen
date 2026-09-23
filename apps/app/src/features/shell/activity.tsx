@@ -19,7 +19,7 @@ import {
 import { useShellState } from "./shell-state";
 import { useSidebarSections } from "./sidebar";
 import type { ShellData } from "./shell-data";
-import { ApprovalsPanel } from "@/features/fleet";
+import { ApprovalsPanel } from "@/features/fleet/client";
 import { readOk } from "@/data/read";
 import { routes, sanitizeNext } from "@/shared/safe-path";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -57,18 +57,18 @@ export function ShellActivityProvider({
   const [result, setResult] = useState<{ key: string; read: Activity } | null>(
     null,
   );
-  const generation = useRef(0);
+  const generationRef = useRef(0);
   const [failed, setFailed] = useState(false);
   const key = `${data.org.slug}/${ws ?? ""}`;
   const refresh = useCallback(async () => {
-    const request = ++generation.current;
+    const request = ++generationRef.current;
     try {
       const read = await readShellActivity(data.org.slug, ws);
-      if (request !== generation.current) return;
+      if (request !== generationRef.current) return;
       setResult({ key, read });
       setFailed(false);
     } catch {
-      if (request === generation.current) setFailed(true);
+      if (request === generationRef.current) setFailed(true);
     }
   }, [data.org.slug, ws, key]);
   useEffect(() => {
@@ -85,7 +85,7 @@ export function ShellActivityProvider({
     void poll();
     return () => {
       stopped = true;
-      generation.current += 1;
+      generationRef.current += 1;
       clearTimeout(timer);
     };
   }, [refresh, drawerOpen]);
@@ -212,7 +212,16 @@ export function ActivityDrawers({ data }: { data: ShellData }) {
   const status = !read ? (
     <p role="status">{t("loading")}</p>
   ) : !read.ok ? (
-    <ReadFailure read={read} section={t("approvals")} />
+    <ReadFailure
+      read={
+        read.reason === "denied"
+          ? { ok: false, reason: "denied", permission: read.code }
+          : read.reason === "pending_approval"
+            ? read
+            : { ok: false, reason: "error", code: read.code, status: 503 }
+      }
+      section={t("approvals")}
+    />
   ) : null;
   return (
     <>

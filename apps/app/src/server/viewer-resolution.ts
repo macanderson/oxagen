@@ -12,11 +12,18 @@
 //   4. a role outside the stored set    → not_found (fail closed)
 //   5. unknown workspace, not a member of it, or a workspace role outside the
 //      stored set → not_found (fail closed, as for the org role)
-//   6. MFA policy requires enrollment   → mfa_enroll
-//   7. a historical slug                → redirect to the canonical slugs
-//   8. otherwise                        → the viewer's fields
+//   6. SSO required, session not one of
+//      the org's verified providers     → sso_required (owners exempt)
+//   7. MFA policy requires enrollment   → mfa_enroll
+//   8. a historical slug                → redirect to the canonical slugs
+//   9. otherwise                        → the viewer's fields
+//
+// SSO comes before MFA: a person who must sign in again through the identity
+// provider gains nothing from an enrollment prompt on the session being
+// replaced.
 import { evaluateMfaGate, mfaGateApplies } from "./mfa-gate";
 import type { AppSession } from "./session";
+import { evaluateSsoGate, ssoGateApplies } from "./sso-gate";
 import type { SystemLookups } from "./tenancy-lookups";
 import type { OrgFields, OrgRole, WsFields } from "./viewer";
 
@@ -29,6 +36,7 @@ export type ViewerResolution =
   | { kind: "unauthenticated" }
   | { kind: "not_found" }
   | { kind: "mfa_enroll" }
+  | { kind: "sso_required" }
   | { kind: "redirect"; org: string; ws: string | null };
 
 /**
@@ -106,7 +114,20 @@ export async function resolveViewerWith(
     };
   }
 
-  const policy = await lookups.mfaPolicy(org.id);
+  // Both policies live on one org row; read them together, not in series.
+  const [sso, policy] = await Promise.all([
+    lookups.ssoPolicy(org.id),
+    lookups.mfaPolicy(org.id),
+  ]);
+  if (ssoGateApplies(role, sso)) {
+    const decision = evaluateSsoGate({
+      role,
+      policy: sso,
+      authMethod: session.authMethod ?? null,
+    });
+    if (decision.action === "sso") return { kind: "sso_required" };
+  }
+
   if (mfaGateApplies(role, policy)) {
     const decision = evaluateMfaGate({
       role,

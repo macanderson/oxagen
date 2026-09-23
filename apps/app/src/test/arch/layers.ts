@@ -88,9 +88,15 @@ const ALLOWED: Record<
   features: (from, target, edge) => {
     const page = featurePage(from.file);
     if (page !== null && under(target, `features/${page}`)) return true;
-    if (isFeatureBarrel(target)) return true;
+    if (isFeatureBarrel(target) || target === "features/fleet/client")
+      return true;
     if (under(target, "ui") || under(target, "shared")) return true;
     if (isVocabulary(target) || target === "data/ports") return true;
+    if (target === "data/source")
+      return (
+        from.file === "features/shell/activity-actions" &&
+        from.directive === "use server"
+      );
     if (target === "server/viewer" || target === "server/session") return true;
     // `server/viewer-zone` has no row here on purpose. A write that places a
     // calendar day a person picked needs the zone they picked it in, and
@@ -288,6 +294,12 @@ const PLATFORM_NAMED_ROWS: Readonly<
   },
   "src/shared/skill-source-identity.ts": {
     "@oxagen/oxagen/skill-frontmatter": ["readSkillFrontmatter"],
+  },
+  // The org gate's Require SSO lookup asks one question of billing: does the
+  // organisation's plan include SSO (ADR-145). The same single tier read the
+  // kernel's gates use, and nothing else from the package.
+  "src/server/tenancy-lookups.ts": {
+    "@oxagen/billing": ["canAccessSSO", "resolveOrgTier"],
   },
   // Browser controls read the shared ceiling without loading the contract registry.
   "src/features/fleet/run-row-controls.tsx": {

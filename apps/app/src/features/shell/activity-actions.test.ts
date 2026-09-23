@@ -12,6 +12,7 @@ vi.mock("@/server/viewer", () => ({ requireViewer: fake.viewer }));
 vi.mock("@/server/kernel", () => ({
   kernelRead: fake.read,
   kernelWrite: fake.write,
+  readToActionResult: (read: unknown) => read,
 }));
 vi.mock("@/data/source", () => ({
   dataSource: () => ({

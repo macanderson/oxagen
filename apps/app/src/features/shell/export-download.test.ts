@@ -89,6 +89,12 @@ describe("the gates", () => {
     expect(get).not.toHaveBeenCalled();
   });
 
+  it("refuses when the organization requires SSO and the session is not one (negative)", async () => {
+    resolveViewer.mockResolvedValue({ kind: "sso_required" });
+    expect((await call()).status).toBe(403);
+    expect(get).not.toHaveBeenCalled();
+  });
+
   // A historical slug must be answered with the move, not spent. Reading on
   // with the stale slug resolves the viewer a second time, and that resolution
   // can only redirect through the optional `x-url` / `next-url` headers;

@@ -26,6 +26,7 @@ import { readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { phoneWidth } from "@/test/phone";
 import en from "../../../messages/en.json";
+import createMessages from "../../../messages/create.json";
 import shellMessages from "../../../messages/shell.json";
 import uiMessages from "../../../messages/ui.json";
 import { shellData } from "./shell.builders";
@@ -112,6 +113,7 @@ function renderPhone(data: ShellData, page: ReactNode = null) {
         ...en,
         ...shellMessages,
         ...uiMessages,
+        ...createMessages,
       }}
     >
       <ShellClient data={data} />
@@ -210,6 +212,7 @@ describe("thumb bar", () => {
     ["/acme/billing", "more"],
     ["/acme/api-keys", "more"],
     ["/acme/model-funding", "more"],
+    ["/acme/sso", "more"],
   ])("%s marks the %s slot current, and only it", (pathname, slot) => {
     nav.pathname = pathname;
     renderPhone(shellData());
@@ -288,7 +291,9 @@ describe("the other dialogs on a phone", () => {
   it("the command menu rises as a sheet and its input is 16 px", async () => {
     const user = userEvent.setup();
     renderPhone(shellData());
-    await user.click(screen.getByRole("button", { name: "Go to a page" }));
+    await user.click(
+      screen.getByRole("button", { name: shellMessages.shell.topbar.search }),
+    );
     const menu = await screen.findByTestId("command-menu");
     expect(menu).toHaveAttribute("data-sheet");
     expect(menu.querySelector("[data-sheet-handle]")).not.toBeNull();
@@ -416,6 +421,7 @@ describe("card tables", () => {
           ...en,
           ...shellMessages,
           ...uiMessages,
+          ...createMessages,
         }}
       >
         <ShellClient data={shellData()} />

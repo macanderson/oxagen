@@ -17,8 +17,8 @@ export type WorkspaceNavKey =
   | "repositories"
   | "spend";
 export type OrgNavKey = "organization" | "billing" | "audit";
-/** Roles, API keys and Model funding are pages under Organization, not sidebar items of their own. */
-type OrgPageNavKey = "apiKeys" | "roles" | "modelFunding";
+/** Roles, API keys, Model funding and Single sign-on are pages under Organization, not sidebar items of their own. */
+type OrgPageNavKey = "apiKeys" | "roles" | "modelFunding" | "sso";
 export type NavKey = WorkspaceNavKey | OrgNavKey | OrgPageNavKey;
 
 export const WORKSPACE_NAV: readonly WorkspaceNavKey[] = [
@@ -44,6 +44,7 @@ const ORG_PAGE_NAV: Readonly<Record<OrgPageNavKey, true>> = {
   apiKeys: true,
   roles: true,
   modelFunding: true,
+  sso: true,
 };
 
 /** Whether a nav key is one of the Organization pages without a sidebar item. */
@@ -83,6 +84,7 @@ const ORG_SEGMENTS = {
   "api-keys": "apiKeys",
   roles: "roles",
   "model-funding": "modelFunding",
+  sso: "sso",
 } as const satisfies Record<string, NavKey>;
 
 /** The nav key for a static organization segment, or null when the segment is a workspace slug. */
@@ -116,6 +118,8 @@ export function orgHref(org: string, key: NavKey): SafePath {
       return pathOf(org, "roles");
     case "modelFunding":
       return pathOf(org, "model-funding");
+    case "sso":
+      return pathOf(org, "sso");
     default:
       throw new Error(`${key} is a workspace page, not an organization page`);
   }
