@@ -2,7 +2,7 @@ import { schema, withTenantDb, withSystemDb } from "@oxagen/database";
 import { runEnrichmentEnabled } from "@oxagen/oxagen/run-enrichment";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { and, asc, eq, gt, isNull, or } from "drizzle-orm";
+import { and, asc, eq, gt, isNull, like, lt, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { digestBytes } from "@oxagen/tacho";
 import { createFunction } from "../create-function";
@@ -80,8 +80,14 @@ export const [runEnrich] = createFunction(
           tx
             .update(table)
             .set({
-              summaryObservedAt: retryMissing ? null : new Date(observedAt),
-              ...(digest ? { summaryInputDigest: digest } : {}),
+              summaryObservedAt: new Date(observedAt),
+              ...(digest
+                ? {
+                    summaryInputDigest: retryMissing
+                      ? `partial:${digest}`
+                      : digest,
+                  }
+                : {}),
             })
             .where(where),
         ),
@@ -131,7 +137,9 @@ export const [runEnrich] = createFunction(
           ...facts,
           manifest: manifest.ref,
           unchanged:
-            previous?.digest === transcript.digest && previous.name !== null,
+            (previous?.digest === transcript.digest ||
+              previous?.digest === `partial:${transcript.digest}`) &&
+            previous.name !== null,
         };
       }),
     );
@@ -209,9 +217,11 @@ export const [runEnrich] = createFunction(
                   : ""),
               summaryModel: generated.model,
               summaryGeneratedAt: new Date(),
-              summaryInputDigest: collected.digest,
-              summaryObservedAt:
-                collected.unavailable > 0 ? null : new Date(observedAt),
+              summaryInputDigest:
+                collected.unavailable > 0
+                  ? `partial:${collected.digest}`
+                  : collected.digest,
+              summaryObservedAt: new Date(observedAt),
             })
             .where(where),
         ),
@@ -246,9 +256,20 @@ export const [runEnrichmentSweep] = createFunction(
                 or(
                   isNull(table.summaryObservedAt),
                   gt(table.updatedAt, table.summaryObservedAt),
+                  and(
+                    like(table.summaryInputDigest, "partial:%"),
+                    lt(
+                      table.summaryObservedAt,
+                      new Date(Date.now() - 5 * 60_000),
+                    ),
+                  ),
                 ),
               )
-              .orderBy(asc(table.updatedAt))
+              .orderBy(
+                asc(
+                  sql`coalesce(${table.summaryObservedAt}, ${table.updatedAt})`,
+                ),
+              )
               .limit(500)),
           );
         }
