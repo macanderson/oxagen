@@ -420,6 +420,22 @@ describe("the Agents pages", () => {
     requireViewer.mockResolvedValue(ctx);
   });
 
+  // The agent and source specs (pages/agent.md, pages/agent-source.md) make
+  // the agent card and the file path the h1, drawn by the feature once the
+  // identity is read, so the route itself draws no h1 and only the tab title
+  // names the page.
+  async function expectFeatureTitle(
+    load: Load,
+    props: RouteProps<typeof SEGMENTS>,
+    name: string,
+  ) {
+    const page = await load();
+    const metadata = await page.generateMetadata(props);
+    const container = await renderPage(await page.default(props));
+    expect(container.querySelectorAll("h1")).toHaveLength(0);
+    expect(metadata.title).toBe(name);
+  }
+
   it("the identities page hands the workspace viewer, the data source and the cursor to Agents", async () => {
     await expectPageTitle(
       await AGENTS(),
@@ -449,8 +465,8 @@ describe("the Agents pages", () => {
   });
 
   it("the agent page hands the agent, the tab and the cursor the URL names to Agent", async () => {
-    await expectPageTitle(
-      await AGENT(),
+    await expectFeatureTitle(
+      AGENT,
       routeProps(SEGMENTS, { tab: "incidents", cursor: "c3" }),
       title("agent"),
     );
@@ -462,7 +478,7 @@ describe("the Agents pages", () => {
       tab: "incidents",
       cursor: "c3",
     });
-    await expectPageTitle(await AGENT(), routeProps(SEGMENTS), title("agent"));
+    await expectFeatureTitle(AGENT, routeProps(SEGMENTS), title("agent"));
     expect(Agent.mock.calls.at(-1)?.[0]).toMatchObject({
       tab: null,
       cursor: null,
@@ -476,8 +492,8 @@ describe("the Agents pages", () => {
   });
 
   it("the source page hands the agent to AgentSource", async () => {
-    await expectPageTitle(
-      await AGENT_SOURCE(),
+    await expectFeatureTitle(
+      AGENT_SOURCE,
       routeProps(SEGMENTS),
       title("agentSource"),
     );
