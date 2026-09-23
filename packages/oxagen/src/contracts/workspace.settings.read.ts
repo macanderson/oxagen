@@ -21,6 +21,7 @@ const workspaceSettingsOutput = z.object({
   // developer's local settings may switch one ON and can never switch one
   // OFF, so these are the floor for the workspace.
   steering: steeringGatePolicy,
+  runEnrichmentEnabled: z.boolean().optional(),
 });
 
 export const workspaceSettingsRead = registerCapability({
