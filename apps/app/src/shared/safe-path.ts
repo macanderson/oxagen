@@ -353,7 +353,7 @@ export const routes = {
   /** One runtime, addressed by its enrollment's public id (`tch_…`). */
   runtime: (org: string, ws: string, runtime: string): SafePath =>
     pathOf(org, ws, "runtimes", runtime),
-  /** Canonical Steering sections, with legacy query links retained for redirects. */
+  /** Steering filters, a selected proposal, and a Skills inventory cursor. */
   steering: (
     org: string,
     ws: string,
