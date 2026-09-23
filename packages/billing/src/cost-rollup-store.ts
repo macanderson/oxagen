@@ -83,7 +83,7 @@ function resolvedCostCenter(
   workspaceLabel: AnyColumn,
 ) {
   const live = (label: AnyColumn) =>
-    sql`(select ${centers.label}::text from ${centers} where ${centers.orgId} = ${orgId} and ${centers.label} = ${label} and ${centers.deletedAt} is null limit 1)`;
+    sql`(select ${centers.label}::text from ${centers} where ${centers.orgId} = ${orgId} and ${centers.label} = ${label}::citext and ${centers.deletedAt} is null limit 1)`;
   return sql<
     string | null
   >`coalesce(${live(agentLabel)}, ${live(workspaceLabel)})`;
@@ -537,7 +537,14 @@ export async function upsertRunTotals(
       .values({ ...values, ...carried })
       .onConflictDoUpdate({
         target: totals.runId,
-        set: values,
+        // A run keeps the cost center it was first charged to (ADR-142): a
+        // reprice or a stale-seal rebuild of a closed month must not move its
+        // spend to the label the agent carries today. A null is filled, which
+        // is what the backfill relies on.
+        set: {
+          ...values,
+          costCenter: sql`coalesce(${totals.costCenter}, excluded.cost_center)`,
+        },
         setWhere: sql`NOT ${regressesToIncomplete()}`,
       }),
   );

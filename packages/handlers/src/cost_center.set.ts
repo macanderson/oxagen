@@ -37,7 +37,12 @@ export const costCenterSetHandler: CapabilityHandler<
         .set({ costCenter: label, updatedAt: now, updatedById: userId })
         .where(
           and(
-            eq(schema.workspaces.id, ctx.workspaceId),
+            // A named workspace is found by public id within the org, so the
+            // org viewer's scope (the org-only sentinel) can label any of the
+            // organization's workspaces; workspace.workspaces is org_only.
+            input.workspace === undefined
+              ? eq(schema.workspaces.id, ctx.workspaceId)
+              : eq(schema.workspaces.publicId, input.workspace),
             eq(schema.workspaces.orgId, ctx.orgId),
           ),
         )

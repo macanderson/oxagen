@@ -1,6 +1,6 @@
 # set_cost_center
 
-Charge the active workspace, or one agent in it, back to a cost-center label, or clear the label (ADR-142). The label must be live on the organization's list. When the rollup next rolls a run up, it reads the agent's label first and the workspace's label second. Runs already rolled up keep the cost center they had. An operator moves the runs that were rolled up with no cost center onto the label with `pnpm db:backfill-cost-centers`, which asks the rollup job to rebuild each one.
+Charge a workspace in the organization, or one agent in the active workspace, back to a cost-center label, or clear the label (ADR-142). The label must be live on the organization's list. When the rollup next rolls a run up, it reads the agent's label first and the workspace's label second. Runs already rolled up keep the cost center they had, including when a later rebuild reprices them. An operator moves the runs that were rolled up with no cost center onto the label with `pnpm db:backfill-cost-centers`, which asks the rollup job to rebuild each one.
 
 ## Mode
 
@@ -14,7 +14,7 @@ Charge the active workspace, or one agent in it, back to a cost-center label, or
 - MCP: `set_cost_center`
 - Authentication: session (org Owner, Admin, or Billing). The handler asserts the org role itself (INV-29).
 - Capability name: `set_cost_center`
-- Workspace-scoped (`scoped: true`). The workspace in the path is the one written, or the one the agent belongs to.
+- Workspace-scoped (`scoped: true`). A `workspace` target writes the workspace named by `workspace`, or the active one when it is omitted, so the Organization page labels any workspace from the organization's scope. An `agent` target names an agent in the active workspace.
 - Not billed (`noBillingGate: true`). IAM default-deny, medium sensitivity.
 
 ## Input
@@ -22,6 +22,7 @@ Charge the active workspace, or one agent in it, back to a cost-center label, or
 | Field | Type | Required | Constraint |
 |---|---|---|---|
 | `target` | enum | yes | `workspace` or `agent` |
+| `workspace` | string | no | a workspace's public id (`wrk_…`); a `workspace` target writes it instead of the active workspace |
 | `agent` | string | when `target` is `agent` | the agent's slug in this workspace |
 | `costCenter` | string or null | yes | a live label on the organization's list, or `null` to clear |
 

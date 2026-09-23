@@ -23,7 +23,7 @@ vi.mock("@/server/viewer", async (importOriginal) => ({
 
 const kernel =
   await vi.importActual<typeof import("@oxagen/oxagen")>("@oxagen/oxagen");
-const { OrgCtx, WsCtx } = await import("@/server/viewer");
+const { OrgCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const { createCostCenter, deleteCostCenter, setWorkspaceCostCenter } =
   await import("./cost-center-actions");
@@ -36,13 +36,6 @@ const org = {
   orgRole: "billing" as const,
 };
 const orgCtx = unsafeMint(OrgCtx, org);
-const wsCtx = unsafeMint(WsCtx, {
-  ...org,
-  workspaceId: "7b000000-0000-4000-8000-000000000001",
-  wsSlug: "core-platform",
-  wsName: "Core platform",
-  wsRole: "member",
-});
 
 const center = {
   id: "ccn_0a1b2c3d4e5f6g7h8j9k0m",
@@ -131,24 +124,30 @@ describe("deleteCostCenter", () => {
 });
 
 describe("setWorkspaceCostCenter", () => {
-  beforeEach(() => {
-    requireViewer.mockResolvedValue(wsCtx);
-  });
-
-  it("charges the workspace it names to the label", async () => {
+  it("charges the workspace it names to the label as the organization viewer", async () => {
     invoke.mockResolvedValue({
       target: "workspace",
       id: "wrk_1",
       costCenter: "ENG-1001",
     });
     expect(
-      await setWorkspaceCostCenter("acme", "core-platform", "ENG-1001"),
+      await setWorkspaceCostCenter(
+        "acme",
+        "wrk_0a1b2c3d4e5f6g7h8j9k0m",
+        "ENG-1001",
+      ),
     ).toEqual({ ok: true, value: { costCenter: "ENG-1001" } });
-    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    // An org Billing member who is not in the workspace can still label it:
+    // the write runs in the organization's scope and names it by public id.
+    expect(requireViewer).toHaveBeenCalledWith("acme");
     expect(invoke).toHaveBeenCalledWith(
       "set_cost_center",
-      { target: "workspace", costCenter: "ENG-1001" },
-      expect.objectContaining({ workspaceId: wsCtx.workspaceId }),
+      {
+        target: "workspace",
+        workspace: "wrk_0a1b2c3d4e5f6g7h8j9k0m",
+        costCenter: "ENG-1001",
+      },
+      expect.objectContaining({ orgId: org.orgId }),
     );
   });
 
@@ -158,13 +157,19 @@ describe("setWorkspaceCostCenter", () => {
       id: "wrk_1",
       costCenter: null,
     });
-    expect(await setWorkspaceCostCenter("acme", "core-platform", "")).toEqual({
+    expect(
+      await setWorkspaceCostCenter("acme", "wrk_0a1b2c3d4e5f6g7h8j9k0m", ""),
+    ).toEqual({
       ok: true,
       value: { costCenter: null },
     });
     expect(invoke).toHaveBeenCalledWith(
       "set_cost_center",
-      { target: "workspace", costCenter: null },
+      {
+        target: "workspace",
+        workspace: "wrk_0a1b2c3d4e5f6g7h8j9k0m",
+        costCenter: null,
+      },
       expect.anything(),
     );
   });
@@ -177,7 +182,11 @@ describe("setWorkspaceCostCenter", () => {
       }),
     );
     expect(
-      await setWorkspaceCostCenter("acme", "core-platform", "GONE-1"),
+      await setWorkspaceCostCenter(
+        "acme",
+        "wrk_0a1b2c3d4e5f6g7h8j9k0m",
+        "GONE-1",
+      ),
     ).toMatchObject({ ok: false, reason: "not_found" });
   });
 });

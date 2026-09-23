@@ -1,9 +1,13 @@
 /**
- * `set_cost_center`: charge this workspace, or one agent in it, back to a
- * cost-center label, or clear it (ADR-142). The label must be live on the
+ * `set_cost_center`: charge a workspace, or one agent in the active workspace,
+ * back to a cost-center label, or clear it (ADR-142). The workspace target
+ * names the workspace by public id, as `archive_workspace` does, so an org
+ * Owner, Admin or Billing member labels any workspace in the organization
+ * from the Organization page without being a member of it. The label must be live on the
  * organization's list. The rollup reads the agent's label first, then the
  * workspace's, when it next rolls a run up; runs already rolled up keep the
- * cost center they had. Org Owner, Admin or Billing, checked in the handler.
+ * cost center they had, even on a later rebuild. Org Owner, Admin or Billing,
+ * checked in the handler.
  */
 import { z } from "zod";
 import { registerCapability } from "../registry";
@@ -16,8 +20,13 @@ import { costCenterLabelSchema } from "./cost_center.shared";
  */
 export const costCenterSetInputObject = z
   .object({
-    /** `workspace` sets the active workspace's label; `agent` sets one agent's. */
+    /** `workspace` sets a workspace's label; `agent` sets one agent's. */
     target: z.enum(["workspace", "agent"]),
+    /**
+     * The workspace a `workspace` target labels, by public id (`wrk_…`).
+     * Omitted, the active workspace. An agent target ignores it.
+     */
+    workspace: z.string().startsWith("wrk_").optional(),
     /** The agent's slug in this workspace; required when `target` is `agent`. */
     agent: z.string().min(1).optional(),
     /** The label, or null to clear it. */
@@ -29,7 +38,7 @@ export const costCenterSet = registerCapability({
   name: "set_cost_center",
   domain: "spend",
   description:
-    "Charge this workspace, or one of its agents, back to a cost-center label from the organization's list, or clear the label. An agent's label wins over its workspace's.",
+    "Charge a workspace in this organization, or one agent in the active workspace, back to a cost-center label from the organization's list, or clear the label. An agent's label wins over its workspace's.",
   mode: "sync",
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],

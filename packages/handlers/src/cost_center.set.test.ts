@@ -101,6 +101,34 @@ describe("set_cost_center", () => {
     });
   });
 
+  it("labels a workspace named by public id from the organization's scope", async () => {
+    // The Organization page calls this as the org viewer, whose scope carries
+    // the org-only workspace sentinel, not the workspace being labelled.
+    const orgScope = {
+      ...CTX,
+      workspaceId: "00000000-0000-0000-0000-000000000000",
+    };
+    const double = makeTx({
+      selects: [[centerRow({ label: "ENG-1001" })]],
+      updates: [[{ id: "wrk_0a1b2c3d4e5f6g7h8j9k0m" }]],
+    });
+    useTx(double);
+    const out = await costCenterSetHandler(
+      {
+        target: "workspace",
+        workspace: "wrk_0a1b2c3d4e5f6g7h8j9k0m",
+        costCenter: "ENG-1001",
+      },
+      orgScope,
+    );
+    expect(double.calls.updates[0]?.table).toBe(schema.workspaces);
+    expect(out).toEqual({
+      target: "workspace",
+      id: "wrk_0a1b2c3d4e5f6g7h8j9k0m",
+      costCenter: "ENG-1001",
+    });
+  });
+
   it("clears an agent's label with null without reading the list", async () => {
     const double = makeTx({ updates: [[{ id: "agt_1" }]] });
     useTx(double);

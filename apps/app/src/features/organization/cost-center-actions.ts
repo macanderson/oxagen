@@ -39,16 +39,20 @@ export async function deleteCostCenter(
     : result;
 }
 
-/** Charge one workspace to a label, or clear it with the empty string. */
+/**
+ * Charge one workspace to a label, or clear it with the empty string. Runs as
+ * the organization viewer and names the workspace by public id, so an org
+ * Owner, Admin or Billing member who is not in that workspace can label it.
+ */
 export async function setWorkspaceCostCenter(
   org: string,
-  workspaceSlug: string,
+  workspaceId: string,
   label: string,
 ): Promise<ActionResult<{ costCenter: string | null }>> {
-  // set_cost_center is workspace-scoped, so it runs in that workspace.
-  const ctx = await requireViewer(org, workspaceSlug);
+  const ctx = await requireViewer(org);
   const result = await kernelWrite(ctx, costCenterSet, {
     target: "workspace",
+    workspace: workspaceId,
     costCenter: label === "" ? null : label,
   });
   return result.ok
