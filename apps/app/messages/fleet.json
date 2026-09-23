@@ -8,8 +8,7 @@
     },
     "steer": {
       "title": "Steer the fleet",
-      "agents": "Agents",
-      "selected": "{selected} of {total} selected",
+      "agents": "Agents · {selected} of {total} selected",
       "all": "All",
       "none": "None",
       "pick": "Steer {agent}",
@@ -51,6 +50,9 @@
         "drawer": "open the drawer",
         "more": "{count}+",
         "moreBasis": "more are parked than this page read",
+        "window": "{minutes}m",
+        "windowSeconds": "{minutes}m {seconds}s",
+        "interjections": "interjections not recorded",
         "unread": "approvals not read: {code}"
       },
       "spend": {
@@ -223,17 +225,17 @@
     },
     "error": {
       "title": "Fleet could not be loaded",
-      "body": "The control plane answered <c>{code}</c>. Nothing was changed. Runs kept recording while this page was down. Frames are written by the collector on each host, not by Oxagen.",
+      "body": "The control plane answered <c>{status} {code}</c>. Nothing was changed. Runs kept recording while this page was down. Frames are written by the collector on each host, not by Oxagen.",
       "retry": "Try again",
       "incident": "Open an incident",
-      "trace": "{status} {code} · {at}"
+      "trace": "trace and region not recorded · {at}"
     },
     "denied": {
       "title": "You cannot see this workspace",
       "body": "Your roles on <b>{org}</b> do not include <c>{permission} on {ws}</c>. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
       "back": "Back to Fleet",
       "signedIn": "Signed in as",
-      "signedInValue": "org.{orgRole} · workspace.{wsRole} · {ws}",
+      "signedInValue": "{name} · <c>workspace.{wsRole}</c> · {ws}",
       "needed": "Needed",
       "neededValue": "{permission} on {ws}",
       "decidedBy": "Decided by",
@@ -260,6 +262,7 @@
         "warning": "warning",
         "info": "info"
       },
+      "attach": "Attach",
       "raise": "Raise it",
       "unbacked": "Oxagen has no record to raise an incident in yet, so this cannot be sent. Report {status} {code} at {at} to whoever runs this deployment."
     }

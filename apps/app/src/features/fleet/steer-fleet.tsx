@@ -115,7 +115,16 @@ export function SteerFleetDialog({
       }}
       title={t("title")}
       testId="steer-fleet-dialog"
-      {...(receipt === null ? { closeLabel: t("cancel") } : {})}
+      {...(receipt === null
+        ? {
+            closeLabel: t("cancel"),
+            footerNote: (
+              <span data-testid="steer-summary">
+                {t("footer", { agents: picked.length, live: inFlight })}
+              </span>
+            ),
+          }
+        : {})}
       footer={
         receipt === null ? (
           <button
@@ -156,14 +165,12 @@ export function SteerFleetDialog({
             className="flex flex-col gap-1.5"
           >
             <div className="flex items-center justify-between gap-2">
-              <span id={`${formId}-agents`} className="text-xs font-medium">
-                {t("agents")}
-              </span>
               <span
-                className="text-xs text-muted-foreground"
+                id={`${formId}-agents`}
                 data-testid="steer-selected"
+                className="text-xs font-medium"
               >
-                {t("selected", {
+                {t("agents", {
                   selected: picked.length,
                   total: agents.length,
                 })}
@@ -233,6 +240,7 @@ export function SteerFleetDialog({
                           <StatusBadge
                             status={run.status}
                             outcome={run.outcome}
+                            vocabulary="lifecycle"
                           />
                         )}
                       </label>
@@ -315,12 +323,6 @@ export function SteerFleetDialog({
           {failure === null ? null : (
             <FormAlert testId="steer-failure">{failure}</FormAlert>
           )}
-          <p
-            data-testid="steer-summary"
-            className="text-xs text-muted-foreground"
-          >
-            {t("footer", { agents: picked.length, live: inFlight })}
-          </p>
         </form>
       )}
     </SheetDialog>

@@ -4,16 +4,16 @@
 //
 // The shape is the design's `.state-wrap`: a glyph tile, an h2, one paragraph
 // and the actions, centred with no panel around them. The copy is the
-// design's, with two lines changed to what the record holds: the error line
-// prints the status, the code and the instant the read failed (a read carries
-// no trace id or region), and the denied state's "Decided by" says the policy
-// was not recorded (a refusal carries only the permission it needed).
+// design's, with two lines changed to what the record holds: the error's trace
+// line says the trace id and region were not recorded and prints the instant
+// the read failed in UTC (a failed read carries neither, #3841), and the denied
+// state's "Decided by" says the policy was not recorded (a refusal carries only
+// the permission it needed, #3841).
 import { Lock, Table2, TriangleAlert } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import { routes } from "@/shared/safe-path";
 import { buttonPrimary, buttonSecondary, mono } from "@/ui/control-styles";
-import { useFormatter } from "@/ui/formatter";
 import { SafeLink } from "@/ui/navigation";
 import { OpenIncident, RequestAccess, TryAgain } from "./state-actions";
 
@@ -105,22 +105,25 @@ export function FleetEmpty({
   );
 }
 
+/** An instant as the design prints it on the trace line: `2026-09-11 09:16:04Z`. */
+export function utcInstant(epochMs: number): string {
+  return `${new Date(epochMs).toISOString().slice(0, 19).replace("T", " ")}Z`;
+}
+
 export function FleetError({
   code: errorCode,
   status,
   readAt,
+  ws,
 }: {
   code: string;
   status: number;
   /** Epoch milliseconds the read failed at. */
   readAt: number;
+  ws: string;
 }) {
   const t = useTranslations("fleet.error");
-  const format = useFormatter();
-  const at = format.dateTime(new Date(readAt), {
-    dateStyle: "medium",
-    timeStyle: "medium",
-  });
+  const at = utcInstant(readAt);
   return (
     <StateWrap
       testId="fleet-error"
@@ -130,7 +133,7 @@ export function FleetError({
       actions={
         <>
           <TryAgain />
-          <OpenIncident code={errorCode} status={status} at={at} />
+          <OpenIncident code={errorCode} status={status} at={at} ws={ws} />
         </>
       }
       after={
@@ -138,11 +141,11 @@ export function FleetError({
           data-testid="fleet-error-trace"
           className={`${mono} mt-4 text-[11.5px] text-dim`}
         >
-          {t("trace", { status: String(status), code: errorCode, at })}
+          <span data-recorded="false">{t("trace", { at })}</span>
         </p>
       }
     >
-      {t.rich("body", { code: errorCode, c: codeTag })}
+      {t.rich("body", { status: String(status), code: errorCode, c: codeTag })}
     </StateWrap>
   );
 }
@@ -150,14 +153,15 @@ export function FleetError({
 export function FleetDenied({
   permission,
   orgName,
-  orgRole,
+  viewerName,
   wsRole,
   org,
   ws,
 }: {
   permission: string;
   orgName: string;
-  orgRole: string;
+  /** The signed-in person's name, or their email when they set no name. */
+  viewerName: string;
   wsRole: string;
   org: string;
   ws: string;
@@ -180,8 +184,13 @@ export function FleetDenied({
       after={
         <dl className="mt-5 grid max-w-[420px] grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-[7px] text-left text-[12.5px]">
           <dt className="text-dim">{t("signedIn")}</dt>
-          <dd className={mono}>
-            {t("signedInValue", { orgRole, wsRole, ws })}
+          <dd>
+            {t.rich("signedInValue", {
+              name: viewerName,
+              wsRole,
+              ws,
+              c: (chunks) => <span className={mono}>{chunks}</span>,
+            })}
           </dd>
           <dt className="text-dim">{t("needed")}</dt>
           <dd className={mono}>{t("neededValue", { permission, ws })}</dd>

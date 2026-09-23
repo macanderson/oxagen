@@ -52,7 +52,14 @@ vi.mock("./actions", async (importOriginal) => ({
   dispatchRunCommand,
   exportFleetRun,
 }));
-vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
+vi.mock("@/server/session", () => ({
+  getSession: vi.fn(),
+  getAuthUser: vi.fn(async () => ({
+    id: "usr_marcusbell",
+    name: "Marcus Bell",
+    email: "marcus@acme.example",
+  })),
+}));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 
 const { WsCtx } = await import("@/server/viewer");
@@ -255,6 +262,9 @@ describe("summary tiles", () => {
     expect(tile("Tokens shown")).toHaveTextContent(
       "Tokens shownnot recordedno cache figure recorded",
     );
+    // No token figure is typed or zeroed: both lines carry the gap they wait on.
+    for (const part of tile("Tokens shown").querySelectorAll("[data-recorded]"))
+      expect(part).toHaveAttribute("data-gap", "G3");
   });
 
   it("opens the approvals drawer from the waiting tile, with the oldest wait off the live clock", async () => {
@@ -262,7 +272,7 @@ describe("summary tiles", () => {
     window.addEventListener("oxagen:open-approvals", opened);
     await loaded();
     expect(waitingTile()).toHaveTextContent(
-      "Waiting on a human1oldest approval has waited 2:30 of 10:00 · open the drawer",
+      "Waiting on a human1oldest approval has waited 2:30 of 10m · interjections not recorded · open the drawer",
     );
     fireEvent.click(waitingTile());
     expect(opened).toHaveBeenCalledOnce();
@@ -272,7 +282,7 @@ describe("summary tiles", () => {
   it("says nothing is parked on an empty queue", async () => {
     await loaded({ approvals: NO_APPROVALS });
     expect(waitingTile()).toHaveTextContent(
-      "0nothing is parked · open the drawer",
+      "0nothing is parked · interjections not recorded · open the drawer",
     );
   });
 
@@ -290,7 +300,7 @@ describe("summary tiles", () => {
       agents: { ok: false, reason: "denied", permission: "agent.read" },
     });
     expect(waitingTile()).toHaveTextContent(
-      "approvals not read: workspace.read",
+      "approvals not read: workspace.read · interjections not recorded",
     );
     expect(tile("Live runs")).toHaveTextContent(
       "the workspace's agents were not read",
@@ -358,8 +368,49 @@ describe("the Runs panel", () => {
     // A ledger run with no harness recorded names its source instead.
     expect(row("arun_sealed")).toHaveTextContent("evidence ledger");
     expect(row("arun_sealed")).toHaveTextContent("retry");
-    expect(row("arun_halted")).toHaveTextContent("cancelled");
+    expect(
+      within(row("arun_halted")).getByTestId("row-tokens"),
+    ).toHaveAttribute("data-gap", "G3");
     expect(row("arun_halted")).toHaveTextContent("not recorded");
+  });
+
+  it("words Status as the design does, sealed or halted, with the outcome on hover", async () => {
+    await loaded();
+    const status = (id: string) => {
+      const badge = row(id).querySelector<HTMLElement>("span[data-status]");
+      if (!badge) throw new Error(`no status badge on ${id}`);
+      return badge;
+    };
+    expect(status("tse_live")).toHaveTextContent("live");
+    expect(status("arun_sealed")).toHaveTextContent("sealed");
+    expect(status("arun_sealed")).toHaveAttribute("title", "completed");
+    expect(status("arun_halted")).toHaveTextContent("halted");
+    expect(status("arun_halted")).toHaveAttribute("title", "cancelled");
+    expect(
+      within(screen.getByTestId("facet-status"))
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual([
+      "All · Status",
+      "halted",
+      "live",
+      "parked for approval",
+      "sealed",
+    ]);
+  });
+
+  it("marks the chips, the pager and the row actions as 44px touch targets on a phone", async () => {
+    await loaded();
+    for (const chip of ["all", "live", "parked", "sealed"])
+      expect(screen.getByTestId(`chip-${chip}`)).toHaveAttribute(
+        "data-touch-target",
+      );
+    const pager = screen.getByRole("navigation", { name: "Runs pages" });
+    for (const button of within(pager).getAllByRole("button"))
+      expect(button).toHaveAttribute("data-touch-target");
+    expect(within(row("tse_live")).getByTestId("row-pause")).toHaveAttribute(
+      "data-touch-target",
+    );
   });
 
   it("reads a live run with a parked call as parked for approval, and resolves it on the Run page", async () => {
@@ -394,6 +445,11 @@ describe("the Runs panel", () => {
       "control.pause frame · operator authority",
     );
     expect(dialog).toHaveTextContent("Pause is not cancel.");
+    const note = dialog.querySelector("[data-sheet-footer] [data-footer-note]");
+    expect(note).toHaveTextContent(
+      "Recorded as a control.pause frame under run.pause.",
+    );
+    expect(dialog).toHaveAttribute("aria-modal", "true");
     await user.type(
       within(dialog).getByLabelText(
         "Reason — the model reads this on resume, so write it for the agent",
@@ -537,7 +593,7 @@ describe("list controls", () => {
       within(screen.getByTestId("facet-status"))
         .getAllByRole("option")
         .map((o) => o.textContent),
-    ).toEqual(["All · Status", "completed"]);
+    ).toEqual(["All · Status", "sealed"]);
     await user.selectOptions(screen.getByTestId("facet-tier"), "");
     const frames = screen.getByRole("button", { name: "Sort by Frames" });
     await user.click(frames);
@@ -594,10 +650,12 @@ describe("not-loaded states", () => {
       }),
     ).toBeInTheDocument();
     expect(error).toHaveTextContent(
-      "The control plane answered run_index_unavailable. Nothing was changed. Runs kept recording while this page was down. Frames are written by the collector on each host, not by Oxagen.",
+      "The control plane answered 503 run_index_unavailable. Nothing was changed. Runs kept recording while this page was down. Frames are written by the collector on each host, not by Oxagen.",
     );
-    expect(screen.getByTestId("fleet-error-trace")).toHaveTextContent(
-      "503 run_index_unavailable ·",
+    // A failed read records no trace id or region (#3841); the instant is
+    // the design's UTC form.
+    expect(screen.getByTestId("fleet-error-trace").textContent).toMatch(
+      /^trace and region not recorded · \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}Z$/,
     );
     expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
     const user = userEvent.setup();
@@ -608,6 +666,16 @@ describe("not-loaded states", () => {
     expect(within(dialog).getByLabelText("Subject")).toHaveValue(
       "503 run_index_unavailable",
     );
+    const attach = within(dialog).getByRole("list", { name: "Attach" });
+    expect(
+      within(attach)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual([
+      "503 run_index_unavailable",
+      "core-platform",
+      expect.stringMatching(/Z$/),
+    ]);
     expect(screen.getByTestId("incident-unbacked")).toHaveTextContent(
       "cannot be sent",
     );
@@ -626,7 +694,7 @@ describe("not-loaded states", () => {
       "Your roles on Acme Robotics do not include workspace.read on core-platform. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
     );
     expect(denied).toHaveTextContent(
-      "Signed in asorg.owner · workspace.member · core-platform",
+      "Signed in asMarcus Bell · workspace.member · core-platform",
     );
     expect(denied).toHaveTextContent("Neededworkspace.read on core-platform");
     expect(denied).toHaveTextContent(

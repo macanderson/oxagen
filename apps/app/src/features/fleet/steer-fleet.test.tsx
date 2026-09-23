@@ -74,7 +74,7 @@ describe("Steer the fleet", () => {
   it("selects every agent by default and shows what each has in flight", () => {
     renderDialog();
     expect(screen.getByTestId("steer-selected")).toHaveTextContent(
-      "2 of 2 selected",
+      "Agents · 2 of 2 selected",
     );
     const release = screen.getByRole("checkbox", {
       name: "Steer acme.core.release-bot",
@@ -92,9 +92,12 @@ describe("Steer the fleet", () => {
     expect(dialog()).toHaveTextContent(
       "Every agent in Core platform, selected by default.",
     );
-    expect(screen.getByTestId("steer-summary")).toHaveTextContent(
+    // The summary sits in the footer beside Cancel and Steer, as the design has it.
+    const summary = screen.getByTestId("steer-summary");
+    expect(summary).toHaveTextContent(
       "2 agents · 1 in flight · at the boundary",
     );
+    expect(summary.closest("[data-sheet-footer]")).not.toBeNull();
   });
 
   it("draws the Interrupt switch disabled and says it is not yet available", () => {
@@ -112,7 +115,7 @@ describe("Steer the fleet", () => {
     await user.type(screen.getByLabelText("Steering text"), "Hold.");
     await user.click(screen.getByRole("button", { name: "None" }));
     expect(screen.getByTestId("steer-selected")).toHaveTextContent(
-      "0 of 2 selected",
+      "Agents · 0 of 2 selected",
     );
     expect(send()).toBeDisabled();
     await user.click(screen.getByRole("button", { name: "All" }));

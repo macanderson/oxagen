@@ -11,6 +11,7 @@
 // the send button is drawn disabled beside the sentence that explains it.
 import { useTranslations } from "next-intl";
 import { useId, useState } from "react";
+import { Badge } from "@/ui/badge";
 import { buttonPrimary, buttonSecondary, inputBase } from "@/ui/control-styles";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -36,11 +37,14 @@ export function OpenIncident({
   code,
   status,
   at,
+  ws,
 }: {
   code: string;
   status: number;
   /** The instant the read failed, already formatted. */
   at: string;
+  /** The workspace whose Fleet read failed. */
+  ws: string;
 }) {
   const t = useTranslations("fleet.incident");
   const label = useTranslations("fleet.error");
@@ -98,6 +102,26 @@ export function OpenIncident({
               </option>
             ))}
           </select>
+          {/* The design attaches the records the incident is about. A failed
+              read has no record id of its own, so it attaches what it has:
+              the answer, the workspace, and the instant. */}
+          <span id={`${subjectId}-attach`} className="text-xs font-medium">
+            {t("attach")}
+          </span>
+          <ul
+            aria-labelledby={`${subjectId}-attach`}
+            data-testid="incident-attach"
+            className="flex flex-wrap gap-1.5"
+          >
+            {[`${String(status)} ${code}`, ws, at].map((item) => (
+              <li key={item}>
+                {/* Not the mono badge: it lowercases, and the instant ends in Z. */}
+                <Badge tone="quiet" dot={false}>
+                  <span className="font-mono text-[11px]">{item}</span>
+                </Badge>
+              </li>
+            ))}
+          </ul>
           <p
             id={`${subjectId}-why`}
             data-testid="incident-unbacked"

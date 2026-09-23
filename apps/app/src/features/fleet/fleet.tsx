@@ -12,6 +12,7 @@
 import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import type { DataSource } from "@/data/ports";
+import { getAuthUser } from "@/features/auth";
 import type { WsCtx } from "@/server/viewer";
 import { canCommandRun } from "@/shared/run-command-roles";
 import { PageHeader } from "@/ui/page-header";
@@ -52,22 +53,31 @@ export async function Fleet({
   const ws = ctx.wsSlug;
   if (!runs.ok) {
     switch (runs.reason) {
-      case "denied":
+      case "denied": {
+        // requireViewer admitted this request, so its memoized session is
+        // present; the person is named as the shell names them.
+        const user = await getAuthUser();
         return (
           <FleetDenied
             permission={runs.permission}
             orgName={ctx.orgName}
-            orgRole={ctx.orgRole}
+            viewerName={user?.name || user?.email || ctx.userId}
             wsRole={ctx.wsRole}
             org={org}
             ws={ws}
           />
         );
+      }
       case "pending_approval":
         return <FleetPending accessRequestId={runs.accessRequestId} />;
       case "error":
         return (
-          <FleetError code={runs.code} status={runs.status} readAt={now} />
+          <FleetError
+            code={runs.code}
+            status={runs.status}
+            readAt={now}
+            ws={ws}
+          />
         );
     }
   }

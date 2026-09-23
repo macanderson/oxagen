@@ -134,6 +134,19 @@ export function oldestApproval(
   };
 }
 
+/**
+ * An approval's window in whole minutes and the seconds left over, for the
+ * waiting tile's "of 10m" (fleet.md). A window is a policy setting, not a
+ * clock, so it reads as a duration and never as m:ss.
+ */
+export function windowParts(windowSeconds: number): {
+  minutes: number;
+  seconds: number;
+} {
+  const total = Math.max(0, Math.round(windowSeconds));
+  return { minutes: Math.floor(total / 60), seconds: total % 60 };
+}
+
 // ── The list controls ─────────────────────────────────────────────────────
 
 /** Rows per page; 0 is All. */

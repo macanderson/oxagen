@@ -1852,7 +1852,6 @@ type Messages = {
     steer: {
       title: string;
       agents: string;
-      selected: string;
       all: string;
       none: string;
       pick: string;
@@ -1894,6 +1893,9 @@ type Messages = {
         drawer: string;
         more: string;
         moreBasis: string;
+        window: string;
+        windowSeconds: string;
+        interjections: string;
         unread: string;
       };
       spend: {
@@ -2103,6 +2105,7 @@ type Messages = {
         warning: string;
         info: string;
       };
+      attach: string;
       raise: string;
       unbacked: string;
     };
@@ -6114,6 +6117,8 @@ type Messages = {
     };
     runStatus: {
       live: string;
+      sealed: string;
+      halted: string;
       running: string;
       completed: string;
       failed: string;

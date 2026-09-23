@@ -47,7 +47,7 @@ import {
 import { FormAlert } from "@/ui/form-feedback";
 import { useFormatter } from "@/ui/formatter";
 import { Money } from "@/ui/money";
-import { formatClock, formatCount } from "@/ui/money-format";
+import { formatCount } from "@/ui/money-format";
 import { SafeLink, useNavigate } from "@/ui/navigation";
 import { ReplayGradeBadge } from "@/ui/replay-grade";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -74,6 +74,7 @@ import {
   type RunChip,
   type SortKey,
   spendShown,
+  windowParts,
 } from "./view";
 
 /** An agent the steer dialog can address. */
@@ -115,34 +116,54 @@ function WaitingTile({
   const t = useTranslations("fleet.stats.waiting");
   const locale = useLocale();
   const drawer = t("drawer");
+  // The design counts an open interjection in this tile. No store records
+  // one yet (#3839), so the tile counts approvals and says interjections are
+  // missing rather than letting the count read as the whole of what waits.
+  const interjections = (
+    <span data-recorded="false" data-testid="interjections-not-recorded">
+      {t("interjections")}
+    </span>
+  );
   let value: ReactNode;
   let note: ReactNode;
   if (!approvals.ok) {
     value = <span className="text-muted-foreground">—</span>;
-    note = t("unread", {
-      code:
-        approvals.reason === "denied"
-          ? approvals.permission
-          : approvals.reason === "error"
-            ? approvals.code
-            : approvals.accessRequestId,
-    });
+    note = (
+      <>
+        {t("unread", {
+          code:
+            approvals.reason === "denied"
+              ? approvals.permission
+              : approvals.reason === "error"
+                ? approvals.code
+                : approvals.accessRequestId,
+        })}
+        {" · "}
+        {interjections}
+      </>
+    );
   } else {
     const { items, more } = approvals.value;
     const count = formatCount(items.length, locale);
     value = more ? t("more", { count }) : count;
     const oldest = oldestApproval(items);
+    const limit = oldest === null ? null : windowParts(oldest.windowSeconds);
     note = (
       <>
-        {oldest === null
+        {oldest === null || limit === null
           ? t("none")
           : t.rich("oldest", {
               clock: () => (
                 <Clock at={oldest.createdAt} now={now} direction="since" />
               ),
-              window: formatClock(oldest.windowSeconds, locale),
+              window:
+                limit.seconds === 0
+                  ? t("window", { minutes: limit.minutes })
+                  : t("windowSeconds", limit),
             })}
         {more ? ` · ${t("moreBasis")}` : null}
+        {" · "}
+        {interjections}
         {` · ${drawer}`}
       </>
     );
@@ -213,18 +234,24 @@ function Tiles({
         note={<span data-testid="spend-basis">{spendNote}</span>}
       />
       {/* list_runs carries no token figures yet, so there is no sum to take:
-          the tile says so rather than printing a zero (fleet.md, G3). */}
+          the tile says so rather than printing a zero (fleet.md, G3; #3834). */}
       <Tile
         term={t("tokens.title")}
         value={
           <span
             data-testid="tokens-not-recorded"
+            data-recorded="false"
+            data-gap="G3"
             className="text-base font-medium text-muted-foreground"
           >
             {t("tokens.notRecorded")}
           </span>
         }
-        note={t("tokens.noCache")}
+        note={
+          <span data-recorded="false" data-gap="G3">
+            {t("tokens.noCache")}
+          </span>
+        }
       />
     </section>
   );
@@ -239,10 +266,11 @@ function useRowWords(listed: readonly ListedRun[]): RowWords[] {
   return useMemo(
     () =>
       listed.map(({ run, state }) => {
+        // The design's lifecycle word (live, sealed, halted, parked for
+        // approval), which the Status facet lists too. The outcome stays on
+        // the badge's hover text.
         const statusWord =
-          state === "parked"
-            ? t("parked")
-            : status(run.status === "live" ? "live" : run.outcome);
+          state === "parked" ? t("parked") : status(run.status);
         const operator =
           run.operatorName ??
           (run.operatorKind === null
@@ -361,6 +389,7 @@ function Chips({
           type="button"
           aria-pressed={chip === name}
           data-testid={`chip-${name}`}
+          data-touch-target=""
           onClick={() => {
             onChip(name);
           }}
@@ -512,6 +541,7 @@ function Pager({
         <button
           type="button"
           aria-label={t("previous")}
+          data-touch-target=""
           disabled={page <= 1}
           onClick={() => {
             onPage(page - 1);
@@ -535,6 +565,7 @@ function Pager({
               type="button"
               aria-label={t("page", { page: slot })}
               aria-current={slot === page ? "page" : undefined}
+              data-touch-target=""
               onClick={() => {
                 onPage(slot);
               }}
@@ -547,6 +578,7 @@ function Pager({
         <button
           type="button"
           aria-label={t("next")}
+          data-touch-target=""
           disabled={page >= pages}
           onClick={() => {
             onPage(page + 1);
@@ -653,7 +685,11 @@ function RunRowView({
             {t("parked")}
           </Badge>
         ) : (
-          <StatusBadge status={run.status} outcome={run.outcome} />
+          <StatusBadge
+            status={run.status}
+            outcome={run.outcome}
+            vocabulary="lifecycle"
+          />
         )}
       </td>
       <td className={cell}>
@@ -667,8 +703,13 @@ function RunRowView({
         )}
       </td>
       <td className={numericCell}>
-        {/* Tokens are not on list_runs yet (G3); the cell says so. */}
-        <span data-testid="row-tokens" className="text-muted-foreground">
+        {/* Tokens are not on list_runs yet (G3, #3834); the cell says so. */}
+        <span
+          data-testid="row-tokens"
+          data-recorded="false"
+          data-gap="G3"
+          className="text-muted-foreground"
+        >
           {t("notRecorded")}
         </span>
       </td>
@@ -700,6 +741,7 @@ function RunRowView({
           <SafeLink
             to={to}
             data-testid="row-resolve"
+            data-touch-target=""
             aria-label={t("rowAction", { action: t("resolve"), run: run.id })}
             className={`${buttonSecondary} px-2.5 py-1 text-xs`}
           >
@@ -709,6 +751,7 @@ function RunRowView({
           <button
             type="button"
             data-testid={`row-${action}`}
+            data-touch-target=""
             disabled={action === "export" && exporting}
             aria-label={t("rowAction", {
               action: t(action),
@@ -805,6 +848,9 @@ function PauseDialog({
       title={t("title")}
       closeLabel={t("cancel")}
       testId="pause-dialog"
+      footerNote={t.rich("footer", {
+        mono: (chunks) => <span className={mono}>{chunks}</span>,
+      })}
       footer={
         <button
           type="submit"
@@ -863,11 +909,6 @@ function PauseDialog({
             className={`${inputBase} resize-y max-md:text-base`}
           />
           <p className="text-xs text-muted-foreground">{t("note")}</p>
-          <p className="text-xs text-muted-foreground">
-            {t.rich("footer", {
-              mono: (chunks) => <span className={mono}>{chunks}</span>,
-            })}
-          </p>
           {failure === null ? null : (
             <FormAlert testId="pause-failure">{failure}</FormAlert>
           )}

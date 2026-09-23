@@ -17,6 +17,7 @@ import {
   type RowWords,
   rowState,
   spendShown,
+  windowParts,
 } from "./view";
 
 const usd = (
@@ -253,5 +254,17 @@ describe("the list controls", () => {
     expect(pagerSlots(1, 3)).toEqual([1, 2, 3]);
     expect(pagerSlots(1, 28)).toEqual([1, 2, "gap", 28]);
     expect(pagerSlots(14, 28)).toEqual([1, "gap", 13, 14, 15, "gap", 28]);
+  });
+});
+
+describe("windowParts", () => {
+  it("reads an approval window as whole minutes and the seconds left over", () => {
+    expect(windowParts(600)).toEqual({ minutes: 10, seconds: 0 });
+    expect(windowParts(90)).toEqual({ minutes: 1, seconds: 30 });
+    expect(windowParts(599.6)).toEqual({ minutes: 10, seconds: 0 });
+  });
+
+  it("never reads a negative window (negative)", () => {
+    expect(windowParts(-5)).toEqual({ minutes: 0, seconds: 0 });
   });
 });
