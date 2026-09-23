@@ -2437,6 +2437,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
+        "cli": true,
         "app": true,
         "unit": true,
         "docs": true
@@ -2456,6 +2457,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
+        "cli": true,
         "app": true,
         "unit": true,
         "docs": true
@@ -5721,6 +5723,21 @@
     {
       "name": "ingest_tacho_events",
       "file": "tacho.events.ingest.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "issue_tacho_github_token",
+      "file": "tacho.github_token.issue.ts",
       "domain": "tacho",
       "mode": "sync",
       "surfaces": [

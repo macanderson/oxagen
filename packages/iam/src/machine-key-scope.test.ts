@@ -5,6 +5,7 @@
  * key minted for one narrow job could invoke anything.
  */
 import { tachoBundleGet } from "@oxagen/oxagen/contracts/tacho.bundle.get";
+import { tachoGithubTokenIssue } from "@oxagen/oxagen/contracts/tacho.github_token.issue";
 import { tachoCommandFetch } from "@oxagen/oxagen/contracts/tacho.command.fetch";
 import { tachoEventsIngest } from "@oxagen/oxagen/contracts/tacho.events.ingest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -323,7 +324,7 @@ describe("a ledger run credential", () => {
 });
 
 describe("the Tacho host key", () => {
-  it("names the control client's three capabilities as their contracts register them", () => {
+  it("names the control client's four capabilities as their contracts register them", () => {
     // A capability rename (ADR-025) left this list naming
     // `fetch_tacho_commands` after the contract became `fetch_commands`, and
     // every host's command poll was refused in production. The list is held
@@ -335,15 +336,17 @@ describe("the Tacho host key", () => {
         tachoBundleGet.name,
         tachoCommandFetch.name,
         tachoEventsIngest.name,
+        tachoGithubTokenIssue.name,
       ].sort(),
     );
   });
 
-  it("may make the three calls its control client makes", async () => {
+  it("may make the four calls its control client makes", async () => {
     for (const capability of [
       "ingest_tacho_events",
       "get_tacho_bundle",
       "fetch_commands",
+      "issue_tacho_github_token",
     ]) {
       keyWithScope({
         purpose: TACHO_HOST_PURPOSE,

@@ -111,6 +111,7 @@ import {
   type GatewayCallRecord,
   type GatewayFetch,
 } from "./mcp-gateway";
+import { createGithubProxy } from "./github-proxy";
 import { issueRunToken } from "./credential-issuer";
 import { type BeforeForward, createModelProxy } from "./model-proxy";
 import { createModelProxyListener } from "./model-proxy-listener";
@@ -2224,7 +2225,22 @@ async function initializeDaemon(
     return host.bundle.mode === "enforce" ? "harness" : "observe";
   }
 
+  const githubProxy = createGithubProxy({
+    host: () => ({
+      ...host,
+      github_broker_enabled:
+        readHostFile(paths.hostFile)?.github_broker_enabled === true,
+    }),
+    registry,
+    controlFetch: options.fetch ?? globalThis.fetch,
+    now,
+    record,
+    log,
+  });
+
   const api: CollectorApi = {
+    githubLease: (input) => githubProxy.issue(input),
+    githubProxy: (req, res) => githubProxy.handle(req, res),
     localToken: host.local_token,
     enrollmentId: host.host_enrollment_id,
     // Deliberately NOT on `serial`. A gateway call is a round trip to the

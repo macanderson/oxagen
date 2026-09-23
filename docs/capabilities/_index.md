@@ -547,6 +547,7 @@ after the registered name separately when their contract uses a dotted stem.
 | --- | --- | --- |
 | [create_enrollment_token](tacho.enrollment_token.create.md) | [tacho.enrollment_token.create.ts](../../packages/oxagen/src/contracts/tacho.enrollment_token.create.ts) | api, cli |
 | [create_tacho_enrollment](tacho.enrollment.create.md) | [tacho.enrollment.create.ts](../../packages/oxagen/src/contracts/tacho.enrollment.create.ts) | api |
+| [issue_tacho_github_token](tacho.github_token.issue.md) | [tacho.github_token.issue.ts](../../packages/oxagen/src/contracts/tacho.github_token.issue.ts) | api |
 | [enroll_host](tacho.host.enroll.md) | [tacho.host.enroll.ts](../../packages/oxagen/src/contracts/tacho.host.enroll.ts) | api, cli |
 | [get_tacho_bundle](tacho.bundle.get.md) | [tacho.bundle.get.ts](../../packages/oxagen/src/contracts/tacho.bundle.get.ts) | api |
 | [get_tacho_session](tacho.session.get.md) | [tacho.session.get.ts](../../packages/oxagen/src/contracts/tacho.session.get.ts) | api |

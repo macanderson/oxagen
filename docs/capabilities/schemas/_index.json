@@ -1,5 +1,5 @@
 {
-  "generatedCount": 355,
+  "generatedCount": 356,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -1832,6 +1832,16 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "issue_tacho_github_token",
+      "domain": "tacho",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],

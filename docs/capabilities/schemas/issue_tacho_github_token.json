@@ -1,0 +1,94 @@
+{
+  "name": "issue_tacho_github_token",
+  "domain": "tacho",
+  "description": "Mint a GitHub App installation token scoped to one repository bound to an enrolled Tacho host's workspace.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "host_enrollment_id": {
+        "type": "string"
+      },
+      "owner": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string",
+        "x-server-validated": true,
+        "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+      },
+      "run_token_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "host_enrollment_id",
+      "owner",
+      "name",
+      "run_token_id"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "token": {
+        "type": "string",
+        "minLength": 1
+      },
+      "expires_at": {
+        "type": "string"
+      },
+      "repository": {
+        "type": "object",
+        "properties": {
+          "owner": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "full_name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "main",
+              "linked"
+            ]
+          }
+        },
+        "required": [
+          "owner",
+          "name",
+          "full_name",
+          "role"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "token",
+      "expires_at",
+      "repository"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -254,6 +254,7 @@ import { telemetryStellaEnrollRoute } from "./routes/v1/telemetry.stella.enroll"
 import { telemetryStellaIngestRoute } from "./routes/v1/telemetry.stella.ingest";
 import { cmsRoute } from "./routes/v1/cms";
 import { tachoBundleGetRoute } from "./routes/v1/tacho.bundle.get";
+import { tachoGithubTokenIssueRoute } from "./routes/v1/tacho.github_token.issue";
 import { tachoCommandDispatchRoute } from "./routes/v1/tacho.command.dispatch";
 import { tachoCommandFetchRoute } from "./routes/v1/tacho.command.fetch";
 import { tachoCommandListRoute } from "./routes/v1/tacho.command.list";
@@ -610,8 +611,10 @@ const tachoControlLimiter = distributedRateLimiter({
 });
 tachoScoped.use("/bundle", tachoControlLimiter);
 tachoScoped.use("/commands", tachoControlLimiter);
+tachoScoped.use("/github-token", tachoControlLimiter);
 tachoScoped.route("/", tachoEventsIngestRoute);
 tachoScoped.route("/", tachoBundleGetRoute);
+tachoScoped.route("/", tachoGithubTokenIssueRoute);
 tachoScoped.route("/", tachoCommandFetchRoute);
 app.route("/v1/tacho", tachoScoped);
 

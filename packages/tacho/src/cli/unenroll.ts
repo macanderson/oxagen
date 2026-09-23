@@ -33,6 +33,7 @@ import {
   readHostFileLenient,
   writeHostFile,
 } from "../host/host-file";
+import { restoreGithubRepositories } from "./github";
 import { restoreCredentials } from "./credential";
 import {
   modelBaseUrlBackupPath,
@@ -406,6 +407,13 @@ async function unenrollLocked(
       `${read.error}; removing the hooks and the service anyway. The enrollment cannot be revoked from here: revoke it from the fleet page.`,
     );
     incomplete = true;
+  }
+
+  const githubFailures = restoreGithubRepositories(host, deps);
+  if (githubFailures.length > 0) {
+    warnings.push(...githubFailures);
+    for (const warning of warnings) deps.err(`warning: ${warning}`);
+    return { ok: false, settingsChanged: false, revoked: false, warnings };
   }
 
   // First of all: each harness gets its vendor key back from custody and

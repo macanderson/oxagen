@@ -91,6 +91,29 @@ export const hostFileSchema = z
      * loads and the daemon still serves the proxy.
      */
     model_proxy_port: z.number().int().min(1024).max(65535).optional(),
+    /** Opt-in repository Git proxy; configured by tacho github configure. */
+    github_broker_enabled: z.boolean().optional(),
+    github_repositories: z
+      .array(
+        z
+          .object({
+            cwd: z.string(),
+            repository: z.string(),
+            url: z.string(),
+            helper: z.string(),
+            remotes: z.array(
+              z
+                .object({
+                  key: z.string(),
+                  before: z.array(z.string()),
+                  after: z.array(z.string()),
+                })
+                .strict(),
+            ),
+          })
+          .strict(),
+      )
+      .optional(),
     local_token: z.string().min(16),
     hostname: z.string(),
     os_user: z.string(),
