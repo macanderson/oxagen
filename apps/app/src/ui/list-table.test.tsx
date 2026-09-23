@@ -152,6 +152,105 @@ describe("ListTable", () => {
   });
 });
 
+describe("ListTable past the first screen", () => {
+  /** The pager's page buttons and gaps, in order. */
+  const pageItems = () =>
+    [...pager().querySelectorAll("span.ml-auto > *")]
+      .slice(1, -1)
+      .map((el) => el.textContent);
+
+  it("shows the first, the last and the pages beside the current one past seven pages, with a gap for the rest", async () => {
+    renderList(rowsOf(100));
+    expect(pageItems()).toEqual(["1", "2", "…", "10"]);
+    await userEvent.click(within(pager()).getByRole("button", { name: "2" }));
+    await userEvent.click(within(pager()).getByRole("button", { name: "3" }));
+    await userEvent.click(within(pager()).getByRole("button", { name: "4" }));
+    await userEvent.click(within(pager()).getByRole("button", { name: "5" }));
+    expect(pageItems()).toEqual(["1", "…", "4", "5", "6", "…", "10"]);
+    expect(pager()).toHaveTextContent("41–50 of 100");
+    await userEvent.click(within(pager()).getByRole("button", { name: "10" }));
+    expect(pageItems()).toEqual(["1", "…", "9", "10"]);
+    expect(
+      within(pager()).getByRole("button", { name: "Next page" }),
+    ).toBeDisabled();
+  });
+
+  it("keeps a row off the page in the document, hidden, so what it holds survives a page turn", async () => {
+    renderList(rowsOf(12));
+    await userEvent.click(
+      within(pager()).getByRole("button", { name: "Next page" }),
+    );
+    const first = document.querySelector<HTMLElement>('[data-n="1"]');
+    expect(first).not.toBeNull();
+    expect(first?.style.display).toBe("none");
+  });
+
+  it("sorts a text column as text, and a second column starts ascending again", async () => {
+    renderList(rowsOf(12));
+    const invoice = screen.getByRole("button", { name: "Invoice" });
+    await userEvent.click(invoice);
+    await userEvent.click(invoice);
+    expect(
+      screen.getByRole("columnheader", { name: "Invoice" }),
+    ).toHaveAttribute("aria-sort", "descending");
+    expect(visible().slice(0, 2)).toEqual(["OXA-012", "OXA-011"]);
+    await userEvent.click(screen.getByRole("button", { name: "Amount" }));
+    expect(
+      screen.getByRole("columnheader", { name: "Invoice" }),
+    ).toHaveAttribute("aria-sort", "none");
+    expect(
+      screen.getByRole("columnheader", { name: "Amount" }),
+    ).toHaveAttribute("aria-sort", "ascending");
+    expect(visible()[0]).toBe("OXA-001");
+  });
+
+  it("sorts a figure that is not recorded after every number ascending, and so first descending", async () => {
+    // A characterization: the direction flips the whole comparison, so a
+    // "not recorded" cell leads the descending order rather than trailing it.
+    renderList([
+      { key: "a", cells: ["A", "$5.00", null] },
+      { key: "b", cells: ["B", "not recorded", null] },
+      { key: "c", cells: ["C", "$1.00", null] },
+    ]);
+    const amount = screen.getByRole("button", { name: "Amount" });
+    await userEvent.click(amount);
+    expect(visible()).toEqual(["C", "A", "B"]);
+    await userEvent.click(amount);
+    expect(visible()).toEqual(["B", "A", "C"]);
+  });
+
+  it("keeps a row that arrived after the last search in the list until the reader searches again", async () => {
+    const { rerender } = render(
+      <IntlProvider>
+        <ListTable label="Invoices" columns={COLUMNS} rows={rowsOf(3)} />
+      </IntlProvider>,
+    );
+    await userEvent.type(
+      screen.getByRole("searchbox", { name: "Search this list" }),
+      "oxa-001",
+    );
+    expect(visible()).toEqual(["OXA-001"]);
+    rerender(
+      <IntlProvider>
+        <ListTable
+          label="Invoices"
+          columns={COLUMNS}
+          rows={[
+            ...rowsOf(3),
+            { key: "late", cells: ["LATE-1", "$1.00", null] },
+          ]}
+        />
+      </IntlProvider>,
+    );
+    expect(visible()).toEqual(["OXA-001", "LATE-1"]);
+    await userEvent.type(
+      screen.getByRole("searchbox", { name: "Search this list" }),
+      " ",
+    );
+    expect(visible()).toEqual(["OXA-001"]);
+  });
+});
+
 describe("leadingNumber", () => {
   it.each([
     ["$4,770.00", 4770],
@@ -159,6 +258,10 @@ describe("leadingNumber", () => {
     ["-954.00", -954],
     ["3.2k", 3200],
     ["41.2 GB", 41.2],
+    ["1.5M", 1_500_000],
+    ["2B", 2_000_000_000],
+    ["12%", 12],
+    ["3 × $32.10", 3],
   ])("reads %s as %d", (text, n) => {
     expect(leadingNumber(text)).toBe(n);
   });
