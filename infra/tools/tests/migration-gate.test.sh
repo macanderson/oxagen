@@ -64,8 +64,15 @@ contains "$PIPE" "  migration-gate:" "pipeline.yml defines a migration-gate job"
 # The one line that makes every other line in this change matter. Without it
 # the gate still runs, still goes red, and still ships the deploy anyway.
 
-contains "$PIPE" "needs: [checks, test, migration-gate]" \
+contains "$PIPE" "needs: [checks, test, migration-gate, staging]" \
   "deploy-node waits on migration-gate — this is the ordering guarantee itself"
+
+# The gate writes to production, so it runs only after every check that could
+# reject the commit. Without this edge a commit that fails its tests would
+# still migrate prod.
+
+contains "$PIPE" "needs: [preflight, checks, test, staging]" \
+  "migration-gate applies only after checks, test and staging pass"
 
 # --- the gate asks all three stores ----------------------------------------
 #

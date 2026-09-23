@@ -927,10 +927,11 @@ jobs:
   # a gate you cannot get past during an incident is a gate people delete.
   migration-gate:
     name: Production schema is ready for this commit
-    needs: [preflight]
-    # Same shape as `checks` and `test`, so a superseded commit skips this job
-    # exactly as it skips those — and `deploy-node`, which needs all three,
-    # skips with them rather than waiting on a job that will never run.
+    # It writes to production, so it waits for every check that could reject
+    # the commit. A commit that fails `test` or `staging` never migrates prod.
+    # A superseded commit skips `checks` and `test` on preflight, and this job
+    # skips with them, so `deploy-node` never waits on a job that never runs.
+    needs: [preflight, checks, test, staging]
     if: >-
       github.event_name == 'push' && github.ref == 'refs/heads/main' &&
       needs.preflight.outputs.proceed == 'true'
@@ -1123,6 +1124,16 @@ jobs:
 
   # ==========================================================================
 
+  staging:
+    name: Verify this commit in staging
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [checks, test, e2e, atlas-validate, rls-integration, rds-compatibility]
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/staging.yml
+    secrets: inherit
+
   deploy-web:
     name: deploy oxagen.sh
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -1131,7 +1142,7 @@ jobs:
     # opens no database connection, so a pending migration cannot break it, and
     # blocking the marketing site on the schema would only train people to treat
     # a red gate as noise.
-    needs: [checks, test]
+    needs: [checks, test, staging]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: production
@@ -1238,7 +1249,7 @@ jobs:
     # fails unless every store reads current, so this job never ships code
     # ahead of its schema. See its header for why unknown blocks as well as
     # behind, and why `manual-app-deploy` is exempt.
-    needs: [checks, test, migration-gate]
+    needs: [checks, test, migration-gate, staging]
     # arm64, matching the t4g.large these ship to (verified 2026-09-10 via
     # where-is-production.yml, run 34456388188 — instance `oxagen-app`). An
     # x86 build passes every check here and fails to load a native module
