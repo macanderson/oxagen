@@ -2226,6 +2226,24 @@
       }
     },
     {
+      "name": "get_steering_deliveries",
+      "file": "context.steering.deliveries.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "get_steering_freshness",
       "file": "context.steering.freshness.ts",
       "domain": "context",
@@ -2437,6 +2455,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
+        "cli": true,
         "app": true,
         "unit": true,
         "docs": true
@@ -2456,6 +2475,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
+        "cli": true,
         "app": true,
         "unit": true,
         "docs": true
@@ -5792,6 +5812,21 @@
         "schema": true,
         "api": true,
         "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "register_contained_launch",
+      "file": "tacho.contained_launch.register.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
         "unit": true,
         "docs": true
       }

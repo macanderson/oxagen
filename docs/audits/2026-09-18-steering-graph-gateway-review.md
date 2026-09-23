@@ -55,7 +55,7 @@ Every claim below was read in code unless marked "docs only".
 | Skills                                             | ADR-008 describes `packages/skills` and `agent.skills` tables. **Neither exists.** Only `tacho.sessions.skills_available`, an inventory of what the harness reported. | No. Observation only.                                                                                                                                                                                                         |
 | Knowledge graph and ontology                       | Neo4j via `packages/ontology`, `packages/ingestion`                                                                                                                   | Only if the model chooses to call `graph.*` tools. Off unless `NEO4J_URI` is set. No nav entry in the app.                                                                                                                    |
 | Memory                                             | Neo4j `:AgentMemory`, recalled at `packages/agent/src/runtime/assistant-recall.ts:82`                                                                                 | Yes, but only for the in-app agent. Capped at 6 items by a constant.                                                                                                                                                          |
-| `packages/engram` plus `packages/context-provider` | A second memory system and the **only real token budgeter** (`context-provider/src/budget.ts:37`)                                                                     | **No production importer.** Dead.                                                                                                                                                                                             |
+| `packages/engram` plus `packages/context-provider` | A second memory system and the **only real token budgeter** (`context-provider/src/budget.ts:37`)                                                                     | **No production importer.** Dead. Deleted on 2026-09-22 (ADR-143). The budget moved to `packages/steering-assembler`.                                                                                                                                                                                             |
 | Decision rules, mandates, auto-approval            | `workspaces.settings.decisionRules` JSONB, `tools.mandates`                                                                                                           | They refuse calls at `kernel.invoke()`. They never produce prompt text. Not in the path of a wrapped agent at all.                                                                                                            |
 | `workspaces.promptConfig.additionalInstructions`   | Postgres JSONB                                                                                                                                                        | Yes, in-app agent only. Appended unconditionally. An override can replace the whole governance prompt with no check against rules.                                                                                            |
 | Operator steer commands                            | `tacho.control_commands`, drained at `hook-handler.ts:217`                                                                                                            | Yes. **This is the only live server-to-running-agent text channel for wrapped agents.**                                                                                                                                       |
@@ -103,6 +103,13 @@ surface are ahead of the code.
 must be one place where that competition is decided, ranked, budgeted and recorded. Today
 there is none. Skills belong in that competition. One screen called Steering should own
 all of it.
+
+**Status on 2026-09-22.** This finding is closed. The assembler is `assembleSteering` in
+`packages/steering-assembler/src/assemble.ts`, and `packages/handlers/src/lib/tacho-steering.ts`
+is its only caller. The budget is `CONTEXT_SYSTEM_BUDGET_TOKENS` in that file. The manifest
+names every candidate as included or cut, with the reason. It rides the policy bundle as
+`context.manifest`, and the host seals it into the run as a `steering.manifest` frame
+(`packages/tacho/src/collector/steering-manifest.ts`). ADR-143 records the decision.
 
 **Push back 1: "single source" is three different things.**
 
@@ -243,11 +250,14 @@ Each phase ships alone and is useful alone.
 
 - Define `SteeringItem` and `assembleSteering(run, budget)` returning prefix, volatile
   selection and manifest.
+  The prefix and the manifest are done on 2026-09-22. The volatile selection is not built yet.
 - Give it source adapters: record registry, `:AgentMemory`, gate notices from rules and
   mandates, skill descriptions, and `promptConfig.additionalInstructions`.
 - Reuse `packWithinBudget` from `packages/context-provider`. Repoint that package at the
   adapters and make it the assembler's home. Delete `packages/engram` or fold what is
   worth keeping. Two memory systems become one.
+  Done on 2026-09-22 with a change of home: the assembler lives in
+  `packages/steering-assembler`, and both memory packages are deleted (ADR-143).
 - Wire `UserPromptSubmit` to call the assembler with the prompt as the query, tight
   timeout, fail open.
 - Fix precedence in one place: gate beats everything, published `must` beats recalled

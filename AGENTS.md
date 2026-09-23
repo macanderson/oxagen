@@ -39,7 +39,7 @@ docs/       VISION.md, capability specs, ADRs, specs (docs/specs)
 | `agent` | `src/handlers/` | Agent registry, approval, MCP, memory, role, trace handlers |
 | `database` | `src/schema/` | Drizzle Postgres domain schemas. `index.ts` exports the current set |
 | `tacho` | `src/` | Leaf package (no `@oxagen/*` runtime dep) that records, gates and evidences agents Oxagen does not run — Claude Code, Agent SDK, custom agents; spec in `docs/specs/tacho/` |
-| `context-provider` | `src/frames.ts` | Serves one workspace's engram memory as budgeted, scored Context Graph Protocol frames |
+| `steering-assembler` | `src/assemble.ts` | The one assembler (ADR-093): ranks every steering candidate by tier then recency, fits it to a token budget, returns the text and a manifest of what was included or cut and why |
 | `inngest-functions` | `src/functions/` | Durable background jobs |
 | `ingestion` | `src/pipeline.ts` | Universal connector pipeline |
 | `billing` | `src/metering.ts` | Credit gate + usage metering |
@@ -57,7 +57,6 @@ docs/       VISION.md, capability specs, ADRs, specs (docs/specs)
 | `auth` | | Better Auth integration (sessions, rate limits, org members) |
 | `iam` | | IAM schema, roles, permissions, policy seeding |
 | `ontology` | | Neo4j ontology contracts + graph queries |
-| `engram` | | Agent memory substrate: content-addressed records, compiler, consolidation, decay |
 | `functions` | `src/types.ts` | Provider-agnostic durable-function contracts that `inngest-functions` implements |
 | `glob` | `src/glob.ts` | The one path-glob implementation for the repo (`matchesGlob`, `globToRegExp`) |
 | `storage` | `src/vercel-blob.ts` | Vercel Blob + filesystem blob driver |

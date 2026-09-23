@@ -78,7 +78,11 @@ export function resolveDeliveryMode(
   requested: TachoDeliveryMode,
   enforcementTier = "harness",
 ): ResolvedMode {
-  if (requested === "interrupt" && enforcementTier !== "gateway") {
+  if (
+    requested === "interrupt" &&
+    enforcementTier !== "gateway" &&
+    enforcementTier !== "contained"
+  ) {
     return { deliveryMode: "next_step", degradedReason: "harness_tier" };
   }
   return { deliveryMode: requested, degradedReason: null };
