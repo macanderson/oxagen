@@ -40,7 +40,7 @@
  * run cannot reopen a recovered incident and a late green run cannot close a
  * live one.
  *
- * Invoked by .github/workflows/deployment-failure.yml with RUN_ID set.
+ * Invoked by .github/workflows/deployment-failure.yml with DEPLOYMENT_FAILURE_RUN_ID set.
  */
 
 const REPO = process.env.GITHUB_REPOSITORY ?? "macanderson/oxagen";
@@ -320,8 +320,8 @@ async function recordRecovery(kind, run) {
 }
 
 async function main() {
-  const runId = process.env.RUN_ID;
-  if (!runId) throw new Error("RUN_ID is required");
+  const runId = process.env.DEPLOYMENT_FAILURE_RUN_ID;
+  if (!runId) throw new Error("DEPLOYMENT_FAILURE_RUN_ID is required");
   const run = await api(`/repos/${REPO}/actions/runs/${runId}`);
   if (run.event !== "push" || run.head_branch !== "main") {
     return console.log(

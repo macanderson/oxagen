@@ -64,5 +64,5 @@ jobs:
       - name: Record the run
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.run_id || github.event.workflow_run.id }}
+          DEPLOYMENT_FAILURE_RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.run_id || github.event.workflow_run.id }}
         run: node tools/scripts/deployment-failure-issue.mjs
