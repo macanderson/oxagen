@@ -315,3 +315,17 @@ describe("ingestionSyncRequested — non-GitHub connector", () => {
     expect(mocks.withSystemDb).toHaveBeenCalledTimes(1);
   });
 });
+
+it("refuses a directly dispatched sync for an issue-only connection", async () => {
+  setupDb(
+    makeConnection({
+      connector_id: "linear",
+      delivery_config: { runOutcomesOnly: true },
+      status: "connected",
+    }),
+  );
+  expect(
+    await capturedHandler!({ event: makeEvent(), step: makeStep() }),
+  ).toEqual({ skipped: true, reason: "issue_connection_not_ingestible" });
+  expect(mocks.inngestSend).not.toHaveBeenCalled();
+});

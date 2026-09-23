@@ -117,6 +117,17 @@
       "name": "Source name",
       "hint": "Enter to apply. Escape to cancel. This updates the name in the source.",
       "invalid": "Use a valid lowercase name with hyphens, and check that the source can be read."
+    },
+    "listTable": {
+      "search": "Search this list",
+      "rows": "Rows",
+      "all": "All",
+      "noMatch": "No rows match.",
+      "range": "{from}–{to} of {total}",
+      "rangeNone": "0 of 0",
+      "previous": "Previous page",
+      "next": "Next page",
+      "pages": "{label} pages"
     }
   }
 }

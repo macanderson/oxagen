@@ -1,3 +1,4 @@
+import { PgDialect } from "drizzle-orm/pg-core";
 /**
  * ingestion.poll-scheduler — the cron that claims due connections and fans out
  * one ingestion/connection.poll per connection. Mocks the DB + connector
@@ -117,4 +118,25 @@ describe("ingestion-poll-scheduler", () => {
     expect(result).toEqual({ enqueued: 0, pollable: 1 });
     expect(sentEvents).toHaveLength(0);
   });
+});
+
+it("excludes issue-only connections in the atomic scheduler claim", async () => {
+  mocks.listConnectors.mockReturnValue([
+    { connectorId: "linear", poll: async function* () {} },
+  ]);
+  let statement = "";
+  mocks.withSystemDb.mockImplementation(
+    async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        execute: async (query: Parameters<PgDialect["sqlToQuery"]>[0]) => {
+          statement = new PgDialect().sqlToQuery(query).sql;
+          return [];
+        },
+      }),
+  );
+  await capturedHandler!({ step: makeStep() });
+  expect(statement).toContain(
+    "(delivery_config->>'runOutcomesOnly') IS DISTINCT FROM 'true'",
+  );
+  expect(sentEvents).toEqual([]);
 });

@@ -6,6 +6,7 @@ import { ACTION_RATE_BANDS } from "@oxagen/billing";
 import { describe, expect, it } from "vitest";
 import {
   contractRateOutput,
+  evidenceRetentionOutput,
   invoiceBucketOutput,
   invoiceItemOutput,
   prepaidBucketOutput,
@@ -13,6 +14,7 @@ import {
 } from "@/test/billing-outputs";
 import {
   toContractRate,
+  toEvidenceRetention,
   toGauBucket,
   toInvoicePage,
   toPlanCard,
@@ -203,5 +205,34 @@ describe("toInvoicePage", () => {
       amountPaid: { micros: "0", currency: "USD" },
       hostedInvoiceUrl: null,
     });
+  });
+});
+
+describe("toEvidenceRetention", () => {
+  it("copies the window and the opt-in, and reads the dollar price into micros through its text", () => {
+    expect(toEvidenceRetention(evidenceRetentionOutput())).toEqual({
+      includedMonths: 12,
+      perGbMonth: { micros: "80000", currency: "USD" },
+      extendedRetentionEnabled: false,
+    });
+  });
+
+  it("maps no stored volume, even a measured one: it is the volume beyond the window, not the volume held (negative)", () => {
+    const view = toEvidenceRetention(
+      evidenceRetentionOutput({
+        storedGbBeyondIncluded: 41.2,
+        storedGbMeasured: true,
+        extendedRetentionEnabled: true,
+      }),
+    );
+    expect(view).not.toHaveProperty("storedGb");
+    expect(view.extendedRetentionEnabled).toBe(true);
+  });
+
+  it("leaves a price the decimal text cannot hold as micros unparseable (negative)", () => {
+    expect(
+      toEvidenceRetention(evidenceRetentionOutput({ usdPerGbMonth: 1e-7 }))
+        .perGbMonth.micros,
+    ).toBe("");
   });
 });

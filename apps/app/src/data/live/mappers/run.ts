@@ -194,6 +194,7 @@ function toTranscriptBody(
     ) ?? false;
   return {
     seq: half.seq,
+    ...(half.sessionUuid === undefined ? {} : { chainRef: half.sessionUuid }),
     type: half.type,
     digest: half.digest,
     bytesRef: half.bytesRef,
@@ -229,6 +230,14 @@ function toTranscriptBody(
   };
 }
 
+function toTranscriptDecision(
+  decision: RunTranscriptOutput["entries"][number]["decision"],
+): z.input<typeof RunTranscript>["entries"][number]["decision"] {
+  if (decision === null) return null;
+  const { sessionUuid, ...rest } = decision;
+  return sessionUuid === undefined ? rest : { ...rest, chainRef: sessionUuid };
+}
+
 export function toRunTranscript(
   out: RunTranscriptOutput,
 ): z.input<typeof RunTranscript> {
@@ -238,6 +247,14 @@ export function toRunTranscript(
     entries: out.entries.map((entry) => ({
       seq: entry.seq,
       endSeq: entry.endSeq,
+      ...(entry.subagent === undefined
+        ? {}
+        : {
+            subagent: {
+              chainRef: entry.subagent.sessionUuid,
+              type: entry.subagent.type,
+            },
+          }),
       at: entry.at,
       elapsedMs: entry.elapsedMs,
       kind: entry.kind,
@@ -248,7 +265,7 @@ export function toRunTranscript(
       kinds: entry.kinds,
       request: toTranscriptBody(entry.request),
       response: toTranscriptBody(entry.response),
-      decision: entry.decision,
+      decision: toTranscriptDecision(entry.decision),
       frames: entry.frames,
       turn: entry.turn,
       cost: toCost(entry.cost),
