@@ -54,6 +54,7 @@ describe("ShellChrome", () => {
       orgRole: "owner",
     });
     const source = {
+      runtimes: { list: vi.fn(), agents: vi.fn() },
       pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
       shell: { context: vi.fn(), preferences: vi.fn() },
       billing: {
