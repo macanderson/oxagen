@@ -1084,6 +1084,15 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "search_tools": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
+      "entry": "every workspace page: ⌘K (or the top bar's Search or run an action) reads search_tools for the query through features/shell/command-actions.ts and lists its runs, agents, approvals and belt tools in the menu's groups (features/shell/command-menu.tsx, features/shell/commands.ts)",
+      "testid": "command-menu",
+      "proof": "apps/app/src/features/shell/shell-client.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01GDv3vsEjQPCRnZtvAm88cY"
+    },
     "send_workspace_invite": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/page.tsx",

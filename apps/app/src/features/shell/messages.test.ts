@@ -43,8 +43,8 @@ describe("messages/shell.json", () => {
   });
 
   it("carries a catalog only for the chrome that renders", () => {
-    // The command menu's runs and questions stay off the list (ARCHITECTURE.md
-    // §1.2). The Account dialog and the assistant render and write
+    // The command menu carries the mockup's groups, its runs coming from
+    // search_tools (ARCHITECTURE.md §1.2). The Account dialog and the assistant render and write
     // (update_profile, ask_assistant); the rev1 design put the approvals
     // drawer and the bell back in the top bar (fleet.md "Shell").
     expect(Object.keys(messages).sort()).toEqual([
@@ -66,10 +66,15 @@ describe("messages/shell.json", () => {
       "userMenu",
     ]);
     expect(Object.keys(messages.commands).sort()).toEqual([
+      "actions",
+      "assistant",
       "create",
       "empty",
       "footer",
+      "groups",
       "input",
+      "search",
+      "shortcut",
       "title",
     ]);
     expect(Object.keys(messages.sidebar)).not.toContain("countLabel");

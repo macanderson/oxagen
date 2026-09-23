@@ -35,6 +35,10 @@ import type { ShellData } from "./shell-data";
 
 const nav = vi.hoisted(() => ({ pathname: "/acme/core-platform", query: "" }));
 
+// The command menu's search_tools read answers nothing here; shell-client.test.tsx covers it.
+vi.mock("./command-actions", () => ({
+  searchCommands: () => Promise.resolve({ ok: true, value: { rows: [] } }),
+}));
 vi.mock("next/navigation", () => ({
   usePathname: () => nav.pathname.split("?")[0],
   // Both conventions, as in shell-client.test.tsx: `nav.query`, or a query

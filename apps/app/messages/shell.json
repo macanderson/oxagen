@@ -73,7 +73,7 @@
     },
     "commands": {
       "title": "Command menu",
-      "input": "Go to a page",
+      "input": "Search runs, agents, tools, records, or run an action",
       "empty": "Nothing matches “{query}”.",
       "create": {
         "any": "Create anything",
@@ -86,7 +86,60 @@
         "move": "move",
         "open": "open",
         "escape": "esc",
-        "close": "close"
+        "close": "close",
+        "governed": "<code>search_tools</code> · this search is itself a governed call, recorded in the audit record",
+        "orgOnly": "Runs, agents and tools are searched inside a workspace."
+      },
+      "groups": {
+        "go": {
+          "label": "Go"
+        },
+        "assistant": {
+          "label": "The assistant",
+          "note": "It acts through these same actions."
+        },
+        "create": {
+          "label": "Create",
+          "note": "Each one ends on a pull request."
+        },
+        "runs": {
+          "label": "Runs"
+        },
+        "agents": {
+          "label": "Agents"
+        },
+        "approvals": {
+          "label": "Approvals"
+        },
+        "actions": {
+          "label": "Actions",
+          "note": "Each one is a governed action."
+        },
+        "tools": {
+          "label": "Tools on the belt"
+        }
+      },
+      "shortcut": "⌘{n}",
+      "assistant": {
+        "open": "Open the assistant",
+        "askCost": "Ask what an agent cost this month",
+        "askCostDraft": "What did each agent in this workspace cost this month, and on what basis?",
+        "mintKey": "Mint a model key for this organization"
+      },
+      "actions": {
+        "pauseAll": "Pause every live run in this workspace",
+        "pauseAllNotBacked": "No capability pauses every live run at once yet. Pause each run from Fleet.",
+        "steer": "Steer the fleet",
+        "register": "Register an agent",
+        "grant": "Grant a mandate",
+        "role": "Create a role",
+        "killSwitch": "Flip a kill switch",
+        "export": "Export a signed bundle",
+        "exportDetail": "from a sealed run's page",
+        "apiKey": "Create an API key"
+      },
+      "search": {
+        "failed": "search_tools could not be read, so runs, agents, approvals and tools are not listed."
       }
     },
     "mobileNav": {

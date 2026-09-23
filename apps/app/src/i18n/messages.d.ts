@@ -4317,6 +4317,59 @@ type Messages = {
         open: string;
         escape: string;
         close: string;
+        governed: string;
+        orgOnly: string;
+      };
+      groups: {
+        go: {
+          label: string;
+        };
+        assistant: {
+          label: string;
+          note: string;
+        };
+        create: {
+          label: string;
+          note: string;
+        };
+        runs: {
+          label: string;
+        };
+        agents: {
+          label: string;
+        };
+        approvals: {
+          label: string;
+        };
+        actions: {
+          label: string;
+          note: string;
+        };
+        tools: {
+          label: string;
+        };
+      };
+      shortcut: string;
+      assistant: {
+        open: string;
+        askCost: string;
+        askCostDraft: string;
+        mintKey: string;
+      };
+      actions: {
+        pauseAll: string;
+        pauseAllNotBacked: string;
+        steer: string;
+        register: string;
+        grant: string;
+        role: string;
+        killSwitch: string;
+        export: string;
+        exportDetail: string;
+        apiKey: string;
+      };
+      search: {
+        failed: string;
       };
     };
     mobileNav: {

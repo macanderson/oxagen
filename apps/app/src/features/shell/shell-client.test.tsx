@@ -67,6 +67,32 @@ vi.mock("./session-client", () => ({
   liveRevokeSession: () => Promise.resolve(true),
   liveRegenerateBackupCodes,
 }));
+// The command menu's search_tools read: one run and one belt tool, whatever
+// the query, so the menu's own filter and the search's rows are both visible.
+const searchCommands = vi.hoisted(() =>
+  vi.fn((_org: string, _ws: string, _query: string) =>
+    Promise.resolve({
+      ok: true as const,
+      value: {
+        rows: [
+          {
+            kind: "run" as const,
+            id: "arun_7k2m9q",
+            label: "Cut 4.11.0 release notes",
+            contextLine: "live",
+          },
+          {
+            kind: "tool" as const,
+            id: "list_runs",
+            label: "list_runs",
+            contextLine: "List the workspace's runs",
+          },
+        ],
+      },
+    }),
+  ),
+);
+vi.mock("./command-actions", () => ({ searchCommands }));
 vi.mock("./account-actions", () => ({
   updateProfile: vi.fn(),
   readPreferences: () =>
@@ -127,6 +153,7 @@ beforeEach(() => {
   nav.pathname = "/acme/core-platform";
   nav.query = "";
   nav.push.mockReset();
+  searchCommands.mockReset();
   nav.replace.mockReset();
   nav.refresh.mockReset();
 });
@@ -339,24 +366,43 @@ describe("top bar", () => {
 });
 
 describe("command menu", () => {
-  it("opens with ⌘K over the static routes only, filters, moves with the arrows and navigates on Enter", async () => {
+  const groupsOf = (menu: HTMLElement) =>
+    within(menu)
+      .getAllByRole("group")
+      .map((g) => g.getAttribute("data-group"));
+  const labelsOf = (menu: HTMLElement) =>
+    within(menu)
+      .getAllByRole("option")
+      .map((o) => o.querySelector("span > span")?.textContent);
+
+  it("opens with ⌘K on every page and action in the mockup's groups, filters, moves with the arrows and navigates on Enter", async () => {
     const user = userEvent.setup();
     renderShell(shellData());
     await user.keyboard("{Meta>}k{/Meta}");
     const menu = await screen.findByTestId("command-menu");
-    const input = within(menu).getByRole("combobox", { name: "Go to a page" });
-    expect(
-      within(menu)
-        .getAllByRole("option")
-        .map((o) => o.textContent),
-    ).toEqual([
+    const input = within(menu).getByRole("combobox", { name: "Command menu" });
+    expect(input).toHaveAttribute(
+      "placeholder",
+      "Search runs, agents, tools, records, or run an action",
+    );
+    await waitFor(() => {
+      expect(groupsOf(menu)).toEqual([
+        "go",
+        "assistant",
+        "create",
+        "runs",
+        "actions",
+        "tools",
+      ]);
+    });
+    expect(labelsOf(menu)).toEqual([
       "Fleet",
       "Agents",
       "Tools",
       "Steering",
+      "Spend",
       "Runtimes",
       "Repositories",
-      "Spend",
       "Organization",
       "Roles",
       "API keys",
@@ -364,23 +410,107 @@ describe("command menu", () => {
       "Single sign-on",
       "Billing",
       "Audit",
+      "Open the assistant",
+      "Ask what an agent cost this month",
+      "Mint a model key for this organization",
       "Create anything",
       "New agent",
       "Add a skill",
       "Write a context record",
+      "Cut 4.11.0 release notes",
+      "Pause every live run in this workspace",
+      "Steer the fleet",
+      "Register an agent",
+      "Grant a mandate",
+      "Create a role",
+      "Flip a kill switch",
+      "Export a signed bundle",
+      "Create an API key",
+      "list_runs",
     ]);
-    expect(within(menu).queryAllByRole("group")).toEqual([]);
-    await user.type(input, "api keys");
+    // The five pages carry ⌘1 to ⌘5, as the mockup's Go group draws them.
     expect(
-      within(menu)
-        .getAllByRole("option")
-        .map((o) => o.textContent),
-    ).toEqual(["API keys"]);
+      within(menu).getByRole("option", { name: /^Spend/ }),
+    ).toHaveTextContent("⌘5");
+    // The group notes, and the search named as the governed read it is.
+    expect(menu).toHaveTextContent("Each one is a governed action.");
+    expect(within(menu).getByTestId("command-footer-note")).toHaveTextContent(
+      "search_tools · this search is itself a governed call, recorded in the audit record",
+    );
+    expect(searchCommands).toHaveBeenCalledWith("acme", "core-platform", "");
+    await user.type(input, "api keys");
+    await waitFor(() => {
+      expect(labelsOf(menu)).toEqual([
+        "API keys",
+        "Cut 4.11.0 release notes",
+        "list_runs",
+      ]);
+    });
     await user.keyboard("{ArrowDown}{ArrowUp}{Enter}");
     expect(nav.push).toHaveBeenCalledWith("/acme/api-keys");
     await waitFor(() => {
       expect(screen.queryByTestId("command-menu")).toBeNull();
     });
+  });
+
+  it("opens a run search_tools found on its own page", async () => {
+    const user = userEvent.setup();
+    renderShell(shellData());
+    await user.keyboard("{Meta>}k{/Meta}");
+    const menu = await screen.findByTestId("command-menu");
+    const run = await within(menu).findByRole("option", {
+      name: /Cut 4\.11\.0 release notes/,
+    });
+    expect(run).toHaveTextContent("live");
+    await user.click(run);
+    expect(nav.push).toHaveBeenCalledWith(
+      "/acme/core-platform/runs/arun_7k2m9q",
+    );
+  });
+
+  it("opens Fleet on ⌘1 while the menu is open", async () => {
+    const user = userEvent.setup();
+    renderShell(shellData());
+    await user.keyboard("{Meta>}k{/Meta}");
+    await screen.findByTestId("command-menu");
+    await user.keyboard("{Meta>}1{/Meta}");
+    expect(nav.push).toHaveBeenCalledWith("/acme/core-platform");
+  });
+
+  it("lists Pause every live run disabled, tied to its gap, and does nothing when chosen (negative)", async () => {
+    const user = userEvent.setup();
+    renderShell(shellData());
+    await user.keyboard("{Meta>}k{/Meta}");
+    const menu = await screen.findByTestId("command-menu");
+    const pause = within(menu).getByRole("option", {
+      name: /^Pause every live run/,
+    });
+    expect(pause).toHaveAttribute("aria-disabled", "true");
+    expect(pause).toHaveAttribute("data-gap", "#3862");
+    expect(pause).toHaveTextContent(
+      "No capability pauses every live run at once yet.",
+    );
+    await user.click(pause);
+    expect(nav.push).not.toHaveBeenCalled();
+    expect(screen.getByTestId("command-menu")).toBeInTheDocument();
+  });
+
+  it("says when search_tools could not be read, and still lists the pages (negative)", async () => {
+    searchCommands.mockResolvedValueOnce({
+      ok: false,
+      reason: "unavailable",
+      code: "down",
+    } as never);
+    const user = userEvent.setup();
+    renderShell(shellData());
+    await user.keyboard("{Meta>}k{/Meta}");
+    const menu = await screen.findByTestId("command-menu");
+    expect(
+      await within(menu).findByTestId("command-search-failed"),
+    ).toHaveTextContent(
+      "search_tools could not be read, so runs, agents, approvals and tools are not listed.",
+    );
+    expect(within(menu).getByRole("option", { name: /^Fleet/ })).toBeTruthy();
   });
 
   it("opens with Ctrl+K as well, and not for K with Shift or Alt, ⌘ with another key, or K alone (negative)", async () => {
@@ -400,6 +530,10 @@ describe("command menu", () => {
   });
 
   it("opens from the search button, says when nothing matches, and opens a clicked route", async () => {
+    searchCommands.mockResolvedValue({
+      ok: true,
+      value: { rows: [] },
+    } as never);
     const user = userEvent.setup();
     renderShell(shellData());
     await user.click(

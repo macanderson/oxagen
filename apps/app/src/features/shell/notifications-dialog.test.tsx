@@ -39,6 +39,10 @@ const nav = vi.hoisted(() => ({
   refresh: vi.fn(),
 }));
 
+// The command menu's search_tools read answers nothing here; shell-client.test.tsx covers it.
+vi.mock("./command-actions", () => ({
+  searchCommands: () => Promise.resolve({ ok: true, value: { rows: [] } }),
+}));
 vi.mock("next/navigation", () => ({
   usePathname: () => nav.pathname,
   useSearchParams: () => new URLSearchParams(),
