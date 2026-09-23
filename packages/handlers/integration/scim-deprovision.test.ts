@@ -14,7 +14,9 @@
  *     Auth finds no session on the browser's next request.
  *
  * It also proves the migration: every audit row the deprovision writes passes
- * the widened `security_events_event_type_check`.
+ * the widened `security_events_event_type_check`. The last case proves #3740
+ * item 2 against the same schema: under Require SSO, a key whose creator never
+ * signed in through one of the organization's providers is refused.
  *
  * CI: rls-integration job. Local:
  *   DATABASE_URL=postgres://oxagen:oxagen@localhost:5433/oxagen \
@@ -145,6 +147,26 @@ describe("#3734: removing a person at the identity provider ends their Oxagen ac
                (${`aky_${RUN}b`}, ${ORG}, ${WS}, ${cli.prefix}, ${cli.hash}, 'cli', '{"purpose":"cli_session_v1"}'::jsonb, ${userId})
       `);
     }
+    // A Tacho host they enrolled, with its control-plane and gateway keys.
+    const hostKey = apiKey();
+    const gatewayKey = apiKey();
+    const hostId = randomUUID();
+    const hostPublicId = `tch_${RUN}${"a".repeat(18)}`;
+    const hostKeyId = randomUUID();
+    await q(sql`
+      INSERT INTO auth.api_keys (id, public_id, org_id, workspace_id, key_prefix, key_hash, name, scope, created_by_id)
+      VALUES (${hostKeyId}, ${`aky_${RUN}h`}, ${ORG}, ${WS}, ${hostKey.prefix}, ${hostKey.hash}, 'host',
+              ${JSON.stringify({ purpose: "tacho_host_v1", host_enrollment_id: hostPublicId })}::jsonb, ${userId}),
+             (${randomUUID()}, ${`aky_${RUN}x`}, ${ORG}, ${WS}, ${gatewayKey.prefix}, ${gatewayKey.hash}, 'gateway',
+              ${JSON.stringify({ purpose: "tacho_gateway_v1", host_enrollment_id: hostPublicId })}::jsonb, ${userId})
+    `);
+    await q(sql`
+      INSERT INTO tacho.hosts (id, public_id, org_id, workspace_id, agent_key, api_key_id, hostname, hostname_digest,
+        platform, os_user, os_user_digest, device_public_key, device_key_fingerprint, enrollment_claims,
+        enrollment_signature, expires_at, created_by_id)
+      VALUES (${hostId}, ${hostPublicId}, ${ORG}, ${WS}, 'claude-code', ${hostKeyId}, 'ada-mbp', 'd1', 'darwin',
+        'ada', 'd2', 'pk', 'fp', '{}'::jsonb, 'sig', now() + interval '1 year', ${userId})
+    `);
     await expect(resolveApiKey(key.raw)).resolves.toMatchObject({ ok: true, orgId: ORG });
     await expect(resolveApiKey(cli.raw)).resolves.toMatchObject({ ok: true, userId });
     await expect(resolveSession(sessionToken)).resolves.toEqual({ userId });
@@ -186,7 +208,18 @@ describe("#3734: removing a person at the identity provider ends their Oxagen ac
         "auth.sign_out",
       ]),
     );
-    expect(types.filter((t) => t === "api_key.revoked")).toHaveLength(2);
+    expect(types.filter((t) => t === "api_key.revoked")).toHaveLength(4);
+    expect(types).toContain("tacho.host_revoked");
+    // The host is revoked through revokeHostEnrollment: both of its keys are
+    // retired and the collector is told to stop.
+    const [host] = await q(sql`SELECT status FROM tacho.hosts WHERE id = ${hostId}`);
+    expect(host?.status).toBe("revoked");
+    await expect(resolveApiKey(hostKey.raw)).resolves.toEqual({ ok: false, kind: "invalid" });
+    await expect(resolveApiKey(gatewayKey.raw)).resolves.toEqual({ ok: false, kind: "invalid" });
+    const commands = await q(sql`
+      SELECT command FROM tacho.control_commands WHERE host_id = ${hostId}
+    `);
+    expect(commands.map((c) => c.command)).toEqual(["revoke"]);
 
     // 6. A later SSO sign-in's role write cannot re-admit them: only a SCIM
     //    reactivation does, and it restores the role their groups map to.
@@ -265,5 +298,62 @@ describe("#3734: removing a person at the identity provider ends their Oxagen ac
       SELECT role FROM org.org_users WHERE org_id = ${ORG} AND user_id = ${userId}
     `);
     expect(still?.role).toBe("owner");
+  });
+});
+
+describe("#3740 item 2: Require SSO reaches API keys", () => {
+  it("refuses a key whose creator never signed in through SSO, and admits Owners and SSO users", async () => {
+    const org = randomUUID();
+    const ws = randomUUID();
+    const provider = `req-it-${RUN}`;
+    const tag = `r${RUN}`;
+    await q(sql`
+      INSERT INTO org.organizations (id, public_id, name, slug, namespace, plan_type, status, type)
+      VALUES (${org}, ${`req_org_${RUN}`}, 'Require Org', ${`req-org-${RUN}`}, ${tag}, 'enterprise', 'active', 'business')
+    `);
+    await q(sql`
+      INSERT INTO workspace.workspaces (id, public_id, org_id, name, slug, namespace)
+      VALUES (${ws}, ${`req_ws_${RUN}`}, ${org}, 'Require WS', ${`req-ws-${RUN}`}, ${`q${RUN}`})
+    `);
+    await q(sql`
+      INSERT INTO auth.sso_providers
+        (id, issuer, oidc_config, provider_id, organization_id, domain, domain_verified,
+         protocol, display_name, domain_verification_token)
+      VALUES (${randomUUID()}, 'https://idp.test', '{}', ${provider}, ${org}, ${`req-${RUN}.test`}, true,
+              'oidc', 'Require IdP', 'tok')
+    `);
+    await q(sql`INSERT INTO security.org_security_policy (org_id, sso_required) VALUES (${org}, true)`);
+
+    const person = async (role: string, ssoAccount: boolean) => {
+      const userId = randomUUID();
+      const key = apiKey();
+      const suffix = randomBytes(3).toString("hex");
+      await q(sql`
+        INSERT INTO auth.users (id, public_id, email, status)
+        VALUES (${userId}, ${`usr_${suffix}`}, ${`${suffix}@req-${RUN}.test`}, 'active')
+      `);
+      await q(sql`
+        INSERT INTO org.org_users (public_id, org_id, user_id, role, joined_at)
+        VALUES (${`ou_${suffix}`}, ${org}, ${userId}, ${role}, now())
+      `);
+      if (ssoAccount) {
+        await q(sql`
+          INSERT INTO auth.accounts (id, user_id, account_id, provider_id)
+          VALUES (${randomUUID()}, ${userId}, ${`sub-${suffix}`}, ${provider})
+        `);
+      }
+      await q(sql`
+        INSERT INTO auth.api_keys (public_id, org_id, workspace_id, key_prefix, key_hash, name, scope, created_by_id)
+        VALUES (${`aky_${suffix}`}, ${org}, ${ws}, ${key.prefix}, ${key.hash}, 'k', '{}'::jsonb, ${userId})
+      `);
+      return key.raw;
+    };
+
+    await expect(resolveApiKey(await person("member", false))).resolves.toEqual({
+      ok: false,
+      kind: "sso_required",
+    });
+    await expect(resolveApiKey(await person("member", true))).resolves.toMatchObject({ ok: true });
+    await expect(resolveApiKey(await person("owner", false))).resolves.toMatchObject({ ok: true });
   });
 });
