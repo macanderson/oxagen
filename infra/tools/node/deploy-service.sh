@@ -44,6 +44,7 @@ readonly REGION="${REGION:-us-east-1}"
 # containers on their next deploy with no permission to write anywhere.
 readonly LOG_DRIVER="${LOG_DRIVER:-json-file}"
 readonly LOG_GROUP_PREFIX="${LOG_GROUP_PREFIX:-/oxagen-app}"
+readonly EXTRA_CA_CERT="${EXTRA_CA_CERT:-}"
 readonly ROOT=/opt/oxagen/services
 readonly KEEP_RELEASES=3
 
