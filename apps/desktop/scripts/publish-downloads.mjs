@@ -123,6 +123,9 @@ const NO_COLOUR_ENV = {
 // Every temporary directory this run makes is removed when the process exits,
 // on every path: a refusal's process.exit, a failed child in sh(), an uncaught
 // error, or one of the signals below. See tempDirTracker in ../src/downloads.ts.
+// A signal handler runs on the event loop, so a signal that arrives while
+// spawnSync is blocked on a child is handled once that child returns. Ctrl-C
+// reaches the child too, which then fails and exits through sh().
 const temps = tempDirTracker(
   (path) => rmSync(path, { recursive: true, force: true }),
   (path, error) => console.warn(`! could not remove ${path}: ${String(error)}`),
