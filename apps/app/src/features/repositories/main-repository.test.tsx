@@ -43,7 +43,9 @@ const listInstallationRepositories = vi.fn();
 const bindWorkspaceRepository = vi.fn();
 const listGithubInstallations = vi.fn();
 const attachGithubInstallation = vi.fn();
+const connectGitLabProject = vi.fn();
 vi.mock("./actions", () => ({
+  connectGitLabProject,
   readWorkspaceRepository,
   listInstallationRepositories,
   bindWorkspaceRepository,
@@ -162,6 +164,7 @@ const connected: WorkspaceRepository = {
 
 const BOUND_REPOSITORY = {
   bindingId: "rpb_0a1b2c",
+  provider: "github" as const,
   owner: "acme",
   name: "platform",
   fullName: "acme/platform",
@@ -260,6 +263,7 @@ beforeEach(() => {
   bindWorkspaceRepository.mockReset();
   listGithubInstallations.mockReset();
   attachGithubInstallation.mockReset();
+  connectGitLabProject.mockReset();
   // The ordinary first-time default: nobody has authorized GitHub yet, so
   // there is nothing to pick from and the doors are the whole panel.
   listGithubInstallations.mockResolvedValue(NOT_AUTHORIZED);
@@ -1555,5 +1559,169 @@ describe("the return leg from GitHub", () => {
     expect(screen.queryByTestId("workspace-github-failed")).toBeNull();
     expect(screen.queryByTestId("workspace-github-choose")).toBeNull();
     expect(screen.queryByTestId("workspace-github-none")).toBeNull();
+  });
+});
+
+/**
+ * A gitlab.com main project (#3762). The panel offers the GitLab form beside
+ * the GitHub doors whenever nothing is bound, binds through it, and repairs a
+ * GitLab binding with a new token rather than with the GitHub App.
+ */
+describe("connecting a GitLab project", () => {
+  const TOKEN = "glpat-abcdefghijklmnopqrstuvwxyz";
+  const GITLAB_REPOSITORY = {
+    bindingId: "rpb_0a1b2d",
+    provider: "gitlab" as const,
+    owner: "acme/platform",
+    name: "rules",
+    fullName: "acme/platform/rules",
+    defaultRef: "main",
+    htmlUrl: "https://gitlab.com/acme/platform/rules",
+    boundAt: "2026-09-23T10:00:00.000Z",
+    connectionLive: true,
+  };
+  const gitlabBound: WorkspaceRepository = {
+    repository: GITLAB_REPOSITORY,
+    github: {
+      connected: false,
+      connectUrl: CONNECT_URL,
+      installUrl: INSTALL_URL,
+      manageUrl: MANAGE_URL,
+    },
+  };
+  const CONNECTED = {
+    ok: true,
+    value: {
+      fullName: "acme/platform/rules",
+      defaultRef: "main",
+      boundAt: "2026-09-23T10:00:00.000Z",
+      webhook: "registered",
+    },
+  };
+
+  async function fill(user: ReturnType<typeof userEvent.setup>) {
+    await user.type(
+      screen.getByLabelText("Project path"),
+      " acme/platform/rules ",
+    );
+    await user.type(screen.getByLabelText("Project access token"), TOKEN);
+  }
+
+  it("offers the GitLab form beside the GitHub doors when nothing is bound", async () => {
+    await openSettings();
+    expect(await screen.findByTestId("workspace-gitlab-connect")).toBeTruthy();
+    expect(screen.getByTestId("workspace-repository-install")).toBeTruthy();
+    expect(
+      screen.getByLabelText("Project access token").getAttribute("type"),
+    ).toBe("password");
+  });
+
+  it("connects and binds the project, clears the token, and re-reads the panel", async () => {
+    connectGitLabProject.mockResolvedValue(CONNECTED);
+    const { user } = await openSettings();
+    await screen.findByTestId("workspace-gitlab-connect");
+    await fill(user);
+    readWorkspaceRepository.mockResolvedValue({ ok: true, value: gitlabBound });
+    await user.click(screen.getByRole("button", { name: "Connect and bind" }));
+
+    expect(connectGitLabProject).toHaveBeenCalledWith("acme", "core-platform", {
+      projectPath: "acme/platform/rules",
+      token: TOKEN,
+    });
+    const boundPanel = await screen.findByTestId("workspace-repository-bound");
+    expect(within(boundPanel).getByText("acme/platform/rules")).toBeTruthy();
+    expect(
+      within(boundPanel)
+        .getByRole("link", { name: "Open on GitLab" })
+        .getAttribute("href"),
+    ).toBe("https://gitlab.com/acme/platform/rules");
+    // No GitHub installation to manage, and no GitHub doors for a GitLab binding.
+    expect(screen.queryByTestId("workspace-github-manage")).toBeNull();
+    expect(screen.queryByTestId("workspace-repository-install")).toBeNull();
+    expect(nav.refresh).toHaveBeenCalled();
+  });
+
+  it("says what GitLab refused and keeps no token on the page (negative)", async () => {
+    connectGitLabProject.mockResolvedValue({
+      ok: false,
+      reason: "conflict",
+      code: "gitlab_credential_rejected",
+    });
+    const { user } = await openSettings();
+    await screen.findByTestId("workspace-gitlab-connect");
+    await fill(user);
+    await user.click(screen.getByRole("button", { name: "Connect and bind" }));
+
+    expect(
+      (await screen.findByTestId("workspace-gitlab-failure")).textContent,
+    ).toContain("GitLab no longer accepts");
+    expect(
+      (screen.getByLabelText("Project access token") as HTMLInputElement).value,
+    ).toBe("");
+  });
+
+  it("tells the person when the webhook could not be registered", async () => {
+    connectGitLabProject.mockResolvedValue({
+      ...CONNECTED,
+      value: { ...CONNECTED.value, webhook: "refused" },
+    });
+    const { user } = await openSettings();
+    await screen.findByTestId("workspace-gitlab-connect");
+    await fill(user);
+    await user.click(screen.getByRole("button", { name: "Connect and bind" }));
+    expect(
+      (await screen.findByTestId("workspace-gitlab-notice")).textContent,
+    ).toContain("Maintainer");
+  });
+
+  it("re-approves a GitLab binding by its project path, not by a GitHub owner and name", async () => {
+    readWorkspaceRepository.mockResolvedValue({ ok: true, value: gitlabBound });
+    const { user } = await openSettings();
+    const reapprove = await screen.findByTestId(
+      "workspace-repository-reapprove",
+    );
+    await user.click(within(reapprove).getByRole("button"));
+    expect(bindWorkspaceRepository).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      { provider: "gitlab", projectPath: "acme/platform/rules" },
+    );
+  });
+
+  it("repairs a GitLab binding whose token was revoked with a new token for the same project", async () => {
+    readWorkspaceRepository.mockResolvedValue({
+      ok: true,
+      value: {
+        ...gitlabBound,
+        repository: { ...GITLAB_REPOSITORY, connectionLive: false },
+      },
+    });
+    connectGitLabProject.mockResolvedValue(CONNECTED);
+    const { user } = await openSettings();
+    const retired = await screen.findByTestId("workspace-repository-retired");
+    const path = within(retired).getByLabelText(
+      "Project path",
+    ) as HTMLInputElement;
+    expect(path.value).toBe("acme/platform/rules");
+    expect(path.readOnly).toBe(true);
+    // The GitHub App is not the repair for a GitLab binding.
+    expect(screen.queryByTestId("workspace-repository-install")).toBeNull();
+    await user.type(
+      within(retired).getByLabelText("Project access token"),
+      TOKEN,
+    );
+    await user.click(
+      within(retired).getByRole("button", { name: "Connect and bind" }),
+    );
+    expect(connectGitLabProject).toHaveBeenCalledWith("acme", "core-platform", {
+      projectPath: "acme/platform/rules",
+      token: TOKEN,
+    });
+  });
+
+  it("has no axe violations with the GitLab form showing", async () => {
+    const { dialog } = await openSettings();
+    await screen.findByTestId("workspace-gitlab-connect");
+    await expectNoAxe(dialog);
   });
 });

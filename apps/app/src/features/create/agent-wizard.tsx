@@ -110,6 +110,8 @@ const FAILURES = {
   org_role_required: "orgRoleRequired",
   workspace_repository_missing: "noRepository",
   github_refused: "githubRefused",
+  gitlab_refused: "gitlabRefused",
+  gitlab_credential_rejected: "gitlabCredentialRejected",
   unanswered: "unanswered",
 } as const;
 

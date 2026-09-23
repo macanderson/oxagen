@@ -56,7 +56,7 @@ export const repositoryGitlabAttach = registerCapability({
     "Connect a gitlab.com project to the workspace with a project access token scoped to that project. The token is verified, encrypted and never returned; a project webhook for merge request events is registered when the token's role allows it. Connecting the same project again rotates the token.",
   mode: "sync",
   surfaces: ["api"],
-  layers: ["schema", "api", "unit", "docs"],
+  layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: true,
