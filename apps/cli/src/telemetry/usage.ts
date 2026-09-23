@@ -275,7 +275,28 @@ export function classifyCommand(
  * account (docs/guides/export-and-verify.md), so it sends no usage event and
  * writes no install id, whatever the opt-out settings say.
  */
-export const OFFLINE_COMMANDS: ReadonlySet<string> = new Set(["verify"]);
+const OFFLINE_COMMANDS: ReadonlySet<string> = new Set(["verify"]);
+
+/** The part of a Commander command that {@link topLevelCommand} reads. */
+interface CommandNode {
+  name(): string;
+  parent: CommandNode | null;
+}
+
+/**
+ * The top-level command Commander dispatched to, or undefined when the root
+ * program's own action ran. `classifyCommand` reads argv before parsing, so
+ * `oxagen -m x verify b.zip` reads as a prompt there; the command Commander
+ * actually runs is the one that decides whether this invocation may send.
+ */
+export function topLevelCommand(
+  action: CommandNode,
+  root: CommandNode,
+): string | undefined {
+  let node = action;
+  while (node.parent !== null && node.parent !== root) node = node.parent;
+  return node === root || node.parent === null ? undefined : node.name();
+}
 
 /** One random id per CLI process — groups the (at most one) event this run emits. */
 const SESSION_ID = randomUUID();

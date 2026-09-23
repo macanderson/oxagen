@@ -314,7 +314,10 @@ function safeDigestJcs(value: JsonValue): string | null {
  * With it, the event must hash to the frame's `hash`, and the frame must
  * show exactly what `wrappedFrameOf` reads from that event.
  */
-function checkWrappedFrame(frame: Envelope): {
+function checkWrappedFrame(
+  frame: Envelope,
+  attemptId: string,
+): {
   digest: CheckState;
   reasons: string[];
 } {
@@ -326,6 +329,13 @@ function checkWrappedFrame(frame: Envelope): {
     return { digest: "broken", reasons: ["event is not a JSON object"] };
   }
   const reasons: string[] = [];
+  // A wrapped run's one attempt is its session, so every event must be one
+  // of that session's: a frame from another chain does not belong here.
+  if (event["session_uuid"] !== attemptId) {
+    reasons.push(
+      `the event belongs to session ${String(event["session_uuid"])}, not ${attemptId}`,
+    );
+  }
   let recomputed: string | null;
   try {
     recomputed = hashEvent(event);
@@ -526,7 +536,7 @@ export function verifyRunExport(files: RunExportFiles): RunExportVerification {
           ],
         });
       } else {
-        const own = checkWrappedFrame(frame);
+        const own = checkWrappedFrame(frame, attempt.attempt_id);
         digest = own.digest;
         reasons.push(...own.reasons);
         const rawSeq = frame["seq"];

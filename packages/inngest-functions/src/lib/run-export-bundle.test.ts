@@ -159,7 +159,9 @@ function tachoSegment(): SealedSegment {
  * A wrapped session whose frames carry their sealed events, built the way
  * the export builds them when the stored row rebuilds each event (#3733).
  */
-function carriedTachoSegment(): SealedSegment {
+function carriedTachoSegment(
+  over: { attrs?: Record<string, string>; attempt?: string } = {},
+): SealedSegment {
   const session = "0a1b2c3d-0000-4000-8000-000000000000";
   const unsealed = (
     kind: string,
@@ -182,6 +184,7 @@ function carriedTachoSegment(): SealedSegment {
         wrapper_version: "2.1.1",
       },
       turn: { turn_seq: 1 },
+      ...(over.attrs === undefined ? {} : { attrs: over.attrs }),
       kind,
       body,
     }) as UnsealedTachoEvent;
@@ -200,8 +203,22 @@ function carriedTachoSegment(): SealedSegment {
   );
   return {
     ...tachoSegment(),
+    ...(over.attempt === undefined ? {} : { attemptPublicId: over.attempt }),
     envelopes,
     digests: events.map((event) => event.hash),
+  };
+}
+
+/** Both verifiers' verdict on one wrapped bundle, as files on disk and in memory. */
+function bothVerdicts(files: Record<string, string>) {
+  return {
+    cli: verifyRunExport({
+      "manifest.json": files["manifest.json"]!,
+      "attestation.json": files["attestation.json"]!,
+      "frames.ndjson": files["frames.ndjson"]!,
+      "redactions.json": files["redactions.json"]!,
+    }),
+    script: runVerifier(writeBundle(files)),
   };
 }
 
@@ -492,6 +509,80 @@ describe("the run export bundle", () => {
     ).toMatch(/frame 3 .*broken: kind differs from the hashed event/);
   });
 
+  it("holds in both verifiers when a host names an attribute toJSON, which the platform hashes in insertion order", () => {
+    // canonicalize@1.0.8 writes an object with a toJSON member with
+    // JSON.stringify, keys unsorted. verify.mjs must reach the same bytes.
+    const bundle = buildRunExportBundle({
+      runId: "tse_0a1b2c",
+      source: "tacho",
+      segments: [carriedTachoSegment({ attrs: { toJSON: "x", a: "y" } })],
+      key,
+      now: new Date(),
+    });
+    const files = unpack(bundle.bytes);
+    expect(files["frames.ndjson"]).toContain('"attrs":{"toJSON":"x","a":"y"}');
+    const { cli, script } = bothVerdicts(files);
+    expect(cli.ok).toBe(true);
+    expect(cli.frames.every((f) => f.digest === "held")).toBe(true);
+    expect(script.output).toMatch(/^HELD /m);
+    expect(script.ok).toBe(true);
+  });
+
+  it("breaks the signed content check in both verifiers when a frame's event is stripped (negative)", () => {
+    const bundle = buildRunExportBundle({
+      runId: "tse_0a1b2c",
+      source: "tacho",
+      segments: [carriedTachoSegment()],
+      key,
+      now: new Date(),
+    });
+    const files = unpack(bundle.bytes);
+    const lines = files["frames.ndjson"]!.split("\n");
+    const frame = JSON.parse(lines[1]!);
+    delete frame.event;
+    lines[1] = JSON.stringify(frame);
+    const { cli, script } = bothVerdicts({
+      ...files,
+      "frames.ndjson": lines.join("\n"),
+    });
+    // The frame alone reads as an older export's frame would...
+    expect(cli.frames[1]).toMatchObject({
+      status: "held",
+      digest: "not_carried",
+    });
+    // ...and the attester's signature over the exported bytes is what catches it.
+    expect(cli.ok).toBe(false);
+    expect(cli.checks).toContainEqual(
+      expect.objectContaining({
+        name: "exported content 0a1b2c3d-0000-4000-8000-000000000000",
+        status: "broken",
+      }),
+    );
+    expect(script.ok).toBe(false);
+    expect(script.output).toContain("exported frame bytes do not match");
+  });
+
+  it("breaks every frame in both verifiers when the events belong to another session than the attempt (negative)", () => {
+    const other = "0a1b2c3d-0000-4000-8000-0000000000ff";
+    const bundle = buildRunExportBundle({
+      runId: "tse_0a1b2c",
+      source: "tacho",
+      segments: [carriedTachoSegment({ attempt: other })],
+      key,
+      now: new Date(),
+    });
+    const { cli, script } = bothVerdicts(unpack(bundle.bytes));
+    const reason = `the event belongs to session 0a1b2c3d-0000-4000-8000-000000000000, not ${other}`;
+    expect(cli.ok).toBe(false);
+    expect(cli.frames.map((f) => f.reasons)).toEqual([
+      [reason],
+      [reason],
+      [reason],
+    ]);
+    expect(script.ok).toBe(false);
+    expect(script.output).toContain(`frame 1 (${other} #0) broken: ${reason}`);
+  });
+
   it("says a wrapped frame without its event is not carried, in the shipped verifier", () => {
     const bundle = buildRunExportBundle({
       runId: "tse_0a1b2c",
@@ -505,6 +596,109 @@ describe("the run export bundle", () => {
     expect(script.output).toMatch(/frame 1 .*held \(digest not carried\)/);
     expect(script.output).toContain("digest not carried on 3 wrapped frame(s)");
   });
+
+  it.each<[string, (frame: Record<string, unknown>) => void, string | null]>([
+    [
+      "a null event",
+      (f) => {
+        f["event"] = null;
+      },
+      null,
+    ],
+    [
+      "an array for an event",
+      (f) => {
+        f["event"] = [];
+      },
+      "event is not a JSON object",
+    ],
+    [
+      "a dropped member",
+      (f) => {
+        delete f["tool_name"];
+      },
+      "tool_name differs from the hashed event",
+    ],
+    [
+      "three shown members edited",
+      (f) => {
+        f["ts"] = "2026-09-14T12:00:59.000Z";
+        f["kind"] = "turn_end";
+        f["tool_name"] = "Write";
+      },
+      "kind, tool_name, ts differ from the hashed event",
+    ],
+    [
+      "the event's own hash member edited",
+      (f) => {
+        (f["event"] as Record<string, unknown>)["hash"] =
+          `sha256:${"e".repeat(64)}`;
+      },
+      "hash differs from the hashed event",
+    ],
+    [
+      "an edited event and nothing beside it",
+      (f) => {
+        (f["event"] as Record<string, unknown>)["kind"] = "turn_end";
+      },
+      "the event does not hash to hash; kind differs from the hashed event",
+    ],
+    [
+      "a bytes_ref that is not a string",
+      (f) => {
+        f["content"] = {
+          ...(f["content"] as Record<string, unknown>),
+          bytes_ref: 7,
+        };
+      },
+      "content differs from the hashed event",
+    ],
+  ])(
+    "both verifiers give one verdict on a wrapped frame with %s (#3733)",
+    (_name, edit, reason) => {
+      const files = unpack(
+        buildRunExportBundle({
+          runId: "tse_0a1b2c",
+          source: "tacho",
+          segments: [carriedTachoSegment()],
+          key,
+          now: new Date(),
+        }).bytes,
+      );
+      const lines = files["frames.ndjson"]!.split("\n");
+      const frame = JSON.parse(lines[1]!) as Record<string, unknown>;
+      edit(frame);
+      lines[1] = JSON.stringify(frame);
+      const edited: Record<string, string> = {
+        ...files,
+        "frames.ndjson": lines.join("\n"),
+      };
+
+      const cli = verifyRunExport({
+        "manifest.json": edited["manifest.json"]!,
+        "attestation.json": edited["attestation.json"]!,
+        "frames.ndjson": edited["frames.ndjson"]!,
+        "redactions.json": edited["redactions.json"]!,
+      }).frames[1];
+      const script = runVerifier(writeBundle(edited)).output;
+      if (reason === null) {
+        expect(cli).toMatchObject({ status: "held", digest: "not_carried" });
+        expect(script).toMatch(/frame 2 \([^)]*\) held \(digest not carried\)/);
+        expect(script).toContain("digest not carried on 1 wrapped frame(s)");
+      } else {
+        expect(cli).toMatchObject({
+          status: "broken",
+          reasons: reason.split("; "),
+        });
+        expect(script).toContain(`frame 2 (`);
+        expect(script).toMatch(
+          new RegExp(
+            `frame 2 \\([^)]*\\) broken: ${reason.replace(/[()]/g, "\\$&")}\\n`,
+          ),
+        );
+      }
+    },
+  );
 
   it("exports a sealed run, and verify reports broken at the one frame that was tampered with", () => {
     const bundle = buildRunExportBundle({

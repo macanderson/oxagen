@@ -161,12 +161,14 @@ const sha256 = (bytes) => createHash("sha256").update(bytes).digest();
 const hex = (buf) => "sha256:" + buf.toString("hex");
 const DIGEST = /^sha256:[0-9a-f]{64}$/;
 
+// The same rule as canonicalize@1.0.8, which @oxagen/tacho hashes with. Its
+// first line matters: an object with a toJSON member is written by
+// JSON.stringify, keys unsorted, so a host that names an attribute toJSON
+// still gets the digest the platform sealed.
 function canonical(value) {
-  if (Array.isArray(value)) return "[" + value.map(canonical).join(",") + "]";
-  if (value !== null && typeof value === "object") {
-    return "{" + Object.keys(value).filter((k) => value[k] !== undefined).sort().map((k) => JSON.stringify(k) + ":" + canonical(value[k])).join(",") + "}";
-  }
-  return JSON.stringify(value);
+  if (value === null || typeof value !== "object" || value.toJSON != null) return JSON.stringify(value);
+  if (Array.isArray(value)) return "[" + value.map((v) => canonical(v === undefined ? null : v)).join(",") + "]";
+  return "{" + Object.keys(value).sort().filter((k) => value[k] !== undefined).map((k) => JSON.stringify(k) + ":" + canonical(value[k])).join(",") + "}";
 }
 const digestJcs = (value) => hex(sha256(Buffer.from(canonical(value), "utf8")));
 // The ledger digests observed_at as Date.toISOString(); an older segment may
@@ -209,15 +211,16 @@ function wrappedFrameOf(event, bytesRef) {
   };
 }
 // null when the frame carries no event; otherwise the reasons it is broken.
-function checkWrapped(f) {
+function checkWrapped(f, attemptId) {
   if (f.event === undefined || f.event === null) return null;
   if (!isObject(f.event)) return ["event is not a JSON object"];
   const why = [];
+  if (f.event.session_uuid !== attemptId) why.push("the event belongs to session " + f.event.session_uuid + ", not " + attemptId);
   const { hash: _hash, ...unhashed } = f.event;
   if (digestJcs(unhashed) !== f.hash) why.push("the event does not hash to hash");
   const expected = wrappedFrameOf(f.event, typeof f.content?.bytes_ref === "string" ? f.content.bytes_ref : null);
   const differs = [...new Set([...Object.keys(expected), ...Object.keys(f)])].filter((k) => k !== "event")
-    .filter((k) => f[k] === undefined || expected[k] === undefined || canonical(f[k]) !== canonical(expected[k])).sort();
+    .filter((k) => canonical(f[k]) !== canonical(expected[k])).sort();
   if (differs.length > 0) why.push(differs.join(", ") + (differs.length === 1 ? " differs" : " differ") + " from the hashed event");
   return why;
 }
@@ -251,7 +254,7 @@ for (const attempt of manifest.attempts) {
       if (prevSeq !== null && f.seq !== prevSeq + 1) why.push("seq " + f.seq + " where " + (prevSeq + 1) + " was due");
       prevSeq = f.seq;
       prevHash = f.hash;
-      const own = checkWrapped(f);
+      const own = checkWrapped(f, attempt.attempt_id);
       if (own === null) notCarried += 1;
       else why.push(...own);
     }

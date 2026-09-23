@@ -126,7 +126,8 @@ const NULLABLE_ENVELOPE_COLUMNS = new Set([
 /**
  * A flattened row's envelope columns as `selectTachoEventRecords` reads them
  * back: an unset `String` column is `""`, an unset `Nullable` one is null,
- * `spawn_depth` (a plain `UInt8`) is 0, `seq` (a `UInt64`) is JSON text, `ts`
+ * `spawn_depth` (a plain `UInt8`) is 0, the `UInt64` columns `seq` and
+ * `harness_event_sequence` are JSON text, `ts`
  * is `toString(DateTime64(3))`, and `bytes_ref` is dropped as server-owned.
  */
 export function asClickHouseRead(row: TachoEventRow): TachoEventRow {
@@ -137,7 +138,11 @@ export function asClickHouseRead(row: TachoEventRow): TachoEventRow {
     if (column === "ts") {
       const instant = new Date(String(value)).toISOString();
       out[column] = instant.replace("T", " ").replace("Z", "");
-    } else if (column === "seq") {
+    } else if (
+      (column === "seq" || column === "harness_event_sequence") &&
+      value !== undefined
+    ) {
+      // UInt64 columns come back as JSON text.
       out[column] = String(value);
     } else if (column === "attrs") {
       out[column] = value ?? {};

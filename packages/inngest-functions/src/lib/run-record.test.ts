@@ -9,8 +9,10 @@ import {
   flattenEvent,
   GENESIS_CURSOR,
   hashEvent,
+  type JsonValue,
   sealEvent,
   type UnsealedTachoEvent,
+  wrappedFrameOf,
 } from "@oxagen/tacho";
 import type { TachoEventRecord, TachoFrameRow } from "@oxagen/telemetry";
 import { drizzle } from "drizzle-orm/postgres-js";
@@ -298,6 +300,67 @@ describe("readSealedSegments", () => {
     );
     expect(bare?.["event"]).toBeUndefined();
     expect(bare?.["tool_name"]).toBe("Read");
+  });
+
+  it("carries an event rebuilt from the row as ClickHouse reads it, with no bytes_ref when none was kept (#3733)", async () => {
+    const event = sealEvent(
+      {
+        v: "tacho/1.0",
+        event_id: "evt_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+        session_id: "sess-1",
+        session_uuid: SESSION,
+        root_session_uuid: SESSION,
+        ts: "2026-09-11T09:00:00Z",
+        fidelity: "sdk",
+        source: "hook",
+        agent: {
+          agent_key: "acme.core.cc-laptop",
+          fleet_id: "wrk_1",
+          runtime: "claude-code",
+          harness: "claude-code",
+          wrapper_version: "2.1.1",
+        },
+        turn: { turn_seq: 4 },
+        harness_event_sequence: 11,
+        kind: "tool_call",
+        body: { tool_name: "Read", tool_status: "ok" },
+      } as UnsealedTachoEvent,
+      GENESIS_CURSOR,
+    ).event;
+    const { bytes_ref: _serverOwned, ...flat } = flattenEvent(event);
+    // UInt64 and Nullable(UInt32) read back as JSON text, ts as toString(ts).
+    const envelope = {
+      ...flat,
+      seq: "0",
+      ts: "2026-09-11 09:00:00.000",
+      turn_seq: "4",
+      harness_event_sequence: "11",
+    };
+    mocks.selectTachoEventRecords.mockResolvedValue([
+      { frame: { ...tachoRow(0), hash: event.hash, bytesRef: "" }, envelope },
+    ]);
+    const [segment] = await readSealedSegments(SCOPE, {
+      source: "tacho",
+      sessionUuid: SESSION,
+      enforcementTier: "harness",
+      completenessGaps: [],
+      replayGrade: null,
+    });
+    const [carried] = (segment?.envelopes ?? []) as Array<
+      Record<string, JsonValue>
+    >;
+    expect(carried?.["event"]).toEqual(event);
+    expect(carried?.["ts"]).toBe("2026-09-11T09:00:00Z");
+    expect(carried?.["turn_seq"]).toBe(4);
+    expect(carried?.["content"]).toEqual({
+      digest: null,
+      bytes_ref: null,
+      redactions: [],
+    });
+    // The frame is exactly what a verifier rebuilds from the event it carries.
+    expect(carried).toEqual(
+      wrappedFrameOf(carried?.["event"] as Record<string, JsonValue>, null),
+    );
   });
 });
 

@@ -193,3 +193,104 @@ describe("unflattenEvent", () => {
     expect(unflattenEvent({ ...row, redactions: "[" })).toBeNull();
   });
 });
+
+describe("unflattenEvent, the readings a row leaves open", () => {
+  it("resolves a row with all eight ambiguities open when only the last reading hashes", () => {
+    // Five empty groups, an empty content, an unset spawn_depth that reads 0,
+    // and a whole-second ts: every flag must flip, so the search reaches the
+    // 256th and final candidate. The cap must not refuse this row.
+    const [event] = sealAll([
+      unsealed(
+        "agent_start",
+        {},
+        {
+          ts: "2026-09-08T10:06:04Z",
+          turn: {},
+          span: {},
+          context: {},
+          host: {},
+          anthropic: {},
+          content: { redactions: [] },
+          subagent: { subagent_id: "sub_1" },
+        },
+      ),
+    ]);
+    if (!event) throw new Error("no event");
+    const read = asClickHouseRead(flattenEvent(event));
+    expect(read["spawn_depth"]).toBe(0);
+    expect(read["ts"]).toBe("2026-09-08 10:06:04.000");
+    expect(unflattenEvent(read)).toEqual(event);
+  });
+
+  it("reads integer columns ClickHouse returns as JSON text as numbers, and leaves string members as text", () => {
+    const [event] = sealAll([
+      unsealed(
+        "tool_call",
+        { tool_name: "Read", tool_status: "ok" },
+        {
+          turn: { turn_seq: 3, prompt_id: "7" },
+          harness_event_sequence: 9,
+          host: { claude_pid: 42, claude_ppid: 41 },
+          subagent: { subagent_id: "sub_1", spawn_depth: 2 },
+        },
+      ),
+    ]);
+    if (!event) throw new Error("no event");
+    const read: Record<string, unknown> = {
+      ...asClickHouseRead(flattenEvent(event)),
+      turn_seq: "3",
+      harness_event_sequence: "9",
+      claude_pid: "42",
+      claude_ppid: "41",
+      spawn_depth: "2",
+    };
+    const rebuilt = unflattenEvent(read);
+    expect(rebuilt).toEqual(event);
+    expect(rebuilt?.turn?.prompt_id).toBe("7");
+  });
+
+  it("reads a null or absent attrs map as the empty map the schema defaulted", () => {
+    const [event] = minimalSession();
+    if (!event) throw new Error("no event");
+    expect(event.attrs).toEqual({});
+    const row = flattenEvent(event);
+    expect(unflattenEvent({ ...row, attrs: null })).toEqual(event);
+    expect(unflattenEvent({ ...row, attrs: undefined })).toEqual(event);
+  });
+
+  it("reads an empty redactions column as no redactions", () => {
+    const [event] = minimalSession();
+    if (!event) throw new Error("no event");
+    expect(unflattenEvent({ ...flattenEvent(event), redactions: "" })).toEqual(
+      event,
+    );
+  });
+
+  it("returns null for a ts the row cannot re-spell, rather than guessing (negative)", () => {
+    // The profile allows `.5Z`; ClickHouse reads it back as `.500`, and only
+    // the millisecond and whole-second spellings are tried.
+    const [coarse] = sealAll([
+      unsealed("agent_stop", {}, { ts: "2026-09-08T10:06:03.5Z" }),
+    ]);
+    if (!coarse) throw new Error("no event");
+    expect(unflattenEvent(flattenEvent(coarse))).toEqual(coarse);
+    expect(unflattenEvent(asClickHouseRead(flattenEvent(coarse)))).toBeNull();
+    const [event] = minimalSession();
+    if (!event) throw new Error("no event");
+    expect(
+      unflattenEvent({ ...flattenEvent(event), ts: undefined }),
+    ).toBeNull();
+  });
+
+  it("returns null when the hash matches a reading the schema refuses (negative)", () => {
+    // A row whose hash was computed over an event no producer could seal:
+    // the hash alone is not the word that the reading is an event.
+    const [event] = minimalSession();
+    if (!event) throw new Error("no event");
+    const forged: Record<string, unknown> = { ...event, fidelity: "bogus" };
+    forged["hash"] = hashEvent(forged);
+    const row = flattenEvent(forged as unknown as typeof event);
+    expect(row["hash"]).toBe(forged["hash"]);
+    expect(unflattenEvent(row)).toBeNull();
+  });
+});

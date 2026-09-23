@@ -25,7 +25,7 @@ An org Owner or Admin exports. The auditor needs no Oxagen account.
 7. Disconnect from the network if you want to prove the check makes no call, then run `oxagen verify bundle.zip`. It reads the zip, or a directory you extracted it into, and nothing else. It sends no usage telemetry and writes nothing to your home directory.
 
 8. Read the frame lines. Each frame prints `held` or `broken`, with two checks:
-   - `digest`: for a ledger run (`arun_…`), the payload hashes to `payload_digest` and the frame's identity fields hash to `event_digest`, both under RFC 8785. For a wrapped session (`tse_…`), the frame carries `event`, the sealed Tacho event, and that event hashes to the frame's `hash` under RFC 8785. Every other member of the frame must match what the event says. A frame edited beside its event prints `broken` and names the member, for example `kind differs from the hashed event`.
+   - `digest`: for a ledger run (`arun_…`), the payload hashes to `payload_digest` and the frame's identity fields hash to `event_digest`, both under RFC 8785. For a wrapped session (`tse_…`), the frame carries `event`, the sealed Tacho event. That event must hash to the frame's `hash` under RFC 8785, and it must belong to the session the attempt names. Every other member of the frame must match what the event says, except `content.bytes_ref`, which is where Oxagen stored the frame's body. Only the signed `exported content` check covers that member. A frame edited beside its event prints `broken` and names the member, for example `kind differs from the hashed event`.
    - `link`: the frame's place in its chain. For a ledger run, `attempt_seq` counts up from 1. For a wrapped session, `prev_hash` is the previous frame's `hash`.
 
 9. Read the bundle checks. The frame count, the Merkle root over every frame digest, each attempt's root against its signed attestation, each Ed25519 signature and key id, and each ledger attempt's `event_stream_digest` fold must all print `held`. Compare the printed key id with the one the operator gives you through a separate channel.
@@ -34,7 +34,9 @@ An org Owner or Admin exports. The auditor needs no Oxagen account.
 
 The last line is `HELD <run-id>` when everything holds, and the command exits 0. Anything broken prints `BROKEN`, names the frame or check, and exits 1. `oxagen verify --json` prints the same result as JSON.
 
-A wrapped frame prints `digest not carried` when the bundle holds no event for it. A bundle exported before format 3 (`oxagen.run-export/3` in `manifest.json`) never holds one. A format-3 export leaves the event out only when the stored row cannot be proven to rebuild it, for example an event whose host sealed a member Oxagen does not store. For those frames, only the link and the Merkle root are checked.
+A wrapped frame prints `digest not carried` when the bundle holds no event for it. A bundle exported before format 3 (`oxagen.run-export/3` in `manifest.json`) never holds one. A format-3 export leaves the event out only when the stored row cannot be proven to rebuild it. Three cases are known: the host sealed a member Oxagen does not store, a session id in upper case (the store keeps it in lower case), or an optional member set to an empty string. For those frames, only the link and the Merkle root are checked. The signed `exported content` check still covers their bytes, so a frame with its event removed after export prints `broken` there.
+
+A CLI older than format 3 prints `unknown bundle format` for a format-3 bundle. Update the CLI, or run the bundle's own `verify.mjs`.
 
 If you open `frames.ndjson` in an editor, the editor may add one newline at the end when it saves. The verifier reads that newline as the end of the last line, so the file still holds. A second newline is a blank line, and a blank line prints `broken`.
 
