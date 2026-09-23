@@ -61,9 +61,7 @@ export async function Organization({
           case "workspaces":
             return <WorkspacesTab org={ctx.orgSlug} workspaces={workspaces} />;
           case "dataPlane":
-            return (
-              <DataPlane ctx={ctx} source={source} workspaces={workspaces} />
-            );
+            return dataPlane(ctx, source, workspaces);
           case "costCenters":
             return <CostCenters ctx={ctx} source={source} />;
           default:
@@ -80,15 +78,11 @@ export async function Organization({
  * The Data plane tab's one read of its own, made inside the frame so a viewer
  * the frame refused never reaches it.
  */
-async function DataPlane({
-  ctx,
-  source,
-  workspaces,
-}: {
-  ctx: OrgCtx;
-  source: DataSource;
-  workspaces: WorkspaceList;
-}) {
+async function dataPlane(
+  ctx: OrgCtx,
+  source: DataSource,
+  workspaces: WorkspaceList,
+) {
   const read = await source.org.dataPlane(ctx);
   return (
     <DataPlaneTab
@@ -115,22 +109,15 @@ export async function OrganizationRoles({
       current="roles"
       retry={routes.roles(ctx.orgSlug)}
     >
-      {({ roles }) => <RolesWithSso ctx={ctx} source={source} roles={roles} />}
+      {async ({ roles }) => (
+        <RolesTab
+          org={ctx.orgSlug}
+          catalog={roles}
+          sso={await source.org.sso(ctx)}
+        />
+      )}
     </OrganizationFrame>
   );
-}
-
-async function RolesWithSso({
-  ctx,
-  source,
-  roles,
-}: {
-  ctx: OrgCtx;
-  source: DataSource;
-  roles: Parameters<typeof RolesTab>[0]["catalog"];
-}) {
-  const sso = await source.org.sso(ctx);
-  return <RolesTab org={ctx.orgSlug} catalog={roles} sso={sso} />;
 }
 
 /** `/{org}/api-keys`: the keys of the workspace in scope (ADR-073). */

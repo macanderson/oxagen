@@ -33,9 +33,14 @@ import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { UNANSWERED, useActionFailure } from "./action-failure";
-import { createRole, deleteRole, setRolePermissions } from "./actions";
+import {
+  createRole,
+  deleteRole,
+  type RoleDraft,
+  setRolePermissions,
+} from "./actions";
 
-export type EditorMode = "create" | "duplicate" | "edit" | "view";
+type EditorMode = "create" | "duplicate" | "edit" | "view";
 
 const label = "text-[12px] font-semibold text-muted-foreground";
 const hint = "text-xs text-muted-foreground";
@@ -120,13 +125,14 @@ export function RoleEditor({
     setFailure(null);
     try {
       const permissions = [...draft.permissions];
+      const created: RoleDraft = {
+        name: draft.name,
+        description: draft.description,
+        scope: draft.scope,
+        permissions,
+      };
       const answer = isNew
-        ? await createRole(org, {
-            name: draft.name,
-            description: draft.description,
-            scope: draft.scope,
-            permissions,
-          })
+        ? await createRole(org, created)
         : await setRolePermissions(org, role?.id ?? "", permissions);
       if (answer.ok) {
         setOpen(false);

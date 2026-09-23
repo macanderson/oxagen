@@ -22,7 +22,7 @@ export type OrganizationTab =
   | "sso";
 
 /** The rows behind the four counted tabs; a count the frame did not read is left off. */
-export type TabCounts = Partial<
+type TabCounts = Partial<
   Record<"people" | "roles" | "invitations" | "workspaces", number>
 >;
 

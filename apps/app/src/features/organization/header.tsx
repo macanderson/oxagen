@@ -4,14 +4,14 @@
 // action, Create a workspace. Every Organization tab draws this same header,
 // so the tabs beneath it read as one page. The frame reaches it only for an
 // Owner or an Admin (`frame.tsx`), which is who both writes admit.
-import { getTranslations } from "next-intl/server";
+import { useTranslations } from "next-intl";
 import type { OrgCtx } from "@/server/viewer";
 import { type SafePath, routes } from "@/shared/safe-path";
 import { PageHeader } from "@/ui/page-header";
 import { InviteDialog } from "./invite-dialog";
 import { CreateWorkspace } from "./workspace-actions";
 
-export async function OrganizationHeader({
+export function OrganizationHeader({
   ctx,
   pendingIds,
   after,
@@ -22,7 +22,7 @@ export async function OrganizationHeader({
   /** Where Invite reloads once an invitation was sent. */
   after?: SafePath;
 }) {
-  const t = await getTranslations("organization.page");
+  const t = useTranslations("organization.page");
   return (
     <PageHeader
       title={ctx.orgName}

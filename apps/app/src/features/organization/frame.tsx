@@ -33,9 +33,9 @@ import {
 import { type OrganizationTab, OrganizationTabs } from "./tabs";
 
 /** The org roles `org.admin` names: the ones that may read this page. */
-export const ORG_ADMIN_ROLES: readonly OrgRole[] = ["owner", "admin"];
+const ORG_ADMIN_ROLES: readonly OrgRole[] = ["owner", "admin"];
 
-export type FrameReads = {
+type FrameReads = {
   members: MemberList;
   roles: RoleCatalog;
   workspaces: WorkspaceList;
@@ -66,7 +66,12 @@ function fleetOf(org: string, workspaces: Read<WorkspaceList>): SafePath {
   return home === undefined ? routes.root() : routes.fleet(org, home.slug);
 }
 
-async function Denied({ ctx, source }: { ctx: OrgCtx; source: DataSource }) {
+/**
+ * The denied state with who is signed in and where Back to Fleet goes. A plain
+ * async function rather than a component, so the frame awaits it and hands back
+ * finished markup.
+ */
+async function denied(ctx: OrgCtx, source: DataSource): Promise<ReactNode> {
   const [session, workspaces] = await Promise.all([
     getSession(),
     source.org.workspaces(ctx),
@@ -95,11 +100,10 @@ export async function OrganizationFrame({
   current: OrganizationTab;
   /** This tab's own URL, which Try again reloads. */
   retry: SafePath;
-  children: (reads: FrameReads) => ReactNode;
+  /** The tab's body, handed the frame's reads; it may read more of its own. */
+  children: (reads: FrameReads) => ReactNode | Promise<ReactNode>;
 }) {
-  if (!ORG_ADMIN_ROLES.includes(ctx.orgRole)) {
-    return <Denied ctx={ctx} source={source} />;
-  }
+  if (!ORG_ADMIN_ROLES.includes(ctx.orgRole)) return denied(ctx, source);
   const [members, roles, workspaces] = await Promise.all([
     source.org.members(ctx),
     source.org.roles(ctx),
@@ -107,14 +111,13 @@ export async function OrganizationFrame({
   ]);
   const failed = firstFailure([members, roles, workspaces]);
   if (failed !== null) {
-    return failed.reason === "error" ? (
+    if (failed.reason !== "error") return denied(ctx, source);
+    return (
       <OrganizationError
         failure={failed}
         retry={retry}
         readAt={instantOfRead()}
       />
-    ) : (
-      <Denied ctx={ctx} source={source} />
     );
   }
   if (!members.ok || !roles.ok || !workspaces.ok) return null;
@@ -138,7 +141,7 @@ export async function OrganizationFrame({
           workspaces: workspaces.value.workspaces.length,
         }}
       />
-      {children({
+      {await children({
         members: members.value,
         roles: roles.value,
         workspaces: workspaces.value,

@@ -10,6 +10,4 @@ export {
   parseOrganizationTab,
 } from "./organization";
 export { OrganizationSkeleton } from "./states";
-export { OrganizationHeader } from "./header";
-export { OrganizationTabs } from "./tabs";
 export { Sso } from "./sso";

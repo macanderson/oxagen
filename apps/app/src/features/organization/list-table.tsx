@@ -11,9 +11,9 @@ import { type ReactNode, useId, useState } from "react";
 import { buttonSecondary, inputBase } from "@/ui/control-styles";
 import { cell, numericCell, Table } from "@/ui/table";
 
-export type ListColumn = { label: string; numeric?: boolean };
+type ListColumn = { label: string; numeric?: boolean };
 
-export type ListFilter = {
+type ListFilter = {
   /** The key each row's `values` carries for this filter. */
   key: string;
   label: string;
@@ -32,7 +32,7 @@ export type ListRow = {
   rowId?: string;
 };
 
-export const PAGE_SIZES = [10, 25, 50] as const;
+const PAGE_SIZES = [10, 25, 50] as const;
 
 export function ListTable({
   label,

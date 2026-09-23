@@ -162,11 +162,6 @@ export function WriteDialog<O>({
   );
 }
 
-/** Every value a repeated field carries, as the text the actions take. */
-export function textValues(form: FormData, field: string): string[] {
-  return form.getAll(field).filter((value) => typeof value === "string");
-}
-
 /** One field's text, or the empty string when the form does not carry it. */
 export function textValue(form: FormData, field: string): string {
   const value = form.get(field);
