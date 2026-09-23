@@ -168,7 +168,7 @@ describe("budgetDocFromVersion", () => {
     ).toThrowError(
       expect.objectContaining({
         code: "conflict",
-        reason: "invalid_active_definition",
+        reason: "invalid_definition_source",
       }),
     );
   });

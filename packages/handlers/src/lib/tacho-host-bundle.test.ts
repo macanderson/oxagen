@@ -1,3 +1,4 @@
+import { evaluatePreToolUse } from "@oxagen/tacho/host";
 /**
  * What the policy bundle has to carry for the local MCP gateway to serve a
  * connected app honestly (ADR-078 §4).
@@ -358,6 +359,51 @@ describe("the active definition budget on the signed bundle", () => {
       ),
     ).toBe(false);
   });
+
+  it.each([
+    "[budget",
+    "budget = { per_run_micros = nan }",
+    "budget = { per_run_micros = 1.5 }",
+  ])(
+    "signs a suspension for an invalid persisted definition: %s",
+    async (source) => {
+      const { tx } = budgetTransaction(source);
+      const mandate = await resolveHostMandate(tx, ctx, governedHost());
+      const { privateKey } = generateKeyPairSync("ed25519");
+      const signer = bundleSignerFromPem(
+        privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
+      );
+      const signed = signBundle(
+        signer,
+        unsignedBundle(
+          governedHost(),
+          { org: 1, workspace: 1 },
+          { mode: "digest_only", classes: [] },
+          null,
+          mandate,
+          NOW,
+        ),
+      );
+      expect(policyBundleSchema.parse(signed).host_status).toBe("suspended");
+      expect(verifyBundle(signed, signer.publicKeyPem)).toBe(true);
+      expect(
+        verifyBundle({ ...signed, host_status: "active" }, signer.publicKeyPem),
+      ).toBe(false);
+      expect(governedHost().status).toBe("active");
+      expect(
+        evaluatePreToolUse({
+          bundle: signed,
+          bundleVerified: true,
+          hostStatus: signed.host_status,
+          session: {},
+          controlReachable: true,
+          now: NOW.getTime(),
+          toolName: "Bash",
+          toolInput: { command: "git push" },
+        }).decision,
+      ).toBe("deny");
+    },
+  );
 
   it("does not arm an unpublished definition when there is no active version", async () => {
     const { tx, findVersion } = budgetTransaction(

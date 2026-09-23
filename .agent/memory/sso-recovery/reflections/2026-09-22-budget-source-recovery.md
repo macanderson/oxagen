@@ -15,3 +15,6 @@ The definition editor writes TOML while publication and older consumers also ret
 Daily budgets remain unenforced by design. The change applies only to the selected active version, not unpublished drafts. CI and a live wrapped session remain necessary verification.
 ### Confidence in the result: medium
 Independent review accepted coverage that follows the stored source into a real signed bundle. CI has not run this commit yet.
+
+### Review follow-up
+Validated full TOML and positive safe-integer budgets before commit or publication. A persisted invalid definition now signs a suspended control bundle while evidence intake commits; a corrected definition recovers on the next poll. Added real signed-bundle refusal and ingest recovery assertions. The parent independently audited the parser, write ordering, and intake behavior before this commit. No local tests ran.

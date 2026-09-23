@@ -68,6 +68,28 @@ describe("agent.definition.publish handler", () => {
     expect(out.checksum).toMatch(/^[0-9a-f]{64}$/);
   });
 
+  it.each([
+    "[budget",
+    "budget = { per_run_micros = nan }",
+    "budget = { per_day_micros = 1.5 }",
+  ])("refuses invalid cached source before activation: %s", async (tail) => {
+    fake.enqueue(
+      [AGENT_ROW],
+      [
+        {
+          id: "ver-uuid",
+          isPublished: false,
+          config: CONFIG,
+          definitionSource: `schema = "agent-definition/v0.1"\nslug = "my-agent"\n${tail}`,
+        },
+      ],
+    );
+    await expect(
+      agentDefinitionPublishHandler({ agentId: "agt_1", version: 1 }, CTX),
+    ).rejects.toMatchObject({ code: "conflict" });
+    expect(fake.mutations).toEqual({ insert: 0, update: 0, delete: 0 });
+  });
+
   it("publishes the latest version when none specified", async () => {
     fake.enqueue(
       [AGENT_ROW], // resolveAgent

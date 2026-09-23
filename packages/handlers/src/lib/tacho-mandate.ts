@@ -24,8 +24,10 @@
  * never reads the clock; every caller resolves its inputs first.
  */
 import type { PolicyBundle } from "@oxagen/tacho";
-import { HandlerError } from "@oxagen/oxagen";
-import { parse as parseToml } from "smol-toml";
+import {
+  definitionBudget,
+  parseAgentDefinitionSource,
+} from "@oxagen/oxagen/agent-definition-source";
 
 /** The harness's own three-value permission vocabulary (mcp-config, tacho's rule evaluator). */
 export type HarnessRuleEffect = "allow" | "deny" | "ask";
@@ -134,12 +136,6 @@ export interface AgentBudgetDoc {
   perDayMicros?: number;
 }
 
-function asTable(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined;
-}
-
 /**
  * Read the active version's committed definition when it has one. The editor
  * writes budget changes into TOML, while the commit handler copies the prior
@@ -150,31 +146,11 @@ export function budgetDocFromVersion(version: {
   config: unknown;
   definitionSource?: string | null;
 }): AgentBudgetDoc | undefined {
-  let table: Record<string, unknown> | undefined;
-  if (
-    version.definitionSource !== undefined &&
-    version.definitionSource !== null
-  ) {
-    try {
-      table = asTable(parseToml(version.definitionSource)["budget"]);
-    } catch {
-      throw new HandlerError({
-        code: "conflict",
-        reason: "invalid_active_definition",
-        message:
-          "The active agent definition is invalid TOML. Publish a valid definition.",
-      });
-    }
-  } else {
-    table = asTable(asTable(version.config)?.["budget"]);
-  }
-  if (table === undefined) return undefined;
-  const perRunMicros = table["per_run_micros"];
-  const perDayMicros = table["per_day_micros"];
-  return {
-    ...(typeof perRunMicros === "number" ? { perRunMicros } : {}),
-    ...(typeof perDayMicros === "number" ? { perDayMicros } : {}),
-  };
+  return definitionBudget(
+    version.definitionSource == null
+      ? version.config
+      : parseAgentDefinitionSource(version.definitionSource),
+  );
 }
 
 function microsToUsd(micros: number): number {

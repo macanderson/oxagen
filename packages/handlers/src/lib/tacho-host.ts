@@ -4,6 +4,8 @@
  * building the control envelope every machine response carries.
  */
 import { CapabilityError } from "@oxagen/oxagen/kernel";
+import { isHandlerError } from "@oxagen/oxagen/handler-error";
+import { logger } from "../logger";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import {
   type PolicyBundle,
@@ -334,6 +336,7 @@ function modelPrices(host: TachoHostRow): {
 
 /** The tool-RBAC-and-budget half of a host's mandate, resolved for the wire. */
 export interface HostMandate {
+  invalidDefinition?: true;
   permissions: PolicyBundle["permissions"];
   budget: PolicyBundle["budget"];
 }
@@ -424,9 +427,28 @@ export async function resolveHostMandate(
     mcpRules,
     externalToolRules: ruleSet?.rules ?? [],
   });
-  const budgetDoc = await readAgentBudgetDoc(tx, host.agentId);
-  const budget = deriveBundleBudget(budgetDoc);
-  return { permissions, budget };
+  try {
+    const budgetDoc = await readAgentBudgetDoc(tx, host.agentId);
+    const budget = deriveBundleBudget(budgetDoc);
+    return { permissions, budget };
+  } catch (error) {
+    if (
+      !isHandlerError(error) ||
+      !["invalid_definition_source", "invalid_definition_budget"].includes(
+        error.reason,
+      )
+    )
+      throw error;
+    logger.warn(
+      { host: host.publicId, agentId: host.agentId, reason: error.reason },
+      "Invalid active definition suspends governed actions while evidence intake continues",
+    );
+    return {
+      permissions,
+      budget: { mode: "observed" },
+      invalidDefinition: true,
+    };
+  }
 }
 
 /**
@@ -466,7 +488,11 @@ export function unsignedBundle(
   mandate: HostMandate,
   now: Date = new Date(),
 ): Omit<PolicyBundle, "signature"> {
-  const status = tachoHostStatusSchema.parse(host.status);
+  const status = tachoHostStatusSchema.parse(
+    mandate.invalidDefinition && host.status === "active"
+      ? "suspended"
+      : host.status,
+  );
   const mode = tachoBundleModeSchema.parse(host.mode);
   // Version and etag cover the policy content only, never the timestamps, so
   // an unchanged bundle answers not_modified across polls.
@@ -638,7 +664,7 @@ export async function controlEnvelope(
   );
   const commands = await drainCommands(tx, host, now);
   return controlEnvelopeSchema.parse({
-    host_status: tachoHostStatusSchema.parse(host.status),
+    host_status: bundle.host_status,
     deny_generation: denyGeneration,
     bundle_etag: bundle.etag,
     commands,
