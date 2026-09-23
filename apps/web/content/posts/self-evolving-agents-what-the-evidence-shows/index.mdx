@@ -1,6 +1,6 @@
 ---
 title: "Self-evolving agents: what the evidence shows"
-description: "What actually changes when an agent improves itself, what judges the change, and the measured gain, across eight systems from Voyager to AlphaEvolve"
+description: "What changes when an agent improves itself, what checks the change, and the measured gain, across eight systems from Voyager to AlphaEvolve."
 date: 2026-09-09
 authors:
   - Oxagen Research
@@ -16,103 +16,103 @@ tags:
 draft: false
 ---
 
-Your agent got the same task wrong last Tuesday, and it will get it wrong again next Tuesday. It has no idea it has seen the task before. Every run starts from the same prompt, the same tools, and the same blank memory, so the hundredth run costs exactly what the first one cost and is exactly as good. That is the first pain, and it is the expensive one.
+Your agent got a task wrong last Tuesday, and it will get the same task wrong next Tuesday. It does not know it has seen the task before. Each run starts from the same prompt, the same tools, and the same empty memory. So the hundredth run costs the same as the first and is no better. That is the first problem, and it is the costly one.
 
-The second pain is the opposite fear. A system that changes itself is a system that can change in ways nobody asked for, and nobody noticed. Ask an engineer whether they want their agent to rewrite its own tool code and you get a long pause.
+The second problem is the opposite worry. A system that changes itself can change in ways nobody asked for and nobody noticed. Ask an engineer whether they want their agent to rewrite its own tool code, and they will hesitate for a long time.
 
-Both reactions are reasonable. The research on self-evolving agents is now large enough to say something useful about which one you should be feeling, and when. A 2025 survey covering the field organizes it around four questions: what evolves, when it evolves, how it evolves, and where.[^1] Those are the right questions. This post answers the first and third with numbers, because the measured gains vary by more than an order of magnitude depending on what changes and what judges the change.
+Both reactions make sense. There is now enough research on self-evolving agents to say which worry fits which case. A 2025 survey sorts the field by four questions: what changes, when it changes, how it changes, and where.[^1] This post answers the first and third questions with numbers. The measured gains differ by more than ten times, depending on what changes and what checks the change.
 
 ## Four things an agent can change about itself
 
-Almost every system in this literature modifies one of four things, in rising order of blast radius.
+Almost every system in this research changes one of four things. They are listed here from least to most that can go wrong.
 
-**The prompt or the context.** The agent writes something down and reads it back on the next attempt. Reflexion is the clean example: after a failed attempt, the agent writes a short verbal post-mortem into an episodic buffer, and that text goes into the next attempt's context.[^2] No weights move. Self-Refine is the single-turn version, where the same model critiques its own output and rewrites it in place.[^3]
+**The prompt or the context.** The agent writes something down and reads it back on its next attempt. Reflexion is the clearest example. After a failed attempt, the agent writes a short note on what went wrong. It stores the note in a buffer, and the note goes into the next attempt's input.[^2] The model's weights do not change. Self-Refine does this within one turn. The same model critiques its own output and then rewrites it.[^3]
 
-**The memory.** Generative Agents stores a full natural-language record of what happened, then synthesizes those records into higher-level reflections and retrieves them to plan.[^4] The agent is not learning a new skill, it is building a compressed model of its own history.
+**The memory.** Generative Agents stores a full plain-language record of what happened. It then combines those records into higher-level reflections and looks them up to plan.[^4] The agent does not learn a new skill. It builds a short summary of its own history.
 
-**The skills or tools.** Voyager keeps an ever-growing library of executable code. When it works out how to craft an item, that procedure is stored as a callable function and becomes a building block for harder ones.[^5] Agent Workflow Memory does the same thing at the level of routines rather than functions: it induces reusable workflows from prior trajectories, offline from training examples or online from test queries as they arrive.[^6]
+**The skills or tools.** Voyager keeps a growing library of code it can run. When it works out how to craft an item, it stores the steps as a function. Later it uses that function to build harder items.[^5] Agent Workflow Memory does the same thing with routines instead of functions. It finds reusable workflows in its past attempts. It can do this offline from training examples, or online from new tasks as they arrive.[^6]
 
-**The code.** At the far end, the agent modifies the program that is the agent. STOP starts with a seed improver and points it at itself, producing an improved improver.[^7] Automated Design of Agentic Systems (ADAS) has a meta agent write new agent programs into a growing archive.[^8] The Darwin Gödel Machine iteratively edits its own codebase and keeps an archive of variants.[^9]
+**The code.** At the far end, the agent changes its own program. STOP starts with a simple program that improves code, called an improver. It then runs the improver on itself, which produces a better improver.[^7] In Automated Design of Agentic Systems (ADAS), one agent writes new agent programs and adds them to a growing archive.[^8] The Darwin Gödel Machine edits its own code over and over and keeps an archive of versions.[^9]
 
-The blast radius rises down that list, and so does the measured gain. That is not a coincidence, and it is not free.
+As you go down that list, more can go wrong, and the measured gain also rises. The two rise together for a reason, and the larger gain has a cost.
 
 <Ladder
   title="Four things an agent can change about itself"
-  axis="Blast radius and measured gain rise"
+  axis="What can go wrong and the measured gain both rise"
   steps={[
     { label: "Prompt or context", detail: "Reflexion, Self-Refine" },
     { label: "Memory", detail: "Generative Agents" },
     { label: "Skills or tools", detail: "Voyager, Agent Workflow Memory" },
     { label: "Code", detail: "STOP, ADAS, Darwin Gödel Machine" },
   ]}
-  caption="Rung height is an ordering, not a measurement. Each rung names the systems in this post that change that layer."
+  caption="The rungs show order only and are not measured. Each rung names the systems in this post that change that layer."
 />
 
-## What judges the change is the whole system
+## The check on each change decides how the agent improves
 
-Every system above has an improvement loop, and every improvement loop needs a judge. Change the judge and the whole thing behaves differently.
+Each system above has a loop that makes a change and then checks it. If you change the check, the whole system behaves differently.
 
-The strong systems all judge against something outside the model. Reflexion's coding results come from running unit tests. Voyager's skill library only admits a skill after self-verification and successful execution in the environment, with execution errors fed back into the next attempt. AlphaEvolve requires an automated evaluator that scores a candidate program, which is why it works on problems with a machine-checkable objective and not on problems without one.[^10] The Darwin Gödel Machine validates each self-edit on coding benchmarks. In all four cases, the loop is anchored by a verifier the model cannot talk its way past.
+The strong systems all check against something outside the model. Reflexion's coding results come from running unit tests. Voyager adds a skill to its library only after the skill passes its own check and runs without error in the game. Errors from running go back into the next attempt. AlphaEvolve needs an automated evaluator that scores each candidate program. So it works on problems with a goal a machine can check, and not on problems without one.[^10] The Darwin Gödel Machine tests each self-edit on coding benchmarks. In all four cases, the loop relies on a checker that the model cannot argue with.
 
 <Flow
-  title="An improvement loop is only as honest as its judge"
+  title="Each loop keeps only what passes a check outside the model"
   steps={[
     { label: "Propose", detail: "A reflection, a skill, a workflow, or a code edit" },
-    { label: "Verify", detail: "Tests, execution, or an evaluator outside the model", emph: true },
+    { label: "Verify", detail: "Tests, running the code, or an evaluator outside the model", emph: true },
     { label: "Keep", detail: "Only what passed enters memory, the library, or the archive" },
     { label: "Next attempt", detail: "Starts from what was kept" },
   ]}
-  loop="the agent improves at the rate step 2 is honest"
-  caption="Reflexion, Voyager, AlphaEvolve, and the Darwin Gödel Machine all anchor step 2 outside the model. Take that away and self-correction stalls or degrades."
+  loop="the agent improves only as far as step 2 checks correctly"
+  caption="Reflexion, Voyager, AlphaEvolve, and the Darwin Gödel Machine all run step 2 outside the model. Without that outside check, self-correction stalls or gets worse."
 />
 
-The weak version is a model grading itself with no external signal, and the evidence there is unkind. Huang and colleagues tested intrinsic self-correction on reasoning, where the model revises based solely on its own judgment, and found that models struggle to correct themselves without external feedback, with performance sometimes degrading after the revision.[^11] Self-Refine reports roughly 20 points of absolute improvement on average across seven tasks, but its feedback is task-specific and its tasks include ones with clear rubrics.[^3] The gap between those two results is mostly a gap in what does the judging.
+The weak version is a model grading itself with no outside signal, and the evidence on it is poor. Huang and colleagues tested this kind of self-correction on reasoning tasks. The model revised its answers using only its own judgment. Models struggled to correct themselves without outside feedback. Sometimes they did worse after revising.[^11] Self-Refine reports about 20 points of absolute gain on average across seven tasks. But its feedback is written for each task, and some of its tasks have clear scoring rules.[^3] The difference between the two results comes mostly from what does the checking.
 
-The practical rule falls out of this: an agent improves at exactly the rate its verifier is honest. If your judge is a test suite, the agent gets better at passing tests. If your judge is a benchmark score, the agent gets better at the benchmark. There is no version of this where you get improvement for free without saying what improvement means.
+This leads to a practical rule. An agent improves only as far as its checker measures the right thing. If your checker is a test suite, the agent gets better at passing tests. If your checker is a benchmark score, the agent gets better at the benchmark. You have to say what "better" means before the agent can get better.
 
 ## The measured gains
 
-Here is the field in one table. Every number is from the cited paper or its official write-up.
+This table covers the field. Each number comes from the cited paper or its official write-up.
 
-| System (year) | What changes | What judges the change | Measured gain |
+| System (year) | What changes | What checks the change | Measured gain |
 |---|---|---|---|
-| Reflexion (2023)[^2] | Reflection text in an episodic buffer | Unit tests, environment reward | 91% pass@1 on HumanEval, against 80% for the GPT-4 baseline |
-| Self-Refine (2023)[^3] | The output, in place | The same model's own feedback | About 20 points absolute on average across 7 tasks |
-| Voyager (2023)[^5] | A library of executable skills | Self-verification plus execution in Minecraft | 3.3x more unique items, 2.3x longer distances, tech-tree milestones up to 15.3x faster |
-| Generative Agents (2023)[^4] | Memory and synthesized reflections | Human evaluation of believability | Ablating reflection degrades believable behavior |
-| STOP (2023)[^7] | The scaffolding program itself | A supplied utility function | The improved improver beats the seed improver on downstream tasks |
-| Agent Workflow Memory (2024)[^6] | Induced reusable workflows | Task success over 1,000+ tasks in 200+ domains | 24.6% relative success gain on Mind2Web, 51.1% on WebArena |
-| ADAS / Meta Agent Search (2024)[^8] | The agent program, into an archive | Benchmark score in the target domain | Discovered agents beat state-of-the-art hand-designed ones, and hold up when transferred across domains and models |
-| Darwin Gödel Machine (2025)[^9] | Its own codebase | SWE-bench and Polyglot scores | SWE-bench 20.0% to 50.0%, Polyglot 14.2% to 30.7% |
+| Reflexion (2023)[^2] | Reflection notes stored in a buffer | Unit tests, reward from the environment | 91% pass@1 on HumanEval, against 80% for the GPT-4 baseline |
+| Self-Refine (2023)[^3] | The output, rewritten | The same model's own feedback | About 20 points absolute on average across 7 tasks |
+| Voyager (2023)[^5] | A library of skills stored as code | Its own check plus running the code in Minecraft | 3.3x more unique items, 2.3x longer distances, tech-tree milestones up to 15.3x faster |
+| Generative Agents (2023)[^4] | Memory and combined reflections | People rating how believable the behavior is | Removing reflection makes behavior less believable |
+| STOP (2023)[^7] | The program around the model | A supplied scoring function | The improved improver beats the starting improver on later tasks |
+| Agent Workflow Memory (2024)[^6] | Reusable workflows found in past attempts | Task success over 1,000+ tasks in 200+ domains | 24.6% relative success gain on Mind2Web, 51.1% on WebArena |
+| ADAS / Meta Agent Search (2024)[^8] | The agent program, added to an archive | Benchmark score in the target domain | Discovered agents beat the best hand-designed ones, and still do when moved to other domains and models |
+| Darwin Gödel Machine (2025)[^9] | Its own code | SWE-bench and Polyglot scores | SWE-bench 20.0% to 50.0%, Polyglot 14.2% to 30.7% |
 | AlphaEvolve (2025)[^10] | Candidate program code | Automated evaluators | A scheduling heuristic in production for over a year recovering 0.7% of Google's worldwide compute, up to 32.5% faster FlashAttention kernel, and 4x4 complex matrix multiplication in 48 scalar multiplications |
 
-Two things stand out. First, the cheap interventions are not small. Agent Workflow Memory adds no new model and no new tools, it just notices that a trajectory contains a reusable routine, and it moves WebArena success by half again.[^6] Second, the AlphaEvolve results are the only ones on this list that show up as production infrastructure rather than a benchmark number. The 4x4 complex matrix multiplication result, 48 scalar multiplications, is the first improvement in that setting over Strassen's algorithm in 56 years.[^10]
+Two results stand out. First, the cheap changes can have large effects. Agent Workflow Memory adds no new model and no new tools. It spots a reusable routine in a past attempt, and that raises WebArena success by about half.[^6] Second, AlphaEvolve's results are the only ones here that run in production. The others are benchmark numbers. Its 4x4 complex matrix multiplication uses 48 scalar multiplications. That is the first improvement in that setting over Strassen's algorithm in 56 years.[^10]
 
-<Callout kind="note" title="Read the denominators">
-A relative success gain of 51.1% on a benchmark where the baseline succeeds a fifth of the time is a different claim from 51.1% on a benchmark where the baseline succeeds most of the time. Check the baseline before you budget against the headline.
+<Callout kind="note" title="Check the baseline behind a relative gain">
+Suppose the baseline succeeds on one task in five. A 51.1% relative gain there means something different than a 51.1% gain where the baseline succeeds most of the time. Check the baseline before you plan a budget around the headline number.
 </Callout>
 
-## Where the evidence runs out
+## What the evidence does not show
 
-Three limits are worth carrying into any decision about this.
+Keep three limits in mind when you decide.
 
-**The judge is usually a benchmark, and benchmarks leak.** Kapoor and colleagues audited agent benchmarks and evaluation practice and found a narrow focus on accuracy with no attention to cost, benchmarks with inadequate holdout sets or none at all, and a pervasive lack of reproducibility.[^12] An agent that evolves against a benchmark with a weak holdout is an agent that is overfitting with extra steps. Every self-evolution result in the table above inherits the quality of the benchmark it was scored on.
+**The checker is usually a benchmark, and benchmarks have gaps.** Kapoor and colleagues audited agent benchmarks and how they are used. They found a narrow focus on accuracy with no attention to cost. They found benchmarks with weak holdout sets, the test cases kept apart from tuning, or none at all. And they found results were often hard to reproduce.[^12] If an agent evolves against a benchmark with a weak holdout set, it overfits to that benchmark. So each result in the table above is only as good as the benchmark that scored it.
 
-**Cost is rarely reported next to accuracy.** The same audit shows state-of-the-art agents are needlessly complex and expensive because nobody was optimizing the second axis.[^12] Self-evolution loops are the most expensive shape in agent design: they run the task many times, and the archive-based ones run many variants of the agent. If you cannot see the cost per accepted improvement, you cannot tell whether the loop is working or just burning tokens.
+**Papers rarely report cost next to accuracy.** The same audit found that leading agents are more complex and costly than they need to be, because no one was trying to lower cost.[^12] Self-evolution loops cost more than any other agent design. They run the task many times, and the archive-based ones run many versions of the agent. If you cannot see the cost of each accepted improvement, you cannot tell whether the loop is helping or only spending tokens.
 
-**None of this is recursive self-improvement, and the papers say so.** STOP is explicit that the language model itself is never altered, so this is not full recursive self-improvement.[^7] The Darwin Gödel Machine departs from Schmidhuber's original design precisely because proving a self-edit beneficial before making it is impossible in practice, so it validates empirically instead and runs with sandboxing and human oversight.[^9] What we have is agents that improve their scaffolding against a fixed model, using a fixed verifier. That is a useful thing. It is not the thing the word "self-evolving" makes people picture.
+**None of this is recursive self-improvement, and the papers say so.** The STOP authors state that the language model itself never changes, so this is not full recursive self-improvement.[^7] Schmidhuber's original design required a proof that a self-edit helps before making it. Such a proof cannot be found in practice. So the Darwin Gödel Machine drops that requirement. It tests edits instead and runs with sandboxing and human oversight.[^9] Today's agents improve the program around a fixed model, and a fixed checker judges them. That is useful. It is less than what the phrase "self-evolving" makes people picture.
 
-## What to actually do with this
+## What to do first
 
-If your agent repeats the same failure, the first move is not to give it the ability to rewrite its own code. It is to give it a place to write down what happened and a verifier that can tell it whether the next attempt was better. That covers the top two rows of the table, costs almost nothing, and is where a large fraction of the reported gain lives.
+If your agent repeats the same failure, do not start by letting it rewrite its own code. Start by giving it a place to write down what happened. Add a checker that can tell it whether the next attempt was better. That covers the top two rows of the table. It costs almost nothing, and a large share of the reported gain comes from it.
 
-The second move is workflow induction: look at your successful trajectories and ask whether a routine is hiding in them. That is what Agent Workflow Memory does, and it is the highest gain per unit of risk in the whole literature, because an induced workflow is a readable artifact you can inspect before you trust it.[^6]
+Next, try finding workflows. Look at your successful attempts and check whether a routine is hidden in them. Agent Workflow Memory does this. It has the best gain for its risk in all of this research. A workflow found this way is a readable file, so you can inspect it before you trust it.[^6]
 
-Code-level self-modification is the last move, not the first. It is where the largest benchmark jumps are, and it is also the only tier where the agent can change what it is permitted to do. That is a governance problem before it is an engineering one.
+Let the agent change its own code last. The largest benchmark jumps come from this layer. It is also the only layer where the agent can change what it is permitted to do. So it is a governance problem before it is an engineering problem.
 
-## Where this meets Oxagen
+## What Oxagen records
 
-Oxagen is the control plane for the agents you run. It does not run them. The part of this that lands on Oxagen is the record: which version of an agent produced a given result, what knowledge it was scoped to, what it asked for and which rule answered, and what checked the outcome. That record is the difference between an agent that got better and an agent you can show got better. The meter matters here too, because a self-evolution loop is the shape most likely to spend real money in the background, and cost per accepted improvement is the number that tells you whether to keep the loop running.
+Oxagen is the agent control plane for the agents you run. It does not run them. The part of this that falls to Oxagen is the record. The record shows which version of an agent produced a result and what knowledge it was scoped to. It shows what the agent asked for, which rule answered, and what checked the outcome. With that record, you can show that an agent got better, instead of only saying so. The meter matters too. A self-evolution loop is the design most likely to spend real money in the background. The cost of each accepted improvement tells you whether to keep the loop running.
 
 [^1]: Gao, H., Geng, J., Hua, W., Hu, M., Juan, X., Liu, H., et al. (2025). *A Survey of Self-Evolving Agents: What, When, How, and Where to Evolve on the Path to Artificial Super Intelligence*. arXiv. https://arxiv.org/abs/2507.21046
 [^2]: Shinn, N., Cassano, F., Berman, E., Gopinath, A., Narasimhan, K., & Yao, S. (2023). *Reflexion: Language Agents with Verbal Reinforcement Learning*. NeurIPS 2023. https://arxiv.org/abs/2303.11366
