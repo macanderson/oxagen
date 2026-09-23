@@ -1,3 +1,4 @@
+import { createContainedRunner } from "../contained/runner";
 /**
  * `tachod`: the per-host collector (spec section 3). Composes the listener,
  * the session registry, the WAL, the shipper, the command inbox, the
@@ -2160,6 +2161,31 @@ async function initializeDaemon(
     log,
   });
 
+  const contained = createContainedRunner({
+    host: () => host,
+    registry,
+    genesis: (uuid) => wal.read(uuid)[0]?.hash,
+    hook: (envelope) => serial.run(() => handleHookInner(envelope)),
+    record,
+    model: modelProxy,
+    modelPort: () => modelProxyListener.port(),
+    issueCredential: (harness) =>
+      issueRunToken(
+        { harness },
+        {
+          key: runTokenKey,
+          store: credentialStore,
+          host: () => host,
+          hostRecorder: () => hostRecorder,
+          record,
+          now,
+          log,
+        },
+      ),
+    fetch: options.fetch ?? ((input, init) => fetch(input, init)),
+    log,
+  });
+
   /**
    * The real interrupt. A pause, cancel or kill already stops the session at
    * its next hook boundary; here it also cuts the model calls that are in
@@ -2181,6 +2207,8 @@ async function initializeDaemon(
           : registry.live();
       for (const target of targets) {
         if (target === undefined) continue;
+        if (command.command === "cancel" || command.command === "kill")
+          contained.stop(target.recorder.sessionUuid);
         const cut = modelProxy.abortSession(
           target.recorder.sessionUuid,
           command.reason ?? `operator ${command.command}`,
@@ -2219,12 +2247,16 @@ async function initializeDaemon(
    * `gateway` only when the proxy saw a model call for it: a base URL written
    * into a config file is intent, not traffic.
    */
-  function tierOf(sessionUuid: string): "gateway" | "harness" | "observe" {
-    if (modelProxy.callsObservedFor(sessionUuid) > 0) return TACHO_GATEWAY_TIER;
+  function tierOf(
+    sessionUuid: string,
+  ): "contained" | "gateway" | "harness" | "observe" {
+    if (modelProxy.callsObservedFor(sessionUuid) > 0)
+      return contained.attested(sessionUuid) ? "contained" : TACHO_GATEWAY_TIER;
     return host.bundle.mode === "enforce" ? "harness" : "observe";
   }
 
   const api: CollectorApi = {
+    runContained: contained.run,
     localToken: host.local_token,
     enrollmentId: host.host_enrollment_id,
     // Deliberately NOT on `serial`. A gateway call is a round trip to the

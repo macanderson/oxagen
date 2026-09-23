@@ -61,7 +61,12 @@ export const TACHO_SOURCES = [
   "collector",
   "control_plane",
 ] as const;
-export const ENFORCEMENT_TIERS = ["gateway", "harness", "observe"] as const;
+export const ENFORCEMENT_TIERS = [
+  "contained",
+  "gateway",
+  "harness",
+  "observe",
+] as const;
 
 export const TOOL_STATUSES = ["ok", "error", "rejected", "cancelled"] as const;
 export const POLICY_DECISIONS = ["allow", "deny", "ask", "defer"] as const;

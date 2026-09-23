@@ -1,3 +1,4 @@
+import type { ContainedRunResult } from "../contained/launcher";
 /**
  * The daemon's listener (spec section 3.1 step 1): one HTTP request handler
  * served on a Unix socket (for `tacho-hook`) and on `127.0.0.1:<port>` (for
@@ -35,6 +36,11 @@ export interface HookEnvelope {
 
 /** What the daemon exposes to the listener; the daemon implements it. */
 export interface CollectorApi {
+  runContained?: (
+    input: unknown,
+    output: (stream: "stdout" | "stderr", text: string) => void,
+    signal?: AbortSignal,
+  ) => Promise<ContainedRunResult>;
   localToken: string;
   enrollmentId: string;
   handleHook: (envelope: HookEnvelope) => Promise<Record<string, unknown>>;
@@ -211,6 +217,34 @@ export function createRequestHandler(
           parsed = raw.length === 0 ? {} : JSON.parse(raw);
         } catch {
           send(res, 400, { error: "invalid JSON" });
+          return;
+        }
+        if (path === "/contained/run") {
+          if (!api.runContained) {
+            send(res, 404, { error: "Contained execution is unavailable" });
+            return;
+          }
+          const controller = new AbortController();
+          res.on("close", () => controller.abort());
+          res.writeHead(200, { "content-type": "application/x-ndjson" });
+          try {
+            const result = await api.runContained(
+              parsed,
+              (stream, text) => {
+                if (!res.destroyed)
+                  res.write(`${JSON.stringify({ stream, text })}\n`);
+              },
+              controller.signal,
+            );
+            res.end(`${JSON.stringify({ result })}\n`);
+          } catch (error) {
+            log(
+              `Contained execution failed: ${error instanceof Error ? error.message : String(error)}`,
+            );
+            res.end(
+              `${JSON.stringify({ error: "Contained execution failed; inspect the daemon log for the cause" })}\n`,
+            );
+          }
           return;
         }
         if (path === "/credential/issue") {
