@@ -340,6 +340,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
       )[0]!.id;
       agent = await support.seedAgent(tenant, { slug: "release-bot" });
       await support.seedAgent(tenant, {
+        slug: "claude-bot",
+        harness: "claude-code",
+      });
+      await support.seedAgent(tenant, { slug: "codex-bot", harness: "codex" });
+      await support.seedAgent(tenant, {
         slug: "gone",
         status: "archived",
         principalStatus: "suspended",
@@ -390,6 +395,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
         agentId: agent.publicId,
         version: 1,
         path: ".oxagen/agents/release-bot.toml",
+        // A custom-harness agent reads no subagent file.
+        generatedPath: null,
         commitSha: "c0ffee01",
         branch: "agents/release-bot",
         pullRequest: {
@@ -441,6 +448,38 @@ describe.skipIf(!process.env.DATABASE_URL)(
         branch: "agents/release-bot",
         source,
       });
+    });
+
+    // #3501: an edit reaches the harness. A Claude Code agent's subagent file
+    // is regenerated beside the definition on the same branch; a Codex agent
+    // gets the definition alone. agent.definition.commit.harness.test.ts
+    // covers Cursor, Stella and the other harnesses without Postgres.
+    it("regenerates the subagent file for a Claude Code agent and writes only the definition for a Codex agent", async () => {
+      const claude = await commit(tenant, {
+        agentId: "claude-bot",
+        repositoryId: bindingPublicId,
+        branch: "agents/claude-bot",
+        source: SOURCE("claude-bot"),
+      });
+      expect(claude.generatedPath).toBe(".claude/agents/claude-bot.md");
+      expect(
+        gh.calls.filter((c) => c.op === "putFile").map((c) => c.args.path),
+      ).toEqual([
+        ".oxagen/agents/claude-bot.toml",
+        ".claude/agents/claude-bot.md",
+      ]);
+
+      gh.calls.length = 0;
+      const codex = await commit(tenant, {
+        agentId: "codex-bot",
+        repositoryId: bindingPublicId,
+        branch: "agents/codex-bot",
+        source: SOURCE("codex-bot"),
+      });
+      expect(codex.generatedPath).toBeNull();
+      expect(
+        gh.calls.filter((c) => c.op === "putFile").map((c) => c.args.path),
+      ).toEqual([".oxagen/agents/codex-bot.toml"]);
     });
 
     it("a second commit to a branch under review puts the file on it, reuses its open pull request, and the version number climbs", async () => {

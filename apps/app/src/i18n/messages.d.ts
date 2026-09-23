@@ -406,6 +406,7 @@ type Messages = {
           aside: string;
           label: string;
           hint: string;
+          hintDefinitionOnly: string;
         };
         harness: {
           title: string;

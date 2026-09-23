@@ -82,3 +82,10 @@ So Codex could not see this repository's skills, and Cursor could not see
 - The agent registry's generator (`register_agent` v2) is not written yet.
   When it is, it emits the per-harness files in the table above. Until then
   the canonical `.oxagen/agents/<slug>.toml` is the only file it commits.
+- Update, 2026-09-23 (#3501): the subagent generator now exists for the
+  definition's two write paths. `propose_agent` (creation) and
+  `commit_agent_definition` (editing) both call `subagentFileFor` in
+  `packages/oxagen/src/contracts/agent.propose.ts`. For a Claude Code, Cursor
+  or Stella agent it writes `.claude/agents/<slug>.md` beside the definition
+  on the same branch. For Codex it writes nothing, because Codex documents no
+  subagent file. `register_agent` still writes no file.

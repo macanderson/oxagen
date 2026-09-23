@@ -10,6 +10,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { AgentDetail } from "@/data/contracts/agents";
 import type { MandateList, MandateRow } from "@/data/contracts/mandates";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
@@ -51,8 +52,12 @@ afterEach(() => {
 function renderForm(
   source = DEFINITION_SOURCE,
   mandates: MandateList | null = ledger([mandateRow()]),
+  harness: AgentDetail["identity"]["harness"] = "claude-code",
 ) {
-  const detail = agentDetail({ definition: committedDefinition(source) });
+  const detail = agentDetail({
+    definition: committedDefinition(source),
+    identity: { harness },
+  });
   const definition = detail.definition;
   if (definition === null) throw new Error("built with a definition");
   const view = render(
@@ -103,6 +108,41 @@ async function committedSource(): Promise<string> {
 }
 
 describe("DefinitionForm", () => {
+  // #3501: the hint says what Save writes, as commit_agent_definition does it.
+  it.each([
+    ["claude-code", "Claude Code"],
+    ["cursor", "Cursor"],
+    ["stella", "Stella"],
+  ] as const)(
+    "tells a %s operator that Save regenerates the subagent file in the same pull request",
+    (harness, label) => {
+      renderForm(DEFINITION_SOURCE, ledger([mandateRow()]), harness);
+      expect(
+        screen.getByText(
+          `Save also regenerates .claude/agents/release-bot.md from these instructions, in the same pull request, because ${label} reads its subagent there.`,
+          { exact: false },
+        ),
+      ).toBeInTheDocument();
+    },
+  );
+
+  it.each([
+    ["codex", "Codex"],
+    ["custom", "Custom harness"],
+  ] as const)(
+    "tells a %s operator that Save writes the definition file alone",
+    (harness, label) => {
+      renderForm(DEFINITION_SOURCE, ledger([mandateRow()]), harness);
+      expect(
+        screen.getByText(
+          `Save writes the definition file alone. ${label} reads no subagent file, so Oxagen generates none.`,
+          { exact: false },
+        ),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/\.claude\/agents/)).toBeNull();
+    },
+  );
+
   it("patches a text field on blur, keeps the rest of the file, and offers Discard and Save", async () => {
     const container = renderForm();
     expect(

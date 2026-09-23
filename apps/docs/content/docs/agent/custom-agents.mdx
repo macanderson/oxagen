@@ -18,7 +18,7 @@ The registration flow can issue a one-time enrollment token for the host. [Wrap 
 
 ## Definition and mandate
 
-The agent definition lives in `.oxagen/agents/<slug>.toml` in the workspace repository. The `commit_agent_definition` capability commits the definition, and `get_agent` returns the cached definition of record alongside identity and enrollment details.
+The agent definition lives in `.oxagen/agents/<slug>.toml` in the workspace repository. The `commit_agent_definition` capability commits the definition. For a Claude Code, Cursor, or Stella agent it also regenerates `.claude/agents/<slug>.md` from the definition on the same branch, because those harnesses read subagents there. A Codex agent gets the definition file alone. `get_agent` returns the cached definition of record alongside identity and enrollment details.
 
 Open the agent's mandate to inspect its authority, budget, equipment, and rules. [Agent roles](/docs/governance/agent-roles) describes the role ceiling. Registration and a definition do not start a scheduled runtime in Oxagen. Your harness runs the work.
 

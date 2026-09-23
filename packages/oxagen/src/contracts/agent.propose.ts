@@ -265,6 +265,42 @@ export function generateSubagentFile(args: {
   ].join("\n");
 }
 
+/**
+ * The subagent file a harness loads for this definition, or null when the
+ * harness reads none. Claude Code, Cursor and Stella get
+ * `.claude/agents/<slug>.md`. Codex, the Agent SDK and a custom harness get
+ * nothing, because none of them documents a subagent file.
+ *
+ * `propose_agent` (creation) and `commit_agent_definition` (editing) both
+ * call this, so a saved edit regenerates the file exactly as the proposal
+ * wrote it (#3501). `digest` is `sha256:<hex>` of the committed definition,
+ * and the file's header names it.
+ */
+export function subagentFileFor(args: {
+  slug: string;
+  harness: string;
+  doc: AgentDefinitionDoc;
+  digest: string;
+}): { path: string; content: string } | null {
+  if (!SUBAGENT_FILE_HARNESSES.includes(args.harness)) return null;
+  const description = own(args.doc, "description");
+  const name = own(args.doc, "name");
+  return {
+    path: generatedAgentPath(args.slug),
+    content: generateSubagentFile({
+      slug: args.slug,
+      description:
+        typeof description === "string"
+          ? description
+          : typeof name === "string"
+            ? name
+            : args.slug,
+      instructions: instructionsOf(args.doc),
+      digest: args.digest,
+    }),
+  };
+}
+
 const agentCheckSchema = z
   .object({
     name: z.enum(AGENT_CHECK_NAMES),

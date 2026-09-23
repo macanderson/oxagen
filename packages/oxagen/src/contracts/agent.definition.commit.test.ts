@@ -80,6 +80,7 @@ describe("commit_agent_definition contract", () => {
       agentId: "agt_0123456789abcdefghjkmn",
       version: 3,
       path: ".oxagen/agents/release-bot.toml",
+      generatedPath: null,
       digest: "f".repeat(64),
       commitSha: "abc123",
       branch: "agents/release-bot",

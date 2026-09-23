@@ -9,6 +9,8 @@ import {
   generateSubagentFile,
   instructionsOf,
   resolvesInRegistry,
+  SUBAGENT_FILE_HARNESSES,
+  subagentFileFor,
 } from "./agent.propose";
 
 const REGISTRY = {
@@ -229,5 +231,60 @@ describe("generateSubagentFile", () => {
     );
     expect(file).toContain("Comment with the regression.\n");
     expect(file).not.toMatch(/^tools:/m);
+  });
+});
+
+// Creation (propose_agent) and editing (commit_agent_definition) both write
+// through subagentFileFor, so the two paths cannot disagree on which harness
+// gets a file or what it says (#3501).
+describe("subagentFileFor", () => {
+  const digest = `sha256:${"b".repeat(64)}`;
+
+  it.each(["claude-code", "cursor", "stella"])(
+    "writes .claude/agents/<slug>.md for %s, with the description and instructions of the definition",
+    (harness) => {
+      expect(SUBAGENT_FILE_HARNESSES).toContain(harness);
+      expect(
+        subagentFileFor({ slug: "perf-watch", harness, doc: DOC, digest }),
+      ).toEqual({
+        path: ".claude/agents/perf-watch.md",
+        content: generateSubagentFile({
+          slug: "perf-watch",
+          description: DOC.description,
+          instructions: DOC.instructions.body,
+          digest,
+        }),
+      });
+    },
+  );
+
+  it.each(["codex", "claude-agent-sdk", "custom"])(
+    "writes nothing for %s, which reads no subagent file",
+    (harness) => {
+      expect(
+        subagentFileFor({ slug: "perf-watch", harness, doc: DOC, digest }),
+      ).toBeNull();
+    },
+  );
+
+  it("falls back to the name, then the slug, when the definition has no description", () => {
+    const { description: _description, ...named } = DOC;
+    expect(
+      subagentFileFor({
+        slug: "perf-watch",
+        harness: "claude-code",
+        doc: named,
+        digest,
+      })?.content,
+    ).toContain('description: "Perf watch"');
+    const { name: _name, ...bare } = named;
+    expect(
+      subagentFileFor({
+        slug: "perf-watch",
+        harness: "claude-code",
+        doc: bare,
+        digest,
+      })?.content,
+    ).toContain('description: "perf-watch"');
   });
 });

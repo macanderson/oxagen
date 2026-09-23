@@ -16,8 +16,14 @@
 //      default ref or the repository's default branch is refused, so the
 //      default branch is never written.
 //   5. GitHub: the branch is created from the default branch when it does
-//      not exist, the file is put on it, and the branch's open pull request
-//      against the default branch is reused or, when there is none, opened.
+//      not exist, the file is put on it, and for a Claude Code, Cursor or
+//      Stella agent the subagent file `.claude/agents/<slug>.md` is
+//      regenerated from it on the same branch (#3501), with the generator
+//      `propose_agent` uses, so the harness loads the instructions the
+//      operator edited. Codex and the other harnesses read no subagent file,
+//      so for them the definition is the only file written. The branch's
+//      open pull request against the default branch is reused or, when
+//      there is none, opened.
 //      GitHub refuses a second pull request for a head that has one open
 //      (422), so the lookup runs before the file is written: a Save to a
 //      branch already under review must not leave the commit in git with no
@@ -48,6 +54,7 @@ import {
   AGENT_DEFINITION_SCHEMA,
   agentDefinitionCommit,
 } from "@oxagen/oxagen/contracts/agent.definition.commit";
+import { subagentFileFor } from "@oxagen/oxagen/contracts/agent.propose";
 import { resolve as resolveIam } from "@oxagen/oxagen/iam";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { assertNotRetired } from "./lib/agent-identity";
@@ -428,7 +435,15 @@ export const agentDefinitionCommitHandler: CapabilityHandler<
   const path = definitionPathFor(agent.slug);
   const digest = sha256Hex(input.source);
   const message = input.message ?? `Agent definition: ${agent.slug}`;
-  const commit = await gh.putFile({
+  // The harness is the registered one, not a table in the file: it is set at
+  // registration, and changing it makes a new agent.
+  const generated = subagentFileFor({
+    slug: agent.slug,
+    harness: agent.harness,
+    doc: definition,
+    digest: `sha256:${digest}`,
+  });
+  let commit = await gh.putFile({
     owner: repository.owner,
     repo: repository.repo,
     path,
@@ -436,6 +451,18 @@ export const agentDefinitionCommitHandler: CapabilityHandler<
     message,
     branch: input.branch,
   });
+  if (generated !== null) {
+    // The version row caches the later commit, the one that carries both
+    // files, so its head matches what the pull request shows.
+    commit = await gh.putFile({
+      owner: repository.owner,
+      repo: repository.repo,
+      path: generated.path,
+      content: generated.content,
+      message: `agents: generate ${generated.path} from ${path}`,
+      branch: input.branch,
+    });
+  }
   const pr =
     existingPr ??
     (await gh.openPullRequest({
@@ -445,7 +472,10 @@ export const agentDefinitionCommitHandler: CapabilityHandler<
       head: input.branch,
       base: info.defaultBranch,
       labels: OXAGEN_PR_LABELS,
-      body: `Definition of record for agent \`${agent.slug}\` (\`${path}\`, sha256 \`${digest}\`). Merging publishes it.`,
+      body:
+        generated === null
+          ? `Definition of record for agent \`${agent.slug}\` (\`${path}\`, sha256 \`${digest}\`). Merging publishes it.`
+          : `Definition of record for agent \`${agent.slug}\` (\`${path}\`, sha256 \`${digest}\`), and the subagent file \`${generated.path}\` generated from it for ${agent.harness}. Merging publishes both. Change the definition, not the generated file.`,
     }));
 
   const version = await insertVersionRow({
@@ -465,6 +495,7 @@ export const agentDefinitionCommitHandler: CapabilityHandler<
       agentId: agent.publicId,
       repository: `${repository.owner}/${repository.repo}`,
       branch: input.branch,
+      generatedPath: generated?.path ?? null,
       pullRequest: pr.number,
     },
     existingPr
@@ -476,6 +507,7 @@ export const agentDefinitionCommitHandler: CapabilityHandler<
     agentId: agent.publicId,
     version,
     path,
+    generatedPath: generated?.path ?? null,
     digest,
     commitSha: commit.commitSha,
     branch: input.branch,

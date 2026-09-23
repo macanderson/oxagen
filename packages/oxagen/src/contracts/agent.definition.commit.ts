@@ -12,6 +12,13 @@
 // definition stays what the default branch holds until a person merges the
 // pull request.
 //
+// For an agent whose harness reads a subagent file (Claude Code, Cursor and
+// Stella), the same commit run also writes `.claude/agents/<slug>.md`,
+// regenerated from the definition by the generator `propose_agent` uses, so
+// the harness loads the edited instructions after merge (#3501). Codex and
+// the other harnesses read no subagent file, and only the definition is
+// written for them.
+//
 // The handler refuses a file whose `schema` is not `agent-definition/v0.1`
 // or whose `slug` is not the agent's, and a branch that is the default
 // branch. The delegation ceiling (spec §6.2: an operator can grant no more
@@ -47,7 +54,7 @@ export const agentDefinitionCommit = registerCapability({
   name: "commit_agent_definition",
   domain: "agent",
   description:
-    "Commit an agent's definition file (.oxagen/agents/<slug>.toml) to a branch of the workspace repository and open the pull request that publishes it, or add to the branch's open pull request; the default branch is never written.",
+    "Commit an agent's definition file (.oxagen/agents/<slug>.toml) and, for a Claude Code, Cursor, or Stella agent, the subagent file generated from it to a branch of the workspace repository, then open the pull request that publishes them or add to the branch's open pull request. The default branch is never written.",
   mode: "sync",
   // The handler acts as the signed-in user or the API key's creator
   // (resolveActingUserId, assertOrgRole, INV-29). The write ships on the API
@@ -93,6 +100,13 @@ export const agentDefinitionCommit = registerCapability({
       /** The `agent_versions.version` row that cached the commit. */
       version: z.number().int().positive(),
       path: z.string().min(1),
+      /**
+       * The subagent file regenerated from the definition on the same branch:
+       * `.claude/agents/<slug>.md` for a Claude Code, Cursor or Stella agent.
+       * Null for Codex and every other harness, which read no subagent file,
+       * so only the definition is written.
+       */
+      generatedPath: z.string().min(1).nullable(),
       /** sha256 hex of `source`. */
       digest: z.string().regex(/^[0-9a-f]{64}$/),
       commitSha: z.string().min(1),

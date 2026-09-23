@@ -349,7 +349,8 @@
           "title": "Instructions",
           "aside": "[instructions] body",
           "label": "Instructions",
-          "hint": "Compiled into the harness file beside this one. Keep credentials and personal data out of it: nothing checks for them before a commit."
+          "hint": "Save also regenerates {path} from these instructions, in the same pull request, because {harness} reads its subagent there. Keep credentials and personal data out of them: nothing checks for them before a commit.",
+          "hintDefinitionOnly": "Save writes the definition file alone. {harness} reads no subagent file, so Oxagen generates none. Keep credentials and personal data out of these instructions: nothing checks for them before a commit."
         },
         "harness": {
           "title": "Harness",

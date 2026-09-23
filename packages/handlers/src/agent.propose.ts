@@ -41,9 +41,8 @@ import {
   beltOf,
   checkAgentDefinition,
   generatedAgentPath,
-  generateSubagentFile,
-  instructionsOf,
   SUBAGENT_FILE_HARNESSES,
+  subagentFileFor,
 } from "@oxagen/oxagen/contracts/agent.propose";
 import type { PlanTier } from "@oxagen/oxagen/types";
 import { and, eq, isNull } from "drizzle-orm";
@@ -263,21 +262,13 @@ export function createProposeAgentHandler(
     }
 
     const digest = `sha256:${sha256Hex(source)}`;
-    const generatedPath = SUBAGENT_FILE_HARNESSES.includes(input.harness)
-      ? generatedAgentPath(input.slug)
-      : null;
-    const description = doc.description;
-    const generated = generateSubagentFile({
+    const generated = subagentFileFor({
       slug: input.slug,
-      description:
-        typeof description === "string"
-          ? description
-          : typeof doc.name === "string"
-            ? doc.name
-            : input.slug,
-      instructions: instructionsOf(doc),
+      harness: input.harness,
+      doc,
       digest,
     });
+    const generatedPath = generated?.path ?? null;
     const branch = agentBranch(input.slug);
 
     if (branch === base) {
@@ -308,11 +299,11 @@ export function createProposeAgentHandler(
       message,
       branch,
     });
-    if (generatedPath !== null)
+    if (generated !== null)
       ({ commitSha } = await deps.github.putFile(repo, {
-        path: generatedPath,
-        content: generated,
-        message: `agents: generate ${generatedPath} from ${path}`,
+        path: generated.path,
+        content: generated.content,
+        message: `agents: generate ${generated.path} from ${path}`,
         branch,
       }));
 

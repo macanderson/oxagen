@@ -8,6 +8,10 @@
 // branch is never written and nothing lands in Postgres but the commit's
 // cache. The source editor is one link away for anything the form does not
 // reach.
+import {
+  generatedAgentPath,
+  SUBAGENT_FILE_HARNESSES,
+} from "@oxagen/oxagen/contracts/agent.propose";
 import { useTranslations } from "next-intl";
 import { type ReactNode, useId, useMemo, useState } from "react";
 import type { AgentDetail } from "@/data/contracts/agents";
@@ -234,6 +238,7 @@ export function DefinitionForm({
 }) {
   const t = useTranslations("agents.detail.definition");
   const ts = useTranslations("agents.source");
+  const th = useTranslations("agents.harness");
   const id = useId();
   const [draft, setDraft] = useState(base);
   const [committing, setCommitting] = useState(false);
@@ -282,6 +287,13 @@ export function DefinitionForm({
       ? null
       : table(tomlGet(harnessTable, identity.harness));
   const color = harness === null ? "" : text(tomlGet(harness, "color"));
+  const harnessLabel = th(identity.harness);
+  // What Save writes besides the definition, as commit_agent_definition
+  // decides it (#3501): the regenerated subagent file for a harness that
+  // reads one, nothing for the rest.
+  const generatedPath = SUBAGENT_FILE_HARNESSES.includes(identity.harness)
+    ? generatedAgentPath(identity.slug)
+    : null;
   const colors: readonly string[] =
     color === "" || COLORS.some((known) => known === color)
       ? COLORS
@@ -575,7 +587,16 @@ export function DefinitionForm({
             <Labelled
               id={field("body")}
               label={t("instructions.label")}
-              hint={t("instructions.hint")}
+              hint={
+                generatedPath === null
+                  ? t("instructions.hintDefinitionOnly", {
+                      harness: harnessLabel,
+                    })
+                  : t("instructions.hint", {
+                      path: generatedPath,
+                      harness: harnessLabel,
+                    })
+              }
             >
               <textarea
                 id={field("body")}
