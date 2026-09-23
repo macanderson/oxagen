@@ -105,6 +105,7 @@
           "enforcementTier": {
             "type": "string",
             "enum": [
+              "contained",
               "gateway",
               "harness",
               "observe"
@@ -537,6 +538,7 @@
             "enforcementTier": {
               "type": "string",
               "enum": [
+                "contained",
                 "gateway",
                 "harness",
                 "observe"
