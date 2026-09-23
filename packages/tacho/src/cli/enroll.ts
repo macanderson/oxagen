@@ -65,6 +65,7 @@ import {
   describeHarness,
   restoreCredentials,
 } from "./credential";
+import { restoreGithubRepositories } from "./github";
 import { revokeAndMark, stripEnrollmentHooks } from "./unenroll";
 
 export interface EnrollOptions extends CredentialOptions {
@@ -516,6 +517,11 @@ export async function enrollLocked(
         return { ok: false, warnings };
       }
       credentials = resolved.credentials;
+    }
+    const custodyFailures = restoreGithubRepositories(existing, deps);
+    if (custodyFailures.length > 0) {
+      for (const failure of custodyFailures) deps.err(failure);
+      return { ok: false, warnings: [...warnings, ...custodyFailures] };
     }
     const managed =
       options.managed === true ||
