@@ -14,7 +14,9 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 // The Fleet page (WL-34) with the cost rollup's two tiles (#2962) under its
-// title.
+// title. It sits in the `(fleet)` route group so its loading skeleton, which
+// draws the Fleet heading, scopes to this one route and not to every page
+// under the workspace.
 export default async function FleetPage({
   params,
   searchParams,

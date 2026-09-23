@@ -138,6 +138,28 @@ export const errorMiddleware: ErrorHandler<AppEnv> = (err, c) => {
     );
   }
 
+  // A request body that is not JSON. `c.req.json()` surfaces the parse
+  // failure as the runtime's SyntaxError, and the routes call it with no
+  // try/catch of their own, so a client sending `{bad` used to get a 500 and
+  // an error-stream capture for its own typo. The match is narrowed to a
+  // SyntaxError whose message names JSON, which is how JSON.parse words every
+  // failure. A SyntaxError from server code parsing stored JSON would land
+  // here too and read as the client's fault; that is the cost of a duck-typed
+  // match, and the message check keeps every other SyntaxError out of it.
+  if (err instanceof SyntaxError && /\bJSON\b/.test(err.message)) {
+    logger.warn({ requestId, message: err.message }, "malformed json body");
+    return c.json(
+      {
+        error: {
+          code: "bad_request",
+          message: "Request body is not valid JSON",
+        },
+        requestId,
+      },
+      400,
+    );
+  }
+
   // CapabilityError — map known codes to HTTP status codes.
   if (err instanceof CapabilityError) {
     if (err.code === "authz_denied") {

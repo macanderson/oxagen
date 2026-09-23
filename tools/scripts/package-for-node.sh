@@ -186,7 +186,7 @@ case $SERVICE in
     # --no-optional drops optional native addons. It was added when
     # @oxagen/engram declared `duckdb` optional and this artifact carried it at
     # 123 MB a release — 369 MB at KEEP_RELEASES=3, on a 20 GB volume (#1193).
-    # ADR-143 deleted that package; the flag stays because nothing in `app`
+    # ADR-144 deleted that package; the flag stays because nothing in `app`
     # needs an optional addon and a future one would land here the same way.
     log "installing runtime dependencies for the externalised packages"
     pnpm deploy --filter "$app_pkg" --prod --no-optional --legacy "$ROOT/.deploy-app"

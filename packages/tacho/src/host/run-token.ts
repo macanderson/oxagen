@@ -1,6 +1,6 @@
 /**
  * Run tokens: the one credential a brokered harness holds (Mission Control
- * spec §6.2 and §6.8, ADR-138).
+ * spec §6.2 and §6.8, ADR-143).
  *
  * A wrapped harness on the brokered credential path never sees its model
  * vendor's key. It is given a run token instead, and it presents that token
@@ -36,9 +36,10 @@
  *
  * ## Revocation
  *
- * Rotating the signing key (`rotateRunTokenKey`) invalidates every token this
- * host ever issued at its next use. Unenroll rotates before it stops, and a
- * host `revoke` reaches the proxy through `host_status` on the same request
+ * The signing key lives in one file, and a token is only ever as good as
+ * that key: unenroll deletes the file after custody is shredded, so every
+ * token this host issued is refused from the next call on, and a host
+ * `revoke` reaches the proxy through `host_status` on the same request
  * path, so a revoked host refuses a valid token too.
  */
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
@@ -145,17 +146,6 @@ export function readRunTokenKey(path: string): RunTokenKey | undefined {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
     throw error;
   }
-}
-
-/**
- * Replace the key on disk. Every token signed by the old key is refused from
- * the next call on; this is how `unenroll` and a host revoke kill outstanding
- * tokens without a list of them.
- */
-export function rotateRunTokenKey(path: string): RunTokenKey {
-  const key = generateRunTokenKey();
-  writeSensitiveFileAtomic(path, `${key.bytes.toString("hex")}\n`);
-  return key;
 }
 
 function b64url(bytes: Buffer): string {
@@ -280,18 +270,26 @@ export function verifyRunToken(
   const dot = body.indexOf(".");
   if (dot <= 0 || dot === body.length - 1)
     return { ok: false, code: "run_token_malformed" };
+  const bodyText = body.slice(0, dot);
   let text: string;
-  let presented: Buffer;
   try {
-    text = Buffer.from(body.slice(0, dot), "base64url").toString("utf8");
-    presented = Buffer.from(body.slice(dot + 1), "base64url");
+    text = Buffer.from(bodyText, "base64url").toString("utf8");
   } catch {
     return { ok: false, code: "run_token_malformed" };
   }
-  const expected = sign(options.key, text);
+  // Compare the signature as the canonical base64url text, not as decoded
+  // bytes. The last character of a 32-byte signature carries two padding bits
+  // the decoder ignores, so a byte comparison admits up to four spellings of
+  // one token. The same holds for the claims segment, so it must round-trip too.
+  const presented = Buffer.from(body.slice(dot + 1), "utf8");
+  const expected = Buffer.from(
+    sign(options.key, text).toString("base64url"),
+    "utf8",
+  );
   if (
     presented.length !== expected.length ||
-    !timingSafeEqual(presented, expected)
+    !timingSafeEqual(presented, expected) ||
+    Buffer.from(text, "utf8").toString("base64url") !== bodyText
   ) {
     // The claims are readable whether or not the signature holds; a refusal
     // frame may cite the id, and nothing else, of a token it did not admit.

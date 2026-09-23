@@ -16,6 +16,7 @@ import { useTranslations } from "next-intl";
 import type { AgentDetail } from "@/data/contracts/agents";
 import { mono } from "@/ui/control-styles";
 import { cell, Table } from "@/ui/table";
+import { ChargeAgent, type CostCenterTarget } from "./cost-center-controls";
 import { CredentialRow } from "./credential-row";
 import {
   AgentStatusBadge,
@@ -123,6 +124,7 @@ export function IdentitySection({
   detail,
   now,
   manage,
+  charge,
 }: {
   detail: AgentDetail;
   /** The instant the agent was read; a credential's expiry is judged against it. */
@@ -133,6 +135,12 @@ export function IdentitySection({
    * the identity is in.
    */
   manage: RoleTarget | null;
+  /**
+   * Where the cost-center write goes, or null when this viewer may not make
+   * one (ADR-142). Decided apart from `manage`: a Billing member charges
+   * agents and assigns no roles.
+   */
+  charge: CostCenterTarget | null;
 }) {
   const t = useTranslations("agents");
   const { identity } = detail;
@@ -183,6 +191,24 @@ export function IdentitySection({
                 ) : (
                   <Instant at={identity.firstFrameAt} />
                 ),
+            },
+            {
+              term: t("detail.identity.costCenter"),
+              value: (
+                <span
+                  data-cost-center={identity.costCenter ?? ""}
+                  className="flex flex-wrap items-center gap-2"
+                >
+                  {identity.costCenter === null ? (
+                    <span className="text-muted-foreground">
+                      {t("detail.identity.inherited")}
+                    </span>
+                  ) : (
+                    <span className={mono}>{identity.costCenter}</span>
+                  )}
+                  {charge === null ? null : <ChargeAgent {...charge} />}
+                </span>
+              ),
             },
           ]}
         />

@@ -19,7 +19,7 @@ import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
 import { cell, numericCell, Table } from "@/ui/table";
 import { invoicesInMonth } from "./invoices-in-month";
-import { ReadFailure } from "./read-failure";
+import { BillingReadFailure } from "./read-failure";
 import { Section } from "./section";
 
 type Failed = Exclude<Read<unknown>, { ok: true }>;
@@ -62,7 +62,7 @@ export function ThisMonth({
   const title = t("thisMonth.title");
   const failed = (read: Failed) => (
     <Section id="billing-this-month" title={title}>
-      <ReadFailure read={read} section={title} />
+      <BillingReadFailure read={read} section={title} />
     </Section>
   );
   if (!bucket.ok) return failed(bucket);

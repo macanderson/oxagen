@@ -1,4 +1,4 @@
-# ADR-143: The assembler has its own package, and the two memory packages are deleted
+# ADR-144: The assembler has its own package, and the two memory packages are deleted
 
 Status: Accepted
 

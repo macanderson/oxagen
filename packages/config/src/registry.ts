@@ -1123,7 +1123,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "path) or 'openrouter' for a deployment that cannot reach the gateway. Never " +
       "an automatic fallback — an operator opts out explicitly, because a silent " +
       "failover would move spend to another vendor's bill and skip metering. Image, " +
-      "video and embeddings stay on the gateway either way.",
+      "video and embeddings stay on the gateway either way. The per-organisation " +
+      "keys ADR-131 mints are OpenRouter keys, so they are minted and consulted " +
+      "only when this is 'openrouter' (ADR-131 §9).",
     secret: false,
     clientExposed: false,
     services: ["api", "app", "mcp"],
@@ -1151,7 +1153,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "It can create, read, disable and delete every key in the account, so it " +
       "is read in one module and never reaches a provider client or a log. " +
       "Unset means no key is minted and every organisation serves on the " +
-      "shared key.",
+      "shared key. Read only when OXAGEN_MODEL_PROVIDER=openrouter: a minted " +
+      "key cannot serve on a gateway deployment, so none is minted there " +
+      "(ADR-131 §9).",
     secret: true,
     clientExposed: false,
     // `create_organization` declares the `mcp` surface, so an organisation can

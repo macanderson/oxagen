@@ -13,7 +13,7 @@ import {
   tachoHostStatusSchema,
 } from "@oxagen/oxagen/tacho/schemas";
 import { gatewayMandateTools } from "@oxagen/iam/machine-key-scope";
-import { fetchAgentRunAuthz } from "@oxagen/iam";
+import { fetchAgentRunAuthzIn } from "@oxagen/iam/fetch-agent-authz";
 import { collectResourceScope } from "@oxagen/oxagen/iam";
 import { loadRuleSetIn } from "@oxagen/rules";
 import { PROVIDER_RATE_CARD, usdPerMillionToMicros } from "@oxagen/billing";
@@ -84,7 +84,10 @@ interface TachoTx {
     workspaces: { findFirst: (args: unknown) => Promise<unknown> };
   };
   // The steering read (`readWorkspaceSteering`): the ledger count and the
-  // records joined to their pinned versions.
+  // records joined to their pinned versions. The tool-RBAC half of the
+  // mandate (`fetchAgentRunAuthzIn`, `@oxagen/iam`) also selects through
+  // this transaction, from the IAM tables (roles, role grants, assignments,
+  // principals, deny generations), for a host that names an agent principal.
   select: SteeringTx["select"];
   update: (table: unknown) => {
     set: (values: Record<string, unknown>) => {
@@ -433,7 +436,12 @@ export async function resolveHostMandate(
 ): Promise<HostMandate> {
   const mcpRules = host.agentPrincipalId
     ? await (async () => {
-        const snapshot = await fetchAgentRunAuthz({
+        // Through the caller's transaction, like `loadRuleSetIn` below. This
+        // runs inside `controlEnvelope`, which every poll and ingest batch
+        // calls from an open tenant transaction; a read that opened its own
+        // held one pool connection while waiting for a second, and twenty
+        // hosts polling at once could exhaust the pool waiting on each other.
+        const snapshot = await fetchAgentRunAuthzIn(tx as unknown as Tx, {
           orgId: ctx.orgId,
           workspaceId: ctx.workspaceId,
           agentPrincipalId: host.agentPrincipalId as string,

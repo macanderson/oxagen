@@ -26,7 +26,7 @@ import type {
   RecordKind,
 } from "@oxagen/oxagen/contracts/context.steering.shared";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
-import { readRecordFromRepo } from "./context.record.source";
+import { recordNotFound, resolveRecordById } from "./context.record.source";
 import { createOpenContextPrHandler } from "./context.pr.open";
 import { createProposal } from "./context.proposal.shared";
 import { steeringDeps, type SteeringDeps } from "./context.steering.deps";
@@ -43,13 +43,15 @@ export function createReviseRecordHandler(
     );
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
 
-    const mirrored = await deps.store.findRecord(scope, input.recordId);
-    const lineageId =
-      mirrored?.record.slug ??
-      (input.recordId.startsWith("ctr_") ? null : input.recordId);
-    if (!lineageId) throw notFound(input.recordId);
-    const fileRead = await readRecordFromRepo(deps.github, scope, lineageId);
-    if (!mirrored && !fileRead) throw notFound(input.recordId);
+    // The lineage names the file the revision rewrites, so an id that is
+    // not a lineage the mirror knows, and not one the proposal contract
+    // would accept, reaches no file (`resolveRecordById`).
+    const { mirrored, lineageId, fileRead } = await resolveRecordById(
+      deps,
+      scope,
+      input.recordId,
+    );
+    if (!lineageId) throw recordNotFound(input.recordId);
 
     const kind = (fileRead?.file.kind ??
       (mirrored?.record.kind as RecordKind | null)) as RecordKind | null;
@@ -97,14 +99,6 @@ export function createReviseRecordHandler(
     });
     return openPr({ proposalId: row.publicId }, ctx);
   };
-}
-
-function notFound(id: string): HandlerError {
-  return new HandlerError({
-    code: "not_found",
-    reason: "record_not_found",
-    message: `No record ${id} in this workspace`,
-  });
 }
 
 export const reviseRecordHandler = createReviseRecordHandler(steeringDeps());

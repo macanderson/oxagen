@@ -535,6 +535,45 @@ export interface ObservedModelRow {
 }
 
 /**
+ * At most this many distinct models come back from one observed-models read.
+ *
+ * The bound is on the store read itself, against a pathological model-id
+ * cardinality: a wrapped agent's free-form `model` field can carry anything,
+ * and an unbounded GROUP BY handed to Node as rows, and then back to
+ * ClickHouse as the `models` array of the class-bucket read, is the shape of
+ * an outage. It is twenty times the 500 models an unpriced-model report shows,
+ * because @oxagen/billing applies that cap AFTER filtering to the models the
+ * book cannot price; a cap here at 500 would let a low-volume unpriced model
+ * be outranked by priced, uninteresting ones and never reach the comparison.
+ * #3629 removed the earlier 5000 bound for exactly that reason and left the
+ * read unbounded. This one is higher, and it is not silent: a read that fills
+ * it says so on stderr, which is what answers the objection that a bound
+ * drops models nobody hears about.
+ */
+export const OBSERVED_MODEL_READ_BOUND = 10_000;
+
+/** The one line this module writes when a read fills its bound. */
+function noteObservedModelBoundHit(args: {
+  orgId: string;
+  workspaceId?: string;
+}): void {
+  try {
+    process.stderr.write(
+      `${JSON.stringify({
+        level: "warn",
+        msg: "cost-frames: observed-models read filled its bound; models past it are not priced or reported",
+        alert: "observed_model_read_bound",
+        bound: OBSERVED_MODEL_READ_BOUND,
+        orgId: args.orgId,
+        workspaceId: args.workspaceId ?? null,
+      })}\n`,
+    );
+  } catch {
+    // A logger never throws into the read it describes.
+  }
+}
+
+/**
  * The interval index a timestamp falls in, given `boundaries` sorted
  * ascending: the count of boundaries at or before it. Boundary 0 covers
  * everything before the first boundary; the book's answer is constant within
@@ -707,8 +746,9 @@ export async function readObservedModels(args: {
       )
       GROUP BY model
       ORDER BY tokens DESC, model
+      LIMIT {limit:UInt32}
     `,
-    query_params: baseParams,
+    query_params: { ...baseParams, limit: OBSERVED_MODEL_READ_BOUND },
     format: "JSONEachRow",
   });
   type SummaryRow = {
@@ -720,6 +760,8 @@ export async function readObservedModels(args: {
     last_seen: string;
   };
   const summaryRows = (await summaryResult.json()) as SummaryRow[];
+  if (summaryRows.length >= OBSERVED_MODEL_READ_BOUND)
+    noteObservedModelBoundHit(args);
   if (summaryRows.length === 0) return [];
 
   const models = [...new Set(summaryRows.map((r) => r.model))];

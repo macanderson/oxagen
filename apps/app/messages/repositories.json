@@ -88,7 +88,7 @@
     },
     "page": {
       "title": "Repositories",
-      "eyebrow": "Workspace · {workspace}",
+      "eyebrow": "Workspace {workspace}",
       "addOxagen": "Add Oxagen to a repository",
       "loading": "Reading this workspace’s repositories…",
       "tabs": {

@@ -520,6 +520,7 @@ export class FakeGitHub implements SteeringGitHub {
     head: string;
     base: string;
     body: string;
+    labels: readonly string[];
     state: "open" | "closed";
     merged: boolean;
     mergeCommitSha: string | null;
@@ -700,7 +701,13 @@ export class FakeGitHub implements SteeringGitHub {
   }
   async openPullRequest(
     _repo: SteeringRepository,
-    args: { title: string; head: string; base: string; body: string },
+    args: {
+      title: string;
+      head: string;
+      base: string;
+      body: string;
+      labels?: readonly string[];
+    },
   ) {
     const open = this.pulls.find(
       (p) => p.head === args.head && p.base === args.base && p.state === "open",
@@ -711,9 +718,11 @@ export class FakeGitHub implements SteeringGitHub {
       );
     }
     this.prNumber += 1;
+    const { labels = [], ...rest } = args;
     this.pulls.push({
       number: this.prNumber,
-      ...args,
+      ...rest,
+      labels,
       state: "open",
       merged: false,
       mergeCommitSha: null,

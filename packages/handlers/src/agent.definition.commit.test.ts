@@ -477,7 +477,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
         "putFile",
         "openPullRequest",
       ]);
-      expect(gh.calls[2]!.args).toMatchObject({ title: "reopen after merge" });
+      expect(gh.calls[2]!.args).toMatchObject({
+        title: "reopen after merge",
+        labels: ["no-issue"],
+      });
     });
 
     it("refuses the configured default ref and the repository's default branch without touching GitHub", async () => {

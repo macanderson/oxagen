@@ -6,6 +6,7 @@ import {
   hasEffect,
   isStable,
   lineageOf,
+  normalizeStatement,
   type RecordChoice,
   seedStatement,
   statementTokens,
@@ -89,6 +90,26 @@ describe("lineageOf", () => {
   });
 });
 
+describe("normalizeStatement", () => {
+  it("puts the statement on one line with single spaces", () => {
+    expect(
+      normalizeStatement(
+        "Do not build or typecheck \nwhen working on a \n\tfeature. ",
+      ),
+    ).toBe("Do not build or typecheck when working on a feature.");
+  });
+
+  it("leaves a one-line statement as it is", () => {
+    expect(normalizeStatement("Read CHANGELOG.md once.")).toBe(
+      "Read CHANGELOG.md once.",
+    );
+  });
+
+  it("reduces whitespace alone to nothing (negative)", () => {
+    expect(normalizeStatement(" \n\t ")).toBe("");
+  });
+});
+
 describe("seedStatement", () => {
   it("capitalizes the description and ends it with a full stop", () => {
     expect(seedStatement("  cache the first   read ", "rule")).toBe(
@@ -109,6 +130,12 @@ describe("seedStatement", () => {
 });
 
 describe("statementTokens", () => {
+  it("counts the one-line form, so a line break adds nothing", () => {
+    expect(statementTokens("Read CHANGELOG.md \nonce.")).toBe(
+      statementTokens("Read CHANGELOG.md once."),
+    );
+  });
+
   it("counts four characters a token over the trimmed statement", () => {
     expect(statementTokens("  12345678  ")).toBe(2);
     expect(statementTokens("")).toBe(0);

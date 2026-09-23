@@ -18,7 +18,7 @@ import type { OrgRole } from "@/server/viewer";
 import { mono } from "@/ui/control-styles";
 import { cell, numericCell, Table } from "@/ui/table";
 import { NotCarried, Section, StateDot, type Tone, useDate } from "./parts";
-import { ReadFailure } from "./read-failure";
+import { ToolsReadFailure } from "./read-failure";
 import { RegisterServer } from "./register-server";
 import { type ToolsAt, toolsLink } from "./view";
 
@@ -88,7 +88,7 @@ export function Servers({
   const t = useTranslations("tools.servers");
   if (!read.ok) {
     return (
-      <ReadFailure
+      <ToolsReadFailure
         at={at}
         orgRole={orgRole}
         read={read}

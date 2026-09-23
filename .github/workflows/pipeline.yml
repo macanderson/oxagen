@@ -40,9 +40,10 @@ concurrency:
   # the prod migrate job, and cancelling the whole run mid-`atlas migrate apply`
   # would strand prod behind the committed migrations. That job is retired
   # (#1341), so nothing in a main run is mid-flight against a real database
-  # today. Production applies are dispatched by hand through `db-migrate.yml`;
-  # the migrate job's retirement comment below has the detail, including which
-  # of the two named routes is the stale one (#2542, #2652). It stays
+  # today. Production applies are run by hand, with
+  # `infra/tools/run-db-migrations.sh` from a laptop or through the
+  # `db-migrate.yml` dispatch that runs the same script; the migrate job's
+  # retirement comment below has the detail (#2542, #2652). It stays
   # off for main anyway, because the deploy jobs are, and half a deploy is worse
   # than a slow one.
   #
@@ -124,7 +125,11 @@ jobs:
     outputs:
       proceed: ${{ steps.preflight-tip.outputs.proceed }}
     steps:
+      # The script reads nothing but its own directory and the environment,
+      # so the checkout carries tools/scripts and the root files only.
       - uses: actions/checkout@v5
+        with:
+          sparse-checkout: tools/scripts
       - name: Decide whether this commit still needs the full gate
         id: preflight-tip
         env:
@@ -797,12 +802,14 @@ jobs:
   # from the app node's own security group and nothing else
   # (`aws_security_group.aurora` in `infra/stacks-new/oxagen/data-services.tf`).
   #
-  # NOT `db-migrate.yml`. Its `environment: production` is not a reviewer gate
-  # — that comment was corrected in the workflow itself once it turned out to
-  # be a branch policy, not a required reviewer — and its own "database is
-  # reachable from this runner" guard fails on every production dispatch by
-  # design: a hosted runner is outside the VPC, so it cannot reach Aurora
-  # (#2652). It stays for `preview` and as a status/validate dry run.
+  # `db-migrate.yml`'s production job runs that same script under the deploy
+  # role, so a dispatch is the second way to run it. It used to run Atlas on
+  # the hosted runner instead, and its own "database is reachable from this
+  # runner" guard failed every production dispatch by design: a hosted runner
+  # is outside the VPC, so it cannot reach Aurora (#2652). Five messages in
+  # this repository sent a blocked operator to that workflow anyway. Its
+  # `environment: production` is not a reviewer gate; it is what the deploy
+  # role's trust policy keys on.
   #
   # A caveat that used to sit here is now spent, and is recorded rather than
   # deleted because the confusion it warned about was real. There were two
@@ -1002,12 +1009,12 @@ jobs:
               echo
               echo "Apply it, then re-run this job:"
               echo
-              # Each store gets exactly one named path, and it is the manual
-              # workflow. The underlying scripts can be run by hand from the app
-              # node, and deliberately are not offered here: the workflow is the
-              # one route that leaves a run record of who applied what and when,
-              # which is the whole reason CLAUDE.md sends applies through it.
-              echo "- Postgres — the **DB Migrate (manual)** workflow"
+              # Postgres names the script first, because it is the path that
+              # reaches Aurora: it runs Atlas on the app node over SSM, from a
+              # laptop with AWS credentials or from the DB Migrate dispatch,
+              # which runs the same script under the deploy role. The stores
+              # have one path, their manual workflow.
+              echo "- Postgres — \`infra/tools/run-db-migrations.sh packages/database --apply\` from a laptop with AWS credentials, on a checkout of origin/main, or the **DB Migrate (manual)** workflow with target production, which runs the same script"
               echo "- ClickHouse / Neo4j — the **Store Migrate (manual)** workflow"
               echo
               echo "Read the pending list before applying. A store whose ledger was lost reports its"

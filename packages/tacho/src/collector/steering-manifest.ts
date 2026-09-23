@@ -1,6 +1,6 @@
 /**
  * The body of the `steering.manifest` frame a session seals at its start
- * (ADR-093, ADR-143).
+ * (ADR-093, ADR-144).
  *
  * The control plane assembles the workspace's steering into the bundle's
  * `context.system` and signs the assembler's manifest beside it as

@@ -117,7 +117,7 @@ describe("Fleet reads", () => {
 });
 
 describe("stat strip", () => {
-  it("counts activity and recorded spend from the rows on the page", async () => {
+  it("counts activity from the rows on the page", async () => {
     await renderFleet({
       runs: runPage([
         runRow({ id: "arun_a1", status: "live" }),
@@ -132,15 +132,13 @@ describe("stat strip", () => {
         approvalItem({ id: "apr_old" }),
       ]),
     });
-    expect(screen.getAllByTestId("tile")).toHaveLength(3);
+    // Two tiles of its own; the spend tiles are the page's (#2962).
+    expect(screen.getAllByTestId("tile")).toHaveLength(2);
     expect(tile("Live runs")).toHaveTextContent(
       "Live runs2of 2 agents in this workspace",
     );
     expect(tile("Waiting on a human")).toHaveTextContent(
       "Waiting on a human2oldest approval has waited 2:30 of 10:00",
-    );
-    expect(tile("Spend, runs shown")).toHaveTextContent(
-      "Cost recorded for 3 of 3 runs",
     );
   });
 
@@ -151,18 +149,6 @@ describe("stat strip", () => {
     );
     expect(tile("Waiting on a human")).toHaveTextContent(
       "Waiting on a human0nothing is parked",
-    );
-  });
-
-  it("does not turn missing cost into zero spend", async () => {
-    await renderFleet({
-      runs: runPage([runRow({ cost: null })]),
-      approvals: NO_APPROVALS,
-    });
-    expect(tile("Spend, runs shown")).toHaveTextContent("Not recorded");
-    expect(tile("Spend, runs shown")).not.toHaveTextContent("$0.00");
-    expect(tile("Spend, runs shown")).toHaveTextContent(
-      "Cost recorded for 0 of 1 runs",
     );
   });
 
@@ -426,6 +412,24 @@ describe("runs table", () => {
     expect(runsSection()).not.toHaveTextContent(/trust/i);
   });
 
+  it("reads the operator id when the record holds neither a name nor a kind for it", async () => {
+    await renderFleet({
+      runs: runPage([
+        runRow({
+          operatorName: null,
+          operatorKind: null,
+          operatorId: "prn_unknown_kind",
+        }),
+      ]),
+      approvals: NO_APPROVALS,
+    });
+    const [row] = within(runsSection()).getAllByTestId("run-row");
+    const cell = within(row ?? runsSection()).getAllByRole("cell")[2];
+    // An id is a recorded operator. "not recorded" is for a run with none.
+    expect(cell).toHaveTextContent(/^prn_unknown_kind$/);
+    expect(cell).not.toHaveTextContent("not recorded");
+  });
+
   it("keeps unnamed operators apart by id without printing the id as a label", async () => {
     await renderFleet({
       runs: runPage([
@@ -483,25 +487,6 @@ describe("runs table", () => {
       "Controls",
     ]);
     expect(runsSection()).not.toHaveTextContent(/witness|proven|flipped/);
-  });
-
-  it("excludes missing costs from the spend total and keeps currencies separate", async () => {
-    await renderFleet({
-      runs: runPage([
-        runRow({ cost: { micros: "1500000", currency: "USD", basis: null } }),
-        runRow({
-          id: "arun_eur",
-          cost: { micros: "2500000", currency: "EUR", basis: null },
-        }),
-        runRow({ id: "arun_missing", cost: null }),
-      ]),
-      approvals: NO_APPROVALS,
-    });
-    expect(tile("Spend, runs shown")).toHaveTextContent("$1.50");
-    expect(tile("Spend, runs shown")).toHaveTextContent("€2.50");
-    expect(tile("Spend, runs shown")).toHaveTextContent(
-      "Cost recorded for 2 of 3 runs",
-    );
   });
 
   // A total over the cost column covers only the rows that carry a figure
@@ -778,7 +763,7 @@ describe("Fleet approvals › the mandate bar", () => {
   });
 });
 
-it("places supplied spend metrics with activity and omits a duplicate spend total", async () => {
+it("places the page's spend tiles in the strip beside activity", async () => {
   const { source } = fleetSource({ runs: NO_RUNS, approvals: NO_APPROVALS });
   const element = await Fleet({
     ctx,
@@ -792,5 +777,4 @@ it("places supplied spend metrics with activity and omits a duplicate spend tota
       "Recorded spend metrics",
     ),
   ).toBeInTheDocument();
-  expect(screen.queryByText("Spend, runs shown")).not.toBeInTheDocument();
 });

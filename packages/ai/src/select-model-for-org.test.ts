@@ -23,7 +23,19 @@ vi.mock("./models", () => ({
   selectModel: mocks.selectModel,
 }));
 
+// `wrapLanguageModel` is the real one: the minted-key test below drives the
+// wrapped model's `doGenerate` and `doStream` to prove the refusal mapping.
+
+import { APICallError } from "@ai-sdk/provider";
+import { AssistantModelKeyLimitError } from "./assistant-model-key-limit";
 import { selectModelForOrg } from "./select-model-for-org";
+
+/** The two entry points the middleware wraps, as a test drives them. */
+type Callable = {
+  doGenerate: (o: unknown) => Promise<unknown>;
+  doStream: (o: unknown) => Promise<unknown>;
+};
+const callable = (model: unknown) => model as Callable;
 
 const ORG = "00000000-0000-4000-8000-0000000000aa";
 
@@ -102,6 +114,112 @@ describe("selectModelForOrg", () => {
       credential: MINTED_KEY,
     });
     expect(selection.fundedBy).toBe("platform");
+  });
+
+  describe("a minted key's spend refusal (ADR-131 §3, §9)", () => {
+    /** A model whose vendor answers 402 to every call. */
+    function refusingModel() {
+      const refusal = new APICallError({
+        message: "Key limit exceeded",
+        url: "https://openrouter.ai/api/v1/chat/completions",
+        requestBodyValues: {},
+        statusCode: 402,
+        responseBody: '{"error":{"message":"Key limit exceeded","code":402}}',
+      });
+      return {
+        specificationVersion: "v4" as const,
+        provider: "openrouter",
+        modelId: "a-model",
+        supportedUrls: {},
+        doGenerate: vi.fn(async () => {
+          throw refusal;
+        }),
+        doStream: vi.fn(async () => {
+          throw refusal;
+        }),
+      };
+    }
+
+    it("reaches the caller as a named error with a message the assistant can show", async () => {
+      mocks.selectModel.mockReturnValue(refusingModel());
+      mocks.resolveModelFundingSource.mockResolvedValue({
+        fundedBy: "platform",
+        modelKey: MINTED_KEY,
+        keyHint: "nted",
+      });
+      const { model } = await selectModelForOrg(ORG, { tier: "fast" });
+      const wrapped = callable(model);
+      for (const call of [wrapped.doGenerate, wrapped.doStream]) {
+        const err: unknown = await call
+          .call(wrapped, { prompt: [] })
+          .catch((e: unknown) => e);
+        expect(err).toBeInstanceOf(AssistantModelKeyLimitError);
+        const refused = err as AssistantModelKeyLimitError;
+        expect(refused.code).toBe("assistant_model_key_limit");
+        expect(refused.keyHint).toBe("nted");
+        expect(refused.message).toMatch(/daily ceiling/);
+        expect(refused.message).not.toMatch(/openrouter|sk-or-v1/i);
+      }
+    });
+
+    it("does not fall back to the shared key", async () => {
+      // The ceiling bounds one organisation's blast radius on the shared
+      // account. A retry on the shared key would spend past it the moment
+      // it was reached, so the refusal is final until the ceiling resets.
+      mocks.selectModel.mockReturnValue(refusingModel());
+      mocks.resolveModelFundingSource.mockResolvedValue({
+        fundedBy: "platform",
+        modelKey: MINTED_KEY,
+        keyHint: "nted",
+      });
+      const { model } = await selectModelForOrg(ORG);
+      await expect(
+        callable(model).doGenerate({ prompt: [] }),
+      ).rejects.toBeInstanceOf(AssistantModelKeyLimitError);
+      // One build, one key: nothing asked `selectModel` for a second model.
+      expect(mocks.selectModel).toHaveBeenCalledTimes(1);
+    });
+
+    it("passes every other error through untouched", async () => {
+      const outage = new Error("upstream 503");
+      mocks.selectModel.mockReturnValue({
+        ...refusingModel(),
+        doGenerate: vi.fn(async () => {
+          throw outage;
+        }),
+      });
+      mocks.resolveModelFundingSource.mockResolvedValue({
+        fundedBy: "platform",
+        modelKey: MINTED_KEY,
+        keyHint: "nted",
+      });
+      const { model } = await selectModelForOrg(ORG);
+      await expect(callable(model).doGenerate({ prompt: [] })).rejects.toBe(
+        outage,
+      );
+    });
+
+    it("leaves a key the customer brought unwrapped: its 402 is the customer's own account", async () => {
+      const raw = refusingModel();
+      mocks.selectModel.mockReturnValue(raw);
+      mocks.resolveModelFundingSource.mockResolvedValue({
+        fundedBy: "org",
+        modelKey: BROUGHT_KEY,
+        keyHint: "cret",
+      });
+      const { model } = await selectModelForOrg(ORG);
+      expect(model).toBe(raw);
+    });
+
+    it("leaves the shared key unwrapped", async () => {
+      const raw = refusingModel();
+      mocks.selectModel.mockReturnValue(raw);
+      mocks.resolveModelFundingSource.mockResolvedValue({
+        fundedBy: "platform",
+      });
+      const { model } = await selectModelForOrg(ORG);
+      expect(model).toBe(raw);
+    });
   });
 
   it("passes the caller's selector through and lets the organisation own the key", async () => {

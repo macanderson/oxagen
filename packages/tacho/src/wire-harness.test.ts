@@ -7,12 +7,22 @@
  * a step record for an app that produces none (ADR-078 §2).
  */
 import { describe, expect, it } from "vitest";
+import { MODEL_PROXY_ROUTES } from "./collector/model-routes";
 import {
+  BROKERABLE_HARNESS_PROVIDER,
+  BROKERABLE_HARNESSES,
   CONNECTED_HARNESSES,
+  defaultHarnessForProvider,
+  HARNESS_BINARY,
+  isBrokerableHarness,
+  isConnectedHarness,
+  isModelRoutedHarness,
+  isWrappedHarness,
+  MODEL_GATEWAY_PROVIDERS,
+  MODEL_HARNESS_ROUTES,
+  MODEL_ROUTED_HARNESSES,
   TACHO_ENFORCEMENT_TIER_ATTR,
   TACHO_GATEWAY_TIER,
-  isConnectedHarness,
-  isWrappedHarness,
   TACHO_HARNESS_LABELS,
   TACHO_HARNESS_TIERS,
   TACHO_TIER_SUMMARY,
@@ -99,5 +109,62 @@ describe("the gateway enforcement attribute is a wire spelling", () => {
   it("is the spelling already deployed hosts emit", () => {
     expect(TACHO_ENFORCEMENT_TIER_ATTR).toBe("oxagen.enforcement_tier");
     expect(TACHO_GATEWAY_TIER).toBe("gateway");
+  });
+});
+
+describe("the model route table is the one place a harness reaches the gateway", () => {
+  it("names only wrapped harnesses, each once, with a binary to launch", () => {
+    const harnesses = MODEL_HARNESS_ROUTES.map((row) => row.harness);
+    expect(new Set(harnesses).size).toBe(harnesses.length);
+    for (const harness of harnesses) {
+      expect(isWrappedHarness(harness)).toBe(true);
+      expect(HARNESS_BINARY[harness]).toBeTruthy();
+    }
+    for (const harness of WRAPPED_HARNESSES)
+      expect(HARNESS_BINARY[harness]).toBeTruthy();
+    expect(HARNESS_BINARY.cursor).toBe("cursor-agent");
+  });
+
+  it("answers every prefix the proxy routes, and only known providers", () => {
+    for (const row of MODEL_HARNESS_ROUTES) {
+      expect(MODEL_PROXY_ROUTES).toContain(row.prefix);
+      expect(MODEL_GATEWAY_PROVIDERS).toContain(row.provider);
+      expect(row.baseUrlFile).toMatch(/\.(json|toml)$/);
+    }
+  });
+
+  it("derives the lists, the predicates and the provider map from the rows", () => {
+    expect(MODEL_ROUTED_HARNESSES).toEqual(["claude-code", "codex", "stella"]);
+    expect(BROKERABLE_HARNESSES).toEqual(["claude-code", "codex"]);
+    expect(BROKERABLE_HARNESS_PROVIDER).toEqual({
+      "claude-code": "anthropic",
+      codex: "openai",
+    });
+    for (const harness of tachoHarnessSchema.options) {
+      expect(isModelRoutedHarness(harness)).toBe(
+        MODEL_HARNESS_ROUTES.some((row) => row.harness === harness),
+      );
+      expect(isBrokerableHarness(harness)).toBe(
+        MODEL_HARNESS_ROUTES.some(
+          (row) => row.harness === harness && row.brokerable,
+        ),
+      );
+    }
+    expect(isModelRoutedHarness("not-a-harness")).toBe(false);
+    expect(isBrokerableHarness("stella")).toBe(false);
+  });
+
+  it("files a bare provider prefix under that provider's brokerable harness", () => {
+    // One brokerable harness per provider, so a call that names no harness
+    // has exactly one place to land.
+    for (const provider of MODEL_GATEWAY_PROVIDERS) {
+      const harness = defaultHarnessForProvider(provider);
+      expect(BROKERABLE_HARNESS_PROVIDER[harness]).toBe(provider);
+      expect(
+        MODEL_HARNESS_ROUTES.filter(
+          (row) => row.brokerable && row.provider === provider,
+        ),
+      ).toHaveLength(1);
+    }
   });
 });

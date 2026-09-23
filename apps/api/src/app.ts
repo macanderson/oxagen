@@ -388,6 +388,26 @@ app.route("/v1/cms", cmsRoute);
 // auditor fetches the bundle with the link alone. The signed, expiring token
 // in the query is the boundary. Mounted before the auth-gated /v1 groups for
 // the same reason as /v1/auth/cli above.
+//
+// The IP-keyed pre-auth ceiling sits above the mount because Hono runs
+// middleware in registration order, and a limiter registered after the route
+// would not wrap it. IP only: the URL carries no Authorization header, so a
+// credential bucket would pool every caller into one counter. `methods: "all"`
+// because the route is a GET and the limiter counts POST alone by default.
+// Each hit streams a whole bundle, so the ceiling is well under the ingest
+// one; an attributable caller gets 300 downloads a minute, and an
+// unattributable one skips the counter rather than sharing a bucket, the same
+// rule as every other pre-auth mount.
+app.use(
+  "/v1/run-exports/download",
+  distributedRateLimiter({
+    keyPrefix: "run-export-preauth-ip",
+    max: 300,
+    bucketKey: trustedClientIpBucketKey,
+    methods: "all",
+    storeErrorPolicy: "degrade-to-local",
+  }),
+);
 app.route("/v1/run-exports/download", runExportDownloadRoute);
 
 // Shared pre-authentication ceilings for credential stuffing on Stella intake.

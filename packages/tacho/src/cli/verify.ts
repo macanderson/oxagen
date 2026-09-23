@@ -7,6 +7,7 @@
 import { readHostFile } from "../host/host-file";
 import { isInternalSession } from "../collector/registry";
 import {
+  HARNESS_BINARY,
   isWrappedHarness,
   type TachoHarness,
   type WrappedHarness,
@@ -22,13 +23,8 @@ export interface VerifyOptions {
 
 const DEFAULT_PROMPT = "Reply with exactly the word OK and nothing else.";
 
-const BINARY: Record<WrappedHarness, string> = {
-  "claude-code": "claude",
-  codex: "codex",
-  // The probe requires Cursor's unambiguous alias, not a generic agent binary.
-  cursor: "cursor-agent",
-  stella: "stella",
-};
+/** The one table of harness executables; Cursor's is its unambiguous alias. */
+const BINARY: Record<WrappedHarness, string> = HARNESS_BINARY;
 
 /**
  * How long to wait for a sealed chain. Stella sends no SessionEnd: its chain
@@ -44,7 +40,7 @@ const DEFAULT_TIMEOUT_MS: Record<WrappedHarness, number> = {
 
 /**
  * One headless turn per harness. Claude Code prints a JSON result carrying
- * its session id; Codex CLI (`codex exec`), Cursor (`agent -p`) and Stella
+ * its session id; Codex CLI (`codex exec`), Cursor (`cursor-agent -p`) and Stella
  * (`stella run`) are matched as a chain the daemon did not have before the
  * turn ran, carrying the harness label. Cursor's JSON result does carry a
  * `session_id`, but its hooks name the session by `conversation_id`, and

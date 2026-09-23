@@ -1,6 +1,6 @@
 {
   "tools": {
-    "eyebrow": "Workspace · {workspace}",
+    "eyebrow": "Workspace {workspace}",
     "lede": "The registry is the only source of tools an agent can see. What an agent may do with one is the classification below, the grants the broker mints, and the switches that can deny it at any level.",
     "loading": "Loading tools",
     "notCarried": "not recorded",

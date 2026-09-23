@@ -37,7 +37,7 @@ import {
 } from "@oxagen/database";
 import { resolveAgentIdentity } from "@oxagen/agent/handlers/_agent-identity";
 import { canAccessACL, resolveOrgTier } from "@oxagen/billing";
-import { createGitHubClient } from "@oxagen/github";
+import { createGitHubClient, OXAGEN_PR_LABELS } from "@oxagen/github";
 import { fetchAgentRunAuthz } from "@oxagen/iam";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import type { CapabilityHandler } from "@oxagen/oxagen";
@@ -442,6 +442,7 @@ export const agentDefinitionCommitHandler: CapabilityHandler<
       title: message,
       head: input.branch,
       base: info.defaultBranch,
+      labels: OXAGEN_PR_LABELS,
       body: `Definition of record for agent \`${agent.slug}\` (\`${path}\`, sha256 \`${digest}\`). Merging publishes it.`,
     }));
 

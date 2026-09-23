@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { HandlerError } from "@oxagen/oxagen";
+import { OXAGEN_PR_LABELS } from "@oxagen/github";
 import { parseSkillConfig } from "./skill-resolution";
 import type { SkillConfigStore, SkillScope } from "./skill-config.store";
 import type { SkillRepository } from "./skill-config.repository";
@@ -48,6 +49,7 @@ export function createSkillConfigService(deps: SkillConfigServiceDeps) {
         title: "Update skill resolution configuration",
         head,
         base: repository.productionBranch,
+        labels: OXAGEN_PR_LABELS,
         body: "Updates `.oxagen/skills.toml`. The merged file controls which skills agents may find. This change grants no tools, model tiers or budget.",
       });
       return { number: pr.number, url: pr.htmlUrl };

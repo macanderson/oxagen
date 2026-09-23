@@ -151,7 +151,7 @@ const nextConfig = {
   // to a throwing stub prevents Turbopack from ever resolving into these
   // packages. At runtime:
   //   - blake3 and duckdb: were reached only through @oxagen/engram, which
-  //     ADR-143 deleted; the aliases stay because this app is kept only for
+  //     ADR-144 deleted; the aliases stay because this app is kept only for
   //     the parity gates and is not rebuilt
   turbopack: {
     resolveAlias: {

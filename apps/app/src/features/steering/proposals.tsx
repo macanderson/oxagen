@@ -9,9 +9,9 @@ import { linkText, mono } from "@/ui/control-styles";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { RecordCard } from "@/ui/record-card";
-import { ReadFailure } from "./read-failure";
+import { SteeringReadFailure } from "./read-failure";
 import { Pager, Section } from "./section";
-import { StatusBadge } from "./status";
+import { ProposalStatusBadge } from "./status";
 import { type SteeringAt, steeringLink } from "./view";
 import { ProposalWrites } from "./write-controls";
 
@@ -53,7 +53,7 @@ function ProposalItem({
       statement={proposal.statement}
       badge={
         <>
-          <StatusBadge status={proposal.status} />
+          <ProposalStatusBadge status={proposal.status} />
           {checks === null ? null : (
             <span data-checks="" className="text-xs text-muted-foreground">
               {t("checks", {
@@ -121,7 +121,7 @@ export function Proposals({
   if (!read.ok) {
     return (
       <Section id="steering-proposals" title={title}>
-        <ReadFailure read={read} section={title} />
+        <SteeringReadFailure read={read} section={title} />
       </Section>
     );
   }

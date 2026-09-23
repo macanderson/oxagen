@@ -70,6 +70,8 @@ export const AgentDetail = z.object({
     status: AgentStatus,
     registeredAt: Instant,
     firstFrameAt: Instant.nullable(),
+    /** The cost-center label the agent is charged to, or null when it inherits the workspace's (ADR-142). */
+    costCenter: z.string().min(1).nullable(),
   }),
   /** Long-lived credentials: the prefix and dates, never the secret. */
   credentials: z.array(

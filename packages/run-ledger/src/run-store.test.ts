@@ -1926,6 +1926,34 @@ describe("sealAttempt", () => {
     expect(ranSql(executed, INSERT_SEAL)).toBe(false);
   });
 
+  it("refuses to append a terminal event while ingress is paused", async () => {
+    const { tx, executed } = makeRoutingTx([
+      {
+        match: LOCK_ATTEMPT,
+        rows: [makeAttemptRow({ ingress_paused: true })],
+      },
+    ]);
+    useTx(tx);
+    await expect(
+      createPostgresRunStore({
+        archive: fakeArchiveStore().store,
+      }).sealAttempt({
+        attemptId: UUID_ATTEMPT,
+        terminalStatus: "completed",
+        terminalEvent: terminalEvent(1),
+        sealerId: "drain-1",
+        result: { ok: true },
+      }),
+    ).rejects.toMatchObject({
+      code: "run_attempt_not_writable",
+      reason: "paused",
+    });
+    // A pause fences the seal's embedded append exactly as it fences
+    // `appendAttemptBatch`: no event row, no seal.
+    expect(ranSql(executed, INSERT_EVENTS)).toBe(false);
+    expect(ranSql(executed, INSERT_SEAL)).toBe(false);
+  });
+
   it("still seals a cancelled attempt from its already-durable rows", async () => {
     // A seal with no NEW terminal event only closes out evidence already on
     // the ledger — cancellation fences further appends, not this

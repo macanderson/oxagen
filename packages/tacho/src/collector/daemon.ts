@@ -53,6 +53,7 @@ import { readModelBaseUrlState } from "../host/model-base-url";
 import {
   applyModelCredentials,
   type ModelCredentialHarnessState,
+  readCodexApiKeyMember,
   readModelCredentialState,
   staticTokenStillGood,
 } from "../host/model-credential";
@@ -158,20 +159,6 @@ export const DEFAULT_TIMERS: DaemonTimers = {
 
 /** How often the daemon looks at Codex's static run token. */
 const STATIC_TOKEN_RENEWAL_CHECK_MS = 60 * 60_000;
-
-/** The `OPENAI_API_KEY` member of `~/.codex/auth.json`, whatever it holds. */
-function codexStaticToken(home: string): string | undefined {
-  try {
-    const raw = readJsonFileIfExists(join(home, ".codex", "auth.json"));
-    const value =
-      typeof raw === "object" && raw !== null
-        ? (raw as { OPENAI_API_KEY?: unknown }).OPENAI_API_KEY
-        : undefined;
-    return typeof value === "string" ? value : undefined;
-  } catch {
-    return undefined;
-  }
-}
 
 export interface DaemonOptions {
   paths: TachoPaths;
@@ -452,7 +439,7 @@ async function initializeDaemon(
   const hostRecorder = hostRecord.recorder;
 
   /**
-   * The credential seam (ADR-138): the vendor credentials this gateway holds
+   * The credential seam (ADR-143): the vendor credentials this gateway holds
    * in custody, and the key that signs the run tokens a brokered harness
    * presents instead. Both are re-read from disk on use rather than cached,
    * so `tacho enroll` taking a key into custody, or `tacho unenroll` rotating
@@ -670,7 +657,7 @@ async function initializeDaemon(
       // Omitted until a read succeeds: absent means nothing was said, and a
       // daemon that could not read the files has nothing to say.
       ...(modelBaseUrls.length > 0 ? { model_base_urls: modelBaseUrls } : {}),
-      // Which providers this host brokers (ADR-138): names and a basis,
+      // Which providers this host brokers (ADR-143): names and a basis,
       // never a secret. Read from the store each time, so a key `tacho
       // enroll` just took into custody is reported on the next poll.
       credentials: RUN_TOKEN_PROVIDERS.map((provider) => ({
@@ -844,7 +831,8 @@ async function initializeDaemon(
       clause = inForce.mandate;
     }
     try {
-      const purged = wal.purgeBodiesOutsideMandate(clause);
+      const purged =
+        wal.purgeBodiesOutsideMandate(clause) + purgePendingEndBodies(clause);
       clearBodyPurgeOwed();
       log(
         `completed an owed body purge: erased ${purged} queued body(ies) the mandate does not cover`,
@@ -876,7 +864,8 @@ async function initializeDaemon(
     // returned.
     const recorded = markBodyPurgeOwed(next, dropped);
     try {
-      const purged = wal.purgeBodiesOutsideMandate(next);
+      const purged =
+        wal.purgeBodiesOutsideMandate(next) + purgePendingEndBodies(next);
       clearBodyPurgeOwed();
       log(
         `mandate narrowed (${dropped.join(", ")}): erased ${purged} queued body(ies) from the WAL`,
@@ -1292,7 +1281,9 @@ async function initializeDaemon(
    * list as well.
    */
   const gitPending = new Map<string, { force: boolean; reconcile: boolean }>();
-  const pendingEndsPath = join(paths.root, "pending-session-ends.json");
+  // The path `paths.ts` declares, so `unenroll --purge` and this daemon name
+  // one file: it can hold a run's content and is purged with the WAL.
+  const pendingEndsPath = paths.pendingEnds;
   const terminalSchema = z.object({
     events: z.array(tachoEventSchema),
     state: z.custom<RegistryState>(
@@ -1322,7 +1313,12 @@ async function initializeDaemon(
       env: z.record(z.string(), z.string().optional()).optional(),
       harness: tachoHarnessSchema.optional(),
       agent: z.string().optional(),
-      replay: z.object({ receivedAt: z.string().datetime() }).optional(),
+      replay: z
+        .object({
+          receivedAt: z.string().datetime(),
+          deferred: z.boolean().optional(),
+        })
+        .optional(),
       terminal: terminalSchema.optional(),
     }),
   ]);
@@ -1370,6 +1366,26 @@ async function initializeDaemon(
     );
   for (const id of pendingSessionEnds.keys())
     gitPending.set(id, { force: true, reconcile: true });
+
+  /**
+   * Drop the pending terminal bodies a retention clause no longer covers,
+   * and rewrite the file. Runs beside `Wal.purgeBodiesOutsideMandate` with
+   * the same clause, so a narrowing erases the same classes from both
+   * places a body can wait.
+   */
+  function purgePendingEndBodies(clause: RetentionMandate): number {
+    let purged = 0;
+    for (const pending of pendingSessionEnds.values()) {
+      if (pending.terminal === undefined) continue;
+      const kept = pending.terminal.bodies.filter((body) =>
+        retentionAllows(clause, body.content_class),
+      );
+      purged += pending.terminal.bodies.length - kept.length;
+      pending.terminal.bodies = kept;
+    }
+    if (purged > 0) persistPendingEnds();
+    return purged;
+  }
 
   /** The most sessions one tick reads worktrees for. */
   const GIT_READS_PER_TICK = 4;
@@ -1708,7 +1724,15 @@ async function initializeDaemon(
       !endingSession.pendingTerminal
     ) {
       const uuid = endingSession.recorder.sessionUuid;
-      pendingSessionEnds.set(uuid, envelope);
+      // Stamped now, not when the git read lands: the frame's `ts` is when
+      // the session ended, however long the drain waits.
+      pendingSessionEnds.set(uuid, {
+        ...envelope,
+        replay: envelope.replay ?? {
+          receivedAt: toProtocolTimestamp(now()),
+          deferred: true,
+        },
+      });
       requestGitRead(uuid, { force: true, reconcile: true });
       persistState();
       persistPendingEnds();
@@ -2309,7 +2333,7 @@ async function initializeDaemon(
       // The loopback model proxy. `calls_observed` counts model calls since
       // the daemon started; a session's own count is on its row below.
       gateway: gatewayStatus(),
-      // What the gateway holds in custody (ADR-138): provider, kind, source
+      // What the gateway holds in custody (ADR-143): provider, kind, source
       // and when it was taken. The secret is not here and has no field.
       credential_custody: (() => {
         try {
@@ -2564,7 +2588,7 @@ async function initializeDaemon(
    */
   /**
    * Codex reads a static run token from `auth.json` and has no helper to
-   * fetch a fresh one, so the gateway that issued it renews it (ADR-138):
+   * fetch a fresh one, so the gateway that issued it renews it (ADR-143):
    * once an hour, when the token in place no longer verifies for this
    * enrollment or is inside the renewal window, a new one is minted through
    * the issuer (so the record carries it) and written in place. A host with
@@ -2588,7 +2612,7 @@ async function initializeDaemon(
       return;
     }
     if (state === undefined || !state.brokered) return;
-    const current = codexStaticToken(home);
+    const current = readCodexApiKeyMember(home);
     if (staticTokenStillGood(current, host, paths.runTokenKey, now())) return;
     const issued = api.issueRunToken?.({
       harness: "codex",

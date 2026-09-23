@@ -124,7 +124,8 @@ export const checkResultSchema = z
   .strict();
 export type CheckResult = z.infer<typeof checkResultSchema>;
 
-const lineageId = z
+/** A lineage id: the file stem under .oxagen/rules/. Shared with handlers that read an id from input. */
+export const lineageIdSchema = z
   .string()
   .min(1)
   .max(200)
@@ -136,7 +137,7 @@ const lineageId = z
 /** The record a proposal asks to publish. */
 export const proposedRecordSchema = z
   .object({
-    lineageId: lineageId.describe(
+    lineageId: lineageIdSchema.describe(
       "The lineage this proposal is about; the file stem under .oxagen/rules/",
     ),
     title: z.string().min(1).max(200).optional(),

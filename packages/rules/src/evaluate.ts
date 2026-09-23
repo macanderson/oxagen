@@ -67,10 +67,17 @@ function orderedRules(rules: readonly DecisionRule[]): DecisionRule[] {
  * The two prefixes an externally contributed tool's identity carries. The
  * mirror of `EXTERNAL_TOOL_PREFIXES` in `@oxagen/run-ledger`'s run-spec schema
  * and of the external branch of this package's own rule pattern (`schema.ts`).
- * This package does not depend on `@oxagen/run-ledger`, so the set is restated
- * rather than imported; the rule schema is the copy an author writes against.
+ * This package does not depend on `@oxagen/run-ledger`, and the ledger does
+ * not depend on this one, so the set is restated rather than imported.
+ * `@oxagen/agent` depends on both and holds the two copies equal in
+ * `packages/agent/src/runtime/external-tool-prefixes.test.ts`.
  */
-const EXTERNAL_IDENTITY = /^(?:mcp|file-mcp)\./i;
+export const EXTERNAL_TOOL_PREFIXES = ["mcp", "file-mcp"] as const;
+
+const EXTERNAL_IDENTITY = new RegExp(
+  `^(?:${EXTERNAL_TOOL_PREFIXES.join("|")})\\.`,
+  "i",
+);
 
 /**
  * The spelling a decision rule is matched under.
