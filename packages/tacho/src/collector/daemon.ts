@@ -424,11 +424,19 @@ async function initializeDaemon(
     host: { hostname_digest: digestText(host.hostname || osHostname()) },
     now,
   };
-  const wal = new Wal(paths.wal, (failure) => {
-    log(
-      `WAL body unavailable for session ${failure.session_uuid}: ${failure.operation} ${failure.code}`,
-    );
-  });
+  const wal = new Wal(
+    paths.wal,
+    (failure) => {
+      log(
+        `WAL body unavailable for session ${failure.session_uuid}: ${failure.operation} ${failure.code}`,
+      );
+    },
+    (gap) => {
+      log(
+        `chain gap written for session ${gap.session_uuid}: ${gap.kind} seq ${gap.seq} follows seq ${gap.after_seq}`,
+      );
+    },
+  );
   const registry = new SessionRegistry({
     context,
     scope: host.host_enrollment_id,
@@ -2479,6 +2487,13 @@ async function initializeDaemon(
    */
   async function controlTick(): Promise<void> {
     if (stopped) return;
+    for (const session of registry.list()) {
+      for (const repair of session.recorder.takeSealRepairs()) {
+        log(
+          `recorder sealed an event no path returned; written anyway: ${repair}`,
+        );
+      }
+    }
     // The detector runs off the serial queue: its scan is asynchronous file
     // I/O over every project directory, and a hook that arrived while it
     // ran would otherwise wait on it. It records each frame in the same

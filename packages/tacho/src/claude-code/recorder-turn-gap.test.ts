@@ -57,3 +57,66 @@ describe("a prompt on an open turn", () => {
     expect(verifyChain(written).ok).toBe(true);
   });
 });
+
+describe("the ingest guard", () => {
+  function started(scope: string): SessionRecorder {
+    const chain = new SessionRecorder({ context, harnessSessionId: ID, scope });
+    chain.ingestHook(
+      { session_id: ID, hook_event_name: "SessionStart" },
+      {},
+      at,
+    );
+    return chain;
+  }
+
+  it("writes an event a path sealed and did not return, in chain order", () => {
+    const chain = started("turn-gap-guard");
+    // Stand in for any future path that seals an event and forgets it: this
+    // one is sealed before the hook's own event and never returned.
+    const inner = Reflect.get(chain, "sealHook") as (
+      ...args: unknown[]
+    ) => TachoEvent[];
+    Reflect.set(chain, "sealHook", (...args: unknown[]) => {
+      chain.sealCollectorEvent(
+        "oxagen:worktree_reconciled",
+        { observed_changes_total: 0, observed_changes_truncated: false },
+        { ts: at },
+      );
+      return inner.apply(chain, args);
+    });
+
+    const events = chain.ingestHook(
+      { session_id: ID, hook_event_name: "UserPromptSubmit", prompt: "go" },
+      {},
+      at,
+    );
+
+    expect(events.map((event) => event.kind)).toEqual([
+      "oxagen:worktree_reconciled",
+      "turn_start",
+    ]);
+    const first = events[0]?.seq ?? -1;
+    expect(events.map((event) => event.seq)).toEqual([first, first + 1]);
+    const repairs = chain.takeSealRepairs();
+    expect(repairs).toHaveLength(1);
+    expect(repairs[0]).toContain("oxagen:worktree_reconciled");
+    expect(chain.takeSealRepairs()).toEqual([]);
+  });
+
+  it("adds nothing when every sealed event is returned", () => {
+    const chain = started("turn-gap-clean");
+    const written = [...chain.sealedEvents];
+    written.push(
+      ...chain.ingestHook(
+        { session_id: ID, hook_event_name: "UserPromptSubmit", prompt: "go" },
+        {},
+        at,
+      ),
+      ...chain.finalize("completed", at),
+    );
+    expect(chain.takeSealRepairs()).toEqual([]);
+    expect(written.map((event) => event.seq)).toEqual(
+      chain.sealedEvents.map((event) => event.seq),
+    );
+  });
+});
