@@ -335,10 +335,14 @@ export const routes = {
     org: string,
     ws: string,
     tab?: "working-copies" | "changes" | "configuration",
+    /** One change on the Changes tab, by its proposal id: the Context PR page. */
+    change?: string,
   ): SafePath =>
     tab === undefined
       ? pathOf(org, ws, "repositories")
-      : pathOf(org, ws, "repositories", tab),
+      : tab === "changes" && change !== undefined
+        ? pathOf(org, ws, "repositories", tab, change)
+        : pathOf(org, ws, "repositories", tab),
   /** Steering filters, a selected proposal, and a Skills inventory cursor. */
   steering: (
     org: string,
