@@ -77,6 +77,8 @@ import type {
   ContextPr,
   ProposalPage,
   RecordDetail,
+  MemoryPage,
+  OxagenTree,
   RecordKind,
   RecordPage,
   SteeringFreshness,
@@ -420,6 +422,18 @@ export interface DataSource {
      * value, so a GitHub outage never takes the library down with it.
      */
     hub(ctx: WsCtx): Promise<Read<SteeringHub>>;
+    /**
+     * list_memories: the workspace's active `:AgentMemory` nodes, newest
+     * first, up to `limit` (1 to `STEERING_READ_MAX`); the Memory shelf and
+     * its chip count.
+     */
+    memories(ctx: WsCtx, q: { limit: number }): Promise<Read<MemoryPage>>;
+    /**
+     * list_repositories and get_repository_tree: every path under `.oxagen/`
+     * on the main repository's production branch, for the Records shelf's On
+     * disk panel; `unbound` when no main repository is bound.
+     */
+    tree(ctx: WsCtx): Promise<Read<OxagenTree>>;
   };
   /**
    * The Tools page's six reads on the workspace (#2958), each role-checked in

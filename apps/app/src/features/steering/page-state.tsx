@@ -191,6 +191,35 @@ export function SteeringEmpty({ repository }: { repository: string | null }) {
   );
 }
 
+/**
+ * A Library shelf's own empty state (the Memory shelf's "Nothing has been
+ * recalled yet"): the same frame, the shelf's words, and its action where it
+ * has one. The header holds no gold while it shows.
+ */
+export function ShelfEmpty({
+  testId,
+  title,
+  children,
+  actions,
+}: {
+  testId: string;
+  title: string;
+  children: ReactNode;
+  actions?: ReactNode;
+}) {
+  return (
+    <StateFrame
+      testId={testId}
+      tone="neutral"
+      icon={<TableGlyph />}
+      title={title}
+      actions={actions}
+    >
+      {children}
+    </StateFrame>
+  );
+}
+
 export function SteeringFailure({
   read,
   org,

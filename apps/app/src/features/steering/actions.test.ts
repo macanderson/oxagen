@@ -27,8 +27,13 @@ const kernel =
   await vi.importActual<typeof import("@oxagen/oxagen")>("@oxagen/oxagen");
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
-const { dismissProposal, mergeContextPr, openContextPr, setGovernanceMode } =
-  await import("./actions");
+const {
+  dismissProposal,
+  forgetMemory,
+  mergeContextPr,
+  openContextPr,
+  setGovernanceMode,
+} = await import("./actions");
 
 const ctx = unsafeMint(WsCtx, {
   userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
@@ -274,6 +279,71 @@ describe("setGovernanceMode", () => {
       ok: false,
       reason: "conflict",
       code: "github_not_connected",
+    });
+  });
+});
+
+describe("forgetMemory", () => {
+  const REF = "4f1c2e9a-8b7d-4c6e-9f0a-1b2c3d4e5f60";
+  /** update_memory's answer: the node as it now reads. */
+  const retracted = {
+    id: REF,
+    publicId: "0c9d8e7f-6a5b-4c3d-8e1f-2a3b4c5d6e7f",
+    nodeRef: "workspace",
+    memoryClass: "OBSERVATION",
+    memoryKind: "gotcha",
+    lesson: "The checkout e2e suite failed twice on Safari and passed on retry.",
+    source: "fix",
+    confidenceScore: 60,
+    enforcementScore: null,
+    status: "RETRACTED",
+    subjectHint: "",
+    halfLifeDays: 30,
+    decayFloor: 10,
+    lastEvidenceAt: null,
+    citationCount: 6,
+    influenceCount: 2,
+    violationCount: 0,
+    createdByKind: "AGENT",
+    createdById: null,
+    confirmedByKind: null,
+    confirmedById: null,
+    createdAt: "2026-09-02T16:40:00.000Z",
+    lastReinforcedAt: null,
+  };
+
+  it("retracts the memory through update_memory and never deletes it", async () => {
+    invoke.mockResolvedValue(retracted);
+    expect(await forgetMemory("acme", "core-platform", REF)).toEqual({
+      ok: true,
+      value: { forgotten: REF },
+    });
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(invoke).toHaveBeenCalledWith(
+      "update_memory",
+      { memoryId: REF, status: "RETRACTED" },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("refuses an empty reference before the kernel runs (negative)", async () => {
+    expect(await forgetMemory("acme", "core-platform", "  ")).toEqual({
+      ok: false,
+      reason: "invalid",
+      field: "memoryRef",
+      code: "invalid_input",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+    expect(requireViewer).not.toHaveBeenCalled();
+  });
+
+  it("returns the kernel's role refusal as denied with nothing changed (negative)", async () => {
+    invoke.mockRejectedValue(refused("forbidden", "workspace_role_required"));
+    expect(await forgetMemory("acme", "core-platform", REF)).toEqual({
+      ok: false,
+      reason: "denied",
+      code: "workspace_role_required",
     });
   });
 });

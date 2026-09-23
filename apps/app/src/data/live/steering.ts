@@ -3,6 +3,7 @@
 // kernelRead on the workspace ctx, mapped into its view model and parsed at
 // the boundary.
 import "server-only";
+import { agentMemoryList } from "@oxagen/oxagen/contracts/agent.memory.list";
 import { contextPrGet } from "@oxagen/oxagen/contracts/context.pr.get";
 import { contextProposalList } from "@oxagen/oxagen/contracts/context.proposal.list";
 import { contextRecordsGet } from "@oxagen/oxagen/contracts/context.records.get";
@@ -15,6 +16,8 @@ import { captureError } from "@oxagen/telemetry";
 import type { z } from "zod";
 import {
   ContextPr,
+  MemoryPage,
+  OxagenTree,
   ProposalPage,
   RecordDetail,
   RecordPage,
@@ -28,6 +31,8 @@ import { type Read, readError, readOk } from "@/data/read";
 import { kernelRead } from "@/server/kernel";
 import {
   toContextPr,
+  toMemoryPage,
+  toOxagenTree,
   toProposalPage,
   toRecordDetail,
   toRecordPage,
@@ -92,6 +97,45 @@ function failureCode(read: Exclude<Read<unknown>, { ok: true }>): string {
 }
 
 export const steering: DataSource["steering"] = {
+  async memories(ctx, q) {
+    const read = await kernelRead(ctx, {
+      contract: agentMemoryList,
+      input: {
+        limit: q.limit,
+        offset: 0,
+        sort: "createdAt",
+        sortDir: "desc",
+      },
+      page: "steering",
+    });
+    return read.ok
+      ? parsed(MemoryPage, toMemoryPage(read.value), ctx.orgId, "memories")
+      : read;
+  },
+  /**
+   * The main repository's `.oxagen/` tree, read from GitHub now: the
+   * binding from list_repositories, then get_repository_tree on it. A
+   * refusal or failure of either read is the panel's own, and never the
+   * shelf's.
+   */
+  async tree(ctx) {
+    const bound = await kernelRead(ctx, {
+      contract: repositoryList,
+      input: {},
+      page: "steering",
+    });
+    if (!bound.ok) return bound;
+    const main = bound.value.repositories.find((repo) => repo.role === "main");
+    if (main === undefined) return readOk({ state: "unbound" });
+    const tree = await kernelRead(ctx, {
+      contract: repositoryTreeGet,
+      input: { bindingId: main.bindingId },
+      page: "steering",
+    });
+    return tree.ok
+      ? parsed(OxagenTree, toOxagenTree(tree.value), ctx.orgId, "tree")
+      : tree;
+  },
   async deliveries(ctx) {
     const read = await kernelRead(ctx, {
       contract: contextSteeringDeliveries,

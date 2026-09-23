@@ -5,6 +5,7 @@
 // handlers (INV-29); merge_context_pr gates the signed-in reviewer the
 // governance mode names. A refusal comes back as `denied` or `conflict` with
 // the handler's reason as its code, and nothing changed.
+import { agentMemoryUpdate } from "@oxagen/oxagen/contracts/agent.memory.update";
 import { contextGovernanceModeSet } from "@oxagen/oxagen/contracts/context.governance_mode.set";
 import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
 import { contextPrOpen } from "@oxagen/oxagen/contracts/context.pr.open";
@@ -145,4 +146,42 @@ export async function setGovernanceMode(
           : { number: pullRequest.number, htmlUrl: pullRequest.htmlUrl },
     },
   };
+}
+
+/**
+ * Forget one memory from the Library's Memory shelf (roadmap
+ * pages/steering-memory.md, `memforget`).
+ *
+ * Forgetting stops the assembler selecting the memory and touches no run.
+ * It is `update_memory` setting the node's status to RETRACTED, never
+ * `delete_memory`: a delete is a `DETACH DELETE` that takes the node's
+ * citation edges with it, and those edges are how a run that carried the
+ * memory still names it. Recall and list read ACTIVE nodes only, so a
+ * retracted memory leaves the shelf and every agent's recall, while each
+ * frame and each citation stays as it was recorded.
+ *
+ * The kernel gates the write on `update_memory`'s roles for the workspace
+ * viewer the URL names: an org Owner or Admin, or a workspace Owner or
+ * Member; anyone else is answered `denied` with nothing changed.
+ */
+export async function forgetMemory(
+  org: string,
+  ws: string,
+  memoryRef: string,
+): Promise<ActionResult<{ forgotten: string }>> {
+  const ref = memoryRef.trim();
+  if (ref === "" || ref.length > 200) {
+    return {
+      ok: false,
+      reason: "invalid",
+      field: "memoryRef",
+      code: "invalid_input",
+    };
+  }
+  const ctx = await requireViewer(org, ws);
+  const result = await kernelWrite(ctx, agentMemoryUpdate, {
+    memoryId: ref,
+    status: "RETRACTED",
+  });
+  return result.ok ? { ok: true, value: { forgotten: result.value.id } } : result;
 }
