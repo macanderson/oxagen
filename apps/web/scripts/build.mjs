@@ -253,7 +253,7 @@ export async function build({ log = console.log } = {}) {
     treatment: "graph",
     ogOnly: true,
     og: {
-      title: "What the papers show. What it takes to govern it.",
+      title: "What the research says about agents, and how to govern them",
       summary: BLOG_DESCRIPTION,
       kind: "Research",
       meta: [`${posts.length} posts`],
