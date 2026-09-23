@@ -783,16 +783,9 @@ export async function applyMappedOrgRoleInTx(
 ): Promise<MappedRoleOutcome> {
   const { orgId, userId, role, actorId } = args;
   // Re-read inside the transaction, locked: a concurrent promotion to Owner
-  // must win over this write.
-  const [member] = await tx
-    .select({ role: schema.orgUsers.role })
-    .from(schema.orgUsers)
-    .where(
-      and(eq(schema.orgUsers.orgId, orgId), eq(schema.orgUsers.userId, userId)),
-    )
-    .limit(1)
-    .for("update");
-  if (member?.role.toLowerCase() === "owner") return { kind: "owner_unmanaged" };
+  // must win over this write. Owner by either record, the org_users role or
+  // the IAM assignment, so the two cannot disagree their way past this.
+  if (await isOrgOwner(tx, orgId, userId)) return { kind: "owner_unmanaged" };
 
   if (role === null) {
     const removal = await removeOrgMemberInTx(tx, {

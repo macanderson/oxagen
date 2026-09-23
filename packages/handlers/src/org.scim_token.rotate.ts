@@ -1,5 +1,6 @@
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import type { CapabilityHandler } from "@oxagen/oxagen";
+import { HandlerError } from "@oxagen/oxagen";
 import { orgScimTokenRotate } from "@oxagen/oxagen/contracts/org.scim_token.rotate";
 import { withSystemDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
@@ -10,6 +11,7 @@ import {
   scimBaseUrl,
   toScimTokenView,
 } from "./lib/scim/token-store";
+import { isUniqueViolation } from "./lib/scim/protocol";
 import { logger } from "./logger";
 
 /**
@@ -35,6 +37,17 @@ export const orgScimTokenRotateHandler: CapabilityHandler<
     const previous = await revokeLiveScimToken(tx, ctx.orgId, actor);
     const minted = await insertScimToken(tx, ctx.orgId, actor);
     return { previous, minted };
+  }).catch((err: unknown) => {
+    // Two rotations at once both insert a live row, and the partial unique
+    // index refuses the second. Nothing was written; the caller retries.
+    if (isUniqueViolation(err)) {
+      throw new HandlerError({
+        code: "conflict",
+        reason: "scim_token_changed",
+        message: "Another change to the SCIM token finished first. Try again.",
+      });
+    }
+    throw err;
   });
 
   emitSecurityEvent({

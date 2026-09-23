@@ -40,6 +40,7 @@ export class ScimError extends Error {
     readonly denial?:
       | "owner_protected"
       | "domain_not_verified"
+      | "identity_not_owned"
       | "cross_organization"
       | "not_entitled"
       | "invalid_token",
@@ -72,6 +73,8 @@ export function listResponse(
   };
 }
 
+const MAX_START_INDEX = 2_147_483_647;
+
 /** `startIndex` and `count` from the query, clamped to what the spec allows. */
 export function pageOf(query: Record<string, string>): {
   startIndex: number;
@@ -80,7 +83,10 @@ export function pageOf(query: Record<string, string>): {
   const start = Number.parseInt(query.startIndex ?? "1", 10);
   const count = Number.parseInt(query.count ?? String(SCIM_DEFAULT_COUNT), 10);
   return {
-    startIndex: Number.isFinite(start) && start >= 1 ? start : 1,
+    // Clamped to a 32-bit offset, so a huge startIndex answers an empty page
+    // rather than overflowing the query's OFFSET.
+    startIndex:
+      Number.isFinite(start) && start >= 1 ? Math.min(start, MAX_START_INDEX) : 1,
     count: Number.isFinite(count)
       ? Math.min(Math.max(count, 0), SCIM_MAX_RESULTS)
       : SCIM_DEFAULT_COUNT,
@@ -340,4 +346,14 @@ export function schemas(baseUrl: string): Record<string, unknown>[] {
       meta: { resourceType: "Schema", location: `${baseUrl}/Schemas/${SCIM_GROUP_SCHEMA}` },
     },
   ];
+}
+
+/**
+ * Postgres unique_violation (23505), as the driver throws it or as Drizzle
+ * wraps it in `cause`: two writes raced for one name, email or live token.
+ */
+export function isUniqueViolation(err: unknown): boolean {
+  if (typeof err !== "object" || err === null) return false;
+  const { code, cause } = err as { code?: unknown; cause?: { code?: unknown } };
+  return code === "23505" || cause?.code === "23505";
 }

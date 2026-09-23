@@ -296,6 +296,20 @@ describe("applyMappedOrgRoleInTx", () => {
     expect(stmts.filter((s) => s.op !== "select")).toEqual([]);
   });
 
+  it("never changes an Owner held only through an IAM assignment", async () => {
+    rows["select:org_users"] = [{ role: "member" }];
+    rows["select:principal_role_assignments"] = [{ id: "owner-pra" }];
+    const out = await applyMappedOrgRoleInTx(fakeTx() as never, {
+      orgId: ORG,
+      userId: USER,
+      role: null,
+      actorId: null,
+      trigger: "scim_group_change",
+    });
+    expect(out).toEqual({ kind: "owner_unmanaged" });
+    expect(stmts.filter((s) => s.op !== "select")).toEqual([]);
+  });
+
   it("turns no mapped role into a full removal that leaves sessions alone", async () => {
     const out = await applyMappedOrgRoleInTx(fakeTx() as never, {
       orgId: ORG,
@@ -349,6 +363,8 @@ describe("applyMappedOrgRoleInTx", () => {
       { id: "prn-1", status: "active", metadata: {} },
     ];
     rows["select:roles"] = [{ id: "role-admin" }];
+    // The first read is the Owner probe, which must find no Owner assignment.
+    queued["select:principal_role_assignments"] = [[]];
     rows["select:principal_role_assignments"] = [{ id: "pra-new" }];
     const out = await applyMappedOrgRoleInTx(fakeTx() as never, {
       orgId: ORG,
@@ -370,6 +386,8 @@ describe("applyMappedOrgRoleInTx", () => {
     rows["select:principals"] = [{ id: "prn-new", status: "active", metadata: {} }];
     rows["select:users"] = [{ displayName: null, email: "ada@acme.com" }];
     rows["select:roles"] = [{ id: "role-admin" }];
+    // The first read is the Owner probe, which must find no Owner assignment.
+    queued["select:principal_role_assignments"] = [[]];
     rows["select:principal_role_assignments"] = [{ id: "pra-new" }];
     await applyMappedOrgRoleInTx(fakeTx() as never, {
       orgId: ORG,

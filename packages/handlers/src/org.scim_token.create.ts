@@ -11,6 +11,7 @@ import {
   scimBaseUrl,
   toScimTokenView,
 } from "./lib/scim/token-store";
+import { isUniqueViolation } from "./lib/scim/protocol";
 import { logger } from "./logger";
 
 /**
@@ -43,6 +44,11 @@ export const orgScimTokenCreateHandler: CapabilityHandler<
   const minted = await withSystemDb(async (tx) => {
     if (await readLiveScimToken(tx, ctx.orgId, true)) return null;
     return insertScimToken(tx, ctx.orgId, actor);
+  }).catch((err: unknown) => {
+    // Two mints at once: the lock above holds no row to lock, so the partial
+    // unique index is what refuses the second one.
+    if (isUniqueViolation(err)) return null;
+    throw err;
   });
   if (!minted) {
     throw new HandlerError({

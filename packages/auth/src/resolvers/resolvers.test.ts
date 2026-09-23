@@ -734,6 +734,20 @@ describe("resolveApiKey", () => {
       expect(fakeTx.select).not.toHaveBeenCalled();
     });
 
+    it("resolves a key whose creator is an Owner by IAM assignment only", async () => {
+      mockQuery.apiKeys.findFirst.mockResolvedValueOnce(creatorKeyRow());
+      requireSso();
+      mockQuery.orgUsers.findFirst.mockResolvedValueOnce({ role: "member" });
+      // The SSO-account read finds nothing; the IAM Owner read finds one.
+      const noAccount = createMockBuilder();
+      noAccount.limit = vi.fn(async () => []);
+      fakeTx.select.mockReturnValueOnce(noAccount);
+      selectMockResult = [{ id: "pra_owner" }];
+      expect(await resolveApiKey(RAW_KEY)).toMatchObject({ ok: true });
+      expect(noAccount.limit).toHaveBeenCalled();
+      expect(fakeTx.select).toHaveBeenCalledTimes(2);
+    });
+
     it("refuses a key whose creator is no longer a member of the org", async () => {
       mockQuery.apiKeys.findFirst.mockResolvedValueOnce(creatorKeyRow());
       requireSso();

@@ -508,6 +508,7 @@ export interface ScimRequestDeniedDetail {
     | "not_entitled"
     | "owner_protected"
     | "domain_not_verified"
+    | "identity_not_owned"
     | "cross_organization";
   method: string;
   path: string;

@@ -7,22 +7,14 @@ import { emitSecurityEvent } from "@oxagen/database/security";
 import { and, eq, isNull } from "drizzle-orm";
 import { ssoAuthBaseUrl, ssoEntitled } from "./lib/sso";
 import { createPgScimStore } from "./lib/scim/pg-store";
-import { ScimError, scimErrorBody } from "./lib/scim/protocol";
+import {
+  isUniqueViolation,
+  ScimError,
+  scimErrorBody,
+} from "./lib/scim/protocol";
 import { serveScim } from "./lib/scim/service";
 import { scimBaseUrl } from "./lib/scim/token-store";
 import { logger } from "./logger";
-
-/** Postgres unique_violation: two writes raced for the same name or email. */
-const UNIQUE_VIOLATION = "23505";
-
-function isUniqueViolation(err: unknown): boolean {
-  const code =
-    typeof err === "object" && err !== null
-      ? ((err as { code?: unknown; cause?: { code?: unknown } }).code ??
-        (err as { cause?: { code?: unknown } }).cause?.code)
-      : undefined;
-  return code === UNIQUE_VIOLATION;
-}
 
 /**
  * execute_scim_request: answer one SCIM request for the organization whose token
@@ -63,6 +55,7 @@ export const scimRequestHandler: CapabilityHandler<typeof scimRequest> = async (
       | "not_entitled"
       | "owner_protected"
       | "domain_not_verified"
+      | "identity_not_owned"
       | "cross_organization",
     err: ScimError,
   ): { status: number; body: unknown } => {
@@ -160,7 +153,11 @@ export const scimRequestHandler: CapabilityHandler<typeof scimRequest> = async (
       );
     }
     if (err instanceof ScimError) {
-      if (err.denial === "owner_protected" || err.denial === "domain_not_verified") {
+      if (
+        err.denial === "owner_protected" ||
+        err.denial === "domain_not_verified" ||
+        err.denial === "identity_not_owned"
+      ) {
         return deny(err.denial, err);
       }
       return { status: err.status, body: scimErrorBody(err) };

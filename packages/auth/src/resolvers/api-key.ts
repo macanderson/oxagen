@@ -301,5 +301,37 @@ async function refusedByRequireSso(
       )
       .limit(1),
   );
-  return vouched.length === 0;
+  if (vouched.length > 0) return false;
+
+  // Owner by the IAM record too, not only by the org_users role string: the
+  // two are written together, and a creator the IAM record makes an Owner
+  // keeps the break-glass exemption even if the role string lags.
+  // tenancy: identity resolution before a tenant scope exists; filtered by the verified key's orgId and its creator's userId on the principal join.
+  const iamOwner = await withSystemDb((tx) =>
+    tx
+      .select({ id: schema.principalRoleAssignments.id })
+      .from(schema.principalRoleAssignments)
+      .innerJoin(
+        schema.principals,
+        eq(schema.principals.id, schema.principalRoleAssignments.principalId),
+      )
+      .innerJoin(
+        schema.roles,
+        eq(schema.roles.id, schema.principalRoleAssignments.roleId),
+      )
+      .where(
+        and(
+          eq(schema.principalRoleAssignments.orgId, orgId),
+          eq(schema.principals.orgId, orgId),
+          eq(schema.principals.parentUserId, creatorId),
+          eq(schema.principals.kind, "human"),
+          eq(schema.roles.name, "Owner"),
+          eq(schema.roles.scopeKind, "org"),
+          isNull(schema.principalRoleAssignments.workspaceId),
+          isNull(schema.principalRoleAssignments.deletedAt),
+        ),
+      )
+      .limit(1),
+  );
+  return iamOwner.length === 0;
 }
