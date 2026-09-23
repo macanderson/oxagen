@@ -55,9 +55,6 @@ export async function createOrganizationAction(
 export type RegisteredAgent = {
   agentId: string;
   agentKey: string | null;
-  /** Shown once, at registration, and never recoverable. */
-  secret: string;
-  expiresAt: string;
   /** The wrap step for this identity. */
   to: SafePath;
 };
@@ -65,6 +62,9 @@ export type RegisteredAgent = {
 /**
  * Mints the identity, its delegated principal and its long-lived credential.
  * The definition file is committed separately, so registration writes none.
+ * The credential's secret stays on the server: the register gate shows none
+ * on the name step, and the SDK path issues its own with
+ * `rotate_agent_credential` when the operator asks for it.
  */
 export async function registerAgent(
   org: string,
@@ -95,8 +95,6 @@ export async function registerAgent(
         value: {
           agentId: result.value.agentId,
           agentKey: result.value.agentKey,
-          secret: result.value.credential.secret,
-          expiresAt: result.value.credential.expiresAt,
           to: routes.register(org, ws, "wrap", {
             agent: result.value.agentId,
           }),

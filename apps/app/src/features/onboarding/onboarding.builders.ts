@@ -4,6 +4,7 @@
 // Importable from tests only (`testOnlyTarget` in src/test/arch/layers.ts).
 import type { AgentDetail } from "@/data/contracts/agents";
 import type { FirstFrame, OnboardingGate } from "@/data/contracts/onboarding";
+import type { RunChain, RunDetail } from "@/data/contracts/run";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 
@@ -47,12 +48,16 @@ type Reads = {
   state?: Read<OnboardingGate>;
   firstFrame?: Read<FirstFrame>;
   agent?: Read<AgentDetail>;
+  run?: Read<RunDetail>;
+  chain?: Read<RunChain>;
 };
 
 type Calls = {
   state: Parameters<DataSource["onboarding"]["state"]>[];
   firstFrame: Parameters<DataSource["onboarding"]["firstFrame"]>[];
   agent: Parameters<DataSource["agents"]["get"]>[];
+  run: Parameters<DataSource["runs"]["get"]>[];
+  chain: Parameters<DataSource["runs"]["chain"]>[];
 };
 
 /** A DataSource that answers the reads a test hands it and refuses every other port. */
@@ -60,7 +65,13 @@ export function onboardingSource(reads: Reads): {
   source: DataSource;
   calls: Calls;
 } {
-  const calls: Calls = { state: [], firstFrame: [], agent: [] };
+  const calls: Calls = {
+    state: [],
+    firstFrame: [],
+    agent: [],
+    run: [],
+    chain: [],
+  };
   const refuse = (port: string) => () => {
     throw new Error(`${port} is not part of this test`);
   };
@@ -106,11 +117,17 @@ export function onboardingSource(reads: Reads): {
     },
     runs: {
       list: refuse("runs.list"),
-      get: refuse("runs.get"),
+      get: (...args: Parameters<DataSource["runs"]["get"]>) => {
+        calls.run.push(args);
+        return Promise.resolve(answer(reads.run, "runs.get"));
+      },
       frameBody: refuse("runs.frameBody"),
       cost: refuse("runs.cost"),
       transcript: refuse("runs.transcript"),
-      chain: refuse("runs.transcript"),
+      chain: (...args: Parameters<DataSource["runs"]["chain"]>) => {
+        calls.chain.push(args);
+        return Promise.resolve(answer(reads.chain, "runs.chain"));
+      },
       outputs: refuse("runs.transcript"),
       work: refuse("runs.transcript"),
       outcomesSettings: refuse("runs.transcript"),

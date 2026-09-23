@@ -174,15 +174,15 @@ describe("registerAgent", () => {
     },
   };
 
-  it("mints the identity for the workspace viewer and names the wrap step it continues to", async () => {
+  it("mints the identity for the workspace viewer, keeps the secret on the server and names the wrap step", async () => {
     invoke.mockResolvedValue(registered);
-    expect(await registerAgent("acme", "core-platform", agentForm)).toEqual({
+    const result = await registerAgent("acme", "core-platform", agentForm);
+    expect(JSON.stringify(result)).not.toContain("oxa_ag_s3cr3t");
+    expect(result).toEqual({
       ok: true,
       value: {
         agentId: "agt_releasebot",
         agentKey: "acme.core.release-bot",
-        secret: "oxa_ag_s3cr3t",
-        expiresAt: "2027-03-14T00:00:00.000Z",
         to: "/acme/core-platform/register/wrap?agent=agt_releasebot",
       },
     });
@@ -195,19 +195,36 @@ describe("registerAgent", () => {
   });
 
   it.each(["claude-agent-sdk", "custom"])(
-    "refuses unsupported %s before minting an identity",
+    "registers %s, which the wrap step's SDK tab takes",
     async (harness) => {
-      expect(
-        await registerAgent("acme", "core-platform", { ...agentForm, harness }),
-      ).toEqual({
-        ok: false,
-        reason: "invalid",
-        code: "agentHarnessInvalid",
-        field: "harness",
+      invoke.mockResolvedValue(registered);
+      const result = await registerAgent("acme", "core-platform", {
+        ...agentForm,
+        harness,
       });
-      expect(invoke).not.toHaveBeenCalled();
+      expect(result.ok).toBe(true);
+      expect(invoke).toHaveBeenCalledWith(
+        "register_agent",
+        expect.objectContaining({ harness }),
+        expect.objectContaining(TENANT),
+      );
     },
   );
+
+  it("refuses a harness the contract does not know, before minting an identity (negative)", async () => {
+    expect(
+      await registerAgent("acme", "core-platform", {
+        ...agentForm,
+        harness: "codex-cli",
+      }),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "agentHarnessInvalid",
+      field: "harness",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
 
   it("sends a description only when one was written", async () => {
     invoke.mockResolvedValue(registered);
