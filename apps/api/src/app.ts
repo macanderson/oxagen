@@ -1,3 +1,4 @@
+import { runOutcomesSettingsRoute } from "./routes/v1/run.outcomes.settings";
 import { configurationCloneGetRoute } from "./routes/v1/configuration.clone.get";
 import { configurationCloneProposeRoute } from "./routes/v1/configuration.clone.propose";
 import { revokeMemberInviteRoute } from "./routes/v1/org.member_invite.revoke";
@@ -929,6 +930,7 @@ orgScoped.route("/org/settings", orgSettingsReadRoute);
 orgScoped.route("/org/data-plane", orgDataPlaneRoute);
 orgScoped.route("/org/model-credential", orgModelCredentialRoute);
 orgScoped.route("/org/settings", orgSettingsWriteRoute);
+orgScoped.route("/run-outcomes/settings", runOutcomesSettingsRoute);
 orgScoped.route("/workspace/settings", workspaceSettingsReadRoute);
 orgScoped.route("/workspace/settings", workspaceSettingsWriteRoute);
 orgScoped.route("/asset/upload", assetUploadRoute);

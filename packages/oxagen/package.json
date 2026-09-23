@@ -32,7 +32,8 @@
     "./client-ip": "./src/client-ip.ts",
     "./skill-frontmatter": "./src/skill-frontmatter.ts",
     "./skills": "./src/skills.ts",
-    "./configuration-clone": "./src/configuration-clone.ts"
+    "./configuration-clone": "./src/configuration-clone.ts",
+    "./run-outcomes": "./src/run-outcomes.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
