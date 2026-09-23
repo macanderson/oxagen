@@ -61,11 +61,12 @@ for (const row of SIGNED_IN_ROUTES) {
       .info()
       .attach("phone", { path: phonePath, contentType: "image/png" });
     if (row.titleKey === "steering") {
-      await page.locator('[data-tab="freshness"]').click();
-      await expect(page.locator('[data-tab="freshness"]')).toHaveAttribute(
-        "aria-current",
-        "page",
-      );
+      // Sections are path segments, and cacheComponents keeps the section
+      // navigated away from mounted but hidden, so its tab strip is still in
+      // the DOM. Only the visible strip is the page a person sees.
+      const freshness = page.locator('[data-tab="freshness"]:visible');
+      await freshness.click();
+      await expect(freshness).toHaveAttribute("aria-current", "page");
       await expect(page).toHaveURL(/\/steering\/freshness(?:\?|$)/);
       await page.setViewportSize({ width: 1280, height: 720 });
       await page.screenshot({
