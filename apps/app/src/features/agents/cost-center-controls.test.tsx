@@ -157,4 +157,26 @@ describe("ChargeAgent", () => {
     expect(router.replace).not.toHaveBeenCalled();
     expect(screen.getByTestId("agent-cost-center")).toBeInTheDocument();
   });
+
+  it("names a write that never answered (negative)", async () => {
+    setAgentCostCenter.mockRejectedValue(new Error("socket closed"));
+    renderCharge();
+    const dialog = await open();
+    await within(dialog).findByLabelText("Cost center");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    expect(
+      await within(dialog).findByTestId("agent-cost-center-failure"),
+    ).toHaveTextContent("action_failed");
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it("names a list read that never answered (negative)", async () => {
+    readCostCenters.mockRejectedValue(new Error("socket closed"));
+    renderCharge();
+    const dialog = await open();
+    expect(
+      await within(dialog).findByTestId("agent-cost-center-list-failure"),
+    ).toHaveTextContent("action_failed");
+    expect(within(dialog).queryByRole("button", { name: "Save" })).toBeNull();
+  });
 });
