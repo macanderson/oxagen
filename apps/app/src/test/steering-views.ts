@@ -18,6 +18,7 @@ import type {
   RecordDetail,
   RecordPage,
   SteeringFreshness,
+  SteeringDeliveries,
 } from "@/data/contracts/steering";
 import { type Read, readOk } from "@/data/read";
 
@@ -204,6 +205,7 @@ export type SteeringReads = {
   proposals: Read<ProposalPage>;
   contextPr: Read<ContextPr>;
   freshness: Read<SteeringFreshness>;
+  deliveries: Read<SteeringDeliveries>;
 };
 
 /** The freshness panel's read: a bound repository, one publication, both gates off. */
@@ -229,6 +231,12 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
     proposals: readOk({ proposals: [proposal()], total: 1 }),
     contextPr: readOk(contextPr("checks_passed")),
     freshness: readOk(steeringFreshness()),
+    deliveries: readOk({
+      runs: [],
+      undelivered: [],
+      scanned: 0,
+      truncated: false,
+    }),
     ...overrides,
   };
   const calls: Record<keyof SteeringReads, unknown[][]> = {
@@ -237,6 +245,7 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
     proposals: [],
     contextPr: [],
     freshness: [],
+    deliveries: [],
   };
   const refuse = () => Promise.reject(new Error("not a Steering read"));
   const source: DataSource = {
@@ -291,6 +300,10 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
     audit: { events: refuse, exportEvents: refuse },
     skills: { inventory: refuse, configuration: refuse },
     steering: {
+      deliveries: (...args) => {
+        calls.deliveries.push(args);
+        return Promise.resolve(reads.deliveries);
+      },
       records: (...args) => {
         calls.records.push(args);
         return Promise.resolve(reads.records);

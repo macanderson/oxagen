@@ -41,6 +41,14 @@ const row = (key: string, micros: string | null, runs = 1) => ({
   ...figure(micros, runs),
   key,
   provider: null,
+  tokens: {
+    input_uncached: 120,
+    cache_read: 80,
+    cache_write_5m: 10,
+    cache_write_1h: 5,
+    output: 40,
+    reasoning: 20,
+  },
   operator: null,
 });
 

@@ -753,6 +753,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .appendRecordHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "get_steering_deliveries",
+    async () =>
+      (await import("./context.steering.deliveries"))
+        .getSteeringDeliveriesHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "get_steering_freshness",
     async () =>
       (await import("./context.steering.freshness"))

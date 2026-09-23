@@ -59,7 +59,7 @@ resource "aws_ssm_parameter" "cloudwatch_agent_config" {
         files = {
           collect_list = [{
             file_path       = local.docker_events_log_path
-            log_group_name  = "/oxagen-app/docker-events"
+            log_group_name  = "/${var.name}/docker-events"
             log_stream_name = "docker-events"
           }]
         }

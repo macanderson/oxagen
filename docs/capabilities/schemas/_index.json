@@ -1,5 +1,5 @@
 {
-  "generatedCount": 362,
+  "generatedCount": 363,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -1633,6 +1633,17 @@
     {
       "name": "get_spend_drill",
       "domain": "spend",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_steering_deliveries",
+      "domain": "context",
       "surfaces": [
         "api",
         "mcp"
