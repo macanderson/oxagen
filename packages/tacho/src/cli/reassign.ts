@@ -151,6 +151,8 @@ async function reassignLocked(
     refusals.push(
       `tacho is running from ${deps.runtime.transient} (${deps.runtime.binDir}), which is gone once it is closed`,
     );
+  if (deps.runtime.executableProblem !== undefined)
+    refusals.push(deps.runtime.executableProblem);
   refusals.push(...harnessFileProblems(harnesses, deps));
   if (refusals.length > 0) {
     deps.err(

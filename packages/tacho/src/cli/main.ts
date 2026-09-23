@@ -8,6 +8,11 @@ import { Command, InvalidArgumentError } from "commander";
 import { runHookProcess } from "../claude-code/hook-process";
 import { runDaemonProcess } from "../collector/run";
 import {
+  readHostFileLenient,
+  withRecordedHarnessFiles,
+} from "../host/host-file";
+import { tachoPaths } from "../host/paths";
+import {
   githubConfigure,
   githubCredential,
   readCredentialInput,
@@ -67,6 +72,21 @@ export function tokenOption(
   if (token.length === 0)
     throw new Error("--token-stdin read no token from stdin");
   return token;
+}
+
+/**
+ * Deps for a command that takes this machine's hooks back out (`unenroll`,
+ * `reassign`): the harness files host.json recorded at enroll, not the ones
+ * this shell's CLAUDE_CONFIG_DIR, CODEX_HOME and the rest resolve to. Run
+ * from an environment that differed from the enrolling one, the strip went
+ * to files that never held a hook and left the real ones behind.
+ */
+export function recordedCliDeps(): CliDeps {
+  const base = tachoPaths();
+  const read = readHostFileLenient(base.hostFile);
+  return defaultCliDeps({
+    paths: withRecordedHarnessFiles(base, read.host ?? read.salvaged),
+  });
 }
 
 export function buildTachoProgram(): Command {
@@ -294,7 +314,7 @@ export function buildTachoProgram(): Command {
           purge: opts["purge"] as boolean | undefined,
           reason: opts["reason"] as string | undefined,
         },
-        deps,
+        recordedCliDeps(),
       );
       if (!result.ok) process.exitCode = 1;
     });
@@ -329,7 +349,7 @@ export function buildTachoProgram(): Command {
             ? { harnesses: parseHarnesses(harness) }
             : {}),
         },
-        asUser,
+        { ...recordedCliDeps(), getuid: asUser.getuid },
       );
       if (!result.ok) process.exitCode = 1;
     });

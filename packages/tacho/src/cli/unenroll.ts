@@ -35,7 +35,7 @@ import {
   writeHostFile,
 } from "../host/host-file";
 import { restoreGithubRepositories } from "./github";
-import { restoreCredentials } from "./credential";
+import { harnessDirsOf, restoreCredentials } from "./credential";
 import {
   modelBaseUrlBackupPath,
   hasOrphanedModelBaseUrl,
@@ -177,11 +177,14 @@ export async function restoreModelBaseUrlsFor(
   for (const harness of MODEL_BASE_URL_HARNESSES) {
     try {
       if (host !== undefined && !host.harnesses.includes(harness)) {
+        const dirs = harnessDirsOf(deps);
         try {
-          lstatSync(modelBaseUrlBackupPath(harness, deps.home, stellaHome));
+          lstatSync(
+            modelBaseUrlBackupPath(harness, deps.home, stellaHome, dirs),
+          );
         } catch (error) {
           if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-          if (!hasOrphanedModelBaseUrl(harness, deps.home, stellaHome))
+          if (!hasOrphanedModelBaseUrl(harness, deps.home, stellaHome, dirs))
             continue;
         }
       }

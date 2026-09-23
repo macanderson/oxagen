@@ -32,6 +32,7 @@ import { mergeStellaHooks, stellaHookPresence } from "../host/stella-writer";
 import {
   HOST_FILE_SCHEMA,
   type HostFile,
+  harnessFilesRecord,
   mcpEndpointOverrideRequestFrom,
   readHostFile,
   writeHostFile,
@@ -63,6 +64,7 @@ import {
   brokerCredentials,
   type CredentialMode,
   describeHarness,
+  harnessDirsOf,
   restoreCredentials,
 } from "./credential";
 import { restoreGithubRepositories } from "./github";
@@ -581,8 +583,14 @@ async function enrollSteps(
         warnings.push(
           `tacho is running from ${deps.runtime.transient} (${deps.runtime.binDir}), which is gone once it is closed, so the service and hooks stay on ${host.hook_command}; run enroll again from a permanent install to move them`,
         );
+      } else if (deps.runtime.executableProblem !== undefined) {
+        warnings.push(
+          `${deps.runtime.executableProblem}, so the service and hooks stay on ${host.hook_command}; run enroll again from an installed tacho to move them`,
+        );
       } else {
-        host = repointed;
+        // The files the hooks now go into, so `unenroll` finds them whatever
+        // the environment it later runs in says.
+        host = { ...repointed, harness_files: harnessFilesRecord(deps.paths) };
         writeHostFile(deps.paths.hostFile, host);
         deps.out(
           `      service and hooks now run from ${deps.runtime.binDir} (was ${existing.hook_command})`,
@@ -601,6 +609,14 @@ async function enrollSteps(
           (deps.platform === "darwin"
             ? "Move Oxagen to /Applications (or run the app's Link into PATH, which keeps a copy of the tools) and enroll again, or point TACHO_BIN_DIR at a permanent copy of tacho."
             : "Install the package (.deb/.rpm) or run the app's Link into PATH, which keeps a copy of the tools, and enroll again; or point TACHO_BIN_DIR at a permanent copy of tacho."),
+      );
+      return { ok: false, warnings };
+    }
+    // The same for a native layout with no tacho executable in it: every
+    // hook and the service would name a file that is not there.
+    if (deps.runtime.executableProblem !== undefined) {
+      deps.err(
+        `Cannot enroll from here: ${deps.runtime.executableProblem}, so the hooks and the service would name a file that does not exist. Run enroll from an installed tacho, or point TACHO_BIN_DIR at the directory that holds it.`,
       );
       return { ok: false, warnings };
     }
@@ -790,9 +806,12 @@ async function enrollSteps(
       }
       return { ok: false, warnings };
     }
+    // Bound to the enrollment just minted: a bundle signed for another host
+    // is refused here as the daemon refuses it later.
     const verification = verifyBundle(
       response.policyBundle,
       response.bundlePublicKeyPem,
+      response.hostEnrollmentId,
     );
     if (!verification.ok) {
       deps.err(
@@ -847,8 +866,8 @@ async function enrollSteps(
           ? { mcp: response.enrollment.claims.mcp_endpoint }
           : {}),
       },
-      // The service unit tachod runs under carries only TACHO_HOME,
-      // CLAUDE_CONFIG_DIR, PATH and HOME, so TACHO_MCP_ENDPOINT as exported in
+      // The service unit tachod runs under carries only TACHO_HOME, the
+      // harness home variables, PATH and HOME, so TACHO_MCP_ENDPOINT as exported in
       // this shell would not survive the install. Write it down instead —
       // beside `port` and `local_token`, the host's other local settings — and
       // leave the signed claims free of plaintext endpoints.
@@ -911,6 +930,7 @@ async function enrollSteps(
           ? existing.displaced_mcp_servers
           : {},
       mcp_stdio_command: deps.runtime.mcpStdioCommand,
+      harness_files: harnessFilesRecord(deps.paths),
       enrolled_at: now,
       expires_at: response.expiresAt,
       revoked_at: null,
@@ -987,9 +1007,21 @@ async function enrollSteps(
           ...(deps.env["TACHO_HOME"] !== undefined
             ? { TACHO_HOME: deps.env["TACHO_HOME"] }
             : {}),
-          ...(deps.env["CLAUDE_CONFIG_DIR"] !== undefined
-            ? { CLAUDE_CONFIG_DIR: deps.env["CLAUDE_CONFIG_DIR"] }
-            : {}),
+          // The harness homes the enrolling shell moved, so tachod reads
+          // the same files the hooks were written to.
+          ...Object.fromEntries(
+            (
+              [
+                "CLAUDE_CONFIG_DIR",
+                "CODEX_HOME",
+                "STELLA_HOME",
+                "CURSOR_CONFIG_DIR",
+              ] as const
+            ).flatMap((key) => {
+              const value = deps.env[key];
+              return value !== undefined ? [[key, value]] : [];
+            }),
+          ),
           PATH: deps.env["PATH"] ?? "/usr/local/bin:/usr/bin:/bin",
           HOME: deps.home,
         },
@@ -1295,6 +1327,7 @@ async function enrollSteps(
           const file = modelBaseUrlFile(harness, {
             home: deps.home,
             stellaHome,
+            ...harnessDirsOf(deps),
           });
           let linked = false;
           try {

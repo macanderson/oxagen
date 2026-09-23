@@ -4,16 +4,27 @@
  * contracts, a fake launchctl and control plane): a failed reassign or
  * harness addition, a daemon that does not come back, `--force` over a live
  * enrollment, a fleet-revoked host, `--print-managed`, root, a deleted
- * GitHub checkout, and the `--port` and `--token` flags.
+ * GitHub checkout, the `--port` and `--token` flags, a native layout with
+ * no tacho executable, the harness files host.json records, and a bundle
+ * signed for another host.
  */
 import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FetchLike } from "../host/control-client";
-import { readHostFile, writeHostFile } from "../host/host-file";
+import {
+  harnessFilesRecord,
+  readHostFile,
+  writeHostFile,
+} from "../host/host-file";
 import { acquireInstallLock } from "../host/install-lock";
-import { TEST_ENROLLMENT } from "../host/test-support";
+import { tachoPaths } from "../host/paths";
+import {
+  bundleSigner,
+  TEST_ENROLLMENT,
+  unsignedBundle,
+} from "../host/test-support";
 import type { TachoHarness } from "../wire";
 import type { CliDeps } from "./deps";
 import { enroll } from "./enroll";
@@ -25,7 +36,12 @@ import {
   type RigOptions,
   seedHome,
 } from "./install-rig";
-import { buildTachoProgram, parsePort, tokenOption } from "./main";
+import {
+  buildTachoProgram,
+  parsePort,
+  recordedCliDeps,
+  tokenOption,
+} from "./main";
 import { reassign } from "./reassign";
 import { unenroll } from "./unenroll";
 
@@ -254,17 +270,33 @@ function mintingNewIds(rig: Rig): FetchLike {
     if (!url.endsWith("/tacho/enrollments")) return answer;
     minted += 1;
     if (minted === 1) return answer;
-    const body = JSON.parse(await answer.text()) as {
-      hostEnrollmentId: string;
-      enrollment: { claims: { host_enrollment_id: string } };
-    };
-    body.hostEnrollmentId = NEW_ENROLLMENT;
-    body.enrollment.claims.host_enrollment_id = NEW_ENROLLMENT;
-    return {
-      ok: true,
-      status: 200,
-      text: async () => JSON.stringify(body),
-    };
+    return reissued(answer, NEW_ENROLLMENT, NEW_ENROLLMENT);
+  };
+}
+
+/**
+ * An enrollment answer re-stated for `id`, with a bundle freshly signed
+ * for `bundleFor` (the same id, unless a test wants them to disagree).
+ */
+async function reissued(
+  answer: Awaited<ReturnType<FetchLike>>,
+  id: string,
+  bundleFor: string,
+): Promise<Awaited<ReturnType<FetchLike>>> {
+  const body = JSON.parse(await answer.text()) as Record<string, unknown> & {
+    enrollment: { claims: { host_enrollment_id: string } };
+  };
+  const signer = bundleSigner();
+  body["hostEnrollmentId"] = id;
+  body.enrollment.claims.host_enrollment_id = id;
+  body["policyBundle"] = signer.sign(
+    unsignedBundle({ mode: "observe", host_enrollment_id: bundleFor }),
+  );
+  body["bundlePublicKeyPem"] = signer.publicKeyPem;
+  return {
+    ok: true,
+    status: 200,
+    text: async () => JSON.stringify(body),
   };
 }
 
@@ -563,5 +595,173 @@ describe("--token and --token-stdin", () => {
           .find((c) => c.name() === name)
           ?.options.some((o) => o.long === "--token-stdin"),
       ).toBe(true);
+  });
+});
+
+describe("a native layout with no tacho executable", () => {
+  const missing =
+    "there is no tacho in /opt/oxagen, and this process (oxagen-sidecar) is not one";
+
+  it("refuses a fresh enrollment before anything is minted", async () => {
+    const rig = buildRig(seedHome());
+    const d: CliDeps = {
+      ...rig.deps,
+      runtime: { ...rig.deps.runtime, executableProblem: missing },
+    };
+    const result = await enroll({ harnesses: ["claude-code"] }, d);
+    expect(result.ok).toBe(false);
+    expect(rig.errors.at(-1)).toContain("Cannot enroll from here");
+    expect(rig.errors.at(-1)).toContain(missing);
+    expect(rig.requests).toEqual([]);
+    expect(readHostFile(rig.deps.paths.hostFile)).toBeUndefined();
+  });
+
+  it("keeps a live host on the commands it has instead of repointing them", async () => {
+    const rig = buildRig(seedHome());
+    expect((await enroll({ harnesses: ["claude-code"] }, rig.deps)).ok).toBe(
+      true,
+    );
+    const before = readHostFile(rig.deps.paths.hostFile);
+    const d: CliDeps = {
+      ...rig.deps,
+      runtime: {
+        ...rig.deps.runtime,
+        hookCommand: "'/opt/oxagen/tacho' hook",
+        daemonCommand: ["/opt/oxagen/tacho", "daemon"],
+        mcpStdioCommand: ["/opt/oxagen/tacho", "mcp-stdio"],
+        binDir: "/opt/oxagen",
+        executableProblem: missing,
+      },
+    };
+    const result = await enroll({}, d);
+    expect(result.ok).toBe(true);
+    expect(result.warnings.join("\n")).toContain(
+      `${missing}, so the service and hooks stay on ${before?.hook_command}`,
+    );
+    expect(readHostFile(rig.deps.paths.hostFile)?.hook_command).toBe(
+      before?.hook_command,
+    );
+  });
+
+  it("refuses a reassign before the revoke", async () => {
+    const rig = buildRig(seedHome());
+    expect((await enroll({ harnesses: ["claude-code"] }, rig.deps)).ok).toBe(
+      true,
+    );
+    rig.requests.length = 0;
+    const d: CliDeps = {
+      ...rig.deps,
+      runtime: { ...rig.deps.runtime, executableProblem: missing },
+    };
+    expect((await reassign({ workspace: "edge" }, d)).ok).toBe(false);
+    expect(rig.errors.at(-1)).toContain(
+      "Cannot reassign, so nothing was changed",
+    );
+    expect(rig.errors.at(-1)).toContain(missing);
+    expect(rig.requests).toEqual([]);
+  });
+});
+
+describe("the harness files host.json records", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("are written at enroll, and are what unenroll and reassign strip", async () => {
+    const rig = buildRig(seedHome());
+    expect((await enroll({ harnesses: ["claude-code"] }, rig.deps)).ok).toBe(
+      true,
+    );
+    const host = readHostFile(rig.deps.paths.hostFile);
+    expect(host?.harness_files).toEqual(harnessFilesRecord(rig.deps.paths));
+
+    // The shell that runs unenroll moved Claude Code's config directory;
+    // the deps it gets still name the file the hooks went into.
+    vi.stubEnv("HOME", rig.home);
+    vi.stubEnv("TACHO_HOME", rig.deps.paths.root);
+    vi.stubEnv("CLAUDE_CONFIG_DIR", join(rig.home, "elsewhere"));
+    expect(tachoPaths().claudeSettings).toBe(
+      join(rig.home, "elsewhere", "settings.json"),
+    );
+    const recorded = recordedCliDeps();
+    expect(recorded.paths.claudeSettings).toBe(rig.deps.paths.claudeSettings);
+    expect(recorded.paths.codexHooks).toBe(rig.deps.paths.codexHooks);
+  });
+
+  it("are recorded again when a re-enroll repoints the commands", async () => {
+    const rig = buildRig(seedHome());
+    expect((await enroll({ harnesses: ["claude-code"] }, rig.deps)).ok).toBe(
+      true,
+    );
+    const host = readHostFile(rig.deps.paths.hostFile);
+    if (host === undefined) throw new Error("not enrolled");
+    // Enrolled by a version that recorded nothing.
+    const older = { ...host };
+    delete older.harness_files;
+    writeHostFile(rig.deps.paths.hostFile, older);
+    const moved = join(rig.home, "Applications", "Oxagen 2.app", "tacho");
+    const d: CliDeps = {
+      ...rig.deps,
+      runtime: {
+        ...rig.deps.runtime,
+        hookCommand: `'${moved}' hook`,
+        daemonCommand: [moved, "daemon"],
+        mcpStdioCommand: [moved, "mcp-stdio"],
+      },
+    };
+    expect((await enroll({}, d)).ok).toBe(true);
+    expect(readHostFile(rig.deps.paths.hostFile)?.harness_files).toEqual(
+      harnessFilesRecord(rig.deps.paths),
+    );
+  });
+});
+
+describe("the service environment", () => {
+  it("carries the harness homes the enrolling shell set", async () => {
+    const seed = seedHome();
+    const env = {
+      HOME: seed.home,
+      PATH: "/usr/bin:/bin",
+      SHELL: "/bin/zsh",
+      CODEX_HOME: join(seed.home, ".codex"),
+      STELLA_HOME: join(seed.home, ".stella"),
+    };
+    const rig = buildRig(seed, { overrides: { env } });
+    const installed: Array<Record<string, string>> = [];
+    const manager = rig.deps.serviceManager;
+    const spy = Object.create(manager) as typeof manager;
+    spy.install = (spec) => {
+      installed.push(spec.env);
+      manager.install(spec);
+    };
+    const d: CliDeps = { ...rig.deps, serviceManager: spy };
+    expect((await enroll({ harnesses: ["claude-code"] }, d)).ok).toBe(true);
+    expect(installed[0]).toMatchObject({
+      CODEX_HOME: env.CODEX_HOME,
+      STELLA_HOME: env.STELLA_HOME,
+    });
+    expect(installed[0]).not.toHaveProperty("CLAUDE_CONFIG_DIR");
+    expect(installed[0]).not.toHaveProperty("CURSOR_CONFIG_DIR");
+  });
+});
+
+describe("the first policy bundle", () => {
+  it("is refused when it was signed for another host", async () => {
+    const rig = buildRig(seedHome());
+    const d: CliDeps = {
+      ...rig.deps,
+      fetch: async (url, init) => {
+        const answer = await rig.deps.fetch(url, init);
+        return url.endsWith("/tacho/enrollments")
+          ? reissued(answer, NEW_ENROLLMENT, TEST_ENROLLMENT)
+          : answer;
+      },
+    };
+    const result = await enroll({ harnesses: ["claude-code"] }, d);
+    expect(result.ok).toBe(false);
+    expect(rig.errors.at(-1)).toContain(
+      `bundle is for host ${TEST_ENROLLMENT}, not ${NEW_ENROLLMENT}`,
+    );
+    expect(readHostFile(rig.deps.paths.hostFile)).toBeUndefined();
   });
 });
