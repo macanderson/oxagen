@@ -11,7 +11,10 @@ import { translateCursorPayload } from "../claude-code/cursor-adapter";
 import { verifyChain } from "../chain";
 import type { ClaudeCodeContext } from "../claude-code/context";
 import { hookInputSchema } from "../claude-code/hooks";
-import { stellaToolUseId } from "../claude-code/stella-adapter";
+import {
+  stellaToolUseId,
+  translateStellaPayload,
+} from "../claude-code/stella-adapter";
 import type { TachoEvent } from "../envelope";
 import {
   bundleSigner,
@@ -21,6 +24,7 @@ import {
 import { toProtocolTimestamp } from "../timestamp";
 import type { CommandAcknowledgement, PolicyBundle } from "../wire";
 import { handleHookEvent, type PolicyView } from "./hook-handler";
+import { pushCredentialBasis } from "./push-basis";
 import { SessionRegistry } from "./registry";
 
 const FIXTURES = join(
@@ -1050,5 +1054,123 @@ describe("Cursor session working directories", () => {
         })
       ).record?.cwd,
     ).toBe("/repo/first");
+  });
+});
+
+describe("the credential basis on a git_push frame (#3788)", () => {
+  const PROXY = "http://127.0.0.1:47111/github/acme/app.git";
+  const receipts = [
+    {
+      cwd: "/repo",
+      repository: "acme/app",
+      url: PROXY,
+      helper: "!tacho github credential",
+      remotes: [
+        {
+          key: "remote.origin.url",
+          before: ["https://github.com/acme/app.git"],
+          after: [PROXY],
+        },
+      ],
+    },
+  ];
+  // `origin` reports the proxy URL, the way `tacho github configure` leaves
+  // it. A URL named on the command line is not a remote, so Git refuses it.
+  const execAsync = async (_command: string, args: string[]) =>
+    args.slice(2).join(" ") === "remote get-url --push --all origin"
+      ? { status: 0, stdout: `${PROXY}\n`, stderr: "" }
+      : { status: 2, stdout: "", stderr: "error: No such remote" };
+  const BROKERED = "git push origin main";
+  const BYPASS =
+    "git push https://x-access-token:ghp_personal@github.com/acme/app.git main";
+
+  const payloads: Record<string, (command: string) => unknown> = {
+    "claude-code": (command) => ({
+      session_id: "cc-push",
+      hook_event_name: "PostToolUse",
+      cwd: "/repo",
+      transcript_path: "/t.jsonl",
+      tool_name: "Bash",
+      tool_input: { command },
+      tool_use_id: "toolu_push",
+      tool_response: { stdout: "" },
+    }),
+    codex: (command) => ({
+      session_id: "codex-push",
+      hook_event_name: "PostToolUse",
+      cwd: "/repo",
+      transcript_path: null,
+      tool_name: "Bash",
+      tool_input: { command },
+      tool_use_id: "call_push",
+      tool_response: "",
+    }),
+    cursor: (command) =>
+      translateCursorPayload({
+        conversation_id: "cursor-push",
+        hook_event_name: "postToolUse",
+        cwd: "/repo",
+        tool_name: "Shell",
+        tool_input: { command },
+        tool_use_id: "cursor_push",
+        tool_output: "",
+      }),
+    stella: (command) =>
+      translateStellaPayload(
+        {
+          event: "PostToolUse",
+          cwd: "/repo",
+          tool: { name: "Bash", input: { command } },
+          toolResult: "",
+        },
+        77,
+      ),
+  };
+
+  for (const [name, payload] of Object.entries(payloads)) {
+    for (const [command, basis] of [
+      [BROKERED, "gateway_brokered"],
+      [BYPASS, "harness_held"],
+    ] as const) {
+      it(`${name}: ${basis}`, async () => {
+        const { deps } = harness();
+        const outcome = await handleHookEvent(
+          payload(command),
+          {},
+          {
+            ...deps,
+            pushCredentialBasis: (line, cwd) =>
+              pushCredentialBasis(line, cwd, {
+                receipts: () => receipts,
+                execAsync,
+              }),
+          },
+          undefined,
+          name as "claude-code" | "codex" | "cursor" | "stella",
+        );
+        const push = outcome.events.filter(
+          (event) =>
+            event.kind === "command" &&
+            (event.body as Record<string, unknown>)["effect_kind"] ===
+              "git_push",
+        );
+        expect(push).toHaveLength(1);
+        expect(push[0]?.attrs?.["oxagen.credential_basis"]).toBe(basis);
+        // The basis rides the push frame alone, not the tool_call beside it.
+        for (const event of outcome.events.filter((e) => e !== push[0]))
+          expect(event.attrs?.["oxagen.credential_basis"]).toBeUndefined();
+      });
+    }
+  }
+
+  it("marks a push harness_held when the daemon supplies no custody reader", async () => {
+    const { deps } = harness();
+    const outcome = await handleHookEvent(
+      payloads["claude-code"]?.(BROKERED),
+      {},
+      deps,
+    );
+    const push = outcome.events.find((event) => event.kind === "command");
+    expect(push?.attrs?.["oxagen.credential_basis"]).toBe("harness_held");
   });
 });
