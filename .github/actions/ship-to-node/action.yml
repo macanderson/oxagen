@@ -10,6 +10,22 @@ description: >-
   of them is fixed.
 
 inputs:
+  source-commit:
+    description: Source commit to record on the uploaded artifact.
+    required: false
+    default: ""
+  deploy-bucket:
+    description: Artifact bucket for the target environment.
+    required: false
+    default: oxagen-deploy-916294258235
+  node-name:
+    description: Name tag of the target application node.
+    required: false
+    default: oxagen-app
+  document-name:
+    description: SSM document that deploys a service on the target node.
+    required: false
+    default: oxagen-deploy-service
   service:
     description: >-
       Logical service name. Selects <service>-standalone.tgz in the deploy
@@ -58,12 +74,16 @@ runs:
       shell: bash
       env:
         SERVICE: ${{ inputs.service }}
-        NODE_NAME: oxagen-app
-        BUCKET: oxagen-deploy-916294258235
+        NODE_NAME: ${{ inputs.node-name }}
+        BUCKET: ${{ inputs.deploy-bucket }}
+        DOCUMENT_NAME: ${{ inputs.document-name }}
+        SOURCE_COMMIT: ${{ inputs.source-commit }}
       run: |
         set -euo pipefail
+        metadata=()
+        if [ -n "$SOURCE_COMMIT" ]; then metadata=(--metadata "source-commit=$SOURCE_COMMIT"); fi
         aws s3 cp "/tmp/$SERVICE-standalone.tgz" \
-          "s3://$BUCKET/_deploy/$SERVICE-standalone.tgz" --only-show-errors
+          "s3://$BUCKET/_deploy/$SERVICE-standalone.tgz" --only-show-errors "${metadata[@]}"
 
         # Resolved by tag, not pinned. This used to be a literal instance id,
         # and the node is replaced whenever its user data changes -- so a
@@ -94,7 +114,7 @@ runs:
 
         command_id=$(aws ssm send-command \
           --instance-ids "$INSTANCE" \
-          --document-name oxagen-deploy-service \
+          --document-name "$DOCUMENT_NAME" \
           --parameters "service=$SERVICE" \
           --query 'Command.CommandId' --output text)
         echo "ssm command $command_id"
