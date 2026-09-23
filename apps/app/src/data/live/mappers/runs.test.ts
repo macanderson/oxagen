@@ -94,6 +94,7 @@ describe("toRunPage", () => {
           operatorKind: "human",
           operatorName: "Marcus Bell",
           status: "sealed",
+          reportedCost: null,
           outcome: "completed",
           turns: 12,
           steps: 40,
