@@ -31,6 +31,7 @@ type Messages = {
     record: string;
     steering: string;
     repositories: string;
+    runtimes: string;
     spend: string;
     people: string;
     roles: string;
@@ -4225,6 +4226,187 @@ type Messages = {
       callCount: string;
     };
   };
+  runtimes: {
+    page: {
+      eyebrow: string;
+      description: string;
+      enroll: string;
+      loading: string;
+    };
+    notRecorded: string;
+    notReported: string;
+    tiles: {
+      runtimes: string;
+      runtimesBasis: string;
+      agentsHosted: string;
+      agentsHostedBasis: string;
+      highestTier: string;
+      highestTierBasis: string;
+      degraded: string;
+      degradedBasis: string;
+    };
+    hosts: {
+      title: string;
+      more: string;
+      columns: {
+        runtime: string;
+        kind: string;
+        harness: string;
+        modelSurface: string;
+        tier: string;
+        agents: string;
+        collector: string;
+        hooks: string;
+        health: string;
+        checkpoint: string;
+      };
+      open: string;
+      agentsNone: string;
+      collector: string;
+      gaps: string;
+      hookCount: string;
+      note: string;
+    };
+    modelSurface: {
+      loopback: string;
+      mixed: string;
+      direct: string;
+      unreported: string;
+      shadowed: string;
+    };
+    health: {
+      notEnrolled: string;
+    };
+    platform: {
+      darwin: string;
+      linux: string;
+      win32: string;
+    };
+    harness: {
+      "claude-code": string;
+      codex: string;
+      cursor: string;
+      stella: string;
+      "claude-agent-sdk": string;
+      custom: string;
+      none: string;
+    };
+    ladder: {
+      title: string;
+      label: string;
+      observe: string;
+      harness: string;
+      gateway: string;
+      contained: string;
+      note: string;
+    };
+    empty: {
+      title: string;
+      body: string;
+      cli: string;
+    };
+    cli: {
+      title: string;
+      body: string;
+      command: string;
+      note: string;
+    };
+    error: {
+      title: string;
+      body: string;
+      retry: string;
+      incident: string;
+      trace: string;
+      regionUnrecorded: string;
+    };
+    denied: {
+      title: string;
+      body: string;
+      request: string;
+      back: string;
+      signedIn: string;
+      signedInValue: string;
+      needed: string;
+      neededValue: string;
+      decidedBy: string;
+      decidedByValue: string;
+      policyUnrecorded: string;
+    };
+    pending: {
+      title: string;
+      body: string;
+    };
+    stub: {
+      requestTitle: string;
+      requestBody: string;
+      requestLink: string;
+      incidentTitle: string;
+      incidentBody: string;
+      smokeTitle: string;
+      smokeBody: string;
+    };
+    detail: {
+      back: string;
+      subtitle: string;
+      kindUnrecorded: string;
+      healthUnrecorded: string;
+      facts: {
+        workspace: string;
+        owner: string;
+        harness: string;
+        collector: string;
+        hookBinary: string;
+        hooksWritten: string;
+        modelSurface: string;
+        settings: string;
+        tierEarned: string;
+        checkpoint: string;
+      };
+      collectorGaps: string;
+      hookEnforce: string;
+      hookObserve: string;
+      modelLoopback: string;
+      modelMixed: string;
+      modelDirect: string;
+      tierBasis: string;
+      agents: {
+        title: string;
+        columns: {
+          agent: string;
+          operator: string;
+          tier: string;
+          principal: string;
+          runs: string;
+        };
+        none: string;
+        unknown: string;
+        note: string;
+      };
+      rollback: {
+        title: string;
+        command: string;
+        note: string;
+        smoke: string;
+        unenroll: string;
+      };
+    };
+    unenroll: {
+      title: string;
+      body: string;
+      scope: string;
+      keep: string;
+      confirm: string;
+      pending: string;
+      failure: {
+        denied: string;
+        notFound: string;
+        refused: string;
+        invalid: string;
+        pendingApproval: string;
+        unavailable: string;
+      };
+    };
+  };
   shell: {
     skipToContent: string;
     loading: string;
@@ -4241,6 +4423,7 @@ type Messages = {
       agents: string;
       tools: string;
       steering: string;
+      runtimes: string;
       repositories: string;
       spend: string;
       organization: string;

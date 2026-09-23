@@ -15,6 +15,7 @@
       "agents": "Agent IAM",
       "tools": "Tools",
       "steering": "Steering",
+      "runtimes": "Runtimes",
       "repositories": "Repositories",
       "spend": "Spend",
       "organization": "Organization",

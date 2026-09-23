@@ -51,6 +51,7 @@ import type {
   TranscriptZoom,
 } from "./contracts/run";
 import type { RunPage } from "./contracts/runs";
+import type { RuntimeAgents, RuntimeList } from "./contracts/runtimes";
 import type {
   OrgChoice,
   ShellContext,
@@ -315,8 +316,9 @@ export interface DataSource {
   /**
    * The Organization pages' four reads, each noBillingGate (#2964, WL-37,
    * WL-43), each an Owner-or-Admin read checked in its handler; callers:
-   * features/organization/people.tsx, roles.tsx, workspaces.tsx, api-keys.tsx
-   * and features/audit/audit.tsx (actor names, off `members`). Three are
+   * features/organization/people.tsx, roles.tsx, workspaces.tsx, api-keys.tsx,
+   * features/audit/audit.tsx (actor names, off `members`) and
+   * features/runtimes/runtime.tsx (operator names, off `members`). Three are
    * org-scoped; `apiKeys` is not, because a key names a workspace (ADR-073).
    */
   org: {
@@ -438,5 +440,17 @@ export interface DataSource {
     ): Promise<Read<ConnectionList>>;
     /** list_mcp_servers: every registered MCP server in the workspace; no filter, no cursor */
     mcpServers(ctx: WsCtx): Promise<Read<McpServerList>>;
+  };
+  /**
+   * The Runtimes page (roadmap mockups/pages/runtimes.md); caller:
+   * features/runtimes/runtimes.tsx. `list` is `list_tacho_hosts` walked to the
+   * end of its cursor under a bound: one row per host enrollment, which is one
+   * agent on one machine, because no host row exists. `agents` is
+   * `list_agents` walked until every named key is found, for the Agents on
+   * this host table.
+   */
+  runtimes: {
+    list(ctx: WsCtx): Promise<Read<RuntimeList>>;
+    agents(ctx: WsCtx, keys: readonly string[]): Promise<Read<RuntimeAgents>>;
   };
 }
