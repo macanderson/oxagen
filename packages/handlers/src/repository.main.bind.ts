@@ -186,6 +186,9 @@ export async function headsHeldElsewhere(
   workspaceId: string | null,
   provider: RepositoryProvider = PROVIDER,
 ): Promise<Array<{ role: string; workspaceId: string }>> {
+  // tenancy: cross-tenant read of binding heads, filtered by provider and
+  // provider_repository_id only; it answers role and workspaceId so the
+  // caller can refuse a claim, and the refusal names no other tenant.
   return withSystemDb((tx) =>
     tx
       .select({

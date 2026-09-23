@@ -201,7 +201,9 @@ export async function handleGitLabWebhook(
 export function gitlabWebhookDeps(): GitLabWebhookDeps {
   return {
     async findConnection(publicId) {
-      // No tenant scope exists yet: the public id is how the tenant is found.
+      // tenancy: webhook lookup with no tenant scope yet; filtered by the
+      // connection public id, and the caller verifies the delivery's
+      // secret token before anything the row names is used.
       const [row] = await withSystemDb((tx) =>
         tx
           .select({
@@ -247,6 +249,8 @@ export function gitlabWebhookDeps(): GitLabWebhookDeps {
       };
     },
     async updateConnectionPath(connectionId, projectPath) {
+      // tenancy: webhook write filtered by the connection id resolved from an
+      // authenticated delivery (verified secret token), one row only.
       await withSystemDb(async (tx) => {
         const [row] = await tx
           .select({ deliveryConfig: schema.sourceConnections.deliveryConfig })
@@ -265,6 +269,8 @@ export function gitlabWebhookDeps(): GitLabWebhookDeps {
       });
     },
     async markCredentialRejected(connectionId) {
+      // tenancy: webhook write filtered by the connection id resolved from an
+      // authenticated delivery (verified secret token), one row only.
       await withSystemDb((tx) =>
         tx
           .update(schema.sourceConnections)
