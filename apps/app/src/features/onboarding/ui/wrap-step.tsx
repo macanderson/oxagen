@@ -426,7 +426,7 @@ export function WrapStep({
       <>
         <div className="flex min-w-0 flex-col gap-3">
           <h3 className="flex items-center gap-2 text-[15px] font-semibold">
-            {t("tabs.cc.name")}
+            {t("tabs.cc.name")}{" "}
             <Badge tone="allowed" dot={false}>
               {t("recommended")}
             </Badge>
