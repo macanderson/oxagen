@@ -756,7 +756,18 @@
       "entry": "/[org]/[ws]/runs/[run]?tab=approvals: the Resolved section reads list_resolved_approvals narrowed to the run, showing the rule that auto-approved a call with no person (features/run/resolved-approvals.tsx, features/run/run.tsx, data/live/approvals.ts)",
       "proof": "apps/app/src/features/run/run.test.tsx",
       "verifiedAt": "2026-09-19",
-      "verifiedBy": "session_011hCk8oPj1zX2ZgeBEfH1wT"
+      "verifiedBy": "session_011hCk8oPj1zX2ZgeBEfH1wT",
+      "also": [
+        {
+          "route": "/[org]",
+          "page": "apps/app/src/app/[org]/page.tsx",
+          "entry": "every page: the approvals drawer lists today's resolutions under \"N resolved today\" from list_resolved_approvals since the start of the viewer's day, per workspace (features/shell/approvals-drawer.tsx, features/shell/source.ts, data/live/approvals.ts)",
+          "testid": "resolved-row",
+          "proof": "apps/app/src/features/shell/approvals-drawer.test.tsx",
+          "verifiedAt": "2026-09-23",
+          "verifiedBy": "session_01GDv3vsEjQPCRnZtvAm88cY"
+        }
+      ]
     },
     "list_runs": {
       "route": "/[org]/[ws]",
@@ -987,6 +998,15 @@
           "proof": "apps/app/src/features/run/run.test.tsx",
           "verifiedAt": "2026-09-20",
           "verifiedBy": "session-018UrgFq-mc1-review"
+        },
+        {
+          "route": "/[org]",
+          "page": "apps/app/src/app/[org]/page.tsx",
+          "entry": "every page: the top bar's Approvals button opens the #apdrawer drawer, and a row opens the same card and Decide dialog Fleet draws, over the same kernel seam (features/shell/approvals-drawer.tsx, features/shell/shell-chrome.tsx, features/fleet/approvals-panel.tsx)",
+          "testid": "approvals-button",
+          "proof": "apps/app/src/features/shell/approvals-drawer.test.tsx",
+          "verifiedAt": "2026-09-23",
+          "verifiedBy": "session_01GDv3vsEjQPCRnZtvAm88cY"
         }
       ]
     },
@@ -1335,6 +1355,15 @@
       "verifiedAt": "2026-09-22",
       "verifiedBy": "session-1a3727fe-cost-centers"
     },
+    "get_nav_counts": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
+      "entry": "every workspace page: the workspace layout reads get_nav_counts for the workspace in the URL and the chrome draws the sidebar's Steering and Audit counts and the phone's More count from it (features/shell/workspace-activity.tsx, features/shell/activity-store.ts, features/shell/sidebar.tsx, data/live/shell.ts)",
+      "testid": "shell-workspace",
+      "proof": "apps/app/src/features/shell/notifications-dialog.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01GDv3vsEjQPCRnZtvAm88cY"
+    },
     "get_steering_deliveries": {
       "route": "/[org]/[ws]/steering?tab=deliveries",
       "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
@@ -1342,6 +1371,24 @@
       "proof": "apps/app/src/features/steering/steering.test.tsx",
       "verifiedAt": "2026-09-22",
       "verifiedBy": "steering-rescue-ci"
+    },
+    "list_notifications": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
+      "entry": "every page: the top bar's bell names the unread count and opens the Notifications dialog, which lists the feed list_notifications answers for the open workspace (features/shell/topbar.tsx, features/shell/notifications-dialog.tsx, features/shell/workspace-activity.tsx, data/live/shell.ts)",
+      "testid": "notifications-button",
+      "proof": "apps/app/src/features/shell/notifications-dialog.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01GDv3vsEjQPCRnZtvAm88cY"
+    },
+    "mark_notification": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
+      "entry": "every page: Mark all read in the Notifications dialog invokes mark_notification once per unread row through the kernel seam (features/shell/notifications-dialog.tsx, features/shell/notification-actions.ts)",
+      "testid": "mark-all-read",
+      "proof": "apps/app/src/features/shell/notification-actions.test.ts",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01GDv3vsEjQPCRnZtvAm88cY"
     }
   }
 }
