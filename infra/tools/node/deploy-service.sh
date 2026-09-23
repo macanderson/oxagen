@@ -43,6 +43,7 @@ readonly REGION="${REGION:-us-east-1}"
 # /oxagen-app/*; switching the default here would break the old node's
 # containers on their next deploy with no permission to write anywhere.
 readonly LOG_DRIVER="${LOG_DRIVER:-json-file}"
+readonly LOG_GROUP_PREFIX="${LOG_GROUP_PREFIX:-/oxagen-app}"
 readonly ROOT=/opt/oxagen/services
 readonly KEEP_RELEASES=3
 
@@ -303,7 +304,7 @@ start_container() {
     log_args=(
       --log-driver awslogs
       --log-opt "awslogs-region=$REGION"
-      --log-opt "awslogs-group=/oxagen-app/$SERVICE"
+      --log-opt "awslogs-group=$LOG_GROUP_PREFIX/$SERVICE"
       --log-opt awslogs-create-group=true
       --log-opt "awslogs-stream=$SERVICE"
     )

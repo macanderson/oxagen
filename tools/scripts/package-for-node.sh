@@ -34,6 +34,11 @@ if [[ $# -ne 1 ]]; then
 fi
 
 readonly SERVICE=$1
+readonly PARAMETER_PREFIX="${PARAMETER_PREFIX:-/oxagen/production}"
+if [[ ! $PARAMETER_PREFIX =~ ^/[a-zA-Z0-9_-]+(/[a-zA-Z0-9_-]+)*$ ]]; then
+  echo "error: PARAMETER_PREFIX must be an absolute SSM path without empty segments" >&2
+  exit 2
+fi
 
 # Assigned before `readonly` so a failed `cd` is a failed script rather than a
 # successful declaration holding an empty path — which would make $OUT below
@@ -199,7 +204,7 @@ case $SERVICE in
     cp -R "$ROOT/.deploy-app/node_modules/." "$OUT/node_modules/"
     rm -rf "$ROOT/.deploy-app"
 
-    write_manifest "$(port_for app)" 768m "/" "/oxagen/production" node "$SERVER_REL"
+    write_manifest "$(port_for app)" 768m "/" "$PARAMETER_PREFIX" node "$SERVER_REL"
     ;;
 
   api)
@@ -213,7 +218,7 @@ case $SERVICE in
     #
     # /health is Hono's own route. Checking it rather than "/" means the health
     # check proves the router is up, not merely that something answered.
-    write_manifest "$(port_for api)" 512m "/health" "/oxagen/production" node server.cjs
+    write_manifest "$(port_for api)" 512m "/health" "$PARAMETER_PREFIX" node server.cjs
     ;;
 
   mcp)
@@ -234,7 +239,7 @@ case $SERVICE in
     # manifest's `port` is what Caddy proxies to and what the health check
     # polls, so the two have to be the same number and the env var below is
     # how the application is told.
-    write_manifest "$(port_for mcp)" 512m "/health" "/oxagen/production" node dist/http.js
+    write_manifest "$(port_for mcp)" 512m "/health" "$PARAMETER_PREFIX" node dist/http.js
     tmp=$(mktemp)
     jq --arg p "$(port_for mcp)" '.env.MCP_PORT = $p' "$OUT/oxagen-run.json" > "$tmp"
     mv "$tmp" "$OUT/oxagen-run.json"
@@ -273,7 +278,7 @@ case $SERVICE in
       > "$OUT/README.txt"
     WRITE_MANIFEST_IMAGE="ghcr.io/macanderson/stella-serve:$STELLA_SERVE_IMAGE_TAG" \
       write_manifest "$(port_for stella-serve)" 384m "/healthz" \
-        "/oxagen/production/stella-serve"
+        "$PARAMETER_PREFIX/stella-serve"
     tmp=$(mktemp)
     jq --arg bind "127.0.0.1:$(port_for stella-serve)" \
       '.env = {
