@@ -182,6 +182,7 @@ export function orgSource(reads: OrgReads): {
     billing: {
       plan: refuse,
       usageCredits: refuse,
+      retention: refuse,
       bucket: refuse,
       contractRate: refuse,
       invoices: refuse,
