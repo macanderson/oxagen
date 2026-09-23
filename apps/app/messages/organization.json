@@ -348,9 +348,9 @@
       },
       "emptyFiltered": "Every key in this workspace has been revoked. Choose All to see {revoked, plural, one {it} other {them}}.",
       "title": "API keys",
-      "caption": "each key is a service principal with its own grants",
+      "caption": "each key acts as the person who created it",
       "badge": "postgres · iam + vault",
-      "note": "A key is shown once, at creation, and never again. Keys carry grants, not roles, so an auditor’s key can read receipts and nothing else. Revoking a key ends its service principal’s access at the next call.",
+      "note": "A key is shown once, at creation, and never again. Until keys carry grants of their own, a key acts as the person who created it, in its workspace. Revoking a key ends its access at the next call.",
       "masked": "{prefix}…",
       "state": {
         "active": "active",
