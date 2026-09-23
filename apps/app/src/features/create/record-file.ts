@@ -80,12 +80,27 @@ export function lineageOf(ws: string, desc: string): string {
 }
 
 /**
+ * The statement as the record carries it: one line, with every run of
+ * whitespace collapsed to a single space. The contract calls the field the
+ * single-sentence claim, and the file that open_context_pr writes escapes a
+ * newline rather than wrapping the string, so a line break typed or pasted
+ * into the editor would reach every surface that preserves whitespace (the
+ * wizard preview, the Context PR body, the turn the record is rendered into)
+ * as a sentence broken mid-way. Collapsing it here keeps the editor free-form
+ * and the record one line. #3736 is the case without it: a revision whose
+ * only change was six line breaks inside the sentence.
+ */
+export function normalizeStatement(statement: string): string {
+  return statement.trim().replace(/\s+/g, " ");
+}
+
+/**
  * The statement drafted from a description: the description itself,
  * capitalized, with a full stop. A procedure keeps its own punctuation, since
  * its steps may already be numbered.
  */
 export function seedStatement(desc: string, kind: RecordKind | null): string {
-  const d = desc.trim().replace(/\s+/g, " ");
+  const d = normalizeStatement(desc);
   if (d === "") return "";
   const capital = d.charAt(0).toUpperCase() + d.slice(1);
   if (kind === "procedure") return capital;
@@ -94,7 +109,7 @@ export function seedStatement(desc: string, kind: RecordKind | null): string {
 
 /** What the statement adds to a turn it is rendered into, at four characters a token. */
 export function statementTokens(statement: string): number {
-  return estimateTokens(statement.trim());
+  return estimateTokens(normalizeStatement(statement));
 }
 
 /** The record propose_record is sent, minus the rationale. */

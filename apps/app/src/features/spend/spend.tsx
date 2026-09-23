@@ -122,7 +122,7 @@ async function body(
     }
     case "cost_center": {
       const report = await source.spend.byGroup(ctx, "cost_center", period);
-      if (!report.ok) return <ReadFailure read={report} />;
+      if (!report.ok) return <SpendReadFailure read={report} />;
       return (
         <>
           <SpendStrip total={report.value.total} period={period} />

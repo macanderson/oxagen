@@ -263,6 +263,35 @@ describe("the context-record wizard: statement", () => {
     );
   });
 
+  it("sends the statement on one line however the editor wraps it", async () => {
+    openRecordPr.mockResolvedValue(opened());
+    const file = await toStatement();
+    fireEvent.change(file, {
+      target: { value: "Read CHANGELOG.md once \nper run, then \n  stop. " },
+    });
+    expect(file.value).toBe(
+      "Read CHANGELOG.md once \nper run, then \n  stop. ",
+    );
+    expect(screen.getByTestId("record-preview").textContent).toContain(
+      "Read CHANGELOG.md once per run, then stop.",
+    );
+
+    fireEvent.click(primary());
+    await screen.findByTestId("record-checks");
+    fireEvent.click(primary());
+    await screen.findByTestId("pr-branch");
+    await waitFor(() => {
+      expect(screen.queryByText(t("pr.repo.loading"))).toBeNull();
+    });
+    fireEvent.click(primary());
+    await screen.findByTestId("pr-opened");
+    const call: unknown[] = proposeRecord.mock.calls[0] ?? [];
+    expect(call.slice(0, 2)).toEqual(["acme", "core-platform"]);
+    expect(call[2]).toMatchObject({
+      record: { statement: "Read CHANGELOG.md once per run, then stop." },
+    });
+  });
+
   it("filters force by kind: a preference is never must, a fact is info (negative)", async () => {
     await toStatement("preference");
     const force = screen.getByTestId<HTMLSelectElement>("record-force");

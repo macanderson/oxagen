@@ -1036,6 +1036,9 @@ export const tachoEventsIngestHandler: CapabilityHandler<
           createdAt: true,
         },
       });
+      // The collector's Shipper matches this message to set the session
+      // aside instead of retrying it (`SESSION_OWNED_ELSEWHERE` in
+      // packages/tacho/src/collector/spool.ts). Change both together.
       if (existing && existing.hostId !== host.id) {
         throw tachoDenied(
           capability,
