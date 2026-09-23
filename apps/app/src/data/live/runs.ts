@@ -94,7 +94,26 @@ export const runs: DataSource["runs"] = {
       page: "run",
     });
     if (!read.ok) return read;
-    return view(ctx.orgId, RunWork, read.value, "runs.work");
+    return view(
+      ctx.orgId,
+      RunWork,
+      {
+        ...read.value,
+        checkouts: read.value.checkouts.map(({ id, ...checkout }) => ({
+          ...checkout,
+          ref: id,
+        })),
+        diffs: read.value.diffs.map(({ checkoutId, ...diff }) => ({
+          ...diff,
+          checkoutRef: checkoutId,
+        })),
+        pullRequests: read.value.pullRequests.map(({ checkoutIds, ...pr }) => ({
+          ...pr,
+          checkoutRefs: checkoutIds,
+        })),
+      },
+      "runs.work",
+    );
   },
   async list(ctx, q) {
     const read = await kernelRead(ctx, {

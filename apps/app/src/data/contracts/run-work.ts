@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PublicId } from "./common";
 const ciCountsSchema = z.object({
   total: z.number(),
   passed: z.number(),
@@ -46,7 +47,7 @@ export const runRepositorySchema = z
   .strict();
 export const runCheckoutSchema = z
   .object({
-    id: z.string(),
+    ref: z.string(),
     path: z.string(),
     branch: z.string().nullable(),
     headSha: z.string().nullable(),
@@ -58,7 +59,7 @@ export const runCheckoutSchema = z
   .strict();
 export const runCapturedDiffSchema = z
   .object({
-    checkoutId: z.string(),
+    checkoutRef: z.string(),
     seq: z.string(),
     baseSha: z.string().nullable(),
     headSha: z.string().nullable(),
@@ -94,7 +95,7 @@ export const runWorkPrSchema = z
     headSha: z.string().nullable(),
     headRef: z.string(),
     association: z.enum(["recorded", "head_commit", "branch"]),
-    checkoutIds: z.array(z.string()),
+    checkoutRefs: z.array(z.string()),
     observedAt: z.string(),
     current: z.boolean(),
     ci: z
@@ -119,7 +120,7 @@ export const runWorkPrSchema = z
 
 export const RunWork = z
   .object({
-    runId: z.string(),
+    runId: PublicId,
     machine: z.object({ name: z.string() }).nullable(),
     checkouts: z.array(runCheckoutSchema),
     diffs: z.array(runCapturedDiffSchema),

@@ -27,7 +27,7 @@ const value: RunWork = {
   machine: { name: "MacBook" },
   checkouts: [
     {
-      id: "one",
+      ref: "one",
       path: "/work/app",
       branch: "fix/work",
       headSha: "abc",
@@ -39,7 +39,7 @@ const value: RunWork = {
   ],
   diffs: [
     {
-      checkoutId: "one",
+      checkoutRef: "one",
       seq: "9",
       baseSha: null,
       headSha: "abc",
@@ -60,7 +60,7 @@ const value: RunWork = {
       headSha: "abc",
       headRef: "fix/work",
       association: "branch",
-      checkoutIds: ["one"],
+      checkoutRefs: ["one"],
       observedAt: "2026-09-23",
       current: true,
       diff: null,

@@ -99,7 +99,7 @@ export function RunWorkSection({
           ) : (
             <ul className="mt-2 space-y-4">
               {value.checkouts.map((checkout) => (
-                <li key={checkout.id}>
+                <li key={checkout.ref}>
                   <code className={`${mono} block break-all text-xs`}>
                     {checkout.path}
                   </code>
