@@ -103,6 +103,7 @@ describe("toRunPage", () => {
             currency: "USD",
             basis: "gateway_observed",
           },
+          reportedCost: null,
           model: null,
           harness: null,
           machine: null,
