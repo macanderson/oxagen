@@ -283,6 +283,7 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
       roles: refuse,
       workspaces: refuse,
       apiKeys: refuse,
+      costCenters: refuse,
       modelCredential: refuse,
     },
     mandates: { list: refuse, get: refuse },

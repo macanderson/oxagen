@@ -2479,6 +2479,78 @@
       }
     },
     {
+      "name": "create_cost_center",
+      "file": "cost_center.create.ts",
+      "domain": "spend",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "delete_cost_center",
+      "file": "cost_center.delete.ts",
+      "domain": "spend",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "list_cost_centers",
+      "file": "cost_center.list.ts",
+      "domain": "spend",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "set_cost_center",
+      "file": "cost_center.set.ts",
+      "domain": "spend",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "list_credential_grants",
       "file": "credential.grant.list.ts",
       "domain": "credential",
@@ -5421,6 +5493,24 @@
         "schema": true,
         "mcp": true,
         "docs": true
+      }
+    },
+    {
+      "name": "export_cost_center_statement",
+      "file": "spend.cost_center_statement.export.ts",
+      "domain": "spend",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
       }
     },
     {

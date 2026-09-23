@@ -2,7 +2,9 @@
 // The calls a person starts from the Spend page: set one scope's spend ceiling
 // (set_spend_budget, whose handler admits an org Owner, Admin or Billing
 // member, or a workspace Owner or Admin for that workspace's own), build one
-// month's statement (export_statement, answered as CSV text in the call), and
+// month's statement (export_statement, answered as CSV text in the call) or
+// the organization's chargeback statement by cost center
+// (export_cost_center_statement, org Owner, Admin or Billing; ADR-142), and
 // decide a finding — record its fix as applied or dismiss it (#2963, ADR-062
 // §2; org Owner or Admin in the handler), state one negotiated rate
 // (set_price_entry) and end one (remove_price_entry), both org Owner, Admin or
@@ -13,6 +15,7 @@ import { costPriceEntryRemove } from "@oxagen/oxagen/contracts/cost.price_entry.
 import { costPriceEntrySet } from "@oxagen/oxagen/contracts/cost.price_entry.set";
 import { findingDismiss } from "@oxagen/oxagen/contracts/finding.dismiss";
 import { findingFixRecord } from "@oxagen/oxagen/contracts/finding.fix.record";
+import { spendCostCenterStatementExport } from "@oxagen/oxagen/contracts/spend.cost_center_statement.export";
 import { spendStatementExport } from "@oxagen/oxagen/contracts/spend.statement.export";
 import { tachoSessionPolicyWrite } from "@oxagen/oxagen/contracts/tacho.session_policy.write";
 import type { ActionResult } from "@/server/kernel";
@@ -136,6 +139,39 @@ export async function exportStatementAction(
     };
   }
   const result = await kernelWrite(ctx, spendStatementExport, {
+    month,
+    format: "csv",
+  });
+  return result.ok
+    ? {
+        ok: true,
+        value: {
+          filename: result.value.filename,
+          content: result.value.content,
+        },
+      }
+    : result;
+}
+
+/**
+ * The organization's chargeback statement for one month: one line per cost
+ * center with its run ids. Organization-wide, so it runs in the organization
+ * viewer's context rather than the workspace's.
+ */
+export async function exportCostCenterStatementAction(
+  at: SpendAt,
+  month: string,
+): Promise<ActionResult<{ filename: string; content: string }>> {
+  const ctx = await requireViewer(at.org);
+  if (!isStatementMonth(month)) {
+    return {
+      ok: false,
+      reason: "invalid",
+      code: "monthInvalid",
+      field: "month",
+    };
+  }
+  const result = await kernelWrite(ctx, spendCostCenterStatementExport, {
     month,
     format: "csv",
   });

@@ -1,5 +1,6 @@
 // The rollup at one level and the configured ceilings, as tables (#2962). An
-// operator, agent or tool row opens that key's drill; a model row has none.
+// operator, agent or tool row opens that key's drill; a model or task row has
+// none. The cost-center level has its own table (./cost-centers.tsx).
 // On a phone the shell labels each cell with its column (card tables).
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
@@ -90,7 +91,7 @@ export function GroupTable({
   rows,
   at,
 }: {
-  kind: SpendGroupKind;
+  kind: Exclude<SpendGroupKind, "cost_center">;
   rows: SpendReport["rows"];
   at: SpendAt;
 }) {
@@ -144,6 +145,10 @@ export function GroupTable({
                         {row.operator?.name ?? t("groups.operator.unnamed")}
                       </SafeLink>
                     </OperatorName>
+                  ) : kind === "task" ? (
+                    // A task reference opens no drill (SpendDrillKind); it is
+                    // the run's goal text, printed as written.
+                    <span>{row.key}</span>
                   ) : (
                     <SafeLink
                       to={routes.spend(at.org, at.ws, {

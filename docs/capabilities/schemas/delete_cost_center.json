@@ -1,0 +1,48 @@
+{
+  "name": "delete_cost_center",
+  "domain": "spend",
+  "description": "Delete a cost-center label from this organization's list. Runs already rolled up keep it; new runs stop being charged to it.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "label": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "label"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "label": {
+        "type": "string"
+      },
+      "deletedAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "label",
+      "deletedAt"
+    ],
+    "additionalProperties": false
+  }
+}

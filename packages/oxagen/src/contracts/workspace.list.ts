@@ -32,6 +32,12 @@ export const workspaceListItemSchema = z.object({
     .describe(
       "ISO-8601 when the workspace was archived (archive_workspace); null while active. Present only when includeArchived is true",
     ),
+  costCenter: z
+    .string()
+    .nullable()
+    .describe(
+      "The cost-center label this workspace's spend is charged back to (set_cost_center); null when it names none",
+    ),
 });
 
 export const workspaceList = registerCapability({

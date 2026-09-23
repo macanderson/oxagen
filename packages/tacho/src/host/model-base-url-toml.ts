@@ -53,9 +53,7 @@ export function tomlStringValue(rest: string): string | null {
  * quotes and spaces removed under a `[standard]` header, and undefined under
  * an `[[array]]` header, which no key this contract edits can live in.
  */
-function* tomlKeyLines(
-  lines: readonly TomlLine[],
-): Generator<{
+function* tomlKeyLines(lines: readonly TomlLine[]): Generator<{
   index: number;
   text: string;
   table: string | null | undefined;

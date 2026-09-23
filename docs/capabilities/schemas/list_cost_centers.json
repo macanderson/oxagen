@@ -1,0 +1,78 @@
+{
+  "name": "list_cost_centers",
+  "domain": "spend",
+  "description": "List this organization's cost-center labels, the labels spend is charged back to, with how many agents and workspaces name each.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "low",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "costCenters": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "agents": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "workspaces": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "createdAt": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "label",
+            "description",
+            "agents",
+            "workspaces",
+            "createdAt"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "costCenters"
+    ],
+    "additionalProperties": false
+  }
+}

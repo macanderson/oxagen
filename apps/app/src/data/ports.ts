@@ -33,6 +33,7 @@ import type { MandateDetail, MandateList } from "./contracts/mandates";
 import type { FirstFrame, OnboardingGate } from "./contracts/onboarding";
 import type {
   ApiKey,
+  CostCenterList,
   MemberList,
   ModelCredential,
   RoleCatalog,
@@ -323,6 +324,8 @@ export interface DataSource {
     roles(ctx: OrgCtx): Promise<Read<RoleCatalog>>;
     /** list_workspaces, archived rows included */
     workspaces(ctx: OrgCtx): Promise<Read<WorkspaceList>>;
+    /** list_cost_centers, the organization's live chargeback labels (ADR-142) */
+    costCenters(ctx: OrgCtx): Promise<Read<CostCenterList>>;
     /**
      * list_api_keys, every key of the workspace in scope, newest first,
      * revoked ones included. A `WsCtx`, never an `OrgCtx`: `auth.api_keys` is

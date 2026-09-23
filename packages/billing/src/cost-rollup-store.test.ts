@@ -26,6 +26,7 @@ function meta(runId: string, operator: string): RunMeta {
     agentPrincipalId: null,
     agentKey: "acme.core.bot",
     taskRef: null,
+    costCenter: null,
     startedAt: new Date("2026-09-15T09:00:00.000Z"),
     sealedAt: new Date("2026-09-15T09:10:00.000Z"),
     turns: 1,

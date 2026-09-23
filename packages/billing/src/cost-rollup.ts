@@ -20,7 +20,11 @@
  * no cost and no basis, and a run or model group with no priced frame has
  * none either, never a zero.
  */
-import type { CostBasis, SpendGroupKind } from "@oxagen/database/schema";
+import {
+  UNASSIGNED_COST_CENTER_KEY,
+  type CostBasis,
+  type SpendGroupKind,
+} from "@oxagen/database/schema";
 import {
   resolvePriceEntry,
   type PriceBook,
@@ -28,6 +32,7 @@ import {
 } from "./price-book";
 
 export type { CostBasis, SpendGroupKind } from "@oxagen/database/schema";
+export { UNASSIGNED_COST_CENTER_KEY } from "@oxagen/database/schema";
 
 /** The token classes a model-call frame carries (spec §12.6). */
 const TOKEN_CLASSES = [
@@ -81,6 +86,11 @@ export interface RunMeta {
   agentPrincipalId: string | null;
   agentKey: string | null;
   taskRef: string | null;
+  /**
+   * The cost-center label the run is charged back to: the agent's live label,
+   * else the workspace's, else null (unassigned). Resolved by the store.
+   */
+  costCenter: string | null;
   startedAt: Date;
   sealedAt: Date | null;
   /** Null when the frames hide the turn index. */
@@ -503,6 +513,13 @@ function addValue(acc: Accumulator, run: RunTotalsRecord, cost: bigint | null) {
  * operator, agent and task it names (a run that names none is not attributed
  * to that level, spec §12.7), to every model its frames used, and to every
  * tool it called.
+ *
+ * The cost-center level departs from §12.7 on purpose (ADR-142): a run with
+ * no cost center is attributed to {@link UNASSIGNED_COST_CENTER_KEY} rather
+ * than left out. Chargeback divides the whole bill, so every run lands in
+ * exactly one cost-center group at its full run cost and basis, the level's
+ * rows sum to the same total the run rows do, and the unlabelled share is a
+ * row a reader can see rather than a gap between two numbers.
  */
 export function dailyTotalsFromRuns(
   runs: readonly RunTotalsRecord[],
@@ -532,6 +549,7 @@ export function dailyTotalsFromRuns(
       ["operator", run.operatorKey],
       ["agent", run.agentKey],
       ["task", run.taskRef],
+      ["cost_center", run.costCenter ?? UNASSIGNED_COST_CENTER_KEY],
     ];
     for (const [groupKind, groupKey] of levels) {
       if (groupKey === null) continue;
