@@ -2074,7 +2074,6 @@ type Messages = {
     denied: {
       title: string;
       body: string;
-      request: string;
       back: string;
       signedIn: string;
       signedInValue: string;

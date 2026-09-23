@@ -231,7 +231,6 @@
     "denied": {
       "title": "You cannot see this workspace",
       "body": "Your roles on <b>{org}</b> do not include <c>{permission} on {ws}</c>. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
-      "request": "Request access",
       "back": "Back to Fleet",
       "signedIn": "Signed in as",
       "signedInValue": "org.{orgRole} · workspace.{wsRole} · {ws}",

@@ -211,8 +211,9 @@ export interface DataSource {
   /**
    * The Agents pages (#2956), each read by the agent's public id or slug:
    * list_agents, one cursor page of the workspace's identities, callers
-   * features/agents/agents.tsx and features/tools/tools.tsx (the grant
-   * dialog's agent picker); get_agent, the identity with its credentials,
+   * features/agents/agents.tsx, features/tools/tools.tsx (the grant
+   * dialog's agent picker) and features/fleet/fleet.tsx (the steer dialog's
+   * agents and the Live runs tile's workspace total); get_agent, the identity with its credentials,
    * roles, hosts and cached definition, callers features/agents/agent.tsx and
    * agent-source.tsx; get_agent_toolbelt, the computed belt, and
    * list_incidents narrowed to the agent, one cursor page, caller
@@ -232,8 +233,9 @@ export interface DataSource {
    * The mandates of the workspace, or of one agent (#2957): `list_mandates`,
    * each row carrying the remaining authority its ledger records. Callers:
    * features/tools/mandates-ledger.tsx (the ledger the accountable office
-   * reads), features/agents/mandates.tsx (the mandates one agent holds) and
-   * features/fleet/fleet.tsx (the bar on an approval card that names one).
+   * reads) and features/agents/mandates.tsx (the mandates one agent holds).
+   * features/run/run.tsx reads it for the bar on its Approvals tab's cards;
+   * Fleet draws no approval card and reads none.
    */
   mandates: {
     list(ctx: WsCtx, q: { agentId: string | null }): Promise<Read<MandateList>>;
