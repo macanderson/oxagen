@@ -2,7 +2,7 @@
 
 Queue a run control (Mission Control spec §7.3, §7.4, §7.6; ADR-056): `pause`, `resume`, `cancel`, `steer` or `message` for one run, for every live run of an agent, or for every live run in the workspace (`@agents`). One `tacho.control_commands` row is written per recipient run, carried by the host its session belongs to; the collector takes it on its next ingest response or command poll (`fetch_commands`) and reports what became of it. The delivery report is `list_commands`.
 
-`steer` and `message` carry prompt content and a §7.3 delivery mode. The mode is resolved per recipient at dispatch, at or below the one requested: the hook adapter, the one connection point in this tree, injects at the next prompt boundary and cannot stop a call in flight, so on the `harness` tier `interrupt` lands as `next_step` and the row records `degradedReason: harness_tier`. A run on the `gateway` tier has its model traffic routed through the host's loopback proxy, which can cut the call in flight, so there `interrupt` is delivered as `interrupt` (ADR-095). On a broadcast the requested mode is a ceiling. Both modes are recorded, and the report shows the achieved one. Steering text is evidence, quoted and cited; Oxagen never executes it.
+`steer` and `message` carry prompt content and a §7.3 delivery mode. The mode is resolved per recipient at dispatch, at or below the one requested: the hook adapter, the one connection point in this tree, injects at the next prompt boundary and cannot stop a call in flight, so on the `harness` tier `interrupt` lands as `next_step` and the row records `degradedReason: harness_tier`. A run on the `gateway` or `contained` tier has its model traffic routed through the host's loopback proxy, which can cut the call in flight, but nothing yet delivers the text before the next prompt, so there `interrupt` also lands as `next_step`, recorded as `degradedReason: no_mid_step_injection`, until the proxy injects queued steers (ADR-095). A `steer` or `message` to a Stella session is refused with `no_text_channel` on a direct target and recorded `failed` on a broadcast, because Stella reads steering only when a process starts. On a broadcast the requested mode is a ceiling. Both modes are recorded, and the report shows the achieved one. Steering text is evidence, quoted and cited; Oxagen never executes it.
 
 A new command supersedes an earlier `queued` command of the same kind on the same run: the earlier row becomes `cancelled` with `superseded_by:<id>`.
 
@@ -25,7 +25,7 @@ A new command supersedes an earlier `queued` command of the same kind on the sam
 |---|---|---|---|
 | `target` | object | yes | `{ kind: "run", id }` with an `arun_…` or `tse_…` id; `{ kind: "agent", id }` with the agent key `list_runs` reports; `{ kind: "workspace", id }` with the caller's workspace id |
 | `command` | enum | yes | `pause`, `resume`, `cancel`, `steer`, `message` |
-| `payload` | object | for `steer` and `message` | `{ text (1–16384 chars), requestedMode }`; refused on the other commands |
+| `payload` | object | for `steer` and `message` | `{ text (1–8000 chars), requestedMode }`; refused on the other commands |
 | `payload.requestedMode` | enum | no | `next_step` (default), `interrupt`, `turn_boundary` |
 | `reason` | string | no | 1–512 chars; read by the model on resume, shown on the pause banner |
 | `expiresInMs` | integer | no | 10 000–86 400 000, default 3 600 000 |

@@ -121,6 +121,7 @@ function session(over: Partial<RecipientSession> = {}): RecipientSession {
     agentKey: "acme.core.cc-laptop",
     outcome: "running",
     enforcementTier: "harness",
+    harness: "claude-code",
     ...over,
   };
 }
@@ -235,14 +236,17 @@ beforeEach(() => {
 });
 
 describe("resolveDeliveryMode on the gateway tier", () => {
-  it("delivers interrupt as interrupt where the model proxy can cut the call", () => {
+  it("degrades interrupt to next_step until the proxy can inject the steer mid-step", () => {
+    // The proxy can cut the call, but nothing delivers the text before the
+    // next prompt yet (no beforeForward injection), so reporting interrupt as
+    // achieved would overstate the delivery.
     expect(resolveDeliveryMode("interrupt", "contained")).toEqual({
-      deliveryMode: "interrupt",
-      degradedReason: null,
+      deliveryMode: "next_step",
+      degradedReason: "no_mid_step_injection",
     });
     expect(resolveDeliveryMode("interrupt", "gateway")).toEqual({
-      deliveryMode: "interrupt",
-      degradedReason: null,
+      deliveryMode: "next_step",
+      degradedReason: "no_mid_step_injection",
     });
     expect(resolveDeliveryMode("interrupt", "harness")).toEqual({
       deliveryMode: "next_step",
@@ -613,11 +617,12 @@ describe("dispatch_command — broadcast", () => {
       deliveryMode: "next_step",
       degradedReason: "harness_tier",
     });
-    // The gateway run's model traffic is routed, so interrupt is real there.
+    // The gateway run's model traffic is routed, but the steer still waits for
+    // the next prompt until the proxy injects it, so it degrades too.
     expect(store.rows[1]).toMatchObject({
       requestedMode: "interrupt",
-      deliveryMode: "interrupt",
-      degradedReason: null,
+      deliveryMode: "next_step",
+      degradedReason: "no_mid_step_injection",
     });
     // The failed row is never a supersession candidate.
     expect(store.cancelled).toEqual([]);

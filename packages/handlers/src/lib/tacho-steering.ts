@@ -74,12 +74,34 @@ import {
 export const CONTEXT_SYSTEM_MAX_CHARS = 16_384;
 
 /**
+ * How long `context.system` may be and still reach the agent whole. The
+ * collector hands the text over as SessionStart `additionalContext`, and
+ * Claude Code keeps 10,000 characters of that: past it the text is saved to
+ * a file and the model reads a preview, while the manifest still says every
+ * record was included. The collector's total for one hook answer is 9,500
+ * characters, and a steer that does not fit beside this text waits for the
+ * next prompt.
+ */
+export const CONTEXT_SYSTEM_DELIVERED_MAX_CHARS = 8_000;
+
+/**
  * The assembler's budget for `context.system`, in Context Graph Protocol
  * budget tokens (`ceil(utf8_bytes / 4)`). A string never has more characters
- * than bytes, so a text under this many tokens is under the host's character
- * limit.
+ * than bytes, so a text under this many tokens is under the delivered limit,
+ * and so under the host's.
  */
-export const CONTEXT_SYSTEM_BUDGET_TOKENS = CONTEXT_SYSTEM_MAX_CHARS / 4;
+export const CONTEXT_SYSTEM_BUDGET_TOKENS =
+  CONTEXT_SYSTEM_DELIVERED_MAX_CHARS / 4;
+
+/**
+ * The most items the signed manifest lists. The host parses
+ * `context.manifest` `.strict()` with at most 2,000 items
+ * (`steeringManifestSchema` in `@oxagen/tacho` `wire.ts`), so a longer list
+ * would make every host that reads the manifest reject the whole bundle and
+ * keep its old mandate. The 100 below that are room for the steers the host
+ * appends to the frame it seals from this manifest.
+ */
+export const STEERING_MANIFEST_MAX_ITEMS = 1_900;
 
 /**
  * How many workspaces the compiled-text cache holds before it drops the
@@ -196,10 +218,12 @@ export function recordCandidate(
 
 /**
  * The bundle's steering for these records: the `must` and `should` ones
- * ranked and fitted to the budget, every one accounted for in the manifest.
- * Deterministic in its input set, whatever order it arrives in: the text is
- * part of the bundle etag, and an etag that moved with the database's row
- * order would make every host refetch an unchanged bundle.
+ * ranked and fitted to the budget, every one accounted for in the manifest,
+ * whose list is capped at `STEERING_MANIFEST_MAX_ITEMS` by dropping the
+ * oldest cut items. Deterministic in its input set, whatever order it
+ * arrives in: the text is part of the bundle etag, and an etag that moved
+ * with the database's row order would make every host refetch an unchanged
+ * bundle.
  */
 export function assembleWorkspaceSteering(
   orgId: string,
@@ -210,7 +234,48 @@ export function assembleWorkspaceSteering(
   const candidates = records
     .map(recordCandidate)
     .filter((c): c is SteeringCandidate => c !== null);
-  return assembleSteering({ orgId, workspaceId, candidates }, budgetTokens);
+  const { text, manifest } = assembleSteering(
+    { orgId, workspaceId, candidates },
+    budgetTokens,
+  );
+  return { text, manifest: capManifestItems(manifest) };
+}
+
+function instantMs(iso: string): number {
+  const ms = Date.parse(iso);
+  return Number.isFinite(ms) ? ms : Number.NEGATIVE_INFINITY;
+}
+
+/**
+ * The manifest with its list held to `max` items. Every included item stays;
+ * cut items are dropped oldest first (the lower-ranked of two recorded at the
+ * same instant goes first), and what is left keeps its rank order. The
+ * counts are left alone: `cut` still counts every candidate that was cut, so
+ * `cut` less the cut items listed is how many the list leaves out. The
+ * schema is strict and has no field of its own for that number.
+ */
+export function capManifestItems(
+  manifest: SteeringManifest,
+  max: number = STEERING_MANIFEST_MAX_ITEMS,
+): SteeringManifest {
+  const over = manifest.items.length - max;
+  if (over <= 0) return manifest;
+  const dropped = new Set(
+    manifest.items
+      .map((item, rank) => ({ item, rank }))
+      .filter(({ item }) => item.outcome === "cut")
+      .sort(
+        (a, b) =>
+          instantMs(a.item.recorded_at) - instantMs(b.item.recorded_at) ||
+          b.rank - a.rank,
+      )
+      .slice(0, over)
+      .map(({ item }) => item),
+  );
+  return {
+    ...manifest,
+    items: manifest.items.filter((item) => !dropped.has(item)),
+  };
 }
 
 /**

@@ -171,7 +171,7 @@ describe("automatic run enrichment", () => {
   it("writes a generated account, then avoids charging for the identical input", async () => {
     expect(await run()).toMatchObject({ status: "generated" });
     expect(state.writes.at(-1)).toMatchObject({
-      name: "Repair authentication · tse_12345678",
+      name: "Repair authentication (tse_12345678)",
       summaryModel: "fast-test",
     });
     expect(await run()).toMatchObject({ status: "unchanged" });

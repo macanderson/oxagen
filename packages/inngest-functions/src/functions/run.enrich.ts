@@ -2,7 +2,18 @@ import { schema, withTenantDb, withSystemDb } from "@oxagen/database";
 import { runEnrichmentEnabled } from "@oxagen/oxagen/run-enrichment";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { and, asc, eq, isNull, like, lt, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  isNull,
+  like,
+  lt,
+  ne,
+  notInArray,
+  or,
+  sql,
+} from "drizzle-orm";
 import { z } from "zod";
 import { digestBytes } from "@oxagen/tacho";
 import { createFunction, MAX_BATCH_SIZE } from "../create-function";
@@ -39,23 +50,58 @@ export function enrichableWorkspace() {
 }
 
 /**
+ * How often a live run that already has a name is summarized again. Every
+ * ingest batch moves a live run's `updated_at`, so the revision rule alone
+ * made every active run due at every five-minute sweep, and each pass reads
+ * and summarizes the whole run from the start.
+ */
+export const LIVE_ENRICHMENT_INTERVAL_MS = 30 * 60_000;
+
+/**
+ * A run that has ended: a wrapped session no longer `running`, or a ledger
+ * run past `pending` and `running`.
+ */
+function sealedRun(
+  table: typeof schema.tachoSessions | typeof schema.agentRuns,
+) {
+  return table === schema.tachoSessions
+    ? ne(schema.tachoSessions.outcome, "running")
+    : notInArray(schema.agentRuns.status, ["pending", "running"]);
+}
+
+/**
  * The runs a sweep queues. A run is due when it was never observed, when its
  * row changed after the revision the last read saw, or when its last read
  * found bodies missing and five minutes have passed. The revision comparison
  * is exact, so a write that commits after the read is caught even when its
  * transaction timestamp predates the read.
+ *
+ * A live run is held to `LIVE_ENRICHMENT_INTERVAL_MS` besides: it is due only
+ * while it has no name yet, or once its last enrichment is that old. Its seal
+ * moves `updated_at` again, so the finished run is always summarized.
  */
 export function dueForEnrichment(
   table: typeof schema.tachoSessions | typeof schema.agentRuns,
   now: Date,
 ) {
-  return or(
-    isNull(table.summaryObservedAt),
-    isNull(table.summaryObservedRevision),
-    sql`${table.updatedAt} IS DISTINCT FROM ${table.summaryObservedRevision}`,
-    and(
-      like(table.summaryInputDigest, "partial:%"),
-      lt(table.summaryObservedAt, new Date(now.getTime() - 5 * 60_000)),
+  return and(
+    or(
+      isNull(table.summaryObservedAt),
+      isNull(table.summaryObservedRevision),
+      sql`${table.updatedAt} IS DISTINCT FROM ${table.summaryObservedRevision}`,
+      and(
+        like(table.summaryInputDigest, "partial:%"),
+        lt(table.summaryObservedAt, new Date(now.getTime() - 5 * 60_000)),
+      ),
+    ),
+    or(
+      sealedRun(table),
+      isNull(table.name),
+      isNull(table.summaryObservedAt),
+      lt(
+        table.summaryObservedAt,
+        new Date(now.getTime() - LIVE_ENRICHMENT_INTERVAL_MS),
+      ),
     ),
   );
 }
@@ -357,7 +403,9 @@ export const [runEnrichmentSweep] = createFunction(
                 workspaceId: table.workspaceId,
                 runPublicId: table.publicId,
                 revision: sql<string>`${table.updatedAt}::text`,
-                observedAt: sql<string | null>`${table.summaryObservedAt}::text`,
+                observedAt: sql<
+                  string | null
+                >`${table.summaryObservedAt}::text`,
               })
               .from(table)
               .innerJoin(

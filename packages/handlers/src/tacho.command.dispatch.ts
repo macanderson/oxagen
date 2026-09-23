@@ -21,8 +21,16 @@
 // requested one: the hook adapter cannot stop an in-flight call, so
 // `interrupt` degrades to `next_step` with `degraded_reason = harness_tier`.
 // A run on the `gateway` tier has its model traffic routed through the host's
-// loopback proxy, which can, so there `interrupt` is delivered as `interrupt`.
-// Both modes are recorded, and the report shows the achieved one.
+// loopback proxy, which can cut the call but cannot yet put the steer into
+// the next request, so there it degrades too, with `no_mid_step_injection`
+// (see `resolveDeliveryMode`). Both modes are recorded, and the report shows
+// the achieved one.
+//
+// Stella has no channel for text after its session starts: it reads prompt
+// text from its one SessionStart, and a run is a session only once that has
+// happened. A `steer` or `message` addressed to a Stella run directly is
+// refused (`no_text_channel`), and a broadcast records it as `failed` with
+// that reason, rather than queue text the host can never deliver.
 //
 // A new command supersedes an earlier `queued` command of the same kind on the
 // same run: the earlier row becomes `cancelled` with the successor's id, so a
@@ -53,7 +61,7 @@ import { ledgerIdentityQuery, type RunScope, runScope } from "./run.list";
 // ---- Delivery mode resolution --------------------------------------------------------
 
 /** Why the achieved mode is below the requested one (spec §7.3). */
-type DegradedReason = "harness_tier";
+type DegradedReason = "harness_tier" | "no_mid_step_injection";
 
 type ResolvedMode = {
   deliveryMode: TachoDeliveryMode;
@@ -68,22 +76,30 @@ type ResolvedMode = {
  * in flight, so on the `harness` tier `interrupt` lands as `next_step` and says
  * so. `turn_boundary` is the next turn's prompt, which the adapter reaches.
  *
- * On the `gateway` tier the run's model traffic is routed through the host's
- * loopback proxy (ADR-094), which can cut the call in flight, so `interrupt` is
- * delivered as `interrupt` (ADR-095: "`interrupt` degrades at `harness` and is
- * real at `gateway`"). The host still reports what happened: the applied frame
- * carries `command.interrupted`, which is `1` only when a call was cut.
+ * On the `gateway` and `contained` tiers the run's model traffic is routed
+ * through the host's loopback proxy (ADR-094), which can cut the call in
+ * flight (ADR-095: "`interrupt` degrades at `harness` and is real at
+ * `gateway`"). Cutting it is only half of `interrupt`: the steer text still
+ * waits for the next prompt, because the proxy's `beforeForward` seam, which
+ * would put it into the retried request, is not wired in production
+ * (`startDaemon` in `@oxagen/tacho` `collector/run.ts` passes none). So an
+ * `interrupt` there cut the agent's step and delivered nothing sooner, and
+ * the report said it was achieved. It degrades to `next_step` with
+ * `no_mid_step_injection` until the daemon passes a `beforeForward` that
+ * injects queued steers; then this tier can carry `interrupt` again.
  */
 export function resolveDeliveryMode(
   requested: TachoDeliveryMode,
   enforcementTier = "harness",
 ): ResolvedMode {
-  if (
-    requested === "interrupt" &&
-    enforcementTier !== "gateway" &&
-    enforcementTier !== "contained"
-  ) {
-    return { deliveryMode: "next_step", degradedReason: "harness_tier" };
+  if (requested === "interrupt") {
+    return {
+      deliveryMode: "next_step",
+      degradedReason:
+        enforcementTier === "gateway" || enforcementTier === "contained"
+          ? "no_mid_step_injection"
+          : "harness_tier",
+    };
   }
   return { deliveryMode: requested, degradedReason: null };
 }
@@ -101,14 +117,23 @@ export type RecipientSession = {
   outcome: string;
   /** `tacho.sessions.enforcement_tier`: gateway, harness or observe. */
   enforcementTier: string;
+  /** `tacho.sessions.harness`: claude-code, codex, cursor, stella, … */
+  harness: string;
 };
 
 /** Why a recipient cannot take the command (recorded on the row, or refused). */
-type UndeliverableReason = "run_sealed" | "observe_tier";
+type UndeliverableReason = "run_sealed" | "observe_tier" | "no_text_channel";
 
-function undeliverable(session: RecipientSession): UndeliverableReason | null {
+function undeliverable(
+  session: RecipientSession,
+  command: RunCommand,
+): UndeliverableReason | null {
   if (session.outcome !== "running") return "run_sealed";
   if (session.enforcementTier === "observe") return "observe_tier";
+  // Stella reads prompt text from its one SessionStart, which a live run is
+  // already past; it answers every later hook with a decision document.
+  if (PROMPT_COMMANDS.has(command) && session.harness === "stella")
+    return "no_text_channel";
   return null;
 }
 
@@ -199,6 +224,7 @@ async function resolveRecipients(
   store: CommandStore,
   scope: RunScope,
   target: CommandTarget,
+  command: RunCommand,
 ): Promise<RecipientSession[]> {
   switch (target.kind) {
     case "run": {
@@ -212,7 +238,7 @@ async function resolveRecipients(
       }
       const session = await store.session(scope, target.id);
       if (!session) throw notFound("run_not_found");
-      const reason = undeliverable(session);
+      const reason = undeliverable(session, command);
       if (reason === "run_sealed")
         throw refused(
           "run_sealed",
@@ -222,6 +248,11 @@ async function resolveRecipients(
         throw refused(
           "observe_tier",
           "An observe-tier run has no connection point; the command is refused",
+        );
+      if (reason === "no_text_channel")
+        throw refused(
+          "no_text_channel",
+          "A Stella run reads text only when its session starts; the command is refused",
         );
       return [session];
     }
@@ -290,10 +321,15 @@ export function createDispatchCommandHandler(
           }),
         ];
       }
-      const sessions = await resolveRecipients(store, scope, input.target);
+      const sessions = await resolveRecipients(
+        store,
+        scope,
+        input.target,
+        input.command,
+      );
       const ids: string[] = [];
       for (const session of sessions) {
-        const reason = undeliverable(session);
+        const reason = undeliverable(session, input.command);
         const resolved =
           requestedMode !== null && reason === null
             ? resolveDeliveryMode(requestedMode, session.enforcementTier)
@@ -359,6 +395,7 @@ const recipientColumns = {
   agentKey: sessions.agentKey,
   outcome: sessions.outcome,
   enforcementTier: sessions.enforcementTier,
+  harness: sessions.harness,
 };
 
 export function postgresCommandStore(tx: Tx): CommandStore {
