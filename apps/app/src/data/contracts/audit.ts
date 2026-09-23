@@ -8,13 +8,19 @@
 // export file has it as a column.
 import { z } from "zod";
 import { PublicId } from "./common";
+import { Money } from "./money";
 
 /** `security.security_events.outcome` (its CHECK constraint). */
 export const AuditOutcome = z.enum(["allow", "deny", "error", "success"]);
 export type AuditOutcome = z.infer<typeof AuditOutcome>;
 
-/** The Rows select: how many events one page of the table shows (rev1 audit.md, Events). */
-export const AUDIT_ROWS = [10, 25, 50] as const;
+/**
+ * The Rows select: how many events one page of the table shows (rev1 audit.md,
+ * Events). The design also offers All, which this page leaves out: one read
+ * returns at most AUDIT_TILE_LIMIT events, so "All" would be a claim the read
+ * cannot keep past that many.
+ */
+export const AUDIT_ROWS = [5, 10, 25, 50] as const;
 export type AuditRows = (typeof AUDIT_ROWS)[number];
 /** Rows on a page when the URL names none; the design opens on ten. */
 export const AUDIT_DEFAULT_ROWS: AuditRows = 10;
@@ -109,3 +115,41 @@ export const AuditExport = z.object({
   rowCount: z.number().int().min(0),
 });
 export type AuditExport = z.infer<typeof AuditExport>;
+
+/**
+ * The organization's evidence retention posture from get_evidence_retention
+ * (ADR-052 §4.3), as Audit's header and Retention tab print it. The body
+ * retention is the longest window a pinned retention policy declares, null
+ * when none is pinned. The stored volume is null until the accounting job has
+ * measured it: a null is "not measured", never "nothing stored".
+ */
+export const EvidenceRetention = z.object({
+  includedMonths: z.number().int().positive(),
+  bodyRetentionDays: z.number().int().positive().nullable(),
+  /** The per-GB-month rate past the included months; null when it is not a decimal the money parser takes. */
+  rate: Money.nullable(),
+  storedGbBeyondIncluded: z.number().nonnegative().nullable(),
+});
+export type EvidenceRetention = z.infer<typeof EvidenceRetention>;
+
+/** Where a queued export has got to (`get_export_status`). */
+export const AuditBundleStatus = z.enum([
+  "queued",
+  "processing",
+  "ready",
+  "failed",
+]);
+
+/**
+ * One organization export Build bundle queued (export_data, scope org), read
+ * back by its id. The archive is the organization's data export as a ZIP; the
+ * signed segment bundle the design describes has no store yet (#3876), so its
+ * range, size, signature and key ids are not part of this record.
+ */
+export const AuditBundle = z.object({
+  exportId: z.uuid(),
+  status: AuditBundleStatus,
+  ready: z.boolean(),
+  completedAt: z.string().nullable(),
+});
+export type AuditBundle = z.infer<typeof AuditBundle>;

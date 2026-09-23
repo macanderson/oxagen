@@ -60,7 +60,12 @@ export function mandateSource(read: Read<MandateDetail> | undefined) {
       sso: refuse,
     },
     skills: { inventory: refuse, configuration: refuse },
-    audit: { events: refuse, exportEvents: refuse },
+    audit: {
+      events: refuse,
+      exportEvents: refuse,
+      retention: refuse,
+      bundle: refuse,
+    },
     steering: {
       records: refuse,
       record: refuse,

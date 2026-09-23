@@ -139,6 +139,8 @@ export function onboardingSource(reads: Reads): {
     audit: {
       events: refuse("audit.events"),
       exportEvents: refuse("audit.exportEvents"),
+      retention: refuse("audit.retention"),
+      bundle: refuse("audit.bundle"),
     },
     org: {
       members: refuse("org.members"),

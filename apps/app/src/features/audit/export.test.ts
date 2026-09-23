@@ -75,7 +75,7 @@ const source: DataSource = {
     modelCredential: refuse,
     sso: refuse,
   },
-  audit: { events: refuse, exportEvents },
+  audit: { events: refuse, exportEvents, retention: refuse, bundle: refuse },
   onboarding: { state: refuse, firstFrame: refuse },
   skills: { inventory: refuse, configuration: refuse },
   mandates: { list: refuse, get: refuse },
