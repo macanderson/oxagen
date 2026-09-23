@@ -174,16 +174,7 @@ describe("links", () => {
     expect(steeringLink(AT, { tab: "proposals", offset: 50 })).toBe(
       `${BASE}/proposals?offset=50`,
     );
-  });
-  it("gives steering delivery its own section and keeps the legacy link", () => {
-    expect(parseSteeringView({ tab: "deliveries" })).toMatchObject({
-      tab: "deliveries",
-    });
-    expect(steeringLink(AT, { tab: "deliveries" })).toBe(
-      "/acme/core-platform/steering/deliveries",
-    );
-  });
-  it("gives path selectors priority over conflicting legacy queries", () => {
+    expect(steeringLink(AT, { tab: "deliveries" })).toBe(`${BASE}/assignments`);
     expect(
       steeringLink(AT, { tab: "compiler", agent: "release-manager" }),
     ).toBe(`${BASE}/compiler/release-manager`);
