@@ -1279,6 +1279,22 @@
       "proof": "apps/app/src/features/run/work.test.tsx",
       "verifiedAt": "2026-09-23",
       "verifiedBy": "source-review"
+    },
+    "get_run_outcomes_settings": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "Run follow-through consent panel. An organization Owner or Admin enables metered follow-through.",
+      "proof": "apps/app/src/features/run-outcomes/consent.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "run-outcomes-providers"
+    },
+    "set_run_outcomes_settings": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "Run follow-through consent panel. An organization Owner or Admin enables metered follow-through.",
+      "proof": "apps/app/src/features/run-outcomes/consent.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "run-outcomes-providers"
     }
   }
 }

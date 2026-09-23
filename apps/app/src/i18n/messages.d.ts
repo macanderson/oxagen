@@ -3979,6 +3979,19 @@ type Messages = {
       incomplete: string;
     };
   };
+  runOutcomes: {
+    title: string;
+    description: string;
+    platformDisabled: string;
+    enabled: string;
+    disabled: string;
+    enable: string;
+    disable: string;
+    saving: string;
+    denied: string;
+    saveFailed: string;
+    ownerRequired: string;
+  };
   shell: {
     skipToContent: string;
     loading: string;
