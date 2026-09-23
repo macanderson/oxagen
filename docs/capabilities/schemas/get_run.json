@@ -489,6 +489,9 @@
               }
             ]
           },
+          "enrichmentEnabled": {
+            "type": "boolean"
+          },
           "name": {
             "anyOf": [
               {

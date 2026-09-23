@@ -9,7 +9,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { verifyChain } from "../chain";
-import { TACHO_EVENT_COLUMNS, flattenEvent } from "../columns";
+import { TACHO_EVENT_COLUMNS, flattenEvent, unflattenEvent } from "../columns";
 import { digestBytes } from "../digest";
 import type { TachoEvent } from "../envelope";
 import { redactionMarker } from "../evidence/redaction";
@@ -19,6 +19,7 @@ import { runOracles } from "../trace/oracles";
 import { projectToTrace } from "../trace/project";
 import { reportPassed } from "../trace/report";
 import { fromUnixNano } from "../timestamp";
+import { asClickHouseRead } from "../test-helpers";
 import { SessionRecorder } from "./recorder";
 
 const FIXTURES = resolve(__dirname, "../../fixtures/claude-code");
@@ -165,6 +166,16 @@ describe("replaying the captured Claude Code session", () => {
       child?.events.every((e) => e.subagent?.subagent_id !== undefined),
     ).toBe(true);
     expect(child?.events.some((e) => e.kind === "tool_requested")).toBe(true);
+  });
+
+  it("rebuilds every sealed event from its stored row, so an export can carry it (#3733)", () => {
+    expect(all.length).toBeGreaterThan(0);
+    for (const event of all) {
+      expect(unflattenEvent(flattenEvent(event))).toEqual(event);
+      expect(unflattenEvent(asClickHouseRead(flattenEvent(event)))).toEqual(
+        event,
+      );
+    }
   });
 
   it("seals verifiable chains for the parent and the child", () => {

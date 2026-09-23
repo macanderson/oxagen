@@ -8,7 +8,7 @@
  * construction: chInsert stamps the authenticated ambient scope, and
  * `chain_verified` is the control plane's verdict, never the producer's.
  */
-import { flattenEvent, type TachoEvent } from "@oxagen/tacho";
+import { ENVELOPE_COLUMNS, flattenEvent, type TachoEvent } from "@oxagen/tacho";
 import { TACHO_EVENTS_TABLE, tachoEventsColumns } from "./tacho-events-ddl";
 import { chInsert, chSelect } from "./tenant";
 
@@ -171,7 +171,12 @@ export async function selectTachoEvents(args: {
       limit: args.limit,
     },
   });
-  return res.data.map((r) => ({
+  return res.data.map(frameRowOf);
+}
+
+/** A raw `tacho_events` read as the Run page's frame row. */
+function frameRowOf(r: RawTachoFrameRow): TachoFrameRow {
+  return {
     seq: Number(r.seq),
     ts: r.ts,
     eventId: r.event_id,
@@ -203,5 +208,69 @@ export async function selectTachoEvents(args: {
     // no clock, so a reassembly's time to first token comes from here.
     ttftMs: nullableCount(r.ttft_ms),
     apiDurationMs: nullableCount(r.api_duration_ms),
-  }));
+  };
+}
+
+/** The projected columns beside the envelope that a frame row reads. */
+const FRAME_BODY_COLUMNS = [
+  "tool_name",
+  "tool_status",
+  "tool_use_id",
+  "model",
+  "provider",
+  "policy_decision",
+  "cost_usd_micros",
+  "ttft_ms",
+  "api_duration_ms",
+] as const;
+
+/** One stored event: the frame row, and the envelope columns it came from. */
+export interface TachoEventRecord {
+  frame: TachoFrameRow;
+  /**
+   * Every envelope column of the row, as ClickHouse reads it back, with
+   * `ts` as `toString(ts)`. `bytes_ref` is left out: the stored column is
+   * where the control plane kept the body, not the event's own member, so it
+   * would mislead `unflattenEvent`. The frame row carries it.
+   */
+  envelope: Record<string, unknown>;
+}
+
+/**
+ * A wrapped session's events past `afterSeq` with every envelope column, for
+ * the run export, which rebuilds each sealed event with `unflattenEvent`. The
+ * same fence and ordering as `selectTachoEvents`.
+ */
+export async function selectTachoEventRecords(args: {
+  sessionUuid: string;
+  afterSeq: number;
+  limit: number;
+}): Promise<TachoEventRecord[]> {
+  const columns = [...ENVELOPE_COLUMNS, ...FRAME_BODY_COLUMNS].map((name) =>
+    name === "ts" ? "toString(ts) AS ts" : `\`${name}\``,
+  );
+  const res = await chSelect<RawTachoFrameRow & Record<string, unknown>>({
+    query: `
+      SELECT ${columns.join(", ")}
+      FROM ${TACHO_EVENTS_TABLE} FINAL
+      WHERE org_id = {orgId:UUID}
+        AND workspace_id = {workspaceId:UUID}
+        AND session_uuid = {sessionUuid:UUID}
+        AND seq > {afterSeq:Int64}
+      ORDER BY seq ASC
+      LIMIT {limit:UInt32}
+    `,
+    params: {
+      sessionUuid: args.sessionUuid,
+      afterSeq: args.afterSeq,
+      limit: args.limit,
+    },
+  });
+  return res.data.map((r) => {
+    const envelope: Record<string, unknown> = {};
+    for (const name of ENVELOPE_COLUMNS) {
+      if (name !== "bytes_ref") envelope[name] = r[name];
+    }
+    return { frame: frameRowOf(r), envelope };
+  });
 }

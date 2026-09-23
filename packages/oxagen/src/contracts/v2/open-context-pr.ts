@@ -91,7 +91,8 @@ export const openContextPr = defineTool({
         .min(1)
         .describe("Names the branch (context/<lineage>) and the record file"),
 
-      // Carried by reference.
+      // Carried by reference. `label` is the readable name #3771 added, which
+      // the merged record keeps when a later proposal omits one.
       title: publishIn.title,
       label: publishIn.label,
       body: publishIn.body,
