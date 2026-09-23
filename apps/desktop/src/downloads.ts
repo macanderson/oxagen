@@ -563,3 +563,92 @@ export function reservationArgs(input: {
   if (!input.allowOverwrite) args.push("--if-none-match", "*");
   return args;
 }
+
+/**
+ * How `curl` downloads one run artifact: the argv, and a config text for the
+ * script to write to curl's stdin.
+ *
+ * The GitHub token goes in the config text (`--config -`), never on the argv.
+ * Every local process can read another's argv from `ps` or
+ * `/proc/<pid>/cmdline` for as long as the download runs, which for the
+ * ~190 MB Windows artifact is minutes. A pipe is readable only by the two
+ * processes on its ends.
+ *
+ * The token is written as a quoted config value, where curl reads a backslash
+ * as an escape, so backslashes and quotes are escaped. A token holding a line
+ * break or another control character is refused: it would end the config line
+ * and let whatever follows it be read as a curl option.
+ */
+export function artifactDownloadCurl(input: {
+  token: string;
+  url: string;
+  output: string;
+}): { args: string[]; config: string } {
+  if (input.token === "")
+    throw new Error("the GitHub token is empty; run `gh auth login`");
+  const hasControl = [...input.token].some((c) => {
+    const code = c.charCodeAt(0);
+    return code < 0x20 || code === 0x7f;
+  });
+  if (hasControl) throw new Error("the GitHub token holds a control character");
+  const quoted = input.token.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  return {
+    args: [
+      "-sSL",
+      "--retry",
+      "5",
+      "--retry-all-errors",
+      "--retry-delay",
+      "10",
+      "--config",
+      "-",
+      "-o",
+      input.output,
+      input.url,
+    ],
+    config: `header = "Authorization: Bearer ${quoted}"\n`,
+  };
+}
+
+/**
+ * The temporary directories a publish has made, removed together on exit.
+ *
+ * The script stops in many places: `process.exit` after a refusal, a child
+ * process that failed, an uncaught error, or a signal. Removing each
+ * directory at the end of the happy path left one behind on every other
+ * path, holding up to ~500 MB of unzipped installers. The script instead
+ * registers `cleanup` once on the process `exit` event, which Node emits for
+ * `process.exit` and for an uncaught error alike, and turns SIGINT, SIGTERM
+ * and SIGHUP into a `process.exit` so they reach it too.
+ *
+ * `remove` is injected so the tracker stays pure for the unit tests. A
+ * failed removal is reported through `onError` and does not stop the rest
+ * being removed.
+ */
+export function tempDirTracker(
+  remove: (path: string) => void,
+  onError: (path: string, error: unknown) => void = () => {},
+): {
+  track: (path: string) => string;
+  cleanup: () => void;
+  tracked: () => string[];
+} {
+  const dirs = new Set<string>();
+  return {
+    track(path) {
+      dirs.add(path);
+      return path;
+    },
+    cleanup() {
+      for (const path of [...dirs]) {
+        dirs.delete(path);
+        try {
+          remove(path);
+        } catch (error) {
+          onError(path, error);
+        }
+      }
+    },
+    tracked: () => [...dirs],
+  };
+}

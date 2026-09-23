@@ -1,7 +1,9 @@
 import { spawnSync } from "node:child_process";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -11,6 +13,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  artifactDownloadCurl,
   classifyInstaller,
   countPublishedObjects,
   decidePublication,
@@ -24,6 +27,7 @@ import {
   reservationArgs,
   sha256SumsText,
   sortInstallers,
+  tempDirTracker,
 } from "./downloads";
 
 const V = "2.1.1";
@@ -416,6 +420,10 @@ describe("resuming an interrupted publish", () => {
       mkdirSync(bin);
       const file = "Oxagen_2.1.1_aarch64.dmg";
       writeFileSync(join(source, file), "installer bytes");
+      // The script's own temp directories land here, so the test can see
+      // whether every exit path removed them.
+      const scratch = join(dir, "tmp");
+      mkdirSync(scratch);
       const statePath = join(dir, "bucket.json");
       writeFileSync(
         statePath,
@@ -478,11 +486,15 @@ if (args[0] === "s3api" && args[1] === "list-objects-v2") {
               ...process.env,
               PATH: `${bin}:${process.env.PATH ?? ""}`,
               TEST_BUCKET_STATE: statePath,
+              TMPDIR: scratch,
             },
           },
         );
       const first = run();
       expect(first.status, first.stderr).toBe(1);
+      // A failed upload exits through sh()'s process.exit, which used to
+      // leave the work directory behind.
+      expect(readdirSync(scratch)).toEqual([]);
       const interrupted = JSON.parse(readFileSync(statePath, "utf8")) as {
         objects: Record<string, string>;
       };
@@ -507,11 +519,13 @@ if (args[0] === "s3api" && args[1] === "list-objects-v2") {
             ...process.env,
             PATH: `${bin}:${process.env.PATH ?? ""}`,
             TEST_BUCKET_STATE: statePath,
+            TMPDIR: scratch,
           },
         },
       );
       expect(pageOnly.status, pageOnly.stderr).toBe(1);
       expect(pageOnly.stderr).toContain("Installers are missing");
+      expect(readdirSync(scratch)).toEqual([]);
       const refused = JSON.parse(readFileSync(statePath, "utf8")) as {
         objects: Record<string, string>;
         writes: string[];
@@ -545,6 +559,169 @@ if (args[0] === "s3api" && args[1] === "list-objects-v2") {
       expect(complete.writes.indexOf(`desktop/${V}/${file}`)).toBeLessThan(
         complete.writes.indexOf("index.html"),
       );
+      expect(readdirSync(scratch)).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("artifactDownloadCurl", () => {
+  const url = "https://api.github.com/repos/o/r/actions/artifacts/7/zip";
+
+  it("keeps the token off the argv and puts it in the stdin config", () => {
+    const { args, config } = artifactDownloadCurl({
+      token: "ghs_secret",
+      url,
+      output: "/tmp/a.zip",
+    });
+    expect(args.join(" ")).not.toContain("ghs_secret");
+    expect(args).not.toContain("-H");
+    expect(args).toEqual(
+      expect.arrayContaining(["--config", "-", "-o", "/tmp/a.zip", url]),
+    );
+    expect(config).toBe('header = "Authorization: Bearer ghs_secret"\n');
+  });
+
+  it("escapes backslashes and quotes for curl's quoted config value", () => {
+    const { config } = artifactDownloadCurl({
+      token: 'a"b\\c',
+      url,
+      output: "o",
+    });
+    expect(config).toBe('header = "Authorization: Bearer a\\"b\\\\c"\n');
+  });
+
+  it("refuses a token that would end the config line", () => {
+    for (const token of [
+      "a\nurl = https://evil",
+      "a\rb",
+      "a\u0000b",
+      "a\u007fb",
+    ])
+      expect(() => artifactDownloadCurl({ token, url, output: "o" })).toThrow(
+        "control character",
+      );
+  });
+
+  it("refuses an empty token", () => {
+    expect(() => artifactDownloadCurl({ token: "", url, output: "o" })).toThrow(
+      "gh auth login",
+    );
+  });
+});
+
+describe("tempDirTracker", () => {
+  it("removes every tracked directory once, in the order made", () => {
+    const removed: string[] = [];
+    const temps = tempDirTracker((path) => removed.push(path));
+    expect(temps.track("/t/a")).toBe("/t/a");
+    temps.track("/t/b");
+    expect(temps.tracked()).toEqual(["/t/a", "/t/b"]);
+    temps.cleanup();
+    temps.cleanup();
+    expect(removed).toEqual(["/t/a", "/t/b"]);
+    expect(temps.tracked()).toEqual([]);
+  });
+
+  it("reports a failed removal and still removes the rest", () => {
+    const removed: string[] = [];
+    const failures: string[] = [];
+    const temps = tempDirTracker(
+      (path) => {
+        if (path === "/t/a") throw new Error("busy");
+        removed.push(path);
+      },
+      (path) => failures.push(path),
+    );
+    temps.track("/t/a");
+    temps.track("/t/b");
+    temps.cleanup();
+    expect(failures).toEqual(["/t/a"]);
+    expect(removed).toEqual(["/t/b"]);
+  });
+
+  it("swallows a failed removal when no reporter is given", () => {
+    const temps = tempDirTracker(() => {
+      throw new Error("busy");
+    });
+    temps.track("/t/a");
+    expect(() => temps.cleanup()).not.toThrow();
+  });
+});
+
+describe("downloading a run's artifacts", () => {
+  it("hands curl the token on stdin and removes its temp directory when curl fails", () => {
+    const dir = mkdtempSync(join(tmpdir(), "downloads-run-test-"));
+    try {
+      const bin = join(dir, "bin");
+      const scratch = join(dir, "tmp");
+      const record = join(dir, "curl.json");
+      mkdirSync(bin);
+      mkdirSync(scratch);
+      // An empty listing: the version is free, so the script goes on to fetch.
+      writeFileSync(
+        join(bin, "aws"),
+        `#!/usr/bin/env node
+const args = process.argv.slice(2);
+if (args[0] === "s3api" && args[1] === "list-objects-v2") process.exit(0);
+throw new Error("Unexpected AWS request: " + args.join(" "));
+`,
+        { mode: 0o755 },
+      );
+      writeFileSync(
+        join(bin, "gh"),
+        `#!/usr/bin/env node
+const args = process.argv.slice(2);
+if (args[0] === "auth" && args[1] === "token") console.log("ghs_run_test_secret");
+else if (args[0] === "api") console.log(JSON.stringify({ artifacts: [{ name: "oxagen-desktop-macos", id: 7, size_in_bytes: 1000 }] }));
+else throw new Error("Unexpected gh request: " + args.join(" "));
+`,
+        { mode: 0o755 },
+      );
+      // Records what it was given, then fails the way a 404 with -f would.
+      writeFileSync(
+        join(bin, "curl"),
+        `#!/usr/bin/env node
+const fs = require("node:fs");
+fs.writeFileSync(process.env.TEST_CURL_RECORD, JSON.stringify({ args: process.argv.slice(2), stdin: fs.readFileSync(0, "utf8") }));
+process.exit(22);
+`,
+        { mode: 0o755 },
+      );
+      const result = spawnSync(
+        process.execPath,
+        [
+          fileURLToPath(
+            new URL("../scripts/publish-downloads.mjs", import.meta.url),
+          ),
+          "--run",
+          "123",
+          "--version",
+          V,
+        ],
+        {
+          encoding: "utf8",
+          env: {
+            ...process.env,
+            PATH: `${bin}:${process.env.PATH ?? ""}`,
+            TEST_CURL_RECORD: record,
+            TMPDIR: scratch,
+          },
+        },
+      );
+      expect(result.status, result.stderr).toBe(22);
+      expect(existsSync(record)).toBe(true);
+      const seen = JSON.parse(readFileSync(record, "utf8")) as {
+        args: string[];
+        stdin: string;
+      };
+      expect(seen.args.join(" ")).not.toContain("ghs_run_test_secret");
+      expect(seen.stdin).toBe(
+        'header = "Authorization: Bearer ghs_run_test_secret"\n',
+      );
+      expect(result.stderr).not.toContain("ghs_run_test_secret");
+      expect(readdirSync(scratch)).toEqual([]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

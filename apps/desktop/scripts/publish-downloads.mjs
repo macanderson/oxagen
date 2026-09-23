@@ -57,10 +57,11 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
+import { constants as osConstants, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  artifactDownloadCurl,
   classifyInstaller,
   decidePublication,
   FONT_FILES,
@@ -69,6 +70,7 @@ import {
   reservationArgs,
   sha256SumsText,
   sortInstallers,
+  tempDirTracker,
 } from "../src/downloads.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -118,11 +120,35 @@ const NO_COLOUR_ENV = {
   AWS_PAGER: "",
 };
 
-function sh(command, args, { capture = false, allowFailure = false } = {}) {
+// Every temporary directory this run makes is removed when the process exits,
+// on every path: a refusal's process.exit, a failed child in sh(), an uncaught
+// error, or one of the signals below. See tempDirTracker in ../src/downloads.ts.
+const temps = tempDirTracker(
+  (path) => rmSync(path, { recursive: true, force: true }),
+  (path, error) => console.warn(`! could not remove ${path}: ${String(error)}`),
+);
+process.on("exit", temps.cleanup);
+for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+  process.on(signal, () => process.exit(128 + osConstants.signals[signal]));
+}
+const makeTempDir = (prefix) =>
+  temps.track(mkdtempSync(join(tmpdir(), prefix)));
+
+/**
+ * Run `command`. `input`, when given, is written to the child's stdin, which
+ * is how a secret reaches a child without appearing on its argv.
+ */
+function sh(
+  command,
+  args,
+  { capture = false, allowFailure = false, input } = {},
+) {
+  const stdin = input !== undefined ? "pipe" : capture ? "ignore" : "inherit";
   const result = spawnSync(command, args, {
     encoding: "utf8",
     env: NO_COLOUR_ENV,
-    stdio: capture ? ["ignore", "pipe", "inherit"] : "inherit",
+    input,
+    stdio: [stdin, capture ? "pipe" : "inherit", "inherit"],
   });
   // `status` is null when the process never ran (spawn failed) or was killed
   // by a signal. Coercing that to a number would let "aws was not on PATH" or
@@ -352,13 +378,12 @@ async function redrawFromBucket({ probeCliRelease, plannedObjects = [] }) {
         `! ${releaseUrl} does not exist; the page omits the bare-binary link`,
       );
   }
-  const dir = mkdtempSync(join(tmpdir(), "oxagen-downloads-page-"));
+  const dir = makeTempDir("oxagen-downloads-page-");
   publishPage(dir, sortInstallers(published), publishedAt, cliRelease);
   invalidate(["/", "/index.html", "/fonts/*"]);
   for (const entry of sortInstallers(published))
     console.log(`${entry.file}  ${entry.bytes} bytes  ${entry.sha256}`);
   console.log(`https://${host}/`);
-  rmSync(dir, { recursive: true, force: true });
   return digests;
 }
 
@@ -380,8 +405,8 @@ if (pageOnly) {
 //
 // The probe runs before anything is fetched, so a refusal costs one request
 // rather than ~500 MB of downloaded artifacts and a pass of SHA-256 over
-// them — and leaves no temp directory behind, since it precedes the mkdtemp
-// below.
+// them. The temp directory made below is removed on every exit path by the
+// tracker registered at the top of this file.
 //
 // `s3api list-objects-v2` rather than `s3 ls`, because this guard must be
 // able to tell "nothing is there" from "I could not find out" and `s3 ls`
@@ -430,7 +455,7 @@ if (resuming) {
 }
 
 // 1. Collect the build outputs.
-const work = mkdtempSync(join(tmpdir(), "oxagen-downloads-"));
+const work = makeTempDir("oxagen-downloads-");
 let source = fromDir !== undefined ? resolve(fromDir) : work;
 if (runId !== undefined) {
   const listing = JSON.parse(
@@ -453,19 +478,13 @@ if (runId !== undefined) {
     console.log(
       `↓ ${artifact.name} (${(artifact.size_in_bytes / 1e6).toFixed(0)} MB)`,
     );
-    sh("curl", [
-      "-sSL",
-      "--retry",
-      "5",
-      "--retry-all-errors",
-      "--retry-delay",
-      "10",
-      "-H",
-      `Authorization: Bearer ${token}`,
-      "-o",
-      zip,
-      `https://api.github.com/repos/${repo}/actions/artifacts/${artifact.id}/zip`,
-    ]);
+    // The token reaches curl on stdin, not the argv: see artifactDownloadCurl.
+    const download = artifactDownloadCurl({
+      token,
+      output: zip,
+      url: `https://api.github.com/repos/${repo}/actions/artifacts/${artifact.id}/zip`,
+    });
+    sh("curl", download.args, { input: download.config });
     sh("unzip", ["-q", "-o", zip, "-d", join(work, artifact.name)]);
     rmSync(zip);
   }
@@ -550,7 +569,6 @@ if (resuming) {
       ? `[dry-run] ${version} installer recovery and page publication planned.`
       : `${version} has every installer; page redrawn.`,
   );
-  rmSync(work, { recursive: true, force: true });
   process.exit(0);
 }
 
@@ -620,4 +638,3 @@ for (const entry of entries)
   );
 console.log(`https://${host}/desktop/${version}/SHA256SUMS.txt`);
 console.log(`https://${host}/`);
-rmSync(work, { recursive: true, force: true });
