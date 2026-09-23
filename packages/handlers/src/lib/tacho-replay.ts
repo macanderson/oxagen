@@ -160,7 +160,9 @@ export function sealTachoSession(input: TachoSealInput): TachoSeal {
     else unknown = true;
   }
   const tier =
-    input.enforcementTier === "gateway" || input.enforcementTier === "harness"
+    input.enforcementTier === "contained" ||
+    input.enforcementTier === "gateway" ||
+    input.enforcementTier === "harness"
       ? input.enforcementTier
       : "observe";
   return {

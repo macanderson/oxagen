@@ -5877,6 +5877,21 @@
       }
     },
     {
+      "name": "register_contained_launch",
+      "file": "tacho.contained_launch.register.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "create_tacho_enrollment",
       "file": "tacho.enrollment.create.ts",
       "domain": "tacho",
