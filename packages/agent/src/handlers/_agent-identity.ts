@@ -11,7 +11,8 @@
 import { agentCreatorUserJoin, schema, type Tx } from "@oxagen/database";
 import { AGENT_CREDENTIAL_SCOPE_PURPOSE } from "@oxagen/oxagen/agent-credential";
 import type { AgentIdentityStatus } from "@oxagen/oxagen/contracts/agent.list";
-import { and, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
+import { TAMPER_INCIDENT_KINDS } from "@oxagen/oxagen/contracts/tacho.incident.list";
+import { and, desc, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
 import {
   composeAgentKey,
   isUuid,
@@ -37,6 +38,8 @@ export interface AgentIdentityRow {
   /** The principal's last write; a suspend or resume is one of them. */
   principalUpdatedAt: Date | null;
   operatorPublicId: string | null;
+  /** The operator's display name, from the same user row as `operatorPublicId`. */
+  operatorName: string | null;
   /** The label set through set_cost_center (ADR-142); null inherits the workspace's. */
   costCenter: string | null;
 }
@@ -56,6 +59,7 @@ const identityColumns = {
   principalStatus: schema.principals.status,
   principalUpdatedAt: schema.principals.updatedAt,
   operatorPublicId: schema.users.publicId,
+  operatorName: schema.users.displayName,
   costCenter: schema.agents.costCenter,
 } as const;
 
@@ -201,6 +205,71 @@ export async function liveHostsByAgentKey(
 }
 
 /**
+ * The hostname of each agent key's live host seen most recently. A host that
+ * has never reported ranks after one that has, then the newest enrollment.
+ */
+export async function latestLiveHostByAgentKey(
+  tx: Tx,
+  scope: { orgId: string; workspaceId: string },
+  agentKeys: readonly string[],
+): Promise<Map<string, string>> {
+  if (agentKeys.length === 0) return new Map();
+  const h = schema.tachoHosts;
+  const rows = await tx
+    .selectDistinctOn([h.agentKey], {
+      agentKey: h.agentKey,
+      hostname: h.hostname,
+    })
+    .from(h)
+    .where(
+      and(
+        eq(h.orgId, scope.orgId),
+        eq(h.workspaceId, scope.workspaceId),
+        inArray(h.agentKey, [...agentKeys]),
+        inArray(h.status, [...HOST_LIVE_STATUSES]),
+      ),
+    )
+    .orderBy(
+      h.agentKey,
+      sql`${h.lastSeenAt} desc nulls last`,
+      desc(h.createdAt),
+    );
+  return new Map(rows.map((r) => [r.agentKey, r.hostname]));
+}
+
+/**
+ * Active mandates per agent principal (uuid) in the scope's workspace: status
+ * `active` and inside the validity window, which is what the mandate gate
+ * reads. A draft, an expired or a revoked mandate authorizes nothing.
+ */
+export async function activeMandatesByPrincipal(
+  tx: Tx,
+  scope: { orgId: string; workspaceId: string },
+  principalIds: readonly string[],
+): Promise<Map<string, number>> {
+  if (principalIds.length === 0) return new Map();
+  const m = schema.mandates;
+  const rows = await tx
+    .select({
+      principalId: m.agentPrincipalId,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(m)
+    .where(
+      and(
+        eq(m.orgId, scope.orgId),
+        eq(m.workspaceId, scope.workspaceId),
+        inArray(m.agentPrincipalId, [...principalIds]),
+        eq(m.status, "active"),
+        sql`${m.validFrom} <= now()`,
+        sql`${m.validTo} > now()`,
+      ),
+    )
+    .groupBy(m.agentPrincipalId);
+  return new Map(rows.map((r) => [r.principalId, r.count]));
+}
+
+/**
  * The identity's state (contract `agentIdentityStatusSchema`). Archived
  * wins over suspended: a retired agent's principal is suspended too.
  */
@@ -218,6 +287,53 @@ export interface RunWindowFigures {
   /** Sum of priced wrapped sessions' `total_cost_micros`; null when none was priced. */
   spendMicros: bigint | null;
   earliestStartedAt: Date | null;
+  /**
+   * The enforcement tier the latest root wrapped session recorded, ignoring
+   * the window; null when no wrapped session was recorded.
+   */
+  latestTier: string | null;
+  /**
+   * The tokens the agent's root wrapped sessions in the window reported, as
+   * the harness counted them; null when no session in the window reported
+   * a token. Ledger runs' tokens are metered in ClickHouse and are not rolled
+   * up per agent, so they are not in this total.
+   */
+  tokens?: WrappedTokenFigures | null;
+}
+
+/**
+ * A wrapped-session token rollup. `input` is every input token the model
+ * read, fresh, cache read and cache written, because the harness reports
+ * `input_tokens` without the cached classes (Anthropic usage semantics), and
+ * `total` adds the output. `cacheReadRate` is cache read over that input;
+ * null when no input was reported.
+ */
+export interface WrappedTokenFigures {
+  total: number;
+  input: number;
+  cacheRead: number;
+  cacheReadRate: number | null;
+  /** Root sessions in the window that reported at least one token. */
+  sessions: number;
+}
+
+/** The rollup from the four summed columns; null when no session reported a token. */
+export function wrappedTokenFigures(sums: {
+  sessions: number;
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheCreation: number;
+}): WrappedTokenFigures | null {
+  if (sums.sessions === 0) return null;
+  const input = sums.input + sums.cacheRead + sums.cacheCreation;
+  return {
+    total: input + sums.output,
+    input,
+    cacheRead: sums.cacheRead,
+    cacheReadRate: input === 0 ? null : sums.cacheRead / input,
+    sessions: sums.sessions,
+  };
 }
 
 /**
@@ -257,6 +373,10 @@ export async function runFiguresByAgent(
     .groupBy(schema.agentRuns.agentId);
 
   const s = schema.tachoSessions;
+  const inWindow = sql`${s.startedAt} >= ${since}`;
+  // A session that reported no token at all is a harness that does not
+  // report usage, not a session that used none.
+  const reported = sql`(${s.inputTokens} + ${s.outputTokens} + ${s.cacheReadTokens} + ${s.cacheCreationTokens}) > 0`;
   const priced = sql`${s.costBasis} is not null and ${s.costBasis} <> 'unknown' and coalesce(${s.hasUnknownModelCost}, false) = false and ${s.startedAt} >= ${since}`;
   const wrapped =
     keys.length === 0
@@ -270,6 +390,14 @@ export async function runFiguresByAgent(
             earliest: sql<Date | null>`min(${s.startedAt})`.mapWith(
               (v: unknown) => (v === null ? null : new Date(v as string)),
             ),
+            latestTier: sql<
+              string | null
+            >`(array_agg(${s.enforcementTier} order by ${s.startedAt} desc nulls last))[1]`,
+            tokenSessions: sql<number>`count(*) filter (where ${inWindow} and ${reported})::int`,
+            inputTokens: sql<string>`coalesce(sum(${s.inputTokens}) filter (where ${inWindow}), 0)::text`,
+            outputTokens: sql<string>`coalesce(sum(${s.outputTokens}) filter (where ${inWindow}), 0)::text`,
+            cacheReadTokens: sql<string>`coalesce(sum(${s.cacheReadTokens}) filter (where ${inWindow}), 0)::text`,
+            cacheCreationTokens: sql<string>`coalesce(sum(${s.cacheCreationTokens}) filter (where ${inWindow}), 0)::text`,
           })
           .from(s)
           .where(
@@ -297,16 +425,31 @@ export async function runFiguresByAgent(
         starts.length === 0
           ? null
           : new Date(Math.min(...starts.map((d) => d.getTime()))),
+      latestTier: w?.latestTier ?? null,
+      tokens: w
+        ? wrappedTokenFigures({
+            sessions: w.tokenSessions,
+            input: Number(w.inputTokens),
+            output: Number(w.outputTokens),
+            cacheRead: Number(w.cacheReadTokens),
+            cacheCreation: Number(w.cacheCreationTokens),
+          })
+        : null,
     });
   }
   return out;
 }
 
-/** Open incidents per agent key, through the hosts enrolled under it. */
+/**
+ * Open incidents per agent key, through the hosts enrolled under it. With
+ * `tamperOnly`, only the kinds `TAMPER_INCIDENT_KINDS` names, which is the set
+ * the workspace tile and the Audit page count.
+ */
 export async function openIncidentsByAgentKey(
   tx: Tx,
   scope: { orgId: string; workspaceId: string },
   agentKeys: readonly string[],
+  tamperOnly = false,
 ): Promise<Map<string, number>> {
   if (agentKeys.length === 0) return new Map();
   const rows = await tx
@@ -328,8 +471,92 @@ export async function openIncidentsByAgentKey(
         eq(schema.tachoIncidents.workspaceId, scope.workspaceId),
         isNull(schema.tachoIncidents.resolvedAt),
         inArray(schema.tachoHosts.agentKey, [...agentKeys]),
+        tamperOnly
+          ? inArray(schema.tachoIncidents.kind, [...TAMPER_INCIDENT_KINDS])
+          : undefined,
       ),
     )
     .groupBy(schema.tachoHosts.agentKey);
   return new Map(rows.map((r) => [r.agentKey, r.count]));
+}
+
+/** Tamper incidents on one agent key's hosts: every one the store keeps, and the open ones. */
+export interface TamperCounts {
+  recorded: number;
+  open: number;
+}
+
+/**
+ * Tamper incidents per agent key, through the hosts enrolled under it: every
+ * incident of a tamper kind the store keeps (its retention window), and how
+ * many of them are open. The Incidents column, the Health cell and the
+ * Tamper incidents tile all read this one set, so the tile is the sum of the
+ * rows.
+ */
+export async function tamperIncidentsByAgentKey(
+  tx: Tx,
+  scope: { orgId: string; workspaceId: string },
+  agentKeys: readonly string[],
+): Promise<Map<string, TamperCounts>> {
+  if (agentKeys.length === 0) return new Map();
+  const rows = await tx
+    .select({
+      agentKey: schema.tachoHosts.agentKey,
+      recorded: sql<number>`count(*)::int`,
+      open: sql<number>`count(*) filter (where ${schema.tachoIncidents.resolvedAt} is null)::int`,
+    })
+    .from(schema.tachoIncidents)
+    .innerJoin(
+      schema.tachoHosts,
+      and(
+        eq(schema.tachoHosts.id, schema.tachoIncidents.hostId),
+        eq(schema.tachoHosts.orgId, schema.tachoIncidents.orgId),
+      ),
+    )
+    .where(
+      and(
+        eq(schema.tachoIncidents.orgId, scope.orgId),
+        eq(schema.tachoIncidents.workspaceId, scope.workspaceId),
+        inArray(schema.tachoHosts.agentKey, [...agentKeys]),
+        inArray(schema.tachoIncidents.kind, [...TAMPER_INCIDENT_KINDS]),
+      ),
+    )
+    .groupBy(schema.tachoHosts.agentKey);
+  return new Map(
+    rows.map((r) => [r.agentKey, { recorded: r.recorded, open: r.open }]),
+  );
+}
+
+/** The newest tamper incident on any of these agent keys' hosts; null when there is none. */
+export async function newestTamperIncident(
+  tx: Tx,
+  scope: { orgId: string; workspaceId: string },
+  agentKeys: readonly string[],
+): Promise<{ agentKey: string; kind: string; detectedAt: Date } | null> {
+  if (agentKeys.length === 0) return null;
+  const [row] = await tx
+    .select({
+      agentKey: schema.tachoHosts.agentKey,
+      kind: schema.tachoIncidents.kind,
+      detectedAt: schema.tachoIncidents.detectedAt,
+    })
+    .from(schema.tachoIncidents)
+    .innerJoin(
+      schema.tachoHosts,
+      and(
+        eq(schema.tachoHosts.id, schema.tachoIncidents.hostId),
+        eq(schema.tachoHosts.orgId, schema.tachoIncidents.orgId),
+      ),
+    )
+    .where(
+      and(
+        eq(schema.tachoIncidents.orgId, scope.orgId),
+        eq(schema.tachoIncidents.workspaceId, scope.workspaceId),
+        inArray(schema.tachoHosts.agentKey, [...agentKeys]),
+        inArray(schema.tachoIncidents.kind, [...TAMPER_INCIDENT_KINDS]),
+      ),
+    )
+    .orderBy(desc(schema.tachoIncidents.detectedAt))
+    .limit(1);
+  return row ?? null;
 }

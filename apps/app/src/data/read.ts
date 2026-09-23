@@ -51,6 +51,7 @@ export type PageKey =
   | "mandates"
   | "tools"
   | "repositories"
+  | "runtimes"
   | "shell";
 
 type PageFailure = {
@@ -132,6 +133,14 @@ export const PAGE_FAILURES = {
   repositories: {
     error: { code: "installation_unreachable", status: 503 },
     permission: "repository.read",
+  },
+  // The Runtimes page reads the workspace's host enrollments. What is down
+  // when it fails is the collector record, so the failure names it (the
+  // mockup's `503 collector_unreachable`). `runtime.read` is the catalogue
+  // permission over `list_tacho_hosts`.
+  runtimes: {
+    error: { code: "collector_unreachable", status: 503 },
+    permission: "runtime.read",
   },
   // The shell's one read fails with the control plane and needs organization
   // membership alone.

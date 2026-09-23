@@ -26,6 +26,7 @@ import steering from "../../messages/steering.json";
 import tools from "../../messages/tools.json";
 import ui from "../../messages/ui.json";
 import repositories from "../../messages/repositories.json";
+import runtimes from "../../messages/runtimes.json";
 
 export const messages = {
   ...en,
@@ -49,6 +50,7 @@ export const messages = {
   ...tools,
   ...ui,
   ...repositories,
+  ...runtimes,
 };
 
 export function IntlProvider({

@@ -196,3 +196,11 @@ describe("integrationSyncHandler", () => {
     expect(data["syncMethod"]).toBe("webhook");
   });
 });
+
+it("refuses issue-only connections before enqueuing ingestion", async () => {
+  setupDbReturning(makeConnRow({ runOutcomesOnly: true }));
+  await expect(
+    integrationSyncHandler({ integrationId: "con_one", mode: "full" }, CTX),
+  ).rejects.toMatchObject({ reason: "issue_connection_not_ingestible" });
+  expect(mocks.inngestSend).not.toHaveBeenCalled();
+});

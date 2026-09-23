@@ -10,8 +10,10 @@
 // attaches an IAM role to the agent's delegated principal, or detaches one.
 import { agentCredentialRotate } from "@oxagen/oxagen/contracts/agent.credential.rotate";
 import { agentDefinitionCommit } from "@oxagen/oxagen/contracts/agent.definition.commit";
+import { agentPropose } from "@oxagen/oxagen/contracts/agent.propose";
 import { agentRetire } from "@oxagen/oxagen/contracts/agent.retire";
 import { agentRoleAssign } from "@oxagen/oxagen/contracts/agent.role.assign";
+import { agentRoleList } from "@oxagen/oxagen/contracts/agent.role.list";
 import { agentRoleRevoke } from "@oxagen/oxagen/contracts/agent.role.revoke";
 import { agentSuspend } from "@oxagen/oxagen/contracts/agent.suspend";
 import { costCenterList } from "@oxagen/oxagen/contracts/cost_center.list";
@@ -27,6 +29,15 @@ import {
   listOf,
   mandateLimitsOf,
 } from "@/data/contracts/mandates";
+import { getTranslations } from "next-intl/server";
+import {
+  AGENT_HARNESSES,
+  type AgentHarness,
+  draftAgentDefinition,
+  isAgentSlug,
+  MODEL_TIERS,
+  type ModelTier,
+} from "@/features/create";
 import type { ActionResult } from "@/server/kernel";
 import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
 import { requireViewer, viewerTimeZone } from "@/server/viewer";
@@ -68,6 +79,62 @@ export async function setAgentSuspended(
   const result = await kernelWrite(ctx, agentSuspend, { agentId, suspended });
   return result.ok
     ? { ok: true, value: { status: result.value.status } }
+    : result;
+}
+
+/** What the Register an agent dialog collects. */
+export type RegisterDraft = { slug: string; harness: string; tier: string };
+
+/**
+ * Register an agent from the Agents list: opens the Context PR that adds
+ * `.oxagen/agents/<slug>.toml` and the generated harness file beside it,
+ * through propose_agent, and writes no Postgres row (agents.md, Register an
+ * agent). The definition is the agent wizard's draft for a slug, a harness and
+ * a model tier, so the two entry points write the same file; the wizard lets
+ * the operator edit it first, this dialog does not. propose_agent runs its six
+ * checks before anything reaches GitHub, and a failed check comes back as
+ * `conflict` with `agent_check_<name>` and nothing written.
+ */
+export async function registerAgent(
+  org: string,
+  ws: string,
+  draft: RegisterDraft,
+): Promise<
+  ActionResult<{ path: string; pullRequest: { number: number; url: string } }>
+> {
+  const slug = draft.slug.trim();
+  if (!isAgentSlug(slug)) return refuseField("slug");
+  const harness = AGENT_HARNESSES.find((h) => h === draft.harness);
+  if (harness === undefined) return refuseField("harness");
+  const tier = MODEL_TIERS.find((m) => m === draft.tier);
+  if (tier === undefined) return refuseField("tier");
+  const ctx = await requireViewer(org, ws);
+  const t = await getTranslations("createAgent.definition.file");
+  const source = draftAgentDefinition({
+    slug,
+    desc: "",
+    tier: tier satisfies ModelTier,
+    harness: harness satisfies AgentHarness,
+    belt: [],
+    copy: {
+      header: t("header"),
+      placeholder: t("placeholder"),
+      stayInside: t("stayInside"),
+    },
+  });
+  const result = await kernelWrite(ctx, agentPropose, {
+    slug,
+    harness,
+    source,
+  });
+  return result.ok
+    ? {
+        ok: true,
+        value: {
+          path: result.value.path,
+          pullRequest: result.value.pullRequest,
+        },
+      }
     : result;
 }
 
@@ -189,6 +256,8 @@ export async function pauseAgent(
 /** One role the picker may offer: its name is what both writes take. */
 type AssignableRole = {
   name: string;
+  /** What the role is for, as the catalogue records it; null when it records nothing. */
+  description: string | null;
   scope: "org" | "workspace";
   /** A seeded agent role rather than one this organization wrote. */
   builtIn: boolean;
@@ -249,6 +318,7 @@ export async function readAssignableRoles(
         .filter((role) => role.kind === "agent")
         .map((role) => ({
           name: role.name,
+          description: role.description,
           scope: role.scopeKind,
           builtIn: role.isSystemDefault,
         })),
@@ -260,24 +330,53 @@ export async function readAssignableRoles(
 }
 
 /**
+ * The names of the roles the agent holds now (list_agent_roles: active,
+ * unexpired assignments on its principal). Assign reads them to mark and
+ * disable a role already held, as the design's picker does, and Deregister
+ * reads them to count the roles retirement ends.
+ */
+export async function readAgentRoleNames(
+  org: string,
+  ws: string,
+  agentId: string,
+): Promise<ActionResult<string[]>> {
+  const ctx = await requireViewer(org, ws);
+  const read = await kernelRead(ctx, {
+    contract: agentRoleList,
+    input: { agentId },
+    page: "agents",
+  });
+  const result = readToActionResult(read);
+  if (!result.ok) return result;
+  return {
+    ok: true,
+    value: [...new Set(result.value.roles.map((role) => role.roleName))],
+  };
+}
+
+/**
  * Attaches the named role to the agent's delegated principal. The handler
  * refuses a role whose grants exceed the assigner's own (the delegation
  * ceiling), so an assignment can never widen what the person doing it holds.
  * `alreadyAssigned` comes back true when the agent held the role already, and
- * nothing was written.
+ * nothing was written. The reason, when the person gave one, rides the
+ * capability's input into the audit event; a blank one is left out.
  */
 export async function assignAgentRole(
   org: string,
   ws: string,
   agentId: string,
   roleName: string,
+  reason = "",
 ): Promise<ActionResult<{ roleName: string; alreadyAssigned: boolean }>> {
   const name = roleName.trim();
   if (name === "") return refuseField("roleName");
+  const why = reason.trim();
   const ctx = await requireViewer(org, ws);
   const result = await kernelWrite(ctx, agentRoleAssign, {
     agentId,
     roleName: name,
+    ...(why === "" ? {} : { reason: why }),
   });
   return result.ok
     ? {
