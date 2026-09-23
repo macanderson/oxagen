@@ -85,7 +85,12 @@ const catalog = roleCatalog({
       builtIn: true,
       description: "everything, including the data plane and funding",
     }),
-    roleRow({ id: "rol_admin", name: "Admin", kind: "human", description: null }),
+    roleRow({
+      id: "rol_admin",
+      name: "Admin",
+      kind: "human",
+      description: null,
+    }),
     roleRow(),
     roleRow({ id: "rol_other", name: "agent.graph.read" }),
   ],
@@ -126,9 +131,25 @@ describe("People", () => {
       "Status",
       "Actions",
     ]);
+    expect(within(panel).getByLabelText("Status")).toBeInTheDocument();
+    // The design's Two-factor filter is drawn, and disabled with the reason,
+    // because no contract records a member's method to filter on.
+    const twoFactor = within(panel).getByLabelText("Two-factor");
+    expect(twoFactor).toBeDisabled();
+    expect(twoFactor).toHaveAccessibleDescription(
+      "No contract records a member's two-factor method yet, so this filter cannot narrow the list.",
+    );
     expect(
-      within(panel).getByLabelText("Status"),
-    ).toBeInTheDocument();
+      within(twoFactor)
+        .getAllByRole("option")
+        .map((option) => option.textContent),
+    ).toEqual([
+      "All · Two-factor",
+      "TOTP",
+      "hardware key",
+      "passkey",
+      "passkey + TOTP",
+    ]);
     expect(within(panel).getByLabelText("Rows")).toBeInTheDocument();
     expect(panel).toHaveTextContent(
       "Changing a role is a governed action. It passes IAM and writes an audit record.",
@@ -150,7 +171,9 @@ describe("People", () => {
     }
     expect(cells[5]).toHaveTextContent("active");
     expect(
-      within(cells[6] as HTMLElement).getAllByRole("button").map((b) => b.textContent),
+      within(cells[6] as HTMLElement)
+        .getAllByRole("button")
+        .map((b) => b.textContent),
     ).toEqual(["Open", "Change role", "Remove"]);
   });
 
@@ -169,13 +192,14 @@ describe("People", () => {
   it("counts Roles in use from the People table, with each role's description", async () => {
     await renderPeople();
     const panel = screen.getByRole("region", { name: "Roles in use" });
-    expect(within(panel).getByRole("link", { name: "Manage roles" })).toHaveAttribute(
-      "href",
-      "/acme/roles",
-    );
+    expect(
+      within(panel).getByRole("link", { name: "Manage roles" }),
+    ).toHaveAttribute("href", "/acme/roles");
     const owner = panel.querySelector('[data-role-in-use="owner"]');
     const admin = panel.querySelector('[data-role-in-use="admin"]');
-    expect(owner).toHaveTextContent("Owner1everything, including the data plane and funding");
+    expect(owner).toHaveTextContent(
+      "Owner1everything, including the data plane and funding",
+    );
     expect(admin).toHaveTextContent("Admin2no description recorded");
     expect(panel).toHaveTextContent("2 agent roles are on the Roles tab.");
   });
@@ -205,8 +229,17 @@ describe("Invitations", () => {
     const panel = screen.getByRole("region", { name: "Pending invitations" });
     expect(within(panel).getByRole("button", { name: "Invite" })).toBeTruthy();
     expect(
-      headers(within(panel).getByRole("table", { name: "Pending invitations" })),
-    ).toEqual(["Email", "Role offered", "Invited by", "Sent", "Expires", "Actions"]);
+      headers(
+        within(panel).getByRole("table", { name: "Pending invitations" }),
+      ),
+    ).toEqual([
+      "Email",
+      "Role offered",
+      "Invited by",
+      "Sent",
+      "Expires",
+      "Actions",
+    ]);
   });
 
   it("prints each invitation with Invited by not recorded, and Resend and Revoke", async () => {

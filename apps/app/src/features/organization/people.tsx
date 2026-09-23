@@ -162,6 +162,20 @@ export function PeopleTab({
                 { value: "invited", label: t("statusInvited") },
               ],
             },
+            {
+              key: "twoFactor",
+              label: t("filters.twoFactor"),
+              options: [
+                { value: "totp", label: t("twoFactorMethods.totp") },
+                { value: "hardware", label: t("twoFactorMethods.hardware") },
+                { value: "passkey", label: t("twoFactorMethods.passkey") },
+                {
+                  value: "passkeyTotp",
+                  label: t("twoFactorMethods.passkeyTotp"),
+                },
+              ],
+              unrecorded: t("twoFactorUnrecorded"),
+            },
           ]}
           empty={members.members.length === 0 ? t("empty") : t("noMatch")}
         />

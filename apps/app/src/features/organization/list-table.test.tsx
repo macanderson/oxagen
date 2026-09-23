@@ -18,7 +18,9 @@ const rows: ListRow[] = Array.from({ length: 12 }, (_, index) => ({
   search: index === 3 ? "Marcus Bell owner" : `Person ${String(index)}`,
   values: { status: index % 2 === 0 ? "active" : "invited" },
   cells: [
-    <span key="name">{index === 3 ? "Marcus Bell" : `Person ${String(index)}`}</span>,
+    <span key="name">
+      {index === 3 ? "Marcus Bell" : `Person ${String(index)}`}
+    </span>,
     <span key="n">{index}</span>,
   ],
 }));
@@ -47,9 +49,10 @@ function renderList() {
 }
 
 function bodyRows() {
-  return within(screen.getByRole("table", { name: "People" })).getAllByRole(
-    "row",
-  ).length - 1;
+  return (
+    within(screen.getByRole("table", { name: "People" })).getAllByRole("row")
+      .length - 1
+  );
 }
 
 describe("ListTable", () => {
@@ -57,9 +60,9 @@ describe("ListTable", () => {
     const view = renderList();
     expect(bodyRows()).toBe(10);
     expect(screen.getByTestId("list-range")).toHaveTextContent("1–10 of 12");
-    expect(
-      screen.getByRole("columnheader", { name: "Number" }),
-    ).toHaveClass("text-right");
+    expect(screen.getByRole("columnheader", { name: "Number" })).toHaveClass(
+      "text-right",
+    );
     await expectNoAxe(view.container);
   });
 
@@ -88,6 +91,32 @@ describe("ListTable", () => {
     ).toBeInTheDocument();
     await userEvent.selectOptions(status, "invited");
     expect(screen.getByTestId("list-range")).toHaveTextContent("1–6 of 6");
+  });
+
+  it("draws a filter the record cannot answer disabled, with the reason as its description (negative)", () => {
+    render(
+      <IntlProvider>
+        <ListTable
+          label="People"
+          columns={[{ label: "Person" }, { label: "Number", numeric: true }]}
+          rows={rows}
+          filters={[
+            {
+              key: "twoFactor",
+              label: "Two-factor",
+              options: [{ value: "totp", label: "TOTP" }],
+              unrecorded: "No contract records it yet.",
+            },
+          ]}
+          empty="No person matches this search."
+        />
+      </IntlProvider>,
+    );
+    const filter = screen.getByLabelText("Two-factor");
+    expect(filter).toBeDisabled();
+    expect(filter).toHaveAccessibleDescription("No contract records it yet.");
+    expect(filter).toHaveAttribute("data-not-recorded");
+    expect(screen.getByTestId("list-range")).toHaveTextContent("1–10 of 12");
   });
 
   it("searches the text each row carries, from the first page", async () => {

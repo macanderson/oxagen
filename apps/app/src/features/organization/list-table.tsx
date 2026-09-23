@@ -18,6 +18,12 @@ type ListFilter = {
   key: string;
   label: string;
   options: readonly { value: string; label: string }[];
+  /**
+   * Why this filter cannot narrow the rows yet: the record carries no value
+   * for it. The design draws it, so it is shown, disabled, with the reason as
+   * its description rather than offered as a filter that empties the table.
+   */
+  unrecorded?: string;
 };
 
 export type ListRow = {
@@ -95,6 +101,16 @@ export function ListTable({
             </label>
             <select
               id={`${id}-${filter.key}`}
+              disabled={filter.unrecorded !== undefined}
+              title={filter.unrecorded}
+              aria-describedby={
+                filter.unrecorded === undefined
+                  ? undefined
+                  : `${id}-${filter.key}-why`
+              }
+              data-not-recorded={
+                filter.unrecorded === undefined ? undefined : ""
+              }
               value={chosen[filter.key] ?? ""}
               onChange={(event) => {
                 setChosen({ ...chosen, [filter.key]: event.target.value });
@@ -109,6 +125,11 @@ export function ListTable({
                 </option>
               ))}
             </select>
+            {filter.unrecorded === undefined ? null : (
+              <span id={`${id}-${filter.key}-why`} className="sr-only">
+                {filter.unrecorded}
+              </span>
+            )}
           </span>
         ))}
         <label htmlFor={`${id}-rows`} className="text-xs text-muted-foreground">

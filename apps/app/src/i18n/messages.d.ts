@@ -2424,6 +2424,13 @@ type Messages = {
         noDescription: string;
         footer: string;
       };
+      twoFactorMethods: {
+        totp: string;
+        hardware: string;
+        passkey: string;
+        passkeyTotp: string;
+      };
+      twoFactorUnrecorded: string;
     };
     actions: {
       readOnly: string;

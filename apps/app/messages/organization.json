@@ -62,7 +62,14 @@
         "description": "Description",
         "noDescription": "no description recorded",
         "footer": "{agents, plural, one {# agent role is} other {# agent roles are}} on the Roles tab."
-      }
+      },
+      "twoFactorMethods": {
+        "totp": "TOTP",
+        "hardware": "hardware key",
+        "passkey": "passkey",
+        "passkeyTotp": "passkey + TOTP"
+      },
+      "twoFactorUnrecorded": "No contract records a member's two-factor method yet, so this filter cannot narrow the list."
     },
     "actions": {
       "readOnly": "An owner or an admin makes these changes.",
