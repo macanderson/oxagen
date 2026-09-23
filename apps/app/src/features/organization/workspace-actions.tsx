@@ -279,7 +279,13 @@ function GovernanceResult({
   );
 }
 
-export function CreateWorkspace({ org }: { org: string }) {
+export function CreateWorkspace({
+  org,
+  primary = false,
+}: {
+  org: string;
+  primary?: boolean;
+}) {
   const t = useTranslations("organization.actions");
   const navigate = useNavigate();
   return (
@@ -290,6 +296,7 @@ export function CreateWorkspace({ org }: { org: string }) {
         confirm: t("createWorkspace.confirm"),
         pending: t("createWorkspace.pending"),
       }}
+      primary={primary}
       testId="create-workspace"
       submit={(form) => createWorkspace(org, newDraftOf(form))}
       onDone={(created) => {

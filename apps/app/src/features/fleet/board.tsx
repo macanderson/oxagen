@@ -23,7 +23,7 @@ import {
 import type { ApprovalQueue } from "@/data/contracts/approvals";
 import { acceptsCommands, type RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
-import { openApprovals } from "@/shared/approvals-drawer";
+import { openApprovals } from "@/features/shell/client";
 import { routes } from "@/shared/safe-path";
 import { AgentCard } from "@/ui/agent-card";
 import { Avatar } from "@/ui/avatar";
@@ -258,6 +258,14 @@ function Tiles({
 
 // ── Row words and cells ──────────────────────────────────────────────────
 
+// A run's second line: its generated name, else its task reference, the same
+// fallback the Run page's header reads. A workspace that turned enrichment off
+// shows no generated name anywhere, so its runs fall back to the task
+// reference, and a run with neither shows only its id.
+function runTitle(run: RunRow): string | null {
+  return (run.enrichmentEnabled === false ? null : run.name) ?? run.taskRef;
+}
+
 function useRowWords(listed: readonly ListedRun[]): RowWords[] {
   const t = useTranslations("fleet.runs");
   const status = useTranslations("ui.runStatus");
@@ -288,8 +296,7 @@ function useRowWords(listed: readonly ListedRun[]): RowWords[] {
         };
         const text = [
           ...Object.values(words),
-          run.name ?? "",
-          run.taskRef ?? "",
+          runTitle(run) ?? "",
           run.harness?.name ?? "",
           run.cost?.basis ?? "",
         ].join(" ");
@@ -616,7 +623,7 @@ function RunRowView({
   const navigate = useNavigate();
   const { run, state } = listed;
   const to = routes.run(org, ws, run.id);
-  const title = run.name ?? run.taskRef ?? t("unnamedRun");
+  const title = runTitle(run);
   const operatorLabel =
     run.operatorName ??
     (run.operatorKind === null
@@ -647,9 +654,11 @@ function RunRowView({
         >
           {run.id}
         </SafeLink>
-        <span className="block text-[11.5px] text-dim" title={title}>
-          {title}
-        </span>
+        {title === null ? null : (
+          <span className="block text-[11.5px] text-dim" title={title}>
+            {title}
+          </span>
+        )}
       </td>
       <td className={`${cell} min-w-48`}>
         <AgentCard

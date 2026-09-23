@@ -173,7 +173,6 @@
       "parked": "parked for approval",
       "notRecorded": "not recorded",
       "basisNotRecorded": "basis not recorded",
-      "unnamedRun": "Untitled run",
       "source": {
         "ledger": "evidence ledger",
         "tacho": "wrapped agent"

@@ -32,7 +32,14 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { makeWithTenantDbMock } from "@oxagen/database";
 import { archiveFrameOf, type SealedFrameRow } from "@oxagen/run-ledger";
 import { buildArchiveSegment } from "@oxagen/tacho";
-import { defaultRunReadDeps, readFrames, type ResolvedRun } from "./run-read";
+import {
+  defaultRunReadDeps,
+  readFrames,
+  readRunFrames,
+  type ResolvedRun,
+  type RunReadDeps,
+} from "./run-read";
+import { tachoRow } from "../run.test-support";
 
 const UUID_RUN = "33333333-3333-4333-8333-333333333333";
 const UUID_ATTEMPT = "44444444-4444-4444-8444-444444444444";
@@ -119,5 +126,69 @@ describe("defaultRunReadDeps: a compacted attempt", () => {
       ["1", "tool.call_completed", SHA_1],
       ["2", "tool.call_completed", SHA_2],
     ]);
+  });
+});
+
+describe("readRunFrames: a wrapped run's subagent chains", () => {
+  const ROOT = "0192d4a8-7c1e-7a00-8000-00000000c0de";
+  const CHILD = "0192d4a8-7c1e-7a00-8000-00000000c1d0";
+  const run = { source: "tacho", sessionUuid: ROOT } as unknown as ResolvedRun;
+  const child = (seq: number) =>
+    tachoRow(seq, {
+      sessionUuid: CHILD,
+      rootSessionUuid: ROOT,
+      parentSessionUuid: ROOT,
+    });
+
+  function deps(childRows: ReturnType<typeof child>[]) {
+    const subagents = vi.fn(
+      (args: { after: { seq: number } | null; limit: number }) =>
+        Promise.resolve(
+          childRows
+            .filter((r) => args.after === null || r.seq > args.after.seq)
+            .slice(0, args.limit),
+        ),
+    );
+    return {
+      subagents,
+      deps: {
+        tachoFrames: (args: { afterSeq: number; limit: number }) =>
+          Promise.resolve(
+            [0, 1, 2]
+              .filter((seq) => seq > args.afterSeq)
+              .slice(0, args.limit)
+              .map((seq) => tachoRow(seq)),
+          ),
+        tachoSubagentFrames: subagents,
+      } as unknown as RunReadDeps,
+    };
+  }
+
+  it("reads every chain under the root, and says when the cap cut the subagents short", async () => {
+    const whole = await readRunFrames(deps([child(0), child(1)]).deps, run, 10);
+    expect(whole.complete).toBe(true);
+    // No spawn was recorded, so the chain goes where it began: after the
+    // root frame it started with.
+    expect(whole.frames.map((f) => f.chain?.sessionUuid ?? "root")).toEqual([
+      "root",
+      CHILD,
+      CHILD,
+      "root",
+      "root",
+    ]);
+    const cut = deps([child(0), child(1), child(2)]);
+    const capped = await readRunFrames(cut.deps, run, 4);
+    expect(capped.frames).toHaveLength(4);
+    expect(capped.complete).toBe(false);
+  });
+
+  it("reads only the run's own chain when no subagent reader is wired (negative)", async () => {
+    const { deps: wired } = deps([child(0)]);
+    const own = await readRunFrames(
+      { ...wired, tachoSubagentFrames: undefined },
+      run,
+      10,
+    );
+    expect(own.frames).toHaveLength(3);
   });
 });

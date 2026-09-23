@@ -9,6 +9,7 @@
 // New agent is not Register an agent. Register wraps an agent that already
 // runs somewhere and mints its identity; this writes one that does not exist
 // yet, and writes no row. The describe step says so.
+import { HarnessIcon } from "@/ui/harness-icon";
 import { SUBAGENT_FILE_HARNESSES } from "@oxagen/oxagen/contracts/agent.propose";
 import { useTranslations } from "next-intl";
 import { useEffect } from "react";
@@ -258,28 +259,31 @@ function IdentityStep({ api }: StepProps<AgentDraft>) {
           <label htmlFor="wizard-harness" className="font-medium">
             {t("harness")}
           </label>
-          <select
-            id="wizard-harness"
-            data-testid="wizard-harness"
-            value={d.harness ?? ""}
-            aria-describedby="wizard-harness-hint"
-            onChange={(event) => {
-              const value = event.target.value;
-              api.update({
-                harness: AGENT_HARNESSES.find((h) => h === value) ?? null,
-              });
-            }}
-            className={inputBase}
-          >
-            <option value="" disabled>
-              {t("harnessChoose")}
-            </option>
-            {AGENT_HARNESSES.map((h) => (
-              <option key={h} value={h}>
-                {t(`harnesses.${h}`)}
+          <div className="flex items-center gap-2">
+            <HarnessIcon harness={d.harness} />
+            <select
+              id="wizard-harness"
+              data-testid="wizard-harness"
+              value={d.harness ?? ""}
+              aria-describedby="wizard-harness-hint"
+              onChange={(event) => {
+                const value = event.target.value;
+                api.update({
+                  harness: AGENT_HARNESSES.find((h) => h === value) ?? null,
+                });
+              }}
+              className={inputBase}
+            >
+              <option value="" disabled>
+                {t("harnessChoose")}
               </option>
-            ))}
-          </select>
+              {AGENT_HARNESSES.map((h) => (
+                <option key={h} value={h}>
+                  {t(`harnesses.${h}`)}
+                </option>
+              ))}
+            </select>
+          </div>
           <p id="wizard-harness-hint" className="text-xs text-muted-foreground">
             {t("harnessHint")}
           </p>

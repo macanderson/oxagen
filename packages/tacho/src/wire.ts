@@ -200,6 +200,17 @@ export const BUNDLE_FEATURE_HOOK_FAIL_OPEN = "hook_fail_open" as const;
 export const BUNDLE_FEATURE_STEERING_MANIFEST = "steering_manifest" as const;
 
 /**
+ * The host can parse `containment`: the mandate's statement that its agent
+ * runs only under the contained launcher (ADR-152). Gated for the same reason
+ * `gateway_tools` is: the bundle schema is strict, so a host built before the
+ * field would reject the whole mandate. The control plane does not simply
+ * omit the field for such a host: a mandate that requires containment
+ * suspends a host that cannot read the requirement, because omitting it
+ * would let that host run the agent uncontained.
+ */
+export const BUNDLE_FEATURE_CONTAINMENT = "containment" as const;
+
+/**
  * Every bundle feature the host in *this* tree can parse, which is what it
  * advertises. One list, read by the daemon's health report and by enrollment,
  * so a field added to `policyBundleSchema` is advertised from the one place
@@ -212,6 +223,7 @@ export const TACHO_BUNDLE_FEATURES = [
   BUNDLE_FEATURE_INDEPENDENT_MODELS,
   BUNDLE_FEATURE_HOOK_FAIL_OPEN,
   BUNDLE_FEATURE_STEERING_MANIFEST,
+  BUNDLE_FEATURE_CONTAINMENT,
 ] as const;
 
 export type TachoBundleFeature = (typeof TACHO_BUNDLE_FEATURES)[number];
@@ -854,6 +866,18 @@ export const policyBundleSchema = z
         allow: z.array(z.string().min(1).max(256)).max(256).nullable(),
         deny: z.array(z.string().min(1).max(256)).max(256),
       })
+      .strict()
+      .optional(),
+    /**
+     * The mandate requires the contained tier (ADR-152). In enforce mode the
+     * hook refuses a session the contained launcher did not start: its start,
+     * its prompts, and every tool call. Absent means the mandate states no
+     * requirement. Emitted only to a host that advertised
+     * `BUNDLE_FEATURE_CONTAINMENT`; see that constant for the host that did
+     * not.
+     */
+    containment: z
+      .object({ required: z.literal(true) })
       .strict()
       .optional(),
     signature: z

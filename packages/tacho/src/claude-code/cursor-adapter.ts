@@ -84,7 +84,10 @@ function str(value: unknown): string | undefined {
 
 /**
  * Cursor's hook events, and the Claude Code event each becomes. Only the
- * events Oxagen registers are here. `beforeShellExecution`,
+ * events Oxagen registers are here. `afterAgentThought` is left out on
+ * purpose: Claude Code's path keeps thinking out of the record too (it is
+ * sized by `thinking_tokens` and never stored), and a Cursor run should read
+ * like any other. `beforeShellExecution`,
  * `beforeMCPExecution`, `beforeReadFile` and `afterFileEdit` are deliberately
  * absent: each fires for a tool type `preToolUse` and `postToolUse` already
  * cover, and a second frame for one call is a false repeat, not more record.
@@ -100,6 +103,10 @@ export const CURSOR_TO_CLAUDE_EVENT = {
   subagentStop: "SubagentStop",
   preCompact: "PreCompact",
   stop: "Stop",
+  // Cursor's own event, with no Claude Code counterpart: the agent's message
+  // once it has finished writing it. `stop` carries no message at all, so
+  // without this a Cursor run records every prompt and not one reply.
+  afterAgentResponse: "AgentResponse",
 } as const;
 
 export type CursorHookEventName = keyof typeof CURSOR_TO_CLAUDE_EVENT;

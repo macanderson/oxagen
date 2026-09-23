@@ -338,6 +338,34 @@ describe("what the meter refuses to hold", () => {
     expect(meter.end().outputTokens).toBe(57);
   });
 
+  it("reads usage from a response.completed line bigger than the old 1 MiB cap (P2-11)", () => {
+    const meter = new UsageMeter("openai.responses", SSE);
+    // Bigger than the old `MAX_LINE_BYTES` (1 MiB), under the new one: a
+    // `response.completed` line carries the whole response's `output`
+    // alongside its usage block, and dropping the line wholesale past 1 MiB
+    // used to drop the usage with it.
+    const padding = "x".repeat(1_200_000);
+    const event = {
+      type: "response.completed",
+      response: {
+        id: "resp_1",
+        status: "completed",
+        model: "gpt-5",
+        output: [
+          {
+            type: "message",
+            content: [{ type: "output_text", text: padding }],
+          },
+        ],
+        usage: { input_tokens: 11, output_tokens: 22 },
+      },
+    };
+    feed(meter, `data: ${JSON.stringify(event)}\n\n`, 4096);
+    const usage = meter.end();
+    expect(usage.inputTokens).toBe(11);
+    expect(usage.outputTokens).toBe(22);
+  });
+
   it("gives up on a document past its cap, and on one that is not JSON", () => {
     const big = new UsageMeter("anthropic.messages", "application/json");
     const chunk = Buffer.alloc(1024 * 1024, 0x20);

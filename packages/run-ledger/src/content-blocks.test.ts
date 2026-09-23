@@ -717,4 +717,239 @@ describe("assembleModelStream", () => {
 
     expect(Buffer.from(wire, "utf8").toString("base64")).toBe(before);
   });
+
+  it("unwraps a lone response, when the request half never shipped (P0-1)", () => {
+    const response = sse(START, ...textDeltas(0, ["answer"]), [
+      "message_stop",
+      { type: "message_stop" },
+    ]);
+    // JCS drops a member with no bytes: a request over the cap ships
+    // `{"response":...}` alone, with no `request` key at all.
+    const wire = JSON.stringify({ response });
+    expect(looksLikeModelStream(wire)).toBe(true);
+    expect(assembleModelStream(wire)?.blocks[0]).toMatchObject({
+      kind: "text",
+      text: "answer",
+    });
+  });
+
+  it("leaves a malformed exchange alone: a `request` that is present but not a string", () => {
+    const response = sse(START, ...textDeltas(0, ["answer"]), [
+      "message_stop",
+      { type: "message_stop" },
+    ]);
+    const wire = JSON.stringify({ request: {}, response });
+    // `looksLikeModelStream` matches on the raw text, which still contains
+    // the SSE event names verbatim inside the un-unwrapped JSON string; the
+    // fold itself is what refuses this shape, finding no real SSE lines once
+    // `responseWire` declines to unwrap a non-string `request`.
+    expect(looksLikeModelStream(wire)).toBe(true);
+    expect(assembleModelStream(wire)).toBeNull();
+  });
+
+  describe("a response that was never streamed (P2-10)", () => {
+    it("folds a non-streamed Anthropic Messages document", () => {
+      const wire = JSON.stringify({
+        id: "msg_1",
+        type: "message",
+        role: "assistant",
+        stop_reason: "tool_use",
+        content: [
+          { type: "text", text: "Reading the file." },
+          {
+            type: "tool_use",
+            id: "toolu_1",
+            name: "Read",
+            input: { file: "a.ts" },
+          },
+        ],
+        usage: {
+          input_tokens: 10,
+          output_tokens: 5,
+          cache_read_input_tokens: 2,
+          cache_creation_input_tokens: 3,
+        },
+      });
+      expect(looksLikeModelStream(wire)).toBe(false);
+      const assembly = assembleModelStream(wire);
+      expect(assembly?.stopReason).toBe("tool_use");
+      expect(assembly?.partial).toBe(false);
+      expect(assembly?.blocks).toMatchObject([
+        { kind: "text", text: "Reading the file." },
+        {
+          kind: "tool_use",
+          name: "Read",
+          input: { file: "a.ts" },
+          inputRaw: false,
+          callKey: "toolu_1",
+        },
+      ]);
+      expect(assembly?.usage).toEqual({
+        inputTokens: 10,
+        outputTokens: 5,
+        cacheReadTokens: 2,
+        cacheWriteTokens: 3,
+      });
+    });
+
+    it("folds a non-streamed OpenAI Responses document", () => {
+      const wire = JSON.stringify({
+        id: "resp_1",
+        object: "response",
+        status: "completed",
+        output: [
+          {
+            type: "reasoning",
+            summary: [{ type: "summary_text", text: "Plan first." }],
+          },
+          {
+            type: "message",
+            content: [{ type: "output_text", text: "Done." }],
+          },
+          {
+            type: "function_call",
+            name: "Write",
+            call_id: "call_1",
+            arguments: '{"path":"b.ts"}',
+          },
+        ],
+        usage: {
+          input_tokens: 12,
+          output_tokens: 6,
+          input_tokens_details: { cached_tokens: 4 },
+        },
+      });
+      expect(looksLikeModelStream(wire)).toBe(false);
+      const assembly = assembleModelStream(wire);
+      expect(assembly?.stopReason).toBe("completed");
+      expect(assembly?.blocks).toMatchObject([
+        { kind: "thinking", text: "Plan first." },
+        { kind: "text", text: "Done." },
+        {
+          kind: "tool_use",
+          name: "Write",
+          input: { path: "b.ts" },
+          callKey: "call_1",
+        },
+      ]);
+      expect(assembly?.usage).toEqual({
+        inputTokens: 8,
+        outputTokens: 6,
+        cacheReadTokens: 4,
+        cacheWriteTokens: null,
+      });
+    });
+
+    it("folds a non-streamed OpenAI Chat Completions document, text and tool calls", () => {
+      const wire = JSON.stringify({
+        id: "chatcmpl-1",
+        object: "chat.completion",
+        choices: [
+          {
+            finish_reason: "tool_calls",
+            message: {
+              role: "assistant",
+              content: "Reading first.",
+              tool_calls: [
+                {
+                  id: "call_2",
+                  type: "function",
+                  function: { name: "Read", arguments: '{"file":"c.ts"}' },
+                },
+              ],
+            },
+          },
+        ],
+        usage: {
+          prompt_tokens: 9,
+          completion_tokens: 4,
+          prompt_tokens_details: { cached_tokens: 1 },
+        },
+      });
+      expect(looksLikeModelStream(wire)).toBe(false);
+      const assembly = assembleModelStream(wire);
+      expect(assembly?.stopReason).toBe("tool_calls");
+      expect(assembly?.blocks).toMatchObject([
+        { kind: "text", text: "Reading first." },
+        {
+          kind: "tool_use",
+          name: "Read",
+          input: { file: "c.ts" },
+          callKey: "call_2",
+        },
+      ]);
+      expect(assembly?.usage).toEqual({
+        inputTokens: 8,
+        outputTokens: 4,
+        cacheReadTokens: 1,
+        cacheWriteTokens: null,
+      });
+    });
+
+    it("folds a streamed OpenAI Chat Completions response, text and tool call deltas", () => {
+      const wire = [
+        `data: ${JSON.stringify({ id: "c1", choices: [{ index: 0, delta: { role: "assistant", content: "" }, finish_reason: null }] })}\n\n`,
+        `data: ${JSON.stringify({ id: "c1", choices: [{ index: 0, delta: { content: "Hel" }, finish_reason: null }] })}\n\n`,
+        `data: ${JSON.stringify({ id: "c1", choices: [{ index: 0, delta: { content: "lo" }, finish_reason: null }] })}\n\n`,
+        `data: ${JSON.stringify({
+          id: "c1",
+          choices: [
+            {
+              index: 0,
+              delta: {
+                tool_calls: [
+                  {
+                    index: 0,
+                    id: "call_3",
+                    function: { name: "Read", arguments: '{"fi' },
+                  },
+                ],
+              },
+              finish_reason: null,
+            },
+          ],
+        })}\n\n`,
+        `data: ${JSON.stringify({
+          id: "c1",
+          choices: [
+            {
+              index: 0,
+              delta: {
+                tool_calls: [
+                  { index: 0, function: { arguments: 'le":"d.ts"}' } },
+                ],
+              },
+              finish_reason: null,
+            },
+          ],
+        })}\n\n`,
+        `data: ${JSON.stringify({ id: "c1", choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }] })}\n\n`,
+        `data: ${JSON.stringify({ id: "c1", choices: [], usage: { prompt_tokens: 5, completion_tokens: 2 } })}\n\n`,
+        "data: [DONE]\n\n",
+      ].join("");
+      expect(looksLikeModelStream(wire)).toBe(true);
+      const assembly = assembleModelStream(wire);
+      expect(assembly?.stopReason).toBe("tool_calls");
+      expect(assembly?.blocks).toMatchObject([
+        { kind: "text", text: "Hello", partial: false },
+        {
+          kind: "tool_use",
+          name: "Read",
+          input: { file: "d.ts" },
+          callKey: "call_3",
+          partial: false,
+        },
+      ]);
+      expect(assembly?.usage.inputTokens).toBe(5);
+      expect(assembly?.usage.outputTokens).toBe(2);
+    });
+
+    it("answers null for a plain JSON body that matches none of the three shapes", () => {
+      expect(
+        assembleModelStream(JSON.stringify({ hello: "world" })),
+      ).toBeNull();
+      expect(assembleModelStream("not json at all")).toBeNull();
+      expect(assembleModelStream("")).toBeNull();
+    });
+  });
 });

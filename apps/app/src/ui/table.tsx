@@ -9,7 +9,16 @@
 // cannot fall off it.
 import type { ReactNode } from "react";
 
-type TableColumn = { label: string; numeric?: boolean };
+type TableColumn = {
+  label: string;
+  numeric?: boolean;
+  /**
+   * The header names the column to assistive tech through aria-label and draws
+   * nothing (a link column). It carries no text, so the phone card that
+   * features/shell/card-tables.ts builds leaves the cell unlabelled.
+   */
+  hidden?: boolean;
+};
 
 /** `th,td { padding:9px 12px; vertical-align:middle }` */
 export const cell = "px-3 py-[9px] align-middle";
@@ -46,9 +55,10 @@ export function Table({
               <th
                 key={column.label}
                 scope="col"
+                aria-label={column.hidden === true ? column.label : undefined}
                 className={`${headCell} ${column.numeric === true ? "text-right" : "text-left"}`}
               >
-                {column.label}
+                {column.hidden === true ? null : column.label}
               </th>
             ))}
           </tr>

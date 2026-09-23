@@ -61,3 +61,5 @@ ClickHouse observes the invocation via the kernel; the change is audit-logged.
 | `not_found`     | `workspace_not_found`                | no workspace with that public id in the org, or the active one is not in the org                                                              |
 | `conflict`      | `slug_taken`                         | the slug is already used by another workspace in the org                                                                                      |
 | `invalid_input` | —                                    | the slug fails the contract's validator (kernel)                                                                                              |
+
+`runEnrichmentEnabled` is an optional boolean. It defaults to true for existing workspaces. False stops automatic Stella generation of run names and summaries and displays run IDs. It does not change recording or deterministic evidence. The same workspace settings role gate applies. The write merges this key into the settings bag without replacing steering settings.

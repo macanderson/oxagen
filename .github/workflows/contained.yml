@@ -1,0 +1,138 @@
+# The contained tier (ADR-096, ADR-152) on this repository's own pull requests.
+#
+# `docker-test` proves the network policy on every change to the launcher: it
+# builds the image's `base` stage and runs a stub harness that curls a vendor
+# host twice. The hook refuses the first; the second fails on the network.
+#
+# `contained-run` is the guide's example (docs/guides/contained-runs.md) run
+# against production: it enrolls this runner, starts Claude Code under
+# `tacho run --contained`, and the run's record says `contained` in Fleet.
+# It stays off until the repository variable OXAGEN_CONTAINED_ENABLED is
+# `true`, which waits on migration 20260923230000 being applied in
+# production (register_contained_launch refuses until it is).
+name: contained
+
+on:
+  pull_request:
+    paths:
+      - "packages/tacho/**"
+      - ".github/workflows/contained.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: contained-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docker-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@v4
+      - run: pnpm install --frozen-lockfile --filter @oxagen/tacho...
+      # GitHub's runner user is unprivileged and in the docker group, which
+      # is what the launcher requires.
+      - name: Run the contained launcher against Docker
+        env:
+          OXAGEN_CONTAINED_DOCKER_TEST: "1"
+        run: pnpm --filter @oxagen/tacho test:unit src/contained/launcher.docker.test.ts
+
+  contained-run:
+    needs: docker-test
+    if: >-
+      vars.OXAGEN_CONTAINED_ENABLED == 'true' &&
+      (github.event_name == 'workflow_dispatch' ||
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      TACHO: node packages/tacho/bin/tacho.mjs
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@v4
+      - run: pnpm install --frozen-lockfile --filter @oxagen/tacho...
+
+      - name: Build the contained image
+        run: >-
+          docker build -f packages/tacho/container/Dockerfile
+          --build-arg HARNESS=claude-code
+          -t oxagen/contained-claude-code:${{ github.sha }} .
+
+      # The agent works in its own checkout. The launcher refuses a tree with
+      # hard-linked files, and pnpm's node_modules is hard-linked. It comes
+      # after the image build so it stays out of the build context.
+      - uses: actions/checkout@v5
+        with:
+          path: agent-workspace
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Enrollment takes the key out of the harness's settings and into the
+      # daemon's custody (ADR-143). The container gets a run token per call.
+      - name: Hand the model key to the gateway
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.OXAGEN_CONTAINED_ANTHROPIC_API_KEY }}
+        run: |
+          mkdir -p ~/.claude
+          node -e 'require("fs").writeFileSync(process.env.HOME + "/.claude/settings.json", JSON.stringify({ env: { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY } }))'
+
+      - name: Enroll this runner
+        env:
+          OXAGEN_TOKEN: ${{ secrets.OXAGEN_CONTAINED_TOKEN }}
+        run: >-
+          $TACHO enroll --token "$OXAGEN_TOKEN"
+          --org "${{ vars.OXAGEN_ORG }}" --workspace "${{ vars.OXAGEN_WORKSPACE }}"
+          --harness claude-code --no-service --validity-days 1
+
+      - name: Start tachod
+        run: |
+          nohup $TACHO daemon > "$RUNNER_TEMP/tachod.log" 2>&1 &
+          # `status` exits 0 once enrolled; the daemon is up when its gateway listens.
+          for _ in $(seq 1 30); do
+            $TACHO status --json 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.exit(JSON.parse(s||"{}").gateway?.listening?0:1))' && exit 0
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/tachod.log"; exit 1
+
+      # One repository, one run. The launcher refuses a token that reaches
+      # more, keeps it outside the container, and revokes it when the run ends.
+      - name: Mint the run's GitHub token
+        id: github-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.OXAGEN_CONTAINED_APP_ID }}
+          private-key: ${{ secrets.OXAGEN_CONTAINED_APP_PRIVATE_KEY }}
+          repositories: ${{ github.event.repository.name }}
+
+      - name: Review this pull request, contained
+        env:
+          OXAGEN_CONTAINED_GITHUB_TOKEN: ${{ steps.github-token.outputs.token }}
+        run: >-
+          $TACHO run --contained
+          --image oxagen/contained-claude-code:${{ github.sha }}
+          --workspace "$GITHUB_WORKSPACE/agent-workspace"
+          --github-repository "${{ github.repository }}"
+          -- claude -p "Read the diff against origin/main and list the three riskiest changes, with file and line. Do not edit files."
+          --max-turns 20
+
+      - name: tachod log
+        if: always()
+        run: cat "$RUNNER_TEMP/tachod.log" || true
+
+      - name: Unenroll this runner
+        if: always()
+        run: $TACHO unenroll

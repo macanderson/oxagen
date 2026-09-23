@@ -104,16 +104,33 @@ export function agentPage(
       id: `agt_${String(index + 1)}`,
       slug: agentKey.split(".").at(-1) ?? agentKey,
       name: agentKey,
+      description: null,
       agentKey,
       harness: "claude-code",
       operatorId: null,
+      operatorName: null,
+      principalId: null,
+      credentials: 0,
+      hosts: 0,
+      host: null,
       status: "enrolled",
+      enforcementTier: null,
       runs30d: 0,
       spend30d: null,
+      tokens30d: null,
+      mandates: null,
       incidents: 0,
+      tamperIncidents: 0,
+      tamperIncidentsRecorded: 0,
     })),
     nextCursor: null,
-    totals: { identities, enrolled: identities, tamperIncidents: 0 },
+    totals: {
+      identities,
+      enrolled: identities,
+      holdingMandate: null,
+      tamperIncidents: 0,
+      tamper: { recorded: 0, open: 0, newest: null },
+    },
   });
 }
 
@@ -140,6 +157,7 @@ export function fleetSource(reads: FleetReads) {
   };
   const refuse = () => Promise.reject(new Error("not a Fleet read"));
   const source: DataSource = {
+    runtimes: { list: refuse, agents: refuse },
     pretenant: { orgs: refuse, workspaces: refuse },
     shell: { context: refuse, preferences: refuse },
     runs: {
@@ -152,6 +170,8 @@ export function fleetSource(reads: FleetReads) {
       cost: refuse,
       chain: refuse,
       outputs: refuse,
+      work: refuse,
+      outcomesSettings: refuse,
       transcript: refuse,
     },
     approvals: {
@@ -180,6 +200,7 @@ export function fleetSource(reads: FleetReads) {
     billing: {
       plan: refuse,
       usageCredits: refuse,
+      retention: refuse,
       bucket: refuse,
       contractRate: refuse,
       invoices: refuse,

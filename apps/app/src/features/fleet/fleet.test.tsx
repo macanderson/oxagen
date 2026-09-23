@@ -442,6 +442,27 @@ describe("the Runs panel", () => {
     expect(row("arun_halted")).toHaveTextContent("not recorded");
   });
 
+  // A workspace that turned enrichment off shows no generated name anywhere
+  // (the Run page's header reads the same fallback), so a row falls back to
+  // its task reference, and a run with neither shows only its id.
+  it("shows no generated name for a run whose workspace turned enrichment off (negative)", async () => {
+    await renderFleet({
+      runs: runPage([
+        runRow({ id: "tse_off", enrichmentEnabled: false }),
+        runRow({
+          id: "tse_bare",
+          enrichmentEnabled: false,
+          name: null,
+          taskRef: null,
+        }),
+      ]),
+      approvals: NO_APPROVALS,
+    });
+    expect(row("tse_off")).toHaveTextContent("ENG-4121 cut the 3.2 release");
+    expect(row("tse_off")).not.toHaveTextContent("Cut the 3.2 release branch");
+    expect(row("tse_bare").querySelector("td")?.textContent).toBe("tse_bare");
+  });
+
   it("words Status as the design does, sealed or halted, with the outcome on hover", async () => {
     await loaded();
     const status = (id: string) => {
@@ -490,9 +511,9 @@ describe("the Runs panel", () => {
 
   it("stacks the four tiles two by two on a phone, as the design does", async () => {
     await loaded();
-    expect(
-      screen.getByRole("region", { name: "Fleet summary" }).className,
-    ).toContain("max-md:grid-cols-2");
+    expect(screen.getByRole("region", { name: "Fleet summary" })).toHaveClass(
+      "grid-cols-2",
+    );
   });
 
   it("draws the Tokens sort where the design has it, disabled until runs carry tokens (G3)", async () => {
