@@ -130,6 +130,14 @@ export const updateWorkspace = defineTool({
      */
     steering: workspaceSettingsWrite.input.shape.steering,
 
+    /**
+     * Carried by reference from `update_workspace_settings`: whether Stella
+     * names and summarizes captured runs on organization credits. Omitted,
+     * the setting is unchanged. It never touches recorded evidence.
+     */
+    runEnrichmentEnabled:
+      workspaceSettingsWrite.input.shape.runEnrichmentEnabled,
+
     // ---- governance (new; Appendix A wrk.workspaces) ----------------------
     /**
      * §10.3 step 3 spends this value: `solo` lets the author merge a Context
@@ -234,6 +242,9 @@ export const updateWorkspace = defineTool({
      * would be indistinguishable from "both off" at every reader.
      */
     steering: workspaceSettingsWrite.output.shape.steering,
+
+    runEnrichmentEnabled:
+      workspaceSettingsWrite.output.shape.runEnrichmentEnabled,
 
     governanceMode: z.enum(["solo", "team", "regulated"]),
     /** Null means "inherit the organization's" — see the input field. */
