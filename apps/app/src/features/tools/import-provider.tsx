@@ -24,7 +24,6 @@ import {
   REGISTERABLE_MCP_TRANSPORTS,
   type RegisterableMcpTransport,
 } from "@/data/contracts/tools";
-import { routes } from "@/shared/safe-path";
 import {
   buttonPrimary,
   buttonSecondary,
@@ -231,7 +230,10 @@ export function ImportProvider({
         published: result.value.published,
         unchanged: result.value.unchanged,
       });
-      navigate.replace(routes.tools(at.org, at.ws));
+      // Re-read the tab the person is on rather than moving them: the dialog
+      // may live in a tab's own panel (Add a provider on Providers), and
+      // navigating away would unmount it before its receipt is read (#3800).
+      navigate.refresh();
     } catch {
       setFailure(failureText(UNANSWERED));
     } finally {

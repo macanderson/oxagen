@@ -176,7 +176,10 @@ describe("ImportProvider", () => {
         tools: ["get_page", "create_page"],
       });
     });
-    expect(router.replace).toHaveBeenCalledWith(TOOLS);
+    // The page behind re-reads in place: moving to another tab would unmount
+    // a dialog opened from a tab's own panel before its receipt is read.
+    expect(router.refresh).toHaveBeenCalled();
+    expect(router.replace).not.toHaveBeenCalled();
     expect(await screen.findByTestId("tools-import-done")).toHaveTextContent(
       "2 new versions · 1 already registered.",
     );
@@ -296,6 +299,7 @@ describe("ImportProvider", () => {
       "This needs an organization Owner or Admin.",
     );
     expect(router.replace).not.toHaveBeenCalled();
+    expect(router.refresh).not.toHaveBeenCalled();
   });
 
   it("names a write that threw before it answered", async () => {
