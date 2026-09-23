@@ -252,7 +252,8 @@
         "body": "The agent stops at the next boundary it reaches. Work already in flight finishes first.",
         "confirm": "Queue the pause",
         "pending": "Queueing",
-        "queued": "The pause is queued. It takes effect at the next boundary; the run's status says when it has."
+        "queued": "The pause is queued. It takes effect at the next boundary; the run's status says when it has.",
+        "header": "Pause run"
       },
       "resume": {
         "open": "Resume",
@@ -260,7 +261,8 @@
         "body": "The agent carries on from where it paused. Your reason reaches the model as a control frame.",
         "confirm": "Queue the resume",
         "pending": "Queueing",
-        "queued": "The resume is queued. The run's status says when the agent has picked it up."
+        "queued": "The resume is queued. The run's status says when the agent has picked it up.",
+        "header": "Resume run"
       },
       "steer": {
         "open": "Steer",
@@ -565,7 +567,6 @@
       }
     },
     "costReportedProvisional": "Agent reported. Provisional until finalized.",
-    "costFinalized": "Finalized rollup ({basis})",
     "tokenUsage": {
       "title": "Reported tokens",
       "missing": "Token usage was not recorded for these frames.",
@@ -581,7 +582,6 @@
       "chips": "Run identity",
       "harnessNotRecorded": "harness not recorded",
       "versionNotCaptured": "version not captured",
-      "effortNotCaptured": "effort not captured",
       "checkout": "Checkout",
       "repoNotCaptured": "repository not captured",
       "noPullRequest": "no pull request",
@@ -654,8 +654,7 @@
       },
       "edge": {
         "observed": "observed",
-        "stated": "stated",
-        "inferred": "inferred"
+        "stated": "stated"
       },
       "frame": "fr {seq}",
       "noLink": "no link",

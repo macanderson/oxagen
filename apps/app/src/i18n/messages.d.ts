@@ -3872,6 +3872,7 @@ type Messages = {
         confirm: string;
         pending: string;
         queued: string;
+        header: string;
       };
       resume: {
         open: string;
@@ -3880,6 +3881,7 @@ type Messages = {
         confirm: string;
         pending: string;
         queued: string;
+        header: string;
       };
       steer: {
         open: string;
@@ -4184,7 +4186,6 @@ type Messages = {
       };
     };
     costReportedProvisional: string;
-    costFinalized: string;
     tokenUsage: {
       title: string;
       missing: string;
@@ -4200,7 +4201,6 @@ type Messages = {
       chips: string;
       harnessNotRecorded: string;
       versionNotCaptured: string;
-      effortNotCaptured: string;
       checkout: string;
       repoNotCaptured: string;
       noPullRequest: string;
@@ -4274,7 +4274,6 @@ type Messages = {
       edge: {
         observed: string;
         stated: string;
-        inferred: string;
       };
       frame: string;
       noLink: string;

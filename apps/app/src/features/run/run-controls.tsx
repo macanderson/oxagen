@@ -277,6 +277,12 @@ const GLYPH: Partial<Record<Command, string>> = { pause: "❙❙", resume: "▶"
 
 function CommandLabel({ command }: { command: Command }) {
   const t = useTranslations("run.commands");
+  // The run page names what it pauses ("Pause run"); a Fleet row keeps the
+  // bare verb, because its row already names the run.
+  const label =
+    command === "pause" || command === "resume"
+      ? t(`${command}.header`)
+      : t(`${command}.open`);
   const glyph = GLYPH[command];
   return (
     <>
@@ -285,7 +291,7 @@ function CommandLabel({ command }: { command: Command }) {
           {glyph}
         </span>
       )}
-      {t(`${command}.open`)}
+      {label}
     </>
   );
 }

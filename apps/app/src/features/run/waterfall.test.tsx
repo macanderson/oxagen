@@ -238,10 +238,8 @@ describe("Waterfall", () => {
       readError("frame_store_unreachable", 502),
       readOk(runTranscript({ entries: [] })),
     );
-    expect(
-      screen.getByText(/Run waterfall could not be loaded/),
-    ).toHaveTextContent(
-      "Run waterfall could not be loaded: the control plane answered frame_store_unreachable. Nothing was changed, and runs kept recording.",
+    expect(screen.getByText(/Waterfall could not be loaded/)).toHaveTextContent(
+      "Waterfall could not be loaded: the control plane answered frame_store_unreachable. Nothing was changed, and runs kept recording.",
     );
   });
 
@@ -250,10 +248,61 @@ describe("Waterfall", () => {
       readOk(runTranscript({ entries: [transcriptEntry()] })),
       readError("frame_store_unreachable", 502),
     );
+    expect(screen.getByText(/Waterfall could not be loaded/)).toHaveTextContent(
+      "Waterfall could not be loaded: the control plane answered frame_store_unreachable. Nothing was changed, and runs kept recording.",
+    );
+  });
+
+  it("lays the turns out in the spec's ledger, with a total row that is the last running total", () => {
+    const turnA = transcriptEntry({
+      seq: "1",
+      endSeq: "5",
+      label: "turn-a",
+      frames: 5,
+      usage: {
+        inputUncached: 100,
+        cacheRead: 300,
+        cacheWrite: 0,
+        output: 20,
+        reasoning: 0,
+      },
+      cost: usd("1000000"),
+      cumulativeCost: usd("1000000"),
+    });
+    const turnB = transcriptEntry({
+      seq: "6",
+      endSeq: "10",
+      label: "turn-b",
+      frames: 5,
+      usage: null,
+      cost: usd("3000000"),
+      cumulativeCost: usd("4000000"),
+    });
+    renderWaterfall(
+      readOk(runTranscript({ entries: [turnA, turnB] })),
+      readOk(runTranscript({ entries: [] })),
+    );
+    const table = screen.getByRole("table", { name: "Turns" });
     expect(
-      screen.getByText(/Run waterfall could not be loaded/),
-    ).toHaveTextContent(
-      "Run waterfall could not be loaded: the control plane answered frame_store_unreachable. Nothing was changed, and runs kept recording.",
+      within(table)
+        .getAllByRole("columnheader")
+        .map((th) => th.textContent),
+    ).toEqual([
+      "Turn",
+      "Steps",
+      "Frames",
+      "Cache hit",
+      "Cost",
+      "Running total",
+      "Pinned",
+    ]);
+    const rows = within(table).getAllByRole("row").slice(1);
+    // cache_read ÷ (input_uncached + cache_read) over the turn's own usage.
+    expect(rows[0]).toHaveTextContent("75%");
+    // A turn with no usage says its cache hit was not recorded.
+    expect(rows[1]).toHaveTextContent("not recorded");
+    expect(screen.getByTestId("waterfall-total")).toHaveTextContent(
+      "of $4.00 recorded",
     );
   });
 

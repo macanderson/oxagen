@@ -268,6 +268,29 @@ describe("the spine", () => {
     );
   });
 
+  it("heads the spine Outputs, counts with mid-dots, and closes with In frame order.", () => {
+    renderSpine(
+      readOk(
+        runOutputs([
+          runOutputNode(),
+          runOutputNode({
+            seq: "7",
+            kind: "read",
+            name: "CHANGELOG.md",
+            state: "read",
+            stat: null,
+          }),
+        ]),
+      ),
+    );
+    const spine = screen.getByTestId("run-outputs");
+    expect(within(spine).getByText("Outputs")).toBeTruthy();
+    expect(screen.getByTestId("run-outputs-tally").textContent).toMatch(
+      /^\d+ artifacts? · \d+ reads?/,
+    );
+    expect(spine).toHaveTextContent("In frame order.");
+  });
+
   it("says the spine ends early when the read was cut", () => {
     renderSpine(readOk(runOutputs([runOutputNode()], { complete: false })));
     expect(screen.getByTestId("run-outputs")).toHaveTextContent(
@@ -279,7 +302,7 @@ describe("the spine", () => {
     renderSpine(readError("frame_store_unreachable", 502));
     expect(screen.queryByTestId("run-outputs")).toBeNull();
     expect(screen.getByText(/frame_store_unreachable/).textContent).toContain(
-      "What this run produced",
+      "Outputs",
     );
   });
 });
