@@ -248,7 +248,7 @@ export type RecordDetail = z.infer<typeof RecordDetail>;
 export const SteeringDeliveries = z.object({
   runs: z.array(
     z.object({
-      sessionUuid: z.string().uuid(),
+      sessionUuid: z.uuid(),
       ts: z.string(),
       harness: z.string(),
       agentKey: z.string(),
