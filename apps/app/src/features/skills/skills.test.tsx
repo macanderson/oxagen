@@ -77,6 +77,7 @@ function inventory(over: Partial<SkillInventory> = {}): SkillInventory {
 const read = vi.fn<DataSource["skills"]["inventory"]>();
 const config = vi.fn<DataSource["skills"]["configuration"]>();
 const source: DataSource = {
+  runtimes: { list: vi.fn(), agents: vi.fn() },
   pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
   shell: { context: vi.fn(), preferences: vi.fn() },
   billing: {

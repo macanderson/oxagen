@@ -39,6 +39,7 @@
             "agent.read",
             "agent.register",
             "agent.roles.assign",
+            "runtime.read",
             "tool.read",
             "tool.grant",
             "repo.read",
