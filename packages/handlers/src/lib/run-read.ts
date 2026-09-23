@@ -1,3 +1,4 @@
+import { readRunEnrichmentEnabled } from "./run-enrichment";
 // run-read.ts — resolving a run in the caller's workspace and reading its
 // frames from the store that recorded it (ADR-058).
 //
@@ -79,6 +80,7 @@ export type RunReadDeps = {
   /** The worker run a witness run was for (ADR-064); null for any other run. */
   readWitnessFor: (scope: RunScope, runId: string) => Promise<string | null>;
   tachoFrames: TachoFrameReader;
+  readEnrichmentEnabled?: typeof readRunEnrichmentEnabled;
 };
 
 export const runNotFound = () =>
@@ -96,6 +98,14 @@ export async function resolveRun(
 ): Promise<ResolvedRun> {
   const scope = runScope(ctx);
   const run = await resolveSource(deps, scope, publicId);
+  const enabled = deps.readEnrichmentEnabled
+    ? await deps.readEnrichmentEnabled(scope)
+    : true;
+  run.item = {
+    ...run.item,
+    enrichmentEnabled: enabled,
+    ...(enabled ? {} : { name: null, summary: null, canSummarize: false }),
+  };
   const witnessFor = await deps.readWitnessFor(scope, publicId);
   if (witnessFor !== null && ctx.apiKeyId !== null) throw runNotFound();
   return { ...run, witnessFor };
@@ -227,5 +237,6 @@ export function defaultRunReadDeps(): RunReadDeps {
     readRunRollups: postgresReadRunRollups,
     readWitnessFor,
     tachoFrames: selectTachoEvents,
+    readEnrichmentEnabled: readRunEnrichmentEnabled,
   };
 }

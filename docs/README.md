@@ -15,6 +15,7 @@ Start with [engineering onboarding](ONBOARDING.md) to find the code and rules fo
 | Operational procedures | [Runbooks](ops/) |
 | Connector and storage extensions | [Guides](guides/) |
 | Enterprise SSO setup | [SSO guide](guides/sso.md) |
+| Run an agent in the contained tier in CI | [Contained runs](guides/contained-runs.md) |
 | Harness and repository host support | [Coverage matrix](reference/harness-matrix.md) |
 | Dated findings | [Audits](audits/) |
 | Preserved, unreachable features | [DEREGISTERED.md](../DEREGISTERED.md) |

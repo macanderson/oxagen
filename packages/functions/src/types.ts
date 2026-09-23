@@ -23,6 +23,13 @@
 export type EventPayload<T = Record<string, unknown>> = {
   name: string;
   data: T;
+  /**
+   * Deduplication key. The provider accepts the first event with a given id
+   * and drops any repeat inside its dedup window (24 hours on Inngest), so a
+   * scheduled sweep can re-select work that is still in flight without
+   * queueing it twice.
+   */
+  id?: string;
 };
 
 // ─── Step Context ────────────────────────────────────────────────────────────

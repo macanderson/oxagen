@@ -1,0 +1,605 @@
+{
+  "name": "get_run_work",
+  "domain": "run",
+  "description": "Read recorded checkout locations and retained diff references, plus connected pull requests and their current CI checks.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "runId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "runId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "runId": {
+        "type": "string"
+      },
+      "machine": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "checkouts": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            },
+            "branch": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "headSha": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "remoteDigest": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "repository": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "host": {
+                      "type": "string"
+                    },
+                    "owner": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "connected": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "host",
+                    "owner",
+                    "name",
+                    "url",
+                    "connected"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "firstSeq": {
+              "type": "string"
+            },
+            "lastSeq": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "path",
+            "branch",
+            "headSha",
+            "remoteDigest",
+            "repository",
+            "firstSeq",
+            "lastSeq"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "diffs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "checkoutId": {
+              "type": "string"
+            },
+            "seq": {
+              "type": "string"
+            },
+            "baseSha": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "headSha": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "digest": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "bodyAvailable": {
+              "type": "boolean"
+            },
+            "completeness": {
+              "type": "string",
+              "enum": [
+                "complete",
+                "partial",
+                "not_retained",
+                "not_captured"
+              ]
+            },
+            "limitations": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "observedAt": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "checkoutId",
+            "seq",
+            "baseSha",
+            "headSha",
+            "digest",
+            "bodyAvailable",
+            "completeness",
+            "limitations",
+            "observedAt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "pullRequests": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "repository": {
+              "type": "object",
+              "properties": {
+                "host": {
+                  "type": "string"
+                },
+                "owner": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string",
+                  "format": "uri"
+                },
+                "connected": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "host",
+                "owner",
+                "name",
+                "url",
+                "connected"
+              ],
+              "additionalProperties": false
+            },
+            "number": {
+              "type": "integer"
+            },
+            "url": {
+              "type": "string",
+              "format": "uri"
+            },
+            "title": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string",
+              "enum": [
+                "open",
+                "closed",
+                "merged"
+              ]
+            },
+            "headSha": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "headRef": {
+              "type": "string"
+            },
+            "association": {
+              "type": "string",
+              "enum": [
+                "recorded",
+                "head_commit",
+                "branch"
+              ]
+            },
+            "checkoutIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "observedAt": {
+              "type": "string"
+            },
+            "current": {
+              "type": "boolean"
+            },
+            "ci": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "overall": {
+                      "type": "string",
+                      "enum": [
+                        "passing",
+                        "failing",
+                        "pending",
+                        "neutral",
+                        "unknown"
+                      ]
+                    },
+                    "counts": {
+                      "type": "object",
+                      "properties": {
+                        "total": {
+                          "type": "integer"
+                        },
+                        "passed": {
+                          "type": "integer"
+                        },
+                        "failed": {
+                          "type": "integer"
+                        },
+                        "pending": {
+                          "type": "integer"
+                        },
+                        "skipped": {
+                          "type": "integer"
+                        },
+                        "neutral": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "total",
+                        "passed",
+                        "failed",
+                        "pending",
+                        "skipped",
+                        "neutral"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "runs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string",
+                            "description": "Check run or status context name"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "queued",
+                              "in_progress",
+                              "completed"
+                            ],
+                            "description": "Lifecycle status of the check"
+                          },
+                          "conclusion": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "success",
+                                  "failure",
+                                  "neutral",
+                                  "cancelled",
+                                  "timed_out",
+                                  "action_required",
+                                  "skipped",
+                                  "stale"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "url": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "startedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "completedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "durationMs": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "app": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "status",
+                          "conclusion",
+                          "url",
+                          "startedAt",
+                          "completedAt",
+                          "durationMs",
+                          "app"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "complete": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "overall",
+                    "counts",
+                    "runs",
+                    "complete"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "diff": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "digest": {
+                      "type": "string"
+                    },
+                    "headSha": {
+                      "type": "string"
+                    },
+                    "files": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "previousPath": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "additions": {
+                            "type": "number"
+                          },
+                          "deletions": {
+                            "type": "number"
+                          },
+                          "patch": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "previousPath",
+                          "status",
+                          "additions",
+                          "deletions",
+                          "patch"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "complete": {
+                      "type": "boolean"
+                    },
+                    "limitations": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "digest",
+                    "headSha",
+                    "files",
+                    "complete",
+                    "limitations"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "repository",
+            "number",
+            "url",
+            "title",
+            "state",
+            "headSha",
+            "headRef",
+            "association",
+            "checkoutIds",
+            "observedAt",
+            "current",
+            "ci",
+            "diff"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "complete": {
+        "type": "boolean"
+      },
+      "warnings": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "runId",
+      "machine",
+      "checkouts",
+      "diffs",
+      "pullRequests",
+      "complete",
+      "warnings"
+    ],
+    "additionalProperties": false
+  }
+}

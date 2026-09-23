@@ -64,6 +64,12 @@ export const workspaceSettingsWrite = registerCapability({
     // other and racing a second editor. Omitting `steering` entirely leaves
     // both alone.
     steering: steeringGatePolicyPatch.optional(),
+    runEnrichmentEnabled: z
+      .boolean()
+      .optional()
+      .describe(
+        "Generate run names and summaries with Stella using organization credits. Does not affect recorded evidence.",
+      ),
   }),
   output: z.object({
     name: z.string(),
@@ -72,6 +78,7 @@ export const workspaceSettingsWrite = registerCapability({
     avatarUrl: avatarUrlOutputSchema,
     consequenceRoles: consequenceRolesSchema,
     steering: steeringGatePolicy,
+    runEnrichmentEnabled: z.boolean().optional(),
   }),
 });
 

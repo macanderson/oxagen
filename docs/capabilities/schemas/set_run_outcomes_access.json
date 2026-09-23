@@ -1,0 +1,71 @@
+{
+  "name": "set_run_outcomes_access",
+  "domain": "run",
+  "description": "Platform-operator only: suspend or restore an organization's run follow-through access with a recorded reason.",
+  "mode": "sync",
+  "surfaces": [],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "orgId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "disabled": {
+        "type": "boolean"
+      },
+      "reason": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      }
+    },
+    "required": [
+      "orgId",
+      "disabled",
+      "reason"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "customerEnabled": {
+        "type": "boolean"
+      },
+      "platformDisabled": {
+        "type": "boolean"
+      },
+      "platformDisabledReason": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "effectiveEnabled": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "customerEnabled",
+      "platformDisabled",
+      "platformDisabledReason",
+      "effectiveEnabled"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -622,3 +622,37 @@ describe("getTree", () => {
     );
   });
 });
+
+it("reads a failing check beyond the first CI page and reports completeness", async () => {
+  const check = {
+    name: "pass",
+    status: "completed",
+    conclusion: "success",
+    details_url: null,
+    started_at: null,
+    completed_at: null,
+    app: null,
+  };
+  const fetchMock = vi.fn().mockImplementation(async (url: string) => {
+    if (url.includes("/status?"))
+      return makeResponse({ sha: "head", statuses: [] });
+    return makeResponse({
+      total_count: 101,
+      check_runs: url.includes("page=2")
+        ? [{ ...check, name: "late failure", conclusion: "failure" }]
+        : Array.from({ length: 100 }, () => check),
+    });
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  const result = await createGitHubClient({ token: "test" }).listCiChecks({
+    owner: "acme",
+    repo: "repo",
+    ref: "head",
+  });
+  expect(result.checkRuns).toHaveLength(101);
+  expect(result.checkRuns[100]).toMatchObject({
+    name: "late failure",
+    conclusion: "failure",
+  });
+  expect(result.complete).toBe(true);
+});
