@@ -4,9 +4,10 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { resolve } from "node:path";
-import { evaluatePreToolUse, verifyBundle } from "../host/bundle";
+import { evaluatePreToolUse } from "../host/bundle";
 import type { HostFile } from "../host/host-file";
 import type { FetchLike } from "../host/control-client";
+import type { PolicyView } from "./hook-handler";
 import type { SessionRecord, SessionRegistry } from "./registry";
 import type { TachoEvent } from "../envelope";
 import {
@@ -34,6 +35,8 @@ export interface GithubLeaseInput {
 }
 export interface GithubProxyDeps {
   host(): HostFile;
+  policy(): PolicyView;
+  refreshBundle(): Promise<boolean>;
   registry: SessionRegistry;
   controlFetch: FetchLike;
   fetch?: typeof globalThis.fetch;
@@ -82,9 +85,32 @@ export function createGithubProxy(deps: GithubProxyDeps) {
       !session.sealed &&
       !session.pendingTerminal &&
       session.control.paused == null &&
-      session.control.cancelled == null
+      session.control.cancelled == null &&
+      receiptMatches(
+        host,
+        lease.repository,
+        session.cwd,
+        deps.registry.agentOf(session).harness,
+      )
       ? session
       : undefined;
+  }
+
+  function receiptMatches(
+    host: HostFile,
+    repository: string,
+    cwd: string | undefined,
+    harness: string,
+  ): boolean {
+    return (
+      cwd !== undefined &&
+      (host.github_repositories ?? []).some(
+        (receipt) =>
+          receipt.repository.toLowerCase() === repository.toLowerCase() &&
+          resolve(receipt.cwd) === resolve(cwd) &&
+          receipt.harness === harness,
+      )
+    );
   }
 
   function issue(input: GithubLeaseInput) {
@@ -113,6 +139,14 @@ export function createGithubProxy(deps: GithubProxyDeps) {
         body: {
           error:
             "A repository, working directory, and wrapped harness are required",
+        },
+      };
+    if (!receiptMatches(host, input.repository, input.cwd, input.harness))
+      return {
+        status: 403,
+        body: {
+          error:
+            "GitHub custody is not configured for this repository and harness",
         },
       };
     const matches = deps.registry
@@ -202,26 +236,34 @@ export function createGithubProxy(deps: GithubProxyDeps) {
     }
     const pushing = (service ?? path[3]) === "git-receive-pack";
     const host = deps.host();
-    const verified = verifyBundle(host.bundle, host.bundle_public_key_pem).ok;
-    if (!verified) {
+    const evaluate = () => {
+      const view = deps.policy();
+      return evaluatePreToolUse({
+        bundle: view.bundle,
+        bundleVerified: view.verified,
+        hostStatus: view.hostStatus,
+        session: session.control,
+        latestDenyGeneration: view.denyGeneration,
+        controlReachable: view.controlReachable,
+        mandateConfirmedAt: view.mandateConfirmedAt,
+        now: deps.now(),
+        toolName: "Bash",
+        toolInput: {
+          command: `git ${pushing ? "push" : "fetch"} https://github.com/${lease.repository}.git`,
+        },
+      });
+    };
+    let verdict = evaluate();
+    if (verdict.decision === "defer") {
+      await deps.refreshBundle();
+      verdict = evaluate();
+    }
+    // Observe mode allows an unverified bundle; a token mint must not.
+    if (!deps.policy().verified) {
       reply(res, 403, "The signed GitHub mandate did not verify");
       return;
     }
-    const verdict = evaluatePreToolUse({
-      bundle: host.bundle,
-      bundleVerified: verified,
-      hostStatus: host.host_status,
-      session: session.control,
-      latestDenyGeneration: host.deny_generation,
-      controlReachable: true,
-      mandateConfirmedAt: Date.parse(host.bundle_fetched_at),
-      now: deps.now(),
-      toolName: "Bash",
-      toolInput: {
-        command: `git ${pushing ? "push" : "fetch"} https://github.com/${lease.repository}.git`,
-      },
-    });
-    if (verdict.decision !== "allow") {
+    if (verdict.decision !== "allow" || !live(lease)) {
       reply(res, 403, verdict.reason);
       return;
     }

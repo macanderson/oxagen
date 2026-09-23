@@ -12,7 +12,9 @@ import {
   readHostFileLenient,
   writeHostFile,
 } from "../host/host-file";
+import { enroll } from "./enroll";
 import { buildRig, seedHome } from "./install-rig";
+import { reassign } from "./reassign";
 import {
   githubConfigure,
   githubCredential,
@@ -133,6 +135,51 @@ describe("GitHub transport configuration", () => {
       expect(t.git(["remote", "get-url", "origin"]).stdout.trim()).toBe(remote);
     },
   );
+  it("restores the recorded remotes before reassign replaces the enrollment", async () => {
+    const seed = seedHome();
+    homes.push(seed.home);
+    const rig = buildRig(seed);
+    expect((await enroll({ harnesses: ["claude-code"] }, rig.deps)).ok).toBe(
+      true,
+    );
+    const cwd = join(seed.home, "repo");
+    mkdirSync(cwd);
+    const git = (args: string[]) =>
+      spawnSync("git", ["-C", cwd, ...args], {
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          GIT_CONFIG_NOSYSTEM: "1",
+          GIT_CONFIG_GLOBAL: join(seed.home, "empty-global"),
+        },
+      });
+    expect(git(["init"]).status).toBe(0);
+    git(["remote", "add", "origin", "git@github.com:acme/repo.git"]);
+    const deps = {
+      ...rig.deps,
+      exec: (command: string, args: string[]) =>
+        command === "git" ? git(args.slice(2)) : rig.deps.exec(command, args),
+    };
+    githubConfigure(
+      { cwd, repository: "acme/repo", harness: "claude-code" },
+      deps,
+    );
+    expect(git(["remote", "get-url", "origin"]).stdout.trim()).toMatch(
+      /^http:\/\/127\.0\.0\.1:\d+\/github\/acme\/repo\.git$/,
+    );
+    // Another workspace, so reassign re-enrolls instead of returning early.
+    expect(
+      (await reassign({ workspace: "other", harnesses: ["claude-code"] }, deps))
+        .ok,
+    ).toBe(true);
+    expect(git(["remote", "get-url", "origin"]).stdout.trim()).toBe(
+      "git@github.com:acme/repo.git",
+    );
+    expect(
+      readHostFile(rig.deps.paths.hostFile)?.github_repositories ?? [],
+    ).toEqual([]);
+  });
+
   it("refuses both sides of a linked checkout before changing shared config", () => {
     const t = setup();
     t.git(["remote", "add", "origin", "https://github.com/acme/repo.git"]);

@@ -1,6 +1,7 @@
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { verifyBundle } from "../host/bundle";
 import type { TachoEvent } from "../envelope";
 import {
   bundleSigner,
@@ -33,6 +34,16 @@ async function setup() {
     ),
     {
       github_broker_enabled: true,
+      github_repositories: [
+        {
+          cwd: "/repo",
+          repository: "acme/repo",
+          harness: "claude-code",
+          url: "http://127.0.0.1:47001/github/acme/repo.git",
+          helper: "helper",
+          remotes: [],
+        },
+      ],
       bundle_fetched_at: new Date(NOW).toISOString(),
     },
   );
@@ -81,7 +92,21 @@ async function setup() {
       });
     },
   );
+  let confirmedAt = NOW;
+  const refreshBundle = vi.fn(async () => {
+    confirmedAt = now;
+    return true;
+  });
   const proxy = createGithubProxy({
+    policy: () => ({
+      bundle: host.bundle,
+      verified: verifyBundle(host.bundle, host.bundle_public_key_pem).ok,
+      hostStatus: host.host_status,
+      denyGeneration: host.deny_generation,
+      controlReachable: true,
+      mandateConfirmedAt: confirmedAt,
+    }),
+    refreshBundle,
     host: () => host,
     registry,
     now: () => now,
@@ -140,6 +165,10 @@ async function setup() {
     forwarded,
     upstream,
     proxy,
+    refreshBundle,
+    setConfirmedAt: (at: number) => {
+      confirmedAt = at;
+    },
     token,
     request,
     advance: () => {
@@ -149,6 +178,35 @@ async function setup() {
 }
 
 describe("GitHub daemon custody", () => {
+  it("binds leases to the configured repository and harness receipt", async () => {
+    const t = await setup();
+    expect(
+      t.proxy.issue({
+        repository: "Acme/Other",
+        cwd: "/repo",
+        harness: "claude-code",
+      }).status,
+    ).toBe(403);
+    expect(
+      t.proxy.issue({ repository: "Acme/Repo", cwd: "/repo", harness: "codex" })
+        .status,
+    ).toBe(403);
+    t.host.github_repositories = [];
+    expect((await t.request()).status).toBe(403);
+    expect(t.controlFetch).not.toHaveBeenCalled();
+  });
+
+  it("uses the daemon confirmation and refreshes a deferred mandate", async () => {
+    const t = await setup();
+    t.host.bundle_fetched_at = "2020-01-01T00:00:00.000Z";
+    expect((await t.request()).status).toBe(200);
+    expect(t.refreshBundle).not.toHaveBeenCalled();
+    t.host.bundle_fetched_at = new Date(NOW).toISOString();
+    t.setConfirmedAt(NOW - 366 * 86400_000);
+    expect((await t.request()).status).toBe(200);
+    expect(t.refreshBundle).toHaveBeenCalledOnce();
+  });
+
   it("streams git bytes with a repository token held only by the daemon, then revokes it", async () => {
     const t = await setup();
     const response = await t.request("/github/acme/repo.git/git-receive-pack", {
@@ -219,7 +277,7 @@ describe("GitHub daemon custody", () => {
         cwd: "/elsewhere",
         harness: "claude-code",
       }).status,
-    ).toBe(409);
+    ).toBe(403);
     t.registry.ensure("second", { cwd: "/repo", harness: "claude-code" });
     expect(
       t.proxy.issue({

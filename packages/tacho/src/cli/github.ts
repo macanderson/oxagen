@@ -165,7 +165,7 @@ export function githubConfigure(
     github_broker_enabled: true,
     github_repositories: [
       ...receipts.filter((entry) => entry !== previous),
-      { cwd, repository, url, helper, remotes },
+      { cwd, repository, harness: options.harness, url, helper, remotes },
     ],
   });
   git(deps, cwd, ["config", "--local", "--replace-all", helperKey, ""]);

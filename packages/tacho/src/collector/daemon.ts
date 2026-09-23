@@ -2250,11 +2250,16 @@ async function initializeDaemon(
   }
 
   const githubProxy = createGithubProxy({
-    host: () => ({
-      ...host,
-      github_broker_enabled:
-        readHostFile(paths.hostFile)?.github_broker_enabled === true,
-    }),
+    host: () => {
+      const current = readHostFile(paths.hostFile);
+      return {
+        ...host,
+        github_broker_enabled: current?.github_broker_enabled === true,
+        github_repositories: current?.github_repositories ?? [],
+      };
+    },
+    policy,
+    refreshBundle,
     registry,
     controlFetch: options.fetch ?? globalThis.fetch,
     now,

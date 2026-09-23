@@ -99,6 +99,9 @@ export const hostFileSchema = z
           .object({
             cwd: z.string(),
             repository: z.string(),
+            harness: z
+              .enum(["claude-code", "codex", "cursor", "stella"])
+              .optional(),
             url: z.string(),
             helper: z.string(),
             remotes: z.array(
