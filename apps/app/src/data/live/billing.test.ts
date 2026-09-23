@@ -1,13 +1,15 @@
-// The billing port: four kernel reads on the organization's ctx, each mapped
+// The billing port: six kernel reads on the organization's ctx, each mapped
 // into its view model, with a refusal passed through and an unmappable record
 // reported once.
 import { billingContractRateGet } from "@oxagen/oxagen/contracts/billing.contract_rate.get";
+import { billingEvidenceRetention } from "@oxagen/oxagen/contracts/billing.evidence_retention";
 import { billingGauBucketGet } from "@oxagen/oxagen/contracts/billing.gau_bucket.get";
 import { billingInvoiceList } from "@oxagen/oxagen/contracts/billing.invoice.list";
 import { billingSubscriptionRead } from "@oxagen/oxagen/contracts/billing.subscription.read";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   contractRateOutput,
+  evidenceRetentionOutput,
   invoiceItemOutput,
   prepaidBucketOutput,
   subscriptionOutput,
@@ -187,6 +189,39 @@ describe("billing.contractRate", () => {
       readOk(contractRateOutput({ agreementRef: "" })),
     );
     expect(await billing.contractRate(ctx)).toEqual(
+      readError("record_unmappable", 502),
+    );
+    expect(captureError).toHaveBeenCalledOnce();
+  });
+});
+
+describe("billing.retention", () => {
+  it("reads get_evidence_retention into the retention terms", async () => {
+    kernelRead.mockResolvedValue(readOk(evidenceRetentionOutput()));
+    expect(await billing.retention(ctx)).toEqual(
+      readOk({
+        includedMonths: 12,
+        perGbMonth: { micros: "80000", currency: "USD" },
+        extendedRetentionEnabled: false,
+      }),
+    );
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: billingEvidenceRetention,
+      input: {},
+      page: "billing",
+    });
+  });
+
+  it("passes a denial through untouched (negative)", async () => {
+    kernelRead.mockResolvedValue(DENIED);
+    expect(await billing.retention(ctx)).toEqual(DENIED);
+  });
+
+  it("answers record_unmappable for a price micros cannot hold (negative)", async () => {
+    kernelRead.mockResolvedValue(
+      readOk(evidenceRetentionOutput({ usdPerGbMonth: 1e-7 })),
+    );
+    expect(await billing.retention(ctx)).toEqual(
       readError("record_unmappable", 502),
     );
     expect(captureError).toHaveBeenCalledOnce();

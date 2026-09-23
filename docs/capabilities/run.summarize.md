@@ -30,10 +30,12 @@ The generated name and summary of a sealed run (Mission Control mockup 2821-2835
 
 ## The job
 
-`run.summarize` (`@oxagen/inngest-functions`) reads the run's transcript at the `steps` zoom, bounded to the first 60 entries and 4 000 characters of body text each, and asks the fast tier (`OXAGEN_LLM_FAST`, `modelIdOf()` recorded as `summary_model`) for a name of at most 80 characters and a summary of at most 1 200. When none of those steps kept a readable body the job fails without retry and makes no model call: a prompt of step labels alone would produce the receipts-only summary the interface forbids, and `get_run` keeps answering no summary. It writes `name`, `summary`, `summary_generated_at` and `summary_model` together on `agent.agent_runs` or `tacho.sessions`.
+`run.enrich` (`@oxagen/inngest-functions`, ADR-153) handles the `run/enrich` event this action sends. It reads every retained frame body in chronological chunks and asks Stella, through a tool-free governed turn on organization funding, for a name of at most 80 characters and a summary of at most 1 600. A run with no retained text gets no model call. It writes `name`, `summary`, `summary_generated_at` and `summary_model` together on `agent.agent_runs` or `tacho.sessions`, with `summary_input_digest`, `summary_observed_at` and `summary_observed_revision` as its cursor.
 
 ## Errors
 
 - `forbidden` (403): the actor holds none of Owner, Admin, Member in the org.
 - `not_found` (404): no run with that id in the caller's workspace.
 - `conflict` (409), by `reason`: `run_not_sealed` (the record is not yet complete); `digest_only` (the seal recorded a `digest_only` gap: there are no bodies for a model to read, and a summary written from receipts alone would be the placeholder the interface forbids).
+
+The action now dispatches `run/enrich`, the same Stella path used by the automatic five-minute sweep. It reads all retained frames in chronological chunks instead of a sixty-step prefix. A repeated request with the same input digest does not spend credits again. The workspace's `runEnrichmentEnabled` setting also gates manual requests; disabling it leaves evidence intact and suppresses generated display text. The action's sealed-run and retained-body admission checks remain in place.

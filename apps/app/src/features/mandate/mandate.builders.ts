@@ -17,6 +17,7 @@ export function mandateSource(read: Read<MandateDetail> | undefined) {
     billing: {
       plan: refuse,
       usageCredits: refuse,
+      retention: refuse,
       bucket: refuse,
       contractRate: refuse,
       invoices: refuse,
@@ -29,6 +30,8 @@ export function mandateSource(read: Read<MandateDetail> | undefined) {
       transcript: refuse,
       chain: refuse,
       outputs: refuse,
+      work: refuse,
+      outcomesSettings: refuse,
     },
     approvals: { pending: refuse, resolved: refuse },
     agents: {

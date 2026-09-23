@@ -358,6 +358,9 @@ const PROBES: Readonly<Record<string, readonly Placement[]>> = {
     { at: "src/features/shell/other-actions.ts", expect: "layer" },
   ],
   "fleet-client.ts": [{ at: "src/features/shell/activity.tsx", expect: null }],
+  "shell-client.ts": [
+    { at: "src/features/fleet/approvals-entry.tsx", expect: null },
+  ],
   "kernel-write-use-server.ts": [
     { at: "src/features/fleet/actions.ts", expect: null },
   ],

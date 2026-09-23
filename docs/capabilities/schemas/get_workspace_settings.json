@@ -89,6 +89,9 @@
           "blockStaleRuns"
         ],
         "additionalProperties": false
+      },
+      "runEnrichmentEnabled": {
+        "type": "boolean"
       }
     },
     "required": [
