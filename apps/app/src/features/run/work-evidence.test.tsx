@@ -2,10 +2,10 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
-import type { RunWork } from "@/data/contracts/run-work";
-import { readError, readOk } from "@/data/read";
+import type { RunWork as RunWorkView } from "@/data/contracts/run-work";
+import { type Read, readError, readOk } from "@/data/read";
 import { IntlProvider } from "@/test/intl";
-import { RunWorkSection } from "./work-evidence";
+import { runDetail, runSource } from "./run.builders";
 vi.mock("next/link", () => ({
   default: ({ children, ...props }: { children: ReactNode; href: string }) => (
     <a {...props}>{children}</a>
@@ -14,6 +14,22 @@ vi.mock("next/link", () => ({
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
+vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
+vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
+const { WsCtx } = await import("@/server/viewer");
+const { unsafeMint } = await import("@/server/viewer.testing");
+const { RunWork } = await import("./work-evidence");
+const ctx = unsafeMint(WsCtx, {
+  userId: "usr_marcusbell",
+  orgId: "7a000000-0000-4000-8000-0000000000a1",
+  orgSlug: "acme",
+  orgName: "Acme Robotics",
+  orgRole: "owner",
+  workspaceId: "7b000000-0000-4000-8000-000000000001",
+  wsSlug: "app",
+  wsName: "App",
+  wsRole: "member",
+});
 afterEach(cleanup);
 const repo = {
   host: "github.com",
@@ -22,7 +38,7 @@ const repo = {
   url: "https://github.com/acme/app",
   connected: true,
 };
-const value: RunWork = {
+const value: RunWorkView = {
   runId: "tse_example",
   machine: { name: "MacBook" },
   checkouts: [
@@ -93,17 +109,20 @@ const value: RunWork = {
   complete: false,
   warnings: ["ci_check_limit"],
 };
-it("puts failed CI beside actionable checkout and PR evidence without claiming authorship", () => {
-  render(
-    <IntlProvider>
-      <RunWorkSection
-        read={readOk(value)}
-        org="acme"
-        ws="app"
-        runId={value.runId}
-      />
-    </IntlProvider>,
-  );
+async function renderWork(read: Read<RunWorkView>) {
+  const { source } = runSource({ detail: readOk(runDetail()) });
+  source.runs.work = () => Promise.resolve(read);
+  const element = await RunWork({
+    ctx,
+    source,
+    org: "acme",
+    ws: "app",
+    runId: value.runId,
+  });
+  render(<IntlProvider>{element}</IntlProvider>);
+}
+it("puts failed CI beside actionable checkout and PR evidence without claiming authorship", async () => {
+  await renderWork(readOk(value));
   expect(
     screen.getByRole("heading", { name: "1 failing check" }),
   ).toBeInTheDocument();
@@ -122,17 +141,8 @@ it("puts failed CI beside actionable checkout and PR evidence without claiming a
     screen.getByText(/Digest recorded; bytes not retained/),
   ).toBeInTheDocument();
 });
-it("does not substitute zero work for an unavailable read", () => {
-  render(
-    <IntlProvider>
-      <RunWorkSection
-        read={readError("unavailable", 503)}
-        org="acme"
-        ws="app"
-        runId={value.runId}
-      />
-    </IntlProvider>,
-  );
+it("does not substitute zero work for an unavailable read", async () => {
+  await renderWork(readError("unavailable", 503));
   expect(screen.queryByTestId("run-work")).toBeNull();
   expect(screen.getByText(/unavailable/)).toBeInTheDocument();
 });

@@ -36,7 +36,7 @@ const ciRunSchema = z.object({
   durationMs: z.number().nullable(),
   app: z.string().nullable(),
 });
-export const runRepositorySchema = z
+const runRepositorySchema = z
   .object({
     host: z.string(),
     owner: z.string(),
@@ -45,7 +45,7 @@ export const runRepositorySchema = z
     connected: z.boolean(),
   })
   .strict();
-export const runCheckoutSchema = z
+const runCheckoutSchema = z
   .object({
     ref: z.string(),
     path: z.string(),
@@ -57,7 +57,7 @@ export const runCheckoutSchema = z
     lastSeq: z.string(),
   })
   .strict();
-export const runCapturedDiffSchema = z
+const runCapturedDiffSchema = z
   .object({
     checkoutRef: z.string(),
     seq: z.string(),
@@ -75,7 +75,7 @@ export const runCapturedDiffSchema = z
     observedAt: z.string(),
   })
   .strict();
-export const runPrDiffFileSchema = z
+const runPrDiffFileSchema = z
   .object({
     path: z.string(),
     previousPath: z.string().nullable(),
@@ -85,7 +85,7 @@ export const runPrDiffFileSchema = z
     patch: z.string().nullable(),
   })
   .strict();
-export const runWorkPrSchema = z
+const runWorkPrSchema = z
   .object({
     repository: runRepositorySchema,
     number: z.number().int(),

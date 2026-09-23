@@ -33,7 +33,7 @@ function ProviderLink({
     <span>{children}</span>
   );
 }
-export function RunWorkSection({
+function RunWorkSection({
   read,
   org,
   ws,
