@@ -77,6 +77,7 @@ export const [ingestionConnectionPoll] = createFunction(
 
     // ── Step 1: Load mapped record types + current cursor ────────────────────
     const loaded = await step.run("load-connection", async () => {
+      // tenancy: the worker loads one connection fenced by its event org ID.
       const rows = await withSystemDb(async (tx) => {
         const conn = await tx.execute(sql`
           SELECT cursor, consecutive_failure_count, status, delivery_config
