@@ -53,6 +53,7 @@ describe("SheetDialog dismissal", () => {
         <SheetDialog
           open
           headerClose
+          closeLabel="Cancel"
           onOpenChange={change}
           title="Governance"
           testId="with-x"
@@ -61,7 +62,7 @@ describe("SheetDialog dismissal", () => {
         </SheetDialog>
       </IntlProvider>,
     );
-    await user.click(screen.getByRole("button", { name: "Close the dialog" }));
+    await user.click(screen.getByRole("button", { name: "Close" }));
     expect(change).toHaveBeenCalledWith(false);
   });
   it("draws no header × by default (negative)", () => {
@@ -72,9 +73,7 @@ describe("SheetDialog dismissal", () => {
         </SheetDialog>
       </IntlProvider>,
     );
-    expect(
-      screen.queryByRole("button", { name: "Close the dialog" }),
-    ).toBeNull();
+    expect(document.querySelector("[data-header-close]")).toBeNull();
   });
 });
 
