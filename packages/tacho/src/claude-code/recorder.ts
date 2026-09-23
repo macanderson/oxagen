@@ -276,6 +276,14 @@ export class SessionRecorder {
   private turnSeq = 0;
   private turnOpen = false;
   private promptId: string | undefined;
+  /**
+   * The agent's last message in the open turn, as a harness that reports it
+   * separately from the turn's end handed it over (Cursor's
+   * `afterAgentResponse`). The turn's `turn_end` carries it when the stop
+   * that closes the turn does not, which is every Cursor stop. One per
+   * session, released when the turn closes.
+   */
+  private turnReply: DraftContent | undefined;
   private started = false;
   private stopped = false;
   private envSnapshot: Record<string, string> | undefined;
@@ -975,18 +983,38 @@ export class SessionRecorder {
     }
     if (draft.kind === "turn_start") {
       if (this.turnOpen) {
+        const reply = this.turnReply;
         out.push(
           this.seal(
             "turn_end",
             {},
-            { ts, source: "collector", hook_event_name: "UserPromptSubmit" },
+            {
+              ts,
+              source: "collector",
+              hook_event_name: "UserPromptSubmit",
+              ...(reply !== undefined ? { content: reply } : {}),
+            },
           ),
         );
       }
+      this.turnReply = undefined;
       this.turnSeq += 1;
       this.turnOpen = true;
       this.promptId = draft.turn?.prompt_id;
     }
+    if (
+      draft.kind === "oxagen:message" &&
+      draft.hook_event_name === "AgentResponse" &&
+      draft.content !== undefined
+    ) {
+      this.turnReply = draft.content;
+    }
+    // A stop that names no message closes the turn with the one the harness
+    // reported on its own, so the turn reads with its reply on every harness.
+    const content =
+      draft.kind === "turn_end" && draft.content === undefined
+        ? this.turnReply
+        : draft.content;
     if (draft.kind === "subagent_start" && draft.subagent === undefined) {
       // The parent-side view of a spawn (no agent_id on the payload).
       body = { ...body };
@@ -1008,17 +1036,19 @@ export class SessionRecorder {
         ? { hook_source_kind: draft.hook_source_kind }
         : {}),
       attrs: { ...draft.attrs, ...duplicate },
-      ...(draft.content !== undefined ? { content: draft.content } : {}),
+      ...(content !== undefined ? { content } : {}),
       raw_source_digest: draft.raw_source_digest,
       turn: draft.turn ?? {},
     });
     sighting.commit();
     if (draft.kind === "turn_end") {
       this.turnOpen = false;
+      this.turnReply = undefined;
     }
     if (draft.kind === "agent_stop") {
       this.stopped = true;
       this.turnOpen = false;
+      this.turnReply = undefined;
     }
     out.push(event);
     return out;

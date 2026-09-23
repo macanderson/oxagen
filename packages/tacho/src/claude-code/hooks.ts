@@ -123,6 +123,13 @@ const PROMOTED = new Set([
   "compact_summary",
   "teammate_name",
   "subagent_result",
+  // Message text, never an attribute. Attributes are stored as they arrive,
+  // so text left there would skip the redaction and the retention mandate
+  // every body goes through. Cursor's `afterAgentResponse` carries the
+  // agent's message as `text`, and its `preToolUse` carries what the agent
+  // said before the call as `agent_message`.
+  "text",
+  "agent_message",
 ]);
 
 function str(value: unknown): string | undefined {
@@ -581,6 +588,28 @@ export function normalizeHook(
               : {}),
           },
           delta !== undefined ? { content: textContent(delta) } : {},
+        ),
+      ];
+    }
+    case "AgentResponse": {
+      // Cursor's `afterAgentResponse`: the agent's message, once written. It
+      // is the reply a Cursor turn has, because Cursor's `stop` carries none;
+      // the recorder hands it to the turn's `turn_end` for that reason. It is
+      // the same frame Claude Code's `MessageDisplay` seals for a message.
+      const text = str(input["text"]);
+      return [
+        draft(
+          "oxagen:message",
+          {
+            ...(text !== undefined
+              ? {
+                  response_digest: digestText(text),
+                  response_length: text.length,
+                }
+              : {}),
+            message_final: true,
+          },
+          text !== undefined ? { content: textContent(text) } : {},
         ),
       ];
     }
