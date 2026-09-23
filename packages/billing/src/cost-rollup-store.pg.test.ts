@@ -373,6 +373,35 @@ describe.skipIf(!enabled)(
       expect(row?.costBasis).toBe(null);
       expect(row?.modelCalls).toBe(3);
     });
+
+    it("keeps a run's first cost center on a later rebuild and fills a null (ADR-142)", async () => {
+      const read = async (id: string) =>
+        (
+          await withSystemDb((tx) =>
+            tx.select().from(totals).where(eq(totals.runId, id)).limit(1),
+          )
+        )[0]?.costCenter;
+      // A closed month stays where finance booked it: a rebuild after the
+      // agent moved to MKT-2002 leaves the run on ENG-1001.
+      const kept = runId("keepcc");
+      await upsertRunTotals(
+        { ...priced, runId: kept, costCenter: "ENG-1001" },
+        new Date(),
+      );
+      await upsertRunTotals(
+        { ...priced, runId: kept, costCenter: "MKT-2002" },
+        new Date(),
+      );
+      expect(await read(kept)).toBe("ENG-1001");
+      // A run first rolled up with no label takes one when a rebuild finds it.
+      const filled = runId("fillcc");
+      await upsertRunTotals({ ...priced, runId: filled }, new Date());
+      await upsertRunTotals(
+        { ...priced, runId: filled, costCenter: "ENG-1001" },
+        new Date(),
+      );
+      expect(await read(filled)).toBe("ENG-1001");
+    });
   },
 );
 
