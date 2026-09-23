@@ -62,7 +62,11 @@ vi.mock("@tauri-apps/plugin-shell", () => ({
 
 import {
   apiPost,
+  checkLiveSession,
+  DETECT_TIMEOUT_MS,
+  detectHarnesses,
   installCli,
+  isUnauthorized,
   parseConnect,
   parseDetect,
   listOrganizations,
@@ -297,5 +301,83 @@ describe("detect and connect parsing", () => {
         detail: "tacho verify exited ? without a result",
       },
     );
+  });
+});
+
+describe("the machine scan", () => {
+  it("resolves the detect document", async () => {
+    const pending = detectHarnesses();
+    await Promise.resolve();
+    expect(spawned[0]?.args).toEqual(["detect", "--json"]);
+    spawned[0]?.emit("stdout", '{"enrolled":false,"harnesses":[]}');
+    spawned[0]?.emit("close", { code: 0 });
+    expect(await pending).toEqual({ enrolled: false, harnesses: [] });
+  });
+
+  it("fails a scan that printed no document instead of reporting nothing found", async () => {
+    const withStderr = detectHarnesses();
+    await Promise.resolve();
+    spawned[0]?.emit("stdout", "warning: profile printed this");
+    spawned[0]?.emit("stderr", "tacho: cannot read host.json");
+    spawned[0]?.emit("close", { code: 1 });
+    await expect(withStderr).rejects.toThrow("tacho: cannot read host.json");
+    const silent = detectHarnesses();
+    await Promise.resolve();
+    spawned[1]?.emit("close", { code: 3 });
+    await expect(silent).rejects.toThrow(
+      "tacho detect exited 3 without a report",
+    );
+  });
+
+  it("gives four harnesses' login-shell probes time to finish", () => {
+    // Four harnesses, three probes each, 10 s apiece in tacho.
+    expect(DETECT_TIMEOUT_MS).toBeGreaterThanOrEqual(4 * 3 * 10_000);
+  });
+});
+
+describe("the session check before a reassign", () => {
+  it("answers live when the control plane lists the organizations", async () => {
+    expect(await checkLiveSession(async () => [])).toEqual({ live: true });
+  });
+
+  it("calls a 401 an expired session and says nothing was changed", async () => {
+    expect(
+      await checkLiveSession(async () => {
+        throw new Error("401: unauthorized");
+      }),
+    ).toEqual({
+      live: false,
+      expired: true,
+      message: "Sign in again first. Nothing was changed.",
+    });
+  });
+
+  it("refuses when the control plane cannot be reached, without calling the session dead", async () => {
+    const check = await checkLiveSession(async () => {
+      throw new Error("error sending request");
+    });
+    expect(check.live).toBe(false);
+    if (!check.live) {
+      expect(check.expired).toBe(false);
+      expect(check.message).toContain("error sending request");
+      expect(check.message).toContain("Nothing was changed.");
+    }
+  });
+
+  it("asks the organizations endpoint by default", async () => {
+    answers.set("api_post", { organizations: [] });
+    expect(await checkLiveSession()).toEqual({ live: true });
+    expect(invoked).toEqual([
+      {
+        cmd: "api_post",
+        args: { path: "/v1/user/organizations", body: {} },
+      },
+    ]);
+  });
+
+  it("reads only a leading 401 as unauthorized", () => {
+    expect(isUnauthorized(new Error("401: token expired"))).toBe(true);
+    expect(isUnauthorized("401")).toBe(true);
+    expect(isUnauthorized(new Error("500: upstream 401"))).toBe(false);
   });
 });

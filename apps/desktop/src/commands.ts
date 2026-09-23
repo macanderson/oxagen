@@ -289,6 +289,28 @@ export function deregisterArgs(
 }
 
 /**
+ * Whether de-registering this harness needs a live sign-in. With others left
+ * it is a `tacho reassign`, which revokes and enrolls again with the session;
+ * the last one is an `unenroll`, which finishes offline.
+ */
+export function deregisterNeedsSession(
+  enrolled: readonly string[],
+  harness: Harness,
+): boolean {
+  return deregisterArgs(enrolled, harness).args[0] === "reassign";
+}
+
+/**
+ * The collector in the wizard's confirmation. It read "starting…" for as
+ * long as the collector did not answer, which the app had no way to know.
+ */
+export function collectorText(daemonUp: boolean, port: number): string {
+  return daemonUp
+    ? `running on 127.0.0.1:${port}`
+    : `not answering on 127.0.0.1:${port}`;
+}
+
+/**
  * The workspace root in the Oxagen app, where the host reports to. Not
  * `/runs`: that route does not exist in `apps/app` (its workspace sections
  * are `knowledge`, `marketplace`, `sessions`, `settings`, `workbench`, plus

@@ -182,6 +182,47 @@ export const listOrganizations = async (): Promise<OrgItem[]> =>
   (await apiPost<{ organizations: OrgItem[] }>("/v1/user/organizations", {}))
     .organizations;
 
+/** `api_post` rejects with "401: ..." when the session token is dead. */
+export function isUnauthorized(e: unknown): boolean {
+  const text = e instanceof Error ? e.message : String(e);
+  return /^401\b/.test(text);
+}
+
+export type SessionCheck =
+  | { live: true }
+  | { live: false; expired: boolean; message: string };
+
+/**
+ * Whether the saved session still works, asked of the control plane right
+ * before an action that needs it. `tacho reassign` revokes the enrollment
+ * first and enrolls again with the session; with a dead token it revoked,
+ * stripped the hooks, failed to enroll and removed the service, so a harness
+ * or workspace change unenrolled the machine. `logged_in` in config.json
+ * only says a token is on disk, and the picker's 401 is learned once, at
+ * launch. A control plane that cannot be reached is refused as well: the
+ * same enroll would fail the same way.
+ */
+export async function checkLiveSession(
+  list: () => Promise<unknown> = listOrganizations,
+): Promise<SessionCheck> {
+  try {
+    await list();
+    return { live: true };
+  } catch (e) {
+    if (isUnauthorized(e))
+      return {
+        live: false,
+        expired: true,
+        message: "Sign in again first. Nothing was changed.",
+      };
+    return {
+      live: false,
+      expired: false,
+      message: `Could not reach Oxagen to check your sign-in: ${e instanceof Error ? e.message : String(e)}. Nothing was changed.`,
+    };
+  }
+}
+
 export const listWorkspaces = async (
   orgSlug: string,
 ): Promise<WorkspaceItem[]> =>
@@ -294,14 +335,28 @@ export interface DetectReport {
   harnesses: DetectedHarness[];
 }
 
-/** Two login-shell probes plus two `--version` calls, each bounded to 10 s in tacho. */
-const DETECT_TIMEOUT_MS = 45_000;
+/**
+ * Four harnesses, each up to two login-shell lookups and a `--version` call,
+ * every one bounded to 10 s in tacho: 120 s when every shell profile is at
+ * its slowest. 45 s cut a slow but working scan short.
+ */
+export const DETECT_TIMEOUT_MS = 150_000;
 
-export async function detectHarnesses(): Promise<DetectReport | null> {
+/**
+ * The detect document. A run that printed none is a failed scan and rejects:
+ * read as an empty list, it told the operator none of their agents was
+ * installed beside the error that said the scan had not worked.
+ */
+export async function detectHarnesses(): Promise<DetectReport> {
   const result = await runSidecar("tacho", ["detect", "--json"], undefined, {
     timeoutMs: DETECT_TIMEOUT_MS,
   });
-  return parseDetect(result.stdout);
+  const report = parseDetect(result.stdout);
+  if (report !== null) return report;
+  throw new Error(
+    result.stderr.trim() ||
+      `tacho detect exited ${result.code ?? "?"} without a report`,
+  );
 }
 
 /** The detect document, or null when the sidecar printed none. */
