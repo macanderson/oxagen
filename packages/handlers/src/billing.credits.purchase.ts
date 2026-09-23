@@ -8,8 +8,9 @@ import { logger } from "./logger";
 /**
  * purchase_credits — top up the organisation's in-app AI usage credit balance
  * through Stripe Checkout (apps/app/ARCHITECTURE.md §1.4, §3.9 "the second
- * meter"). Credits pay for the in-app agent's model calls at provider cost
- * times the published markup; 1 credit = $0.01. The Stripe webhook grants the
+ * meter"). Credits pay for the in-app agent's model calls on the platform key
+ * at provider cost, with no markup (`ASSISTANT_TOKEN_MARKUP` is 1, ADR-053 §3
+ * as amended 2026-09-18); 1 credit = $0.01. The Stripe webhook grants the
  * credits after payment, so this handler grants nothing itself.
  *
  * Role gate — `assertOrgRole`: org Owner or Billing, for the signed-in user or

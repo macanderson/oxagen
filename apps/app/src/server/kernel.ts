@@ -89,7 +89,18 @@ export type ActionResult<O> =
   | {
       ok: false;
       reason: "exhausted";
-      code: "gau_exhausted" | "billing_suspended" | "budget_exceeded";
+      /**
+       * What ran out. `insufficient_credits` and `assistant_spend_cap` are the
+       * in-app agent's credit gate (packages/billing turn-credit-gate.ts): the
+       * usage credit balance is spent, or the month's platform-paid assistant
+       * cap is. The other three refuse governed actions.
+       */
+      code:
+        | "gau_exhausted"
+        | "billing_suspended"
+        | "budget_exceeded"
+        | "insufficient_credits"
+        | "assistant_spend_cap";
     };
 
 type ExhaustedCode = Extract<
@@ -113,6 +124,8 @@ const EXHAUSTED_CODES: readonly string[] = [
   "gau_exhausted",
   "billing_suspended",
   "budget_exceeded",
+  "insufficient_credits",
+  "assistant_spend_cap",
 ] satisfies readonly ExhaustedCode[];
 
 const isExhaustedCode = (code: string): code is ExhaustedCode =>

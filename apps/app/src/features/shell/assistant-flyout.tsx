@@ -149,8 +149,19 @@ const EMPTY_THREAD: Thread = {
   pending: false,
 };
 
-/** The refusal reasons a turn can come back with, each said plainly. */
-type Refusal = "denied" | "invalid" | "exhausted" | "parked" | "unavailable";
+/**
+ * The refusal reasons a turn can come back with, each said plainly. The
+ * credit gate's two refusals are their own entries rather than `exhausted`,
+ * because each has one way out and the sentence links to it.
+ */
+type Refusal =
+  | "denied"
+  | "invalid"
+  | "exhausted"
+  | "out-of-credits"
+  | "spend-cap"
+  | "parked"
+  | "unavailable";
 
 /**
  * Below `md` the flyout is `w-full` and covers the application, so it is a
@@ -260,7 +271,11 @@ function refusalKey(
 ): Refusal {
   if (result.reason === "denied") return "denied";
   if (result.reason === "invalid") return "invalid";
-  if (result.reason === "exhausted") return "exhausted";
+  if (result.reason === "exhausted") {
+    if (result.code === "insufficient_credits") return "out-of-credits";
+    if (result.code === "assistant_spend_cap") return "spend-cap";
+    return "exhausted";
+  }
   if (result.reason === "pending_approval") return "parked";
   return "unavailable";
 }
@@ -270,7 +285,7 @@ function refusalKey(
  * catalog walk reads `t()` keys statically, and a computed key reaches no
  * catalog it can check.
  */
-function RefusalText({ code }: { code: Refusal }) {
+function RefusalText({ code, org }: { code: Refusal; org: string | null }) {
   const t = useTranslations("shell.assistant.refused");
   switch (code) {
     case "denied":
@@ -279,6 +294,46 @@ function RefusalText({ code }: { code: Refusal }) {
       return <>{t("invalid")}</>;
     case "exhausted":
       return <>{t("exhausted")}</>;
+    // The way out is a top-up on Billing, where the usage credit balance and
+    // its purchase form live (features/billing/usage-credits.tsx).
+    case "out-of-credits":
+      return (
+        <>
+          {t("outOfCredits")}
+          {org === null ? null : (
+            <>
+              {" "}
+              <SafeLink
+                to={routes.billing(org)}
+                data-testid="assistant-buy-credits"
+                className={linkText}
+              >
+                {t("outOfCreditsLink")}
+              </SafeLink>
+            </>
+          )}
+        </>
+      );
+    // The cap bounds only what the platform key pays (ADR-053 §3); a turn on
+    // the organization's own key is not held to it.
+    case "spend-cap":
+      return (
+        <>
+          {t("spendCap")}
+          {org === null ? null : (
+            <>
+              {" "}
+              <SafeLink
+                to={routes.modelFunding(org)}
+                data-testid="assistant-model-funding"
+                className={linkText}
+              >
+                {t("spendCapLink")}
+              </SafeLink>
+            </>
+          )}
+        </>
+      );
     case "parked":
       return <>{t("parked")}</>;
     case "unavailable":
@@ -693,7 +748,7 @@ export function AssistantFlyout() {
                       className="mt-0.5 size-4 flex-none text-error"
                     />
                     <span>
-                      <RefusalText code={entry.code} />
+                      <RefusalText code={entry.code} org={org} />
                     </span>
                   </p>
                 )}

@@ -24,6 +24,12 @@ const { tenantSeam, systemSeam } = vi.hoisted(() => ({
 function makeTx() {
   let call = 0;
   return {
+    // The debt settlement's read of org_billing_settings: no row, nothing owed.
+    select: vi.fn(() => ({
+      from: vi.fn(() => ({
+        where: vi.fn(() => ({ for: vi.fn(async () => []) })),
+      })),
+    })),
     insert: vi.fn(() => {
       call++;
       if (call === 1) {

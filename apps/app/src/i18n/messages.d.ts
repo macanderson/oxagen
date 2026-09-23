@@ -4506,6 +4506,10 @@ type Messages = {
         denied: string;
         invalid: string;
         exhausted: string;
+        outOfCredits: string;
+        outOfCreditsLink: string;
+        spendCap: string;
+        spendCapLink: string;
         parked: string;
         unavailable: string;
       };

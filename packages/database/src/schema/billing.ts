@@ -546,10 +546,13 @@ export const orgBillingSettings = billingSchema.table(
     // it against the assistant spend cap. One bucket per reason makes a fraction
     // debitable only under the reason that accrued it.
     //
-    // Each value is always in [0, 1e6): consumeCredits reads the bucket, adds
-    // this call's micro-credits in BigInt, debits the whole credits and writes
-    // back only the remainder, so no value here is ever large enough to lose
-    // precision as a JSON number. Absent key == nothing carried.
+    // A value is the sub-credit remainder, in [0, 1e6), plus, for a reason
+    // whose shortfall is kept (`consume_assistant_tokens`, ADR-158), the whole
+    // credits the balance could not cover times 1e6. consumeCredits collects
+    // that debt first on the reason's next charge, and settleOwedCredits
+    // collects it from the next grant. consumeCredits refuses to write a value
+    // past 2^53, so every value stays exact as a JSON number. Absent key ==
+    // nothing carried.
     meterCarryMicroCreditsByReason: jsonb("meter_carry_micro_credits_by_reason")
       .$type<Record<string, number>>()
       .notNull()

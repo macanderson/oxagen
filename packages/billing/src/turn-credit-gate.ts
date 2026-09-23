@@ -17,12 +17,17 @@
  * organisation's month bucket rather than a credit balance.
  *
  * WHY it is safe (never a false lockout):
- *   - It blocks ONLY on the two AFFIRMATIVE billing outcomes:
- *       · InsufficientCreditsError — thrown only when effectiveBalance <= 0
- *         AFTER any auto-reload attempt (assertCanStartTurn calls maybeAutoReload
- *         first, so an org that would top up is NOT blocked).
+ *   - It blocks ONLY on the three AFFIRMATIVE billing outcomes:
+ *       · InsufficientCreditsError — thrown only when the effective balance
+ *         minus what the org owes (a debt an earlier turn left when it outran
+ *         the balance) is <= 0 AFTER any auto-reload attempt
+ *         (assertCanStartTurn calls maybeAutoReload first, so an org that
+ *         would top up is NOT blocked).
  *       · BillingSuspendedError — thrown only when dunningState === 'suspended'.
- *     Both are affirmative "this org must not spend" states. Every new org
+ *       · AssistantSpendCapError — the month's platform-paid cap is spent.
+ *     All are affirmative "this org must not spend" states. A turn on the
+ *     organisation's own key (`fundedBy: "org"`) debits no credits, so only
+ *     the suspension check applies to it. Every new org
  *     holds a non-expiring $5 signup grant: `create_org` writes it on the org
  *     transaction (grantSignupCredits) and the deprecated onboarding action
  *     through grantFreeCredits (ADR-055 §13). A zero effective balance means
@@ -31,9 +36,13 @@
  *     route: it can never refuse a turn the tool-call gate would have admitted,
  *     and it introduces no new lockout class.
  *   - Any NON-billing failure (a metering-infra/DB hiccup inside the gate)
- *     resolves to `{ ok: true }` — FAIL OPEN. A transient telemetry blip must
- *     never block a paying customer's turn; any tool call within the turn is
- *     still guarded by the invoke() admission gate as a backstop.
+ *     resolves to `{ ok: true }`: FAIL OPEN. A transient read failure must not
+ *     block a paying customer's turn. Nothing else bounds the turn's token
+ *     spend in that case (the invoke() gate on its tool calls is the GAU gate,
+ *     which does not limit tokens), and the spend cap is skipped with it. What
+ *     the turn spends is still charged: a shortfall becomes a debt the next
+ *     grant collects (credits.ts). The open branch logs at error level with an
+ *     `alert` field so a gate stuck open is visible, not silent.
  *
  * The caller maps `{ ok: false }` to a structured HTTP 402 (Payment Required)
  * before any streaming begins. It lives in `@oxagen/billing` rather than in one
@@ -48,6 +57,7 @@ import {
   BillingSuspendedError,
   type StartTurnOptions,
 } from "./metering";
+import { logger } from "./logger";
 
 /**
  * The 402 error codes surfaced to the client — match errorMiddleware's billing
@@ -65,7 +75,7 @@ export type CreditGateResult =
 
 /**
  * Evaluate the pre-turn credit admission gate for `orgId`. Never throws —
- * returns a typed result the route maps to a 402. Blocks ONLY on the two
+ * returns a typed result the route maps to a 402. Blocks ONLY on the three
  * affirmative billing errors; fails OPEN on anything else (see module docstring).
  *
  * MUST be called inside a tenant scope (runInTenantScope) — the underlying
@@ -89,8 +99,17 @@ export async function evaluateTurnCreditGate(
     if (err instanceof AssistantSpendCapError) {
       return { ok: false, code: "assistant_spend_cap", message: err.message };
     }
-    // Unknown / infra error — FAIL OPEN. Do not block the turn on a metering
-    // blip; the invoke() admission gate still guards any tool call in the turn.
+    // Unknown / infra error: FAIL OPEN. Do not block the turn on a metering
+    // blip. The turn's spend is still charged, and an unpaid remainder is
+    // banked as a debt; the log makes a gate that keeps failing open visible.
+    logger.error(
+      {
+        orgId,
+        alert: "billing_turn_credit_gate_failed_open",
+        err: err instanceof Error ? err.message : String(err),
+      },
+      "billing: the turn credit gate could not decide and let the turn run",
+    );
     return { ok: true };
   }
 }

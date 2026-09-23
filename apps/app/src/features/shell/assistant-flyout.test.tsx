@@ -491,6 +491,41 @@ describe("AssistantFlyout", () => {
     expect(await screen.findByTestId("assistant-exhausted")).toBeTruthy();
   });
 
+  // Before the kernel seam mapped the credit gate's codes, an organization
+  // out of usage credits read "could not be reached. Try again.", and trying
+  // again could never work. The refusal now names the balance and links to
+  // the top-up on Billing.
+  it("says the organization is out of usage credits and links to the top-up (negative)", async () => {
+    askAssistant.mockResolvedValue({
+      ok: false,
+      reason: "exhausted",
+      code: "insufficient_credits",
+    });
+    const { user } = await openFlyout();
+    await ask(user, "what is live?");
+    const refused = await screen.findByTestId("assistant-out-of-credits");
+    expect(refused.textContent).toContain("out of usage credits");
+    expect(screen.queryByTestId("assistant-unavailable")).toBeNull();
+    expect(
+      screen.getByTestId("assistant-buy-credits").getAttribute("href"),
+    ).toBe("/acme/billing");
+  });
+
+  it("says the monthly assistant cap is spent and links to model funding (negative)", async () => {
+    askAssistant.mockResolvedValue({
+      ok: false,
+      reason: "exhausted",
+      code: "assistant_spend_cap",
+    });
+    const { user } = await openFlyout();
+    await ask(user, "what is live?");
+    const refused = await screen.findByTestId("assistant-spend-cap");
+    expect(refused.textContent).toContain("platform-paid assistant usage");
+    expect(
+      screen.getByTestId("assistant-model-funding").getAttribute("href"),
+    ).toBe("/acme/model-funding");
+  });
+
   it("survives a thrown action without claiming an answer (negative)", async () => {
     askAssistant.mockRejectedValue(new Error("network"));
     const { user } = await openFlyout();

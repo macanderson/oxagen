@@ -137,9 +137,26 @@ fail the user's turn.
 `credit_balances` has a DB CHECK `balance_cents >= 0`. `chargeUsageCredits`
 **clamps** the debit to the available balance and reports a `shortfallCredits`
 when the org outruns its credits mid-turn. A zero-cost call inserts **no** ledger
-row (the ledger CHECK forbids a zero delta). The real admission control —
-refusing a turn when the balance is empty — is the caller's pre-turn guard,
-`hasCreditBalance(orgId)`.
+row (the ledger CHECK forbids a zero delta).
+
+For `consume_assistant_tokens` the shortfall is a debt, not a write-off. The
+pre-turn gate admits a turn on any positive balance and a turn runs up to
+twelve model steps, so the last turn before the balance empties can cost more
+than was left. `consumeCredits` (with `carryShortfall`) banks the unpaid whole
+credits in that reason's bucket of
+`org_billing_settings.meter_carry_micro_credits_by_reason`, beside the
+sub-credit fraction. Three things read it:
+
+- `assertCanStartTurn` admits a platform-funded turn only while the effective
+  balance minus `owedCredits(orgId)` is above zero.
+- The next charge under the reason collects the debt first, in a ledger row of
+  its own (`reference_type` `credit_debt`, no `created_by_id`).
+- Every grant (`createCreditLot`, and the Stripe grants in `grants.ts`) runs
+  `settleOwedCredits` on its own transaction before it writes the balance
+  mirror, so credits that arrive pay the debt before anything else spends them.
+
+A turn on the organisation's own key (`fundedBy: "org"`) debits no credits, so
+the gate runs only the suspension check for it.
 
 Embeddings ([`embed.ts`](../../../packages/ai/src/embed.ts)) are metered for
 cost the same way (input-only); they are infrastructure and are not separately

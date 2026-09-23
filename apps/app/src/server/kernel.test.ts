@@ -459,6 +459,20 @@ describe("kernelWrite", () => {
       { ok: false, reason: "exhausted", code: "budget_exceeded" },
       0,
     ],
+    // The in-app agent's credit gate. These read "unavailable" before, so a
+    // person out of usage credits was told to try again, not to top up.
+    [
+      "insufficient_credits",
+      new Coded("insufficient_credits"),
+      { ok: false, reason: "exhausted", code: "insufficient_credits" },
+      0,
+    ],
+    [
+      "assistant_spend_cap",
+      new Coded("assistant_spend_cap"),
+      { ok: false, reason: "exhausted", code: "assistant_spend_cap" },
+      0,
+    ],
     [
       "HandlerError forbidden",
       handlerError("forbidden"),
