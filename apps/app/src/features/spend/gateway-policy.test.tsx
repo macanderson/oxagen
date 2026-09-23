@@ -106,6 +106,38 @@ describe("the gateway policy section", () => {
     ).toBeNull();
   });
 
+  it("switches from permit-none to a typed allowlist and back explicitly", async () => {
+    const user = userEvent.setup();
+    renderSection({ ...OBSERVED, mode: "enforced", modelAllow: [] });
+    await user.type(
+      screen.getByLabelText(spend.spend.gateway.modelAllow),
+      "gpt-5",
+    );
+    expect(
+      screen.getByLabelText(spend.spend.gateway.permitNoModels),
+    ).not.toBeChecked();
+    await user.click(screen.getByRole("button", { name: /save the policy/i }));
+    await waitFor(() => {
+      expect(setGatewayPolicyAction).toHaveBeenCalledTimes(1);
+    });
+    expect(
+      GatewayPolicyForm.parse(setGatewayPolicyAction.mock.calls[0]?.[1])
+        .modelAllow,
+    ).toEqual(["gpt-5"]);
+    await user.click(screen.getByLabelText(spend.spend.gateway.permitNoModels));
+    expect(screen.getByLabelText(spend.spend.gateway.modelAllow)).toHaveValue(
+      "",
+    );
+    await user.click(screen.getByRole("button", { name: /save the policy/i }));
+    await waitFor(() => {
+      expect(setGatewayPolicyAction).toHaveBeenCalledTimes(2);
+    });
+    expect(
+      GatewayPolicyForm.parse(setGatewayPolicyAction.mock.calls[1]?.[1])
+        .modelAllow,
+    ).toEqual([]);
+  });
+
   it("qualifies saved enforcement until host support is known", () => {
     renderSection({ ...OBSERVED, mode: "enforced", modelDeny: ["*"] }, false);
     expect(

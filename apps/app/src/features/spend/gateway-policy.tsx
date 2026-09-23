@@ -242,6 +242,7 @@ export function GatewayPolicySection({
                 setValues((prev) => ({
                   ...prev,
                   permitNoModels: event.target.checked,
+                  modelAllow: event.target.checked ? "" : prev.modelAllow,
                 }));
               }}
             />
@@ -254,7 +255,11 @@ export function GatewayPolicySection({
             value={values.modelAllow}
             error={message("modelAllow")}
             onChange={(modelAllow) => {
-              setValues((prev) => ({ ...prev, modelAllow }));
+              setValues((prev) => ({
+                ...prev,
+                modelAllow,
+                permitNoModels: false,
+              }));
             }}
           />
           <ModelList
