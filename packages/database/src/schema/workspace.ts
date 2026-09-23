@@ -12,6 +12,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
+import { COST_CENTER_LABEL_PATTERN } from "./cost";
 import { workspaceSchema } from "./_schemas";
 import { auditMixin, citext, idMixin, uuidv7Default } from "./_mixins";
 import { modelTierEnum } from "./auth";
@@ -66,12 +67,20 @@ export const workspaces = workspaceSchema.table(
     // slug stays taken. Both columns move together (CHECK below).
     archivedAt: timestamp("archived_at", { withTimezone: true, mode: "date" }),
     archivedByUserId: uuid("archived_by_user_id"),
+    // The cost center this workspace's spend is charged back to when the run's
+    // agent names none: a label from `cost.cost_centers`, checked by the write
+    // handler (no cross-schema FK).
+    costCenter: text("cost_center"),
   },
   (t) => ({
     orgSlugIdx: uniqueIndex("workspaces_org_slug_idx").on(t.orgId, t.slug),
     archivedCheck: check(
       "workspaces_archived_check",
       sql`(${t.archivedAt} IS NULL) = (${t.archivedByUserId} IS NULL)`,
+    ),
+    costCenterCheck: check(
+      "workspaces_cost_center_check",
+      sql`${t.costCenter} IS NULL OR ${t.costCenter} ~ '${sql.raw(COST_CENTER_LABEL_PATTERN)}'`,
     ),
     // Namespace unique per org + immutable. Immutability is enforced by a
     // BEFORE UPDATE trigger (migration 20260709120000_namespace_identity), not

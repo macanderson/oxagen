@@ -244,6 +244,7 @@ const workspacesSample = {
       name: "Core platform",
       role: "Owner",
       archivedAt: null,
+      costCenter: null,
     },
     {
       id: "7b000000-0000-4000-8000-000000000002",
@@ -253,6 +254,7 @@ const workspacesSample = {
       name: "Research",
       role: null,
       archivedAt: "2026-09-01T08:00:00.000Z",
+      costCenter: null,
     },
   ],
 };
@@ -269,6 +271,7 @@ describe("toWorkspaceList", () => {
         name: "Core platform",
         role: "Owner",
         archivedAt: null,
+        costCenter: null,
       },
       {
         id: "wrk_9z8y7x6w5v4t3s2r1q0p9n",
@@ -276,6 +279,7 @@ describe("toWorkspaceList", () => {
         name: "Research",
         role: null,
         archivedAt: "2026-09-01T08:00:00.000Z",
+        costCenter: null,
       },
     ]);
   });

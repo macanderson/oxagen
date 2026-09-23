@@ -311,6 +311,7 @@ export function agentsSource(reads: AgentReads) {
       roles: refuse,
       workspaces: refuse,
       apiKeys: refuse,
+      costCenters: refuse,
       modelCredential: refuse,
       sso: refuse,
     },

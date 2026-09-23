@@ -42,7 +42,14 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { costSchema } from "./_schemas";
-import { auditMixin, idMixin, orgScopeMixin, uuidv7Default } from "./_mixins";
+import {
+  auditMixin,
+  citext,
+  idMixin,
+  orgScopeMixin,
+  softDeleteMixin,
+  uuidv7Default,
+} from "./_mixins";
 import { organizations } from "./org";
 
 /** The token classes a price entry may price (spec §12.6 plus the per-asset media units). */
@@ -99,8 +106,25 @@ export const SPEND_GROUP_KINDS = [
   "model",
   "tool",
   "task",
+  "cost_center",
 ] as const;
 export type SpendGroupKind = (typeof SPEND_GROUP_KINDS)[number];
+
+/**
+ * A cost-center label: what finance charges spend back to. One to 64
+ * characters, starting with a letter or digit, then letters, digits, `.`, `_`
+ * or `-` (`ENG-1001`, `marketing.emea`). The same pattern is the CHECK on
+ * every column that holds one and the contract's schema.
+ */
+export const COST_CENTER_LABEL_PATTERN = "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$";
+
+/**
+ * The `cost_center` group key of spend no cost center claims. The label
+ * pattern refuses `~`, so no real label can collide with it. Every run lands
+ * in exactly one `cost_center` group, this one included, so the level's rows
+ * sum to the period total by construction.
+ */
+export const UNASSIGNED_COST_CENTER_KEY = "~none";
 
 const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 
@@ -233,10 +257,7 @@ export const priceBookInitializations = costSchema.table(
      * inside it names for the first time is a model that did not exist before,
      * and starts at the requested boundary.
      */
-    completedCatalogs: text("completed_catalogs")
-      .array()
-      .notNull()
-      .default([]),
+    completedCatalogs: text("completed_catalogs").array().notNull().default([]),
   },
   (t) => ({
     // One book has a cold start: the platform list book. A negotiated book is
@@ -266,6 +287,10 @@ export const runTotals = costSchema.table(
     // `org_ns.ws_ns.slug` (ADR-024); the level "by agent" groups on.
     agentKey: text("agent_key"),
     taskRef: text("task_ref"),
+    // The cost center the run's spend is charged back to, resolved at rollup:
+    // the agent's live label, else the workspace's, else null. The level
+    // "by cost center" groups on it, with null under UNASSIGNED_COST_CENTER_KEY.
+    costCenter: text("cost_center"),
     startedAt: timestamp("started_at", {
       withTimezone: true,
       mode: "date",
@@ -343,6 +368,10 @@ export const runTotals = costSchema.table(
       "run_totals_counts_check",
       sql`${t.steps} >= 0 AND ${t.modelCalls} >= 0 AND ${t.toolCalls} >= 0 AND (${t.turns} IS NULL OR ${t.turns} >= 0) AND (${t.retries} IS NULL OR ${t.retries} >= 0) AND (${t.governedActions} IS NULL OR ${t.governedActions} >= 0)`,
     ),
+    costCenterCheck: check(
+      "run_totals_cost_center_check",
+      sql`${t.costCenter} IS NULL OR ${t.costCenter} ~ '${sql.raw(COST_CENTER_LABEL_PATTERN)}'`,
+    ),
     ratiosCheck: check(
       "run_totals_ratios_check",
       sql`(${t.cacheHitRate} IS NULL OR (${t.cacheHitRate} >= 0 AND ${t.cacheHitRate} <= 1)) AND (${t.productiveRatio} IS NULL OR (${t.productiveRatio} >= 0 AND ${t.productiveRatio} <= 1))`,
@@ -361,7 +390,7 @@ export const dailyTotals = costSchema.table(
     groupKind: text("group_kind").notNull(),
     // operator: the principal's public id (`prn_…`) · agent: the agent key ·
     // model: the model id · tool: the tool or capability name · task: the
-    // task reference.
+    // task reference · cost_center: the label, or UNASSIGNED_COST_CENTER_KEY.
     groupKey: text("group_key").notNull(),
     // Set on model rows.
     provider: text("provider"),
@@ -404,6 +433,38 @@ export const dailyTotals = costSchema.table(
     countsCheck: check(
       "daily_totals_counts_check",
       sql`${t.runs} >= 0 AND ${t.calls} >= 0`,
+    ),
+  }),
+);
+
+// ── cost_centers ──────────────────────────────────────────────────────────────
+/**
+ * The organization's list of valid cost-center labels. An agent's or a
+ * workspace's `cost_center` must name a live row here when it is written; the
+ * rollup reads the agent's label first, then the workspace's, and a label
+ * whose row is soft-deleted no longer claims new rollups.
+ *
+ * One row per (org, label) for ever, deleted rows included, like an agent
+ * slug: a statement keyed by label then names one row across its history, and
+ * adding a deleted label back restores that row rather than minting another.
+ */
+export const costCenters = costSchema.table(
+  "cost_centers",
+  {
+    ...idMixin("ccn"),
+    ...auditMixin(),
+    ...softDeleteMixin(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    label: citext("label").notNull(),
+    description: text("description"),
+  },
+  (t) => ({
+    orgLabelIdx: uniqueIndex("cost_centers_org_label_idx").on(t.orgId, t.label),
+    labelCheck: check(
+      "cost_centers_label_check",
+      sql`${t.label} ~ '${sql.raw(COST_CENTER_LABEL_PATTERN)}'`,
     ),
   }),
 );

@@ -44,6 +44,7 @@ function run(
     agentPrincipalId: null,
     agentKey: AGENT,
     taskRef: null,
+    costCenter: null,
     startedAt: new Date(START.getTime() + seq * 60_000),
     sealedAt: null,
     turns: 1,

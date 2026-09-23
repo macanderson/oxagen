@@ -13,6 +13,7 @@
 // that does not. The page picks a workspace and resolves into it first.
 import "server-only";
 import { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
+import { costCenterList } from "@oxagen/oxagen/contracts/cost_center.list";
 import { iamRoleList } from "@oxagen/oxagen/contracts/iam.role.list";
 import { orgModelCredentialGet } from "@oxagen/oxagen/contracts/org.model_credential.get";
 import { orgSsoList } from "@oxagen/oxagen/contracts/org.sso.list";
@@ -22,6 +23,7 @@ import { captureError } from "@oxagen/telemetry";
 import type { z } from "zod";
 import {
   ApiKeyList,
+  CostCenterList,
   MemberList,
   ModelCredential,
   RoleCatalog,
@@ -33,6 +35,7 @@ import { type Read, readError, readOk } from "@/data/read";
 import { kernelRead } from "@/server/kernel";
 import {
   toApiKeys,
+  toCostCenterList,
   toMemberList,
   toModelCredential,
   toRoleCatalog,
@@ -143,6 +146,21 @@ export const org: DataSource["org"] = {
       WorkspaceList,
       toWorkspaceList(read.value),
       "org.workspaces",
+    );
+  },
+
+  async costCenters(ctx) {
+    const read = await kernelRead(ctx, {
+      contract: costCenterList,
+      input: {},
+      page: "organization",
+    });
+    if (!read.ok) return read;
+    return view(
+      ctx.orgId,
+      CostCenterList,
+      toCostCenterList(read.value),
+      "org.costCenters",
     );
   },
 

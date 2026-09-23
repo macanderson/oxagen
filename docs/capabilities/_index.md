@@ -528,14 +528,19 @@ after the registered name separately when their contract uses a dotted stem.
 
 | Capability | Contract | Declared surfaces |
 | --- | --- | --- |
+| [create_cost_center](cost_center.create.md) | [cost_center.create.ts](../../packages/oxagen/src/contracts/cost_center.create.ts) | api, mcp |
+| [delete_cost_center](cost_center.delete.md) | [cost_center.delete.ts](../../packages/oxagen/src/contracts/cost_center.delete.ts) | api, mcp |
 | [dismiss_finding](finding.dismiss.md) | [finding.dismiss.ts](../../packages/oxagen/src/contracts/finding.dismiss.ts) | api, mcp |
+| [export_cost_center_statement](spend.cost_center_statement.export.md) | [spend.cost_center_statement.export.ts](../../packages/oxagen/src/contracts/spend.cost_center_statement.export.ts) | api, mcp |
 | [export_statement](spend.statement.export.md) | [spend.statement.export.ts](../../packages/oxagen/src/contracts/spend.statement.export.ts) | api, mcp |
 | [get_finding_evidence](finding.evidence.get.md) | [finding.evidence.get.ts](../../packages/oxagen/src/contracts/finding.evidence.get.ts) | api, mcp |
 | [get_spend](spend.get.md) | [spend.get.ts](../../packages/oxagen/src/contracts/spend.get.ts) | api, mcp |
 | [get_spend_drill](spend.drill.md) | [spend.drill.ts](../../packages/oxagen/src/contracts/spend.drill.ts) | api, mcp |
+| [list_cost_centers](cost_center.list.md) | [cost_center.list.ts](../../packages/oxagen/src/contracts/cost_center.list.ts) | api, mcp |
 | [list_findings](finding.list.md) | [finding.list.ts](../../packages/oxagen/src/contracts/finding.list.ts) | api, mcp |
 | [list_waste](spend.waste.md) | [spend.waste.ts](../../packages/oxagen/src/contracts/spend.waste.ts) | api, mcp |
 | [record_finding_fix](finding.fix.record.md) | [finding.fix.record.ts](../../packages/oxagen/src/contracts/finding.fix.record.ts) | api, mcp, agent |
+| [set_cost_center](cost_center.set.md) | [cost_center.set.ts](../../packages/oxagen/src/contracts/cost_center.set.ts) | api, mcp |
 
 ## System
 

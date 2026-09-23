@@ -201,6 +201,7 @@ describe.skipIf(!enabled)(
       agentPrincipalId: null,
       agentKey: null,
       taskRef: null,
+      costCenter: null,
       startedAt: new Date("2001-06-01T00:00:00.000Z"),
       sealedAt: new Date("2001-06-01T00:05:00.000Z"),
       turns: null,

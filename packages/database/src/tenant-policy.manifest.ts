@@ -127,6 +127,9 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "cost.daily_totals", policyClass: "standard" },
   // The findings job's output (ADR-062); org_id + workspace_id NOT NULL.
   { table: "cost.findings", policyClass: "standard" },
+  // The organization's cost-center labels (ADR-142): org_id NOT NULL, no
+  // workspace_id, so org_only.
+  { table: "cost.cost_centers", policyClass: "org_only" },
 
   // ── chat.* / content.* (orgScopeMixin) ───────────────────────────────────
   { table: "chat.conversations", policyClass: "standard" },

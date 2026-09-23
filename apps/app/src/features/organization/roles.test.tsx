@@ -100,6 +100,7 @@ async function renderRoles(
       roles,
       workspaces: vi.fn(),
       apiKeys: vi.fn(),
+      costCenters: vi.fn(),
       modelCredential: vi.fn(),
       sso,
     },

@@ -97,6 +97,7 @@ describe("ShellChrome", () => {
         roles: vi.fn(),
         workspaces: vi.fn(),
         apiKeys: vi.fn(),
+        costCenters: vi.fn(),
         modelCredential: vi.fn(),
         sso: vi.fn(),
       },

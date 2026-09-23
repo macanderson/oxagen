@@ -147,6 +147,7 @@ const source: DataSource = {
     roles: vi.fn(),
     workspaces: vi.fn(),
     apiKeys: vi.fn(),
+    costCenters: vi.fn(),
     modelCredential: vi.fn(),
     sso: vi.fn(),
   },
@@ -888,5 +889,51 @@ describe("Spend › Findings", () => {
     await renderSpend({ tab: "findings", finding: "fnd_01k5rtgh" });
     expect(document.querySelector('[data-state="error"]')).not.toBeNull();
     expect(screen.getByRole("navigation")).toBeInTheDocument();
+  });
+});
+
+describe("Spend › By cost center and By task (ADR-142)", () => {
+  it("reads the cost_center level and prints the unassigned share as its own row", async () => {
+    byGroup.mockResolvedValue(
+      report(
+        [
+          row("ENG-1001", { cost: cost("7500000") }),
+          row("~none", { cost: cost("2500000") }),
+        ],
+        figure({ cost: cost("10000000") }),
+      ),
+    );
+    await renderSpend({ tab: "cost_center" });
+    expect(byGroup).toHaveBeenCalledExactlyOnceWith(ctx, "cost_center", PERIOD);
+    expect(
+      within(rowOf("~none")).getByText("No cost center"),
+    ).toBeInTheDocument();
+    expect(within(rowOf("~none")).getByText("25%")).toBeInTheDocument();
+    expect(within(rowOf("ENG-1001")).getByText("75%")).toBeInTheDocument();
+  });
+
+  it("renders the empty state and a failed read on the cost-center tab (negative)", async () => {
+    byGroup.mockResolvedValue(
+      report([], figure({ cost: null, calls: 0, runs: 0 })),
+    );
+    await renderSpend({ tab: "cost_center" });
+    expect(
+      screen.getByRole("heading", { name: "No spend to report yet" }),
+    ).toBeInTheDocument();
+    cleanup();
+    byGroup.mockResolvedValue(readError("rollup_rebuild_in_progress", 504));
+    await renderSpend({ tab: "cost_center" });
+    expect(document.querySelector('[data-state="error"]')).toHaveTextContent(
+      "rollup_rebuild_in_progress",
+    );
+  });
+
+  it("prints a task row as text with no drill", async () => {
+    byGroup.mockResolvedValue(report([row("cut the 3.2 release")]));
+    await renderSpend({ tab: "task" });
+    expect(byGroup).toHaveBeenCalledExactlyOnceWith(ctx, "task", PERIOD);
+    const task = rowOf("cut the 3.2 release");
+    expect(within(task).getByText("cut the 3.2 release")).toBeInTheDocument();
+    expect(within(task).queryByRole("link")).toBeNull();
   });
 });

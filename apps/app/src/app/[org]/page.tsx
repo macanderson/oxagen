@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { dataSource } from "@/data/source";
-import { People, Workspaces } from "@/features/organization";
+import { CostCenters, People, Workspaces } from "@/features/organization";
 import { requireViewer } from "@/server/viewer";
 import { PageHeader } from "@/ui/page-header";
 
@@ -28,6 +28,7 @@ export default async function OrganizationPage({
       />
       <People ctx={ctx} source={source} />
       <Workspaces ctx={ctx} source={source} />
+      <CostCenters ctx={ctx} source={source} />
     </main>
   );
 }

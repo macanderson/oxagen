@@ -2,12 +2,14 @@
 // §3.4): list_members {scope:"org"} to People, narrowed to the org branch of
 // its scope union (the adapter answers the workspace branch as unmappable);
 // list_iam_roles to the role and permission catalogue, folded to the
-// vocabulary the editor speaks; list_workspaces to the Workspaces section; and
+// vocabulary the editor speaks; list_workspaces to the Workspaces section;
+// list_cost_centers to the Cost centers section; and
 // list_api_keys to the keys the organization holds. Each carries the public id
 // so no database uuid reaches the page (INV-11), and each is typed from the
 // contract's `_output`, so a nullable contract field cannot land in a required
 // view field.
 import type { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
+import type { costCenterList } from "@oxagen/oxagen/contracts/cost_center.list";
 import type { iamRoleList } from "@oxagen/oxagen/contracts/iam.role.list";
 import type { orgModelCredentialGet } from "@oxagen/oxagen/contracts/org.model_credential.get";
 import type { orgSsoList } from "@oxagen/oxagen/contracts/org.sso.list";
@@ -16,6 +18,7 @@ import type { listMembers } from "@oxagen/oxagen/contracts/workspace.member.list
 import type { z } from "zod";
 import type {
   ApiKeyList,
+  CostCenterList,
   MemberList,
   ModelCredential,
   RoleCatalog,
@@ -89,6 +92,22 @@ export function toWorkspaceList(
       name: workspace.name,
       role: workspace.role,
       archivedAt: workspace.archivedAt,
+      costCenter: workspace.costCenter,
+    })),
+  };
+}
+
+/** list_cost_centers to the Cost centers section; the public id is the only id it carries. */
+export function toCostCenterList(
+  out: ContractOutput<typeof costCenterList>,
+): z.input<typeof CostCenterList> {
+  return {
+    costCenters: out.costCenters.map((center) => ({
+      id: center.id,
+      label: center.label,
+      description: center.description,
+      agents: center.agents,
+      workspaces: center.workspaces,
     })),
   };
 }

@@ -59,6 +59,7 @@ const meta: RunMeta = {
   agentPrincipalId: null,
   agentKey: null,
   taskRef: null,
+  costCenter: null,
   startedAt: at,
   sealedAt: at,
   turns: 1,

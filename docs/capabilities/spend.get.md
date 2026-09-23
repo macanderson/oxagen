@@ -1,6 +1,6 @@
 # get_spend
 
-The Spend page's rollup at one level (Mission Control spec §12.7, §12.9; ADR-060). Reads `cost.daily_totals` for the active workspace over an inclusive day range, grouped by operator, agent, model, tool or task, and answers one row per group plus the period's total over every run: the month strip. The rows are a derived index rebuilt from frames by the rollup jobs (`cost.run-rollup` after each seal, `cost.daily-rollup` nightly); nothing here reads ClickHouse.
+The Spend page's rollup at one level (Mission Control spec §12.7, §12.9; ADR-060). Reads `cost.daily_totals` for the active workspace over an inclusive day range, grouped by operator, agent, model, tool, task, or cost center, and answers one row per group plus the period's total over every run: the month strip. The rows are a derived index rebuilt from frames by the rollup jobs (`cost.run-rollup` after each seal, `cost.daily-rollup` nightly); nothing here reads ClickHouse.
 
 ## Mode
 
@@ -19,7 +19,7 @@ The Spend page's rollup at one level (Mission Control spec §12.7, §12.9; ADR-0
 | Field | Type | Required | Constraint |
 |---|---|---|---|
 | `period` | object | yes | `{ from, to }`, UTC days `YYYY-MM-DD`, `to` on or after `from`, at most 92 days (`SPEND_RANGE_DAYS_MAX`): one read folds at most a quarter of the workspace's runs |
-| `groupBy` | enum | yes | `operator`, `agent`, `model`, `tool`, `task` |
+| `groupBy` | enum | yes | `operator`, `agent`, `model`, `tool`, `task`, `cost_center` |
 
 ## Output
 
@@ -41,7 +41,7 @@ A figure:
 | `accepted` | money or null | spend on runs a human accepted; null until one is recorded |
 | `productiveRatio` | number or null | 0..1, run-weighted; null until the grading lane writes it |
 
-A row adds `key` (an operator's principal public id `prn_…`, the `operatorId` a run of `list_runs` carries and the key `get_spend_drill` takes; an agent key `org_ns.ws_ns.slug`; a model id; a tool name; or a task reference), `provider` (set on `model` rows) and `tokens` by class (`input_uncached`, `cache_read`, `cache_write_5m`, `cache_write_1h`, `output`, `reasoning`).
+A row adds `key` (an operator's principal public id `prn_…`, the `operatorId` a run of `list_runs` carries and the key `get_spend_drill` takes; an agent key `org_ns.ws_ns.slug`; a model id; a tool name; a task reference; or a cost-center label, with `~none` for spend no cost center claims), `provider` (set on `model` rows) and `tokens` by class (`input_uncached`, `cache_read`, `cache_write_5m`, `cache_write_1h`, `output`, `reasoning`).
 
 ## Basis
 
@@ -49,4 +49,8 @@ A row adds `key` (an operator's principal public id `prn_…`, the `operatorId` 
 
 ## Attribution
 
-A run is attributed to the operator, agent and task it names; a run that names none is not on that level. A run appears under every model its frames used and every tool it called. Tool rows carry counts and no money: no frame prices a tool call.
+A run is attributed to the operator, agent and task it names; a run that names none is not on that level. The `cost_center` level is the exception: every run is on it exactly once, so its rows sum to the total. A run appears under every model its frames used and every tool it called. Tool rows carry counts and no money: no frame prices a tool call.
+
+## Cost center
+
+The `cost_center` level charges each run to the cost center the rollup resolved when it rolled the run up (ADR-142): the agent's label first, then the workspace's. A run with neither lands on the `~none` key, so the level's rows sum to the period's total. A label deleted from the organization's list claims no new run. Runs already rolled up keep the cost center they had. `list_cost_centers` answers the organization's labels, and `export_cost_center_statement` answers the organization-wide chargeback statement.

@@ -79,6 +79,7 @@ const source: DataSource = {
     roles: refuse,
     workspaces: refuse,
     apiKeys: refuse,
+    costCenters: refuse,
     modelCredential: refuse,
     sso: refuse,
   },

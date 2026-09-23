@@ -46,6 +46,7 @@ describe("list_workspaces contract", () => {
       name: "Core",
       role: null,
       archivedAt: null,
+      costCenter: null,
     };
     expect(
       workspaceList.output.safeParse({ organization, workspaces: [workspace] })

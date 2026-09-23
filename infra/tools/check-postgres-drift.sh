@@ -170,7 +170,7 @@ classify_atlas_status() {
 
   echo "::error::Postgres is behind this repository: ${pending:-some} of $declared migrations pending."
   atlas_pending_files "$file" | sed 's/^/::error::  pending: /'
-  echo "::error::Postgres: apply with the DB Migrate (manual) workflow — read its pending list first."
+  echo "::error::Postgres: run infra/tools/run-db-migrations.sh packages/database, read its pending list, then run it again in apply mode (see its header). DB Migrate (manual) cannot reach production Aurora (#2652)."
   return 1
 }
 

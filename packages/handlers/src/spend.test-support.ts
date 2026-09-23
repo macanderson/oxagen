@@ -39,6 +39,7 @@ export function run(over: Partial<RunTotalsRecord> = {}): RunTotalsRecord {
     agentPrincipalId: null,
     agentKey: "acme.core.cc",
     taskRef: null,
+    costCenter: null,
     startedAt: new Date("2026-09-10T12:00:00.000Z"),
     sealedAt: new Date("2026-09-10T12:30:00.000Z"),
     turns: 3,

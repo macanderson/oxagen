@@ -627,6 +627,7 @@ export function runSource(reads: RunReads) {
       roles: refuse,
       workspaces: refuse,
       apiKeys: refuse,
+      costCenters: refuse,
       modelCredential: refuse,
       sso: refuse,
     },

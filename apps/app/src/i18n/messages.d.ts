@@ -2869,6 +2869,31 @@ type Messages = {
         domainPlaceholder: string;
         issuerPlaceholder: string;
         certPlaceholder: string;
+    costCenters: {
+      title: string;
+      lead: string;
+      empty: string;
+      labelsTable: string;
+      workspacesTable: string;
+      noDescription: string;
+      none: string;
+      columns: {
+        label: string;
+        description: string;
+        agents: string;
+        workspaces: string;
+        workspace: string;
+        costCenter: string;
+        actions: string;
+      };
+      add: {
+        open: string;
+        title: string;
+        confirm: string;
+        pending: string;
+        label: string;
+        labelHint: string;
+        description: string;
       };
       delete: {
         open: string;
@@ -2932,6 +2957,18 @@ type Messages = {
       failure: {
         groupRequired: string;
         groupDuplicate: string;
+        confirm: string;
+        pending: string;
+        body: string;
+      };
+      charge: {
+        open: string;
+        title: string;
+        confirm: string;
+        pending: string;
+        label: string;
+        none: string;
+        hint: string;
       };
     };
   };
@@ -4428,6 +4465,8 @@ type Messages = {
       operator: string;
       agent: string;
       tool: string;
+      task: string;
+      cost_center: string;
       waste: string;
       budgets: string;
       pricing: string;
@@ -4550,6 +4589,7 @@ type Messages = {
       runs: string;
       calls: string;
       spend: string;
+      share: string;
     };
     groups: {
       operator: {
@@ -4571,6 +4611,19 @@ type Messages = {
       tool: {
         title: string;
         key: string;
+        empty: string;
+      };
+      task: {
+        title: string;
+        key: string;
+        empty: string;
+      };
+      cost_center: {
+        title: string;
+        key: string;
+        note: string;
+        unassigned: string;
+        shareBasis: string;
         empty: string;
       };
     };
@@ -4794,6 +4847,17 @@ type Messages = {
     };
     exportDialog: {
       title: string;
+      kind: string;
+      kinds: {
+        workspace: {
+          label: string;
+          hint: string;
+        };
+        cost_center: {
+          label: string;
+          hint: string;
+        };
+      };
       month: string;
       monthHint: string;
       submit: string;
@@ -4803,6 +4867,7 @@ type Messages = {
       };
       alert: {
         denied: string;
+        deniedCostCenter: string;
         failed: string;
       };
     };
