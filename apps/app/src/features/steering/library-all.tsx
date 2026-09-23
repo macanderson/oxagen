@@ -9,9 +9,12 @@
 // numbered pager) work over every row. Every row is a record. Token cost and the enforcement
 // grant have no field on that contract, so the Compiles to and Token cost
 // cells and the Compiled size and Carry a grant tiles print "not recorded"
-// rather than a figure nobody measured. Instructions, skills, memory and
-// ontology notes join the list when the steering registry reads every source
-// into one item type; the footer names the issue that tracks it.
+// rather than a figure nobody measured, and the repository a repository-scoped
+// record names prints "not recorded" under its scope. Instructions, skills,
+// memory and ontology notes join the list when the steering registry reads
+// every source into one item type; each not-recorded value names the issue
+// that tracks it in its tooltip, and the footer holds nothing the design does
+// not.
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type { RecordForce, RecordPage } from "@/data/contracts/steering";
@@ -64,14 +67,17 @@ function Tile({
   value,
   note: basis,
   testId,
+  title,
 }: {
   term: string;
   value: ReactNode;
   note: string;
   testId: string;
+  /** What the value leaves out, and the issue that tracks it. */
+  title?: string;
 }) {
   return (
-    <div className={statTile} data-testid={testId}>
+    <div className={statTile} data-testid={testId} title={title}>
       <span className={statTerm}>{term}</span>
       <span className={statValue}>{value}</span>
       <span className={statNote}>{basis}</span>
@@ -88,6 +94,7 @@ export function LibraryAll({
   page: RecordPage;
 }) {
   const t = useTranslations("steering.library");
+  const issue = String(STEERING_GAPS.registry);
   const record = useTranslations("ui.record");
   const notRecorded = (
     <span className="text-[15px] font-medium text-muted-foreground">
@@ -142,10 +149,21 @@ export function LibraryAll({
               </Badge>
             )}
           </td>
-          <td className={cell}>{row.sharingScope}</td>
+          <td className={cell}>
+            {row.sharingScope}
+            {row.sharingScope === "repository" ? (
+              <span
+                className="block text-[12px] text-muted-foreground"
+                title={t("scopeTargetTitle", { issue })}
+                data-scope-target="not-recorded"
+              >
+                {t("notRecorded")}
+              </span>
+            ) : null}
+          </td>
           <td className={cell}>
             <span
-              title={t("compilesTitle")}
+              title={t("compilesTitle", { issue })}
               data-compiles="not-recorded"
               className="text-muted-foreground"
             >
@@ -154,7 +172,7 @@ export function LibraryAll({
           </td>
           <td className={numericCell}>
             <span
-              title={t("tokensTitle")}
+              title={t("tokensTitle", { issue })}
               className="font-sans text-muted-foreground"
             >
               {t("notRecorded")}
@@ -181,6 +199,7 @@ export function LibraryAll({
           term={t("items")}
           value={page.total}
           note={t("itemsNote")}
+          title={t("gap", { issue })}
         />
         <Tile
           testId="tile-by-kind"
@@ -191,18 +210,21 @@ export function LibraryAll({
             </span>
           }
           note={t("byKindNote")}
+          title={t("gap", { issue })}
         />
         <Tile
           testId="tile-compiled-size"
           term={t("compiledSize")}
           value={notRecorded}
           note={t("compiledSizeNote")}
+          title={t("tokensTitle", { issue })}
         />
         <Tile
           testId="tile-grants"
           term={t("grants")}
           value={notRecorded}
           note={t("grantsNote")}
+          title={t("compilesTitle", { issue })}
         />
       </div>
       <p className={note} data-testid="library-lead">
@@ -250,9 +272,6 @@ export function LibraryAll({
             </p>
           ) : null}
           <p className={note}>{t("planes")}</p>
-          <p className={note} data-testid="library-gap">
-            {t("gap", { issue: String(STEERING_GAPS.registry) })}
-          </p>
         </div>
       </section>
     </div>

@@ -20,7 +20,6 @@ import { getAuthUser } from "@/server/session";
 import { PageRecord } from "@/features/shell";
 import { Skills, SkillsLoading } from "@/features/skills";
 import type { WsCtx } from "@/server/viewer";
-import { useFormatter } from "@/ui/formatter";
 import { SteeringCreate, tabHoldsPrimary } from "./create-action";
 import { GovernanceChip } from "./governance";
 import { LibraryAll } from "./library-all";
@@ -129,7 +128,17 @@ function instantOfRead(): string {
   return new Date().toISOString();
 }
 
-/** The failed read's trace instant, in the viewer's zone. */
+/**
+ * The failed read's trace instant in UTC, as the design prints it:
+ * `2026-09-11 09:16:04Z`. A trace line is quoted into an incident, so it
+ * carries one zone for every reader rather than the viewer's own.
+ */
+export function traceInstant(readAt: string): string {
+  const at = new Date(readAt);
+  if (Number.isNaN(at.getTime())) return readAt;
+  return `${at.toISOString().slice(0, 19).replace("T", " ")}Z`;
+}
+
 function FailureAt({
   ctx,
   read,
@@ -143,7 +152,6 @@ function FailureAt({
   readAt: string;
   viewer: string | null;
 }) {
-  const format = useFormatter();
   return (
     <SteeringFailure
       read={read}
@@ -154,10 +162,7 @@ function FailureAt({
       wsRole={ctx.wsRole}
       viewer={viewer}
       retry={retryLink(ctx, view)}
-      readAt={format.dateTime(new Date(readAt), {
-        dateStyle: "medium",
-        timeStyle: "long",
-      })}
+      readAt={traceInstant(readAt)}
     />
   );
 }

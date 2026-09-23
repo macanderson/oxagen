@@ -5177,6 +5177,7 @@ type Messages = {
       compilesNotRecorded: string;
       compilesTitle: string;
       tokensTitle: string;
+      scopeTargetTitle: string;
       sourceNone: string;
       gap: string;
       truncated: string;

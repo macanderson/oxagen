@@ -284,17 +284,35 @@ export function SteeringFailure({
           footer={
             <dl className="mt-5 grid max-w-[420px] grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-left text-[13px]">
               <dt className="text-muted-foreground">{t("denied.signedIn")}</dt>
-              <dd className="font-mono text-[12px]">
-                {viewer === null
-                  ? t("denied.signedInValue", {
-                      role: wsRole,
-                      workspace: wsSlug,
-                    })
-                  : t("denied.signedInNamed", {
-                      name: viewer,
+              {/* The design sets the person's name in the sans face and the role and workspace, which are identifiers, in mono. */}
+              <dd data-testid="steering-signed-in">
+                {viewer === null ? (
+                  <span className="font-mono text-[12px]">
+                    {t("denied.signedInValue", {
                       role: wsRole,
                       workspace: wsSlug,
                     })}
+                  </span>
+                ) : (
+                  t.rich("denied.signedInNamed", {
+                    name: viewer,
+                    role: wsRole,
+                    workspace: wsSlug,
+                    person: (chunks) => (
+                      <span className="font-sans" data-signed-in="name">
+                        {chunks}
+                      </span>
+                    ),
+                    mono: (chunks) => (
+                      <span
+                        className="font-mono text-[12px]"
+                        data-signed-in="role"
+                      >
+                        {chunks}
+                      </span>
+                    ),
+                  })
+                )}
               </dd>
               <dt className="text-muted-foreground">{t("denied.needed")}</dt>
               <dd className="font-mono text-[12px]">

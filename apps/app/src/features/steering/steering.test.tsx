@@ -68,7 +68,7 @@ vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
-const { Steering } = await import("./steering");
+const { Steering, traceInstant } = await import("./steering");
 const { SteeringLoading } = await import("./page-state");
 const { resolveSteeringRoute } = await import("./view");
 
@@ -509,18 +509,28 @@ describe("the Library, All shelf", () => {
     expect(should).toHaveTextContent("workspace");
   });
 
-  it("says steering and gating are two planes, and names the issue the other shelves wait on", async () => {
+  it("says steering and gating are two planes, and names the issue the other shelves wait on on the values it leaves out", async () => {
     await renderSteering();
     expect(
       screen.getByText(/Steering is what the model reads/),
     ).toHaveTextContent(
       "advisory, ranked, budgeted, and it may be dropped. Gating is what gets refused: deterministic, never budgeted, never ranked.",
     );
-    expect(screen.getByTestId("library-gap")).toHaveTextContent(
-      "Only records are read into this list today.",
+    // The design's footer holds no gap paragraph; the tooltips carry the issue.
+    expect(screen.queryByTestId("library-gap")).toBeNull();
+    expect(screen.getByTestId("tile-items")).toHaveAttribute(
+      "title",
+      expect.stringMatching(
+        /^Only records are read into this list today\..*tracked in #3830\.$/,
+      ),
     );
-    expect(screen.getByTestId("library-gap")).toHaveTextContent(
-      "tracked in #3830",
+    expect(screen.getByTestId("tile-compiled-size")).toHaveAttribute(
+      "title",
+      expect.stringContaining("#3830"),
+    );
+    expect(screen.getByTestId("tile-grants")).toHaveAttribute(
+      "title",
+      expect.stringContaining("#3830"),
     );
   });
 
@@ -567,6 +577,39 @@ describe("the Library, All shelf", () => {
       expect(
         within(pager).getByRole("button", { name: "Next page" }),
       ).toBeDisabled();
+    });
+
+    it("marks the repository a repository-scoped record names as not recorded, naming the issue", async () => {
+      await renderSteering("/library", { records: twelve });
+      const row = (lineage: string) =>
+        screen
+          .getAllByRole("row")
+          .find((r) => r.getAttribute("data-lineage") === lineage);
+      const scoped = row("ctx.r00")?.querySelector(
+        '[data-scope-target="not-recorded"]',
+      );
+      expect(scoped).toHaveTextContent("not recorded");
+      expect(scoped).toHaveAttribute(
+        "title",
+        "list_records carries no repository for a record, so the repository this record names is not recorded. Tracked in #3830.",
+      );
+      // Workspace scope names nothing further, so it carries no sub-line.
+      expect(row("ctx.r01")?.querySelector("[data-scope-target]")).toBeNull();
+    });
+
+    it("gives every pager button a phone-sized touch target", async () => {
+      await renderSteering("/library", { records: twelve });
+      const pager = screen.getByRole("navigation", { name: "Pages" });
+      const buttons = within(pager).getAllByRole("button");
+      expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual([
+        "Previous page",
+        "Page 1",
+        "Page 2",
+        "Next page",
+      ]);
+      for (const button of buttons) {
+        expect(button).toHaveAttribute("data-touch-target", "");
+      }
     });
 
     it("searches, filters by Scope, Compiles to and Force, and changes the rows per page", async () => {
@@ -676,8 +719,9 @@ describe("states", () => {
     expect(
       within(error).getByRole("link", { name: "Try again" }),
     ).toHaveAttribute("href", `${BASE}/gates`);
+    // The design prints the instant in UTC: `2026-09-11 09:16:04Z`.
     expect(screen.getByTestId("steering-trace")).toHaveTextContent(
-      /^503 record_index_unavailable · /,
+      /^503 record_index_unavailable · \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}Z$/,
     );
     fireEvent.click(
       within(error).getByRole("button", { name: "Open an incident" }),
@@ -700,6 +744,21 @@ describe("states", () => {
     ).toHaveAttribute("href", "/acme/core-platform");
     expect(denied).toHaveTextContent(
       "Signed in asMarcus Bell · workspace.member · core-platform",
+    );
+    // The name is set in sans; the role and workspace are identifiers, in mono.
+    const signedIn = screen.getByTestId("steering-signed-in");
+    expect(signedIn).not.toHaveClass("font-mono");
+    expect(signedIn.querySelector('[data-signed-in="name"]')).toHaveClass(
+      "font-sans",
+    );
+    expect(signedIn.querySelector('[data-signed-in="name"]')).toHaveTextContent(
+      /^Marcus Bell$/,
+    );
+    expect(signedIn.querySelector('[data-signed-in="role"]')).toHaveClass(
+      "font-mono",
+    );
+    expect(signedIn.querySelector('[data-signed-in="role"]')).toHaveTextContent(
+      /^workspace\.member · core-platform$/,
     );
     expect(denied).toHaveTextContent("Neededsteering.read on core-platform");
     // The refusal does not carry the policy that decided it yet (#3846).
@@ -1072,5 +1131,20 @@ describe("Assignments, the delivery report", () => {
       document.querySelector(`[data-reason="${read.reason}"]`),
     ).toBeVisible();
     expect(screen.queryByRole("table")).toBeNull();
+  });
+});
+
+describe("traceInstant", () => {
+  it("prints the instant in UTC as the design does", () => {
+    expect(traceInstant("2026-09-11T09:16:04.512Z")).toBe(
+      "2026-09-11 09:16:04Z",
+    );
+    expect(traceInstant("2026-09-11T11:16:04+02:00")).toBe(
+      "2026-09-11 09:16:04Z",
+    );
+  });
+
+  it("returns an unreadable instant as it came rather than an invalid date", () => {
+    expect(traceInstant("not a time")).toBe("not a time");
   });
 });

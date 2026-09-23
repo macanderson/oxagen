@@ -285,6 +285,7 @@ export function ListTable({
         <span className="flex items-center gap-1">
           <button
             type="button"
+            data-touch-target=""
             className={`${buttonSecondary} min-h-7 px-2 py-0.5 text-[12px]`}
             aria-label={t("previous")}
             disabled={current <= 1}
@@ -308,6 +309,7 @@ export function ListTable({
               <button
                 key={n}
                 type="button"
+                data-touch-target=""
                 className={`${buttonSecondary} min-h-7 px-2 py-0.5 text-[12px] aria-[current=page]:border-gold aria-[current=page]:text-foreground`}
                 aria-current={n === current ? "page" : undefined}
                 aria-label={t("page", { page: String(n) })}
@@ -321,6 +323,7 @@ export function ListTable({
           )}
           <button
             type="button"
+            data-touch-target=""
             className={`${buttonSecondary} min-h-7 px-2 py-0.5 text-[12px]`}
             aria-label={t("next")}
             disabled={current >= pages}

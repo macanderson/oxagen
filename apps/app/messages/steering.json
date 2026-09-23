@@ -55,7 +55,7 @@
           "hint": "Separation of duties: the author of a record may never be its approver."
         }
       },
-      "tomlHeader": "# .oxagen/rules/governance.toml: read on the production branch when a pull request is\n# opened and again when it is merged. A missing file means team.",
+      "tomlHeader": "# .oxagen/rules/governance.toml \u2014 read on the production branch when a pull request is\n# opened and again when it is merged. A missing file means team.",
       "note": "The mode is read off the file when a pull request is opened and again when it is merged, so raising it takes effect on everything already in flight.",
       "cancel": "Cancel",
       "close": "Close",
@@ -101,8 +101,9 @@
         "source": "Source"
       },
       "compilesNotRecorded": "not recorded",
-      "compilesTitle": "list_records carries no enforcement grant, so whether this record also compiles to a gate is not recorded.",
-      "tokensTitle": "list_records carries no token cost for a record.",
+      "compilesTitle": "list_records carries no enforcement grant, so whether this record also compiles to a gate is not recorded. Tracked in #{issue}.",
+      "tokensTitle": "list_records carries no token cost for a record. Tracked in #{issue}.",
+      "scopeTargetTitle": "list_records carries no repository for a record, so the repository this record names is not recorded. Tracked in #{issue}.",
       "sourceNone": "not recorded",
       "gap": "Only records are read into this list today. Instructions, skills, memory, and ontology notes join it when the steering registry (Phase 1) reads every source into one item type, tracked in #{issue}.",
       "truncated": "This list holds the first {read} of the {total} records in force, in the assembler's order."
@@ -131,7 +132,7 @@
         "back": "Back to Fleet",
         "signedIn": "Signed in as",
         "signedInValue": "workspace.{role} \u00b7 {workspace}",
-        "signedInNamed": "{name} \u00b7 workspace.{role} \u00b7 {workspace}",
+        "signedInNamed": "<person>{name}</person> \u00b7 <mono>workspace.{role} \u00b7 {workspace}</mono>",
         "needed": "Needed",
         "neededValue": "{permission} on {workspace}",
         "decidedBy": "Decided by",
