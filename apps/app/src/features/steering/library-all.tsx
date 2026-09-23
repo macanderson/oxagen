@@ -4,7 +4,7 @@
 //
 // Today the one source read into it is the record registry (list_records,
 // status active), read whole (./library-read.ts) so the assembler's order
-// holds across the list and the list tools (@/ui/list-table: search, the
+// holds across the list and the list tools (@/ui/faceted-list-table: search, the
 // Scope, Compiles to and Force filters, sortable headers, a Rows select and a
 // numbered pager) work over every row. Every row is a record. Token cost and the enforcement
 // grant have no field on that contract, so the Compiles to and Token cost
@@ -34,7 +34,7 @@ import {
   statValue,
 } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
-import { ListTable, type ListRow } from "@/ui/list-table";
+import { ListTable, type ListRow } from "@/ui/faceted-list-table";
 import { cell, numericCell } from "@/ui/table";
 import { STEERING_GAPS } from "./gaps";
 import { type SteeringAt, steeringLink } from "./view";

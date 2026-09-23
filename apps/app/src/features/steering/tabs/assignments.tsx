@@ -26,7 +26,7 @@ import { routes } from "@/shared/safe-path";
 import { AgentCard } from "@/ui/agent-card";
 import { Badge } from "@/ui/badge";
 import { buttonSecondary } from "@/ui/control-styles";
-import { ListTable, type ListRow } from "@/ui/list-table";
+import { ListTable, type ListRow } from "@/ui/faceted-list-table";
 import { SafeLink } from "@/ui/navigation";
 import { cell, numericCell } from "@/ui/table";
 import { readSteeringAgents, type SteeringAgents } from "../agents-read";

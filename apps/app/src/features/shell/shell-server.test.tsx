@@ -59,6 +59,7 @@ describe("ShellChrome", () => {
       billing: {
         plan: vi.fn(),
         usageCredits: vi.fn(),
+        retention: vi.fn(),
         bucket: vi.fn(),
         contractRate: vi.fn(),
         invoices: vi.fn(),
@@ -71,6 +72,8 @@ describe("ShellChrome", () => {
         transcript: vi.fn(),
         chain: vi.fn(),
         outputs: vi.fn(),
+        work: vi.fn(),
+        outcomesSettings: vi.fn(),
       },
       approvals: { pending: vi.fn(), resolved: vi.fn() },
       agents: {

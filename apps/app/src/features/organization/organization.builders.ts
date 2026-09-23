@@ -181,6 +181,7 @@ export function orgSource(reads: OrgReads): {
     billing: {
       plan: refuse,
       usageCredits: refuse,
+      retention: refuse,
       bucket: refuse,
       contractRate: refuse,
       invoices: refuse,
@@ -193,6 +194,8 @@ export function orgSource(reads: OrgReads): {
       transcript: refuse,
       chain: refuse,
       outputs: refuse,
+      work: refuse,
+      outcomesSettings: refuse,
     },
     approvals: { pending: refuse, resolved: refuse },
     agents: {

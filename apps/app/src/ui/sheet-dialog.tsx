@@ -42,6 +42,7 @@ export function SheetDialog({
   closeLabel,
   wide = false,
   headerClose = false,
+  side = false,
   dismissible = true,
   testId,
   children,
@@ -65,6 +66,8 @@ export function SheetDialog({
    * Close or Cancel, for a dialog whose design draws one.
    */
   headerClose?: boolean;
+  /** Organization activity opens beside the page on desktop. */
+  side?: boolean;
   testId: string;
   children: ReactNode;
 }) {
@@ -85,7 +88,7 @@ export function SheetDialog({
         <Dialog.Popup
           data-sheet=""
           data-testid={testId}
-          className={`fixed left-1/2 top-[12vh] z-50 flex max-h-[76dvh] w-[calc(100%-1.5rem)] -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-dialog-border bg-dialog-bg text-dialog-fg shadow-2xl ${wide ? "max-w-[600px]" : "max-w-md"}`}
+          className={`fixed z-50 flex flex-col overflow-hidden border border-dialog-border bg-dialog-bg text-dialog-fg shadow-2xl ${side ? "inset-y-0 right-0 w-full max-w-lg" : `left-1/2 top-[12vh] max-h-[76dvh] w-[calc(100%-1.5rem)] -translate-x-1/2 rounded-xl ${wide ? "max-w-[600px]" : "max-w-md"}`}`}
         >
           <SheetHandle />
           <div

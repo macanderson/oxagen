@@ -16,8 +16,19 @@ import {
   tachoFrame,
 } from "@oxagen/run-ledger";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
-import { digestBytes, type JsonValue, readArchiveSegment } from "@oxagen/tacho";
-import { selectTachoEvents, type TachoFrameRow } from "@oxagen/telemetry";
+import {
+  digestBytes,
+  type JsonValue,
+  readArchiveSegment,
+  unflattenEvent,
+  wrappedFrameOf,
+} from "@oxagen/tacho";
+import {
+  selectTachoEventRecords,
+  selectTachoEvents,
+  type TachoEventRecord,
+  type TachoFrameRow,
+} from "@oxagen/telemetry";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, eq } from "drizzle-orm";
 
@@ -133,7 +144,46 @@ async function allTachoRows(sessionUuid: string): Promise<TachoFrameRow[]> {
   }
 }
 
-/** A wrapped frame as the export writes it: the row's chained facts. */
+/** Every stored event of a session with its envelope columns, in order. */
+async function allTachoRecords(
+  sessionUuid: string,
+): Promise<TachoEventRecord[]> {
+  const records: TachoEventRecord[] = [];
+  let after = -1;
+  for (;;) {
+    const page = await selectTachoEventRecords({
+      sessionUuid,
+      afterSeq: after,
+      limit: PAGE,
+    });
+    records.push(...page);
+    const last = page.at(-1);
+    if (!last || page.length < PAGE) return records;
+    after = last.frame.seq;
+  }
+}
+
+/**
+ * A wrapped frame as the export writes it. When the stored row rebuilds the
+ * sealed event, proven by its hash (`unflattenEvent`), the frame is
+ * `wrappedFrameOf` that event and carries it, so a verifier recomputes the
+ * hash (#3733). Otherwise it is the row's projection with no event, and the
+ * verifier prints the frame's digest as not carried.
+ */
+function tachoExportFrame(record: TachoEventRecord): JsonValue {
+  const event = unflattenEvent(record.envelope);
+  if (event !== null) {
+    const bytesRef =
+      record.frame.bytesRef === "" ? null : record.frame.bytesRef;
+    return wrappedFrameOf(
+      event as unknown as Record<string, JsonValue>,
+      bytesRef,
+    );
+  }
+  return tachoEnvelope(record.frame);
+}
+
+/** A wrapped frame's projection from its row, without the event. */
 function tachoEnvelope(row: TachoFrameRow): JsonValue {
   return {
     event_id: row.eventId,
@@ -173,20 +223,20 @@ export async function readSealedSegments(
 ): Promise<SealedSegment[]> {
   return runInTenantScope(scope, async () => {
     if (record.source === "tacho") {
-      const rows = await allTachoRows(record.sessionUuid);
+      const records = await allTachoRecords(record.sessionUuid);
       return [
         {
           attemptId: record.sessionUuid,
           attemptPublicId: record.sessionUuid,
-          frameCount: rows.length,
+          frameCount: records.length,
           merkleRoot: "",
           archiveSegmentDigest: null,
           eventStreamDigest: null,
           enforcementTier: record.enforcementTier,
           completenessGaps: record.completenessGaps,
           replayGrade: record.replayGrade,
-          envelopes: rows.map(tachoEnvelope),
-          digests: rows.map((row) => row.hash),
+          envelopes: records.map(tachoExportFrame),
+          digests: records.map((r) => r.frame.hash),
         },
       ];
     }

@@ -8,3 +8,4 @@ export * from "./reassign";
 export * from "./status";
 export * from "./unenroll";
 export * from "./verify";
+export * from "./run";

@@ -1,14 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
+  BUNDLE_FEATURE_CONTAINMENT,
   bundleResponseSchema,
   controlEnvelopeSchema,
   deliveredCommandSchema,
   ingestResponseSchema,
   commandsResponseSchema,
+  policyBundleSchema,
   tachoBatchSchema,
   TACHO_MAX_BODY_BYTES,
   TACHO_BATCH_SCHEMA,
+  TACHO_BUNDLE_FEATURES,
 } from "./wire";
+import { bundleSigner, unsignedBundle } from "./host/test-support";
 import { minimalSession } from "./test-helpers";
 
 /**
@@ -245,5 +249,41 @@ describe("what this host sends", () => {
         bodies: [{ ...batch.bodies[0], bytes_base64: overCap }],
       }),
     ).toThrow();
+  });
+});
+
+/**
+ * The mandate's containment requirement (ADR-152). The bundle schema is
+ * strict, so the one shape it takes is `{ required: true }`: "not required"
+ * is the field's absence, and anything else fails the whole bundle rather
+ * than being read as no requirement.
+ */
+describe("the bundle's containment requirement", () => {
+  const signed = bundleSigner().sign(unsignedBundle());
+
+  it("parses a bundle without it, and one that requires containment", () => {
+    expect(policyBundleSchema.parse(signed).containment).toBeUndefined();
+    expect(
+      policyBundleSchema.parse({ ...signed, containment: { required: true } })
+        .containment,
+    ).toEqual({ required: true });
+  });
+
+  it.each([
+    [{ required: false }],
+    [{ required: "true" }],
+    [{}],
+    [{ required: true, tier: "gateway" }],
+    [true],
+    [null],
+  ])("rejects the whole bundle for containment %j", (containment) => {
+    expect(
+      policyBundleSchema.safeParse({ ...signed, containment }).success,
+    ).toBe(false);
+  });
+
+  it("is a feature this host advertises, so the control plane sends it", () => {
+    expect(TACHO_BUNDLE_FEATURES).toContain(BUNDLE_FEATURE_CONTAINMENT);
+    expect(BUNDLE_FEATURE_CONTAINMENT).toBe("containment");
   });
 });

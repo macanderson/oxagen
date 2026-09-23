@@ -55,6 +55,7 @@ export const RETENTION_CLASS_BY_KIND: Readonly<
   tool_requested: "tool_call",
   tool_call: "tool_call",
   token_denied: "tool_call",
+  "oxagen:worktree_reconciled": "tool_call",
   // What a person was asked to approve.
   approval_request: "approval_receipt",
 };

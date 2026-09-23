@@ -23,7 +23,7 @@ import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
 import { Badge } from "@/ui/badge";
 import { buttonSecondary, panelBody } from "@/ui/control-styles";
-import { ListTable, type ListRow } from "@/ui/list-table";
+import { ListTable, type ListRow } from "@/ui/faceted-list-table";
 import { SafeLink } from "@/ui/navigation";
 import { cell, numericCell } from "@/ui/table";
 import { Freshness } from "../freshness";

@@ -41,7 +41,7 @@ import {
   panelHeader,
   panelTitle,
 } from "@/ui/control-styles";
-import { pageNumbers } from "@/ui/list-table";
+import { pageNumbers } from "@/ui/faceted-list-table";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { PressLink } from "@/ui/press-link";

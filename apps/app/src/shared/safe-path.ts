@@ -133,6 +133,11 @@ export const routes = {
     withQuery(mint("/cli/authorize"), query),
   /** Organization › People is the organization's root. */
   people: (org: string): SafePath => pathOf(org),
+  organization: (
+    org: string,
+    tab: "people" | "invitations" | "workspaces" | "costCenters",
+  ): SafePath =>
+    withQuery(pathOf(org), { tab: tab === "people" ? undefined : tab }),
   /** Organization › Roles: the roles and the permission catalogue (#2964). */
   roles: (org: string): SafePath => pathOf(org, "roles"),
   /**
