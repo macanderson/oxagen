@@ -20,7 +20,11 @@ vi.mock("@/data/source", () => ({
     mandates: { list: fake.mandates },
   }),
 }));
-import { markShellNotification, readShellActivity } from "./activity-actions";
+import {
+  markShellNotification,
+  readShellActivity,
+  readShellNavCounts,
+} from "./activity-actions";
 
 const notification = (publicId: string) => ({
   publicId,
@@ -77,6 +81,20 @@ beforeEach(() => {
 });
 
 describe("organization activity", () => {
+  it("reads only the selected workspace count for idle navigation", async () => {
+    await readShellNavCounts("org", "two");
+    expect(fake.viewer).toHaveBeenCalledWith("org", "two");
+    expect(fake.read).toHaveBeenCalledOnce();
+    expect(fake.read).toHaveBeenCalledWith(
+      { org: "org", ws: "two" },
+      expect.objectContaining({
+        contract: expect.objectContaining({ name: "get_nav_counts" }),
+      }),
+    );
+    expect(fake.context).not.toHaveBeenCalled();
+    expect(fake.pending).not.toHaveBeenCalled();
+    expect(fake.mandates).not.toHaveBeenCalled();
+  });
   it("keeps the verified workspace on each notification and deduplicates shared rows", async () => {
     const result = await readShellActivity("org", "one");
     expect(result.ok).toBe(true);

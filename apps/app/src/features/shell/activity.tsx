@@ -11,7 +11,11 @@ import {
 } from "react";
 import { useTranslations } from "next-intl";
 import { Bell, CheckCheck } from "lucide-react";
-import { readShellActivity, markShellNotification } from "./activity-actions";
+import {
+  readShellActivity,
+  readShellNavCounts,
+  markShellNotification,
+} from "./activity-actions";
 import { useShellState } from "./shell-state";
 import { useSidebarSections } from "./sidebar";
 import type { ShellData } from "./shell-data";
@@ -26,6 +30,7 @@ import { buttonSecondary } from "@/ui/control-styles";
 type Activity = Awaited<ReturnType<typeof readShellActivity>>;
 type ActivityState = {
   read: Activity | null;
+  counts: Awaited<ReturnType<typeof readShellNavCounts>> | null;
   failed: boolean;
   refresh: () => Promise<void>;
 };
@@ -43,6 +48,12 @@ export function ShellActivityProvider({
   children: ReactNode;
 }) {
   const { ws } = useSidebarSections(data);
+  const { approvalsOpen, notificationsOpen } = useShellState();
+  const drawerOpen = approvalsOpen || notificationsOpen;
+  const [navCounts, setNavCounts] = useState<{
+    key: string;
+    read: Awaited<ReturnType<typeof readShellNavCounts>>;
+  } | null>(null);
   const [result, setResult] = useState<{ key: string; read: Activity } | null>(
     null,
   );
@@ -61,6 +72,7 @@ export function ShellActivityProvider({
     }
   }, [data.org.slug, ws, key]);
   useEffect(() => {
+    if (!drawerOpen) return;
     let stopped = false;
     let timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
@@ -76,10 +88,33 @@ export function ShellActivityProvider({
       generation.current += 1;
       clearTimeout(timer);
     };
-  }, [refresh]);
+  }, [refresh, drawerOpen]);
+  useEffect(() => {
+    if (!ws) return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        const read = await readShellNavCounts(data.org.slug, ws);
+        if (!stopped) setNavCounts({ key, read });
+      } catch {
+        if (!stopped) setNavCounts(null);
+      }
+      if (!stopped)
+        timer = setTimeout(() => {
+          void poll();
+        }, 30_000);
+    };
+    void poll();
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
+  }, [data.org.slug, ws, key]);
+  const counts = navCounts?.key === key ? navCounts.read : null;
   const read = result?.key === key ? result.read : null;
   return (
-    <ActivityContext value={{ read, failed, refresh }}>
+    <ActivityContext value={{ read, counts, failed, refresh }}>
       {children}
     </ActivityContext>
   );

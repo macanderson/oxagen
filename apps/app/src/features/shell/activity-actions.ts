@@ -115,3 +115,12 @@ export async function markShellNotification(
     ws === null ? await requireViewer(org) : await requireViewer(org, ws);
   return kernelWrite(ctx, notificationsMark, { id, read: true, archived });
 }
+
+export async function readShellNavCounts(org: string, ws: string) {
+  const ctx = await requireViewer(org, ws);
+  return kernelRead(ctx, {
+    contract: shellNavCountsGet,
+    input: {},
+    page: "shell",
+  });
+}
