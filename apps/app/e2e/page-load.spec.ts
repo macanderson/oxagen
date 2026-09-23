@@ -60,24 +60,23 @@ for (const row of SIGNED_IN_ROUTES) {
     await test
       .info()
       .attach("phone", { path: phonePath, contentType: "image/png" });
-    if (row.path.endsWith("/steering")) {
-      // The tabs are path segments: Gates carries the freshness gates the
-      // one-route page called Settings (roadmap pages/steering.md).
-      await page.locator('[data-tab="gates"]').click();
-      await expect(page.locator('[data-tab="gates"]')).toHaveAttribute(
-        "aria-selected",
-        "true",
-      );
-      await expect(page).toHaveURL(/\/steering\/gates(?:\?|$)/);
+    if (row.titleKey === "steering") {
+      // Each tab is its own route segment, and with Cache Components the page
+      // navigated away from stays mounted but hidden, so its tab bar is still
+      // in the DOM. Only the visible bar is the one the person is using.
+      const freshness = page.locator('[data-tab="freshness"]:visible');
+      await freshness.click();
+      await expect(freshness).toHaveAttribute("aria-current", "page");
+      await expect(page).toHaveURL(/\/steering\/freshness(?:\?|$)/);
       await page.setViewportSize({ width: 1280, height: 720 });
       await page.screenshot({
-        path: test.info().outputPath("gates-desktop.png"),
+        path: test.info().outputPath("freshness-desktop.png"),
         fullPage: true,
         animations: "disabled",
       });
       await page.setViewportSize({ width: 390, height: 844 });
       await page.screenshot({
-        path: test.info().outputPath("gates-phone.png"),
+        path: test.info().outputPath("freshness-phone.png"),
         fullPage: true,
         animations: "disabled",
       });
