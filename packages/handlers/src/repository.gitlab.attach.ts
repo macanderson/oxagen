@@ -36,6 +36,7 @@ import { eq } from "drizzle-orm";
 import {
   GITLAB_AUTH_SCHEME,
   GITLAB_PROVIDER,
+  resolveGitLabCredential,
   type GitLabCredential,
 } from "./lib/gitlab-credential";
 import { logger } from "./logger";
@@ -194,19 +195,24 @@ export function createGitLabAttachHandler(
     });
     // A rotation keeps the webhook and its secret: the hook GitLab holds is
     // signed with that secret, and replacing it would break deliveries until
-    // the hook was re-registered.
+    // the hook was re-registered. When the stored secret is gone, the rotation
+    // takes a new one and re-registers the hook below, rather than keeping a
+    // hook that would refuse every delivery.
+    const kept = existing
+      ? await storedWebhookSecret(scope, existing.id)
+      : null;
     const credential: GitLabCredential = {
       token: input.token,
-      webhookSecret: existing
-        ? await keepWebhookSecret(scope, existing.id, deps)
-        : deps.newSecret(),
+      webhookSecret: kept ?? deps.newSecret(),
     };
+    const staleHookId =
+      existing !== null && kept === null ? existing.config.webhookId : null;
     const sealed = await deps.seal(JSON.stringify(credential));
     const now = new Date();
     const config: GitLabDeliveryConfig = {
       projectId: project.id,
       projectPath: project.pathWithNamespace,
-      webhookId: existing?.config.webhookId ?? null,
+      webhookId: kept === null ? null : (existing?.config.webhookId ?? null),
     };
 
     const connection = await withTenantDb(async (tx) => {
@@ -257,6 +263,22 @@ export function createGitLabAttachHandler(
     if (config.webhookId !== null) {
       webhook = { status: "unchanged" };
     } else {
+      if (staleHookId !== null) {
+        // The hook signed with the lost secret. Removing it is best effort:
+        // one already gone, or a role that cannot manage hooks, leaves nothing
+        // this call can do, and the new hook below is what delivers.
+        await gl
+          .deleteProjectHook({ project: project.id, hookId: staleHookId })
+          .catch((err: unknown) => {
+            if (
+              !(
+                err instanceof GitLabApiError &&
+                (err.status === 404 || err.status === 403)
+              )
+            )
+              throw err;
+          });
+      }
       try {
         const hook = await gl.createProjectHook({
           project: project.id,
@@ -304,21 +326,23 @@ export function createGitLabAttachHandler(
 
 /**
  * The webhook secret already stored on a connection, so a token rotation does
- * not orphan the hook GitLab signs with it. A connection whose credential no
- * longer decrypts gets a new secret; its hook then stops verifying, which is
- * the safe direction.
+ * not orphan the hook GitLab signs with it. Null when the connection holds no
+ * readable credential (`gitlab_not_connected`), which sends the rotation down
+ * the re-registration path. Any other failure, such as the key service being
+ * unreachable, is thrown: rotating on a guess would leave the hook and the
+ * stored secret disagreeing.
  */
-async function keepWebhookSecret(
+async function storedWebhookSecret(
   scope: { orgId: string; workspaceId: string },
   connectionId: string,
-  deps: GitLabAttachDeps,
-): Promise<string> {
-  const { resolveGitLabCredential } = await import("./lib/gitlab-credential");
+): Promise<string | null> {
   try {
     return (await resolveGitLabCredential({ ...scope, connectionId }))
       .webhookSecret;
-  } catch {
-    return deps.newSecret();
+  } catch (err) {
+    if (err instanceof HandlerError && err.reason === "gitlab_not_connected")
+      return null;
+    throw err;
   }
 }
 

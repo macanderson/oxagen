@@ -188,6 +188,74 @@ describe("attach_gitlab_project", () => {
     expect(createProjectHook).not.toHaveBeenCalled();
   });
 
+  it("re-registers the hook with a new secret when the stored credential is unreadable", async () => {
+    const writes = wireDb();
+    mocks.findConnection.mockResolvedValue({
+      id: "conn-uuid",
+      publicId: "con_gl1",
+      status: "error",
+      config: {
+        projectId: "4242",
+        projectPath: "acme/platform/rules",
+        webhookId: 55,
+      },
+    });
+    const { gitlabNotConnected } = await import("./lib/gitlab-credential");
+    mocks.resolveCredential.mockRejectedValue(gitlabNotConnected());
+    const deleteProjectHook = vi.fn(async () => {});
+    const createProjectHook = vi.fn(async () => ({ id: 902, url: "u" }));
+    const { d, seal } = deps(new FakeGitLabApi(), {
+      deleteProjectHook,
+      createProjectHook,
+    });
+
+    const out = await createGitLabAttachHandler(d)(INPUT, makeCTX());
+
+    // Never "unchanged" with a secret the old hook does not carry.
+    expect(out).toMatchObject({
+      rotated: true,
+      webhook: { status: "registered" },
+    });
+    expect(seal).toHaveBeenCalledWith(
+      JSON.stringify({ token: TOKEN, webhookSecret: "whsec-fresh" }),
+    );
+    expect(deleteProjectHook).toHaveBeenCalledWith({
+      project: "4242",
+      hookId: 55,
+    });
+    expect(createProjectHook).toHaveBeenCalledWith(
+      expect.objectContaining({ token: "whsec-fresh" }),
+    );
+    expect(
+      writes.updates.some(
+        (u) =>
+          (u.values.deliveryConfig as { webhookId?: number })?.webhookId ===
+          902,
+      ),
+    ).toBe(true);
+  });
+
+  it("fails the rotation rather than guessing when the stored credential cannot be read for another reason", async () => {
+    const writes = wireDb();
+    mocks.findConnection.mockResolvedValue({
+      id: "conn-uuid",
+      publicId: "con_gl1",
+      status: "connected",
+      config: {
+        projectId: "4242",
+        projectPath: "acme/platform/rules",
+        webhookId: 55,
+      },
+    });
+    mocks.resolveCredential.mockRejectedValue(new Error("KMS unavailable"));
+    const { d, seal } = deps(new FakeGitLabApi());
+    await expect(
+      createGitLabAttachHandler(d)(INPUT, makeCTX()),
+    ).rejects.toThrow("KMS unavailable");
+    expect(seal).not.toHaveBeenCalled();
+    expect(writes.updates).toHaveLength(0);
+  });
+
   it("connects without a webhook when the token's role cannot manage hooks", async () => {
     wireDb();
     const { d } = deps(new FakeGitLabApi(), {

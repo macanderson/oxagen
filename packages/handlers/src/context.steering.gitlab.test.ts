@@ -257,6 +257,25 @@ describe("a context record published through a GitLab merge request", () => {
   });
 });
 
+describe("a proposal whose PR was opened on the other host", () => {
+  it("is dismissed without closing anything by its number on GitLab", async () => {
+    const { api, h } = gitlabHarness();
+    const proposalId = await propose(h);
+    await createOpenContextPrHandler(h)({ proposalId }, ctx());
+    // The row as a GitHub-era open left it: `!1` on GitLab is not its PR.
+    h.store.proposals[0]!.provider = "github";
+
+    const out = await createDismissProposalHandler(h)(
+      { proposalId, reason: "moved to GitLab" },
+      ctx(),
+    );
+
+    expect(out.status).toBe("rejected");
+    expect(api.mergeRequests[0]!.state).toBe("opened");
+    expect(api.branches.has(BRANCH)).toBe(true);
+  });
+});
+
 describe("the GitLab seam", () => {
   const resolved = async (api: FakeGitLabApi) => {
     const { seam, sleep, resolveToken } = gitlabSeam(api);
@@ -425,6 +444,89 @@ describe("the GitLab seam", () => {
     });
     expect(sleep).toHaveBeenCalledTimes(3);
     expect(out.sha).toBe(api.branches.get("main"));
+  });
+
+  async function openedMr(api: FakeGitLabApi) {
+    const { seam, repo } = await resolved(api);
+    await seam.ensureBranch(repo, "b", "main");
+    const { commitSha } = await seam.putFile(repo, {
+      path: "a",
+      content: "1",
+      message: "m",
+      branch: "b",
+    });
+    const mr = await seam.openPullRequest(repo, {
+      title: "t",
+      head: "b",
+      base: "main",
+      body: "",
+    });
+    return { seam, repo, commitSha, mr };
+  }
+
+  it("refuses a merge whose head moved past the checked commit as head_moved", async () => {
+    const api = new FakeGitLabApi();
+    const { seam, repo, commitSha, mr } = await openedMr(api);
+    api.commit("b", "b", "pushed after the checks");
+    await expect(
+      seam.mergePullRequest(repo, {
+        number: mr.number,
+        commitTitle: "t",
+        sha: commitSha,
+      }),
+    ).rejects.toMatchObject({ code: "conflict", reason: "head_moved" });
+    expect(api.merges).toHaveLength(0);
+  });
+
+  it("refuses a merge GitLab accepted without merging, such as one waiting on a pipeline", async () => {
+    const api = new FakeGitLabApi();
+    const { repo, commitSha, mr } = await openedMr(api);
+    const client = api.client.bind(api);
+    api.client = (t) => ({
+      ...client(t),
+      mergeMergeRequest: async () => ({
+        ...(await client(t).getMergeRequest({ project: "4242", iid: 1 })),
+        state: "opened" as const,
+      }),
+    });
+    const { seam } = gitlabSeam(api);
+    const fresh = await seam.resolveRepository(SCOPE);
+    await expect(
+      seam.mergePullRequest(fresh, {
+        number: mr.number,
+        commitTitle: "t",
+        sha: commitSha,
+      }),
+    ).rejects.toMatchObject({ reason: "gitlab_refused" });
+    expect(repo.provider).toBe("gitlab");
+  });
+
+  it("updates a merge request's title and description by its IID", async () => {
+    const api = new FakeGitLabApi();
+    const { seam, repo, mr } = await openedMr(api);
+    await expect(
+      seam.updatePullRequest(repo, {
+        number: mr.number,
+        title: "Context PR: renamed",
+        body: "new body",
+      }),
+    ).resolves.toEqual({ number: 1, htmlUrl: mr.htmlUrl });
+    expect(api.mergeRequests[0]).toMatchObject({
+      title: "Context PR: renamed",
+      description: "new body",
+    });
+  });
+
+  it("wraps any other GitLab refusal as gitlab_refused with GitLab's message", async () => {
+    const api = new FakeGitLabApi();
+    const { seam, repo } = await resolved(api);
+    await expect(
+      seam.ensureBranch(repo, "b", "no-such-ref"),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "gitlab_refused",
+      message: expect.stringContaining("Invalid reference name"),
+    });
   });
 
   it("reports a refused commit status as no URL rather than failing the check", async () => {

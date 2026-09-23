@@ -973,6 +973,53 @@ describe("workspaceCreateHandler with a GitLab main project", () => {
     ).resolves.toMatchObject({ mainRepo: { provider: "gitlab" } });
   });
 
+  it("refuses a path GitLab would not accept before calling GitLab", async () => {
+    const api = new FakeGitLabApi();
+    const { handler } = handlerWith(api);
+    await expect(
+      handler(
+        {
+          ...gitlabDraft,
+          mainRepo: { ...gitlabDraft.mainRepo, projectPath: "acme/rules.git" },
+        },
+        CTX,
+      ),
+    ).rejects.toMatchObject({ reason: "invalid_project_path" });
+    expect(api.tokens).toEqual([]);
+    expect(mocks.inserts).toEqual([]);
+  });
+
+  it("fails the creation when registering the hook fails for a reason other than the token's role", async () => {
+    const api = new FakeGitLabApi();
+    const client = api.client.bind(api);
+    api.client = (token) => ({
+      ...client(token),
+      createProjectHook: async () => {
+        const { GitLabApiError } = await import("@oxagen/gitlab");
+        throw new GitLabApiError(500, "500 Internal Server Error");
+      },
+    });
+    const { handler } = handlerWith(api);
+    await expect(handler(gitlabDraft, CTX)).rejects.toThrow("500");
+  });
+
+  it("creates the workspace without a hook when the token's role cannot register one", async () => {
+    const api = new FakeGitLabApi();
+    const client = api.client.bind(api);
+    api.client = (token) => ({
+      ...client(token),
+      createProjectHook: async () => {
+        const { GitLabApiError } = await import("@oxagen/gitlab");
+        throw new GitLabApiError(403, "403 Forbidden");
+      },
+    });
+    const { handler } = handlerWith(api);
+    await expect(handler(gitlabDraft, CTX)).resolves.toMatchObject({
+      mainRepo: { provider: "gitlab" },
+    });
+    expect(mocks.updates).toEqual([]);
+  });
+
   it("refuses a token that is not this project's before writing anything", async () => {
     const api = new FakeGitLabApi();
     const { handler } = handlerWith(api);

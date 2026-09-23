@@ -235,9 +235,14 @@ export function gitlabWebhookDeps(): GitLabWebhookDeps {
           .limit(1),
       );
       if (!row) return null;
+      // The config first: a row that names no GitLab project is no connection
+      // this route serves, whatever its credential. A decrypt that throws (the
+      // key service is down) is left to throw, so GitLab gets a 5xx and
+      // retries rather than a 401 that counts toward disabling the hook.
       const config = gitlabDeliveryConfigOf(row.deliveryConfig);
+      if (!config) return null;
       const credential = await decryptGitLabCredential(row.encryptedPayload);
-      if (!config || !credential) return null;
+      if (!credential) return null;
       return {
         id: row.id,
         orgId: row.orgId,
