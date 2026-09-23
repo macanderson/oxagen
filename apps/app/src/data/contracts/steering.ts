@@ -12,6 +12,8 @@ const Instant = z.iso.datetime({ offset: true });
 
 /** One page of records or proposals; the adapter reads this many and the pager steps by it. */
 export const STEERING_PAGE = 50;
+/** The most rows one list_records call answers (its contract's `limit` bound). */
+export const STEERING_READ_MAX = 200;
 
 /** The six kinds of context-record/v0.1 (spec §10.2), in the mockup's order. */
 export const RECORD_KINDS = [

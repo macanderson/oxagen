@@ -22,6 +22,7 @@ import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import {
+  contextPr,
   PROPOSAL_ID,
   publishedRecord,
   proposal,
@@ -45,7 +46,12 @@ vi.mock("./actions", () => ({
   setSteeringGate: vi.fn(),
   setGovernanceMode: vi.fn(),
 }));
-vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
+vi.mock("@/server/session", () => ({
+  getSession: vi.fn(),
+  getAuthUser: vi.fn(() =>
+    Promise.resolve({ name: "Marcus Bell", email: "marcus@acme.test" }),
+  ),
+}));
 // The Skills tab is the Skills lane's inventory; its states are its own test
 // (features/skills/skills.test.tsx). Here the tab only has to hand it the
 // viewer, the data source and the page the URL names.
@@ -137,7 +143,10 @@ const tab = (name: string) =>
 describe("the hub", () => {
   it("opens the Library's All shelf on the bare route with the five tabs as path segments, in order", async () => {
     const calls = await renderSteering();
-    expect(calls.records).toEqual([[ctx, { kind: null, offset: 0 }]]);
+    // The All shelf reads the whole list at the contract's bound.
+    expect(calls.records).toEqual([
+      [ctx, { kind: null, offset: 0, limit: 200 }],
+    ]);
     expect(calls.hub).toEqual([[ctx]]);
     expect(calls.proposals).toEqual([]);
     const tabs = screen.getByRole("tablist", { name: "Steering" });
@@ -168,6 +177,74 @@ describe("the hub", () => {
     expect(
       within(header).getByRole("button", { name: "Write a context record" }),
     ).toHaveAttribute("data-create", "record");
+  });
+
+  it("gives the gold to Merge pull request on a selected Context PR whose checks passed", async () => {
+    await renderSteering(`/proposals/prs?proposal=${PROPOSAL_ID}`);
+    const create = within(screen.getByTestId("hub-header")).getByRole(
+      "button",
+      { name: "Write a context record" },
+    );
+    expect(create.className).not.toMatch(/button-primary/);
+    expect(
+      screen.getByRole("button", { name: "Merge pull request" }).className,
+    ).toMatch(/button-primary/);
+    expect(
+      document.querySelectorAll('[class*="bg-button-primary-bg"]'),
+    ).toHaveLength(1);
+  });
+
+  it("keeps the gold in the header while the selected Context PR cannot merge (negative)", async () => {
+    await renderSteering(`/proposals/prs?proposal=${PROPOSAL_ID}`, {
+      contextPr: readOk(contextPr("checks_failed")),
+    });
+    expect(
+      within(screen.getByTestId("hub-header")).getByRole("button", {
+        name: "Write a context record",
+      }).className,
+    ).toMatch(/button-primary/);
+    expect(
+      document.querySelectorAll('[class*="bg-button-primary-bg"]'),
+    ).toHaveLength(1);
+  });
+
+  it("gives the gold to the Skills shelf's Search view", async () => {
+    await renderSteering("/skills/search");
+    expect(
+      screen.getByRole("button", { name: "Add a skill" }).className,
+    ).not.toMatch(/button-primary/);
+  });
+
+  it("names the panel the selected tab controls, and moves focus along the tabs with the arrow keys", async () => {
+    await renderSteering();
+    const library = tab("Library");
+    const panel = screen.getByRole("tabpanel", { name: /^Library/ });
+    expect(library).toHaveAttribute("aria-controls", panel.id);
+    expect(library).toHaveAttribute("tabindex", "0");
+    expect(tab("Gates")).toHaveAttribute("tabindex", "-1");
+    library.focus();
+    fireEvent.keyDown(library, { key: "ArrowRight" });
+    expect(tab("Assignments")).toHaveFocus();
+    fireEvent.keyDown(tab("Assignments"), { key: "End" });
+    expect(tab("Compiler")).toHaveFocus();
+    fireEvent.keyDown(tab("Compiler"), { key: "ArrowRight" });
+    expect(library).toHaveFocus();
+    fireEvent.keyDown(library, { key: "ArrowLeft" });
+    expect(tab("Compiler")).toHaveFocus();
+  });
+
+  it("follows a shelf chip on Space, as its button role promises", async () => {
+    await renderSteering();
+    const row = screen.getByRole("group", { name: "Library shelves" });
+    const records = within(row).getByRole("button", { name: /^Records/ });
+    const followed = vi.fn((event: Event) => {
+      event.preventDefault();
+    });
+    records.addEventListener("click", followed);
+    fireEvent.keyDown(records, { key: " " });
+    expect(followed).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(records, { key: "a" });
+    expect(followed).toHaveBeenCalledTimes(1);
   });
 
   it("draws the shelf row with a count per shelf and aria-pressed on each chip", async () => {
@@ -269,6 +346,14 @@ describe("the hub", () => {
         "Steering freshness could not be loaded: record_index_unavailable. Nothing was changed.",
       ),
     ).toBeVisible();
+  });
+
+  it("keeps the skill a source address names, above the Skills catalog", async () => {
+    await renderSteering("/skills/a-intel.release-notes/source");
+    expect(screen.getByTestId("skill-source")).toHaveTextContent(
+      "The source of a-intel.release-notes opens here when the skill source page ships.",
+    );
+    expect(screen.getByTestId("skills-tab")).toBeInTheDocument();
   });
 
   it("opens Skills with the page the URL names and gives the gold to Add a skill", async () => {
@@ -439,15 +524,115 @@ describe("the Library, All shelf", () => {
     );
   });
 
-  it("pages the list by fifty on /library", async () => {
-    const calls = await renderSteering("/library?offset=50", {
-      records: readOk({ records: [publishedRecord()], total: 51 }),
+  describe("the list tools", () => {
+    // Twelve records over two reads, newest first as list_records answers:
+    // the one `must` sits on the second read, and the assembler puts it first.
+    const force = (i: number) =>
+      i === 11 ? "must" : i % 2 ? "should" : "info";
+    const record = (i: number) =>
+      publishedRecord({
+        id: `ctr_r${String(i).padStart(2, "0")}`,
+        lineage: `ctx.r${String(i).padStart(2, "0")}`,
+        force: force(i),
+        sharingScope: i % 3 === 0 ? "repository" : "workspace",
+        statement: `Record ${String(i)}.`,
+      });
+    const twelve = (q: { offset: number }) =>
+      readOk({
+        records: Array.from({ length: 12 }, (_, i) => record(i)).slice(
+          q.offset,
+          q.offset + 8,
+        ),
+        total: 12,
+      });
+    const lineages = () =>
+      within(screen.getByRole("table", { name: "Everything written down" }))
+        .getAllByRole("row")
+        .slice(1)
+        .map((row) => row.getAttribute("data-lineage"));
+
+    it("reads every page and orders the whole list, ten rows to a page", async () => {
+      const calls = await renderSteering("/library", { records: twelve });
+      expect(calls.records).toEqual([
+        [ctx, { kind: null, offset: 0, limit: 200 }],
+        [ctx, { kind: null, offset: 8, limit: 200 }],
+      ]);
+      expect(lineages()).toHaveLength(10);
+      expect(lineages()[0]).toBe("ctx.r11");
+      const pager = screen.getByRole("navigation", { name: "Pages" });
+      expect(pager).toHaveTextContent("1–10 of 12");
+      fireEvent.click(within(pager).getByRole("button", { name: "Page 2" }));
+      expect(pager).toHaveTextContent("11–12 of 12");
+      expect(lineages()).toHaveLength(2);
+      expect(
+        within(pager).getByRole("button", { name: "Next page" }),
+      ).toBeDisabled();
     });
-    expect(calls.records).toEqual([[ctx, { kind: null, offset: 50 }]]);
-    expect(screen.getByRole("link", { name: "Previous page" })).toHaveAttribute(
-      "href",
-      `${BASE}/library`,
-    );
+
+    it("searches, filters by Scope, Compiles to and Force, and changes the rows per page", async () => {
+      await renderSteering("/library", { records: twelve });
+      expect(
+        screen.getByRole("searchbox", { name: "Search this list" }),
+      ).toBeVisible();
+      expect(
+        screen
+          .getAllByRole("combobox")
+          .map((select) => select.getAttribute("aria-label")),
+      ).toEqual([
+        "Filter by Scope",
+        "Filter by Compiles to",
+        "Filter by Force",
+        "Rows",
+      ]);
+      fireEvent.change(
+        screen.getByRole("combobox", { name: "Filter by Force" }),
+        { target: { value: "must" } },
+      );
+      expect(lineages()).toEqual(["ctx.r11"]);
+      fireEvent.change(
+        screen.getByRole("combobox", { name: "Filter by Force" }),
+        { target: { value: "" } },
+      );
+      fireEvent.change(
+        screen.getByRole("searchbox", { name: "Search this list" }),
+        { target: { value: "Record 7." } },
+      );
+      expect(lineages()).toEqual(["ctx.r07"]);
+      fireEvent.change(
+        screen.getByRole("searchbox", { name: "Search this list" }),
+        { target: { value: "nothing like it" } },
+      );
+      expect(screen.getByText("No rows match.")).toBeVisible();
+      fireEvent.change(
+        screen.getByRole("searchbox", { name: "Search this list" }),
+        { target: { value: "" } },
+      );
+      fireEvent.change(screen.getByRole("combobox", { name: "Rows" }), {
+        target: { value: "0" },
+      });
+      expect(lineages()).toHaveLength(12);
+    });
+
+    it("sorts on a header press, reverses on the second and gives the assembler's order back on the third", async () => {
+      await renderSteering("/library", { records: twelve });
+      const item = screen.getByRole("button", { name: "Item" });
+      fireEvent.click(item);
+      expect(item.closest("th")).toHaveAttribute("aria-sort", "ascending");
+      expect(lineages()[0]).toBe("ctx.r00");
+      fireEvent.click(item);
+      expect(item.closest("th")).toHaveAttribute("aria-sort", "descending");
+      expect(lineages()[0]).toBe("ctx.r11");
+      fireEvent.click(item);
+      expect(item.closest("th")).toHaveAttribute("aria-sort", "none");
+      expect(lineages()[0]).toBe("ctx.r11");
+    });
+
+    it("fails the shelf when a later read fails, rather than showing part of the list (negative)", async () => {
+      await renderSteering("/library", {
+        records: (q) => (q.offset === 0 ? twelve(q) : DOWN),
+      });
+      expect(section("Steering could not be loaded")).toBeInTheDocument();
+    });
   });
 });
 
@@ -514,10 +699,13 @@ describe("states", () => {
       within(denied).getByRole("link", { name: "Back to Fleet" }),
     ).toHaveAttribute("href", "/acme/core-platform");
     expect(denied).toHaveTextContent(
-      "Signed in asworkspace.member · core-platform",
+      "Signed in asMarcus Bell · workspace.member · core-platform",
     );
     expect(denied).toHaveTextContent("Neededsteering.read on core-platform");
-    expect(denied).toHaveTextContent("Decided bydeny wins over every allow");
+    // The refusal does not carry the policy that decided it yet (#3846).
+    expect(denied).toHaveTextContent(
+      "Decided bypolicy not recorded (#3846) · deny wins over every allow",
+    );
     fireEvent.click(
       within(denied).getByRole("button", { name: "Request access" }),
     );

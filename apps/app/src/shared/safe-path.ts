@@ -370,6 +370,8 @@ export const routes = {
       tab?: string;
       /** The agent the Compiler assembles for; only with `tab: "compiler"`. */
       agent?: string;
+      /** A skill whose source `/steering/skills/<skill>/source` opens; only with `tab: "skills"`. */
+      skill?: string;
       kind?: string;
       offset?: string;
       proposal?: string;
@@ -383,6 +385,9 @@ export const routes = {
         : [];
     if (segments[0] === "compiler" && q.agent !== undefined) {
       segments.push(q.agent);
+    }
+    if (segments[0] === "skills" && q.skill !== undefined) {
+      segments.push(q.skill, "source");
     }
     return withQuery(pathOf(org, ws, "steering", ...segments), {
       kind: q.kind,

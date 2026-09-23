@@ -41,6 +41,7 @@ export function SheetDialog({
   footer,
   closeLabel,
   wide = false,
+  headerClose = false,
   dismissible = true,
   testId,
   children,
@@ -59,6 +60,11 @@ export function SheetDialog({
   closeLabel?: string;
   /** The mockup's dialog width (600px) for editors that need two columns. */
   wide?: boolean;
+  /**
+   * The mockup's × in the header's corner (`.dlg-h .x`), beside the footer's
+   * Close or Cancel, for a dialog whose design draws one.
+   */
+  headerClose?: boolean;
   testId: string;
   children: ReactNode;
 }) {
@@ -83,8 +89,18 @@ export function SheetDialog({
         >
           <SheetHandle />
           <div
-            className={`border-b border-border px-4 pt-4 ${tabs ? "pb-0" : "pb-3"}`}
+            className={`relative border-b border-border px-4 pt-4 ${tabs ? "pb-0" : "pb-3"} ${headerClose ? "pr-12" : ""}`}
           >
+            {headerClose ? (
+              <Dialog.Close
+                disabled={!dismissible}
+                aria-label={t("dismiss")}
+                data-header-close=""
+                className="absolute right-2.5 top-2.5 inline-flex size-8 max-md:size-11 items-center justify-center rounded-md text-lg leading-none text-muted-foreground hover:bg-hl hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              >
+                <span aria-hidden="true">×</span>
+              </Dialog.Close>
+            ) : null}
             <Dialog.Title className="text-base font-semibold">
               {title}
             </Dialog.Title>

@@ -28,6 +28,12 @@ export const STEERING_TABS = [
 ] as const;
 export type SteeringTab = (typeof STEERING_TABS)[number];
 
+/** The id of the region the selected tab controls: the shelf row and the body. */
+export const TAB_PANEL_ID = "steering-panel";
+
+/** A tab's element id, which the panel names as its label. */
+export const tabId = (tab: SteeringTab): string => `steering-tab-${tab}`;
+
 /**
  * The Library's shelves, in the design's order. Instructions renders only
  * where the workspace has one, so All stays the sum of the chips beside it.
@@ -62,6 +68,8 @@ export type SteeringView = {
   cursor: string | null;
   /** Only on the Skills shelf: which of its views is open. */
   skillView: string | undefined;
+  /** Only on the Skills shelf's `source` view: the skill `/skills/<id>/source` names. */
+  skill: string | null;
 };
 
 /** What a request resolves to: a view, a move to where the view lives now, or nothing. */
@@ -167,6 +175,7 @@ function viewOf(
       shelf === "skills"
         ? (base.skillView ?? firstParam(query.view))
         : undefined,
+    skill: shelf === "skills" ? (base.skill ?? null) : null,
   };
 }
 
@@ -222,7 +231,12 @@ export function resolveSteeringRoute(
         : notFound;
     }
     return third === "source" && SLUG.test(second)
-      ? view({ tab: "library", shelf: "skills", skillView: "source" })
+      ? view({
+          tab: "library",
+          shelf: "skills",
+          skillView: "source",
+          skill: second,
+        })
       : notFound;
   }
 
@@ -269,6 +283,8 @@ export function steeringLink(
     kind?: RecordKind | null;
     offset?: number;
     proposal?: string | null;
+    /** A skill whose source the Skills shelf opens. */
+    skill?: string | null;
   },
 ): SafePath {
   return routes.steering(at.org, at.ws, {
@@ -280,6 +296,7 @@ export function steeringLink(
         ? undefined
         : String(to.offset),
     proposal: to.proposal ?? undefined,
+    skill: to.skill ?? undefined,
   });
 }
 

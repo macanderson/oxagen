@@ -133,23 +133,30 @@ vi.mock("@/features/agents", () => ({
 }));
 // The route resolves its path with the lane's own resolver (view.test.ts
 // covers every address); here it only has to hand over what it resolved.
-vi.mock("@/features/steering", () => ({
-  Steering,
-  SteeringLoading: () => null,
-  resolveSteeringRoute: (
-    _at: unknown,
-    segments: string[] | undefined,
-    query: Record<string, string>,
-  ) =>
-    query.tab === "prs"
-      ? {
-          kind: "redirect",
-          to: `/acme/core-platform/steering/proposals/prs?proposal=${query.proposal ?? ""}`,
-        }
-      : segments?.[0] === "nowhere"
-        ? { kind: "not_found" }
-        : { kind: "view", view: { tab: segments?.[0] ?? "library" } },
-}));
+// The old Skills addresses resolve through the real resolver, since the route
+// builds its redirect from the view it returns.
+vi.mock("@/features/steering", async () => {
+  const realView = await import("@/features/steering/view");
+  return {
+    Steering,
+    SteeringLoading: () => null,
+    resolveSteeringRoute: (
+      at: { org: string; ws: string },
+      segments: string[] | undefined,
+      query: Record<string, string>,
+    ) =>
+      segments?.[0] === "skills"
+        ? realView.resolveSteeringRoute(at, segments, query)
+        : query.tab === "prs"
+          ? {
+              kind: "redirect",
+              to: `/acme/core-platform/steering/proposals/prs?proposal=${query.proposal ?? ""}`,
+            }
+          : segments?.[0] === "nowhere"
+            ? { kind: "not_found" }
+            : { kind: "view", view: { tab: segments?.[0] ?? "library" } },
+  };
+});
 vi.mock("@/features/spend", () => ({ Spend, FleetSpendTiles }));
 // People stays real, so the organization page still renders a roster; the two
 // sections the #2964 lane adds are stubbed to show what each route hands them.
@@ -222,6 +229,7 @@ const title = translator("pages");
 
 /** A redirect with no title of its own, so not a `Load`. */
 const SKILLS = () => import("./[ws]/skills/page");
+const SKILLS_VIEW = () => import("./[ws]/skills/[...rest]/page");
 const TOOLS: Load = () => import("./[ws]/tools/page");
 const STEERING: Load = () => import("./[ws]/steering/page");
 const STEERING_VIEW = () => import("./[ws]/steering/[...view]/page");
@@ -442,6 +450,51 @@ describe("the Skills route", () => {
     ).rejects.toThrow("REDIRECT /acme/core-platform/steering/skills?cursor=c2");
     expect(requireViewer).toHaveBeenCalledWith(...WS);
     expect(Skills).not.toHaveBeenCalled();
+  });
+
+  it.each<[string[], Record<string, string>, string]>([
+    [["search"], {}, "/acme/core-platform/steering/skills?view=search"],
+    [["versions"], {}, "/acme/core-platform/steering/skills?view=versions"],
+    [
+      ["catalog"],
+      { cursor: "c2" },
+      "/acme/core-platform/steering/skills?cursor=c2",
+    ],
+    [
+      ["a-intel.release-notes", "source"],
+      {},
+      "/acme/core-platform/steering/skills/a-intel.release-notes/source",
+    ],
+  ])(
+    "moves the old /skills/%j to the Skills shelf of Steering",
+    async (rest, query, to) => {
+      requireViewer.mockResolvedValue({
+        orgSlug: "acme",
+        wsSlug: "core-platform",
+      });
+      await expect(
+        Promise.resolve(
+          (await SKILLS_VIEW()).default(
+            routeProps({ ...SEGMENTS, rest }, query),
+          ),
+        ),
+      ).rejects.toThrow(`REDIRECT ${to}`);
+      expect(requireViewer).toHaveBeenCalledWith(...WS);
+    },
+  );
+
+  it("answers an old /skills address that names nothing with a 404 (negative)", async () => {
+    requireViewer.mockResolvedValue({
+      orgSlug: "acme",
+      wsSlug: "core-platform",
+    });
+    await expect(
+      Promise.resolve(
+        (await SKILLS_VIEW()).default(
+          routeProps({ ...SEGMENTS, rest: ["nowhere"] }),
+        ),
+      ),
+    ).rejects.toThrow("NEXT_NOT_FOUND");
   });
 
   it("moves to the first page when the URL names no cursor", async () => {

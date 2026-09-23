@@ -23,6 +23,7 @@ import {
   statTile,
 } from "@/ui/control-styles";
 import { CreateButton } from "@/ui/create-button";
+import { STEERING_GAPS } from "./gaps";
 import { SafeLink } from "@/ui/navigation";
 import { StubAction } from "./stub-action";
 
@@ -197,6 +198,7 @@ export function SteeringFailure({
   orgName,
   wsSlug,
   wsRole,
+  viewer,
   retry,
   readAt,
 }: {
@@ -207,6 +209,8 @@ export function SteeringFailure({
   wsSlug: string;
   /** The signed-in person's workspace role, lowercased as the viewer carries it. */
   wsRole: string;
+  /** The signed-in person's name, or their email where no name is set; null when the session gave neither. */
+  viewer: string | null;
   /** Where Try again points: the view that failed. */
   retry: SafePath;
   /** The instant the read was attempted, formatted by the caller. */
@@ -281,7 +285,16 @@ export function SteeringFailure({
             <dl className="mt-5 grid max-w-[420px] grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-left text-[13px]">
               <dt className="text-muted-foreground">{t("denied.signedIn")}</dt>
               <dd className="font-mono text-[12px]">
-                {t("denied.signedInValue", { role: wsRole, workspace: wsSlug })}
+                {viewer === null
+                  ? t("denied.signedInValue", {
+                      role: wsRole,
+                      workspace: wsSlug,
+                    })
+                  : t("denied.signedInNamed", {
+                      name: viewer,
+                      role: wsRole,
+                      workspace: wsSlug,
+                    })}
               </dd>
               <dt className="text-muted-foreground">{t("denied.needed")}</dt>
               <dd className="font-mono text-[12px]">
@@ -291,7 +304,11 @@ export function SteeringFailure({
                 })}
               </dd>
               <dt className="text-muted-foreground">{t("denied.decidedBy")}</dt>
-              <dd>{t("denied.decidedByValue")}</dd>
+              <dd data-testid="steering-decided-by">
+                {t("denied.decidedByValue", {
+                  issue: String(STEERING_GAPS.denial),
+                })}
+              </dd>
             </dl>
           }
         >

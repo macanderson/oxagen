@@ -9,8 +9,13 @@
 // Compiler print none until their reads exist, rather than a zero nobody
 // counted. On a phone the strip is one row that scrolls with snap, and the
 // selected tab is scrolled into view on render.
+//
+// The keyboard follows the tabs pattern: the selected tab is the one stop in
+// the tab order, the arrow keys, Home and End move focus along the strip, and
+// Enter or Space follows the focused tab's link. Each tab names the panel it
+// controls, and the panel (./steering.tsx) names its tab as its label.
 import { useTranslations } from "next-intl";
-import { useEffect, useRef } from "react";
+import { type KeyboardEvent, useEffect, useRef } from "react";
 import { tabCount, tabLink } from "@/ui/route-tabs";
 import { SafeLink } from "@/ui/navigation";
 import {
@@ -18,7 +23,26 @@ import {
   type SteeringAt,
   type SteeringTab,
   steeringLink,
+  TAB_PANEL_ID,
+  tabId,
 } from "./view";
+
+/** The tab focus moves to for a key, or null when the key is not a move. */
+function nextTab(key: string, from: number): number | null {
+  const last = STEERING_TABS.length - 1;
+  switch (key) {
+    case "ArrowRight":
+      return from === last ? 0 : from + 1;
+    case "ArrowLeft":
+      return from === 0 ? last : from - 1;
+    case "Home":
+      return 0;
+    case "End":
+      return last;
+    default:
+      return null;
+  }
+}
 
 export type SteeringTabCounts = Partial<Record<SteeringTab, number | null>>;
 
@@ -40,11 +64,23 @@ export function SteeringTabs({
     // jsdom has no layout, so it has no scrollIntoView either.
     selected?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
   }, [current]);
+  const move = (event: KeyboardEvent<HTMLDivElement>) => {
+    const tabs = [
+      ...(strip.current?.querySelectorAll<HTMLElement>('[role="tab"]') ?? []),
+    ];
+    const from = tabs.indexOf(event.target as HTMLElement);
+    if (from === -1) return;
+    const to = nextTab(event.key, from);
+    if (to === null) return;
+    event.preventDefault();
+    tabs[to]?.focus();
+  };
   return (
     <div
       ref={strip}
       role="tablist"
       aria-label={t("label")}
+      onKeyDown={move}
       data-testid="steering-tabs"
       className="flex min-w-0 snap-x snap-mandatory gap-0.5 overflow-x-auto border-b border-border"
     >
@@ -53,10 +89,19 @@ export function SteeringTabs({
         return (
           <SafeLink
             key={tab}
+            id={tabId(tab)}
             role="tab"
             to={steeringLink(at, { tab })}
             data-tab={tab}
             aria-selected={tab === current}
+            aria-controls={tab === current ? TAB_PANEL_ID : undefined}
+            tabIndex={tab === current ? 0 : -1}
+            onKeyDown={(event) => {
+              // A link follows on Enter alone; a tab follows on Space too.
+              if (event.key !== " ") return;
+              event.preventDefault();
+              event.currentTarget.click();
+            }}
             className={`${tabLink} snap-start aria-selected:border-gold aria-selected:text-foreground`}
           >
             {t(tab)}

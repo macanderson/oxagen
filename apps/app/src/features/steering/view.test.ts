@@ -25,6 +25,7 @@ describe("resolveSteeringRoute", () => {
           proposal: null,
           cursor: null,
           skillView: undefined,
+          skill: null,
         },
       });
     }
@@ -91,7 +92,23 @@ describe("resolveSteeringRoute", () => {
     });
     expect(
       resolve(["skills", "a-intel.release-notes-from-prs", "source"]),
-    ).toMatchObject({ view: { shelf: "skills", skillView: "source" } });
+    ).toMatchObject({
+      view: {
+        shelf: "skills",
+        skillView: "source",
+        skill: "a-intel.release-notes-from-prs",
+      },
+    });
+    // The id belongs to the source view alone.
+    expect(resolve(["skills", "search"])).toMatchObject({
+      view: { skill: null },
+    });
+  });
+
+  it("builds the skill source address from the id it carries", () => {
+    expect(
+      steeringLink(AT, { tab: "skills", skill: "a-intel.release-notes" }),
+    ).toBe(`${BASE}/skills/a-intel.release-notes/source`);
   });
 
   it.each<[string[] | undefined, Record<string, string>, string]>([

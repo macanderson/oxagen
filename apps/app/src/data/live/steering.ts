@@ -112,7 +112,7 @@ export const steering: DataSource["steering"] = {
       contract: contextRecordsList,
       input: {
         status: "active",
-        limit: STEERING_PAGE,
+        limit: q.limit ?? STEERING_PAGE,
         offset: q.offset,
         ...(q.kind === null ? {} : { kind: q.kind }),
       },

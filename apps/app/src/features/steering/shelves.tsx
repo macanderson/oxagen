@@ -2,7 +2,8 @@
 // Instructions, Skills, Memory and Ontology, each with its count in a dim
 // span and each carrying `aria-pressed`, inside a group named "Library
 // shelves". Picking a shelf is a navigation, so a shelf has an address
-// somebody can send and the back button walks the shelves.
+// somebody can send and the back button walks the shelves; a chip is a link
+// that also answers Space, as its button role promises (@/ui/press-link).
 //
 // Instructions renders only where the workspace has one. A shelf whose count
 // has no read yet prints "not recorded" in place of a number, so All is the
@@ -11,7 +12,7 @@
 // lifecycle.
 import { useTranslations } from "next-intl";
 import { buttonSecondary } from "@/ui/control-styles";
-import { SafeLink } from "@/ui/navigation";
+import { PressLink } from "@/ui/press-link";
 import {
   LIBRARY_SHELVES,
   type LibraryShelf,
@@ -49,12 +50,11 @@ export function ShelfRow({
       {shelves.map((shelf) => {
         const count = counts[shelf];
         return (
-          <SafeLink
+          <PressLink
             key={shelf}
-            role="button"
             to={shelfLink(at, shelf)}
             data-shelf={shelf}
-            aria-pressed={shelf === current}
+            pressed={shelf === current}
             className={`${chip} shrink-0 snap-start`}
           >
             {t(shelf)}
@@ -64,7 +64,7 @@ export function ShelfRow({
             >
               {count === null ? t("notRecorded") : count}
             </span>
-          </SafeLink>
+          </PressLink>
         );
       })}
     </div>

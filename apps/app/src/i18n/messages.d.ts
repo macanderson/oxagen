@@ -5135,6 +5135,8 @@ type Messages = {
       close: string;
       submit: string;
       pending: string;
+      commit: string;
+      commitPending: string;
       proposed: string;
       applied: string;
       unchanged: string;
@@ -5146,6 +5148,7 @@ type Messages = {
         pendingApproval: string;
         unavailable: string;
       };
+      lowering: string;
     };
     library: {
       items: string;
@@ -5176,6 +5179,7 @@ type Messages = {
       tokensTitle: string;
       sourceNone: string;
       gap: string;
+      truncated: string;
     };
     state: {
       loading: string;
@@ -5201,6 +5205,7 @@ type Messages = {
         back: string;
         signedIn: string;
         signedInValue: string;
+        signedInNamed: string;
         needed: string;
         neededValue: string;
         decidedBy: string;
@@ -5231,6 +5236,9 @@ type Messages = {
       };
       instructions: {
         what: string;
+      };
+      skillSource: {
+        pending: string;
       };
     };
     failure: {
@@ -6105,6 +6113,7 @@ type Messages = {
     };
     dialog: {
       close: string;
+      dismiss: string;
     };
     record: {
       kinds: {
@@ -6217,6 +6226,20 @@ type Messages = {
       name: string;
       hint: string;
       invalid: string;
+    };
+    list: {
+      search: string;
+      filterBy: string;
+      all: string;
+      rows: string;
+      allRows: string;
+      noMatch: string;
+      pager: string;
+      range: string;
+      rangeEmpty: string;
+      previous: string;
+      next: string;
+      page: string;
     };
   };
 };

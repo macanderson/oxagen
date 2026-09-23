@@ -12,6 +12,12 @@
 // calls `set_governance_mode`, which writes that file and nothing else: a pull
 // request under `team` or `regulated`, a commit under `solo`. Picking the mode
 // already in force reports that nothing changed and calls nothing.
+//
+// The dialog says what that capability does, which is less than the design
+// asks (#3859): the pull request is an ordinary one, not a Context PR, so the
+// report says "pull request"; under `solo` the confirm button names the
+// commit it makes; and a lowering needs no org-owner approval yet, so the
+// note names the issue in place of promising one.
 import { useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
 import type { SteeringHub } from "@/data/contracts/steering";
@@ -21,6 +27,7 @@ import { buttonPrimary, buttonSecondary, linkText } from "@/ui/control-styles";
 import { PullRequestLink, useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { type GovernanceChanged, setGovernanceMode } from "./actions";
+import { STEERING_GAPS } from "./gaps";
 
 const MODES = ["solo", "team", "regulated"] as const;
 type Mode = (typeof MODES)[number];
@@ -136,6 +143,7 @@ export function GovernanceChip({
         title={t("title", { workspace })}
         subtitle={t("subtitle", { repository })}
         closeLabel={outcome?.ok ? t("close") : t("cancel")}
+        headerClose
         testId="governance-dialog"
         footer={
           outcome?.ok ? null : (
@@ -146,7 +154,13 @@ export function GovernanceChip({
               disabled={pending}
               onClick={confirm}
             >
-              {pending ? t("pending") : t("submit")}
+              {now === "solo"
+                ? pending
+                  ? t("commitPending")
+                  : t("commit")
+                : pending
+                  ? t("pending")
+                  : t("submit")}
             </button>
           )
         }
@@ -188,7 +202,17 @@ export function GovernanceChip({
             >
               {governanceToml(t("tomlHeader"), picked)}
             </pre>
-            <p className={note}>{t("note")}</p>
+            <p className={note} data-testid="governance-note">
+              {t("note")}
+            </p>
+            <p
+              className="text-[12.5px] text-muted-foreground"
+              data-testid="governance-gap"
+              data-not-backed=""
+              data-issue={String(STEERING_GAPS.governance)}
+            >
+              {t("lowering", { issue: String(STEERING_GAPS.governance) })}
+            </p>
             {outcome === null ? null : <GovernanceFailure failure={outcome} />}
           </div>
         )}

@@ -3,7 +3,10 @@
 // table over the items the assembler reads, in the assembler's order.
 //
 // Today the one source read into it is the record registry (list_records,
-// status active), so every row is a record. Token cost and the enforcement
+// status active), read whole (./library-read.ts) so the assembler's order
+// holds across the list and the list tools (@/ui/list-table: search, the
+// Scope, Compiles to and Force filters, sortable headers, a Rows select and a
+// numbered pager) work over every row. Every row is a record. Token cost and the enforcement
 // grant have no field on that contract, so the Compiles to and Token cost
 // cells and the Compiled size and Carry a grant tiles print "not recorded"
 // rather than a figure nobody measured. Instructions, skills, memory and
@@ -28,9 +31,9 @@ import {
   statValue,
 } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
-import { cell, numericCell, Table } from "@/ui/table";
+import { ListTable, type ListRow } from "@/ui/list-table";
+import { cell, numericCell } from "@/ui/table";
 import { STEERING_GAPS } from "./gaps";
-import { Pager } from "./section";
 import { type SteeringAt, steeringLink } from "./view";
 
 /** `STG_FORCE_ORDER`: must, should, may, info; an unclassified record last. */
@@ -79,11 +82,10 @@ function Tile({
 export function LibraryAll({
   at,
   page,
-  offset,
 }: {
   at: SteeringAt;
+  /** Every record in force the shelf read, and how many are in force. */
   page: RecordPage;
-  offset: number;
 }) {
   const t = useTranslations("steering.library");
   const record = useTranslations("ui.record");
@@ -92,7 +94,85 @@ export function LibraryAll({
       {t("notRecorded")}
     </span>
   );
-  const rows = assemblerOrder(page.records);
+  const kindOf = (row: Row) =>
+    row.kind === null
+      ? t("kindRecord")
+      : `${t("kindRecord")} · ${record(`kinds.${row.kind}`).toLowerCase()}`;
+  const sourceOf = (row: Row) =>
+    row.path === null
+      ? null
+      : `${row.path}${row.commit === null ? "" : ` @ ${row.commit.slice(0, 7)}`}`;
+  const rows: ListRow[] = assemblerOrder(page.records).map((row) => {
+    const source = sourceOf(row);
+    return {
+      key: row.id,
+      values: {
+        item: `${row.statement ?? row.title} ${row.lineage}`,
+        kind: kindOf(row),
+        force: row.force ?? t("notRecorded"),
+        scope: row.sharingScope,
+        compiles: t("compilesNotRecorded"),
+        tokens: null,
+        source,
+      },
+      node: (
+        <tr key={row.id} data-lineage={row.lineage}>
+          <td className={`${cell} max-w-[54ch]`}>
+            <b className="block font-medium text-foreground">
+              {row.statement ?? row.title}
+            </b>
+            <SafeLink
+              to={routes.steeringRecord(at.org, at.ws, row.lineage)}
+              className={`${linkText} font-mono text-[12px]`}
+            >
+              {row.lineage}
+            </SafeLink>
+          </td>
+          <td className={cell}>
+            <Badge tone="quiet" dot={false}>
+              {kindOf(row)}
+            </Badge>
+          </td>
+          <td className={cell}>
+            {row.force === null ? (
+              <span className="text-muted-foreground">{t("notRecorded")}</span>
+            ) : (
+              <Badge tone="quiet" dot={false} data-force={row.force}>
+                {row.force}
+              </Badge>
+            )}
+          </td>
+          <td className={cell}>{row.sharingScope}</td>
+          <td className={cell}>
+            <span
+              title={t("compilesTitle")}
+              data-compiles="not-recorded"
+              className="text-muted-foreground"
+            >
+              {t("compilesNotRecorded")}
+            </span>
+          </td>
+          <td className={numericCell}>
+            <span
+              title={t("tokensTitle")}
+              className="font-sans text-muted-foreground"
+            >
+              {t("notRecorded")}
+            </span>
+          </td>
+          <td
+            className={`${cell} max-w-[34ch] break-all font-mono text-[11px]`}
+          >
+            {source ?? (
+              <span className="font-sans text-muted-foreground">
+                {t("sourceNone")}
+              </span>
+            )}
+          </td>
+        </tr>
+      ),
+    };
+  });
   return (
     <div className="flex flex-col gap-3.5" data-testid="library-all">
       <div className={statStrip}>
@@ -145,88 +225,30 @@ export function LibraryAll({
             </SafeLink>
           </span>
         </div>
-        <Table
+        <ListTable
+          testId="library-list"
           label={t("title")}
           columns={[
-            { label: t("columns.item") },
-            { label: t("columns.kind") },
-            { label: t("columns.force") },
-            { label: t("columns.scope") },
-            { label: t("columns.compiles") },
-            { label: t("columns.tokens"), numeric: true },
-            { label: t("columns.source") },
+            { key: "item", label: t("columns.item") },
+            { key: "kind", label: t("columns.kind") },
+            { key: "force", label: t("columns.force") },
+            { key: "scope", label: t("columns.scope") },
+            { key: "compiles", label: t("columns.compiles") },
+            { key: "tokens", label: t("columns.tokens"), numeric: true },
+            { key: "source", label: t("columns.source") },
           ]}
-        >
-          {rows.map((row) => (
-            <tr key={row.id} data-lineage={row.lineage}>
-              <td className={`${cell} max-w-[54ch]`}>
-                <b className="block font-medium text-foreground">
-                  {row.statement ?? row.title}
-                </b>
-                <SafeLink
-                  to={routes.steeringRecord(at.org, at.ws, row.lineage)}
-                  className={`${linkText} font-mono text-[12px]`}
-                >
-                  {row.lineage}
-                </SafeLink>
-              </td>
-              <td className={cell}>
-                <Badge tone="quiet" dot={false}>
-                  {row.kind === null
-                    ? t("kindRecord")
-                    : `${t("kindRecord")} · ${record(`kinds.${row.kind}`).toLowerCase()}`}
-                </Badge>
-              </td>
-              <td className={cell}>
-                {row.force === null ? (
-                  <span className="text-muted-foreground">
-                    {t("notRecorded")}
-                  </span>
-                ) : (
-                  <Badge tone="quiet" dot={false} data-force={row.force}>
-                    {row.force}
-                  </Badge>
-                )}
-              </td>
-              <td className={cell}>{row.sharingScope}</td>
-              <td className={cell}>
-                <span
-                  title={t("compilesTitle")}
-                  data-compiles="not-recorded"
-                  className="text-muted-foreground"
-                >
-                  {t("compilesNotRecorded")}
-                </span>
-              </td>
-              <td className={numericCell}>
-                <span
-                  title={t("tokensTitle")}
-                  className="font-sans text-muted-foreground"
-                >
-                  {t("notRecorded")}
-                </span>
-              </td>
-              <td
-                className={`${cell} max-w-[34ch] break-all font-mono text-[11px]`}
-              >
-                {row.path === null ? (
-                  <span className="font-sans text-muted-foreground">
-                    {t("sourceNone")}
-                  </span>
-                ) : (
-                  `${row.path}${row.commit === null ? "" : ` @ ${row.commit.slice(0, 7)}`}`
-                )}
-              </td>
-            </tr>
-          ))}
-        </Table>
+          filters={["scope", "compiles", "force"]}
+          rows={rows}
+        />
         <div className={`${panelFooter} flex-col items-start`}>
-          <Pager
-            offset={offset}
-            shown={page.records.length}
-            total={page.total}
-            link={(to) => steeringLink(at, { tab: "library", offset: to })}
-          />
+          {page.records.length < page.total ? (
+            <p className={note} data-testid="library-truncated">
+              {t("truncated", {
+                read: String(page.records.length),
+                total: String(page.total),
+              })}
+            </p>
+          ) : null}
           <p className={note}>{t("planes")}</p>
           <p className={note} data-testid="library-gap">
             {t("gap", { issue: String(STEERING_GAPS.registry) })}

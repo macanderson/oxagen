@@ -9,4 +9,8 @@ export const STEERING_GAPS = {
   assembler: 3297,
   /** The gates that reach a workspace and the notice each puts into steering (#3297 item 3). */
   gates: 3297,
+  /** A governance change as a Context PR in every mode, and an org-owner approval and security event for a lowering (#3859). */
+  governance: 3859,
+  /** The policy that decided a refused read, carried on the denial (#3846). */
+  denial: 3846,
 } as const;

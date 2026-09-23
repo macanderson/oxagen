@@ -13,14 +13,18 @@
 // tab and shelf owns its empty copy in its own body. Each body makes only the
 // reads it shows.
 import { Suspense, type ReactNode } from "react";
+import type { ContextPr } from "@/data/contracts/steering";
 import type { DataSource } from "@/data/ports";
+import type { Read } from "@/data/read";
+import { getAuthUser } from "@/server/session";
 import { PageRecord } from "@/features/shell";
 import { Skills, SkillsLoading } from "@/features/skills";
 import type { WsCtx } from "@/server/viewer";
 import { useFormatter } from "@/ui/formatter";
-import { SteeringCreate } from "./create-action";
+import { SteeringCreate, tabHoldsPrimary } from "./create-action";
 import { GovernanceChip } from "./governance";
 import { LibraryAll } from "./library-all";
+import { readLibrary } from "./library-read";
 import { SteeringEmpty, SteeringFailure } from "./page-state";
 import { type ShelfCounts, ShelfRow } from "./shelves";
 import { SteeringTabs } from "./tabs";
@@ -32,7 +36,13 @@ import { MemoryShelf } from "./tabs/memory";
 import { OntologyShelf } from "./tabs/ontology";
 import { ProposalsTab } from "./tabs/proposals";
 import { RecordsShelf } from "./tabs/records";
-import type { SteeringAt, SteeringView } from "./view";
+import { SkillSourceShelf } from "./tabs/skill-source";
+import {
+  type SteeringAt,
+  type SteeringView,
+  TAB_PANEL_ID,
+  tabId,
+} from "./view";
 import { routes } from "@/shared/safe-path";
 
 /** The page header, drawn by the route with these actions; the route owns its title key. */
@@ -43,11 +53,14 @@ async function Body({
   source,
   view,
   at,
+  pr,
 }: {
   ctx: WsCtx;
   source: DataSource;
   view: SteeringView;
   at: SteeringAt;
+  /** The selected Context PR, when the hub read it. */
+  pr: Read<ContextPr> | null;
 }) {
   // The async bodies are awaited here rather than rendered as elements, so
   // each read runs before the hub returns and a test renders the result.
@@ -66,6 +79,7 @@ async function Body({
         segment: view.segment ?? "candidates",
         offset: view.offset,
         proposal: view.proposal,
+        pr,
       });
     case "library":
       switch (view.shelf) {
@@ -79,14 +93,19 @@ async function Body({
           });
         case "skills":
           return (
-            <Suspense fallback={<SkillsLoading />}>
-              <Skills
-                ctx={ctx}
-                source={source}
-                cursor={view.cursor}
-                view={view.skillView}
-              />
-            </Suspense>
+            <>
+              {view.skill === null ? null : (
+                <SkillSourceShelf skill={view.skill} />
+              )}
+              <Suspense fallback={<SkillsLoading />}>
+                <Skills
+                  ctx={ctx}
+                  source={source}
+                  cursor={view.cursor}
+                  view={view.skillView}
+                />
+              </Suspense>
+            </>
           );
         case "memory":
           return <MemoryShelf />;
@@ -116,11 +135,13 @@ function FailureAt({
   read,
   view,
   readAt,
+  viewer,
 }: {
   ctx: WsCtx;
   read: Parameters<typeof SteeringFailure>[0]["read"];
   view: SteeringView;
   readAt: string;
+  viewer: string | null;
 }) {
   const format = useFormatter();
   return (
@@ -131,6 +152,7 @@ function FailureAt({
       orgName={ctx.orgName}
       wsSlug={ctx.wsSlug}
       wsRole={ctx.wsRole}
+      viewer={viewer}
       retry={retryLink(ctx, view)}
       readAt={format.dateTime(new Date(readAt), {
         dateStyle: "medium",
@@ -170,16 +192,33 @@ export async function Steering({
   const at: SteeringAt = { org: ctx.orgSlug, ws: ctx.wsSlug };
   const readAt = instantOfRead();
   const onAll = view.tab === "library" && view.shelf === "all";
-  const [library, hub] = await Promise.all([
-    source.steering.records(ctx, {
-      kind: null,
-      offset: onAll ? view.offset : 0,
-    }),
+  // The All shelf reads the whole list, in the assembler's order; every other
+  // view needs only the count. The selected Context PR is read here, beside
+  // them, because its state decides whether the header keeps the gold.
+  const [library, hub, pr] = await Promise.all([
+    onAll
+      ? readLibrary(ctx, source)
+      : source.steering.records(ctx, { kind: null, offset: 0 }),
     source.steering.hub(ctx),
+    view.segment === "prs" && view.proposal !== null
+      ? source.steering.contextPr(ctx, view.proposal)
+      : null,
   ]);
   if (!library.ok) {
-    return <FailureAt ctx={ctx} read={library} view={view} readAt={readAt} />;
+    // The denied state names who is signed in; the session is memoized per
+    // request, so this is no second lookup.
+    const user = library.reason === "denied" ? await getAuthUser() : null;
+    return (
+      <FailureAt
+        ctx={ctx}
+        read={library}
+        view={view}
+        readAt={readAt}
+        viewer={user === null ? null : user.name || user.email || null}
+      />
+    );
   }
+  const mergeable = pr?.ok === true && pr.value.status === "checks_passed";
   const governance = hub.ok ? hub.value.governance : null;
   const records = library.value.total;
   // Records is the one shelf a read counts today; the rest print "not
@@ -209,7 +248,12 @@ export async function Steering({
             workspace={ctx.wsName}
             governance={governance}
           />
-          {empty ? null : <SteeringCreate view={view} />}
+          {empty ? null : (
+            <SteeringCreate
+              view={view}
+              primary={!tabHoldsPrimary(view, mergeable)}
+            />
+          )}
         </>,
       )}
       <SteeringTabs
@@ -220,20 +264,27 @@ export async function Steering({
           proposals: hub.ok ? hub.value.proposalsWaiting : null,
         }}
       />
-      {view.tab === "library" ? (
-        <ShelfRow at={at} current={view.shelf ?? "all"} counts={shelves} />
-      ) : null}
-      {empty ? (
-        <SteeringEmpty
-          repository={
-            governance?.state === "read" ? governance.repository : null
-          }
-        />
-      ) : onAll ? (
-        <LibraryAll at={at} page={library.value} offset={view.offset} />
-      ) : (
-        await Body({ ctx, source, view, at })
-      )}
+      <div
+        role="tabpanel"
+        id={TAB_PANEL_ID}
+        aria-labelledby={tabId(view.tab)}
+        className="flex flex-col gap-4"
+      >
+        {view.tab === "library" ? (
+          <ShelfRow at={at} current={view.shelf ?? "all"} counts={shelves} />
+        ) : null}
+        {empty ? (
+          <SteeringEmpty
+            repository={
+              governance?.state === "read" ? governance.repository : null
+            }
+          />
+        ) : onAll ? (
+          <LibraryAll at={at} page={library.value} />
+        ) : (
+          await Body({ ctx, source, view, at, pr })
+        )}
+      </div>
     </div>
   );
 }

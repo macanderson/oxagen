@@ -3,10 +3,12 @@
 // builds). Its two segments are the candidates and their Context PRs, each an
 // address: `/steering/proposals` and `/steering/proposals/prs`.
 import { useTranslations } from "next-intl";
+import type { ContextPr } from "@/data/contracts/steering";
 import type { DataSource } from "@/data/ports";
+import type { Read } from "@/data/read";
 import type { WsCtx } from "@/server/viewer";
 import { buttonSecondary } from "@/ui/control-styles";
-import { SafeLink } from "@/ui/navigation";
+import { PressLink } from "@/ui/press-link";
 import { ContextPrs } from "../context-prs";
 import { Proposals } from "../proposals";
 import { type ProposalSegment, type SteeringAt, steeringLink } from "../view";
@@ -28,22 +30,20 @@ function Segments({
       className="flex flex-wrap gap-1.5"
       data-testid="proposal-segments"
     >
-      <SafeLink
-        role="button"
+      <PressLink
         to={steeringLink(at, { tab: "proposals" })}
-        aria-pressed={current === "candidates"}
+        pressed={current === "candidates"}
         className={chip}
       >
         {t("candidates")}
-      </SafeLink>
-      <SafeLink
-        role="button"
+      </PressLink>
+      <PressLink
         to={steeringLink(at, { tab: "prs" })}
-        aria-pressed={current === "prs"}
+        pressed={current === "prs"}
         className={chip}
       >
         {t("prs")}
-      </SafeLink>
+      </PressLink>
     </div>
   );
 }
@@ -55,6 +55,7 @@ export async function ProposalsTab({
   segment,
   offset,
   proposal,
+  pr: preread,
 }: {
   ctx: WsCtx;
   source: DataSource;
@@ -62,11 +63,16 @@ export async function ProposalsTab({
   segment: ProposalSegment;
   offset: number;
   proposal: string | null;
+  /**
+   * get_context_pr for `proposal`, when the hub already read it to decide
+   * which action is gold; read here otherwise.
+   */
+  pr?: Read<ContextPr> | null;
 }) {
   const [read, pr] = await Promise.all([
     source.steering.proposals(ctx, { offset }),
     segment === "prs" && proposal !== null
-      ? source.steering.contextPr(ctx, proposal)
+      ? (preread ?? source.steering.contextPr(ctx, proposal))
       : null,
   ]);
   return (
