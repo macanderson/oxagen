@@ -105,6 +105,18 @@ export const routes = {
   resetPassword: (): SafePath => mint("/reset-password"),
   newOrganization: (next?: SafePath): SafePath =>
     withQuery(mint("/new-organization"), { next: nextParam(next) }),
+  /**
+   * The onboarding gate's later steps and the installer's screens, outside the
+   * app shell (`(onboarding)/welcome/[org]/[ws]/[step]`). `agent` is the
+   * identity the steps enrol, carried so a reload lands on the same one.
+   */
+  welcome: (
+    org: string,
+    ws: string,
+    step: "wrap" | "run" | "installer",
+    q?: { agent?: string },
+  ): SafePath =>
+    withQuery(pathOf("welcome", org, ws, step), { agent: q?.agent }),
   invite: (token: string): SafePath => pathOf("invite", token),
   cliAuthorize: (query: Readonly<Record<string, string>>): SafePath =>
     withQuery(mint("/cli/authorize"), query),

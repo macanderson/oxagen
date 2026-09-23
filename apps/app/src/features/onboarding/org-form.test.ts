@@ -3,13 +3,21 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import onboardingMessages from "../../../messages/onboarding.json";
 import { RESERVED_ORG_SLUGS } from "@oxagen/oxagen/contracts/org.create";
-import { OrganizationForm, toSlug } from "./org-form";
+import { OrganizationForm, toNamespace, toSlug } from "./org-form";
 
 describe("toSlug", () => {
   it("derives an address from a name", () => {
     expect(toSlug("Acme Robotics")).toBe("acme-robotics");
     expect(toSlug("  Ünïcode & Co.  ")).toBe("unicode-co");
     expect(toSlug(`${"a".repeat(39)} b`)).toBe("a".repeat(39));
+  });
+});
+
+describe("toNamespace", () => {
+  it("suggests the name's letters and digits, at most six", () => {
+    expect(toNamespace("Anderson Intelligence Corp.")).toBe("anders");
+    expect(toNamespace("A-1 Co")).toBe("a1co");
+    expect(toNamespace("Ünï")).toBe("uni");
   });
 });
 
@@ -42,6 +50,7 @@ describe("OrganizationForm", () => {
   const valid = {
     name: "Acme Robotics",
     slug: "acme",
+    namespace: "acme",
     workspaceName: "core-platform",
     workspaceSlug: "core-platform",
   };
@@ -57,6 +66,10 @@ describe("OrganizationForm", () => {
     [{ slug: "api" }, "slug", "slugReserved"],
     [{ slug: "invite" }, "slug", "slugReserved"],
     [{ name: "" }, "name", "orgNameRequired"],
+    [{ namespace: "a" }, "namespace", "namespaceInvalid"],
+    [{ namespace: "a-intel" }, "namespace", "namespaceInvalid"],
+    [{ namespace: "toolong" }, "namespace", "namespaceInvalid"],
+    [{ namespace: "ACME" }, "namespace", "namespaceInvalid"],
     [{ workspaceSlug: "billing" }, "workspaceSlug", "workspaceSlugReserved"],
     [{ workspaceSlug: "-core" }, "workspaceSlug", "workspaceSlugInvalid"],
     // The form takes the contract's own spelling now (#3110). It used to take
@@ -81,12 +94,14 @@ describe("OrganizationForm", () => {
   // from, so the exhaustive check covers the register form's keys (agent-form.ts)
   // as well: a key either form can raise has copy, and the catalog carries no
   // copy no form can reach.
-  it("every key either onboarding form raises, and both alerts, have catalog copy, and the catalog carries no other", () => {
+  it("every key either onboarding form raises, and the failure alert, have catalog copy, and the catalog carries no other", () => {
     const keys = [
       "orgNameRequired",
       "orgNameTooLong",
       "slugInvalid",
       "slugReserved",
+      "namespaceInvalid",
+      "namespaceTaken",
       "workspaceNameRequired",
       "workspaceNameTooLong",
       "workspaceSlugInvalid",
@@ -98,7 +113,6 @@ describe("OrganizationForm", () => {
       "agentDescriptionTooLong",
       "agentHarnessInvalid",
       "failed",
-      "denied",
     ];
     expect(Object.keys(onboardingMessages.onboarding.errors).sort()).toEqual(
       [...keys].sort(),
