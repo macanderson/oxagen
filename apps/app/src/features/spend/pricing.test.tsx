@@ -53,11 +53,13 @@ const AT = "2026-09-15T12:00:00.000Z";
 const priceBook = vi.fn<DataSource["spend"]["priceBook"]>();
 const unpricedModels = vi.fn<DataSource["spend"]["unpricedModels"]>();
 const source: DataSource = {
+  runtimes: { list: vi.fn(), agents: vi.fn() },
   pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
   shell: { context: vi.fn(), preferences: vi.fn() },
   billing: {
     plan: vi.fn(),
     usageCredits: vi.fn(),
+    retention: vi.fn(),
     bucket: vi.fn(),
     contractRate: vi.fn(),
     invoices: vi.fn(),
@@ -70,6 +72,8 @@ const source: DataSource = {
     transcript: vi.fn(),
     chain: vi.fn(),
     outputs: vi.fn(),
+    work: vi.fn(),
+    outcomesSettings: vi.fn(),
   },
   approvals: { pending: vi.fn(), resolved: vi.fn() },
   agents: {
@@ -109,6 +113,7 @@ const source: DataSource = {
     proposals: vi.fn(),
     contextPr: vi.fn(),
     freshness: vi.fn(),
+    hub: vi.fn(),
     deliveries: vi.fn(),
   },
   tools: {

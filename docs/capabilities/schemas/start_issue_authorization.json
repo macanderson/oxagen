@@ -1,0 +1,44 @@
+{
+  "name": "start_issue_authorization",
+  "domain": "run",
+  "description": "Start Linear authorization for issue follow-through.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "provider": {
+        "const": "linear"
+      }
+    },
+    "required": [
+      "provider"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "authorizeUrl": {
+        "type": "string",
+        "format": "uri"
+      }
+    },
+    "required": [
+      "authorizeUrl"
+    ],
+    "additionalProperties": false
+  }
+}

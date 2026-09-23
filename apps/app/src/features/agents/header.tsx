@@ -151,6 +151,7 @@ export function AgentHeader({
             ws={ws}
             agentId={identity.id}
             name={identity.name}
+            slug={identity.slug}
             suspended={identity.status === "suspended"}
             here={routes.agent(org, ws, identity.slug)}
             list={routes.agents(org, ws)}

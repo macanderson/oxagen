@@ -138,13 +138,13 @@ once every auditor has returned.
 
 Write a self-contained HTML report (no external assets) to:
 
-  docs/audits/release-audits/<UTC_TIMESTAMP>_<SHORT_SHA>_release-audit.html
+  verifications/audits/release-audits/<UTC_TIMESTAMP>_<SHORT_SHA>_release-audit.html
 
 where `UTC_TIMESTAMP` is the audit *request* time as `YYYYMMDDTHHMMSSZ` and
 `SHORT_SHA` is `git rev-parse --short HEAD` captured in Phase 0.
-Example: docs/audits/release-audits/20260601T174500Z_a1b9f3c_release-audit.html
+Example: verifications/audits/release-audits/20260601T174500Z_a1b9f3c_release-audit.html
 
-`mkdir -p docs/audits/release-audits` first. The report must contain, in order:
+`mkdir -p verifications/audits/release-audits` first. The report must contain, in order:
 1. A header with repo, branch, full commit SHA, and request timestamp.
 2. A **hero readiness band** — the single 0–100 composite grade in a large, bold,
    color-coded font, with a GO / NO-GO verdict pill and a PASS / WARN / FAIL badge.

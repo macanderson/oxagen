@@ -24,6 +24,7 @@ import type {
 } from "./contracts/audit";
 import type {
   ContractRate,
+  EvidenceRetention,
   GauBucket,
   InvoicePage,
   PlanCard,
@@ -50,7 +51,9 @@ import type {
   TranscriptKind,
   TranscriptZoom,
 } from "./contracts/run";
+import type { RunWork, RunOutcomesPolicy } from "./contracts/run-work";
 import type { RunPage } from "./contracts/runs";
+import type { RuntimeAgents, RuntimeList } from "./contracts/runtimes";
 import type {
   OrgChoice,
   ShellContext,
@@ -77,10 +80,13 @@ import type {
   ContextPr,
   ProposalPage,
   RecordDetail,
+  MemoryPage,
+  OxagenTree,
   RecordKind,
   RecordPage,
   SteeringFreshness,
   SteeringDeliveries,
+  SteeringHub,
 } from "./contracts/steering";
 import type {
   ApprovalRuleSet,
@@ -120,7 +126,7 @@ export interface DataSource {
     preferences(ctx: OrgCtx): Promise<Read<ViewerPreferences>>;
   };
   /**
-   * The Billing page's five noBillingGate reads, each Owner, Admin or Billing
+   * The Billing page's six noBillingGate reads, each Owner, Admin or Billing
    * (checked in its handler); caller: features/billing/billing.tsx.
    */
   billing: {
@@ -136,6 +142,8 @@ export interface DataSource {
     bucket(ctx: OrgCtx): Promise<Read<GauBucket>>;
     /** get_contract_rate */
     contractRate(ctx: OrgCtx): Promise<Read<ContractRate>>;
+    /** get_evidence_retention: the included window, its price, and the volume held once it is measured */
+    retention(ctx: OrgCtx): Promise<Read<EvidenceRetention>>;
     /** list_invoices, one cursor page, newest first */
     invoices(
       ctx: OrgCtx,
@@ -185,6 +193,8 @@ export interface DataSource {
      * — caller features/run/run.tsx.
      */
     outputs(ctx: WsCtx, runId: string): Promise<Read<RunOutputs>>;
+    work(ctx: WsCtx, runId: string): Promise<Read<RunWork>>;
+    outcomesSettings(ctx: WsCtx): Promise<Read<RunOutcomesPolicy>>;
   };
   /** list_approvals, the workspace's pending approvals or one run's; caller: features/fleet/fleet.tsx. */
   approvals: {
@@ -211,8 +221,9 @@ export interface DataSource {
   /**
    * The Agents pages (#2956), each read by the agent's public id or slug:
    * list_agents, one cursor page of the workspace's identities, callers
-   * features/agents/agents.tsx and features/tools/tools.tsx (the grant
-   * dialog's agent picker); get_agent, the identity with its credentials,
+   * features/agents/agents.tsx, features/tools/tools.tsx (the grant
+   * dialog's agent picker) and features/fleet/fleet.tsx (the steer dialog's
+   * agents and the Live runs tile's workspace total); get_agent, the identity with its credentials,
    * roles, hosts and cached definition, callers features/agents/agent.tsx and
    * agent-source.tsx; get_agent_toolbelt, the computed belt, and
    * list_incidents narrowed to the agent, one cursor page, caller
@@ -232,8 +243,10 @@ export interface DataSource {
    * The mandates of the workspace, or of one agent (#2957): `list_mandates`,
    * each row carrying the remaining authority its ledger records. Callers:
    * features/tools/mandates-ledger.tsx (the ledger the accountable office
-   * reads), features/agents/mandates.tsx (the mandates one agent holds) and
-   * features/fleet/fleet.tsx (the bar on an approval card that names one).
+   * reads) and features/agents/mandates.tsx (the mandates one agent holds).
+   * features/run/run.tsx and the shell's approvals drawer
+   * (features/shell/activity-actions.ts) read it for the bar on their approval
+   * cards; Fleet draws no approval card and reads none.
    */
   mandates: {
     list(ctx: WsCtx, q: { agentId: string | null }): Promise<Read<MandateList>>;
@@ -315,8 +328,9 @@ export interface DataSource {
   /**
    * The Organization pages' four reads, each noBillingGate (#2964, WL-37,
    * WL-43), each an Owner-or-Admin read checked in its handler; callers:
-   * features/organization/people.tsx, roles.tsx, workspaces.tsx, api-keys.tsx
-   * and features/audit/audit.tsx (actor names, off `members`). Three are
+   * features/organization/people.tsx, roles.tsx, workspaces.tsx, api-keys.tsx,
+   * features/audit/audit.tsx (actor names, off `members`) and
+   * features/runtimes/runtime.tsx (operator names, off `members`). Three are
    * org-scoped; `apiKeys` is not, because a key names a workspace (ADR-073).
    */
   org: {
@@ -384,7 +398,12 @@ export interface DataSource {
     /** list_records, status active: one page of the records in force, of one kind or all */
     records(
       ctx: WsCtx,
-      q: { kind: RecordKind | null; offset: number },
+      q: {
+        kind: RecordKind | null;
+        offset: number;
+        /** Rows to a page, 1 to `STEERING_READ_MAX`; `STEERING_PAGE` when omitted. */
+        limit?: number;
+      },
     ): Promise<Read<RecordPage>>;
     /**
      * get_record on a lineage: the published record's page (#3395). Reads the
@@ -407,6 +426,25 @@ export interface DataSource {
     contextPr(ctx: WsCtx, proposalId: string): Promise<Read<ContextPr>>;
     /** get_steering_freshness: what is published, where, and the two gates */
     freshness(ctx: WsCtx): Promise<Read<SteeringFreshness>>;
+    /**
+     * The hub header's reads: list_repositories and get_repository_tree for
+     * the governance mode on the main repository, and three list_proposals
+     * counts for the proposals waiting. Each half fails on its own inside the
+     * value, so a GitHub outage never takes the library down with it.
+     */
+    hub(ctx: WsCtx): Promise<Read<SteeringHub>>;
+    /**
+     * list_memories: the workspace's active `:AgentMemory` nodes, newest
+     * first, up to `limit` (1 to `STEERING_READ_MAX`); the Memory shelf and
+     * its chip count.
+     */
+    memories(ctx: WsCtx, q: { limit: number }): Promise<Read<MemoryPage>>;
+    /**
+     * list_repositories and get_repository_tree: every path under `.oxagen/`
+     * on the main repository's production branch, for the Records shelf's On
+     * disk panel; `unbound` when no main repository is bound.
+     */
+    tree(ctx: WsCtx): Promise<Read<OxagenTree>>;
   };
   /**
    * The Tools page's six reads on the workspace (#2958), each role-checked in
@@ -438,5 +476,17 @@ export interface DataSource {
     ): Promise<Read<ConnectionList>>;
     /** list_mcp_servers: every registered MCP server in the workspace; no filter, no cursor */
     mcpServers(ctx: WsCtx): Promise<Read<McpServerList>>;
+  };
+  /**
+   * The Runtimes page (roadmap mockups/pages/runtimes.md); caller:
+   * features/runtimes/runtimes.tsx. `list` is `list_tacho_hosts` walked to the
+   * end of its cursor under a bound: one row per host enrollment, which is one
+   * agent on one machine, because no host row exists. `agents` is
+   * `list_agents` walked until every named key is found, for the Agents on
+   * this host table.
+   */
+  runtimes: {
+    list(ctx: WsCtx): Promise<Read<RuntimeList>>;
+    agents(ctx: WsCtx, keys: readonly string[]): Promise<Read<RuntimeAgents>>;
   };
 }

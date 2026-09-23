@@ -2,10 +2,10 @@
   "name": "oxagen-monorepo",
   "version": "2.1.1",
   "private": true,
-  "packageManager": "pnpm@11.7.0",
+  "packageManager": "pnpm@12.6.0",
   "engines": {
     "node": ">=24.21.0",
-    "pnpm": ">=11"
+    "pnpm": ">=12"
   },
   "scripts": {
     "preinstall": "npx only-allow pnpm",
@@ -92,19 +92,19 @@
     "check:system-db": "tsx tools/scripts/check-system-db-justifications.ts"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.2.0",
-    "@changesets/cli": "2.31.0",
-    "@eslint/js": "9.39.4",
-    "@types/node": "25.9.1",
-    "eslint": "9.39.4",
-    "eslint-config-next": "16.2.7",
-    "inngest-cli": "1.30.0",
+    "@biomejs/biome": "2.5.14",
+    "@changesets/cli": "3.0.3",
+    "@eslint/js": "9.39.5",
+    "@types/node": "25.9.8",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.3.6",
+    "inngest-cli": "1.45.1",
     "lefthook": "latest",
     "postject": "1.0.0-alpha.6",
-    "tsx": "4.22.3",
-    "turbo": "2.9.18",
+    "tsx": "4.23.5",
+    "turbo": "2.11.3",
     "typescript": "6.0.3",
-    "typescript-eslint": "8.60.0",
+    "typescript-eslint": "8.70.1",
     "vitest": "2.1.9"
   }
 }

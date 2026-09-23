@@ -27,13 +27,24 @@ export function agentRow(overrides: Partial<AgentRow> = {}): AgentRow {
     id: "agt_releasebot",
     slug: "release-bot",
     name: "Release bot",
+    description: "Cuts releases and opens their pull requests.",
     agentKey: "acme.core.release-bot",
     harness: "claude-code",
     operatorId: "usr_marcusbell",
+    operatorName: "Marcus Bell",
+    principalId: "prn_91",
+    credentials: 1,
+    hosts: 1,
+    host: "build-01",
     status: "enrolled",
+    enforcementTier: "gateway",
     runs30d: 42,
     spend30d: { micros: "12500000", currency: "USD", basis: "client_attested" },
+    tokens30d: { total: 1_840_000, cacheReadRate: 0.62, sessions: 40 },
+    mandates: 0,
     incidents: 1,
+    tamperIncidents: 0,
+    tamperIncidentsRecorded: 0,
     ...overrides,
   };
 }
@@ -41,11 +52,27 @@ export function agentRow(overrides: Partial<AgentRow> = {}): AgentRow {
 export function agentPage(
   agents: AgentRow[],
   nextCursor: string | null = null,
+  totals: Partial<AgentPage["totals"]> = {},
 ): Read<AgentPage> {
   return readOk({
     agents,
     nextCursor,
-    totals: { identities: 7, enrolled: 2, tamperIncidents: 3 },
+    totals: {
+      identities: 7,
+      enrolled: 2,
+      holdingMandate: 1,
+      tamperIncidents: 3,
+      tamper: {
+        recorded: 4,
+        open: 3,
+        newest: {
+          agentKey: "acme.core.release-bot",
+          kind: "hooks_removed",
+          detectedAt: "2026-09-11T09:16:04.000Z",
+        },
+      },
+      ...totals,
+    },
   });
 }
 
@@ -447,11 +474,13 @@ export function agentsSource(reads: AgentReads) {
         : Promise.resolve(read);
     };
   const source: DataSource = {
+    runtimes: { list: refuse, agents: refuse },
     pretenant: { orgs: refuse, workspaces: refuse },
     shell: { context: refuse, preferences: refuse },
     billing: {
       plan: refuse,
       usageCredits: refuse,
+      retention: refuse,
       bucket: refuse,
       contractRate: refuse,
       invoices: refuse,
@@ -464,6 +493,8 @@ export function agentsSource(reads: AgentReads) {
       transcript: refuse,
       chain: refuse,
       outputs: refuse,
+      work: refuse,
+      outcomesSettings: refuse,
     },
     approvals: { pending: refuse, resolved: refuse },
     agents: {
@@ -503,6 +534,7 @@ export function agentsSource(reads: AgentReads) {
       proposals: refuse,
       contextPr: refuse,
       freshness: refuse,
+      hub: refuse,
       deliveries: answer(reads.deliveries, "deliveries"),
     },
     tools: {

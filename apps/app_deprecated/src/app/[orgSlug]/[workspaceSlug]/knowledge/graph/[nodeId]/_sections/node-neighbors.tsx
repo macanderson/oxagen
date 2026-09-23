@@ -1,6 +1,6 @@
 /**
  * node-neighbors.tsx — Async server component for the node-detail Neighbors
- * section (spec: docs/web-app-2.0/workspace/knowledge/graph/node/spec.md).
+ * section (spec: docs/web-app-2.0/workspace/knowledge/graph/node/spec.md, removed 2026-09-23; git history keeps it).
  *
  * Fetches the node's one-hop neighborhood via ontology.neighbors
  * (get_ontology_neighbors) and renders it as NodeRefLink citation chips

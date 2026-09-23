@@ -17,7 +17,6 @@
     "cliAuthorize": "Authorize the Oxagen CLI",
     "cliComplete": "The Oxagen CLI is signed in",
     "workspaceEyebrow": "Workspace {workspace}",
-    "organizationEyebrow": "Organization {organization}",
     "fleet": "Fleet",
     "run": "Run",
     "agents": "Agents",
@@ -28,6 +27,7 @@
     "record": "Record",
     "steering": "Steering",
     "repositories": "Repositories",
+    "runtimes": "Runtimes",
     "spend": "Spend",
     "people": "Organization",
     "roles": "Roles",
@@ -35,7 +35,8 @@
     "billing": "Billing",
     "audit": "Audit",
     "modelFunding": "Model funding",
-    "sso": "Single sign-on"
+    "sso": "Single sign-on",
+    "organizationEyebrow": "Organization {organization}"
   },
   "unrecorded": {
     "run": {

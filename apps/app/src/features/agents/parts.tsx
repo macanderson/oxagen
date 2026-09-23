@@ -145,15 +145,23 @@ export function Tile({
   title,
   value,
   basis,
+  critical = false,
 }: {
   title: string;
   value: ReactNode;
   basis: ReactNode;
+  /** The critical hue on the figure (`.stat .v.crit`), for a count that is a problem when it is not zero. */
+  critical?: boolean;
 }) {
   return (
     <dl data-testid="tile" className={statTile}>
       <dt className={statTerm}>{title}</dt>
-      <dd className={statValue}>{value}</dd>
+      <dd
+        data-critical={critical ? "true" : undefined}
+        className={`${statValue} ${critical ? "text-critical" : ""}`}
+      >
+        {value}
+      </dd>
       <dd className={statNote}>{basis}</dd>
     </dl>
   );
@@ -171,10 +179,33 @@ export function Instant({ at }: { at: string }) {
   );
 }
 
-/** A value the store did not record. */
-export function NotRecordedValue() {
+/** The backend gaps a list cell can name when it prints not recorded. */
+type ListGap =
+  | "steering"
+  | "toolbelt"
+  | "belt"
+  | "tokens"
+  | "commit"
+  | "organization"
+  | "tier"
+  | "runtimeKind";
+
+/**
+ * A value the store did not record. With `gap`, the cell names the missing
+ * store on hover and carries it as `data-gap`, so an unbacked column says what
+ * it is waiting for rather than only that it is empty.
+ */
+export function NotRecordedValue({ gap }: { gap?: ListGap } = {}) {
   const t = useTranslations("agents");
-  return <span className="text-muted-foreground">{t("notRecorded")}</span>;
+  return (
+    <span
+      data-gap={gap}
+      title={gap === undefined ? undefined : t(`list.gaps.${gap}`)}
+      className="text-muted-foreground"
+    >
+      {t("notRecorded")}
+    </span>
+  );
 }
 
 const STATUS_DOT: Record<AgentStatus, string> = {

@@ -1,3 +1,4 @@
+import { readRunEnrichmentEnabled } from "./lib/run-enrichment";
 // `list_runs`: Fleet's runs table, read from the two stores that record runs.
 //
 //   arun_…  the run evidence ledger: `agent.agent_runs` (V2 rows only; a legacy
@@ -1267,6 +1268,7 @@ export async function ledgerEnrichment(
 export type RunListDeps = {
   queries: RunQueries;
   readRunRollups: ReadRunRollups;
+  readEnrichmentEnabled?: typeof readRunEnrichmentEnabled;
 };
 
 type FleetItem =
@@ -1329,12 +1331,23 @@ export function createRunListHandler(
         merged.items.map((item) => item.id),
       ),
     ]);
+    const enabled = deps.readEnrichmentEnabled
+      ? await deps.readEnrichmentEnabled(scope)
+      : true;
     return {
-      runs: merged.items.map((item) =>
-        item.kind === "ledger"
-          ? toLedgerRunItem(enrich(item.row), costs.get(item.id))
-          : toTachoRunItem(item.row, costs.get(item.id)),
-      ),
+      runs: merged.items
+        .map((item) =>
+          item.kind === "ledger"
+            ? toLedgerRunItem(enrich(item.row), costs.get(item.id))
+            : toTachoRunItem(item.row, costs.get(item.id)),
+        )
+        .map((run) => ({
+          ...run,
+          enrichmentEnabled: enabled,
+          ...(enabled
+            ? {}
+            : { name: null, summary: null, canSummarize: false }),
+        })),
       nextCursor: merged.nextCursor,
     };
   };
@@ -1343,4 +1356,5 @@ export function createRunListHandler(
 export const runListHandler = createRunListHandler({
   queries: postgresRunQueries,
   readRunRollups: postgresReadRunRollups,
+  readEnrichmentEnabled: readRunEnrichmentEnabled,
 });

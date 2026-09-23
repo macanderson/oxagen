@@ -4,6 +4,7 @@
  * Claude Code's `http` hooks and its OTLP exporter). Every request carries
  * the per-install bearer so another local user cannot post fake events.
  */
+import type { ContainedRunResult } from "../contained/launcher";
 import {
   createServer,
   type IncomingMessage,
@@ -32,10 +33,21 @@ export interface HookEnvelope {
   harness?: TachoHarness;
   /** A custom agent's name (`tacho hook --agent`); wins over `harness`. */
   agent?: string;
+  /**
+   * The id `tacho-hook` gave this hook when it read stdin. The live request
+   * and a spool replay of the same hook carry the same id, so a hook the
+   * daemon answered after the client gave up is recorded once.
+   */
+  hook_id?: string;
 }
 
 /** What the daemon exposes to the listener; the daemon implements it. */
 export interface CollectorApi {
+  runContained?: (
+    input: unknown,
+    output: (stream: "stdout" | "stderr", text: string) => void,
+    signal?: AbortSignal,
+  ) => Promise<ContainedRunResult>;
   githubLease?: (input: GithubLeaseInput) => { status: number; body: unknown };
   githubProxy?: (req: IncomingMessage, res: ServerResponse) => Promise<void>;
   localToken: string;
@@ -227,6 +239,34 @@ export function createRequestHandler(
           parsed = raw.length === 0 ? {} : JSON.parse(raw);
         } catch {
           send(res, 400, { error: "invalid JSON" });
+          return;
+        }
+        if (path === "/contained/run") {
+          if (!api.runContained) {
+            send(res, 404, { error: "Contained execution is unavailable" });
+            return;
+          }
+          const controller = new AbortController();
+          res.on("close", () => controller.abort());
+          res.writeHead(200, { "content-type": "application/x-ndjson" });
+          try {
+            const result = await api.runContained(
+              parsed,
+              (stream, text) => {
+                if (!res.destroyed)
+                  res.write(`${JSON.stringify({ stream, text })}\n`);
+              },
+              controller.signal,
+            );
+            res.end(`${JSON.stringify({ result })}\n`);
+          } catch (error) {
+            const message =
+              error instanceof Error ? error.message : String(error);
+            log(`Contained execution failed: ${message}`);
+            // The launcher's own refusals name what the runner lacks, and the
+            // caller already holds the local token, so the reason goes back.
+            res.end(`${JSON.stringify({ error: message.slice(0, 1000) })}\n`);
+          }
           return;
         }
         if (path === "/github-lease") {

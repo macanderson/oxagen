@@ -13,7 +13,8 @@
  */
 
 import * as React from "react";
-import { GithubIcon, ExternalLinkIcon, RefreshCwIcon } from "lucide-react";
+import { ExternalLinkIcon, RefreshCwIcon } from "lucide-react";
+import { GithubIcon } from "@/components/brand/github-icon";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DialogFooter } from "@oxagen/ui";
 import {

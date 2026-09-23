@@ -4,30 +4,31 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Oxagen: Engineering Deterministic AI Coding Agents</title>
-<meta name="description" content="A free field manual in 21 parts, by Mac Anderson. Build the deterministic system around a coding agent, then operate the agents you run: identity, authority, budget, equipment, and a record another person can read.">
+<meta name="description" content="A free field manual in 21 parts, by Mac Anderson. The first parts show how to build a predictable system around a coding agent. The later parts show how to manage the agents you run: identity, authority, budget, equipment, and a record another person can read.">
 <link rel="canonical" href="https://oxagen.sh/read">
-<meta name="theme-color" content="#0A0A0C">
+<meta name="theme-color" content="#09090B">
 <meta name="color-scheme" content="dark">
 <meta property="og:type" content="book">
 <meta property="og:url" content="https://oxagen.sh/read">
 <meta property="og:site_name" content="Oxagen">
 <meta property="og:title" content="Oxagen: Engineering Deterministic AI Coding Agents">
-<meta property="og:description" content="A free field manual in 21 parts, by Mac Anderson. Build the deterministic system around a coding agent, then operate the agents you run: identity, authority, budget, equipment, and a record another person can read.">
+<meta property="og:description" content="A free field manual in 21 parts, by Mac Anderson. The first parts show how to build a predictable system around a coding agent. The later parts show how to manage the agents you run: identity, authority, budget, equipment, and a record another person can read.">
 <meta property="og:image" content="https://oxagen.sh/research-assets/book-og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:site" content="@oxagenai">
 <meta name="twitter:title" content="Oxagen: Engineering Deterministic AI Coding Agents">
-<meta name="twitter:description" content="A free field manual in 21 parts, by Mac Anderson. Build the deterministic system around a coding agent, then operate the agents you run: identity, authority, budget, equipment, and a record another person can read.">
+<meta name="twitter:description" content="A free field manual in 21 parts, by Mac Anderson. The first parts show how to build a predictable system around a coding agent. The later parts show how to manage the agents you run: identity, authority, budget, equipment, and a record another person can read.">
 <meta name="twitter:image" content="https://oxagen.sh/research-assets/book-og.png">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any">
 <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
 <link rel="icon" href="/favicon-16.png" sizes="16x16" type="image/png">
 <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<link rel="preload" href="/fonts/Aeonik-VF.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="/fonts/AeonikMono-VF.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/space-grotesk-latin-700.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/geist-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/house-tokens.css">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -43,42 +44,39 @@
 </script>
 <style>
 /* ============ tokens ============
-   The Stella palette, re-declared because this page does not link
-   /assets/oxagen.css. It replaces its own document with the reader HTML the
-   API returns, so it carries everything it needs inline. Keep the values here
-   in step with the --st-* table in /assets/oxagen.css.
-   The `--ember-*` and `--indigo` names predate the Stella reskin; what they
-   now hold is the gold, the fail red and the ink. Nothing here is a gradient. */
+   Every colour here aliases the house palette in /assets/house-tokens.css,
+   the brand kit's --ox-* table, linked in the head. This page replaces its
+   own document with the reader HTML the API returns, so the link only has to
+   serve the gate, and the reader carries its own styles.
+   The `--ember-*` and `--indigo` names predate the house system. They now
+   hold the failed red and the gold. Nothing here is a gradient.
+   Gold is identity (the eyebrow, the book spine, the word on the cover) and
+   the one action on the screen, the submit button. Selection, focus, and
+   links use the neutral ramp, because gold never carries a state. */
 :root{
-  --bg:#0A0A0C;
-  --surface:#17171B;
-  --card:#0F0F12;
-  --line:#26262C;
-  --line-strong:#2C2C33;
-  --ink:#F4F1EA;
-  --ink-soft:#BFC1CC;
-  --muted:#A9AAB5;
-  --faint:#4B4B56;
-  --ember-a:#E0687A;   /* fail */
-  --ember-b:#EFC53F;   /* the brand metal */
-  --ember-c:#EFC53F;   /* the brand metal */
-  --indigo:#EFC53F;    /* the brand metal, as a link colour */
-  --ok:#74C991;
+  --bg:var(--ox-ink);
+  --surface:var(--ox-panel);
+  --card:var(--ox-ink);
+  --line:var(--ox-border);
+  --line-strong:var(--ox-rule);
+  --ink:var(--ox-text);
+  --ink-soft:var(--ox-text-body);
+  --muted:var(--ox-muted);
+  --faint:var(--ox-dim);
+  --ember-a:var(--ox-destructive);   /* fail, lifted to clear AA on ink */
+  --ember-b:var(--ox-gold);          /* the brand metal */
+  --ember-c:var(--ox-gold);          /* the brand metal */
+  --ember-hover:var(--ox-gold-bright);
+  --indigo:var(--ox-text);           /* links: neutral, underlined */
+  --on-gold:var(--ox-ink);
+  --ok:var(--ox-st-allowed);
   --radius:2px;
   --ease-out:cubic-bezier(.22,1,.36,1);
 }
-@font-face{
-  font-family:"Aeonik";
-  src:url("/fonts/Aeonik-VF.woff2") format("woff2-variations"),
-      url("/fonts/Aeonik-VF.woff2") format("woff2");
-  font-weight:100 900;font-style:normal;font-display:swap;
-}
-@font-face{
-  font-family:"Aeonik Mono";
-  src:url("/fonts/AeonikMono-VF.woff2") format("woff2-variations"),
-      url("/fonts/AeonikMono-VF.woff2") format("woff2");
-  font-weight:100 900;font-style:normal;font-display:swap;
-}
+@font-face{font-family:"Space Grotesk";src:url("/fonts/space-grotesk-latin-600.woff2") format("woff2");font-weight:600;font-style:normal;font-display:swap}
+@font-face{font-family:"Space Grotesk";src:url("/fonts/space-grotesk-latin-700.woff2") format("woff2");font-weight:700;font-style:normal;font-display:swap}
+@font-face{font-family:"Geist";src:url("/fonts/geist-latin-wght.woff2") format("woff2");font-weight:100 900;font-style:normal;font-display:swap}
+@font-face{font-family:"Monaspace Neon";src:url("/fonts/monaspace-neon-latin-wght.woff2") format("woff2");font-weight:200 800;font-style:normal;font-display:swap}
 
 /* ============ base ============ */
 *,*::before,*::after{box-sizing:border-box}
@@ -86,20 +84,20 @@ html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
 body{
   margin:0;background:var(--bg);color:var(--ink);
-  font:400 16px/1.6 "Aeonik",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font:400 16px/1.6 var(--ox-font);
   -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
   min-height:100vh;display:flex;flex-direction:column;
 }
-::selection{background:var(--ember-b);color:#0A0A0C}
-h1,h2,h3{margin:0;font-weight:640;letter-spacing:-.02em;line-height:1.1;text-wrap:balance}
+::selection{background:var(--ox-hl);color:var(--ox-text)}
+h1,h2,h3{margin:0;font-family:var(--ox-font-display);font-weight:700;letter-spacing:-.02em;line-height:1.1;text-wrap:balance}
 p{margin:0}
 a{color:inherit;text-decoration:none}
 img,svg{display:block;max-width:100%}
 button,input,textarea,select{font:inherit;color:inherit}
-.mono{font-family:"Aeonik Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
-:focus-visible{outline:2px solid var(--ember-c);outline-offset:3px;border-radius:2px}
+.mono{font-family:var(--ox-font-mono)}
+:focus-visible{outline:2px solid var(--ox-text);outline-offset:3px;border-radius:2px}
 .skip{
-  position:fixed;left:12px;top:-64px;z-index:200;background:var(--ember-c);color:#0A0A0C;
+  position:fixed;left:12px;top:-64px;z-index:200;background:var(--ox-text);color:var(--ox-ink);
   padding:10px 16px;border-radius:2px;font-weight:600;transition:top .2s;
 }
 .skip:focus{top:12px}
@@ -107,7 +105,7 @@ button,input,textarea,select{font:inherit;color:inherit}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
 
 .eyebrow{
-  font-family:"Aeonik Mono",monospace;font-size:12px;font-weight:520;letter-spacing:.22em;
+  font-family:var(--ox-font-mono);font-size:12px;font-weight:500;letter-spacing:.22em;
   text-transform:uppercase;color:var(--ember-c);display:inline-flex;align-items:center;gap:10px;
 }
 .eyebrow::before{content:"";width:20px;height:2px;background:var(--ember-c)}
@@ -120,11 +118,11 @@ button,input,textarea,select{font:inherit;color:inherit}
   transition:transform .18s var(--ease-out),box-shadow .18s,border-color .18s,background-color .18s,filter .18s;
 }
 .btn svg{flex:none}
-.btn-primary{background:var(--ember-c);color:#0A0A0C;border-color:var(--ember-c)}
-.btn-primary:hover{transform:translateY(-1px);background:#F7D96B;border-color:#F7D96B}
+.btn-primary{background:var(--ember-c);color:var(--on-gold);border-color:var(--ember-c)}
+.btn-primary:hover{transform:translateY(-1px);background:var(--ember-hover);border-color:var(--ember-hover)}
 .btn-primary:active{transform:translateY(0)}
 .btn-ghost{border-color:var(--line-strong);color:var(--ink-soft);background:transparent}
-.btn-ghost:hover{border-color:var(--ember-c);color:var(--ink);transform:translateY(-1px)}
+.btn-ghost:hover{border-color:var(--muted);color:var(--ink);transform:translateY(-1px)}
 .btn-sm{padding:9px 16px;font-size:14px;border-radius:2px}
 .btn[disabled]{opacity:.6;cursor:progress;transform:none}
 .btn .arr{transition:transform .18s var(--ease-out)}
@@ -134,20 +132,23 @@ button,input,textarea,select{font:inherit;color:inherit}
 /* ============ header / footer ============ */
 .gate-header{padding:22px 0}
 .gate-header .wrap{width:min(680px,calc(100% - 40px));margin-inline:auto}
-.brand{display:inline-flex;align-items:center;gap:10px;color:var(--ink);font-weight:660;font-size:18px;letter-spacing:-.02em}
+.brand{display:inline-flex;align-items:center;gap:10px;color:var(--ink);font-family:var(--ox-font-display);font-weight:600;font-size:18px;letter-spacing:-.02em}
 .brand svg{width:26px;height:26px}
 .gate-footer{border-top:1px solid var(--line);padding:24px 0;margin-top:auto}
 .gate-footer .wrap{
   width:min(680px,calc(100% - 40px));margin-inline:auto;display:flex;flex-wrap:wrap;gap:8px 16px;
   justify-content:space-between;font-size:13px;color:var(--muted);
 }
-.gate-footer a{color:var(--indigo)}
-.gate-footer a:hover{color:var(--ink)}
+.gate-footer a{color:var(--indigo);border-bottom:1px solid var(--line-strong)}
+.gate-footer a:hover{border-bottom-color:var(--ink)}
 
 /* ============ shell ============ */
 main{flex:1;position:relative}
 .gate-shell{
   position:relative;padding:28px 0 72px;display:flex;flex-direction:column;align-items:center;
+  /* The lattice behind the card is 820px wide. Clip it so a phone does not
+     scroll sideways. */
+  overflow-x:hidden;overflow-x:clip;
 }
 .gate-glow{
   position:absolute;left:50%;top:0;width:820px;height:520px;transform:translateX(-50%);
@@ -169,7 +170,7 @@ main{flex:1;position:relative}
 }
 .spinner{
   width:34px;height:34px;border-radius:50%;
-  border:3px solid var(--line-strong);border-top-color:var(--ember-c);
+  border:3px solid var(--line-strong);border-top-color:var(--ink);
   animation:spin .85s linear infinite;
 }
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -204,10 +205,10 @@ main{flex:1;position:relative}
   content:"";position:absolute;left:0;top:0;bottom:0;width:5px;
   background:var(--ember-c);
 }
-.book-kicker{font-family:"Aeonik Mono",monospace;font-size:8.5px;letter-spacing:.2em;color:var(--ember-c);text-transform:uppercase;margin-bottom:10px}
-.book-title{font-size:clamp(15px,3.6vw,17px);font-weight:680;letter-spacing:-.01em;line-height:1.16}
+.book-kicker{font-family:var(--ox-font-mono);font-size:8.5px;letter-spacing:.2em;color:var(--ember-c);text-transform:uppercase;margin-bottom:10px}
+.book-title{font-family:var(--ox-font-display);font-size:clamp(15px,3.6vw,17px);font-weight:700;letter-spacing:-.01em;line-height:1.16}
 .book-author{margin-top:auto;padding-top:10px;border-top:1px solid var(--line)}
-.book-author b{display:block;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;font-weight:620}
+.book-author b{display:block;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;font-weight:600}
 .book-author span{font-size:9.5px;color:var(--muted)}
 
 .gate-copy{text-align:center;display:grid;gap:12px;justify-items:center}
@@ -220,7 +221,7 @@ main{flex:1;position:relative}
 @media (max-width:520px){.f-row{grid-template-columns:1fr}}
 .field{display:grid;gap:6px}
 .field.full{grid-column:1/-1}
-.field label{font-size:13px;color:var(--ink-soft);font-weight:520}
+.field label{font-size:13px;color:var(--ink-soft);font-weight:500}
 .field label .opt{color:var(--muted);font-weight:400}
 .field input,.field select,.field textarea{
   background:var(--surface);border:1px solid var(--line-strong);border-radius:2px;
@@ -228,24 +229,24 @@ main{flex:1;position:relative}
   transition:border-color .15s,box-shadow .15s;
 }
 .field select{appearance:none;-webkit-appearance:none;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236F7785' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23A1A1AA' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   background-repeat:no-repeat;background-position:right 12px center;background-size:16px;padding-right:36px;
 }
 .field select:invalid{color:var(--muted)}
 .field input::placeholder,.field textarea::placeholder{color:var(--muted)}
 .field input:focus,.field select:focus,.field textarea:focus{
-  outline:none;border-color:var(--ember-b);box-shadow:none;
+  outline:none;border-color:var(--ink);box-shadow:none;
 }
 .hp-wrap{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%)}
 .consent-copy{font-size:13px;color:var(--muted);line-height:1.55}
 .form-foot{display:grid;gap:12px}
 .form-status{font-size:14px;color:var(--muted);min-height:1.4em}
 .form-status.err{color:var(--ember-a)}
-.form-status a{color:var(--indigo);border-bottom:1px solid var(--ember-c)}
+.form-status a{color:var(--indigo);border-bottom:1px solid var(--line-strong)}
 
 /* edition chooser */
 .edition-pick{border:0;padding:0;margin:0;display:grid;gap:10px}
-.edition-pick legend{font-size:13px;color:var(--ink-soft);font-weight:520;padding:0;margin-bottom:2px}
+.edition-pick legend{font-size:13px;color:var(--ink-soft);font-weight:500;padding:0;margin-bottom:2px}
 .edition-opts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 @media (max-width:520px){.edition-opts{grid-template-columns:1fr}}
 .edition-opt{
@@ -255,7 +256,7 @@ main{flex:1;position:relative}
 }
 .edition-opt input{position:absolute;opacity:0;width:1px;height:1px}
 .edition-opt.is-selected,.edition-opt:has(input:checked){
-  border-color:var(--ember-c);background:var(--surface);box-shadow:0 0 0 1px var(--ember-c) inset;
+  border-color:var(--ink);background:var(--surface);box-shadow:0 0 0 1px var(--ink) inset;
 }
 .edition-name{font-weight:600;font-size:14.5px;color:var(--ink)}
 .edition-desc{font-size:12px;color:var(--muted)}
@@ -265,7 +266,7 @@ main{flex:1;position:relative}
   display:grid;gap:14px;background:var(--card);border:1px solid var(--line);
   border-radius:var(--radius);padding:26px;text-align:left;
 }
-.ok-line{display:flex;align-items:center;gap:10px;font-weight:620;font-size:17px}
+.ok-line{display:flex;align-items:center;gap:10px;font-weight:600;font-size:17px}
 .ok-line .ok-dot{
   width:24px;height:24px;border-radius:50%;background:var(--surface);flex:none;
   display:grid;place-items:center;color:var(--ok);font-size:13px;border:1px solid var(--ok);
@@ -276,9 +277,9 @@ main{flex:1;position:relative}
 .resend-wrap{text-align:center;display:grid;gap:14px;justify-items:center}
 .resend-toggle{
   background:none;border:0;color:var(--indigo);font-size:14px;cursor:pointer;
-  border-bottom:1px solid var(--ember-c);padding:4px 0;
+  border-bottom:1px solid var(--line-strong);padding:4px 0;
 }
-.resend-toggle:hover{color:var(--ink)}
+.resend-toggle:hover{border-bottom-color:var(--ink)}
 .resend-panel{
   width:100%;display:grid;gap:12px;background:var(--surface);border:1px solid var(--line);
   border-radius:var(--radius);padding:18px;text-align:left;
@@ -333,9 +334,10 @@ main{flex:1;position:relative}
       <div class="gate-copy">
         <p class="eyebrow">Free · read online</p>
         <h1 id="gateHeading" tabindex="-1">Read the field manual</h1>
-        <p>Twenty-one parts. The first thirteen build the system around a coding agent. The
-        next seven cover operating the agents you run. Each part ends with steps for this
-        week. Tell us where to send your single-use reading link.</p>
+        <p>The manual has 21 parts. The first thirteen show how to build the system around a
+        coding agent. The next seven show how to manage the agents you run. Each part ends
+        with steps you can take this week. Tell Oxagen where to send your reading link. The
+        link works once.</p>
       </div>
 
       <form class="lead-form" id="gateForm" novalidate>
@@ -410,7 +412,7 @@ main{flex:1;position:relative}
           </div>
         </div>
         <div class="field full">
-          <label for="g-referral">How did you hear about us? <span class="opt">(optional)</span></label>
+          <label for="g-referral">How did you hear about Oxagen? <span class="opt">(optional)</span></label>
           <select id="g-referral" name="referralSource">
             <option value="" selected>Select one</option>
             <option value="search_engine">Search engine</option>
@@ -426,22 +428,22 @@ main{flex:1;position:relative}
         </div>
 
         <fieldset class="edition-pick">
-          <legend>Which edition should we send?</legend>
+          <legend>Which edition do you want?</legend>
           <div class="edition-opts">
             <label class="edition-opt">
               <input type="radio" name="edition" value="page-flip-reader">
               <span class="edition-name">Page-flip reader</span>
-              <span class="edition-desc">The premium reading experience</span>
+              <span class="edition-desc">Turn the pages like a printed book</span>
             </label>
             <label class="edition-opt">
               <input type="radio" name="edition" value="field-manual">
               <span class="edition-name">Field manual</span>
-              <span class="edition-desc">Linear scroll</span>
+              <span class="edition-desc">One long page you scroll</span>
             </label>
           </div>
         </fieldset>
 
-        <p class="consent-copy">We’ll only use your details to send the book and follow up about Oxagen. No spam.</p>
+        <p class="consent-copy">Oxagen uses your details only to send the book and to follow up about Oxagen. Oxagen will not send you spam.</p>
 
         <div class="hp-wrap" aria-hidden="true">
           <label for="g-website">Website</label>
@@ -455,13 +457,13 @@ main{flex:1;position:relative}
       </form>
 
       <div class="success-panel" id="successPanel" hidden tabindex="-1">
-        <div class="ok-line"><span class="ok-dot" aria-hidden="true">✓</span> <span id="successMessage">The link to the book has been sent to your email.</span></div>
-        <p>Check your inbox (and spam, just in case).</p>
+        <div class="ok-line"><span class="ok-dot" aria-hidden="true">✓</span> <span id="successMessage">Oxagen sent the link to the book to your email.</span></div>
+        <p>Check your inbox. If the email is not there, check your spam folder.</p>
       </div>
 
       <div class="resend-wrap">
         <button type="button" class="resend-toggle" id="resendToggle" aria-expanded="false" aria-controls="resendPanel">
-          Already got access? Resend my link
+          Already asked for the book? Resend my link
         </button>
         <div class="resend-panel" id="resendPanel" hidden>
           <form id="resendForm" novalidate>
@@ -488,9 +490,9 @@ main{flex:1;position:relative}
 </footer>
 
 <noscript>
-  <div style="max-width:560px;margin:40px auto;padding:20px;text-align:center;color:#B6AFC9">
-    Please enable JavaScript to request the book, or email
-    <a href="mailto:success@oxagen.sh" style="color:var(--ember-c)">success@oxagen.sh</a> and we'll send it to you.
+  <div style="max-width:560px;margin:40px auto;padding:20px;text-align:center;color:var(--muted)">
+    Turn on JavaScript to request the book. Or email
+    <a href="mailto:success@oxagen.sh" style="color:var(--ink);border-bottom:1px solid var(--line-strong)">success@oxagen.sh</a>, and Oxagen will send it to you.
   </div>
 </noscript>
 
@@ -595,15 +597,15 @@ main{flex:1;position:relative}
   }
 
   function reasonMessage(reason) {
-    if (reason === "consumed") return "That link has already been used. Links are single-use.";
+    if (reason === "consumed") return "That link was already used. Each link works once.";
     if (reason === "expired") return "That link has expired.";
-    return "That link isn’t valid.";
+    return "That link is not valid.";
   }
 
   function redeemFailureMessage(status, reason) {
     if (status === 429) return "Too many attempts. Wait a moment and try again.";
     if (status >= 500 || !reason) {
-      return "We couldn’t verify that link. Check your connection and try again.";
+      return "Oxagen could not check that link. Check your connection and try again.";
     }
     return reasonMessage(reason);
   }
@@ -641,7 +643,7 @@ main{flex:1;position:relative}
       }
       showGate(redeemFailureMessage(r.status, data.reason));
     }).catch(function () {
-      showGate("We couldn’t verify that link. Check your connection and try again.");
+      showGate("Oxagen could not check that link. Check your connection and try again.");
     });
   } else {
     showGate(null);
@@ -710,7 +712,7 @@ main{flex:1;position:relative}
         if (r.status >= 200 && r.status < 300 && data.ok) {
           setStatus(statusEl, "");
           gateForm.hidden = true;
-          successMessage.textContent = data.message || "The link to the book has been sent to your email.";
+          successMessage.textContent = data.message || "Oxagen sent the link to the book to your email.";
           successPanel.hidden = false;
           announce(successMessage.textContent);
           try { successPanel.focus(); } catch (_) { /* ignore */ }
@@ -772,7 +774,7 @@ main{flex:1;position:relative}
         var data = r.data || {};
         btn.disabled = false;
         if (r.status >= 200 && r.status < 300 && data.ok) {
-          setStatusText(statusEl, data.message || (data.sent ? "The link to the book has been sent to your email." : "We couldn’t find that email. Please fill out the form to get the book."));
+          setStatusText(statusEl, data.message || (data.sent ? "Oxagen sent the link to the book to your email." : "Oxagen could not find that email. Fill out the form to get the book."));
           announce(statusEl.textContent);
         } else {
           setStatus(

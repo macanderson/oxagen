@@ -3,5 +3,5 @@
 export { Agent } from "./agent";
 export { AgentSource } from "./agent-source";
 export { AgentLoading } from "./page-states";
-export { Agents } from "./agents";
+export { Agents, AgentsLoading } from "./agents";
 export { AgentsCreate } from "./create-actions";

@@ -54,11 +54,13 @@ describe("ShellChrome", () => {
       orgRole: "owner",
     });
     const source = {
+      runtimes: { list: vi.fn(), agents: vi.fn() },
       pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
       shell: { context: vi.fn(), preferences: vi.fn() },
       billing: {
         plan: vi.fn(),
         usageCredits: vi.fn(),
+        retention: vi.fn(),
         bucket: vi.fn(),
         contractRate: vi.fn(),
         invoices: vi.fn(),
@@ -71,6 +73,8 @@ describe("ShellChrome", () => {
         transcript: vi.fn(),
         chain: vi.fn(),
         outputs: vi.fn(),
+        work: vi.fn(),
+        outcomesSettings: vi.fn(),
       },
       approvals: { pending: vi.fn(), resolved: vi.fn() },
       agents: {
@@ -110,6 +114,7 @@ describe("ShellChrome", () => {
         proposals: vi.fn(),
         contextPr: vi.fn(),
         freshness: vi.fn(),
+        hub: vi.fn(),
         deliveries: vi.fn(),
       },
       tools: {
@@ -120,6 +125,7 @@ describe("ShellChrome", () => {
         connections: vi.fn(),
         mcpServers: vi.fn(),
       },
+      runtimes: { list: vi.fn(), agents: vi.fn() },
     };
     // The chrome is wrapped in the viewer's zone, so its own dates agree with
     // the page's; the client shell is the provider's one child.

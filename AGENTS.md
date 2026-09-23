@@ -33,7 +33,7 @@ docs/       VISION.md, capability specs, ADRs, specs (docs/specs)
 | `oxagen` | `src/contracts/` | Capability contracts (Zod schemas and metadata; inspect the registry for current names) |
 | `oxagen` | `src/iam/resolve.ts` | IAM policy resolution |
 | `oxagen` | `src/registry.ts` | Capability registry (`registerCapability`, `getCapability`) |
-| `oxagen` | `src/plugins/` | Plugin manifest registry + built-in plugin catalogs |
+| `oxagen` | `src/plugins/` | Plugin manifest schema + registry (which plugin claims a contract) |
 | `handlers` | `src/register.ts` | All built-in capability handler registrations (lazy-loaded) |
 | `agent` | `src/runtime/materialize-tools.ts` | Governed tool materialisation (IAM → entitlement → tool RBAC → consent → approval → telemetry per call), MCP gateway auth, `runGovernedTurn` for the in-app agent |
 | `agent` | `src/handlers/` | Agent registry, approval, MCP, memory, role, trace handlers |
@@ -359,6 +359,6 @@ belong to steers it.
   the deploy of that change, never after. Here the label is applied from the
   diff by `.github/workflows/migration-label.yml` and comes back if removed,
   and `migration-gate` in `pipeline.yml` holds the deploy until the stores
-  carry the schema. Say in the PR which store changed and what must be
-  applied. The automatic apply in `migration-gate` is a separate decision,
-  made on 2026-09-23 in #3653.
+  carry the schema. `migration-gate` also applies the pending migrations on
+  merge (decided 2026-09-23, #3653), so the label is the only thing a
+  schema-changing PR adds. Write no apply steps and apply nothing by hand.

@@ -1,6 +1,6 @@
 ---
 title: Architecture atlas
-description: "Generated diagrams of the Oxagen monorepo: datastores and schemas, the request path, the capability kernel's gate order, the evidence ledger, metering and billing, background jobs, deployment topology, and the configuration contract."
+description: "Generated diagrams of the Oxagen monorepo: datastores and schemas, the request path, the capability kernel's gate order, the governed turn, the evidence ledger, metering and billing, the knowledge graph, background jobs, the CLI and MCP surfaces, deployment topology, the configuration contract, and the ADR index."
 ---
 
 The **[Architecture Atlas](/architecture/index.html)** is the internal engineering map of the platform. The build generates it from the tree. Package manifests, the storage manifest (ADR-031), the capability manifest, route and function sources, the environment registry, CI workflows, and ADRs feed the figures directly. The hand-described mechanism flows cite the files and symbols they depict, and the build verifies each citation.
@@ -11,11 +11,11 @@ The **[Architecture Atlas](/architecture/index.html)** is the internal engineeri
 
 - **Overview.** System context and the live counts (apps, packages, contracts, routes, tables, functions, variables, workflows, and decisions).
 - **Workspace.** The dependency graph with implied edges removed, and every workspace package.
-- **Request path.** One org-scoped request from identity to row-level security, tenant data planes (ADR-042), auth tiers, and every API route.
-- **Capability kernel.** How a surface reaches a handler, the gate order inside `invoke()`, `checkIAM`'s decision order, domains × surfaces, and the full catalog.
-- **The governed turn.** The in-app agent loop on stella-serve.
-- **Evidence ledger and wrapped agents.** The ledger's `run`, `attempt`, `event`, and `seal` records, their status machines, and the ingest path a wrapped agent's host reports on.
-- **Metering and billing.** Governed action to credit debit (ADR-052), and the turn admission gate.
+- **Request path.** One org-scoped API request from identity to row-level security, tenant data planes (ADR-042), auth tiers, and every API route.
+- **Capability kernel.** How a surface reaches a handler, the gate order inside `invoke()`, `checkIAM`'s decision order, domains × surfaces, and the full catalog with each contract's handler binding.
+- **The governed turn.** The in-app assistant's turn: `ask_assistant`, the credit gate, the evidence-ledger run, and the loop on stella-serve that hands every completion and tool call back to Oxagen.
+- **Evidence ledger and wrapped agents.** The ledger's `run`, `attempt`, `event`, and `seal` records, their status machines, and the ingest path a wrapped agent's host reports on, with its four enforcement tiers.
+- **Metering and billing.** Governed action to GAU bucket debit (ADR-052, ADR-055), the governed-action admission gate, and the credit gate for platform-funded assistant turns.
 - **Knowledge graph.** The ingestion pipeline (ADR-012), Neo4j labels, and vector indexes.
 - **Datastores.** The four stores, domains across stores, Postgres schemas, an entity-relationship diagram per schema with RLS classes, ClickHouse tables replayed from migrations, and Blob kinds.
 - **Background jobs.** The Inngest event → function → event graph.
@@ -25,7 +25,7 @@ The **[Architecture Atlas](/architecture/index.html)** is the internal engineeri
 
 ```bash
 pnpm docs:architecture           # write apps/docs/public/architecture/ (gitignored)
-pnpm docs:architecture --check   # refs resolve + deterministic output (runs in the gate)
+pnpm docs:architecture --check   # refs resolve + deterministic output (runs in pnpm gate and CI's checks job)
 ```
 
-The output is not committed. The docs app runs the generator as its `prebuild` and `predev` step, so the published atlas describes the tree it shipped with, and no pull request has to regenerate it. The generator lives in `tools/scripts/gen-architecture-docs.ts`. Its collectors, SVG layout engine, and curated flows live under `tools/scripts/lib/archdocs/`. To add a mechanism diagram, add a flow to `flows.ts` with the source references it depends on. The build refuses to run when a cited file or symbol is gone.
+The output is not committed. The docs app runs the generator as its `prebuild` and `predev` step, so the published atlas describes the tree it shipped with, and no pull request has to regenerate it. The generator lives in `tools/scripts/gen-architecture-docs.ts`. Its collectors, SVG layout engine, and curated flows live under `tools/scripts/lib/archdocs/`. To add a mechanism diagram, add a flow to `flows.ts` with the source references it depends on. The build refuses to run when a cited file or symbol is gone. A cited symbol that still exists but no longer does what the flow says passes that check, so review the prose in `flows.ts` when you change the code it describes.

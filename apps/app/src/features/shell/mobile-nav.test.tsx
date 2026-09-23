@@ -26,6 +26,7 @@ import { readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { phoneWidth } from "@/test/phone";
 import en from "../../../messages/en.json";
+import createMessages from "../../../messages/create.json";
 import shellMessages from "../../../messages/shell.json";
 import uiMessages from "../../../messages/ui.json";
 import { shellData } from "./shell.builders";
@@ -112,6 +113,7 @@ function renderPhone(data: ShellData, page: ReactNode = null) {
         ...en,
         ...shellMessages,
         ...uiMessages,
+        ...createMessages,
       }}
     >
       <ShellClient data={data} />
@@ -206,6 +208,7 @@ describe("thumb bar", () => {
     ["/acme/core-platform/tools", "tools"],
     ["/acme/core-platform/spend", "spend"],
     ["/acme/core-platform/steering", "more"],
+    ["/acme/core-platform/runtimes", "more"],
     ["/acme/core-platform/repositories", "more"],
     ["/acme/billing", "more"],
     ["/acme/api-keys", "more"],
@@ -236,7 +239,7 @@ describe("thumb bar", () => {
 });
 
 describe("More sheet", () => {
-  it("rises as a bottom sheet carrying Steering, Repositories, Organization, Billing and Audit", async () => {
+  it("rises as a bottom sheet carrying Steering, Runtimes, Repositories, Organization, Billing and Audit", async () => {
     const user = userEvent.setup();
     renderPhone(shellData());
     const more = screen.getByRole("button", { name: "More" });
@@ -247,6 +250,7 @@ describe("More sheet", () => {
     const links = within(sheet).getAllByRole("link");
     expect(links.map((l) => [l.textContent, l.getAttribute("href")])).toEqual([
       ["Steering", "/acme/core-platform/steering"],
+      ["Runtimes", "/acme/core-platform/runtimes"],
       ["Repositories", "/acme/core-platform/repositories"],
       ["Organization", "/acme"],
       ["Billing", "/acme/billing"],
@@ -289,14 +293,16 @@ describe("the other dialogs on a phone", () => {
   it("the command menu rises as a sheet and its input is 16 px", async () => {
     const user = userEvent.setup();
     renderPhone(shellData());
-    await user.click(screen.getByRole("button", { name: "Go to a page" }));
+    await user.click(
+      screen.getByRole("button", { name: shellMessages.shell.topbar.search }),
+    );
     const menu = await screen.findByTestId("command-menu");
     expect(menu).toHaveAttribute("data-sheet");
     expect(menu.querySelector("[data-sheet-handle]")).not.toBeNull();
     expect(style(within(menu).getByRole("combobox")).fontSize).toBe("16px");
   });
 
-  it("the drawer opens over a scrim with the sidebar's eight links", async () => {
+  it("the drawer opens over a scrim with the sidebar's ten links", async () => {
     const user = userEvent.setup();
     renderPhone(shellData());
     expect(document.querySelector("[data-scrim]")).toBeNull();
@@ -307,7 +313,7 @@ describe("the other dialogs on a phone", () => {
       within(drawer)
         .getByRole("navigation", { name: "Main" })
         .querySelectorAll("a"),
-    ).toHaveLength(9);
+    ).toHaveLength(10);
   });
 
   // The rail that carries the launcher is `hidden md:flex`, so without this a
@@ -417,6 +423,7 @@ describe("card tables", () => {
           ...en,
           ...shellMessages,
           ...uiMessages,
+          ...createMessages,
         }}
       >
         <ShellClient data={shellData()} />

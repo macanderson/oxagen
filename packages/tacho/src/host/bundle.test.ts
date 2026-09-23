@@ -6,6 +6,7 @@ import {
   ruleMatches,
   verifyBundle,
 } from "./bundle";
+import { CONTAINMENT_REQUIRED_REASON } from "../collector/hook-handler";
 import { bundleSigner, unsignedBundle } from "./test-support";
 
 const NOW = Date.parse("2026-09-10T12:00:00.000Z");
@@ -135,6 +136,15 @@ describe("rule matching", () => {
     expect(globToRegex("a/*/b").test("a/x/y/b")).toBe(false);
     expect(globToRegex("a?c").test("abc")).toBe(true);
     expect(globToRegex("a.c").test("abc")).toBe(false);
+  });
+
+  it("reads ** then a separator as whole segments, never a name suffix", () => {
+    expect(globToRegex("**/.env").test(".env")).toBe(true);
+    expect(globToRegex("**/.env").test("config/.env")).toBe(true);
+    expect(globToRegex("**/.env").test("foo.env")).toBe(false);
+    expect(globToRegex("a/**/b").test("a/b")).toBe(true);
+    expect(globToRegex("a/**/b").test("a/xb")).toBe(false);
+    expect(globToRegex("src/**").test("src/a/b.ts")).toBe(true);
   });
 });
 
@@ -450,6 +460,144 @@ describe("PreToolUse evaluation", () => {
         hostStatus: "paused",
       }).decision,
     ).toBe("deny");
+  });
+});
+
+describe("PreToolUse evaluation for a mandate that requires the contained tier (ADR-152)", () => {
+  const signer = bundleSigner();
+  const bundle = signer.sign(
+    unsignedBundle({ containment: { required: true } }),
+  );
+  const base = {
+    bundle,
+    bundleVerified: true,
+    hostStatus: "active" as const,
+    latestDenyGeneration: { org: 1, workspace: 1 },
+    controlReachable: true,
+    now: NOW,
+    context: { cwd: "/repo" },
+  };
+
+  it("denies even a read-only tool the rules allow, with the hook's own reason", () => {
+    // `Read` is on the allow list and read-only, so nothing but containment
+    // can deny it here.
+    expect(evaluatePreToolUse({ ...base, toolName: "Read" }).decision).toBe(
+      "allow",
+    );
+    expect(
+      evaluatePreToolUse({ ...base, toolName: "Read", containmentUnmet: true }),
+    ).toMatchObject({
+      decision: "deny",
+      evaluated: "deny",
+      source: "bundle",
+      reason_code: "containment_required",
+      reason: CONTAINMENT_REQUIRED_REASON,
+    });
+  });
+
+  it("denies before freshness, so a stale bundle cannot defer it to a refresh", () => {
+    const stale = { ...base, latestDenyGeneration: { org: 2, workspace: 1 } };
+    const write = { toolName: "Bash", toolInput: { command: "git status" } };
+    expect(evaluatePreToolUse({ ...stale, ...write }).decision).toBe("defer");
+    expect(
+      evaluatePreToolUse({ ...stale, ...write, containmentUnmet: true }),
+    ).toMatchObject({
+      decision: "deny",
+      reason_code: "containment_required",
+      stale: false,
+    });
+  });
+
+  it("reports an unverified bundle as unverified first", () => {
+    // Enforce: the unverified bundle already fails closed, and the reason
+    // says why rather than naming a requirement nobody could verify.
+    expect(
+      evaluatePreToolUse({
+        ...base,
+        toolName: "Read",
+        bundleVerified: false,
+        containmentUnmet: true,
+      }),
+    ).toMatchObject({ decision: "deny", reason_code: "bundle_unverified" });
+    // Observe: an unverified bundle allows, and an unverifiable containment
+    // requirement does not turn that into a deny.
+    const observe = signer.sign(
+      unsignedBundle({ mode: "observe", containment: { required: true } }),
+    );
+    expect(
+      evaluatePreToolUse({
+        ...base,
+        bundle: observe,
+        toolName: "Read",
+        bundleVerified: false,
+        containmentUnmet: true,
+      }),
+    ).toMatchObject({
+      decision: "allow",
+      evaluated: "defer",
+      reason_code: "bundle_unverified",
+    });
+  });
+
+  it("leaves operator state first: a paused host or cancelled session says so", () => {
+    expect(
+      evaluatePreToolUse({
+        ...base,
+        toolName: "Read",
+        hostStatus: "paused",
+        containmentUnmet: true,
+      }),
+    ).toMatchObject({ source: "human", reason_code: "host_paused" });
+    expect(
+      evaluatePreToolUse({
+        ...base,
+        toolName: "Read",
+        session: { cancelled: "budget" },
+        containmentUnmet: true,
+      }),
+    ).toMatchObject({ source: "human", reason_code: "session_cancelled" });
+  });
+
+  it("never refuses under an observe bundle, even when a caller sets the flag", () => {
+    // The evaluator checks the mode itself rather than trusting its caller,
+    // so an observe host records and never refuses.
+    const observe = signer.sign(
+      unsignedBundle({ mode: "observe", containment: { required: true } }),
+    );
+    expect(
+      evaluatePreToolUse({
+        ...base,
+        bundle: observe,
+        toolName: "Read",
+        containmentUnmet: true,
+      }).reason_code,
+    ).not.toBe("containment_required");
+  });
+});
+
+describe("verifying a bundle that carries a containment requirement", () => {
+  it("fails verification when the requirement is stripped or added after signing", () => {
+    // The requirement is inside the signature, so a host whose bundle was
+    // edited to drop it fails closed as unverified instead of running the
+    // agent uncontained.
+    const signer = bundleSigner();
+    const required = signer.sign(
+      unsignedBundle({ containment: { required: true } }),
+    );
+    expect(verifyBundle(required, signer.publicKeyPem).ok).toBe(true);
+    const stripped = { ...required };
+    delete stripped.containment;
+    expect(verifyBundle(stripped, signer.publicKeyPem)).toMatchObject({
+      ok: false,
+      reason: "signature does not verify",
+    });
+    const plain = signer.sign(unsignedBundle());
+    expect(
+      verifyBundle(
+        { ...plain, containment: { required: true } },
+        signer.publicKeyPem,
+      ).ok,
+    ).toBe(false);
   });
 });
 

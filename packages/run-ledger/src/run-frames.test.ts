@@ -5,8 +5,11 @@ import {
   bisectKey,
   filterFramesByKind,
   foldTranscript,
+  frameKey,
   frameKinds,
   ledgerFrame,
+  spliceSubagentChains,
+  withoutDuplicateModelCalls,
   type RunFrame,
   stepKind,
   tachoFrame,
@@ -155,6 +158,35 @@ describe("run frame projection", () => {
       fidelity: "digest_only",
     });
     expect(tachoFrame(tachoRow(9, "agent_start")).body).toEqual(NO_BODY);
+  });
+
+  it("reads a harness-reported agent message as a response, and leaves other messages single", () => {
+    const digest = `sha256:${"e".repeat(64)}`;
+    const reply = tachoFrame(
+      tachoRow(10, "oxagen:message", {
+        contentDigest: digest,
+        bytesRef: "evb:v1:k:" + "e".repeat(64),
+        body: JSON.stringify({
+          last_assistant_message_digest: digest,
+          response_length: 12,
+          message_final: true,
+        }),
+      }),
+    );
+    expect(reply.phase).toBe("response");
+    const prompt = tachoFrame(
+      tachoRow(11, "oxagen:message", {
+        body: JSON.stringify({ prompt_digest: digest, prompt_length: 3 }),
+      }),
+    );
+    expect(prompt.phase).toBe("single");
+    const delta = tachoFrame(
+      tachoRow(12, "oxagen:message", {
+        body: JSON.stringify({ response_digest: digest }),
+      }),
+    );
+    expect(delta.phase).toBe("single");
+    expect(tachoFrame(tachoRow(13, "oxagen:message")).phase).toBe("single");
   });
 
   it("names a stage for every wrapped kind and reads the ClickHouse timestamp as UTC", () => {
@@ -876,5 +908,303 @@ describe("transcript reasoning splits", () => {
       output: 9,
       reasoning: 4,
     });
+  });
+});
+
+const ROOT_UUID = "0192d4a8-7c1e-7a00-8000-00000000000a";
+const CHILD_A = "0192d4a8-7c1e-7a00-8000-0000000000c1";
+const CHILD_B = "0192d4a8-7c1e-7a00-8000-0000000000c2";
+const GRANDCHILD = "0192d4a8-7c1e-7a00-8000-0000000000c3";
+
+/** A frame on a subagent's chain, as the run-wide read returns it. */
+function childRow(
+  session: string,
+  seq: number,
+  kind: string,
+  over: Partial<Parameters<typeof tachoFrame>[0]> = {},
+  parent = ROOT_UUID,
+) {
+  return tachoRow(seq, kind, {
+    sessionUuid: session,
+    rootSessionUuid: ROOT_UUID,
+    parentSessionUuid: parent,
+    subagentId: `agent-${session.slice(-2)}`,
+    subagentType: "Explore",
+    spawnToolUseId: `toolu_task_${session.slice(-2)}`,
+    ...over,
+  });
+}
+
+const at = (second: number) =>
+  `2026-09-11 09:00:${String(second).padStart(2, "0")}.000`;
+
+describe("subagent chains in the run's frames", () => {
+  // Subagent work used to reach no transcript: the run read only the root
+  // session's chain, while its cost counted every chain under the root.
+  it("projects a subagent row's chain, and a spawn's subagent (negative: a root row names none)", () => {
+    const child = tachoFrame(childRow(CHILD_A, 3, "llm_call"));
+    expect(child.chain).toEqual({
+      sessionUuid: CHILD_A,
+      parentSessionUuid: ROOT_UUID,
+      subagentId: "agent-c1",
+      subagentType: "Explore",
+      spawnToolUseId: "toolu_task_c1",
+    });
+    expect(frameKey(child)).toBe(`${CHILD_A}:3`);
+    const own = tachoFrame(tachoRow(3, "llm_call"));
+    expect(own.chain).toBeUndefined();
+    expect(frameKey(own)).toBe("3");
+    // A root row read by the run-wide reader names the root as its session.
+    expect(
+      tachoFrame(
+        tachoRow(4, "turn_end", {
+          sessionUuid: ROOT_UUID,
+          rootSessionUuid: ROOT_UUID,
+        }),
+      ).chain,
+    ).toBeUndefined();
+    const spawn = tachoFrame(
+      tachoRow(5, "subagent_start", {
+        toolUseId: "toolu_task_c1",
+        attrs: { "hook.agent_id": "agent-c1" },
+      }),
+    );
+    expect(spawn.spawn).toEqual({
+      subagentId: "agent-c1",
+      toolUseId: "toolu_task_c1",
+    });
+  });
+
+  it("splices each chain whole after the subagent_start that spawned it, nested chains inside their parent", () => {
+    const root = [
+      tachoRow(0, "turn_start", { ts: at(0) }),
+      tachoRow(1, "tool_requested", {
+        ts: at(1),
+        toolName: "Task",
+        toolUseId: "toolu_task_c1",
+      }),
+      tachoRow(2, "subagent_start", {
+        ts: at(2),
+        toolUseId: "toolu_task_c1",
+        attrs: { "hook.agent_id": "agent-c1" },
+      }),
+      // The parent records on while the subagent works.
+      tachoRow(3, "oxagen:message", { ts: at(4) }),
+      tachoRow(4, "tool_call", {
+        ts: at(9),
+        toolName: "Task",
+        toolUseId: "toolu_task_c1",
+      }),
+      tachoRow(5, "turn_end", { ts: at(10) }),
+    ].map(tachoFrame);
+    const children = [
+      childRow(CHILD_A, 0, "agent_start", { ts: at(3) }),
+      childRow(CHILD_A, 1, "subagent_start", {
+        ts: at(5),
+        toolUseId: "toolu_task_c3",
+      }),
+      childRow(CHILD_A, 2, "turn_end", { ts: at(8) }),
+      childRow(GRANDCHILD, 0, "llm_call", { ts: at(6) }, CHILD_A),
+    ].map(tachoFrame);
+    const merged = spliceSubagentChains(root, children);
+    expect(merged.map(frameKey)).toEqual([
+      "0",
+      "1",
+      "2",
+      `${CHILD_A}:0`,
+      `${CHILD_A}:1`,
+      `${GRANDCHILD}:0`,
+      `${CHILD_A}:2`,
+      "3",
+      "4",
+      "5",
+    ]);
+    // The parent's Task call still pairs with its own result across the
+    // subagent's frames, because pairing keys on the call id.
+    const steps = foldTranscript(merged, "steps");
+    const task = steps.find(
+      (fold) => fold.opening.seq === "1" && !fold.opening.chain,
+    );
+    expect(task?.request?.seq).toBe("1");
+    expect(task?.response?.seq).toBe("4");
+    expect(task?.response?.chain).toBeUndefined();
+  });
+
+  it("places a chain with no recorded spawn by when it began, and one whose parent is unread under the root (negative: nothing dropped)", () => {
+    const root = [
+      tachoRow(0, "turn_start", { ts: at(0) }),
+      tachoRow(1, "llm_call", { ts: at(5) }),
+      tachoRow(2, "turn_end", { ts: at(9) }),
+    ].map(tachoFrame);
+    const children = [
+      childRow(CHILD_A, 0, "agent_start", { ts: at(3) }),
+      childRow(CHILD_A, 1, "agent_stop", { ts: at(4) }),
+      childRow(CHILD_B, 0, "agent_start", { ts: at(20) }, GRANDCHILD),
+    ].map(tachoFrame);
+    const merged = spliceSubagentChains(root, children);
+    expect(merged.map(frameKey)).toEqual([
+      "0",
+      `${CHILD_A}:0`,
+      `${CHILD_A}:1`,
+      "1",
+      "2",
+      `${CHILD_B}:0`,
+    ]);
+    expect(spliceSubagentChains(root, [])).toEqual(root);
+  });
+
+  it("a subagent's own turn_start opens no turn of the run and takes no turn number", () => {
+    const root = [
+      tachoRow(0, "turn_start", { ts: at(0), turnSeq: 1 }),
+      tachoRow(1, "subagent_start", { ts: at(1), toolUseId: "toolu_task_c1" }),
+      tachoRow(2, "turn_end", { ts: at(9), turnSeq: 1 }),
+      tachoRow(3, "turn_start", { ts: at(10), turnSeq: 2 }),
+    ].map(tachoFrame);
+    const children = [
+      childRow(CHILD_A, 0, "turn_start", { ts: at(2), turnSeq: 1 }),
+      childRow(CHILD_A, 1, "llm_call", { ts: at(3), turnSeq: 1 }),
+    ].map(tachoFrame);
+    const merged = spliceSubagentChains(root, children);
+    expect(turnOrdinals(merged)).toEqual([1, 1, 1, 1, 1, 2]);
+    const turns = foldTranscript(merged, "turns");
+    expect(turns.map((fold) => fold.opening.seq)).toEqual(["0", "3"]);
+    expect(turns[0]?.last.seq).toBe("2");
+    expect(turns[0]?.frames).toBe(5);
+  });
+});
+
+describe("one model call reported by several sources", () => {
+  const DUP = "oxagen.llm_call_duplicate_of";
+  const body = JSON.stringify({
+    request_id: "req_1",
+    input_tokens: 10,
+    output_tokens: 5,
+  });
+  const retained = (seq: number) => ({
+    contentDigest: `sha256:${String(seq).padStart(64, "e")}`,
+    bytesRef: `evb:v1:k:${String(seq).padStart(64, "e")}`,
+  });
+
+  it("carries no cost on a later sighting (negative: the first sighting keeps its cost)", () => {
+    const first = tachoFrame(
+      tachoRow(1, "llm_call", {
+        body,
+        source: "otel_log",
+        costUsdMicros: 900,
+      }),
+    );
+    const copy = tachoFrame(
+      tachoRow(2, "llm_call", {
+        body,
+        source: "transcript",
+        attrs: { [DUP]: "otel_log" },
+        costUsdMicros: 900,
+      }),
+    );
+    expect(first.costMicros).toBe(900);
+    expect(first.llmCall).toEqual({
+      duplicateOf: null,
+      keys: ["request:req_1"],
+      source: "otel_log",
+    });
+    expect(copy.costMicros).toBeNull();
+    expect(copy.llmCall?.duplicateOf).toBe("otel_log");
+  });
+
+  it("hides a copy with no body, keeps the richer body, and moves the counted spend onto the frame kept", () => {
+    // A copy with nothing to read is hidden; the call is one step.
+    const proxied = [
+      tachoRow(1, "llm_call", {
+        body,
+        source: "collector",
+        costUsdMicros: 700,
+        ...retained(1),
+      }),
+      tachoRow(2, "llm_call", {
+        body,
+        source: "otel_log",
+        attrs: { [DUP]: "collector" },
+      }),
+      // The transcript's text of the same message: the proxy's stream holds
+      // every block of it, so the stream is kept.
+      tachoRow(3, "llm_call", {
+        body,
+        source: "transcript",
+        attrs: { [DUP]: "collector" },
+        ...retained(3),
+      }),
+    ].map(tachoFrame);
+    expect(withoutDuplicateModelCalls(proxied).map((f) => f.seq)).toEqual([
+      "1",
+    ]);
+    // The first sighting kept no body and the copy did: the copy is shown,
+    // with the spend the first sighting carried.
+    const otelFirst = [
+      tachoRow(1, "llm_call", {
+        body,
+        source: "otel_log",
+        costUsdMicros: 700,
+      }),
+      tachoRow(2, "llm_call", {
+        body,
+        source: "transcript",
+        attrs: { [DUP]: "otel_log" },
+        ...retained(2),
+      }),
+    ].map(tachoFrame);
+    const kept = withoutDuplicateModelCalls(otelFirst);
+    expect(kept.map((f) => f.seq)).toEqual(["2"]);
+    expect(kept[0]?.costMicros).toBe(700);
+    // Two different calls are both kept (negative).
+    const two = [
+      tachoRow(1, "llm_call", { body, source: "otel_log" }),
+      tachoRow(2, "llm_call", {
+        body: JSON.stringify({ request_id: "req_2" }),
+        source: "transcript",
+        attrs: { [DUP]: "otel_log" },
+      }),
+    ].map(tachoFrame);
+    expect(withoutDuplicateModelCalls(two)).toHaveLength(2);
+  });
+
+  it("keeps a transcript message's later blocks with its first, and drops them with it", () => {
+    // Each later block of one transcript message is stamped a duplicate of
+    // `transcript`: it is the rest of the message, not a copy of it.
+    const block = (seq: number) =>
+      tachoRow(seq, "llm_call", {
+        body,
+        source: "transcript",
+        attrs: { [DUP]: "transcript" },
+        ...retained(seq),
+      });
+    const alone = [
+      tachoRow(1, "llm_call", { body, source: "transcript", ...retained(1) }),
+      block(2),
+      block(3),
+    ].map(tachoFrame);
+    expect(withoutDuplicateModelCalls(alone).map((f) => f.seq)).toEqual([
+      "1",
+      "2",
+      "3",
+    ]);
+    // The proxy's stream holds the whole message: the transcript's first
+    // block and its later blocks all give way to it.
+    const proxied = [
+      tachoRow(1, "llm_call", {
+        body,
+        source: "collector",
+        ...retained(1),
+      }),
+      tachoRow(2, "llm_call", {
+        body,
+        source: "transcript",
+        attrs: { [DUP]: "collector" },
+        ...retained(2),
+      }),
+      block(3),
+    ].map(tachoFrame);
+    expect(withoutDuplicateModelCalls(proxied).map((f) => f.seq)).toEqual([
+      "1",
+    ]);
   });
 });

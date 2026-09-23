@@ -11,7 +11,7 @@
 // the tab shows the ceilings that do govern this agent, says plainly that no
 // per-agent one exists, and sends the write to Spend, where the contract's
 // scopes live. Agent-scope budgets wait on an ADR for the scopes
-// `billing.budgets` accepts (docs/mission-control/BUILD-CHUNKS.md).
+// `billing.budgets` accepts (oxagen-roadmap:docs/oxagen/mission-control/BUILD-CHUNKS.md).
 //
 // The read is `source.spend.budgets`, not a port method of its own: it is the
 // same record the Spend page's Budgets tab reads, and reading it under the

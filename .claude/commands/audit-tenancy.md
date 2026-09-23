@@ -65,9 +65,9 @@ For every table in `packages/database/src/schema/`:
 
 ## Output
 
-`mkdir -p docs/audits/tenancy-audits`
+`mkdir -p verifications/audits/tenancy-audits`
 
-Write: `docs/audits/tenancy-audits/<SHORT_SHA>_<TIMESTAMP>_tenancy-audit.html`
+Write: `verifications/audits/tenancy-audits/<SHORT_SHA>_<TIMESTAMP>_tenancy-audit.html`
 
 Self-contained HTML (all CSS + JS inline). Must contain:
 

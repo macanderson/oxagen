@@ -3,7 +3,9 @@ import { z } from "zod";
 // ─────────────────────────────────────────────────────────────────────────────
 // Oxagen Agent Schema — runtime-validated source of truth.
 // ─────────────────────────────────────────────────────────────────────────────
-// This module is the executable implementation of docs/reference/agent-schema.ts.
+// This module is the executable implementation of the agent schema design.
+// The design copy that sat at docs/reference/agent-schema.ts duplicated it and
+// was removed on 2026-09-23 (#3895); git history keeps it.
 // An agent DEFINITION is the versioned, declarative source of truth (what the
 // agent is, what it loads, how it reaches the graph, and whether it is
 // deployed). Triggers belong to automations/playbooks, not the agent — a
