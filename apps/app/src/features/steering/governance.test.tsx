@@ -122,9 +122,18 @@ describe("the governance dialog", () => {
     expect(within(dialog).getByTestId("governance-toml")).toHaveTextContent(
       'mode = "team" separation_of_duties = false',
     );
-    expect(dialog).toHaveTextContent(
-      "The mode is read off the file when a pull request is opened and again when it is merged, so raising it takes effect on everything already in flight. Lowering it is an org-owner action with approval, recorded as a security event.",
+    expect(within(dialog).getByTestId("governance-note")).toHaveTextContent(
+      "The mode is read off the file when a pull request is opened and again when it is merged, so raising it takes effect on everything already in flight.",
     );
+    // A lowering needs no org-owner approval yet, so the dialog names the
+    // issue rather than promising one (#3859).
+    expect(dialog).not.toHaveTextContent("Lowering it is an org-owner action");
+    expect(within(dialog).getByTestId("governance-gap")).toHaveTextContent(
+      "Not recorded yet: an org-owner approval and a security event when the mode is lowered. Tracked in #3859.",
+    );
+    expect(
+      within(dialog).getByRole("button", { name: "Close the dialog" }),
+    ).toBeVisible();
     expect(
       within(dialog).getByRole("button", { name: "Cancel" }),
     ).toBeVisible();
@@ -167,7 +176,11 @@ describe("the governance dialog", () => {
     );
     await waitFor(() => {
       expect(within(dialog).getByRole("status")).toHaveTextContent(
-        "Context PR opened on acme/platform: .oxagen/rules/governance.toml sets mode = regulated. It takes effect on merge for everything already in flight; nothing else in Oxagen writes that file.",
+        "Pull request opened on acme/platform: .oxagen/rules/governance.toml sets mode = regulated. It takes effect on merge for everything already in flight; nothing else in Oxagen writes that file.",
+      );
+      // set_governance_mode opens an ordinary pull request, not a Context PR.
+      expect(within(dialog).getByRole("status")).not.toHaveTextContent(
+        "Context PR",
       );
     });
     expect(setGovernanceMode).toHaveBeenCalledExactlyOnceWith(
@@ -184,6 +197,17 @@ describe("the governance dialog", () => {
     ).toBeNull();
   });
 
+  it("closes from the header ×", async () => {
+    renderChip();
+    const dialog = openDialog();
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Close the dialog" }),
+    );
+    await waitFor(() => {
+      expect(screen.queryByTestId("governance-dialog")).toBeNull();
+    });
+  });
+
   it("reports a solo commit as in force now and re-reads the page", async () => {
     setGovernanceMode.mockResolvedValue({
       ok: true,
@@ -198,8 +222,12 @@ describe("the governance dialog", () => {
     renderChip({ state: "read", repository: "acme/platform", mode: "solo" });
     const dialog = openDialog();
     fireEvent.click(within(dialog).getByRole("radio", { name: /^team/ }));
+    // Under solo the change is a commit, and the button says so.
+    expect(
+      within(dialog).queryByRole("button", { name: "Open the Context PR" }),
+    ).toBeNull();
     fireEvent.click(
-      within(dialog).getByRole("button", { name: "Open the Context PR" }),
+      within(dialog).getByRole("button", { name: "Commit the change" }),
     );
     await waitFor(() => {
       expect(within(dialog).getByRole("status")).toHaveTextContent(
