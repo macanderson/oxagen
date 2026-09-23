@@ -7,6 +7,7 @@
 import {
   type ClipboardEvent,
   type KeyboardEvent,
+  useEffect,
   useId,
   useRef,
   useState,
@@ -26,6 +27,7 @@ export function CodeInput({
   label,
   digitLabel,
   error,
+  autoFocus = false,
 }: {
   id: string;
   name: string;
@@ -34,6 +36,8 @@ export function CodeInput({
   digitLabel: (n: number) => string;
   /** Already-translated error text; renders under the boxes and marks them invalid. */
   error?: string | undefined;
+  /** Focus the first box on mount: set after a refused code, so the next one can be typed at once. */
+  autoFocus?: boolean;
 }) {
   const labelId = useId();
   const errorId = `${id}-error`;
@@ -41,6 +45,10 @@ export function CodeInput({
     Array.from({ length: LENGTH }, () => ""),
   );
   const boxes = useRef<(HTMLInputElement | null)[]>([]);
+
+  useEffect(() => {
+    if (autoFocus) boxes.current[0]?.focus();
+  }, [autoFocus]);
 
   function focus(index: number) {
     boxes.current[Math.max(0, Math.min(LENGTH - 1, index))]?.focus();

@@ -6,7 +6,7 @@
 // password step was for, which only this browser tab knows.
 
 import { useTranslations } from "next-intl";
-import { type SyntheticEvent, useEffect, useState } from "react";
+import { type SyntheticEvent, useEffect, useRef, useState } from "react";
 import type { AuthOutcomeKey } from "./auth-errors";
 import {
   liveVerifyTwoFactor,
@@ -78,7 +78,11 @@ export function TwoFactorForm({
   // A refused code clears the boxes by remounting them.
   const [attempt, setAttempt] = useState(0);
 
+  // Taken once per mount; the ref keeps a development double-run from taking it twice.
+  const took = useRef(false);
   useEffect(() => {
+    if (took.current) return;
+    took.current = true;
     setEmail(takePendingEmail());
   }, []);
 
@@ -146,6 +150,7 @@ export function TwoFactorForm({
           {method === "totp" ? (
             <CodeInput
               key={`totp-${attempt}`}
+              autoFocus={attempt > 0}
               id="two-factor-code"
               name="code"
               label={t("fields.code")}

@@ -7,6 +7,7 @@ import {
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { routes } from "@/shared/safe-path";
@@ -625,6 +626,25 @@ describe("TwoFactorForm", () => {
     );
   });
 
+  it("takes the remembered address once, even when React runs effects twice", async () => {
+    live.takePendingEmail.mockReturnValueOnce("marcus@a-intel.example");
+    render(
+      <StrictMode>
+        <IntlProvider>
+          <TwoFactorForm
+            next={routes.root()}
+            eyebrow="Step 2 of 2"
+            title="Two-factor authentication"
+          />
+        </IntlProvider>
+      </StrictMode>,
+    );
+    await waitFor(() => {
+      expect(document.body).toHaveTextContent("marcus@a-intel.example");
+    });
+    expect(live.takePendingEmail).toHaveBeenCalledTimes(1);
+  });
+
   it("without a remembered address the lead names none", () => {
     renderForm();
     expect(document.body).toHaveTextContent(
@@ -697,6 +717,7 @@ describe("TwoFactorForm", () => {
     const alert = await screen.findByRole("alert");
     expect(alert.querySelector("b")).toHaveTextContent("That code is wrong.");
     for (const n of [1, 2, 3, 4, 5, 6]) expect(box(n)).toHaveValue("");
+    expect(box(1)).toHaveFocus();
 
     live.liveVerifyTwoFactor.mockResolvedValueOnce({ ok: true });
     await typeCode("602914");

@@ -10,6 +10,7 @@ import {
   type ReactNode,
   type SyntheticEvent,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import type { AuthOutcomeKey } from "./auth-errors";
@@ -73,8 +74,12 @@ export function LoginForm({
   const [email, setEmail] = useState("");
   const [notice, setNotice] = useState<AuthNotice | null>(null);
 
-  // A notice another screen left (a password just set) shows once, after hydration.
+  // A notice another screen left (a password just set) shows once, after
+  // hydration; the ref keeps a development double-run from taking it twice.
+  const took = useRef(false);
   useEffect(() => {
+    if (took.current) return;
+    took.current = true;
     setNotice(takeNotice());
   }, []);
 
