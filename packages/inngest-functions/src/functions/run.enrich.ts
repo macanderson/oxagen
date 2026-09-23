@@ -63,7 +63,21 @@ export const [runEnrich] = createFunction(
       eq(table.workspaceId, scope.workspaceId),
       eq(table.publicId, data.runPublicId),
     );
+    const readable = async () =>
+      inScope(() =>
+        withTenantDb(async (tx) => {
+          const rows = await tx
+            .select({ id: table.id })
+            .from(table)
+            .where(where)
+            .limit(1);
+          return rows.length > 0;
+        }),
+      );
+    // Durable read-record output may come from an earlier deployment. Recheck before resuming it.
+    if (!(await readable())) return { status: "not_found" };
     const enabled = async () =>
+      (await readable()) &&
       inScope(() =>
         withTenantDb(async (tx) => {
           const [workspace] = await tx

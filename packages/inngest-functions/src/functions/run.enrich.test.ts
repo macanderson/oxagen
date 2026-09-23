@@ -191,3 +191,17 @@ it("uses root Tacho and V2 ledger predicates for enrichment eligibility", async 
   expect(ledger.sql).toContain('"spec_version" =');
   expect(ledger.params).toEqual([2]);
 });
+
+it("rejects an ineligible queued run before replaying an older durable read step", async () => {
+  state.readable = false;
+  const replay = vi.fn((_name: string, fn: () => unknown) => fn());
+  expect(
+    await state.handlers.get("run/enrich")!({
+      event: { data },
+      events: [{ data }],
+      step: { run: replay },
+    }),
+  ).toEqual({ status: "not_found" });
+  expect(replay).not.toHaveBeenCalled();
+  expect(state.call).not.toHaveBeenCalled();
+});
