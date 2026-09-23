@@ -120,6 +120,14 @@ export const updateWorkspace = defineTool({
     consequenceRoles: workspaceSettingsWrite.input.shape.consequenceRoles,
 
     /**
+     * ADR-153, carried by reference from `update_workspace_settings`: whether
+     * Stella writes run names and summaries on organization credits. It
+     * governs spend and what the Run page shows, not the recorded evidence.
+     */
+    runEnrichmentEnabled:
+      workspaceSettingsWrite.input.shape.runEnrichmentEnabled,
+
+    /**
      * The two steering-freshness gates, carried by reference from
      * `update_workspace_settings`. They belong here for the same reason
      * `governanceMode` does: both decide what happens to a Context record
