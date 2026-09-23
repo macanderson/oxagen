@@ -316,6 +316,11 @@ export function createRunTranscriptGetHandler(
     const scope = runScope(ctx);
     const run = await resolveRun(deps, ctx, input.runId);
     const read = await readAllFrames(deps, run, TRANSCRIPT_FRAME_CAP);
+    let observedUsage = false;
+    for (const frame of read.frames) {
+      if (frame.usageObserved) observedUsage = true;
+      else if (observedUsage && frame.type === "llm_call") frame.usage = null;
+    }
     const frames = filterFramesByKind(read.frames, input.kinds);
     const folds = foldTranscript(frames, input.zoom);
     // Turns are counted over every frame of the run, so a chip filter never
@@ -395,6 +400,7 @@ export function createRunTranscriptGetHandler(
         type: opening.type,
         label: opening.summary,
         callId: opening.identity.callId,
+        usage: fold.usage ?? null,
         kinds: entryKinds(fold),
         request: pair.request,
         response: pair.response,
