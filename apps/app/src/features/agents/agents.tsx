@@ -1,3 +1,4 @@
+import { HarnessLabel } from "@/ui/harness-icon";
 // Agent IAM (ARCHITECTURE.md §1.2 Agents row, #2956): the workspace's
 // identities from one list_agents page. The tiles count the whole workspace
 // (the contract's totals); the table is the page. A figure no store records
@@ -107,7 +108,9 @@ function IdentityRows({
               </SafeLink>
             </td>
             <td className={`${cell} whitespace-nowrap`}>
-              {t(`harness.${agent.harness}`)}
+              <HarnessLabel harness={agent.harness}>
+                {t(`harness.${agent.harness}`)}
+              </HarnessLabel>
             </td>
             <td className={cell}>
               {agent.operatorId === null ? (
