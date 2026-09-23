@@ -36,9 +36,7 @@ export function ShellMobileNav({ data }: { data: ShellData }) {
   const { sections, pathname, ws } = useSidebarSections(data);
   const { setCommandOpen, setNotificationsOpen, openAccount } = useShellState();
   const activity = useShellActivity();
-  const currentCounts = activity?.read?.ok
-    ? activity.read.value.workspaces.find((w) => w.slug === ws)?.counts
-    : null;
+  const currentCounts = activity?.counts;
   const [moreOpen, setMoreOpen] = useState(false);
   const items = new Map<string, NavItem>(
     sections.flatMap((s) => s.items).map((item) => [item.key, item]),

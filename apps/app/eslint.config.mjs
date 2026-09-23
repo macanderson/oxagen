@@ -34,7 +34,7 @@ function restrictedImports(navigationNames) {
       ...(tenancySeamRestrictedImports.patterns ?? []),
       // Lane isolation: a page's features may not import another page's internals.
       {
-        group: ["@/features/*/*"],
+        group: ["@/features/*/*", "!@/features/fleet/client"],
         message:
           "Import a page's public surface from '@/features/<page>', never its internals.",
       },

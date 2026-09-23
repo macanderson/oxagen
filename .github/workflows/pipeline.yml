@@ -1045,6 +1045,16 @@ jobs:
 
   # ==========================================================================
 
+  staging:
+    name: Verify this commit in staging
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [checks, test, e2e, atlas-validate, rls-integration, rds-compatibility]
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/staging.yml
+    secrets: inherit
+
   deploy-web:
     name: deploy oxagen.sh
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -1053,7 +1063,7 @@ jobs:
     # opens no database connection, so a pending migration cannot break it, and
     # blocking the marketing site on the schema would only train people to treat
     # a red gate as noise.
-    needs: [checks, test]
+    needs: [checks, test, staging]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: production
@@ -1161,7 +1171,7 @@ jobs:
     # migration has not landed. The wait is no longer decorative — the gate
     # fails on a real answer from the real stores. See its header for why
     # unknown blocks as well as behind, and why `manual-app-deploy` is exempt.
-    needs: [checks, test, migration-gate]
+    needs: [checks, test, migration-gate, staging]
     # arm64, matching the t4g.large these ship to (verified 2026-09-10 via
     # where-is-production.yml, run 34456388188 — instance `oxagen-app`). An
     # x86 build passes every check here and fails to load a native module

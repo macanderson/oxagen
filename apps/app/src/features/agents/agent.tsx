@@ -1,3 +1,4 @@
+import { HarnessLabel } from "@/ui/harness-icon";
 // One agent (ARCHITECTURE.md §1.2 Agents row, #2956; mockup `pAgent`): the
 // identity card with its status and the writes on it, then one section chosen
 // by `?tab=`. Six sections have a store behind them: Identity (get_agent),
@@ -73,7 +74,9 @@ function Header({
         />
         <p className="flex flex-wrap items-center gap-3 text-xs">
           <AgentStatusBadge status={identity.status} />
-          <span>{t(`harness.${identity.harness}`)}</span>
+          <HarnessLabel harness={identity.harness}>
+            {t(`harness.${identity.harness}`)}
+          </HarnessLabel>
         </p>
         {identity.description === null ? null : (
           <p className="max-w-prose text-sm text-muted-foreground">

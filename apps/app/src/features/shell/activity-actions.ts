@@ -6,10 +6,11 @@ import { notificationsMark } from "@oxagen/oxagen/contracts/notification.mark";
 import { shellNavCountsGet } from "@oxagen/oxagen/contracts/shell.nav_counts.get";
 import { dataSource } from "@/data/source";
 import { readOk } from "@/data/read";
-import { kernelRead, kernelWrite } from "@/server/kernel";
+import type { ActionResult, ContractOutput } from "@/server/kernel";
+import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
 
-export async function readShellActivity(org: string, ws: string | null) {
+async function loadShellActivity(org: string, ws: string | null) {
   const ctx = await requireViewer(org);
   const source = dataSource();
   const context = await source.shell.context(ctx);
@@ -105,13 +106,39 @@ export async function readShellActivity(org: string, ws: string | null) {
   });
 }
 
+type ActivityValue = Extract<
+  Awaited<ReturnType<typeof loadShellActivity>>,
+  { ok: true }
+>["value"];
+
+export async function readShellActivity(
+  org: string,
+  ws: string | null,
+): Promise<ActionResult<ActivityValue>> {
+  return readToActionResult(await loadShellActivity(org, ws));
+}
+
 export async function markShellNotification(
   org: string,
   ws: string | null,
   id: string,
   archived: boolean,
-) {
+): Promise<ActionResult<ContractOutput<typeof notificationsMark>>> {
   const ctx =
     ws === null ? await requireViewer(org) : await requireViewer(org, ws);
   return kernelWrite(ctx, notificationsMark, { id, read: true, archived });
+}
+
+export async function readShellNavCounts(
+  org: string,
+  ws: string,
+): Promise<ActionResult<ContractOutput<typeof shellNavCountsGet>>> {
+  const ctx = await requireViewer(org, ws);
+  return readToActionResult(
+    await kernelRead(ctx, {
+      contract: shellNavCountsGet,
+      input: {},
+      page: "shell",
+    }),
+  );
 }
