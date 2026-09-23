@@ -129,7 +129,6 @@ async function renderRoles(
       connections: vi.fn(),
       mcpServers: vi.fn(),
     },
-    runtimes: { list: vi.fn(), agents: vi.fn() },
   };
   const view = render(
     <IntlProvider>{await Roles({ ctx, source })}</IntlProvider>,
