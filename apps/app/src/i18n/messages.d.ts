@@ -6068,6 +6068,27 @@ type Messages = {
       hint: string;
       invalid: string;
     };
+    pageState: {
+      loading: string;
+      error: {
+        body: string;
+        retry: string;
+        incident: string;
+        trace: string;
+        incidentNotBacked: string;
+      };
+      denied: {
+        body: string;
+        request: string;
+        back: string;
+        requestNotBacked: string;
+        signedIn: string;
+        needed: string;
+        decidedBy: string;
+        decidedByValue: string;
+        policyNotRecorded: string;
+      };
+    };
   };
 };
 

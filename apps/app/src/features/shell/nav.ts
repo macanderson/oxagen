@@ -1,6 +1,6 @@
-// The shell's navigation model (ARCHITECTURE.md §1.2): the sidebar's nine
-// links in the mockup's order (Workspace: Fleet, Agent IAM, Tools,
-// Steering, Repositories, Spend; Organization: Organization, Billing, Audit), the phone's thumb bar and More
+// The shell's navigation model (ARCHITECTURE.md §1.2): the sidebar's ten
+// links in the mockup's order (Workspace: Fleet, Agents, Tools, Steering,
+// Runtimes, Repositories, Spend; Organization: Organization, Billing, Audit), the phone's thumb bar and More
 // sheet over the same keys, which item is current, and the breadcrumbs. Pure
 // functions of the URL, so the sidebar, top bar, command menu and <MobileNav>
 // agree on one model. Run has no entry: it opens from the Fleet runs table.
@@ -14,6 +14,7 @@ export type WorkspaceNavKey =
   | "agents"
   | "tools"
   | "steering"
+  | "runtimes"
   | "repositories"
   | "spend";
 export type OrgNavKey = "organization" | "billing" | "audit";
@@ -26,6 +27,7 @@ export const WORKSPACE_NAV: readonly WorkspaceNavKey[] = [
   "agents",
   "tools",
   "steering",
+  "runtimes",
   "repositories",
   "spend",
 ];
@@ -65,9 +67,10 @@ export const THUMB_SLOTS: readonly ThumbSlot[] = [
   "spend",
 ];
 
-/** The rest of the sidebar, one tap away in the phone's More sheet. */
+/** The rest of the sidebar, one tap away in the phone's More sheet (mockup `DLG_EXT.more`). */
 export const MORE_SHEET: readonly NavKey[] = [
   "steering",
+  "runtimes",
   "repositories",
   "organization",
   "billing",
@@ -100,6 +103,7 @@ const WORKSPACE_SEGMENT: Record<Exclude<WorkspaceNavKey, "fleet">, string> = {
   agents: "agents",
   tools: "tools",
   steering: "steering",
+  runtimes: "runtimes",
   repositories: "repositories",
   spend: "spend",
 };
@@ -269,6 +273,20 @@ export function breadcrumbs(
         if (sub === "source")
           out.push({ kind: "id", text: "source", href: null });
       }
+      break;
+    case "runtimes":
+      // One host (`runtimes/{host}`) sits under the list, as a run sits under
+      // Fleet: Runtimes → the host id (mockup `crumbs()`).
+      if (id === undefined) {
+        out.push({ kind: "nav", key: "runtimes", href: null });
+        break;
+      }
+      out.push({
+        kind: "nav",
+        key: "runtimes",
+        href: pathOf(org, ws, "runtimes"),
+      });
+      out.push({ kind: "id", text: id, href: null });
       break;
     case "mandates":
       // Flat route (ARCHITECTURE.md §1.2): the mandate is not nested under
