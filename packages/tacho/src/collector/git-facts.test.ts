@@ -180,8 +180,8 @@ describe("readGitFacts", () => {
       };
     };
     await readGitFacts(exec, "/repo");
-    // `HEAD` alone, then branch, status and remote at once.
-    expect(peak).toBe(3);
+    // `HEAD` alone, then branch, status, remote and root at once.
+    expect(peak).toBe(4);
   });
 
   it("reads without taking the index lock", async () => {
