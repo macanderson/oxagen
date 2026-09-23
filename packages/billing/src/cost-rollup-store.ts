@@ -531,6 +531,7 @@ export async function upsertRunTotals(
         ? null
         : record.productiveRatio.toFixed(8),
   };
+  // tenancy: the global rollup worker writes the resolved run's orgId and workspaceId, keyed by its unique runId.
   await withSystemDb((tx) =>
     tx
       .insert(totals)
