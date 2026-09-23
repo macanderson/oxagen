@@ -13,8 +13,9 @@ export const meta = {
 
 // args: { branch (required: the session's push branch), session (required: the session id, e.g. session_01...),
 //         only (lane ids to build; default all), prTitle, repo, roadmap, worktrees }
-// Lanes: shell, fleet, agents, runtimes, billing, steering-hub, steering-library, steering-tabs.
-// steering-library and steering-tabs build on steering-hub, so run the three together.
+// Lanes: shell, fleet, agents, runtimes, billing, steering-hub, steering-library, steering-tabs, skills, run, agent,
+//        mandate, tools, spend, record-repositories, organization, audit, register, auth, onboarding.
+// steering-library, steering-tabs and skills build on steering-hub when it is in the same run; otherwise on origin/main.
 const cfg = Object.assign({ only: null, repo: '/home/user/oxagen', roadmap: '/home/user/macanderson/oxagen-roadmap', worktrees: '/home/user/oxagen-worktrees' }, args || {})
 if (!cfg.branch || !cfg.session) throw new Error('pass args.branch and args.session')
 const REPO = cfg.repo
@@ -92,6 +93,66 @@ const LANES = [
     id: 'steering-tabs', specs: ['steering-assignments', 'steering-gates', 'steering-proposals', 'steering-compiler'], routes: '/[org]/[ws]/steering/assignments|gates|proposals|compiler', dependsOn: 'steering-hub',
     owns: 'the Assignments, Gates, Proposals and Compiler tab body files under apps/app/src/features/steering/ that the hub lane created (plus the existing proposals/context-pr files), their data contracts and live adapters, messages sub-keys for those tabs',
     task: 'Fill the Assignments, Gates, Proposals and Compiler tabs of Steering exactly as steering-assignments.md, steering-gates.md, steering-proposals.md and steering-compiler.md, in every state each spec lists. The Compiler reads the one assembler (packages/steering-assembler) through whatever capability exposes it; where none exists, NotBacked plus an issue.',
+  },
+  {
+    id: 'skills', specs: ['skills', 'skills-off', 'skill-source'], routes: '/[org]/[ws]/steering/skills[/<view>] and /steering/skills/<id>/source (the old /[org]/[ws]/skills… routes redirect there)', dependsOn: 'steering-hub',
+    owns: 'apps/app/src/features/skills/**, apps/app/src/app/[org]/[ws]/skills/**, the Skills shelf route under apps/app/src/app/[org]/[ws]/steering/, apps/app/src/data/live/skills.ts and its contract, messages namespace "skills"',
+    task: 'The Skills shelf of the Steering Library exactly as skills.md, skills-off.md (the off-by-default gate, loaded state only) and skill-source.md (no empty state): sync, resolution, the seat in the loop, reflection, the cited rate, the interjection, and every state. Skills has no nav entry; it is a shelf, and the shelf row from the hub shows on it. If the steering hub is not on your base, build the shelf body and routes so the hub can mount them, and note it under coordination.',
+  },
+  {
+    id: 'run', specs: ['run', 'run-interjection'], routes: '/[org]/[ws]/runs/[run]',
+    owns: 'apps/app/src/features/run/**, apps/app/src/app/[org]/[ws]/runs/**, apps/app/src/data/live/runs.ts run-detail paths and data/contracts/run.ts, messages namespace "run"',
+    task: 'The Run page exactly as run.md and run-interjection.md: the generated summary, the stat row (Tokens, Prompts, Cost, Wasted, Wall clock, Cache hit), the tabs (Transcript, Issues, Governed actions, Cost, Policy, Context, Chain and seal) in the two-thirds column, the right-hand Repository panel, outputs and spend by area, the interjection card and its answer flow, every dialog and every state. Open PRs #3778, #3779 and #3773 touch run outcomes, checkout evidence and run summaries: read their diffs and build compatibly.',
+  },
+  {
+    id: 'agent', specs: ['agent', 'agent-source'], routes: '/[org]/[ws]/agents/[agent][/<tab>] and /[org]/[ws]/agents/[agent]/source',
+    owns: 'the agent detail files in apps/app/src/features/agents/ (agent.tsx, agent-source.tsx, identity, enrollment, toolbelt, budget-panel, role-controls, kill-switch, incidents, mandates, definition*, source-editor and their tests; not agents.tsx), apps/app/src/app/[org]/[ws]/agents/[agent]/**, agent-detail paths in data/live/agents.ts, messages sub-keys for the agent detail',
+    task: 'The agent detail exactly as agent.md (every tab: overview, Toolbelt, Steering, Runtime, Permissions, Activity, with the coaching strip in place of any score) and agent-source.md, in every state each lists. The Agents list page belongs to another lane; do not edit agents.tsx.',
+  },
+  {
+    id: 'mandate', specs: ['mandate'], routes: '/[org]/[ws]/mandates/[mandate] (the design route is /agents/<agent>/mandates/<id>; make both land)',
+    owns: 'apps/app/src/features/mandate/**, apps/app/src/app/[org]/[ws]/mandates/**, a mandate route under agents/[agent]/ if the design needs it, data/live/mandates.ts and its contract, messages namespace "mandate"',
+    task: 'The Mandate page exactly as mandate.md: every region, the grant and ledger, dialogs, and every state.',
+  },
+  {
+    id: 'tools', specs: ['tools'], routes: '/[org]/[ws]/tools[/<tab>]',
+    owns: 'apps/app/src/features/tools/**, apps/app/src/app/[org]/[ws]/tools/**, data/live/tools.ts and its contract, messages namespace "tools"',
+    task: 'The Tools page exactly as tools.md, all five of its tabs (Toolbelts and Providers among them) as URL path segments, with every table, dialog, the auto-approval rules and every state.',
+  },
+  {
+    id: 'spend', specs: ['spend'], routes: '/[org]/[ws]/spend[/<tab>]',
+    owns: 'apps/app/src/features/spend/**, apps/app/src/app/[org]/[ws]/spend/**, data/live/spend.ts and its contract, messages namespace "spend"',
+    task: 'The Spend page exactly as spend.md, including the Tokens tab (the month by class, by prompt part, by harness with its basis, by agent) and the Coaching tab, with every money figure showing its basis and every state.',
+  },
+  {
+    id: 'record-repositories', specs: ['record', 'repositories'], routes: '/[org]/[ws]/steering/records/[lineage] and /[org]/[ws]/repositories[/<tab>]',
+    owns: 'apps/app/src/features/record/**, apps/app/src/features/repositories/**, apps/app/src/app/[org]/[ws]/steering/records/[lineage]/**, apps/app/src/app/[org]/[ws]/repositories/**, their data contracts and live adapters, messages namespaces "record" and "repositories"',
+    task: 'The context record page exactly as record.md (no empty state) and Repositories exactly as repositories.md, in every state. The creation wizards that end at these pages are specified in docs/creation-spec.md in oxagen-roadmap; keep the existing wizards in apps/app/src/features/create working.',
+  },
+  {
+    id: 'organization', specs: ['organization', 'organization-api-keys', 'organization-roles'], routes: '/[org], /[org]/api-keys, /[org]/roles',
+    owns: 'apps/app/src/features/organization/** except model-funding* and sso* files, apps/app/src/app/[org]/page.tsx, apps/app/src/app/[org]/api-keys/**, apps/app/src/app/[org]/roles/**, data/live/org.ts and its contract, messages namespace "organization"',
+    task: 'Organization, API keys and Roles exactly as organization.md, organization-api-keys.md and organization-roles.md: people, invitations, workspaces with their governance mode read off the workspace, keys, roles, every dialog and every state. Model funding and SSO have no mock spec: leave them working and reachable. Open PR #3777 resurfaces organization sections: read its diff and build compatibly.',
+  },
+  {
+    id: 'audit', specs: ['audit'], routes: '/[org]/audit',
+    owns: 'apps/app/src/features/audit/**, apps/app/src/app/[org]/audit/**, data/live/audit.ts and its contract, messages namespace "audit"',
+    task: 'The Audit page exactly as audit.md: filters, the event table, export, incidents, every dialog and every state.',
+  },
+  {
+    id: 'register', specs: ['register-name', 'register-wrap', 'register-run'], routes: '/[org]/[ws]/register/[step] (name, wrap, run)',
+    owns: 'apps/app/src/app/[org]/[ws]/register/**, the register files in apps/app/src/features/onboarding/ (register.tsx, gate.tsx, rail.tsx, steps.ts, agent-form.ts and their tests), messages sub-keys for register',
+    task: 'The three-step Register Agent gate exactly as register-name.md, register-wrap.md and register-run.md, in the states each lists (name and wrap: loaded, loading, denied; run: also error). The onboarding lane shares features/onboarding: touch only the register files.',
+  },
+  {
+    id: 'auth', specs: ['signup', 'verify-email', 'login', 'two-factor', 'forgot-password', 'reset-password', 'accept-invitation'], routes: '/signup, /verify, /login, /two-factor, /forgot-password, /reset-password, /invite/[token]',
+    owns: 'apps/app/src/features/auth/** (not cli-* files), apps/app/src/app/(auth)/**, messages namespace "auth"',
+    task: 'The seven sign-in screens exactly as their specs, in the states each lists (none has an empty state). Login, sign-up and payment are covered by the login and pay Playwright specs in apps/app/e2e: keep every selector those specs use working, and do not change auth behaviour, only its presentation and copy. Better Auth rate limiting and the CLI consent flow must keep working.',
+  },
+  {
+    id: 'onboarding', specs: ['onboarding-organization', 'onboarding-wrap', 'onboarding-run', 'installer'], routes: '/new-organization and the onboarding wrap, run and installer steps the specs name',
+    owns: 'apps/app/src/app/(onboarding)/**, the onboarding files in apps/app/src/features/onboarding/ (new-organization.tsx, org-form.ts, actions.ts, ui/ and their tests; not the register files), messages namespace "onboarding"',
+    task: 'The onboarding gate exactly as onboarding-organization.md, onboarding-wrap.md, onboarding-run.md and installer.md, in the states each lists (the installer has loaded and error). Wrap, run and installer have no route today: add them where the spec places them, and keep the post-signup redirect to Fleet working.',
   },
 ]
 
@@ -232,12 +293,13 @@ await agent(`Run: test -d ${ROADMAP}/mockups/pages || (mkdir -p $(dirname ${ROAD
 
 let hubResolve
 const hubReady = new Promise(r => { hubResolve = r })
+if (!lanes.some(l => l.id === 'steering-hub')) hubResolve(null)
 
 const results = await parallel(lanes.map(lane => async () => {
   let base = 'origin/main'
   if (lane.dependsOn === 'steering-hub') {
     const hub = await hubReady
-    if (!hub) { log(`${lane.id}: hub lane failed; building from origin/main`) } else { base = `page/steering-hub` }
+    if (!hub) { log(`${lane.id}: no steering-hub lane in this run (or it failed); building from origin/main`) } else { base = `page/steering-hub` }
   }
   const r = await runLane(lane, base)
   if (lane.id === 'steering-hub') hubResolve(r && r.built)
@@ -245,7 +307,6 @@ const results = await parallel(lanes.map(lane => async () => {
   const merged = await serial(() => agent(integratePrompt(lane, r.built), { label: `integrate:${lane.id}`, phase: 'Integrate', agentType: 'general-purpose' }))
   return { ...r, merged }
 }))
-if (!lanes.some(l => l.id === 'steering-hub')) hubResolve(null)
 
 const done = results.filter(Boolean)
 const scoreboard = done.map(r => ({
