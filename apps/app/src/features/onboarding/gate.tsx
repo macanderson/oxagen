@@ -2,57 +2,26 @@
 // gate is open, the provisional-workspace banner while no main repository is
 // bound, and the first-run banner once the first frame opened the gate.
 //
+// The provisional banner names the workspace by its name, as the design does,
+// when the gate's workspace is the one the page is on; another workspace's
+// gate falls back to its slug, the only label the gate record carries.
+//
 // An organization that predates the gate has no row: it reads as `unlocked`
 // with no provisional window, so nothing is drawn. A read that failed draws
 // nothing either — the gate is a banner over Fleet, and Fleet's own sections
 // report their own failures (§3.6).
 import "server-only";
 import { useTranslations } from "next-intl";
-import type { ReactNode } from "react";
 import type { OnboardingGate as Gate } from "@/data/contracts/onboarding";
 import type { DataSource } from "@/data/ports";
-import type { OrgCtx, WsCtx } from "@/server/viewer";
-import { routes } from "@/shared/safe-path";
-import { linkText, mono, panel } from "@/ui/control-styles";
-import { SafeLink } from "@/ui/navigation";
+import { type OrgCtx, WsCtx } from "@/server/viewer";
+import { panel } from "@/ui/control-styles";
 import { Rail, type RailStep } from "./rail";
+import { GateBanner } from "./ui/banner";
 import { BindRepository } from "./ui/bind-repository";
+import { FirstRunBanner } from "./ui/first-run";
 import { gateRail, type GateStep } from "./steps";
 import { useFormatter } from "@/ui/formatter";
-
-function Banner({
-  testId,
-  badge,
-  title,
-  children,
-  action,
-}: {
-  testId: string;
-  badge: string;
-  title: string;
-  children: ReactNode;
-  action?: ReactNode;
-}) {
-  return (
-    <section
-      data-testid={testId}
-      className={`rounded-xl border border-border bg-banner text-card-foreground shadow-sm flex flex-col gap-2 p-4 sm:flex-row sm:items-start sm:gap-4`}
-    >
-      <span className="inline-flex flex-none items-center rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-        {badge}
-      </span>
-      <div className="flex min-w-0 flex-col gap-1">
-        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
-        <div className="max-w-prose text-sm text-muted-foreground">
-          {children}
-        </div>
-      </div>
-      {action === undefined ? null : (
-        <div className="flex flex-none items-center">{action}</div>
-      )}
-    </section>
-  );
-}
 
 function GateRail({
   step,
@@ -104,9 +73,10 @@ function Provisional({
     dateStyle: "medium",
   });
   return (
-    <Banner
+    <GateBanner
       testId="onboarding-provisional"
       badge={t("badge")}
+      tone="denied"
       title={t("title", { workspace, until })}
       action={
         repository === null ? undefined : (
@@ -130,38 +100,26 @@ function Provisional({
     >
       <p>{t("body")}</p>
       {repository === null ? <p>{t("noRepository")}</p> : null}
-    </Banner>
+    </GateBanner>
   );
 }
 
-function FirstRun({
-  runId,
-  org,
-  ws,
-}: {
-  runId: string;
-  org: string;
-  ws: string;
-}) {
-  const t = useTranslations("onboarding.gate.firstRun");
-  return (
-    <Banner
-      testId="onboarding-first-run"
-      badge={t("badge")}
-      title={t("title")}
-      action={
-        <SafeLink to={routes.run(org, ws, runId)} className={linkText}>
-          {t("open")}
-        </SafeLink>
-      }
-    >
-      <p>
-        {t.rich("body", {
-          run: () => <span className={mono}>{runId}</span>,
-        })}
-      </p>
-    </Banner>
-  );
+/**
+ * The first run, when it is the only run the workspace holds: the newest
+ * page of `list_runs` is that one run. A workspace with a second run is past
+ * "one run so far", so the banner is not drawn, and a failed read draws
+ * nothing, since Fleet reports its own runs read.
+ */
+async function soleFirstRun(
+  ctx: WsCtx,
+  source: DataSource,
+  runId: string,
+): Promise<{ runId: string; agentKey: string | null } | null> {
+  const read = await source.runs.list(ctx, { cursor: null });
+  if (!read.ok) return null;
+  const [only, ...rest] = read.value.runs;
+  if (only === undefined || rest.length > 0 || only.id !== runId) return null;
+  return { runId: only.id, agentKey: only.agentKey };
 }
 
 /**
@@ -189,7 +147,11 @@ export async function OnboardingGate({
     gate.provisional !== null && gate.provisional.mainRepoBoundAt === null
       ? gate.provisional
       : null;
-  const firstRunId = provisional === null ? null : gate.firstRunId;
+  const onPage = WsCtx.is(ctx) && ctx.wsSlug === workspace.slug ? ctx : null;
+  const firstRun =
+    provisional === null || gate.firstRunId === null || onPage === null
+      ? null
+      : await soleFirstRun(onPage, source, gate.firstRunId);
   if (gate.step === "unlocked" && provisional === null) return null;
   return (
     <div className="flex flex-col gap-3">
@@ -199,13 +161,13 @@ export async function OnboardingGate({
       {provisional === null ? null : (
         <Provisional
           provisional={provisional}
-          workspace={workspace.slug}
+          workspace={onPage?.wsName ?? workspace.slug}
           org={org}
           ws={ws}
         />
       )}
-      {firstRunId === null ? null : (
-        <FirstRun runId={firstRunId} org={org} ws={ws} />
+      {firstRun === null ? null : (
+        <FirstRunBanner runId={firstRun.runId} agentKey={firstRun.agentKey} />
       )}
     </div>
   );

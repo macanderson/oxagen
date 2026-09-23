@@ -42,6 +42,8 @@
     },
     "runStatus": {
       "live": "live",
+      "sealed": "sealed",
+      "halted": "halted",
       "running": "running",
       "completed": "completed",
       "failed": "failed",
