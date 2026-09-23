@@ -3,7 +3,7 @@ import { tachoContainedLaunchRegister as contract } from "./tacho.contained_laun
 const input = {
   host_enrollment_id: "tch_0123456789abcdefghjkmn",
   session_uuid: "11111111-1111-4111-8111-111111111111",
-  genesis_hash: "a".repeat(64),
+  genesis_hash: `sha256:${"a".repeat(64)}`,
   measurement: {
     profile: "oxagen-linux-docker-v1",
     containerId: "b".repeat(64),
@@ -19,6 +19,7 @@ describe("contained launch contract", () => {
     expect(contract.input.safeParse(input).success).toBe(true);
     for (const patch of [
       { genesis_hash: "claimed" },
+      { genesis_hash: "a".repeat(64) },
       { session_uuid: "other" },
       { extra: true },
       { measurement: { ...input.measurement, profile: "unrestricted" } },
