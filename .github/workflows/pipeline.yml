@@ -44,16 +44,10 @@ concurrency:
       github.event_name == 'push' && github.ref == 'refs/heads/main'
         && format('-{0}', github.sha) || ''
     }}
-  # Auto-cancel superseded runs for PRs only. A push-to-main run used to carry
-  # the prod migrate job, and cancelling the whole run mid-`atlas migrate apply`
-  # would strand prod behind the committed migrations. That job is retired
-  # (#1341), so nothing in a main run is mid-flight against a real database
-  # today. Production applies are run by hand, with
-  # `infra/tools/run-db-migrations.sh` from a laptop or through the
-  # `db-migrate.yml` dispatch that runs the same script; the migrate job's
-  # retirement comment below has the detail (#2542, #2652). It stays
-  # off for main anyway, because the deploy jobs are, and half a deploy is worse
-  # than a slow one.
+  # Auto-cancel superseded runs for PRs only. Since 2026-09-23 a main run's
+  # `migration-gate` applies production migrations, and cancelling it
+  # mid-`atlas migrate apply` would strand prod behind the committed
+  # migrations. Half a deploy is also worse than a slow one.
   #
   # `false` protects a run that has STARTED. It does not protect one still
   # queued: GitHub keeps a single pending entry per concurrency group, so a
@@ -856,14 +850,15 @@ jobs:
   # Both were already unreachable before this deletion; neither becomes more
   # broken by it, and both now have a home.
   #
-  # Applying is still not covered, and deliberately so. `migration-gate` below
-  # does not restore the retired job: it never applies anything. It restores
-  # only the ORDERING the retired job's `needs:` used to imply, by refusing to
-  # ship code whose schema has not landed.
+  # Applying came back on 2026-09-23 inside `migration-gate` below, not as a
+  # restored job. The gate applies what is pending, re-checks, and only then
+  # lets `deploy-node` ship, so the ORDERING the retired job's `needs:` implied
+  # holds again and no person has to remember the apply.
 
   # ==========================================================================
 
-  # migration-gate — does production carry the schema this commit assumes?
+  # migration-gate — bring production to the schema this commit assumes, then
+  # prove it got there.
   #
   # THE FAILURE THIS EXISTS FOR
   #
@@ -877,20 +872,26 @@ jobs:
   # "deploying code ahead of its migration is what took production login down
   # once already ... the ordering guarantee is gone either way".
   #
-  # WHAT IT DOES, AND WHAT IT REFUSES TO DO
+  # WHAT IT DOES
   #
-  # It asks all three stores whether they carry what this repository declares,
-  # read-only, and fails the deploy when any of them does not. It applies
-  # nothing. Applying production migrations stays manual, through `DB Migrate
-  # (manual)` and `Store Migrate (manual)`, with a human reading the pending
-  # list first — CLAUDE.md states that rule and #3653 is the issue filed when a
-  # generated workflow broke it. A gate that applied would be that same mistake
-  # wearing this job's name, and `check-postgres-drift.sh`'s tests assert it
-  # cannot grow one.
+  # Mac decided on 2026-09-23 that CI applies production migrations, closing
+  # #3653. Until then this job only checked, and every merged migration blocked
+  # every deploy until someone applied it by hand. Main sat undeployed behind
+  # #3735's migration while open branches piled up behind it.
   #
-  # So this does not fix drift. It makes drift STOP THE DEPLOY instead of
-  # reaching production inside it. The human step is unchanged; what changes is
-  # that skipping it can no longer break production silently.
+  # Postgres: `apply-postgres-migrations.sh` asks Atlas for status and applies
+  # when a readable store is behind by less than its whole history. It refuses
+  # an unreadable store and an empty revision table, and re-checks after the
+  # apply. Its tests hold those refusals.
+  #
+  # ClickHouse and Neo4j: `check-store-drift.sh` compares the tables and
+  # constraints that exist against what the repository declares. When one is
+  # missing, `db-migrate.ts` applies both stores (every statement is
+  # `IF NOT EXISTS`) and the check runs again.
+  #
+  # The deploy proceeds only when every store reads current after that. The
+  # manual workflows, `DB Migrate (manual)` and `Store Migrate (manual)`, stay
+  # for the cases this job refuses.
   #
   # WHY IT GATES A DEPLOY WHEN `store-migrate-drift.yml` ALREADY ASKS
   #
@@ -934,7 +935,9 @@ jobs:
       github.event_name == 'push' && github.ref == 'refs/heads/main' &&
       needs.preflight.outputs.proceed == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # An apply adds the platform seed over SSM and a pnpm install for the
+    # stores, on top of the ~2 minutes of tunnel setup a check alone needs.
+    timeout-minutes: 30
     # Required: the deploy role's trust policy keys on the OIDC `sub` claim
     # carrying `environment:production` (see where-is-production.yml).
     environment: production
@@ -950,20 +953,19 @@ jobs:
           aws-region: us-east-1
 
       # Postgres first, and without the tunnels: it needs neither. Aurora is
-      # reached by sending `atlas migrate status` to the node over SSM, which
-      # run-db-migrations.sh already does in its status-only mode. Running it
-      # before the ~2 minutes of tunnel and cypher-shell setup means the most
-      # common drift answers arrive fastest.
-      - name: Postgres — is Aurora at the head of the migration directory?
+      # reached by sending Atlas to the node over SSM, which
+      # run-db-migrations.sh does for both status and apply.
+      - name: Postgres — apply pending migrations to Aurora
         id: pg
         run: |
           set +e
-          bash infra/tools/check-postgres-drift.sh | tee /tmp/pg-drift.txt
+          bash infra/tools/apply-postgres-migrations.sh | tee /tmp/pg-drift.txt
           code=${PIPESTATUS[0]}
           echo "code=$code" >> "$GITHUB_OUTPUT"
           exit 0
 
       - name: Open the store tunnels
+        id: tunnels
         uses: ./.github/actions/open-store-tunnels
 
       # The exit code is captured rather than allowed to fail the step, so that
@@ -975,6 +977,81 @@ jobs:
         run: |
           set +e
           bash infra/tools/check-store-drift.sh | tee /tmp/store-drift.txt
+          code=${PIPESTATUS[0]}
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      # The store apply runs only when a store is behind (1). Unknown (2) is
+      # never applied to (#3036). These steps are store-migrate.yml's apply
+      # path, which that workflow's header explains.
+      - uses: actions/setup-node@v4
+        if: steps.stores.outputs.code == '1'
+        with:
+          node-version-file: .node-version
+
+      - uses: pnpm/action-setup@v4
+        if: steps.stores.outputs.code == '1'
+
+      - name: Install
+        if: steps.stores.outputs.code == '1'
+        run: pnpm install --frozen-lockfile
+
+      # db-migrate.ts takes its ClickHouse lock in the same Aurora database the
+      # Postgres migrations use. Hosted runners cannot reach Aurora, so this
+      # forwards through the node.
+      - name: Open the ClickHouse coordinator tunnel
+        if: steps.stores.outputs.code == '1'
+        env:
+          INSTANCE: ${{ steps.tunnels.outputs.instance }}
+        run: |
+          set -euo pipefail
+          COORDINATOR_URL=$(aws ssm get-parameter --name "/oxagen/production/DATABASE_URL" \
+            --with-decryption --query Parameter.Value --output text)
+          echo "::add-mask::$COORDINATOR_URL"
+          export COORDINATOR_URL
+          node --input-type=module <<'NODE'
+          import { appendFileSync, writeFileSync } from 'node:fs';
+          import { coordinatorTunnel } from './tools/scripts/store-migrate-coordinator.mjs';
+          const { host, port, url } = coordinatorTunnel(process.env.COORDINATOR_URL);
+          console.log(`::add-mask::${url}`);
+          appendFileSync(process.env.GITHUB_ENV, `DATABASE_URL=${url}\n`);
+          writeFileSync('/tmp/coordinator-tunnel.json', JSON.stringify({
+            host: [host], portNumber: [port], localPortNumber: ['15432'],
+          }));
+          NODE
+          # Keep the original hostname for TLS certificate verification. Only
+          # this runner resolves it to the local forwarding socket.
+          host=$(jq -r '.host[0]' /tmp/coordinator-tunnel.json)
+          printf '127.0.0.1 %s\n' "$host" | sudo tee -a /etc/hosts >/dev/null
+          aws ssm start-session \
+            --target "$INSTANCE" \
+            --document-name AWS-StartPortForwardingSessionToRemoteHost \
+            --parameters file:///tmp/coordinator-tunnel.json \
+            > /tmp/tunnel-coordinator.log 2>&1 &
+          echo $! > /tmp/tunnel-coordinator.pid
+          for _ in $(seq 1 30); do
+            if timeout 1 bash -c 'cat < /dev/null > /dev/tcp/127.0.0.1/15432' 2>/dev/null; then
+              echo "Coordinator tunnel is open"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Aurora coordinator tunnel did not open"
+          tail -3 /tmp/tunnel-coordinator.log
+          exit 1
+
+      - name: ClickHouse and Neo4j — apply pending migrations
+        if: steps.stores.outputs.code == '1'
+        run: DB_MIGRATE_STORES=clickhouse,neo4j npx tsx tools/scripts/db-migrate.ts
+
+      # The apply's exit code is not the verdict. Only a fresh check that reads
+      # current lets the deploy through.
+      - name: ClickHouse and Neo4j — re-check after the apply
+        id: stores_after
+        if: steps.stores.outputs.code == '1'
+        run: |
+          set +e
+          bash infra/tools/check-store-drift.sh | tee /tmp/store-drift-after.txt
           code=${PIPESTATUS[0]}
           echo "code=$code" >> "$GITHUB_OUTPUT"
           exit 0
@@ -993,7 +1070,9 @@ jobs:
         if: always()
         env:
           PG: ${{ steps.pg.outputs.code }}
-          STORES: ${{ steps.stores.outputs.code }}
+          # The re-check's answer when an apply ran. When the apply failed, the
+          # re-check never ran and the first answer (behind) stands.
+          STORES: ${{ steps.stores_after.outputs.code || steps.stores.outputs.code }}
         run: |
           set -uo pipefail
           # An empty code is a step that never ran — the tunnel action failing,
@@ -1012,16 +1091,15 @@ jobs:
             echo "### Deploy blocked: production schema is not ready for this commit"
             echo
             if [ "$pg" = "1" ] || [ "$stores" = "1" ]; then
-              echo "A migration on this branch has not been applied to production."
+              echo "A migration is still not in production after this job tried to apply it."
               echo "Shipping now would start serving code against a schema that is not there."
               echo
-              echo "Apply it, then re-run this job:"
+              echo "The step output above says why: an apply that failed, an out-of-order"
+              echo "migration that needs renumbering, or a Postgres revision table that lists"
+              echo "every migration as pending, which this job refuses to apply."
               echo
-              # Postgres names the script first, because it is the path that
-              # reaches Aurora: it runs Atlas on the app node over SSM, from a
-              # laptop with AWS credentials or from the DB Migrate dispatch,
-              # which runs the same script under the deploy role. The stores
-              # have one path, their manual workflow.
+              echo "Fix the cause, apply by hand if needed, then re-run this job:"
+              echo
               echo "- Postgres — \`infra/tools/run-db-migrations.sh packages/database --apply\` from a laptop with AWS credentials, on a checkout of origin/main, or the **DB Migrate (manual)** workflow with target production, which runs the same script"
               echo "- ClickHouse / Neo4j — the **Store Migrate (manual)** workflow"
               echo
@@ -1037,7 +1115,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
           if [ "$pg" = "1" ] || [ "$stores" = "1" ]; then
-            echo "::error::A committed migration has not reached production. Apply it, then re-run this job. See the run summary."
+            echo "::error::A committed migration is still not in production after the automatic apply. See the run summary."
           else
             echo "::error::The stores could not be read, so this job cannot say the schema is ready. Re-run it. See the run summary."
           fi
@@ -1156,11 +1234,10 @@ jobs:
     # and had applied nothing since #1280, so the wait had been decorative for
     # months — the ordering guarantee is gone either way.
     #
-    # `migration-gate` restores it, and restores the guarantee rather than the
-    # job: it applies nothing, it only refuses to let this job ship code whose
-    # migration has not landed. The wait is no longer decorative — the gate
-    # fails on a real answer from the real stores. See its header for why
-    # unknown blocks as well as behind, and why `manual-app-deploy` is exempt.
+    # `migration-gate` restores it: it applies what is pending, re-checks, and
+    # fails unless every store reads current, so this job never ships code
+    # ahead of its schema. See its header for why unknown blocks as well as
+    # behind, and why `manual-app-deploy` is exempt.
     needs: [checks, test, migration-gate]
     # arm64, matching the t4g.large these ship to (verified 2026-09-10 via
     # where-is-production.yml, run 34456388188 — instance `oxagen-app`). An
