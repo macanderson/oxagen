@@ -54,6 +54,8 @@ export interface ResolveInput {
   parameters: Parameter[];
   /** Path prefix to strip from each parameter name. */
   prefix: string;
+  /** Preview may omit OAuth providers instead of registering fake credentials. */
+  withoutOAuth?: boolean;
 }
 
 export interface ResolvedVar {
@@ -94,7 +96,17 @@ export function resolveBuildEnv({
   env,
   parameters,
   prefix,
+  withoutOAuth = false,
 }: ResolveInput): ResolveResult {
+  if (withoutOAuth && env !== "preview") {
+    throw new Error("OAuth omission is allowed only for preview builds");
+  }
+  const oauthKeys = new Set([
+    "GOOGLE_LOGIN_CLIENT_ID",
+    "GOOGLE_LOGIN_CLIENT_SECRET",
+    "GITHUB_LOGIN_CLIENT_ID",
+    "GITHUB_LOGIN_CLIENT_SECRET",
+  ]);
   const normalizedPrefix = prefix.endsWith("/") ? prefix.slice(0, -1) : prefix;
   const fromStore = new Map<string, string>();
   for (const { Name, Value } of parameters) {
@@ -113,6 +125,7 @@ export function resolveBuildEnv({
 
   for (const [key, meta] of Object.entries(ENV_REGISTRY)) {
     if (!meta.services.includes(service)) continue;
+    if (withoutOAuth && oauthKeys.has(key)) continue;
 
     const staticValue =
       meta.valueOrigin === "static" ? staticValueFor(key, env) : undefined;
@@ -185,6 +198,7 @@ async function main(): Promise<void> {
       env: env as EnvName,
       parameters,
       prefix,
+      withoutOAuth: argv.includes("--without-oauth"),
     });
 
   // Mask before anything else can echo one. A multi-line secret has to be

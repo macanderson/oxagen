@@ -185,3 +185,33 @@ describe("shellQuote", () => {
     expect(file).toBe("A='plain'\nB='two\nlines'\n");
   });
 });
+
+describe("preview without OAuth", () => {
+  it("omits providers explicitly while preserving required database and payment configuration", () => {
+    const result = resolveBuildEnv({
+      service: "app",
+      env: "preview",
+      parameters: [],
+      prefix: "/oxagen/staging",
+      withoutOAuth: true,
+    });
+    expect(result.missingRequired).not.toContain("GOOGLE_LOGIN_CLIENT_ID");
+    expect(result.missingRequired).not.toContain("GITHUB_LOGIN_CLIENT_SECRET");
+    expect(result.missingRequired).toContain("DATABASE_URL");
+    expect(result.missingRequired).toContain("STRIPE_SECRET_KEY");
+    expect(
+      result.resolved.some((entry) => entry.key.includes("LOGIN_CLIENT")),
+    ).toBe(false);
+  });
+  it("refuses the omission for production", () => {
+    expect(() =>
+      resolveBuildEnv({
+        service: "app",
+        env: "production",
+        parameters: [],
+        prefix: PREFIX,
+        withoutOAuth: true,
+      }),
+    ).toThrow("only for preview");
+  });
+});
