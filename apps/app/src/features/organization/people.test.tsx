@@ -1,11 +1,7 @@
 // @vitest-environment jsdom
-// Organization › People over org.members: the tabs, the members with the two
-// writes their row carries, pending invitations with the Invite control that
-// adds one, each
-// section's empty line, and the denied, pending-approval and error states that
-// replace both sections. Every state is checked with axe. Roles is a tab of its
-// own and Workspaces is a sibling section of the same page, so neither renders
-// from here.
+// People and Invitations share the organization roster read and render only
+// the selected section. Existing row writes, refusal states, and empty states
+// remain covered on the tab that owns them.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -45,6 +41,7 @@ type Members = Parameters<typeof People>[0]["source"]["org"]["members"];
 async function renderPeople(
   read: Awaited<ReturnType<Members>>,
   orgRole: OrgRole = "owner",
+  selected: "people" | "invitations" = "people",
 ) {
   const ctx = unsafeMint(OrgCtx, {
     userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
@@ -55,7 +52,9 @@ async function renderPeople(
   });
   const { source, calls } = orgSource({ members: read });
   const view = render(
-    <IntlProvider>{await People({ ctx, source })}</IntlProvider>,
+    <IntlProvider>
+      {await People({ ctx, source, view: selected })}
+    </IntlProvider>,
   );
   expect(calls.members).toEqual([[ctx]]);
   expect(calls.apiKeys).toEqual([]);
@@ -118,6 +117,22 @@ describe("People tabs", () => {
   });
 });
 
+it("marks Invitations selected and preserves the People destination", async () => {
+  await renderPeople(readOk(roster), "owner", "invitations");
+  const tabs = screen.getByRole("navigation", { name: "Organization" });
+  expect(
+    within(tabs).getByRole("link", { name: "Invitations" }),
+  ).toHaveAttribute("href", "/acme?tab=invitations");
+  expect(
+    within(tabs).getByRole("link", { name: "Invitations" }),
+  ).toHaveAttribute("aria-current", "page");
+  expect(
+    within(tabs).getByRole("link", { name: "People" }),
+  ).not.toHaveAttribute("aria-current");
+  expect(sectionTitles()).toEqual(["Pending invitations"]);
+  expect(screen.queryByRole("region", { name: "People" })).toBeNull();
+});
+
 describe("ok", () => {
   it("lists each member with name, email, role and join date", async () => {
     await renderPeople(readOk(roster));
@@ -136,7 +151,7 @@ describe("ok", () => {
   });
 
   it("lists each pending invitation with email, role offered, sent and expiry, and Never for one that does not expire", async () => {
-    await renderPeople(readOk(roster));
+    await renderPeople(readOk(roster), "owner", "invitations");
     const invitations = screen.getByRole("region", {
       name: "Pending invitations",
     });
@@ -153,9 +168,9 @@ describe("ok", () => {
     expect(audit).toHaveTextContent("Never");
   });
 
-  it("renders only the People and Pending invitations sections: no settings slice, and no workspaces table of its own (negative)", async () => {
+  it("keeps invitations and workspace tables off People (negative)", async () => {
     await renderPeople(readOk(roster));
-    expect(sectionTitles()).toEqual(["People", "Pending invitations"]);
+    expect(sectionTitles()).toEqual(["People"]);
     expect(screen.queryByTestId("not-recorded")).toBeNull();
     expect(screen.queryByText(/settings/i)).toBeNull();
     expect(screen.queryByRole("region", { name: "Workspaces" })).toBeNull();
@@ -194,7 +209,7 @@ describe("the writes on a member's row", () => {
 
 describe("the Invite control", () => {
   it("an Owner opens it from the Pending invitations section", async () => {
-    await renderPeople(readOk(roster));
+    await renderPeople(readOk(roster), "owner", "invitations");
     const invitations = screen.getByRole("region", {
       name: "Pending invitations",
     });
@@ -205,7 +220,7 @@ describe("the Invite control", () => {
   });
 
   it("a Member reads the refusal in its place, and opens nothing (negative)", async () => {
-    await renderPeople(readOk(roster), "member");
+    await renderPeople(readOk(roster), "member", "invitations");
     expect(screen.getByTestId("invite-denied")).toHaveTextContent(
       "Inviting someone is an Owner and Admin action.",
     );
@@ -213,29 +228,46 @@ describe("the Invite control", () => {
   });
 
   it("stays offered when no invitation is waiting", async () => {
-    await renderPeople(readOk({ members: [], invitations: [] }));
+    await renderPeople(
+      readOk({ members: [], invitations: [] }),
+      "owner",
+      "invitations",
+    );
     expect(screen.getByRole("button", { name: "Invite" })).toBeInTheDocument();
   });
 
   it("is not offered when the read did not list (negative)", async () => {
-    await renderPeople(readError("control_plane_unavailable", 503));
+    await renderPeople(
+      readError("control_plane_unavailable", 503),
+      "owner",
+      "invitations",
+    );
     expect(screen.queryByRole("button", { name: "Invite" })).toBeNull();
     expect(screen.queryByTestId("invite-denied")).toBeNull();
   });
 });
 
 describe("empty", () => {
-  it("says so in each section in place of its table", async () => {
-    await renderPeople(readOk({ members: [], invitations: [] }));
-    expect(sectionTitles()).toEqual(["People", "Pending invitations"]);
-    expect(
-      screen.getByText("This organization has no members."),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("No invitations are waiting for an answer."),
-    ).toBeInTheDocument();
-    expect(screen.queryByRole("table")).toBeNull();
-  });
+  it.each([
+    ["people", "People", "This organization has no members."],
+    [
+      "invitations",
+      "Pending invitations",
+      "No invitations are waiting for an answer.",
+    ],
+  ] as const)(
+    "keeps the %s empty state in its selected section",
+    async (selected, title, message) => {
+      await renderPeople(
+        readOk({ members: [], invitations: [] }),
+        "owner",
+        selected,
+      );
+      expect(sectionTitles()).toEqual([title]);
+      expect(screen.getByText(message)).toBeInTheDocument();
+      expect(screen.queryByRole("table")).toBeNull();
+    },
+  );
 });
 
 describe("a read that did not list", () => {

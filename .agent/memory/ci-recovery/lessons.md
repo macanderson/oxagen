@@ -1,0 +1,1 @@
+- [2026-09-23] When splitting a page into tabs, move existing action and refusal assertions to the new selected view before adding layout checks. (source: reflections/2026-09-23-organization-baseline-tests.md, agent: ci-recovery)
