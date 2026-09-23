@@ -89,6 +89,7 @@ function QuantityPicker({
           step={rate.blockSizeGau}
           value={text}
           aria-describedby="purchase-step"
+          data-touch-target=""
           className={`${inputBase} w-36`}
           onChange={(event) => {
             const input = event.currentTarget;

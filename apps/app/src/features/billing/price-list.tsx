@@ -95,7 +95,9 @@ export function PriceList({ retention }: { retention: EvidenceRetention }) {
             {t("priceList.tokensTerms")}
           </Price>
           <Price name="enterprise" term={t("priceList.enterprise")}>
-            {t("priceList.enterpriseTerms")}
+            {t.rich("priceList.enterpriseTerms", {
+              nr: (chunks) => <NotRecordedValue>{chunks}</NotRecordedValue>,
+            })}
           </Price>
         </tbody>
       </table>

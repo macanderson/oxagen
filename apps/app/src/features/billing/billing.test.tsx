@@ -216,9 +216,9 @@ describe("header", () => {
     await renderBilling({ ...LOADED, plan: readOk({ subscription: null }) });
     await userEvent.click(screen.getByRole("button", { name: "Change plan" }));
     const dialog = screen.getByRole("dialog", { name: "Change plan" });
-    expect(
-      within(dialog).getByRole("combobox", { name: "Plan" }),
-    ).toBeInTheDocument();
+    const select = within(dialog).getByRole("combobox", { name: "Plan" });
+    expect(select).toBeInTheDocument();
+    expect(select).toHaveAttribute("data-touch-target");
   });
 });
 
@@ -588,7 +588,7 @@ describe("Price list", () => {
       "Invoice billingnever capped · overage invoiced at the contracted rate at period end",
       "Evidence retention12 months included on paid plans, then $0.08 per GB-month",
       "Tokens Oxagen buys for youat cost, no markup, capped",
-      "Enterprise, annualnegotiated per organization",
+      "Enterprise, annualfrom not recorded per year",
     ]);
     expect(list).toHaveTextContent(
       "No credits, no resellers, and no revenue dashboard. The free tier is the whole product, limited by retention and seats, never by features or volume. Upgrading is a governance decision, not a volume accident.",
@@ -717,6 +717,20 @@ describe("the controls that buy through Stripe", () => {
   it("keeps every submit off the gold: the header's Change plan is the page's one gold action", async () => {
     await renderBilling();
     expect(gold()).toHaveLength(1);
+  });
+
+  it("makes every payment field and the auto top-up switch a 44px tap target on a phone", async () => {
+    await renderBilling();
+    // ui/phone.css gives [data-touch-target] 44px below the md breakpoint.
+    const targets = [
+      screen.getByRole("switch"),
+      within(section("Auto top-up")).getByRole("spinbutton"),
+      within(section("Buy governed actions")).getByRole("spinbutton"),
+      within(section("Token balance")).getByRole("spinbutton"),
+    ];
+    for (const field of targets) {
+      expect(field.closest("[data-touch-target]")).not.toBeNull();
+    }
   });
 });
 

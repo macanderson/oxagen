@@ -111,7 +111,12 @@ function AutoTopupControl({
             {outcome === "denied" ? t("readOnly") : t("failed")}
           </FormAlert>
         ) : null}
-        <div className="flex items-center gap-2 text-sm">
+        {/* The label wraps the switch so its whole row is the 44px phone target. */}
+        <label
+          htmlFor="auto-topup-enabled"
+          data-touch-target=""
+          className="flex items-center gap-2 text-sm"
+        >
           <input
             id="auto-topup-enabled"
             type="checkbox"
@@ -123,8 +128,8 @@ function AutoTopupControl({
             disabled={!editable}
             className="size-4"
           />
-          <label htmlFor="auto-topup-enabled">{t("enabled")}</label>
-        </div>
+          {t("enabled")}
+        </label>
         <div className="flex flex-wrap items-center gap-3 text-sm">
           <label htmlFor="auto-topup-blocks">{t("blocks")}</label>
           <input
@@ -140,6 +145,7 @@ function AutoTopupControl({
             disabled={!editable}
             aria-invalid={invalid || undefined}
             aria-describedby={invalid ? "auto-topup-blocks-error" : undefined}
+            data-touch-target=""
             className={`${inputBase} w-24`}
           />
           {blockSizeGau === null || !Number.isInteger(blocks) ? null : (

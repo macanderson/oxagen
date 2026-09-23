@@ -105,6 +105,7 @@ function TopUpForm({
           step={1}
           value={text}
           aria-describedby="credits-min"
+          data-touch-target=""
           className={`${inputBase} w-36`}
           onChange={(event) => {
             setText(event.currentTarget.value);

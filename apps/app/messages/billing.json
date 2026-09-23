@@ -120,7 +120,7 @@
       "tokens": "Tokens Oxagen buys for you",
       "tokensTerms": "at cost, no markup, capped",
       "enterprise": "Enterprise, annual",
-      "enterpriseTerms": "negotiated per organization",
+      "enterpriseTerms": "from <nr>not recorded</nr> per year",
       "footer": "No credits, no resellers, and no revenue dashboard. The free tier is the whole product, limited by retention and seats, never by features or volume. Upgrading is a governance decision, not a volume accident."
     },
     "billableUnits": {

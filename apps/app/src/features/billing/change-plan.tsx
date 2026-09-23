@@ -98,6 +98,7 @@ function PlanForm({
           onChange={(event) => {
             setChoice(event.currentTarget.value);
           }}
+          data-touch-target=""
           className={`${inputBase} w-full text-base font-normal text-foreground md:text-sm`}
         >
           {plans.flatMap((plan) => [
