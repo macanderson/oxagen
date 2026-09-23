@@ -62,7 +62,7 @@ export type SteeringView = {
   /** Only on the Records shelf. */
   kind: RecordKind | null;
   offset: number;
-  /** Only on the Context PRs segment. */
+  /** Only on Proposals: the proposal under review, or the Context PR selected. */
   proposal: string | null;
   /** Only on the Skills shelf: the inventory page `list_skills` answered with. */
   cursor: string | null;
@@ -159,7 +159,7 @@ function viewOf(
     offset:
       rawOffset !== undefined && OFFSET.test(rawOffset) ? Number(rawOffset) : 0,
     proposal:
-      segment === "prs" &&
+      tab === "proposals" &&
       rawProposal !== undefined &&
       PROPOSAL.test(rawProposal)
         ? rawProposal
