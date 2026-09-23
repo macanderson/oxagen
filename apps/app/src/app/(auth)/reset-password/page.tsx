@@ -34,7 +34,8 @@ async function Reset({
     getTranslations("auth"),
     getTranslations("pages"),
   ]);
-  // The page is reached from the emailed link only, so it carries no footer link.
+  // The page is reached from the emailed link only, so it carries no footer
+  // link. The lead cannot name the address until the token is readable (#3887).
   return (
     <AuthColumn>
       <ResetPasswordForm

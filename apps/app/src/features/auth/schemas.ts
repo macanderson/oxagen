@@ -8,7 +8,8 @@ import { z } from "zod";
  * The password policy the sign-up and reset screens list and tick (mockups
  * `obPwBits`): at least 12 characters, one symbol, one digit. Better Auth's own
  * floor (packages/auth/src/auth.ts minPasswordLength) is lower, so a direct API
- * call still meets only that floor until the server enforces the same policy.
+ * call still meets only that floor until the server enforces the same policy
+ * (#3888).
  */
 export const PASSWORD_MIN = 12;
 const PASSWORD_MAX = 128;

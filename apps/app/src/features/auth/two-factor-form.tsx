@@ -2,7 +2,9 @@
 // The sign-in second factor (mockup `obTwoFactor`). Reached holding only Better
 // Auth's short-lived two-factor cookie, so the route is public. Six digit boxes
 // take the authenticator code; a single-use recovery code completes sign-in
-// instead. The header lives here because its lead names the address the
+// instead. Attempts left and the lockout are not recorded yet (#3884), so a
+// wrong code says only that it is wrong. The header lives here because its
+// lead names the address the
 // password step was for, which only this browser tab knows.
 
 import { useTranslations } from "next-intl";

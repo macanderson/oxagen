@@ -6,7 +6,7 @@
 //
 // The design also lists the workspace, the workspace role and what that role
 // lets you do. `org.invitations` carries no workspace, so those rows are not
-// drawn until the invitation records one (ARCHITECTURE.md §3.6: an unbacked
+// drawn until the invitation records one (#3886; ARCHITECTURE.md §3.6: an unbacked
 // in-page slice renders nothing).
 import { Lock } from "lucide-react";
 import type { ReactNode } from "react";

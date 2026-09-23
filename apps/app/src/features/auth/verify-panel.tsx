@@ -1,7 +1,7 @@
 "use client";
 // Email verification (mockup `obVerify`). The design asks for a six-digit code;
 // this deployment verifies by link (Better Auth `emailVerification`, no email
-// OTP plugin), so the card holds what the link flow can do: say a spent link
+// OTP plugin, #3883), so the card holds what the link flow can do: say a spent link
 // expired, and send a new one. The reply to a resend never reveals whether an
 // account is waiting.
 import { useTranslations } from "next-intl";

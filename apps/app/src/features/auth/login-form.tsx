@@ -1,7 +1,8 @@
 "use client";
 // Log in (mockup `obLogin`). The page hands over its header and footer so the
 // suspended state can replace all three with one full card, the way the design
-// does. Validates in the browser, then signs in through Better Auth. The
+// does (who suspended the account, and when, is not recorded yet: #3885).
+// Validates in the browser, then signs in through Better Auth. The
 // destination is the sanitised `next` the page passed down, and the SSO entry
 // under the two providers sends a single sign-on to the same place.
 import Link from "next/link";
