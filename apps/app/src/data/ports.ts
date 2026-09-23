@@ -316,8 +316,9 @@ export interface DataSource {
   /**
    * The Organization pages' four reads, each noBillingGate (#2964, WL-37,
    * WL-43), each an Owner-or-Admin read checked in its handler; callers:
-   * features/organization/people.tsx, roles.tsx, workspaces.tsx, api-keys.tsx
-   * and features/audit/audit.tsx (actor names, off `members`). Three are
+   * features/organization/people.tsx, roles.tsx, workspaces.tsx, api-keys.tsx,
+   * features/audit/audit.tsx (actor names, off `members`) and
+   * features/runtimes/runtime.tsx (operator names, off `members`). Three are
    * org-scoped; `apiKeys` is not, because a key names a workspace (ADR-073).
    */
   org: {

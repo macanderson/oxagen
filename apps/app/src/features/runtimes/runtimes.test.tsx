@@ -20,6 +20,7 @@ import { nth } from "@/test/nth";
 import { phoneWidth } from "@/test/phone";
 import {
   enrollment,
+  memberList,
   runtimeAgent,
   runtimeList,
   runtimesSource,
@@ -236,8 +237,15 @@ describe("Runtimes, loaded", () => {
     expect(
       nth(cells, 4, "cell").querySelector("[data-not-backed]"),
     ).toHaveAttribute("data-gap", "#3817");
-    // The count, then the key under it.
+    // The count, then the key under it, right-aligned as the mockup's
+    // `td.num`; the count takes the cell's face, not a mono span of its own.
     expect(cells[5]).toHaveTextContent(/^1acme\.core\.release-manager$/);
+    expect(cells[5]).toHaveClass("text-right", "tabular-nums");
+    expect(cells[7]).toHaveClass("text-right", "tabular-nums");
+    for (const name of ["Agents", "Hooks"])
+      expect(screen.getByRole("columnheader", { name })).toHaveClass(
+        "text-right",
+      );
     expect(cells[6]).toHaveTextContent("tachod 1.6.2");
     expect(cells[6]).toHaveTextContent("gaps in 24h not recorded");
     expect(cells[7]).toHaveTextContent(/^count not recorded$/);
@@ -352,7 +360,7 @@ describe("Runtimes, not loaded", () => {
     // The kernel's error carries no trace id or region (#3841).
     const trace = screen.getByTestId("runtimes-trace");
     expect(trace).toHaveTextContent(
-      /^trace not recorded · region not recorded · \d{4}-\d{2}-\d{2}T/,
+      /^trace not recorded · region not recorded · \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}Z$/,
     );
     for (const gap of trace.querySelectorAll("[data-not-backed]"))
       expect(gap).toHaveAttribute("data-gap", "#3841");
@@ -387,7 +395,7 @@ describe("Runtimes, not loaded", () => {
         .map((dt) => dt.textContent),
     ).toEqual(["Signed in as", "Needed", "Decided by"]);
     expect(screen.getByTestId("runtimes-signed-in")).toHaveTextContent(
-      "Marcus Bell · owner on the organization · member on this workspace",
+      "Marcus Bell · workspace.member · core-platform",
     );
     const decided = screen.getByTestId("runtimes-decided-by");
     expect(decided).toHaveTextContent(
@@ -483,7 +491,7 @@ describe("One runtime", () => {
       "tacho-hook 1.6.2 · fails closed against its cached bundle",
     );
     expect(screen.getByTestId("fact-model-surface")).toHaveTextContent(
-      "the harness config names the loopback proxy",
+      "every harness config names the loopback proxy",
     );
     expect(screen.getByTestId("fact-tier")).toHaveTextContent(
       "computed per run from what was actually routed",
@@ -504,6 +512,12 @@ describe("One runtime", () => {
       "href",
       "/acme/core-platform/agents/release-manager",
     );
+    // The operator by name from the roster; the id is the key the hover card
+    // holds, never the label.
+    const operator = within(row).getByTestId("runtime-operator");
+    expect(operator).toHaveTextContent(/^Marcus Bell$/);
+    expect(operator).toHaveAttribute("data-operator-id", "usr_marcusbell");
+    expect(row).not.toHaveTextContent("usr_marcusbell");
     expect(row).toHaveTextContent("prn_01JQ8W3F2M6XKD7A9RZT4BVCNE");
     expect(row).toHaveTextContent("212");
     expect(agents).toHaveTextContent(
@@ -531,10 +545,41 @@ describe("One runtime", () => {
       list: runtimeList([enrollment({ agentKey: "" })]),
     });
     expect(calls.agents).toEqual([]);
+    expect(calls.members).toBe(0);
     expect(screen.getByTestId("runtime-agents-none")).toHaveTextContent(
       "This host is enrolled and no agent is assigned to it. It records nothing until one runs here.",
     );
     expect(screen.getByTestId("runtime-agents-count")).toHaveTextContent("0");
+  });
+
+  it("names no operator it cannot find, and never labels one by its id", async () => {
+    await renderDetail({
+      list: runtimeList([enrollment()]),
+      members: readError("list_members_unavailable", 503),
+    });
+    const operator = screen.getByTestId("runtime-operator");
+    expect(operator).toHaveTextContent(/^Operator$/);
+    expect(operator).toHaveAttribute("data-operator-id", "usr_marcusbell");
+    cleanup();
+    await renderDetail({
+      list: runtimeList([enrollment()]),
+      members: memberList([]),
+    });
+    expect(screen.getByTestId("runtime-operator")).toHaveTextContent(
+      /^Operator$/,
+    );
+  });
+
+  it("reads a host whose harnesses route differently as both routes, never as the proxy", async () => {
+    await renderDetail({
+      list: runtimeList([enrollment({ modelRoute: "mixed" })]),
+    });
+    expect(screen.getByTestId("fact-model-surface")).toHaveTextContent(
+      "loopback proxy and provider directsome harness configs name the loopback proxy and some send model traffic to the provider direct",
+    );
+    expect(screen.getByTestId("fact-model-surface")).not.toHaveTextContent(
+      "every harness config",
+    );
   });
 
   it("keeps the host when the agents read fails, and names the failure in its panel", async () => {

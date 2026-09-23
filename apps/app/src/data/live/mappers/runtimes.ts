@@ -18,7 +18,12 @@ import type { ContractOutput } from "@/server/kernel";
 type HostSummary = ContractOutput<typeof tachoHostList>["hosts"][number];
 type AgentItem = ContractOutput<typeof agentList>["items"][number];
 
-/** What the harness configs on this machine name for model traffic, as last reported. */
+/**
+ * What the harness configs on this machine name for model traffic, as last
+ * reported. `loopback` needs every report to name the proxy: a host where
+ * Claude Code is routed and Codex goes direct is `mixed`, because reading it
+ * as routed would claim the proxy sees calls it never sees.
+ */
 export function modelRouteOf(host: HostSummary): {
   route: ModelRoute | null;
   shadowedBy: string | null;
@@ -26,8 +31,14 @@ export function modelRouteOf(host: HostSummary): {
   const reports = host.modelBaseUrls;
   if (reports.length === 0) return { route: null, shadowedBy: null };
   const shadowed = reports.find((report) => report.shadowedBy !== null);
+  const routed = reports.filter((report) => report.ours).length;
   return {
-    route: reports.some((report) => report.ours) ? "loopback" : "direct",
+    route:
+      routed === reports.length
+        ? "loopback"
+        : routed === 0
+          ? "direct"
+          : "mixed",
     shadowedBy: shadowed?.shadowedBy ?? null,
   };
 }

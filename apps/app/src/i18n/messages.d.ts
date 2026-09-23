@@ -4269,6 +4269,7 @@ type Messages = {
     };
     modelSurface: {
       loopback: string;
+      mixed: string;
       direct: string;
       unreported: string;
       shadowed: string;
@@ -4365,6 +4366,7 @@ type Messages = {
       hookEnforce: string;
       hookObserve: string;
       modelLoopback: string;
+      modelMixed: string;
       modelDirect: string;
       tierBasis: string;
       agents: {

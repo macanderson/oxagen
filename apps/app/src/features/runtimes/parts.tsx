@@ -170,7 +170,9 @@ export function Sub({
 }) {
   return (
     <span
-      className={`block text-xs text-muted-foreground ${monoFace ? mono : ""}`}
+      // Under a numeric cell the sub-line keeps its own face and wraps: the
+      // cell's mono and nowrap are for the figure above it.
+      className={`block whitespace-normal text-xs text-muted-foreground ${monoFace ? mono : "font-sans"}`}
     >
       {children}
     </span>

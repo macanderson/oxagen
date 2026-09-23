@@ -8,6 +8,7 @@ import type {
   RuntimeEnrollment,
   RuntimeList,
 } from "@/data/contracts/runtimes";
+import type { MemberList } from "@/data/contracts/org";
 import type { DataSource } from "@/data/ports";
 import { type Read, readOk } from "@/data/read";
 
@@ -59,12 +60,35 @@ export function runtimeList(
   return readOk({ enrollments, more });
 }
 
-/** A DataSource whose runtimes port answers with the reads given, recording each call. */
+/** The organization's roster, holding the operator `runtimeAgent()` names. */
+export function memberList(
+  members: MemberList["members"] = [
+    {
+      id: "usr_marcusbell",
+      name: "Marcus Bell",
+      email: "marcus@acme.test",
+      role: "owner",
+      joinedAt: "2026-01-05T09:00:00.000Z",
+    },
+  ],
+): Read<MemberList> {
+  return readOk({ members, invitations: [] });
+}
+
+/**
+ * A DataSource whose runtimes port answers with the reads given, recording
+ * each call, and whose org port answers the roster the detail page names an
+ * operator from.
+ */
 export function runtimesSource(reads: {
   list: Read<RuntimeList>;
   agents?: Read<RuntimeAgents>;
-}): { source: DataSource; calls: { agents: (readonly string[])[] } } {
-  const calls = { agents: [] as (readonly string[])[] };
+  members?: Read<MemberList>;
+}): {
+  source: DataSource;
+  calls: { agents: (readonly string[])[]; members: number };
+} {
+  const calls = { agents: [] as (readonly string[])[], members: 0 };
   const runtimes: DataSource["runtimes"] = {
     list: () => Promise.resolve(reads.list),
     agents: (_ctx, keys) => {
@@ -74,10 +98,18 @@ export function runtimesSource(reads: {
       );
     },
   };
-  // Only the runtimes port is read by these pages; any other access is a test bug.
-  const source = new Proxy({ runtimes } as DataSource, {
+  const org = {
+    members: () => {
+      calls.members += 1;
+      return Promise.resolve(reads.members ?? memberList());
+    },
+  } as unknown as DataSource["org"];
+  // Only the runtimes port and the roster are read by these pages; any other
+  // access is a test bug.
+  const source = new Proxy({ runtimes, org } as DataSource, {
     get(target, key) {
       if (key === "runtimes") return target.runtimes;
+      if (key === "org") return target.org;
       throw new Error(`unexpected port ${String(key)}`);
     },
   });

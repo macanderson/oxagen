@@ -42,6 +42,7 @@
     },
     "modelSurface": {
       "loopback": "loopback proxy",
+      "mixed": "loopback proxy and provider direct",
       "direct": "provider direct",
       "unreported": "not reported",
       "shadowed": "overridden by {file}"
@@ -97,7 +98,7 @@
       "request": "Request access",
       "back": "Back to Fleet",
       "signedIn": "Signed in as",
-      "signedInValue": "{name} · <code>{orgRole}</code> on the organization · <code>{wsRole}</code> on this workspace",
+      "signedInValue": "{name} · <code>workspace.{wsRole} · {workspace}</code>",
       "needed": "Needed",
       "neededValue": "{permission} on {workspace}",
       "decidedBy": "Decided by",
@@ -137,7 +138,8 @@
       "collectorGaps": "telemetry gaps in the last 24h not recorded",
       "hookEnforce": "tacho-hook {version} · fails closed against its cached bundle",
       "hookObserve": "tacho-hook {version} · allows when its bundle is stale, because this host is in observe mode",
-      "modelLoopback": "the harness config names the loopback proxy, as the daemon last reported it",
+      "modelLoopback": "every harness config names the loopback proxy, as the daemon last reported them",
+      "modelMixed": "some harness configs name the loopback proxy and some send model traffic to the provider direct, as the daemon last reported them",
       "modelDirect": "model traffic goes from the harness to its provider; routing it is the gateway tier",
       "tierBasis": "computed per run from what was actually routed",
       "agents": {

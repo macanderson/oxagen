@@ -12,15 +12,17 @@ import type {
   RuntimeAgents,
   RuntimeEnrollment,
 } from "@/data/contracts/runtimes";
+import type { MemberList } from "@/data/contracts/org";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
+import { PageRecord } from "@/features/shell";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
 import { AgentCard } from "@/ui/agent-card";
 import { buttonSecondary, mono, panelBody } from "@/ui/control-styles";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
-import { OperatorName } from "@/ui/operator";
+import { type OperatorIdentity, OperatorName } from "@/ui/operator";
 import { ReadFailure } from "@/ui/read-failure";
 import { cell, numericCell, Table } from "@/ui/table";
 import { SmokeSession, Unenroll } from "./controls";
@@ -115,7 +117,9 @@ function HostPanel({
             <Sub>
               {host.modelRoute === "loopback"
                 ? t("detail.modelLoopback")
-                : t("detail.modelDirect")}
+                : host.modelRoute === "mixed"
+                  ? t("detail.modelMixed")
+                  : t("detail.modelDirect")}
             </Sub>
           )}
         </>
@@ -174,14 +178,39 @@ function HostPanel({
   );
 }
 
+/**
+ * The agent's operator, named from the organization's roster. `list_agents`
+ * carries the operator's `usr_…` id and no name, so the name comes from the
+ * members read, the way Spend and Audit name a person. The id is never the
+ * label: it stays in the hover card, copyable. A roster that did not load, or
+ * that does not hold the id, leaves the name unknown rather than guessed.
+ */
+export function operatorOf(
+  operatorId: string,
+  members: Read<MemberList>,
+): OperatorIdentity {
+  const member = members.ok
+    ? members.value.members.find((m) => m.id === operatorId)
+    : undefined;
+  if (member === undefined) return { id: operatorId, name: null, kind: null };
+  return {
+    id: operatorId,
+    name: member.name,
+    kind: "human",
+    email: member.email,
+  };
+}
+
 function AgentRow({
   agent,
   agentKey,
+  members,
   org,
   ws,
 }: {
   agent: RuntimeAgent | null;
   agentKey: string;
+  members: Read<MemberList>;
   org: string;
   ws: string;
 }) {
@@ -219,10 +248,9 @@ function AgentRow({
           <span className="text-muted-foreground">{t("notRecorded")}</span>
         ) : (
           <OperatorName
-            operator={{ id: agent.operatorId, name: null, kind: null }}
-          >
-            <span className={mono}>{agent.operatorId}</span>
-          </OperatorName>
+            operator={operatorOf(agent.operatorId, members)}
+            testId="runtime-operator"
+          />
         )}
       </td>
       <td className={cell}>
@@ -249,11 +277,13 @@ function AgentRow({
 function AgentsPanel({
   host,
   agents,
+  members,
   org,
   ws,
 }: {
   host: RuntimeEnrollment;
   agents: Read<RuntimeAgents>;
+  members: Read<MemberList>;
   org: string;
   ws: string;
 }) {
@@ -291,6 +321,7 @@ function AgentsPanel({
             <AgentRow
               agent={agent}
               agentKey={host.agentKey}
+              members={members}
               org={org}
               ws={ws}
             />
@@ -348,6 +379,7 @@ function RollbackPanel({
 function RuntimeLoaded({
   host,
   agents,
+  members,
   org,
   ws,
   wsName,
@@ -355,6 +387,7 @@ function RuntimeLoaded({
 }: {
   host: RuntimeEnrollment;
   agents: Read<RuntimeAgents>;
+  members: Read<MemberList>;
   org: string;
   ws: string;
   wsName: string;
@@ -378,7 +411,13 @@ function RuntimeLoaded({
       </div>
       <div className="flex flex-col gap-3.5">
         <HostPanel host={host} wsName={wsName} now={now} />
-        <AgentsPanel host={host} agents={agents} org={org} ws={ws} />
+        <AgentsPanel
+          host={host}
+          agents={agents}
+          members={members}
+          org={org}
+          ws={ws}
+        />
         <RollbackPanel
           host={host}
           agent={
@@ -398,11 +437,18 @@ async function readRuntime(ctx: WsCtx, source: DataSource, runtime: string) {
     return { state: "failed" as const, read: list, now: Date.now() };
   const host = list.value.enrollments.find((row) => row.id === runtime);
   if (host === undefined) return { state: "missing" as const, now: Date.now() };
-  const agents: Read<RuntimeAgents> =
+  // A host with no agent has no operator to name, so it reads neither.
+  const [agents, members]: [Read<RuntimeAgents>, Read<MemberList>] =
     host.agentKey === ""
-      ? { ok: true, value: { agents: [] } }
-      : await source.runtimes.agents(ctx, [host.agentKey]);
-  return { state: "found" as const, host, agents, now: Date.now() };
+      ? [
+          { ok: true, value: { agents: [] } },
+          { ok: true, value: { members: [], invitations: [] } },
+        ]
+      : await Promise.all([
+          source.runtimes.agents(ctx, [host.agentKey]),
+          source.org.members(ctx),
+        ]);
+  return { state: "found" as const, host, agents, members, now: Date.now() };
 }
 
 export async function Runtime({
@@ -430,19 +476,25 @@ export async function Runtime({
         ws={ws}
         orgName={ctx.orgName}
         wsSlug={ctx.wsSlug}
-        orgRole={ctx.orgRole}
         wsRole={ctx.wsRole}
         viewerName={viewerName}
-        readAt={new Date(read.now).toISOString()}
+        readAt={read.now}
       />
     );
   if (read.state === "missing") notFound();
   return (
     <>
+      {/* The breadcrumb ends on the runtime's name, not its enrollment id. */}
+      <PageRecord
+        route="runtimes"
+        id={read.host.id}
+        label={read.host.hostname}
+      />
       <RuntimesHeader org={org} ws={ws} wsName={ctx.wsName} />
       <RuntimeLoaded
         host={read.host}
         agents={read.agents}
+        members={read.members}
         org={org}
         ws={ws}
         wsName={ctx.wsName}

@@ -7,7 +7,6 @@
 import { CircleAlert, Lock, PanelTop } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
-import type { OrgRole } from "@/data/contracts/common";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
 import { buttonSecondary, mono } from "@/ui/control-styles";
@@ -22,6 +21,15 @@ import {
 } from "./controls";
 
 type Failure = Exclude<Read<unknown>, { ok: true }>;
+
+/**
+ * The trace line's instant, as the mockup prints it: `2026-09-11 09:16:04Z`,
+ * UTC to the second. A person reads it aloud to whoever runs the workspace, so
+ * it carries no `T` and no milliseconds.
+ */
+export function traceStamp(at: number): string {
+  return `${new Date(at).toISOString().slice(0, 19).replace("T", " ")}Z`;
+}
 
 function StateWrap({
   tone,
@@ -97,7 +105,6 @@ export function RuntimesFailure({
   ws,
   orgName,
   wsSlug,
-  orgRole,
   wsRole,
   viewerName,
   readAt,
@@ -107,12 +114,12 @@ export function RuntimesFailure({
   ws: string;
   orgName: string;
   wsSlug: string;
-  orgRole: OrgRole;
+  /** The viewer's role in this workspace: Signed in as names it, as the mockup's `me().role` does. */
   wsRole: string;
   /** The signed-in person's name, or their email when the account has no name. */
   viewerName: string;
-  /** The instant the read returned, formatted by the caller. */
-  readAt: string;
+  /** The instant the read returned, in epoch milliseconds. */
+  readAt: number;
 }) {
   const t = useTranslations("runtimes");
   switch (read.reason) {
@@ -157,8 +164,8 @@ export function RuntimesFailure({
             <dd data-testid="runtimes-signed-in">
               {t.rich("denied.signedInValue", {
                 name: viewerName,
-                orgRole,
                 wsRole,
+                workspace: wsSlug,
                 code: (chunks) => <code className={mono}>{chunks}</code>,
               })}
             </dd>
@@ -216,7 +223,7 @@ export function RuntimesFailure({
             className={`${mono} mt-4 text-[11.5px] text-dim`}
           >
             {t.rich("error.trace", {
-              at: readAt,
+              at: traceStamp(readAt),
               trace: () => <NotBacked gap="decision" />,
               region: () => (
                 <NotBacked gap="decision">

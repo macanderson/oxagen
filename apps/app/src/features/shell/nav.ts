@@ -237,10 +237,18 @@ export type Crumb =
   | { kind: "name"; text: string; href: SafePath | null }
   | { kind: "id"; text: string; href: SafePath | null };
 
-/** Breadcrumbs for a pathname, per the mockup's `crumbs()`. The last crumb has no href. */
+/**
+ * Breadcrumbs for a pathname, per the mockup's `crumbs()`. The last crumb has
+ * no href. `record` is what the page declared it is showing (`PageRecord`),
+ * so a route whose segment is a key can end on the record's name.
+ */
 export function breadcrumbs(
   pathname: string,
-  names: { org: string; ws: string | null },
+  names: {
+    org: string;
+    ws: string | null;
+    record?: { id: string | null; label: string | null } | null;
+  },
 ): Crumb[] {
   const { org, ws, rest } = parseShellPath(pathname);
   if (org === null) return [];
@@ -283,14 +291,20 @@ export function breadcrumbs(
       if (id !== undefined) out.push({ kind: "id", text: id, href: null });
       break;
     case "runtimes":
-      // One runtime ends the trail on its enrollment id, under Runtimes
-      // (mockup `crumbs()`: the list is a link, the id is mono).
+      // One runtime ends the trail on the runtime's name, under Runtimes
+      // (mockup `crumbs()`: the list is a link, the name is mono). The
+      // segment is the enrollment id, so the name is the one the page
+      // declared for that id; until it has, the id stands in. The id stays
+      // copyable on the page, in the rollback command.
       out.push({
         kind: "nav",
         key: "runtimes",
         href: pathOf(org, ws, "runtimes"),
       });
-      if (id !== undefined) out.push({ kind: "id", text: id, href: null });
+      if (id !== undefined) {
+        const label = names.record?.id === id ? (names.record.label ?? id) : id;
+        out.push({ kind: "id", text: label, href: null });
+      }
       break;
     default: {
       const key = currentNavKey(pathname);

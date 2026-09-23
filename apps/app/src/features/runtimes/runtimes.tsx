@@ -23,7 +23,7 @@ import { mono, panelBody, statStrip } from "@/ui/control-styles";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { PageHeader } from "@/ui/page-header";
-import { cell, Table } from "@/ui/table";
+import { cell, numericCell, Table } from "@/ui/table";
 import { EnrollRuntime } from "./controls";
 import {
   HarnessNames,
@@ -148,16 +148,16 @@ function HostRow({
       <td className={cell}>
         <NotBacked gap="tier" />
       </td>
-      <td className={cell} data-testid="runtime-agents">
+      {/* `td.num`: the count right-aligned, its sub-line under it. */}
+      <td className={numericCell} data-testid="runtime-agents">
         {host.agentKey === "" ? (
           <>
-            <span className={`${mono} text-muted-foreground`}>0</span>
+            <span className="text-muted-foreground">0</span>
             <Sub>{t("hosts.agentsNone")}</Sub>
           </>
         ) : (
           <>
-            <span className={mono}>1</span>
-            <Sub monoFace>{host.agentKey}</Sub>
+            1<Sub monoFace>{host.agentKey}</Sub>
           </>
         )}
       </td>
@@ -173,7 +173,7 @@ function HostRow({
           <NotBacked gap="gaps">{t("hosts.gaps")}</NotBacked>
         </Sub>
       </td>
-      <td className={cell}>
+      <td className={numericCell} data-testid="runtime-hooks">
         <NotBacked gap="hooks">{t("hosts.hookCount")}</NotBacked>
       </td>
       <td className={cell}>
@@ -213,9 +213,9 @@ function EnrolledHosts({
           { label: t("columns.harness") },
           { label: t("columns.modelSurface") },
           { label: t("columns.tier") },
-          { label: t("columns.agents") },
+          { label: t("columns.agents"), numeric: true },
           { label: t("columns.collector") },
-          { label: t("columns.hooks") },
+          { label: t("columns.hooks"), numeric: true },
           { label: t("columns.health") },
           { label: t("columns.checkpoint") },
         ]}
@@ -301,10 +301,9 @@ export async function Runtimes({
         ws={ws}
         orgName={ctx.orgName}
         wsSlug={ctx.wsSlug}
-        orgRole={ctx.orgRole}
         wsRole={ctx.wsRole}
         viewerName={viewerName}
-        readAt={new Date(now).toISOString()}
+        readAt={now}
       />
     );
   if (read.value.enrollments.length === 0)

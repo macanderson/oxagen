@@ -176,6 +176,44 @@ describe("runtimes.list", () => {
     ]);
   });
 
+  it("reads loopback only when every harness report names the proxy, and a mixed host as mixed", async () => {
+    const claude = {
+      harness: "claude-code",
+      key: "ANTHROPIC_BASE_URL",
+      ours: true,
+      shadowedBy: null,
+    };
+    const codex = {
+      harness: "codex",
+      key: "base_url",
+      ours: false,
+      shadowedBy: null,
+    };
+    kernelRead.mockResolvedValueOnce(
+      readOk({
+        hosts: [
+          host({ modelBaseUrls: [claude, codex] }),
+          host({
+            hostEnrollmentId: "tch_bothaaaaaaaaaaaaaaaaaaa",
+            modelBaseUrls: [claude, { ...claude, harness: "stella" }],
+          }),
+          host({
+            hostEnrollmentId: "tch_neitheraaaaaaaaaaaaaaaa",
+            modelBaseUrls: [codex],
+          }),
+        ],
+        nextCursor: null,
+      }),
+    );
+    const read = await runtimes.list(ctx);
+    if (!read.ok) throw new Error("expected a list");
+    expect(read.value.enrollments.map((e) => e.modelRoute)).toEqual([
+      "mixed",
+      "loopback",
+      "direct",
+    ]);
+  });
+
   it("walks the cursor and says when the bound stopped the walk", async () => {
     for (let page = 0; page < 5; page++)
       kernelRead.mockResolvedValueOnce(

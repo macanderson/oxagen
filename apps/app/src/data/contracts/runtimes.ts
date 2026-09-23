@@ -25,13 +25,15 @@ export type RuntimePlatform = z.infer<typeof RuntimePlatform>;
 const RuntimeStatus = z.enum(["active", "paused", "suspended", "revoked"]);
 
 /**
- * Where the harness sends its model calls, as the daemon last reported its
- * config: `loopback` when a harness config names Oxagen's loopback proxy,
- * `direct` when every reported config names something else. Null when the
- * daemon reported nothing, which is a daemon older than the report, never a
- * harness that has not drifted.
+ * Where the harnesses send their model calls, as the daemon last reported
+ * their configs: `loopback` when every reported config names Oxagen's loopback
+ * proxy, `direct` when none does, and `mixed` when some do and some do not.
+ * One routed harness never makes the host read `loopback`: the value is the
+ * weakest thing the record says, not the strongest. Null when the daemon
+ * reported nothing, which is a daemon older than the report, never a harness
+ * that has not drifted.
  */
-const ModelRoute = z.enum(["loopback", "direct"]);
+const ModelRoute = z.enum(["loopback", "mixed", "direct"]);
 export type ModelRoute = z.infer<typeof ModelRoute>;
 
 export const RuntimeEnrollment = z.object({
