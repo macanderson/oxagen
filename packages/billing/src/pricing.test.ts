@@ -116,6 +116,13 @@ describe("resolveRate", () => {
     expect(resolveRate("claude-opus-5-5").cachedInputPer1M).toBe(0.2);
   });
 
+  it("prices Codex's current model by its own row", () => {
+    expect(resolveRate("gpt-5.3-codex")).toBe(
+      PROVIDER_RATE_CARD["gpt-5.3-codex"],
+    );
+    expect(resolveRate("openai/gpt-5.3-codex").outputPer1M).toBe(14.0);
+  });
+
   it("leaves the dotted names of other vendors' models alone", () => {
     // gpt-5.5 and gpt-5 are separately priced products, keyed dotted.
     expect(resolveRate("gpt-5.5")).toBe(PROVIDER_RATE_CARD["gpt-5.5"]);

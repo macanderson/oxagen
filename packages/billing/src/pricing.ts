@@ -331,6 +331,17 @@ export const PROVIDER_RATE_CARD: RateCard = {
     cachedInputPer1M: 0.17,
     cacheWritePer1M: 1.75,
   },
+  // Codex's current model, from OpenAI's pricing page on 2026-09-23. The
+  // gateway prices a model only by its own row or a dated snapshot of it, so
+  // without this row every Codex call went unpriced and a Codex session budget
+  // counted nothing against its limit.
+  "gpt-5.3-codex": {
+    provider: "openai",
+    inputPer1M: 1.75,
+    outputPer1M: 14.0,
+    cachedInputPer1M: 0.175,
+    cacheWritePer1M: 1.75,
+  },
   "gpt-5-mini": {
     provider: "openai",
     inputPer1M: 0.25,
