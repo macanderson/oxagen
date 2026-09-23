@@ -79,10 +79,10 @@
     "bisect_runs": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run] — Bisect compares this run with another and names the first frame at which they diverge (features/run/actions.ts, features/run/replay-actions.tsx)",
+      "entry": "/[org]/[ws]/runs/[run] — Bisect in the header of an ended run compares this run with another and names the first frame at which they diverge (features/run/header.tsx, features/run/actions.ts, features/run/replay-actions.tsx)",
       "proof": "apps/app/src/features/run/replay.test.tsx",
-      "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-replay-ui"
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01PJLLvSEGR6bxr1H2aRH1hH"
     },
     "change_member_role": {
       "route": "/[org]",
@@ -262,10 +262,10 @@
     "export_run": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run] — Export on a sealed run queues export_run for an org Owner or Admin (features/run/actions.ts, features/run/record-actions.tsx)",
-      "proof": "apps/app/src/features/run/controls.test.tsx",
-      "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-c2f283fb-3282-review"
+      "entry": "/[org]/[ws]/runs/[run] — Export, the header's last action, queues export_run on a sealed run for an org Owner or Admin; a live run or another role draws it disabled with the reason (features/run/actions.ts, features/run/record-actions.tsx)",
+      "proof": "apps/app/src/features/run/record-actions.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01PJLLvSEGR6bxr1H2aRH1hH"
     },
     "get_run_export": {
       "route": "/[org]/[ws]/runs/[run]",
@@ -286,10 +286,10 @@
     "fork_run": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run] — Fork replay on a sealed ledger run graded fork calls fork_run from the dialog; a wrapped session or a weaker grade draws the control disabled with the reason (features/run/actions.ts, features/run/replay-actions.tsx)",
+      "entry": "/[org]/[ws]/runs/[run] — Fork replay in the header of an ended run calls fork_run from the dialog; a wrapped session or a weaker grade draws the control disabled with the reason (features/run/header.tsx, features/run/actions.ts, features/run/replay-actions.tsx)",
       "proof": "apps/app/src/features/run/replay.test.tsx",
-      "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-replay-ui"
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01PJLLvSEGR6bxr1H2aRH1hH"
     },
     "get_agent": {
       "route": "/[org]/[ws]/agents/[agent]",
@@ -461,7 +461,7 @@
     "get_run_cost": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run]?tab=cost — the Cost tab reads get_run_cost for the rollup, under the run waterfall (data/live/runs.ts, features/run/cost.tsx)",
+      "entry": "/[org]/[ws]/runs/[run]?tab=cost — the stat row, the Cost tab's instruments and token classes, and Spend by area read get_run_cost for the rollup (data/live/runs.ts, features/run/cost.tsx, features/run/stats.tsx, features/run/work.tsx)",
       "proof": "apps/app/src/features/run/waterfall.test.tsx",
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-replay-ui"
@@ -469,7 +469,7 @@
     "get_run_frame_body": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run] — the Frames tab's Open body link reads get_run_frame_body for ?body=<seq> (data/live/runs.ts, features/run/frames.tsx)",
+      "entry": "/[org]/[ws]/runs/[run] — Governed actions' Open body link reads get_run_frame_body for ?body=<seq>, and the Context tab reads the steering.manifest frame's body (data/live/runs.ts, features/run/frames.tsx, features/run/sections.tsx)",
       "proof": "apps/app/src/features/run/run.test.tsx",
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-c2f283fb-3282-review"
@@ -1199,10 +1199,10 @@
     "summarize_run": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run] — Summarize on a sealed run queues summarize_run (features/run/actions.ts, features/run/record-actions.tsx)",
-      "proof": "apps/app/src/features/run/controls.test.tsx",
-      "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-c2f283fb-3282-review"
+      "entry": "/[org]/[ws]/runs/[run] — Summarize in the Summary panel of a sealed run queues summarize_run (features/run/stats.tsx, features/run/actions.ts, features/run/record-actions.tsx)",
+      "proof": "apps/app/src/features/run/record-actions.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01PJLLvSEGR6bxr1H2aRH1hH"
     },
     "suspend_agent": {
       "route": "/[org]/[ws]/agents/[agent]",
