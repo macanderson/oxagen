@@ -224,7 +224,7 @@ function buildPrompt(lane, base) {
   return `${RULES}\n${MOCK_HOWTO}\n${ISSUE_RULES}
 TASK: lane "${lane.id}". Make ${lane.routes} in apps/app match the rev1 design exactly, in every state, desktop and mobile.
 Specs and audit prompts: ${specList(lane)}.
-1. Setup: git -C ${REPO} fetch origin; git -C ${REPO} worktree add ${WT}/${lane.id} -b page/${lane.id} ${base}. Work only in that worktree. Do not push.
+1. Setup: git -C ${REPO} fetch origin; git -C ${REPO} worktree add ${WT}/${lane.id} -b page/${lane.id} ${base}. If that worktree and branch already exist from an earlier attempt, reuse them: read their commits (git log ${base}..HEAD) and continue from them rather than starting over. Work only in that worktree. Do not push.
 2. Baseline: read the spec(s) in full, then run the audit prompt(s) yourself against the current code (read the files; {{APP_ROOT}} is ${WT}/${lane.id}/apps/app). Record every check's PASS/FAIL with evidence in ${REPO}/${VERIF}/${lane.id}/baseline.md.
 3. Screenshot the mock in every state the catalog lists for these pages, desktop and mobile, and study them.
 4. Build: ${lane.task}
