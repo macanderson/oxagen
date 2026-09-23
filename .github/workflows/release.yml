@@ -29,6 +29,10 @@ name: Release
 #
 # A dry run (`dry_run: true`) previews the bump and the notes in the log and
 # writes nothing; it needs no token.
+#
+# `highlight` tells the model what the release leads with. `from` sets the
+# base of the notes diff; pass it when the previous release was never tagged
+# on main, or the notes cover every commit since the older tag.
 
 on:
   workflow_dispatch:
@@ -39,6 +43,16 @@ on:
         required: true
         default: patch
         options: [patch, minor, major]
+      highlight:
+        description: "What the release leads with; the notes open with it (optional)"
+        type: string
+        required: false
+        default: ""
+      from:
+        description: "Base ref for the notes diff; default is the newest tag on main (optional)"
+        type: string
+        required: false
+        default: ""
       dry_run:
         description: "Preview the version and the notes; write nothing"
         type: boolean
@@ -95,9 +109,13 @@ jobs:
           OXAGEN_LLM_BALANCED: ${{ vars.OXAGEN_LLM_BALANCED }}
           BUMP: ${{ inputs.bump }}
           DRY_RUN: ${{ inputs.dry_run }}
+          HIGHLIGHT: ${{ inputs.highlight }}
+          FROM_REF: ${{ inputs.from }}
         run: |
           set -euo pipefail
           args=("$BUMP" --no-git --no-npm)
+          if [ -n "$HIGHLIGHT" ]; then args+=(--highlight "$HIGHLIGHT"); fi
+          if [ -n "$FROM_REF" ]; then args+=(--from "$FROM_REF"); fi
           if [ "$DRY_RUN" = "true" ]; then args+=(--dry-run); fi
           pnpm exec tsx tools/scripts/release.ts "${args[@]}"
           if [ "$DRY_RUN" = "true" ]; then exit 0; fi

@@ -34,6 +34,8 @@ export interface NotesHistory {
   log: string;
   stat: string;
   diff: string;
+  /** What the maintainer names as the release's headline, if anything. */
+  highlight?: string | null;
 }
 
 export interface ReleaseNotes {
@@ -85,9 +87,19 @@ export function systemPrompt(skills: string): string {
 
 /** What the model reads for this release. */
 export function userPrompt(h: NotesHistory): string {
+  const highlight = h.highlight?.trim();
   return [
     `Version ${h.version}. Changes since ${h.fromRef}.`,
     "",
+    ...(highlight
+      ? [
+          "## The headline",
+          "The maintainer names this as what the release leads with. Open the summary and the first change with it, in the product's words, and claim only what the log and the diff support.",
+          "",
+          highlight,
+          "",
+        ]
+      : []),
     "## Commit log",
     h.log || "(none)",
     "",
