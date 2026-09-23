@@ -69,26 +69,57 @@ describe("agent.definition.publish handler", () => {
   });
 
   it.each([
+    'schema = "agent-definition/v0.1"\nslug = "my-agent"\n[budget]\nper_run_micros = 900000000',
+    'schema = "agent-definition/v0.1"\nslug = "my-agent"',
     "[budget",
-    "budget = { per_run_micros = nan }",
-    "budget = { per_day_micros = 1.5 }",
-  ])("refuses invalid cached source before activation: %s", async (tail) => {
-    fake.enqueue(
-      [AGENT_ROW],
-      [
-        {
-          id: "ver-uuid",
-          isPublished: false,
-          config: CONFIG,
-          definitionSource: `schema = "agent-definition/v0.1"\nslug = "my-agent"\n${tail}`,
-        },
-      ],
-    );
-    await expect(
-      agentDefinitionPublishHandler({ agentId: "agt_1", version: 1 }, CTX),
-    ).rejects.toMatchObject({ code: "conflict" });
-    expect(fake.mutations).toEqual({ insert: 0, update: 0, delete: 0 });
-  });
+    "",
+  ])(
+    "refuses Git-backed source before activation: %s",
+    async (definitionSource) => {
+      fake.enqueue(
+        [AGENT_ROW],
+        [
+          {
+            id: "ver-uuid",
+            isPublished: false,
+            config: CONFIG,
+            definitionSource,
+          },
+        ],
+      );
+      await expect(
+        agentDefinitionPublishHandler({ agentId: "agt_1", version: 1 }, CTX),
+      ).rejects.toMatchObject({
+        code: "conflict",
+        reason: "git_definition_requires_merge",
+      });
+      expect(fake.mutations).toEqual({ insert: 0, update: 0, delete: 0 });
+    },
+  );
+
+  it.each([NaN, Infinity, -1, 0, 1.5])(
+    "refuses invalid legacy budget before activation: %s",
+    async (perRunMicros) => {
+      fake.enqueue(
+        [AGENT_ROW],
+        [
+          {
+            id: "ver-uuid",
+            isPublished: false,
+            definitionSource: null,
+            config: { ...CONFIG, budget: { per_run_micros: perRunMicros } },
+          },
+        ],
+      );
+      await expect(
+        agentDefinitionPublishHandler({ agentId: "agt_1", version: 1 }, CTX),
+      ).rejects.toMatchObject({
+        code: "conflict",
+        reason: "invalid_definition_budget",
+      });
+      expect(fake.mutations).toEqual({ insert: 0, update: 0, delete: 0 });
+    },
+  );
 
   it("publishes the latest version when none specified", async () => {
     fake.enqueue(

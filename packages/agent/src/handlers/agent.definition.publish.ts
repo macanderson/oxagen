@@ -1,9 +1,5 @@
-import {
-  definitionBudget,
-  parseAgentDefinitionSource,
-} from "@oxagen/oxagen/agent-definition-source";
+import { definitionBudget } from "@oxagen/oxagen/agent-definition-source";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
-import { AGENT_DEFINITION_SCHEMA } from "@oxagen/oxagen/contracts/agent.definition.commit";
 import { withTenantDb, schema } from "@oxagen/database";
 import { and, desc, eq } from "drizzle-orm";
 import { computeConfigChecksum } from "@oxagen/oxagen/interactive-agent";
@@ -81,18 +77,14 @@ export async function agentDefinitionPublishHandler(
     }
 
     if (version.definitionSource != null) {
-      const doc = parseAgentDefinitionSource(version.definitionSource);
-      if (
-        doc["schema"] !== AGENT_DEFINITION_SCHEMA ||
-        doc["slug"] !== agent.slug
-      )
-        throw new HandlerError({
-          code: "conflict",
-          reason: "invalid_definition_identity",
-          message:
-            "The definition schema and slug must match this agent before publishing.",
-        });
-    } else definitionBudget(version.config);
+      throw new HandlerError({
+        code: "conflict",
+        reason: "git_definition_requires_merge",
+        message:
+          "Merge the agent definition pull request to publish this version.",
+      });
+    }
+    definitionBudget(version.config);
     const checksum = computeConfigChecksum(version.config);
 
     await tx
