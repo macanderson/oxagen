@@ -42,7 +42,7 @@ const TONE: Record<MandateMovement, BadgeTone> = {
 };
 
 // 16px on a phone, as the design's inputs are, so iOS does not zoom the page.
-const toolbarControl = `${inputBase} max-md:text-base`;
+const toolbarControl = `${inputBase} max-md:min-h-11 max-md:text-base`;
 
 /** At most five page buttons, centred on the current page where there is room. */
 function pageWindow(current: number, pages: number): number[] {

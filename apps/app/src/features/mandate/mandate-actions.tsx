@@ -26,7 +26,7 @@ import { editableOf, measuresOf, thresholdOf, unitOf } from "./view";
 type Place = { org: string; ws: string; mandate: MandateRow; here: SafePath };
 
 // 16px on a phone, as the design's inputs are, so iOS does not zoom the sheet.
-const field = `${inputBase} max-md:text-base`;
+const field = `${inputBase} max-md:min-h-11 max-md:text-base`;
 
 function text(form: FormData, name: string): string {
   const value = form.get(name);
