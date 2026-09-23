@@ -94,8 +94,8 @@ const {
       <p data-testid="skills-body" />
     )),
     SkillsLoading: vi.fn(() => null),
-    Tools: vi.fn((props: { searchParams: Record<string, string> }) => (
-      <p data-testid="tools-body" data-tab={props.searchParams.tab} />
+    Tools: vi.fn((props: { tab: string }) => (
+      <p data-testid="tools-body" data-tab={props.tab} />
     )),
     ToolsLoading: vi.fn(() => null),
     members,
@@ -140,7 +140,11 @@ vi.mock("@/features/organization", async (importOriginal) => ({
 }));
 vi.mock("@/features/onboarding", () => ({ OnboardingGate }));
 vi.mock("@/features/skills", () => ({ Skills, SkillsLoading }));
-vi.mock("@/features/tools", () => ({ Tools, ToolsLoading }));
+vi.mock("@/features/tools", async (load) => ({
+  ...(await load<typeof import("@/features/tools")>()),
+  Tools,
+  ToolsLoading,
+}));
 vi.mock("@/data/source", () => ({ dataSource: () => source }));
 vi.mock("next-intl/server", () => ({
   getTranslations: (namespace: string) =>
@@ -195,7 +199,7 @@ const title = translator("pages");
 
 /** A redirect with no title of its own, so not a `Load`. */
 const SKILLS = () => import("./[ws]/skills/page");
-const TOOLS: Load = () => import("./[ws]/tools/page");
+const TOOLS: Load = () => import("./[ws]/tools/[[...tab]]/page");
 const STEERING: Load = () => import("./[ws]/steering/page");
 
 const FLEET: Load = () => import("./[ws]/(fleet)/page");
@@ -211,21 +215,23 @@ const BILLING: Load = () => import("./billing/page");
 const AUDIT: Load = () => import("./audit/page");
 
 describe("the Tools page", () => {
-  it("resolves the workspace viewer, names the page once under the workspace eyebrow and hands the viewer, the data source and the query to Tools", async () => {
+  it("resolves the workspace viewer and hands the viewer, the data source, the tab the path names and the query to Tools", async () => {
     const viewer = { wsSlug: "core-platform", wsName: "Core platform" };
     requireViewer.mockResolvedValue(viewer);
-    const page = await expectPageTitle(
-      await TOOLS(),
-      routeProps(SEGMENTS, { tab: "switches", names: "api" }),
-      title("tools"),
+    const page = await TOOLS();
+    await renderPage(
+      await page.default({
+        params: Promise.resolve({ ...SEGMENTS, tab: ["switches"] }),
+        searchParams: Promise.resolve({ names: "api" }),
+      }),
     );
     expect(requireViewer).toHaveBeenCalledWith(...WS);
-    expect(page).toHaveTextContent("Workspace Core platform");
     expect(Tools).toHaveBeenCalledOnce();
     expect(Tools.mock.calls[0]?.[0]).toEqual({
       ctx: viewer,
       source,
-      searchParams: { tab: "switches", names: "api" },
+      tab: "switches",
+      searchParams: { names: "api" },
     });
     expect(screen.getByTestId("tools-body")).toHaveAttribute(
       "data-tab",
@@ -235,9 +241,42 @@ describe("the Tools page", () => {
     expect(screen.queryByTestId("not-recorded")).toBeNull();
   });
 
-  it("hands Tools the registry with no query when the URL carries none", async () => {
-    await expectPageTitle(await TOOLS(), routeProps(SEGMENTS), title("tools"));
-    expect(Tools.mock.calls.at(-1)?.[0]).toMatchObject({ searchParams: {} });
+  it("names itself pages.tools in the document title", async () => {
+    const page = await TOOLS();
+    expect(await page.generateMetadata(routeProps(SEGMENTS))).toEqual({
+      title: title("tools"),
+    });
+  });
+
+  it("lands the old servers tab and a pre-rev1 ?tab= on the tab that absorbed each", async () => {
+    const page = await TOOLS();
+    await renderPage(
+      await page.default({
+        params: Promise.resolve({ ...SEGMENTS, tab: ["servers"] }),
+        searchParams: Promise.resolve({}),
+      }),
+    );
+    expect(Tools.mock.calls.at(-1)?.[0]).toMatchObject({ tab: "providers" });
+    await renderPage(
+      await page.default({
+        params: Promise.resolve(SEGMENTS),
+        searchParams: Promise.resolve({ tab: "autoapprovals" }),
+      }),
+    );
+    expect(Tools.mock.calls.at(-1)?.[0]).toMatchObject({ tab: "policy" });
+  });
+
+  it("answers a path deeper than one tab with a 404 before resolving anyone (negative)", async () => {
+    const page = await TOOLS();
+    await expect(
+      Promise.resolve(
+        page.default({
+          params: Promise.resolve({ ...SEGMENTS, tab: ["providers", "x"] }),
+          searchParams: Promise.resolve({}),
+        }),
+      ),
+    ).rejects.toThrow();
+    expect(requireViewer).not.toHaveBeenCalled();
   });
 });
 
