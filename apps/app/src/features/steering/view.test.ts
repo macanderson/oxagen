@@ -62,6 +62,14 @@ describe("Steering routes", () => {
       "/acme/core-platform/steering/library/skills?cursor=next&view=search",
     );
   });
+  it("gives steering delivery its own section and keeps the legacy link", () => {
+    expect(parseSteeringView({ tab: "deliveries" })).toMatchObject({
+      tab: "deliveries",
+    });
+    expect(steeringLink(AT, { tab: "deliveries" })).toBe(
+      "/acme/core-platform/steering/deliveries",
+    );
+  });
   it("gives path selectors priority over conflicting legacy queries", () => {
     expect(
       parseSteeringView(

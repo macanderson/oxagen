@@ -2,7 +2,12 @@
 import { RECORD_KINDS, type RecordKind } from "@/data/contracts/steering";
 import { firstParam, routes, type SafePath } from "@/shared/safe-path";
 
-export const STEERING_TABS = ["library", "proposals", "freshness"] as const;
+export const STEERING_TABS = [
+  "library",
+  "proposals",
+  "freshness",
+  "deliveries",
+] as const;
 export type SteeringHubTab = (typeof STEERING_TABS)[number];
 export type SteeringTab =
   | SteeringHubTab

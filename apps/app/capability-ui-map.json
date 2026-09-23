@@ -152,6 +152,14 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "create_sso_provider": {
+      "route": "/[org]/sso",
+      "page": "apps/app/src/app/[org]/sso/page.tsx",
+      "entry": "/[org]/sso: Add provider dialog (features/organization/sso-provider-form.tsx, sso-actions.ts)",
+      "proof": "apps/app/src/features/organization/sso-provider-form.test.tsx",
+      "verifiedAt": "2026-09-22",
+      "verifiedBy": "session-enterprise-sso"
+    },
     "create_workspace": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/page.tsx",
@@ -191,6 +199,14 @@
       "proof": "apps/app/src/features/organization/role-actions.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
+    },
+    "delete_sso_provider": {
+      "route": "/[org]/sso",
+      "page": "apps/app/src/app/[org]/sso/page.tsx",
+      "entry": "/[org]/sso: Delete on a provider row, after an in-page confirm (features/organization/sso-controls.tsx, sso-actions.ts)",
+      "proof": "apps/app/src/features/organization/sso.test.tsx",
+      "verifiedAt": "2026-09-22",
+      "verifiedBy": "session-enterprise-sso"
     },
     "dismiss_finding": {
       "route": "/[org]/[ws]/spend",
@@ -758,6 +774,22 @@
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session-creation-wizards"
     },
+    "list_sso_providers": {
+      "route": "/[org]/sso",
+      "page": "apps/app/src/app/[org]/sso/page.tsx",
+      "entry": "/[org]/sso: the surface that invokes list_sso_providers (data/live/org.ts, data/live/mappers/org.ts)",
+      "proof": "apps/app/src/features/organization/sso.test.tsx",
+      "verifiedAt": "2026-09-22",
+      "verifiedBy": "session-enterprise-sso",
+      "also": [
+        {
+          "route": "/[org]/roles",
+          "page": "apps/app/src/app/[org]/roles/page.tsx",
+          "entry": "/[org]/roles: the IdP group mappings section reads list_sso_providers (features/organization/roles.tsx)",
+          "proof": "apps/app/src/features/organization/roles.test.tsx"
+        }
+      ]
+    },
     "list_tool_versions": {
       "route": "/[org]/[ws]/tools",
       "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
@@ -1132,6 +1164,22 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "set_sso_group_roles": {
+      "route": "/[org]/roles",
+      "page": "apps/app/src/app/[org]/roles/page.tsx",
+      "entry": "/[org]/roles: Save mappings in the IdP group mappings section (features/organization/sso-group-roles.tsx, sso-actions.ts)",
+      "proof": "apps/app/src/features/organization/sso-group-roles.test.tsx",
+      "verifiedAt": "2026-09-22",
+      "verifiedBy": "session-enterprise-sso"
+    },
+    "set_sso_policy": {
+      "route": "/[org]/sso",
+      "page": "apps/app/src/app/[org]/sso/page.tsx",
+      "entry": "/[org]/sso: the Require SSO for members switch (features/organization/sso-controls.tsx, sso-actions.ts)",
+      "proof": "apps/app/src/features/organization/sso.test.tsx",
+      "verifiedAt": "2026-09-22",
+      "verifiedBy": "session-enterprise-sso"
+    },
     "set_tool_classification": {
       "route": "/[org]/[ws]/tools",
       "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
@@ -1197,6 +1245,14 @@
       "verifiedAt": "2026-09-20",
       "verifiedBy": "skills-console-ci"
     },
+    "update_sso_provider": {
+      "route": "/[org]/sso",
+      "page": "apps/app/src/app/[org]/sso/page.tsx",
+      "entry": "/[org]/sso: Edit on a provider row (features/organization/sso-provider-form.tsx, sso-actions.ts)",
+      "proof": "apps/app/src/features/organization/sso-provider-form.test.tsx",
+      "verifiedAt": "2026-09-22",
+      "verifiedBy": "session-enterprise-sso"
+    },
     "update_tacho_session_policy": {
       "route": "/[org]/[ws]/spend",
       "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
@@ -1220,6 +1276,14 @@
       "proof": "apps/app/src/features/organization/model-funding-form.test.tsx",
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-343b879e-byok"
+    },
+    "verify_sso_domain": {
+      "route": "/[org]/sso",
+      "page": "apps/app/src/app/[org]/sso/page.tsx",
+      "entry": "/[org]/sso: Verify domain under a pending provider's DNS record (features/organization/sso-controls.tsx, sso-actions.ts)",
+      "proof": "apps/app/src/features/organization/sso.test.tsx",
+      "verifiedAt": "2026-09-22",
+      "verifiedBy": "session-enterprise-sso"
     },
     "list_cost_centers": {
       "route": "/[org]",
@@ -1270,6 +1334,14 @@
       "proof": "apps/app/src/features/spend/dialogs.test.tsx",
       "verifiedAt": "2026-09-22",
       "verifiedBy": "session-1a3727fe-cost-centers"
+    },
+    "get_steering_deliveries": {
+      "route": "/[org]/[ws]/steering?tab=deliveries",
+      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
+      "entry": "Delivery tab showing included and cut records per recorded run",
+      "proof": "apps/app/src/features/steering/steering.test.tsx",
+      "verifiedAt": "2026-09-22",
+      "verifiedBy": "steering-rescue-ci"
     }
   }
 }

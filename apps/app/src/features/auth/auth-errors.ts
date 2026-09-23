@@ -6,6 +6,14 @@
 // Social sign-in failures also arrive as `?error=<code>` on /login (Better Auth
 // OAuth errorCallbackURL, or the proxy lift from `/?error=`). Those codes are
 // lowercase snake_case from the provider / Better Auth, not the client shape.
+//
+// Enterprise SSO (@better-auth/sso) throws APIErrors that carry only a message
+// ("No provider found for the issuer", "Provider domain has not been
+// verified"), so those match on the normalised message. Its identity-provider
+// round-trip failures arrive as `?error=` codes of their own (invalid_provider,
+// discovery_failed, invalid_saml_response …), distinct from the social ones.
+// SSO_REQUIRED is Oxagen's own code: the password sign-in hook in
+// packages/auth refuses an email whose organization requires SSO (ADR-145).
 
 export type AuthOutcomeKey =
   | "wrongCredentials"
@@ -17,6 +25,10 @@ export type AuthOutcomeKey =
   | "linkExpired"
   | "oauthCancelled"
   | "oauthFailed"
+  | "ssoRequired"
+  | "ssoNoProvider"
+  | "ssoDomainUnverified"
+  | "ssoFailed"
   | "unavailable"
   | "unknown";
 
@@ -30,6 +42,18 @@ type AuthErrorLike = {
 };
 
 const BY_CODE: ReadonlyArray<readonly [RegExp, AuthOutcomeKey]> = [
+  // The SSO patterns come first: "NO_PROVIDER_FOUND…" and "…PROVIDER…" would
+  // otherwise read as a social sign-in failure.
+  [/SSO_REQUIRED/, "ssoRequired"],
+  [/NO_PROVIDER_FOUND|SSO_PROVIDER_NOT_FOUND/, "ssoNoProvider"],
+  [
+    /PROVIDER_DOMAIN_HAS_NOT_BEEN_VERIFIED|DOMAIN_NOT_VERIFIED/,
+    "ssoDomainUnverified",
+  ],
+  [
+    /INVALID_PROVIDER|DISCOVERY_FAILED|INVALID_SAML_RESPONSE|UNSOLICITED_RESPONSE|REPLAY_DETECTED/,
+    "ssoFailed",
+  ],
   [
     /INVALID_EMAIL_OR_PASSWORD|INVALID_PASSWORD|USER_NOT_FOUND|CREDENTIAL_ACCOUNT_NOT_FOUND/,
     "wrongCredentials",
@@ -64,9 +88,17 @@ export function authOutcomeKey(err: unknown): AuthOutcomeKey {
   const e = readError(err);
   if (!e) return "unknown";
   if (e.status === 429) return "rateLimited";
+  // The code decides; the message is read only when the code names nothing
+  // here, because a plugin error can carry a bare status name ("NOT_FOUND")
+  // as its code and the meaning only in its message.
   const code = normalizeCode(e.code ?? e.body?.code ?? "");
-  const haystack = code || normalizeCode(e.message ?? e.body?.message ?? "");
-  for (const [pattern, key] of BY_CODE) if (pattern.test(haystack)) return key;
+  const message = normalizeCode(e.message ?? e.body?.message ?? "");
+  for (const haystack of [code, message]) {
+    if (haystack === "") continue;
+    for (const [pattern, key] of BY_CODE) {
+      if (pattern.test(haystack)) return key;
+    }
+  }
   if (typeof e.status === "number" && e.status >= 500) return "unavailable";
   return "unknown";
 }

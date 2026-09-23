@@ -147,6 +147,7 @@ export function onboardingSource(reads: Reads): {
       apiKeys: refuse("org.apiKeys"),
       costCenters: refuse("org.costCenters"),
       modelCredential: refuse("org.modelCredential"),
+      sso: refuse("org.sso"),
     },
     skills: {
       inventory: refuse("skills.inventory"),
@@ -158,6 +159,7 @@ export function onboardingSource(reads: Reads): {
       proposals: refuse("steering.proposals"),
       contextPr: refuse("steering.contextPr"),
       freshness: refuse("steering.freshness"),
+      deliveries: refuse("steering.deliveries"),
     },
     tools: {
       versions: refuse("tools.versions"),

@@ -42,6 +42,7 @@ import { fetchAgentRunAuthz } from "@oxagen/iam";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { getCapability, HandlerError } from "@oxagen/oxagen";
+import { parseAgentDefinitionSource } from "@oxagen/oxagen/agent-definition-source";
 import {
   AGENT_DEFINITION_DIR,
   AGENT_DEFINITION_SCHEMA,
@@ -58,8 +59,8 @@ const AGENT_DEFINITION_ROLES = ["Owner", "Admin", "Member"] as const;
 
 /**
  * The top-level `key = "value"` string of a TOML subset (spec §6.2's file
- * shape), or null. Only the fields this handler checks are read; the file's
- * full validation is the repository's own check on the pull request.
+ * shape), or null. Retained for callers that inspect legacy source snippets;
+ * definition writes use the full TOML parser below.
  */
 export function readTopLevelString(source: string, key: string): string | null {
   for (const line of source.split(/\r?\n/)) {
@@ -344,7 +345,8 @@ export const agentDefinitionCommitHandler: CapabilityHandler<
   const now = new Date();
   const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
 
-  const fileSchema = readTopLevelString(input.source, "schema");
+  const definition = parseAgentDefinitionSource(input.source);
+  const fileSchema = definition["schema"];
   if (fileSchema !== AGENT_DEFINITION_SCHEMA) {
     throw new HandlerError({
       code: "conflict",
@@ -363,7 +365,7 @@ export const agentDefinitionCommitHandler: CapabilityHandler<
       });
     }
     assertNotRetired(agent);
-    const fileSlug = readTopLevelString(input.source, "slug");
+    const fileSlug = definition["slug"];
     if (fileSlug !== agent.slug) {
       throw new HandlerError({
         code: "conflict",
@@ -376,7 +378,7 @@ export const agentDefinitionCommitHandler: CapabilityHandler<
       await assertToolsWithinCeiling(
         tx,
         { ...scope, userId },
-        capabilityToolsOf(readTopLevelStringArray(input.source, "tools")),
+        capabilityToolsOf((definition["tools"] ?? []) as string[]),
         now,
       );
     }

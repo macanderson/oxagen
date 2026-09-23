@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { readError } from "@/data/read";
 import type { MfaPolicy } from "./mfa-gate";
+import type { SsoPolicy } from "./sso-gate";
 import type { AppSession } from "./session";
 import type { SystemLookups } from "./tenancy-lookups";
 import {
@@ -59,6 +60,7 @@ function lookups(overrides: Overrides = {}): SystemLookups {
       Promise.resolve({ id: "wsu_1", role: "member" }),
     ),
     mfaPolicy: vi.fn(() => Promise.resolve(null)),
+    ssoPolicy: vi.fn(() => Promise.resolve(null)),
     twoFactorEnabled: vi.fn(() => Promise.resolve(false)),
     invitationByToken: vi.fn(() => Promise.resolve(null)),
     ...overrides,
@@ -333,6 +335,77 @@ describe("resolveViewerWith: MFA gate", () => {
     const l = lookups({ mfaPolicy: () => Promise.resolve(policy) });
     expect((await resolve(l, "acme")).kind).toBe("ok");
     expect(l.twoFactorEnabled).not.toHaveBeenCalled();
+  });
+});
+
+describe("resolveViewerWith: SSO gate", () => {
+  const sso: SsoPolicy = { ssoRequired: true, providerIds: ["acme-okta"] };
+  const withMethod = (authMethod: string | null): AppSession => ({
+    ...session,
+    authMethod,
+  });
+
+  it("sends a member signed in with a password to SSO", async () => {
+    const l = lookups({ ssoPolicy: () => Promise.resolve(sso) });
+    await expect(
+      resolve(l, "acme", "core-platform", withMethod("password")),
+    ).resolves.toEqual({ kind: "sso_required" });
+  });
+
+  it("sends a stale session that recorded no method to SSO", async () => {
+    const l = lookups({ ssoPolicy: () => Promise.resolve(sso) });
+    await expect(resolve(l, "acme")).resolves.toEqual({
+      kind: "sso_required",
+    });
+  });
+
+  it("lets a session from one of the organization's providers through", async () => {
+    const l = lookups({ ssoPolicy: () => Promise.resolve(sso) });
+    expect(
+      (await resolve(l, "acme", "core-platform", withMethod("sso:acme-okta")))
+        .kind,
+    ).toBe("ok");
+  });
+
+  it("refuses a session from another organization's provider", async () => {
+    const l = lookups({ ssoPolicy: () => Promise.resolve(sso) });
+    await expect(
+      resolve(l, "acme", undefined, withMethod("sso:globex-okta")),
+    ).resolves.toEqual({ kind: "sso_required" });
+  });
+
+  it("lets an owner through on a password session (break-glass)", async () => {
+    const l = lookups({
+      orgRole: () => Promise.resolve("owner"),
+      ssoPolicy: () => Promise.resolve(sso),
+    });
+    const result = await resolve(l, "acme", undefined, withMethod("password"));
+    expect(result.kind).toBe("ok");
+  });
+
+  it("checks SSO before MFA enrollment", async () => {
+    const l = lookups({
+      orgRole: () => Promise.resolve("admin"),
+      ssoPolicy: () => Promise.resolve(sso),
+      mfaPolicy: () =>
+        Promise.resolve({
+          mfaRequired: true,
+          mfaGraceHours: 0,
+          updatedAt: new Date("2026-09-01T00:00:00Z"),
+        }),
+    });
+    await expect(resolve(l, "acme")).resolves.toEqual({
+      kind: "sso_required",
+    });
+  });
+
+  it("does not disclose the policy to a non-member", async () => {
+    const l = lookups({
+      orgRole: () => Promise.resolve(null),
+      ssoPolicy: vi.fn(() => Promise.resolve(sso)),
+    });
+    await expect(resolve(l, "acme")).resolves.toEqual({ kind: "not_found" });
+    expect(l.ssoPolicy).not.toHaveBeenCalled();
   });
 });
 

@@ -1,4 +1,5 @@
-// Existing steering reads grouped under the Library, Freshness and Proposals.
+// Existing steering reads grouped under the Library, Proposals, Freshness and
+// Delivery.
 import { Suspense } from "react";
 import { useTranslations } from "next-intl";
 import { firstParam } from "@/shared/safe-path";
@@ -10,6 +11,7 @@ import { PageRecord } from "@/features/shell";
 import { Skills, SkillsLoading } from "@/features/skills";
 import type { WsCtx } from "@/server/viewer";
 import { ContextPrs } from "./context-prs";
+import { Deliveries } from "./deliveries";
 import { Freshness } from "./freshness";
 import { Proposals } from "./proposals";
 import { SteeringReadFailure } from "./read-failure";
@@ -48,6 +50,8 @@ async function TabBody({
   at: SteeringAt;
 }) {
   switch (view.tab) {
+    case "deliveries":
+      return <Deliveries read={await source.steering.deliveries(ctx)} />;
     case "freshness":
       return (
         <SettingsPanel

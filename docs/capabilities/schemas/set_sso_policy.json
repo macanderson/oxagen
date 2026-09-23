@@ -1,0 +1,53 @@
+{
+  "name": "set_sso_policy",
+  "domain": "org",
+  "description": "Require SSO for the organisation, or stop requiring it. While required, members other than Owners reach the organisation only through one of its SSO providers. Turning it on needs at least one provider with a verified domain.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "ssoRequired": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "ssoRequired"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "policy": {
+        "type": "object",
+        "properties": {
+          "ssoRequired": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ssoRequired"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "policy"
+    ],
+    "additionalProperties": false
+  }
+}

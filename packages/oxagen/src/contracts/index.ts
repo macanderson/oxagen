@@ -264,6 +264,7 @@ import { contextProposalDismiss } from "./context.proposal.dismiss";
 import { contextPrOpen } from "./context.pr.open";
 import { contextPrGet } from "./context.pr.get";
 import { contextPrMerge } from "./context.pr.merge";
+import { contextSteeringDeliveries } from "./context.steering.deliveries";
 import { contextSteeringFreshness } from "./context.steering.freshness";
 import { contextGovernanceModeSet } from "./context.governance_mode.set";
 import { connectionList } from "./connection.list";
@@ -316,6 +317,13 @@ import { orgModelCredentialDelete } from "./org.model_credential.delete";
 import { orgModelCredentialGet } from "./org.model_credential.get";
 import { orgModelCredentialSet } from "./org.model_credential.set";
 import { orgModelCredentialVerify } from "./org.model_credential.verify";
+import { orgSsoCreate } from "./org.sso.create";
+import { orgSsoDelete } from "./org.sso.delete";
+import { orgSsoGroupRolesSet } from "./org.sso.group_roles.set";
+import { orgSsoList } from "./org.sso.list";
+import { orgSsoPolicySet } from "./org.sso.policy.set";
+import { orgSsoUpdate } from "./org.sso.update";
+import { orgSsoVerifyDomain } from "./org.sso.verify_domain";
 import { orgSettingsRead } from "./org.settings.read";
 import { orgSettingsWrite } from "./org.settings.write";
 import { workspaceSettingsRead } from "./workspace.settings.read";
@@ -564,6 +572,28 @@ export type {
   ModelCredentialVerification,
 } from "./org.model_credential.shared";
 
+// Shared enterprise-SSO wire schemas (ADR-145, not capabilities themselves),
+// re-exported so the app, the API route and the MCP tools import one shape.
+export {
+  ssoDomainSchema,
+  ssoGroupRoleSchema,
+  ssoGroupsClaimSchema,
+  ssoMappableRoleSchema,
+  ssoPolicyViewSchema,
+  ssoProtocolInputSchema,
+  ssoProtocolUpdateInputSchema,
+  ssoProviderIdSchema,
+  ssoProviderViewSchema,
+} from "./org.sso.shared";
+export type {
+  SsoGroupRole,
+  SsoMappableRole,
+  SsoPolicyView,
+  SsoProtocolInput,
+  SsoProtocolUpdateInput,
+  SsoProviderView,
+} from "./org.sso.shared";
+
 export {
   apiKeyCreate,
   apiKeyList,
@@ -810,6 +840,7 @@ export {
   contextRecordsList,
   contextRecordsGet,
   contextSteeringFreshness,
+  contextSteeringDeliveries,
   contextRecordsAppend,
   contextProposalCreate,
   contextProposalList,
@@ -868,6 +899,13 @@ export {
   orgModelCredentialGet,
   orgModelCredentialSet,
   orgModelCredentialVerify,
+  orgSsoCreate,
+  orgSsoDelete,
+  orgSsoGroupRolesSet,
+  orgSsoList,
+  orgSsoPolicySet,
+  orgSsoUpdate,
+  orgSsoVerifyDomain,
   orgSettingsRead,
   orgSettingsWrite,
   workspaceSettingsRead,
@@ -1176,6 +1214,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   contextRecordsList,
   contextRecordsGet,
   contextSteeringFreshness,
+  contextSteeringDeliveries,
   contextRecordsAppend,
   contextProposalCreate,
   contextProposalList,
@@ -1236,6 +1275,13 @@ export const contracts: readonly CapabilityDeclaration[] = [
   orgModelCredentialGet,
   orgModelCredentialSet,
   orgModelCredentialVerify,
+  orgSsoCreate,
+  orgSsoDelete,
+  orgSsoGroupRolesSet,
+  orgSsoList,
+  orgSsoPolicySet,
+  orgSsoUpdate,
+  orgSsoVerifyDomain,
   orgSettingsRead,
   orgSettingsWrite,
   workspaceSettingsRead,

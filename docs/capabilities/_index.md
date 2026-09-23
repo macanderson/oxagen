@@ -352,18 +352,25 @@ after the registered name separately when their contract uses a dotted stem.
 | [add_org_member](org.member.add.md) | [org.member.add.ts](../../packages/oxagen/src/contracts/org.member.add.ts) | api, mcp, agent |
 | [change_member_role](org.member_role.change.md) | [org.member_role.change.ts](../../packages/oxagen/src/contracts/org.member_role.change.ts) | api, mcp, agent |
 | [create_org](org.create.md) | [org.create.ts](../../packages/oxagen/src/contracts/org.create.ts) | api, mcp, agent |
+| [create_sso_provider](create_sso_provider.md) | [org.sso.create.ts](../../packages/oxagen/src/contracts/org.sso.create.ts) | api, mcp |
 | [decline_member_invite](org.member_invite.decline.md) | [org.member_invite.decline.ts](../../packages/oxagen/src/contracts/org.member_invite.decline.ts) | api, mcp, agent |
 | [delete_model_credential](delete_model_credential.md) | [org.model_credential.delete.ts](../../packages/oxagen/src/contracts/org.model_credential.delete.ts) | api, mcp |
+| [delete_sso_provider](delete_sso_provider.md) | [org.sso.delete.ts](../../packages/oxagen/src/contracts/org.sso.delete.ts) | api, mcp |
 | [get_data_plane](get_data_plane.md) | [org.data_plane.get.ts](../../packages/oxagen/src/contracts/org.data_plane.get.ts) | api, mcp |
 | [get_model_credential](get_model_credential.md) | [org.model_credential.get.ts](../../packages/oxagen/src/contracts/org.model_credential.get.ts) | api, mcp |
 | [get_org_settings](org.settings.read.md) | [org.settings.read.ts](../../packages/oxagen/src/contracts/org.settings.read.ts) | api, mcp, agent |
 | [list_members](workspace.member.list.md) | [workspace.member.list.ts](../../packages/oxagen/src/contracts/workspace.member.list.ts) | api, mcp |
 | [list_orgs](org.list.md) | [org.list.ts](../../packages/oxagen/src/contracts/org.list.ts) | api, mcp, agent |
+| [list_sso_providers](list_sso_providers.md) | [org.sso.list.ts](../../packages/oxagen/src/contracts/org.sso.list.ts) | api, mcp |
 | [remove_org_member](org.member.remove.md) | [org.member.remove.ts](../../packages/oxagen/src/contracts/org.member.remove.ts) | api, mcp, agent |
 | [set_data_plane](set_data_plane.md) | [org.data_plane.set.ts](../../packages/oxagen/src/contracts/org.data_plane.set.ts) | api, mcp |
 | [set_model_credential](set_model_credential.md) | [org.model_credential.set.ts](../../packages/oxagen/src/contracts/org.model_credential.set.ts) | api, mcp |
+| [set_sso_group_roles](set_sso_group_roles.md) | [org.sso.group_roles.set.ts](../../packages/oxagen/src/contracts/org.sso.group_roles.set.ts) | api, mcp |
+| [set_sso_policy](set_sso_policy.md) | [org.sso.policy.set.ts](../../packages/oxagen/src/contracts/org.sso.policy.set.ts) | api, mcp |
 | [update_org_settings](org.settings.write.md) | [org.settings.write.ts](../../packages/oxagen/src/contracts/org.settings.write.ts) | api, mcp, agent |
+| [update_sso_provider](update_sso_provider.md) | [org.sso.update.ts](../../packages/oxagen/src/contracts/org.sso.update.ts) | api, mcp |
 | [verify_model_credential](verify_model_credential.md) | [org.model_credential.verify.ts](../../packages/oxagen/src/contracts/org.model_credential.verify.ts) | api, mcp |
+| [verify_sso_domain](verify_sso_domain.md) | [org.sso.verify_domain.ts](../../packages/oxagen/src/contracts/org.sso.verify_domain.ts) | api, mcp |
 
 ## Plugin
 
@@ -623,3 +630,5 @@ after the registered name separately when their contract uses a dotted stem.
 | [update_skill_config](skill.config.update.md) | [skill.config.update.ts](../../packages/oxagen/src/contracts/skill.config.update.ts) | api, mcp |
 | [preview_skill_search](skill.search.preview.md) | [skill.search.preview.ts](../../packages/oxagen/src/contracts/skill.search.preview.ts) | api |
 | [summarize_skill_search](skill.search.summarize.md) | [skill.search.summarize.ts](../../packages/oxagen/src/contracts/skill.search.summarize.ts) | mcp |
+
+- [get_steering_deliveries](./context.steering.deliveries.md): included and cut records per run.

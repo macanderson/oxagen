@@ -102,6 +102,7 @@ describe("tabs", () => {
       proposals: [],
       contextPr: [],
       freshness: [],
+      deliveries: [],
     });
     const tabs = screen.getByRole("navigation", { name: "Steering views" });
     expect(
@@ -116,6 +117,7 @@ describe("tabs", () => {
       ["Library", `${BASE}/library`, "page"],
       ["Proposals", `${BASE}/proposals`, null],
       ["Freshness", `${BASE}/freshness`, null],
+      ["Delivery", `${BASE}/deliveries`, null],
     ]);
   });
 
@@ -127,6 +129,7 @@ describe("tabs", () => {
       proposals: [],
       contextPr: [],
       freshness: [[ctx]],
+      deliveries: [],
     });
     expect(screen.getByRole("link", { name: "Freshness" })).toHaveAttribute(
       "aria-current",
@@ -362,6 +365,7 @@ describe("Proposals", () => {
       proposals: [[ctx, { offset: 0 }]],
       contextPr: [],
       freshness: [],
+      deliveries: [],
     });
     const card = within(section("Proposals")).getByRole("article");
     expect(card.querySelector("[data-status]")).toHaveTextContent(
@@ -502,5 +506,74 @@ describe("Context PRs", () => {
     expect(section("Context PRs")).toHaveTextContent(
       "Context PRs could not be loaded: record_index_unavailable.",
     );
+  });
+});
+
+describe("Delivery", () => {
+  it("reads only delivery counts and distinguishes missing manifests from zero delivery", async () => {
+    const calls = await renderSteering({ tab: "deliveries" });
+    expect(calls.deliveries).toEqual([[ctx]]);
+    expect(calls.records).toEqual([]);
+    expect(
+      screen.getByText(/No steering manifests were recorded/),
+    ).toBeVisible();
+    expect(screen.getByRole("link", { name: "Delivery" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+  it("renders counts per run and names records cut from the bounded sample", async () => {
+    await renderSteering(
+      { tab: "deliveries" },
+      {
+        deliveries: readOk({
+          runs: [
+            {
+              sessionUuid: "10000000-0000-4000-8000-000000000001",
+              ts: "2026-09-22 12:00:00.000",
+              harness: "codex",
+              agentKey: "review",
+              recordsIncluded: 14,
+              recordsCut: 3,
+              recordsCutForBudget: 2,
+              budgetTokens: 4096,
+              spentTokens: 3200,
+            },
+          ],
+          undelivered: [
+            {
+              recordRef: "ctx.release",
+              runs: 9,
+              lastReason: "budget",
+              lastSeen: "2026-09-22 12:00:00.000",
+            },
+          ],
+          scanned: 2000,
+          truncated: true,
+        }),
+      },
+    );
+    const table = screen.getByRole("table", { name: "Steering delivery" });
+    expect(within(table).getByText("14")).toBeVisible();
+    expect(within(table).getByText("3")).toBeVisible();
+    expect(within(table).getByText("2")).toBeVisible();
+    expect(screen.getByRole("status")).toHaveTextContent("newest 2,000");
+    expect(screen.getByText("ctx.release")).toBeVisible();
+    expect(screen.getByText("Budget", { exact: true })).toBeVisible();
+  });
+  it.each([
+    DENIED,
+    DOWN,
+    {
+      ok: false,
+      reason: "pending_approval",
+      accessRequestId: "apr_wait",
+    } as const,
+  ])("preserves an unsuccessful delivery read", async (read) => {
+    await renderSteering({ tab: "deliveries" }, { deliveries: read });
+    expect(
+      document.querySelector(`[data-reason="${read.reason}"]`),
+    ).toBeVisible();
+    expect(screen.queryByRole("table")).toBeNull();
   });
 });

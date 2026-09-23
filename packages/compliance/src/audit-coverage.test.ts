@@ -105,6 +105,7 @@ const REQUIRED_EMIT_PREFIXES: readonly string[] = [
   "org.member.", // org membership + role mutations + invite lifecycle
   "org.settings.", // org-profile reads/writes
   "org.model_credential.", // customer model-vendor key set / delete (get + verify are audit-exempt)
+  "org.sso.", // enterprise SSO providers, domain verification, policy and group roles (the list is audit-exempt)
   "billing.", // billing mutations (checkout, plan/seat/subscription)
   "plugin.org.", // org-level plugin governance (install / uninstall / enable)
   "plugin.set_enabled", // org- and workspace-level plugin enable/disable (one handler, both scopes)

@@ -234,6 +234,8 @@ describe("header", () => {
       "prn_marcusbell",
     );
     expect(facts.getByText("claude-sonnet-5")).toBeTruthy();
+    expect(facts.getByText("Claude Code")).toBeTruthy();
+    expect(facts.getByText("Version 2.1.0")).toBeTruthy();
     expect(facts.getByText("anthropic \u00b7 sonnet")).toBeTruthy();
     expect(facts.getByText("mac-studio.local")).toBeTruthy();
     expect(facts.getByText("Session machine facts not recorded.")).toBeTruthy();
@@ -285,13 +287,18 @@ describe("header", () => {
     await renderRun({
       detail: ok(
         runDetail({
-          run: runRow({ source: "ledger", model: null, machine: null }),
+          run: runRow({
+            source: "ledger",
+            model: null,
+            machine: null,
+            harness: null,
+          }),
         }),
       ),
       transcript: ok(runTranscript()),
     });
     const facts = within(screen.getByTestId("run-facts"));
-    expect(facts.getAllByText("not recorded")).toHaveLength(2);
+    expect(facts.getAllByText("not recorded")).toHaveLength(3);
     expect(
       facts.getByText("The evidence ledger records no host for a run."),
     ).toBeTruthy();

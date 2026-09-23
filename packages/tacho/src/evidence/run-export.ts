@@ -20,6 +20,8 @@
  *   wrapped frame (`tse_…`)
  *     link     prev_hash is the previous frame's hash (sha256("") at seq 0)
  *              and seq is dense.
+ *     export   the exact exported segment bytes match the signed
+ *              archive_segment_digest, authenticating the projection.
  *     digest   not carried: the export holds a projection of the stored row,
  *              and the hash was taken over the full envelope.
  *
@@ -367,6 +369,15 @@ export function verifyRunExport(files: RunExportFiles): RunExportVerification {
     `unknown bundle format ${String(manifest.format)}`,
   );
 
+  hold(
+    "source",
+    typeof manifest.run_id === "string" &&
+      ((manifest.source === "ledger" && manifest.run_id.startsWith("arun_")) ||
+        (manifest.source === "tacho" && manifest.run_id.startsWith("tse_"))),
+    "the source matches the run identifier",
+    "the source is invalid or does not match the run identifier",
+  );
+
   // Per-frame checks, walking the attempts the manifest declares.
   const byLine = new Map(verdicts.map((v) => [v.line, v]));
   let offset = 0;
@@ -513,6 +524,25 @@ export function verifyRunExport(files: RunExportFiles): RunExportVerification {
     const slice = digests.slice(
       covered,
       covered + (a.payload?.frame_count ?? 0),
+    );
+    if (manifest.source === "tacho") {
+      const exportedDigest = digestBytes(
+        lines
+          .slice(covered, covered + (a.payload?.frame_count ?? 0))
+          .join("\n"),
+      );
+      hold(
+        `exported content ${attemptId}`,
+        exportedDigest === a.payload?.archive_segment_digest,
+        "the exported frame bytes match the signed segment digest",
+        "the exported frame bytes do not match the signed segment digest",
+      );
+    }
+    hold(
+      `run identity ${attemptId}`,
+      a.payload?.run_id === manifest.run_id,
+      "the attestation names this run",
+      "the manifest run differs from the signed run",
     );
     covered += a.payload?.frame_count ?? 0;
     const attemptRoot = slice.every((d): d is string => d !== null)
