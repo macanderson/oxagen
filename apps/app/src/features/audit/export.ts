@@ -70,7 +70,7 @@ export async function handleAuditExport(
   // The same window the page reads over, resolved in the viewer's zone here so
   // the file carries the rows the reader is looking at (auditWindow).
   const source = deps.dataSource();
-  const range = await auditWindow(viewer.ctx, source, filters);
+  const range = await auditWindow(viewer.ctx, source, filters, Date.now());
   const read = await source.audit.exportEvents(viewer.ctx, {
     ...range,
     format,

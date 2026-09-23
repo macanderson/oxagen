@@ -14,7 +14,6 @@ import { auditLogQuery } from "@oxagen/oxagen/contracts/audit.log.query";
 import { captureError } from "@oxagen/telemetry";
 import type { z } from "zod";
 import {
-  AUDIT_PAGE_SIZE,
   AuditExport,
   AuditPage,
   type AuditWindow,
@@ -56,13 +55,13 @@ function contractFilters(f: AuditWindow) {
 
 export const audit: DataSource["audit"] = {
   async events(ctx, q) {
-    const { offset, ...filters } = q;
+    const { offset, limit, ...filters } = q;
     const read = await kernelRead(ctx, {
       contract: auditLogQuery,
       input: {
         source: "security",
         ...contractFilters(filters),
-        limit: AUDIT_PAGE_SIZE,
+        limit,
         offset,
       },
       page: "audit",

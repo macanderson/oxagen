@@ -13,21 +13,43 @@ import { PublicId } from "./common";
 export const AuditOutcome = z.enum(["allow", "deny", "error", "success"]);
 export type AuditOutcome = z.infer<typeof AuditOutcome>;
 
-/** Events on one page of the record. */
-export const AUDIT_PAGE_SIZE = 50;
+/** The Rows select: how many events one page of the table shows (rev1 audit.md, Events). */
+export const AUDIT_ROWS = [10, 25, 50] as const;
+export type AuditRows = (typeof AUDIT_ROWS)[number];
+/** Rows on a page when the URL names none; the design opens on ten. */
+export const AUDIT_DEFAULT_ROWS: AuditRows = 10;
 
-/** The filters a reader sets in the URL, each null when unset; `from` and `to` are UTC days, both inclusive. */
+/**
+ * The Range select: how far back the record is read, ending now. The design
+ * opens the page on thirty days, which is the window the first tile names.
+ */
+export const AUDIT_RANGES = ["48h", "7d", "30d"] as const;
+export type AuditRange = (typeof AUDIT_RANGES)[number];
+export const AUDIT_DEFAULT_RANGE: AuditRange = "30d";
+
+/**
+ * The most events the summary tiles count in one read: the contract's own
+ * page limit. A window holding more shows its counts as a lower bound.
+ */
+export const AUDIT_TILE_LIMIT = 200;
+
+/**
+ * The filters a reader sets in the URL, each null when unset. `range` is the
+ * window ending now; `from` and `to` are calendar days, both inclusive, and
+ * replace the range when either is set (a link from before the Range select).
+ */
 export type AuditFilters = {
   eventType: string | null;
   outcome: AuditOutcome | null;
   actor: string | null;
   capability: string | null;
+  range: AuditRange;
   from: string | null;
   to: string | null;
 };
 
-/** One page of the record: the filters plus where the page starts. */
-export type AuditQuery = AuditFilters & { offset: number };
+/** One page of the record: the filters, the page size and where the page starts. */
+export type AuditQuery = AuditFilters & { rows: AuditRows; offset: number };
 
 export type AuditExportFormat = "csv" | "ndjson";
 
@@ -41,15 +63,15 @@ export type AuditExportFormat = "csv" | "ndjson";
  * types are otherwise the same shape, and this way a day handed to the port
  * where an instant belongs does not compile.
  */
-export type AuditWindow = Omit<AuditFilters, "from" | "to"> & {
+export type AuditWindow = Omit<AuditFilters, "from" | "to" | "range"> & {
   /** The first instant of the `from` day in the viewer's zone, inclusive; null when unset. */
   since: string | null;
   /** The first instant of the day after `to` in that zone, exclusive; null when unset. */
   until: string | null;
 };
 
-/** One page of the record, as the port takes it. */
-export type AuditPageQuery = AuditWindow & { offset: number };
+/** One page of the record, as the port takes it: at most `limit` events from `offset`. */
+export type AuditPageQuery = AuditWindow & { offset: number; limit: number };
 
 /** The signed export over the same window. */
 export type AuditExportQuery = AuditWindow & { format: AuditExportFormat };

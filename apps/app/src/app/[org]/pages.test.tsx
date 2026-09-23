@@ -113,7 +113,12 @@ vi.mock("@/server/viewer", () => ({
     is: (x: unknown) => typeof x === "object" && x !== null && "wsSlug" in x,
   },
 }));
-vi.mock("@/features/audit", () => ({ Audit, AuditSkeleton: () => null }));
+vi.mock("@/features/audit", async (actual) => ({
+  Audit,
+  AuditSkeleton: () => null,
+  AuditHeaderAction: () => <p data-testid="audit-header-action" />,
+  auditTabOf: (await actual<typeof import("@/features/audit")>()).auditTabOf,
+}));
 vi.mock("@/features/billing", () => ({ Billing, BillingActions }));
 vi.mock("@/features/fleet", () => ({ Fleet, FleetRegister: () => null }));
 vi.mock("@/features/run", () => ({ Run }));
@@ -163,6 +168,9 @@ vi.mock("@/features/organization/api-key-actions", () => ({
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+  notFound: () => {
+    throw new Error("NOT_FOUND");
+  },
 }));
 // The Skills route only moves to the Steering tab; the redirect throws, as
 // Next's does, with the target in its message.
@@ -209,6 +217,7 @@ const API_KEYS: Load = () => import("./api-keys/page");
 
 const BILLING: Load = () => import("./billing/page");
 const AUDIT: Load = () => import("./audit/page");
+const AUDIT_TAB = () => import("./audit/[tab]/page");
 
 describe("the Tools page", () => {
   it("resolves the workspace viewer, names the page once under the workspace eyebrow and hands the viewer, the data source and the query to Tools", async () => {
@@ -242,10 +251,10 @@ describe("the Tools page", () => {
 });
 
 describe("the Audit page", () => {
-  it("resolves the organization viewer, names the page once and hands the viewer, the data source and the filters the URL carries to Audit", async () => {
+  it("resolves the organization viewer, names the page once with its gold action and hands the viewer, the data source, the Events tab and the filters the URL carries to Audit", async () => {
     const ctx = { orgSlug: "acme" };
     requireViewer.mockResolvedValue(ctx);
-    await expectPageTitle(
+    const page = await expectPageTitle(
       await AUDIT(),
       routeProps(SEGMENTS, { outcome: "deny", offset: "50" }),
       title("audit"),
@@ -255,10 +264,44 @@ describe("the Audit page", () => {
     expect(Audit.mock.calls[0]?.[0]).toEqual({
       ctx,
       source,
+      tab: "events",
       searchParams: { outcome: "deny", offset: "50" },
     });
+    expect(page).toHaveTextContent(
+      "What happened, who allowed it, under what authority, and what it cost.",
+    );
+    expect(page).toHaveTextContent(
+      "control-plane events retained 7 years · acme",
+    );
+    expect(screen.getByTestId("audit-header-action")).toBeInTheDocument();
     // Audit has a page, so it has no UNRECORDED row (§3.6).
     expect(screen.queryByTestId("not-recorded")).toBeNull();
+  });
+
+  it("opens another tab from its segment, under the same header", async () => {
+    const ctx = { orgSlug: "acme" };
+    requireViewer.mockResolvedValue(ctx);
+    await expectPageTitle(
+      await AUDIT_TAB(),
+      routeProps({ ...SEGMENTS, tab: "keys" }),
+      title("audit"),
+    );
+    expect(requireViewer).toHaveBeenCalledWith(...ORG);
+    expect(Audit.mock.calls.at(-1)?.[0]).toEqual({
+      ctx,
+      source,
+      tab: "keys",
+      searchParams: {},
+    });
+  });
+
+  it("answers a segment that names no tab with a 404 (negative)", async () => {
+    requireViewer.mockResolvedValue({ orgSlug: "acme" });
+    const module = await AUDIT_TAB();
+    await expect(
+      module.default(routeProps({ ...SEGMENTS, tab: "events" })),
+    ).rejects.toThrow("NOT_FOUND");
+    expect(Audit).not.toHaveBeenCalled();
   });
 });
 

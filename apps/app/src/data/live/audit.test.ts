@@ -64,7 +64,7 @@ beforeEach(() => {
 });
 
 describe("audit.events", () => {
-  it("reads one page of the whole organization's security events for the page", async () => {
+  it("reads one page of the whole organization's security events at the size the page asks for", async () => {
     kernelRead.mockResolvedValue(
       readOk({
         events: [event],
@@ -74,7 +74,11 @@ describe("audit.events", () => {
         offset: 0,
       }),
     );
-    const read = await audit.events(ctx, { ...NO_FILTERS, offset: 0 });
+    const read = await audit.events(ctx, {
+      ...NO_FILTERS,
+      offset: 0,
+      limit: 50,
+    });
     expect(read.ok && read.value.events).toHaveLength(1);
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: auditLogQuery,
@@ -95,6 +99,7 @@ describe("audit.events", () => {
       since: "2026-09-01T00:00:00.000Z",
       until: "2026-09-16T00:00:00.000Z",
       offset: 50,
+      limit: 50,
     });
     expect(kernelRead.mock.calls[0]?.[1]?.input).toEqual({
       source: "security",
@@ -117,6 +122,7 @@ describe("audit.events", () => {
       ...NO_FILTERS,
       until: "2027-01-01T00:00:00.000Z",
       offset: 0,
+      limit: 50,
     });
     expect(kernelRead.mock.calls[0]?.[1]?.input).toEqual({
       source: "security",
@@ -133,9 +139,9 @@ describe("audit.events", () => {
       permission: "org.admin",
     } as const;
     kernelRead.mockResolvedValue(denied);
-    expect(await audit.events(ctx, { ...NO_FILTERS, offset: 0 })).toEqual(
-      denied,
-    );
+    expect(
+      await audit.events(ctx, { ...NO_FILTERS, offset: 0, limit: 50 }),
+    ).toEqual(denied);
     expect(captureError).not.toHaveBeenCalled();
   });
 
@@ -149,9 +155,9 @@ describe("audit.events", () => {
         offset: 0,
       }),
     );
-    expect(await audit.events(ctx, { ...NO_FILTERS, offset: 0 })).toEqual(
-      readError("record_unmappable", 502),
-    );
+    expect(
+      await audit.events(ctx, { ...NO_FILTERS, offset: 0, limit: 50 }),
+    ).toEqual(readError("record_unmappable", 502));
     expect(captureError).toHaveBeenCalledOnce();
     expect(captureError.mock.calls[0]?.[0]).toMatchObject({
       source: "app",

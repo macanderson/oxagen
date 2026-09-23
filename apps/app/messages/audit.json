@@ -1,22 +1,70 @@
 {
   "audit": {
     "eyebrow": "Organization",
-    "description": "What happened, who allowed it, and what the kernel recorded. The record is written on every governed action and nothing in the product can edit it.",
+    "description": "What happened, who allowed it, under what authority, and what it cost.",
+    "retentionLine": "control-plane events retained 7 years · {org}",
     "loading": "Loading the audit record",
+    "notRecorded": "not recorded",
+    "tabs": {
+      "label": "Audit sections",
+      "events": "Events",
+      "incidents": "Incidents",
+      "receipts": "Receipts",
+      "exports": "Exports",
+      "keys": "Keys",
+      "retention": "Retention"
+    },
+    "tiles": {
+      "label": "Summary",
+      "events48h": "Events · 48 hours",
+      "events7d": "Events · 7 days",
+      "events30d": "Events · 30 days",
+      "eventsDays": "Events · chosen days",
+      "eventsNote": "every IAM decision is recorded, allowed or not",
+      "atLeast": "{count}+",
+      "denied": "Denied",
+      "deniedNote": "denials are recorded and cost nothing",
+      "service": "By a service principal",
+      "serviceNote": "Terraform, CI, exports, the archiver",
+      "agent": "By an agent",
+      "agentNote": "each one a governed action with a receipt"
+    },
     "events": {
       "title": "Control-plane events",
+      "caption": "admin actions, IAM changes, repo bindings, plane changes, key rotations",
+      "store": "postgres · 7 years",
+      "filters": "Filter the audit record",
+      "actor": "Actor",
+      "anyActor": "All actors",
+      "range": "Range",
+      "ranges": {
+        "48h": "Last 48 hours",
+        "7d": "Last 7 days",
+        "30d": "Last 30 days"
+      },
+      "search": "Search the audit record",
+      "searchPlaceholder": "Search events, receipts, actors, external ids",
+      "searchNotRecorded": "Search is not recorded yet. The audit read takes no text query, so use the Actor, Range and Result filters.",
+      "result": "Result",
+      "anyResult": "All · Result",
+      "severity": "Severity",
+      "anySeverity": "All · Severity",
+      "severityNotRecorded": "An audit event records no severity yet.",
+      "rows": "Rows",
+      "apply": "Apply",
       "when": "When",
       "event": "Event",
-      "actor": "Actor",
       "what": "What",
-      "result": "Result",
-      "more": "Details",
-      "workspace": "Workspace",
-      "ip": "IP address",
-      "request": "Request",
-      "userAgent": "User agent",
+      "reference": "Reference",
+      "kindNotRecorded": "kind not recorded",
       "detail": "Recorded facts",
-      "notRecorded": "not recorded"
+      "none": "No events in this window match these filters.",
+      "note": "The record is written by the kernel, never by an agent. A client-attested call is labeled as such and can never be shown as decided by Oxagen.",
+      "shown": "{start}-{end} of {total}",
+      "shownOpen": "{start}-{end}",
+      "pager": "Pages of the audit record",
+      "newer": "Newer events",
+      "older": "Older events"
     },
     "outcomes": {
       "allow": "allowed",
@@ -24,60 +72,137 @@
       "error": "error",
       "success": "succeeded"
     },
-    "filters": {
-      "label": "Filter the audit record",
-      "eventType": "Event",
-      "anyEventType": "Any event",
-      "outcome": "Result",
-      "anyOutcome": "Any result",
-      "actor": "Actor",
-      "anyActor": "Anyone",
-      "capability": "Capability",
+    "csv": {
+      "open": "CSV",
+      "title": "Export events",
+      "subtitle": "CSV · the same rows the API and MCP return",
+      "body": "The file holds the events this table reads over the same actor, range and result, with the event id, actor, capability, result, workspace, IP address, user agent and request id. It is signed with HMAC-SHA256 and the signature travels in the response headers. Nothing in a control-plane event is a prompt or tool body, so this export carries no redaction step.",
+      "download": "Download CSV"
+    },
+    "bundle": {
+      "open": "Export evidence bundle",
+      "title": "Export an evidence bundle",
+      "subtitle": "segments, attestations, key ids, and the verifier",
+      "scope": "Scope",
+      "scopeAll": "All workspaces · all runs",
       "from": "From",
       "to": "To",
-      "apply": "Apply filters",
-      "clear": "Clear filters"
+      "format": "Format",
+      "formatBundle": "Signed bundle (segments + verifier)",
+      "formatCsv": "Receipts as CSV",
+      "formatJson": "Receipts as JSON",
+      "notRecorded": "Oxagen does not build evidence bundles yet. No store holds archive segments, seal attestations or receipts to put in one. The signed CSV of control-plane events is on the Events tab.",
+      "build": "Build bundle"
     },
-    "export": {
-      "csv": "Export CSV",
-      "ndjson": "Export NDJSON"
+    "incidents": {
+      "open": "Open",
+      "critical": "Critical · 12 months",
+      "median": "Median time to resolve",
+      "money": "Money moved without a receipt",
+      "title": "Incidents",
+      "caption": "raised by the policy engine, the gateway and the verifier",
+      "raise": "Open an incident",
+      "notRecorded": "Incidents are not listed for the organization yet. The incident read answers one workspace at a time, and no write opens, assigns or resolves an incident."
     },
-    "pager": {
-      "label": "Pages of the audit record",
-      "newer": "Newer",
-      "older": "Older",
-      "end": "End of the record"
+    "incident": {
+      "title": "Open an incident",
+      "subject": "Subject",
+      "severity": "Severity",
+      "severities": {
+        "critical": "critical",
+        "warning": "warning",
+        "info": "info"
+      },
+      "attach": "Attach",
+      "attachNone": "Nothing attached",
+      "notRecorded": "No write opens an incident yet. The collector and the control plane record incidents they detect, and nothing records one a person raises.",
+      "submit": "Raise it"
+    },
+    "receipts": {
+      "title": "Receipt search",
+      "caption": "one signed record per tool call",
+      "notRecorded": "Receipts are not recorded yet. No store holds a signed receipt per tool call, so there is nothing to search."
+    },
+    "exports": {
+      "title": "Exports",
+      "caption": "signed archives with a verifier",
+      "notRecorded": "Evidence bundles are not recorded yet. No store lists a built bundle, its signature or its key ids.",
+      "verifier": "Verifier",
+      "verifierNotRecorded": "The offline verifier ships with evidence bundles, and none is built yet.",
+      "outbound": "Outbound events",
+      "outboundNotRecorded": "No outbound event subscription is recorded. Nothing names the event kinds, the dead-letter view or the delivery."
+    },
+    "keys": {
+      "title": "Keys",
+      "store": "kms + postgres",
+      "rotate": "Rotate KEK",
+      "notRecorded": "Keys are not recorded yet. No store lists the organization's key-encryption key, its generations or the signing keys receipts cite."
+    },
+    "rotate": {
+      "title": "Rotate the key-encryption key",
+      "subtitle": "a new generation, nothing rewritten",
+      "notRecorded": "No write rotates a key-encryption key yet, because no key registry exists to hold the next generation.",
+      "submit": "Rotate"
+    },
+    "retention": {
+      "title": "Retention",
+      "edit": "Edit policy",
+      "notRecorded": "The retention policy is not recorded yet. No read carries the body retention, the hot window, replay of a compacted run, each workspace's opt-down or the cold storage cost.",
+      "tiers": "Archive tiers",
+      "tiersNotRecorded": "No read lists the archive tiers, where each is held or how much each holds today.",
+      "redaction": "Redaction",
+      "redactionCaption": "before write",
+      "redactionNote": "The collector redacts credential shapes before a frame body is written. Each removal is recorded with the digest of the bytes removed, so a redacted body still verifies against its digest."
+    },
+    "policy": {
+      "title": "Retention policy",
+      "subtitle": "organization-wide",
+      "body": "Body retention",
+      "bodyDefault": "7 years (default)",
+      "hot": "Frame hot window",
+      "hotDefault": "13 months (default)",
+      "notRecorded": "No write saves a retention policy yet. The policy has no store for the body retention or the hot window.",
+      "submit": "Save policy"
     },
     "empty": {
       "title": "No audit events yet",
       "body": "Control-plane audit events are written by the kernel on every governed action. An empty record means nothing has been done in this organization yet, not that recording is off.",
       "action": "Open Organization"
     },
-    "filteredEmpty": {
-      "title": "No events match these filters",
-      "body": "The record holds events outside this filter. Clear the filters to read it from the newest event."
-    },
     "error": {
       "title": "Audit could not be loaded",
-      "body": "Nothing was changed. Runs kept recording while this page was down: events are written by the kernel, not by the operator console.",
-      "code": "{status} {code}",
-      "retry": "Try again"
+      "body": "The control plane answered <c>{status} {code}</c>. Nothing was changed. Runs kept recording while this page was down. Frames are written by the collector on each host, not by Oxagen.",
+      "retry": "Try again",
+      "trace": "trace not recorded · region not recorded · {at}"
     },
     "denied": {
       "title": "You cannot see the audit record",
-      "body": "Signed in as {role}. Needed: an organization owner or admin ({permission}). An owner can grant it, and the grant is itself recorded in the audit record."
+      "body": "Your roles on <b>{org}</b> do not include <code>{permission}</code>. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+      "request": "Request access",
+      "back": "Back to Fleet",
+      "open": "Open Organization",
+      "signedIn": "Signed in as",
+      "needed": "Needed",
+      "decidedBy": "Decided by"
+    },
+    "request": {
+      "title": "Request access",
+      "role": "Role requested",
+      "why": "Why",
+      "notRecorded": "No write sends an access request yet. Ask an organization owner to grant the role, and the grant lands in the audit record.",
+      "submit": "Send the request"
     },
     "pending": {
       "title": "Waiting for approval",
       "body": "Access request {id} is waiting for an owner's decision."
     },
     "roles": {
-      "owner": "an owner",
-      "admin": "an admin",
-      "member": "a member",
-      "billing": "a billing member",
-      "compliance": "a compliance member",
-      "viewer": "a viewer"
+      "owner": "owner",
+      "admin": "admin",
+      "member": "member",
+      "billing": "billing",
+      "compliance": "compliance",
+      "viewer": "viewer"
     }
   }
 }
