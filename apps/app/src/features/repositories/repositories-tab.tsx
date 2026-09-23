@@ -2,8 +2,8 @@
 // The Repositories tab (mockup `repoTab()`; MC spec §10.1, §11.2): every
 // repository this workspace binds, main first, and every repository the
 // installation reaches that it does not, as `not linked`. Role is the
-// workspace's word, not GitHub's. Every row opens the repository dialog by
-// click, Enter or Space.
+// workspace's word, not GitHub's. Every row opens the repository dialog: a
+// click anywhere on it, or its name, which is the button a keyboard reaches.
 //
 // Bound rows are local facts (`list_repositories` makes no GitHub call), so
 // the table draws while GitHub is down. The `.oxagen/` column is a live read
@@ -12,7 +12,6 @@
 // delivery counters and the code graph have no store yet and say so.
 import { FolderGit2 } from "lucide-react";
 import { useTranslations } from "next-intl";
-import type { KeyboardEvent } from "react";
 import { Badge } from "@/ui/badge";
 import { mono } from "@/ui/control-styles";
 import {
@@ -23,12 +22,7 @@ import {
 } from "@/ui/list-controls";
 import { cell, headCell } from "@/ui/table";
 import { REPOSITORY_GAPS } from "./gaps";
-import {
-  buttonSmall,
-  code,
-  note,
-  Panel,
-} from "./parts";
+import { buttonSmall, code, note, Panel } from "./parts";
 import { type RepositoryRow, treeState, type TreeState } from "./view";
 
 /** A `.oxagen/` state as a dot and a word. */
@@ -153,7 +147,9 @@ export function RepositoriesTab({
           data-testid="repositories-ungoverned"
           className="flex flex-wrap items-start gap-3 rounded-xl border border-border bg-hl px-4 py-3"
         >
-          <Badge tone="approval">{t("bannerBadge", { count: bare.length })}</Badge>
+          <Badge tone="approval">
+            {t("bannerBadge", { count: bare.length })}
+          </Badge>
           <div className="min-w-0 flex-1 text-[13px] text-muted-foreground">
             <b className="text-foreground">
               {t("bannerLead", {
@@ -291,30 +287,37 @@ function Row({
   const open = () => {
     onOpen(row.fullName);
   };
-  const keyDown = (event: KeyboardEvent<HTMLTableRowElement>) => {
-    if (event.target !== event.currentTarget) return;
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      open();
-    }
-  };
+  // The whole row opens the dialog to a pointer, as the mockup's rows do; the
+  // repository's name is the button a keyboard and a screen reader reach.
+  // The row itself takes no role, because it holds Add Oxagen, and a button
+  // inside a button is announced as neither.
   return (
     <tr
-      role="button"
-      tabIndex={0}
-      aria-label={t("open", { repository: row.fullName })}
       data-testid={`repository-row-${row.fullName}`}
       data-role={row.role}
       onClick={open}
-      onKeyDown={keyDown}
-      className="cursor-pointer transition-colors hover:bg-hl focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+      className="cursor-pointer transition-colors hover:bg-hl"
     >
       <td className={cell}>
         <span className="flex items-center gap-2">
-          <FolderGit2 aria-hidden="true" className="size-3.5 flex-none text-dim" />
-          <b className={`${mono} break-all font-semibold text-foreground`}>
+          <FolderGit2
+            aria-hidden="true"
+            className="size-3.5 flex-none text-dim"
+          />
+          <button
+            type="button"
+            aria-haspopup="dialog"
+            aria-label={t("open", { repository: row.fullName })}
+            data-testid={`repository-open-${row.fullName}`}
+            data-touch-target=""
+            onClick={(event) => {
+              event.stopPropagation();
+              open();
+            }}
+            className={`${mono} break-all text-left font-semibold text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:min-h-11`}
+          >
             {row.fullName}
-          </b>
+          </button>
         </span>
         {row.visibility === null ? null : (
           <span className="mt-0.5 block text-[11px] text-dim">
