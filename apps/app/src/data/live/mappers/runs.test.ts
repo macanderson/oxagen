@@ -118,7 +118,6 @@ describe("toRunPage", () => {
           verdict: null,
           enforcementTier: "gateway",
           enrichmentEnabled: true,
-          reportedCost: null,
           ingressRevoked: false,
           ingressPaused: false,
           completenessGaps: [],
