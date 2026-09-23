@@ -22,15 +22,15 @@
     "@oxagen/database": "workspace:*",
     "@oxagen/storage": "workspace:*",
     "@oxagen/tacho": "workspace:*",
-    "ai": "7.0.14",
-    "drizzle-orm": "0.45.2",
+    "ai": "7.0.111",
+    "drizzle-orm": "0.45.3",
     "typescript": "6.0.3",
     "zod": "3.25.76"
   },
   "devDependencies": {
-    "@types/node": "25.9.1",
+    "@types/node": "25.9.8",
     "@vitest/coverage-v8": "2.1.9",
-    "eslint": "9.39.4",
+    "eslint": "9.39.5",
     "vitest": "2.1.9"
   },
   "description": "Durable run / attempt / event / seal / finalization ledger — the evidence store for governed agent runs (ADR-043)."

@@ -3,16 +3,11 @@ packages:
   - "packages/*"
   - "tools/*"
 
-# pnpm 11 reads these settings from pnpm-workspace.yaml only — the
+# pnpm 11 and later read these settings from pnpm-workspace.yaml only — the
 # package.json#pnpm field is ignored (pnpm warns on every install).
 
-# Never prompt before recreating node_modules: non-TTY contexts (background
-# agents, CI, pnpm dev's deps check) abort with
-# ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY instead of installing.
-confirmModulesPurge: false
-
 overrides:
-  drizzle-orm: 0.45.2
+  drizzle-orm: 0.45.3
   # Narrowed to <7 so apps/app's `@typescript/native` (npm:typescript@7.0.2,
   # the `tsc` CLI) and its `typescript` alias (npm:@typescript/typescript6, the
   # JS API typescript-eslint needs, plus `tsc6`) are not rewritten to 6.0.3.
@@ -20,14 +15,16 @@ overrides:
   d3-path: 3.1.0
   d3-shape: 3.2.0
 
-# lucide-react 0.469 (the @oxagen/ui kit's pin) imports "react" types without
-# declaring @types/react as a peer, so pnpm resolves them through the hidden
-# hoist, which holds the highest @types/react in the tree. Once apps/app moved
-# to @types/react 19.3, every 19.2 consumer of lucide saw two unrelated
-# React type trees (TS2322 "Two different types with this name exist"). The
-# optional peer makes each lucide instance use its consumer's @types/react.
+# lucide-react imports "react" types without declaring @types/react as a
+# peer, so pnpm resolves them through the hidden hoist, which holds the highest
+# @types/react in the tree. When the @oxagen/ui kit sat on lucide 0.469 and
+# apps/app moved to @types/react 19.3, every 19.2 consumer of lucide saw two
+# unrelated React type trees (TS2322 "Two different types with this name
+# exist"). Every package now shares lucide 1.x and @types/react 19.3, but the
+# optional peer stays so a future split cannot bring the error back: each
+# lucide instance uses its consumer's @types/react.
 packageExtensions:
-  lucide-react@0.469.0:
+  lucide-react@1:
     peerDependencies:
       "@types/react": "*"
     peerDependenciesMeta:
@@ -69,11 +66,3 @@ allowBuilds:
 minimumReleaseAgeExclude:
   # First-party: our own CGP SDK, consumed the day it is published.
   - '@contextgraphprotocol/typescript-sdk@0.1.0'
-  - inngest-cli@1.30.0
-  - '@ai-sdk/anthropic@4.0.7'
-  - '@ai-sdk/devtools@1.0.2'
-  - '@ai-sdk/gateway@4.0.11'
-  - '@ai-sdk/openai-compatible@3.0.5'
-  - '@ai-sdk/provider-utils@5.0.5'
-  - '@ai-sdk/provider@4.0.2'
-  - ai@7.0.14
