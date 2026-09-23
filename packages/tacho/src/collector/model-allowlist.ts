@@ -34,11 +34,8 @@ export type ModelVerdict = "denied" | "not_allowed" | undefined;
 /**
  * The policy's verdict on one model.
  *
- * A request whose model this proxy could not read returns `undefined`: an
- * unreadable body is not evidence of a forbidden model, and refusing on one
- * would break every non-JSON call the proxy forwards untouched. That is a
- * known hole in a model allowlist and it is the honest one — the alternative
- * refuses calls nobody has shown to be against policy.
+ * Missing models return no verdict here. The proxy separately refuses an
+ * unreadable model on metered endpoints when a model policy is armed.
  */
 export function modelVerdict(
   policy: ModelPolicy | undefined,

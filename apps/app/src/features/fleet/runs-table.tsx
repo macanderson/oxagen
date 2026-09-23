@@ -111,7 +111,10 @@ function RunsPageView({
               />
               {run.harness && (
                 <span className="mt-1 inline-flex items-center gap-2 text-xs text-muted-foreground">
-                  <HarnessIcon harness={run.harness.name} size={16} />
+                  <HarnessIcon
+                    harness={run.harness.runtime ?? run.harness.name}
+                    size={16}
+                  />
                   <span>
                     {run.harness.name}
                     {run.harness.version ? ` ${run.harness.version}` : ""}

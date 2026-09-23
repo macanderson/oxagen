@@ -88,7 +88,7 @@ afterEach(async () => {
 describe("Servers", () => {
   it("prints each server with its transport, endpoint, health and pin count", () => {
     renderServers();
-    const table = screen.getByRole("table", { name: "Tool servers" });
+    const table = screen.getByRole("table", { name: "Providers" });
     const stripe = rowOf(within(table).getByText("Stripe"));
     expect(within(stripe).getByText("mcs_01k5s1")).toBeInTheDocument();
     expect(within(stripe).getByText("Streamable HTTP")).toBeInTheDocument();
@@ -98,7 +98,7 @@ describe("Servers", () => {
 
   it("prints the unknown health a plugin-installed row carries, and says why", () => {
     renderServers();
-    const table = screen.getByRole("table", { name: "Tool servers" });
+    const table = screen.getByRole("table", { name: "Providers" });
     const github = rowOf(within(table).getByText("GitHub"));
     expect(within(github).getByText("Not checked")).toBeInTheDocument();
     expect(within(github).getByText("SSE")).toBeInTheDocument();
@@ -113,7 +113,7 @@ describe("Servers", () => {
 
   it("says nothing is registered when the roster is empty", () => {
     renderServers({ read: readOk(mcpServerList({ servers: [] })) });
-    expect(screen.getByText("No server is registered")).toBeVisible();
+    expect(screen.getByText("No provider is registered")).toBeVisible();
     expect(screen.getByTestId("server-register-open")).toBeVisible();
   });
 
@@ -169,7 +169,7 @@ describe("RegisterServer", () => {
       target: { value: "bearer" },
     });
     fill("Auth config", "token = secret-value");
-    fireEvent.submit(formOf(screen.getByText("Register server")));
+    fireEvent.submit(formOf(screen.getByText("Register provider")));
     await waitFor(() => {
       expect(registerServer).toHaveBeenCalledWith("acme", "core-platform", {
         name: "Notion",
@@ -202,7 +202,7 @@ describe("RegisterServer", () => {
       target: { value: "bearer" },
     });
     fill("Auth config", "token = secret-value");
-    fireEvent.submit(formOf(screen.getByText("Register server")));
+    fireEvent.submit(formOf(screen.getByText("Register provider")));
     await screen.findByTestId("server-register-done");
     for (const field of document.querySelectorAll("input, textarea")) {
       if (field instanceof HTMLInputElement) {
@@ -221,7 +221,7 @@ describe("RegisterServer", () => {
       target: { value: "bearer" },
     });
     fill("Auth config", "token");
-    fireEvent.submit(formOf(screen.getByText("Register server")));
+    fireEvent.submit(formOf(screen.getByText("Register provider")));
     expect(
       await screen.findByTestId("server-register-failure"),
     ).toBeInTheDocument();
@@ -238,7 +238,7 @@ describe("RegisterServer", () => {
     fireEvent.click(screen.getByTestId("server-register-open"));
     fill("Name", "Notion");
     fill("Endpoint URL", "https://mcp.notion.example/v1");
-    fireEvent.submit(formOf(screen.getByText("Register server")));
+    fireEvent.submit(formOf(screen.getByText("Register provider")));
     expect(
       await screen.findByTestId("server-register-failure"),
     ).toHaveTextContent("This needs an organization Owner or Admin.");
@@ -251,7 +251,7 @@ describe("RegisterServer", () => {
     fireEvent.click(screen.getByTestId("server-register-open"));
     fill("Name", "Notion");
     fill("Endpoint URL", "https://mcp.notion.example/v1");
-    fireEvent.submit(formOf(screen.getByText("Register server")));
+    fireEvent.submit(formOf(screen.getByText("Register provider")));
     expect(
       await screen.findByTestId("server-register-failure"),
     ).toHaveTextContent("action_failed");

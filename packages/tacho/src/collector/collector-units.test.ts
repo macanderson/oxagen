@@ -1139,6 +1139,40 @@ describe("shipper", () => {
   });
 
   it("ships each event once when two drains overlap", async () => {
+    // The daemon's interval tick, a caller's tick() and stop() all drain, and
+    // none waits on the others. Two drains that both read the batch before
+    // either marked it shipped sent a window of frames twice (#3782).
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    wal.append(minimalSession());
+    const sent: number[] = [];
+    let release: (() => void) | undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const { s } = shipper(
+      wal,
+      {
+        ingest: async (batch) => {
+          sent.push(...batch.map((e) => e.seq));
+          await held;
+          return okResponse(batch);
+        },
+      },
+      paths.quarantine,
+      () => 0,
+    );
+    const first = s.drain();
+    const second = s.drain();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    release?.();
+    await Promise.all([first, second]);
+    expect(sent).toEqual([...new Set(sent)].sort((a, b) => a - b));
+    expect(sent.length).toBe(minimalSession().length);
+    expect(wal.stats().unshipped).toBe(0);
+  });
+
+  it("ships events appended mid-drain once, and the chain verifies", async () => {
     // tachod starts a drain from its interval tick, from a tick a caller
     // drives, and from stop(), and nothing stopped two of them reading the
     // same unshipped tail while the first one's ingest was still awaited.
