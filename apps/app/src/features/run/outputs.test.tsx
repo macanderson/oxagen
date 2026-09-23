@@ -250,7 +250,7 @@ describe("the spine", () => {
   it("says a run produced nothing rather than drawing an empty list", async () => {
     const { container } = renderSpine(readOk(runOutputs()));
     expect(screen.getByTestId("run-outputs")).toHaveTextContent(
-      "Nothing recorded. This run read nothing and changed nothing.",
+      "No file or output evidence was captured for this run. Recorded frames may still contain activity.",
     );
     expect(screen.getByTestId("run-outputs-tally")).toHaveTextContent(
       "0 artifacts",

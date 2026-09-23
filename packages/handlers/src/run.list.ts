@@ -486,6 +486,9 @@ const tachoColumns = {
     id: sessions.id,
     publicId: sessions.publicId,
     sessionUuid: sessions.sessionUuid,
+    harness: sessions.harness,
+    harnessVersion: sessions.harnessVersion,
+    runtime: sessions.runtime,
     agentKey: sessions.agentKey,
     outcome: sessions.outcome,
     numTurns: sessions.numTurns,
@@ -695,6 +698,9 @@ export type RunCost = {
 type RunRollup = { cost: RunCost | null; verdict: RunItem["verdict"] };
 
 export type TachoSessionColumns = GeneratedSummaryColumns & {
+  harness?: string;
+  harnessVersion?: string | null;
+  runtime?: string;
   machineSnapshot?: unknown;
   /** `tacho.sessions.id`; foreign key for checkpoints and rollups. */
   id: string;
@@ -1053,6 +1059,13 @@ export function toTachoRunItem(
     // only the one it started on.
     model: modelFactsOf(session.modelFinal ?? session.modelInitial),
     machine: toRunMachine(row.host, row.session.machineSnapshot),
+    harness: session.harness
+      ? {
+          name: session.harness,
+          version: blankToNull(session.harnessVersion ?? null),
+          runtime: session.runtime ?? null,
+        }
+      : null,
     // The model-written name when `summarize_run` has produced one, and the
     // derived title until then. A run always has something to be called.
     name: session.name ?? session.title ?? null,

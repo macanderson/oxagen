@@ -3435,6 +3435,9 @@ type Messages = {
     facts: {
       operator: string;
       model: string;
+      harness: string;
+      harnessVersion: string;
+      harnessVersionNotRecorded: string;
       machine: string;
       noMachineOnLedger: string;
       operatorKind: {
