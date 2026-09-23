@@ -13,6 +13,7 @@ function setup(opts: {
   }[];
   failApply?: boolean;
   entitled?: boolean;
+  scimSuspended?: boolean;
 }) {
   const store: SsoProvisioningStore = {
     entitled: vi.fn(async () => opts.entitled ?? true),
@@ -20,6 +21,7 @@ function setup(opts: {
     currentRole: vi.fn(async () => opts.current ?? null),
     applyRole: vi.fn(async () => {
       if (opts.failApply) throw new Error("db down");
+      return opts.scimSuspended ? ("scim_suspended" as const) : ("applied" as const);
     }),
   };
   const emit = vi.fn();
@@ -109,6 +111,29 @@ describe("createSsoProvisioner", () => {
     await provision({ user, provider, userInfo: {} });
     expect(store.applyRole).toHaveBeenCalledWith(
       expect.objectContaining({ role: null }),
+    );
+  });
+
+  it("does not admit a person a SCIM deprovision suspended, and records why", async () => {
+    const { emit, provision } = setup({
+      mappings: [{ group: "a", role: "admin" }],
+      scimSuspended: true,
+    });
+    const out = await provision({ user, provider, userInfo: { groups: ["a"] } });
+    expect(out).toEqual({
+      grantedRole: null,
+      previousRole: null,
+      reason: "scim_deprovisioned",
+    });
+    expect(emit).toHaveBeenCalledOnce();
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: "deny",
+        detail: expect.objectContaining({
+          grantedRole: null,
+          reason: "scim_deprovisioned",
+        }),
+      }),
     );
   });
 

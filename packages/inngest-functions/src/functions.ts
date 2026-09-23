@@ -18,6 +18,10 @@ import {
   privacyErasureExecuteOnFailure,
 } from "./functions/privacy.erasure.execute";
 import { authSessionExpiryAudit } from "./functions/auth.session-expiry-audit";
+import {
+  authSsoResealDaily,
+  authSsoResealRequested,
+} from "./functions/auth.sso-reseal";
 import { approvalResume } from "./functions/approval.resume";
 import { mandateExpiry } from "./functions/mandate.expiry";
 import { ingestionPipeline } from "./functions/ingestion.pipeline";
@@ -68,6 +72,8 @@ export const functions: any[] = [
   privacyErasureExecute,
   privacyErasureExecuteOnFailure,
   authSessionExpiryAudit,
+  authSsoResealDaily,
+  authSsoResealRequested,
   mandateExpiry,
   approvalResume,
   ingestionPipeline,

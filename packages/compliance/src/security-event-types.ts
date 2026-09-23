@@ -236,6 +236,30 @@ export const SECURITY_EVENT_TYPES = [
   // when no IdP group the person carries is mapped, so the sign-in granted
   // nothing in the org. Emitted from packages/auth/src/sso/provision.ts.
   "sso.sign_in",
+  // SCIM 2.0 provisioning (#3734). The bearer token an identity provider
+  // pushes users and groups with: an Owner or Admin mints, rotates or revokes
+  // it on the Single sign-on page. Emitted by
+  // packages/handlers/src/org.scim_token.{create,rotate,revoke}.ts.
+  "scim.token_created",
+  "scim.token_rotated",
+  "scim.token_revoked",
+  // What the identity provider pushed. A user is provisioned (created or
+  // linked), updated, or deprovisioned; deprovisioning ends every session,
+  // revokes every key and removes the membership in one transaction. A group
+  // change records the members added and removed and the roles recomputed.
+  // A request the SCIM endpoint refused (bad token, an Owner, a domain the
+  // organization does not hold) is scim.request_denied. Emitted by
+  // packages/handlers/src/scim.request.ts and packages/handlers/src/lib/scim/.
+  "scim.user_provisioned",
+  "scim.user_updated",
+  "scim.user_deprovisioned",
+  "scim.group_changed",
+  "scim.request_denied",
+  // A Tacho host's enrollment was revoked: the host row marked revoked, both
+  // enrollment keys retired, a revoke command queued. Emitted by the member
+  // removal transaction (packages/database/src/member-lifecycle.ts) for each
+  // host the removed person enrolled.
+  "tacho.host_revoked",
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -416,7 +440,8 @@ export interface SsoSignInDetail {
     | "no_mapped_group"
     | "owner_unmanaged"
     | "not_entitled"
-    | "provision_failed";
+    | "provision_failed"
+    | "scim_deprovisioned";
 }
 
 /** Evidence recorded on `sso.policy_updated`. */
@@ -430,7 +455,84 @@ export interface SsoGroupRolesDetail {
   mappings: readonly { group: string; role: string }[];
 }
 
+/** Evidence recorded on `scim.token_*`. Never the token, only its lookup prefix. */
+export interface ScimTokenDetail {
+  tokenPrefix: string;
+}
+
+/**
+ * Evidence recorded on `scim.user_provisioned` and `scim.user_updated`.
+ * `linked` is true when the userName matched a person who already had an
+ * Oxagen account, so SCIM adopted it rather than creating one.
+ */
+export interface ScimUserDetail {
+  userId: string;
+  userName: string;
+  externalId: string | null;
+  linked?: boolean;
+  changedFields?: readonly string[];
+}
+
+/**
+ * Evidence recorded when a person is removed from an organization by its
+ * identity provider: `scim.user_deprovisioned`, and `org.member_removed` for a
+ * sign-in that no mapped group admitted. The counts are what the removal
+ * transaction ended; each ended session and revoked key also has its own row.
+ */
+export interface MemberRemovalDetail {
+  userId: string;
+  trigger: "scim_active_false" | "scim_delete" | "scim_group_change" | "sso_deny";
+  sessionsEnded: number;
+  apiKeysRevoked: number;
+  hostsRevoked: number;
+  enrollmentTokensExpired: number;
+  roleAssignmentsRevoked: number;
+  workspaceMembershipsRemoved: number;
+}
+
+/** Evidence recorded on `scim.group_changed`. */
+export interface ScimGroupDetail {
+  groupId: string;
+  displayName: string;
+  change: "created" | "updated" | "deleted";
+  membersAdded: readonly string[];
+  membersRemoved: readonly string[];
+  /** The organization role each affected person holds after the change; null is no role. */
+  rolesRecomputed: readonly { userId: string; role: string | null }[];
+}
+
+/** Evidence recorded on `scim.request_denied`. */
+export interface ScimRequestDeniedDetail {
+  reason:
+    | "invalid_token"
+    | "not_entitled"
+    | "owner_protected"
+    | "domain_not_verified"
+    | "cross_organization";
+  method: string;
+  path: string;
+}
+
+/**
+ * Evidence recorded on `api_key.revoked`, `security.session_revoked` and
+ * `tacho.host_revoked` when a member removal ended the credential rather than
+ * a person revoking it by hand.
+ */
+export interface CredentialRevocationDetail {
+  reason: "member_removed";
+  trigger: MemberRemovalDetail["trigger"];
+  subjectUserId: string;
+  /** The key's scope purpose, the session id, or the host's public id. */
+  credential: string;
+}
+
 export type SecurityEventDetail =
+  | ScimTokenDetail
+  | ScimUserDetail
+  | MemberRemovalDetail
+  | ScimGroupDetail
+  | ScimRequestDeniedDetail
+  | CredentialRevocationDetail
   | ApprovalRuleInvalidationDetail
   | GovernanceChangeDetail
   | SsoProviderChangeDetail

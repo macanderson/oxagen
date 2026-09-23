@@ -76,7 +76,19 @@ secret, SAML private keys, and their passphrases. Each becomes an
 `enc:v1:<keyId>:<envelope>` token: AES-256-GCM under a fresh data key wrapped
 by the master key in `AUTH_TOKEN_ENCRYPTION_KEY`, the same envelope model
 credentials and plugin credentials use. `withSsoSecrets` wraps the Better Auth
-adapter and opens the tokens when the plugin reads a row.
+adapter and opens the tokens when the plugin reads one row. A listing opens
+nothing: it returns each row with its secrets removed. A before hook on
+`/sign-in/sso` names the most specific verified provider for the email's
+domain, so a sign-in opens only that provider's secrets.
+
+The key id in each token selects the key that opens it. The current key is
+`AUTH_TOKEN_ENCRYPTION_KEY` under the id in `SSO_SECRET_KEY_ID`, which
+defaults to `sso_v1`. Retired keys stay readable through
+`SSO_SECRET_PREVIOUS_KEYS`, a comma-separated list of `<keyId>=<base64 key>`.
+The Inngest function `auth/sso-reseal-daily` moves every token onto the
+current key once a day, and `auth/sso-reseal-requested` does the same when an
+operator sends the `auth/sso-secrets.reseal.requested` event. A retired key can
+leave the list once a run reports no failures.
 
 The issuer, endpoints, client ID, and IdP certificate stay readable, because
 someone debugging a sign-in needs them and none of them is secret. A read
@@ -165,7 +177,17 @@ set on the server and never by a client. The app's gate admits a non-Owner
 member of a require-SSO organization only with a session that one of that
 organization's providers created.
 
-Owners are exempt in both places. They are the break-glass account: an IdP
+An API key has no session, so `resolveApiKey`
+(`packages/auth/src/resolvers/api-key.ts`), which turns a raw key into a scope
+for the API, the MCP server, and every other surface, checks the person who
+created the key instead. In a require-SSO organization on Enterprise, a key
+authenticates only while its creator is a member and has signed in at least
+once through one of the organization's verified providers, which leaves an
+`auth.accounts` row naming that provider. Any other key is refused as
+`sso_required`: the API answers 403 and the MCP server refuses the call. A key
+with no creator was minted by the system and is not checked.
+
+Owners are exempt in all three places. They are the break-glass account: an IdP
 outage or a broken certificate must not lock every administrator out of the
 switch that would fix it.
 

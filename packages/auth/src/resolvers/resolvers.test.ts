@@ -10,6 +10,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createHash } from "node:crypto";
+import type { SQL } from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
 // DB mock — hoisted so imports in the resolvers see the mock immediately.
@@ -22,6 +23,7 @@ const mockQuery = {
   orgUsers: { findFirst: vi.fn() },
   workspaces: { findFirst: vi.fn() },
   workspaceUsers: { findFirst: vi.fn() },
+  orgSecurityPolicy: { findFirst: vi.fn() },
 };
 
 // Mock for Drizzle query builder used in resolveOrgScope (org.ts)
@@ -59,6 +61,13 @@ vi.mock("@oxagen/database", async (importOriginal) => {
       fn(fakeTx),
   };
 });
+
+// Whether the org's plan includes SSO (ADR-145). Only read once an org
+// requires SSO, so the default of "entitled" never matters elsewhere.
+const mockOrgHasSso = vi.fn(async (_orgId: string) => true);
+vi.mock("../sso/entitlement", () => ({
+  orgHasSso: (orgId: string) => mockOrgHasSso(orgId),
+}));
 
 // Import resolvers after the mock is registered.
 import {
@@ -616,6 +625,149 @@ describe("resolveApiKey", () => {
       orgId: "org_abc",
       workspaceId: "wrk_xyz",
       userId: null,
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // ADR-145: Require SSO reaches API keys through the key's creator.
+  // -------------------------------------------------------------------------
+  describe("when the key's organization requires SSO", () => {
+    const creatorKeyRow = (createdById: string | null = "user_member") => ({
+      id: "aky_sso",
+      keyHash: sha256hex(RAW_KEY),
+      orgId: "org_abc",
+      workspaceId: "wrk_xyz",
+      expiresAt: null,
+      scope: {},
+      createdById,
+    });
+    const requireSso = () =>
+      mockQuery.orgSecurityPolicy.findFirst.mockResolvedValueOnce({
+        ssoRequired: true,
+      });
+
+    beforeEach(() => {
+      mockOrgHasSso.mockReset();
+      mockOrgHasSso.mockResolvedValue(true);
+      selectMockResult = [];
+    });
+
+    it("resolves with one policy read and nothing else when the org does not require SSO", async () => {
+      mockQuery.apiKeys.findFirst.mockResolvedValueOnce(creatorKeyRow());
+      mockQuery.orgSecurityPolicy.findFirst.mockResolvedValueOnce({
+        ssoRequired: false,
+      });
+      expect(await resolveApiKey(RAW_KEY)).toMatchObject({ ok: true });
+      expect(mockQuery.orgSecurityPolicy.findFirst).toHaveBeenCalledTimes(1);
+      expect(mockOrgHasSso).not.toHaveBeenCalled();
+      expect(mockQuery.orgUsers.findFirst).not.toHaveBeenCalled();
+      expect(fakeTx.select).not.toHaveBeenCalled();
+    });
+
+    it("resolves when the org requires SSO but its plan no longer includes it", async () => {
+      mockQuery.apiKeys.findFirst.mockResolvedValueOnce(creatorKeyRow());
+      requireSso();
+      mockOrgHasSso.mockResolvedValue(false);
+      expect(await resolveApiKey(RAW_KEY)).toMatchObject({ ok: true });
+      expect(mockQuery.orgUsers.findFirst).not.toHaveBeenCalled();
+    });
+
+    it("refuses a key whose creator is a member who never signed in through SSO", async () => {
+      mockQuery.apiKeys.findFirst.mockResolvedValueOnce(creatorKeyRow());
+      requireSso();
+      mockQuery.orgUsers.findFirst.mockResolvedValueOnce({ role: "member" });
+      selectMockResult = [];
+      expect(await resolveApiKey(RAW_KEY)).toEqual({
+        ok: false,
+        kind: "sso_required",
+      });
+    });
+
+    it("resolves a key whose creator signed in through one of the org's verified providers", async () => {
+      mockQuery.apiKeys.findFirst.mockResolvedValueOnce(creatorKeyRow());
+      requireSso();
+      mockQuery.orgUsers.findFirst.mockResolvedValueOnce({ role: "member" });
+      selectMockResult = [{ id: "acc_sso" }];
+      expect(await resolveApiKey(RAW_KEY)).toEqual({
+        ok: true,
+        apiKeyId: "aky_sso",
+        orgId: "org_abc",
+        workspaceId: "wrk_xyz",
+        userId: null,
+      });
+    });
+
+    it("refuses a key whose creator's only SSO account is with another organization's provider", async () => {
+      // The account lookup joins on this org's verified providers, so an
+      // account from another org's provider matches no row.
+      mockQuery.apiKeys.findFirst.mockResolvedValueOnce(creatorKeyRow());
+      requireSso();
+      mockQuery.orgUsers.findFirst.mockResolvedValueOnce({ role: "admin" });
+      const builder = createMockBuilder();
+      fakeTx.select.mockReturnValueOnce(builder);
+      expect(await resolveApiKey(RAW_KEY)).toEqual({
+        ok: false,
+        kind: "sso_required",
+      });
+      expect(builder.innerJoin).toHaveBeenCalledTimes(1);
+      const { schema } = await import("@oxagen/database");
+      expect(builder.from).toHaveBeenCalledWith(schema.accounts);
+      expect((builder.innerJoin.mock.calls[0] as unknown[])[0]).toBe(
+        schema.ssoProviderTable,
+      );
+      // The predicate pins the provider to this org and to a verified domain.
+      const { PgDialect } = await import("drizzle-orm/pg-core");
+      const predicate = (builder.where.mock.calls[0] as unknown[])[0] as SQL;
+      const where = new PgDialect().sqlToQuery(predicate);
+      expect(where.sql).toContain('"sso_providers"."organization_id" = $');
+      expect(where.sql).toContain('"sso_providers"."domain_verified" = $');
+      expect(where.params).toEqual(
+        expect.arrayContaining(["user_member", "org_abc", true]),
+      );
+    });
+
+    it("resolves a key an Owner created without an SSO account (break-glass)", async () => {
+      mockQuery.apiKeys.findFirst.mockResolvedValueOnce(creatorKeyRow());
+      requireSso();
+      mockQuery.orgUsers.findFirst.mockResolvedValueOnce({ role: "Owner" });
+      expect(await resolveApiKey(RAW_KEY)).toMatchObject({ ok: true });
+      expect(fakeTx.select).not.toHaveBeenCalled();
+    });
+
+    it("refuses a key whose creator is no longer a member of the org", async () => {
+      mockQuery.apiKeys.findFirst.mockResolvedValueOnce(creatorKeyRow());
+      requireSso();
+      mockQuery.orgUsers.findFirst.mockResolvedValueOnce(undefined);
+      expect(await resolveApiKey(RAW_KEY)).toEqual({
+        ok: false,
+        kind: "sso_required",
+      });
+    });
+
+    it("resolves a key with no creator without reading the policy", async () => {
+      mockQuery.apiKeys.findFirst.mockResolvedValueOnce(creatorKeyRow(null));
+      mockQuery.orgSecurityPolicy.findFirst.mockResolvedValue({
+        ssoRequired: true,
+      });
+      expect(await resolveApiKey(RAW_KEY)).toMatchObject({
+        ok: true,
+        userId: null,
+      });
+      expect(mockQuery.orgSecurityPolicy.findFirst).not.toHaveBeenCalled();
+      mockQuery.orgSecurityPolicy.findFirst.mockReset();
+    });
+
+    it("refuses a CLI session key whose creator never signed in through SSO", async () => {
+      mockQuery.apiKeys.findFirst.mockResolvedValueOnce(cliKeyRow());
+      mockQuery.orgUsers.findFirst
+        .mockResolvedValueOnce({ id: "ou_1" })
+        .mockResolvedValueOnce({ role: "member" });
+      mockQuery.workspaceUsers.findFirst.mockResolvedValueOnce({ id: "wsu_1" });
+      requireSso();
+      expect(await resolveApiKey(RAW_KEY)).toEqual({
+        ok: false,
+        kind: "sso_required",
+      });
     });
   });
 

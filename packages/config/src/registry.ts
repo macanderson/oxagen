@@ -432,6 +432,32 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: DEPLOYED,
     valueOrigin: "manual",
   },
+  SSO_SECRET_KEY_ID: {
+    group: "Better Auth",
+    description:
+      "Key id written into every SSO provider secret sealed under AUTH_TOKEN_ENCRYPTION_KEY. " +
+      "Unset means sso_v1. Give it a new value when you rotate that key, and list the " +
+      "old key in SSO_SECRET_PREVIOUS_KEYS under the old id (ADR-145).",
+    secret: false,
+    clientExposed: false,
+    // The same services as AUTH_TOKEN_ENCRYPTION_KEY: every process that
+    // seals or opens an SSO secret reads both.
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  SSO_SECRET_PREVIOUS_KEYS: {
+    group: "Better Auth",
+    description:
+      "Retired SSO secret keys that still open existing tokens, as comma-separated " +
+      "<keyId>=<base64 32-byte key> entries. Remove an entry once an auth/sso-reseal " +
+      "run reports no failures (ADR-145).",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OAUTH_PROXY_PRODUCTION_URL: {
     group: "Better Auth",
     description:
