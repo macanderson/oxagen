@@ -92,6 +92,7 @@ describe("service managers", () => {
     expect(existsSync(manager.unitPath)).toBe(true);
     expect(readFileSync(manager.unitPath, "utf8")).toContain("tachod.mjs");
     expect(calls).toEqual([
+      `launchctl enable gui/501/${SERVICE_LABEL}`,
       `launchctl bootout gui/501/${SERVICE_LABEL}`,
       `launchctl bootstrap gui/501 ${manager.unitPath}`,
     ]);
@@ -145,6 +146,7 @@ describe("service managers", () => {
     expect(manager.kind).toBe("systemd");
     manager.install(SPEC);
     expect(calls).toEqual([
+      "systemctl --user show-environment",
       "systemctl --user daemon-reload",
       "systemctl --user enable --now tachod.service",
       "systemctl --user restart tachod.service",
