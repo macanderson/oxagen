@@ -95,7 +95,7 @@ describe("CostCenterTable", () => {
   it("prints every spend beside its basis and explains the share", async () => {
     await renderTable();
     const eng = rowOf(screen.getByText("ENG-1001"));
-    expect(within(eng).getByText("gateway observed")).toBeDefined();
+    expect(within(eng).getByText("gateway_observed")).toBeDefined();
     expect(within(eng).getByText("60%")).toBeDefined();
     expect(
       screen.getByText(

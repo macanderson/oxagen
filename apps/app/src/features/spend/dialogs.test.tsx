@@ -112,7 +112,7 @@ describe("Set a budget", () => {
 
     await waitFor(() => {
       expect(router.replace).toHaveBeenCalledWith(
-        "/acme/core-platform/spend?tab=budgets",
+        "/acme/core-platform/spend/budgets",
       );
     });
     expect(setBudgetAction).toHaveBeenCalledWith(at, {
@@ -295,7 +295,7 @@ describe("Fix a finding", () => {
         fix="Request grouped totals; page line items only on drill-down."
       />,
     );
-    await userEvent.click(screen.getByRole("button", { name: "Review fix" }));
+    await userEvent.click(screen.getByRole("button", { name: "Fix" }));
     return screen.getByRole("dialog", {
       name: "Review the recommended change",
     });
@@ -318,7 +318,7 @@ describe("Fix a finding", () => {
           contextDescription={description}
         />,
       );
-      await userEvent.click(screen.getByRole("button", { name: "Review fix" }));
+      await userEvent.click(screen.getByRole("button", { name: "Fix" }));
       await userEvent.click(
         screen.getByRole("button", { name: "Draft a context PR" }),
       );
@@ -399,9 +399,7 @@ describe("Fix a finding", () => {
     );
 
     await waitFor(() => {
-      expect(router.replace).toHaveBeenCalledWith(
-        "/acme/core-platform/spend?tab=findings",
-      );
+      expect(router.replace).toHaveBeenCalledWith("/acme/core-platform/spend");
     });
     expect(recordFindingFixAction).toHaveBeenCalledWith(at, "fnd_01k5rtgh");
     expect(dismissFindingAction).not.toHaveBeenCalled();
@@ -416,9 +414,7 @@ describe("Fix a finding", () => {
     );
 
     await waitFor(() => {
-      expect(router.replace).toHaveBeenCalledWith(
-        "/acme/core-platform/spend?tab=findings",
-      );
+      expect(router.replace).toHaveBeenCalledWith("/acme/core-platform/spend");
     });
     expect(dismissFindingAction).toHaveBeenCalledWith(at, "fnd_01k5rtgh");
     expect(recordFindingFixAction).not.toHaveBeenCalled();
