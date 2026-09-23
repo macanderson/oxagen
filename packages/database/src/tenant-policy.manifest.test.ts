@@ -249,9 +249,9 @@ describe("tenant policy manifest", () => {
     // 117 as of workspace.tacho_session_policy, the workspace's wrapped-harness
     // session policy. The gateway does not read it yet; the table is in the
     // manifest because it carries org_id, not because anything enforces it.
-    // 118 as of cost.cost_centers, the organization's chargeback labels
-    // (ADR-142).
-    expect(POLICY_MANIFEST.length).toBe(118);
+    // 119 includes cost.cost_centers (ADR-142) and org.sso_group_roles
+    // (ADR-145), which both arrived after the session policy table.
+    expect(POLICY_MANIFEST.length).toBe(119);
   });
 
   it("covers the ADR-055 GAU tables as org_only (WL-24)", () => {

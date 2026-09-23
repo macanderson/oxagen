@@ -4,7 +4,8 @@
  * whose `hooks` member has Claude Code's group shape, receives the same stdin
  * fields (`session_id`, `hook_event_name`, `tool_name`, `tool_input`, `cwd`,
  * `transcript_path`), and honours the same `hookSpecificOutput.
- * permissionDecision` answer. Two differences drive this module:
+ * permissionDecision` deny answer. The client converts unsupported ask
+ * decisions to deny. Two differences drive this module:
  *
  *   - only `type: "command"` hooks exist, so the telemetry events that Claude
  *     Code posts over `http` are command hooks here too (fail open: the hook

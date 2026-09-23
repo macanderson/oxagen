@@ -43,6 +43,7 @@ export function buildCommands(
       go("roles", orgHref(org, "roles"));
       go("apiKeys", orgHref(org, "apiKeys"));
       go("modelFunding", orgHref(org, "modelFunding"));
+      go("sso", orgHref(org, "sso"));
     }
   }
   if (ws !== null) {
