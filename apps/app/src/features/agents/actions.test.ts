@@ -572,7 +572,13 @@ describe("registerAgent", () => {
     expect(name).toBe("propose_agent");
     expect(context).toEqual(expect.objectContaining(TENANT));
     expect(input).toMatchObject({ slug: "perf-watch", harness: "cursor" });
-    const source = (input as { source: string }).source;
+    const source =
+      typeof input === "object" &&
+      input !== null &&
+      "source" in input &&
+      typeof input.source === "string"
+        ? input.source
+        : "";
     expect(source).toContain('slug = "perf-watch"');
     expect(source).toContain('model_tier = "light"');
     expect(source).toContain("[harness.cursor]");
@@ -597,9 +603,10 @@ describe("registerAgent", () => {
 
   it("returns a denial as denied (negative)", async () => {
     invoke.mockRejectedValue(denied("propose_agent"));
-    expect(
-      await registerAgent("acme", "core-platform", draft),
-    ).toMatchObject({ ok: false, reason: "denied" });
+    expect(await registerAgent("acme", "core-platform", draft)).toMatchObject({
+      ok: false,
+      reason: "denied",
+    });
   });
 });
 

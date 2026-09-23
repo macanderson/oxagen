@@ -324,7 +324,10 @@ export async function seedIncident(
 export async function seedMandate(
   tenant: SeededTenant,
   agent: SeededAgent,
-  over: { status?: "draft" | "active" | "expired" | "revoked"; expired?: boolean } = {},
+  over: {
+    status?: "draft" | "active" | "expired" | "revoked";
+    expired?: boolean;
+  } = {},
 ): Promise<{ id: string }> {
   const status = over.status ?? "active";
   const now = Date.now();

@@ -78,8 +78,7 @@ describe("list_agents contract", () => {
     expect(parsed.tamperIncidents).toBe(1);
     expect(parsed.host).toBe("build-01");
     expect(
-      agentListItem.safeParse({ ...item, enforcementTier: "enforced" })
-        .success,
+      agentListItem.safeParse({ ...item, enforcementTier: "enforced" }).success,
     ).toBe(false);
     expect(
       agentListItem.safeParse({ ...item, tamperIncidents: -1 }).success,

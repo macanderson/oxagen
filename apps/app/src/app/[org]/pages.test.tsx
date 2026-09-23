@@ -430,12 +430,17 @@ describe("the Agents pages", () => {
       title("agents"),
     );
     expect(requireViewer).toHaveBeenCalledWith(...WS);
-    expect(Agents.mock.calls.at(-1)?.[0]).toEqual({
+    expect(Agents.mock.calls.at(-1)?.[0]).toMatchObject({
       ctx,
       source,
       cursor: "c2",
-      header: expect.anything(),
     });
+    expect(Object.keys(Agents.mock.calls.at(-1)?.[0] ?? {}).sort()).toEqual([
+      "ctx",
+      "cursor",
+      "header",
+      "source",
+    ]);
     expect(screen.queryByTestId("not-recorded")).toBeNull();
   });
 

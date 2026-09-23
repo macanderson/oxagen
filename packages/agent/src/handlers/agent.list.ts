@@ -176,7 +176,8 @@ export async function agentListHandler(
       all.flatMap((r) => (r.principalId === null ? [] : [r.principalId])),
     );
     const holdingMandate = all.filter(
-      (r) => r.principalId !== null && (allMandates.get(r.principalId) ?? 0) > 0,
+      (r) =>
+        r.principalId !== null && (allMandates.get(r.principalId) ?? 0) > 0,
     ).length;
 
     const enrolled = all.filter(
