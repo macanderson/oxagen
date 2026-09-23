@@ -137,6 +137,15 @@ describe("rule matching", () => {
     expect(globToRegex("a?c").test("abc")).toBe(true);
     expect(globToRegex("a.c").test("abc")).toBe(false);
   });
+
+  it("reads ** then a separator as whole segments, never a name suffix", () => {
+    expect(globToRegex("**/.env").test(".env")).toBe(true);
+    expect(globToRegex("**/.env").test("config/.env")).toBe(true);
+    expect(globToRegex("**/.env").test("foo.env")).toBe(false);
+    expect(globToRegex("a/**/b").test("a/b")).toBe(true);
+    expect(globToRegex("a/**/b").test("a/xb")).toBe(false);
+    expect(globToRegex("src/**").test("src/a/b.ts")).toBe(true);
+  });
 });
 
 describe("bundle verification", () => {

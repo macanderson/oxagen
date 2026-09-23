@@ -1,7 +1,7 @@
 # ADR-024 — Namespaced, immutable agent identity (`org_ns.workspace_ns.agent_slug`)
 
 Status: Accepted · Date: 2026-07-07
-Related: ADR-022 (capability naming), `docs/specs/a2a-agent-identity/spec.md`, `docs/specs/agent-rbac/spec.md`.
+Related: ADR-022 (capability naming), `docs/specs/a2a-agent-identity/spec.md` (removed 2026-09-23 with A2A, ADR-043; git history keeps it), `docs/specs/agent-rbac/spec.md`.
 
 ## Context
 

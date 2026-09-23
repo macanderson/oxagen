@@ -6,7 +6,7 @@
 - **Related:** issue #2592 (records stored and never applied), ADR-051
   (superseded delivery), ADR-061 §8 (the steering version is the ledger
   length), ADR-043 (runtime excision), `docs/specs/tacho/spec.md` §7.5,
-  `docs/specs/mission-control/spec.md` §10.4,
+  `oxagen-roadmap:docs/oxagen/specs/mission-control/spec.md` §10.4,
   `packages/handlers/src/lib/tacho-steering.ts`
 
 ## Context

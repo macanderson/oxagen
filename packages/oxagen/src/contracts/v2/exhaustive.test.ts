@@ -23,19 +23,13 @@ import type { ToolV2 } from "./_define";
 type Matrix = { name: string; resolved: string[] }[];
 
 const MATRIX: Matrix = JSON.parse(
-  readFileSync(
-    join(__dirname, "../../../../../docs/mission-control/matrix.json"),
-    "utf8",
-  ),
+  readFileSync(join(__dirname, "fixtures/matrix.json"), "utf8"),
 );
 
 const contractFile = new Map<string, string>(
   (
     JSON.parse(
-      readFileSync(
-        join(__dirname, "../../../../../docs/mission-control/full-matrix.json"),
-        "utf8",
-      ),
+      readFileSync(join(__dirname, "fixtures/full-matrix.json"), "utf8"),
     ) as { rows: { absorbs: { name: string; file: string | null }[] }[] }
   ).rows.flatMap((r) =>
     r.absorbs
