@@ -281,6 +281,7 @@ import { contextGovernanceModeSetRoute } from "./routes/v1/context.governance_mo
 import { repositoryInstallationListRoute } from "./routes/v1/repository.installation.list";
 import { repositoryInstallationCandidatesRoute } from "./routes/v1/repository.installation.candidates";
 import { repositoryInstallationAttachRoute } from "./routes/v1/repository.installation.attach";
+import { repositoryGitlabAttachRoute } from "./routes/v1/repository.gitlab.attach";
 import { tachoHostListRoute } from "./routes/v1/tacho.host.list";
 import { tachoSessionPolicyReadRoute } from "./routes/v1/tacho.session_policy.read";
 import { tachoSessionPolicyWriteRoute } from "./routes/v1/tacho.session_policy.write";
@@ -698,6 +699,9 @@ orgScoped.route(
   "/repository/installation/attach",
   repositoryInstallationAttachRoute,
 );
+// A gitlab.com project connects with a project access token instead of an App
+// installation (attach_gitlab_project, #3762).
+orgScoped.route("/repository/gitlab/attach", repositoryGitlabAttachRoute);
 // Run controls (dispatch_command, list_commands): addressed to runs, agents
 // and the workspace rather than to a host, so they sit beside /runs.
 orgScoped.route("/commands", tachoCommandDispatchRoute);

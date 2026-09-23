@@ -1,7 +1,7 @@
 {
   "name": "create_workspace",
   "domain": "workspace",
-  "description": "Create a workspace within the active tenant together with its main repository, which is required: a GitHub repository, or a gitlab.com project with a project access token (API only). Refused for a slug already used in the organization, or a repository the org's GitHub App installation cannot reach or another workspace already steers by.",
+  "description": "Create a workspace within the active tenant together with its main repository, which is required: a GitHub repository, or a gitlab.com project with a project access token (web app and API only). Refused for a slug already used in the organization, or a repository the org's GitHub App installation cannot reach or another workspace already steers by.",
   "mode": "sync",
   "surfaces": [
     "api",

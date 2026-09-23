@@ -948,15 +948,29 @@ describe("workspaceCreateHandler with a GitLab main project", () => {
     ).toBe(true);
   });
 
-  it("refuses the token on any surface but the API, before calling GitLab", async () => {
+  it("refuses the token from MCP, a runner, or an agent's chat turn, before calling GitLab", async () => {
     const api = new FakeGitLabApi();
     const { handler } = handlerWith(api);
-    const err = await handler(gitlabDraft, { ...CTX, surface: "mcp" }).catch(
-      (e: unknown) => e,
-    );
-    expect(err).toMatchObject({ reason: "gitlab_token_surface" });
+    for (const over of [
+      { surface: "mcp" as const },
+      { surface: "runner" as const },
+      // The in-app agent calls through the app surface inside a chat turn.
+      { surface: "app" as const, messageId: "msg_1" },
+    ]) {
+      const err = await handler(gitlabDraft, { ...CTX, ...over }).catch(
+        (e: unknown) => e,
+      );
+      expect(err).toMatchObject({ reason: "gitlab_token_surface" });
+    }
     expect(api.tokens).toEqual([]);
     expect(mocks.inserts).toEqual([]);
+  });
+
+  it("accepts the token from the web app outside a chat turn", async () => {
+    const { handler } = handlerWith(new FakeGitLabApi());
+    await expect(
+      handler(gitlabDraft, { ...CTX, surface: "app" }),
+    ).resolves.toMatchObject({ mainRepo: { provider: "gitlab" } });
   });
 
   it("refuses a token that is not this project's before writing anything", async () => {

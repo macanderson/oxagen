@@ -2120,6 +2120,9 @@ importers:
       '@oxagen/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@oxagen/gitlab':
+        specifier: workspace:*
+        version: link:../../packages/gitlab
       '@oxagen/handlers':
         specifier: workspace:*
         version: link:../../packages/handlers

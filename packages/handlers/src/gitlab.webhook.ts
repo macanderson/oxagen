@@ -1,6 +1,6 @@
 // audit-exempt: an unauthenticated webhook receiver; the only writes are a proposal rejected because its merge request was closed on GitLab, a connection marked errored after GitLab rejected its token, and a project path label. None is a privileged mutation a person makes.
 //
-// gitlab.webhook.ts — what a GitLab project webhook delivery does (#3762).
+// gitlab.webhook.ts: what a GitLab project webhook delivery does (#3762).
 //
 // The webhook is a trigger. The GitLab API is the truth. A delivery never acts
 // on the state its payload claims: for every merge request event the receiver

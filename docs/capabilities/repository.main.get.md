@@ -39,7 +39,8 @@ None. The org and workspace come from the capability context.
 | `repository.name` | string | the repository name as GitHub reported it at bind time |
 | `repository.fullName` | string | `owner/name` |
 | `repository.defaultRef` | string | the branch `.oxagen/` is read from unless a context branch overrides it |
-| `repository.htmlUrl` | string | `https://github.com/{fullName}` — derived, because the bind persists no html url |
+| `repository.provider` | `"github"` \| `"gitlab"` | the host the main repository is on (#3762) |
+| `repository.htmlUrl` | string | `https://github.com/{fullName}` or `https://gitlab.com/{fullName}`, derived because the bind persists no html url |
 | `repository.boundAt` | string | RFC 3339 |
 | `repository.connectionLive` | boolean | the GitHub connection this binding hangs off is still live — not soft-deleted, and not left at `status = 'deleting'` by `delete_connection` for a purge that has not run yet. False is what a delete-then-reconnect leaves behind: the attach only ever sees live rows, so it inserts a NEW connection while the binding head still points at the retired one, and `readGitHubConnection` (the steering seam) — which joins head → binding → connection and filters exactly those statuses — resolves nothing from that moment, so steering and Context PRs are off with the repository still reading as bound. The repository is still reported, because the person has to be told which one it is; `bind_main_repository` on the SAME repository is the repair |
 | `github.connected` | boolean | an installation is attached; false is exactly the state `bind_main_repository` answers `conflict: github_not_connected` in |

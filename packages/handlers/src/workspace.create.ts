@@ -120,9 +120,17 @@ interface CreationTarget {
 async function gitlabCreationTarget(
   deps: GitLabAttachDeps,
   input: { projectPath: string; token: string },
-  surface: string,
+  ctx: { surface: string; messageId: string | null },
 ): Promise<CreationTarget> {
-  if (surface !== "api")
+  // A token is accepted only from a person's own request: the web app or the
+  // HTTP API, outside a chat turn. An MCP client, a runner, or the in-app
+  // agent (a call that carries a chat `messageId`) keeps its tool input in a
+  // transcript, which is no place for a credential. The kernel's `agent`
+  // surface is not visible here, so the chat message is what marks it.
+  if (
+    !(ctx.surface === "api" || ctx.surface === "app") ||
+    ctx.messageId !== null
+  )
     throw new HandlerError({
       code: "conflict",
       reason: "gitlab_token_surface",
@@ -335,7 +343,7 @@ export function createWorkspaceCreateHandler(
         ? await gitlabCreationTarget(
             deps.gitlab ?? gitlabAttachDeps,
             input.mainRepo,
-            ctx.surface,
+            ctx,
           )
         : await githubCreationTarget(deps, ctx, input.mainRepo);
     const { repo, provider } = target;

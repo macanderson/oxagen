@@ -1,4 +1,4 @@
-// gitlab-credential.ts — the GitLab project access token a workspace connected
+// gitlab-credential.ts: the GitLab project access token a workspace connected
 // (#3762), decrypted for one call and never logged.
 //
 // `attach_gitlab_project` stores the token and the webhook secret together as

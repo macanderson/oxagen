@@ -1,4 +1,4 @@
-// context.steering.host.ts — which repository host a workspace's steering
+// context.steering.host.ts: which repository host a workspace's steering
 // publishes through (#3762). The workspace's main repository binding names its
 // provider; this seam resolves the repository with that host and sends every
 // later call on the handle to the same host.

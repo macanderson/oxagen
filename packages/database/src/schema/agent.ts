@@ -1614,9 +1614,9 @@ export const contextProposals = agentSchema.table(
     // was opened; merge_context_pr reads the file again.
     governanceMode: text("governance_mode"),
     // The host the PR lives on: 'github' or 'gitlab' (#3762). `pr_number` is
-    // only meaningful with it — a GitHub PR number and a GitLab merge request
-    // IID are both scoped to one repository on one host — so a number is
-    // never read back through a different host than the one that issued it.
+    // only meaningful with it. A GitHub PR number and a GitLab merge request
+    // IID are both scoped to one repository on one host, so a number is never
+    // read back through a different host than the one that issued it.
     provider: text("provider"),
     repository: text("repository"),
     baseRef: text("base_ref"),

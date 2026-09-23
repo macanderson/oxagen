@@ -1,4 +1,4 @@
-// repository.gitlab-connection.ts — a workspace's GitLab project connections
+// repository.gitlab-connection.ts: a workspace's GitLab project connections
 // (#3762). A connection holds one project access token, so it reaches exactly
 // one project; `deliveryConfig` records which one by id and by path.
 import {

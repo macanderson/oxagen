@@ -1,6 +1,6 @@
 // audit-exempt: the kernel's capability.invoke_* audit records every connect; the security_events taxonomy has no repository-credential type yet, and the token itself is never logged or returned.
 //
-// repository.gitlab.attach.ts — `attach_gitlab_project` (#3762).
+// repository.gitlab.attach.ts: `attach_gitlab_project` (#3762).
 //
 // Flow:
 //   1. Role gate: org Owner or Admin (INV-29).

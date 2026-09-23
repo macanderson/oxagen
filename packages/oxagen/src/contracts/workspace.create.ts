@@ -27,8 +27,9 @@ export const githubMainRepoInput = z
 /**
  * A gitlab.com main project and a project access token for it (#3762). The
  * workspace does not exist yet, so it has no connection to hold a token, and
- * the token arrives with the request. The handler accepts this arm on the API
- * surface only.
+ * the token arrives with the request. The handler accepts this arm only from
+ * the web app or the HTTP API outside a chat turn, because an MCP client, a
+ * runner or the in-app agent keeps its tool input in a transcript.
  */
 export const gitlabMainRepoInput = z
   .object({
@@ -69,8 +70,9 @@ export const gitlabMainRepoInput = z
  * installation. The token is verified exactly as `attach_gitlab_project`
  * verifies it (a live project access token for that project, with the `api`
  * scope) and stored encrypted with the new workspace's GitLab connection.
- * Accepted on the API surface only: `conflict: gitlab_token_surface` for any
- * other surface.
+ * Refused from MCP, a runner, or the in-app agent's chat turn with
+ * `conflict: gitlab_token_surface`, because their tool input lands in a
+ * transcript.
  *
  * The production branch is GitHub's default branch, recorded as the binding's
  * configured default ref exactly as `bind_main_repository` records it; a
@@ -83,7 +85,7 @@ export const workspaceCreate = registerCapability({
   name: "create_workspace",
   domain: "workspace",
   description:
-    "Create a workspace within the active tenant together with its main repository, which is required: a GitHub repository, or a gitlab.com project with a project access token (API only). Refused for a slug already used in the organization, or a repository the org's GitHub App installation cannot reach or another workspace already steers by.",
+    "Create a workspace within the active tenant together with its main repository, which is required: a GitHub repository, or a gitlab.com project with a project access token (web app and API only). Refused for a slug already used in the organization, or a repository the org's GitHub App installation cannot reach or another workspace already steers by.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
