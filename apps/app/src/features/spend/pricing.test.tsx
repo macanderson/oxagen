@@ -71,6 +71,8 @@ const source: DataSource = {
     transcript: vi.fn(),
     chain: vi.fn(),
     outputs: vi.fn(),
+    work: vi.fn(),
+    outcomesSettings: vi.fn(),
   },
   approvals: { pending: vi.fn(), resolved: vi.fn() },
   agents: {

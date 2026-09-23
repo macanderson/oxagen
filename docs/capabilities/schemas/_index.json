@@ -1,5 +1,5 @@
 {
-  "generatedCount": 365,
+  "generatedCount": 369,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -1563,6 +1563,16 @@
       "consumes": []
     },
     {
+      "name": "get_run_outcomes_settings",
+      "domain": "run",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_run_outputs",
       "domain": "run",
       "surfaces": [
@@ -1588,6 +1598,16 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_run_work",
+      "domain": "run",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -3627,6 +3647,24 @@
         "api",
         "mcp",
         "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "set_run_outcomes_access",
+      "domain": "run",
+      "surfaces": [],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "set_run_outcomes_settings",
+      "domain": "run",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],

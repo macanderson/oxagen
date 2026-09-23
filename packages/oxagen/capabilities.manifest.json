@@ -4881,6 +4881,50 @@
       }
     },
     {
+      "name": "set_run_outcomes_access",
+      "file": "run.outcomes.access.set.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [],
+      "layers": {
+        "schema": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "get_run_outcomes_settings",
+      "file": "run.outcomes.settings.get.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "app": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "set_run_outcomes_settings",
+      "file": "run.outcomes.settings.set.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "app": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
       "name": "get_run_outputs",
       "file": "run.outputs.get.ts",
       "domain": "run",
@@ -4975,6 +5019,22 @@
         "unit": true,
         "docs": true,
         "app": true
+      }
+    },
+    {
+      "name": "get_run_work",
+      "file": "run.work.get.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "app": true,
+        "unit": false,
+        "docs": true
       }
     },
     {

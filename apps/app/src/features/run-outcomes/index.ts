@@ -1,0 +1,1 @@
+export { RunOutcomesConsent } from "./consent";

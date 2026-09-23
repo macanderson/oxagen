@@ -9,7 +9,8 @@
     ".": "./src/index.ts",
     "./credentials": "./src/credentials/credential-service.ts",
     "./registry": "./src/registry/index.ts",
-    "./catalog-sync": "./src/catalog-sync.ts"
+    "./catalog-sync": "./src/catalog-sync.ts",
+    "./run-outcomes-policy": "./src/run-outcomes-policy.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

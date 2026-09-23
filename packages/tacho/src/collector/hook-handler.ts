@@ -50,7 +50,34 @@ export interface PolicyView {
    * `isStale` in host/bundle.ts for why the two are not the same thing.
    */
   mandateConfirmedAt?: number;
+  /**
+   * Whether this session was started by the contained launcher (ADR-152).
+   * Absent answers no. A mandate that requires the contained tier refuses a
+   * session the launcher did not start.
+   */
+  launchedContained?: (harnessSessionId: string) => boolean;
 }
+
+/**
+ * The mandate requires `contained` and this session is not one the launcher
+ * started. Read only from a verified bundle, so a requirement written into
+ * the host file cannot refuse a session. Enforce mode only: an observe host
+ * records and never refuses.
+ */
+export function containmentUnmet(
+  view: PolicyView,
+  record: Pick<SessionRecord, "harnessSessionId">,
+): boolean {
+  return (
+    view.verified &&
+    view.bundle.mode === "enforce" &&
+    view.bundle.containment?.required === true &&
+    view.launchedContained?.(record.harnessSessionId) !== true
+  );
+}
+
+export const CONTAINMENT_REQUIRED_REASON =
+  "This agent's mandate requires the contained tier. Start it with `tacho run --contained`.";
 
 export interface HookHandlerDeps {
   registry: SessionRegistry;
@@ -171,29 +198,40 @@ export function pidFromEnv(
 function operatorBlock(
   view: PolicyView,
   record: SessionRecord,
-): { code: string; reason: string } | undefined {
+): { code: string; reason: string; source: "human" | "bundle" } | undefined {
   if (view.hostStatus === "suspended" || view.hostStatus === "revoked") {
     return {
       code: `host_${view.hostStatus}`,
       reason: `This host is ${view.hostStatus} by its Oxagen operator.`,
+      source: "human",
     };
   }
   if (view.hostStatus === "paused") {
     return {
       code: "host_paused",
       reason: "This host is paused by its Oxagen operator.",
+      source: "human",
     };
   }
   if (record.control.cancelled !== null) {
     return {
       code: "session_cancelled",
       reason: `This session was cancelled by its Oxagen operator: ${record.control.cancelled}`,
+      source: "human",
     };
   }
   if (record.control.paused !== null) {
     return {
       code: "session_paused",
       reason: `This session is paused by its Oxagen operator: ${record.control.paused}`,
+      source: "human",
+    };
+  }
+  if (containmentUnmet(view, record)) {
+    return {
+      code: "containment_required",
+      reason: CONTAINMENT_REQUIRED_REASON,
+      source: "bundle",
     };
   }
   return undefined;
@@ -376,6 +414,7 @@ function evaluationRequestFor(
     ...(toolInput !== undefined ? { toolInput } : {}),
     hostStatus: view.hostStatus,
     session: record.control,
+    ...(containmentUnmet(view, record) ? { containmentUnmet: true } : {}),
     latestDenyGeneration: view.denyGeneration,
     controlReachable: view.controlReachable,
     ...(view.mandateConfirmedAt !== undefined
@@ -511,7 +550,7 @@ async function routeHook(
             "policy_decision",
             {
               policy_decision: "deny",
-              policy_source: "human",
+              policy_source: block.source,
               policy_reason_code: block.code,
               policy_reason_digest: digestText(block.reason),
               bundle_version: view.bundle.version,
@@ -573,7 +612,7 @@ async function routeHook(
             body: {
               ...draft.body,
               policy_decision: block === undefined ? "allow" : "deny",
-              policy_source: block === undefined ? "bundle" : "human",
+              policy_source: block?.source ?? "bundle",
               policy_reason_code: block?.code ?? "boundary_clear",
               bundle_version: view.bundle.version,
               bundle_mode: view.bundle.mode,
@@ -782,7 +821,7 @@ async function routeHook(
               ...(block !== undefined
                 ? {
                     policy_decision: "deny",
-                    policy_source: "human",
+                    policy_source: block.source,
                     policy_reason_code: block.code,
                     policy_reason_digest: digestText(block.reason),
                   }
