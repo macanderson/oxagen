@@ -1,3 +1,4 @@
+import { runEnrichmentEnabled } from "@oxagen/oxagen/run-enrichment";
 // audit-exempt: workspace-profile field edit (name/slug/description) — no fitting security-event type exists in the taxonomy (no workspace.settings_updated); covered by the kernel capability.invoke_* audit. Do not invent a type.
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { workspaceSettingsWrite } from "@oxagen/oxagen/contracts/workspace.settings.write";
@@ -176,6 +177,12 @@ export const workspaceSettingsWriteHandler: CapabilityHandler<
                )`;
         }
 
+        if (input.runEnrichmentEnabled !== undefined) {
+          const bag =
+            updates.settings ??
+            sql`CASE WHEN jsonb_typeof(${schema.workspaces.settings}) = 'object' THEN ${schema.workspaces.settings} ELSE '{}'::jsonb END`;
+          updates.settings = sql`${bag} || ${JSON.stringify({ runEnrichmentEnabled: input.runEnrichmentEnabled })}::jsonb`;
+        }
         if (Object.keys(updates).length === 0) {
           return existing;
         }
@@ -211,6 +218,22 @@ export const workspaceSettingsWriteHandler: CapabilityHandler<
           throw err;
         }
 
+        if (
+          input.runEnrichmentEnabled === true &&
+          !runEnrichmentEnabled(existing.settings)
+        ) {
+          for (const runs of [schema.tachoSessions, schema.agentRuns]) {
+            await tx
+              .update(runs)
+              .set({ summaryInputDigest: null, summaryObservedAt: null })
+              .where(
+                and(
+                  eq(runs.orgId, ctx.orgId),
+                  eq(runs.workspaceId, workspaceId),
+                ),
+              );
+          }
+        }
         return tx.query.workspaces.findFirst({
           where: eq(schema.workspaces.id, workspaceId),
           columns: {

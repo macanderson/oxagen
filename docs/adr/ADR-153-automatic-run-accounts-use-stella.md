@@ -1,0 +1,18 @@
+# ADR-153: Automatic run accounts use Stella
+
+Status: Accepted
+Date: 2026-09-23
+
+Runs need a useful name and a concise account of the whole recorded conversation. The previous manual summary read the first sixty steps, truncated each body, and accepted only sealed runs. It could omit a later correction or the outcome of a long run.
+
+A durable sweep finds changed wrapped sessions and evidence-ledger runs every five minutes, including historical recordings uploaded later. Per-run batching and concurrency coalesce notifications. A digest of the recorded frames and body references skips unchanged input. Encrypted content-addressed chunks and a manifest keep transcript bytes out of durable-step payloads. Availability contributes to the input digest; unreadable bodies remain eligible for the next sweep. Separate observation timestamps prevent the summary write from scheduling itself.
+
+Stella's existing headless engine generates these accounts through `runGovernedTurn`, with no tools. Every retained text body participates in chronological chunks. Long inputs are reduced in successive levels before a final name and summary. The model is told to treat recorded instructions as evidence, and missing bodies are disclosed. Model-written prose is a derived account, never a replacement for the recording. The full unique run ID as a suffix distinguishes otherwise identical titles.
+
+Model selection, funding, credit admission and charging use the existing organization path. Each model step checks credit admission and is checkpointed by the durable job. An unavailable engine or refused credit admission leaves the recording intact and does not manufacture a summary.
+
+`runEnrichmentEnabled` in workspace settings defaults to true. The existing settings capability and role gate control it. The job checks it before model calls and before publishing. Turning it off hides generated names and summaries in run reads, so the UI displays the run ID. It does not turn off Stella chat, recording, deterministic repository and output evidence, metering, or harness identity.
+
+The schema adds nullable `summary_input_digest` and `summary_observed_at` columns to both run stores. Deploy migration 20260923070000 before registering the new jobs. Existing runs are eligible for the initial sweep. The existing manual summarize action queues the same enrichment event; its sealed/body-retention admission remains unchanged.
+
+The sweep processes up to five hundred rows per store per pass. A backlog takes multiple passes. Derived accounts expose their generation time. They do not claim to cover actions or messages the recorder never retained.

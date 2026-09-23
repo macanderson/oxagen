@@ -3419,6 +3419,10 @@ type Messages = {
     eyebrow: string;
     notRecorded: string;
     basisNotRecorded: string;
+    enrichment: {
+      label: string;
+      description: string;
+    };
     noSummary: string;
     source: {
       ledger: string;

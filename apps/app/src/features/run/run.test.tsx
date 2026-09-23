@@ -205,6 +205,26 @@ describe("header", () => {
     expect(screen.queryByText("$0.00")).toBeNull();
   });
 
+  it("uses the run ID as its heading when automatic names are disabled", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            enrichmentEnabled: false,
+            name: "Old generated name",
+            taskRef: "A derived project label",
+            summary: null,
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByRole("heading", { name: "tse_7k2m9q" })).toBeTruthy();
+    expect(
+      screen.queryByRole("heading", { name: "Old generated name" }),
+    ).toBeNull();
+  });
+
   it("names the operator, the model and the machine the run ran on", async () => {
     const { container } = await renderRun({
       detail: ok(runDetail()),

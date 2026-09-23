@@ -259,6 +259,7 @@ export const runItemSchema = z
       .nullable()
       .optional(),
     /** The generated name; null until `summarize_run` wrote one. */
+    enrichmentEnabled: z.boolean().optional(),
     name: z.string().nullable(),
     summary: runSummarySchema.nullable(),
   })

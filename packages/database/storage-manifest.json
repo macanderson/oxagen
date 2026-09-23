@@ -3759,7 +3759,7 @@
       "writes": []
     }
   ],
-  "contentHash": "4c3b1ee210ab7d1d01f1ea5f3fd3f750b5068bc7f25f9dcb0b0b0fb3b366b274",
+  "contentHash": "662b252a8673fb3fc5f5791326d76ab087f5e6ded32737880d7343799144699c",
   "domains": [
     {
       "name": "agent",
@@ -7195,6 +7195,18 @@
           "nullable": true,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "summary_input_digest",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "summary_observed_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
         },
         {
           "name": "spec_version",
@@ -21494,6 +21506,18 @@
           "nullable": true,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "summary_input_digest",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "summary_observed_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
         }
       ],
       "domain": "tacho",

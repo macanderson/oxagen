@@ -1,3 +1,4 @@
+import { EnrichmentSwitch } from "./enrichment-switch";
 import { useLocale, useTranslations } from "next-intl";
 import type { RunMachine, RunModel, RunRow } from "@/data/contracts/runs";
 import type { OrgRole, WsRole } from "@/server/viewer";
@@ -211,7 +212,9 @@ export function RunHeader({
         <div className="flex min-w-0 flex-col gap-2">
           <p className={eyebrow}>{t("eyebrow")}</p>
           <h2 className="text-xl font-semibold">
-            {run.name ?? run.taskRef ?? t("unnamedRun")}
+            {run.enrichmentEnabled === false
+              ? run.id
+              : (run.name ?? run.taskRef ?? run.id)}
           </h2>
           <p className={`${mono} text-xs text-muted-foreground break-all`}>
             {run.id}
@@ -238,6 +241,15 @@ export function RunHeader({
           {run.taskRef === null ? null : (
             <p className="text-sm">{run.taskRef}</p>
           )}
+          <EnrichmentSwitch
+            org={org}
+            ws={ws}
+            enabled={run.enrichmentEnabled !== false}
+            canEdit={
+              ["owner", "admin"].includes(orgRole) ||
+              ["owner", "admin"].includes(wsRole)
+            }
+          />
           {run.summary === null ? (
             <p className="max-w-prose text-sm text-muted-foreground">
               {t("noSummary")}
