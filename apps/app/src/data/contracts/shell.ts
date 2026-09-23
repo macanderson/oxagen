@@ -37,9 +37,10 @@ const Count = z.number().int().nonnegative();
 
 /**
  * The sidebar's counts for one workspace (`get_nav_counts`, mockup
- * `sidebar()`): what waits on a person there. Each is null when its store does
- * not exist, and a null draws no count rather than a zero: rev1 records
- * approvals, and has no proposals or incident store behind the other two.
+ * `sidebar()`): what waits on a person there. Pending approvals, open
+ * steering proposals and open critical incidents, each read from the store
+ * that owns it. A null is a read that answered no figure, and the sidebar
+ * draws it as not recorded rather than as a zero.
  */
 export const NavCounts = z.object({
   approvals: Count.nullable(),
