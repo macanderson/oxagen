@@ -136,7 +136,7 @@ describe("the governance dialog", () => {
       "Not recorded yet: an org-owner approval and a security event when the mode is lowered. Tracked in #3859.",
     );
     expect(
-      within(dialog).getByRole("button", { name: "Close the dialog" }),
+      within(dialog).getByRole("button", { name: "Close" }),
     ).toBeVisible();
     expect(
       within(dialog).getByRole("button", { name: "Cancel" }),
@@ -205,7 +205,7 @@ describe("the governance dialog", () => {
     renderChip();
     const dialog = openDialog();
     fireEvent.click(
-      within(dialog).getByRole("button", { name: "Close the dialog" }),
+      within(dialog).getByRole("button", { name: "Close" }),
     );
     await waitFor(() => {
       expect(screen.queryByTestId("governance-dialog")).toBeNull();
