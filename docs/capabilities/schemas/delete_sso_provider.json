@@ -1,0 +1,46 @@
+{
+  "name": "delete_sso_provider",
+  "domain": "org",
+  "description": "Delete an SSO provider and its group-to-role mappings. If SSO is required and no verified provider remains, the requirement is turned off in the same change.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "providerId": {
+        "type": "string",
+        "x-server-validated": true,
+        "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+      }
+    },
+    "required": [
+      "providerId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "deleted": {
+        "const": true
+      }
+    },
+    "required": [
+      "deleted"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -20,6 +20,7 @@ const ALL_KEYS: readonly NavKey[] = [
   "apiKeys",
   "roles",
   "modelFunding",
+  "sso",
 ];
 
 describe("parseShellPath", () => {
@@ -38,6 +39,7 @@ describe("parseShellPath", () => {
       "api-keys",
       "roles",
       "model-funding",
+      "sso",
     ])
       expect(parseShellPath(`/acme/${segment}`)).toEqual({
         org: "acme",
@@ -75,6 +77,7 @@ describe("isNavItemCurrent", () => {
     ["/acme/audit", "audit"],
     ["/acme/api-keys", "apiKeys"],
     ["/acme/model-funding", "modelFunding"],
+    ["/acme/sso", "sso"],
     ["/acme/roles", "roles"],
     ["/acme/core-platform", "fleet"],
     ["/acme/core-platform/runs/run_01/chain", "fleet"],
@@ -95,7 +98,8 @@ describe("isNavItemCurrent", () => {
       key === "organization" ||
         key === "apiKeys" ||
         key === "roles" ||
-        key === "modelFunding",
+        key === "modelFunding" ||
+        key === "sso",
     );
   });
 
@@ -132,6 +136,7 @@ describe("hrefs", () => {
     expect(orgHref("acme", "audit")).toBe("/acme/audit");
     expect(orgHref("acme", "apiKeys")).toBe("/acme/api-keys");
     expect(orgHref("acme", "modelFunding")).toBe("/acme/model-funding");
+    expect(orgHref("acme", "sso")).toBe("/acme/sso");
     expect(orgHref("acme", "roles")).toBe("/acme/roles");
   });
 
