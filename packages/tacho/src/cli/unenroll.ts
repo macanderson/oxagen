@@ -409,7 +409,9 @@ async function unenrollLocked(
     incomplete = true;
   }
 
-  const githubFailures = restoreGithubRepositories(host, deps);
+  const githubFailures = read.githubRecoveryError
+    ? [read.githubRecoveryError]
+    : restoreGithubRepositories(host ?? read.salvaged, deps);
   if (githubFailures.length > 0) {
     warnings.push(...githubFailures);
     for (const warning of warnings) deps.err(`warning: ${warning}`);

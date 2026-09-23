@@ -611,7 +611,14 @@ const tachoControlLimiter = distributedRateLimiter({
 });
 tachoScoped.use("/bundle", tachoControlLimiter);
 tachoScoped.use("/commands", tachoControlLimiter);
-tachoScoped.use("/github-token", tachoControlLimiter);
+tachoScoped.use(
+  "/github-token",
+  distributedRateLimiter({
+    keyPrefix: "tacho-github-token",
+    max: TACHO_HOST_PER_MIN,
+    bucketKey: enrolledMachineBucketKey,
+  }),
+);
 tachoScoped.route("/", tachoEventsIngestRoute);
 tachoScoped.route("/", tachoBundleGetRoute);
 tachoScoped.route("/", tachoGithubTokenIssueRoute);

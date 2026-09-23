@@ -1,5 +1,5 @@
 /** Opt-in GitHub Git transport. Git receives a local lease, never a GitHub token. */
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import type { CliDeps } from "./deps";
 import { shellQuote } from "./deps";
@@ -19,6 +19,25 @@ function git(
   )
     throw new Error(out.stderr || "Git configuration failed");
   return out.stdout.trim();
+}
+
+/** Common Git config cannot bind different agent identities in sibling worktrees. */
+function requireSingleWorktree(deps: CliDeps, cwd: string): void {
+  const directory = git(deps, cwd, ["rev-parse", "--absolute-git-dir"]);
+  const common = resolve(
+    cwd,
+    git(deps, cwd, ["rev-parse", "--git-common-dir"]),
+  );
+  const worktrees = git(deps, cwd, ["worktree", "list", "--porcelain"]);
+  if (
+    realpathSync(directory) !== realpathSync(common) ||
+    worktrees.split("\n").filter((line) => line.startsWith("worktree "))
+      .length !== 1
+  ) {
+    throw new Error(
+      "GitHub custody requires a standalone checkout. Use a separate clone for this agent, or remove custody before adding worktrees.",
+    );
+  }
 }
 
 function setGitValues(
@@ -97,10 +116,13 @@ export function githubConfigure(
     deps.out(`GitHub proxy removed for ${repository}`);
     return;
   }
+  requireSingleWorktree(deps, cwd);
   const accepted = new Set([
     `https://github.com/${repository}`,
     `https://github.com/${repository}.git`,
+    `git@github.com:${repository}`,
     `git@github.com:${repository}.git`,
+    `ssh://git@github.com/${repository}`,
     `ssh://git@github.com/${repository}.git`,
   ]);
   const configured = git(
@@ -179,6 +201,8 @@ export async function githubCredential(
     !match
   )
     throw new Error("The GitHub helper only answers this host's proxy");
+  // Recheck: a linked worktree may have been added after configuration.
+  requireSingleWorktree(deps, resolve(options.cwd));
   const answer = await deps.daemonPost?.("/github-lease", {
     repository: match[1],
     cwd: resolve(options.cwd),
@@ -203,7 +227,7 @@ export function readCredentialInput(): string {
 
 /** Remove recorded proxy settings before the daemon stops. Foreign helpers survive. */
 export function restoreGithubRepositories(
-  host: HostFile | undefined,
+  host: Pick<HostFile, "github_repositories"> | undefined,
   deps: CliDeps,
 ): string[] {
   const failures: string[] = [];
