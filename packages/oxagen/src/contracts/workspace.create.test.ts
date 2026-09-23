@@ -10,6 +10,7 @@ const OUTPUT = {
   mainRepo: {
     bindingId: "rpb_0123abcd",
     connectionId: "con_abc",
+    provider: "github",
     fullName: "acme/widgets",
     defaultRef: "main",
   },
@@ -62,6 +63,39 @@ describe("workspace.create capability", () => {
         mainRepo: { provider: "gitlab", owner: "acme", name: "widgets" },
       }).success,
     ).toBe(false);
+  });
+
+  it("takes a gitlab.com project with its project access token, and nothing looser (#3762)", () => {
+    const token = "glpat-abcdefghijklmnopqrstuvwxyz";
+    expect(
+      workspaceCreate.input.parse({
+        name: "Rules",
+        slug: "rules",
+        mainRepo: {
+          provider: "gitlab",
+          projectPath: "acme/platform/rules",
+          token,
+        },
+      }).mainRepo,
+    ).toEqual({
+      provider: "gitlab",
+      projectPath: "acme/platform/rules",
+      token,
+    });
+    for (const mainRepo of [
+      { provider: "gitlab", projectPath: "acme/platform/rules" },
+      { provider: "gitlab", projectPath: "rules", token },
+      {
+        provider: "gitlab",
+        projectPath: "acme/rules",
+        token,
+        host: "gitlab.example.com",
+      },
+    ])
+      expect(
+        workspaceCreate.input.safeParse({ name: "R", slug: "rules", mainRepo })
+          .success,
+      ).toBe(false);
   });
 
   it("refuses a repository owner or name bind_main_repository would refuse", () => {

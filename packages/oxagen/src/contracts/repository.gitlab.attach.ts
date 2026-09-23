@@ -46,6 +46,9 @@ export const gitlabProjectPathSchema = z
   .max(1024)
   .regex(/^[A-Za-z0-9_][A-Za-z0-9_.-]*(\/[A-Za-z0-9_][A-Za-z0-9_.-]*)+$/);
 
+/** A GitLab project access token, as the attach and create flows accept it. */
+export const gitlabTokenSchema = z.string().min(20).max(255).regex(/^\S+$/);
+
 export const repositoryGitlabAttach = registerCapability({
   name: "attach_gitlab_project",
   domain: "repository",
@@ -68,7 +71,7 @@ export const repositoryGitlabAttach = registerCapability({
       /** `group/sub/project` on gitlab.com. */
       projectPath: gitlabProjectPathSchema,
       /** A project access token for that project. Stored encrypted. */
-      token: z.string().min(20).max(255).regex(/^\S+$/),
+      token: gitlabTokenSchema,
     })
     .strict(),
   output: z

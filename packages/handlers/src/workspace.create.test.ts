@@ -23,6 +23,8 @@ const mocks = vi.hoisted(() => ({
     /** Which `withTenantDb` call (0-based) the insert ran inside. */
     txIndex: number;
   }>,
+  /** Every `tx.update(table).set(v)` the creating transaction issues. */
+  updates: [] as Array<{ table: unknown; values: Record<string, unknown> }>,
   /** The transaction object each `withTenantDb` call handed its callback. */
   txs: [] as unknown[],
   /** A failure the heads insert raises, for the lost-race path. */
@@ -232,6 +234,12 @@ vi.mock("@oxagen/database", async (importOriginal) => {
             return chain;
           },
         }),
+        update: (table: unknown) => ({
+          set: (values: Record<string, unknown>) => {
+            mocks.updates.push({ table, values });
+            return { where: async () => [] };
+          },
+        }),
         insert: (table: unknown): unknown => {
           insertCountRef.n++;
           const record = (values: Record<string, unknown>) =>
@@ -292,6 +300,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 import { schema } from "@oxagen/database";
 import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
 import { createWorkspaceCreateHandler } from "./workspace.create";
+import { FakeGitLabApi } from "./context.steering.gitlab.test-support";
 import { isHandlerError, type CapabilityContext } from "@oxagen/oxagen";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -340,6 +349,7 @@ describe("workspaceCreateHandler (@oxagen/handlers)", () => {
   beforeEach(() => {
     mocks.txScopeMoves.length = 0;
     mocks.inserts.length = 0;
+    mocks.updates.length = 0;
     mocks.txs.length = 0;
     mocks.headInsertError = null;
     mocks.withSystemDbCalls = 0;
@@ -703,6 +713,7 @@ describe("workspaceCreateHandler (@oxagen/handlers)", () => {
       mainRepo: {
         bindingId: "rpb_0123abcd",
         connectionId: "con_new",
+        provider: "github",
         fullName: "Acme/Widgets",
         defaultRef: "trunk",
       },
@@ -844,5 +855,133 @@ describe("workspaceCreateHandler (@oxagen/handlers)", () => {
   it("slug uniqueness check uses both orgId from context and the input slug", async () => {
     await workspaceCreateHandler(draft("Scoped2", "scoped2"), CTX);
     expect(mocks.wsFindFirst).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * A GitLab main project (#3762): the token arrives with the request, is
+ * verified against gitlab.com (here an in-memory project), and is written
+ * sealed with the new workspace's GitLab connection. No GitHub authorization
+ * is read.
+ */
+describe("workspaceCreateHandler with a GitLab main project", () => {
+  const TOKEN = "glpat-abcdefghijklmnopqrstuvwxyz";
+  const gitlabDraft = {
+    name: "Rules",
+    slug: "rules",
+    mainRepo: {
+      provider: "gitlab" as const,
+      projectPath: "acme/platform/rules",
+      token: TOKEN,
+    },
+  };
+
+  function handlerWith(api: FakeGitLabApi) {
+    const seal = vi.fn(async (plaintext: string) => ({
+      keyId: "local:test",
+      ciphertext: Buffer.from(`sealed:${plaintext.length}`).toString("base64"),
+    }));
+    const handler = createWorkspaceCreateHandler({
+      ...github,
+      gitlab: {
+        client: (token) => api.client(token),
+        seal,
+        newSecret: () => "whsec-fresh",
+        webhookUrl: (id) => `https://api.oxagen.test/webhooks/gitlab/${id}`,
+      },
+    });
+    return { handler, seal };
+  }
+
+  beforeEach(() => {
+    mocks.inserts.length = 0;
+    mocks.updates.length = 0;
+    mocks.sharedRows = new Map<unknown, unknown[]>([
+      [schema.dataPlanes, []],
+      [schema.repositoryBindingHeads, []],
+    ]);
+    github.candidates.mockClear();
+    github.repository.mockClear();
+  });
+
+  it("creates the workspace with the project bound by id, the token sealed, and the hook registered", async () => {
+    const { handler, seal } = handlerWith(new FakeGitLabApi());
+
+    const out = await handler(gitlabDraft, CTX);
+
+    expect(github.candidates).not.toHaveBeenCalled();
+    expect(out.mainRepo).toMatchObject({
+      provider: "gitlab",
+      connectionId: "con_new",
+      fullName: "acme/platform/rules",
+      defaultRef: "main",
+    });
+    expect(seal).toHaveBeenCalledWith(
+      JSON.stringify({ token: TOKEN, webhookSecret: "whsec-fresh" }),
+    );
+    const byTable = (t: unknown) => mocks.inserts.find((i) => i.table === t);
+    expect(byTable(schema.sourceConnections)?.values).toMatchObject({
+      connectorId: "gitlab",
+      authScheme: "project_access_token",
+      status: "connected",
+    });
+    expect(byTable(schema.repositoryBindings)?.values).toMatchObject({
+      provider: "gitlab",
+      providerRepositoryId: "4242",
+      providerOwner: "acme/platform",
+      providerFullName: "acme/platform/rules",
+      configuredDefaultRef: "main",
+    });
+    expect(byTable(schema.repositoryBindingHeads)?.values).toMatchObject({
+      provider: "gitlab",
+      role: "main",
+    });
+    expect(JSON.stringify(mocks.inserts.map((i) => i.values))).not.toContain(
+      TOKEN,
+    );
+    expect(
+      mocks.updates.some(
+        (u) =>
+          (u.values.deliveryConfig as { webhookId?: number })?.webhookId ===
+          901,
+      ),
+    ).toBe(true);
+  });
+
+  it("refuses the token on any surface but the API, before calling GitLab", async () => {
+    const api = new FakeGitLabApi();
+    const { handler } = handlerWith(api);
+    const err = await handler(gitlabDraft, { ...CTX, surface: "mcp" }).catch(
+      (e: unknown) => e,
+    );
+    expect(err).toMatchObject({ reason: "gitlab_token_surface" });
+    expect(api.tokens).toEqual([]);
+    expect(mocks.inserts).toEqual([]);
+  });
+
+  it("refuses a token that is not this project's before writing anything", async () => {
+    const api = new FakeGitLabApi();
+    const { handler } = handlerWith(api);
+    const client = api.client.bind(api);
+    api.client = (token) => ({
+      ...client(token),
+      getCurrentUser: async () => ({ id: 3, username: "marcus", bot: false }),
+    });
+    const err = await handler(gitlabDraft, CTX).catch((e: unknown) => e);
+    expect(err).toMatchObject({ reason: "gitlab_token_not_project_scoped" });
+    expect((err as Error).message).not.toContain(TOKEN);
+    expect(mocks.inserts).toEqual([]);
+  });
+
+  it("refuses a project another workspace already steers by", async () => {
+    mocks.sharedRows = new Map<unknown, unknown[]>([
+      [schema.dataPlanes, []],
+      [schema.repositoryBindingHeads, [{ role: "main", workspaceId: "ws_9" }]],
+    ]);
+    const { handler } = handlerWith(new FakeGitLabApi());
+    await expect(handler(gitlabDraft, CTX)).rejects.toMatchObject({
+      reason: "main_repo_claimed",
+    });
+    expect(mocks.inserts).toEqual([]);
   });
 });
