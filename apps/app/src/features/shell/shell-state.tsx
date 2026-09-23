@@ -78,7 +78,13 @@ function isCommandShortcut(
 export function ShellStateProvider({ children }: { children: ReactNode }) {
   const [approvalsOpen, setApprovalsOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  useEffect(() => subscribeApprovals(() => setApprovalsOpen(true)), []);
+  useEffect(
+    () =>
+      subscribeApprovals(() => {
+        setApprovalsOpen(true);
+      }),
+    [],
+  );
   const [commandOpen, setCommandOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);

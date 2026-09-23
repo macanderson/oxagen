@@ -43,10 +43,9 @@ const ok = <T>(value: T) => ({ ok: true, value });
 
 beforeEach(() => {
   vi.resetAllMocks();
-  fake.viewer.mockImplementation(async (org: string, ws?: string) => ({
-    org,
-    ws: ws ?? null,
-  }));
+  fake.viewer.mockImplementation((org: string, ws?: string) =>
+    Promise.resolve({ org, ws: ws ?? null }),
+  );
   fake.context.mockResolvedValue(
     ok({
       orgs: [],
@@ -61,21 +60,22 @@ beforeEach(() => {
     ok({ mandates: [], asOf: "2026-09-23T00:00:00Z", truncatedAt: null }),
   );
   fake.read.mockImplementation(
-    async (
-      ctx: { ws: string | null },
-      call: { contract: { name: string } },
-    ) => {
+    (ctx: { ws: string | null }, call: { contract: { name: string } }) => {
       if (call.contract.name === "list_notifications")
-        return ok({
-          notifications: [
-            notification("shared"),
-            ...(ctx.ws ? [notification(ctx.ws)] : []),
-          ],
-          unreadCount: ctx.ws ? 2 : 1,
-        });
+        return Promise.resolve(
+          ok({
+            notifications: [
+              notification("shared"),
+              ...(ctx.ws ? [notification(ctx.ws)] : []),
+            ],
+            unreadCount: ctx.ws ? 2 : 1,
+          }),
+        );
       if (call.contract.name === "get_nav_counts")
-        return ok({ approvals: 0, proposals: null, incidents: null });
-      return ok({ items: [], nextCursor: null });
+        return Promise.resolve(
+          ok({ approvals: 0, proposals: null, incidents: null }),
+        );
+      return Promise.resolve(ok({ items: [], nextCursor: null }));
     },
   );
   fake.write.mockResolvedValue(ok({ ok: true }));
@@ -89,7 +89,9 @@ describe("organization activity", () => {
     expect(fake.read).toHaveBeenCalledWith(
       { org: "org", ws: "two" },
       expect.objectContaining({
-        contract: expect.objectContaining({ name: "get_nav_counts" }),
+        contract: expect.objectContaining({
+          name: "get_nav_counts",
+        }) as unknown,
       }),
     );
     expect(fake.context).not.toHaveBeenCalled();
@@ -118,11 +120,13 @@ describe("organization activity", () => {
   });
 
   it("does not present a refused workspace read as an empty notification inbox", async () => {
-    fake.read.mockImplementation(async () => ({
-      ok: false,
-      reason: "denied",
-      permission: "notification.read",
-    }));
+    fake.read.mockImplementation(() =>
+      Promise.resolve({
+        ok: false,
+        reason: "denied",
+        permission: "notification.read",
+      }),
+    );
     const result = await readShellActivity("org", "one");
     expect(result.ok).toBe(true);
     if (!result.ok) return;
