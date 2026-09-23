@@ -980,9 +980,6 @@ type Messages = {
     };
   };
   billing: {
-    units: {
-      gau: string;
-    };
     range: string;
     notRecorded: string;
     header: {
@@ -1001,9 +998,10 @@ type Messages = {
       scale: string;
       enterprise: string;
     };
-    intervals: {
-      month: string;
-      year: string;
+    chargeBasis: {
+      blocks: string;
+      bought: string;
+      overage: string;
     };
     tiles: {
       label: string;
@@ -1011,70 +1009,55 @@ type Messages = {
       planMonth: string;
       planYear: string;
       planNone: string;
-      gau: string;
-      gauNote: string;
-      overdrawn: string;
-      rate: string;
-      perThousand: string;
+      governed: string;
+      governedNote: string;
+      retained: string;
+      retainedNote: string;
       due: string;
       dueNote: string;
-      nothingDue: string;
-      nextInvoice: string;
-      mixedCurrency: string;
     };
-    thisMonth: {
+    thisPeriod: {
       title: string;
+      badge: string;
       columns: {
         line: string;
         basis: string;
         amount: string;
       };
       lines: {
-        plan: string;
-        blocks: string;
-        topups: string;
-        overage: string;
-        tax: string;
+        governed: string;
+        governedNone: string;
+        tokens: string;
+        retention: string;
+        discount: string;
         total: string;
       };
       basis: {
-        plan: string;
-        planNone: string;
-        invoices: string;
-        tax: string;
+        tokens: string;
+        retention: string;
+        retentionExtended: string;
+        heldNotRecorded: string;
+        discount: string;
         total: string;
       };
-      none: string;
-      empty: string;
-      partial: string;
-      mixedCurrency: string;
     };
     meters: {
       title: string;
       columns: {
         meter: string;
-        thisMonth: string;
+        thisPeriod: string;
         note: string;
       };
-      gau: string;
-      gauValue: string;
-      gauNote: string;
-      remaining: string;
-      overdrawn: string;
-      other: string;
-      otherNote: string;
-      credits: string;
-      creditsValue: string;
-      creditsNote: string;
-      exhaustedNoCard: string;
-    };
-    mode: {
-      prepaid: string;
-      prepaidNoCard: string;
-      invoice: string;
-      uninvoiced: string;
-      invoiced: string;
-      pastDue: string;
+      governed: string;
+      governedNote: string;
+      sealed: string;
+      sealedNote: string;
+      retained: string;
+      retainedNote: string;
+      halted: string;
+      inApp: string;
+      free: string;
+      note: string;
     };
     invoices: {
       title: string;
@@ -1082,7 +1065,7 @@ type Messages = {
       columns: {
         invoice: string;
         period: string;
-        kind: string;
+        governed: string;
         amount: string;
         status: string;
         paid: string;
@@ -1090,14 +1073,8 @@ type Messages = {
       };
       unnumbered: string;
       view: string;
+      viewLabel: string;
       unpublished: string;
-      kinds: {
-        subscription: string;
-        gau_purchase: string;
-        gau_auto_topup: string;
-        gau_interim: string;
-        gau_period_close: string;
-      };
       statuses: {
         open: string;
         paid: string;
@@ -1110,26 +1087,30 @@ type Messages = {
     };
     priceList: {
       title: string;
-      governed: string;
-      inApp: string;
       free: string;
       freeTerms: string;
-      perMonth: string;
+      blocks: string;
+      blocksTerms: string;
+      negotiated: string;
+      negotiatedTerms: string;
+      invoice: string;
+      invoiceTerms: string;
+      retention: string;
+      retentionTerms: string;
+      tokens: string;
+      tokensTerms: string;
       enterprise: string;
       enterpriseTerms: string;
-      list: string;
-      perThousand: string;
-      blocks: string;
-      blockTerms: string;
-      bands: string;
-      credit: string;
-      creditTerms: string;
-      calls: string;
-      callsTerms: string;
-      grant: string;
-      packs: string;
-      packsTerms: string;
-      everyFeature: string;
+      footer: string;
+    };
+    billableUnits: {
+      title: string;
+      priced: string;
+      pricedBody: string;
+      reported: string;
+      reportedBody: string;
+      free: string;
+      freeBody: string;
     };
     autoTopup: {
       title: string;
@@ -1162,6 +1143,7 @@ type Messages = {
       submit: string;
       submitting: string;
       denied: string;
+      invoiceBilled: string;
       errors: {
         invalid: string;
         aboveMax: string;
@@ -1173,8 +1155,6 @@ type Messages = {
     usageCredits: {
       title: string;
       balance: string;
-      faceValue: string;
-      credits: string;
       basis: string;
       exhausted: string;
       presets: string;
@@ -1190,27 +1170,17 @@ type Messages = {
         unavailable: string;
       };
     };
-    whatCounts: {
-      title: string;
-      gau: string;
-      gauBody: string;
-      credits: string;
-      creditsBody: string;
-      free: string;
-      freeBody: string;
-    };
     changePlan: {
       open: string;
       title: string;
-      lede: string;
       plan: string;
-      interval: string;
       perMonth: string;
       perYear: string;
-      includes: string;
-      enterprise: string;
+      enterpriseOption: string;
+      note: string;
       submit: string;
       submitting: string;
+      cancel: string;
       denied: string;
       subscribed: string;
       errors: {
@@ -1220,15 +1190,59 @@ type Messages = {
         unavailable: string;
       };
     };
-    rate: {
-      published: string;
-      negotiated: string;
-      negotiatedNoRef: string;
-    };
     failure: {
       denied: string;
       pendingApproval: string;
       error: string;
+    };
+    state: {
+      loading: string;
+      empty: {
+        title: string;
+        body: string;
+        back: string;
+      };
+      error: {
+        title: string;
+        body: string;
+        retry: string;
+        incident: string;
+        trace: string;
+      };
+      denied: {
+        title: string;
+        body: string;
+        request: string;
+        back: string;
+        signedIn: string;
+        needed: string;
+        neededValue: string;
+        decidedBy: string;
+        signedInValue: string;
+        decidedByValue: string;
+      };
+      pending: {
+        title: string;
+        body: string;
+      };
+      requestAccess: {
+        title: string;
+        body: string;
+        now: string;
+      };
+      incident: {
+        title: string;
+        body: string;
+        now: string;
+      };
+    };
+    roles: {
+      owner: string;
+      admin: string;
+      member: string;
+      billing: string;
+      compliance: string;
+      viewer: string;
     };
   };
   create: {
@@ -6170,6 +6184,17 @@ type Messages = {
       name: string;
       hint: string;
       invalid: string;
+    };
+    listTable: {
+      search: string;
+      rows: string;
+      all: string;
+      noMatch: string;
+      range: string;
+      rangeNone: string;
+      previous: string;
+      next: string;
+      pages: string;
     };
   };
 };
