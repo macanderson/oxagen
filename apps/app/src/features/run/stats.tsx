@@ -100,6 +100,7 @@ export function StatRow({
 }) {
   const t = useTranslations("run.stats");
   const tc = useTranslations("run.cost");
+  const tr = useTranslations("run");
   const locale = useLocale();
   const rollup = cost.ok ? cost.value.rollup : null;
   const waste = wasted(rollup?.cost ?? null, rollup?.productiveRatio ?? null);
@@ -112,6 +113,8 @@ export function StatRow({
         .length
     : null;
   const runCost = rollup?.cost ?? run.cost;
+  // A finalized rollup wins. Otherwise the agent-reported cost is provisional.
+  const displayedCost = runCost ?? run.reportedCost ?? null;
   const missingRollup = cost.ok && rollup === null ? t("noRollup") : undefined;
   return (
     <section
@@ -150,14 +153,18 @@ export function StatRow({
       <Stat
         label={t("cost")}
         note={
-          runCost === null ? undefined : (
+          displayedCost === null ? undefined : (
             <span className={mono}>
-              {runCost.basis ?? tc("basisNotRecorded")}
+              {runCost === null
+                ? tr("costReportedProvisional")
+                : tr("costFinalized", {
+                    basis: runCost.basis ?? tc("basisNotRecorded"),
+                  })}
             </span>
           )
         }
       >
-        {runCost === null ? <NoValue /> : <Money value={runCost} />}
+        {displayedCost === null ? <NoValue /> : <Money value={displayedCost} />}
       </Stat>
       <Stat
         label={t("wasted")}

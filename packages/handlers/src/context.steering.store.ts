@@ -12,6 +12,7 @@ import {
   schema,
   withTenantDb,
 } from "@oxagen/database";
+import { contextRecordLabel } from "@oxagen/oxagen/context-record-label";
 import { HandlerError } from "@oxagen/oxagen";
 import type {
   CheckResult,
@@ -40,8 +41,8 @@ interface SteeringScope {
 
 export type ProposalRow = Omit<
   typeof schema.contextProposals.$inferSelect,
-  "checks" | "title"
-> & { checks: CheckResult[]; title?: string | null };
+  "checks" | "title" | "label"
+> & { checks: CheckResult[]; title?: string | null; label?: string | null };
 
 type ProposalInsert = Pick<
   ProposalRow,
@@ -60,7 +61,7 @@ type ProposalInsert = Pick<
   | "supportingRecordIds"
   | "evidenceLinks"
   | "createdById"
-> & { title?: string | null };
+> & { title?: string | null; label?: string | null };
 
 /** The columns a handler may change after insert. */
 type ProposalPatch = Partial<
@@ -84,7 +85,11 @@ type ProposalPatch = Partial<
   >
 >;
 
-export type PublishedRecordRow = typeof schema.contextRecords.$inferSelect & {
+export type PublishedRecordRow = Omit<
+  typeof schema.contextRecords.$inferSelect,
+  "label"
+> & {
+  label?: string | null;
   version: number | null;
   checksum: string | null;
 };
@@ -931,6 +936,7 @@ export const postgresSteeringStore: SteeringStore = {
         .select({
           id: schema.contextRecords.id,
           publicId: schema.contextRecords.publicId,
+          label: schema.contextRecords.label,
         })
         .from(schema.contextRecords)
         .where(
@@ -945,6 +951,13 @@ export const postgresSteeringStore: SteeringStore = {
 
       const classification = {
         title: proposal.title ?? proposal.statement,
+        // An omitted label keeps the record's own. The title names a new
+        // record only when the proposal gave no label.
+        label:
+          proposal.label ??
+          existing?.label ??
+          proposal.title ??
+          contextRecordLabel(proposal.lineageId),
         status: "active" as const,
         kind: proposal.kind,
         force: proposal.force,

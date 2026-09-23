@@ -38,6 +38,11 @@
             "minLength": 1,
             "maxLength": 200
           },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
           "kind": {
             "type": "string",
             "enum": [

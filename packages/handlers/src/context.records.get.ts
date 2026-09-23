@@ -1,3 +1,4 @@
+import { contextRecordLabel } from "@oxagen/oxagen/context-record-label";
 // audit-exempt: read-only — answers one published or appended record; mutates nothing. The kernel capability.invoke_* audit covers access.
 //
 // get_record (ADR-061): a `cta_` id reads the append; anything else reads the
@@ -121,6 +122,7 @@ function detailRecord(
     id: mirrored?.id ?? null,
     lineageId: file.lineageId,
     title: mirrored?.title ?? file.lineageId,
+    label: mirrored?.label ?? contextRecordLabel(file.lineageId),
     kind: file.kind,
     force: file.force,
     constraintEffect: mirrored?.constraintEffect ?? null,
