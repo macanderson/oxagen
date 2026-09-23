@@ -556,7 +556,7 @@
         },
         "coaching": {
           "title": "Coaching",
-          "badge": "0 from the token record",
+          "badge": "waits on the token classes",
           "notBacked": "Coaching is read off the token classes, and the record does not split input by class yet. Nothing is suggested until it does.",
           "all": "All coaching for this workspace →"
         },
