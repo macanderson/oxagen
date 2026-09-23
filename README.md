@@ -126,8 +126,7 @@ oxagen/
 │   ├── billing      Credit gate, usage metering, Stripe meter/ledger sync
 │   ├── database     Drizzle schemas + Atlas migrations (Postgres)
 │   ├── ontology     Neo4j schema, indexes, graph query layer
-│   ├── engram       Agent memory substrate (content-addressed, consolidated, decaying)
-│   ├── context-provider  Serves a workspace's memory as Context Graph Protocol frames
+│   ├── steering-assembler  The one assembler: ranks steering candidates, fits them to a budget, records the manifest
 │   ├── telemetry    ClickHouse client + event schemas + circuit breaker
 │   ├── tenancy      Tenant scoping (RLS seam) — withTenantDb / runInTenantScope / data planes
 │   ├── iam          Roles, permissions, policy seeds

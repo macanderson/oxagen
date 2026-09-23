@@ -25,7 +25,9 @@ const {
   BUNDLE_FEATURE_GATEWAY_TOOLS,
   BUNDLE_FEATURE_MODEL_ALLOWLIST,
   BUNDLE_FEATURE_MODEL_PRICES,
+  BUNDLE_FEATURE_STEERING_MANIFEST,
 } = await import("@oxagen/tacho");
+const { assembleWorkspaceSteering } = await import("./tacho-steering");
 const { PROVIDER_RATE_CARD } = await import("@oxagen/billing");
 
 const NOW = new Date("2026-09-17T09:30:00.000Z");
@@ -51,12 +53,32 @@ const NO_MANDATE = {
   budget: { mode: "observed" as const },
 };
 
+/** One must record and one may record: text for the first, a manifest naming both. */
+const STEERING = assembleWorkspaceSteering("org", "ws", [
+  {
+    slug: "no-force-push",
+    kind: "constraint",
+    force: "must",
+    constraintEffect: "forbid",
+    statement: "Never force-push.",
+    activatedAt: "2026-09-16T00:00:00.000Z",
+  },
+  {
+    slug: "prefer-small-prs",
+    kind: "preference",
+    force: "may",
+    constraintEffect: null,
+    statement: "Prefer small pull requests.",
+    activatedAt: "2026-09-15T00:00:00.000Z",
+  },
+]);
+
 function bundle(bundleFeatures: string[] = CURRENT) {
   return unsignedBundle(
     host(bundleFeatures),
     { org: 1, workspace: 1 },
     { mode: "digest_only", classes: [] },
-    null,
+    STEERING,
     NO_MANDATE,
     NOW,
   );
@@ -194,6 +216,33 @@ describe("a host that cannot parse the field is not sent it", () => {
     // A host advertising something else has not advertised this.
     gatewayMandateTools.mockReturnValue(["get_run"]);
     expect(served(["some_later_field"])).not.toHaveProperty("gateway_tools");
+  });
+});
+
+describe("the steering manifest on the bundle", () => {
+  it("signs the text for every host, and the manifest only for a host that can parse it", () => {
+    const plain = bundle([]);
+    expect(plain.context.system).toBe(STEERING.text);
+    expect(plain.context).not.toHaveProperty("manifest");
+    // A host deployed before the field parses what it is served.
+    expect(() => policyBundleSchema.parse(served([]))).not.toThrow();
+
+    const current = bundle([BUNDLE_FEATURE_STEERING_MANIFEST]);
+    expect(current.context.system).toBe(STEERING.text);
+    expect(current.context.manifest).toEqual(STEERING.manifest);
+    expect(current.context.manifest?.items.map((i) => i.outcome)).toEqual([
+      "included",
+      "cut",
+    ]);
+    expect(() =>
+      policyBundleSchema.parse(served([BUNDLE_FEATURE_STEERING_MANIFEST])),
+    ).not.toThrow();
+  });
+
+  it("moves the etag with the manifest, so a host that gains the field refetches once", () => {
+    expect(bundle([BUNDLE_FEATURE_STEERING_MANIFEST]).etag).not.toBe(
+      bundle([]).etag,
+    );
   });
 
   it("keeps the etag stable per host, so neither end refetches forever", () => {
