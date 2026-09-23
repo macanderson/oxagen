@@ -11,8 +11,9 @@ import {
   utimesSync,
   writeFileSync,
 } from "node:fs";
+import { createServer, request } from "node:http";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   GENESIS_CURSOR,
   sealEvent,
@@ -50,7 +51,7 @@ import {
 } from "./exporters";
 import { applyCommands } from "./inbox";
 import { SessionRegistry } from "./registry";
-import { createRequestHandler } from "./server";
+import { createRequestHandler, type CollectorApi } from "./server";
 import {
   Shipper,
   MAX_BODY_AUTHORITY_WAIT_MS,
@@ -1369,8 +1370,13 @@ describe("shipper", () => {
     // tachod starts a drain from its interval tick, from a tick a caller
     // drives, and from stop(), and nothing stopped two of them reading the
     // same unshipped tail while the first one's ingest was still awaited.
-    // Both sent it, and the control plane saw `144, 145, 144, 145`: seq 144
-    // following seq 145 on a chain that was dense in the WAL.
+    // Both sent it, so the control plane saw seq 144 arrive after seq 145 on
+    // a chain that was dense in the WAL (#3782).
+    //
+    // Each drain stops after one batch here, because the stub reports the
+    // rate window as spent. Without that, the first drain's own loop would
+    // ship the late events and the second drain would find nothing to do,
+    // so a drain() that merely shared the one in flight would still pass.
     const paths = scratchPaths();
     const wal = new Wal(paths.wal);
     const events = minimalSession();
@@ -1387,6 +1393,9 @@ describe("shipper", () => {
         ingest: async (batch) => {
           await held;
           ingested.push(...batch);
+          // A spent window ends each drain after this batch. resetAtMs 0
+          // keeps ready() true, because the clock below reads 0.
+          s.noteRateLimit({ remaining: 0, resetAtMs: 0 });
           return okResponse(batch);
         },
       },
@@ -1395,15 +1404,18 @@ describe("shipper", () => {
     );
 
     const a = s.drain();
-    // Let the first drain read the WAL and park on its ingest request.
+    // Let the first drain reach its ingest request.
     await new Promise((resolve) => setTimeout(resolve, 20));
     // Written after the first drain read the WAL, so only a later read ships
-    // it. The second drain has to wait for the first and still find it.
+    // it. The second drain has to wait for the first, then ship it itself.
     wal.append(events.slice(split));
     const b = s.drain();
     await new Promise((resolve) => setTimeout(resolve, 20));
     release?.();
-    await Promise.all([a, b]);
+    const [first, second] = await Promise.all([a, b]);
+
+    expect(first.shipped).toBe(split);
+    expect(second.shipped).toBe(events.length - split);
 
     const ids = ingested.map((event) => event.event_id_idem);
     expect(new Set(ids).size).toBe(ids.length);
@@ -2172,5 +2184,200 @@ describe("request handler", () => {
       error: "no custody",
       code: "credential_unavailable",
     });
+  });
+});
+
+/**
+ * `/contained/run` (ADR-152) streams NDJSON: one line per chunk of the
+ * agent's output, then one line with the result or the launcher's error.
+ * Served over a real loopback listener, because the route writes, ends and
+ * listens for `close` on the response in ways a hand-built double would only
+ * imitate.
+ */
+describe("the contained-run route", () => {
+  function api(runContained?: CollectorApi["runContained"]): CollectorApi {
+    return {
+      localToken: "tok",
+      enrollmentId: TEST_ENROLLMENT,
+      handleHook: async () => ({}),
+      handleOtlp: async () => undefined,
+      health: () => ({}),
+      status: () => ({}),
+      sessions: () => [],
+      exportSession: () => undefined,
+      ...(runContained !== undefined ? { runContained } : {}),
+    };
+  }
+
+  async function serve(collector: CollectorApi, log = vi.fn()) {
+    const server = createServer(createRequestHandler(collector, log));
+    await new Promise<void>((resolve) =>
+      server.listen(0, "127.0.0.1", resolve),
+    );
+    const address = server.address();
+    if (address === null || typeof address === "string")
+      throw new Error("no test listener");
+    const close = () =>
+      new Promise<void>((resolve) => {
+        server.closeAllConnections();
+        server.close(() => resolve());
+      });
+    return { url: `http://127.0.0.1:${address.port}`, close, log };
+  }
+
+  const REQUEST = {
+    workspace: "/work/repo",
+    harness: "claude-code",
+    args: [],
+    image: "img",
+  };
+
+  async function post(url: string, body: unknown, token = "tok") {
+    const response = await fetch(`${url}/contained/run`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+    });
+    const text = await response.text();
+    return {
+      status: response.status,
+      type: response.headers.get("content-type"),
+      lines: text
+        .split("\n")
+        .filter((line) => line.length > 0)
+        .map((line) => JSON.parse(line) as unknown),
+    };
+  }
+
+  it("answers 404 on a daemon built without a contained runner", async () => {
+    const { url, close } = await serve(api());
+    try {
+      const response = await fetch(`${url}/contained/run`, {
+        method: "POST",
+        headers: { authorization: "Bearer tok" },
+        body: JSON.stringify(REQUEST),
+      });
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({
+        error: "Contained execution is unavailable",
+      });
+    } finally {
+      await close();
+    }
+  });
+
+  it("streams the agent's output and then the result", async () => {
+    const run = vi.fn<NonNullable<CollectorApi["runContained"]>>(
+      async (_input, output) => {
+        output("stdout", "working\n");
+        output("stderr", "warn\n");
+        return {
+          sessionId: "contained-x",
+          exitCode: 3,
+          measurement: {} as never,
+        };
+      },
+    );
+    const { url, close } = await serve(api(run));
+    try {
+      const answer = await post(url, REQUEST);
+      expect(answer.status).toBe(200);
+      expect(answer.type).toBe("application/x-ndjson");
+      expect(answer.lines).toEqual([
+        { stream: "stdout", text: "working\n" },
+        { stream: "stderr", text: "warn\n" },
+        { result: { sessionId: "contained-x", exitCode: 3, measurement: {} } },
+      ]);
+      expect(run.mock.calls[0]?.[0]).toEqual(REQUEST);
+      expect(run.mock.calls[0]?.[2]).toBeInstanceOf(AbortSignal);
+    } finally {
+      await close();
+    }
+  });
+
+  it("ends with the launcher's own error, cut to 1000 characters, and logs it whole", async () => {
+    const long = `Contained execution requires an unprivileged Linux runner with Docker ${"x".repeat(1500)}`;
+    const { url, close, log } = await serve(
+      api(async (_input, output) => {
+        output("stdout", "partial\n");
+        throw new Error(long);
+      }),
+    );
+    try {
+      const answer = await post(url, REQUEST);
+      // The stream has already started, so the status stays 200 and the
+      // failure is the last line.
+      expect(answer.status).toBe(200);
+      expect(answer.lines).toEqual([
+        { stream: "stdout", text: "partial\n" },
+        { error: long.slice(0, 1000) },
+      ]);
+      expect(log).toHaveBeenCalledWith(`Contained execution failed: ${long}`);
+    } finally {
+      await close();
+    }
+  });
+
+  it("reports a thrown non-Error as text", async () => {
+    const { url, close } = await serve(
+      api(async () => {
+        throw "docker exited 125";
+      }),
+    );
+    try {
+      expect((await post(url, REQUEST)).lines).toEqual([
+        { error: "docker exited 125" },
+      ]);
+    } finally {
+      await close();
+    }
+  });
+
+  it("refuses a caller without the local token before any run", async () => {
+    const run = vi.fn<NonNullable<CollectorApi["runContained"]>>();
+    const { url, close } = await serve(api(run));
+    try {
+      expect((await post(url, REQUEST, "nope")).status).toBe(401);
+      expect(run).not.toHaveBeenCalled();
+    } finally {
+      await close();
+    }
+  });
+
+  it("aborts the run when the caller disconnects", async () => {
+    let signal: AbortSignal | undefined;
+    const { url, close } = await serve(
+      api(
+        (_input, output, given) =>
+          new Promise((_resolve, reject) => {
+            signal = given;
+            output("stdout", "started\n");
+            given?.addEventListener("abort", () =>
+              reject(new Error("Contained run cancelled")),
+            );
+          }),
+      ),
+    );
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const call = request(`${url}/contained/run`, {
+          method: "POST",
+          headers: { authorization: "Bearer tok" },
+        });
+        call.on("response", (response) => {
+          response.once("data", () => {
+            call.destroy();
+            resolve();
+          });
+        });
+        call.on("error", () => undefined);
+        call.on("close", () => resolve());
+        call.end(JSON.stringify(REQUEST));
+        setTimeout(() => reject(new Error("no first line")), 5000).unref();
+      });
+      await vi.waitFor(() => expect(signal?.aborted).toBe(true));
+    } finally {
+      await close();
+    }
   });
 });

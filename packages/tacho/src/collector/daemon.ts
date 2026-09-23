@@ -5,6 +5,12 @@
  * a side effect is injectable so the whole daemon runs in a test against a
  * fake control plane and a scratch `TACHO_HOME`.
  */
+import { createContainedRunner } from "../contained/runner";
+import {
+  readWorktreeSnapshot,
+  type WorktreeSnapshot,
+} from "./worktree-snapshot";
+import { jsonContent } from "../evidence/frame-body";
 import {
   existsSync,
   readdirSync,
@@ -834,9 +840,13 @@ async function initializeDaemon(
     };
   }
 
+  // Bound once the contained runner exists below. Until then no session is
+  // one the launcher started, which is the fail-closed answer.
+  let launchedContained: (harnessSessionId: string) => boolean = () => false;
   function policy(): PolicyView {
     const current = host as HostFile;
     return {
+      launchedContained: (id) => launchedContained(id),
       bundle: current.bundle,
       verified: bundleVerified,
       mandateConfirmedAt,
@@ -1671,6 +1681,7 @@ async function initializeDaemon(
       // describe but does have a worktree to reconcile.
       facts?: GitFacts;
       changes?: GitWorkingTreeChange[];
+      snapshot?: WorktreeSnapshot;
     }> = [];
     for (const harnessSessionId of work) {
       const want = gitPending.get(harnessSessionId);
@@ -1750,14 +1761,23 @@ async function initializeDaemon(
                 cwd,
                 session.baselineCommit,
               );
-              return changes === undefined ? {} : { changes };
+              return changes === undefined
+                ? {}
+                : {
+                    changes,
+                    snapshot: await readWorktreeSnapshot(
+                      execAsync,
+                      cwd,
+                      session.baselineCommit,
+                    ),
+                  };
             })()
           : {}),
       });
     }
     if (found.length === 0) return;
     await serial.run(async () => {
-      for (const { session, cwd, facts, changes, ending } of found) {
+      for (const { session, cwd, facts, changes, snapshot, ending } of found) {
         if (session.sealed) continue;
         // The session moved while the probe ran, so this answer describes a
         // repository it is no longer in. A later turn reads the new one.
@@ -1771,7 +1791,8 @@ async function initializeDaemon(
         }
         if (facts !== undefined)
           session.recorder.noteContext(gitContextOf(facts));
-        if (changes !== undefined) recordReconciliation(session, changes);
+        if (changes !== undefined)
+          recordReconciliation(session, changes, snapshot);
         if (
           ending !== undefined &&
           pendingSessionEnds.get(session.recorder.sessionUuid) === ending
@@ -1805,6 +1826,7 @@ async function initializeDaemon(
   function recordReconciliation(
     session: SessionRecord,
     changes: GitWorkingTreeChange[],
+    snapshot?: WorktreeSnapshot,
   ): void {
     const mark = session.recorder.markChain();
     try {
@@ -1812,6 +1834,23 @@ async function initializeDaemon(
         session.recorder.sealCollectorEvent(
           "oxagen:worktree_reconciled",
           worktreeReconciledBody(changes),
+          snapshot
+            ? {
+                attrs: {
+                  worktree_root: snapshot.root,
+                  ...(snapshot.repository
+                    ? { repository_url: snapshot.repository }
+                    : {}),
+                  ...(snapshot.baseline
+                    ? { diff_base_sha: snapshot.baseline }
+                    : {}),
+                  ...(snapshot.head ? { diff_head_sha: snapshot.head } : {}),
+                  diff_complete: String(snapshot.complete),
+                  diff_limitations: snapshot.limitations.join(","),
+                },
+                content: jsonContent(JSON.stringify(snapshot)),
+              }
+            : {},
         ),
       ]);
     } catch (error) {
@@ -2467,6 +2506,32 @@ async function initializeDaemon(
     log,
   });
 
+  const contained = createContainedRunner({
+    host: () => host,
+    registry,
+    genesis: (uuid) => wal.read(uuid)[0]?.hash,
+    hook: (envelope) => serial.run(() => handleHookInner(envelope)),
+    record,
+    model: modelProxy,
+    modelPort: () => modelProxyListener.port(),
+    issueCredential: (harness) =>
+      issueRunToken(
+        { harness },
+        {
+          key: runTokenKey,
+          store: credentialStore,
+          host: () => host,
+          hostRecorder: () => hostRecorder,
+          record,
+          now,
+          log,
+        },
+      ),
+    fetch: options.fetch ?? ((input, init) => fetch(input, init)),
+    log,
+  });
+  launchedContained = contained.launched;
+
   /**
    * The real interrupt. A pause, cancel or kill already stops the session at
    * its next hook boundary; here it also cuts the model calls that are in
@@ -2488,6 +2553,8 @@ async function initializeDaemon(
           : registry.live();
       for (const target of targets) {
         if (target === undefined) continue;
+        if (command.command === "cancel" || command.command === "kill")
+          contained.stop(target.recorder.sessionUuid);
         const cut = modelProxy.abortSession(
           target.recorder.sessionUuid,
           command.reason ?? `operator ${command.command}`,
@@ -2550,6 +2617,7 @@ async function initializeDaemon(
   });
 
   const api: CollectorApi = {
+    runContained: contained.run,
     githubLease: (input) => githubProxy.issue(input),
     githubProxy: (req, res) => githubProxy.handle(req, res),
     localToken: host.local_token,

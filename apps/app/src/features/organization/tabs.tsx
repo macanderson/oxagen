@@ -10,6 +10,9 @@ export type OrganizationTab =
   | "roles"
   | "apiKeys"
   | "modelFunding"
+  | "invitations"
+  | "workspaces"
+  | "costCenters"
   | "sso";
 
 export function OrganizationTabs({
@@ -35,6 +38,16 @@ export function OrganizationTabs({
           current: current === "roles",
         },
         {
+          to: routes.organization(org, "invitations"),
+          label: t("invitations"),
+          current: current === "invitations",
+        },
+        {
+          to: routes.organization(org, "workspaces"),
+          label: t("workspaces"),
+          current: current === "workspaces",
+        },
+        {
           to: routes.apiKeys(org),
           label: t("apiKeys"),
           current: current === "apiKeys",
@@ -43,6 +56,11 @@ export function OrganizationTabs({
           to: routes.modelFunding(org),
           label: t("modelFunding"),
           current: current === "modelFunding",
+        },
+        {
+          to: routes.organization(org, "costCenters"),
+          label: t("costCenters"),
+          current: current === "costCenters",
         },
         {
           to: routes.sso(org),

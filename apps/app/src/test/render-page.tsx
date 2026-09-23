@@ -49,13 +49,14 @@ export async function expectPageTitle<P extends object>(
   page: PageModule<P>,
   props: RouteProps<P>,
   title: string,
+  heading: string = title,
 ): Promise<HTMLElement> {
   const metadata = await page.generateMetadata(props);
   const container = await renderPage(await page.default(props));
   const headings = [...container.querySelectorAll("h1")].map(
     (h) => h.textContent,
   );
-  expect(headings).toEqual([title]);
+  expect(headings).toEqual([heading]);
   expect(metadata.title).toBe(title);
   return container;
 }

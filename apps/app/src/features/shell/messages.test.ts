@@ -30,7 +30,7 @@ describe("messages/shell.json", () => {
   it("names every nav key", () => {
     for (const key of [...WORKSPACE_NAV, ...ORG_NAV, ...ORG_PAGE_NAV])
       expect(messages.nav).toHaveProperty(key);
-    expect(messages.nav.agents).toBe("Agent IAM");
+    expect(messages.nav.agents).toBe("Agents");
     expect(Object.keys(messages.mobileNav.slots)).toEqual([...THUMB_SLOTS]);
   });
 
@@ -49,6 +49,7 @@ describe("messages/shell.json", () => {
     // both render, and both write (update_profile, ask_assistant).
     expect(Object.keys(messages).sort()).toEqual([
       "account",
+      "activity",
       "assistant",
       "avatar",
       "commands",

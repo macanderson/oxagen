@@ -1,3 +1,4 @@
+import { readRunEnrichmentEnabled } from "./run-enrichment";
 // run-read.ts — resolving a run in the caller's workspace and reading its
 // frames from the store that recorded it (ADR-058).
 //
@@ -91,6 +92,7 @@ export type RunReadDeps = {
    * when it is absent.
    */
   tachoSubagentFrames?: TachoSubagentFrameReader;
+  readEnrichmentEnabled?: typeof readRunEnrichmentEnabled;
 };
 
 export const runNotFound = () =>
@@ -108,6 +110,14 @@ export async function resolveRun(
 ): Promise<ResolvedRun> {
   const scope = runScope(ctx);
   const run = await resolveSource(deps, scope, publicId);
+  const enabled = deps.readEnrichmentEnabled
+    ? await deps.readEnrichmentEnabled(scope)
+    : true;
+  run.item = {
+    ...run.item,
+    enrichmentEnabled: enabled,
+    ...(enabled ? {} : { name: null, summary: null, canSummarize: false }),
+  };
   const witnessFor = await deps.readWitnessFor(scope, publicId);
   if (witnessFor !== null && ctx.apiKeyId !== null) throw runNotFound();
   return { ...run, witnessFor };
@@ -292,5 +302,6 @@ export function defaultRunReadDeps(): RunReadDeps {
     readWitnessFor,
     tachoFrames: selectTachoEvents,
     tachoSubagentFrames: selectTachoSubagentEvents,
+    readEnrichmentEnabled: readRunEnrichmentEnabled,
   };
 }

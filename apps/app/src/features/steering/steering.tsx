@@ -1,16 +1,11 @@
-// Steering (#2961; ARCHITECTURE.md §1.2): the records in force in this
-// workspace, the skills its harness sessions reported (the Skills tab, which
-// is the Skills lane's inventory; MC spec §10.7), the proposals waiting for a
-// person with the support they cite, and the Context PR that publishes one:
-// its state machine, its checks, what merge will do and the merge. Effect metrics, retirement candidates and
-// promotion thresholds are not in this release. Each tab makes only the reads
-// it shows.
+// Existing steering reads grouped under the Library, Freshness and Proposals.
 import { Suspense } from "react";
 import { useTranslations } from "next-intl";
 import { firstParam } from "@/shared/safe-path";
 import type { Read } from "@/data/read";
 import type { SteeringFreshness } from "@/data/contracts/steering";
 import type { DataSource } from "@/data/ports";
+import { GovernanceLink, LibraryShelves, ProposalSections } from "./hub";
 import { PageRecord } from "@/features/shell";
 import { Skills, SkillsLoading } from "@/features/skills";
 import type { WsCtx } from "@/server/viewer";
@@ -56,7 +51,7 @@ async function TabBody({
   switch (view.tab) {
     case "deliveries":
       return <Deliveries read={await source.steering.deliveries(ctx)} />;
-    case "settings":
+    case "freshness":
       return (
         <SettingsPanel
           read={await source.steering.freshness(ctx)}
@@ -64,46 +59,55 @@ async function TabBody({
           canEdit={canEditGates(ctx)}
         />
       );
-    case "records": {
-      const read = await source.steering.records(ctx, {
-        kind: view.kind,
-        offset: view.offset,
-      });
-      return (
-        <Records at={at} kind={view.kind} offset={view.offset} read={read} />
-      );
-    }
-    case "skills":
-      return (
-        <Suspense fallback={<SkillsLoading />}>
+    case "library": {
+      if (view.shelf === "skills")
+        return (
           <Skills
             ctx={ctx}
             source={source}
             cursor={view.cursor}
             view={skillView}
           />
-        </Suspense>
-      );
-    case "proposals": {
-      const read = await source.steering.proposals(ctx, {
+        );
+      const kind = view.shelf === "memory" ? "memory" : view.kind;
+      const read = await source.steering.records(ctx, {
+        kind,
         offset: view.offset,
       });
-      return <Proposals at={at} offset={view.offset} read={read} />;
+      return (
+        <>
+          <Records
+            at={at}
+            shelf={view.shelf}
+            kind={kind}
+            offset={view.offset}
+            read={read}
+          />
+          {view.shelf === "all" ? (
+            <Suspense fallback={<SkillsLoading />}>
+              <Skills ctx={ctx} source={source} cursor={null} />
+            </Suspense>
+          ) : null}
+        </>
+      );
     }
-    case "prs": {
-      const { proposal } = view;
+    case "proposals": {
       const [read, pr] = await Promise.all([
         source.steering.proposals(ctx, { offset: view.offset }),
-        proposal === null ? null : source.steering.contextPr(ctx, proposal),
+        view.proposal === null
+          ? null
+          : source.steering.contextPr(ctx, view.proposal),
       ]);
-      return (
+      return view.section === "prs" ? (
         <ContextPrs
           at={at}
           offset={view.offset}
           read={read}
-          selected={proposal}
+          selected={view.proposal}
           pr={pr}
         />
+      ) : (
+        <Proposals at={at} offset={view.offset} read={read} />
       );
     }
   }
@@ -116,7 +120,7 @@ export async function Steering({
 }: {
   ctx: WsCtx;
   source: DataSource;
-  /** The query the URL carried: `tab`, `kind`, `offset`, `proposal`, `cursor`. */
+  /** Selectors from the canonical path and preserved legacy query. */
   searchParams: Readonly<Record<string, string | string[] | undefined>>;
 }) {
   const view = parseSteeringView(searchParams);
@@ -126,7 +130,14 @@ export async function Steering({
       {/* `proposal` selects nothing off the Context PRs tab, so the parse
           decides this, not the query string. */}
       <PageRecord route="steering" id={view.proposal} />
+      <GovernanceLink at={at} />
       <SteeringTabs at={at} current={view.tab} />
+      {view.tab === "library" ? (
+        <LibraryShelves at={at} current={view.shelf} />
+      ) : null}
+      {view.tab === "proposals" ? (
+        <ProposalSections at={at} current={view.section} />
+      ) : null}
       {
         await TabBody({
           ctx,

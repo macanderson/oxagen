@@ -72,15 +72,21 @@ export const panelBody = "px-4 py-3.5";
  * `.stat { background:var(--panel); border:1px solid var(--border);
  * border-radius:12px; padding:13px 15px }`, `.stat .k` (10.5px caps, dim),
  * `.stat .v` (23px, 700, tabular) and `.stat .s` (11.5px, muted). One tile of
- * a figure strip; every strip on every page draws these four.
+ * a figure strip; every strip on every page draws these four. On a phone the
+ * tile tightens to `#viewport.phone .stat { padding:11px 12px }` and its
+ * figure to `.stat .v { font-size:17px }`, so two tiles fit a row.
  */
 export const statTile =
-  "flex min-w-0 flex-col rounded-xl border border-border bg-card px-[15px] py-[13px] text-card-foreground";
+  "flex min-w-0 flex-col rounded-xl border border-border bg-card px-[15px] py-[13px] text-card-foreground max-md:px-3 max-md:py-[11px]";
 export const statTerm =
   "mb-[5px] text-[10.5px] font-semibold uppercase tracking-[0.1em] text-dim";
 export const statValue =
-  "text-[23px] font-bold leading-[1.15] tracking-[-0.02em] tabular-nums";
+  "text-[23px] font-bold leading-[1.15] tracking-[-0.02em] tabular-nums max-md:text-[17px]";
 export const statNote = "mt-[3px] text-[11.5px] text-muted-foreground";
-/** `.grid.g4 { grid-template-columns:repeat(auto-fit,minmax(175px,1fr)); gap:14px }` */
+/**
+ * `.grid.g4 { grid-template-columns:repeat(auto-fit,minmax(175px,1fr)); gap:14px }`,
+ * and `#viewport.phone .g4 { grid-template-columns:1fr 1fr }`: a phone draws
+ * the strip two by two rather than one tile to a row.
+ */
 export const statStrip =
-  "grid gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(175px,1fr))]";
+  "grid grid-cols-2 gap-3.5 md:[grid-template-columns:repeat(auto-fit,minmax(175px,1fr))]";
