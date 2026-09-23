@@ -30,6 +30,7 @@ export const SIGNED_IN_ROUTES: readonly RouteRow[] = [
   { path: `/${org}/${ws}/tools`, titleKey: "tools" },
   { path: `/${org}/${ws}/steering`, titleKey: "steering" },
   { path: `/${org}/${ws}/steering/library`, titleKey: "steering" },
+  { path: `/${org}/${ws}/runtimes`, titleKey: "runtimes" },
   { path: `/${org}/${ws}/repositories`, titleKey: "repositories" },
   { path: `/${org}/${ws}/spend`, titleKey: "spend" },
   { path: `/${org}`, titleKey: "people" },

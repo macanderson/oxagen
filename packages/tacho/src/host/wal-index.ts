@@ -164,6 +164,79 @@ class LineSplitter {
   }
 }
 
+/**
+ * The last complete line of a file, read from its tail rather than by
+ * walking from the start.
+ *
+ * `readLinesFrom` costs the whole file when a caller only wants the end of
+ * it, which is what a daemon restart needs from a session's event file: the
+ * seq and hash the log actually holds, to check a restored cursor against
+ * before a new event is sealed on top of it (`Wal.lastEvent`). This grows a
+ * backward-reading window from one tail chunk until an earlier newline turns
+ * up, so a multi-gigabyte session with a short last line costs one small
+ * read; only a session whose single line exceeds the starting window costs
+ * more, and even then it costs that one line, never the file before it.
+ *
+ * A single trailing newline, the terminator every complete write leaves, is
+ * not itself a line: the line it closes is what this answers, marked
+ * `terminated: true`. A file with no other newline is entirely one line,
+ * terminated or not depending on whether that trailing byte was there.
+ */
+export function readTailLine(path: string): IndexedLine | undefined {
+  const size = statSync(path).size;
+  if (size === 0) return undefined;
+  const fd = openSync(path, "r");
+  try {
+    let end = size;
+    let terminated = false;
+    const last = Buffer.allocUnsafe(1);
+    if (readSync(fd, last, 0, 1, size - 1) === 1 && last[0] === 10) {
+      terminated = true;
+      end = size - 1;
+    }
+    if (end === 0) return undefined; // the whole file is one newline
+    let windowSize = SCAN_CHUNK_BYTES;
+    for (;;) {
+      const start = Math.max(0, end - windowSize);
+      const length = end - start;
+      const buffer = Buffer.allocUnsafe(length);
+      let filled = 0;
+      while (filled < length) {
+        const read = readSync(
+          fd,
+          buffer,
+          filled,
+          length - filled,
+          start + filled,
+        );
+        if (read <= 0) break;
+        filled += read;
+      }
+      const chunk = buffer.subarray(0, filled);
+      const newline = chunk.lastIndexOf(10);
+      if (newline !== -1) {
+        return {
+          text: chunk.subarray(newline + 1).toString("utf8"),
+          offset: start + newline + 1,
+          end: terminated ? end + 1 : end,
+          terminated,
+        };
+      }
+      if (start === 0) {
+        return {
+          text: chunk.toString("utf8"),
+          offset: 0,
+          end: terminated ? end + 1 : end,
+          terminated,
+        };
+      }
+      windowSize *= 2;
+    }
+  } finally {
+    closeSync(fd);
+  }
+}
+
 /** Every line of a file from `from`, one at a time, with its byte span. */
 export function* readLinesFrom(
   path: string,
@@ -308,13 +381,34 @@ export class BodyIndexStore {
     const entries = new Map<string, BodyLocation>();
     let covered: number | undefined;
     let header = false;
-    for (const line of readLinesFrom(path)) {
+    // Buffered rather than walked line by line: a line that fails to parse
+    // is only ever safe to skip when it is the file's LAST line, the shape a
+    // crash mid-append leaves. Knowing that requires knowing there is
+    // nothing after it, which a generator only answers once it is exhausted.
+    // The sidecar is a small cache file, never the multi-gigabyte kind this
+    // package streams elsewhere, so holding it in memory once costs nothing
+    // a scan of it would not already have cost.
+    const lines = [...readLinesFrom(path)];
+    for (const [index, line] of lines.entries()) {
       if (line.text.trim().length === 0) continue;
       let row: unknown;
       try {
         row = JSON.parse(line.text);
       } catch {
-        continue; // A torn final line costs a rescan of what it covered.
+        if (index < lines.length - 1) {
+          // A torn line that is NOT the last one is not what a crash
+          // mid-append leaves — it is two appends joined with no separator
+          // between them (see `persist`'s own leading "\n" for the fix on
+          // the write side; this is the read side's backstop for a sidecar
+          // a build before that fix already wrote). Whatever entries or
+          // `through` marker that joined line should have held are gone,
+          // and every `through` after it claims coverage of bytes this
+          // index never actually recorded. Trusting what follows would
+          // leave `bodiesOfSession` treating a body that is really on disk
+          // as one that never arrived. Force a full rescan instead.
+          return undefined;
+        }
+        continue; // A torn FINAL line costs only a rescan of what it covered.
       }
       if (!Array.isArray(row)) continue;
       if (!header) {
@@ -361,7 +455,13 @@ export class BodyIndexStore {
       lines.push(JSON.stringify([idem, at.offset, at.length]));
     lines.push(JSON.stringify(["through", result.covered]));
     try {
-      appendFileSync(path, `${lines.join("\n")}\n`, { mode: 0o600 });
+      // Leading "\n", matching `Wal.writeBodies`: it separates this append
+      // from a prior torn tail rather than joining onto it. Without it, an
+      // append landing right after a crash mid-write concatenated onto the
+      // unfinished line with no boundary between them, and `load` had no way
+      // to tell the corrupted result from an ordinary line — a blank line is
+      // free to skip either way.
+      appendFileSync(path, `\n${lines.join("\n")}\n`, { mode: 0o600 });
     } catch (error) {
       onWriteFailure(error);
     }

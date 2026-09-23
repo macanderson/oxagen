@@ -8,6 +8,12 @@ packages:
 
 overrides:
   drizzle-orm: 0.45.3
+  # drizzle-orm takes @types/pg as a peer, so every @types/pg version in the
+  # tree gives drizzle-orm a separate instance with its own SQL type. With
+  # @oxagen/database on one version and transitive consumers on another,
+  # apps/api read SQL<unknown> as not assignable to SQL<unknown> (TS2322).
+  # One version for the whole tree keeps one drizzle-orm.
+  "@types/pg": 8.23.1
   # Narrowed to <7 so apps/app's `@typescript/native` (npm:typescript@7.0.2,
   # the `tsc` CLI) and its `typescript` alias (npm:@typescript/typescript6, the
   # JS API typescript-eslint needs, plus `tsc6`) are not rewritten to 6.0.3.

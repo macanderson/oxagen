@@ -13,6 +13,7 @@ import {
   mulMicros,
   ratioOfIntegers,
   ratioOfMicros,
+  roundToCentsHalfEven,
   shareOfMicros,
   sumMoney,
 } from "./money";
@@ -280,5 +281,32 @@ describe("sumExceeds", () => {
 
   it("refuses a figure that is not an integer string (negative)", () => {
     expect(() => sumExceeds("1.5", "0", "5")).toThrow();
+  });
+});
+
+describe("roundToCentsHalfEven", () => {
+  it("rounds a half cent to the even cent, up and down", () => {
+    expect(roundToCentsHalfEven(usd("1005000"))).toEqual(usd("1000000"));
+    expect(roundToCentsHalfEven(usd("1015000"))).toEqual(usd("1020000"));
+  });
+
+  it("rounds past the half up and short of it down", () => {
+    expect(roundToCentsHalfEven(usd("1005001"))).toEqual(usd("1010000"));
+    expect(roundToCentsHalfEven(usd("1004999"))).toEqual(usd("1000000"));
+  });
+
+  it("rounds a negative amount by its magnitude and never prints -0", () => {
+    expect(roundToCentsHalfEven(usd("-1015000"))).toEqual(usd("-1020000"));
+    expect(roundToCentsHalfEven(usd("-4000"))).toEqual(usd("0"));
+  });
+
+  it("stays exact past what a float holds", () => {
+    expect(roundToCentsHalfEven(usd("90071992547409915000"))).toEqual(
+      usd("90071992547409920000"),
+    );
+  });
+
+  it("refuses micros that are not an integer string (negative)", () => {
+    expect(() => roundToCentsHalfEven(usd("1.5"))).toThrow(/micros/);
   });
 });

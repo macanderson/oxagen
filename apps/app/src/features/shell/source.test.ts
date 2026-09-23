@@ -32,6 +32,7 @@ const source = {
   billing: {
     plan: vi.fn(),
     usageCredits: vi.fn(),
+    retention: vi.fn(),
     bucket: vi.fn(),
     contractRate: vi.fn(),
     invoices: vi.fn(),
@@ -95,6 +96,7 @@ const source = {
     connections: vi.fn(),
     mcpServers: vi.fn(),
   },
+  runtimes: { list: vi.fn(), agents: vi.fn() },
 };
 const listed = readOk({
   orgs: [{ slug: "acme", name: "Acme Robotics" }],

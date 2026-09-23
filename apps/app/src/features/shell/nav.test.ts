@@ -84,6 +84,8 @@ describe("isNavItemCurrent", () => {
     ["/acme/core-platform/agents/acme.core.triage", "agents"],
     ["/acme/core-platform/tools/switches", "tools"],
     ["/acme/core-platform/steering", "steering"],
+    ["/acme/core-platform/runtimes", "runtimes"],
+    ["/acme/core-platform/runtimes/tch_1", "runtimes"],
     ["/acme/core-platform/repositories", "repositories"],
     ["/acme/core-platform/repositories/changes", "repositories"],
     ["/acme/core-platform/spend/budgets", "spend"],
@@ -146,7 +148,7 @@ describe("hrefs", () => {
 });
 
 describe("sidebarSections", () => {
-  it("has the mockup's nine links in order, Repositories between Steering and Spend, and Audit after Billing, and no Run or Ontology entry", () => {
+  it("has the mockup's ten links in order, Runtimes between Steering and Repositories, Repositories before Spend, and Audit after Billing, and no Run or Ontology entry", () => {
     const sections = sidebarSections("acme", "core-platform");
     expect(sections.map((s) => s.key)).toEqual(["workspace", "organization"]);
     expect(sections.flatMap((s) => s.items)).toEqual([
@@ -154,6 +156,7 @@ describe("sidebarSections", () => {
       { key: "agents", href: "/acme/core-platform/agents" },
       { key: "tools", href: "/acme/core-platform/tools" },
       { key: "steering", href: "/acme/core-platform/steering" },
+      { key: "runtimes", href: "/acme/core-platform/runtimes" },
       { key: "repositories", href: "/acme/core-platform/repositories" },
       { key: "spend", href: "/acme/core-platform/spend" },
       { key: "organization", href: "/acme" },
@@ -179,10 +182,11 @@ describe("sidebarSections", () => {
 });
 
 describe("the phone's thumb bar and More sheet", () => {
-  it("split the nine sidebar keys: four slots, the rest in the sheet, each key once", () => {
+  it("split the ten sidebar keys: four slots, the rest in the sheet, each key once", () => {
     expect(THUMB_SLOTS).toEqual(["fleet", "agents", "tools", "spend"]);
     expect(MORE_SHEET).toEqual([
       "steering",
+      "runtimes",
       "repositories",
       "organization",
       "billing",
@@ -201,6 +205,8 @@ describe("the phone's thumb bar and More sheet", () => {
       "/acme/billing",
       "/acme/audit",
       "/acme/core-platform/steering",
+      "/acme/core-platform/runtimes",
+      "/acme/core-platform/runtimes/tch_1",
       "/acme/core-platform/repositories",
     ])
       expect(isMoreCurrent(path)).toBe(true);
@@ -287,6 +293,41 @@ describe("breadcrumbs", () => {
       { kind: "nav", key: "agents", href: "/acme/core-platform/agents" },
       { kind: "id", text: "mnd_1", href: null },
     ]);
+  });
+
+  it("runtimes ends on Runtimes, and one runtime ends on its id under a Runtimes link", () => {
+    expect(breadcrumbs("/acme/core-platform/runtimes", names).slice(2)).toEqual(
+      [{ kind: "nav", key: "runtimes", href: null }],
+    );
+    expect(
+      breadcrumbs("/acme/core-platform/runtimes/tch_1", names).slice(2),
+    ).toEqual([
+      { kind: "nav", key: "runtimes", href: "/acme/core-platform/runtimes" },
+      { kind: "id", text: "tch_1", href: null },
+    ]);
+  });
+
+  it("one runtime ends on the name its page declared for that id, and never on another id's name", () => {
+    const at = "/acme/core-platform/runtimes/tch_1";
+    expect(
+      breadcrumbs(at, {
+        ...names,
+        record: { id: "tch_1", label: "mbell-mbp-16" },
+      }).at(-1),
+    ).toEqual({ kind: "id", text: "mbell-mbp-16", href: null });
+    // A declaration left by the runtime being navigated away from names
+    // another host, so the id stands in until this page declares its own.
+    expect(
+      breadcrumbs(at, {
+        ...names,
+        record: { id: "tch_2", label: "ci-runner-07" },
+      }).at(-1),
+    ).toEqual({ kind: "id", text: "tch_1", href: null });
+    expect(
+      breadcrumbs(at, { ...names, record: { id: "tch_1", label: null } }).at(
+        -1,
+      ),
+    ).toEqual({ kind: "id", text: "tch_1", href: null });
   });
 
   it("falls back to the slug for an unknown workspace name, and is empty outside an organization", () => {

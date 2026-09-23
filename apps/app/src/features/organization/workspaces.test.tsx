@@ -52,6 +52,7 @@ async function renderWorkspaces(
     billing: {
       plan: vi.fn(),
       usageCredits: vi.fn(),
+      retention: vi.fn(),
       bucket: vi.fn(),
       contractRate: vi.fn(),
       invoices: vi.fn(),
@@ -115,6 +116,7 @@ async function renderWorkspaces(
       connections: vi.fn(),
       mcpServers: vi.fn(),
     },
+    runtimes: { list: vi.fn(), agents: vi.fn() },
   };
   const view = render(
     <IntlProvider>{await Workspaces({ ctx, source })}</IntlProvider>,

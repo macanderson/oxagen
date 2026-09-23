@@ -11,7 +11,7 @@
 //     pnpm --filter @oxagen/agent exec vitest run src/handlers/agent.list.test.ts
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { agentList } from "@oxagen/oxagen/contracts/agent.list";
-import { identityStatus } from "./_agent-identity";
+import { identityStatus, wrappedTokenFigures } from "./_agent-identity";
 import { decodeCursor, encodeCursor, toAgentListItem } from "./agent.list";
 
 const row = {
@@ -31,8 +31,15 @@ const row = {
   principalStatus: "active",
   principalUpdatedAt: new Date("2026-09-13T10:00:00.000Z"),
   operatorPublicId: "usr_0123456789abcdefghjkmn",
+  operatorName: "Marcus Bell",
   costCenter: null,
 };
+
+const none = {
+  tamperIncidents: 0,
+  mandates: null,
+  host: null,
+} as const;
 
 describe("list_agents cursor", () => {
   it("round-trips a slug and starts over on a cursor it did not mint", () => {
@@ -53,13 +60,18 @@ describe("list_agents row", () => {
       credentials: 0,
       hosts: 0,
       incidents: 0,
+      ...none,
       figures: undefined,
     });
     expect(item.tier).toBeNull();
+    expect(item.enforcementTier).toBeNull();
+    expect(item.host).toBeNull();
     expect(item.beltSize).toBeNull();
     expect(item.proven30d).toBeNull();
     expect(item.mandates).toBeNull();
     expect(item.spend30d).toBeNull();
+    expect(item.tokens30d).toBeNull();
+    expect(item.tamperIncidentsRecorded).toBe(0);
     expect(item.runs30d).toBe(0);
     expect(item.status).toBe("unenrolled");
     expect(agentList.output.shape.items.element.parse(item)).toEqual(item);
@@ -71,7 +83,13 @@ describe("list_agents row", () => {
       credentials: 1,
       hosts: 0,
       incidents: 2,
-      figures: { runs: 4, spendMicros: 1_250_000n, earliestStartedAt: null },
+      ...none,
+      figures: {
+        runs: 4,
+        spendMicros: 1_250_000n,
+        earliestStartedAt: null,
+        latestTier: null,
+      },
     });
     expect(priced.spend30d).toEqual({
       micros: "1250000",
@@ -84,10 +102,135 @@ describe("list_agents row", () => {
       credentials: 0,
       hosts: 1,
       incidents: 0,
-      figures: { runs: 4, spendMicros: null, earliestStartedAt: null },
+      ...none,
+      figures: {
+        runs: 4,
+        spendMicros: null,
+        earliestStartedAt: null,
+        latestTier: null,
+      },
     });
     expect(unpriced.spend30d).toBeNull();
     expect(unpriced.status).toBe("enrolled");
+  });
+
+  it("carries the purpose, the operator's name, the recorded tier, the mandates and the live host", () => {
+    const item = toAgentListItem(row, {
+      agentKey: "acme.core.release-bot",
+      credentials: 1,
+      hosts: 1,
+      incidents: 3,
+      tamperIncidents: 1,
+      mandates: 2,
+      host: "build-01",
+      figures: {
+        runs: 1,
+        spendMicros: null,
+        earliestStartedAt: null,
+        latestTier: "gateway",
+      },
+    });
+    expect(item.description).toBeNull();
+    expect(item.operatorName).toBe("Marcus Bell");
+    expect(item.enforcementTier).toBe("gateway");
+    expect(item.mandates).toBe(2);
+    expect(item.incidents).toBe(3);
+    expect(item.tamperIncidents).toBe(1);
+    expect(item.host).toBe("build-01");
+    expect(agentList.output.shape.items.element.parse(item)).toEqual(item);
+  });
+
+  it("reports a tier off the ladder as no tier, and no operator name without an operator", () => {
+    const item = toAgentListItem(
+      { ...row, operatorPublicId: null, operatorName: "stale" },
+      {
+        agentKey: null,
+        credentials: 0,
+        hosts: 0,
+        incidents: 0,
+        ...none,
+        figures: {
+          runs: 0,
+          spendMicros: null,
+          earliestStartedAt: null,
+          latestTier: "enforced",
+        },
+      },
+    );
+    expect(item.enforcementTier).toBeNull();
+    expect(item.operatorName).toBeNull();
+  });
+});
+
+describe("wrapped-session tokens", () => {
+  it("counts cached input as input, adds the output, and rates cache read over input", () => {
+    expect(
+      wrappedTokenFigures({
+        sessions: 2,
+        input: 100,
+        output: 50,
+        cacheRead: 700,
+        cacheCreation: 200,
+      }),
+    ).toEqual({
+      total: 1050,
+      input: 1000,
+      cacheRead: 700,
+      cacheReadRate: 0.7,
+      sessions: 2,
+    });
+  });
+
+  it("reports nothing when no session reported a token, and no rate without input", () => {
+    expect(
+      wrappedTokenFigures({
+        sessions: 0,
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheCreation: 0,
+      }),
+    ).toBeNull();
+    expect(
+      wrappedTokenFigures({
+        sessions: 1,
+        input: 0,
+        output: 40,
+        cacheRead: 0,
+        cacheCreation: 0,
+      })?.cacheReadRate,
+    ).toBeNull();
+  });
+
+  it("maps the rollup onto the row and the recorded tamper count beside the open one", () => {
+    const tokens = wrappedTokenFigures({
+      sessions: 1,
+      input: 10,
+      output: 5,
+      cacheRead: 30,
+      cacheCreation: 0,
+    });
+    const item = toAgentListItem(row, {
+      agentKey: "acme.core.release-bot",
+      credentials: 1,
+      hosts: 1,
+      incidents: 1,
+      tamperIncidents: 1,
+      tamperIncidentsRecorded: 3,
+      mandates: 0,
+      host: null,
+      figures: {
+        runs: 1,
+        spendMicros: null,
+        earliestStartedAt: null,
+        latestTier: null,
+        tokens,
+      },
+    });
+    expect(item.tokens30d).toEqual(tokens);
+    expect(item.tamperIncidents).toBe(1);
+    expect(item.tamperIncidentsRecorded).toBe(3);
+    expect(agentList.output.shape.items.element.parse(item)).toEqual(item);
   });
 });
 
@@ -168,6 +311,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         startedAt: new Date(now - 2 * DAY_MS),
         costMicros: 700_000,
         costBasis: "list",
+        tokens: { input: 100, output: 400, cacheRead: 600, cacheCreation: 300 },
       });
       await support.seedSession(tenant, alpha.agentKey!, {
         startedAt: new Date(now - 3 * DAY_MS),
@@ -179,6 +323,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         startedAt: new Date(now - 40 * DAY_MS),
         costMicros: 9_000_000,
         costBasis: "list",
+        tokens: { input: 9_000, output: 9_000 },
       });
       await support.seedSession(tenant, alpha.agentKey!, {
         startedAt: new Date(now - DAY_MS),
@@ -193,6 +338,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         hostId: host.id,
         kind: "chain_break",
         resolved: true,
+        detectedAt: new Date(now - 5 * DAY_MS),
       });
       // A control-plane notice with no host: counts as a workspace tamper
       // incident only if its kind is a tamper kind (telemetry_gap is not).
@@ -201,8 +347,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
         severity: 3,
       });
 
-      // bravo: enrolled by a paused host only; no credential; no runs.
+      // bravo: enrolled by a paused host only; no credential; no runs; one
+      // active mandate, and a draft and an expired one that count for nothing.
       const bravo = await support.seedAgent(tenant, { slug: "bravo" });
+      await support.seedMandate(tenant, bravo);
+      await support.seedMandate(tenant, bravo, { status: "draft" });
+      await support.seedMandate(tenant, bravo, { expired: true });
       await support.seedHost(tenant, bravo.agentKey!, { status: "paused" });
       // charlie: nothing held, an unpriced session in the window.
       const charlie = await support.seedAgent(tenant, { slug: "charlie" });
@@ -266,6 +416,20 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(alpha.credentials).toBe(1);
       expect(alpha.hosts).toBe(1);
       expect(alpha.incidents).toBe(1);
+      expect(alpha.tamperIncidents).toBe(1);
+      // The open hooks_removed and the resolved chain_break.
+      expect(alpha.tamperIncidentsRecorded).toBe(2);
+      // The one in-window session that reported usage; the 40-day-old one is
+      // outside the window.
+      expect(alpha.tokens30d).toEqual({
+        total: 1400,
+        input: 1000,
+        cacheRead: 600,
+        cacheReadRate: 0.6,
+        sessions: 1,
+      });
+      expect(alpha.host).toBe("build-1");
+      expect(alpha.mandates).toBe(0);
       // Two root sessions in the window plus one ledger run; the child and
       // the 40-day-old session are outside the count.
       expect(alpha.runs30d).toBe(3);
@@ -277,7 +441,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
         basis: "client_attested",
       });
       expect(alpha.tier).toBeNull();
-      expect(alpha.mandates).toBeNull();
+      // Every seeded session takes the column default, `observe`.
+      expect(alpha.enforcementTier).toBe("observe");
+      const bravo = out.items.find((i) => i.slug === "bravo")!;
+      expect(bravo.mandates).toBe(1);
+      expect(bravo.enforcementTier).toBeNull();
     });
 
     it("derives each status from what the row holds", async () => {
@@ -295,16 +463,30 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const charlie = out.items.find((i) => i.slug === "charlie")!;
       expect(charlie.runs30d).toBe(1);
       expect(charlie.spend30d).toBeNull();
+      // A session that reported no usage is not a session that used none.
+      expect(charlie.tokens30d).toBeNull();
     });
 
-    it("counts the tiles over the whole workspace and leaves the mandate tile null", async () => {
+    it("counts the tiles over the whole workspace, the mandate tile included", async () => {
       const out = await list(tenant, { limit: 2 });
       expect(out.items).toHaveLength(2);
+      // The tamper figures are sums over the agents' own records: alpha's
+      // two, of which one is open, and the newest is the open one. The
+      // hostless telemetry_gap notice belongs to no agent.
       expect(out.totals).toEqual({
         identities: 5,
         enrolled: 2,
-        holdingMandate: null,
+        holdingMandate: 1,
         tamperIncidents: 1,
+        tamper: {
+          recorded: 2,
+          open: 1,
+          newest: {
+            agentKey: `${tenant.orgNamespace}.${tenant.workspaceNamespace}.alpha`,
+            kind: "hooks_removed",
+            detectedAt: expect.any(String),
+          },
+        },
       });
     });
 

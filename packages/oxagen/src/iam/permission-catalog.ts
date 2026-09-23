@@ -96,6 +96,17 @@ export const PERMISSION_CATALOG: readonly Permission[] = [
     description: "Assign and revoke an agent's roles",
     capabilities: ["assign_agent_role", "revoke_agent_role"],
   },
+  {
+    // The Runtimes page's read (roadmap mockups/pages/runtimes.md,
+    // Permissions). Unenroll (`revoke_tacho_enrollment`) is not a permission
+    // here: its handler admits an org Owner or Admin whatever the role grants
+    // say, so a ticked `runtime.unenroll` would be a grant the write ignores
+    // (#3857 moves the handler onto role grants and adds the two writes).
+    id: "runtime.read",
+    group: "Agents",
+    description: "Read the hosts agents run on and their enrollments",
+    capabilities: ["list_tacho_hosts"],
+  },
   // ── Tools and policy ─────────────────────────────────────────────────────
   {
     id: "tool.read",

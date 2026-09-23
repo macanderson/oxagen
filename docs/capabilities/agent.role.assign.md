@@ -25,6 +25,7 @@ Re-assignment after a revoke resurrects the soft-deleted assignment row; an alre
 |---|---|---|
 | `agentId` | `string` | Agent public id (`agt_…`), UUID, or slug — workspace-scoped. |
 | `roleName` | `string` | IAM role name (e.g. `"Agent Contributor"` or a custom role name). |
+| `reason` | `string?` | Why the role is assigned, at most 500 characters. Optional. It is kept in the audit event's recorded input, where an approver reads it. |
 
 ## Output
 
@@ -43,7 +44,7 @@ Org Owner, Org Admin — checked by the handler (`assertOrgRole`, INV-29), the g
 ## Side effects
 
 - Postgres: inserts (or resurrects) an `iam.principal_role_assignments` row for the agent's principal.
-- ClickHouse: emits the IAM audit event with `principal_kind='agent'` and the agent as the audit target.
+- ClickHouse: emits the IAM audit event with `principal_kind='agent'` and the agent as the audit target. The event's recorded input carries `reason` when one was given.
 
 ## App
 
