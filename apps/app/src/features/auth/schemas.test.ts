@@ -8,6 +8,8 @@ import {
   SignupSchema,
   TwoFactorSchema,
   fieldErrors,
+  passwordMeterScore,
+  passwordRequirements,
 } from "./schemas";
 
 function errorsOf(result: {
@@ -45,7 +47,7 @@ describe("LoginSchema", () => {
 });
 
 describe("SignupSchema", () => {
-  it("requires a name and a password of at least eight characters", () => {
+  it("requires a name and a password of at least twelve characters", () => {
     expect(
       errorsOf(
         SignupSchema.safeParse({
@@ -58,6 +60,27 @@ describe("SignupSchema", () => {
       name: "nameRequired",
       password: "passwordTooShort",
     });
+  });
+
+  it.each([
+    ["missioncontrol9", "passwordNeedsSymbol"],
+    ["mission-control", "passwordNeedsDigit"],
+  ])("refuses %s: the password needs a symbol and a digit", (password, key) => {
+    expect(
+      errorsOf(
+        SignupSchema.safeParse({ name: "M", email: "a@b.co", password }),
+      ),
+    ).toEqual({ password: key });
+  });
+
+  it("accepts a password that meets all three requirements", () => {
+    expect(
+      SignupSchema.safeParse({
+        name: "M",
+        email: "a@b.co",
+        password: "mission-control-9",
+      }).success,
+    ).toBe(true);
   });
 
   it("refuses a password longer than Better Auth accepts", () => {
@@ -122,11 +145,39 @@ describe("ResetPasswordSchema", () => {
       errorsOf(
         ResetPasswordSchema.safeParse({
           token: "",
-          newPassword: "longenough",
-          confirmPassword: "longenough",
+          newPassword: "Rq7!mesa-lattice",
+          confirmPassword: "Rq7!mesa-lattice",
         }),
       ),
     ).toEqual({ token: "tokenMissing" });
+  });
+});
+
+describe("password requirements and meter", () => {
+  it("ticks each requirement on its own", () => {
+    expect(passwordRequirements("")).toEqual({
+      length: false,
+      symbol: false,
+      digit: false,
+    });
+    expect(passwordRequirements("abc!")).toEqual({
+      length: false,
+      symbol: true,
+      digit: false,
+    });
+    expect(passwordRequirements("abcdefghijk7")).toEqual({
+      length: true,
+      symbol: false,
+      digit: true,
+    });
+  });
+
+  it("lights one of four segments per four characters", () => {
+    expect(passwordMeterScore("")).toBe(0);
+    expect(passwordMeterScore("abc")).toBe(0);
+    expect(passwordMeterScore("abcd")).toBe(1);
+    expect(passwordMeterScore("a".repeat(15))).toBe(3);
+    expect(passwordMeterScore("a".repeat(40))).toBe(4);
   });
 });
 
@@ -146,6 +197,8 @@ describe("error keys", () => {
       "passwordRequired",
       "passwordTooShort",
       "passwordTooLong",
+      "passwordNeedsSymbol",
+      "passwordNeedsDigit",
       "passwordsDiffer",
       "nameRequired",
       "nameTooLong",

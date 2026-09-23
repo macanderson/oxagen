@@ -777,12 +777,12 @@ type Messages = {
   };
   auth: {
     shell: {
-      brand: string;
       tags: {
-        free: string;
+        allowance: string;
         markup: string;
         evidence: string;
       };
+      tagsLabel: string;
     };
     fields: {
       name: string;
@@ -795,7 +795,15 @@ type Messages = {
       rememberMe: string;
       showPassword: string;
       hidePassword: string;
-      passwordHint: string;
+      digit: string;
+      requirements: {
+        label: string;
+        length: string;
+        symbol: string;
+        digit: string;
+        met: string;
+        unmet: string;
+      };
     };
     errors: {
       emailRequired: string;
@@ -809,6 +817,8 @@ type Messages = {
       codeInvalid: string;
       backupCodeInvalid: string;
       tokenMissing: string;
+      passwordNeedsSymbol: string;
+      passwordNeedsDigit: string;
     };
     outcomes: {
       wrongCredentials: string;
@@ -841,13 +851,18 @@ type Messages = {
     login: {
       eyebrow: string;
       title: string;
-      lead: string;
       forgot: string;
       submit: string;
       pending: string;
       newHere: string;
       createAccount: string;
       haveInvite: string;
+      acceptIt: string;
+      acceptHint: string;
+      passwordSet: string;
+      suspendedTitle: string;
+      suspendedBody: string;
+      suspendedBodyNoEmail: string;
     };
     signup: {
       eyebrow: string;
@@ -863,12 +878,12 @@ type Messages = {
       lead: string;
       leadNoEmail: string;
       expired: string;
-      resendTitle: string;
+      notArrived: string;
       resend: string;
       resendPending: string;
       resent: string;
       wrongAddress: string;
-      startOver: string;
+      changeIt: string;
     };
     twoFactor: {
       eyebrow: string;
@@ -880,6 +895,8 @@ type Messages = {
       useBackup: string;
       useTotp: string;
       back: string;
+      leadNoEmail: string;
+      expires: string;
     };
     forgot: {
       eyebrow: string;
@@ -889,8 +906,8 @@ type Messages = {
       pending: string;
       sentTitle: string;
       sentBody: string;
-      again: string;
       back: string;
+      failed: string;
     };
     reset: {
       eyebrow: string;
@@ -898,23 +915,16 @@ type Messages = {
       lead: string;
       submit: string;
       pending: string;
-      doneTitle: string;
-      doneBody: string;
-      logIn: string;
       expiredTitle: string;
       expiredBody: string;
       requestNew: string;
-      back: string;
     };
     invite: {
       eyebrow: string;
-      invited: string;
       invitedOn: string;
       organization: string;
       role: string;
-      sentTo: string;
       expires: string;
-      never: string;
       roles: {
         owner: string;
         admin: string;
@@ -928,7 +938,6 @@ type Messages = {
       decline: string;
       declining: string;
       declined: string;
-      signInLead: string;
       logIn: string;
       signUp: string;
       signedInAs: string;
@@ -944,9 +953,13 @@ type Messages = {
         revoked: string;
         expired: string;
       };
-      closedTitle: string;
       failed: string;
       denied: string;
+      invitedOnNoRole: string;
+      never: string;
+      signInLead: string;
+      wrongAccountBodyNoInviter: string;
+      failedClosed: string;
     };
     cli: {
       title: string;

@@ -54,6 +54,8 @@ const record = {
   status: "pending",
   invitedAt: new Date("2026-09-11T09:00:00Z"),
   expiresAt: new Date("2099-01-01T00:00:00Z"),
+  inviterName: "Priya Natarajan",
+  inviterRole: "Owner",
 };
 const refusal = (code: "forbidden" | "conflict", reason: string) =>
   new kernel.HandlerError({ code, reason });

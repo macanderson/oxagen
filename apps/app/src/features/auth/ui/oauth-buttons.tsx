@@ -4,12 +4,12 @@
 // never leave the page (provider unset, network) show as a form alert; failures
 // after the provider round-trip land on /login?error= via errorCallbackURL.
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import type { SafePath } from "@/shared/safe-path";
 import { buttonSecondary } from "@/ui/control-styles";
-import { FormAlert } from "@/ui/form-feedback";
 import type { AuthOutcomeKey } from "../auth-errors";
 import { liveSignInSocial } from "../auth-client";
+import { AuthAlert, AuthOr } from "./auth-card";
 
 type Provider = "google" | "github";
 
@@ -39,7 +39,18 @@ function ProviderMark({ provider }: { provider: Provider }) {
   );
 }
 
-export function OAuthButtons({ callbackURL }: { callbackURL: SafePath }) {
+/**
+ * Continue with Google and Continue with GitHub, then the "or" rule (mockups
+ * `obSso`). `children` sits under the two providers, before the rule: the
+ * login screen's single sign-on entry.
+ */
+export function OAuthButtons({
+  callbackURL,
+  children,
+}: {
+  callbackURL: SafePath;
+  children?: ReactNode;
+}) {
   const t = useTranslations("auth");
   const tSso = useTranslations("auth.sso");
   const [pending, setPending] = useState<Provider | null>(null);
@@ -59,32 +70,29 @@ export function OAuthButtons({ callbackURL }: { callbackURL: SafePath }) {
   }
 
   return (
-    <div className="flex flex-col gap-2.5">
+    <div className="flex flex-col gap-4">
       {outcome ? (
-        <FormAlert testId="oauth-outcome">{t(`outcomes.${outcome}`)}</FormAlert>
+        <AuthAlert testId="oauth-outcome" message={t(`outcomes.${outcome}`)} />
       ) : null}
-      {(["google", "github"] as const).map((provider) => (
-        <button
-          key={provider}
-          type="button"
-          aria-disabled={pending !== null || undefined}
-          onClick={() => {
-            if (pending === null) void start(provider);
-          }}
-          className={`${buttonSecondary} justify-start`}
-        >
-          <ProviderMark provider={provider} />
-          <span>{tSso(provider)}</span>
-        </button>
-      ))}
-      <div
-        className="flex items-center gap-3 text-xs uppercase tracking-[0.1em] text-muted-foreground"
-        aria-hidden
-      >
-        <span className="h-px flex-1 bg-border" />
-        {tSso("or")}
-        <span className="h-px flex-1 bg-border" />
+      <div className="grid gap-[9px]">
+        {(["google", "github"] as const).map((provider) => (
+          <button
+            key={provider}
+            type="button"
+            aria-disabled={pending !== null || undefined}
+            onClick={() => {
+              if (pending === null) void start(provider);
+            }}
+            data-touch-target=""
+            className={`${buttonSecondary} w-full justify-start`}
+          >
+            <ProviderMark provider={provider} />
+            <span>{tSso(provider)}</span>
+          </button>
+        ))}
+        {children}
       </div>
+      <AuthOr label={tSso("or")} />
     </div>
   );
 }

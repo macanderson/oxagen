@@ -18,6 +18,8 @@ const record = {
   status: "pending",
   invitedAt: new Date("2026-09-11T09:00:00Z"),
   expiresAt: new Date("2099-01-01T00:00:00Z"),
+  inviterName: "Priya Natarajan",
+  inviterRole: "Owner",
 };
 beforeEach(() => {
   readInvitation.mockReset();
@@ -37,6 +39,8 @@ describe("loadInvitation", () => {
         status: "pending",
         invitedAt: "2026-09-11T09:00:00.000Z",
         expiresAt: "2099-01-01T00:00:00.000Z",
+        inviterName: "Priya Natarajan",
+        inviterRole: "owner",
       },
     });
     expect(readInvitation).toHaveBeenCalledWith("invi_live");
@@ -76,6 +80,26 @@ describe("loadInvitation", () => {
       reason: "error",
       code: "invitation_unreadable",
       status: 500,
+    });
+  });
+
+  it("an inviter whose role is unknown or who has no record reads as null, never as an error", async () => {
+    readInvitation.mockResolvedValue({ ...record, inviterRole: "Superuser" });
+    const unknownRole = await loadInvitation("invi_live");
+    if (!unknownRole.ok) throw new Error("expected the invitation to read");
+    expect(unknownRole.value.inviterRole).toBeNull();
+    expect(unknownRole.value.inviterName).toBe("Priya Natarajan");
+
+    readInvitation.mockResolvedValue({
+      ...record,
+      inviterName: null,
+      inviterRole: null,
+    });
+    const noInviter = await loadInvitation("invi_live");
+    if (!noInviter.ok) throw new Error("expected the invitation to read");
+    expect(noInviter.value).toMatchObject({
+      inviterName: null,
+      inviterRole: null,
     });
   });
 });

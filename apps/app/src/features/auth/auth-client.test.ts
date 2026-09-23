@@ -215,3 +215,40 @@ describe("pending next", () => {
     get.mockRestore();
   });
 });
+
+describe("pending email and notice", () => {
+  it("each is taken once", () => {
+    auth.rememberPendingEmail("marcus@a-intel.example");
+    expect(auth.takePendingEmail()).toBe("marcus@a-intel.example");
+    expect(auth.takePendingEmail()).toBeNull();
+    auth.rememberNotice("passwordSet");
+    expect(auth.takeNotice()).toBe("passwordSet");
+    expect(auth.takeNotice()).toBeNull();
+  });
+
+  it("a stored notice this screen does not know reads as none (negative)", () => {
+    sessionStorage.setItem("oxagen.auth.notice", "<script>");
+    expect(auth.takeNotice()).toBeNull();
+  });
+
+  it("survives unavailable storage", () => {
+    const set = vi
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(() => {
+        throw new Error("denied");
+      });
+    const get = vi
+      .spyOn(Storage.prototype, "getItem")
+      .mockImplementation(() => {
+        throw new Error("denied");
+      });
+    expect(() => {
+      auth.rememberPendingEmail("a@b.co");
+      auth.rememberNotice("passwordSet");
+    }).not.toThrow();
+    expect(auth.takePendingEmail()).toBeNull();
+    expect(auth.takeNotice()).toBeNull();
+    set.mockRestore();
+    get.mockRestore();
+  });
+});

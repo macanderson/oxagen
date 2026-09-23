@@ -1,29 +1,86 @@
 "use client";
-// The sign-in second factor (mockup `obTwoFactor` @ mc-baseline-w1). Reached
-// holding only Better Auth's short-lived two-factor cookie, so the route is
-// public. An authenticator code or a single-use recovery code completes sign-in.
+// The sign-in second factor (mockup `obTwoFactor`). Reached holding only Better
+// Auth's short-lived two-factor cookie, so the route is public. Six digit boxes
+// take the authenticator code; a single-use recovery code completes sign-in
+// instead. The header lives here because its lead names the address the
+// password step was for, which only this browser tab knows.
 
 import { useTranslations } from "next-intl";
-import { type SyntheticEvent, useState } from "react";
+import { type SyntheticEvent, useEffect, useState } from "react";
 import type { AuthOutcomeKey } from "./auth-errors";
-import { liveVerifyTwoFactor, takePendingNext } from "./auth-client";
+import {
+  liveVerifyTwoFactor,
+  takePendingEmail,
+  takePendingNext,
+} from "./auth-client";
 import { routes, type SafePath, sanitizeNext } from "@/shared/safe-path";
 import { useNavigate } from "@/ui/navigation";
 import { type AuthErrorKey, TwoFactorSchema, fieldErrors } from "./schemas";
 import { Field } from "@/ui/field";
-import { FormAlert, SubmitButton } from "@/ui/form-feedback";
-import { linkText, panel } from "@/ui/control-styles";
+import { SubmitButton } from "@/ui/form-feedback";
+import { mono } from "@/ui/control-styles";
+import { PageHeader } from "@/ui/page-header";
 import { formText } from "./form-text";
+import { AuthAlert, AuthPanel, authLinkButton } from "./ui/auth-card";
+import { CodeInput } from "./ui/code-input";
 
 type Method = "totp" | "backup";
 
-export function TwoFactorForm({ next }: { next: SafePath }) {
+/** Better Auth's TOTP period (the plugin's default): a code is valid for the rest of its 30-second window. */
+const TOTP_PERIOD_SECONDS = 30;
+
+function secondsLeft(now: number): number {
+  return TOTP_PERIOD_SECONDS - (Math.floor(now / 1000) % TOTP_PERIOD_SECONDS);
+}
+
+/** "expires 0:24": how long the code on the authenticator app stays valid. Rendered after hydration only. */
+function ExpiryClock() {
+  const t = useTranslations("auth.twoFactor");
+  const [left, setLeft] = useState<number | null>(null);
+  useEffect(() => {
+    const tick = () => {
+      setLeft(secondsLeft(Date.now()));
+    };
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => {
+      clearInterval(timer);
+    };
+  }, []);
+  if (left === null) return null;
+  return (
+    <span
+      data-testid="two-factor-expiry"
+      className="font-mono text-[11.5px] text-dim"
+    >
+      {t("expires", { time: `0:${String(left).padStart(2, "0")}` })}
+    </span>
+  );
+}
+
+export function TwoFactorForm({
+  next,
+  eyebrow,
+  title,
+}: {
+  next: SafePath;
+  /** The page's eyebrow and its `pages.twoFactor` title, for the header this form renders. */
+  eyebrow: string;
+  title: string;
+}) {
   const t = useTranslations("auth");
   const navigate = useNavigate();
   const [method, setMethod] = useState<Method>("totp");
   const [error, setError] = useState<AuthErrorKey | null>(null);
   const [outcome, setOutcome] = useState<AuthOutcomeKey | null>(null);
   const [pending, setPending] = useState(false);
+  const [email, setEmail] = useState<string | null>(null);
+  // A refused code clears the boxes by remounting them.
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    setEmail(takePendingEmail());
+  }, []);
 
   async function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -49,6 +106,7 @@ export function TwoFactorForm({ next }: { next: SafePath }) {
       const result = await liveVerifyTwoFactor(parsed.data);
       if (!result.ok) {
         setOutcome(result.outcome);
+        setAttempt((n) => n + 1);
         return;
       }
       navigate.replace(destination);
@@ -59,57 +117,77 @@ export function TwoFactorForm({ next }: { next: SafePath }) {
     }
   }
 
+  const lead =
+    method === "backup"
+      ? t("twoFactor.leadBackup")
+      : email
+        ? t.rich("twoFactor.lead", {
+            email,
+            mono: (chunks) => <span className={mono}>{chunks}</span>,
+          })
+        : t("twoFactor.leadNoEmail");
+
   return (
-    <div className="flex flex-col gap-4">
-      <p className="text-[0.95rem] leading-relaxed text-muted-foreground">
-        {method === "totp" ? t("twoFactor.lead") : t("twoFactor.leadBackup")}
-      </p>
-      <form
-        noValidate
-        aria-label={t("twoFactor.title")}
-        onSubmit={(e) => void onSubmit(e)}
-        className={`${panel} flex flex-col gap-4 p-5 sm:p-6`}
-      >
+    <>
+      <PageHeader eyebrow={eyebrow} title={title} description={lead} />
+      <AuthPanel>
         {outcome ? (
-          <FormAlert testId="two-factor-outcome">
-            {t(`outcomes.${outcome}`)}
-          </FormAlert>
+          <AuthAlert
+            testId="two-factor-outcome"
+            message={t(`outcomes.${outcome}`)}
+          />
         ) : null}
-        <Field
-          key={method}
-          id="two-factor-code"
-          name="code"
-          type="text"
-          autoComplete="one-time-code"
-          inputMode={method === "totp" ? "numeric" : "text"}
-          maxLength={method === "totp" ? 6 : 32}
-          className={
-            method === "totp"
-              ? "font-mono text-lg tracking-[0.4em]"
-              : "font-mono"
-          }
-          label={method === "totp" ? t("fields.code") : t("fields.backupCode")}
-          error={error ? t(`errors.${error}`) : undefined}
-        />
-        <SubmitButton
-          pending={pending}
-          label={t("twoFactor.submit")}
-          pendingLabel={t("twoFactor.pending")}
-        />
-        <button
-          type="button"
-          className={`${linkText} self-start text-sm`}
-          onClick={() => {
-            setError(null);
-            setOutcome(null);
-            setMethod((m) => (m === "totp" ? "backup" : "totp"));
-          }}
+        <form
+          noValidate
+          aria-label={t("twoFactor.title")}
+          onSubmit={(e) => void onSubmit(e)}
+          className="flex flex-col gap-3.5"
         >
-          {method === "totp"
-            ? t("twoFactor.useBackup")
-            : t("twoFactor.useTotp")}
-        </button>
-      </form>
-    </div>
+          {method === "totp" ? (
+            <CodeInput
+              key={`totp-${attempt}`}
+              id="two-factor-code"
+              name="code"
+              label={t("fields.code")}
+              digitLabel={(n) => t("fields.digit", { n })}
+              error={error ? t(`errors.${error}`) : undefined}
+            />
+          ) : (
+            <Field
+              key={`backup-${attempt}`}
+              id="two-factor-backup"
+              name="code"
+              type="text"
+              autoComplete="one-time-code"
+              maxLength={32}
+              className="font-mono"
+              label={t("fields.backupCode")}
+              error={error ? t(`errors.${error}`) : undefined}
+            />
+          )}
+          <SubmitButton
+            pending={pending}
+            label={t("twoFactor.submit")}
+            pendingLabel={t("twoFactor.pending")}
+          />
+          <div className="flex items-center justify-between gap-3 text-[13px]">
+            <button
+              type="button"
+              className={authLinkButton}
+              onClick={() => {
+                setError(null);
+                setOutcome(null);
+                setMethod((m) => (m === "totp" ? "backup" : "totp"));
+              }}
+            >
+              {method === "totp"
+                ? t("twoFactor.useBackup")
+                : t("twoFactor.useTotp")}
+            </button>
+            {method === "totp" ? <ExpiryClock /> : null}
+          </div>
+        </form>
+      </AuthPanel>
+    </>
   );
 }

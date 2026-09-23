@@ -17,6 +17,12 @@ type BetterAuthReply = {
 
 /** Where a sign-in that stopped for a second factor resumes. Read by the two-factor form. */
 const PENDING_NEXT_KEY = "oxagen.auth.next";
+/** The address a sign-in that stopped for a second factor was for, shown back on the two-factor screen. */
+const PENDING_EMAIL_KEY = "oxagen.auth.email";
+/** A one-shot notice the next sign-in screen shows (the reset form's "Password set"). */
+const NOTICE_KEY = "oxagen.auth.notice";
+
+export type AuthNotice = "passwordSet";
 
 async function client() {
   const { authClient } = await import("@oxagen/auth/client");
@@ -132,6 +138,44 @@ export function takePendingNext(): string | null {
     const value = sessionStorage.getItem(PENDING_NEXT_KEY);
     sessionStorage.removeItem(PENDING_NEXT_KEY);
     return value;
+  } catch {
+    return null;
+  }
+}
+
+export function rememberPendingEmail(email: string): void {
+  try {
+    sessionStorage.setItem(PENDING_EMAIL_KEY, email);
+  } catch {
+    // Storage can be unavailable; the two-factor lead then omits the address.
+  }
+}
+
+/** The address the password step was for. Read once; it is shown back to the person who typed it and never looked up. */
+export function takePendingEmail(): string | null {
+  try {
+    const value = sessionStorage.getItem(PENDING_EMAIL_KEY);
+    sessionStorage.removeItem(PENDING_EMAIL_KEY);
+    return value;
+  } catch {
+    return null;
+  }
+}
+
+export function rememberNotice(notice: AuthNotice): void {
+  try {
+    sessionStorage.setItem(NOTICE_KEY, notice);
+  } catch {
+    // Storage can be unavailable; the next screen then shows no notice.
+  }
+}
+
+/** The notice left for this screen, read once. Anything but a known notice reads as none. */
+export function takeNotice(): AuthNotice | null {
+  try {
+    const value = sessionStorage.getItem(NOTICE_KEY);
+    sessionStorage.removeItem(NOTICE_KEY);
+    return value === "passwordSet" ? value : null;
   } catch {
     return null;
   }
