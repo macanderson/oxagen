@@ -49,7 +49,7 @@ None. Read-only; audit-exempt.
 
 - `POST /v1/{org}/{ws}/credential-grants`
 - MCP tool `list_credential_grants` (an API key acts as its creator at the role gate, ADR-072 decision 8)
-- App: **Tools → Connections** at `/{org}/{ws}/tools?tab=connections` — the credential grants log.
+- App: **Tools → Providers** at `/{org}/{ws}/tools/providers`: the credential grants log under the providers table.
 
 ## Errors
 
