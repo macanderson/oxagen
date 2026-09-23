@@ -6,6 +6,11 @@
  * fake control plane and a scratch `TACHO_HOME`.
  */
 import {
+  readWorktreeSnapshot,
+  type WorktreeSnapshot,
+} from "./worktree-snapshot";
+import { jsonContent } from "../evidence/frame-body";
+import {
   existsSync,
   readdirSync,
   readFileSync,
@@ -1513,6 +1518,7 @@ async function initializeDaemon(
       // describe but does have a worktree to reconcile.
       facts?: GitFacts;
       changes?: GitWorkingTreeChange[];
+      snapshot?: WorktreeSnapshot;
     }> = [];
     for (const harnessSessionId of work) {
       const want = gitPending.get(harnessSessionId);
@@ -1592,14 +1598,23 @@ async function initializeDaemon(
                 cwd,
                 session.baselineCommit,
               );
-              return changes === undefined ? {} : { changes };
+              return changes === undefined
+                ? {}
+                : {
+                    changes,
+                    snapshot: await readWorktreeSnapshot(
+                      execAsync,
+                      cwd,
+                      session.baselineCommit,
+                    ),
+                  };
             })()
           : {}),
       });
     }
     if (found.length === 0) return;
     await serial.run(async () => {
-      for (const { session, cwd, facts, changes, ending } of found) {
+      for (const { session, cwd, facts, changes, snapshot, ending } of found) {
         if (session.sealed) continue;
         // The session moved while the probe ran, so this answer describes a
         // repository it is no longer in. A later turn reads the new one.
@@ -1613,7 +1628,8 @@ async function initializeDaemon(
         }
         if (facts !== undefined)
           session.recorder.noteContext(gitContextOf(facts));
-        if (changes !== undefined) recordReconciliation(session, changes);
+        if (changes !== undefined)
+          recordReconciliation(session, changes, snapshot);
         if (
           ending !== undefined &&
           pendingSessionEnds.get(session.recorder.sessionUuid) === ending
@@ -1647,6 +1663,7 @@ async function initializeDaemon(
   function recordReconciliation(
     session: SessionRecord,
     changes: GitWorkingTreeChange[],
+    snapshot?: WorktreeSnapshot,
   ): void {
     const mark = session.recorder.markChain();
     try {
@@ -1654,6 +1671,23 @@ async function initializeDaemon(
         session.recorder.sealCollectorEvent(
           "oxagen:worktree_reconciled",
           worktreeReconciledBody(changes),
+          snapshot
+            ? {
+                attrs: {
+                  worktree_root: snapshot.root,
+                  ...(snapshot.repository
+                    ? { repository_url: snapshot.repository }
+                    : {}),
+                  ...(snapshot.baseline
+                    ? { diff_base_sha: snapshot.baseline }
+                    : {}),
+                  ...(snapshot.head ? { diff_head_sha: snapshot.head } : {}),
+                  diff_complete: String(snapshot.complete),
+                  diff_limitations: snapshot.limitations.join(","),
+                },
+                content: jsonContent(JSON.stringify(snapshot)),
+              }
+            : {},
         ),
       ]);
     } catch (error) {

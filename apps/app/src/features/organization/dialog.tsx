@@ -6,7 +6,7 @@
 // state this component kept.
 import { type ReactNode, type SyntheticEvent, useState } from "react";
 import type { ActionResult } from "@/server/kernel";
-import { buttonSecondary } from "@/ui/control-styles";
+import { buttonPrimary, buttonSecondary } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { UNANSWERED, useActionFailure } from "./action-failure";
@@ -25,8 +25,10 @@ export function WriteDialog<O>({
   onDone,
   done,
   children,
+  primary = false,
 }: {
   copy: DialogCopy;
+  primary?: boolean;
   testId: string;
   /** Reads the dialog's fields and performs the write. */
   submit: (form: FormData) => Promise<ActionResult<O>>;
@@ -108,7 +110,7 @@ export function WriteDialog<O>({
     <>
       <button
         type="button"
-        className={buttonSecondary}
+        className={primary ? buttonPrimary : buttonSecondary}
         onClick={() => {
           setOpen(true);
         }}

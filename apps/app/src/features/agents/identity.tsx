@@ -1,3 +1,4 @@
+import { HarnessLabel } from "@/ui/harness-icon";
 // The Identity section: the principal as Postgres records it, the roles on it
 // and the long-lived credentials it holds (prefix and dates, never a secret).
 //
@@ -171,7 +172,11 @@ export function IdentitySection({
             },
             {
               term: t("detail.identity.harness"),
-              value: t(`harness.${identity.harness}`),
+              value: (
+                <HarnessLabel harness={identity.harness}>
+                  {t(`harness.${identity.harness}`)}
+                </HarnessLabel>
+              ),
             },
             {
               term: t("detail.identity.operator"),

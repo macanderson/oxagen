@@ -1,3 +1,4 @@
+import { HarnessLabel } from "@/ui/harness-icon";
 import { useLocale, useTranslations } from "next-intl";
 import type { AgentPage } from "@/data/contracts/agents";
 import type { DataSource } from "@/data/ports";
@@ -135,7 +136,9 @@ function IdentityRows({
               </>
             ) : null}
             <td className={`${cell} whitespace-nowrap`}>
-              {t(`harness.${agent.harness}`)}
+              <HarnessLabel harness={agent.harness}>
+                {t(`harness.${agent.harness}`)}
+              </HarnessLabel>
             </td>
             <td className={cell}>
               {agent.operatorId === null ? (
