@@ -105,7 +105,7 @@ export function ChargeWorkspace({
       }}
       testId={id}
       submit={(form) =>
-        setWorkspaceCostCenter(org, workspace.slug, textValue(form, "label"))
+        setWorkspaceCostCenter(org, workspace.id, textValue(form, "label"))
       }
       onDone={() => {
         navigate.replace(routes.people(org));

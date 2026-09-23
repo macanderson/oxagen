@@ -32,6 +32,9 @@ async function Login({
   // Better Auth social failures land here as `?error=<code>` (errorCallbackURL
   // and the proxy lift from `/?error=`). Map once so LoginForm can show it.
   const initialOutcome = oauthQueryOutcome(firstParam(params.error));
+  // requireViewer sends `?sso=required` when the organization requires single
+  // sign-on and this session was not one; the SSO entry then starts open.
+  const ssoRequired = firstParam(params.sso) === "required";
   const [t, pages] = await Promise.all([
     getTranslations("auth"),
     getTranslations("pages"),
@@ -45,7 +48,11 @@ async function Login({
       />
       <div className="flex flex-col gap-4">
         <OAuthButtons callbackURL={next} />
-        <LoginForm next={next} initialOutcome={initialOutcome} />
+        <LoginForm
+          next={next}
+          initialOutcome={initialOutcome}
+          ssoRequired={ssoRequired}
+        />
       </div>
       <AuthFooter>
         {t("login.newHere")}{" "}

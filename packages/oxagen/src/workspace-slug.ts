@@ -60,6 +60,7 @@ export const RESERVED_WORKSPACE_SLUGS: ReadonlySet<string> = new Set([
   "roles",
   "security",
   "settings",
+  "sso",
   "workspaces",
 ]);
 

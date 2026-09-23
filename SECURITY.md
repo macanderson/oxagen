@@ -34,7 +34,7 @@ In scope:
 - Tenant-isolation boundaries: Postgres RLS, per-workspace Neo4j scoping, ClickHouse predicates
 - The capability kernel's IAM, entitlement, and billing gates (bypasses are high severity)
 - MCP tool surface: schema enforcement, tool-poisoning and injection resistance
-- Secrets handling: BYOK model keys, API keys, OAuth tokens
+- Secrets handling: BYOK model keys, API keys, OAuth tokens, SSO provider secrets
 
 Out of scope:
 
@@ -53,9 +53,9 @@ Oxagen is deployed continuously from `main`. The production deployment and the l
 
 ## Security Posture (for reviewers)
 
-- **Every capability is a typed contract** (Zod-validated input/output) dispatched through a single `invoke()` kernel that enforces IAM (deny-by-default), plugin entitlement, and billing admission on every call. There is no ungoverned tool surface.
+- **Every capability is a typed contract** (Zod-validated input/output) dispatched through a single `invoke()` kernel. The kernel runs the IAM check on every call, the billing admission gate on every contract not marked `noBillingGate`, and the plugin entitlement gate on contracts a plugin claims. IAM denies by default in an organization on the enterprise tier and for every agent principal. In other organizations a person passes IAM, and a handler that needs an organization role checks it with `assertOrgRole`.
 - **Tenant isolation** is enforced at the data layer: Postgres row-level security via a non-superuser app role (raw `db()` access is banned in code), workspace-scoped Neo4j graphs, and tenant predicates on ClickHouse queries.
-- **Auth** is Better Auth with passkeys, OAuth, org/workspace RBAC, and rate limiting.
-- **Secrets** live in environment configuration validated against a Zod registry — never in code. BYOK keys (model providers, Neo4j endpoints) remain customer-controlled.
-- **Audit**: every invocation emits org, workspace, user, run, model, timestamp, and source to an append-only store.
+- **Auth** is Better Auth: email and password, Google and GitHub sign-in, TOTP two-factor, and enterprise SSO over OIDC and SAML 2.0 with IdP group-to-role mapping. Organization and workspace RBAC decide what a signed-in person may call. Auth endpoints are rate limited, with tighter limits on password, SSO, and sign-up attempts. The counters live in Postgres, so every server instance shares them.
+- **Secrets**: platform secrets live in environment configuration, validated at runtime by a Zod schema and catalogued in `packages/config/src/registry.ts`, and never in code. Secrets a customer hands Oxagen (model provider keys, plugin credentials, dedicated data-plane connections, and SSO client secrets and SAML private keys) are stored in Postgres as AES-256-GCM envelopes whose data key is wrapped by a master key held in environment configuration.
+- **Audit**: the kernel writes one row per capability call to Postgres `security.security_events`, with the outcome (allow, deny, or error), organization, workspace, person, capability, request id, and time. Sign-in, SSO, role, API key, and billing changes write to the same table. The write does not block the call, so a failed write loses that row rather than failing the call. Model usage and token counts go to ClickHouse through `@oxagen/ai`.
 - **CLI telemetry** is anonymous and allowlist-validated at ingest — see [`TELEMETRY.md`](TELEMETRY.md) for the exact schema and opt-out.

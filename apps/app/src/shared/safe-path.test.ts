@@ -161,6 +161,7 @@ describe("routes", () => {
     expect(routes.people("\\evil")).toBe("/%5Cevil");
     expect(routes.apiKeys("a/b")).toBe("/a%2Fb/api-keys");
     expect(routes.modelFunding("a/b")).toBe("/a%2Fb/model-funding");
+    expect(routes.sso("a/b")).toBe("/a%2Fb/sso");
   });
 
   it("carries Fleet's runs cursor as a query and builds a run's path", () => {

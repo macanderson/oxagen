@@ -94,10 +94,11 @@ record first. The level can re-key to it once one exists.
 
 ## Consequences
 
-- Resolving at rollup means a rebuild after a reassignment moves that run to
-  the new cost center. Rollups happen at seal, nightly for missed seals, and
-  on a reprice. A statement for a closed month is stable unless one of those
-  rebuilds a run from it.
+- A run keeps the cost center its first rollup resolved. A later rebuild (a
+  reprice, or the nightly sweep of a missed seal) fills a null and changes
+  nothing else, so a statement for a closed month stays where finance booked
+  it after an agent or workspace is reassigned. Amended 2026-09-23 after
+  review of PR #3732; the first version let a rebuild move the run.
 - `cost.run_totals` rows written before this change, or before their agent
   or workspace was charged to a label, have a null `cost_center` until they
   are rebuilt, so their spend reads as unassigned. The nightly sweep does not
