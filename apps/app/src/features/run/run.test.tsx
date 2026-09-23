@@ -211,6 +211,33 @@ describe("header", () => {
     expect(screen.queryByText("$0.00")).toBeNull();
   });
 
+  it("leaves out the generated name when automatic names are disabled", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            enrichmentEnabled: false,
+            name: "Old generated name",
+            taskRef: "A derived project label",
+            summary: null,
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.queryByText("Old generated name")).toBeNull();
+    expect(
+      within(screen.getByTestId("run-when")).getByText(
+        "A derived project label",
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("checkbox", {
+        name: "Automatic run names and summaries",
+      }),
+    ).not.toBeChecked();
+  });
+
   it("draws the agent, status and tier chips, and the rig the run ran on", async () => {
     const { container } = await renderRun({
       detail: ok(runDetail()),

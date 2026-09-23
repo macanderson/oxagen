@@ -45,6 +45,7 @@ describe("workspace.settings.read handler", () => {
         ships_code: ["Admin"],
       },
       // Both steering-freshness gates are off until the workspace sets one.
+      runEnrichmentEnabled: true,
       steering: { autoSync: false, blockStaleRuns: false },
     });
   });
