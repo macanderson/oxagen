@@ -101,7 +101,7 @@
     "inngest-cli": "1.45.1",
     "lefthook": "latest",
     "postject": "1.0.0-alpha.6",
-    "tsx": "4.23.15",
+    "tsx": "4.23.5",
     "turbo": "2.11.3",
     "typescript": "6.0.3",
     "typescript-eslint": "8.70.1",

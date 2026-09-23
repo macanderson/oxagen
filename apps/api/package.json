@@ -47,7 +47,7 @@
     "@oxagen/tacho": "workspace:*",
     "@vitest/coverage-v8": "2.1.9",
     "esbuild": "0.28.2",
-    "tsx": "4.23.15",
+    "tsx": "4.23.5",
     "typescript": "6.0.3",
     "vitest": "2.1.9"
   }

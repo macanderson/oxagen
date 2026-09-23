@@ -31,7 +31,7 @@
     "neo4j-driver": "6.2.0"
   },
   "devDependencies": {
-    "tsx": "4.23.15",
+    "tsx": "4.23.5",
     "typescript": "6.0.3",
     "vitest": "2.1.9",
     "@vitest/coverage-v8": "2.1.9"
