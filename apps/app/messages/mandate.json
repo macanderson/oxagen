@@ -140,7 +140,7 @@
         "approvalAbove": "Approval above ({unit})",
         "approvalHint": "A call above this parks for a human, and no rule elsewhere can release it.",
         "validTo": "Valid to",
-        "note": "Lowering a ceiling below what is already reserved does not claw the reservation back; it applies from the next call. A field left blank keeps what is stored.",
+        "note": "Lowering a ceiling below what is already reserved does not claw the reservation back. It applies from the next call. A field left blank keeps what is stored.",
         "windows": {
           "daily": "day",
           "weekly": "week",

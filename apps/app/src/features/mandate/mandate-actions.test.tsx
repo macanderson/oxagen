@@ -140,7 +140,7 @@ describe("mandateedit", () => {
       "A call above this parks for a human, and no rule elsewhere can release it.",
     );
     expect(form).toHaveTextContent(
-      "Lowering a ceiling below what is already reserved does not claw the reservation back; it applies from the next call.",
+      "Lowering a ceiling below what is already reserved does not claw the reservation back. It applies from the next call.",
     );
     // The design's header close, labelled, beside the footer's Cancel.
     expect(

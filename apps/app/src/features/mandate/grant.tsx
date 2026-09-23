@@ -24,7 +24,7 @@
 //     of that day (`validDays`).
 //   - The agent card's line names the harness from `get_agent`. That read
 //     answers no 30-day runs or spend for one agent, so the card says so rather
-//     than print the list page's figures for a different read.
+//     than print the list page's figures for a different read (#3926).
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type { AgentDetail } from "@/data/contracts/agents";
