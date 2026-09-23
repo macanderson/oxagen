@@ -33,6 +33,12 @@ function ProviderLink({
     <span>{children}</span>
   );
 }
+
+/**
+ * The section drawn from a settled read.
+ *
+ * @internal Exported for its unit test; the page renders it through RunWork.
+ */
 export function RunWorkSection({
   read,
   org,
