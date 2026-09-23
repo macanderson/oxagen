@@ -120,7 +120,9 @@ function fakeControlPlane(bundleEtag: string) {
   let bundle: unknown = null;
   let refuseNext: number | undefined;
   /** While set, every command poll is refused with this status and body. */
-  let refuseCommands: { status: number; body: string } | undefined;
+  let refuseCommands:
+    | { status: number; body: string; headers?: Record<string, string> }
+    | undefined;
   let down = false;
   const calls: string[] = [];
   /** Every daemon health report the plane received, newest last. */
@@ -184,6 +186,10 @@ function fakeControlPlane(bundleEtag: string) {
           ok: false,
           status: refuseCommands.status,
           text: async () => refuseCommands?.body ?? "",
+          headers: {
+            get: (name: string) =>
+              refuseCommands?.headers?.[name.toLowerCase()] ?? null,
+          },
         };
       }
       if (body["daemon"] !== undefined) reported.push(body["daemon"]);
@@ -234,7 +240,9 @@ function fakeControlPlane(bundleEtag: string) {
       refuseNext = status;
     },
     refuseCommandsWith: (
-      refusal: { status: number; body: string } | undefined,
+      refusal:
+        | { status: number; body: string; headers?: Record<string, string> }
+        | undefined,
     ) => {
       refuseCommands = refusal;
     },
@@ -1286,6 +1294,77 @@ describe("tachod", () => {
       /1 in a row, retrying in 2s/,
     );
   });
+
+  it("waits commandsPollMs between successful polls while ingest is idle", async () => {
+    // The regression this guards: the poll's only gate was "an ingest landed
+    // in the last commandsPollMs", and a successful poll did not count. A host
+    // with nothing to ship therefore polled on every one-second tick, spent
+    // the 30/min `tacho-host` budget in 30 s, and took 429s until the window
+    // turned over. The live log showed it as a 429 streak ~30 s after every
+    // "command poll recovered", once a minute (2026-09-23).
+    const plane = fakeControlPlane("etag-idle");
+    let clock = 1_000_000;
+    const { handle } = await boot(plane, scratchPaths(), {
+      now: () => clock,
+      timers: {
+        detectorMs: 0,
+        sweepMs: 0,
+        checkpointMs: 0,
+        commandsPollMs: 30_000,
+      },
+    });
+    const pollCount = () =>
+      plane.calls.filter((u) => u.endsWith("/commands")).length;
+
+    // Startup can ship a control envelope through ingestion. Let that
+    // envelope's quiet window expire before measuring idle command polls.
+    await handle.tick();
+    clock += 30_000;
+    await handle.tick();
+    const first = pollCount();
+    expect(first).toBeGreaterThanOrEqual(1);
+
+    // A minute of one-second ticks with nothing to ship: one poll every 30 s,
+    // not sixty.
+    for (let i = 0; i < 60; i += 1) {
+      clock += 1_000;
+      await handle.tick();
+    }
+    expect(pollCount()).toBe(first + 2);
+  });
+
+  it.each([429, 503])(
+    "obeys %s Retry-After on the command poll",
+    async (status) => {
+      const plane = fakeControlPlane("etag-429");
+      let clock = 1_000_000;
+      const { handle, log } = await boot(plane, scratchPaths(), {
+        now: () => clock,
+      });
+      const pollCount = () =>
+        plane.calls.filter((u) => u.endsWith("/commands")).length;
+
+      plane.refuseCommandsWith({
+        status,
+        body: '{"error":"rate_limited"}',
+        headers: { "retry-after": "20" },
+      });
+      await handle.tick();
+      const afterRefusal = pollCount();
+
+      // The guessed backoff would have retried at 2 s; the server said 20.
+      clock += 19_000;
+      await handle.tick();
+      expect(pollCount()).toBe(afterRefusal);
+      expect(
+        log.filter((l) => l.includes("command poll failed")).at(-1),
+      ).toMatch(/retrying in 20s/);
+
+      clock += 1_500;
+      await handle.tick();
+      expect(pollCount()).toBe(afterRefusal + 1);
+    },
+  );
 
   it("parks the command poll for 15 minutes on a wire mismatch and keeps shipping events", async () => {
     // The regression this guards: on 2026-09-18 a daemon sending
