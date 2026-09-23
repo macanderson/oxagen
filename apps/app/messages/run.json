@@ -83,6 +83,8 @@
       "speed": "×{speed}",
       "transportNote": "The transport moves the viewer, never the run. Idle longer than 2 seconds is compressed, and the true elapsed time is shown beside the position.",
       "frameHead": "seq {seq} · +{time} · {fidelity}",
+      "subagent": "subagent",
+      "subagentTyped": "subagent {type}",
       "fidelity": {
         "full": "body retained",
         "digest_only": "digest only"
@@ -429,7 +431,7 @@
       "noCost": "this turn's cost was not recorded",
       "empty": "This run has no turn the recording could fold, so there is nothing to lay out.",
       "unpriced": "No turn in this run carries a cost, so the bars have no scale to sit against. The turns and their steps are listed as recorded.",
-      "cut": "The run has more turns than one read carries, so this stops short of the end."
+      "cut": "This stops short of the end of the run: the run is still recording, or it has more turns and steps than these reads carry."
     },
     "replay": {
       "forkNeedsLedger": "Forking replays an attempt from the evidence ledger. This run was recorded by a wrapped agent, which has no attempt to branch from.",

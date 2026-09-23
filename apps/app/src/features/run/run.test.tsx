@@ -1799,7 +1799,11 @@ describe("policy and context", () => {
       },
       { tab: "policy" },
     );
-    expect(calls.transcript).toHaveLength(1);
+    // The page's own read, then the tab's: its own chip, read to the end.
+    expect(calls.transcript).toEqual([
+      [ctx, "tse_7k2m9q", "everything", { kinds: [] }],
+      [ctx, "tse_7k2m9q", "everything", { kinds: ["policy"] }],
+    ]);
     const policy = within(
       screen.getByRole("region", { name: "Policy decisions" }),
     );
@@ -1834,6 +1838,49 @@ describe("policy and context", () => {
       { tab: "context" },
     );
     expect(screen.getByText("This run recorded no recall.")).toBeTruthy();
+  });
+
+  it("says a list is missing later decisions when a page lies past the one read, and names a subagent's frame without a link (negative)", async () => {
+    // `complete` is the read's frame cap. The list used to claim it was whole
+    // whenever the cap held, however many pages were left.
+    await renderRun(
+      {
+        detail: ok(runDetail()),
+        transcript: ok(
+          runTranscript({
+            cursor: "dDo0MQ",
+            entries: [
+              {
+                ...decided,
+                subagent: {
+                  chainRef: "0192d4a8-7c1e-7a00-8000-0000000000c1",
+                  type: "Explore",
+                },
+                decision:
+                  decided.decision === null
+                    ? null
+                    : {
+                        ...decided.decision,
+                        chainRef: "0192d4a8-7c1e-7a00-8000-0000000000c1",
+                      },
+              },
+            ],
+          }),
+        ),
+      },
+      { tab: "policy" },
+    );
+    expect(
+      screen.getByText(
+        "The transcript read stopped short, so later decisions are missing here.",
+      ),
+    ).toBeTruthy();
+    // The Frames tab reads the run's own chain: seq 41 there is another frame.
+    const policy = within(
+      screen.getByRole("region", { name: "Policy decisions" }),
+    );
+    expect(policy.queryByRole("link", { name: "41" })).toBeNull();
+    expect(policy.getByText("41")).toBeTruthy();
   });
 
   it("says a list from a transcript that stopped short is missing later decisions (negative)", async () => {

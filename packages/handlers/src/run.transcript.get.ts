@@ -15,9 +15,18 @@
 // own first entry would restate the run's cost, clock and turns as the page's,
 // which is wrong on every page but the first.
 //
+// A wrapped run's subagents record on chains of their own, each numbered from
+// 0. The read takes every chain under the root and places each one after the
+// `subagent_start` that spawned it, so an entry from a subagent carries
+// `subagent` and its halves carry `sessionUuid`: its `seq` names a frame only
+// together with that chain. Pages are therefore cut on each frame's position
+// in the run as read, and a cursor names its frame as `t:<seq>` on the run's
+// own chain or `t:<session uuid>:<seq>` on a subagent's.
+//
 // Bodies are read a few at a time; a body that is not text, or that no longer
 // hashes to its recorded digest, leaves its half with `text: null` rather than
-// with bytes the record does not vouch for.
+// with bytes the record does not vouch for. So does a body the store cannot
+// answer at all: one missing object must not blank the whole page.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
   runTranscriptGet,
@@ -30,11 +39,13 @@ import {
 import {
   filterFramesByKind,
   foldTranscript,
+  frameKey,
   frameKinds,
   type RunFrame,
   type TranscriptFold,
   type TranscriptKind,
   turnOrdinals,
+  withoutDuplicateModelCalls,
 } from "@oxagen/run-ledger";
 import type { EvidenceStore } from "@oxagen/run-ledger/evidence-store";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
@@ -45,6 +56,7 @@ import {
 } from "@oxagen/billing";
 import { assemblyView, readAssembly } from "./lib/transcript-assembly";
 import { digestBytes } from "@oxagen/tacho";
+import { logger } from "./logger";
 import {
   invalidCursor,
   microsString,
@@ -53,7 +65,7 @@ import {
 } from "./run.list";
 import {
   defaultRunReadDeps,
-  readAllFrames,
+  readRunFrames,
   resolveRun,
   startCursorSeq,
   type RunReadDeps,
@@ -89,18 +101,63 @@ const decoder = new TextDecoder("utf-8", { fatal: true });
 
 // ---- Cursor ---------------------------------------------------------------------------
 
-/** The cursor for an entry: the last frame it folded, wrapped so the shape stays ours. */
-export function encodeTranscriptCursor(endSeq: string): string {
-  return Buffer.from(`t:${endSeq}`, "utf8").toString("base64url");
+/**
+ * The cursor for an entry: the last frame it folded, wrapped so the shape
+ * stays ours. The frame is named by `frameKey`: its `seq` on the run's own
+ * chain (`t:<seq>`, the only form before subagent chains were read), and its
+ * chain and `seq` on a subagent's (`t:<session uuid>:<seq>`).
+ */
+export function encodeTranscriptCursor(endKey: string): string {
+  return Buffer.from(`t:${endKey}`, "utf8").toString("base64url");
 }
 
-/** The sequence a cursor names, or null for a cursor this handler did not write. */
+const CHAIN_KEY =
+  /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}):(\d{1,19})$/i;
+
+/**
+ * The frame key a cursor names, or null for a cursor this handler did not
+ * write. Both forms are read: `t:<seq>`, which every cursor issued before
+ * subagent chains were read carries, and `t:<session uuid>:<seq>`.
+ */
 export function decodeTranscriptCursor(raw: string): string | null {
   const text = Buffer.from(raw, "base64url").toString("utf8");
   if (!text.startsWith("t:")) return null;
-  const seq = text.slice(2);
-  if (seq === TACHO_START) return seq;
-  return DECIMAL.test(seq) && seq.length <= 19 ? seq : null;
+  const key = text.slice(2);
+  if (key === TACHO_START) return key;
+  if (CHAIN_KEY.test(key)) return key.toLowerCase();
+  return DECIMAL.test(key) && key.length <= 19 ? key : null;
+}
+
+/**
+ * The position in `frames` a cursor's frame holds, or the position just
+ * before the next frame of its chain when that frame is no longer shown (a
+ * model call's copy that a richer one replaced). -1 reads from the start.
+ */
+export function cursorPosition(
+  frames: readonly RunFrame[],
+  key: string,
+): number {
+  if (key === TACHO_START) return -1;
+  const exact = frames.findIndex((frame) => frameKey(frame) === key);
+  if (exact !== -1) return exact;
+  const chained = CHAIN_KEY.exec(key);
+  const session = chained ? (chained[1] as string).toLowerCase() : null;
+  const seq = BigInt(chained ? (chained[2] as string) : key);
+  const sameChain = (frame: RunFrame) =>
+    (frame.chain?.sessionUuid ?? null) === session;
+  const next = frames.findIndex(
+    (frame) => sameChain(frame) && BigInt(frame.seq) > seq,
+  );
+  if (next !== -1) return next - 1;
+  // Nothing of that chain lies past the cursor: resume after its last frame.
+  for (let i = frames.length - 1; i >= 0; i -= 1) {
+    const frame = frames[i];
+    if (frame !== undefined && sameChain(frame)) return i;
+  }
+  // A chain this read does not hold. The run's own chain with no frames
+  // reads from the start; a subagent chain past the frame cap has nothing
+  // this read can resume into.
+  return session === null ? -1 : frames.length - 1;
 }
 
 /**
@@ -186,6 +243,9 @@ async function half(
   const { bodyRef, bodyDigest, fidelity, redactions } = frame.body;
   const base = {
     seq: frame.seq,
+    ...(frame.chain === undefined
+      ? {}
+      : { sessionUuid: frame.chain.sessionUuid }),
     type: frame.type,
     digest: bodyDigest,
     bytesRef: bodyRef,
@@ -199,17 +259,38 @@ async function half(
   if (bodyRef === null || bodyDigest === null) {
     return { ...base, text: null, truncated: false, assembly: null };
   }
-  const stored = await bodies.getBody(scope, bodyRef);
-  if (digestBytes(stored.bytes) !== bodyDigest) {
-    return { ...base, text: null, truncated: false, assembly: null };
+  const unread = { ...base, text: null, truncated: false, assembly: null };
+  // One body the store cannot answer (an object gone missing, a key id this
+  // deployment no longer holds, a transient read failure) leaves its own half
+  // unread. It must not fail the page: every other half is still readable,
+  // and the Policy, Context and stats tabs read through this same page.
+  let stored: Awaited<ReturnType<typeof bodies.getBody>>;
+  try {
+    stored = await bodies.getBody(scope, bodyRef);
+  } catch (err) {
+    logger.warn(
+      { err, seq: frame.seq, type: frame.type, bytesRef: bodyRef },
+      "get_run_transcript: a frame body could not be read; its half is shown without text",
+    );
+    return unread;
   }
+  if (digestBytes(stored.bytes) !== bodyDigest) return unread;
   let text: string;
   try {
     text = decoder.decode(stored.bytes);
   } catch {
-    return { ...base, text: null, truncated: false, assembly: null };
+    return unread;
   }
-  const assembly = await readAssembly(bodies, scope, bodyRef, text, frame);
+  let assembly: Awaited<ReturnType<typeof readAssembly>>;
+  try {
+    assembly = await readAssembly(bodies, scope, bodyRef, text, frame);
+  } catch (err) {
+    logger.warn(
+      { err, seq: frame.seq, type: frame.type, bytesRef: bodyRef },
+      "get_run_transcript: a frame's reassembly could not be read; its half is shown without text",
+    );
+    return unread;
+  }
   if (assembly !== null) {
     return {
       ...base,
@@ -321,30 +402,43 @@ export function createRunTranscriptGetHandler(
 
     const scope = runScope(ctx);
     const run = await resolveRun(deps, ctx, input.runId);
-    const read = await readAllFrames(deps, run, TRANSCRIPT_FRAME_CAP);
-    let observedUsage = false;
+    // The run's own chain and every subagent chain under it, each spliced in
+    // where it was spawned (`readRunFrames`).
+    const read = await readRunFrames(deps, run, TRANSCRIPT_FRAME_CAP);
+    // Once a chain's model calls are observed by the proxy, the harness's own
+    // report of the same calls counts neither its tokens nor its cost: the
+    // rule the intake folds session totals by (`usageCountedEvents`), per
+    // chain, because each chain is metered on its own.
+    const observedChains = new Set<string>();
     for (const frame of read.frames) {
-      if (frame.usageObserved) observedUsage = true;
-      else if (observedUsage && frame.type === "llm_call") frame.usage = null;
+      const chain = frame.chain?.sessionUuid ?? "";
+      if (frame.usageObserved) observedChains.add(chain);
+      else if (observedChains.has(chain) && frame.type === "llm_call") {
+        frame.usage = null;
+        frame.costMicros = null;
+      }
     }
-    const frames = filterFramesByKind(read.frames, input.kinds);
+    // One model call reported by several sources is one step
+    // (`withoutDuplicateModelCalls`): a proxied call drew twice.
+    const shown = withoutDuplicateModelCalls(read.frames);
+    const frames = filterFramesByKind(shown, input.kinds);
     const folds = foldTranscript(frames, input.zoom);
     // Turns are counted over every frame of the run, so a chip filter never
     // renumbers them: turn 2 is turn 2 whichever kinds the page shows.
-    const ordinals = turnOrdinals(read.frames);
+    const ordinals = turnOrdinals(shown);
     const turnOf = new Map(
-      read.frames.map((frame, i) => [frame.seq, ordinals[i] ?? null]),
+      shown.map((frame, i) => [frame, ordinals[i] ?? null]),
     );
 
     // Cumulative cost is a prefix over every frame of the run (§8.4), before
     // any chip filter. Building it from the filtered folds understated spend
     // whenever a costly model call was hidden and a later tool entry showed.
-    const costThrough = new Map<string, number | null>();
+    const costThrough = new Map<RunFrame, number | null>();
     let running: number | null = null;
-    for (const frame of read.frames) {
+    for (const frame of shown) {
       running =
         frame.costMicros === null ? running : (running ?? 0) + frame.costMicros;
-      costThrough.set(frame.seq, running);
+      costThrough.set(frame, running);
     }
 
     // A sealed run answers no cursor once the page holds every fold left. A
@@ -354,7 +448,18 @@ export function createRunTranscriptGetHandler(
     const resumeCursor = (): string =>
       encodeTranscriptCursor(after ?? startCursorSeq(run));
 
-    const start = foldPageStart(folds, after);
+    // Pages are cut on each frame's position in the run as read, not on its
+    // `seq`: a subagent's chain is numbered from 0 like the root's, so a
+    // sequence alone no longer orders the frames of a run.
+    const position = new Map(shown.map((frame, i) => [frame, i]));
+    const at = (frame: RunFrame): string => String(position.get(frame) ?? -1);
+    const start = foldPageStart(
+      folds.map((fold) => ({
+        opening: { seq: at(fold.opening) },
+        endSeq: at(fold.last),
+      })),
+      after === null ? null : String(cursorPosition(shown, after)),
+    );
     if (start === -1) {
       return {
         zoom: input.zoom,
@@ -400,6 +505,15 @@ export function createRunTranscriptGetHandler(
       return {
         seq: opening.seq,
         endSeq: fold.endSeq,
+        ...(opening.chain === undefined
+          ? {}
+          : {
+              subagent: {
+                sessionUuid: opening.chain.sessionUuid,
+                id: opening.chain.subagentId,
+                type: opening.chain.subagentType,
+              },
+            }),
         at: opening.observedAt.toISOString(),
         elapsedMs: elapsedMs(runStartedAt, opening.observedAt),
         kind: fold.kind,
@@ -415,14 +529,17 @@ export function createRunTranscriptGetHandler(
             ? null
             : {
                 seq: fold.decision.seq,
+                ...(fold.decision.sessionUuid === undefined
+                  ? {}
+                  : { sessionUuid: fold.decision.sessionUuid }),
                 decision: fold.decision.decision,
                 type: fold.decision.type,
                 at: fold.decision.at.toISOString(),
               },
         frames: fold.frames,
-        turn: turnOf.get(opening.seq) ?? null,
+        turn: turnOf.get(opening) ?? null,
         cost: cost(fold.costMicros),
-        cumulativeCost: cost(costThrough.get(fold.endSeq) ?? null),
+        cumulativeCost: cost(costThrough.get(fold.last) ?? null),
       };
     });
 
@@ -430,10 +547,10 @@ export function createRunTranscriptGetHandler(
     const more = start + page.length < folds.length;
     const cursor = live
       ? last
-        ? encodeTranscriptCursor(last.endSeq)
+        ? encodeTranscriptCursor(frameKey(last.last))
         : resumeCursor()
       : more && last
-        ? encodeTranscriptCursor(last.endSeq)
+        ? encodeTranscriptCursor(frameKey(last.last))
         : null;
     return {
       zoom: input.zoom,

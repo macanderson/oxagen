@@ -31,6 +31,18 @@ function soleBody(entry: TranscriptEntry): TranscriptBody | null {
   return entry.response ?? entry.request;
 }
 
+/**
+ * An entry's name within its run. A subagent records on a chain of its own,
+ * numbered from 0 like the run's, so its entries are named by chain and seq
+ * together; an entry on the run's own chain is named by its seq, as before.
+ * Stable across re-reads, so it keys a rendered list and a step's id.
+ */
+export function entryKey(entry: TranscriptEntry): string {
+  return entry.subagent === undefined
+    ? entry.seq
+    : `${entry.subagent.chainRef}:${entry.seq}`;
+}
+
 /** A transcript with at least one frame: the only kind the view draws. */
 export type Frames = readonly [TranscriptEntry, ...TranscriptEntry[]];
 
@@ -50,7 +62,7 @@ export function frameAt(entries: Frames, pos: number): TranscriptEntry {
 export type StepNode = "model" | "tool" | "policy" | "control" | "deny";
 
 export type TranscriptStep = {
-  /** Stable across re-reads of a live run: the opening frame's seq. */
+  /** Stable across re-reads of a live run: the opening frame's `entryKey`. */
   id: string;
   kind: "model" | "tool" | "event";
   /** Positions of the step's first and last frames in the transcript. */
@@ -363,7 +375,7 @@ function stepsOf(
     const from = indices[0] ?? i;
     const to = indices[indices.length - 1] ?? i;
     steps.push({
-      id: `s${first.seq}`,
+      id: `s${entryKey(first)}`,
       kind,
       from: offset + from,
       to: offset + to,
@@ -382,8 +394,13 @@ function textOf(
   last: boolean,
 ): string | null {
   const ordered = last ? [...frames].reverse() : frames;
+  // A subagent's own prompt and reply sit inside the turn that spawned it;
+  // they are the subagent's, not what the person asked or was answered.
   const found = ordered.find(
-    (frame) => frame.type === type && (soleBody(frame)?.text ?? null) !== null,
+    (frame) =>
+      frame.subagent === undefined &&
+      frame.type === type &&
+      (soleBody(frame)?.text ?? null) !== null,
   );
   return found === undefined ? null : (soleBody(found)?.text ?? null);
 }
@@ -404,7 +421,7 @@ export function buildTranscript(
     const frames = entries.slice(start, index + 1);
     const first = frames[0] ?? entry;
     turns.push({
-      id: `t${first.seq}`,
+      id: `t${entryKey(first)}`,
       turn: entry.turn,
       first,
       last: entry,
