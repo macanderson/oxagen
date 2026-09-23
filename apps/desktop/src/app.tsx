@@ -41,6 +41,7 @@ import { gatewayText, serviceStatusText } from "./tacho-status";
 import { computeAgentRows, HEALTH_LABEL, summarizeAgents } from "./agents";
 import {
   checkLiveSession,
+  sidecarEnv,
   type ConnectResult,
   connectRun,
   type DesktopState,
@@ -475,8 +476,13 @@ export function App() {
     setConfirming(null);
     setLog([{ text: `$ ${sidecar} ${args.join(" ")}`, err: false }]);
     try {
-      const run = runSidecar(sidecar, args, (line, stream) =>
-        setLog((prev) => [...prev, { text: line, err: stream === "stderr" }]),
+      const env = await sidecarEnv();
+      const run = runSidecar(
+        sidecar,
+        args,
+        (line, stream) =>
+          setLog((prev) => [...prev, { text: line, err: stream === "stderr" }]),
+        { env },
       );
       let result: RunOutcome;
       if (landed) {
@@ -1948,6 +1954,19 @@ export function App() {
         )}
         {state === null ? (
           <p className="sub">Reading this machine…</p>
+        ) : state.host_error ? (
+          <section className="panel" aria-label="Enrollment file unreadable">
+            <p className="headline">
+              This machine's enrollment could not be read
+            </p>
+            <p className="sub">
+              {state.host_path}: {state.host_error}. The machine may still be
+              enrolled, so setup is not offered here, because it would write
+              over that file. Run <code>tacho status</code> in a terminal to see
+              what is in place, or <code>tacho unenroll</code> to remove it,
+              then reopen Oxagen.
+            </p>
+          </section>
         ) : firstRun ? (
           wizard
         ) : (

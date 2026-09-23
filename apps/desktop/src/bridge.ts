@@ -110,6 +110,13 @@ export interface DesktopState {
   app_version: string;
   config: CliConfigView;
   host: HostView | null;
+  /**
+   * Why `host_path` exists but could not be read (unreadable, not UTF-8, not
+   * a JSON object). Set, the machine may well be enrolled, so the app must not
+   * offer the setup that would write over it. Optional: an older Rust shell
+   * reports nothing and an unreadable file reads as no enrollment.
+   */
+  host_error?: string | null;
   host_path: string;
   daemon: DaemonStatus | null;
   log_path: string;
@@ -166,6 +173,23 @@ export const uninstallCli = () => invoke<string[]>("uninstall_cli");
  */
 export const removeLocalData = () => invoke<RemovalReport>("remove_local_data");
 export const logTail = (lines = 120) => invoke<string>("log_tail", { lines });
+
+/**
+ * What a sidecar needs in its environment on top of the app's own:
+ * `TACHO_BIN_DIR` at the durable copy of the tools while the app runs from a
+ * directory that is gone after this launch (a mounted .dmg, an AppImage, App
+ * Translocation), so the hooks and service an enroll writes point at a binary
+ * that lasts. Asked before each run, so a copy made during this launch is used
+ * at once. A Rust shell that predates the command answers nothing, and the
+ * sidecar then inherits the app's environment as before.
+ */
+export async function sidecarEnv(): Promise<Record<string, string>> {
+  try {
+    return (await invoke<Record<string, string>>("sidecar_env")) ?? {};
+  } catch {
+    return {};
+  }
+}
 
 export interface OrgItem {
   id: string;
@@ -248,9 +272,15 @@ export async function runSidecar(
   name: Sidecar,
   args: string[],
   onLine?: (line: string, stream: "stdout" | "stderr") => void,
-  options: { timeoutMs?: number } = {},
+  options: { timeoutMs?: number; env?: Record<string, string> } = {},
 ): Promise<RunResult> {
-  const command = Command.sidecar(`binaries/${name}`, args);
+  // Extra variables only: an empty or absent `env` inherits the app's
+  // environment, and Tauri clears it only for an explicit null.
+  const env =
+    options.env !== undefined && Object.keys(options.env).length > 0
+      ? { env: options.env }
+      : undefined;
+  const command = Command.sidecar(`binaries/${name}`, args, env);
   let stdout = "";
   let stderr = "";
   command.stdout.on("data", (line: string) => {

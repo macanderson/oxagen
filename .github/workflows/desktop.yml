@@ -63,6 +63,12 @@ jobs:
     if: github.event_name != 'release'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
+    # Whether a Developer ID certificate is configured, for the two signing
+    # steps below. A step's `if` is evaluated before that step's own `env`
+    # applies, so `env.APPLE_CERTIFICATE` read there was always empty: the
+    # import never ran and every build was signed ad-hoc.
+    env:
+      HAS_APPLE_CERT: ${{ secrets.APPLE_CERTIFICATE != '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -130,7 +136,7 @@ jobs:
       # The Apple variables reach the build step only from here, so a missing
       # certificate leaves them unset (not empty) and tauri skips signing.
       - name: Import the Apple certificate
-        if: runner.os == 'macOS' && env.APPLE_CERTIFICATE != ''
+        if: runner.os == 'macOS' && env.HAS_APPLE_CERT == 'true'
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -169,9 +175,7 @@ jobs:
       # "-" is required rather than an empty value: an empty APPLE_SIGNING_IDENTITY
       # makes tauri run `codesign -s ""`, which fails with "no identity found".
       - name: Ad-hoc sign when no Developer ID is configured
-        if: runner.os == 'macOS' && env.APPLE_CERTIFICATE == ''
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+        if: runner.os == 'macOS' && env.HAS_APPLE_CERT != 'true'
         run: |
           echo "APPLE_SIGNING_IDENTITY=-" >> "$GITHUB_ENV"
           echo "::notice::No Apple Developer ID secrets; ad-hoc signing the bundle so it verifies and can be opened via the unidentified-developer prompt. Not notarized."

@@ -18,6 +18,7 @@ type Listener = (payload: never) => void;
 interface FakeCommand {
   program: string;
   args: string[];
+  options?: { env?: Record<string, string> };
   stdout: { on: (event: string, fn: Listener) => void };
   stderr: { on: (event: string, fn: Listener) => void };
   on: (event: string, fn: Listener) => void;
@@ -31,7 +32,11 @@ const spawned: FakeCommand[] = [];
 let spawnFails: Error | undefined;
 vi.mock("@tauri-apps/plugin-shell", () => ({
   Command: {
-    sidecar: (program: string, args: string[]) => {
+    sidecar: (
+      program: string,
+      args: string[],
+      options?: { env?: Record<string, string> },
+    ) => {
       const listeners = new Map<string, Listener[]>();
       const on = (channel: string) => (event: string, fn: Listener) => {
         const key = `${channel}:${event}`;
@@ -40,6 +45,7 @@ vi.mock("@tauri-apps/plugin-shell", () => ({
       const command: FakeCommand = {
         program,
         args,
+        options,
         stdout: { on: on("stdout") },
         stderr: { on: on("stderr") },
         on: on("command"),
@@ -72,6 +78,7 @@ import {
   listOrganizations,
   listWorkspaces,
   logTail,
+  sidecarEnv,
   readState,
   removeLocalData,
   runSidecar,
@@ -379,5 +386,35 @@ describe("the session check before a reassign", () => {
     expect(isUnauthorized(new Error("401: token expired"))).toBe(true);
     expect(isUnauthorized("401")).toBe(true);
     expect(isUnauthorized(new Error("500: upstream 401"))).toBe(false);
+  });
+});
+
+describe("the sidecar environment", () => {
+  it("passes the durable tools directory to a sidecar the app spawns", async () => {
+    answers.set("sidecar_env", { TACHO_BIN_DIR: "/Users/m/.oxagen/bin" });
+    const env = await sidecarEnv();
+    const pending = runSidecar("tacho", ["enroll"], undefined, { env });
+    await Promise.resolve();
+    expect(spawned.at(-1)?.options).toEqual({
+      env: { TACHO_BIN_DIR: "/Users/m/.oxagen/bin" },
+    });
+    spawned.at(-1)?.emit("close", { code: 0 });
+    await pending;
+  });
+
+  it("inherits the app's environment when there is nothing to add", async () => {
+    answers.set("sidecar_env", {});
+    const pending = runSidecar("tacho", ["enroll"], undefined, {
+      env: await sidecarEnv(),
+    });
+    await Promise.resolve();
+    expect(spawned.at(-1)?.options).toBeUndefined();
+    spawned.at(-1)?.emit("close", { code: 0 });
+    await pending;
+  });
+
+  it("reads an older shell with no sidecar_env command as nothing to add", async () => {
+    answers.delete("sidecar_env");
+    expect(await sidecarEnv()).toEqual({});
   });
 });
