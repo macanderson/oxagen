@@ -1,5 +1,5 @@
 {
-  "generatedCount": 363,
+  "generatedCount": 364,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -2994,6 +2994,16 @@
       "surfaces": [
         "api",
         "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "register_contained_launch",
+      "domain": "tacho",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],

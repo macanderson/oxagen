@@ -95,7 +95,7 @@ interface RunSource {
   frames: FrameRunRef;
 }
 
-const LEDGER_TIERS = new Set(["gateway", "harness", "observe"]);
+const LEDGER_TIERS = new Set(["contained", "gateway", "harness", "observe"]);
 const GRADES = new Set(["inspect", "view", "fork", "retry"]);
 
 function tier(value: string | null): RunMeta["enforcementTier"] {
