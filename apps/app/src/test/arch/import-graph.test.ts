@@ -187,7 +187,9 @@ const PROBES: Readonly<Record<string, readonly Placement[]>> = {
     { at: "src/server/tenancy-lookups.ts", expect: null },
   ],
   "oxagen-command-limits.ts": [
-    { at: "src/features/fleet/run-row-controls.tsx", expect: null },
+    // The Fleet steer dialog is admitted STEER_TEXT_MAX alone, so the reason
+    // ceiling this probe imports is refused there.
+    { at: "src/features/fleet/steer-fleet.tsx", expect: "platform" },
     { at: "src/ui/command-failure.ts", expect: null },
     { at: "src/ui/probe.ts", expect: "platform" },
   ],
