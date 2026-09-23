@@ -88,18 +88,18 @@ describe("the gateway policy section", () => {
       screen.getByLabelText(spend.spend.gateway.permitNoModels),
     ).toBeChecked();
     await user.click(screen.getByRole("button", { name: /save the policy/i }));
-    await waitFor(() =>
-      expect(setGatewayPolicyAction).toHaveBeenCalledTimes(1),
-    );
+    await waitFor(() => {
+      expect(setGatewayPolicyAction).toHaveBeenCalledTimes(1);
+    });
     expect(
       GatewayPolicyForm.parse(setGatewayPolicyAction.mock.calls[0]?.[1])
         .modelAllow,
     ).toEqual([]);
     await user.click(screen.getByLabelText(spend.spend.gateway.permitNoModels));
     await user.click(screen.getByRole("button", { name: /save the policy/i }));
-    await waitFor(() =>
-      expect(setGatewayPolicyAction).toHaveBeenCalledTimes(2),
-    );
+    await waitFor(() => {
+      expect(setGatewayPolicyAction).toHaveBeenCalledTimes(2);
+    });
     expect(
       GatewayPolicyForm.parse(setGatewayPolicyAction.mock.calls[1]?.[1])
         .modelAllow,
