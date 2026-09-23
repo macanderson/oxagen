@@ -1,6 +1,7 @@
 # @oxagen/glob
 
-One path glob, for the whole repository.
+The path glob for every package that can take a workspace dependency.
+`@oxagen/tacho` cannot, and keeps its own copy (see "Other globs in the tree").
 
 ```ts
 import { globToRegExp, matchesGlob } from "@oxagen/glob";
@@ -10,6 +11,37 @@ matchesGlob("**/.env", "config/.env"); // true
 matchesGlob("**/.env", "foo.env"); // false
 matchesGlob("src/*.ts", "src/a/b.ts"); // false — `*` stays in one segment
 ```
+
+## Boundary
+
+- **Owns:** `globToRegExp` and `matchesGlob` for path patterns, and the table
+  of semantics in `src/glob.test.ts`.
+- **Does not own:**
+  - Flat-value matching for MCP tool names and URLs, where `*` crosses every
+    separator: [`@oxagen/mcp-config`](../mcp-config/README.md) (`matchGlob`).
+  - Path rules in Tacho's policy bundle: [`@oxagen/tacho`](../tacho/README.md)
+    (`globToRegex` in `packages/tacho/src/host/bundle.ts`).
+- **Depends on:** No `@oxagen/*` runtime dependencies. It has no runtime
+  dependencies at all.
+- **Used by:** `@oxagen/ingestion`.
+
+## Seams
+
+| Seam | Kind | Source | Wired by |
+|---|---|---|---|
+| `globToRegExp` / `matchesGlob` | export | `packages/glob/src/glob.ts` | `packages/ingestion/src/filters.ts` |
+
+## Entry points
+
+- `.` (`src/index.ts`): `globToRegExp` and `matchesGlob`.
+
+## Tests
+
+```bash
+pnpm --filter @oxagen/glob test:unit src/glob.test.ts
+```
+
+`src/glob.test.ts` is the only test file.
 
 ## What it supports
 
@@ -42,6 +74,16 @@ site: it is the only place these semantics are written down.
 `matchGlob` in `@oxagen/mcp-config` matches flat values — MCP tool names and
 URLs — where `*` is expected to cross every separator. A tool-name rule and a
 path rule mean different things by the same character.
+
+## Other globs in the tree
+
+`@oxagen/ingestion` is the only package that imports this one today.
+
+`globToRegex` in `packages/tacho/src/host/bundle.ts` matches the path rules in
+Tacho's policy bundle. Tacho takes no `@oxagen/*` runtime dependency, so it
+cannot import this package. Its rules differ at `**/`: it consumes the
+separator and emits `.*`, so under Tacho `**/.env` also matches `foo.env`.
+Here it emits `(?:.*/)?`, and `**/.env` does not.
 
 ## God files
 

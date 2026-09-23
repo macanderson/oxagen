@@ -12,6 +12,62 @@ pointing at the same build command and output directory for the legacy Vercel
 project, but nothing in CI deploys through it. Nothing in `dist/` is
 committed.
 
+## Boundary
+
+- **Owns:** the oxagen.sh pages, the shared site stylesheet and script
+  (`assets/`), the blog source (`content/`) and its build
+  (`scripts/build.mjs`, `scripts/lib/`), the generated share images, the
+  sitemap and feed, and the ebook gate page (`read/index.html`).
+- **Does not own:** lead storage, the ebook reader content, and the Attio
+  sync ([`apps/api`](../api/README.md), `src/routes/v1/cms.ts`, with the
+  reader HTML seeded from `packages/database/seed-assets/books/`); the house
+  component system ([`@oxagen/ui`](../../packages/ui/README.md)), whose
+  tokens `assets/oxagen.css` mirrors by hand; the documentation site
+  ([`apps/docs`](../docs/README.md)); the S3 bucket and CloudFront
+  distribution (`infra/stacks-new/ci-deploy/`).
+- **Depends on:** No `@oxagen/*` dependencies. Its npm packages are build-time
+  `devDependencies`, and the browser gets no JavaScript beyond
+  `assets/oxagen.js`.
+- **Used by:** no workspace package imports it. CI's `deploy-web` job in
+  `.github/workflows/pipeline.yml` publishes `dist/`.
+
+## Seams
+
+| Seam | Kind | Source | Wired by |
+|---|---|---|---|
+| Lead and ebook endpoints (`/v1/cms/leads`, `/v1/cms/book/redeem`, `/v1/cms/book/resend`) | boundary | `apps/web/assets/oxagen.js`, `apps/web/read/index.html` | Served by `apps/api/src/routes/v1/cms.ts`. The API's CORS allowlist must include `MARKETING_URL` |
+| Post frontmatter and pillar links | boundary | `apps/web/scripts/lib/content.mjs` | `scripts/build.mjs`, which fails the build on an invalid post |
+| Published site (`dist/`) | boundary | `apps/web/scripts/build.mjs` | `deploy-web` in `.github/workflows/pipeline.yml`, which syncs it to S3 |
+| Brand fonts | boundary | `apps/web/fonts/` | `node tools/scripts/sync-brand-assets.mjs` vendors them from the brand kit |
+| Prose gate | boundary | `tools/scripts/check-prose.mjs` | `pnpm check:prose`, the pre-push hook, and CI. It scans `.html`, `.mdx`, `.md`, and `.yaml` here, skipping this README |
+
+The site bootstraps no kernel gate and exposes no capability.
+
+## Entry points
+
+- `pnpm --filter @oxagen/web-v2 build` → `scripts/build.mjs`: writes `dist/`.
+- `pnpm --filter @oxagen/web-v2 dev` → `scripts/dev.mjs`: build, serve on
+  port 5500, rebuild on change.
+- `pnpm --filter @oxagen/web-v2 check:links` → `scripts/check-links.mjs`:
+  resolves every URL the posts cite. It needs the network.
+
+## Rules
+
+- Copy follows `clear-prose` and `oxagen-branding`, and `pnpm check:prose`
+  fails on em dashes, exclamation points, and the avoid list.
+- Figures are HTML and inline SVG, never screenshots.
+- The ebook gate is a marketing gate, not access control (ADR-154).
+- Leads sync to Attio only after the row commits (ADR-156).
+
+## Tests
+
+```bash
+pnpm --filter @oxagen/web-v2 test:unit scripts/lib/content.test.mjs
+```
+
+Never put `--` before the filename. Each build module has a co-located
+`scripts/lib/<name>.test.mjs`, gated at 90% coverage.
+
 ## Layout
 
 - `assets/oxagen.css`: the shared shell: the house colour tokens, the nav,
