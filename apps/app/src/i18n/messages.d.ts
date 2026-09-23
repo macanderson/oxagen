@@ -20,7 +20,6 @@ type Messages = {
     cliAuthorize: string;
     cliComplete: string;
     workspaceEyebrow: string;
-    organizationEyebrow: string;
     fleet: string;
     run: string;
     agents: string;
@@ -39,6 +38,7 @@ type Messages = {
     audit: string;
     modelFunding: string;
     sso: string;
+    organizationEyebrow: string;
   };
   unrecorded: {
     run: {
@@ -2340,6 +2340,9 @@ type Messages = {
       roles: string;
       apiKeys: string;
       modelFunding: string;
+      invitations: string;
+      workspaces: string;
+      costCenters: string;
       sso: string;
     };
     roles: {
@@ -2987,6 +2990,10 @@ type Messages = {
         none: string;
         hint: string;
       };
+    };
+    header: {
+      eyebrow: string;
+      description: string;
     };
   };
   record: {

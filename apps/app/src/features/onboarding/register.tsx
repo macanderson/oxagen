@@ -1,3 +1,4 @@
+import { HarnessLabel } from "@/ui/harness-icon";
 // Register an agent (#2967, ADR-065 decision 1): name the agent, wrap it, and
 // wait for the first frame, one step per `[step]` segment over `register_agent`,
 // `create_enrollment_token` and `get_first_frame`.
@@ -130,7 +131,11 @@ function Identity({ identity }: { identity: AgentDetail["identity"] }) {
       </div>
       <div className="flex gap-2">
         <dt className="text-muted-foreground">{t("harness")}</dt>
-        <dd>{harness(identity.harness)}</dd>
+        <dd>
+          <HarnessLabel harness={identity.harness}>
+            {harness(identity.harness)}
+          </HarnessLabel>
+        </dd>
       </div>
     </dl>
   );

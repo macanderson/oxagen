@@ -11,11 +11,15 @@ import {
 } from "react";
 import { useTranslations } from "next-intl";
 import { Bell, CheckCheck } from "lucide-react";
-import { readShellActivity, markShellNotification } from "./activity-actions";
+import {
+  readShellActivity,
+  readShellNavCounts,
+  markShellNotification,
+} from "./activity-actions";
 import { useShellState } from "./shell-state";
 import { useSidebarSections } from "./sidebar";
 import type { ShellData } from "./shell-data";
-import { ApprovalsPanel } from "@/features/fleet";
+import { ApprovalsPanel } from "@/features/fleet/client";
 import { readOk } from "@/data/read";
 import { routes, sanitizeNext } from "@/shared/safe-path";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -26,6 +30,7 @@ import { buttonSecondary } from "@/ui/control-styles";
 type Activity = Awaited<ReturnType<typeof readShellActivity>>;
 type ActivityState = {
   read: Activity | null;
+  counts: Awaited<ReturnType<typeof readShellNavCounts>> | null;
   failed: boolean;
   refresh: () => Promise<void>;
 };
@@ -44,34 +49,72 @@ export function ShellActivityProvider({
 }) {
   const { ws } = useSidebarSections(data);
   const { approvalsOpen, notificationsOpen } = useShellState();
-  const isOpen = approvalsOpen || notificationsOpen;
+  const drawerOpen = approvalsOpen || notificationsOpen;
+  const [navCounts, setNavCounts] = useState<{
+    key: string;
+    read: Awaited<ReturnType<typeof readShellNavCounts>>;
+  } | null>(null);
   const [result, setResult] = useState<{ key: string; read: Activity } | null>(
     null,
   );
-  const generation = useRef(0);
+  const generationRef = useRef(0);
   const [failed, setFailed] = useState(false);
   const key = `${data.org.slug}/${ws ?? ""}`;
   const refresh = useCallback(async () => {
-    const request = ++generation.current;
+    const request = ++generationRef.current;
     try {
       const read = await readShellActivity(data.org.slug, ws);
-      if (request !== generation.current) return;
+      if (request !== generationRef.current) return;
       setResult({ key, read });
       setFailed(false);
     } catch {
-      if (request === generation.current) setFailed(true);
+      if (request === generationRef.current) setFailed(true);
     }
   }, [data.org.slug, ws, key]);
   useEffect(() => {
-    if (!isOpen) return;
-    void refresh();
-    return () => {
-      generation.current += 1;
+    if (!drawerOpen) return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      await refresh();
+      if (!stopped)
+        timer = setTimeout(() => {
+          void poll();
+        }, 30_000);
     };
-  }, [refresh, isOpen]);
+    void poll();
+    return () => {
+      stopped = true;
+      generationRef.current += 1;
+      clearTimeout(timer);
+    };
+  }, [refresh, drawerOpen]);
+  useEffect(() => {
+    if (!ws) return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        const read = await readShellNavCounts(data.org.slug, ws);
+        if (!stopped) setNavCounts({ key, read });
+      } catch {
+        if (!stopped) setNavCounts(null);
+      }
+      if (!stopped)
+        timer = setTimeout(() => {
+          void poll();
+        }, 30_000);
+    };
+    void poll();
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
+  }, [data.org.slug, ws, key]);
+  const counts = navCounts?.key === key ? navCounts.read : null;
   const read = result?.key === key ? result.read : null;
   return (
-    <ActivityContext value={{ read, failed, refresh }}>
+    <ActivityContext value={{ read, counts, failed, refresh }}>
       {children}
     </ActivityContext>
   );
@@ -169,7 +212,16 @@ export function ActivityDrawers({ data }: { data: ShellData }) {
   const status = !read ? (
     <p role="status">{t("loading")}</p>
   ) : !read.ok ? (
-    <ReadFailure read={read} section={t("approvals")} />
+    <ReadFailure
+      read={
+        read.reason === "denied"
+          ? { ok: false, reason: "denied", permission: read.code }
+          : read.reason === "pending_approval"
+            ? read
+            : { ok: false, reason: "error", code: read.code, status: 503 }
+      }
+      section={t("approvals")}
+    />
   ) : null;
   return (
     <>

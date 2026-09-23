@@ -547,7 +547,7 @@ describe("Organization › People", { timeout: 30_000 }, () => {
   });
 
   it("resolves the organization viewer, names the page once and renders the roster org.members read for that viewer", async () => {
-    const ctx = { orgSlug: "acme", orgRole: "owner" };
+    const ctx = { orgSlug: "acme", orgName: "Acme Robotics", orgRole: "owner" };
     requireViewer.mockResolvedValue(ctx);
     members.mockResolvedValue({
       ok: true,
@@ -564,7 +564,12 @@ describe("Organization › People", { timeout: 30_000 }, () => {
         invitations: [],
       },
     });
-    await expectPageTitle(await people, routeProps(SEGMENTS), title("people"));
+    await expectPageTitle(
+      await people,
+      routeProps(SEGMENTS),
+      title("people"),
+      "Acme Robotics",
+    );
     expect(requireViewer).toHaveBeenCalledWith(...ORG);
     expect(members).toHaveBeenCalledWith(ctx);
     expect(screen.getByRole("main")).toHaveTextContent("Marcus Bell");
@@ -572,13 +577,18 @@ describe("Organization › People", { timeout: 30_000 }, () => {
   });
 
   it("renders the Workspaces section of the same page from the same viewer and data source (#2964)", async () => {
-    const ctx = { orgSlug: "acme", orgRole: "owner" };
+    const ctx = { orgSlug: "acme", orgName: "Acme Robotics", orgRole: "owner" };
     requireViewer.mockResolvedValue(ctx);
     members.mockResolvedValue({
       ok: true,
       value: { members: [], invitations: [] },
     });
-    await expectPageTitle(await people, routeProps(SEGMENTS), title("people"));
+    await expectPageTitle(
+      await people,
+      routeProps(SEGMENTS, { tab: "workspaces" }),
+      title("people"),
+      "Acme Robotics",
+    );
     expect(Workspaces).toHaveBeenCalledOnce();
     expect(Workspaces.mock.calls[0]?.[0]).toEqual({ ctx, source });
   });
@@ -586,12 +596,13 @@ describe("Organization › People", { timeout: 30_000 }, () => {
 
 describe("Organization › Roles", () => {
   it("resolves the organization viewer, names the page once and hands the viewer and the data source to Roles", async () => {
-    const ctx = { orgSlug: "acme", orgRole: "owner" };
+    const ctx = { orgSlug: "acme", orgName: "Acme Robotics", orgRole: "owner" };
     requireViewer.mockResolvedValue(ctx);
     await expectPageTitle(
       await import("./roles/page"),
       routeProps(SEGMENTS),
       title("roles"),
+      "Acme Robotics",
     );
     expect(requireViewer).toHaveBeenCalledWith(...ORG);
     expect(Roles).toHaveBeenCalledOnce();
@@ -626,6 +637,7 @@ describe("Organization › API keys", () => {
     // A key names a workspace (ADR-073): the page resolves one before it reads.
     const ctx = {
       orgSlug: "acme",
+      orgName: "Acme Robotics",
       orgRole: "owner",
       wsSlug: "core-platform",
     };
@@ -658,6 +670,7 @@ describe("Organization › API keys", () => {
       await API_KEYS(),
       routeProps(SEGMENTS, { workspace: "growth" }),
       title("apiKeys"),
+      "Acme Robotics",
     );
     expect(requireViewer).toHaveBeenCalledWith(...ORG);
     expect(requireViewer).toHaveBeenCalledWith("acme", "growth");
@@ -670,6 +683,7 @@ describe("Organization › API keys", () => {
   it("falls back to the first workspace the viewer may enter when the URL names none", async () => {
     requireViewer.mockResolvedValue({
       orgSlug: "acme",
+      orgName: "Acme Robotics",
       orgRole: "owner",
       wsSlug: "core-platform",
     });
@@ -678,17 +692,23 @@ describe("Organization › API keys", () => {
       await API_KEYS(),
       routeProps(SEGMENTS),
       title("apiKeys"),
+      "Acme Robotics",
     );
     expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
   });
 
   it("resolves no workspace and reads no key when the viewer may enter none (negative)", async () => {
-    requireViewer.mockResolvedValue({ orgSlug: "acme", orgRole: "owner" });
+    requireViewer.mockResolvedValue({
+      orgSlug: "acme",
+      orgName: "Acme Robotics",
+      orgRole: "owner",
+    });
     workspaces.mockResolvedValue({ ok: true, value: { workspaces: [] } });
     await expectPageTitle(
       await API_KEYS(),
       routeProps(SEGMENTS),
       title("apiKeys"),
+      "Acme Robotics",
     );
     expect(requireViewer).toHaveBeenCalledExactlyOnceWith(...ORG);
     expect(apiKeys).not.toHaveBeenCalled();

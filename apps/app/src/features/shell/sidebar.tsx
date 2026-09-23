@@ -49,11 +49,7 @@ export function SidebarNav({
   const { sections, pathname } = useSidebarSections(data);
   const labelId = useId();
   const activity = useShellActivity();
-  const selectedWorkspace = useSidebarSections(data).ws;
-  const currentCounts = activity?.read?.ok
-    ? activity.read.value.workspaces.find((w) => w.slug === selectedWorkspace)
-        ?.counts
-    : null;
+  const currentCounts = activity?.counts;
   return (
     <nav aria-label={t("sidebar.navLabel")} className="flex-1 px-2.5 py-3">
       {sections.map((section) => (
