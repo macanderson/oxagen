@@ -4112,6 +4112,7 @@ type Messages = {
       by: string;
       paused: string;
       copy: string;
+      copyLabel: string;
       copied: string;
       copyFailed: string;
       modelNotRecorded: string;

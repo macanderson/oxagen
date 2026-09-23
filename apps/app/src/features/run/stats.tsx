@@ -7,7 +7,7 @@
 // only when the rollup holds both, and marked as derived. A prompt count read
 // from a transcript that stopped short is a floor, and says so.
 import { useLocale, useTranslations } from "next-intl";
-import type { Cost } from "@/data/contracts/money";
+import { type Cost, shareOfMicros } from "@/data/contracts/money";
 import type { RunCost, RunTranscript } from "@/data/contracts/run";
 import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
@@ -79,13 +79,13 @@ function Stat({
  * The part of `cost` the rollup did not count as productive. Exact in micros:
  * the share is rounded to a millionth, never the money.
  */
-function wasted(cost: Cost, productiveRatio: number): Cost {
-  const share = BigInt(Math.round((1 - productiveRatio) * 1_000_000));
-  return {
-    micros: ((BigInt(cost.micros) * share) / 1_000_000n).toString(),
-    currency: cost.currency,
-    basis: cost.basis,
-  };
+function wasted(
+  cost: Cost | null,
+  productiveRatio: number | null,
+): Cost | null {
+  if (cost === null || productiveRatio === null) return null;
+  const part = shareOfMicros(cost, 1 - productiveRatio);
+  return part === null ? null : { ...part, basis: cost.basis };
 }
 
 export function StatRow({
@@ -102,6 +102,7 @@ export function StatRow({
   const tc = useTranslations("run.cost");
   const locale = useLocale();
   const rollup = cost.ok ? cost.value.rollup : null;
+  const waste = wasted(rollup?.cost ?? null, rollup?.productiveRatio ?? null);
   const tokens =
     rollup === null
       ? null
@@ -160,17 +161,9 @@ export function StatRow({
       </Stat>
       <Stat
         label={t("wasted")}
-        note={
-          rollup?.cost == null || rollup.productiveRatio === null
-            ? missingRollup
-            : t("wastedNote")
-        }
+        note={waste === null ? missingRollup : t("wastedNote")}
       >
-        {rollup?.cost == null || rollup.productiveRatio === null ? (
-          <NoValue />
-        ) : (
-          <Money value={wasted(rollup.cost, rollup.productiveRatio)} />
-        )}
+        {waste === null ? <NoValue /> : <Money value={waste} />}
       </Stat>
       <Stat label={t("wallClock")}>
         {run.sealedAt === null

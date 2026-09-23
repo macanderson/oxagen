@@ -30,7 +30,7 @@ export function CopyText({ text }: { text: string }) {
       <button
         type="button"
         onClick={() => void copy()}
-        aria-label={`${t("copy")} ${text}`}
+        aria-label={t("copyLabel", { text })}
         className="rounded px-1 text-[11px] font-medium text-muted-foreground hover:text-foreground"
       >
         {state === "copied" ? t("copied") : t("copy")}

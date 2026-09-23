@@ -522,6 +522,7 @@
       "by": "by",
       "paused": "Ingress is paused. The agent takes no new step until you resume it.",
       "copy": "Copy",
+      "copyLabel": "Copy {text}",
       "copied": "Copied",
       "copyFailed": "Copy failed. Select the text and copy it.",
       "modelNotRecorded": "model not recorded",
