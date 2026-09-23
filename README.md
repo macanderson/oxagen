@@ -415,6 +415,13 @@ something adjacent is how the Stripe sync became unreachable for months without
 anybody noticing (#1371). The fifth row is the read-only check that notices
 when a committed store migration has not been applied.
 
+Production migrations are no longer one of those things. Since 2026-09-23 the
+`migration-gate` job in `pipeline.yml` applies pending Postgres, ClickHouse and
+Neo4j migrations on every push to `main`, re-checks all three stores, and holds
+`deploy-node` until they read current (#3653). The two migrate workflows below
+stay for the cases the gate refuses: an unreadable store, a Postgres revision
+table that lists every migration as pending, and an apply that failed.
+
 | Workflow | What it does | Safe default |
 | --- | --- | --- |
 | `db-migrate.yml` | For `target: production`, runs `infra/tools/run-db-migrations.sh packages/database` under the deploy role, which executes Atlas on the app node over SSM because Aurora admits 5432 from the app node only. The same script run from a laptop with AWS credentials, on a checkout of `origin/main`, is the other way to apply. For `target: preview`, runs Atlas on the runner against `PREVIEW_DATABASE_URL` | `apply=false` (and the script without `--apply`) prints the pending list and changes nothing |
