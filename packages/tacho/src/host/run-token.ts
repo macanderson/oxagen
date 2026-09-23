@@ -280,18 +280,26 @@ export function verifyRunToken(
   const dot = body.indexOf(".");
   if (dot <= 0 || dot === body.length - 1)
     return { ok: false, code: "run_token_malformed" };
+  const bodyText = body.slice(0, dot);
   let text: string;
-  let presented: Buffer;
   try {
-    text = Buffer.from(body.slice(0, dot), "base64url").toString("utf8");
-    presented = Buffer.from(body.slice(dot + 1), "base64url");
+    text = Buffer.from(bodyText, "base64url").toString("utf8");
   } catch {
     return { ok: false, code: "run_token_malformed" };
   }
-  const expected = sign(options.key, text);
+  // Compare the signature as the canonical base64url text, not as decoded
+  // bytes. The last character of a 32-byte signature carries two padding bits
+  // the decoder ignores, so a byte comparison admits up to four spellings of
+  // one token. The same holds for the claims segment, so it must round-trip too.
+  const presented = Buffer.from(body.slice(dot + 1), "utf8");
+  const expected = Buffer.from(
+    sign(options.key, text).toString("base64url"),
+    "utf8",
+  );
   if (
     presented.length !== expected.length ||
-    !timingSafeEqual(presented, expected)
+    !timingSafeEqual(presented, expected) ||
+    Buffer.from(text, "utf8").toString("base64url") !== bodyText
   ) {
     // The claims are readable whether or not the signature holds; a refusal
     // frame may cite the id, and nothing else, of a token it did not admit.

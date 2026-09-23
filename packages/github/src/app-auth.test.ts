@@ -24,7 +24,17 @@ function minted(token: string): Response {
   );
 }
 
-function sentBody(fetchMock: ReturnType<typeof vi.fn>, call = 0): unknown {
+// Typed parameters, so `mock.calls[n]` is `[input, init]` and not an empty tuple.
+function fetchReturning(respond: () => Response) {
+  return vi.fn(async (_input: string | URL | Request, _init?: RequestInit) =>
+    respond(),
+  );
+}
+
+function sentBody(
+  fetchMock: ReturnType<typeof fetchReturning>,
+  call = 0,
+): unknown {
   const init = fetchMock.mock.calls[call]?.[1] as RequestInit | undefined;
   return init?.body === undefined ? undefined : JSON.parse(init.body as string);
 }
@@ -39,7 +49,7 @@ afterEach(() => {
 
 describe("createAppInstallationToken", () => {
   it("posts no body when nothing narrows the token", async () => {
-    const fetchMock = vi.fn(async () => minted("ghs_full"));
+    const fetchMock = fetchReturning(() => minted("ghs_full"));
     vi.stubGlobal("fetch", fetchMock);
     const result = await createAppInstallationToken(base);
     expect(result.token).toBe("ghs_full");
@@ -50,7 +60,7 @@ describe("createAppInstallationToken", () => {
   });
 
   it("posts the repositories and permissions that narrow the token", async () => {
-    const fetchMock = vi.fn(async () => minted("ghs_narrow"));
+    const fetchMock = fetchReturning(() => minted("ghs_narrow"));
     vi.stubGlobal("fetch", fetchMock);
     await createAppInstallationToken({
       ...base,
@@ -64,7 +74,7 @@ describe("createAppInstallationToken", () => {
   });
 
   it("treats an empty narrowing as no narrowing", async () => {
-    const fetchMock = vi.fn(async () => minted("ghs_full"));
+    const fetchMock = fetchReturning(() => minted("ghs_full"));
     vi.stubGlobal("fetch", fetchMock);
     await createAppInstallationToken({
       ...base,
@@ -111,7 +121,7 @@ describe("getInstallationToken", () => {
   });
 
   it("reuses a narrowed token for the same narrowing in any order", async () => {
-    const fetchMock = vi.fn(async () => minted("ghs_narrow"));
+    const fetchMock = fetchReturning(() => minted("ghs_narrow"));
     vi.stubGlobal("fetch", fetchMock);
     await getInstallationToken({
       ...base,

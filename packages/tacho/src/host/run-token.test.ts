@@ -162,7 +162,7 @@ describe("a run token", () => {
       string,
       string,
     ];
-    const flipped = `oxrt_${body}.${sig.slice(0, -1)}${sig.endsWith("A") ? "B" : "A"}`;
+    const flipped = `oxrt_${body}.${sig[0] === "A" ? "B" : "A"}${sig.slice(1)}`;
     expect(
       verifyRunToken(flipped, {
         key,
@@ -171,6 +171,25 @@ describe("a run token", () => {
         now: NOW,
       }),
     ).toMatchObject({ ok: false, code: "run_token_invalid" });
+    // The last character of a 32-byte signature carries two padding bits the
+    // decoder ignores. Every other spelling of those bits decodes to the same
+    // bytes, and each one is refused.
+    const alphabet =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    const last = alphabet.indexOf(sig.at(-1) as string);
+    const respelled = [0, 1, 2, 3]
+      .map((low) => alphabet[(last & ~3) | low] as string)
+      .filter((c) => c !== sig.at(-1));
+    expect(respelled).toHaveLength(3);
+    for (const c of respelled)
+      expect(
+        verifyRunToken(`oxrt_${body}.${sig.slice(0, -1)}${c}`, {
+          key,
+          host: HOST,
+          provider: "anthropic",
+          now: NOW,
+        }),
+      ).toMatchObject({ ok: false, code: "run_token_invalid" });
     // The same claims with a longer life, signed by nobody.
     const forged = `oxrt_${Buffer.from(
       JSON.stringify({ ...claims, exp: claims.exp + 10 ** 9 }),
