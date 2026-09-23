@@ -10,7 +10,6 @@
 // the read returns them all. One of the files money renders in (INV-25).
 import { useTranslations } from "next-intl";
 import type { InvoicePage, InvoiceRow } from "@/data/contracts/billing";
-import type { Read } from "@/data/read";
 import { parseHostedInvoiceUrl } from "@/shared/invoice-url";
 import { routes } from "@/shared/safe-path";
 import { Badge, type BadgeTone } from "@/ui/badge";
@@ -19,7 +18,6 @@ import { type ListRow, ListTable } from "@/ui/list-table";
 import { Money } from "@/ui/money";
 import { HostedInvoiceLink, SafeLink } from "@/ui/navigation";
 import { cell } from "@/ui/table";
-import { BillingReadFailure } from "./read-failure";
 import { NotRecordedValue, Section, usePeriod } from "./section";
 
 const STATUS_TONE: Record<InvoiceRow["status"], BadgeTone> = {
@@ -59,7 +57,8 @@ function useInvoiceRow(): (row: InvoiceRow) => ListRow {
           <HostedInvoiceLink
             key="link"
             to={url}
-            className={linkText}
+            data-touch-target=""
+            className={`${linkText} max-md:inline-flex max-md:items-center`}
             aria-label={t("invoices.viewLabel", { number })}
           >
             {t("invoices.view")}
@@ -75,7 +74,7 @@ export function Invoices({
   cursor,
   org,
 }: {
-  invoices: Read<InvoicePage>;
+  invoices: InvoicePage;
   /** The page on screen; null is the newest. */
   cursor: string | null;
   org: string;
@@ -83,14 +82,7 @@ export function Invoices({
   const t = useTranslations("billing.invoices");
   const toRow = useInvoiceRow();
   const title = t("title");
-  if (!invoices.ok) {
-    return (
-      <Section id="billing-invoices" title={title}>
-        <BillingReadFailure read={invoices} section={title} />
-      </Section>
-    );
-  }
-  const { items, nextCursor } = invoices.value;
+  const { items, nextCursor } = invoices;
   if (items.length === 0 && cursor === null) {
     return (
       <Section id="billing-invoices" title={title}>

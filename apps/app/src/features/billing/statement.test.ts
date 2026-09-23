@@ -33,7 +33,6 @@ describe("statementFor", () => {
       retention: evidenceRetention(),
       discount: ZERO,
     });
-    expect(s.aboveIncluded).toBe(1_587_838);
     expect(s.pricedCount).toBe(1_590_000);
     expect(s.charge).toEqual({
       kind: "blocks",
@@ -78,17 +77,15 @@ describe("statementFor", () => {
     });
     expect(s.pricedCount).toBe(112_500);
     expect(s.governedAmount).toEqual(usd("562500000"));
-    expect(s.aboveIncluded).toBe(112_500);
   });
 
-  it("labels invoice-billed overage with the priced count, not what was used past the allowance, when actions were carried in", () => {
+  it("labels invoice-billed overage with the priced count, less what was carried in", () => {
     const s = statementFor({
       bucket: { ...invoiceBucket(), carriedGau: 10_000 },
       rate: PUBLISHED_BUILD,
       retention: evidenceRetention(),
       discount: ZERO,
     });
-    expect(s.aboveIncluded).toBe(112_500);
     expect(s.pricedCount).toBe(102_500);
   });
 
@@ -99,7 +96,6 @@ describe("statementFor", () => {
       retention: evidenceRetention(),
       discount: ZERO,
     });
-    expect(under.aboveIncluded).toBe(0);
     expect(under.pricedCount).toBe(0);
     expect(under.charge).toMatchObject({ kind: "overage", count: 0 });
     expect(under.governedAmount).toEqual(ZERO);

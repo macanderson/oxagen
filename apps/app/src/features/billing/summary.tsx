@@ -1,5 +1,6 @@
 // The four tiles at the top of Billing (pages/billing.md, "Summary tiles"):
-// the plan, the governed actions past the included allowance this period,
+// the plan, the governed actions priced this period (the count the first line
+// of This period is labelled with, so the tile and the line always agree),
 // the evidence retained, and what is due at the period's end. Each prints one
 // figure and one basis line, and each figure is a rollup of a section below
 // it: the governed actions and the amount due are statement.ts's, the same
@@ -17,7 +18,6 @@ import type {
   EvidenceRetention,
   PlanCard,
 } from "@/data/contracts/billing";
-import type { Read } from "@/data/read";
 import {
   statNote,
   statStrip,
@@ -26,7 +26,6 @@ import {
   statValue,
 } from "@/ui/control-styles";
 import { formatCount } from "@/ui/money-format";
-import { BillingReadFailure } from "./read-failure";
 import { NotRecordedValue, useDate } from "./section";
 import type { Statement } from "./statement";
 import { ChargeBasis, StatementAmount } from "./this-period";
@@ -52,97 +51,55 @@ function Tile({
   );
 }
 
-function PlanTile({
-  plan,
-  rate,
-}: {
-  plan: Read<PlanCard>;
-  rate: Read<ContractRate>;
-}) {
+function PlanTile({ plan, rate }: { plan: PlanCard; rate: ContractRate }) {
   const t = useTranslations("billing");
-  const term = t("tiles.plan");
-  if (!plan.ok) {
-    return (
-      <Tile name="plan" term={term} note={null}>
-        <BillingReadFailure read={plan} section={term} />
-      </Tile>
-    );
-  }
-  const { subscription } = plan.value;
-  // The tier the terms resolve to names the plan for a person; the Stripe
-  // plan slug is the fallback when the terms could not be read.
-  if (subscription !== null) {
-    return (
-      <Tile
-        name="plan"
-        term={term}
-        note={
-          subscription.billingInterval === "year"
-            ? t("tiles.planYear")
-            : t("tiles.planMonth")
-        }
-      >
-        {rate.ok ? t(`tiers.${rate.value.tier}`) : subscription.plan}
-      </Tile>
-    );
-  }
-  // No subscription: the tier the terms resolve to names the plan (Free, or a
-  // negotiated Enterprise agreement).
+  const { subscription } = plan;
+  // The tier the terms resolve to names the plan for a person. The basis is
+  // how the subscription bills: yearly when Stripe says so, since printing
+  // "monthly" over an annual plan would state a term the record contradicts.
+  // With no subscription the plan is the tier the terms resolve to (Free, or
+  // a negotiated Enterprise agreement), and nothing bills it.
+  const note =
+    subscription === null
+      ? t("tiles.planNone")
+      : subscription.billingInterval === "year"
+        ? t("tiles.planYear")
+        : t("tiles.planMonth");
   return (
-    <Tile name="plan" term={term} note={t("tiles.planNone")}>
-      {rate.ok ? (
-        t(`tiers.${rate.value.tier}`)
-      ) : (
-        <NotRecordedValue>{t("notRecorded")}</NotRecordedValue>
-      )}
+    <Tile name="plan" term={t("tiles.plan")} note={note}>
+      {t(`tiers.${rate.tier}`)}
     </Tile>
   );
 }
 
-function GovernedTile({ statement }: { statement: Read<Statement> }) {
+function GovernedTile({ statement: s }: { statement: Statement }) {
   const t = useTranslations("billing");
   const locale = useLocale();
-  const term = t("tiles.governed");
-  if (!statement.ok) {
-    return (
-      <Tile name="governed" term={term} note={null}>
-        <BillingReadFailure read={statement} section={term} />
-      </Tile>
-    );
-  }
-  const s = statement.value;
+  // The count the first line of This period is labelled with: one number in
+  // both places, never a second derivation.
   return (
     <Tile
       name="governed"
-      term={term}
-      data-count={s.aboveIncluded}
+      term={t("tiles.governed")}
+      data-count={s.pricedCount}
       note={t.rich("tiles.governedNote", {
         basis: () => <ChargeBasis charge={s.charge} included={s.includedGau} />,
       })}
     >
-      {formatCount(s.aboveIncluded, locale)}
+      {formatCount(s.pricedCount, locale)}
     </Tile>
   );
 }
 
-function RetainedTile({ retention }: { retention: Read<EvidenceRetention> }) {
+function RetainedTile({ retention }: { retention: EvidenceRetention }) {
   const t = useTranslations("billing");
   const locale = useLocale();
-  const term = t("tiles.retained");
-  if (!retention.ok) {
-    return (
-      <Tile name="retained" term={term} note={null}>
-        <BillingReadFailure read={retention} section={term} />
-      </Tile>
-    );
-  }
-  const r = retention.value;
   return (
     <Tile
       name="retained"
-      term={term}
+      term={t("tiles.retained")}
       note={t("tiles.retainedNote", {
-        months: formatCount(r.includedMonths, locale),
+        months: formatCount(retention.includedMonths, locale),
       })}
     >
       <NotRecordedValue>{t("notRecorded")}</NotRecordedValue>
@@ -151,30 +108,19 @@ function RetainedTile({ retention }: { retention: Read<EvidenceRetention> }) {
 }
 
 function DueTile({
-  statement,
+  statement: s,
   periodEnd,
 }: {
-  statement: Read<Statement>;
-  /** The bucket month's end, when the bucket was read. */
-  periodEnd: string | null;
+  statement: Statement;
+  /** The bucket month's end. */
+  periodEnd: string;
 }) {
   const t = useTranslations("billing");
   const date = useDate();
-  const term = t("tiles.due", {
-    date: periodEnd === null ? t("notRecorded") : date(periodEnd),
-  });
-  if (!statement.ok) {
-    return (
-      <Tile name="due" term={term} note={null}>
-        <BillingReadFailure read={statement} section={term} />
-      </Tile>
-    );
-  }
-  const s = statement.value;
   return (
     <Tile
       name="due"
-      term={term}
+      term={t("tiles.due", { date: date(periodEnd) })}
       note={t("tiles.dueNote", { currency: s.currency.toUpperCase() })}
     >
       <StatementAmount value={s.total} />
@@ -189,11 +135,11 @@ export function SummaryTiles({
   statement,
   periodEnd,
 }: {
-  plan: Read<PlanCard>;
-  rate: Read<ContractRate>;
-  retention: Read<EvidenceRetention>;
-  statement: Read<Statement>;
-  periodEnd: string | null;
+  plan: PlanCard;
+  rate: ContractRate;
+  retention: EvidenceRetention;
+  statement: Statement;
+  periodEnd: string;
 }) {
   const t = useTranslations("billing");
   return (

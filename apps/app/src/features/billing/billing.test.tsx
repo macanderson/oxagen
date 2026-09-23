@@ -3,7 +3,9 @@
 // DataSource: the six reads it makes, the header and its one gold action, the
 // four tiles and how they reconcile with This period, the five meters,
 // Invoices, the list controls on those three tables, the price list, Billable
-// units, the controls that buy through Stripe (#3858), the checkout banner,
+// units, the three panels that buy through Stripe (Auto top-up, Buy governed
+// actions and Token balance, kept by macanderson/oxagen-roadmap#67), the
+// checkout banner,
 // and the empty, error, denied and pending states with the design's copy
 // verbatim, with an axe check in every one (INV-26). The
 // controls' own interactions have their own test files (auto-topup,
@@ -269,10 +271,10 @@ describe("summary tiles", () => {
     expect(tile("plan")).toHaveTextContent("PlanBuildno subscription");
   });
 
-  it("prints the governed actions past the allowance, with the blocks and the allowance as its basis", async () => {
+  it("prints the governed actions the first line priced, with the blocks and the allowance as its basis", async () => {
     await renderBilling();
     expect(tile("governed")).toHaveTextContent(
-      "Governed actions this period1,587,838above the included allowance · 159 blocks × $32.10 · 250,000 included",
+      "Governed actions this period1,590,000above the included allowance · 159 blocks × $32.10 · 250,000 included",
     );
   });
 
@@ -293,20 +295,33 @@ describe("summary tiles", () => {
       "Due 2026-10-01not recordedUSD · after the onboarding discount",
     );
   });
-
-  it("shows a read's refusal in the tiles that read it (negative)", async () => {
-    await renderBilling({ ...LOADED, rate: DOWN });
-    expect(
-      tile("governed").querySelector("[data-reason=error]"),
-    ).toBeInTheDocument();
-    expect(
-      tile("due").querySelector("[data-reason=error]"),
-    ).toBeInTheDocument();
-    expect(tile("plan")).toHaveTextContent("build");
-  });
 });
 
 describe("figures reconcile", () => {
+  /** The count the first line of This period is labelled with. */
+  const lineCount = () => {
+    const label = (row("data-line", "governed") as HTMLTableRowElement).cells[0]
+      ?.textContent;
+    return /^Governed actions 1 – ([\d,]+)$/.exec(label ?? "")?.[1];
+  };
+
+  it.each([
+    ["whole blocks bought", LOADED.bucket],
+    ["invoice-billed overage", readOk(invoiceBucket())],
+    [
+      "invoice-billed overage with actions carried in",
+      readOk({ ...invoiceBucket(), carriedGau: 10_000 }),
+    ],
+  ] as const)(
+    "prints one governed count on the tile and the first line: %s",
+    async (_mode, bucket) => {
+      await renderBilling({ ...LOADED, bucket });
+      const figure = tile("governed").querySelector("dd")?.textContent;
+      expect(lineCount()).toBeDefined();
+      expect(figure).toBe(lineCount());
+    },
+  );
+
   it("rolls the tiles up from the lines of This period", async () => {
     await renderBilling();
     // The line is labelled with the count it priced: 159 blocks of 10,000.
@@ -397,15 +412,6 @@ describe("This period", () => {
     expect(row("data-line", "total")).toHaveTextContent("not recorded");
     expect(tile("due")).toHaveTextContent("not recorded");
   });
-
-  it("shows the read's error in place of the table when the rate could not be read (negative)", async () => {
-    await renderBilling({ ...LOADED, rate: DOWN });
-    expect(
-      section("This period").querySelector("[data-reason=error]"),
-    ).toHaveTextContent(
-      "This period could not be loaded: the billing service answered stripe_unreachable. Nothing was charged.",
-    );
-  });
 });
 
 describe("Meters", () => {
@@ -448,13 +454,6 @@ describe("Meters", () => {
     });
     expect(section("Meters").querySelector("[data-mode]")).toBeNull();
   });
-
-  it("shows the retention read's error in its row (negative)", async () => {
-    await renderBilling({ ...LOADED, retention: DOWN });
-    expect(
-      row("data-meter", "retained").querySelector("[data-reason=error]"),
-    ).toBeInTheDocument();
-  });
 });
 
 describe("Invoices", () => {
@@ -492,6 +491,8 @@ describe("Invoices", () => {
     );
     expect(link).toHaveAttribute("target", "_blank");
     expect(link).toHaveAttribute("rel", "noopener noreferrer");
+    // A 44px tap target on a phone (ui/phone.css).
+    expect(link).toHaveAttribute("data-touch-target");
   });
 
   it("prints a period that is not one calendar month as its two ISO days", async () => {
@@ -514,9 +515,14 @@ describe("Invoices", () => {
       expect(
         within(panel).getByRole("searchbox", { name: "Search this list" }),
       ).toBeInTheDocument();
-      expect(within(panel).getByRole("combobox", { name: "Rows" })).toHaveValue(
-        "10",
-      );
+      const search = within(panel).getByRole("searchbox", {
+        name: "Search this list",
+      });
+      const rows = within(panel).getByRole("combobox", { name: "Rows" });
+      expect(rows).toHaveValue("10");
+      // Both are 44px tap targets on a phone (ui/phone.css).
+      expect(search).toHaveAttribute("data-touch-target");
+      expect(rows).toHaveAttribute("data-touch-target");
       expect(
         within(panel).getByRole("navigation", { name: `${name} pages` }),
       ).toBeInTheDocument();
@@ -567,13 +573,6 @@ describe("Invoices", () => {
       screen.getByRole("link", { name: "Newest invoices" }),
     ).toHaveAttribute("href", "/acme/billing");
   });
-
-  it("shows the read's error in place of the table (negative)", async () => {
-    await renderBilling({ ...LOADED, invoices: DOWN });
-    expect(
-      section("Invoices").querySelector("[data-reason=error]"),
-    ).toBeInTheDocument();
-  });
 });
 
 describe("Price list", () => {
@@ -583,7 +582,7 @@ describe("Price list", () => {
     expect(
       [...list.querySelectorAll("tr")].map((tr) => tr.textContent),
     ).toEqual([
-      "Freeevery governance feature, 5,000 governed actions a month",
+      "Freeevery governance feature, an included monthly allowance, days of evidence not recorded, seats not recorded",
       "Governed actions, blocks of 5,000$25.00 per block at the published rate",
       "Negotiated agreementthe same four figures, per organization",
       "Invoice billingnever capped · overage invoiced at the contracted rate at period end",
@@ -594,13 +593,6 @@ describe("Price list", () => {
     expect(list).toHaveTextContent(
       "No credits, no resellers, and no revenue dashboard. The free tier is the whole product, limited by retention and seats, never by features or volume. Upgrading is a governance decision, not a volume accident.",
     );
-  });
-
-  it("shows the retention read's error on its row (negative)", async () => {
-    await renderBilling({ ...LOADED, retention: DOWN });
-    expect(
-      row("data-price", "retention").querySelector("[data-reason=error]"),
-    ).toBeInTheDocument();
   });
 });
 
@@ -672,11 +664,14 @@ describe("the controls that buy through Stripe", () => {
     },
   );
 
-  it("draws no purchase form for an invoice-billed organization (negative)", async () => {
+  it("tells an invoice-billed organization it does not buy blocks, with no form (negative)", async () => {
     await renderBilling({ ...LOADED, bucket: readOk(invoiceBucket()) });
-    expect(
-      screen.queryByRole("region", { name: "Buy governed actions" }),
-    ).toBeNull();
+    const buy = section("Buy governed actions");
+    expect(buy).toHaveAttribute("data-state", "invoice");
+    expect(buy).toHaveTextContent(
+      "This organization is billed by invoice, so it does not buy governed actions in blocks.",
+    );
+    expect(within(buy).queryByRole("spinbutton")).toBeNull();
   });
 
   it.each(["owner", "admin"] as const)(
@@ -757,7 +752,7 @@ describe("empty", () => {
     expect(screen.queryByRole("region", { name: "This period" })).toBeNull();
   });
 
-  it("draws the design's panel alone, with no header, no Change plan and no gold, then only the purchase form the pay journey buys through (#3858)", async () => {
+  it("draws the design's panel with no header, no Change plan and no gold, then only Buy governed actions, so an organization can buy its first block", async () => {
     await renderBilling(EMPTY);
     expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
     expect(gold()).toEqual([]);
@@ -781,6 +776,9 @@ describe("error", () => {
   it.each([
     ["plan", { plan: DOWN }],
     ["bucket", { bucket: DOWN }],
+    ["rate", { rate: DOWN }],
+    ["retention", { retention: DOWN }],
+    ["invoices", { invoices: DOWN }],
   ] as const)(
     "replaces the page with the error state when the %s read fails",
     async (_read, reads) => {
@@ -798,7 +796,7 @@ describe("error", () => {
         within(state).getByRole("link", { name: "Try again" }),
       ).toHaveAttribute("href", "/acme/billing");
       expect(state).toHaveTextContent(
-        /trace not recorded · region not recorded · \d{4}-\d{2}-\d{2}T/,
+        /trace not recorded · region not recorded · \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}Z$/,
       );
       expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
       expect(gold().map((el) => el.textContent)).toEqual(["Try again"]);
@@ -815,6 +813,15 @@ describe("error", () => {
       "Filing an incident from this page is not in Oxagen yet.",
     );
     expect(dialog).toHaveTextContent("502 stripe_unreachable");
+  });
+});
+
+describe("traceTime", () => {
+  it("prints the instant as the design does, with no T and no milliseconds", async () => {
+    const { traceTime } = await import("./billing");
+    expect(traceTime(new Date("2026-09-11T09:16:04.123Z"))).toBe(
+      "2026-09-11 09:16:04Z",
+    );
   });
 });
 
@@ -839,7 +846,9 @@ describe("access denied", () => {
       "Your roles on Acme Robotics do not include org.billing (plan and invoices are readable only by a finance role). An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
     );
     expect(state).toHaveTextContent("Signed in asMarcus Bell · member");
-    expect(state).toHaveTextContent("Neededorg.billing");
+    expect(state.querySelector("[data-fact=needed]")).toHaveTextContent(
+      /^org\.billing: plan and invoices are readable only by a finance role$/,
+    );
     // A refusal carries no policy version yet (#3846).
     expect(state).toHaveTextContent(
       "Decided bypolicy version not recorded · deny wins over every allow",

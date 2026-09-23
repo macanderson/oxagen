@@ -11,49 +11,31 @@
 // renders here (INV-25).
 import { useLocale, useTranslations } from "next-intl";
 import type { EvidenceRetention, GauBucket } from "@/data/contracts/billing";
-import type { Read } from "@/data/read";
 import { type ListRow, ListTable } from "@/ui/list-table";
 import { formatCount } from "@/ui/money-format";
 import { cell } from "@/ui/table";
-import { BillingReadFailure } from "./read-failure";
 import { NotRecordedValue, PanelNote, Section } from "./section";
 
 export function Meters({
   bucket,
   retention,
 }: {
-  bucket: Read<GauBucket>;
-  retention: Read<EvidenceRetention>;
+  bucket: GauBucket;
+  retention: EvidenceRetention;
 }) {
   const t = useTranslations("billing");
   const locale = useLocale();
   const title = t("meters.title");
   const count = (n: number) => formatCount(n, locale);
   const notRecorded = <NotRecordedValue>{t("notRecorded")}</NotRecordedValue>;
-  let governedValue: ListRow["cells"][number];
-  let governedNote: ListRow["cells"][number] = null;
-  if (!bucket.ok) {
-    governedValue = (
-      <BillingReadFailure read={bucket} section={t("meters.governed")} />
-    );
-  } else {
-    const v = bucket.value;
-    governedValue = count(v.usedGau);
-    governedNote = t("meters.governedNote", { included: count(v.includedGau) });
-  }
-  let retainedValue: ListRow["cells"][number];
-  let retainedNote: ListRow["cells"][number] = null;
-  if (!retention.ok) {
-    retainedValue = (
-      <BillingReadFailure read={retention} section={t("meters.retained")} />
-    );
-  } else {
-    const r = retention.value;
-    retainedValue = notRecorded;
-    retainedNote = t("meters.retainedNote", {
-      months: count(r.includedMonths),
-    });
-  }
+  const governedValue = count(bucket.usedGau);
+  const governedNote = t("meters.governedNote", {
+    included: count(bucket.includedGau),
+  });
+  const retainedValue = notRecorded;
+  const retainedNote = t("meters.retainedNote", {
+    months: count(retention.includedMonths),
+  });
   const row = (
     name: string,
     meter: string,

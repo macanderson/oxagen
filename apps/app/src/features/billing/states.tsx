@@ -231,7 +231,12 @@ export function BillingDenied({
               : t("signedInValue", { name, role: roles(role) })}
           </dd>
           <dt className={term}>{t("needed")}</dt>
-          <dd className={mono}>{permission}</dd>
+          <dd data-fact="needed">
+            {t.rich("neededValue", {
+              permission,
+              code: (chunks) => <span className={mono}>{chunks}</span>,
+            })}
+          </dd>
           <dt className={term}>{t("decidedBy")}</dt>
           <dd data-fact="decided-by">
             {t.rich("decidedByValue", {

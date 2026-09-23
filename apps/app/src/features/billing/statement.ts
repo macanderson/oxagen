@@ -9,7 +9,9 @@
 // mode, the governed actions bought this period (blocks × block price when the
 // purchase is whole blocks at today's block size); in invoice mode, the
 // overage past the allowance and what was carried in, at the per-action rate.
-// The line is labelled with the count it priced. Tokens are reported at zero:
+// The line is labelled with the count it priced, and the Governed actions
+// tile prints that same count: one number in both places, never a second
+// derivation (pages/billing.md, "headers are rollups"). Tokens are reported at zero:
 // Oxagen does not price them. Evidence retention is zero while the
 // organization has not opted into extended retention, because nothing accrues
 // until it does (get_evidence_retention); once it has, the amount is not
@@ -38,9 +40,10 @@ export type GovernedCharge =
   | { kind: "overage"; count: number; rate: Money };
 
 export type Statement = {
-  /** Governed actions used past the included allowance; never negative. */
-  aboveIncluded: number;
-  /** The governed actions the line priced: its label's "1 – N". */
+  /**
+   * The governed actions the line priced: its label's "1 – N" and the figure
+   * on the Governed actions tile. Never negative.
+   */
   pricedCount: number;
   includedGau: number;
   charge: GovernedCharge;
@@ -126,7 +129,6 @@ export function statementFor({
   const recorded = lines.filter((line): line is Money => line !== null);
   const sum = recorded.length === lines.length ? sumMoney(recorded) : null;
   return {
-    aboveIncluded: Math.max(0, bucket.usedGau - bucket.includedGau),
     pricedCount: pricedCount(charge, rate.blockSizeGau),
     includedGau: bucket.includedGau,
     charge,

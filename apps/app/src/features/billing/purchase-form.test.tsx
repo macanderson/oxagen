@@ -4,7 +4,7 @@
 // purchase action the organization, the block size and the quantity, and each
 // refusal the action returns is said in words. A Free organization with no
 // saved card is offered the purchase; an admin sees who can buy; an
-// invoice-billed organization sees no form. Axe checks every state.
+// invoice-billed organization is told it does not buy blocks. Axe checks every state.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -232,11 +232,14 @@ describe("PurchaseForm", () => {
     expect(within(region()).queryByTestId("money")).toBeNull();
   });
 
-  it("is not drawn for an invoice-billed organization (negative)", () => {
+  it("tells an invoice-billed organization it does not buy blocks, with no form (negative)", () => {
     renderForm({ bucket: readOk(invoiceBucket()) });
-    expect(
-      screen.queryByRole("region", { name: "Buy governed actions" }),
-    ).toBeNull();
+    expect(region()).toHaveAttribute("data-state", "invoice");
+    expect(region()).toHaveTextContent(
+      "This organization is billed by invoice, so it does not buy governed actions in blocks.",
+    );
+    expect(screen.queryByRole("spinbutton")).toBeNull();
+    expect(screen.queryByRole("button")).toBeNull();
   });
 
   it.each([

@@ -108,7 +108,7 @@
     "priceList": {
       "title": "Price list",
       "free": "Free",
-      "freeTerms": "every governance feature, {count} governed actions a month",
+      "freeTerms": "every governance feature, an included monthly allowance, <nr>days of evidence not recorded</nr>, <nr>seats not recorded</nr>",
       "blocks": "Governed actions, blocks of {count}",
       "blocksTerms": "<price></price> per block at the published rate",
       "negotiated": "Negotiated agreement",
@@ -163,6 +163,7 @@
       "submit": "Continue to Checkout",
       "submitting": "Opening Checkout…",
       "denied": "An owner or a billing member can buy governed actions.",
+      "invoiceBilled": "This organization is billed by invoice, so it does not buy governed actions in blocks.",
       "errors": {
         "invalid": "Choose a whole number of blocks.",
         "aboveMax": "You can buy at most {max} governed actions at once.",
@@ -235,6 +236,7 @@
         "back": "Back to Fleet",
         "signedIn": "Signed in as",
         "needed": "Needed",
+        "neededValue": "<code>{permission}</code>: plan and invoices are readable only by a finance role",
         "decidedBy": "Decided by",
         "signedInValue": "{name} · {role}",
         "decidedByValue": "<policy>policy version not recorded</policy> · deny wins over every allow"

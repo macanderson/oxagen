@@ -10,8 +10,10 @@
 // on the same quantity. A prepaid organization with no saved card, a Free one
 // included, is offered the purchase, because the Checkout saves the card it collects (spec §4.2,
 // ADR-055 §6). Owners and billing members buy; anyone else who can read the
-// bucket sees who can. Nothing renders in invoice mode, or when the bucket or
-// the rate could not be read: those sections say why.
+// bucket sees who can. An organization billed by invoice does not buy blocks,
+// and the panel says so in place of the form (pages/billing.md, Buy governed
+// actions). Nothing renders when the bucket or the rate could not be read:
+// the page's error state says why.
 import { useLocale, useTranslations } from "next-intl";
 import { useActionState, useState } from "react";
 import type { ContractRate, GauBucket } from "@/data/contracts/billing";
@@ -144,7 +146,14 @@ export function PurchaseForm({
   allowed: boolean;
 }) {
   const t = useTranslations("billing.purchase");
-  if (!bucket.ok || bucket.value.mode !== "prepaid" || !rate.ok) return null;
+  if (!bucket.ok || !rate.ok) return null;
+  if (bucket.value.mode === "invoice") {
+    return (
+      <Section id="billing-buy" title={t("title")} data-state="invoice">
+        <p className="text-sm text-muted-foreground">{t("invoiceBilled")}</p>
+      </Section>
+    );
+  }
   return (
     <Section
       id="billing-buy"

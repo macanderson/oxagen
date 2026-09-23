@@ -1143,6 +1143,7 @@ type Messages = {
       submit: string;
       submitting: string;
       denied: string;
+      invoiceBilled: string;
       errors: {
         invalid: string;
         aboveMax: string;
@@ -1215,6 +1216,7 @@ type Messages = {
         back: string;
         signedIn: string;
         needed: string;
+        neededValue: string;
         decidedBy: string;
         signedInValue: string;
         decidedByValue: string;

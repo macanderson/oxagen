@@ -9,17 +9,13 @@
 import { useLocale, useTranslations } from "next-intl";
 import type { EvidenceRetention } from "@/data/contracts/billing";
 import type { Money as MoneyValue } from "@/data/contracts/money";
-import type { Read } from "@/data/read";
 import { Badge } from "@/ui/badge";
 import { type ListRow, ListTable } from "@/ui/list-table";
 import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
 import { cell } from "@/ui/table";
-import { BillingReadFailure } from "./read-failure";
 import { NotRecordedValue, Section } from "./section";
 import type { GovernedCharge, Statement } from "./statement";
-
-type Failed = Exclude<Read<unknown>, { ok: true }>;
 
 /** The governed-action line's basis: how the meter was priced. */
 export function ChargeBasis({
@@ -67,23 +63,15 @@ export function ThisPeriod({
   statement,
   retention,
 }: {
-  /** The statement, or the read that stopped it. */
-  statement: Read<Statement>;
-  retention: Read<EvidenceRetention>;
+  statement: Statement;
+  retention: EvidenceRetention;
 }) {
   const t = useTranslations("billing");
   const locale = useLocale();
   const title = t("thisPeriod.title");
   const badge = <Badge tone="quiet">{t("thisPeriod.badge")}</Badge>;
-  const failed = (read: Failed) => (
-    <Section id="billing-this-period" title={title} badge={badge}>
-      <BillingReadFailure read={read} section={title} />
-    </Section>
-  );
-  if (!statement.ok) return failed(statement);
-  if (!retention.ok) return failed(retention);
-  const s = statement.value;
-  const r = retention.value;
+  const s = statement;
+  const r = retention;
   const count = (n: number) => formatCount(n, locale);
   const notRecorded = <NotRecordedValue>{t("notRecorded")}</NotRecordedValue>;
   const line = (

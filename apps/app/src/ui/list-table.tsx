@@ -221,6 +221,7 @@ export function ListTable({
             setQuery(event.currentTarget.value);
             setPage(1);
           }}
+          data-touch-target=""
           className="min-w-[140px] flex-[1_1_200px] rounded-lg border border-input-border bg-input-bg px-2.5 py-1.5 text-[12.5px] text-input-fg placeholder:text-dim focus-visible:border-input-border-focus focus-visible:outline-none max-md:basis-full"
         />
         <label className="ml-auto inline-flex items-center gap-1.5 whitespace-nowrap text-[11.5px] text-muted-foreground max-md:ml-0">
@@ -231,6 +232,7 @@ export function ListTable({
               setPer(Number(event.currentTarget.value));
               setPage(1);
             }}
+            data-touch-target=""
             className={controlSelect}
           >
             {LIST_PAGE_SIZES.map((n) => (

@@ -1,22 +1,26 @@
 // Billing (pages/billing.md; ARCHITECTURE.md §1.4, §3.9): the page body in the
 // mockup's shape. The header carries the one gold action, Change plan. Four
-// tiles summarise the plan, the governed actions past the included allowance,
+// tiles summarise the plan, the governed actions priced this period,
 // the evidence retained and what is due. Below, two columns: This period,
 // Meters and Invoices on the left; the price list and Billable units on the
 // right, stacking into one column on a phone. Every tile is a rollup of a
 // section beneath it (statement.ts).
 //
-// Beneath Billable units sit three panels the design does not draw: auto
-// top-up, buying governed actions and the token balance. They are the only
-// way to pay Oxagen in prepaid mode today, and the pay journey
-// (e2e/pay.spec.ts) buys through the second. Whether they stay is a
-// maintainer decision (#3858).
+// Beneath Billable units sit Auto top-up, Buy governed actions and Token
+// balance. The rendered mock does not draw them. The spec describes them in
+// its text (Mac kept them on 2026-09-23, macanderson/oxagen-roadmap#67). They
+// are how a prepaid organization pays, and the pay journey (e2e/pay.spec.ts)
+// buys through the second. None of their buttons is gold.
 //
 // The page makes six reads. A refusal on any of them is the denied state and
-// replaces the body, header included; a failed plan or bucket read is the
-// error state; an organization with no subscription, no invoice and no
-// governed action yet is the empty state, the design's panel alone, followed
-// only by the governed-action purchase a new organization pays through.
+// replaces the body, header included. A failure of any of the five reads the
+// design draws from (the plan, the bucket, the rate, the retention terms and
+// the invoices) is the error state: the design has no partially loaded page,
+// so every tile and line either reconciles or the body is replaced. The token
+// balance read feeds only its own panel and says its failure there. An
+// organization with no subscription, no invoice and no governed action yet is
+// the empty state: the design's panel, then Buy governed actions, so it can
+// buy its first block.
 import {
   canTierBuyCredits,
   CREDIT_TOPUP_PRESETS_USD,
@@ -28,13 +32,12 @@ import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type {
   ContractRate,
-  EvidenceRetention,
   GauBucket,
   UsageCredits,
 } from "@/data/contracts/billing";
 import { type Money as MoneyValue, mulMicros } from "@/data/contracts/money";
 import type { DataSource } from "@/data/ports";
-import { type Read, readOk } from "@/data/read";
+import type { Read } from "@/data/read";
 import type { OrgCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
 import { PageHeader } from "@/ui/page-header";
@@ -50,7 +53,7 @@ import { Invoices } from "./invoices";
 import { Meters } from "./meters";
 import { PriceList } from "./price-list";
 import { PurchaseForm } from "./purchase-form";
-import { type Statement, statementFor } from "./statement";
+import { statementFor } from "./statement";
 import {
   BillingDenied,
   BillingEmpty,
@@ -76,31 +79,16 @@ const buysFor = (ctx: OrgCtx) =>
   ctx.orgRole === "owner" || ctx.orgRole === "billing";
 
 type Failed = Exclude<Read<unknown>, { ok: true }>;
+type ReadError = Extract<Failed, { reason: "error" }>;
 
 /** The instant after the reads, for the error state's trace line. */
 function instantAfterRead(): Date {
   return new Date();
 }
 
-/** The statement, or the first read that stopped it. */
-function statementRead(reads: {
-  bucket: Read<GauBucket>;
-  rate: Read<ContractRate>;
-  retention: Read<EvidenceRetention>;
-}): Read<Statement> {
-  const { bucket, rate, retention } = reads;
-  if (!bucket.ok) return bucket;
-  if (!rate.ok) return rate;
-  if (!retention.ok) return retention;
-  return readOk(
-    statementFor({
-      bucket: bucket.value,
-      rate: rate.value,
-      retention: retention.value,
-      // No store records the onboarding offer yet (spec §20, deferred; #3845).
-      discount: null,
-    }),
-  );
+/** The trace line's time as the design prints it: `2026-09-11 09:16:04Z`. */
+export function traceTime(at: Date): string {
+  return `${at.toISOString().slice(0, 19).replace("T", " ")}Z`;
 }
 
 /** Whether the viewer is offered the token top-up, and when not, what refused it. */
@@ -204,16 +192,19 @@ export async function Billing({
   if (pending !== undefined && pending.reason === "pending_approval") {
     return <BillingPending request={pending.accessRequestId} />;
   }
-  // The plan and the bucket are the page's spine: every tile reads one of
-  // them. Either failing is the error state; a failure elsewhere is said in
-  // its own section.
-  const spine = [plan, bucket].find((read): read is Failed => !read.ok);
-  if (spine !== undefined && spine.reason === "error") {
+  // A failure of any read the design draws from is the error state: the
+  // tiles are rollups of the lines, so a page missing one read cannot
+  // reconcile.
+  if (!plan.ok || !bucket.ok || !rate.ok || !retention.ok || !invoices.ok) {
+    // A refusal or a waiting request returned above, so this is an error.
+    const failed = [plan, bucket, rate, retention, invoices].find(
+      (read): read is ReadError => !read.ok && read.reason === "error",
+    );
     return (
       <BillingError
-        code={spine.code}
-        status={spine.status}
-        at={instantAfterRead().toISOString()}
+        code={failed?.code ?? "unknown"}
+        status={failed?.status ?? 500}
+        at={traceTime(instantAfterRead())}
         retry={routes.billing(ctx.orgSlug)}
       />
     );
@@ -223,13 +214,10 @@ export async function Billing({
   const banner = <CheckoutBanner outcome={checkoutOutcome(checkout)} />;
 
   const empty =
-    plan.ok &&
     plan.value.subscription === null &&
-    bucket.ok &&
     bucket.value.usedGau === 0 &&
     bucket.value.purchasedGau === 0 &&
     cursor === null &&
-    invoices.ok &&
     invoices.value.items.length === 0;
   if (empty) {
     return (
@@ -251,13 +239,19 @@ export async function Billing({
 
   let blocked: PlanChangeBlock | null = null;
   if (!buys) blocked = { kind: "role" };
-  else if (plan.ok && plan.value.subscription !== null)
+  else if (plan.value.subscription !== null)
     blocked = {
       kind: "subscribed",
       plan: plan.value.subscription.plan,
-      tier: rate.ok ? rate.value.tier : null,
+      tier: rate.value.tier,
     };
-  const statement = statementRead({ bucket, rate, retention });
+  const statement = statementFor({
+    bucket: bucket.value,
+    rate: rate.value,
+    retention: retention.value,
+    // No store records the onboarding offer yet (spec §20, deferred; #3845).
+    discount: null,
+  });
   return (
     <Page state="loaded">
       <Header
@@ -273,20 +267,24 @@ export async function Billing({
       />
       {banner}
       <SummaryTiles
-        plan={plan}
-        rate={rate}
-        retention={retention}
+        plan={plan.value}
+        rate={rate.value}
+        retention={retention.value}
         statement={statement}
-        periodEnd={bucket.ok ? bucket.value.period.end : null}
+        periodEnd={bucket.value.period.end}
       />
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
         <div className="flex min-w-0 flex-col gap-4">
-          <ThisPeriod statement={statement} retention={retention} />
-          <Meters bucket={bucket} retention={retention} />
-          <Invoices invoices={invoices} cursor={cursor} org={ctx.orgSlug} />
+          <ThisPeriod statement={statement} retention={retention.value} />
+          <Meters bucket={bucket.value} retention={retention.value} />
+          <Invoices
+            invoices={invoices.value}
+            cursor={cursor}
+            org={ctx.orgSlug}
+          />
         </div>
         <div className="flex min-w-0 flex-col gap-4">
-          <PriceList retention={retention} />
+          <PriceList retention={retention.value} />
           <BillableUnits />
           <PaymentControls
             ctx={ctx}

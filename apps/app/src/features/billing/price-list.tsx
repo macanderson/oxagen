@@ -1,23 +1,23 @@
 // The price list (pages/billing.md): the seven published terms and the footer.
-// Every figure is read, never typed here: the free allowance, the block size
-// and the list rate come from PUBLISHED_TERMS in the start_subscription_upgrade
-// contract, which pricing.test.ts in @oxagen/billing holds equal to the
-// schedule Stripe is synced from; the retention window and its price come from
-// get_evidence_retention. A figure the record does not carry (the seats and
-// evidence days of the free tier, a floor price for Enterprise) is left out
-// rather than written in. One of the files money renders in (INV-25).
+// Every figure is read, never typed here: the block size and the list rate
+// come from PUBLISHED_TERMS in the start_subscription_upgrade contract, which
+// pricing.test.ts in @oxagen/billing holds equal to the schedule Stripe is
+// synced from; the retention window and its price come from
+// get_evidence_retention. The Free row is the design's wording, "an included
+// monthly allowance" with no figure. The free tier's evidence days and seats
+// have no published term yet (#3844), so each says "not recorded" in its
+// place. A floor price for Enterprise has none either and is left out. One of
+// the files money renders in (INV-25).
 import { PUBLISHED_TERMS } from "@oxagen/oxagen/contracts/billing.subscription_upgrade.start";
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type { EvidenceRetention } from "@/data/contracts/billing";
 import { type Money as MoneyValue, mulMicros } from "@/data/contracts/money";
-import type { Read } from "@/data/read";
 import { panelBody } from "@/ui/control-styles";
 import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
 import { cell } from "@/ui/table";
-import { BillingReadFailure } from "./read-failure";
-import { Section } from "./section";
+import { NotRecordedValue, Section } from "./section";
 
 const ONE_MICRO: MoneyValue = { micros: "1", currency: "USD" };
 
@@ -47,11 +47,7 @@ function Price({
   );
 }
 
-export function PriceList({
-  retention,
-}: {
-  retention: Read<EvidenceRetention>;
-}) {
+export function PriceList({ retention }: { retention: EvidenceRetention }) {
   const t = useTranslations("billing");
   const locale = useLocale();
   const count = (n: number) => formatCount(n, locale);
@@ -65,8 +61,8 @@ export function PriceList({
       >
         <tbody className="divide-y divide-border">
           <Price name="free" term={t("priceList.free")}>
-            {t("priceList.freeTerms", {
-              count: count(PUBLISHED_TERMS.freeIncludedGauPerMonth),
+            {t.rich("priceList.freeTerms", {
+              nr: (chunks) => <NotRecordedValue>{chunks}</NotRecordedValue>,
             })}
           </Price>
           <Price
@@ -88,19 +84,12 @@ export function PriceList({
             {t("priceList.invoiceTerms")}
           </Price>
           <Price name="retention" term={t("priceList.retention")}>
-            {retention.ok ? (
-              t.rich("priceList.retentionTerms", {
-                months: count(retention.value.includedMonths),
-                price: () => (
-                  <Money value={retention.value.perGbMonth} precision="exact" />
-                ),
-              })
-            ) : (
-              <BillingReadFailure
-                read={retention}
-                section={t("priceList.retention")}
-              />
-            )}
+            {t.rich("priceList.retentionTerms", {
+              months: count(retention.includedMonths),
+              price: () => (
+                <Money value={retention.perGbMonth} precision="exact" />
+              ),
+            })}
           </Price>
           <Price name="tokens" term={t("priceList.tokens")}>
             {t("priceList.tokensTerms")}
