@@ -14,7 +14,7 @@ Read `oxagen-roadmap:docs/oxagen/mission-control/BUILD-CHUNKS.md` first. Its sec
 
 1. `git fetch origin` and note `origin/main`'s sha. Read `git log --oneline -30 origin/main -- apps/app` for anything that landed on this session's pages since the plan was written.
 2. Check the preconditions:
-   - `docs/audits/2026-09-19-mission-control-gap-inventory-review.md` exists on main. If it does not, this branch has not merged; run from it.
+   - `oxagen-roadmap:docs/oxagen/audits/2026-09-19-mission-control-gap-inventory-review.md` exists on main. If it does not, this branch has not merged; run from it.
    - PRs #3479 and #3459: open, merged, or closed. Tell the workflow through `skipLanes: ["prs"]` if both have merged.
 3. Decide the worktree root. On the shared machine it is `~/Projects/.worktrees/oxagen`. In a cloud session use `../oxagen-worktrees`. Pass it as `worktreeRoot`.
 4. To skip a lane that has already shipped, pass its id in `skipLanes`. To see the scout's verdict without building, pass `dryRun: true` first.

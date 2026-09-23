@@ -39,7 +39,7 @@ const CONTEXT = `
 oxagen-roadmap:<path> means <path> in https://github.com/macanderson/oxagen-roadmap (the build plan, the gap inventory, and the product spec moved there on 2026-09-23, #3895). Read it from a checkout beside this repository (~/Projects/oxagen-roadmap, or ../oxagen-roadmap in a cloud session); a change to those files is a pull request in that repository.
 CONTEXT you must read before editing (paths relative to the repo root):
 - oxagen-roadmap:docs/oxagen/mission-control/BUILD-CHUNKS.md: the session plan and the corrected gap facts. Your session's section names your lane and what is already built.
-- docs/audits/2026-09-19-mission-control-gap-inventory-review.md: why the older gap inventory is stale. Do not rebuild anything §1 there marks Built.
+- oxagen-roadmap:docs/oxagen/audits/2026-09-19-mission-control-gap-inventory-review.md: why the older gap inventory is stale. Do not rebuild anything §1 there marks Built.
 - apps/app/ARCHITECTURE.md §1.2 (the page set and what each page reads), §3 (viewer, kernel, ports, mappers, SSE, not recorded), §4 (invariants), §6 (testing).
 - oxagen-roadmap:docs/mission-control-spec.md §14 (the page table), and the section your lane names.
 - apps/app/capability-ui-map.json: the enforced binding of every app-layer capability to a page and a proof. Diff against it first, the spec second.
@@ -248,7 +248,7 @@ const session = {
       owns: ['oxagen-roadmap:docs/oxagen/mission-control/GAP-INVENTORY.md', 'docs/adr/ADR-1xx-*.md (one new file)', 'oxagen-roadmap:docs/mission-control-spec.md §2.1 and §14 (notes only)', 'apps/app/ARCHITECTURE.md §1.2 lines for Skills and Mandate', 'docs/capabilities/*.md (twelve new files)', 'docs/capabilities/_index.md'],
       checks: ['GAP-INVENTORY.md still says Mandate detail Missing', 'ARCHITECTURE.md §1.2 still claims a skills/[[...tab]] catch-all', 'no ADR records the 2026-09-14 scope review', 'docs/capabilities lacks files for approval_rule.{list,set,delete,enabled.set}, approval.auto_eligibility.get, mandate.{grant,revoke,limits.update,request,list,get}, context.steering.freshness'],
       issues: ['#2957', '#3286', '#2592'],
-      task: `(a) Rewrite oxagen-roadmap:docs/oxagen/mission-control/GAP-INVENTORY.md against origin/main: apply every correction in docs/audits/2026-09-19-mission-control-gap-inventory-review.md §1 to §3 and §5, keep the page-by-page table shape, add a "Class" column (UI-only, UI plus backend, backend, cut) per row, take the page set from apps/app/src/app with ARCHITECTURE.md §1.2 as the map, drop the scorecard, and name the owning issue per row. Keep the "Cut" rows and cite apps/app/ARCHITECTURE.md §9 (2026-09-14, 2026-09-15, 2026-09-18 entries) and ADR-062 for each.
+      task: `(a) Rewrite oxagen-roadmap:docs/oxagen/mission-control/GAP-INVENTORY.md against origin/main: apply every correction in oxagen-roadmap:docs/oxagen/audits/2026-09-19-mission-control-gap-inventory-review.md §1 to §3 and §5, keep the page-by-page table shape, add a "Class" column (UI-only, UI plus backend, backend, cut) per row, take the page set from apps/app/src/app with ARCHITECTURE.md §1.2 as the map, drop the scorecard, and name the owning issue per row. Keep the "Cut" rows and cite apps/app/ARCHITECTURE.md §9 (2026-09-14, 2026-09-15, 2026-09-18 entries) and ADR-062 for each.
 (b) Write one ADR, next free number after the highest in docs/adr, titled "The 2026-09-14 scope review: what the rev1 app does not build", recording the ten cuts and the two reversals (Audit page 2026-09-15 #3097, Model funding 2026-09-18) with their ARCHITECTURE.md §9 sources. Status Accepted, decided by the maintainer on the dates given. Follow the shape of docs/adr/ADR-095.
 (c) In oxagen-roadmap:docs/mission-control-spec.md add a one-line status note under §2.1 that legal hold, reconciliation, and the ontology engine are cut for rev1 per that ADR. Do not rewrite the spec.
 (d) In apps/app/ARCHITECTURE.md §1.2 correct the Skills row (no catch-all route exists; the page is one section; Phase 2 moves it under Steering per ADR-097) and the Mandate row's "not yet built" sentence (line ~90), and add a decision-log line dated today.
@@ -276,5 +276,5 @@ const session = {
   ],
 }
 
-const result = await runSession(session, 'docs/audits/2026-09-19-mission-control-gap-inventory-review.md §5, ADR-095 as the ADR shape, tools/scripts/check_ui_parity.mjs, docs/capabilities/kill_switch.set.md as the doc shape')
+const result = await runSession(session, 'oxagen-roadmap:docs/oxagen/audits/2026-09-19-mission-control-gap-inventory-review.md §5, ADR-095 as the ADR shape, tools/scripts/check_ui_parity.mjs, docs/capabilities/kill_switch.set.md as the doc shape')
 return result
