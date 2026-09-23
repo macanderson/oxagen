@@ -33,7 +33,6 @@ const {
   requireViewer,
   Audit,
   Billing,
-  BillingActions,
   Fleet,
   Run,
   Agents,
@@ -61,8 +60,11 @@ const {
   return {
     requireViewer: vi.fn<(org: string, ws?: string) => Promise<unknown>>(),
     Audit: vi.fn((_props: Record<string, unknown>) => null),
-    Billing: vi.fn((_props: Record<string, unknown>) => null),
-    BillingActions: vi.fn((_props: Record<string, unknown>) => null),
+    // Billing draws its own header (a not-loaded state replaces it), so the
+    // stand-in draws the h1 from the title the route hands it.
+    Billing: vi.fn((props: Record<string, unknown>) => (
+      <h1>{String(props.title)}</h1>
+    )),
     Fleet: vi.fn(
       (props: Record<string, unknown> & { spendTiles?: ReactNode }) => (
         <>{props.spendTiles}</>
@@ -116,7 +118,12 @@ vi.mock("@/server/viewer", () => ({
   },
 }));
 vi.mock("@/features/audit", () => ({ Audit, AuditSkeleton: () => null }));
-vi.mock("@/features/billing", () => ({ Billing, BillingActions }));
+vi.mock("@/features/billing", () => ({ Billing }));
+// Billing names the signed-in person on its denied state; the session is Better
+// Auth's, so the stub answers with the name alone.
+vi.mock("@/server/session", () => ({
+  getAuthUser: () => Promise.resolve({ name: "Marcus Bell" }),
+}));
 vi.mock("@/features/fleet", () => ({ Fleet, FleetRegister: () => null }));
 vi.mock("@/features/run", () => ({ Run }));
 vi.mock("@/features/agents", () => ({
@@ -126,7 +133,10 @@ vi.mock("@/features/agents", () => ({
   AgentSource,
   AgentsCreate: () => null,
 }));
-vi.mock("@/features/steering", () => ({
+// The view parser and link builder stay real: the route redirects a legacy
+// `?tab=` URL to its path segment with them.
+vi.mock("@/features/steering", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/steering")>()),
   Steering,
   SteeringCreate: (props: { searchParams: Record<string, string> }) => (
     <p data-testid="steering-create" data-tab={props.searchParams.tab} />
@@ -167,10 +177,14 @@ vi.mock("@/features/organization/api-key-actions", () => ({
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
-// The Skills route only moves to the Steering tab; the redirect throws, as
-// Next's does, with the target in its message.
+// The Skills route only moves to the Steering tab, and the Steering route moves
+// a legacy `?tab=` URL to its path; each redirect throws, as Next's does, with
+// the target in its message.
 vi.mock("@/shared/navigation", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/shared/navigation")>()),
+  redirectTo: (path: string) => {
+    throw new Error(`REDIRECT ${path}`);
+  },
   permanentRedirectTo: (path: string) => {
     throw new Error(`REDIRECT ${path}`);
   },
@@ -266,7 +280,7 @@ describe("the Audit page", () => {
 });
 
 describe("the Billing page", () => {
-  it("resolves the organization viewer, names the page once and hands the viewer, the data source, the checkout outcome and the invoices cursor to Billing", async () => {
+  it("resolves the organization viewer, names the page once and hands the viewer, the data source, the title, the signed-in name, the checkout outcome and the invoices cursor to Billing", async () => {
     const ctx = { orgSlug: "acme", orgName: "Acme Robotics" };
     requireViewer.mockResolvedValue(ctx);
     await expectPageTitle(
@@ -276,20 +290,16 @@ describe("the Billing page", () => {
     );
     expect(requireViewer).toHaveBeenCalledWith(...ORG);
     expect(Billing).toHaveBeenCalledOnce();
+    // Billing renders the header itself (eyebrow, subtext and Change plan),
+    // since its not-loaded states replace the header with the body.
     expect(Billing.mock.calls[0]?.[0]).toEqual({
       ctx,
       source,
+      title: title("billing"),
+      viewerName: "Marcus Bell",
       checkout: "success",
       cursor: "c2",
     });
-    // The header carries the eyebrow, the description and Change plan
-    // (pages/billing.md); the action reads the plan on its own.
-    expect(screen.getByText("Organization")).toBeInTheDocument();
-    expect(
-      screen.getByText(/What Acme Robotics pays Oxagen/),
-    ).toBeInTheDocument();
-    expect(BillingActions).toHaveBeenCalledOnce();
-    expect(BillingActions.mock.calls[0]?.[0]).toEqual({ ctx, source });
   });
 
   it("hands Billing no checkout outcome and the newest invoices when the URL carries neither", async () => {
@@ -311,7 +321,7 @@ describe("the Steering page", () => {
     requireViewer.mockResolvedValue(ctx);
     await expectPageTitle(
       await STEERING(),
-      routeProps(SEGMENTS, { tab: "prs", proposal: "prp_1" }),
+      routeProps(SEGMENTS, { proposal: "prp_1" }),
       title("steering"),
     );
     expect(requireViewer).toHaveBeenCalledWith(...WS);
@@ -319,17 +329,25 @@ describe("the Steering page", () => {
     expect(Steering.mock.calls[0]?.[0]).toEqual({
       ctx,
       source,
-      searchParams: { tab: "prs", proposal: "prp_1" },
+      searchParams: { proposal: "prp_1" },
     });
-    expect(screen.getByTestId("steering-body")).toHaveAttribute(
-      "data-tab",
-      "prs",
-    );
-    expect(screen.getByTestId("steering-create")).toHaveAttribute(
-      "data-tab",
-      "prs",
-    );
+    expect(screen.getByTestId("steering-body")).toBeInTheDocument();
+    expect(screen.getByTestId("steering-create")).toBeInTheDocument();
     expect(screen.queryByTestId("not-recorded")).toBeNull();
+  });
+
+  it("moves a legacy ?tab= URL to the tab's path segment and keeps the selected proposal", async () => {
+    requireViewer.mockResolvedValue({
+      orgSlug: "acme",
+      wsSlug: "core-platform",
+    });
+    const { default: page } = await STEERING();
+    await expect(
+      page(routeProps(SEGMENTS, { tab: "prs", proposal: "prp_1" })),
+    ).rejects.toThrow(
+      /^REDIRECT \/acme\/core-platform\/steering\/proposals\b.*prp_1/,
+    );
+    expect(Steering).not.toHaveBeenCalled();
   });
 });
 
@@ -579,7 +597,7 @@ describe("Organization › People", { timeout: 30_000 }, () => {
   });
 
   it("resolves the organization viewer, names the page once and renders the roster org.members read for that viewer", async () => {
-    const ctx = { orgSlug: "acme", orgRole: "owner" };
+    const ctx = { orgSlug: "acme", orgName: "Acme Robotics", orgRole: "owner" };
     requireViewer.mockResolvedValue(ctx);
     members.mockResolvedValue({
       ok: true,
@@ -596,7 +614,12 @@ describe("Organization › People", { timeout: 30_000 }, () => {
         invitations: [],
       },
     });
-    await expectPageTitle(await people, routeProps(SEGMENTS), title("people"));
+    await expectPageTitle(
+      await people,
+      routeProps(SEGMENTS),
+      title("people"),
+      "Acme Robotics",
+    );
     expect(requireViewer).toHaveBeenCalledWith(...ORG);
     expect(members).toHaveBeenCalledWith(ctx);
     expect(screen.getByRole("main")).toHaveTextContent("Marcus Bell");
@@ -604,13 +627,18 @@ describe("Organization › People", { timeout: 30_000 }, () => {
   });
 
   it("renders the Workspaces section of the same page from the same viewer and data source (#2964)", async () => {
-    const ctx = { orgSlug: "acme", orgRole: "owner" };
+    const ctx = { orgSlug: "acme", orgName: "Acme Robotics", orgRole: "owner" };
     requireViewer.mockResolvedValue(ctx);
     members.mockResolvedValue({
       ok: true,
       value: { members: [], invitations: [] },
     });
-    await expectPageTitle(await people, routeProps(SEGMENTS), title("people"));
+    await expectPageTitle(
+      await people,
+      routeProps(SEGMENTS, { tab: "workspaces" }),
+      title("people"),
+      "Acme Robotics",
+    );
     expect(Workspaces).toHaveBeenCalledOnce();
     expect(Workspaces.mock.calls[0]?.[0]).toEqual({ ctx, source });
   });
@@ -618,12 +646,13 @@ describe("Organization › People", { timeout: 30_000 }, () => {
 
 describe("Organization › Roles", () => {
   it("resolves the organization viewer, names the page once and hands the viewer and the data source to Roles", async () => {
-    const ctx = { orgSlug: "acme", orgRole: "owner" };
+    const ctx = { orgSlug: "acme", orgName: "Acme Robotics", orgRole: "owner" };
     requireViewer.mockResolvedValue(ctx);
     await expectPageTitle(
       await import("./roles/page"),
       routeProps(SEGMENTS),
       title("roles"),
+      "Acme Robotics",
     );
     expect(requireViewer).toHaveBeenCalledWith(...ORG);
     expect(Roles).toHaveBeenCalledOnce();
@@ -658,6 +687,7 @@ describe("Organization › API keys", () => {
     // A key names a workspace (ADR-073): the page resolves one before it reads.
     const ctx = {
       orgSlug: "acme",
+      orgName: "Acme Robotics",
       orgRole: "owner",
       wsSlug: "core-platform",
     };
@@ -690,6 +720,7 @@ describe("Organization › API keys", () => {
       await API_KEYS(),
       routeProps(SEGMENTS, { workspace: "growth" }),
       title("apiKeys"),
+      "Acme Robotics",
     );
     expect(requireViewer).toHaveBeenCalledWith(...ORG);
     expect(requireViewer).toHaveBeenCalledWith("acme", "growth");
@@ -702,6 +733,7 @@ describe("Organization › API keys", () => {
   it("falls back to the first workspace the viewer may enter when the URL names none", async () => {
     requireViewer.mockResolvedValue({
       orgSlug: "acme",
+      orgName: "Acme Robotics",
       orgRole: "owner",
       wsSlug: "core-platform",
     });
@@ -710,17 +742,23 @@ describe("Organization › API keys", () => {
       await API_KEYS(),
       routeProps(SEGMENTS),
       title("apiKeys"),
+      "Acme Robotics",
     );
     expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
   });
 
   it("resolves no workspace and reads no key when the viewer may enter none (negative)", async () => {
-    requireViewer.mockResolvedValue({ orgSlug: "acme", orgRole: "owner" });
+    requireViewer.mockResolvedValue({
+      orgSlug: "acme",
+      orgName: "Acme Robotics",
+      orgRole: "owner",
+    });
     workspaces.mockResolvedValue({ ok: true, value: { workspaces: [] } });
     await expectPageTitle(
       await API_KEYS(),
       routeProps(SEGMENTS),
       title("apiKeys"),
+      "Acme Robotics",
     );
     expect(requireViewer).toHaveBeenCalledExactlyOnceWith(...ORG);
     expect(apiKeys).not.toHaveBeenCalled();

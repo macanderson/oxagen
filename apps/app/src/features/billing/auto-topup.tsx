@@ -14,7 +14,7 @@ import { inputBase } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { formatCount } from "@/ui/money-format";
 import { setAutoTopup } from "./actions";
-import { Section, useDate } from "./section";
+import { Section, isoDate } from "./section";
 
 type AutoTopupState = NonNullable<GauBucket["autoTopup"]>;
 type Outcome = "saved" | "invalidBlocks" | "denied" | "failed";
@@ -57,7 +57,7 @@ function AutoTopupControl({
 }) {
   const t = useTranslations("billing.autoTopup");
   const locale = useLocale();
-  const date = useDate();
+  const date = isoDate;
   const [enabled, setEnabled] = useState(state.enabled);
   const [blocks, setBlocks] = useState(state.blocks);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
@@ -111,7 +111,12 @@ function AutoTopupControl({
             {outcome === "denied" ? t("readOnly") : t("failed")}
           </FormAlert>
         ) : null}
-        <div className="flex items-center gap-2 text-sm">
+        {/* The label wraps the switch so its whole row is the 44px phone target. */}
+        <label
+          htmlFor="auto-topup-enabled"
+          data-touch-target=""
+          className="flex items-center gap-2 text-sm"
+        >
           <input
             id="auto-topup-enabled"
             type="checkbox"
@@ -123,8 +128,8 @@ function AutoTopupControl({
             disabled={!editable}
             className="size-4"
           />
-          <label htmlFor="auto-topup-enabled">{t("enabled")}</label>
-        </div>
+          {t("enabled")}
+        </label>
         <div className="flex flex-wrap items-center gap-3 text-sm">
           <label htmlFor="auto-topup-blocks">{t("blocks")}</label>
           <input
@@ -140,6 +145,7 @@ function AutoTopupControl({
             disabled={!editable}
             aria-invalid={invalid || undefined}
             aria-describedby={invalid ? "auto-topup-blocks-error" : undefined}
+            data-touch-target=""
             className={`${inputBase} w-24`}
           />
           {blockSizeGau === null || !Number.isInteger(blocks) ? null : (
@@ -162,6 +168,7 @@ function AutoTopupControl({
               label={t("save")}
               pendingLabel={t("saving")}
               fullWidth={false}
+              secondary
             />
             {outcome === "saved" ? (
               <p role="status" className="text-sm">

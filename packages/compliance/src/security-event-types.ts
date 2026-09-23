@@ -379,6 +379,19 @@ export interface GovernanceChangeDetail {
  * adding a named interface, never by reaching for `Record<string, unknown>`:
  * an audit reader has to be able to know what a row means.
  */
+export interface RunOutcomesPolicyChangeDetail {
+  feature: "run_outcomes";
+  change: "customer_consent" | "platform_access";
+  enabled: boolean;
+  reason: string | null;
+}
+
+export interface RunIssueAuthorizationDetail {
+  feature: "run_outcomes";
+  provider: "linear";
+  connectionId: string;
+}
+
 /**
  * Evidence recorded on an SSO provider's lifecycle events
  * (`sso.provider_created`, `sso.domain_verified`, `sso.provider_updated`,
@@ -431,6 +444,8 @@ export interface SsoGroupRolesDetail {
 }
 
 export type SecurityEventDetail =
+  | RunIssueAuthorizationDetail
+  | RunOutcomesPolicyChangeDetail
   | ApprovalRuleInvalidationDetail
   | GovernanceChangeDetail
   | SsoProviderChangeDetail

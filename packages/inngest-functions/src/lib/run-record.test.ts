@@ -5,7 +5,16 @@
  * seal refuses to export.
  */
 import { schema } from "@oxagen/database";
-import type { TachoFrameRow } from "@oxagen/telemetry";
+import {
+  flattenEvent,
+  GENESIS_CURSOR,
+  hashEvent,
+  type JsonValue,
+  sealEvent,
+  type UnsealedTachoEvent,
+  wrappedFrameOf,
+} from "@oxagen/tacho";
+import type { TachoEventRecord, TachoFrameRow } from "@oxagen/telemetry";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -15,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   createPostgresRunStore: vi.fn(),
   getSegment: vi.fn(),
   selectTachoEvents: vi.fn(),
+  selectTachoEventRecords: vi.fn(),
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -39,6 +49,7 @@ vi.mock("@oxagen/run-ledger/evidence-store", () => ({
 }));
 vi.mock("@oxagen/telemetry", () => ({
   selectTachoEvents: mocks.selectTachoEvents,
+  selectTachoEventRecords: mocks.selectTachoEventRecords,
 }));
 
 import {
@@ -189,9 +200,14 @@ describe("readSealedSegments", () => {
 
   it("builds a wrapped session's one segment from every row, paging past the first 500", async () => {
     const rows = Array.from({ length: 501 }, (_, i) => tachoRow(i));
-    mocks.selectTachoEvents.mockImplementation(
+    mocks.selectTachoEventRecords.mockImplementation(
       ({ afterSeq, limit }: { afterSeq: number; limit: number }) =>
-        Promise.resolve(rows.filter((r) => r.seq > afterSeq).slice(0, limit)),
+        Promise.resolve(
+          rows
+            .filter((r) => r.seq > afterSeq)
+            .slice(0, limit)
+            .map((frame) => ({ frame, envelope: {} })),
+        ),
     );
     const [segment] = await readSealedSegments(SCOPE, {
       source: "tacho",
@@ -203,13 +219,148 @@ describe("readSealedSegments", () => {
     expect(segment?.frameCount).toBe(501);
     expect(segment?.digests.at(-1)).toBe(rows[500]?.hash);
     expect(
-      mocks.selectTachoEvents.mock.calls.map((c) => c[0].afterSeq),
+      mocks.selectTachoEventRecords.mock.calls.map((c) => c[0].afterSeq),
     ).toEqual([-1, 499]);
     expect(
-      mocks.selectTachoEvents.mock.calls.every(
+      mocks.selectTachoEventRecords.mock.calls.every(
         (c) => c[0].sessionUuid === SESSION,
       ),
     ).toBe(true);
+    // No row here rebuilds its event, so every frame is the row's projection.
+    expect(
+      segment?.envelopes.every(
+        (e) => (e as Record<string, unknown>)["event"] === undefined,
+      ),
+    ).toBe(true);
+  });
+
+  it("carries each event its stored row rebuilds, and leaves out one it cannot prove (#3733)", async () => {
+    const event = sealEvent(
+      {
+        v: "tacho/1.0",
+        event_id: "evt_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+        session_id: "sess-1",
+        session_uuid: SESSION,
+        root_session_uuid: SESSION,
+        ts: "2026-09-11T09:00:00.000Z",
+        fidelity: "sdk",
+        source: "hook",
+        agent: {
+          agent_key: "acme.core.cc-laptop",
+          fleet_id: "wrk_1",
+          runtime: "claude-code",
+          harness: "claude-code",
+          wrapper_version: "2.1.1",
+        },
+        turn: { turn_seq: 1 },
+        kind: "tool_call",
+        body: { tool_name: "Read", tool_status: "ok" },
+      } as UnsealedTachoEvent,
+      GENESIS_CURSOR,
+    ).event;
+    const { bytes_ref: _serverOwned, ...envelope } = flattenEvent(event);
+    const proven: TachoEventRecord = {
+      frame: {
+        ...tachoRow(0),
+        hash: event.hash,
+        bytesRef: "evb:v1:k1:" + "a".repeat(64),
+      },
+      envelope,
+    };
+    // The row says Read; the sealed event said Write. No reading hashes to
+    // the chain's hash, so the export does not carry an event for it.
+    const unproven: TachoEventRecord = {
+      frame: tachoRow(1),
+      envelope: {
+        ...envelope,
+        seq: 1,
+        body: JSON.stringify({ tool_name: "Write" }),
+      },
+    };
+    mocks.selectTachoEventRecords.mockResolvedValue([proven, unproven]);
+    const [segment] = await readSealedSegments(SCOPE, {
+      source: "tacho",
+      sessionUuid: SESSION,
+      enforcementTier: "harness",
+      completenessGaps: [],
+      replayGrade: null,
+    });
+    const [carried, bare] = (segment?.envelopes ?? []) as Array<
+      Record<string, unknown>
+    >;
+    expect(carried?.["event"]).toEqual(event);
+    expect(carried?.["ts"]).toBe("2026-09-11T09:00:00.000Z");
+    expect(carried?.["content"]).toEqual({
+      digest: null,
+      bytes_ref: "evb:v1:k1:" + "a".repeat(64),
+      redactions: [],
+    });
+    expect(hashEvent(carried?.["event"] as Record<string, unknown>)).toBe(
+      carried?.["hash"],
+    );
+    expect(bare?.["event"]).toBeUndefined();
+    expect(bare?.["tool_name"]).toBe("Read");
+  });
+
+  it("carries an event rebuilt from the row as ClickHouse reads it, with no bytes_ref when none was kept (#3733)", async () => {
+    const event = sealEvent(
+      {
+        v: "tacho/1.0",
+        event_id: "evt_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+        session_id: "sess-1",
+        session_uuid: SESSION,
+        root_session_uuid: SESSION,
+        ts: "2026-09-11T09:00:00Z",
+        fidelity: "sdk",
+        source: "hook",
+        agent: {
+          agent_key: "acme.core.cc-laptop",
+          fleet_id: "wrk_1",
+          runtime: "claude-code",
+          harness: "claude-code",
+          wrapper_version: "2.1.1",
+        },
+        turn: { turn_seq: 4 },
+        harness_event_sequence: 11,
+        kind: "tool_call",
+        body: { tool_name: "Read", tool_status: "ok" },
+      } as UnsealedTachoEvent,
+      GENESIS_CURSOR,
+    ).event;
+    const { bytes_ref: _serverOwned, ...flat } = flattenEvent(event);
+    // UInt64 and Nullable(UInt32) read back as JSON text, ts as toString(ts).
+    const envelope = {
+      ...flat,
+      seq: "0",
+      ts: "2026-09-11 09:00:00.000",
+      turn_seq: "4",
+      harness_event_sequence: "11",
+    };
+    mocks.selectTachoEventRecords.mockResolvedValue([
+      { frame: { ...tachoRow(0), hash: event.hash, bytesRef: "" }, envelope },
+    ]);
+    const [segment] = await readSealedSegments(SCOPE, {
+      source: "tacho",
+      sessionUuid: SESSION,
+      enforcementTier: "harness",
+      completenessGaps: [],
+      replayGrade: null,
+    });
+    const [carried] = (segment?.envelopes ?? []) as Array<
+      Record<string, JsonValue>
+    >;
+    expect(carried?.["event"]).toEqual(event);
+    expect(carried?.["ts"]).toBe("2026-09-11T09:00:00Z");
+    expect(carried?.["turn_seq"]).toBe(4);
+    expect(carried?.["content"]).toEqual({
+      digest: null,
+      bytes_ref: null,
+      redactions: [],
+    });
+    // The frame is exactly what a verifier rebuilds from the event it carries.
+    expect(carried).toEqual(
+      wrappedFrameOf(carried?.["event"] as Record<string, JsonValue>, null),
+    );
   });
 });
 

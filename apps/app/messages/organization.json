@@ -6,6 +6,9 @@
       "roles": "Roles",
       "apiKeys": "API keys",
       "modelFunding": "Model funding",
+      "invitations": "Invitations",
+      "workspaces": "Workspaces",
+      "costCenters": "Cost centers",
       "sso": "Single sign-on"
     },
     "roles": {
@@ -131,9 +134,9 @@
         "targetNotMember": "This person is no longer a member of this organization.",
         "roleNotGrantable": "That role is not one this organization grants. Nothing was changed.",
         "insufficientRole": "Your organization role does not allow this change. Nothing was changed.",
-        "githubNotAuthorized": "This organization has not connected GitHub, so the repository cannot be reached. Connect GitHub from a workspace’s settings, then try again.",
+        "githubNotAuthorized": "This organization has not connected GitHub, so the repository cannot be reached. Connect GitHub from a workspace\u2019s settings, then try again.",
         "installationUnreachable": "The Oxagen GitHub App is not installed on that owner, or the connected GitHub account cannot reach it. Install the App on the owner, then try again.",
-        "repositoryNotInstalled": "The App’s installation on that owner cannot see that repository. Grant it access on GitHub, then try again.",
+        "repositoryNotInstalled": "The App\u2019s installation on that owner cannot see that repository. Grant it access on GitHub, then try again.",
         "mainRepoClaimed": "Another workspace already steers by that repository. A repository is the main repository of one workspace.",
         "repositoryLinkedElsewhere": "Another workspace has linked that repository, so it cannot be a main repository. A main repository holds the .oxagen/ tree, and a linked one receives another workspace’s Context PRs.",
         "repositoryUnparsable": "That is not a repository name GitHub accepts. Write it as owner/name.",
@@ -228,7 +231,7 @@
         "secret": {
           "title": "Copy the key now",
           "body": "This is the only time Oxagen shows it. Close this and the secret is gone from here for good.",
-          "named": "{name} · begins {prefix}"
+          "named": "{name} \u00b7 begins {prefix}"
         },
         "failure": {
           "denied": "Your organization role does not allow this. Nothing was changed.",
@@ -252,7 +255,7 @@
       "workspace": {
         "label": "Workspace",
         "archived": "{name} (archived)",
-        "archivedNote": "This workspace is archived. Its keys still authenticate, so they are listed here until they are revoked — but no new key is issued into it."
+        "archivedNote": "This workspace is archived. Its keys still authenticate, so they are listed here until they are revoked \u2014 but no new key is issued into it."
       },
       "noWorkspace": {
         "title": "A key needs a workspace",
@@ -262,12 +265,12 @@
       "neverUsed": "Never used",
       "empty": "This workspace has no API keys.",
       "denied": {
-        "title": "You cannot see this organization’s API keys",
+        "title": "You cannot see this organization\u2019s API keys",
         "body": "Signed in as {role}. Needed: {permission}. An owner can grant it, and the grant is recorded in the audit record."
       },
       "pending": {
         "title": "Waiting for approval",
-        "body": "Access request {id} is waiting for an owner’s decision."
+        "body": "Access request {id} is waiting for an owner\u2019s decision."
       },
       "error": {
         "title": "API keys could not be loaded",
@@ -281,19 +284,19 @@
       },
       "pager": {
         "label": "Pages of API keys",
-        "range": "{from}–{to} of {total}",
+        "range": "{from}\u2013{to} of {total}",
         "previous": "Previous",
         "next": "Next"
       },
       "emptyFiltered": "Every key in this workspace has been revoked. Choose All to see {revoked, plural, one {it} other {them}}."
     },
     "denied": {
-      "title": "You cannot see this organization’s people",
+      "title": "You cannot see this organization\u2019s people",
       "body": "Signed in as {role}. Needed: {permission}. An owner can grant it, and the grant is recorded in the audit record."
     },
     "pending": {
       "title": "Waiting for approval",
-      "body": "Access request {id} is waiting for an owner’s decision."
+      "body": "Access request {id} is waiting for an owner\u2019s decision."
     },
     "error": {
       "title": "Organization could not be loaded",
@@ -654,6 +657,10 @@
         "none": "None",
         "hint": "Runs rolled up after this change are charged to the new label."
       }
+    },
+    "header": {
+      "eyebrow": "Organization",
+      "description": "Manage people, workspaces, roles, model funding, API keys, and cost centers."
     }
   }
 }

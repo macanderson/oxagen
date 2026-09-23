@@ -167,7 +167,18 @@ export function createControlClient(
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     let response: Awaited<ReturnType<FetchLike>>;
+    let text: string;
     try {
+      // `clearTimeout` used to run in a `finally` scoped to this fetch call
+      // alone, so the abort timer was disarmed the instant headers arrived —
+      // before `response.text()` ever ran. A response whose body stalled
+      // (a slow or wedged connection past the headers) then had nothing
+      // bounding it: `post` never resolved, `shipOnce` never returned, and
+      // the daemon's `ticking` guard (the interval driver skips a tick that
+      // overlaps the one before it) stopped every later tick behind it,
+      // wedging the whole ship path on one hung request. The timeout now
+      // covers the read as well as the connect, and either half aborting
+      // reports the same `ControlUnreachable` the caller already retries.
       response = await fetchImpl(url, {
         method: "POST",
         headers: {
@@ -178,12 +189,12 @@ export function createControlClient(
         body: JSON.stringify(body),
         signal: controller.signal,
       });
+      text = await response.text();
     } catch (error) {
       throw new ControlUnreachable(error);
     } finally {
       clearTimeout(timer);
     }
-    const text = await response.text();
     const hint = readRateLimitHint(response.headers, nowMs());
     if (hint) options.onRateLimit?.(hint);
     if (!response.ok)

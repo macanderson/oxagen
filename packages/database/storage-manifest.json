@@ -135,6 +135,15 @@
       "writes": []
     },
     {
+      "domain": "run",
+      "name": "authorize_issue_provider",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "bind_agent_environment",
       "reads": [],
@@ -1424,6 +1433,24 @@
     },
     {
       "domain": "run",
+      "name": "get_run_issue_providers",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "run",
+      "name": "get_run_outcomes_settings",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "run",
       "name": "get_run_outputs",
       "reads": [],
       "surfaces": [
@@ -1447,6 +1474,15 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "run",
+      "name": "get_run_work",
+      "reads": [],
+      "surfaces": [
+        "api"
       ],
       "writes": []
     },
@@ -3306,6 +3342,22 @@
       "writes": []
     },
     {
+      "domain": "run",
+      "name": "set_run_outcomes_access",
+      "reads": [],
+      "surfaces": [],
+      "writes": []
+    },
+    {
+      "domain": "run",
+      "name": "set_run_outcomes_settings",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "secret",
       "name": "set_secret_value",
       "reads": [],
@@ -3367,6 +3419,15 @@
         "api",
         "cli",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "run",
+      "name": "start_issue_authorization",
+      "reads": [],
+      "surfaces": [
+        "api"
       ],
       "writes": []
     },
@@ -3857,7 +3918,7 @@
       "writes": []
     }
   ],
-  "contentHash": "0fd0f8b81e08b91f8ffb5205a6eed1b93a72c638aac630dd3875e57c32acdd20",
+  "contentHash": "fd9ac67ab157cdcdc75ea1fb4f5f47f69a6481a7dba03037bc0b339b73383ff2",
   "domains": [
     {
       "name": "agent",
@@ -7296,6 +7357,24 @@
           "nullable": true,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "summary_input_digest",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "summary_observed_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "summary_observed_revision",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
         },
         {
           "name": "spec_version",
@@ -21854,6 +21933,24 @@
           "nullable": true,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "summary_input_digest",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "summary_observed_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "summary_observed_revision",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
         }
       ],
       "domain": "tacho",

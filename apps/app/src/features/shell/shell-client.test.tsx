@@ -25,6 +25,7 @@ import {
 } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import en from "../../../messages/en.json";
+import createMessages from "../../../messages/create.json";
 import shellMessages from "../../../messages/shell.json";
 import uiMessages from "../../../messages/ui.json";
 
@@ -151,6 +152,7 @@ function renderShell(data: ShellData) {
         ...en,
         ...shellMessages,
         ...uiMessages,
+        ...createMessages,
       }}
     >
       <ShellClient data={data} />
@@ -176,7 +178,9 @@ describe("the shell on /{org}/{ws}", () => {
     expect(launcher).toHaveAttribute("aria-haspopup", "dialog");
     expect(screen.getByTestId("assistant-flyout")).toHaveAttribute("inert");
     // The bell and nav counts are still dropped.
-    expect(screen.queryByRole("button", { name: /^Notifications/ })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: /^Notifications/ }),
+    ).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.queryByRole("tab")).toBeNull();
     const main = screen.getByRole("navigation", { name: "Main" });
@@ -244,14 +248,14 @@ describe("the user-menu trigger", () => {
 });
 
 describe("sidebar", () => {
-  it("renders exactly the mockup's ten links with Agent IAM naming and the current page", () => {
+  it("renders exactly the mockup's ten links with Agents naming and the current page", () => {
     renderShell(shellData());
     const sidebar = screen.getByRole("complementary", { name: "Sidebar" });
     const main = within(sidebar).getByRole("navigation", { name: "Main" });
     const links = within(main).getAllByRole("link");
     expect(links.map((l) => [l.textContent, l.getAttribute("href")])).toEqual([
       ["Fleet", "/acme/core-platform"],
-      ["Agent IAM", "/acme/core-platform/agents"],
+      ["Agents", "/acme/core-platform/agents"],
       ["Tools", "/acme/core-platform/tools"],
       ["Steering", "/acme/core-platform/steering"],
       ["Runtimes", "/acme/core-platform/runtimes"],
@@ -266,7 +270,7 @@ describe("sidebar", () => {
         /^\/acme\/core-platform\/ontology(\/|$)/,
       );
     expect(
-      within(main).getByRole("link", { name: "Agent IAM" }),
+      within(main).getByRole("link", { name: "Agents" }),
     ).toBeInTheDocument();
     expect(within(main).getByRole("link", { name: "Fleet" })).toHaveAttribute(
       "aria-current",
@@ -344,7 +348,7 @@ describe("command menu", () => {
         .map((o) => o.textContent),
     ).toEqual([
       "Fleet",
-      "Agent IAM",
+      "Agents",
       "Tools",
       "Steering",
       "Runtimes",
@@ -395,7 +399,9 @@ describe("command menu", () => {
   it("opens from the search button, says when nothing matches, and opens a clicked route", async () => {
     const user = userEvent.setup();
     renderShell(shellData());
-    await user.click(screen.getByRole("button", { name: "Go to a page" }));
+    await user.click(
+      screen.getByRole("button", { name: shellMessages.shell.topbar.search }),
+    );
     const menu = await screen.findByTestId("command-menu");
     const input = within(menu).getByRole("combobox");
     await user.type(input, "zebra");

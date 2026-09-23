@@ -297,3 +297,46 @@ export async function handleTachoHosts(
   );
   return true;
 }
+
+/**
+ * `oxagen run -- <agent> [args...]`: the contained launcher (ADR-096,
+ * ADR-152). The platform CLI adds nothing to the run: tacho's own command
+ * asks the local daemon, which measures and registers the container before
+ * the agent starts.
+ */
+export async function handleContainedRun(
+  command: string[],
+  opts: { image?: string; workspace?: string; githubRepository?: string },
+  writer: CommandWriter = stdoutWriter,
+): Promise<number> {
+  const { runContained } = await import("@oxagen/tacho/cli");
+  const deps = await tachoDeps(writer);
+  const controller = new AbortController();
+  const stop = () => controller.abort();
+  process.once("SIGINT", stop);
+  process.once("SIGTERM", stop);
+  try {
+    const [agent, ...args] = command;
+    return await runContained(
+      {
+        agent,
+        args,
+        ...(opts.image !== undefined ? { image: opts.image } : {}),
+        ...(opts.workspace !== undefined ? { workspace: opts.workspace } : {}),
+        ...(opts.githubRepository !== undefined
+          ? { githubRepository: opts.githubRepository }
+          : {}),
+      },
+      {
+        ...deps,
+        cwd: process.cwd(),
+        signal: controller.signal,
+        write: (stream, text) =>
+          (stream === "stdout" ? process.stdout : process.stderr).write(text),
+      },
+    );
+  } finally {
+    process.off("SIGINT", stop);
+    process.off("SIGTERM", stop);
+  }
+}

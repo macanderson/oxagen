@@ -42,6 +42,7 @@ const source: DataSource = {
   billing: {
     plan: refuse,
     usageCredits: refuse,
+    retention: refuse,
     bucket: refuse,
     contractRate: refuse,
     invoices: refuse,
@@ -54,6 +55,8 @@ const source: DataSource = {
     transcript: refuse,
     chain: refuse,
     outputs: refuse,
+    work: refuse,
+    outcomesSettings: refuse,
   },
   approvals: { pending: refuse, resolved: refuse },
   agents: {

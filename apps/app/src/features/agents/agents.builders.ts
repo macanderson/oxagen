@@ -301,6 +301,7 @@ export function agentsSource(reads: AgentReads) {
     billing: {
       plan: refuse,
       usageCredits: refuse,
+      retention: refuse,
       bucket: refuse,
       contractRate: refuse,
       invoices: refuse,
@@ -313,6 +314,8 @@ export function agentsSource(reads: AgentReads) {
       transcript: refuse,
       chain: refuse,
       outputs: refuse,
+      work: refuse,
+      outcomesSettings: refuse,
     },
     approvals: { pending: refuse, resolved: refuse },
     agents: {

@@ -35,6 +35,7 @@ import {
   markPipelineUsed,
   setByok,
   addSteps,
+  topLevelCommand,
 } from "./usage.js";
 
 const mockReadConfig = readConfig as ReturnType<typeof vi.fn>;
@@ -100,6 +101,17 @@ describe("opting out fully suppresses id generation and network I/O", () => {
     expect(mockFetch).not.toHaveBeenCalled();
     // No installId/disclosed write should occur — disabled means truly no-op.
     expect(mockWriteConfig).not.toHaveBeenCalled();
+  });
+
+  it("never sends or writes for verify, the offline auditor's check, even with telemetry on", async () => {
+    await recordUsageEvent({
+      command: "verify",
+      durationMs: 100,
+      exitStatus: "success",
+    });
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(mockWriteConfig).not.toHaveBeenCalled();
+    expect(mockReadConfig).not.toHaveBeenCalled();
   });
 
   it("sendUsageEvent itself refuses to send when disabled, even if called directly", async () => {
@@ -434,5 +446,35 @@ describe("ALLOWED_KEYS matches the canonical server-side schema", () => {
     expect([...ALLOWED_KEYS].sort()).toEqual(
       [...USAGE_EVENT_ALLOWED_KEYS].sort(),
     );
+  });
+});
+
+describe("topLevelCommand — the command Commander dispatched, not the argv guess", () => {
+  interface Node {
+    name(): string;
+    parent: Node | null;
+  }
+  const node = (name: string, parent: Node | null): Node => ({
+    name: () => name,
+    parent,
+  });
+  const root = node("oxagen", null);
+
+  it("names the top-level command of a leaf, so an option before it cannot hide verify", () => {
+    // `oxagen -m x verify b.zip`: classifyCommand reads "prompt" from argv.
+    expect(
+      classifyCommand(
+        ["node", "oxagen", "-m", "x", "verify", "b.zip"],
+        ["verify"],
+      ),
+    ).toBe("prompt");
+    expect(topLevelCommand(node("verify", root), root)).toBe("verify");
+    const run = node("run", root);
+    expect(topLevelCommand(node("export", run), root)).toBe("run");
+  });
+
+  it("answers undefined when the root's own action ran, so the argv guess stands", () => {
+    expect(topLevelCommand(root, root)).toBeUndefined();
+    expect(topLevelCommand(node("stray", null), root)).toBeUndefined();
   });
 });

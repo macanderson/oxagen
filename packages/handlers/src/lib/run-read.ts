@@ -1,3 +1,4 @@
+import { readRunEnrichmentEnabled } from "./run-enrichment";
 // run-read.ts — resolving a run in the caller's workspace and reading its
 // frames from the store that recorded it (ADR-058).
 //
@@ -23,10 +24,14 @@ import {
   ledgerFrame,
   type RunFrame,
   type RunStore,
+  spliceSubagentChains,
   tachoFrame,
 } from "@oxagen/run-ledger";
 import { deferredEvidenceArchive } from "@oxagen/run-ledger/evidence-store";
-import { selectTachoEvents } from "@oxagen/telemetry";
+import {
+  selectTachoEvents,
+  selectTachoSubagentEvents,
+} from "@oxagen/telemetry";
 import {
   ledgerEnrichment,
   type LedgerRunRecord,
@@ -68,6 +73,7 @@ export type ResolvedRun = ResolvedSource & {
 };
 
 type TachoFrameReader = typeof selectTachoEvents;
+type TachoSubagentFrameReader = typeof selectTachoSubagentEvents;
 
 export type RunReadDeps = {
   queries: Pick<
@@ -79,6 +85,14 @@ export type RunReadDeps = {
   /** The worker run a witness run was for (ADR-064); null for any other run. */
   readWitnessFor: (scope: RunScope, runId: string) => Promise<string | null>;
   tachoFrames: TachoFrameReader;
+  /**
+   * Every subagent chain under a wrapped run's root session. Optional so a
+   * reader that only walks the run's own chain (the chain verifier, the frame
+   * body read) is built without it; `readRunFrames` reads no subagent frames
+   * when it is absent.
+   */
+  tachoSubagentFrames?: TachoSubagentFrameReader;
+  readEnrichmentEnabled?: typeof readRunEnrichmentEnabled;
 };
 
 export const runNotFound = () =>
@@ -96,6 +110,14 @@ export async function resolveRun(
 ): Promise<ResolvedRun> {
   const scope = runScope(ctx);
   const run = await resolveSource(deps, scope, publicId);
+  const enabled = deps.readEnrichmentEnabled
+    ? await deps.readEnrichmentEnabled(scope)
+    : true;
+  run.item = {
+    ...run.item,
+    enrichmentEnabled: enabled,
+    ...(enabled ? {} : { name: null, summary: null, canSummarize: false }),
+  };
   const witnessFor = await deps.readWitnessFor(scope, publicId);
   if (witnessFor !== null && ctx.apiKeyId !== null) throw runNotFound();
   return { ...run, witnessFor };
@@ -193,6 +215,58 @@ export async function readAllFrames(
   return { frames, complete: true };
 }
 
+/**
+ * Every frame of the run up to `cap`, its subagents' included: for a wrapped
+ * run, the root session's chain with each subagent chain spliced in where it
+ * was spawned (`spliceSubagentChains`). A subagent records on a chain of its
+ * own, and the run's cost already counts those chains; a transcript that read
+ * only the root showed none of the work they did. A ledger run has no
+ * subagent chains and reads as `readAllFrames` does.
+ *
+ * The cap is over the frames of every chain together, and `complete` is
+ * false when it cut either read short.
+ */
+export async function readRunFrames(
+  deps: RunReadDeps,
+  run: ResolvedRun,
+  cap: number,
+): Promise<{ frames: RunFrame[]; complete: boolean }> {
+  const own = await readAllFrames(deps, run, cap);
+  if (run.source !== "tacho" || deps.tachoSubagentFrames === undefined) {
+    return own;
+  }
+  const children: RunFrame[] = [];
+  let after: { sessionUuid: string; seq: number } | null = null;
+  let complete = own.complete;
+  for (;;) {
+    const room = cap - own.frames.length - children.length;
+    if (room <= 0) {
+      // Past the cap: ask for one more row only to learn whether one exists.
+      const probe = await deps.tachoSubagentFrames({
+        rootSessionUuid: run.sessionUuid,
+        after,
+        limit: 1,
+      });
+      if (probe.length > 0) complete = false;
+      break;
+    }
+    const want = Math.min(FRAME_READ_MAX, room);
+    const page = await deps.tachoSubagentFrames({
+      rootSessionUuid: run.sessionUuid,
+      after,
+      limit: want,
+    });
+    children.push(...page.map(tachoFrame));
+    const last = page.at(-1);
+    if (!last || page.length < want || last.sessionUuid === undefined) break;
+    after = { sessionUuid: last.sessionUuid, seq: last.seq };
+  }
+  return {
+    frames: spliceSubagentChains(own.frames, children),
+    complete,
+  };
+}
+
 /** The one frame at `seq`, or null. */
 export async function readFrameAt(
   deps: RunReadDeps,
@@ -227,5 +301,7 @@ export function defaultRunReadDeps(): RunReadDeps {
     readRunRollups: postgresReadRunRollups,
     readWitnessFor,
     tachoFrames: selectTachoEvents,
+    tachoSubagentFrames: selectTachoSubagentEvents,
+    readEnrichmentEnabled: readRunEnrichmentEnabled,
   };
 }
