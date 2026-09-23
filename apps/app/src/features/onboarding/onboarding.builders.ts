@@ -80,6 +80,10 @@ export function onboardingSource(reads: Reads): {
     return read;
   };
   const source: DataSource = {
+    runtimes: {
+      list: refuse("runtimes.list"),
+      agents: refuse("runtimes.agents"),
+    },
     onboarding: {
       state: (...args: Parameters<DataSource["onboarding"]["state"]>) => {
         calls.state.push(args);

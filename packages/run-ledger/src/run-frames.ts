@@ -27,6 +27,8 @@ import {
   isTranscriptKind,
   countsLlmCallUsage,
   countsLlmCallSplit,
+  LLM_CALL_DUPLICATE_OF_ATTR,
+  llmCallKeys,
   TACHO_METERING_ATTR,
   TACHO_METERING_OBSERVED,
   TRANSCRIPT_KINDS,
@@ -133,6 +135,51 @@ export interface RunFrame {
   timing: FrameTiming;
   usage?: FrameUsage | null;
   usageObserved?: boolean;
+  /**
+   * The subagent chain the frame was recorded on. Absent on the run's own
+   * chain (and on every ledger frame). A subagent records on a chain of its
+   * own with its own dense `seq`, so a frame of a run that reads its
+   * subagents is named by this and its `seq` together, never by `seq` alone.
+   */
+  chain?: FrameChain;
+  /**
+   * On a `subagent_start`: the subagent it spawned, so a reader can put that
+   * subagent's chain where it began.
+   */
+  spawn?: FrameSpawn;
+  /**
+   * On a wrapped `llm_call`: the source the host sealed this call from first
+   * when this row is a later sighting of it (`oxagen.llm_call_duplicate_of`),
+   * and the ids it joins sightings on. A later sighting's usage and cost are
+   * not counted; the first sighting's are.
+   */
+  llmCall?: FrameLlmCall;
+}
+
+/** A subagent chain's place in its run. */
+export interface FrameChain {
+  sessionUuid: string;
+  /** The chain that spawned this one. */
+  parentSessionUuid: string | null;
+  subagentId: string | null;
+  subagentType: string | null;
+  /** The parent's tool call that spawned the subagent. */
+  spawnToolUseId: string | null;
+}
+
+/** The subagent a `subagent_start` frame records. */
+export interface FrameSpawn {
+  subagentId: string | null;
+  toolUseId: string | null;
+}
+
+/** A wrapped model call's sighting facts. */
+export interface FrameLlmCall {
+  /** Null on a first sighting. */
+  duplicateOf: string | null;
+  /** `request:<id>`, `message:<id>`: the keys the host's ledger joins sightings on. */
+  keys: string[];
+  source: string | null;
 }
 
 /** What a frame's receipt timed. Null where it timed nothing. */
@@ -371,6 +418,13 @@ export interface TachoFrameRowLike {
   ttftMs?: number | null;
   /** The provider call's wall time; null when untimed. */
   apiDurationMs?: number | null;
+  /** The chain the row was recorded on; set by a read across a run's chains. */
+  sessionUuid?: string;
+  rootSessionUuid?: string;
+  parentSessionUuid?: string | null;
+  subagentId?: string;
+  subagentType?: string;
+  spawnToolUseId?: string;
 }
 
 /** Which half of its exchange a wrapped kind records. */
@@ -383,6 +437,31 @@ const TACHO_PHASES: Readonly<Record<string, FramePhase>> = {
 
 export function tachoPhase(kind: string): FramePhase {
   return TACHO_PHASES[kind] ?? "single";
+}
+
+/**
+ * The half a wrapped frame records, read from its body where the kind alone
+ * does not say.
+ *
+ * An `oxagen:message` that names `last_assistant_message_digest` is the
+ * agent's own message, reported by a harness that sends it apart from the
+ * turn's end (Cursor's `afterAgentResponse`). It is what came back, so it is a
+ * response, and the transcript read gives it a half the page can show. Every
+ * other `oxagen:message` (a prompt line from a transcript, a streamed delta)
+ * stays a single frame: the turn already shows the prompt, and a delta is a
+ * fragment of a message rather than the message.
+ */
+function tachoFramePhase(kind: string, payload: unknown): FramePhase {
+  if (
+    kind === "oxagen:message" &&
+    typeof payload === "object" &&
+    payload !== null &&
+    typeof (payload as Record<string, unknown>)[
+      "last_assistant_message_digest"
+    ] === "string"
+  )
+    return "response";
+  return tachoPhase(kind);
 }
 
 /** The stage a wrapped kind belongs to (tacho spec §6.1 kinds). */
@@ -473,6 +552,39 @@ export function tachoFrameSummary(row: TachoFrameRowLike): string {
   }
 }
 
+/**
+ * The chain a row was recorded on, when it is a subagent's, and the subagent
+ * a `subagent_start` spawned. A row read from one session's chain names no
+ * chain and adds neither.
+ */
+function tachoChainFacts(
+  row: TachoFrameRowLike,
+  payload: unknown,
+): Pick<RunFrame, "chain" | "spawn"> {
+  const out: Pick<RunFrame, "chain" | "spawn"> = {};
+  if (
+    row.sessionUuid !== undefined &&
+    row.rootSessionUuid !== undefined &&
+    row.sessionUuid !== row.rootSessionUuid
+  ) {
+    out.chain = {
+      sessionUuid: row.sessionUuid,
+      parentSessionUuid: row.parentSessionUuid ?? null,
+      subagentId: blank(row.subagentId ?? ""),
+      subagentType: blank(row.subagentType ?? ""),
+      spawnToolUseId: blank(row.spawnToolUseId ?? ""),
+    };
+  }
+  if (row.kind === "subagent_start") {
+    const bodyToolUseId = field(payload, "tool_use_id");
+    out.spawn = {
+      subagentId: blank(row.attrs?.["hook.agent_id"] ?? ""),
+      toolUseId: blank(row.toolUseId) ?? bodyToolUseId,
+    };
+  }
+  return out;
+}
+
 /** A `tacho_events` row as a run frame. */
 export function tachoFrame(row: TachoFrameRowLike): RunFrame {
   const digest = blank(row.contentDigest);
@@ -512,6 +624,14 @@ export function tachoFrame(row: TachoFrameRowLike): RunFrame {
   };
   const counted = countsLlmCallUsage(usageSource);
   const split = countsLlmCallSplit(usageSource);
+  // A later sighting of a call the host already sealed from another source.
+  // Its tokens are not counted (`countsLlmCallUsage`), and neither is its
+  // cost: carrying the cost here priced the call twice on every transcript
+  // entry and cumulative sum that read it.
+  const duplicateOf =
+    row.kind === "llm_call"
+      ? (row.attrs?.[LLM_CALL_DUPLICATE_OF_ATTR] ?? null)
+      : null;
   let usage = usageObserved || counted || split ? usageFrom(payload) : null;
   if (usage) {
     if (!usageObserved && !counted) {
@@ -533,9 +653,22 @@ export function tachoFrame(row: TachoFrameRowLike): RunFrame {
     digest: row.hash,
     summary: tachoFrameSummary(row),
     body,
-    costMicros: row.costUsdMicros,
+    costMicros: duplicateOf === null ? row.costUsdMicros : null,
     turnIndex: row.turnSeq,
-    phase: tachoPhase(row.kind),
+    phase: tachoFramePhase(row.kind, payload),
+    ...tachoChainFacts(row, payload),
+    ...(row.kind === "llm_call"
+      ? {
+          llmCall: {
+            duplicateOf,
+            keys:
+              typeof payload === "object" && payload !== null
+                ? llmCallKeys(payload as Record<string, unknown>).ids
+                : [],
+            source: blank(row.source ?? ""),
+          },
+        }
+      : {}),
     identity: {
       tool: blank(row.toolName),
       toolStatus: blank(row.toolStatus),
@@ -707,6 +840,8 @@ export function filterFramesByKind(
 /** A decision a rule or a person made about the call an entry records. */
 export interface TranscriptDecision {
   seq: string;
+  /** The subagent chain the decision was recorded on; absent on the run's own. */
+  sessionUuid?: string;
   /** The recorded word: `allow`, `deny`, `route`, or whatever the rule wrote. */
   decision: string;
   type: string;
@@ -726,6 +861,12 @@ export interface TranscriptFold {
   /** The frame that opens the entry. */
   opening: RunFrame;
   endSeq: string;
+  /**
+   * The frame `endSeq` names. A run that reads its subagents' chains holds
+   * frames from several chains, each numbered from 0, so a sequence alone
+   * does not name one frame there; this does.
+   */
+  last: RunFrame;
   kind: TranscriptEntryKind;
   frames: number;
   /** Summed cost records of the folded frames; null when none carried one. */
@@ -769,6 +910,16 @@ const TOOL_TYPES: ReadonlySet<string> = new Set([
 ]);
 const TURN_OPENERS: ReadonlySet<string> = new Set(["turn_start"]);
 
+/**
+ * Whether `frame` opens one of the run's turns. A subagent's own
+ * `turn_start` is the prompt its parent handed it, inside the parent's turn:
+ * it opens no turn of the run, so splicing a subagent's chain in never
+ * renumbers the turns a person typed.
+ */
+function opensRunTurn(frame: RunFrame): boolean {
+  return TURN_OPENERS.has(frame.type) && frame.chain === undefined;
+}
+
 export function stepKind(frame: RunFrame): "model_call" | "tool_call" | null {
   if (MODEL_TYPES.has(frame.type)) return "model_call";
   if (TOOL_TYPES.has(frame.type)) return "tool_call";
@@ -784,6 +935,9 @@ function decisionOf(frame: RunFrame): TranscriptDecision | null {
   if (!POLICY_TYPES.has(frame.type)) return null;
   return {
     seq: frame.seq,
+    ...(frame.chain === undefined
+      ? {}
+      : { sessionUuid: frame.chain.sessionUuid }),
     decision: frame.identity.policy ?? frame.type,
     type: frame.type,
     at: frame.observedAt,
@@ -802,6 +956,7 @@ function open(frame: RunFrame, kind: TranscriptEntryKind): TranscriptFold {
   return {
     opening: frame,
     endSeq: frame.seq,
+    last: frame,
     kind,
     frames: 1,
     costMicros: frame.costMicros,
@@ -824,6 +979,7 @@ function open(frame: RunFrame, kind: TranscriptEntryKind): TranscriptFold {
  */
 function absorb(current: TranscriptFold, frame: RunFrame): void {
   current.endSeq = frame.seq;
+  current.last = frame;
   current.frames += 1;
   current.costMicros = addCost(current.costMicros, frame.costMicros);
   current.usage = addFrameUsage(current.usage, frame.usage);
@@ -1043,14 +1199,14 @@ export function foldTranscript(
     case "steps":
       return foldSteps(frames);
     case "turns": {
-      const hasBoundaries = frames.some((frame) =>
-        TURN_OPENERS.has(frame.type),
-      );
+      const hasBoundaries = frames.some(opensRunTurn);
       let lastTurn: number | null = null;
       return fold(frames, (frame, index) => {
         if (hasBoundaries) {
-          return TURN_OPENERS.has(frame.type) || index === 0 ? "turn" : null;
+          return opensRunTurn(frame) || index === 0 ? "turn" : null;
         }
+        // A subagent numbers its own turns; they are not the run's.
+        if (frame.chain !== undefined && index !== 0) return null;
         const turn = frame.turnIndex;
         if (index === 0) {
           lastTurn = turn;
@@ -1076,10 +1232,10 @@ export function foldTranscript(
  * fold: a new turn wherever the turn index changes, and every frame in one.
  */
 export function turnOrdinals(frames: readonly RunFrame[]): (number | null)[] {
-  if (frames.some((frame) => TURN_OPENERS.has(frame.type))) {
+  if (frames.some(opensRunTurn)) {
     let turn = 0;
     return frames.map((frame) => {
-      if (TURN_OPENERS.has(frame.type)) turn += 1;
+      if (opensRunTurn(frame)) turn += 1;
       return turn === 0 ? null : turn;
     });
   }
@@ -1088,4 +1244,246 @@ export function turnOrdinals(frames: readonly RunFrame[]): (number | null)[] {
     for (let i = 0; i < fold.frames; i += 1) out.push(index + 1);
   });
   return out;
+}
+
+// ── Subagent chains ─────────────────────────────────────────────────────────
+
+/**
+ * The run's own frames with every subagent chain spliced in where it was
+ * spawned.
+ *
+ * A wrapped agent's subagent records on a chain of its own (`chain` on each of
+ * its frames), numbered from 0 like the root's. The run is the root and every
+ * chain under it, so a reader of the run reads them as one sequence: each
+ * chain is placed, whole and in its own order, directly after the
+ * `subagent_start` that spawned it (matched on the spawning tool call's id,
+ * then on the subagent id), and a chain that spawned subagents of its own has
+ * theirs placed the same way inside it.
+ *
+ * A chain is kept whole rather than interleaved by timestamp because the
+ * transcript pairs a request with its result by call id, and by adjacency
+ * where a producer recorded none. Interleaving a subagent's frames with its
+ * parent's by wall clock puts the parent's frames between a subagent's
+ * request and its result, which is where adjacency pairing breaks.
+ *
+ * A chain whose spawn was not recorded (a `subagent_start` lost, or a harness
+ * that records none) goes before the first frame of its parent that was
+ * observed after the chain's own first frame, and at the end of its parent
+ * when none was. A chain whose parent chain is not among `children` is placed
+ * under the root, so no recorded frame is ever dropped.
+ */
+export function spliceSubagentChains(
+  root: readonly RunFrame[],
+  children: readonly RunFrame[],
+): RunFrame[] {
+  if (children.length === 0) return [...root];
+  const chains = new Map<string, RunFrame[]>();
+  for (const frame of children) {
+    const id = frame.chain?.sessionUuid;
+    if (id === undefined) continue;
+    const list = chains.get(id) ?? [];
+    list.push(frame);
+    chains.set(id, list);
+  }
+  for (const list of chains.values()) {
+    list.sort((a, b) => Number(BigInt(a.seq) - BigInt(b.seq)));
+  }
+  const ROOT = "";
+  const parentOf = (id: string): string => {
+    const parent = chains.get(id)?.[0]?.chain?.parentSessionUuid ?? null;
+    return parent !== null && chains.has(parent) && parent !== id
+      ? parent
+      : ROOT;
+  };
+  const childrenOf = new Map<string, string[]>();
+  for (const id of chains.keys()) {
+    const parent = parentOf(id);
+    const list = childrenOf.get(parent) ?? [];
+    list.push(id);
+    childrenOf.set(parent, list);
+  }
+  const placed = new Set<string>();
+  const out: RunFrame[] = [];
+
+  const firstAt = (id: string): number =>
+    chains.get(id)?.[0]?.observedAt.getTime() ?? Number.POSITIVE_INFINITY;
+  const facts = (id: string): FrameChain | undefined =>
+    chains.get(id)?.[0]?.chain;
+
+  /** Which of `candidates` each `subagent_start` in `frames` spawned. */
+  const spawnsIn = (
+    frames: readonly RunFrame[],
+    candidates: readonly string[],
+  ): Map<RunFrame, string> => {
+    const out = new Map<RunFrame, string>();
+    const taken = new Set<string>();
+    const match = (
+      frame: RunFrame,
+      same: (chain: FrameChain, spawn: FrameSpawn) => boolean,
+    ): string | undefined =>
+      candidates.find((id) => {
+        const chain = facts(id);
+        return (
+          !taken.has(id) &&
+          chain !== undefined &&
+          frame.spawn !== undefined &&
+          same(chain, frame.spawn)
+        );
+      });
+    for (const frame of frames) {
+      if (frame.spawn === undefined) continue;
+      const hit =
+        match(
+          frame,
+          (chain, spawn) =>
+            spawn.toolUseId !== null &&
+            chain.spawnToolUseId === spawn.toolUseId,
+        ) ??
+        match(
+          frame,
+          (chain, spawn) =>
+            spawn.subagentId !== null && chain.subagentId === spawn.subagentId,
+        );
+      if (hit !== undefined) {
+        taken.add(hit);
+        out.set(frame, hit);
+      }
+    }
+    return out;
+  };
+
+  const emit = (frames: readonly RunFrame[], id: string): void => {
+    if (placed.has(id)) return;
+    placed.add(id);
+    const candidates = childrenOf.get(id) ?? [];
+    const spawns = spawnsIn(frames, candidates);
+    const matched = new Set(spawns.values());
+    // The chains no frame of this one spawns, placed by when they began.
+    const loose = candidates
+      .filter((c) => !matched.has(c))
+      .sort((a, b) => firstAt(a) - firstAt(b));
+    for (const frame of frames) {
+      while (
+        loose.length > 0 &&
+        firstAt(loose[0] as string) < frame.observedAt.getTime()
+      ) {
+        const next = loose.shift() as string;
+        emit(chains.get(next) ?? [], next);
+      }
+      out.push(frame);
+      const child = spawns.get(frame);
+      if (child !== undefined) emit(chains.get(child) ?? [], child);
+    }
+    for (const next of loose) emit(chains.get(next) ?? [], next);
+  };
+
+  emit(root, ROOT);
+  // A chain a cycle in the recorded parents kept out of every walk above.
+  for (const [id, frames] of chains) emit(frames, id);
+  return out;
+}
+
+/**
+ * A frame's name within its run: its `seq` on the run's own chain, and its
+ * chain and `seq` on a subagent's. Stable across reads, so a cursor can carry
+ * it.
+ */
+export function frameKey(frame: RunFrame): string {
+  return frame.chain === undefined
+    ? frame.seq
+    : `${frame.chain.sessionUuid}:${frame.seq}`;
+}
+
+/** Where a source records a model call's content, richest first. */
+const LLM_CALL_BODY_RANK: Readonly<Record<string, number>> = {
+  // The proxy keeps the whole response stream: every block of the message.
+  collector: 3,
+  // The transcript keeps the message as the harness wrote it down.
+  transcript: 2,
+  hook: 1,
+  otel_log: 0,
+};
+
+/**
+ * The frames a transcript shows, with each model call once.
+ *
+ * A wrapped session reports one model call from up to three sources, and
+ * the host stamps every sighting after the first with
+ * `oxagen.llm_call_duplicate_of` (`FrameLlmCall.duplicateOf`). Read as they
+ * are, a proxied call drew as two model steps: the proxy's, and the
+ * transcript's copy of the same message. So, per call (joined on the
+ * request or message id the host's ledger joins on, within one chain):
+ *
+ *   - a later sighting from another source that carries no body is left
+ *     out: the call is already on the page and the copy has nothing to add;
+ *   - where both carry a body, the one whose source keeps more of the message
+ *     is kept (the proxy's stream over the transcript's text, the transcript
+ *     over a hook's or an OTel record's), and the first sighting on a tie;
+ *   - the frame left out gives its counted usage and cost to the one kept,
+ *     so hiding a copy never hides the spend.
+ *
+ * A transcript writes one record per content block and the host stamps each
+ * block after the first as a duplicate of its own source. Those are the rest
+ * of one message, not copies of it: they stay exactly when the message's
+ * first block stays, and go when a richer sighting replaced it.
+ *
+ * A later sighting whose first sighting is not among `frames` stays: it is
+ * then the only copy of the call on the page. Nothing else is touched.
+ */
+export function withoutDuplicateModelCalls(
+  frames: readonly RunFrame[],
+): RunFrame[] {
+  const hidden = new Set<RunFrame>();
+  // The frame that first carried each call, and each source's first frame
+  // of it, keyed by chain and call id.
+  const firstByKey = new Map<string, RunFrame>();
+  const sourceHead = new Map<string, RunFrame>();
+  const continuations: Array<{ frame: RunFrame; keys: string[] }> = [];
+  const chainOf = (frame: RunFrame) => frame.chain?.sessionUuid ?? "";
+  const rank = (frame: RunFrame) =>
+    LLM_CALL_BODY_RANK[frame.llmCall?.source ?? ""] ?? -1;
+  for (const frame of frames) {
+    const call = frame.llmCall;
+    if (call === undefined || call.keys.length === 0) continue;
+    const scoped = call.keys.map((key) => `${chainOf(frame)}|${key}`);
+    const bySource = scoped.map((key) => `${key}|${call.source ?? ""}`);
+    if (call.duplicateOf !== null && call.duplicateOf === call.source) {
+      continuations.push({ frame, keys: bySource });
+      continue;
+    }
+    for (const key of bySource)
+      if (!sourceHead.has(key)) sourceHead.set(key, frame);
+    if (call.duplicateOf === null) {
+      for (const key of scoped)
+        if (!firstByKey.has(key)) firstByKey.set(key, frame);
+      continue;
+    }
+    const first = scoped
+      .map((key) => firstByKey.get(key))
+      .find((found): found is RunFrame => found !== undefined);
+    if (first === undefined || hidden.has(first)) continue;
+    const keepCopy =
+      frame.body.bodyRef !== null &&
+      (first.body.bodyRef === null || rank(frame) > rank(first));
+    if (!keepCopy) {
+      hidden.add(frame);
+      continue;
+    }
+    // The copy is the one worth reading. It takes the call's counted spend,
+    // and every key of the call now names it.
+    hidden.add(first);
+    frame.costMicros = first.costMicros;
+    frame.usage = first.usage ?? null;
+    frame.usageObserved = first.usageObserved;
+    for (const key of scoped) firstByKey.set(key, frame);
+  }
+  for (const { frame, keys } of continuations) {
+    const head = keys
+      .map((key) => sourceHead.get(key))
+      .find((found): found is RunFrame => found !== undefined);
+    if (head !== undefined && hidden.has(head)) hidden.add(frame);
+  }
+  return hidden.size === 0
+    ? [...frames]
+    : frames.filter((frame) => !hidden.has(frame));
 }
