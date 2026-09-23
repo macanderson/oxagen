@@ -4187,6 +4187,25 @@ type Messages = {
       failed: string;
       photoPlaceholder: string;
     };
+    activity: {
+      notifications: string;
+      approvals: string;
+      unread: string;
+      loading: string;
+      refresh: string;
+      failed: string;
+      allApprovals: string;
+      empty: string;
+      partial: string;
+      resolved: string;
+      resolvedTitle: string;
+      noWorkspaces: string;
+      noNotifications: string;
+      open: string;
+      markRead: string;
+      archive: string;
+      notificationsPartial: string;
+    };
   };
   skills: {
     lede: string;

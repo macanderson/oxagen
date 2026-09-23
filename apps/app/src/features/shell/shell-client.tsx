@@ -3,6 +3,7 @@
 // provider. It renders grid items (rail, top bar) plus fixed and portalled
 // overlays, so the layout places it beside the page without a wrapper, and it
 // labels the page's list tables for the phone's card layout.
+import { ShellActivityProvider, ActivityDrawers } from "./activity";
 import { AccountDialog } from "./account-dialog";
 import { AssistantFlyout } from "./assistant-flyout";
 import { AvatarDialog } from "./avatar-dialog";
@@ -18,14 +19,17 @@ export function ShellClient({ data }: { data: ShellData }) {
   useCardTables();
   return (
     <ShellStateProvider>
-      <Sidebar data={data} />
-      <Topbar data={data} />
-      <ShellMobileNav data={data} />
-      <NavDrawer data={data} />
-      <CommandMenu data={data} />
-      <AccountDialog data={data} />
-      <AvatarDialog data={data} />
-      <AssistantFlyout />
+      <ShellActivityProvider data={data}>
+        <Sidebar data={data} />
+        <Topbar data={data} />
+        <ShellMobileNav data={data} />
+        <NavDrawer data={data} />
+        <CommandMenu data={data} />
+        <AccountDialog data={data} />
+        <AvatarDialog data={data} />
+        <AssistantFlyout />
+        <ActivityDrawers data={data} />
+      </ShellActivityProvider>
     </ShellStateProvider>
   );
 }
