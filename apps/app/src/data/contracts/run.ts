@@ -335,7 +335,6 @@ const ChainCheckpoint = z.object({
   anchorRoot: z.string().nullable(),
   anchoredAt: z.iso.datetime({ offset: true }).nullable(),
 });
-/** @deregistered Retained with the chain UI under ADR-130. */
 export type ChainCheckpoint = z.infer<typeof ChainCheckpoint>;
 
 const COMPLETENESS_GAPS = [

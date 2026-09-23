@@ -9,17 +9,14 @@ export const tachoSessionPolicyWrite = registerCapability({
   name: "update_tacho_session_policy",
   domain: "tacho",
   description:
-    "Set the workspace's policy for wrapped-harness sessions — the Claude Code and Codex sessions that route their model calls through the loopback gateway. Partial update: an omitted field does not change. Sets the per-session dollar ceiling and the model allow and deny lists. Nothing reads this policy yet: no bundle carries the model lists, and a session's ceiling comes from the agent's own mandate budget, so the gateway refuses nothing whatever is saved here and `mode: \"enforced\"` is refused. Owner/Admin only.",
+    "Set the workspace model allow and deny lists for routed calls from upgraded hosts. Enforced mode arms model restrictions independently of agent budgets. The legacy workspace dollar ceiling is recorded only. Omitted fields stay unchanged. Owner/Admin only.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "docs", "mcp", "unit", "app"],
   scoped: true,
   // `requiresApproval: true`, like `update_mandate_limits`, `set_kill_switch`
   // and `set_approval_rule`: an agent that asks to raise its own session
-  // ceiling or widen the models it may call waits for a person. The gateway
-  // reads none of this yet, but the record it writes is a governance
-  // decision, and the approval gate is set by what the write means, not by
-  // what enforces it today.
+  // ceiling or widen the models it may call waits for a person. The model lists are independent of the agent budget.
   agent: {
     requiresApproval: true,
     riskLevel: "high",
@@ -58,7 +55,7 @@ export const tachoSessionPolicyWrite = registerCapability({
     reach: z.object({
       /** Enrolled, non-revoked hosts in this workspace. */
       hosts: z.number().int().nonnegative(),
-      /** Of those, the ones that advertised they can parse `models`. */
+      /** Of those, the ones that advertised independent model enforcement. */
       hostsEnforcingModels: z.number().int().nonnegative(),
     }),
   }),

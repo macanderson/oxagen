@@ -28,7 +28,7 @@ import {
 } from "./parts";
 import { AssignRole, type RoleTarget, RevokeRole } from "./role-controls";
 
-function Roles({
+export function Roles({
   roles,
   manage,
 }: {
@@ -126,8 +126,10 @@ export function IdentitySection({
   now,
   manage,
   charge,
+  showRoles = true,
 }: {
   detail: AgentDetail;
+  showRoles?: boolean;
   /** The instant the agent was read; a credential's expiry is judged against it. */
   now: number;
   /**
@@ -218,7 +220,7 @@ export function IdentitySection({
           ]}
         />
       </Panel>
-      <Roles roles={detail.roles} manage={manage} />
+      {showRoles ? <Roles roles={detail.roles} manage={manage} /> : null}
       <div className="lg:col-span-2">
         <Credentials credentials={detail.credentials} now={now} />
       </div>

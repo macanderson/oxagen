@@ -20,9 +20,7 @@
   ],
   "preprocessor": "./knip.preprocessor.ts",
   "ignoreIssues": {
-    "src/features/run/chain.tsx": ["files"],
-    "src/features/run/replay-actions.tsx": ["files"],
-    "src/ui/replay-grade.tsx": ["files"]
+    "src/features/run/replay-actions.tsx": ["files"]
   },
   "tags": ["-deregistered", "-internal"]
 }
