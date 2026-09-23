@@ -116,6 +116,8 @@ describe("toRunPage", () => {
           replayGrade: "fork",
           verdict: null,
           enforcementTier: "gateway",
+          enrichmentEnabled: true,
+          reportedCost: null,
           ingressRevoked: false,
           ingressPaused: false,
           completenessGaps: [],

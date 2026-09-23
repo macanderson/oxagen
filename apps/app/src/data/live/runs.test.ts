@@ -123,6 +123,8 @@ describe("runs.list", () => {
             replayGrade: null,
             verdict: null,
             enforcementTier: "observe",
+            enrichmentEnabled: true,
+            reportedCost: null,
             ingressPaused: false,
             ingressRevoked: false,
             completenessGaps: ["digest_only"],

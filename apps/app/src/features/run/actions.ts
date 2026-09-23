@@ -231,6 +231,7 @@ function toTranscriptPage(
       type: entry.type,
       label: entry.label,
       callKey: entry.callId,
+      usage: entry.usage ?? null,
       kinds: entry.kinds,
       turn: entry.turn,
       request: entry.request,
@@ -388,7 +389,7 @@ export async function setRunEnrichment(
   org: string,
   ws: string,
   enabled: boolean,
-) {
+): Promise<ActionResult<ContractOutput<typeof workspaceSettingsWrite>>> {
   const ctx = await requireViewer(org, ws);
   if (typeof enabled !== "boolean")
     return {

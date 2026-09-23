@@ -2,6 +2,7 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 const { write, refresh } = vi.hoisted(() => ({
   write: vi.fn(),
@@ -18,7 +19,7 @@ beforeEach(() => {
   write.mockResolvedValue({ ok: true, value: {} });
 });
 function show(canEdit = true) {
-  render(
+  return render(
     <IntlProvider>
       <EnrichmentSwitch org="acme" ws="core" enabled canEdit={canEdit} />
     </IntlProvider>,
@@ -46,5 +47,9 @@ describe("automatic run names and summaries", () => {
     expect(await screen.findByRole("alert")).toBeVisible();
     expect(screen.getByRole("checkbox")).toBeChecked();
     expect(refresh).not.toHaveBeenCalled();
+  });
+  it("passes an axe check on the loaded render", async () => {
+    const { container } = show();
+    await expectNoAxe(container);
   });
 });
