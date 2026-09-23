@@ -21,8 +21,9 @@ import { tachoEnrollmentCreate } from "../tacho.enrollment.create";
  * "create_tacho_enrollment, create_stella_enrollment (today's names)". There is
  * no `create_stella_enrollment` contract in the registry, and the generated
  * matrix resolves this row to one source. `absorbs` therefore lists one name,
- * matching `docs/mission-control/p1-batches.json`. When a Stella enrollment
- * contract lands it is a second source for this same tool, not a second tool.
+ * matching `docs/oxagen/mission-control/p1-batches.json` in oxagen-roadmap.
+ * When a Stella enrollment contract lands it is a second source for this same
+ * tool, not a second tool.
  *
  * **Surfaces are deliberately narrower than Appendix E's default.** The
  * appendix exposes every unmarked tool on API, MCP and the UI. `enroll_host`

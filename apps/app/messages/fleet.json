@@ -1,22 +1,74 @@
 {
   "fleet": {
+    "subtitle": "Every run in this workspace, live and recent.",
     "loading": "Loading the fleet",
     "actions": {
-      "register": "Register an agent"
+      "steer": "Steer",
+      "register": "Register Agent"
+    },
+    "steer": {
+      "title": "Steer the fleet",
+      "agents": "Agents · {selected} of {total} selected",
+      "all": "All",
+      "none": "None",
+      "pick": "Steer {agent}",
+      "inFlight": "{run} · turn {turn} · {task}",
+      "inFlightNoTurn": "{run} · {task}",
+      "idle": "idle",
+      "idleSub": "no run in flight",
+      "hint": "Every agent in {workspace}, selected by default. Steering the fleet is a grant you hold by role, not a default.",
+      "noAgents": "No agent in this workspace carries a key yet, so there is nobody to steer.",
+      "agentsUnread": "The workspace's agents could not be read, so there is nobody to pick.",
+      "keyless": "{count, plural, one {# agent carries no key, so a steer cannot reach it.} other {# agents carry no key, so a steer cannot reach them.}}",
+      "stopped": "The list stops after {listed, plural, one {# agent} other {# agents}}. {count, plural, one {# more is} other {# more are}} not listed, so a steer does not reach {count, plural, one {it} other {them}}.",
+      "text": "Steering text",
+      "delivery": "Delivery",
+      "boundary": "At the boundary",
+      "boundaryBody": "Each agent finishes the turn it is on, then reads this before its next model call. Nothing in flight is cut. A steer reaches runs in flight, so an idle agent does not read it.",
+      "interrupt": "Interrupt",
+      "interruptUnavailable": "not yet available",
+      "interruptHint": "Interrupt cuts the call in flight at the proxy on the <mono>gateway</mono> and <mono>contained</mono> tiers. On the <mono>harness</mono> tier a steer lands at the next hook boundary.",
+      "recorded": "Recorded per run as a <mono>control.steer</mono> frame attributed to you.",
+      "note": "Oxagen never executes steering as an instruction; it enters as evidence at the steering position with operator authority.",
+      "footer": "{agents, plural, one {# agent} other {# agents}} · {live} in flight · at the boundary",
+      "send": "Steer",
+      "sending": "Steering",
+      "cancel": "Cancel",
+      "queued": "{count, plural, =0 {No run in flight took this steer.} one {Steer queued for # run in flight.} other {Steer queued for # runs in flight.}}",
+      "refused": "{count, plural, one {# agent refused the steer} other {# agents refused the steer}}: {codes}."
     },
     "stats": {
       "label": "Fleet summary",
       "live": {
         "title": "Live runs",
-        "basis": "of {agents, plural, one {{count} agent} other {{count} agents}} in this workspace"
+        "basis": "of {count, plural, one {# agent} other {# agents}} in this workspace",
+        "basisUnread": "the workspace's agents were not read"
       },
       "waiting": {
         "title": "Waiting on a human",
+        "open": "Open approvals",
         "oldest": "oldest approval has waited <clock></clock> of {window}",
         "none": "nothing is parked",
+        "drawer": "open the drawer",
         "more": "{count}+",
         "moreBasis": "more are parked than this page read",
-        "open": "Review waiting approvals"
+        "window": "{minutes}m",
+        "windowSeconds": "{minutes}m {seconds}s",
+        "interjections": "interjections not recorded",
+        "unread": "approvals not read: {code}"
+      },
+      "spend": {
+        "title": "Spend shown",
+        "noBasis": "no basis recorded",
+        "unbased": "basis not recorded",
+        "unpriced": "{count, plural, one {# run has no cost recorded} other {# runs have no cost recorded}}",
+        "notRecorded": "not recorded",
+        "mixed": "more than one currency"
+      },
+      "tokens": {
+        "title": "Tokens shown",
+        "notRecorded": "not recorded",
+        "noCache": "no cache figure recorded"
       }
     },
     "approvals": {
@@ -92,53 +144,130 @@
     },
     "runs": {
       "title": "Runs",
+      "chipsLabel": "Show runs",
+      "chips": {
+        "all": "all",
+        "live": "live",
+        "parked": "parked",
+        "sealed": "sealed"
+      },
+      "search": "Search this list",
+      "facetAll": "All · {facet}",
+      "facetLabel": "Filter by {facet}",
+      "rows": "Rows",
+      "rowsAll": "All",
+      "sortBy": "Sort by {column}",
+      "tokensUnsorted": "Runs carry no token figure yet, so there is nothing to sort.",
       "columns": {
         "run": "Run",
         "agent": "Agent",
         "operator": "Operator",
         "status": "Status",
         "tier": "Tier",
+        "replay": "Replay",
+        "tokens": "Tokens",
         "cost": "Cost",
         "frames": "Frames",
-        "started": "Started",
-        "controls": "Controls"
+        "started": "Started"
       },
+      "parked": "parked for approval",
       "notRecorded": "not recorded",
       "basisNotRecorded": "basis not recorded",
-      "unpriced": "{count, plural, one {# run on this page has no cost recorded} other {# runs on this page have no cost recorded}}. A total over this column leaves them out.",
-      "unpricedLink": "Open Spend",
       "source": {
         "ledger": "evidence ledger",
         "tacho": "wrapped agent"
-      },
-      "older": "Older runs",
-      "newest": "Newest runs",
-      "pager": "Runs pages",
-      "empty": {
-        "title": "No runs yet in {workspace}",
-        "body": "Nothing has reached Oxagen from this workspace. A run appears when an enrolled agent makes its first model call; agents start runs, and this page is where you open one.",
-        "enroll": "Enroll the host an agent runs on, from its repository:",
-        "command": "oxagen agent enroll"
-      },
-      "controls": {
-        "group": "Commands for {run}",
-        "action": "{command} {run}",
-        "verbs": {
-          "pause": "pause",
-          "resume": "resume",
-          "cancel": "cancel"
-        },
-        "sending": "Sending the {command}.",
-        "queued": "The {command} is queued. The run's status says when the agent has taken it.",
-        "reread": "Re-read the runs",
-        "unavailable": "View only"
       },
       "operatorKind": {
         "human": "Unnamed operator",
         "agent": "Agent",
         "service": "Service"
       },
-      "rowsShown": "{count} runs shown"
+      "noMatch": "No rows match.",
+      "pager": {
+        "label": "Runs pages",
+        "range": "{from}–{to} of {total}",
+        "rangeMore": "{from}–{to} of {total}+",
+        "none": "0 of 0",
+        "previous": "Previous page",
+        "next": "Next page",
+        "page": "Page {page}",
+        "older": "Older runs",
+        "newest": "Newest runs"
+      },
+      "pause": "Pause",
+      "resolve": "Resolve",
+      "export": "Export",
+      "rowAction": "{action} {run}",
+      "exportQueued": "Export bundle queued for {run}.",
+      "exportFailed": "The export bundle for {run} was not queued. {reason}"
+    },
+    "pause": {
+      "title": "Pause this run",
+      "body": "Takes effect at the next boundary: the model call or tool call now in flight completes, and nothing new is dispatched. The run keeps its token and its budget reservation; pending approvals keep their clocks.",
+      "run": "Run",
+      "position": "Position",
+      "positionValue": "turn {turn} · step {steps} · frame {frames}",
+      "positionNoTurn": "step {steps} · frame {frames}",
+      "recordedAs": "Recorded as",
+      "recordedValue": "<mono>control.pause</mono> frame · operator authority",
+      "reason": "Reason — the model reads this on resume, so write it for the agent",
+      "note": "Pause is not cancel. Nothing is revoked, and the run resumes exactly where it stopped; the gap is visible in the chain and the receipts.",
+      "footer": "Recorded as a <mono>control.pause</mono> frame under <mono>run.pause</mono>.",
+      "confirm": "Pause at the next boundary",
+      "pending": "Queueing",
+      "cancel": "Cancel",
+      "queued": "Pause queued for {run}. It takes effect at the next boundary."
+    },
+    "empty": {
+      "title": "No runs yet in {workspace}",
+      "body": "Nothing has reached Oxagen from this workspace. A run appears the moment a registered agent makes its first model call — you do not create runs here, agents do.",
+      "register": "Register Agent",
+      "agents": "Open Agents"
+    },
+    "error": {
+      "title": "Fleet could not be loaded",
+      "body": "The control plane answered <c>{status} {code}</c>. Nothing was changed. Runs kept recording while this page was down. Frames are written by the collector on each host, not by Oxagen.",
+      "retry": "Try again",
+      "incident": "Open an incident",
+      "trace": "trace and region not recorded · {at}"
+    },
+    "denied": {
+      "title": "You cannot see this workspace",
+      "body": "Your roles on <b>{org}</b> do not include <c>{permission} on {ws}</c>. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+      "back": "Back to Fleet",
+      "signedIn": "Signed in as",
+      "signedInValue": "{name} · <c>workspace.{wsRole}</c> · {ws}",
+      "needed": "Needed",
+      "neededValue": "{permission} on {ws}",
+      "decidedBy": "Decided by",
+      "decidedByValue": "policy not recorded · deny wins over every allow"
+    },
+    "pending": {
+      "title": "Your access request is waiting",
+      "body": "Reading this workspace parked for approval. The request is {request}."
+    },
+    "requestAccess": {
+      "title": "Request access",
+      "role": "Role requested",
+      "why": "Why",
+      "note": "Granting a role is a governed action. It will appear in the audit record with the granter’s name, your name, and this reason.",
+      "send": "Send the request",
+      "cancel": "Cancel",
+      "unbacked": "Oxagen records no access request yet, so this cannot be sent. Ask an organization owner to grant {permission} on {ws}; the grant lands in the audit record."
+    },
+    "incident": {
+      "title": "Open an incident",
+      "subject": "Subject",
+      "severity": "Severity",
+      "severities": {
+        "critical": "critical — money moved that Oxagen did not govern",
+        "warning": "warning",
+        "info": "info"
+      },
+      "attach": "Attach",
+      "raise": "Raise it",
+      "cancel": "Cancel",
+      "unbacked": "Oxagen has no record to raise an incident in yet, so this cannot be sent. Report {status} {code} at {at} to whoever runs this deployment."
     }
   }
 }

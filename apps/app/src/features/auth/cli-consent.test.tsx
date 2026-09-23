@@ -26,6 +26,7 @@ const ctx = unsafeMint(PretenantCtx, { userId: "u1" });
 const orgs = vi.fn();
 const workspaces = vi.fn();
 const source = {
+  runtimes: { list: vi.fn(), agents: vi.fn() },
   pretenant: { orgs, workspaces },
   shell: { context: vi.fn(), preferences: vi.fn() },
   billing: {
@@ -96,7 +97,6 @@ const source = {
     connections: vi.fn(),
     mcpServers: vi.fn(),
   },
-  runtimes: { list: vi.fn(), agents: vi.fn() },
 };
 
 beforeEach(() => {

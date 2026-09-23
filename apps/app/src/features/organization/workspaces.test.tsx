@@ -47,6 +47,7 @@ async function renderWorkspaces(
   });
   const workspaces = vi.fn<Read>().mockResolvedValue(read);
   const source = {
+    runtimes: { list: vi.fn(), agents: vi.fn() },
     pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
     shell: { context: vi.fn(), preferences: vi.fn() },
     billing: {
@@ -117,7 +118,6 @@ async function renderWorkspaces(
       connections: vi.fn(),
       mcpServers: vi.fn(),
     },
-    runtimes: { list: vi.fn(), agents: vi.fn() },
   };
   const view = render(
     <IntlProvider>{await Workspaces({ ctx, source })}</IntlProvider>,

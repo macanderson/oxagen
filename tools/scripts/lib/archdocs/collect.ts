@@ -475,10 +475,12 @@ export function collectCapabilities(root: string): Capability[] {
   ) as { capabilities: Capability[] };
   const reg = read(join(root, "packages/handlers/src/register.ts"));
   const handlers = new Map<string, string>();
+  // Two registration shapes: `async () => (await import("./x")).handler` and
+  // `() => import("./x").then((m) => m.handler)`.
   for (const h of reg.matchAll(
-    /registerHandler\(\s*"(\w+)",\s*async \(\) =>\s*\(await import\("\.\/([^"]+)"\)\)/g,
+    /registerHandler\(\s*"(\w+)",\s*(?:async \(\) =>\s*\(await import\("\.\/([^"]+)"\)\)|\(\) =>\s*import\("\.\/([^"]+)"\)\.then)/g,
   ))
-    handlers.set(h[1]!, `packages/handlers/src/${h[2]}.ts`);
+    handlers.set(h[1]!, `packages/handlers/src/${h[2] ?? h[3]}.ts`);
   return m.capabilities
     .map((c) => ({
       ...c,
@@ -491,10 +493,16 @@ export function collectCapabilities(root: string): Capability[] {
 export function collectMcpTools(root: string): string[] {
   const dir = join(root, "apps/mcp/src/tools");
   if (!existsSync(dir)) return [];
-  return readdirSync(dir)
-    .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"))
-    .map((f) => f.replace(/\.ts$/, ""))
-    .sort();
+  return (
+    readdirSync(dir)
+      // `_`-prefixed files are shared helpers, not tools.
+      .filter(
+        (f) =>
+          f.endsWith(".ts") && !f.endsWith(".test.ts") && !f.startsWith("_"),
+      )
+      .map((f) => f.replace(/\.ts$/, ""))
+      .sort()
+  );
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
@@ -504,17 +512,33 @@ export function collectCli(root: string): CliCommand[] {
   const out: CliCommand[] = [];
   for (const m of src.matchAll(/retiredCommand\("([\w-]+)",\s*"([^"]*)"\)/g))
     out.push({ path: m[1]!, description: m[2]!, retired: true });
-  // parent variable → command path
-  const parents = new Map<string, string>([["program", ""]]);
   const re =
-    /(?:const (\w+) = )?(\w+)\s*\n?\s*\.command\("([\w:-]+)(?:\s[^"]*)?"\)\s*(?:\n?\s*\/\/[^\n]*)*\s*(?:\n?\s*\.alias\("[^"]*"\))?\s*(?:\n?\s*\.description\(\s*"([^"]*)"|\.description\(\s*\n\s*"([^"]*)")?/g;
-  for (const m of src.matchAll(re)) {
-    const [, assigned, parentVar, name, d1, d2] = m;
-    const parentPath = parents.get(parentVar!);
-    if (parentPath === undefined) continue;
-    const path = parentPath ? `${parentPath}:${name}` : name!;
-    if (assigned) parents.set(assigned, path);
-    out.push({ path, description: (d1 ?? d2 ?? "").trim() });
+    /(?:const (\w+) = )?(\w+)\s*\n?\s*\.command\("([\w:-]+)(?:\s[^"]*)?"(?:,\s*\{[^}]*\})?\)\s*(?:\n?\s*\/\/[^\n]*)*\s*(?:\n?\s*\.alias\("[^"]*"\))?\s*(?:\n?\s*\.description\(\s*"([^"]*)"|\.description\(\s*\n\s*"([^"]*)")?/g;
+  // parent variable → command path
+  const scan = (body: string, parents: Map<string, string>): void => {
+    for (const m of body.matchAll(re)) {
+      const [, assigned, parentVar, name, d1, d2] = m;
+      const parentPath = parents.get(parentVar!);
+      if (parentPath === undefined) continue;
+      const path = parentPath ? `${parentPath}:${name}` : name!;
+      if (assigned) parents.set(assigned, path);
+      out.push({ path, description: (d1 ?? d2 ?? "").trim() });
+    }
+  };
+  const parents = new Map<string, string>([["program", ""]]);
+  scan(src, parents);
+  // Helpers such as `addHostWrapCommands(parent: Command)` add the same
+  // subcommands under every command they are called with. Scan each helper's
+  // body once per call site, with its parameter bound to the caller's path.
+  for (const h of src.matchAll(
+    /(?:^|\n)function (\w+)\((\w+): Command\)[^{]*\{([\s\S]*?)\n\}/g,
+  )) {
+    const [, fn, param, body] = h;
+    for (const call of src.matchAll(new RegExp(`\\b${fn}\\((\\w+)\\)`, "g"))) {
+      const at = parents.get(call[1]!);
+      if (at === undefined) continue;
+      scan(body!, new Map([[param!, at]]));
+    }
   }
   return out.sort(by((c) => c.path));
 }
@@ -522,26 +546,73 @@ export function collectCli(root: string): CliCommand[] {
 // ── Inngest ──────────────────────────────────────────────────────────────────
 
 export function collectInngest(root: string): InngestFunction[] {
-  const dir = join(root, "packages/inngest-functions/src/functions");
+  const pkg = join(root, "packages/inngest-functions/src");
+  const dir = join(pkg, "functions");
+  // What apps/api serves is the `functions` array, not every file on disk: a
+  // file whose export is not in that array is never registered with Inngest.
+  const servedSrc = read(join(pkg, "functions.ts"));
+  const arrayAt = servedSrc.indexOf("export const functions");
+  const served = new Set(
+    [...servedSrc.slice(arrayAt).matchAll(/^\s*(\w+),$/gm)].map((m) => m[1]!),
+  );
+  // Event names declared as constants: `export const X_EVENT = "a/b";`, in the
+  // function's own file or the shared events module.
+  const constantsIn = (src: string): Map<string, string> =>
+    new Map(
+      [...src.matchAll(/\bconst (\w+)\s*=\s*"([^"]+)"/g)].map(
+        (m) => [m[1]!, m[2]!] as const,
+      ),
+    );
+  const shared = existsSync(join(pkg, "events.ts"))
+    ? constantsIn(read(join(pkg, "events.ts")))
+    : new Map<string, string>();
   const out: InngestFunction[] = [];
   for (const f of readdirSync(dir).sort()) {
     if (!f.endsWith(".ts") || /\.(test|spec)\.ts$/.test(f)) continue;
     const src = read(join(dir, f));
     const rel = relative(root, join(dir, f));
-    const triggers = [
-      ...new Set(triggersIn(src, rel).map((t) => t.event)),
-    ].sort();
-    const id = /\bid:\s*"([^"]+)"/.exec(src)?.[1] ?? f.replace(/\.ts$/, "");
-    const cron = /\bcron:\s*"([^"]+)"/.exec(src)?.[1];
-    const retries = /\bretries:\s*(\d+)/.exec(src)?.[1];
-    const sends = [...new Set(sendersIn(src))].sort();
-    out.push({
-      id,
-      file: rel,
-      triggers,
-      cron,
-      sends,
-      retries: retries ? Number(retries) : undefined,
+    const local = constantsIn(src);
+    // One file can declare several functions: split at each
+    // `export const [name(, onFailure)?] = createFunction(`.
+    const starts = [
+      ...src.matchAll(
+        /export const \[(\w+)(?:,\s*(\w+))?\]\s*=\s*createFunction\(/g,
+      ),
+    ];
+    starts.forEach((start, i) => {
+      const name = start[1]!;
+      if (!served.has(name)) return;
+      // A single-function file is read whole, helpers included; a
+      // multi-function file is read one declaration at a time.
+      const seg =
+        starts.length === 1
+          ? src
+          : src.slice(start.index, starts[i + 1]?.index ?? src.length);
+      const events = [
+        ...triggersIn(seg, rel).map((t) => t.event),
+        ...[...seg.matchAll(/\bevent:\s*([A-Z][A-Z0-9_]+)\b/g)]
+          .map((m) => local.get(m[1]!) ?? shared.get(m[1]!))
+          .filter((e): e is string => e !== undefined),
+      ];
+      const id = /\bid:\s*"([^"]+)"/.exec(seg)?.[1] ?? name;
+      const cron = /\bcron:\s*"([^"]+)"/.exec(seg)?.[1];
+      const retries = /\bretries:\s*(\d+)/.exec(seg)?.[1];
+      const sends = [
+        ...new Set([
+          ...sendersIn(seg),
+          ...[...seg.matchAll(/\bname:\s*([A-Z][A-Z0-9_]+)\b/g)]
+            .map((m) => local.get(m[1]!) ?? shared.get(m[1]!))
+            .filter((e): e is string => e !== undefined),
+        ]),
+      ].sort();
+      out.push({
+        id,
+        file: rel,
+        triggers: [...new Set(events)].sort(),
+        cron,
+        sends,
+        retries: retries ? Number(retries) : undefined,
+      });
     });
   }
   return out.sort(by((fn) => fn.id));
@@ -579,7 +650,8 @@ export function collectWorkflows(root: string): Workflow[] {
     const onIdx = src.search(/^on:/m);
     const triggers: string[] = [];
     if (onIdx >= 0) {
-      const onLine = /^on:\s*([^#\n]*)/m.exec(src)![1]!.trim();
+      // `[ \t]*`, not `\s*`: a block-style `on:` must not reach the next line.
+      const onLine = /^on:[ \t]*([^#\n]*)/m.exec(src)![1]!.trim();
       if (onLine.startsWith("["))
         triggers.push(
           ...onLine
@@ -657,12 +729,19 @@ export function collectAdrs(root: string): Adr[] {
       m[2]!.replace(/-/g, " ");
     // Headers vary: "**Status:** Accepted (2026-06-27)", "- Status: accepted",
     // "Date: … · Status: Accepted · Scope: …". Take the word run after the label.
+    // A "## Status" heading puts the word on a later line instead.
     const rawStatus =
-      /\bStatus:?\*{0,2}:?\s*([A-Za-z][^\n·|]*)/.exec(head)?.[1] ?? "";
-    const status = rawStatus
-      .split(/[(.—]| - /)[0]!
-      .trim()
-      .replace(/^[a-z]/, (c) => c.toUpperCase());
+      /\bStatus:?\*{0,2}:?[ \t]*([A-Za-z][^\n·|]*)/.exec(head)?.[1] ??
+      /^## Status\s*\n\s*\**([A-Za-z][^\n·|]*)/m.exec(head)?.[1] ??
+      "";
+    const clause = rawStatus.split(/[(.—;,*]| - /)[0]!.trim();
+    // Keep the status word and a short qualifier ("in part", "by ADR-043"),
+    // not a sentence of context after it.
+    const status = (
+      /^(?:accepted|proposed|superseded|deprecated|rejected|draft|withdrawn)(?:\s+(?:in part|by ADR-\d+))?/i.exec(
+        clause,
+      )?.[0] ?? clause
+    ).replace(/^[a-z]/, (c) => c.toUpperCase());
     const date = /(\d{4}-\d{2}-\d{2})/.exec(head)?.[1] ?? "";
     const epicRaw = epicOf.get(Number(m[1]));
     const epic =

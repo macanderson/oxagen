@@ -34,7 +34,7 @@ const OAUTH_ONLY_SCHEMES = new Set([
 
 /**
  * Knowledge → Sources → Connect — the governed multi-step "Connect a source"
- * wizard (docs/web-app-2.0/workspace/knowledge/sources/connect/spec.md).
+ * wizard (docs/web-app-2.0/workspace/knowledge/sources/connect/spec.md, removed 2026-09-23; git history keeps it).
  *
  * Session + org/workspace + membership guard happens here (same
  * resolveOrg/assertOrgMember pattern as knowledge/ontology/page.tsx); the

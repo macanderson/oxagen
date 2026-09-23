@@ -31,6 +31,7 @@ const ctx = unsafeMint(PretenantCtx, { userId: "usr_marcusbell" });
 const orgs = vi.fn();
 const workspaces = vi.fn();
 const source = {
+  runtimes: { list: vi.fn(), agents: vi.fn() },
   pretenant: { orgs, workspaces },
   shell: { context: vi.fn(), preferences: vi.fn() },
   billing: {
@@ -101,7 +102,6 @@ const source = {
     connections: vi.fn(),
     mcpServers: vi.fn(),
   },
-  runtimes: { list: vi.fn(), agents: vi.fn() },
 };
 
 const acme = { slug: "acme", name: "Acme Robotics" };

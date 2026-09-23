@@ -28,10 +28,10 @@
     "@oxagen/config": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "@oxagen/tenancy": "workspace:*",
-    "neo4j-driver": "5.28.3"
+    "neo4j-driver": "6.2.0"
   },
   "devDependencies": {
-    "tsx": "4.22.3",
+    "tsx": "4.23.5",
     "typescript": "6.0.3",
     "vitest": "2.1.9",
     "@vitest/coverage-v8": "2.1.9"
