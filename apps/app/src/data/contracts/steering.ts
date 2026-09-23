@@ -12,6 +12,8 @@ const Instant = z.iso.datetime({ offset: true });
 
 /** One page of records or proposals; the adapter reads this many and the pager steps by it. */
 export const STEERING_PAGE = 50;
+/** The most rows one list_records call answers (its contract's `limit` bound). */
+export const STEERING_READ_MAX = 200;
 
 /** The six kinds of context-record/v0.1 (spec §10.2), in the mockup's order. */
 export const RECORD_KINDS = [
@@ -276,3 +278,45 @@ export const SteeringDeliveries = z.object({
   truncated: z.boolean(),
 });
 export type SteeringDeliveries = z.infer<typeof SteeringDeliveries>;
+
+/**
+ * The mode `.oxagen/rules/governance.toml` declares on the main repository's
+ * production branch, as `get_repository_tree` read it. `absent` is no file,
+ * which the Context PR gate reads as `team`; `invalid` is a file naming no
+ * mode the gate knows, which refuses every open and merge.
+ */
+export const DeclaredGovernanceMode = z.enum([
+  "solo",
+  "team",
+  "regulated",
+  "absent",
+  "invalid",
+]);
+export type DeclaredGovernanceMode = z.infer<typeof DeclaredGovernanceMode>;
+
+/**
+ * What the Steering hub header reads beside the library (roadmap
+ * pages/steering.md): the governance mode on the main repository and the
+ * proposals waiting for a person.
+ *
+ * Each half is its own read and fails on its own. `governance` is `unbound`
+ * while the workspace binds no main repository and `unread` when a read was
+ * refused or failed, with the code it answered; the chip prints that rather
+ * than a mode nobody read. `proposalsWaiting` is null when a count failed, so
+ * the tab badge prints nothing rather than a zero nobody counted.
+ */
+export const SteeringHub = z.object({
+  governance: z.discriminatedUnion("state", [
+    z.object({
+      state: z.literal("read"),
+      /** `owner/name` of the main repository. */
+      repository: z.string().min(1),
+      mode: DeclaredGovernanceMode,
+    }),
+    z.object({ state: z.literal("unbound") }),
+    z.object({ state: z.literal("unread"), code: z.string().min(1) }),
+  ]),
+  /** Proposals not merged and not dismissed: candidates plus open Context PRs. */
+  proposalsWaiting: Count.nullable(),
+});
+export type SteeringHub = z.infer<typeof SteeringHub>;

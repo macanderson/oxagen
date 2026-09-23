@@ -36,7 +36,7 @@ const { MergeContextPr, ProposalWrites } = await import("./write-controls");
 const { useActionFailure } = await import("./action-failure");
 
 const TARGET = { org: "acme", ws: "core-platform", proposalId: "prp_01k5ru4a" };
-const PRS = "/acme/core-platform/steering?tab=prs&proposal=prp_01k5ru4a";
+const PRS = "/acme/core-platform/steering/proposals/prs?proposal=prp_01k5ru4a";
 
 const intl = ({ children }: { children: ReactNode }) => (
   <IntlProvider>{children}</IntlProvider>
@@ -192,7 +192,7 @@ describe("Dismiss", () => {
     submitReason("Duplicate of ctx.release.notes-format");
     await waitFor(() => {
       expect(router.replace).toHaveBeenCalledWith(
-        "/acme/core-platform/steering?tab=proposals",
+        "/acme/core-platform/steering/proposals",
       );
     });
     expect(dismissProposal).toHaveBeenCalledWith(

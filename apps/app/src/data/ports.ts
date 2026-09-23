@@ -81,6 +81,7 @@ import type {
   RecordPage,
   SteeringFreshness,
   SteeringDeliveries,
+  SteeringHub,
 } from "./contracts/steering";
 import type {
   ApprovalRuleSet,
@@ -384,7 +385,12 @@ export interface DataSource {
     /** list_records, status active: one page of the records in force, of one kind or all */
     records(
       ctx: WsCtx,
-      q: { kind: RecordKind | null; offset: number },
+      q: {
+        kind: RecordKind | null;
+        offset: number;
+        /** Rows to a page, 1 to `STEERING_READ_MAX`; `STEERING_PAGE` when omitted. */
+        limit?: number;
+      },
     ): Promise<Read<RecordPage>>;
     /**
      * get_record on a lineage: the published record's page (#3395). Reads the
@@ -407,6 +413,13 @@ export interface DataSource {
     contextPr(ctx: WsCtx, proposalId: string): Promise<Read<ContextPr>>;
     /** get_steering_freshness: what is published, where, and the two gates */
     freshness(ctx: WsCtx): Promise<Read<SteeringFreshness>>;
+    /**
+     * The hub header's reads: list_repositories and get_repository_tree for
+     * the governance mode on the main repository, and three list_proposals
+     * counts for the proposals waiting. Each half fails on its own inside the
+     * value, so a GitHub outage never takes the library down with it.
+     */
+    hub(ctx: WsCtx): Promise<Read<SteeringHub>>;
   };
   /**
    * The Tools page's six reads on the workspace (#2958), each role-checked in
