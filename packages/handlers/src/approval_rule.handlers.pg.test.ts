@@ -183,6 +183,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
       resolvedReasons?: string[];
       resolvedByPolicy?: string | null;
       resolvedByUserId?: string | null;
+      resolution?: "approved" | "denied" | "expired" | null;
+      expiresAt?: Date;
       createdAt?: Date;
     }): Promise<{ id: string; publicId: string }> {
       const [row] = await withSystemDb((tx) =>
@@ -198,9 +200,15 @@ describe.skipIf(!process.env.DATABASE_URL)(
             resolvedReasons: values.resolvedReasons ?? [],
             resolvedByPolicy: values.resolvedByPolicy ?? null,
             resolvedByUserId: values.resolvedByUserId ?? null,
-            resolution: values.resolvedByPolicy ? "approved" : null,
+            resolution:
+              values.resolution === undefined
+                ? values.resolvedByPolicy
+                  ? "approved"
+                  : null
+                : values.resolution,
             createdAt: values.createdAt ?? new Date(),
-            expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+            expiresAt:
+              values.expiresAt ?? new Date(Date.now() + 60 * 60 * 1000),
           })
           .returning({
             id: schema.approvalRequests.id,
@@ -351,6 +359,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .values({
             id: ownerUserId,
             email: `owner-${tag}@rules.test`,
+            displayName: "Rules Owner",
             status: "active",
           })
           .returning({ publicId: schema.users.publicId });
@@ -1446,7 +1455,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
       );
       expect(out).toEqual({
         approvalId: row.publicId,
+        state: "approved",
         resolvedBy: `policy:${RULE.id}`,
+        resolvedByName: null,
         eligibility: {
           ruleId: RULE.id,
           ok: true,
@@ -1467,6 +1478,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           ctx(ownerUserId),
         ),
       );
+      expect(out.state).toBe("pending");
       expect(out.resolvedBy).toBeNull();
       expect(out.eligibility).toEqual({
         ruleId: RULE.id,
@@ -1480,6 +1492,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const row = await insertApproval({
         autoRuleId: null,
         resolvedByUserId: ownerUserId,
+        resolution: "denied",
       });
       const out = await inScope(() =>
         approvalAutoEligibilityGetHandler(
@@ -1487,8 +1500,35 @@ describe.skipIf(!process.env.DATABASE_URL)(
           ctx(ownerUserId),
         ),
       );
+      expect(out.state).toBe("denied");
       expect(out.resolvedBy).toBe(`user:${ownerPublicId}`);
+      expect(out.resolvedByName).toBe("Rules Owner");
       expect(out.eligibility).toBeNull();
+    });
+
+    // #3521: mandate revoke and expiry write `expired` and no resolver, and a
+    // request past its expiry is closed before any sweep writes it. Neither
+    // may read as pending, or the dialog offers a decision the handler refuses.
+    it("reports a request closed with no resolver as expired, not pending", async () => {
+      const revoked = await insertApproval({
+        autoRuleId: null,
+        resolution: "expired",
+      });
+      const lapsed = await insertApproval({
+        autoRuleId: null,
+        expiresAt: new Date(Date.now() - 60 * 1000),
+      });
+      for (const row of [revoked, lapsed]) {
+        const out = await inScope(() =>
+          approvalAutoEligibilityGetHandler(
+            { approvalId: row.publicId },
+            ctx(ownerUserId),
+          ),
+        );
+        expect(out.state).toBe("expired");
+        expect(out.resolvedBy).toBeNull();
+        expect(out.resolvedByName).toBeNull();
+      }
     });
 
     it("refuses an approval this workspace does not hold", async () => {

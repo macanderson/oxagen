@@ -29,6 +29,18 @@ export function isApprovalPublicId(value: string): boolean {
   return PUBLIC_ID.test(value);
 }
 
+/**
+ * The longest decision note the record keeps, in characters (#3521).
+ *
+ * The note is the whole record of why a call was approved or denied, and it
+ * goes on the approval row, the run's chain and every receipt that prints the
+ * decision. An unbounded note would put any length a caller sends into all
+ * three. The app's decision dialog caps its textarea at this figure through a
+ * mirror in `apps/app/src/data/contracts/approvals.ts`, pinned to this constant
+ * by that module's test, so the form never accepts text the kernel refuses.
+ */
+export const APPROVAL_NOTE_MAX = 2000;
+
 // `resolve_approval` is the rev1 governed action (apps/app/ARCHITECTURE.md
 // §1.5): the human decision on a tool call is what ADR-052 bills, so the
 // contract carries no `noBillingGate`. A decision that matches no row leaves
@@ -54,7 +66,7 @@ export const agentApprovalResolve = registerCapability({
   input: z.object({
     approvalId: approvalIdSchema,
     decision: z.enum(["approved", "denied"]),
-    note: z.string().optional(),
+    note: z.string().max(APPROVAL_NOTE_MAX).optional(),
   }),
   output: z.object({
     // Echoes the id in the form the caller sent (public id or uuid).

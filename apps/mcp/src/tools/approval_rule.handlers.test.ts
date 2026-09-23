@@ -120,7 +120,9 @@ describe("the auto-approval rule tools", () => {
   it("returns the recorded evaluation and the approver", async () => {
     const out = {
       approvalId: "apr_0123456789abcdefghjkmn",
+      state: "approved",
       resolvedBy: "policy:small-vendor-payments",
+      resolvedByName: null,
       eligibility: {
         ruleId: "small-vendor-payments",
         ok: true,
@@ -137,7 +139,9 @@ describe("the auto-approval rule tools", () => {
   it("refuses an output whose approver is neither a person nor a rule", async () => {
     mocks.invoke.mockResolvedValue({
       approvalId: "apr_0123456789abcdefghjkmn",
+      state: "approved",
       resolvedBy: "someone",
+      resolvedByName: null,
       eligibility: null,
     });
     await expect(

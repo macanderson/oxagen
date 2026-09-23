@@ -30,6 +30,7 @@ write that answers an item.
 | ------------ | ------------------------ | --------------------------------------- |
 | `items[]`    | see below                | Soonest expiry first, then by id.       |
 | `nextCursor` | `string \| null`         | Null on the last page.                  |
+| `total`      | `int`                    | Every pending approval the filter matches, across all pages. |
 
 Each item:
 
@@ -63,6 +64,11 @@ Only public ids leave the handler.
 - **Paging:** the cursor is the last row's `(expires_at, public_id)`, so a
   page after the cursor has no duplicate and no gap even when several rows
   share an expiry.
+- **Count:** `total` counts the rows the same pending, workspace and `runId`
+  filter matches, ignoring the cursor, in the same transaction as the page
+  (#3521). A reader can show one page with the whole queue's count, without
+  walking every page to learn it. A later page can differ from the count by
+  the calls parked or answered between the two reads.
 
 ## Side effects
 

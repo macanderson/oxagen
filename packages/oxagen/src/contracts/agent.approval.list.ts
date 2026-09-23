@@ -17,6 +17,11 @@
 // other run". The store records no agent key. The mandate hop and the rule
 // that parked the call are recorded on rows the mandate gate writes (ADR-059)
 // and null on the chat gate's rows.
+//
+// `total` counts every pending approval the filter matches, whatever page the
+// cursor is on (#3521). A reader that shows one page and a count no longer has
+// to walk every page to learn the count: the Fleet panel read up to ten pages
+// in series, and mounted a card for every row, to print one number.
 import { z } from "zod";
 import { autoEligibilitySchema } from "../approval-rules/schemas";
 import { registerCapability } from "../registry";
@@ -108,6 +113,12 @@ export const agentApprovalList = registerCapability({
     .object({
       items: z.array(approvalListItem).max(100),
       nextCursor: z.string().nullable(),
+      /**
+       * Every pending approval the filter matches, across all pages. Counted
+       * in the same read as the page, so it can differ from the rows a later
+       * page returns by the calls parked or answered in between.
+       */
+      total: z.number().int().min(0),
     })
     .strict(),
 });

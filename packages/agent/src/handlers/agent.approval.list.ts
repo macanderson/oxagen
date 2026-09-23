@@ -3,7 +3,7 @@
 // null are on the contract (packages/oxagen/src/contracts/agent.approval.list.ts).
 import { schema, withTenantDb } from "@oxagen/database";
 import { isFloorReason } from "@oxagen/rules";
-import { and, asc, eq, gt, isNull, or, sql } from "drizzle-orm";
+import { and, asc, count, eq, gt, isNull, or, sql } from "drizzle-orm";
 import type {
   AgentApprovalListInput,
   AgentApprovalListOutput,
@@ -103,8 +103,21 @@ export async function agentApprovalListHandler(
   ctx: CapabilityContext,
 ): Promise<AgentApprovalListOutput> {
   const after = decodeCursor(input.cursor);
-  const rows = await withTenantDb((tx) =>
-    tx
+  // The pending queue this read answers for, before the page boundary. The
+  // page and the count share it, so `total` counts exactly the rows the
+  // cursor walks (#3521).
+  const pending = and(
+    eq(ar.orgId, ctx.orgId),
+    eq(ar.workspaceId, ctx.workspaceId),
+    isNull(ar.resolution),
+    sql`${ar.expiresAt} > now()`,
+    // One run's parked calls, when the caller names one. A run whose writers
+    // recorded no reference answers an empty page, which is the truth about
+    // the record and not a filter that was ignored.
+    input.runId === undefined ? undefined : eq(ar.runPublicId, input.runId),
+  );
+  const { rows, total } = await withTenantDb(async (tx) => {
+    const page = await tx
       .select({
         publicId: ar.publicId,
         capabilityName: ar.capabilityName,
@@ -136,26 +149,19 @@ export async function agentApprovalListHandler(
         ),
       )
       .leftJoin(schema.users, eq(schema.users.id, schema.conversations.userId))
-      .where(
-        and(
-          eq(ar.orgId, ctx.orgId),
-          eq(ar.workspaceId, ctx.workspaceId),
-          isNull(ar.resolution),
-          sql`${ar.expiresAt} > now()`,
-          // One run's parked calls, when the caller names one. A run whose
-          // writers recorded no reference answers an empty page, which is the
-          // truth about the record and not a filter that was ignored.
-          input.runId === undefined ? undefined : eq(ar.runPublicId, input.runId),
-          after ? afterCursor(after) : undefined,
-        ),
-      )
+      .where(and(pending, after ? afterCursor(after) : undefined))
       .orderBy(asc(expiresAtMs), asc(ar.publicId))
-      .limit(input.limit + 1),
-  );
+      .limit(input.limit + 1);
+    // The count needs none of the joins: every one is a left join onto a
+    // single row, so it neither adds nor drops an approval.
+    const [counted] = await tx.select({ n: count() }).from(ar).where(pending);
+    return { rows: page, total: counted?.n ?? 0 };
+  });
   const page = rows.slice(0, input.limit);
   const last = page[page.length - 1];
   return {
     items: page.map(toApprovalListItem),
     nextCursor: rows.length > input.limit && last ? encodeCursor(last) : null,
+    total,
   };
 }

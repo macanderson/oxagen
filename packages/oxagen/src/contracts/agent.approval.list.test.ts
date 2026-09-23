@@ -54,17 +54,33 @@ describe("list_approvals contract", () => {
     ).toBe(false);
   });
 
-  it("answers with items and a cursor", () => {
+  it("answers with items, a cursor and the whole queue's count", () => {
     const out = agentApprovalList.output.parse({
       items: [item],
       nextCursor: "next",
+      total: 140,
     });
     expect(out.items).toHaveLength(1);
     expect(out.nextCursor).toBe("next");
+    expect(out.total).toBe(140);
     expect(
-      agentApprovalList.output.parse({ items: [], nextCursor: null })
+      agentApprovalList.output.parse({ items: [], nextCursor: null, total: 0 })
         .nextCursor,
     ).toBeNull();
+  });
+
+  // #3521: a reader shows one page and the count beside it, so the count is
+  // required rather than something a caller has to walk the cursor to learn.
+  it("refuses a page without a count, or with a count that is not a whole number", () => {
+    for (const total of [undefined, -1, 1.5, "140"]) {
+      expect(
+        agentApprovalList.output.safeParse({
+          items: [],
+          nextCursor: null,
+          total,
+        }).success,
+      ).toBe(false);
+    }
   });
 
   it("carries public ids only", () => {

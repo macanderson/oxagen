@@ -187,11 +187,16 @@
             "type": "null"
           }
         ]
+      },
+      "total": {
+        "type": "integer",
+        "minimum": 0
       }
     },
     "required": [
       "items",
-      "nextCursor"
+      "nextCursor",
+      "total"
     ],
     "additionalProperties": false
   }

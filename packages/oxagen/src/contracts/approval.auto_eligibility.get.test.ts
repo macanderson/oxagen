@@ -35,7 +35,9 @@ describe("get_auto_eligibility contract", () => {
     const out = (resolvedBy: string | null) =>
       approvalAutoEligibilityGet.output.parse({
         approvalId: "apr_0123456789abcdefghjkmn",
+        state: resolvedBy === null ? "pending" : "approved",
         resolvedBy,
+        resolvedByName: null,
         eligibility: {
           ruleId: "small-vendor-payments",
           ok: false,
@@ -53,8 +55,52 @@ describe("get_auto_eligibility contract", () => {
     expect(
       approvalAutoEligibilityGet.output.safeParse({
         approvalId: "apr_0123456789abcdefghjkmn",
+        state: "approved",
         resolvedBy: "someone",
+        resolvedByName: null,
         eligibility: null,
+      }).success,
+    ).toBe(false);
+  });
+
+  // #3521: a mandate revoked or expired after the call was parked closes the
+  // request with no resolver, so the state is carried on its own.
+  it("carries a settled state with no resolver, and the name of a person who answered", () => {
+    const base = {
+      approvalId: "apr_0123456789abcdefghjkmn",
+      eligibility: null,
+    };
+    expect(
+      approvalAutoEligibilityGet.output.parse({
+        ...base,
+        state: "expired",
+        resolvedBy: null,
+        resolvedByName: null,
+      }).state,
+    ).toBe("expired");
+    expect(
+      approvalAutoEligibilityGet.output.parse({
+        ...base,
+        state: "denied",
+        resolvedBy: "user:usr_0123456789abcdefghjkmn",
+        resolvedByName: "Dana Reyes",
+      }).resolvedByName,
+    ).toBe("Dana Reyes");
+    for (const state of ["waiting", "resolved", ""]) {
+      expect(
+        approvalAutoEligibilityGet.output.safeParse({
+          ...base,
+          state,
+          resolvedBy: null,
+          resolvedByName: null,
+        }).success,
+      ).toBe(false);
+    }
+    expect(
+      approvalAutoEligibilityGet.output.safeParse({
+        ...base,
+        resolvedBy: null,
+        resolvedByName: null,
       }).success,
     ).toBe(false);
   });

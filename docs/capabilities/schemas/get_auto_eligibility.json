@@ -1,7 +1,7 @@
 {
   "name": "get_auto_eligibility",
   "domain": "approval_rule",
-  "description": "The auto-approval evaluation recorded for one approval request, and who resolved it",
+  "description": "The auto-approval evaluation recorded for one approval request, where the request stands, and who resolved it",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -41,10 +41,31 @@
       "approvalId": {
         "type": "string"
       },
+      "state": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "approved",
+          "denied",
+          "expired"
+        ]
+      },
       "resolvedBy": {
         "anyOf": [
           {
             "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "resolvedByName": {
+        "anyOf": [
+          {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
           },
           {
             "type": "null"
@@ -93,7 +114,9 @@
     },
     "required": [
       "approvalId",
+      "state",
       "resolvedBy",
+      "resolvedByName",
       "eligibility"
     ],
     "additionalProperties": false

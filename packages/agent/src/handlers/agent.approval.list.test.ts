@@ -313,6 +313,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         ids["run_scoped_call"],
       ]);
       expect(out.nextCursor).toBeNull();
+      expect(out.total).toBe(4);
       for (const item of out.items) {
         expect(item.id).toMatch(/^apr_[0-9a-z]{22}$/);
         expect(item.chain).toEqual({ agentKey: null, rule: null });
@@ -335,6 +336,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(own.items.map((i) => i.tool)).not.toContain("other_org");
       const sibling = await list(orgA, wsA2);
       expect(sibling.items.map((i) => i.tool)).toEqual(["other_workspace"]);
+      expect(sibling.total).toBe(1);
       const foreign = await list(orgB, wsB1);
       expect(foreign.items.map((i) => i.tool)).toEqual(["other_org"]);
     });
@@ -360,12 +362,15 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const two = await list(orgA, wsA1, { limit: 2 });
       expect(two.items.map((i) => i.id)).toEqual(seen.slice(0, 2));
       expect(two.nextCursor).not.toBeNull();
+      // #3521: the count is the whole queue on every page, not the page's rows.
+      expect(two.total).toBe(4);
       const rest = await list(orgA, wsA1, {
         limit: 2,
         cursor: two.nextCursor!,
       });
       expect(rest.items.map((i) => i.id)).toEqual(seen.slice(2));
       expect(rest.nextCursor).toBeNull();
+      expect(rest.total).toBe(4);
     });
 
     it("narrows to one run's own parked calls, and answers each with the run it names", async () => {
@@ -373,18 +378,20 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(out.items.map((i) => i.tool)).toEqual(["run_scoped_call"]);
       expect(out.items[0]!.runId).toBe(RUN_ID);
       expect(out.nextCursor).toBeNull();
+      expect(out.total).toBe(1);
     });
 
     it("answers an empty page for a run with nothing parked (negative)", async () => {
       const out = await list(orgA, wsA1, {
         runId: "tse_0123456789abcdefghjkmn",
       });
-      expect(out).toEqual({ items: [], nextCursor: null });
+      expect(out).toEqual({ items: [], nextCursor: null, total: 0 });
     });
 
     it("does not leak another workspace's run-scoped approval (negative)", async () => {
       const out = await list(orgA, wsA2, { runId: RUN_ID });
       expect(out.items).toEqual([]);
+      expect(out.total).toBe(0);
     });
   },
 );

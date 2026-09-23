@@ -18,7 +18,7 @@ Legacy approvals without stored arguments keep their existing wait or caller-ret
 | ------------ | ------------------------ | -------------------------------------------------------------------------------------- |
 | `approvalId` | `string`                 | The public id (`apr_…`) or the row uuid (#2906); anything else is refused at the edge. |
 | `decision`   | `"approved" \| "denied"` | Required.                                                                              |
-| `note`       | `string?`                | Optional human note for the audit row.                                                 |
+| `note`       | `string?`                | Optional human note for the audit row. At most `APPROVAL_NOTE_MAX` (2,000) characters. |
 
 ## Output
 
@@ -50,7 +50,10 @@ auto-approval evaluation, and a Decide control that opens the approve or deny
 dialog. The dialog writes through the kernel seam
 (`apps/app/src/features/fleet/actions.ts` → `kernelWrite`), and a denial with no
 reason is refused before the kernel: the note is the whole record of why a call
-an agent was authorised to make was refused.
+an agent was authorised to make was refused. The note is bounded on the contract
+at `APPROVAL_NOTE_MAX` (#3521), and the dialog's textarea reads that bound
+through a mirror in `apps/app/src/data/contracts/approvals.ts` pinned to the
+contract by its test, so the form never accepts a note the kernel refuses.
 
 ## Side effects
 

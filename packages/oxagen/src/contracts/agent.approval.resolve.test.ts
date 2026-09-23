@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  APPROVAL_NOTE_MAX,
   agentApprovalResolve,
   approvalIdSchema,
   isApprovalPublicId,
@@ -45,6 +46,18 @@ describe("agent.approval.resolve capability", () => {
     expect(isApprovalPublicId(PUBLIC_ID.toUpperCase())).toBe(true);
     expect(isApprovalPublicId(ROW_UUID)).toBe(false);
     expect(isApprovalPublicId("appr_1")).toBe(false);
+  });
+
+  it("bounds the note at APPROVAL_NOTE_MAX characters (#3521)", () => {
+    expect(APPROVAL_NOTE_MAX).toBe(2000);
+    const note = (length: number) =>
+      agentApprovalResolve.input.safeParse({
+        approvalId: PUBLIC_ID,
+        decision: "denied",
+        note: "x".repeat(length),
+      }).success;
+    expect(note(APPROVAL_NOTE_MAX)).toBe(true);
+    expect(note(APPROVAL_NOTE_MAX + 1)).toBe(false);
   });
 
   it("rejects an unknown decision", () => {
