@@ -272,7 +272,10 @@ describe("Agent not-loaded states", () => {
     );
     expect(
       within(error).getByRole("link", { name: "Try again" }),
-    ).toHaveAttribute("href", "/acme/core-platform/agents/release-bot/identity");
+    ).toHaveAttribute(
+      "href",
+      "/acme/core-platform/agents/release-bot/identity",
+    );
     expect(
       within(error).getByRole("button", { name: "Open an incident" }),
     ).toBeVisible();
@@ -369,9 +372,10 @@ describe("Overview", () => {
 
   it("badges an open tamper incident as tamper (negative)", async () => {
     await renderAgent();
-    expect(
-      within(region("Composition")).getByText("tamper"),
-    ).toHaveAttribute("data-health", "tamper");
+    expect(within(region("Composition")).getByText("tamper")).toHaveAttribute(
+      "data-health",
+      "tamper",
+    );
   });
 
   it("draws the last 30 days and the definition in git with their links", async () => {
@@ -381,7 +385,10 @@ describe("Overview", () => {
     expect(last30).toHaveTextContent("Tokens6,000");
     expect(
       within(last30).getByRole("link", { name: "Open activity" }),
-    ).toHaveAttribute("href", "/acme/core-platform/agents/release-bot/activity");
+    ).toHaveAttribute(
+      "href",
+      "/acme/core-platform/agents/release-bot/activity",
+    );
     const git = region("Definition in git");
     expect(git).toHaveTextContent(".oxagen/agents/release-bot.toml");
     expect(git).toHaveTextContent("acme/core @ agents/release-bot");
@@ -434,7 +441,9 @@ describe("Identity", () => {
     const trust = region("Trust relationships");
     expect(trust).toHaveTextContent("subagents narrow, never widen");
     expect(trust).toHaveTextContent("1 · hooks_removed");
-    expect(within(trust).getByRole("link", { name: "Read them" })).toHaveAttribute(
+    expect(
+      within(trust).getByRole("link", { name: "Read them" }),
+    ).toHaveAttribute(
       "href",
       "/acme/core-platform/agents/release-bot/activity",
     );
@@ -544,10 +553,7 @@ describe("Runtime", () => {
   });
 
   it("is the empty state with Wrap it and Show the CLI path when no host is enrolled (negative)", async () => {
-    await renderAgent(
-      { get: readOk(agentDetail({ hosts: [] })) },
-      "runtime",
-    );
+    await renderAgent({ get: readOk(agentDetail({ hosts: [] })) }, "runtime");
     const empty = screen.getByTestId("runtime-empty");
     expect(empty).toHaveTextContent("No runtime is enrolled for this agent");
     expect(within(empty).getByRole("link", { name: "Wrap it" })).toBeVisible();
@@ -614,7 +620,9 @@ describe("Activity", () => {
     expect(accounting).toHaveTextContent("counted as input");
     const last30 = screen.getByTestId("agent-findings");
     expect(last30).toHaveTextContent("Duplicate tool calls");
-    expect(within(last30).getByRole("link", { name: "Evidence" })).toBeVisible();
+    expect(
+      within(last30).getByRole("link", { name: "Evidence" }),
+    ).toBeVisible();
     expect(within(last30).getByRole("link", { name: "Fix" })).toBeVisible();
     const [panel] = screen.getAllByTestId("incident-panel");
     expect(panel).toHaveTextContent("hooks_removed");
@@ -645,6 +653,8 @@ describe("Activity", () => {
         name: "Open the incident register",
       }),
     ).toBeVisible();
-    expect(screen.getByText("No finding is open against this agent.")).toBeVisible();
+    expect(
+      screen.getByText("No finding is open against this agent."),
+    ).toBeVisible();
   });
 });

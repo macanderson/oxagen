@@ -144,7 +144,10 @@ type ToolsReads = {
    */
   versions?:
     | Read<ToolVersionPage>
-    | ((q: { category: string | null; cursor: string | null }) => Read<ToolVersionPage>);
+    | ((q: {
+        category: string | null;
+        cursor: string | null;
+      }) => Read<ToolVersionPage>);
   grants?: Read<CredentialGrantPage>;
   killSwitches?: Read<KillSwitchBoard>;
   /** The Mandates tab's read (#2957); built by `@/test/mandate-views`, which
@@ -268,10 +271,7 @@ export function toolsSource(reads: ToolsReads) {
         const read = reads.versions ?? readOk(toolVersionPage());
         return Promise.resolve(typeof read === "function" ? read(q) : read);
       },
-      grants: answer(
-        reads.grants ?? readOk(credentialGrantPage()),
-        "grants",
-      ),
+      grants: answer(reads.grants ?? readOk(credentialGrantPage()), "grants"),
       killSwitches: answer(
         reads.killSwitches ?? readOk(killSwitchBoard()),
         "killSwitches",
