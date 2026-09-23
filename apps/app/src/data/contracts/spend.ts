@@ -18,8 +18,21 @@ export const DayRange = z.object({ from: Day, to: Day });
 export type DayRange = z.infer<typeof DayRange>;
 
 /** The levels the page reads the rollup at. */
-export const SpendGroupKind = z.enum(["operator", "agent", "model", "tool"]);
+export const SpendGroupKind = z.enum([
+  "operator",
+  "agent",
+  "model",
+  "tool",
+  "task",
+  "cost_center",
+]);
 export type SpendGroupKind = z.infer<typeof SpendGroupKind>;
+
+/**
+ * The key of the `cost_center` row that holds spend no cost center claims
+ * (ADR-142). The label pattern refuses `~`, so no label collides with it.
+ */
+export const UNASSIGNED_COST_CENTER_KEY = "~none";
 
 /** The levels a drill opens (spec §12.9): a model has none. */
 export const SpendDrillKind = z.enum(["operator", "agent", "tool"]);
@@ -46,7 +59,7 @@ const OperatorFacts = z.object({
 type OperatorFacts = z.infer<typeof OperatorFacts>;
 
 const SpendRow = SpendFigure.extend({
-  /** A principal public id, an agent key, a model id or a tool name. */
+  /** A principal public id, an agent key, a model id, a tool name, a task reference or a cost-center label. */
   key: z.string().min(1),
   /** The model's provider on a model row; null elsewhere. */
   provider: z.string().nullable(),

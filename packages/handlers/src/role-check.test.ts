@@ -90,6 +90,13 @@ const ROLE_CHECKED_CONTRACTS = [
   "set_model_credential",
   "delete_model_credential",
   "verify_model_credential",
+  // Cost-center chargeback (ADR-142). The list's editors and the readers of
+  // the organization-wide statement are Owner, Admin and Billing.
+  // `list_cost_centers` admits every Member, so it carries no gate.
+  "create_cost_center",
+  "delete_cost_center",
+  "set_cost_center",
+  "export_cost_center_statement",
 ] as const;
 
 const AGENT_ROLE_CHECKED_CONTRACTS = [

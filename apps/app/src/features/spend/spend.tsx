@@ -1,6 +1,7 @@
 // The Spend page body (#2962, #2963; ARCHITECTURE.md §1.2): the open costed
 // findings the page leads with and one finding's evidence, the cost rollup for
-// the current month by operator, agent (with the models beside it) and tool,
+// the current month by operator, agent (with the models beside it), tool, task
+// and cost center (ADR-142),
 // wasted spend by cause, the configured ceilings, one key's drill, and the
 // price book with the models it cannot price. Every
 // read is a noBillingGate kernel read through the spend port; the first read
@@ -13,6 +14,7 @@ import type { DataSource } from "@/data/ports";
 import { PageRecord } from "@/features/shell";
 import type { WsCtx } from "@/server/viewer";
 import { BudgetDialog } from "./budget-dialog";
+import { CostCenterTable } from "./cost-centers";
 import { DrillSection } from "./drill";
 import { ExportDialog } from "./export-dialog";
 import { SpendStrip } from "./figures";
@@ -103,7 +105,8 @@ async function body(
       );
     }
     case "operator":
-    case "tool": {
+    case "tool":
+    case "task": {
       const report = await source.spend.byGroup(ctx, view.tab, period);
       if (!report.ok) return <SpendReadFailure read={report} />;
       return (
@@ -113,6 +116,20 @@ async function body(
             <SpendEmpty at={at} />
           ) : (
             <GroupTable kind={view.tab} rows={report.value.rows} at={at} />
+          )}
+        </>
+      );
+    }
+    case "cost_center": {
+      const report = await source.spend.byGroup(ctx, "cost_center", period);
+      if (!report.ok) return <ReadFailure read={report} />;
+      return (
+        <>
+          <SpendStrip total={report.value.total} period={period} />
+          {isEmpty(report.value) ? (
+            <SpendEmpty at={at} />
+          ) : (
+            <CostCenterTable report={report.value} />
           )}
         </>
       );
