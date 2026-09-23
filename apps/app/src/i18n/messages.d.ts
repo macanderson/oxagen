@@ -2007,18 +2007,54 @@ type Messages = {
       label: string;
       perCall: string;
       perCallBasis: string;
+      perCallCalls: string;
       perPeriod: string;
-      perPeriodBasis: string;
+      perPeriodCalls: string;
       settled: string;
       settledBasis: string;
       remaining: string;
       remainingBasis: string;
+      noLimit: string;
+      noPeriodLimit: string;
+      periods: {
+        daily: string;
+        weekly: string;
+        monthly: string;
+      };
+      windows: {
+        daily: string;
+        weekly: string;
+        monthly: string;
+      };
+    };
+    bar: {
+      title: string;
+      of: string;
+      ofMoney: string;
+      settled: string;
+      reserved: string;
+      remaining: string;
+      share: string;
+      label: string;
+      labelReserved: string;
+      overLimit: string;
     };
     ledger: {
       title: string;
       label: string;
-      basis: string;
-      note: string;
+      concurrency: string;
+      search: string;
+      state: string;
+      allStates: string;
+      rows: string;
+      all: string;
+      range: string;
+      pager: {
+        label: string;
+        previous: string;
+        next: string;
+        page: string;
+      };
       columns: {
         when: string;
         call: string;
@@ -2032,84 +2068,65 @@ type Messages = {
         settle: string;
         release: string;
       };
+      noEffectYet: string;
+      releasedNoEffect: string;
       notRecorded: string;
-      callBasis: string;
-      receiptBasis: string;
-      readBound: string;
-      empty: string;
-      emptyBody: string;
       filteredEmpty: string;
-      filteredEmptyBody: string;
-      search: string;
-      searchHint: string;
-      state: string;
-      anyState: string;
-      apply: string;
-      clear: string;
-      shown: string;
-      pager: {
-        label: string;
-        newer: string;
-        older: string;
-        end: string;
-      };
+      readBound: string;
+      footnote: string;
+      empty: string;
       emptyBodyEffective: string;
+      emptyBody: string;
     };
     grant: {
       title: string;
       agent: string;
+      agentNotRecorded: string;
       grantedBy: string;
       notGranted: string;
       requestedBy: string;
-      roleAtGrant: string;
+      atGrant: string;
+      secondApprover: string;
+      secondApproverNotBacked: string;
       effect: string;
       counterparties: string;
       allow: string;
       deny: string;
       anyTarget: string;
-      noPattern: string;
       allowAnyTarget: string;
       anyNotDenied: string;
+      noPattern: string;
       tools: string;
       approval: string;
       approvalAbove: string;
+      approvalAboveMeasure: string;
       approvalAlways: string;
-      approvalNone: string;
       approvalApprovers: string;
       approvalConsequenceRoles: string;
+      approvalNone: string;
       valid: string;
       validWindow: string;
-      validWindowBasis: string;
     };
-    reconciliation: {
+    exceptions: {
       title: string;
-      body: string;
-      notRecorded: string;
-      openAudit: string;
+      notBacked: string;
     };
     actions: {
+      label: string;
       limits: {
         open: string;
         title: string;
-        body: string;
-        measure: string;
-        measureHint: string;
-        unit: string;
-        unitHint: string;
-        perCall: string;
-        perPeriod: string;
-        period: string;
-        periods: {
-          daily: string;
-          weekly: string;
-          monthly: string;
-        };
-        validTo: string;
-        validToHint: string;
+        cancel: string;
         confirm: string;
         pending: string;
-        callsPer: string;
-        periodsPer: {
+        perCall: string;
+        perPeriod: string;
+        approvalAbove: string;
+        approvalHint: string;
+        validTo: string;
+        validToHint: string;
+        note: string;
+        windows: {
           daily: string;
           weekly: string;
           monthly: string;
@@ -2118,7 +2135,11 @@ type Messages = {
       revoke: {
         open: string;
         title: string;
-        body: string;
+        cancel: string;
+        warnTitle: string;
+        warnBody: string;
+        warnNoMeasure: string;
+        note: string;
         reason: string;
         reasonHint: string;
         confirm: string;
@@ -2158,9 +2179,12 @@ type Messages = {
       denied: {
         title: string;
         body: string;
+        requestAccess: string;
+        requestAccessBody: string;
         signedIn: string;
         needed: string;
         decidedBy: string;
+        decidedByValue: string;
       };
       pending: {
         title: string;
@@ -2169,9 +2193,10 @@ type Messages = {
       error: {
         title: string;
         body: string;
-        code: string;
-        readAt: string;
         retry: string;
+        incident: string;
+        incidentBody: string;
+        trace: string;
       };
     };
   };

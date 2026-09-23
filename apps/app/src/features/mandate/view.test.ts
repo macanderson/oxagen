@@ -1,19 +1,26 @@
-// What the mandate page's query string selects, and what the ledger's search,
-// facet and pager return. These are pure functions over the rows the read
-// answered, so they are tested here rather than through the page: the page's
-// suite proves what is rendered, this one proves what is selected.
+// The pure questions the mandate page asks of its record: which route it came
+// by, which measure the tiles and the dialog speak for, what a figure looks like
+// typed back into a field, and which rows one view of the ledger shows. The
+// page's suite proves what is rendered; this one proves what is selected.
 import { describe, expect, it } from "vitest";
-import { mandateMovement } from "@/test/mandate-views";
 import {
-  LEDGER_PAGE,
+  callsAuthority,
+  mandateAuthority,
+  mandateMovement,
+  mandateRow,
+} from "@/test/mandate-views";
+import {
+  editableOf,
+  isDrawn,
+  kindOf,
   ledgerPage,
   MANDATE_ID,
   mandateLink,
-  MOVEMENT_STATES,
-  parseMandateView,
+  measuresOf,
+  thresholdOf,
+  unitOf,
+  unitsOf,
 } from "./view";
-
-const at = { org: "a-intel", ws: "core-platform", mandate: "mnd_4f2a9c" };
 
 describe("MANDATE_ID", () => {
   it("accepts the public-id shape the contract accepts", () => {
@@ -21,8 +28,6 @@ describe("MANDATE_ID", () => {
     expect(MANDATE_ID.test("mnd_7K2ETQ4")).toBe(true);
   });
 
-  // A URL that could never name a mandate is a 404 rather than a kernel
-  // invalid_input rendered as "this mandate could not be loaded".
   it("refuses anything that is not one (negative)", () => {
     for (const value of ["", "mnd_", "agt_4f2a9c", "not-a-mandate", "mnd 4f"]) {
       expect(MANDATE_ID.test(value)).toBe(false);
@@ -30,134 +35,153 @@ describe("MANDATE_ID", () => {
   });
 });
 
-describe("parseMandateView", () => {
-  it("defaults to no search, every state and the first page", () => {
-    expect(parseMandateView({})).toEqual({
-      search: null,
-      state: null,
-      offset: 0,
-    });
+describe("mandateLink", () => {
+  it("points at the flat route when the page came by it", () => {
+    expect(
+      mandateLink({
+        org: "a-intel",
+        ws: "finops",
+        mandate: "mnd_1",
+        agent: null,
+      }),
+    ).toBe("/a-intel/finops/mandates/mnd_1");
   });
 
-  it("takes the search trimmed, and reads a blank box as no search", () => {
-    expect(parseMandateView({ q: "  pi_3Qa  " }).search).toBe("pi_3Qa");
-    expect(parseMandateView({ q: "   " }).search).toBeNull();
-  });
-
-  it("bounds the search, so a crafted URL cannot hand the filter an unbounded string", () => {
-    expect(parseMandateView({ q: "x".repeat(5000) }).search).toHaveLength(200);
-  });
-
-  it("takes each movement state the facet offers", () => {
-    for (const state of MOVEMENT_STATES) {
-      expect(parseMandateView({ state }).state).toBe(state);
-    }
-  });
-
-  // A value the page does not recognise falls back to the default rather than
-  // failing the page.
-  it("ignores a state nobody records (negative)", () => {
-    expect(parseMandateView({ state: "spent" }).state).toBeNull();
-  });
-
-  it("snaps an offset to a page boundary and ignores one that is not a number", () => {
-    expect(parseMandateView({ offset: "25" }).offset).toBe(25);
-    expect(parseMandateView({ offset: "30" }).offset).toBe(25);
-    expect(parseMandateView({ offset: "-5" }).offset).toBe(0);
-    expect(parseMandateView({ offset: "many" }).offset).toBe(0);
-  });
-
-  it("takes the first value when a parameter is repeated", () => {
-    expect(parseMandateView({ state: ["settle", "release"] }).state).toBe(
-      "settle",
-    );
+  it("points at the design's route when the page came by that", () => {
+    expect(
+      mandateLink({
+        org: "a-intel",
+        ws: "finops",
+        mandate: "mnd_1",
+        agent: "invoice-bot",
+      }),
+    ).toBe("/a-intel/finops/agents/invoice-bot/mandates/mnd_1");
   });
 });
 
-describe("mandateLink", () => {
-  it("leaves off every default, so the plain route is the plain route", () => {
-    expect(mandateLink(at)).toBe("/a-intel/core-platform/mandates/mnd_4f2a9c");
+describe("measuresOf", () => {
+  it("speaks for the first measure that is not calls, and keeps the calls cap aside", () => {
+    const amount = mandateAuthority();
+    const calls = callsAuthority();
+    const tax = mandateAuthority({ measure: "tax" });
+    const split = measuresOf(mandateRow({ authority: [calls, amount, tax] }));
+    expect(split.primary?.measure).toBe("amount");
+    expect(split.calls?.measure).toBe("calls");
+    expect(split.others.map((a) => a.measure)).toEqual(["tax"]);
   });
 
-  it("carries the search, the facet and the page when they are not the defaults", () => {
+  it("speaks for calls when that is the only limit", () => {
+    const split = measuresOf(mandateRow({ authority: [callsAuthority()] }));
+    expect(split.primary?.measure).toBe("calls");
+    expect(split.calls).toBeNull();
+  });
+
+  it("speaks for nothing on a mandate with no limit", () => {
+    expect(measuresOf(mandateRow({ authority: [] })).primary).toBeNull();
+  });
+});
+
+describe("units", () => {
+  it("reads the kind and the unit from the record, never from a spelling", () => {
+    expect(kindOf(mandateAuthority())).toBe("money");
+    expect(unitOf(mandateAuthority())).toBe("USD");
+    expect(kindOf(callsAuthority())).toBe("count");
+    expect(unitOf(callsAuthority())).toBe("calls");
+  });
+
+  it("lists each currency once and leaves the calls cap out", () => {
     expect(
-      mandateLink(at, { search: "pi_3Qa", state: "settle", offset: 25 }),
-    ).toBe(
-      "/a-intel/core-platform/mandates/mnd_4f2a9c?q=pi_3Qa&state=settle&offset=25",
+      unitsOf(
+        mandateRow({
+          authority: [
+            mandateAuthority(),
+            mandateAuthority({ measure: "tax" }),
+            callsAuthority(),
+          ],
+        }),
+      ),
+    ).toEqual(["USD"]);
+  });
+
+  it("tells a drawn figure from an undrawn one on the recorded digits", () => {
+    expect(isDrawn({ kind: "count", count: "0", unit: "calls" })).toBe(false);
+    expect(isDrawn({ kind: "count", count: "3", unit: "calls" })).toBe(true);
+    expect(
+      isDrawn({ kind: "money", money: { micros: "000", currency: "USD" } }),
+    ).toBe(false);
+  });
+});
+
+describe("editableOf", () => {
+  it("writes micros as a decimal with at least two places and no grouping", () => {
+    const money = (micros: string) =>
+      ({ kind: "money", money: { micros, currency: "USD" } }) as const;
+    expect(editableOf(money("250000000"))).toBe("250.00");
+    expect(editableOf(money("5000000000"))).toBe("5000.00");
+    expect(editableOf(money("5000"))).toBe("0.005");
+    expect(editableOf(money("1250000"))).toBe("1.25");
+    expect(editableOf(money("0"))).toBe("0.00");
+  });
+
+  it("writes a count as its digits, and nothing as blank", () => {
+    expect(editableOf({ kind: "count", count: "50", unit: "calls" })).toBe(
+      "50",
     );
+    expect(editableOf(null)).toBe("");
+  });
+});
+
+describe("thresholdOf", () => {
+  it("finds the approval threshold the rule sets on a measure", () => {
+    expect(thresholdOf(mandateRow(), "amount")?.recorded).toBe("100000000");
+    expect(thresholdOf(mandateRow(), "calls")).toBeNull();
   });
 });
 
 describe("ledgerPage", () => {
-  const view = (over: Partial<ReturnType<typeof parseMandateView>> = {}) => ({
-    search: null,
-    state: null,
-    offset: 0,
-    ...over,
-  });
-  const three = [
-    mandateMovement({ measure: "amount", externalEffectRef: "pi_3QaL8f2Xk" }),
-    mandateMovement({
-      kind: "reserve",
-      measure: "amount",
-      externalEffectRef: null,
-    }),
-    mandateMovement({
-      kind: "release",
-      measure: "calls",
-      value: { kind: "count", count: "1", unit: "calls" },
-      externalEffectRef: null,
-    }),
+  const ledger = [
+    mandateMovement({ kind: "reserve", externalEffectRef: null }),
+    mandateMovement({ externalEffectRef: "pi_AAA" }),
+    mandateMovement({ externalEffectRef: "pi_BBB" }),
+    mandateMovement({ kind: "release", externalEffectRef: null }),
+    mandateMovement({ measure: "tax", externalEffectRef: "sp-1" }),
   ];
+  const view = { search: "", state: null, size: 10, page: 0 } as const;
 
-  it("returns every movement, newest first, on the plain view", () => {
-    const page = ledgerPage(three, view());
-    expect(page.rows).toEqual(three);
-    expect(page).toMatchObject({ total: 3, offset: 0, hasMore: false });
+  it("shows every row on one page by default, with its range", () => {
+    const page = ledgerPage(ledger, view);
+    expect(page.rows).toHaveLength(5);
+    expect([page.from, page.to, page.total, page.pages]).toEqual([1, 5, 5, 1]);
   });
 
-  it("matches a measure and an external effect reference, whatever the casing", () => {
-    expect(ledgerPage(three, view({ search: "CALLS" })).rows).toHaveLength(1);
-    expect(ledgerPage(three, view({ search: "pi_3qa" })).rows).toHaveLength(1);
-  });
-
-  it("narrows to one state on the facet", () => {
-    expect(ledgerPage(three, view({ state: "release" })).rows).toHaveLength(1);
-  });
-
-  it("applies the search and the facet together", () => {
-    expect(
-      ledgerPage(three, view({ search: "amount", state: "reserve" })).rows,
-    ).toHaveLength(1);
-    expect(
-      ledgerPage(three, view({ search: "calls", state: "reserve" })).rows,
-    ).toHaveLength(0);
-  });
-
-  it("pages the rows the filter left", () => {
-    const many = Array.from({ length: LEDGER_PAGE + 5 }, () =>
-      mandateMovement(),
+  it("narrows to one state", () => {
+    expect(ledgerPage(ledger, { ...view, state: "settle" }).rows).toHaveLength(
+      3,
     );
-    const first = ledgerPage(many, view());
-    expect(first.rows).toHaveLength(LEDGER_PAGE);
-    expect(first.hasMore).toBe(true);
-    const second = ledgerPage(many, view({ offset: LEDGER_PAGE }));
-    expect(second.rows).toHaveLength(5);
-    expect(second.hasMore).toBe(false);
   });
 
-  // A blank page would read as a mandate with no movements, and only a link can
-  // reach one.
-  it("shows the first page rather than nothing when the offset is past the end (negative)", () => {
-    const page = ledgerPage(three, view({ offset: 500 }));
-    expect(page.rows).toHaveLength(3);
-    expect(page.offset).toBe(0);
+  it("matches the measure and the external id, case-insensitively", () => {
+    expect(ledgerPage(ledger, { ...view, search: "PI_a" }).rows).toHaveLength(
+      1,
+    );
+    expect(ledgerPage(ledger, { ...view, search: "tax" }).rows).toHaveLength(1);
   });
 
-  it("returns no rows and the true total when nothing matches (negative)", () => {
-    const page = ledgerPage(three, view({ search: "no-such-thing" }));
-    expect(page.rows).toHaveLength(0);
-    expect(page.total).toBe(0);
-    expect(page.hasMore).toBe(false);
+  it("pages by the chosen size and clamps a page past the end", () => {
+    const page = ledgerPage(ledger, { ...view, size: 5, page: 0 });
+    expect(page.pages).toBe(1);
+    const second = ledgerPage(ledger, { ...view, size: 2, page: 2 });
+    expect([second.from, second.to]).toEqual([5, 5]);
+    const past = ledgerPage(ledger, { ...view, size: 2, page: 9 });
+    expect(past.page).toBe(2);
+  });
+
+  it("shows every row when the size is All", () => {
+    expect(ledgerPage(ledger, { ...view, size: 0 }).rows).toHaveLength(5);
+  });
+
+  it("reports an empty range when nothing matches", () => {
+    const page = ledgerPage(ledger, { ...view, search: "zzz" });
+    expect([page.from, page.to, page.total]).toEqual([0, 0, 0]);
   });
 });
