@@ -2666,6 +2666,7 @@ type Messages = {
       empty: string;
       catalog: {
         title: string;
+        open: string;
         lead: string;
         covers: string;
       };
