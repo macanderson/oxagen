@@ -5076,12 +5076,167 @@ type Messages = {
   steering: {
     tabs: {
       label: string;
-      records: string;
-      skills: string;
+      library: string;
+      assignments: string;
+      gates: string;
       proposals: string;
-      prs: string;
+      compiler: string;
+      records: string;
       settings: string;
       deliveries: string;
+      candidates: string;
+      prs: string;
+      segments: string;
+    };
+    hub: {
+      description: string;
+      count: string;
+    };
+    shelves: {
+      label: string;
+      all: string;
+      records: string;
+      instructions: string;
+      skills: string;
+      memory: string;
+      ontology: string;
+      notRecorded: string;
+    };
+    governance: {
+      chip: string;
+      chipTitle: string;
+      absentTitle: string;
+      invalidTitle: string;
+      unboundTitle: string;
+      unreadTitle: string;
+      shown: {
+        invalid: string;
+        unbound: string;
+        unread: string;
+      };
+      title: string;
+      subtitle: string;
+      mainRepository: string;
+      pick: string;
+      now: string;
+      modes: {
+        solo: {
+          summary: string;
+          hint: string;
+        };
+        team: {
+          summary: string;
+          hint: string;
+        };
+        regulated: {
+          summary: string;
+          hint: string;
+        };
+      };
+      tomlHeader: string;
+      note: string;
+      cancel: string;
+      close: string;
+      submit: string;
+      pending: string;
+      proposed: string;
+      applied: string;
+      unchanged: string;
+      openPr: string;
+      failure: {
+        denied: string;
+        noRepository: string;
+        refused: string;
+        pendingApproval: string;
+        unavailable: string;
+      };
+    };
+    library: {
+      items: string;
+      itemsNote: string;
+      byKind: string;
+      byKindNote: string;
+      compiledSize: string;
+      compiledSizeNote: string;
+      grants: string;
+      grantsNote: string;
+      notRecorded: string;
+      tok: string;
+      kindRecord: string;
+      lead: string;
+      planes: string;
+      title: string;
+      receives: string;
+      columns: {
+        item: string;
+        kind: string;
+        force: string;
+        scope: string;
+        compiles: string;
+        tokens: string;
+        source: string;
+      };
+      compilesNotRecorded: string;
+      compilesTitle: string;
+      tokensTitle: string;
+      sourceNone: string;
+      gap: string;
+    };
+    state: {
+      loading: string;
+      empty: {
+        title: string;
+        body: string;
+        repository: string;
+      };
+      error: {
+        title: string;
+        answered: string;
+        body: string;
+        retry: string;
+        incident: string;
+        incidentNote: string;
+        trace: string;
+      };
+      denied: {
+        title: string;
+        body: string;
+        request: string;
+        requestNote: string;
+        back: string;
+        signedIn: string;
+        signedInValue: string;
+        needed: string;
+        neededValue: string;
+        decidedBy: string;
+        decidedByValue: string;
+      };
+      pending: {
+        title: string;
+        body: string;
+      };
+    };
+    bodies: {
+      notBacked: string;
+      issue: string;
+      assignments: {
+        what: string;
+      };
+      gates: {
+        what: string;
+      };
+      compiler: {
+        what: string;
+      };
+      memory: {
+        what: string;
+      };
+      ontology: {
+        what: string;
+      };
+      instructions: {
+        what: string;
+      };
     };
     failure: {
       denied: string;

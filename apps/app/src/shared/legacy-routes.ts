@@ -37,10 +37,8 @@ type WorkspaceTarget =
   | "/{org}/{ws}/steering"
   | "/{org}/{ws}/spend";
 
-/** Skills moved under Steering after the legacy route table was introduced. */
-type WorkspaceTargetWithQuery =
-  | WorkspaceTarget
-  | "/{org}/{ws}/steering?tab=skills";
+/** Skills moved under Steering, as a shelf of its Library, after the legacy route table was introduced. */
+type WorkspaceTargetWithQuery = WorkspaceTarget | "/{org}/{ws}/steering/skills";
 
 /** A target may name `{ws}` only when its source captured one. */
 type LegacyRoute =
@@ -109,15 +107,15 @@ export const LEGACY_ROUTES: readonly LegacyRoute[] = [
   { from: "/{org}/{ws}/workbench/tools", to: "/{org}/{ws}/tools" },
   { from: "/{org}/{ws}/workbench/tools/capabilities", to: "/{org}/{ws}/tools" },
   { from: "/{org}/{ws}/workbench/tools/mcp", to: "/{org}/{ws}/tools" },
-  // Skills is a Steering tab. Send retired routes there in one redirect rather
+  // Skills is a shelf of the Steering library. Send retired routes there in one redirect rather
   // than through the compatibility-only /skills route (ADR-090 amendment).
   {
     from: "/{org}/{ws}/workbench/tools/skills/**",
-    to: "/{org}/{ws}/steering?tab=skills",
+    to: "/{org}/{ws}/steering/skills",
   },
   {
     from: "/{org}/{ws}/settings/skills",
-    to: "/{org}/{ws}/steering?tab=skills",
+    to: "/{org}/{ws}/steering/skills",
   },
   { from: "/{org}/{ws}/marketplace", to: "/{org}/{ws}/tools" },
   { from: "/{org}/{ws}/marketplace/agent-tools", to: "/{org}/{ws}/tools" },

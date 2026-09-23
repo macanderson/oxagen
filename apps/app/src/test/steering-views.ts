@@ -16,6 +16,7 @@ import type {
   ProposalPage,
   ProposalStatus,
   RecordDetail,
+  RecordKind,
   RecordPage,
   SteeringFreshness,
   SteeringDeliveries,
@@ -201,7 +202,13 @@ export function contextPr(
 }
 
 export type SteeringReads = {
-  records: Read<RecordPage>;
+  /**
+   * One read for every records call, or an answer per query: the Steering hub
+   * reads every kind for its counts and a shelf then reads its own kind.
+   */
+  records:
+    | Read<RecordPage>
+    | ((q: { kind: RecordKind | null; offset: number }) => Read<RecordPage>);
   record: Read<RecordDetail>;
   proposals: Read<ProposalPage>;
   contextPr: Read<ContextPr>;
@@ -319,7 +326,10 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
       },
       records: (...args) => {
         calls.records.push(args);
-        return Promise.resolve(reads.records);
+        const read = reads.records;
+        return Promise.resolve(
+          typeof read === "function" ? read(args[1]) : read,
+        );
       },
       record: (...args) => {
         calls.record.push(args);

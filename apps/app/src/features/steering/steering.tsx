@@ -1,155 +1,239 @@
-// Steering (#2961; ARCHITECTURE.md §1.2): the records in force in this
-// workspace, the skills its harness sessions reported (the Skills tab, which
-// is the Skills lane's inventory; MC spec §10.7), the proposals waiting for a
-// person with the support they cite, and the Context PR that publishes one:
-// its state machine, its checks, what merge will do and the merge. Effect metrics, retirement candidates and
-// promotion thresholds are not in this release. Each tab makes only the reads
-// it shows.
-import { Suspense } from "react";
-import { useTranslations } from "next-intl";
-import { firstParam } from "@/shared/safe-path";
-import type { Read } from "@/data/read";
-import type { SteeringFreshness } from "@/data/contracts/steering";
+// The Steering hub (roadmap pages/steering.md; #2961): the header with the
+// governance chip and the one gold action, the five tabs, the Library's shelf
+// row, and the body of the tab or shelf in view.
+//
+// Every tab reads the record registry first, because the Library's count sits
+// on the Library tab wherever the reader is, and because that read is the
+// page's own: a refusal or an outage there is the page's denied or error
+// state, which replaces the body and the header with it and never the shell.
+// The hub read (governance mode and proposals waiting) fails on its own
+// inside its value, so GitHub being down leaves the library standing.
+//
+// The Library's All and Records shelves share one empty state; every other
+// tab and shelf owns its empty copy in its own body. Each body makes only the
+// reads it shows.
+import { Suspense, type ReactNode } from "react";
 import type { DataSource } from "@/data/ports";
 import { PageRecord } from "@/features/shell";
 import { Skills, SkillsLoading } from "@/features/skills";
 import type { WsCtx } from "@/server/viewer";
-import { ContextPrs } from "./context-prs";
-import { Deliveries } from "./deliveries";
-import { Freshness } from "./freshness";
-import { Proposals } from "./proposals";
-import { SteeringReadFailure } from "./read-failure";
-import { Records } from "./records";
+import { useFormatter } from "@/ui/formatter";
+import { SteeringCreate } from "./create-action";
+import { GovernanceChip } from "./governance";
+import { LibraryAll } from "./library-all";
+import { SteeringEmpty, SteeringFailure } from "./page-state";
+import { type ShelfCounts, ShelfRow } from "./shelves";
 import { SteeringTabs } from "./tabs";
-import { parseSteeringView, type SteeringAt, type SteeringView } from "./view";
+import { AssignmentsTab } from "./tabs/assignments";
+import { CompilerTab } from "./tabs/compiler";
+import { GatesTab } from "./tabs/gates";
+import { InstructionsShelf } from "./tabs/instructions";
+import { MemoryShelf } from "./tabs/memory";
+import { OntologyShelf } from "./tabs/ontology";
+import { ProposalsTab } from "./tabs/proposals";
+import { RecordsShelf } from "./tabs/records";
+import type { SteeringAt, SteeringView } from "./view";
+import { routes } from "@/shared/safe-path";
 
-function SettingsPanel({
-  read,
-  at,
-  canEdit,
-}: {
-  read: Read<SteeringFreshness>;
-  at: SteeringAt;
-  canEdit: boolean;
-}) {
-  const t = useTranslations("steering.tabs");
-  return read.ok ? (
-    <Freshness at={at} read={read.value} canEdit={canEdit} />
-  ) : (
-    <SteeringReadFailure read={read} section={t("settings")} />
-  );
-}
+/** The page header, drawn by the route with these actions; the route owns its title key. */
+export type SteeringHeader = (actions: ReactNode) => ReactNode;
 
-async function TabBody({
+async function Body({
   ctx,
   source,
   view,
-  skillView,
   at,
 }: {
   ctx: WsCtx;
   source: DataSource;
   view: SteeringView;
-  skillView: string | undefined;
   at: SteeringAt;
 }) {
+  // The async bodies are awaited here rather than rendered as elements, so
+  // each read runs before the hub returns and a test renders the result.
   switch (view.tab) {
-    case "deliveries":
-      return <Deliveries read={await source.steering.deliveries(ctx)} />;
-    case "settings":
-      return (
-        <SettingsPanel
-          read={await source.steering.freshness(ctx)}
-          at={at}
-          canEdit={canEditGates(ctx)}
-        />
-      );
-    case "records": {
-      const read = await source.steering.records(ctx, {
-        kind: view.kind,
+    case "assignments":
+      return await AssignmentsTab({ ctx, source });
+    case "gates":
+      return await GatesTab({ ctx, source });
+    case "compiler":
+      return <CompilerTab agent={view.agent} />;
+    case "proposals":
+      return await ProposalsTab({
+        ctx,
+        source,
+        at,
+        segment: view.segment ?? "candidates",
         offset: view.offset,
+        proposal: view.proposal,
       });
-      return (
-        <Records at={at} kind={view.kind} offset={view.offset} read={read} />
-      );
-    }
-    case "skills":
-      return (
-        <Suspense fallback={<SkillsLoading />}>
-          <Skills
-            ctx={ctx}
-            source={source}
-            cursor={view.cursor}
-            view={skillView}
-          />
-        </Suspense>
-      );
-    case "proposals": {
-      const read = await source.steering.proposals(ctx, {
-        offset: view.offset,
-      });
-      return <Proposals at={at} offset={view.offset} read={read} />;
-    }
-    case "prs": {
-      const { proposal } = view;
-      const [read, pr] = await Promise.all([
-        source.steering.proposals(ctx, { offset: view.offset }),
-        proposal === null ? null : source.steering.contextPr(ctx, proposal),
-      ]);
-      return (
-        <ContextPrs
-          at={at}
-          offset={view.offset}
-          read={read}
-          selected={proposal}
-          pr={pr}
-        />
-      );
-    }
+    case "library":
+      switch (view.shelf) {
+        case "records":
+          return await RecordsShelf({
+            ctx,
+            source,
+            at,
+            kind: view.kind,
+            offset: view.offset,
+          });
+        case "skills":
+          return (
+            <Suspense fallback={<SkillsLoading />}>
+              <Skills
+                ctx={ctx}
+                source={source}
+                cursor={view.cursor}
+                view={view.skillView}
+              />
+            </Suspense>
+          );
+        case "memory":
+          return <MemoryShelf />;
+        case "ontology":
+          return <OntologyShelf />;
+        case "instructions":
+          return <InstructionsShelf />;
+        case "all":
+        case null:
+          // The All shelf is drawn from the hub's own read in Steering.
+          return null;
+      }
   }
+}
+
+/**
+ * The instant the reads were attempted, taken before them. Declared outside
+ * the component because a component may not read a clock during render.
+ */
+function instantOfRead(): string {
+  return new Date().toISOString();
+}
+
+/** The failed read's trace instant, in the viewer's zone. */
+function FailureAt({
+  ctx,
+  read,
+  view,
+  readAt,
+}: {
+  ctx: WsCtx;
+  read: Parameters<typeof SteeringFailure>[0]["read"];
+  view: SteeringView;
+  readAt: string;
+}) {
+  const format = useFormatter();
+  return (
+    <SteeringFailure
+      read={read}
+      org={ctx.orgSlug}
+      ws={ctx.wsSlug}
+      orgName={ctx.orgName}
+      wsSlug={ctx.wsSlug}
+      wsRole={ctx.wsRole}
+      retry={retryLink(ctx, view)}
+      readAt={format.dateTime(new Date(readAt), {
+        dateStyle: "medium",
+        timeStyle: "long",
+      })}
+    />
+  );
+}
+
+/** Try again reloads the view that failed. */
+function retryLink(ctx: WsCtx, view: SteeringView) {
+  const tab =
+    view.tab === "library"
+      ? view.shelf === "all" || view.shelf === null
+        ? "library"
+        : view.shelf
+      : view.tab === "proposals" && view.segment === "prs"
+        ? "prs"
+        : view.tab;
+  return routes.steering(ctx.orgSlug, ctx.wsSlug, {
+    tab,
+    agent: view.agent ?? undefined,
+  });
 }
 
 export async function Steering({
   ctx,
   source,
-  searchParams,
+  view,
+  header,
 }: {
   ctx: WsCtx;
   source: DataSource;
-  /** The query the URL carried: `tab`, `kind`, `offset`, `proposal`, `cursor`. */
-  searchParams: Readonly<Record<string, string | string[] | undefined>>;
+  view: SteeringView;
+  header: SteeringHeader;
 }) {
-  const view = parseSteeringView(searchParams);
   const at: SteeringAt = { org: ctx.orgSlug, ws: ctx.wsSlug };
+  const readAt = instantOfRead();
+  const onAll = view.tab === "library" && view.shelf === "all";
+  const [library, hub] = await Promise.all([
+    source.steering.records(ctx, {
+      kind: null,
+      offset: onAll ? view.offset : 0,
+    }),
+    source.steering.hub(ctx),
+  ]);
+  if (!library.ok) {
+    return <FailureAt ctx={ctx} read={library} view={view} readAt={readAt} />;
+  }
+  const governance = hub.ok ? hub.value.governance : null;
+  const records = library.value.total;
+  // Records is the one shelf a read counts today; the rest print "not
+  // recorded" until the steering registry reads them (./library-all.tsx).
+  const shelves: ShelfCounts = {
+    all: records,
+    records,
+    instructions: null,
+    skills: null,
+    memory: null,
+    ontology: null,
+  };
+  const empty =
+    records === 0 &&
+    view.tab === "library" &&
+    (view.shelf === "all" || view.shelf === "records");
   return (
-    <div className="flex flex-col gap-6">
-      {/* `proposal` selects nothing off the Context PRs tab, so the parse
-          decides this, not the query string. */}
+    <div className="flex flex-col gap-4" data-testid="steering">
+      {/* `proposal` selects nothing off the Context PRs segment, so the
+          parse decides this, not the query string. */}
       <PageRecord route="steering" id={view.proposal} />
-      <SteeringTabs at={at} current={view.tab} />
-      {
-        await TabBody({
-          ctx,
-          source,
-          view,
-          at,
-          skillView: firstParam(searchParams.view),
-        })
-      }
+      {header(
+        <>
+          <GovernanceChip
+            org={ctx.orgSlug}
+            ws={ctx.wsSlug}
+            workspace={ctx.wsName}
+            governance={governance}
+          />
+          {empty ? null : <SteeringCreate view={view} />}
+        </>,
+      )}
+      <SteeringTabs
+        at={at}
+        current={view.tab}
+        counts={{
+          library: records,
+          proposals: hub.ok ? hub.value.proposalsWaiting : null,
+        }}
+      />
+      {view.tab === "library" ? (
+        <ShelfRow at={at} current={view.shelf ?? "all"} counts={shelves} />
+      ) : null}
+      {empty ? (
+        <SteeringEmpty
+          repository={
+            governance?.state === "read" ? governance.repository : null
+          }
+        />
+      ) : onAll ? (
+        <LibraryAll at={at} page={library.value} offset={view.offset} />
+      ) : (
+        await Body({ ctx, source, view, at })
+      )}
     </div>
   );
-}
-
-/**
- * Who may set the gates, mirroring `update_workspace_settings`'s own gate
- * (INV-29): an org Owner or Admin, or the Owner or Admin of this workspace.
- *
- * The handler decides, not this; the check here only stops the page offering
- * a checkbox that would come back `denied`. Getting it wrong in the strict
- * direction hides a control from someone entitled to it, so it admits
- * exactly the roles the handler does and no fewer.
- */
-function canEditGates(ctx: WsCtx): boolean {
-  const admin = (role: string) => role === "owner" || role === "admin";
-  return admin(ctx.orgRole) || admin(ctx.wsRole);
 }

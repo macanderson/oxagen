@@ -71,9 +71,17 @@ const {
     Agents: vi.fn((_props: Record<string, unknown>) => null),
     Agent: vi.fn((_props: Record<string, unknown>) => null),
     AgentSource: vi.fn((_props: Record<string, unknown>) => null),
-    Steering: vi.fn((props: { searchParams: Record<string, string> }) => (
-      <p data-testid="steering-body" data-tab={props.searchParams.tab} />
-    )),
+    Steering: vi.fn(
+      (props: {
+        view: { tab: string };
+        header: (actions: ReactNode) => ReactNode;
+      }) => (
+        <>
+          {props.header(<span data-testid="steering-actions" />)}
+          <p data-testid="steering-body" data-tab={props.view.tab} />
+        </>
+      ),
+    ),
     Spend: vi.fn((props: { searchParams: Record<string, string> }) => (
       <p data-testid="spend-body" data-tab={props.searchParams.tab} />
     )),
@@ -123,11 +131,24 @@ vi.mock("@/features/agents", () => ({
   AgentSource,
   AgentsCreate: () => null,
 }));
+// The route resolves its path with the lane's own resolver (view.test.ts
+// covers every address); here it only has to hand over what it resolved.
 vi.mock("@/features/steering", () => ({
   Steering,
-  SteeringCreate: (props: { searchParams: Record<string, string> }) => (
-    <p data-testid="steering-create" data-tab={props.searchParams.tab} />
-  ),
+  SteeringLoading: () => null,
+  resolveSteeringRoute: (
+    _at: unknown,
+    segments: string[] | undefined,
+    query: Record<string, string>,
+  ) =>
+    query.tab === "prs"
+      ? {
+          kind: "redirect",
+          to: `/acme/core-platform/steering/proposals/prs?proposal=${query.proposal ?? ""}`,
+        }
+      : segments?.[0] === "nowhere"
+        ? { kind: "not_found" }
+        : { kind: "view", view: { tab: segments?.[0] ?? "library" } },
 }));
 vi.mock("@/features/spend", () => ({ Spend, FleetSpendTiles }));
 // People stays real, so the organization page still renders a roster; the two
@@ -163,12 +184,18 @@ vi.mock("@/features/organization/api-key-actions", () => ({
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+  notFound: () => {
+    throw new Error("NEXT_NOT_FOUND");
+  },
 }));
 // The Skills route only moves to the Steering tab; the redirect throws, as
 // Next's does, with the target in its message.
 vi.mock("@/shared/navigation", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/shared/navigation")>()),
   permanentRedirectTo: (path: string) => {
+    throw new Error(`REDIRECT ${path}`);
+  },
+  redirectTo: (path: string) => {
     throw new Error(`REDIRECT ${path}`);
   },
 }));
@@ -197,6 +224,7 @@ const title = translator("pages");
 const SKILLS = () => import("./[ws]/skills/page");
 const TOOLS: Load = () => import("./[ws]/tools/page");
 const STEERING: Load = () => import("./[ws]/steering/page");
+const STEERING_VIEW = () => import("./[ws]/steering/[...view]/page");
 
 const FLEET: Load = () => import("./[ws]/(fleet)/page");
 const AGENTS: Load = () => import("./[ws]/agents/page");
@@ -303,30 +331,78 @@ describe("the Billing page", () => {
 });
 
 describe("the Steering page", () => {
-  it("resolves the workspace viewer, names the page once and hands the viewer, the data source and the query to Steering", async () => {
-    const ctx = { orgSlug: "acme", wsSlug: "core-platform" };
+  it("resolves the workspace viewer, names the page once and hands the viewer, the data source and the view to Steering", async () => {
+    const ctx = {
+      orgSlug: "acme",
+      wsSlug: "core-platform",
+      wsName: "Core platform",
+    };
     requireViewer.mockResolvedValue(ctx);
-    await expectPageTitle(
+    const page = await expectPageTitle(
       await STEERING(),
-      routeProps(SEGMENTS, { tab: "prs", proposal: "prp_1" }),
+      routeProps(SEGMENTS),
       title("steering"),
     );
     expect(requireViewer).toHaveBeenCalledWith(...WS);
     expect(Steering).toHaveBeenCalledOnce();
-    expect(Steering.mock.calls[0]?.[0]).toEqual({
+    expect(Steering.mock.calls[0]?.[0]).toMatchObject({
       ctx,
       source,
-      searchParams: { tab: "prs", proposal: "prp_1" },
+      view: { tab: "library" },
     });
-    expect(screen.getByTestId("steering-body")).toHaveAttribute(
-      "data-tab",
-      "prs",
+    // The eyebrow is the workspace name and the subtext the design's sentence.
+    expect(page.textContent).toContain("Core platform");
+    expect(page.textContent).toContain(
+      "Everything that can steer an agent in this workspace competes in one assembler.",
     );
-    expect(screen.getByTestId("steering-create")).toHaveAttribute(
-      "data-tab",
-      "prs",
-    );
+    expect(screen.getByTestId("steering-actions")).toBeInTheDocument();
     expect(screen.queryByTestId("not-recorded")).toBeNull();
+  });
+
+  it("moves a ?tab= link from the one-route page to the path it names", async () => {
+    requireViewer.mockResolvedValue({
+      orgSlug: "acme",
+      wsSlug: "core-platform",
+    });
+    await expect(
+      Promise.resolve(
+        (await STEERING()).default(
+          routeProps(SEGMENTS, { tab: "prs", proposal: "prp_1" }),
+        ),
+      ),
+    ).rejects.toThrow(
+      "REDIRECT /acme/core-platform/steering/proposals/prs?proposal=prp_1",
+    );
+  });
+
+  it("renders a tab segment on the catch-all route", async () => {
+    requireViewer.mockResolvedValue({
+      orgSlug: "acme",
+      wsSlug: "core-platform",
+      wsName: "Core platform",
+    });
+    await expectPageTitle(
+      await STEERING_VIEW(),
+      routeProps({ ...SEGMENTS, view: ["gates"] }),
+      title("steering"),
+    );
+    expect(Steering.mock.calls[0]?.[0]).toMatchObject({
+      view: { tab: "gates" },
+    });
+  });
+
+  it("answers a segment that names nothing with a 404 (negative)", async () => {
+    requireViewer.mockResolvedValue({
+      orgSlug: "acme",
+      wsSlug: "core-platform",
+    });
+    await expect(
+      Promise.resolve(
+        (await STEERING_VIEW()).default(
+          routeProps({ ...SEGMENTS, view: ["nowhere"] }),
+        ),
+      ),
+    ).rejects.toThrow("NEXT_NOT_FOUND");
   });
 });
 
@@ -363,9 +439,7 @@ describe("the Skills route", () => {
       Promise.resolve(
         (await SKILLS()).default(routeProps(SEGMENTS, { cursor: "c2" })),
       ),
-    ).rejects.toThrow(
-      "REDIRECT /acme/core-platform/steering?tab=skills&cursor=c2",
-    );
+    ).rejects.toThrow("REDIRECT /acme/core-platform/steering/skills?cursor=c2");
     expect(requireViewer).toHaveBeenCalledWith(...WS);
     expect(Skills).not.toHaveBeenCalled();
   });
@@ -377,7 +451,7 @@ describe("the Skills route", () => {
     });
     await expect(
       Promise.resolve((await SKILLS()).default(routeProps(SEGMENTS))),
-    ).rejects.toThrow("REDIRECT /acme/core-platform/steering?tab=skills");
+    ).rejects.toThrow("REDIRECT /acme/core-platform/steering/skills");
   });
 });
 

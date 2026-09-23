@@ -17,16 +17,17 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("steering") };
 }
 
-// Steering, the Library's All shelf (roadmap pages/steering.md). The five
-// tabs and the shelves are path segments under this route
-// (./[...view]/page.tsx); a `?tab=` link from the one-route page moves to the
-// path it names. The header is drawn inside the body's boundary, because the
-// loading, error and denied states replace it along with the body.
-export default async function SteeringPage({
+// One Steering tab or Library shelf (roadmap pages/steering.md): Library,
+// Assignments, Gates, Proposals and Compiler, and the shelves Records,
+// Instructions, Skills, Memory and Ontology, each a path segment. An address
+// written before the five tabs (policy, preview, prs, settings, deliveries,
+// library/<shelf>) moves to where it lives now; a segment that names nothing
+// is a 404. `/steering/records/<lineage>` is the record page, its own route.
+export default async function SteeringViewPage({
   params,
   searchParams,
-}: PageProps<"/[org]/[ws]/steering">) {
-  const { org, ws } = await params;
+}: PageProps<"/[org]/[ws]/steering/[...view]">) {
+  const { org, ws, view: segments } = await params;
   const ctx = await requireViewer(org, ws);
   const [t, st, query] = await Promise.all([
     getTranslations("pages"),
@@ -35,7 +36,7 @@ export default async function SteeringPage({
   ]);
   const route = resolveSteeringRoute(
     { org: ctx.orgSlug, ws: ctx.wsSlug },
-    undefined,
+    segments,
     query,
   );
   if (route.kind === "redirect") redirectTo(route.to);

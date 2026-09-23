@@ -27,9 +27,8 @@ const kernel =
   await vi.importActual<typeof import("@oxagen/oxagen")>("@oxagen/oxagen");
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
-const { dismissProposal, mergeContextPr, openContextPr } = await import(
-  "./actions"
-);
+const { dismissProposal, mergeContextPr, openContextPr, setGovernanceMode } =
+  await import("./actions");
 
 const ctx = unsafeMint(WsCtx, {
   userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
@@ -190,5 +189,91 @@ describe("a person the workspace refuses", () => {
     requireViewer.mockRejectedValue(new Error("NEXT_NOT_FOUND"));
     await expect(run()).rejects.toThrow("NEXT_NOT_FOUND");
     expect(invoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("setGovernanceMode", () => {
+  const OUT = {
+    outcome: "proposed",
+    requestedMode: "regulated",
+    previousMode: "team",
+    effectiveMode: "team",
+    fullName: "acme/platform",
+    productionBranch: "main",
+    commitSha: null,
+    pullRequest: {
+      number: 42,
+      htmlUrl: "https://github.com/acme/platform/pull/42",
+      reused: false,
+    },
+    overrodeReview: false,
+  } as const;
+
+  it("writes governance.toml for the workspace viewer, never skipping review, and returns what happened", async () => {
+    invoke.mockResolvedValue(OUT);
+    expect(
+      await setGovernanceMode("acme", "core-platform", "regulated"),
+    ).toEqual({
+      ok: true,
+      value: {
+        outcome: "proposed",
+        mode: "regulated",
+        repository: "acme/platform",
+        branch: "main",
+        pullRequest: {
+          number: 42,
+          htmlUrl: "https://github.com/acme/platform/pull/42",
+        },
+      },
+    });
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    expect(invoke).toHaveBeenCalledWith(
+      "set_governance_mode",
+      { mode: "regulated", applyImmediately: false },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("returns a solo commit with no pull request", async () => {
+    invoke.mockResolvedValue({
+      ...OUT,
+      outcome: "applied",
+      requestedMode: "team",
+      previousMode: "solo",
+      effectiveMode: "team",
+      commitSha: "9f8e7d6c",
+      pullRequest: null,
+    });
+    const result = await setGovernanceMode("acme", "core-platform", "team");
+    expect(result).toMatchObject({
+      ok: true,
+      value: { outcome: "applied", mode: "team", pullRequest: null },
+    });
+  });
+
+  it("refuses a mode the contract does not know before the kernel runs (negative)", async () => {
+    expect(await setGovernanceMode("acme", "core-platform", "anarchy")).toEqual(
+      { ok: false, reason: "invalid", field: "mode", code: "invalid_input" },
+    );
+    expect(invoke).not.toHaveBeenCalled();
+    expect(requireViewer).not.toHaveBeenCalled();
+  });
+
+  it("returns the handler's role refusal as denied with its reason (negative)", async () => {
+    invoke.mockRejectedValue(refused("forbidden", "org_role_required"));
+    expect(await setGovernanceMode("acme", "core-platform", "solo")).toEqual({
+      ok: false,
+      reason: "denied",
+      code: "org_role_required",
+    });
+  });
+
+  it("returns a workspace with no GitHub installation as a conflict (negative)", async () => {
+    invoke.mockRejectedValue(refused("conflict", "github_not_connected"));
+    expect(await setGovernanceMode("acme", "core-platform", "solo")).toEqual({
+      ok: false,
+      reason: "conflict",
+      code: "github_not_connected",
+    });
   });
 });
