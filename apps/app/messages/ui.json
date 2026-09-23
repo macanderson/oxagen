@@ -121,6 +121,7 @@
     "pageState": {
       "loading": "Loading this page",
       "error": {
+        "title": "This page could not be loaded",
         "body": "The control plane answered <code>{answer}</code>. Nothing was changed. Runs kept recording while this page was down. Frames are written by the collector on each host, not by Oxagen.",
         "retry": "Try again",
         "incident": "Open an incident",

@@ -317,6 +317,11 @@
       "empty": "No notifications.",
       "noWorkspace": "Notifications are read in a workspace, and this organization has none you can open.",
       "unread": "Unread."
+    },
+    "denied": {
+      "workspace": "You cannot see this workspace",
+      "permission": "workspace.read on {ws}",
+      "unnamed": "You"
     }
   }
 }

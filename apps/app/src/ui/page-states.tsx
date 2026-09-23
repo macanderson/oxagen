@@ -12,7 +12,13 @@
 // Each renders as a disabled button that says why, so the reader learns the
 // route that does exist rather than pressing a control that does nothing.
 import { useTranslations } from "next-intl";
-import { useId, type ReactNode } from "react";
+import {
+  type ReactNode,
+  startTransition,
+  useEffect,
+  useId,
+  useState,
+} from "react";
 import type { SafePath } from "@/shared/safe-path";
 import { buttonPrimary, buttonSecondary, mono, panel } from "./control-styles";
 import { SafeLink, useNavigate } from "./navigation";
@@ -140,6 +146,7 @@ export function PageError({
   status,
   code: errorCode,
   trace,
+  onRetry,
 }: {
   title: string;
   status: number;
@@ -151,6 +158,8 @@ export function PageError({
    * caller has one.
    */
   trace: { at: string; id?: string | null; region?: string | null };
+  /** What Try again does; a refresh of the route when absent. */
+  onRetry?: () => void;
 }) {
   const t = useTranslations("ui.pageState.error");
   const navigate = useNavigate();
@@ -159,7 +168,7 @@ export function PageError({
     trace.id ? t("trace", { id: trace.id }) : null,
     trace.region ?? null,
     trace.at,
-  ].filter((part): part is string => part !== null);
+  ].filter((part): part is string => part !== null && part !== "");
   return (
     <StateWrap testId="page-error">
       <StateIcon tone="failed" />
@@ -177,7 +186,8 @@ export function PageError({
           type="button"
           className={buttonPrimary}
           onClick={() => {
-            navigate.refresh();
+            if (onRetry) onRetry();
+            else navigate.refresh();
           }}
         >
           {t("retry")}
@@ -206,6 +216,53 @@ export function PageError({
         {t("incidentNotBacked")}
       </p>
     </StateWrap>
+  );
+}
+
+/** `hh:mm:ssZ`, the instant a boundary caught the failure, as the mock's trace line prints it. */
+function utcTime(at: Date): string {
+  return `${at.toISOString().slice(11, 19)}Z`;
+}
+
+/**
+ * The route error boundary (`error.tsx` under `[org]` and `[org]/[ws]`): a
+ * page that threw while rendering draws PageError in place of its body, and
+ * the shell stays. The server logs the failure under `digest`, so the trace
+ * line cites it; the code is `internal_error` because the render failed
+ * inside Oxagen rather than on a read that answered its own code. The
+ * instant is read after mount, because a component may not read a clock
+ * during render.
+ */
+export function RouteError({
+  error,
+  reset,
+}: {
+  error: Error & { digest?: string };
+  reset: () => void;
+}) {
+  const t = useTranslations("ui.pageState.error");
+  const navigate = useNavigate();
+  const [at, setAt] = useState<string | null>(null);
+  useEffect(() => {
+    setAt(utcTime(new Date()));
+  }, []);
+  return (
+    <main className="mx-auto flex w-full max-w-6xl flex-col">
+      <PageError
+        title={t("title")}
+        status={500}
+        code="internal_error"
+        trace={{ at: at ?? "", id: error.digest ?? null }}
+        onRetry={() => {
+          // A server render failed, so the retry re-requests the route and
+          // then clears the boundary once the new payload is in.
+          startTransition(() => {
+            navigate.refresh();
+            reset();
+          });
+        }}
+      />
+    </main>
   );
 }
 

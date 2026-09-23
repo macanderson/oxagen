@@ -12,7 +12,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { pathOf } from "@/shared/safe-path";
-import { PageDenied, PageError, PageSkeleton } from "./page-states";
+import { PageDenied, PageError, PageSkeleton, RouteError } from "./page-states";
 
 const refresh = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({
@@ -122,6 +122,44 @@ describe("PageError", () => {
       /cannot open an incident from this page yet/,
     );
     expect(incident).toHaveAttribute("data-gap");
+  });
+});
+
+describe("RouteError", () => {
+  function renderBoundary(digest?: string) {
+    const reset = vi.fn();
+    const error = Object.assign(new Error("boom"), digest ? { digest } : {});
+    render(
+      <IntlProvider>
+        <RouteError error={error} reset={reset} />
+      </IntlProvider>,
+    );
+    return reset;
+  }
+
+  it("draws the error state with the server's digest as the trace id and the instant it caught the failure", () => {
+    renderBoundary("2731905432");
+    expect(
+      screen.getByRole("heading", { name: "This page could not be loaded" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("500 internal_error")).toBeInTheDocument();
+    expect(screen.getByTestId("page-error-trace").textContent).toMatch(
+      /^trace 2731905432 · \d{2}:\d{2}:\d{2}Z$/,
+    );
+  });
+
+  it("prints no trace id when the failure carries no digest (negative)", () => {
+    renderBoundary();
+    expect(screen.getByTestId("page-error-trace").textContent).toMatch(
+      /^\d{2}:\d{2}:\d{2}Z$/,
+    );
+  });
+
+  it("re-requests the route and clears the boundary on Try again", async () => {
+    const reset = renderBoundary("1");
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(reset).toHaveBeenCalledTimes(1);
   });
 });
 

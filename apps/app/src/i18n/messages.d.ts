@@ -4544,6 +4544,11 @@ type Messages = {
       noWorkspace: string;
       unread: string;
     };
+    denied: {
+      workspace: string;
+      permission: string;
+      unnamed: string;
+    };
   };
   skills: {
     lede: string;
@@ -6132,6 +6137,7 @@ type Messages = {
     pageState: {
       loading: string;
       error: {
+        title: string;
         body: string;
         retry: string;
         incident: string;
