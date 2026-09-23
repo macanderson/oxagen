@@ -38,6 +38,7 @@ type Messages = {
     billing: string;
     audit: string;
     modelFunding: string;
+    sso: string;
   };
   unrecorded: {
     run: {
@@ -794,6 +795,10 @@ type Messages = {
       linkExpired: string;
       oauthCancelled: string;
       oauthFailed: string;
+      ssoRequired: string;
+      ssoNoProvider: string;
+      ssoDomainUnverified: string;
+      ssoFailed: string;
       unavailable: string;
       unknown: string;
     };
@@ -801,6 +806,12 @@ type Messages = {
       google: string;
       github: string;
       or: string;
+      entry: string;
+      formLabel: string;
+      lead: string;
+      submit: string;
+      pending: string;
+      required: string;
     };
     login: {
       eyebrow: string;
@@ -2328,6 +2339,7 @@ type Messages = {
       roles: string;
       apiKeys: string;
       modelFunding: string;
+      sso: string;
     };
     roles: {
       owner: string;
@@ -2458,6 +2470,7 @@ type Messages = {
         mainRepoClaimed: string;
         repositoryLinkedElsewhere: string;
         repositoryUnparsable: string;
+        ssoProviderNotFound: string;
       };
     };
     invitations: {
@@ -2768,6 +2781,167 @@ type Messages = {
         refused: string;
         pendingApproval: string;
         unavailable: string;
+      };
+    };
+    sso: {
+      title: string;
+      intro: string;
+      readOnly: string;
+      denied: {
+        title: string;
+        body: string;
+      };
+      plan: {
+        notice: string;
+        upgrade: string;
+        lapsed: string;
+      };
+      providers: {
+        title: string;
+        tableLabel: string;
+        empty: string;
+        columns: {
+          name: string;
+          protocol: string;
+          domain: string;
+          status: string;
+          actions: string;
+        };
+        verified: string;
+        pending: string;
+      };
+      protocols: {
+        oidc: string;
+        saml: string;
+      };
+      setup: {
+        title: string;
+        dnsTitle: string;
+        dnsLead: string;
+        dnsVerified: string;
+        recordName: string;
+        recordValue: string;
+        idpTitle: string;
+        idpLead: string;
+        redirectUri: string;
+        acsUrl: string;
+        spMetadataUrl: string;
+        verify: string;
+        verifying: string;
+        verifiedNow: string;
+        copy: string;
+        copied: string;
+        copyFailed: string;
+        copyLabel: string;
+      };
+      policy: {
+        title: string;
+        label: string;
+        on: string;
+        off: string;
+        owners: string;
+        needsVerified: string;
+        saving: string;
+        lapsed: string;
+      };
+      form: {
+        add: string;
+        addTitle: string;
+        editTitle: string;
+        edit: string;
+        save: string;
+        saving: string;
+        cancel: string;
+        protocol: string;
+        providerId: string;
+        providerIdHint: string;
+        displayName: string;
+        displayNameHint: string;
+        domain: string;
+        domainHint: string;
+        groupsClaim: string;
+        groupsClaimHint: string;
+        issuer: string;
+        issuerHint: string;
+        clientId: string;
+        clientSecret: string;
+        entityId: string;
+        entryPoint: string;
+        cert: string;
+        certHint: string;
+        certEditHint: string;
+        spPrivateKey: string;
+        spPrivateKeyHint: string;
+        stored: string;
+        notStored: string;
+        show: string;
+        hide: string;
+        domainPlaceholder: string;
+        issuerPlaceholder: string;
+        certPlaceholder: string;
+      };
+      delete: {
+        open: string;
+        title: string;
+        body: string;
+        confirm: string;
+        pending: string;
+      };
+      failure: {
+        denied: string;
+        invalid: string;
+        invalidSettings: string;
+        providerIdRequired: string;
+        displayNameRequired: string;
+        domainRequired: string;
+        issuerRequired: string;
+        clientIdRequired: string;
+        clientSecretRequired: string;
+        entryPointRequired: string;
+        certRequired: string;
+        certRequiredForChange: string;
+        dnsRecordNotFound: string;
+        noVerifiedProvider: string;
+        providerIdTaken: string;
+        providerIdReserved: string;
+        domainTaken: string;
+        notFound: string;
+        refused: string;
+        pendingApproval: string;
+        unavailable: string;
+        requiresEnterprise: string;
+      };
+    };
+    ssoGroups: {
+      title: string;
+      lead: string;
+      noProviders: string;
+      openSso: string;
+      provider: string;
+      tableLabel: string;
+      empty: string;
+      columns: {
+        group: string;
+        role: string;
+        actions: string;
+      };
+      groupLabel: string;
+      roleLabel: string;
+      add: string;
+      remove: string;
+      removeLabel: string;
+      save: string;
+      saving: string;
+      saved: string;
+      roles: {
+        admin: string;
+        compliance: string;
+        billing: string;
+        member: string;
+      };
+      failure: {
+        groupRequired: string;
+        groupDuplicate: string;
       };
     };
     costCenters: {
@@ -3954,6 +4128,7 @@ type Messages = {
       roles: string;
       apiKeys: string;
       modelFunding: string;
+      sso: string;
     };
     switcher: {
       org: string;
