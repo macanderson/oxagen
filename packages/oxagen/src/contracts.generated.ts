@@ -343,6 +343,7 @@ import "./contracts/tacho.bundle.get";
 import "./contracts/tacho.command.dispatch";
 import "./contracts/tacho.command.fetch";
 import "./contracts/tacho.command.list";
+import "./contracts/tacho.contained_launch.register";
 import "./contracts/tacho.enrollment.create";
 import "./contracts/tacho.enrollment.revoke";
 import "./contracts/tacho.enrollment_token.create";
