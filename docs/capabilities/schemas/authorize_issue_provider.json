@@ -1,0 +1,50 @@
+{
+  "name": "authorize_issue_provider",
+  "domain": "run",
+  "description": "Complete actor-bound Linear authorization for issue follow-through.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "state": {
+        "type": "string"
+      },
+      "code": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2048
+      }
+    },
+    "required": [
+      "state",
+      "code"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "connectionId": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "required": [
+      "connectionId"
+    ],
+    "additionalProperties": false
+  }
+}

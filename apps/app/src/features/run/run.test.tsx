@@ -58,6 +58,10 @@ vi.mock("next/navigation", () => ({
 vi.mock("../run-outcomes/actions", () => ({
   setRunOutcomesConsentAction: vi.fn(),
 }));
+vi.mock("../run-outcomes/provider-actions", () => ({
+  loadRunIssueProviders: vi.fn(),
+  authorizeRunIssues: vi.fn(),
+}));
 vi.mock("./actions", () => ({
   haltRun: vi.fn(),
   steerRun: vi.fn(),

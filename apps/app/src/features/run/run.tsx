@@ -14,7 +14,10 @@ import type { RunRow } from "@/data/contracts/runs";
 import type { DataSource } from "@/data/ports";
 import { PAGE_FAILURES, type Read, readError } from "@/data/read";
 import { ApprovalsPanel } from "@/features/fleet";
-import { RunOutcomesConsent } from "@/features/run-outcomes";
+import {
+  RunOutcomesConsent,
+  RunIssueConnections,
+} from "@/features/run-outcomes";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
 import { panel } from "@/ui/control-styles";
@@ -318,6 +321,7 @@ export async function Run({
   // streams inside the work section's Suspense boundary and cannot hold the
   // rest of the page.
   const work = readRunWork(ctx, source, run.id);
+  const canManageOutcomes = ctx.orgRole === "owner" || ctx.orgRole === "admin";
   let section: ReactNode;
   switch (selected) {
     case "transcript":
@@ -412,6 +416,7 @@ export async function Run({
       section = <ChainSection read={await source.runs.chain(ctx, run.id)} />;
       break;
   }
+  const outcomes = await outcomesPolicy;
   return (
     <div className="flex flex-col gap-6">
       <RunHeader
@@ -432,8 +437,14 @@ export async function Run({
       </Suspense>
       <RunOutcomesConsent
         at={place}
-        policy={await outcomesPolicy}
-        canManage={ctx.orgRole === "owner" || ctx.orgRole === "admin"}
+        policy={outcomes}
+        canManage={canManageOutcomes}
+      />
+      <RunIssueConnections
+        at={place}
+        runId={run.id}
+        enabled={outcomes.ok && outcomes.value.effectiveEnabled}
+        canManage={canManageOutcomes}
       />
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">

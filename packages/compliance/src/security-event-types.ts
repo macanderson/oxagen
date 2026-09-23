@@ -386,6 +386,12 @@ export interface RunOutcomesPolicyChangeDetail {
   reason: string | null;
 }
 
+export interface RunIssueAuthorizationDetail {
+  feature: "run_outcomes";
+  provider: "linear";
+  connectionId: string;
+}
+
 /**
  * Evidence recorded on an SSO provider's lifecycle events
  * (`sso.provider_created`, `sso.domain_verified`, `sso.provider_updated`,
@@ -438,6 +444,7 @@ export interface SsoGroupRolesDetail {
 }
 
 export type SecurityEventDetail =
+  | RunIssueAuthorizationDetail
   | RunOutcomesPolicyChangeDetail
   | ApprovalRuleInvalidationDetail
   | GovernanceChangeDetail
