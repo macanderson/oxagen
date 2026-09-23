@@ -168,3 +168,4 @@ first. Move a row into its epic when one fits.
 - [ADR-147](./ADR-147-a-merge-queue-runs-the-full-gate-before-a-pr-lands-on-main.md): `pipeline.yml` runs on `merge_group`, so the merge queue runs the full, unfiltered gate on the exact commit main would become before a PR lands. Two PRs that were each green against a stale main broke main together on 2026-09-23. The queue catches that before the merge. Deploys and the migration gate stay on push to main, and `dod` is not a queue check.
 
 - [ADR-153](./ADR-153-automatic-run-accounts-use-stella.md): Automatic run names and summaries read all retained turns through Stella, use organization funding, and remain separate from deterministic evidence.
+- [ADR-150](./ADR-150-isolated-staging-before-production.md): Staging has separate infrastructure, credentials, state, and deployment permissions. Production waits for the same commit to pass staging.
