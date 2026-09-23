@@ -169,6 +169,12 @@ export function TranscriptSection({
         ws={ws}
         runId={runId}
       />
+      <p
+        data-testid="run-transcript-note"
+        className="mt-3 border-l-2 border-accent pl-3 text-xs text-muted-foreground"
+      >
+        {t("note")}
+      </p>
     </div>
   );
 }

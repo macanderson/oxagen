@@ -100,85 +100,80 @@ function Checkpoints({
   const t = useTranslations("run.chain");
   const format = useFormatter();
   const locale = useLocale();
-  if (checkpoints.length === 0) {
-    return (
-      <div className="flex flex-col gap-2">
-        <h4 className="text-sm font-semibold">{t("checkpointsTitle")}</h4>
+  const when = (at: string) =>
+    format.dateTime(new Date(at), { dateStyle: "medium", timeStyle: "short" });
+  return (
+    <Panel title={t("checkpointsTitle")}>
+      {checkpoints.length === 0 ? (
         <p
           data-testid="chain-no-checkpoints"
           className="max-w-prose text-sm text-muted-foreground"
         >
           {t("noCheckpoints")}
         </p>
-      </div>
-    );
-  }
-  return (
-    <div className="flex flex-col gap-2">
-      <h4 className="text-sm font-semibold">{t("checkpointsTitle")}</h4>
-      <Table
-        label={t("checkpointsTitle")}
-        columns={[
-          { label: t("columns.seq"), numeric: true },
-          { label: t("columns.head") },
-          { label: t("columns.frames"), numeric: true },
-          { label: t("columns.signed") },
-          { label: t("columns.countersigned") },
-          { label: t("columns.anchor") },
-        ]}
-      >
-        {checkpoints.map((checkpoint) => (
-          <tr key={checkpoint.chainHead} data-testid="chain-checkpoint">
-            <td className={`${numericCell} ${mono}`}>{checkpoint.seq}</td>
-            <td className={`${cell} ${mono} break-all text-[11px]`}>
-              {checkpoint.chainHead}
-              <span className="block text-muted-foreground">
-                {checkpoint.deviceKeyFingerprint}
-              </span>
-            </td>
-            <td className={numericCell}>
-              {formatCount(checkpoint.eventCount, locale)}
-            </td>
-            <td className={cell}>
-              <time dateTime={checkpoint.signedAt}>
-                {format.dateTime(new Date(checkpoint.signedAt), {
-                  dateStyle: "medium",
-                  timeStyle: "short",
+      ) : (
+        <Table
+          label={t("checkpointsTitle")}
+          columns={[
+            { label: t("columns.frame"), numeric: true },
+            { label: t("columns.head") },
+            { label: t("columns.covers"), numeric: true },
+            { label: t("columns.signature") },
+          ]}
+        >
+          {checkpoints.map((checkpoint) => (
+            <tr key={checkpoint.chainHead} data-testid="chain-checkpoint">
+              <td className={`${numericCell} ${mono}`}>{checkpoint.seq}</td>
+              <td className={`${cell} ${mono} break-all text-[11px]`}>
+                {checkpoint.chainHead}
+              </td>
+              <td className={numericCell}>
+                {t("covers", {
+                  count: formatCount(checkpoint.eventCount, locale),
                 })}
-              </time>
-            </td>
-            <td className={cell}>
-              {checkpoint.countersignedAt === null ? (
-                <NoValue />
-              ) : (
-                <>
-                  <time dateTime={checkpoint.countersignedAt}>
-                    {format.dateTime(new Date(checkpoint.countersignedAt), {
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    })}
-                  </time>
-                  {checkpoint.platformKey === null ? null : (
-                    <span
-                      className={`${mono} block break-all text-[11px] text-muted-foreground`}
-                    >
-                      {checkpoint.platformKey}
+              </td>
+              <td className={`${cell} text-xs`}>
+                <span className="flex flex-col gap-0.5">
+                  <span>
+                    {t("signedBy", {
+                      key: checkpoint.deviceKeyFingerprint,
+                    })}{" "}
+                    <time dateTime={checkpoint.signedAt}>
+                      {when(checkpoint.signedAt)}
+                    </time>
+                  </span>
+                  {checkpoint.countersignedAt === null ? (
+                    <span className="text-muted-foreground">
+                      {t("notCountersigned")}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">
+                      {t("countersignedBy", {
+                        key: checkpoint.platformKey ?? t("keyNotRecorded"),
+                      })}{" "}
+                      <time dateTime={checkpoint.countersignedAt}>
+                        {when(checkpoint.countersignedAt)}
+                      </time>
                     </span>
                   )}
-                </>
-              )}
-            </td>
-            <td className={`${cell} ${mono} break-all text-[11px]`}>
-              {checkpoint.anchorRoot ?? <NoValue />}
-            </td>
-          </tr>
-        ))}
-      </Table>
-    </div>
+                  {checkpoint.anchorRoot === null ? null : (
+                    <span
+                      className={`${mono} break-all text-[11px] text-muted-foreground`}
+                    >
+                      {t("anchor", { root: checkpoint.anchorRoot })}
+                    </span>
+                  )}
+                </span>
+              </td>
+            </tr>
+          ))}
+        </Table>
+      )}
+    </Panel>
   );
 }
 
-function Ladder({
+function ReplayGrade({
   ladder,
   recordedGrade,
 }: {
@@ -187,32 +182,45 @@ function Ladder({
 }) {
   const t = useTranslations("run.chain");
   return (
-    <div className="flex flex-col gap-2">
-      <h4 className="text-sm font-semibold">{t("ladderTitle")}</h4>
-      <p className="max-w-prose text-xs text-muted-foreground">
+    <Panel
+      title={t("gradeTitle")}
+      aside={
+        recordedGrade === null ? undefined : (
+          <ReplayGradeBadge grade={recordedGrade} />
+        )
+      }
+    >
+      <p className="max-w-prose pb-3 text-xs text-muted-foreground">
         {recordedGrade === null ? t("ladderNoGrade") : t("ladderWhy")}
       </p>
-      <ul data-testid="chain-ladder" className="flex flex-col gap-1.5">
+      <Table
+        label={t("gradeTitle")}
+        columns={[
+          { label: t("columns.grade") },
+          { label: t("columns.recorded") },
+          { label: t("columns.allows") },
+        ]}
+      >
         {ladder.map((rung) => (
-          <li
+          <tr
             key={rung.grade}
             data-testid="chain-rung"
             data-met={rung.met ? "true" : "false"}
-            className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm"
           >
-            <span className="font-medium">{t(`grade.${rung.grade}`)}</span>
-            <span className="text-xs text-muted-foreground">
-              {rung.met ? t("rungMet") : t("rungUnmet")}
-            </span>
-            <span
-              className={`${mono} break-all text-[11px] text-muted-foreground`}
-            >
+            <td className={cell}>
+              <span className="font-medium">{t(`grade.${rung.grade}`)}</span>
+              <span className="block text-xs text-muted-foreground">
+                {rung.met ? t("rungMet") : t("rungUnmet")}
+              </span>
+            </td>
+            <td className={`${cell} ${mono} break-all text-[11px]`}>
               {rung.reason}
-            </span>
-          </li>
+            </td>
+            <td className={`${cell} text-xs`}>{t(`allows.${rung.grade}`)}</td>
+          </tr>
         ))}
-      </ul>
-    </div>
+      </Table>
+    </Panel>
   );
 }
 
@@ -231,10 +239,13 @@ function Seal({
     <div className="flex flex-col gap-2">
       <h4 className="text-sm font-semibold">
         {attempt === undefined
-          ? t("sealTitle")
-          : `${t("sealTitle")}: ${t("attemptLabel", { n: attempt.n })}`}
+          ? t("sealRecord")
+          : t("attemptLabel", { n: attempt.n })}
       </h4>
       <Facts>
+        <Fact label={t("signature")}>
+          <NoValue />
+        </Fact>
         <Fact label={t("sealedAt")}>
           <time dateTime={seal.sealedAt}>
             {format.dateTime(new Date(seal.sealedAt), {
@@ -272,35 +283,47 @@ function Seal({
 export function ChainSection({ read }: { read: Read<RunChain> }) {
   const t = useTranslations("run.chain");
   const locale = useLocale();
-  return (
-    <Panel
-      title={t("title")}
-      aside={
-        read.ok && read.value.recordedGrade !== null ? (
-          <ReplayGradeBadge grade={read.value.recordedGrade} />
-        ) : undefined
-      }
-    >
-      {!read.ok ? (
+  if (!read.ok) {
+    return (
+      <Panel title={t("title")}>
         <ReadFailure read={read} section={t("title")} />
-      ) : (
+      </Panel>
+    );
+  }
+  const chain = read.value;
+  return (
+    <div className="flex flex-col gap-4">
+      <Panel title={t("hashTitle")}>
         <div className="flex flex-col gap-5">
           <Facts>
-            <Fact label={t("hashRule")} code>
-              {read.value.hashRule}
-            </Fact>
             <Fact label={t("frameCount")}>
-              {formatCount(read.value.frameCount, locale)}
-            </Fact>
-            <Fact label={t("range")} code>
-              {read.value.firstSeq === null || read.value.lastSeq === null ? (
-                <NoValue />
-              ) : (
-                `${read.value.firstSeq}-${read.value.lastSeq}`
+              {formatCount(chain.frameCount, locale)}
+              {chain.firstSeq === null || chain.lastSeq === null ? null : (
+                <span className={`${mono} ml-2 text-xs text-muted-foreground`}>
+                  {t("rangeValue", {
+                    from: chain.firstSeq,
+                    to: chain.lastSeq,
+                  })}
+                </span>
               )}
             </Fact>
+            <Fact label={t("hashRule")} code>
+              {chain.hashRule}
+            </Fact>
+            <Fact label={t("telemetryGap")}>
+              {chain.gaps.recorded.includes("telemetry_gap")
+                ? t("telemetryGapRecorded")
+                : t("telemetryGapNone")}
+            </Fact>
+          </Facts>
+          <Gaps gaps={chain.gaps} complete={chain.complete} />
+        </div>
+      </Panel>
+      <Panel title={t("sealTitle")}>
+        <div className="flex flex-col gap-5">
+          <Facts>
             <Fact label={t("merkleRoot")} code>
-              {read.value.merkleRoot ?? <NoValue />}
+              {chain.merkleRoot ?? <NoValue />}
             </Fact>
             <Fact label={t("tierLabel")}>
               {/*
@@ -308,18 +331,13 @@ export function ChainSection({ read }: { read: Read<RunChain> }) {
                 seal's tier is the run's tier, so three copies of the closed
                 vocabulary (ADR-095) were three places it could drift.
               */}
-              <EnforcementTierBadge tier={read.value.enforcementTier} />
+              <EnforcementTierBadge tier={chain.enforcementTier} />
             </Fact>
-            <Fact label={t("gradeLabel")}>
-              {read.value.recordedGrade === null ? (
-                <NoValue />
-              ) : (
-                t(`grade.${read.value.recordedGrade}`)
-              )}
+            <Fact label={t("verify")}>
+              <span className="text-muted-foreground">{t("verifyHow")}</span>
             </Fact>
           </Facts>
-          <Gaps gaps={read.value.gaps} complete={read.value.complete} />
-          {read.value.seals.length === 0 ? (
+          {chain.seals.length === 0 ? (
             <p
               data-testid="chain-unsealed"
               className="max-w-prose text-sm text-muted-foreground"
@@ -328,24 +346,19 @@ export function ChainSection({ read }: { read: Read<RunChain> }) {
             </p>
           ) : (
             <div className="flex flex-col gap-5" data-testid="chain-seals">
-              {read.value.seals.map((seal, i) => (
+              {chain.seals.map((seal, i) => (
                 <Seal
                   key={`${seal.sealedAt}-${String(i)}`}
                   seal={seal}
-                  attempt={
-                    read.value.seals.length > 1 ? { n: i + 1 } : undefined
-                  }
+                  attempt={chain.seals.length > 1 ? { n: i + 1 } : undefined}
                 />
               ))}
             </div>
           )}
-          <Checkpoints checkpoints={read.value.checkpoints} />
-          <Ladder
-            ladder={read.value.ladder}
-            recordedGrade={read.value.recordedGrade}
-          />
         </div>
-      )}
-    </Panel>
+      </Panel>
+      <ReplayGrade ladder={chain.ladder} recordedGrade={chain.recordedGrade} />
+      <Checkpoints checkpoints={chain.checkpoints} />
+    </div>
   );
 }

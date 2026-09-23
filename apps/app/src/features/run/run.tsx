@@ -4,10 +4,7 @@ import type { ReactNode } from "react";
 import { TranscriptZoom } from "@/data/contracts/run";
 import type { TranscriptKind } from "@/data/contracts/run";
 import { TRANSCRIPT_KINDS } from "@/data/contracts/run";
-import type {
-  ApprovalQueue,
-  ResolvedApprovalItem,
-} from "@/data/contracts/approvals";
+import type { ApprovalQueue } from "@/data/contracts/approvals";
 import type { MandateRow } from "@/data/contracts/mandates";
 import type { RunCost, RunTranscript } from "@/data/contracts/run";
 import type { RunRow } from "@/data/contracts/runs";
@@ -16,23 +13,23 @@ import { PAGE_FAILURES, type Read, readError } from "@/data/read";
 import { ApprovalsPanel } from "@/features/fleet";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
-import { panel } from "@/ui/control-styles";
-import { SafeLink } from "@/ui/navigation";
 import { Money } from "@/ui/money";
-import { ReadFailure } from "@/ui/read-failure";
+import { SafeLink } from "@/ui/navigation";
 import { ChainSection } from "./chain";
 import { CostSection } from "./cost";
 import { FramesSection } from "./frames";
 import { RunHeader } from "./header";
+import { IssuesSection } from "./issues";
 import { OutputsSpine } from "./outputs";
 import { ResolvedApprovalsPanel } from "./resolved-approvals";
 import {
   ContextSection,
   entriesOf,
-  IssuesSection,
+  manifestSeq,
   PolicySection,
 } from "./sections";
 import { StatRow, SummaryPanel } from "./stats";
+import { RunEmpty, RunReadFailure } from "./states";
 import { kindsParam, TranscriptSection } from "./transcript";
 import { ChangesPanel, SpendByArea } from "./work";
 
@@ -55,6 +52,11 @@ type Tab = (typeof TABS)[number];
 const TAB_ALIASES: Record<string, Tab> = {
   frames: "actions",
   approvals: "actions",
+  // The proof, definition-of-done and ladder tabs are gone; the spec lands
+  // their old links on Cost.
+  proof: "cost",
+  dod: "cost",
+  ladder: "cost",
 };
 
 /** A frame's position as the contract spells it (`frameSeqSchema`): decimal, at most 19 digits. */
@@ -74,20 +76,18 @@ type Counted = {
   everything: Read<RunTranscript>;
   cost: Read<RunCost>;
   pending: Read<ApprovalQueue>;
-  resolved: Read<ResolvedApprovalItem[]>;
 };
 
 /**
- * What each tab holds, beside its name. A count read from a transcript that
- * stopped short is a floor and says so with a plus; a tab whose read failed
- * shows no count rather than a zero.
+ * What each tab holds, beside its name (spec: counts are live). A count read
+ * from a transcript that stopped short is a floor and says so with a plus; a
+ * tab whose read failed shows no count rather than a zero.
  */
 function useTabCounts({
   run,
   everything,
   cost,
   pending,
-  resolved,
 }: Counted): Partial<Record<Tab, ReactNode>> {
   const t = useTranslations("run.tabs");
   const floor = (count: number) =>
@@ -98,16 +98,11 @@ function useTabCounts({
   const recall = entriesOf(everything, "recall");
   const runCost = cost.ok ? (cost.value.rollup?.cost ?? run.cost) : run.cost;
   return {
-    transcript: String(run.steps),
+    transcript: everything.ok
+      ? floor(everything.value.entries.length)
+      : undefined,
     issues: run.taskRef === null ? "0" : "1",
-    actions:
-      pending.ok && resolved.ok
-        ? pending.value.more
-          ? t("atLeast", {
-              count: pending.value.items.length + resolved.value.length,
-            })
-          : String(pending.value.items.length + resolved.value.length)
-        : undefined,
+    actions: policy === null ? undefined : floor(policy.length),
     cost: runCost === null ? undefined : <Money value={runCost} />,
     policy: policy === null ? undefined : floor(policy.length),
     context: recall === null ? undefined : floor(recall.length),
@@ -115,11 +110,16 @@ function useTabCounts({
   };
 }
 
+/** A call parked on this run: the dot the Governed actions and Policy tabs carry. */
+function isParked(pending: Read<ApprovalQueue>): boolean {
+  return pending.ok && pending.value.items.length > 0;
+}
+
 /** The side column: what the run changed, what it produced, and where it spent. */
 function Work({ children }: { children: ReactNode }) {
   const t = useTranslations("run.work");
   return (
-    <aside aria-label={t("label")} className="flex min-w-0 flex-col gap-6">
+    <aside aria-label={t("label")} className="flex min-w-0 flex-col gap-4">
       {children}
     </aside>
   );
@@ -142,43 +142,53 @@ function Tabs({
 } & Place) {
   const t = useTranslations("run.tabs");
   const shown = useTabCounts(counts);
+  const parked = isParked(counts.pending);
   return (
-    <nav
+    <div
+      role="tablist"
       aria-label={t("label")}
-      className="overflow-x-auto border-b border-border"
+      className="flex overflow-x-auto border-b border-border"
     >
-      <ul className="flex min-w-max gap-1">
-        {TABS.map((tab) => (
-          <li key={tab}>
-            <SafeLink
-              // The Transcript tab keeps the zoom and the chips a person chose,
-              // so leaving it for the chain and coming back does not reset the
-              // view they built.
-              to={routes.run(
-                org,
-                ws,
-                runId,
-                tab === "transcript"
-                  ? { tab, zoom, kinds: kindsParam(kinds) }
-                  : { tab },
-              )}
-              aria-current={tab === selected ? "page" : undefined}
-              className="inline-flex min-h-10 items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent px-3 text-sm font-medium text-muted-foreground hover:text-foreground aria-[current=page]:border-foreground aria-[current=page]:text-foreground"
+      {TABS.map((tab) => (
+        <SafeLink
+          key={tab}
+          role="tab"
+          aria-selected={tab === selected}
+          aria-controls="run-tab-panel"
+          // The Transcript tab keeps the zoom and the chips a person chose,
+          // so leaving it for the chain and coming back does not reset the
+          // view they built.
+          to={routes.run(
+            org,
+            ws,
+            runId,
+            tab === "transcript"
+              ? { tab, zoom, kinds: kindsParam(kinds) }
+              : { tab },
+          )}
+          aria-current={tab === selected ? "page" : undefined}
+          className="inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent px-3 text-[13px] font-medium text-muted-foreground hover:text-foreground aria-selected:border-accent aria-selected:text-foreground"
+        >
+          {t(tab)}
+          {shown[tab] === undefined ? null : (
+            <span
+              data-testid={`run-tab-count-${tab}`}
+              className="text-[11px] tabular-nums text-dim"
             >
-              {t(tab)}
-              {shown[tab] === undefined ? null : (
-                <span
-                  data-testid={`run-tab-count-${tab}`}
-                  className="rounded-md bg-hl px-1.5 text-[11px] tabular-nums text-muted-foreground"
-                >
-                  {shown[tab]}
-                </span>
-              )}
-            </SafeLink>
-          </li>
-        ))}
-      </ul>
-    </nav>
+              {shown[tab]}
+            </span>
+          )}
+          {parked && (tab === "actions" || tab === "policy") ? (
+            <span
+              data-testid={`run-tab-parked-${tab}`}
+              className="size-1.5 rounded-full bg-info"
+            >
+              <span className="sr-only">{t("parked")}</span>
+            </span>
+          ) : null}
+        </SafeLink>
+      ))}
+    </div>
   );
 }
 
@@ -188,18 +198,15 @@ function Tabs({
  *
  * The ledger is read only when a parked call names a mandate, the same rule
  * `readFleet` follows, so a run whose approvals drew on none makes one read and
- * a viewer who may not read the ledger sees the cards without their bars. It
- * used to pass an empty map here, which made every card on this page say the
- * mandate could not be read: the card showed a mandate id and no authority, on
- * the one page where the call's own run is in front of you.
+ * a viewer who may not read the ledger sees the cards without their bars.
  *
  * `Date.now()` lives here rather than in the page or the component body: a
  * component's render must be pure, and the route's render is a render too, so
  * the React compiler's rule refuses the call in either place. An async read
- * function is neither, and the clock belongs beside the read anyway. This is
- * the same shape `readFleet` uses in features/fleet.
+ * function is neither, and the clock belongs beside the read anyway. The same
+ * instant is the one a live run's wall clock is read against.
  *
- * `fixed` is how a test pins the countdown.
+ * `fixed` is how a test pins the clock.
  */
 async function readApprovals(
   source: DataSource,
@@ -219,6 +226,18 @@ async function readApprovals(
         mandates.set(mandate.id, mandate);
   }
   return { approvals, mandates, at: fixed ?? Date.now() };
+}
+
+/** The run's header read, and the instant it answered: the error state names that instant. */
+async function readRun(
+  source: DataSource,
+  ctx: WsCtx,
+  runId: string,
+  frames: string | null,
+  fixed: number | undefined,
+) {
+  const read = await source.runs.get(ctx, runId, { framesAfter: frames });
+  return { read, at: fixed ?? Date.now() };
 }
 
 export async function Run({
@@ -253,9 +272,8 @@ export async function Run({
   /** `?spine=`, the spine groups a person opened, comma-separated. */
   spine: string | null;
   /**
-   * Pins the instant the approvals strip counts down from. Only a test passes
-   * it; the page leaves it out and `readApprovals` reads the clock beside the
-   * read it belongs to.
+   * Pins the clock the page reads. Only a test passes it; the page leaves it
+   * out and the read helpers take the clock beside their reads.
    */
   now?: number;
 }) {
@@ -266,42 +284,48 @@ export async function Run({
   const level = TranscriptZoom.safeParse(zoom);
   const zoomed = level.success ? level.data : "steps";
   const chips = parseKinds(kinds);
-  const read = await source.runs.get(ctx, runId, { framesAfter: frames });
+  const { read, at: readAt } = await readRun(source, ctx, runId, frames, now);
   if (!read.ok) {
     if (read.reason === "error" && read.status === 404) notFound();
+    // A failed read replaces the page body and never the shell.
     return (
-      <div className={`${panel} p-4`}>
-        <ReadFailure read={read} section={runId} />
-      </div>
+      <RunReadFailure
+        read={read}
+        org={ctx.orgSlug}
+        ws={ctx.wsSlug}
+        orgName={ctx.orgName}
+        wsSlug={ctx.wsSlug}
+        orgRole={ctx.orgRole}
+        wsRole={ctx.wsRole}
+        retry={routes.run(ctx.orgSlug, ctx.wsSlug, runId)}
+        readAt={readAt}
+      />
     );
   }
   const detail = read.value;
   const run = detail.run;
   const place = { org: ctx.orgSlug, ws: ctx.wsSlug, runId: run.id };
+  // A run token was minted and nothing has been recorded under it yet.
+  if (run.frames === 0) return <RunEmpty org={place.org} ws={place.ws} />;
   // The header, the stat row, the side column and the tab counts all read
   // from these, whichever tab is open, so they are read together rather than
   // one after another. The whole-run transcript serves the Prompts figure,
   // the Policy and Context tabs and their counts, and the Transcript tab too
   // when no chip is pressed.
   const agentSlug = run.agentKey?.split(".").at(-1) ?? null;
-  const [outputs, everything, cost, pending, resolved, agent] =
-    await Promise.all([
-      // A thrown outputs read folds to the Run page's own read error, so
-      // the spine says the read failed rather than the page throwing.
-      source.runs
-        .outputs(ctx, run.id)
-        .catch(() =>
-          readError(
-            PAGE_FAILURES.run.error.code,
-            PAGE_FAILURES.run.error.status,
-          ),
-        ),
-      source.runs.transcript(ctx, run.id, "everything"),
-      source.runs.cost(ctx, run.id),
-      readApprovals(source, ctx, run.id, now),
-      source.approvals.resolved(ctx, { runId: run.id }),
-      agentSlug === null ? null : source.agents.get(ctx, agentSlug),
-    ]);
+  const [outputs, everything, cost, pending, agent] = await Promise.all([
+    // A thrown outputs read folds to the Run page's own read error, so
+    // the spine says the read failed rather than the page throwing.
+    source.runs
+      .outputs(ctx, run.id)
+      .catch(() =>
+        readError(PAGE_FAILURES.run.error.code, PAGE_FAILURES.run.error.status),
+      ),
+    source.runs.transcript(ctx, run.id, "everything"),
+    source.runs.cost(ctx, run.id),
+    readApprovals(source, ctx, run.id, now),
+    agentSlug === null ? null : source.agents.get(ctx, agentSlug),
+  ]);
   let section: ReactNode;
   switch (selected) {
     case "transcript":
@@ -322,21 +346,15 @@ export async function Run({
       );
       break;
     case "issues":
-      section = <IssuesSection run={run} />;
+      section = <IssuesSection run={run} outputs={outputs} place={place} />;
       break;
     case "actions": {
       const seq = body !== null && FRAME_SEQ.test(body) ? body : null;
+      const resolved = await source.approvals.resolved(ctx, {
+        runId: run.id,
+      });
       section = (
-        <div className="flex flex-col gap-6">
-          <ApprovalsPanel
-            approvals={pending.approvals}
-            mandates={pending.mandates}
-            now={pending.at}
-            on="run"
-            org={place.org}
-            ws={place.ws}
-          />
-          <ResolvedApprovalsPanel approvals={resolved} />
+        <div className="flex flex-col gap-4">
           <FramesSection
             read={read}
             frames={frames}
@@ -347,6 +365,15 @@ export async function Run({
             }
             {...place}
           />
+          <ApprovalsPanel
+            approvals={pending.approvals}
+            mandates={pending.mandates}
+            now={pending.at}
+            on="run"
+            org={place.org}
+            ws={place.ws}
+          />
+          <ResolvedApprovalsPanel approvals={resolved} />
         </div>
       );
       break;
@@ -360,21 +387,45 @@ export async function Run({
         source.runs.transcript(ctx, run.id, "turns"),
         source.runs.transcript(ctx, run.id, "steps"),
       ]);
-      section = <CostSection read={cost} turns={turns} steps={steps} />;
+      section = (
+        <CostSection
+          run={run}
+          read={cost}
+          turns={turns}
+          steps={steps}
+          at={pending.at}
+          place={place}
+        />
+      );
       break;
     }
     case "policy":
       section = <PolicySection read={everything} place={place} />;
       break;
-    case "context":
-      section = <ContextSection read={everything} place={place} />;
+    case "context": {
+      // The steering manifest is the body of the frame the session sealed it
+      // under, read only when this tab is open and the run sealed one.
+      const seq = manifestSeq(everything);
+      section = (
+        <ContextSection
+          run={run}
+          read={everything}
+          manifest={
+            seq === null
+              ? null
+              : { seq, read: await source.runs.frameBody(ctx, run.id, seq) }
+          }
+          place={place}
+        />
+      );
       break;
+    }
     case "chain":
       section = <ChainSection read={await source.runs.chain(ctx, run.id)} />;
       break;
   }
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-5">
       <RunHeader
         run={run}
         agent={agent}
@@ -388,29 +439,36 @@ export async function Run({
         org={place.org}
         ws={place.ws}
       />
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">
-          <SummaryPanel run={run} org={place.org} ws={place.ws} />
-          <StatRow run={run} cost={cost} transcript={everything} />
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+        <div className="flex min-w-0 flex-col gap-4 lg:col-span-2">
+          <SummaryPanel
+            run={run}
+            agent={agent}
+            org={place.org}
+            ws={place.ws}
+            orgRole={ctx.orgRole}
+          />
+          <StatRow
+            run={run}
+            cost={cost}
+            transcript={everything}
+            at={pending.at}
+          />
           <Tabs
             selected={selected}
             zoom={zoomed}
             kinds={chips}
-            counts={{
-              run,
-              everything,
-              cost,
-              pending: pending.approvals,
-              resolved,
-            }}
+            counts={{ run, everything, cost, pending: pending.approvals }}
             {...place}
           />
-          {section}
+          <div id="run-tab-panel" role="tabpanel">
+            {section}
+          </div>
         </div>
         <Work>
           <ChangesPanel read={outputs} place={place} />
           <OutputsSpine read={outputs} reads={reads} spine={spine} {...place} />
-          <SpendByArea read={cost} />
+          <SpendByArea read={cost} place={place} />
         </Work>
       </div>
     </div>

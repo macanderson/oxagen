@@ -421,7 +421,14 @@ function RecordDialog<O>({
   );
 }
 
-export function RecordActions({
+/**
+ * Summarize, in the Summary panel. `summarize_run` needs a sealed record, an
+ * organization Owner, Admin or Member, and a recording that kept bodies
+ * (`canSummarize` from the row, the rule the handler gates on, #3285). A
+ * viewer or a recording it would refuse sees the button disabled with the
+ * reason, not a button that ends in a refusal.
+ */
+export function SummarizeAction({
   org,
   ws,
   runId,
@@ -433,88 +440,95 @@ export function RecordActions({
   org: string;
   ws: string;
   runId: string;
-  /** Both writes need a sealed record: a live run is refused by both handlers. */
   sealed: boolean;
   hasSummary: boolean;
-  /**
-   * `canSummarize` from the row: `summarize_run` refuses a `digest_only`
-   * recording, because there are no bodies for a model to read. The contract
-   * answers it, so the button and the handler read one rule (#3285).
-   */
   summarizable: boolean;
-  /**
-   * The viewer's organization role, which both handlers assert on:
-   * `summarize_run` admits an Owner, Admin or Member and `export_run` an Owner
-   * or Admin. A viewer a handler would refuse sees that button disabled with
-   * the reason, not a button that ends in `org_role_required`.
-   */
   orgRole: OrgRole;
 }) {
   const t = useTranslations("run.record");
   if (!sealed) return null;
-  const canExport = orgRole === "owner" || orgRole === "admin";
-  const hasRole = canExport || orgRole === "member";
+  const hasRole =
+    orgRole === "owner" || orgRole === "admin" || orgRole === "member";
   const canSummarize = hasRole && summarizable;
-  const summarizeAction = hasSummary ? "resummarize" : "summarize";
+  const action = hasSummary ? "resummarize" : "summarize";
   return (
-    <div className="flex flex-col items-start gap-2 lg:items-end">
-      <div className="flex flex-wrap gap-2">
-        {canSummarize ? (
-          <RecordDialog
-            action={summarizeAction}
-            label={t(`${summarizeAction}.open`)}
-            runId={runId}
-            write={() => summarizeRun(org, ws, runId)}
-            receipt={(value) => value.runId}
-          />
-        ) : (
-          <button
-            type="button"
-            disabled
-            data-testid={`run-${summarizeAction}`}
-            className={buttonSecondary}
-          >
-            {t(`${summarizeAction}.open`)}
-          </button>
-        )}
-        {canExport ? (
-          <RecordDialog
-            action="export"
-            label={t("export.open")}
-            runId={runId}
-            write={() => exportRun(org, ws, runId)}
-            receipt={(value) => value.exportId}
-            follow={(exportId) => (
-              <ExportStatus org={org} ws={ws} exportId={exportId} />
-            )}
-          />
-        ) : (
-          <button
-            type="button"
-            disabled
-            data-testid="run-export"
-            className={buttonSecondary}
-          >
-            {t("export.open")}
-          </button>
-        )}
-      </div>
+    <span className="inline-flex flex-col items-start gap-1">
+      {canSummarize ? (
+        <RecordDialog
+          action={action}
+          label={t(`${action}.open`)}
+          runId={runId}
+          write={() => summarizeRun(org, ws, runId)}
+          receipt={(value) => value.runId}
+        />
+      ) : (
+        <button
+          type="button"
+          disabled
+          data-testid={`run-${action}`}
+          className={buttonSecondary}
+        >
+          {t(`${action}.open`)}
+        </button>
+      )}
       {canSummarize ? null : (
-        <p
+        <span
           data-testid={hasRole ? "summarize-no-bodies" : "summarize-no-role"}
-          className="max-w-prose text-xs text-muted-foreground lg:text-right"
+          className="max-w-prose text-xs text-muted-foreground"
         >
           {hasRole ? t("summarize.needsBodies") : t("summarize.needsRole")}
-        </p>
+        </span>
       )}
-      {canExport ? null : (
-        <p
-          data-testid="export-no-role"
-          className="max-w-prose text-xs text-muted-foreground lg:text-right"
-        >
-          {t("export.needsRole")}
-        </p>
-      )}
-    </div>
+    </span>
+  );
+}
+
+/**
+ * Export, always the last header action. `export_run` needs a sealed record
+ * and an organization Owner or Admin; the button is drawn disabled with the
+ * reason as its title on a live run or for any other role, so it never ends
+ * in a refusal the page could have said first.
+ */
+export function ExportAction({
+  org,
+  ws,
+  runId,
+  sealed,
+  orgRole,
+}: {
+  org: string;
+  ws: string;
+  runId: string;
+  /** A live run is refused by the handler: the bundle signs a finished record. */
+  sealed: boolean;
+  orgRole: OrgRole;
+}) {
+  const t = useTranslations("run.record");
+  const canExport = orgRole === "owner" || orgRole === "admin";
+  if (sealed && canExport) {
+    return (
+      <RecordDialog
+        action="export"
+        label={t("export.open")}
+        runId={runId}
+        write={() => exportRun(org, ws, runId)}
+        receipt={(value) => value.exportId}
+        follow={(exportId) => (
+          <ExportStatus org={org} ws={ws} exportId={exportId} />
+        )}
+      />
+    );
+  }
+  const reason = sealed ? t("export.needsRole") : t("export.needsSeal");
+  return (
+    <button
+      type="button"
+      disabled
+      data-testid="run-export"
+      title={reason}
+      className={buttonSecondary}
+    >
+      {t("export.open")}
+    </button>
   );
 }

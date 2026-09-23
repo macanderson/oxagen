@@ -90,7 +90,8 @@ type Place = { org: string; ws: string; runId: string };
 /** Why a later page did not arrive, in the shape the action answers with. */
 type PageFailure = Exclude<ActionResult<unknown>, { ok: true }>;
 
-const SPEEDS = [1, 1.5, 2, 4] as const;
+/** The spec's playback rates: 1×, 2×, 3× and 6×. */
+const SPEEDS = [1, 2, 3, 6] as const;
 /** How close to the end the playhead gets before the next page is read ahead of it. */
 const PREFETCH_WITHIN = 5;
 

@@ -482,3 +482,74 @@ export const RunOutputs = z.object({
   complete: z.boolean(),
 });
 export type RunOutputs = z.infer<typeof RunOutputs>;
+
+// ---- Steering manifest -------------------------------------------------------
+
+/**
+ * The body of a wrapped session's `steering.manifest` frame (ADR-093,
+ * ADR-144; `steeringManifestFrameSchema` in @oxagen/tacho/wire): every
+ * steering candidate in rank order with what happened to it, and the bundle it
+ * came from. The Context tab reads it from the frame body, so what it draws is
+ * what the host sealed into the chain.
+ */
+const SteeringManifestItem = z.object({
+  kind: z.string().min(1),
+  force: z.string().min(1),
+  tokens: z.number().int().nonnegative(),
+  outcome: z.enum(["included", "cut"]),
+  reason: z.enum(["tier", "budget", "superseded"]).optional(),
+  superseded_by: z.string().min(1).optional(),
+});
+
+export const SteeringManifest = z.object({
+  schema: z.literal("oxagen.steering.manifest/1"),
+  budget_tokens: z.number().int().nonnegative(),
+  spent_tokens: z.number().int().nonnegative(),
+  included: z.number().int().nonnegative(),
+  cut: z.number().int().nonnegative(),
+  items: z.array(SteeringManifestItem),
+  bundle_version: z.number().int().nonnegative(),
+  bundle_etag: z.string().min(1),
+});
+type SteeringManifestShape = z.infer<typeof SteeringManifest>;
+
+/**
+ * One candidate as the page reads it. The frame names each candidate by its
+ * record key (`ctx.release.notes-format`), carried here as `ref`: it is a
+ * record's own name, not a public id Oxagen minted (INV-11).
+ */
+export type SteeringManifestEntry = SteeringManifestShape["items"][number] & {
+  ref: string | null;
+};
+export type SteeringManifest = Omit<SteeringManifestShape, "items"> & {
+  items: SteeringManifestEntry[];
+};
+
+function refOf(raw: unknown): string | null {
+  if (typeof raw !== "object" || raw === null || !("id" in raw)) return null;
+  const value = (raw as Record<string, unknown>).id;
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+/** The manifest a frame body carries; null when the text is not one. */
+export function parseSteeringManifest(
+  text: string | null,
+): SteeringManifest | null {
+  if (text === null) return null;
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  const parsed = SteeringManifest.safeParse(value);
+  if (!parsed.success) return null;
+  const rawItems = (value as { items: unknown[] }).items;
+  return {
+    ...parsed.data,
+    items: parsed.data.items.map((item, index) => ({
+      ...item,
+      ref: refOf(rawItems[index]),
+    })),
+  };
+}

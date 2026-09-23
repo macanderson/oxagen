@@ -1,12 +1,13 @@
-// The Run page's header (mockup `pRun`, spec pages/run.md): who ran it and
-// under what tier, the rig it ran on, where it ran, when, and the controls the
-// run's status allows. The run id is the page's h1, drawn by page.tsx.
+// The Run page's header (mockup `pRun`, spec pages/run.md): the eyebrow "Run"
+// and the run id as the page's h1, who ran it and under what tier, the rig it
+// ran on, where it ran, when, and the controls the run's status allows.
 //
 // Every chip shows what the record holds. A fact the record does not capture
 // (a harness version the session did not report, the effort setting, the
-// checkout path) is said to be missing in words rather than left blank or
-// guessed, and the model-fit reading the mockup draws is left out because
-// nothing records it.
+// repository, the branch and the checkout path) is said to be missing in words
+// rather than left blank or guessed. The model-fit badges the mockup draws
+// beside the rig need a fit reading nothing records (G14), so they are not
+// drawn; the Cost tab's Model fit panel names that gap.
 import { useTranslations } from "next-intl";
 import type { AgentDetail } from "@/data/contracts/agents";
 import type { RunOutputNode } from "@/data/contracts/run";
@@ -14,16 +15,15 @@ import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import type { OrgRole, WsRole } from "@/server/viewer";
 import { AgentCard } from "@/ui/agent-card";
-import { Badge } from "@/ui/badge";
-import { mono } from "@/ui/control-styles";
+import { eyebrow, mono } from "@/ui/control-styles";
 import { EnforcementTierBadge } from "@/ui/enforcement-tier";
 import { useFormatter } from "@/ui/formatter";
 import { HarnessIcon } from "@/ui/harness-icon";
-import { OperatorName } from "@/ui/operator";
 import { ReplayGradeBadge } from "@/ui/replay-grade";
 import { StatusBadge } from "@/ui/status-badge";
 import { CopyText } from "./copy-text";
-import { RecordActions } from "./record-actions";
+import { ExportAction } from "./record-actions";
+import { ReplayActions } from "./replay-actions";
 import { RunControls } from "./run-controls";
 
 const chip = `${mono} inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border border-border px-2 py-0.5 text-[11.5px]`;
@@ -41,12 +41,11 @@ function Strip({
 }) {
   return (
     <div
+      role="group"
+      aria-label={label}
       data-testid={testId}
       className="flex flex-wrap items-center gap-x-2 gap-y-1.5"
     >
-      <span className="w-16 shrink-0 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-dim">
-        {label}
-      </span>
       {children}
     </div>
   );
@@ -67,7 +66,7 @@ function harnessOf(agent: Read<AgentDetail> | null) {
  * wrapped session recorded wins over the registry, which names the harness an
  * agent was registered with but never a version.
  */
-function useHarness(run: RunRow, agent: Read<AgentDetail> | null) {
+export function useHarness(run: RunRow, agent: Read<AgentDetail> | null) {
   const ta = useTranslations("agents");
   const registered = harnessOf(agent);
   if (run.harness) {
@@ -92,7 +91,11 @@ function Rig({ run, agent }: { run: RunRow; agent: Read<AgentDetail> | null }) {
   return (
     <Strip label={t("rig")} testId="run-rig">
       {harness === null ? (
-        <span className={missing}>{t("harnessNotRecorded")}</span>
+        <span className={chip}>
+          <span className="text-muted-foreground">
+            {t("harnessNotRecorded")}
+          </span>
+        </span>
       ) : (
         <span className={chip}>
           <HarnessIcon harness={harness.mark} size={14} />
@@ -100,12 +103,14 @@ function Rig({ run, agent }: { run: RunRow; agent: Read<AgentDetail> | null }) {
           <span className="text-muted-foreground">
             {harness.version === null
               ? t("versionNotCaptured")
-              : t("harnessVersion", { version: harness.version })}
+              : harness.version}
           </span>
         </span>
       )}
       {model === null ? (
-        <span className={missing}>{t("modelNotRecorded")}</span>
+        <span className={chip}>
+          <span className="text-muted-foreground">{t("modelNotRecorded")}</span>
+        </span>
       ) : (
         <span
           className={chip}
@@ -116,7 +121,17 @@ function Rig({ run, agent }: { run: RunRow; agent: Read<AgentDetail> | null }) {
           {model.slug}
         </span>
       )}
-      <span className={missing}>{t("effortNotCaptured")}</span>
+      {/* Effort is read out of the request body, which the record does not
+          keep (G6), so the chip says so rather than printing a default. */}
+      <span
+        data-testid="run-effort"
+        data-gap="G6"
+        title={t("effortWhy")}
+        className={chip}
+      >
+        {t("effort")}{" "}
+        <span className="text-muted-foreground">{t("notCaptured")}</span>
+      </span>
     </Strip>
   );
 }
@@ -126,49 +141,43 @@ function joinFacts(parts: readonly (string | null)[]): string {
 }
 
 /**
- * Where the host facts came from. A session observation and the enrollment
- * record keep separate labels, so an old enrollment is never read as what the
- * session saw.
+ * Where the host facts came from, as the machine chip's tooltip. A session
+ * observation and the enrollment record keep separate sentences, so an old
+ * enrollment is never read as what the session saw.
  */
-function MachineProvenance({ run }: { run: RunRow }) {
+function useMachineProvenance(run: RunRow): string | null {
   const t = useTranslations("run.header");
   const machine = run.machine;
-  if (machine === null) {
-    return run.source === "ledger" ? (
-      <p className="text-xs text-muted-foreground">{t("noMachineOnLedger")}</p>
-    ) : null;
-  }
+  if (machine === null) return null;
   const recorded = machine.recorded;
-  return (
-    <p
-      data-testid="run-machine"
-      className="flex flex-col text-xs text-muted-foreground"
-    >
-      <span>
-        {recorded === undefined
-          ? t("machineNotRecorded")
-          : t("machineRecorded", {
-              facts: joinFacts([
-                recorded.platform,
-                recorded.osVersion,
-                recorded.arch,
-              ]),
-            })}
-      </span>
-      <span>
-        {t("machineEnrollment", {
+  return [
+    recorded === undefined
+      ? t("machineNotRecorded")
+      : t("machineRecorded", {
           facts: joinFacts([
-            machine.platform,
-            machine.osVersion,
-            machine.arch,
-            machine.nodeVersion,
+            recorded.platform,
+            recorded.osVersion,
+            recorded.arch,
           ]),
-        })}
-      </span>
-    </p>
-  );
+        }),
+    t("machineEnrollment", {
+      facts: joinFacts([
+        machine.platform,
+        machine.osVersion,
+        machine.arch,
+        machine.nodeVersion,
+      ]),
+    }),
+    t("pathWhy"),
+  ].join(" ");
 }
 
+/**
+ * The checkout: the repository, the branch, every pull request the run pushed
+ * to, and `<machine>:<path>`. The run record carries the host and the pull
+ * requests the outputs recorded; the repository, the branch and the path are
+ * not on it, so each says so rather than borrowing a value from another host.
+ */
 function Checkout({
   run,
   pulls,
@@ -178,66 +187,56 @@ function Checkout({
   pulls: readonly RunOutputNode[] | null;
 }) {
   const t = useTranslations("run.header");
+  const provenance = useMachineProvenance(run);
   return (
     <Strip label={t("checkout")} testId="run-checkout">
-      <span className={missing}>{t("repoNotCaptured")}</span>
+      <span className={chip}>
+        <span className="text-muted-foreground">{t("repoNotCaptured")}</span>
+      </span>
+      <span className={chip}>
+        <span className="text-muted-foreground">{t("branchNotCaptured")}</span>
+      </span>
       {pulls === null ? null : pulls.length === 0 ? (
-        <span className={missing}>{t("noPullRequest")}</span>
+        <span className={chip}>
+          <span className="text-muted-foreground">{t("noPullRequest")}</span>
+        </span>
       ) : (
         pulls.map((pull) => (
-          <span key={`${pull.seq ?? ""}${pull.name}`} className={chip}>
+          <span
+            key={`${pull.seq ?? ""}${pull.name}`}
+            data-testid="run-checkout-pr"
+            className={chip}
+          >
             {pull.name}
-            {pull.where === null ? null : (
-              <span className="text-muted-foreground">{pull.where}</span>
-            )}
           </span>
         ))
       )}
       {run.machine === null ? (
-        <span className={missing}>{t("noMachine")}</span>
+        <span className={chip}>
+          <span className="text-muted-foreground">
+            {run.source === "ledger" ? t("noMachineOnLedger") : t("noMachine")}
+          </span>
+        </span>
       ) : (
-        <span className="inline-flex flex-wrap items-center gap-1.5">
+        <span
+          data-testid="run-machine"
+          title={provenance ?? undefined}
+          className="inline-flex flex-wrap items-center gap-1.5"
+        >
           <CopyText text={run.machine.hostname} />
           <span className={missing}>{t("pathNotCaptured")}</span>
-          <Badge tone="quiet" dot={false}>
-            {t("derived")}
-          </Badge>
         </span>
       )}
     </Strip>
   );
 }
 
-/** "<task> · started <t> by <operator> · sealed <t>". */
+/** "<task title> · started <t>", with "· sealed <t>" once sealed. */
 function When({ run }: { run: RunRow }) {
   const t = useTranslations("run.header");
-  const tr = useTranslations("run");
   const format = useFormatter();
   const when = (at: string) =>
     format.dateTime(new Date(at), { dateStyle: "medium", timeStyle: "short" });
-  // A run with no operator on record says so, rather than dropping "by".
-  const operator =
-    run.operatorId === null && run.operatorName === null ? (
-      tr("notRecorded")
-    ) : (
-      <OperatorName
-        testId="run-operator-name"
-        operator={{
-          id: run.operatorId,
-          name: run.operatorName,
-          kind: run.operatorKind,
-        }}
-      >
-        {run.operatorName ??
-          (run.operatorKind === null ? (
-            // An id with no name and no kind is still a recorded operator:
-            // the id is the label, never "not recorded".
-            <span className={mono}>{run.operatorId}</span>
-          ) : (
-            tr(`facts.operatorKind.${run.operatorKind}`)
-          ))}
-      </OperatorName>
-    );
   const title = run.name ?? run.taskRef;
   return (
     <p
@@ -246,7 +245,7 @@ function When({ run }: { run: RunRow }) {
     >
       {title === null ? null : (
         <>
-          <span className="font-medium text-foreground">{title}</span>
+          <span className="text-foreground">{title}</span>
           <span aria-hidden="true">·</span>
         </>
       )}
@@ -254,17 +253,14 @@ function When({ run }: { run: RunRow }) {
         {t("started")}{" "}
         <time dateTime={run.startedAt}>{when(run.startedAt)}</time>
       </span>
-      <span data-testid="run-operator">
-        {t("by")} {operator}
-      </span>
-      <span aria-hidden="true">·</span>
-      {run.sealedAt === null ? (
-        <span>{t("running")}</span>
-      ) : (
-        <span>
-          {t("sealed")}{" "}
-          <time dateTime={run.sealedAt}>{when(run.sealedAt)}</time>
-        </span>
+      {run.sealedAt === null ? null : (
+        <>
+          <span aria-hidden="true">·</span>
+          <span>
+            {t("sealed")}{" "}
+            <time dateTime={run.sealedAt}>{when(run.sealedAt)}</time>
+          </span>
+        </>
       )}
     </p>
   );
@@ -286,9 +282,8 @@ export function RunHeader({
   /**
    * The viewer's two roles, because the writes gate on them differently:
    * `dispatch_command` admits an org Owner or Admin or a workspace Owner or
-   * Member, `summarize_run` an org Owner, Admin or Member, `export_run` an org
-   * Owner or Admin. Each control is drawn disabled for a viewer its handler
-   * would refuse.
+   * Member, and `export_run` an org Owner or Admin. Each control is drawn
+   * disabled for a viewer its handler would refuse.
    */
   orgRole: OrgRole;
   wsRole: WsRole;
@@ -296,15 +291,31 @@ export function RunHeader({
   ws: string;
 }) {
   const t = useTranslations("run");
+  const tp = useTranslations("pages");
   const harness = useHarness(run, agent);
+  // Export is always last. A live run's controls come first; an ended run
+  // offers Fork replay and Bisect, which read the finished recording.
+  const exportAction = (
+    <ExportAction
+      org={org}
+      ws={ws}
+      runId={run.id}
+      sealed={run.status !== "live"}
+      orgRole={orgRole}
+    />
+  );
   return (
     <header data-testid="run-header" className="flex flex-col gap-3">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex min-w-0 flex-col gap-2.5">
+        <div className="flex min-w-0 flex-col gap-2">
+          <p className={eyebrow}>{tp("run")}</p>
+          <h1 className="break-all font-mono text-[19px] font-bold leading-tight text-foreground">
+            {run.id}
+          </h1>
           <div
             data-testid="run-chips"
             aria-label={t("header.chips")}
-            className="flex flex-wrap items-center gap-x-3 gap-y-2"
+            className="flex flex-wrap items-center gap-x-3 gap-y-2 pt-1"
           >
             <AgentCard
               agentKey={run.agentKey}
@@ -323,49 +334,35 @@ export function RunHeader({
             )}
             {run.taskRef === null ? null : (
               <span data-testid="run-task" className={chip}>
-                {run.taskRef}
+                {t("header.task", { ref: run.taskRef })}
               </span>
             )}
           </div>
           <Rig run={run} agent={agent} />
           <Checkout run={run} pulls={pulls} />
-          <MachineProvenance run={run} />
           <When run={run} />
-          <p className="text-xs text-muted-foreground">
-            {t(`source.${run.source}`)}
-          </p>
-          {run.completenessGaps.length === 0 ? null : (
-            <p
-              data-testid="run-gaps"
-              className="max-w-prose text-xs text-muted-foreground"
-            >
-              {t("gaps")}{" "}
-              {run.completenessGaps.map((gap) => t(`gap.${gap}`)).join(", ")}
-            </p>
-          )}
         </div>
-        <div className="flex flex-col gap-3 lg:items-end">
-          <RunControls
-            org={org}
-            ws={ws}
-            runId={run.id}
-            status={run.status}
-            source={run.source}
-            enforcementTier={run.enforcementTier}
-            ingressRevoked={run.ingressRevoked}
-            ingressPaused={run.ingressPaused}
-            orgRole={orgRole}
-            wsRole={wsRole}
-          />
-          <RecordActions
-            org={org}
-            ws={ws}
-            runId={run.id}
-            sealed={run.status !== "live"}
-            hasSummary={run.summary !== null}
-            summarizable={run.canSummarize}
-            orgRole={orgRole}
-          />
+        <div
+          data-testid="run-actions"
+          className="flex flex-col gap-3 lg:items-end"
+        >
+          {run.status === "live" ? (
+            <RunControls
+              org={org}
+              ws={ws}
+              runId={run.id}
+              status={run.status}
+              source={run.source}
+              enforcementTier={run.enforcementTier}
+              ingressRevoked={run.ingressRevoked}
+              ingressPaused={run.ingressPaused}
+              orgRole={orgRole}
+              wsRole={wsRole}
+              after={exportAction}
+            />
+          ) : (
+            <ReplayActions org={org} ws={ws} run={run} after={exportAction} />
+          )}
         </div>
       </div>
       {run.ingressPaused === true ? (
@@ -374,6 +371,7 @@ export function RunHeader({
           data-testid="run-paused"
           className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-2.5 text-sm text-foreground"
         >
+          <strong className="font-semibold">{t("header.pausedTitle")}</strong>{" "}
           {t("header.paused")}
         </p>
       ) : null}

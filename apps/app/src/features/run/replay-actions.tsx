@@ -18,7 +18,7 @@
 // with the reason, wherever the row already says the recording is weaker, so a
 // person is not sent to a refusal they could have read here.
 import { useTranslations } from "next-intl";
-import { type SyntheticEvent, useId, useState } from "react";
+import { type ReactNode, type SyntheticEvent, useId, useState } from "react";
 import type { RunRow } from "@/data/contracts/runs";
 import { UNANSWERED, useActionFailure } from "@/ui/command-failure";
 import { buttonSecondary, inputBase, mono } from "@/ui/control-styles";
@@ -267,10 +267,13 @@ export function ReplayActions({
   org,
   ws,
   run,
+  after,
 }: {
   org: string;
   ws: string;
   run: RunRow;
+  /** The header's last action (Export), drawn in the same row. */
+  after?: ReactNode;
 }) {
   const t = useTranslations("run.replay");
   // `fork_run` refuses a wrapped session by name and a recording graded below
@@ -301,6 +304,7 @@ export function ReplayActions({
           </button>
         )}
         <BisectDialog org={org} ws={ws} runId={run.id} />
+        {after}
       </div>
       {forkable ? null : (
         <p

@@ -21,8 +21,14 @@ import { ratioOfIntegers } from "@/data/contracts/money";
 import type { Read } from "@/data/read";
 import { mono } from "@/ui/control-styles";
 import { Money } from "@/ui/money";
-import { formatCount, formatDuration, ratioWidth } from "@/ui/money-format";
+import {
+  formatCount,
+  formatDuration,
+  formatRatio,
+  ratioWidth,
+} from "@/ui/money-format";
 import { ReadFailure } from "@/ui/read-failure";
+import { cell, numericCell, Table } from "@/ui/table";
 import { NoValue } from "./parts";
 
 /** The narrowest a priced turn's bar is drawn, as a share of the run total. */
@@ -131,6 +137,95 @@ function StepSegments({ bar }: { bar: Bar }) {
   );
 }
 
+/** cache_read ÷ (input_uncached + cache_read) over one turn's reported usage. */
+function cacheHitOf(entry: TranscriptEntry): number | null {
+  const usage = entry.usage;
+  if (usage == null) return null;
+  const read = usage.cacheRead;
+  const fresh = usage.inputUncached;
+  if (read === null || fresh === null || read + fresh === 0) return null;
+  return read / (read + fresh);
+}
+
+/**
+ * The waterfall's ledger (spec: Turn · Steps · Frames · Cache hit · Cost ·
+ * Running total · Pinned), one row per bar and a total row that is the last
+ * running total, so the table and the bars read one derivation. Nothing pins a
+ * finding to a turn yet, so the Pinned cells say so.
+ */
+function WaterfallTable({
+  bars,
+  total,
+}: {
+  bars: readonly Bar[];
+  total: TranscriptEntry["cumulativeCost"];
+}) {
+  const t = useTranslations("run.waterfall");
+  const locale = useLocale();
+  return (
+    <Table
+      label={t("table")}
+      columns={[
+        { label: t("columns.turn") },
+        { label: t("columns.steps"), numeric: true },
+        { label: t("columns.frames"), numeric: true },
+        { label: t("columns.cacheHit"), numeric: true },
+        { label: t("columns.cost"), numeric: true },
+        { label: t("columns.running"), numeric: true },
+        { label: t("columns.pinned") },
+      ]}
+    >
+      {bars.map((bar) => {
+        const hit = cacheHitOf(bar.turn);
+        return (
+          <tr key={`${bar.turn.seq}-${bar.turn.endSeq}`}>
+            <td className={`${cell} ${mono}`}>{bar.turn.label}</td>
+            <td className={numericCell}>
+              {formatCount(bar.steps.length, locale)}
+            </td>
+            <td className={numericCell}>
+              {formatCount(bar.turn.frames, locale)}
+            </td>
+            <td className={numericCell}>
+              {hit === null ? <NoValue /> : formatRatio(hit, locale)}
+            </td>
+            <td className={numericCell}>
+              {bar.turn.cost === null ? (
+                <NoValue />
+              ) : (
+                <Money value={bar.turn.cost} precision="exact" />
+              )}
+            </td>
+            <td className={numericCell}>
+              {bar.turn.cumulativeCost === null ? (
+                <NoValue />
+              ) : (
+                <Money value={bar.turn.cumulativeCost} precision="exact" />
+              )}
+            </td>
+            <td className={`${cell} text-muted-foreground`}>{t("noPin")}</td>
+          </tr>
+        );
+      })}
+      <tr data-testid="waterfall-total" className="font-semibold">
+        <td className={cell} colSpan={5}>
+          {t("totalRow")}
+        </td>
+        <td className={numericCell}>
+          {total === null ? (
+            <NoValue />
+          ) : (
+            t.rich("recorded", {
+              cost: () => <Money value={total} precision="exact" />,
+            })
+          )}
+        </td>
+        <td className={cell} />
+      </tr>
+    </Table>
+  );
+}
+
 export function Waterfall({
   turns,
   steps,
@@ -218,6 +313,7 @@ export function Waterfall({
           </li>
         ))}
       </ol>
+      <WaterfallTable bars={bars} total={total} />
       {turns.value.complete ? null : (
         <p
           data-testid="waterfall-cut"
