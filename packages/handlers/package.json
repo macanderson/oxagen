@@ -34,6 +34,7 @@
     "@oxagen/rules": "workspace:*",
     "@oxagen/run-evidence": "workspace:*",
     "@oxagen/run-ledger": "workspace:*",
+    "@oxagen/steering-assembler": "workspace:*",
     "@oxagen/storage": "workspace:*",
     "@oxagen/tacho": "workspace:*",
     "@oxagen/telemetry": "workspace:*",

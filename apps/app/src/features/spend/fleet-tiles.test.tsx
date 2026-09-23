@@ -94,6 +94,7 @@ const source: DataSource = {
     proposals: refuse,
     contextPr: refuse,
     freshness: refuse,
+    deliveries: refuse,
   },
   tools: {
     versions: refuse,

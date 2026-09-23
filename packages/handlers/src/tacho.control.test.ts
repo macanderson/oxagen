@@ -395,6 +395,8 @@ describe("get_tacho_bundle", () => {
     db.records = [
       {
         slug: "no-force-push",
+        activatedAt: "2026-09-02T00:00:00.000Z",
+        createdAt: "2026-09-01T00:00:00.000Z",
         versionKind: "constraint",
         versionForce: "must",
         versionConstraintEffect: "forbid",
@@ -406,6 +408,8 @@ describe("get_tacho_bundle", () => {
       },
       {
         slug: "prefer-small-prs",
+        activatedAt: "2026-09-04T00:00:00.000Z",
+        createdAt: "2026-09-03T00:00:00.000Z",
         versionKind: "preference",
         versionForce: "may",
         versionConstraintEffect: null,

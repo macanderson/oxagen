@@ -275,6 +275,7 @@ export function billingSource(
       proposals: refuse,
       contextPr: refuse,
       freshness: refuse,
+      deliveries: refuse,
     },
     tools: {
       versions: refuse,

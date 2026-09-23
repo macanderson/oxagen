@@ -1359,6 +1359,14 @@
       "proof": "apps/app/src/features/run-outcomes/consent.test.tsx",
       "verifiedAt": "2026-09-23",
       "verifiedBy": "run-outcomes-providers"
+    },
+    "get_steering_deliveries": {
+      "route": "/[org]/[ws]/steering?tab=deliveries",
+      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
+      "entry": "Delivery tab showing included and cut records per recorded run",
+      "proof": "apps/app/src/features/steering/steering.test.tsx",
+      "verifiedAt": "2026-09-22",
+      "verifiedBy": "steering-rescue-ci"
     }
   }
 }
