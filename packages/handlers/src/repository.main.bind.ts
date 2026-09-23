@@ -47,7 +47,16 @@ import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { assertDataPlaneUsable, resolveDataPlane } from "@oxagen/tenancy";
 import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import { logger } from "./logger";
-import { writeRepositoryHead } from "./repository.binding-write";
+import {
+  writeRepositoryHead,
+  type BindableRepository,
+  type RepositoryProvider,
+} from "./repository.binding-write";
+import {
+  findWorkspaceGitLabConnection,
+  gitlabNotConnected,
+  readGitLabProject,
+} from "./repository.gitlab-connection";
 import {
   GITHUB_PROVIDER,
   resolveWorkspaceGithubInstallation,
@@ -175,6 +184,7 @@ export function rethrowHeadConflict(err: unknown, fullName: string): never {
 export async function headsHeldElsewhere(
   providerRepositoryId: string,
   workspaceId: string | null,
+  provider: RepositoryProvider = PROVIDER,
 ): Promise<Array<{ role: string; workspaceId: string }>> {
   return withSystemDb((tx) =>
     tx
@@ -185,7 +195,7 @@ export async function headsHeldElsewhere(
       .from(schema.repositoryBindingHeads)
       .where(
         and(
-          eq(schema.repositoryBindingHeads.provider, PROVIDER),
+          eq(schema.repositoryBindingHeads.provider, provider),
           eq(
             schema.repositoryBindingHeads.providerRepositoryId,
             providerRepositoryId,
@@ -319,6 +329,54 @@ export interface MainRepositoryDeps {
     owner: string,
     name: string,
   ): Promise<GitHubRepoInfo | null>;
+  /**
+   * The GitLab project the workspace connected under `projectPath`, read by id
+   * through that connection's token. Defaults to the real reader; tests pass
+   * a fake.
+   */
+  gitlabProject?(
+    scope: { orgId: string; workspaceId: string },
+    projectPath: string,
+  ): Promise<BindTarget>;
+}
+
+/** What a bind writes against: the connection, the host and the repository. */
+export interface BindTarget {
+  provider: RepositoryProvider;
+  connection: { id: string; publicId: string; status: string };
+  repo: BindableRepository;
+}
+
+/**
+ * The GitLab arm: the workspace's live GitLab connection for the path, and
+ * the project read through its own token. A project the token can no longer
+ * see is `repository_not_installed`, the refusal GitHub gives for a repository
+ * its installation cannot see.
+ */
+export async function gitlabBindTarget(
+  scope: { orgId: string; workspaceId: string },
+  projectPath: string,
+): Promise<BindTarget> {
+  const connection = await findWorkspaceGitLabConnection(scope, {
+    path: projectPath,
+  });
+  if (!connection) throw gitlabNotConnected();
+  const repo = await readGitLabProject(scope, connection);
+  if (!repo)
+    throw new HandlerError({
+      code: "not_found",
+      reason: "repository_not_installed",
+      message: `The GitLab token connected for ${projectPath} can no longer see the project`,
+    });
+  return {
+    provider: "gitlab",
+    connection: {
+      id: connection.id,
+      publicId: connection.publicId,
+      status: connection.status,
+    },
+    repo,
+  };
 }
 
 export const githubMainRepositoryDeps: MainRepositoryDeps = {
@@ -367,28 +425,37 @@ export function createMainRepositoryBindHandler(
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
     const now = new Date();
 
-    const connection = await resolveWorkspaceGithubInstallation(scope);
-    if (!connection) {
-      throw new HandlerError({
-        code: "conflict",
-        reason: "github_not_connected",
-        message:
-          "This workspace has no GitHub App installation attached; connect GitHub first",
-      });
+    let target: BindTarget;
+    if (input.provider === "gitlab") {
+      target = await (deps.gitlabProject ?? gitlabBindTarget)(
+        scope,
+        input.projectPath,
+      );
+    } else {
+      const installation = await resolveWorkspaceGithubInstallation(scope);
+      if (!installation) {
+        throw new HandlerError({
+          code: "conflict",
+          reason: "github_not_connected",
+          message:
+            "This workspace has no GitHub App installation attached; connect GitHub first",
+        });
+      }
+      const github = await deps.repository(
+        installation.installationId,
+        input.owner,
+        input.name,
+      );
+      if (!github) {
+        throw new HandlerError({
+          code: "not_found",
+          reason: "repository_not_installed",
+          message: `The GitHub App installation on this workspace cannot see ${input.owner}/${input.name}`,
+        });
+      }
+      target = { provider: PROVIDER, connection: installation, repo: github };
     }
-
-    const repo = await deps.repository(
-      connection.installationId,
-      input.owner,
-      input.name,
-    );
-    if (!repo) {
-      throw new HandlerError({
-        code: "not_found",
-        reason: "repository_not_installed",
-        message: `The GitHub App installation on this workspace cannot see ${input.owner}/${input.name}`,
-      });
-    }
+    const { connection, repo, provider } = target;
 
     // ── Is this repository already some other workspace's main repository? ───
     //
@@ -411,7 +478,11 @@ export function createMainRepositoryBindHandler(
     // workspace's own heads: re-binding a repository this workspace already
     // steers is the idempotent/repair path below, not a claim.
     await assertGlobalClaimIsKnowable(ctx.orgId);
-    const heldElsewhere = await headsHeldElsewhere(repo.id, ctx.workspaceId);
+    const heldElsewhere = await headsHeldElsewhere(
+      repo.id,
+      ctx.workspaceId,
+      provider,
+    );
     if (heldElsewhere.length > 0) {
       logger.warn(
         {
@@ -475,6 +546,7 @@ export function createMainRepositoryBindHandler(
           .select({
             id: schema.repositoryBindingHeads.id,
             role: schema.repositoryBindingHeads.role,
+            provider: schema.repositoryBindingHeads.provider,
             connectionId: schema.repositoryBindingHeads.connectionId,
             providerRepositoryId:
               schema.repositoryBindingHeads.providerRepositoryId,
@@ -505,12 +577,14 @@ export function createMainRepositoryBindHandler(
         // Neither is a cross-workspace claim, so `rethrowHeadConflict` passes
         // them through and the operator gets a 500 on the only move that would
         // have given their workspace a main repository back.
-        const same = heads.find((h) => h.providerRepositoryId === repo.id);
-        if (
-          heads.some(
-            (h) => h.role === "main" && h.providerRepositoryId !== repo.id,
-          )
-        ) {
+        // A repository is its host plus the host's id: a GitLab project and
+        // a GitHub repository can carry the same number.
+        const isThis = (h: {
+          provider: string;
+          providerRepositoryId: string;
+        }) => h.provider === provider && h.providerRepositoryId === repo.id;
+        const same = heads.find(isThis);
+        if (heads.some((h) => h.role === "main" && !isThis(h))) {
           throw new HandlerError({
             code: "conflict",
             reason: "main_repo_bound",
@@ -635,7 +709,7 @@ export function createMainRepositoryBindHandler(
                 orgId: scope.orgId,
                 workspaceId: scope.workspaceId,
                 connectionId: connection.id,
-                provider: PROVIDER,
+                provider,
                 providerRepositoryId: repo.id,
                 providerOwner: repo.owner,
                 providerName: repo.name,
@@ -686,6 +760,7 @@ export function createMainRepositoryBindHandler(
             connectionId: connection.id,
             repo,
             role: "main",
+            provider,
             userId,
             now,
           });
@@ -752,6 +827,7 @@ export function createMainRepositoryBindHandler(
     return {
       bindingId: result.bindingPublicId,
       connectionId: connection.publicId,
+      provider,
       fullName: repo.fullName,
       defaultRef: repo.defaultBranch,
       boundAt: result.boundAt.toISOString(),

@@ -1,7 +1,11 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { workspaceSlug } from "../workspace-slug";
-import { repositoryMainBind } from "./repository.main.bind";
+import {
+  githubOwnerSchema,
+  githubRepositoryNameSchema,
+  repositoryMainBind,
+} from "./repository.main.bind";
 
 /**
  * create_workspace — a workspace in the caller's org, with its main repository.
@@ -68,8 +72,8 @@ export const workspaceCreate = registerCapability({
     mainRepo: z
       .object({
         provider: z.literal("github").default("github"),
-        owner: repositoryMainBind.input.shape.owner,
-        name: repositoryMainBind.input.shape.name,
+        owner: githubOwnerSchema,
+        name: githubRepositoryNameSchema,
       })
       .strict(),
   }),

@@ -33,6 +33,13 @@
               "bindingId": {
                 "type": "string"
               },
+              "provider": {
+                "type": "string",
+                "enum": [
+                  "github",
+                  "gitlab"
+                ]
+              },
               "owner": {
                 "type": "string",
                 "minLength": 1
@@ -62,6 +69,7 @@
             },
             "required": [
               "bindingId",
+              "provider",
               "owner",
               "name",
               "fullName",
