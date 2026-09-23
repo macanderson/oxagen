@@ -446,7 +446,7 @@ export function OutputsSpine({
 
       {nodes.length === 0 ? (
         <p className="border-l-2 border-dashed border-border py-2.5 pl-3 text-sm text-muted-foreground">
-          {t("empty")}
+          {complete ? t("empty") : t("cut")}
         </p>
       ) : (
         <ol className="flex flex-col">

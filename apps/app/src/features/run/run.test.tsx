@@ -221,8 +221,9 @@ describe("header", () => {
       "title",
       "anthropic sonnet",
     );
-    // The agent read is denied by default, so the harness is not guessed.
-    expect(rig.getByText("harness not recorded")).toBeTruthy();
+    // The session recorded its harness, so the rig names it and its version.
+    expect(rig.getByText("Claude Code")).toBeTruthy();
+    expect(rig.getByText("version 2.1.0")).toBeTruthy();
     expect(rig.getByText("effort not captured")).toBeTruthy();
     await expectNoAxe(container);
   });
@@ -298,14 +299,20 @@ describe("header", () => {
     await renderRun({
       detail: ok(
         runDetail({
-          run: runRow({ source: "ledger", model: null, machine: null }),
+          run: runRow({
+            source: "ledger",
+            model: null,
+            machine: null,
+            harness: null,
+          }),
         }),
       ),
       transcript: ok(runTranscript()),
     });
-    expect(
-      within(screen.getByTestId("run-rig")).getByText("model not recorded"),
-    ).toBeTruthy();
+    const rig = within(screen.getByTestId("run-rig"));
+    expect(rig.getByText("model not recorded")).toBeTruthy();
+    // No session harness and a denied agent read: the harness is not guessed.
+    expect(rig.getByText("harness not recorded")).toBeTruthy();
     expect(
       within(screen.getByTestId("run-checkout")).getByText(
         "machine not recorded",

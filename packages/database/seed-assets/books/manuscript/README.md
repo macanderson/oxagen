@@ -1,7 +1,7 @@
 # The book's manuscript
 
 "Engineering Deterministic AI Coding Agents", second edition. This folder is the
-only place the text lives (ADR-109). The two editions one level up and the
+only place the text lives (ADR-155). The two editions one level up and the
 migration that ships them are generated from it.
 
 ## Change the book

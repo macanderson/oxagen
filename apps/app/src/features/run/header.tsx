@@ -3,9 +3,10 @@
 // run's status allows. The run id is the page's h1, drawn by page.tsx.
 //
 // Every chip shows what the record holds. A fact the record does not capture
-// (the harness version, the effort setting, the checkout path) is said to be
-// missing in words rather than left blank or guessed, and the model-fit
-// reading the mockup draws is left out because nothing records it.
+// (a harness version the session did not report, the effort setting, the
+// checkout path) is said to be missing in words rather than left blank or
+// guessed, and the model-fit reading the mockup draws is left out because
+// nothing records it.
 import { useTranslations } from "next-intl";
 import type { AgentDetail } from "@/data/contracts/agents";
 import type { RunOutputNode } from "@/data/contracts/run";
@@ -17,6 +18,7 @@ import { Badge } from "@/ui/badge";
 import { mono } from "@/ui/control-styles";
 import { EnforcementTierBadge } from "@/ui/enforcement-tier";
 import { useFormatter } from "@/ui/formatter";
+import { HarnessIcon } from "@/ui/harness-icon";
 import { OperatorName } from "@/ui/operator";
 import { ReplayGradeBadge } from "@/ui/replay-grade";
 import { StatusBadge } from "@/ui/status-badge";
@@ -60,10 +62,32 @@ function harnessOf(agent: Read<AgentDetail> | null) {
   return agent?.ok === true ? agent.value.identity.harness : null;
 }
 
+/**
+ * The harness name, the key its mark is drawn by, and its version. What the
+ * wrapped session recorded wins over the registry, which names the harness an
+ * agent was registered with but never a version.
+ */
+function useHarness(run: RunRow, agent: Read<AgentDetail> | null) {
+  const ta = useTranslations("agents");
+  const registered = harnessOf(agent);
+  if (run.harness) {
+    return {
+      name: run.harness.name,
+      mark: run.harness.runtime ?? registered,
+      version: run.harness.version,
+    };
+  }
+  if (registered === null) return null;
+  return {
+    name: ta(`harness.${registered}`),
+    mark: registered,
+    version: null,
+  };
+}
+
 function Rig({ run, agent }: { run: RunRow; agent: Read<AgentDetail> | null }) {
   const t = useTranslations("run.header");
-  const ta = useTranslations("agents");
-  const harness = harnessOf(agent);
+  const harness = useHarness(run, agent);
   const model = run.model;
   return (
     <Strip label={t("rig")} testId="run-rig">
@@ -71,9 +95,12 @@ function Rig({ run, agent }: { run: RunRow; agent: Read<AgentDetail> | null }) {
         <span className={missing}>{t("harnessNotRecorded")}</span>
       ) : (
         <span className={chip}>
-          {ta(`harness.${harness}`)}
+          <HarnessIcon harness={harness.mark} size={14} />
+          {harness.name}
           <span className="text-muted-foreground">
-            {t("versionNotCaptured")}
+            {harness.version === null
+              ? t("versionNotCaptured")
+              : t("harnessVersion", { version: harness.version })}
           </span>
         </span>
       )}
@@ -269,8 +296,7 @@ export function RunHeader({
   ws: string;
 }) {
   const t = useTranslations("run");
-  const ta = useTranslations("agents");
-  const harness = harnessOf(agent);
+  const harness = useHarness(run, agent);
   return (
     <header data-testid="run-header" className="flex flex-col gap-3">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -284,9 +310,7 @@ export function RunHeader({
               agentKey={run.agentKey}
               notRecorded={t("notRecorded")}
               sub={
-                harness === null
-                  ? t("header.harnessNotRecorded")
-                  : ta(`harness.${harness}`)
+                harness === null ? t("header.harnessNotRecorded") : harness.name
               }
             />
             <StatusBadge status={run.status} outcome={run.outcome} />

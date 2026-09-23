@@ -1,22 +1,17 @@
 // Organization › Roles (ARCHITECTURE.md §1.2, ADR-063): the organization's
 // roles with the permissions each one allows, who holds it and where it came
-// from, and the permission catalogue the editor speaks. The read reports
-// whether Oxagen resolves these grants for this organization's tier (§1.5),
-// and the section says so either way rather than implying an enforcement the
-// record does not carry. A refused or failed read replaces the sections; the
-// tabs stay.
+// from, and a button that opens the permission catalogue the editor speaks.
+// The read reports whether Oxagen resolves these grants for this
+// organization's tier (§1.5), and the section says so either way rather than
+// implying an enforcement the record does not carry. A refused or failed read
+// replaces the sections; the tabs stay.
 //
-// Beside the catalogue sit the IdP group mappings (ADR-145): for each single
+// Below the roles table sit the IdP group mappings (ADR-145): for each single
 // sign-on provider, which organization role each identity provider group
 // grants. They come from the SSO read, so a refused or failed SSO read says so
 // in that section alone and leaves the roles in place.
 import { useLocale, useTranslations } from "next-intl";
-import type {
-  Permission,
-  Role,
-  RoleCatalog,
-  SsoSettings,
-} from "@/data/contracts/org";
+import type { Role, RoleCatalog, SsoSettings } from "@/data/contracts/org";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import type { OrgCtx } from "@/server/viewer";
@@ -26,6 +21,7 @@ import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
 import { cell, numericCell, Table } from "@/ui/table";
+import { CatalogueDialog } from "./catalogue-dialog";
 import { CreateRole, DeleteRole, EditRole } from "./role-actions";
 import { SsoPlanNotice } from "./sso";
 import { SsoGroupRoles } from "./sso-group-roles";
@@ -74,7 +70,6 @@ function RolesView({
       {read.ok ? (
         <>
           <RoleTable org={org} canEdit={canEdit} value={read.value} />
-          <Catalogue catalog={read.value.catalog} />
           <GroupMappings org={org} canEdit={canEdit} read={sso} />
         </>
       ) : (
@@ -138,13 +133,11 @@ function RoleTable({
       </h2>
       <p className={lead}>{t("lead")}</p>
       <Enforcement enforcement={value.enforcement} />
-      {canEdit ? (
-        <div className="flex flex-wrap gap-2">
-          <CreateRole org={org} catalog={value.catalog} />
-        </div>
-      ) : (
-        <p className={lead}>{tActions("readOnly")}</p>
-      )}
+      {canEdit ? null : <p className={lead}>{tActions("readOnly")}</p>}
+      <div className="flex flex-wrap gap-2">
+        {canEdit ? <CreateRole org={org} catalog={value.catalog} /> : null}
+        <CatalogueDialog catalog={value.catalog} />
+      </div>
       {value.roles.length === 0 ? (
         <p className={lead}>{t("empty")}</p>
       ) : (
@@ -188,51 +181,6 @@ function RoleTable({
           ))}
         </Table>
       )}
-    </section>
-  );
-}
-
-function Catalogue({ catalog }: { catalog: readonly Permission[] }) {
-  const t = useTranslations("organization.roleCatalog.catalog");
-  const locale = useLocale();
-  const groups = [...new Set(catalog.map((entry) => entry.group))];
-  return (
-    <section
-      aria-labelledby="permission-catalogue"
-      className={`${panel} flex flex-col gap-4 p-5`}
-    >
-      <div className="flex flex-col gap-0.5">
-        <h2 id="permission-catalogue" className={sectionTitle}>
-          {t("title")}
-        </h2>
-        <p className={lead}>{t("lead")}</p>
-      </div>
-      {groups.map((group) => (
-        <div key={group} className="flex flex-col gap-1.5">
-          <h3 className="text-sm font-semibold text-foreground">{group}</h3>
-          <dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
-            {catalog
-              .filter((entry) => entry.group === group)
-              .map((entry) => (
-                <div
-                  key={entry.permission}
-                  data-permission={entry.permission}
-                  className="contents"
-                >
-                  <dt className={`${mono} text-foreground`}>
-                    {entry.permission}
-                  </dt>
-                  <dd className="text-muted-foreground">
-                    {entry.description}{" "}
-                    {t("covers", {
-                      count: formatCount(entry.capabilities.length, locale),
-                    })}
-                  </dd>
-                </div>
-              ))}
-          </dl>
-        </div>
-      ))}
     </section>
   );
 }

@@ -50,6 +50,7 @@ export function runRow(overrides: Partial<RunRow> = {}): RunRow {
       provider: "anthropic",
       tier: "sonnet",
     },
+    harness: { name: "Claude Code", version: "2.1.0", runtime: "claude-code" },
     machine: {
       hostname: "mac-studio.local",
       platform: "darwin",
@@ -677,6 +678,7 @@ export function runSource(reads: RunReads) {
       proposals: refuse,
       contextPr: refuse,
       freshness: refuse,
+      deliveries: refuse,
     },
     tools: {
       versions: refuse,

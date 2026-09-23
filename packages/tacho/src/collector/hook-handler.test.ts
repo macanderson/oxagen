@@ -811,6 +811,93 @@ describe("handleHookEvent over the recorded session", () => {
     expect(record.control.messages).toHaveLength(1);
   });
 
+  it("seals the bundle's steering manifest at a session start, with the steers delivered beside the prefix", async () => {
+    const manifest = {
+      schema: "oxagen.steering.manifest/1" as const,
+      delivers: ["must" as const, "should" as const],
+      budget_tokens: 4096,
+      spent_tokens: 8,
+      included: 1,
+      cut: 1,
+      text_digest: `sha256:${"b".repeat(64)}`,
+      items: [
+        {
+          id: "no-force-push",
+          kind: "record" as const,
+          force: "must" as const,
+          recorded_at: "2026-09-20T00:00:00.000Z",
+          tokens: 8,
+          outcome: "included" as const,
+        },
+        {
+          id: "prefer-small-prs",
+          kind: "record" as const,
+          force: "may" as const,
+          recorded_at: "2026-09-19T00:00:00.000Z",
+          tokens: 6,
+          outcome: "cut" as const,
+          reason: "tier" as const,
+        },
+      ],
+    };
+    const { deps, registry, view } = harness({
+      context: { system: "You are governed by Oxagen.", manifest },
+    });
+    const start = loadFixtures()[0] as Fixture;
+    // The first start creates the record; a steer arrives; the next start
+    // delivers it with the prefix.
+    await handleHookEvent(start.stdin, start.env, deps);
+    const record = registry.get(String(start.stdin["session_id"]));
+    if (record === undefined) throw new Error("no record");
+    record.control.messages.push({
+      id: "cmd_1",
+      text: "Stop after the migration lands.",
+      command: "steer",
+      requestedMode: null,
+      deliveryMode: null,
+      degradedReason: null,
+      expiresAt: null,
+      issuedAt: "2026-09-21T10:00:00.000Z",
+    });
+    const outcome = await handleHookEvent(start.stdin, start.env, deps);
+    const frame = outcome.events.find((e) => e.kind === "steering.manifest");
+    expect(frame).toBeDefined();
+    expect(frame?.hook_event_name).toBe("SessionStart");
+    expect(frame?.body).toEqual({
+      ...manifest,
+      included: 2,
+      items: [
+        ...manifest.items,
+        {
+          id: "cmd_1",
+          kind: "steer",
+          force: "must",
+          recorded_at: "2026-09-21T10:00:00.000Z",
+          tokens: 8,
+          outcome: "included",
+        },
+      ],
+      bundle_version: view.bundle.version,
+      bundle_etag: view.bundle.etag,
+    });
+    expect(outcome.response).toMatchObject({
+      hookSpecificOutput: {
+        additionalContext:
+          "You are governed by Oxagen.\n\nStop after the migration lands.",
+      },
+    });
+    // The chain still verifies with the new kind on it.
+    expect(verifyChain([...record.recorder.sealedEvents]).ok).toBe(true);
+
+    // A bundle that carries no manifest seals no frame: the start event's
+    // context digest remains the record of the text.
+    const plain = harness();
+    const first = await handleHookEvent(start.stdin, start.env, plain.deps);
+    expect(first.events.some((e) => e.kind === "steering.manifest")).toBe(
+      false,
+    );
+  });
+
   it("pairs each body with the event it belongs to, across the parent and its subagent", async () => {
     const { deps } = harness();
     const session = "sess-bodies";

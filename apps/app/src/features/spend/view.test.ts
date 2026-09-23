@@ -26,6 +26,17 @@ describe("parseSpendView", () => {
     });
   });
 
+  it.each(["tokens", "model"])(
+    "opens %s without accepting an unsupported drill",
+    (tab) => {
+      expect(parseSpendView({ tab, drill: "anything" })).toEqual({
+        tab,
+        drill: null,
+        finding: null,
+      });
+    },
+  );
+
   it("opens an operator's, an agent's or a tool's drill", () => {
     expect(
       parseSpendView({ tab: "operator", drill: "prn_marcusbell" }),

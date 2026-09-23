@@ -104,6 +104,7 @@ describe("toRunPage", () => {
             basis: "gateway_observed",
           },
           model: null,
+          harness: null,
           machine: null,
           taskRef: "ENG-4121",
           name: "Cut the 3.2 release branch",
