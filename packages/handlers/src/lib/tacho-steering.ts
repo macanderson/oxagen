@@ -1,41 +1,49 @@
 /**
- * The workspace's steering, compiled into the text the policy bundle carries
- * as `context.system` (ADR-091).
+ * The workspace's steering, assembled into the text the policy bundle carries
+ * as `context.system` and the manifest it carries as `context.manifest`
+ * (ADR-091, ADR-093, ADR-142).
  *
  * A context record merged through a Context PR is published with a `force`.
- * The ones marked `must` or `should` are what the workspace told its agents
- * to do; this turns them into one block of plain text. The collector already
- * hands `context.system` to the agent at session start (Claude Code's
- * `SessionStart` `additionalContext`), so a record reaches a run the moment
- * the host next fetches its bundle. `may` and `info` records stay out: they
- * inform, and the one channel that reaches every session is kept for what
- * the workspace requires.
+ * Every active record is a candidate; `@oxagen/steering-assembler` ranks the
+ * candidates by tier and then by recency, fits the `must` and `should` ones
+ * to the budget, and says in the manifest what happened to each: included,
+ * or cut for its tier, for the budget, or because a newer version of its
+ * lineage won. This module is the assembler's only caller. It owns the read
+ * of the record rows, the adapter from a row to a candidate, and the cache.
+ * The collector hands `context.system` to the agent at session start
+ * (Claude Code's `SessionStart` `additionalContext`) and seals the manifest
+ * into the run's chain as a `steering.manifest` frame, so a record reaches a
+ * run the moment the host next fetches its bundle, and the run record says
+ * whether it did.
  *
  * What a record says is read from the version it pins, not from the record
  * row (#3312). The row carries a copy of the classification for listing, but
  * the copy is what the last write left there; the version is what the body
  * says. A version the legacy `publish_context_record` path wrote has no
  * classification of its own, and for that one the row's copy is the answer.
+ * When a record took effect is the row's `activated_at`, which both publish
+ * paths write when they pin a version.
  *
- * The compiled text is cached per workspace, keyed on the workspace's
- * steering version (#3311). Every control poll and every event ingest
- * carries the bundle etag, and the etag is a digest of the bundle's content,
- * so without a cache every one of those responses loaded and sorted every
- * steering record in the workspace. The key carries the promotions ledger
- * length, the count of active steering records, and a digest of their pins
- * and record classifications. Direct publication changes a pin without
- * appending a promotion. Legacy versions use the record classification, so
- * those fields also participate in the digest. Soft deletion changes the
- * active set. None of these writes needs an in-process cache notification.
+ * The assembly is cached per workspace, keyed on the workspace's steering
+ * version (#3311). Every control poll and every event ingest carries the
+ * bundle etag, and the etag is a digest of the bundle's content, so without
+ * a cache every one of those responses loaded and ranked every steering
+ * record in the workspace. The key carries the promotions ledger length, the
+ * count of active steering records, and a digest of their pins, activation
+ * instants and record classifications. Direct publication changes a pin
+ * without appending a promotion. Legacy versions use the record
+ * classification, so those fields also participate in the digest. Soft
+ * deletion changes the active set. None of these writes needs an in-process
+ * cache notification.
  *
  * The four version columns arrive in migration `20260918160000`, and
  * production applies migrations by hand while `deploy-node` ships on merge
  * without waiting. So every read here asks `information_schema` first and
- * names the version columns only once they exist; until then it compiles from
- * the record row alone, which is what this module did before #3312 and is the
- * right answer for a database on which no version can yet carry a
+ * names the version columns only once they exist; until then it assembles
+ * from the record row alone, which is what this module did before #3312 and
+ * is the right answer for a database on which no version can yet carry a
  * classification. The probe's answer is part of the cache key, so the text
- * compiled during the window is dropped the moment the columns land rather
+ * assembled during the window is dropped the moment the columns land rather
  * than outliving it.
  *
  * No version counter travels in the bundle. The bundle etag is a digest of
@@ -49,15 +57,29 @@ import {
   type ProbeTx,
   schema,
 } from "@oxagen/database";
-import { and, count, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, count, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import {
+  assembleSteering,
+  type SteeringCandidate,
+  type SteeringForce,
+  type SteeringManifest,
+} from "@oxagen/steering-assembler";
 
 /**
  * The host's limit on `context.system` (`policyBundleSchema` in
  * `@oxagen/tacho` `wire.ts`). The host parses the bundle `.strict()`, so a
  * longer string would make it reject the whole bundle and keep its old
- * mandate. The compiler stays under it by leaving records out.
+ * mandate. The assembler stays under it by leaving records out.
  */
 export const CONTEXT_SYSTEM_MAX_CHARS = 16_384;
+
+/**
+ * The assembler's budget for `context.system`, in Context Graph Protocol
+ * budget tokens (`ceil(utf8_bytes / 4)`). A string never has more characters
+ * than bytes, so a text under this many tokens is under the host's character
+ * limit.
+ */
+export const CONTEXT_SYSTEM_BUDGET_TOKENS = CONTEXT_SYSTEM_MAX_CHARS / 4;
 
 /**
  * How many workspaces the compiled-text cache holds before it drops the
@@ -66,9 +88,8 @@ export const CONTEXT_SYSTEM_MAX_CHARS = 16_384;
  */
 export const STEERING_CACHE_MAX_ENTRIES = 1_000;
 
-/** The forces that steer, in the order they are printed. */
-const STEERING_FORCES = ["must", "should"] as const;
-type SteeringForce = (typeof STEERING_FORCES)[number];
+/** The forces a record can carry; anything else is not a candidate. */
+const RECORD_FORCES: readonly string[] = ["must", "should", "may", "info"];
 
 export interface SteeringRecord {
   slug: string;
@@ -76,6 +97,8 @@ export interface SteeringRecord {
   force: string | null;
   constraintEffect: string | null;
   statement: string | null;
+  /** When the pinned version took effect, or null for a row that never activated. */
+  activatedAt: Date | string | null;
 }
 
 /**
@@ -85,6 +108,8 @@ export interface SteeringRecord {
  */
 export interface SteeringRow {
   slug: string;
+  activatedAt: Date | string | null;
+  createdAt: Date | string | null;
   // Optional, not just nullable: before migration `20260918160000` the read
   // cannot name these columns, so the row arrives without the keys at all.
   // `classificationOf` tests `!= null`, which is false for `undefined` too, so
@@ -124,74 +149,68 @@ export interface SteeringTx extends ProbeTx {
   };
 }
 
-const HEADER =
-  "This workspace's published steering records, merged by its reviewers through Oxagen. " +
-  "Follow every MUST record. Follow every SHOULD record unless the task gives you a stated reason not to.";
+/** What the bundle carries: the text, and the account of how it was assembled. */
+export interface WorkspaceSteering {
+  /** `context.system`, or null when nothing steers. */
+  text: string | null;
+  manifest: SteeringManifest;
+}
 
-const HEADINGS: Record<SteeringForce, string> = {
-  must: "MUST",
-  should: "SHOULD",
-};
+function instant(value: Date | string | null): string {
+  if (value == null) return "";
+  return value instanceof Date ? value.toISOString() : String(value);
+}
 
-function describe(record: SteeringRecord): string {
+/**
+ * The record-registry adapter (ADR-093 §3): a record as a candidate, or
+ * `null` for a row that cannot steer. A row with no force cannot be ranked
+ * and a row with no statement has nothing to say; both are what the schema
+ * comment on `context_records` warns the legacy publish path could leave,
+ * and neither can be delivered.
+ *
+ * The body is the line the agent reads: the statement, then the kind (with a
+ * constraint's effect) and the slug, unchanged from ADR-091 so a workspace
+ * that has only records receives the text it did before the assembler.
+ */
+export function recordCandidate(
+  record: SteeringRecord,
+): SteeringCandidate | null {
+  if (
+    !RECORD_FORCES.includes(record.force ?? "") ||
+    typeof record.statement !== "string" ||
+    record.statement.trim() === ""
+  )
+    return null;
   const kind =
     record.kind === "constraint" && record.constraintEffect
       ? `constraint, ${record.constraintEffect}`
       : (record.kind ?? "record");
-  return `- ${record.statement} (${kind}; ${record.slug})`;
-}
-
-function omittedLine(count: number): string {
-  return count === 1
-    ? "1 more record was left out because the steering text reached its size limit."
-    : `${count} more records were left out because the steering text reached its size limit.`;
+  return {
+    id: record.slug,
+    kind: "record",
+    force: record.force as SteeringForce,
+    body: `${record.statement} (${kind}; ${record.slug})`,
+    recordedAt: instant(record.activatedAt),
+  };
 }
 
 /**
- * The `context.system` text for these records, or `null` when none of them
- * steers. Deterministic in its input set, whatever order it arrives in: the
- * text is part of the bundle etag, and an etag that moved with the database's
- * row order would make every host refetch an unchanged bundle.
+ * The bundle's steering for these records: the `must` and `should` ones
+ * ranked and fitted to the budget, every one accounted for in the manifest.
+ * Deterministic in its input set, whatever order it arrives in: the text is
+ * part of the bundle etag, and an etag that moved with the database's row
+ * order would make every host refetch an unchanged bundle.
  */
-export function compileSteering(
+export function assembleWorkspaceSteering(
+  orgId: string,
+  workspaceId: string,
   records: readonly SteeringRecord[],
-  maxChars: number = CONTEXT_SYSTEM_MAX_CHARS,
-): string | null {
-  const steering = records
-    .filter(
-      (r): r is SteeringRecord & { force: SteeringForce; statement: string } =>
-        (STEERING_FORCES as readonly string[]).includes(r.force ?? "") &&
-        typeof r.statement === "string" &&
-        r.statement.trim() !== "",
-    )
-    .sort((a, b) => {
-      const byForce =
-        STEERING_FORCES.indexOf(a.force) - STEERING_FORCES.indexOf(b.force);
-      if (byForce !== 0) return byForce;
-      return a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0;
-    });
-  if (steering.length === 0) return null;
-
-  const lines = [HEADER];
-  let current: SteeringForce | null = null;
-  for (let i = 0; i < steering.length; i++) {
-    const record = steering[i]!;
-    const next: string[] = [];
-    if (record.force !== current) next.push("", HEADINGS[record.force]);
-    next.push(describe(record));
-    const left = steering.length - i - 1;
-    // Room for this record, and for the note naming what follows it if the
-    // next one does not fit either.
-    const reserve = left > 0 ? omittedLine(left).length + 2 : 0;
-    const candidate = [...lines, ...next].join("\n");
-    if (candidate.length + reserve > maxChars) {
-      const omitted = steering.length - i;
-      return [...lines, "", omittedLine(omitted)].join("\n");
-    }
-    lines.push(...next);
-    current = record.force;
-  }
-  return lines.join("\n");
+  budgetTokens: number = CONTEXT_SYSTEM_BUDGET_TOKENS,
+): WorkspaceSteering {
+  const candidates = records
+    .map(recordCandidate)
+    .filter((c): c is SteeringCandidate => c !== null);
+  return assembleSteering({ orgId, workspaceId, candidates }, budgetTokens);
 }
 
 /**
@@ -202,6 +221,7 @@ export function compileSteering(
  * through to a constraint effect the row kept from an earlier version.
  */
 export function classificationOf(row: SteeringRow): SteeringRecord {
+  const activatedAt = row.activatedAt ?? row.createdAt;
   return row.versionKind != null
     ? {
         slug: row.slug,
@@ -209,6 +229,7 @@ export function classificationOf(row: SteeringRow): SteeringRecord {
         force: row.versionForce ?? null,
         constraintEffect: row.versionConstraintEffect ?? null,
         statement: row.versionStatement ?? null,
+        activatedAt,
       }
     : {
         slug: row.slug,
@@ -216,12 +237,13 @@ export function classificationOf(row: SteeringRow): SteeringRecord {
         force: row.recordForce,
         constraintEffect: row.recordConstraintEffect,
         statement: row.recordStatement,
+        activatedAt,
       };
 }
 
 interface CachedSteering {
   key: string;
-  text: string | null;
+  steering: WorkspaceSteering;
 }
 
 const cache = new Map<string, CachedSteering>();
@@ -308,13 +330,14 @@ async function readSteeringVersion(
   // Nest every column reference so Drizzle keeps its table qualifier in the
   // scalar subquery. Pins name immutable versions. The record fields cover
   // legacy versions whose classification falls back to the record row.
-  const identity = sql`jsonb_build_array(${schema.contextRecords.id}, ${schema.contextRecords.activeVersionId}, ${schema.contextRecords.slug}, ${schema.contextRecords.kind}, ${schema.contextRecords.force}, ${schema.contextRecords.constraintEffect}, ${schema.contextRecords.statement})`;
+  const identity = sql`jsonb_build_array(${schema.contextRecords.id}, ${schema.contextRecords.activeVersionId}, ${schema.contextRecords.slug}, ${schema.contextRecords.kind}, ${schema.contextRecords.force}, ${schema.contextRecords.constraintEffect}, ${schema.contextRecords.statement}, ${schema.contextRecords.activatedAt})`;
   const order = sql`${schema.contextRecords.id}`;
+  const forces = sql`('must', 'should', 'may', 'info')`;
   const rows = (await tx
     .select({
       ledger: count(),
-      steering: sql`(select count(*) from ${schema.contextRecords} ${join} where ${activePinnedIn(orgId, workspaceId)} and ${force} in ('must', 'should'))`,
-      revisions: sql`(select md5(string_agg(md5(${identity}::text), '' order by ${order})) from ${schema.contextRecords} ${join} where ${activePinnedIn(orgId, workspaceId)} and ${force} in ('must', 'should'))`,
+      steering: sql`(select count(*) from ${schema.contextRecords} ${join} where ${activePinnedIn(orgId, workspaceId)} and ${force} in ${forces})`,
+      revisions: sql`(select md5(string_agg(md5(${identity}::text), '' order by ${order})) from ${schema.contextRecords} ${join} where ${activePinnedIn(orgId, workspaceId)} and ${force} in ${forces})`,
     })
     .from(schema.contextPromotions)
     .where(
@@ -327,7 +350,11 @@ async function readSteeringVersion(
   return `${Number(row?.ledger ?? 0)}:${Number(row?.steering ?? 0)}:${row?.revisions ?? ""}`;
 }
 
-/** The rows that steer, each with its pinned version's classification. */
+/**
+ * The rows that could steer, each with its pinned version's classification.
+ * Every force is read: `may` and `info` are candidates the manifest accounts
+ * for, cut for their tier, so the record shows they reached no session.
+ */
 async function readSteeringRows(
   tx: SteeringTx,
   orgId: string,
@@ -336,6 +363,8 @@ async function readSteeringRows(
 ): Promise<SteeringRow[]> {
   const recordFields = {
     slug: schema.contextRecords.slug,
+    activatedAt: schema.contextRecords.activatedAt,
+    createdAt: schema.contextRecords.createdAt,
     recordKind: schema.contextRecords.kind,
     recordForce: schema.contextRecords.force,
     recordConstraintEffect: schema.contextRecords.constraintEffect,
@@ -343,7 +372,7 @@ async function readSteeringRows(
   };
   const where = and(
     activePinnedIn(orgId, workspaceId),
-    inArray(effectiveForceWhen(ready), [...STEERING_FORCES]),
+    sql`${effectiveForceWhen(ready)} in ('must', 'should', 'may', 'info')`,
   );
   // Before the migration the version columns cannot be named at all, so the
   // read is the record-row one and `classificationOf` takes its fallback for
@@ -369,15 +398,15 @@ async function readSteeringRows(
 }
 
 /**
- * The workspace's active steering records, compiled for the bundle. One
- * aggregate statement on every call; records are read and compiled only when
- * the workspace's steering version has moved since the last call.
+ * The workspace's active steering records, assembled for the bundle. One
+ * aggregate statement on every call; records are read and assembled only
+ * when the workspace's steering version has moved since the last call.
  */
 export async function readWorkspaceSteering(
   tx: SteeringTx,
   orgId: string,
   workspaceId: string,
-): Promise<string | null> {
+): Promise<WorkspaceSteering> {
   // The plane is part of the cache namespace, not just of the probe. A
   // workspace's identity does not name the database it lives on, and
   // `set_data_plane` moves an organisation between planes: two planes whose
@@ -393,9 +422,13 @@ export async function readWorkspaceSteering(
   // record row alone would be served on past the window.
   const key = `${ready ? "v" : "r"}:${await readSteeringVersion(tx, orgId, workspaceId, ready)}`;
   const hit = cache.get(workspaceKey);
-  if (hit && hit.key === key) return hit.text;
+  if (hit && hit.key === key) return hit.steering;
   const rows = await readSteeringRows(tx, orgId, workspaceId, ready);
-  const text = compileSteering(rows.map(classificationOf));
-  remember(workspaceKey, { key, text });
-  return text;
+  const steering = assembleWorkspaceSteering(
+    orgId,
+    workspaceId,
+    rows.map(classificationOf),
+  );
+  remember(workspaceKey, { key, steering });
+  return steering;
 }

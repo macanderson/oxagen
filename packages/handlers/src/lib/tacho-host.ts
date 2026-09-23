@@ -21,8 +21,10 @@ import {
   BUNDLE_FEATURE_GATEWAY_TOOLS,
   BUNDLE_FEATURE_HOOK_FAIL_OPEN,
   BUNDLE_FEATURE_MODEL_PRICES,
+  BUNDLE_FEATURE_STEERING_MANIFEST,
   digestJcs,
   type JsonValue,
+  type SteeringManifest,
 } from "@oxagen/tacho";
 import { FAIL_OPEN_HOOK_PATHS } from "@oxagen/tacho/claude-code";
 import { schema, type Tx } from "@oxagen/database";
@@ -51,7 +53,11 @@ import {
   deriveBundleBudget,
   mapMandateToBundlePermissions,
 } from "./tacho-mandate";
-import { readWorkspaceSteering, type SteeringTx } from "./tacho-steering";
+import {
+  readWorkspaceSteering,
+  type SteeringTx,
+  type WorkspaceSteering,
+} from "./tacho-steering";
 
 export type TachoHostRow = typeof schema.tachoHosts.$inferSelect;
 export type ControlEnvelope = z.output<typeof controlEnvelopeSchema>;
@@ -351,6 +357,26 @@ function hookFailOpen(host: TachoHostRow): { hook_fail_open?: string[] } {
 }
 
 /**
+ * The assembler's manifest for `context.system` (ADR-093), signed beside the
+ * text for a host that advertised it can parse the field. `context` is
+ * strict on the host, so a host built before the field would reject the
+ * whole mandate; a host that advertises it seals the manifest into every
+ * session's chain as a `steering.manifest` frame at `SessionStart`.
+ */
+function steeringManifest(
+  host: TachoHostRow,
+  steering: WorkspaceSteering,
+): { manifest?: SteeringManifest } {
+  const advertised: unknown = host.bundleFeatures;
+  if (
+    !Array.isArray(advertised) ||
+    !advertised.includes(BUNDLE_FEATURE_STEERING_MANIFEST)
+  )
+    return {};
+  return { manifest: steering.manifest };
+}
+
+/**
  * The agent-definition `budget` table off the host's agent's ACTIVE version
  * config (`agent.propose.ts`'s own reading of the same doc), or `undefined`
  * when the host names no agent, the agent has no published version, or the
@@ -452,10 +478,11 @@ export async function resolveHostMandate(
 /**
  * The unsigned bundle for a host at this moment (spec section 7.1).
  *
- * `contextSystem` is the workspace's compiled steering
- * (`readWorkspaceSteering`), or `null` when nothing steers. It is required so
- * that a caller cannot build a bundle and forget it: a record that silently
- * failed to reach the agent is the defect #2592 was filed about.
+ * `steering` is the workspace's assembled steering (`readWorkspaceSteering`):
+ * the `context.system` text, or `null` when nothing steers, and the manifest
+ * that accounts for every record. It is required so that a caller cannot
+ * build a bundle and forget it: a record that silently failed to reach the
+ * agent is the defect #2592 was filed about.
  *
  * `mandate` is the tool-RBAC-and-budget half (`resolveHostMandate`), likewise
  * required: a caller building a bundle without resolving it would silently
@@ -465,7 +492,7 @@ export function unsignedBundle(
   host: TachoHostRow,
   denyGeneration: DenyGeneration,
   retention: BundleRetention,
-  contextSystem: string | null,
+  steering: WorkspaceSteering,
   mandate: HostMandate,
   now: Date = new Date(),
 ): Omit<PolicyBundle, "signature"> {
@@ -480,7 +507,7 @@ export function unsignedBundle(
     permissions: mandate.permissions,
     tools: {} as PolicyBundle["tools"],
     budget: mandate.budget,
-    context: { system: contextSystem },
+    context: { system: steering.text, ...steeringManifest(host, steering) },
     retention,
     mode,
     ...gatewayTools(host),

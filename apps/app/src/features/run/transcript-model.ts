@@ -103,6 +103,8 @@ const TOOL_GATE: ReadonlySet<string> = new Set([
 const CONTROL: ReadonlySet<string> = new Set([
   "agent_start",
   "agent_stop",
+  // The steering the agent was shown at its start, sealed beside it.
+  "steering.manifest",
   "subagent_start",
   "subagent_stop",
   "turn_start",

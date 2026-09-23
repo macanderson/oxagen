@@ -2427,6 +2427,7 @@ describe("the wire and the host file", () => {
       "model_prices",
       "models",
       "hook_fail_open",
+      "steering_manifest",
     ]);
   });
 
