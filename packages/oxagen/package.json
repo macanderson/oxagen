@@ -34,6 +34,7 @@
     "./skills": "./src/skills.ts",
     "./configuration-clone": "./src/configuration-clone.ts",
     "./run-outcomes": "./src/run-outcomes.ts",
+    "./context-record-label": "./src/context-record-label.ts",
     "./agent-definition-source": "./src/agent-definition-source.ts"
   },
   "scripts": {

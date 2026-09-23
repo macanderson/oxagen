@@ -98,6 +98,7 @@ export function Records({
                 constraintEffect={record.constraintEffect}
                 sharingScope={record.sharingScope}
                 lineage={record.lineage}
+                label={record.label}
                 statement={record.statement ?? record.title}
               >
                 <CloneButton kind="record" sourceRef={record.lineage} />

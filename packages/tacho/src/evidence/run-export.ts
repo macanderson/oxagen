@@ -326,7 +326,11 @@ export function verifyRunExport(files: RunExportFiles): RunExportVerification {
     "attestation",
     checks,
   );
-  const text = files["frames.ndjson"];
+  // One trailing newline ends the last line rather than starting a new one:
+  // an editor that saves the file adds it, and the frame count and Merkle root
+  // still catch a frame that was added or dropped.
+  const raw = files["frames.ndjson"];
+  const text = raw.endsWith("\n") ? raw.slice(0, -1) : raw;
   const lines = text.length === 0 ? [] : text.split("\n");
   const frames: Envelope[] = [];
   const verdicts: FrameVerdict[] = [];

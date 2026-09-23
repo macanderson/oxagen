@@ -1642,6 +1642,9 @@ type Messages = {
       };
       noGrant: string;
       next: string;
+      name: string;
+      slug: string;
+      slugHint: string;
     };
     kind: {
       title: string;
@@ -4127,6 +4130,19 @@ type Messages = {
         blocked: string;
         withheld: string;
       };
+    };
+    costReportedProvisional: string;
+    costFinalized: string;
+    tokenUsage: {
+      title: string;
+      missing: string;
+      notRecorded: string;
+      inputUncached: string;
+      cacheRead: string;
+      cacheWrite: string;
+      output: string;
+      reasoning: string;
+      coverage: string;
     };
     header: {
       chips: string;

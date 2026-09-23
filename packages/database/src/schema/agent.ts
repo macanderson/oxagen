@@ -1377,6 +1377,7 @@ export const contextRecords = agentSchema.table(
     ...softDeleteMixin(),
     slug: citext("slug").notNull(),
     title: text("title").notNull(),
+    label: text("label"),
     // promote → active, retire → retired, supersede → superseded.
     status: text("status").notNull().default("active"),
     validUntil: timestamp("valid_until", { withTimezone: true, mode: "date" }),
@@ -1427,6 +1428,10 @@ export const contextRecords = agentSchema.table(
     orgIdx: index("context_records_org_idx").on(t.orgId, t.workspaceId),
     activeVersionIdx: index("context_records_active_version_idx").on(
       t.activeVersionId,
+    ),
+    labelCheck: check(
+      "context_records_label_check",
+      sql`${t.label} IS NULL OR (length(btrim(${t.label})) BETWEEN 1 AND 200)`,
     ),
     statusCheck: check(
       "context_records_status_check",
@@ -1590,6 +1595,7 @@ export const contextProposals = agentSchema.table(
     constraintEffect: text("constraint_effect"),
     sharingScope: text("sharing_scope").notNull(),
     title: text("title"),
+    label: text("label"),
     statement: text("statement").notNull(),
     rationale: text("rationale").notNull(),
     // Who raised it, as a label the page prints: `user:<uuid>`,
@@ -1645,6 +1651,10 @@ export const contextProposals = agentSchema.table(
       .where(
         sql`status IN ('pr_open', 'checks_running', 'checks_passed', 'checks_failed')`,
       ),
+    labelCheck: check(
+      "context_proposals_label_check",
+      sql`${t.label} IS NULL OR (length(btrim(${t.label})) BETWEEN 1 AND 200)`,
+    ),
     kindCheck: check(
       "context_proposals_kind_check",
       sql`${t.kind} IN ('rule', 'constraint', 'procedure', 'fact', 'memory', 'preference')`,
