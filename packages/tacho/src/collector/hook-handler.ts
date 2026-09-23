@@ -481,7 +481,7 @@ async function routeHook(
           record.recorder.sealCollectorEvent(
             "steering.manifest",
             steeringManifestFrame(manifest, view.bundle, messages),
-            { hook_event_name: "SessionStart", attrs: replayAttrs },
+            { hook_event_name: "SessionStart", attrs: replayed },
           ),
         );
       }
