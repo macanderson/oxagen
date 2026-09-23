@@ -24,6 +24,7 @@ import { AutoApprovals } from "./auto-approvals";
 import { Connections } from "./connections";
 import { type LedgerGrant, MandatesLedger } from "./mandates-ledger";
 import { Registry } from "./registry";
+import { Servers } from "./servers";
 import { Switches, switchesOn } from "./switches";
 import { ToolsTabs } from "./tabs";
 import { parseToolsView, type ToolsAt, type ToolsView } from "./view";
@@ -159,7 +160,6 @@ async function TabBody({
           cursor={view.cursor}
           canImport={canImportTools(ctx)}
           canClassify={canAdministerOrg(ctx)}
-          canRegister={canAdministerOrg(ctx)}
           read={read}
           servers={servers}
         />
@@ -169,18 +169,27 @@ async function TabBody({
       // Two reads: the workspace's connections, and the grants log of the
       // uses they were put to. Neither narrows the other, and a refusal of
       // one leaves the other readable.
-      const [read, connections] = await Promise.all([
+      const [read, connections, servers] = await Promise.all([
         source.tools.grants(ctx, { cursor: view.cursor }),
         source.tools.connections(ctx, { status: null, connectorId: null }),
+        source.tools.mcpServers(ctx),
       ]);
       return (
-        <Connections
-          at={at}
-          orgRole={ctx.orgRole}
-          cursor={view.cursor}
-          connections={connections}
-          read={read}
-        />
+        <div className="flex flex-col gap-6">
+          <Servers
+            at={at}
+            orgRole={ctx.orgRole}
+            canRegister={canAdministerOrg(ctx)}
+            read={servers}
+          />
+          <Connections
+            at={at}
+            orgRole={ctx.orgRole}
+            cursor={view.cursor}
+            connections={connections}
+            read={read}
+          />
+        </div>
       );
     }
     case "switches": {

@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import type { RunWork } from "@/data/contracts/run-work";
 import { readError, readOk } from "@/data/read";
 import { IntlProvider } from "@/test/intl";
-import { RunWorkSection } from "./work";
+import { RunWorkSection } from "./work-ci";
 vi.mock("next/link", () => ({
   default: ({ children, ...props }: { children: ReactNode; href: string }) => (
     <a {...props}>{children}</a>

@@ -197,19 +197,16 @@ What standing in the path gives you:
   observed spend reached `budget.session_limit_usd` has its next call refused
   with a 403 in the vendor's error shape, and the refusal is sealed as a
   `policy_decision`. Prices arrive in the signed bundle as `model_prices`. The
-  mode and the ceiling come from the workspace's own
-  `update_tacho_session_policy`, not from a literal.
-- **A model allowlist.** With the same `budget.mode: enforced`, a call for a
-  model outside `models.allow`, or inside `models.deny`, is refused with
-  `model_not_permitted` before it is forwarded. A pattern ending in `*`
-  matches by prefix. `models` is sent only to a host that advertised
-  `BUNDLE_FEATURE_MODEL_ALLOWLIST`, so a host that has not upgraded keeps
-  calling any model; `update_tacho_session_policy` returns how many hosts are
-  in that state. A request that names more than one model is refused with
-  `model_ambiguous`, because the proxy forwards the original bytes and vendor
-  parsers disagree on which duplicate survives, so no single string says what
-  would run. A request that names no model is forwarded: absence states nothing
-  to refuse, ambiguity states two things.
+  mode and ceiling come from the agent's published `per_run_micros` mandate.
+  A per-day ceiling is recorded but not enforced for wrapped sessions.
+- **A model allowlist.** The workspace explicitly enables lists through
+  `update_tacho_session_policy`. This decision is independent of the agent's
+  budget. A model outside `models.allow`, or inside `models.deny`, is refused
+  with `model_not_permitted`. A trailing `*` matches by prefix. Hosts must
+  advertise `models_independent` and refresh their signed bundle. The reported
+  host count measures support, not confirmed receipt. While lists are enabled,
+  metered requests with missing or ambiguous models are refused with
+  `model_ambiguous`, including requests without a correlated session.
 - **A real interrupt.** `pause`, `cancel`, `kill` and a steer delivered as
   `interrupt` abort the session's in-flight model calls. A paused session's new
   calls are refused until `resume`.

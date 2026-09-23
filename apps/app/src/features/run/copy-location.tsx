@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 import { buttonSecondary } from "@/ui/control-styles";
 
 export function CopyLocation({ path }: { path: string }) {
-  const t = useTranslations("run.work");
+  const t = useTranslations("run.workCi");
   const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
   return (
     <span className="inline-flex flex-wrap items-center gap-2">

@@ -8,7 +8,7 @@ import { CREATE_EVENT, createRequestOf } from "@/shared/create";
 import { routes } from "@/shared/safe-path";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider, translator } from "@/test/intl";
-import { buttonPrimary } from "@/ui/control-styles";
+import { buttonPrimary, buttonSecondary } from "@/ui/control-styles";
 import { AgentsCreate } from "./create-actions";
 
 const t = translator("agents.list.create");
@@ -30,12 +30,12 @@ function mount() {
 }
 
 describe("AgentsCreate", () => {
-  it("opens the agent wizard from New agent, the one gold action", () => {
+  it("opens the agent wizard from New agent, with wrapping as the primary action", () => {
     const seen = vi.fn((event: Event) => createRequestOf(event));
     window.addEventListener(CREATE_EVENT, seen);
     mount();
     const button = screen.getByRole("button", { name: t("newAgent") });
-    expect(button.className).toBe(buttonPrimary);
+    expect(button.className).toBe(buttonSecondary);
     fireEvent.click(button);
     expect(seen.mock.results[0]?.value).toEqual({ kind: "agent" });
     window.removeEventListener(CREATE_EVENT, seen);
@@ -44,11 +44,11 @@ describe("AgentsCreate", () => {
   it("links Register an agent to its own flow, not to the wizard", () => {
     mount();
     const link = screen.getByTestId("agents-register");
-    expect(link.textContent).toBe(t("register"));
+    expect(link.textContent).toBe(t("wrap"));
     expect(link.getAttribute("href")).toBe(
       routes.register("acme", "core-platform", "name"),
     );
-    expect(link.className).not.toContain("gold");
+    expect(link.className).toBe(buttonPrimary);
     expect(document.querySelectorAll('[data-create="agent"]')).toHaveLength(1);
   });
 });

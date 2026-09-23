@@ -16,9 +16,10 @@ import {
 
 const RULE = "port-callers";
 const PORTS_FILE = "src/data/ports.ts";
-// ADR-130 / DEREGISTERED.md §15: the chain reader is retained for the
-// excluded replay UI. Keep this exception exact; all other ports need callers.
-const RETAINED_PORTS = new Set(["runs.chain"]);
+// ADR-130 / DEREGISTERED.md §15 retained ports without a caller. The Run
+// page's Chain and seal tab calls `runs.chain` again, so none is retained now.
+// Keep this set exact: a port added here is a port nothing reads.
+const RETAINED_PORTS = new Set<string>();
 const PROBES = "src/test/arch/probes/port-callers";
 
 type Ports = { readonly methods: string[]; readonly unreadable: string[] };

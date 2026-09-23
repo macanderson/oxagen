@@ -88,7 +88,7 @@ function Body({
       {body.digest === null || body.fidelity !== "full" ? null : (
         <SafeLink
           to={routes.run(org, ws, runId, {
-            tab: "frames",
+            tab: "actions",
             ...(frames === null ? {} : { frames }),
             body: frame.seq,
           })}
@@ -116,7 +116,7 @@ function Pager({
     <nav aria-label={t("pager")} className="flex gap-4 pt-3 text-sm">
       {frames === null ? null : (
         <SafeLink
-          to={routes.run(org, ws, runId, { tab: "frames" })}
+          to={routes.run(org, ws, runId, { tab: "actions" })}
           className={linkText}
         >
           {t("first")}
@@ -125,7 +125,7 @@ function Pager({
       {more && page.cursor !== null ? (
         <SafeLink
           to={routes.run(org, ws, runId, {
-            tab: "frames",
+            tab: "actions",
             frames: page.cursor,
           })}
           className={linkText}
@@ -228,7 +228,7 @@ function FrameBodyPanel({
       aside={
         <SafeLink
           to={routes.run(org, ws, runId, {
-            tab: "frames",
+            tab: "actions",
             ...(frames === null ? {} : { frames }),
           })}
           className={`${linkText} text-sm`}

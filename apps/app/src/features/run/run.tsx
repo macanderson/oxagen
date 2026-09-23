@@ -4,27 +4,60 @@ import { Suspense, type ReactNode } from "react";
 import { TranscriptZoom } from "@/data/contracts/run";
 import type { TranscriptKind } from "@/data/contracts/run";
 import { TRANSCRIPT_KINDS } from "@/data/contracts/run";
+import type {
+  ApprovalQueue,
+  ResolvedApprovalItem,
+} from "@/data/contracts/approvals";
 import type { MandateRow } from "@/data/contracts/mandates";
+import type { RunCost, RunTranscript } from "@/data/contracts/run";
+import type { RunRow } from "@/data/contracts/runs";
 import type { DataSource } from "@/data/ports";
-import { PAGE_FAILURES, readError } from "@/data/read";
-import { RunOutcomesConsent } from "@/features/run-outcomes";
+import { PAGE_FAILURES, type Read, readError } from "@/data/read";
 import { ApprovalsPanel } from "@/features/fleet";
+import { RunOutcomesConsent } from "@/features/run-outcomes";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
 import { panel } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
+import { Money } from "@/ui/money";
 import { ReadFailure } from "@/ui/read-failure";
+import { ChainSection } from "./chain";
 import { CostSection } from "./cost";
 import { FramesSection } from "./frames";
-import { RunSummary } from "./summary";
 import { RunHeader } from "./header";
-import { RunWork, RunWorkLoading } from "./work";
 import { OutputsSpine } from "./outputs";
 import { ResolvedApprovalsPanel } from "./resolved-approvals";
+import {
+  ContextSection,
+  entriesOf,
+  IssuesSection,
+  PolicySection,
+} from "./sections";
+import { StatRow, SummaryPanel } from "./stats";
 import { kindsParam, TranscriptSection } from "./transcript";
+import { ChangesPanel, SpendByArea } from "./work";
+import { RunWork, RunWorkLoading } from "./work-ci";
 
-const TABS = ["transcript", "cost", "frames", "approvals"] as const;
+/** The seven tabs, in the spec's order (pages/run.md). */
+const TABS = [
+  "transcript",
+  "issues",
+  "actions",
+  "cost",
+  "policy",
+  "context",
+  "chain",
+] as const;
 type Tab = (typeof TABS)[number];
+
+/**
+ * Tab names an older link may still carry. Frames and Approvals became one
+ * Governed actions tab, so a bookmark to either opens it.
+ */
+const TAB_ALIASES: Record<string, Tab> = {
+  frames: "actions",
+  approvals: "actions",
+};
 
 /** A frame's position as the contract spells it (`frameSeqSchema`): decimal, at most 19 digits. */
 const FRAME_SEQ = /^\d{1,19}$/;
@@ -38,10 +71,67 @@ function parseKinds(raw: string | null): TranscriptKind[] {
   return TRANSCRIPT_KINDS.filter((kind) => asked.has(kind));
 }
 
+type Counted = {
+  run: RunRow;
+  everything: Read<RunTranscript>;
+  cost: Read<RunCost>;
+  pending: Read<ApprovalQueue>;
+  resolved: Read<ResolvedApprovalItem[]>;
+};
+
+/**
+ * What each tab holds, beside its name. A count read from a transcript that
+ * stopped short is a floor and says so with a plus; a tab whose read failed
+ * shows no count rather than a zero.
+ */
+function useTabCounts({
+  run,
+  everything,
+  cost,
+  pending,
+  resolved,
+}: Counted): Partial<Record<Tab, ReactNode>> {
+  const t = useTranslations("run.tabs");
+  const floor = (count: number) =>
+    everything.ok && !everything.value.complete
+      ? t("atLeast", { count })
+      : String(count);
+  const policy = entriesOf(everything, "policy");
+  const recall = entriesOf(everything, "recall");
+  const runCost = cost.ok ? (cost.value.rollup?.cost ?? run.cost) : run.cost;
+  return {
+    transcript: String(run.steps),
+    issues: run.taskRef === null ? "0" : "1",
+    actions:
+      pending.ok && resolved.ok
+        ? pending.value.more
+          ? t("atLeast", {
+              count: pending.value.items.length + resolved.value.length,
+            })
+          : String(pending.value.items.length + resolved.value.length)
+        : undefined,
+    cost: runCost === null ? undefined : <Money value={runCost} />,
+    policy: policy === null ? undefined : floor(policy.length),
+    context: recall === null ? undefined : floor(recall.length),
+    chain: t(`status.${run.status}`),
+  };
+}
+
+/** The side column: what the run changed, what it produced, and where it spent. */
+function Work({ children }: { children: ReactNode }) {
+  const t = useTranslations("run.work");
+  return (
+    <aside aria-label={t("label")} className="flex min-w-0 flex-col gap-6">
+      {children}
+    </aside>
+  );
+}
+
 function Tabs({
   selected,
   zoom,
   kinds,
+  counts,
   org,
   ws,
   runId,
@@ -49,11 +139,17 @@ function Tabs({
   selected: Tab;
   zoom: TranscriptZoom;
   kinds: readonly TranscriptKind[];
+  /** The reads each tab's count comes from. */
+  counts: Counted;
 } & Place) {
   const t = useTranslations("run.tabs");
+  const shown = useTabCounts(counts);
   return (
-    <nav aria-label={t("label")} className="border-b border-border">
-      <ul className="flex flex-wrap gap-1">
+    <nav
+      aria-label={t("label")}
+      className="overflow-x-auto border-b border-border"
+    >
+      <ul className="flex min-w-max gap-1">
         {TABS.map((tab) => (
           <li key={tab}>
             <SafeLink
@@ -69,9 +165,17 @@ function Tabs({
                   : { tab },
               )}
               aria-current={tab === selected ? "page" : undefined}
-              className="inline-flex min-h-10 items-center border-b-2 border-transparent px-3 text-sm font-medium text-muted-foreground hover:text-foreground aria-[current=page]:border-foreground aria-[current=page]:text-foreground"
+              className="inline-flex min-h-10 items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent px-3 text-sm font-medium text-muted-foreground hover:text-foreground aria-[current=page]:border-foreground aria-[current=page]:text-foreground"
             >
               {t(tab)}
+              {shown[tab] === undefined ? null : (
+                <span
+                  data-testid={`run-tab-count-${tab}`}
+                  className="rounded-md bg-hl px-1.5 text-[11px] tabular-nums text-muted-foreground"
+                >
+                  {shown[tab]}
+                </span>
+              )}
             </SafeLink>
           </li>
         ))}
@@ -157,7 +261,10 @@ export async function Run({
    */
   now?: number;
 }) {
-  const selected = TABS.find((name) => name === tab) ?? "transcript";
+  const selected =
+    TABS.find((name) => name === tab) ??
+    (tab === null ? undefined : TAB_ALIASES[tab]) ??
+    "transcript";
   const level = TranscriptZoom.safeParse(zoom);
   const zoomed = level.success ? level.data : "steps";
   const chips = parseKinds(kinds);
@@ -171,18 +278,34 @@ export async function Run({
     );
   }
   const detail = read.value;
-  const place = { org: ctx.orgSlug, ws: ctx.wsSlug, runId: detail.run.id };
-  // Read with the page and not with a tab, because the spine is what the page
-  // is for. Started here and awaited after the section, so the two reads
-  // overlap rather than queue: the spine costs the page no extra round trip.
-  // A section read that throws would leave this promise's rejection with no
-  // listener, so a thrown outputs read folds to the Run page's own read
-  // error and the spine says the read failed.
-  const outputs = source.runs
-    .outputs(ctx, detail.run.id)
-    .catch(() =>
-      readError(PAGE_FAILURES.run.error.code, PAGE_FAILURES.run.error.status),
-    );
+  const run = detail.run;
+  const place = { org: ctx.orgSlug, ws: ctx.wsSlug, runId: run.id };
+  // The header, the stat row, the side column and the tab counts all read
+  // from these, whichever tab is open, so they are read together rather than
+  // one after another. The whole-run transcript serves the Prompts figure,
+  // the Policy and Context tabs and their counts, and the Transcript tab too
+  // when no chip is pressed.
+  const agentSlug = run.agentKey?.split(".").at(-1) ?? null;
+  const [outputs, everything, cost, pending, resolved, agent] =
+    await Promise.all([
+      // A thrown outputs read folds to the Run page's own read error, so
+      // the spine says the read failed rather than the page throwing.
+      source.runs
+        .outputs(ctx, run.id)
+        .catch(() =>
+          readError(
+            PAGE_FAILURES.run.error.code,
+            PAGE_FAILURES.run.error.status,
+          ),
+        ),
+      source.runs.transcript(ctx, run.id, "everything"),
+      source.runs.cost(ctx, run.id),
+      readApprovals(source, ctx, run.id, now),
+      source.approvals.resolved(ctx, { runId: run.id }),
+      agentSlug === null ? null : source.agents.get(ctx, agentSlug),
+    ]);
+  // The consent read is started here and awaited in the render, so it
+  // overlaps the section read below rather than queueing behind it.
   const outcomesPolicy = source.runs
     .outcomesSettings(ctx)
     .catch(() =>
@@ -194,33 +317,46 @@ export async function Run({
       section = (
         <TranscriptSection
           read={
-            await source.runs.transcript(ctx, detail.run.id, "everything", {
-              kinds: chips,
-            })
+            chips.length === 0
+              ? everything
+              : await source.runs.transcript(ctx, run.id, "everything", {
+                  kinds: chips,
+                })
           }
           zoom={zoomed}
           kinds={chips}
-          run={detail.run}
+          run={run}
           {...place}
         />
       );
       break;
-    case "frames": {
+    case "issues":
+      section = <IssuesSection run={run} />;
+      break;
+    case "actions": {
       const seq = body !== null && FRAME_SEQ.test(body) ? body : null;
       section = (
-        <FramesSection
-          read={read}
-          frames={frames}
-          body={
-            seq === null
-              ? null
-              : {
-                  seq,
-                  read: await source.runs.frameBody(ctx, detail.run.id, seq),
-                }
-          }
-          {...place}
-        />
+        <div className="flex flex-col gap-6">
+          <ApprovalsPanel
+            approvals={pending.approvals}
+            mandates={pending.mandates}
+            now={pending.at}
+            on="run"
+            org={place.org}
+            ws={place.ws}
+          />
+          <ResolvedApprovalsPanel approvals={resolved} />
+          <FramesSection
+            read={read}
+            frames={frames}
+            body={
+              seq === null
+                ? null
+                : { seq, read: await source.runs.frameBody(ctx, run.id, seq) }
+            }
+            {...place}
+          />
+        </div>
       );
       break;
     }
@@ -229,44 +365,33 @@ export async function Run({
       // bars and their running totals, the steps carry what sits inside each
       // one. Both are the transcript, so the figures on this tab and the
       // figures on the Transcript tab come from one derivation.
-      const [cost, turns, steps] = await Promise.all([
-        source.runs.cost(ctx, detail.run.id),
-        source.runs.transcript(ctx, detail.run.id, "turns"),
-        source.runs.transcript(ctx, detail.run.id, "steps"),
+      const [turns, steps] = await Promise.all([
+        source.runs.transcript(ctx, run.id, "turns"),
+        source.runs.transcript(ctx, run.id, "steps"),
       ]);
       section = <CostSection read={cost} turns={turns} steps={steps} />;
       break;
     }
-    case "approvals": {
-      const { approvals, mandates, at } = await readApprovals(
-        source,
-        ctx,
-        detail.run.id,
-        now,
-      );
-      const resolvedApprovals = await source.approvals.resolved(ctx, {
-        runId: detail.run.id,
-      });
-      section = (
-        <div className="flex flex-col gap-6">
-          <ApprovalsPanel
-            approvals={approvals}
-            mandates={mandates}
-            now={at}
-            on="run"
-            org={place.org}
-            ws={place.ws}
-          />
-          <ResolvedApprovalsPanel approvals={resolvedApprovals} />
-        </div>
-      );
+    case "policy":
+      section = <PolicySection read={everything} place={place} />;
       break;
-    }
+    case "context":
+      section = <ContextSection read={everything} place={place} />;
+      break;
+    case "chain":
+      section = <ChainSection read={await source.runs.chain(ctx, run.id)} />;
+      break;
   }
   return (
     <div className="flex flex-col gap-6">
       <RunHeader
-        run={detail.run}
+        run={run}
+        agent={agent}
+        pulls={
+          outputs.ok
+            ? outputs.value.nodes.filter((node) => node.kind === "pr")
+            : null
+        }
         orgRole={ctx.orgRole}
         wsRole={ctx.wsRole}
         org={place.org}
@@ -280,20 +405,30 @@ export async function Run({
         policy={await outcomesPolicy}
         canManage={ctx.orgRole === "owner" || ctx.orgRole === "admin"}
       />
-      <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-        <div className="flex min-w-0 flex-col gap-6">
-          <RunSummary run={detail.run} org={place.org} ws={place.ws} />
-          <Tabs selected={selected} zoom={zoomed} kinds={chips} {...place} />
-          {section}
-        </div>
-        <aside className="min-w-0" data-testid="run-output-sidebar">
-          <OutputsSpine
-            read={await outputs}
-            reads={reads}
-            spine={spine}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">
+          <SummaryPanel run={run} org={place.org} ws={place.ws} />
+          <StatRow run={run} cost={cost} transcript={everything} />
+          <Tabs
+            selected={selected}
+            zoom={zoomed}
+            kinds={chips}
+            counts={{
+              run,
+              everything,
+              cost,
+              pending: pending.approvals,
+              resolved,
+            }}
             {...place}
           />
-        </aside>
+          {section}
+        </div>
+        <Work>
+          <ChangesPanel read={outputs} place={place} />
+          <OutputsSpine read={outputs} reads={reads} spine={spine} {...place} />
+          <SpendByArea read={cost} />
+        </Work>
       </div>
     </div>
   );

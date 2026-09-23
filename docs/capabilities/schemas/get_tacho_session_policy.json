@@ -1,7 +1,7 @@
 {
   "name": "get_tacho_session_policy",
   "domain": "tacho",
-  "description": "Read the workspace's policy for wrapped-harness sessions — the Claude Code and Codex sessions that route their model calls through the loopback gateway. Returns the mode, the per-session dollar ceiling, and the model allow and deny lists. Nothing reads this policy yet, so it records a decision rather than what a machine refuses. Readable by every member.",
+  "description": "Read the workspace model enforcement mode, allow and deny lists, and legacy recorded dollar ceiling. Enabled model lists govern routed calls on upgraded hosts independently of agent budgets. Readable by every member.",
   "mode": "sync",
   "surfaces": [
     "api",

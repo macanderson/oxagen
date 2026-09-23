@@ -1,9 +1,4 @@
 import { HarnessLabel } from "@/ui/harness-icon";
-// Agent IAM (ARCHITECTURE.md §1.2 Agents row, #2956): the workspace's
-// identities from one list_agents page. The tiles count the whole workspace
-// (the contract's totals); the table is the page. A figure no store records
-// (tier, belt size, mandates) has no column: it renders nothing
-// until its lane lands (§3.6).
 import { useLocale, useTranslations } from "next-intl";
 import type { AgentPage } from "@/data/contracts/agents";
 import type { DataSource } from "@/data/ports";
@@ -77,11 +72,23 @@ function IdentityRows({
   cursor,
   org,
   ws,
-}: { page: AgentPage; cursor: string | null } & Place) {
+  view,
+}: {
+  page: AgentPage;
+  cursor: string | null;
+  view: "composition" | "operations";
+} & Place) {
   const t = useTranslations("agents");
   const locale = useLocale();
   const columns = [
     { label: t("list.columns.identity") },
+    ...(view === "composition"
+      ? [
+          { label: t("list.columns.principal") },
+          { label: t("list.columns.hosts"), numeric: true },
+          { label: t("list.columns.credentials"), numeric: true },
+        ]
+      : []),
     { label: t("list.columns.harness") },
     { label: t("list.columns.operator") },
     { label: t("list.columns.status") },
@@ -107,6 +114,27 @@ function IdentityRows({
                 />
               </SafeLink>
             </td>
+            {view === "composition" ? (
+              <>
+                <td className={cell}>
+                  {agent.principalId ?? <NotRecordedValue />}
+                </td>
+                <td className={numericCell}>
+                  {agent.hosts === undefined ? (
+                    <NotRecordedValue />
+                  ) : (
+                    formatCount(agent.hosts, locale)
+                  )}
+                </td>
+                <td className={numericCell}>
+                  {agent.credentials === undefined ? (
+                    <NotRecordedValue />
+                  ) : (
+                    formatCount(agent.credentials, locale)
+                  )}
+                </td>
+              </>
+            ) : null}
             <td className={`${cell} whitespace-nowrap`}>
               <HarnessLabel harness={agent.harness}>
                 {t(`harness.${agent.harness}`)}
@@ -173,13 +201,13 @@ function IdentityRows({
         first={
           cursor === null
             ? null
-            : { to: routes.agents(org, ws), text: t("list.first") }
+            : { to: routes.agents(org, ws, { view }), text: t("list.first") }
         }
         next={
           page.nextCursor === null
             ? null
             : {
-                to: routes.agents(org, ws, { cursor: page.nextCursor }),
+                to: routes.agents(org, ws, { cursor: page.nextCursor, view }),
                 text: t("list.next"),
               }
         }
@@ -192,12 +220,14 @@ function Identities({
   read,
   cursor,
   workspace,
+  view,
   org,
   ws,
 }: {
   read: Read<AgentPage>;
   cursor: string | null;
   workspace: string;
+  view: "composition" | "operations";
 } & Place) {
   const t = useTranslations("agents.list");
   const title = t("title", { workspace });
@@ -208,7 +238,13 @@ function Identities({
       ) : read.value.agents.length === 0 && cursor === null ? (
         <EmptyIdentities workspace={workspace} />
       ) : (
-        <IdentityRows page={read.value} cursor={cursor} org={org} ws={ws} />
+        <IdentityRows
+          page={read.value}
+          cursor={cursor}
+          org={org}
+          ws={ws}
+          view={view}
+        />
       )}
     </Panel>
   );
@@ -218,9 +254,11 @@ export async function Agents({
   ctx,
   source,
   cursor,
+  view = "composition",
 }: {
   ctx: WsCtx;
   source: DataSource;
+  view?: "composition" | "operations";
   /** The identities page the URL asked for; null is the first. */
   cursor: string | null;
 }) {
@@ -228,13 +266,37 @@ export async function Agents({
   return (
     <div className="flex flex-col gap-3.5">
       {read.ok ? <Tiles totals={read.value.totals} /> : null}
+      <ListViews org={ctx.orgSlug} ws={ctx.wsSlug} view={view} />
       <Identities
         read={read}
+        view={view}
         cursor={cursor}
         workspace={ctx.wsName}
         org={ctx.orgSlug}
         ws={ctx.wsSlug}
       />
     </div>
+  );
+}
+
+function ListViews({
+  org,
+  ws,
+  view,
+}: Place & { view: "composition" | "operations" }) {
+  const t = useTranslations("agents.list.views");
+  return (
+    <nav aria-label={t("label")} className="flex gap-2">
+      {(["composition", "operations"] as const).map((name) => (
+        <SafeLink
+          key={name}
+          to={routes.agents(org, ws, { view: name })}
+          aria-current={view === name ? "page" : undefined}
+          className="inline-flex min-h-11 items-center rounded-md border border-border px-3 text-sm aria-[current=page]:bg-muted"
+        >
+          {t(name)}
+        </SafeLink>
+      ))}
+    </nav>
   );
 }

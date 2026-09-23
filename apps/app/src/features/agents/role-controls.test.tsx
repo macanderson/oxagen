@@ -33,7 +33,9 @@ const TARGET = {
   agentId: "agt_releasebot",
   agentSlug: "release-bot",
 };
-const HERE = routes.agent("acme", "core-platform", "release-bot");
+const HERE = routes.agent("acme", "core-platform", "release-bot", {
+  tab: "permissions",
+});
 
 const OFFER = {
   roles: [
