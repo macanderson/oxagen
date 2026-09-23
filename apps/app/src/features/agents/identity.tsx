@@ -206,7 +206,7 @@ function Credentials({ org, ws }: { org: string; ws: string }) {
       </ul>
       <p className="text-[13px]">{t("body")}</p>
       <SafeLink
-        to={routes.tools(org, ws, { tab: "connections" })}
+        to={routes.tools(org, ws, { tab: "providers" })}
         className={`${buttonSecondary} self-start`}
       >
         {t("connections")}

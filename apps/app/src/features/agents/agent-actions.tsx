@@ -52,8 +52,6 @@ function WriteDialog<O>({
 }: {
   copy: Copy;
   testId: string;
-  /** Draws the trigger as `.btn.danger`, for a write that ends something. */
-  danger?: boolean;
   write: () => Promise<ActionResult<O>>;
   /** Runs after the write answered ok; returning true closes the dialog. */
   onDone: (value: O) => boolean;

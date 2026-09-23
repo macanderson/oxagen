@@ -258,6 +258,8 @@ export function toolsSource(reads: ToolsReads) {
       contextPr: refuse,
       freshness: refuse,
       hub: refuse,
+      memories: refuse,
+      tree: refuse,
       deliveries: refuse,
     },
     tools: {

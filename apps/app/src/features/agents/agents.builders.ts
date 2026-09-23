@@ -535,6 +535,8 @@ export function agentsSource(reads: AgentReads) {
       contextPr: refuse,
       freshness: refuse,
       hub: refuse,
+      memories: refuse,
+      tree: refuse,
       deliveries: answer(reads.deliveries, "deliveries"),
     },
     tools: {
