@@ -46,18 +46,18 @@ export function ShellActivityProvider({
   const [result, setResult] = useState<{ key: string; read: Activity } | null>(
     null,
   );
-  const generation = useRef(0);
+  const generationRef = useRef(0);
   const [failed, setFailed] = useState(false);
   const key = `${data.org.slug}/${ws ?? ""}`;
   const refresh = useCallback(async () => {
-    const request = ++generation.current;
+    const request = ++generationRef.current;
     try {
       const read = await readShellActivity(data.org.slug, ws);
-      if (request !== generation.current) return;
+      if (request !== generationRef.current) return;
       setResult({ key, read });
       setFailed(false);
     } catch {
-      if (request === generation.current) setFailed(true);
+      if (request === generationRef.current) setFailed(true);
     }
   }, [data.org.slug, ws, key]);
   useEffect(() => {
@@ -73,7 +73,7 @@ export function ShellActivityProvider({
     void poll();
     return () => {
       stopped = true;
-      generation.current += 1;
+      generationRef.current += 1;
       clearTimeout(timer);
     };
   }, [refresh]);
@@ -107,7 +107,9 @@ export function ActivityButtons() {
         data-touch-target=""
         className="relative grid min-h-11 min-w-11 place-items-center rounded-lg border border-border"
         aria-label={t("notifications")}
-        onClick={() => setNotificationsOpen(true)}
+        onClick={() => {
+          setNotificationsOpen(true);
+        }}
       >
         <Bell aria-hidden="true" className="size-4" />
         {unread !== null && unread > 0 ? (
@@ -122,7 +124,9 @@ export function ActivityButtons() {
         data-touch-target=""
         className="flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-lg border border-border px-2 text-xs"
         aria-label={t("approvals")}
-        onClick={() => setApprovalsOpen(true)}
+        onClick={() => {
+          setApprovalsOpen(true);
+        }}
       >
         <CheckCheck aria-hidden="true" className="size-4" />
         <span className="hidden sm:inline">{t("approvals")}</span>
@@ -204,7 +208,9 @@ export function ActivityDrawers({ data }: { data: ShellData }) {
             <button
               className={`${buttonSecondary} my-3`}
               type="button"
-              onClick={() => setSelection(null)}
+              onClick={() => {
+                setSelection(null);
+              }}
             >
               {t("allApprovals")}
             </button>
@@ -243,7 +249,9 @@ export function ActivityDrawers({ data }: { data: ShellData }) {
                       <button
                         type="button"
                         className="min-h-11 w-full rounded-lg border border-border p-3 text-left"
-                        onClick={() => setSelection(item.id)}
+                        onClick={() => {
+                          setSelection(item.id);
+                        }}
                       >
                         <span className="block font-mono text-xs">
                           {item.tool}
@@ -319,7 +327,9 @@ export function ActivityDrawers({ data }: { data: ShellData }) {
                     <div className="mt-2 flex flex-wrap gap-2">
                       {n.deepLink ? (
                         <SafeLink
-                          onClick={() => setNotificationsOpen(false)}
+                          onClick={() => {
+                            setNotificationsOpen(false);
+                          }}
                           className={buttonSecondary}
                           to={sanitizeNext(
                             n.deepLink,

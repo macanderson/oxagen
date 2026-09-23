@@ -289,7 +289,9 @@ describe("the other dialogs on a phone", () => {
   it("the command menu rises as a sheet and its input is 16 px", async () => {
     const user = userEvent.setup();
     renderPhone(shellData());
-    await user.click(screen.getByRole("button", { name: "Go to a page" }));
+    await user.click(
+      screen.getByRole("button", { name: "Search or run an action" }),
+    );
     const menu = await screen.findByTestId("command-menu");
     expect(menu).toHaveAttribute("data-sheet");
     expect(menu.querySelector("[data-sheet-handle]")).not.toBeNull();

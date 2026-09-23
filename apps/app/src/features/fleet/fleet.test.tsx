@@ -85,8 +85,8 @@ async function renderFleet(
   return { container, calls };
 }
 
-async function renderApprovalPanel(reads: Parameters<typeof fleetSource>[0]) {
-  const approvals = reads.approvals ?? NO_APPROVALS;
+function renderApprovalPanel(reads: Parameters<typeof fleetSource>[0]) {
+  const approvals = reads.approvals;
   const mandates = new Map(
     reads.mandates?.ok
       ? reads.mandates.value.mandates.map((item) => [item.id, item])
@@ -95,11 +95,7 @@ async function renderApprovalPanel(reads: Parameters<typeof fleetSource>[0]) {
   return render(
     <IntlProvider>
       {approvals.ok ? (
-        <StatStrip
-          runs={reads.runs ?? NO_RUNS}
-          approvals={approvals}
-          now={NOW}
-        />
+        <StatStrip runs={reads.runs} approvals={approvals} now={NOW} />
       ) : null}
       <ApprovalsPanel
         approvals={approvals}
@@ -220,8 +216,8 @@ describe("stat strip", () => {
 });
 
 describe("approvals panel", () => {
-  it("draws one card per pending approval with its four hops and expiry clock", async () => {
-    await renderApprovalPanel({
+  it("draws one card per pending approval with its four hops and expiry clock", () => {
+    renderApprovalPanel({
       runs: NO_RUNS,
       approvals: approvalQueue([
         approvalItem(),
@@ -259,8 +255,8 @@ describe("approvals panel", () => {
     ).toHaveAttribute("href", "/acme/core-platform/runs/arun_7k2m9q");
   });
 
-  it("says no rule covered a call the auto-approval clause never judged", async () => {
-    await renderApprovalPanel({
+  it("says no rule covered a call the auto-approval clause never judged", () => {
+    renderApprovalPanel({
       runs: NO_RUNS,
       approvals: approvalQueue([approvalItem()]),
     });
@@ -271,8 +267,8 @@ describe("approvals panel", () => {
     );
   });
 
-  it("names the rule, its reasons and its floor when one judged the call and refused it", async () => {
-    await renderApprovalPanel({
+  it("names the rule, its reasons and its floor when one judged the call and refused it", () => {
+    renderApprovalPanel({
       runs: NO_RUNS,
       approvals: approvalQueue([
         approvalItem({
@@ -309,8 +305,8 @@ describe("approvals panel", () => {
 
   // §6.9 part 3: a mandate's own approval rule outranks any workspace rule, so
   // a call a rule would have released can still be parked.
-  it("says a rule would have released a call a mandate parked anyway", async () => {
-    await renderApprovalPanel({
+  it("says a rule would have released a call a mandate parked anyway", () => {
+    renderApprovalPanel({
       runs: NO_RUNS,
       approvals: approvalQueue([
         approvalItem({
@@ -330,8 +326,8 @@ describe("approvals panel", () => {
     );
   });
 
-  it("marks a count the read could not finish, on the tile and on the panel", async () => {
-    await renderApprovalPanel({
+  it("marks a count the read could not finish, on the tile and on the panel", () => {
+    renderApprovalPanel({
       runs: NO_RUNS,
       approvals: approvalQueue([approvalItem()], true),
     });
@@ -341,31 +337,31 @@ describe("approvals panel", () => {
     );
   });
 
-  it("says nothing is waiting on a human when the queue is empty", async () => {
-    await renderApprovalPanel({ runs: NO_RUNS, approvals: NO_APPROVALS });
+  it("says nothing is waiting on a human when the queue is empty", () => {
+    renderApprovalPanel({ runs: NO_RUNS, approvals: NO_APPROVALS });
     expect(approvalsSection()).toHaveTextContent(
       "Nothing is waiting on a human.",
     );
     expect(within(approvalsSection()).queryAllByTestId("approval")).toEqual([]);
   });
 
-  it("names the permission a denied read needed, with no cards (negative)", async () => {
-    await renderApprovalPanel({ runs: NO_RUNS, approvals: DENIED });
+  it("names the permission a denied read needed, with no cards (negative)", () => {
+    renderApprovalPanel({ runs: NO_RUNS, approvals: DENIED });
     expect(approvalsSection()).toHaveTextContent(
       "You cannot see Approvals in this workspace. Your roles do not include workspace.read",
     );
     expect(approvalsSection()).not.toHaveTextContent("parked");
   });
 
-  it("names the code a failed read answered (negative)", async () => {
-    await renderApprovalPanel({ runs: NO_RUNS, approvals: DOWN });
+  it("names the code a failed read answered (negative)", () => {
+    renderApprovalPanel({ runs: NO_RUNS, approvals: DOWN });
     expect(approvalsSection()).toHaveTextContent(
       "Approvals could not be loaded: the control plane answered run_index_unavailable.",
     );
   });
 
-  it("carries the request id of an access request still waiting (negative)", async () => {
-    await renderApprovalPanel({
+  it("carries the request id of an access request still waiting (negative)", () => {
+    renderApprovalPanel({
       runs: NO_RUNS,
       approvals: {
         ok: false,
@@ -636,7 +632,7 @@ describe("Fleet approvals › the mandate bar", () => {
   const parked = approvalItem({ mandateId: "mnd_4f2a9c" });
 
   it("draws the bar of the mandate a parked call drew on", async () => {
-    const { container } = await renderApprovalPanel({
+    const { container } = renderApprovalPanel({
       runs: NO_RUNS,
       approvals: approvalQueue([parked]),
       mandates: mandateList([mandateRow()]),
@@ -653,8 +649,8 @@ describe("Fleet approvals › the mandate bar", () => {
     await expectNoAxe(container);
   });
 
-  it("says what the bar's figures are counted over, since a parked call can outlive a period", async () => {
-    await renderApprovalPanel({
+  it("says what the bar's figures are counted over, since a parked call can outlive a period", () => {
+    renderApprovalPanel({
       runs: NO_RUNS,
       approvals: approvalQueue([parked]),
       mandates: mandateList([mandateRow()]),
@@ -664,8 +660,8 @@ describe("Fleet approvals › the mandate bar", () => {
     ).toHaveTextContent("A reservation this call made in an earlier period");
   });
 
-  it("says nothing about a period on a card with no bar (negative)", async () => {
-    await renderApprovalPanel({
+  it("says nothing about a period on a card with no bar (negative)", () => {
+    renderApprovalPanel({
       runs: NO_RUNS,
       approvals: approvalQueue([approvalItem()]),
     });
@@ -674,8 +670,8 @@ describe("Fleet approvals › the mandate bar", () => {
     ).toBeNull();
   });
 
-  it("shows no mandate bar when no parked call names one (negative)", async () => {
-    await renderApprovalPanel({
+  it("shows no mandate bar when no parked call names one (negative)", () => {
+    renderApprovalPanel({
       runs: NO_RUNS,
       approvals: approvalQueue([approvalItem()]),
     });
@@ -683,7 +679,7 @@ describe("Fleet approvals › the mandate bar", () => {
   });
 
   it("draws the card without its bar when the ledger refuses the viewer (negative)", async () => {
-    const { container } = await renderApprovalPanel({
+    const { container } = renderApprovalPanel({
       runs: NO_RUNS,
       approvals: approvalQueue([parked]),
       mandates: { ok: false, reason: "denied", permission: "org.billing" },
@@ -696,7 +692,7 @@ describe("Fleet approvals › the mandate bar", () => {
   });
 
   it("names a mandate the page did not read rather than drawing nothing (negative)", async () => {
-    const { container } = await renderApprovalPanel({
+    const { container } = renderApprovalPanel({
       runs: NO_RUNS,
       approvals: approvalQueue([approvalItem({ mandateId: "mnd_absent" })]),
       mandates: mandateList([mandateRow()], 100),
@@ -709,8 +705,8 @@ describe("Fleet approvals › the mandate bar", () => {
     await expectNoAxe(container);
   });
 
-  it("names the mandate on a card the viewer may not read the ledger for (negative)", async () => {
-    await renderApprovalPanel({
+  it("names the mandate on a card the viewer may not read the ledger for (negative)", () => {
+    renderApprovalPanel({
       runs: NO_RUNS,
       approvals: approvalQueue([parked]),
       mandates: { ok: false, reason: "denied", permission: "org.billing" },
@@ -720,8 +716,8 @@ describe("Fleet approvals › the mandate bar", () => {
     ).toHaveTextContent("mnd_4f2a9c");
   });
 
-  it("names no mandate on a card that drew on none (negative)", async () => {
-    await renderApprovalPanel({
+  it("names no mandate on a card that drew on none (negative)", () => {
+    renderApprovalPanel({
       runs: NO_RUNS,
       approvals: approvalQueue([approvalItem()]),
     });
@@ -734,8 +730,8 @@ describe("Fleet approvals › the mandate bar", () => {
   // draws nothing — and the card used to print a caveat about the period it
   // was not counting, over that emptiness, while suppressing the fallback that
   // would at least have named the mandate.
-  it("names a per-call-only mandate instead of drawing an empty card", async () => {
-    await renderApprovalPanel({
+  it("names a per-call-only mandate instead of drawing an empty card", () => {
+    renderApprovalPanel({
       runs: NO_RUNS,
       approvals: approvalQueue([parked]),
       mandates: mandateList([
@@ -761,8 +757,8 @@ describe("Fleet approvals › the mandate bar", () => {
     expect(line.textContent).toContain("amount");
   });
 
-  it("keeps the period caveat when a measure does have a period limit", async () => {
-    await renderApprovalPanel({
+  it("keeps the period caveat when a measure does have a period limit", () => {
+    renderApprovalPanel({
       runs: NO_RUNS,
       approvals: approvalQueue([parked]),
       mandates: mandateList([mandateRow()]),
@@ -777,8 +773,8 @@ describe("Fleet approvals › the mandate bar", () => {
   // A mandate's measures are a partition, not an either/or. Keying the
   // fallback on "are there any bars" hid the per-call measures of a mandate
   // that had one of each.
-  it("draws the bars and names the per-call-only measures beside them", async () => {
-    await renderApprovalPanel({
+  it("draws the bars and names the per-call-only measures beside them", () => {
+    renderApprovalPanel({
       runs: NO_RUNS,
       approvals: approvalQueue([parked]),
       mandates: mandateList([

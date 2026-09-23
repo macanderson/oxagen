@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { dataSource } from "@/data/source";
 import {
@@ -9,6 +9,7 @@ import {
   steeringLink,
   steeringPathParams,
 } from "@/features/steering";
+import { redirectTo } from "@/shared/navigation";
 import { requireViewer } from "@/server/viewer";
 import { firstParam } from "@/shared/safe-path";
 import { PageHeader } from "@/ui/page-header";
@@ -26,6 +27,7 @@ export default async function SteeringSectionPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { org, ws, view: segments } = await params;
+  const section = segments[0] ?? "";
   const allowed = [
     "library",
     "proposals",
@@ -38,13 +40,13 @@ export default async function SteeringSectionPage({
     "prs",
   ];
   if (
-    !allowed.includes(segments[0] ?? "") ||
+    !allowed.includes(section) ||
     segments.length > 2 ||
-    (segments.length === 2 && !["library"].includes(segments[0]!))
+    (segments.length === 2 && !["library"].includes(section))
   )
     notFound();
   if (
-    segments[0] === "library" &&
+    section === "library" &&
     segments[1] &&
     !["all", "records", "skills", "memory"].includes(segments[1])
   )
@@ -52,10 +54,8 @@ export default async function SteeringSectionPage({
   const ctx = await requireViewer(org, ws);
   const query = steeringPathParams(segments, await searchParams);
   const view = parseSteeringView(query);
-  if (
-    !["library", "proposals", "freshness", "deliveries"].includes(segments[0]!)
-  )
-    redirect(
+  if (!["library", "proposals", "freshness", "deliveries"].includes(section))
+    redirectTo(
       steeringLink({ org, ws }, { ...view, view: firstParam(query.view) }),
     );
   const [t, st] = await Promise.all([
