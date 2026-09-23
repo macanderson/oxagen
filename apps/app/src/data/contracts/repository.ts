@@ -266,7 +266,11 @@ export type InitPullRequest = {
  */
 export type RepositoryChange = {
   proposalId: string;
+  /** The record's lineage: the file stem under `.oxagen/rules/`, and the row's title. */
+  lineage: string;
   statement: string;
+  /** Why it was proposed, as the proposal recorded it. */
+  why: string;
   kind: "context_record";
   pullRequest: {
     number: number;

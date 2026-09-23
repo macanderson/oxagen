@@ -3386,7 +3386,7 @@ type Messages = {
     };
     page: {
       title: string;
-      eyebrow: string;
+      subtitle: string;
       addOxagen: string;
       loading: string;
       tabs: {
@@ -3394,67 +3394,49 @@ type Messages = {
         repositories: string;
         workingCopies: string;
         changes: string;
-        changesOpen: string;
         configuration: string;
       };
-      ungoverned: string;
-      linking: {
-        title: string;
-        branch: string;
-        events: string;
-        issues: string;
-        graph: string;
-      };
-      setup: string;
-      connectDirectory: string;
       error: {
         title: string;
         body: string;
         retry: string;
+        incident: string;
+        incidentNotRecorded: string;
+        trace: string;
       };
       denied: {
         title: string;
         body: string;
-        signedIn: string;
-        roles: string;
         needed: string;
-        ask: string;
+        request: string;
+        requestNotRecorded: string;
         back: string;
+        signedInTerm: string;
+        signedIn: string;
+        neededTerm: string;
+        decidedByTerm: string;
+        decidedBy: string;
       };
       empty: {
         title: string;
         body: string;
       };
     };
-    permissions: {
+    repos: {
+      bannerBadge: string;
+      bannerLead: string;
+      bannerBody: string;
+      addOxagenShort: string;
       title: string;
+      subtitle: string;
       label: string;
-      columns: {
-        permission: string;
-        access: string;
-      };
-      names: {
-        contents: string;
-        pullRequests: string;
-        checks: string;
-        metadata: string;
-        issues: string;
-      };
-      access: {
-        readWrite: string;
-        write: string;
-        read: string;
-      };
-      cannotHeading: string;
-      cannot: {
-        productionBranch: string;
-        merge: string;
-        secrets: string;
-        authority: string;
-      };
-    };
-    table: {
-      label: string;
+      search: string;
+      all: string;
+      rows: string;
+      range: string;
+      previous: string;
+      next: string;
+      nothing: string;
       columns: {
         repository: string;
         role: string;
@@ -3464,78 +3446,23 @@ type Messages = {
         symbols: string;
         action: string;
       };
-      onlyMain: string;
-      openOnGitHub: string;
-      retired: string;
-      roleMain: string;
-      roleLinked: string;
-      events: {
-        installed: string;
-        suspended: string;
-        uninstalled: string;
-        paused: string;
-        retired: string;
-        unknown: string;
+      roles: {
+        main: string;
+        linked: string;
+        available: string;
       };
-      symbolsNotRecorded: string;
-      details: string;
-      unlink: string;
-      unlinkConfirm: string;
-      unlinkYes: string;
-      unlinkNo: string;
-      unlinking: string;
+      open: string;
+      visibility: {
+        private: string;
+        public: string;
+      };
       tree: {
+        governed: string;
+        absent: string;
         reading: string;
         unread: string;
         branchMissing: string;
-        governed: string;
-        absent: string;
-      };
-      reachable: {
-        heading: string;
-        about: string;
-        label: string;
-        columns: {
-          repository: string;
-          role: string;
-          defaultBranch: string;
-          action: string;
-        };
-        notLinked: string;
-        link: string;
-        linking: string;
-        truncated: string;
-      };
-      link: {
-        heading: string;
-        label: string;
-        hint: string;
-        placeholder: string;
-        unparsable: string;
-        submit: string;
-        pending: string;
-      };
-    };
-    dialog: {
-      title: string;
-      roleMain: string;
-      roleLinked: string;
-      seeChanges: string;
-      addOxagen: string;
-      loading: string;
-      facts: {
-        productionBranch: string;
-        branchMissing: string;
-        head: string;
-        githubDefault: string;
-        suggestion: string;
-        oxagen: string;
-        atCommit: string;
-        events: string;
-        codeGraph: string;
-        drift: string;
-        workingCopies: string;
-        issues: string;
+        files: string;
       };
       events: {
         installed: string;
@@ -3545,12 +3472,51 @@ type Messages = {
         retired: string;
         unknown: string;
       };
+      deliveries: string;
       notRecorded: string;
-      issuesNotRecorded: string;
+      none: string;
+      nothingWaiting: string;
+      retired: string;
+      reachableUnread: string;
+      truncated: string;
+      note: string;
+    };
+    dialog: {
+      subtitle: {
+        main: string;
+        linked: string;
+        available: string;
+      };
+      facts: {
+        productionBranch: string;
+        at: string;
+        branchMissing: string;
+        visibility: string;
+        oxagen: string;
+        filesAt: string;
+        issues: string;
+        events: string;
+        codeGraph: string;
+        dataLayer: string;
+        workingCopies: string;
+      };
+      notRecorded: string;
+      notIndexed: string;
+      recordsHere: string;
+      recordsMain: string;
+      recordsLinked: string;
+      noTreeLead: string;
+      noTreeAvailable: string;
+      noTreeLinked: string;
       initOpen: string;
       initOpenLink: string;
-      ungovernedLinked: string;
-      ungovernedMain: string;
+      retiredLead: string;
+      unlink: string;
+      link: string;
+      linking: string;
+      linked: string;
+      seeChanges: string;
+      addOxagen: string;
       branch: {
         heading: string;
         about: string;
@@ -3564,86 +3530,84 @@ type Messages = {
         pending: string;
       };
     };
-    wizard: {
+    unlink: {
       title: string;
-      cancel: string;
-      back: string;
-      next: string;
-      open: string;
-      opening: string;
-      stepsLabel: string;
-      steps: {
-        repository: string;
-        branch: string;
-        permissions: string;
-        review: string;
-        pullRequest: string;
-      };
-      repository: {
-        heading: string;
-        about: string;
-        empty: string;
-        none: string;
-        main: string;
-        linked: string;
-      };
-      branch: {
-        heading: string;
-        production: string;
-        suggestion: string;
-        same: string;
-      };
-      mode: {
-        heading: string;
-        about: string;
-        solo: string;
-        team: string;
-        regulated: string;
-      };
-      review: {
-        about: string;
-      };
-      pullRequest: {
-        heading: string;
-        about: string;
-        gitignore: string;
-      };
-      opened: {
-        opened: string;
-        reused: string;
-        merge: string;
-        link: string;
-      };
+      body: string;
+      governed: string;
+      copies: string;
+      keep: string;
+      submit: string;
+      pending: string;
+      done: string;
     };
-    workingCopies: {
-      behindNote: string;
+    copies: {
+      title: string;
+      subtitle: string;
+      connect: string;
       notRecorded: string;
-      twoFiles: {
-        title: string;
-        toml: string;
-        json: string;
-        gitignore: string;
-      };
+      filesTitle: string;
+      filesToml: string;
+      filesJson: string;
+      filesNote: string;
+      syncTitle: string;
       sync: {
-        title: string;
         init: string;
+        pull: string;
         status: string;
         propose: string;
-        pull: string;
-        merge: string;
       };
-      connect: {
-        title: string;
-        about: string;
-        reads: string;
-        pairing: string;
-        grantsNothing: string;
+      syncNote: string;
+      stale: string;
+      label: string;
+      columns: {
+        directory: string;
+        repository: string;
+        branch: string;
+        oxagen: string;
+        symlinks: string;
+        bundle: string;
+        lastSeen: string;
       };
     };
+    linkdir: {
+      title: string;
+      subtitle: string;
+      lead: string;
+      commandLabel: string;
+      pairing: string;
+      pairingHint: string;
+      whatLabel: string;
+      writes: {
+        writes: {
+          name: string;
+          what: string;
+        };
+        links: {
+          name: string;
+          what: string;
+        };
+        noWrite: {
+          name: string;
+          what: string;
+        };
+        noRead: {
+          name: string;
+          what: string;
+        };
+      };
+      grants: string;
+      copy: string;
+      copied: string;
+      copyFailed: string;
+    };
     changes: {
+      title: string;
+      subtitle: string;
+      label: string;
       loading: string;
       empty: string;
-      label: string;
+      otherKinds: string;
+      search: string;
       columns: {
         change: string;
         kind: string;
@@ -3653,7 +3617,15 @@ type Messages = {
         checks: string;
         opened: string;
       };
+      filters: {
+        state: string;
+        kind: string;
+        openedBy: string;
+      };
       kinds: {
+        context_record: string;
+      };
+      kindPaths: {
         context_record: string;
       };
       states: {
@@ -3664,25 +3636,112 @@ type Messages = {
         merged: string;
         rejected: string;
       };
-      checksPending: string;
-      otherKinds: string;
-      whoOpens: {
-        title: string;
-        promoter: string;
-        reconciler: string;
+      openedBy: {
         person: string;
-        drift: string;
+        other: string;
       };
+      open: string;
+      ci: {
+        queued: string;
+        count: string;
+      };
+      note: string;
+      autoTitle: string;
+      auto: {
+        promoter: {
+          name: string;
+          what: string;
+        };
+        reconciler: {
+          name: string;
+          what: string;
+        };
+        person: {
+          name: string;
+          what: string;
+        };
+      };
+      drift: string;
     };
-    configuration: {
+    change: {
+      back: string;
+      loading: string;
+      facts: {
+        kind: string;
+        pullRequest: string;
+        branch: string;
+        openedBy: string;
+        why: string;
+      };
+      branchValue: string;
+      whyNotRecorded: string;
+      filesTitle: string;
+      checksTitle: string;
+      checksLabel: string;
+      checkColumns: {
+        check: string;
+        result: string;
+        what: string;
+      };
+      results: {
+        passed: string;
+        failed: string;
+        running: string;
+        pending: string;
+      };
+      stopped: string;
+      mergeTitle: string;
+      merge: {
+        squash: string;
+        deleteBranch: string;
+        reindex: string;
+        ledger: string;
+        audit: string;
+      };
+      mergeButton: string;
+      merging: string;
+      closeButton: string;
+      governance: string;
+      governanceUnread: string;
+      waiting: string;
+      merged: string;
+      mergedDone: string;
+      closed: string;
+      didNotRun: string;
+      notReported: string;
+    };
+    closepr: {
+      title: string;
+      subtitle: string;
+      lead: string;
+      closedBy: string;
+      addedVia: string;
+      notPosted: string;
+      note: string;
+      cancel: string;
+      submit: string;
+      pending: string;
+    };
+    config: {
+      on: string;
+      notIndexed: string;
       noMain: string;
       loading: string;
-      branchMissing: string;
-      readAt: string;
-      workspaceTomlMissing: string;
-      drift: {
-        title: string;
-        notRecorded: string;
+      workspaceMissing: string;
+      driftTitle: string;
+      driftSubtitle: string;
+      driftNotRecorded: string;
+      driftColumns: {
+        declared: string;
+        file: string;
+        live: string;
+        right: string;
+      };
+      governanceMissing: string;
+      modes: {
+        solo: string;
+        team: string;
+        regulated: string;
       };
       mode: {
         solo: string;
@@ -3691,16 +3750,150 @@ type Messages = {
         absent: string;
         invalid: string;
       };
-      modeRead: string;
-      modes: {
-        solo: string;
-        team: string;
-        regulated: string;
+      modeNote: string;
+      treeTitle: string;
+      treeEmpty: string;
+      treeJson: string;
+      treeNote: string;
+      driftPr: string;
+    };
+    wizard: {
+      title: string;
+      titleFor: string;
+      subtitle: string;
+      cancel: string;
+      back: string;
+      next: string;
+      open: string;
+      opening: string;
+      needs: string;
+      stepsLabel: string;
+      steps: {
+        repository: string;
+        branch: string;
+        permissions: string;
+        review: string;
+        pullRequest: string;
       };
-      tree: {
-        title: string;
+      repository: {
+        lead: string;
+        label: string;
+        option: string;
+        hint: string;
         empty: string;
-        stella: string;
+        noMain: string;
+        roleLabel: string;
+        main: {
+          title: string;
+          about: string;
+        };
+        linked: {
+          title: string;
+          about: string;
+        };
+        noteLinked: string;
+        noteMain: string;
+        moveMain: string;
+      };
+      branch: {
+        lead: string;
+        label: string;
+        hint: string;
+        modeLabel: string;
+        modeHint: string;
+        modes: {
+          solo: string;
+          team: string;
+          regulated: string;
+        };
+        empty: string;
+      };
+      permissions: {
+        lead: string;
+        label: string;
+        columns: {
+          permission: string;
+          level: string;
+          for: string;
+        };
+        rows: {
+          contents: {
+            name: string;
+            level: string;
+            for: string;
+          };
+          pullRequests: {
+            name: string;
+            level: string;
+            for: string;
+          };
+          checks: {
+            name: string;
+            level: string;
+            for: string;
+          };
+          metadata: {
+            name: string;
+            level: string;
+            for: string;
+          };
+          issues: {
+            name: string;
+            level: string;
+            for: string;
+          };
+        };
+        cannotLabel: string;
+        cannot: {
+          push: {
+            name: string;
+            what: string;
+          };
+          merge: {
+            name: string;
+            what: string;
+          };
+          secret: {
+            name: string;
+            what: string;
+          };
+          authority: {
+            name: string;
+            what: string;
+          };
+        };
+      };
+      review: {
+        lead: string;
+        note: string;
+      };
+      pullRequest: {
+        lead: string;
+        files: {
+          workspaceToml: {
+            main: string;
+            linked: string;
+          };
+          governanceToml: string;
+          rules: string;
+          proposals: string;
+          agents: string;
+          gitignore: string;
+        };
+        checksLabel: string;
+        checks: {
+          schema: string;
+          layout: string;
+          governance: string;
+          secret_pii_scan: string;
+          no_authority: string;
+        };
+      };
+      opened: {
+        opened: string;
+        reused: string;
+        merge: string;
+        link: string;
       };
     };
   };

@@ -367,7 +367,9 @@ export async function readRepositoryChanges(
     if (proposal.pr === null || proposal.status === "proposed") continue;
     changes.push({
       proposalId: proposal.id,
+      lineage: proposal.lineageId,
       statement: proposal.statement,
+      why: proposal.rationale,
       kind: "context_record",
       pullRequest: proposal.pr,
       openedBy: proposal.source,

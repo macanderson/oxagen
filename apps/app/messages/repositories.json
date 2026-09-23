@@ -259,7 +259,17 @@
         "propose": "Turns a local edit under <code>.oxagen/</code> into a proposal. Opening and merging its pull request happen here, because both gate on a role only a signed-in person holds."
       },
       "syncNote": "Stella symlinks into this directory rather than copying it, so there is no second copy that could drift. A copy whose symlinks read <code>missing</code> is one where Stella will load nothing.",
-      "stale": "A copy that is behind is not a run that is behind. Steering reaches a run from the merged commit, whatever a directory on a laptop holds."
+      "stale": "A copy that is behind is not a run that is behind. Steering reaches a run from the merged commit, whatever a directory on a laptop holds.",
+      "label": "Working copies of this workspace",
+      "columns": {
+        "directory": "Directory",
+        "repository": "Repository",
+        "branch": "Branch",
+        "oxagen": ".oxagen/",
+        "symlinks": "Symlinks",
+        "bundle": "Bundle",
+        "lastSeen": "Last seen"
+      }
     },
     "linkdir": {
       "title": "Connect a directory",
@@ -330,15 +340,10 @@
       },
       "openedBy": {
         "person": "a person",
-        "promoter": "the promoter",
-        "reconciler": "the reconciler",
-        "agent": "an agent"
+        "other": "another source"
       },
       "open": "Open {change}",
       "ci": {
-        "running": "running",
-        "failed": "{count} failed",
-        "passed": "all passed",
         "queued": "queued",
         "count": "{done} / {total}"
       },
@@ -403,7 +408,9 @@
       "waiting": "Merge stays disabled until every check reports.",
       "merged": "Merged. The file is on <code>{base}</code>, the promotion event is on the ledger, and the workspace’s steering version is the ledger’s length.",
       "mergedDone": "Merged at {commit}. The change is in force from that commit.",
-      "closed": "Closed without merging."
+      "closed": "Closed without merging.",
+      "didNotRun": "Did not run: {check} stopped the run.",
+      "notReported": "not reported yet"
     },
     "closepr": {
       "title": "Close {pr}",
@@ -418,7 +425,6 @@
       "pending": "Closing"
     },
     "config": {
-      "workspaceTitle": ".oxagen/workspace.toml",
       "on": "On <code>{repository}</code> at <code>{sha}</code>",
       "notIndexed": "On <code>{repository}</code> · not indexed yet",
       "noMain": "This workspace binds no main repository, so there is no .oxagen/ to show.",
@@ -433,7 +439,6 @@
         "live": "Live",
         "right": "Right"
       },
-      "governanceTitle": ".oxagen/rules/governance.toml",
       "governanceMissing": "No governance.toml on the production branch. Pull requests are reviewed as team.",
       "modes": {
         "solo": "The author may merge their own.",
@@ -451,7 +456,8 @@
       "treeTitle": "Tree",
       "treeEmpty": "No .oxagen/ on the production branch.",
       "treeJson": "workspace.json is gitignored and never on the production branch.",
-      "treeNote": "Oxagen reads <code>.oxagen/</code> and nothing else. Whatever sits under <code>.stella/</code> is invisible to it, and it never looks."
+      "treeNote": "Oxagen reads <code>.oxagen/</code> and nothing else. Whatever sits under <code>.stella/</code> is invisible to it, and it never looks.",
+      "driftPr": "See the pull request"
     },
     "wizard": {
       "title": "Add Oxagen to a repository",
@@ -460,7 +466,6 @@
       "cancel": "Cancel",
       "back": "Back",
       "next": "Next",
-      "draft": "Draft the files",
       "open": "Open pull request",
       "opening": "Opening",
       "needs": "needs <code>repository.admin</code> on {ws}",
@@ -502,7 +507,8 @@
           "solo": "The author may merge their own. One person, or a repository nobody else reviews.",
           "team": "A reviewer other than the author merges. What a missing governance.toml means, and what most repositories want.",
           "regulated": "An org Owner or Admin other than the author merges, recorded as the accountable approver. The author of a record may never be its approver."
-        }
+        },
+        "empty": "Name the production branch first."
       },
       "permissions": {
         "lead": "What Oxagen will be able to do in {repository}",

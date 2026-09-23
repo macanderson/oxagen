@@ -16,19 +16,29 @@ const REPOSITORY_TABS = [
 ] as const;
 export type RepositoryTab = (typeof REPOSITORY_TABS)[number];
 
+/** What the route names: a tab, and on Changes the one pull request selected. */
+export type RepositoryView = { tab: RepositoryTab; change: string | null };
+
+/** A proposal id as a path segment carries it: letters, digits, `_` and `-`. */
+const CHANGE_ID = /^[A-Za-z0-9_-]{1,64}$/;
+
 /**
- * The tab a route's optional catch-all names: none is the first tab, one
- * known segment is that tab, and anything else is null, which the route
- * answers with a 404 rather than a page that guesses.
+ * The view a route's optional catch-all names: none is the first tab, one
+ * known segment is that tab, `changes/<id>` is one Context PR on the Changes
+ * tab (the URL the close comment links to), and anything else is null, which
+ * the route answers with a 404 rather than a page that guesses.
  */
-export function parseRepositoryTab(
+export function parseRepositoryView(
   segments: readonly string[] | undefined,
-): RepositoryTab | null {
-  if (segments === undefined || segments.length === 0) return "repositories";
-  if (segments.length !== 1) return null;
-  const [segment] = segments;
-  if (segment === "repositories") return null;
-  return REPOSITORY_TABS.find((tab) => tab === segment) ?? null;
+): RepositoryView | null {
+  if (segments === undefined || segments.length === 0)
+    return { tab: "repositories", change: null };
+  const [segment, change, ...rest] = segments;
+  if (segment === "repositories" || rest.length > 0) return null;
+  const tab = REPOSITORY_TABS.find((known) => known === segment);
+  if (tab === undefined) return null;
+  if (change === undefined) return { tab, change: null };
+  return tab === "changes" && CHANGE_ID.test(change) ? { tab, change } : null;
 }
 
 type Bound = WorkspaceRepositories["repositories"][number];
@@ -93,9 +103,7 @@ export function repositoryRows(
     ]),
   );
   const rows: RepositoryRow[] = [...bound]
-    .sort((a, b) =>
-      a.role === b.role ? 0 : a.role === "main" ? -1 : 1,
-    )
+    .sort((a, b) => (a.role === b.role ? 0 : a.role === "main" ? -1 : 1))
     .map((repository) => {
       const seen = byName.get(repository.fullName.toLowerCase());
       return {
