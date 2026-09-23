@@ -99,6 +99,37 @@ describe("CreateWorkspace", () => {
     expect(within(dialog).queryByLabelText(/installation/i)).toBeNull();
   });
 
+  it("draws Production branch, Governance mode and Retention mode, and says which it cannot set yet", async () => {
+    render(
+      <IntlProvider>
+        <CreateWorkspace org="acme" primary />
+      </IntlProvider>,
+    );
+    expect(
+      screen.getByRole("button", { name: "Create a workspace" }),
+    ).toHaveClass("bg-button-primary-bg");
+    const dialog = await open("Create a workspace", "create-workspace");
+    expect(within(dialog).getByLabelText("Production branch")).toBeDisabled();
+    const mode = within(dialog).getByLabelText("Governance mode");
+    expect(mode).toBeDisabled();
+    expect(mode).toHaveAccessibleDescription(
+      /Create a workspace takes no governance mode yet/,
+    );
+    expect(
+      within(mode)
+        .getAllByRole("option")
+        .map((option) => option.textContent),
+    ).toEqual([
+      "Leave unchanged (the mode in force is not read here)",
+      "solo: Any workspace member merges, the author included.",
+      "team: An org Owner or Admin, or a workspace Owner, other than the author merges.",
+      "regulated: An org Owner or Admin other than the author merges, recorded as the accountable approver.",
+    ]);
+    expect(within(dialog).getByLabelText("Retention mode")).toHaveValue(
+      "not recorded",
+    );
+  });
+
   it.each([
     [
       "repository_unparsable",
@@ -232,10 +263,10 @@ describe("CreateWorkspace", () => {
 });
 
 describe("EditWorkspace", () => {
-  it("opens on the workspace's own name and slug and sends what changed", async () => {
+  it("opens on the workspace's name, keeps its slug and sends what changed", async () => {
     editWorkspace.mockResolvedValue({
       ok: true,
-      value: { slug: "core", governance: null },
+      value: { slug: "core-platform", governance: null },
     });
     render(
       <IntlProvider>
@@ -246,27 +277,37 @@ describe("EditWorkspace", () => {
       "Edit",
       "edit-workspace-wrk_0a1b2c3d4e5f6g7h8j9k0m",
     );
-    const slug = within(dialog).getByLabelText("Slug");
-    expect(slug).toHaveValue("core-platform");
-    // Which repository is main does not change from here (spec §10.1).
-    expect(within(dialog).queryByLabelText("Main repository")).toBeNull();
-    await userEvent.clear(slug);
-    await userEvent.type(slug, "core");
+    // The design's Edit form has no slug field, and which repository is main
+    // does not change from here (spec §10.1): the field is read-only.
+    expect(within(dialog).queryByLabelText("Slug")).toBeNull();
+    expect(within(dialog).getByLabelText("Main repository")).toHaveAttribute(
+      "readonly",
+    );
+    expect(within(dialog).getByLabelText("Namespace")).toHaveValue(
+      workspace.namespace,
+    );
+    expect(within(dialog).getByLabelText("Governance mode")).toHaveValue("");
+    for (const fact of ["Toolbelt limit", "Default budget", "Agents"]) {
+      expect(dialog).toHaveTextContent(fact);
+    }
+    const name = within(dialog).getByLabelText("Name");
+    await userEvent.clear(name);
+    await userEvent.type(name, "Core");
     await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
-    // The governance radio was left on "leave unchanged", so the mode travels
+    // The governance select was left on "leave unchanged", so the mode travels
     // empty and no governance capability is invoked (see
     // workspace-governance.test.tsx for the modes themselves).
     expect(editWorkspace).toHaveBeenCalledWith(
       "acme",
       "wrk_0a1b2c3d4e5f6g7h8j9k0m",
       {
-        name: "Core platform",
-        slug: "core",
+        name: "Core",
+        slug: "core-platform",
         mode: "",
         applyImmediately: false,
       },
     );
-    expect(router.replace).toHaveBeenCalledWith("/acme");
+    expect(router.replace).toHaveBeenCalledWith("/acme?tab=workspaces");
   });
 });
 
@@ -293,7 +334,7 @@ describe("ArchiveWorkspace", () => {
       "acme",
       "wrk_0a1b2c3d4e5f6g7h8j9k0m",
     );
-    expect(router.replace).toHaveBeenCalledWith("/acme");
+    expect(router.replace).toHaveBeenCalledWith("/acme?tab=workspaces");
   });
 
   it("names a workspace that still has agents and archives nothing (negative)", async () => {

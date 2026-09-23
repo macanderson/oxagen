@@ -150,7 +150,7 @@ function GovernanceField({
         <option value="">{t("unchanged")}</option>
         {GOVERNANCE_MODES.map((choice) => (
           <option key={choice} value={choice}>
-            {`${choice} · ${meaning(choice)}`}
+            {`${choice}: ${meaning(choice)}`}
           </option>
         ))}
       </select>
