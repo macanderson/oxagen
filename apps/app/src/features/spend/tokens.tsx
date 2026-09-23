@@ -6,7 +6,7 @@ import { CostFigure, NotRecordedValue } from "./figures";
 import { Panel } from "./tables";
 
 /** Sum the model groups once; another grouping would count the same calls again. */
-export function tokenClasses(report: SpendReport) {
+function tokenClasses(report: SpendReport) {
   const totals = {
     input_uncached: 0,
     cache_read: 0,

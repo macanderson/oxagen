@@ -59,7 +59,7 @@ const OperatorFacts = z.object({
 type OperatorFacts = z.infer<typeof OperatorFacts>;
 
 /** Normalized token classes already returned by get_spend. */
-export const SpendTokens = z.object({
+const SpendTokens = z.object({
   input_uncached: Count,
   cache_read: Count,
   cache_write_5m: Count,
@@ -67,7 +67,6 @@ export const SpendTokens = z.object({
   output: Count,
   reasoning: Count,
 });
-export type SpendTokens = z.infer<typeof SpendTokens>;
 
 const SpendRow = SpendFigure.extend({
   tokens: SpendTokens,
