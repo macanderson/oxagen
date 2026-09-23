@@ -3,7 +3,10 @@
 // allows and where it came from, the permission catalogue, the line that says
 // whether Oxagen resolves these grants for this organization, the writes an
 // owner is offered and a member is not, and the denied and error states that
-// replace the sections. Every state is checked with axe.
+// replace the sections. Every state is checked with axe. Beside them, the IdP
+// group mappings over org.sso: one editor per provider for an owner, a
+// read-only table for a member, a pointer to Single sign-on with no provider,
+// and a refused SSO read that leaves the roles in place.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -26,9 +29,8 @@ vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 const { OrgCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const { readError, readOk } = await import("@/data/read");
-const { permissionEntry, roleCatalog, roleRow } = await import(
-  "./organization.builders"
-);
+const { permissionEntry, roleCatalog, roleRow, ssoProvider, ssoSettings } =
+  await import("./organization.builders");
 const { Roles } = await import("./roles");
 
 afterEach(() => {
@@ -36,10 +38,14 @@ afterEach(() => {
 });
 
 type Read = Parameters<typeof Roles>[0]["source"]["org"]["roles"];
+type SsoRead = Parameters<typeof Roles>[0]["source"]["org"]["sso"];
 
 async function renderRoles(
   read: Awaited<ReturnType<Read>>,
   orgRole: OrgRole = "owner",
+  ssoRead: Awaited<ReturnType<SsoRead>> = readOk(
+    ssoSettings({ providers: [] }),
+  ),
 ) {
   const ctx = unsafeMint(OrgCtx, {
     userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
@@ -49,6 +55,7 @@ async function renderRoles(
     orgRole,
   });
   const roles = vi.fn<Read>().mockResolvedValue(read);
+  const sso = vi.fn<SsoRead>().mockResolvedValue(ssoRead);
   const source = {
     pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
     shell: { context: vi.fn(), preferences: vi.fn() },
@@ -95,6 +102,7 @@ async function renderRoles(
       apiKeys: vi.fn(),
       costCenters: vi.fn(),
       modelCredential: vi.fn(),
+      sso,
     },
     mandates: { list: vi.fn(), get: vi.fn() },
     audit: { events: vi.fn(), exportEvents: vi.fn() },
@@ -120,6 +128,7 @@ async function renderRoles(
     <IntlProvider>{await Roles({ ctx, source })}</IntlProvider>,
   );
   expect(roles).toHaveBeenCalledWith(ctx);
+  expect(sso).toHaveBeenCalledWith(ctx);
   await expectNoAxe(view.container);
   return view;
 }
@@ -293,5 +302,79 @@ describe("a read that did not list", () => {
       "error",
     );
     expect(screen.queryByRole("table")).toBeNull();
+  });
+});
+
+describe("IdP group mappings", () => {
+  it("points to Single sign-on when the organization has no provider", async () => {
+    await renderRoles(readOk(catalog));
+    const section = screen.getByRole("region", { name: "IdP group mappings" });
+    expect(
+      within(section).getByRole("link", {
+        name: "Add one on the Single sign-on tab.",
+      }),
+    ).toHaveAttribute("href", "/acme/sso");
+    expect(within(section).queryByRole("table")).toBeNull();
+  });
+
+  it("offers an owner one editor per provider, with the mapped rows", async () => {
+    await renderRoles(readOk(catalog), "owner", readOk(ssoSettings()));
+    const section = screen.getByRole("region", { name: "IdP group mappings" });
+    expect(section).toHaveTextContent("Acme Okta (acme.com)");
+    expect(
+      within(section).getByRole("textbox", { name: "Group name, row 1" }),
+    ).toHaveValue("oxagen-admins");
+    expect(
+      within(section).getByRole("button", { name: "Save mappings" }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows a member the mappings with no control (negative)", async () => {
+    await renderRoles(
+      readOk(roleCatalog({ roles: [] })),
+      "member",
+      readOk(ssoSettings({ providers: [ssoProvider()] })),
+    );
+    const section = screen.getByRole("region", { name: "IdP group mappings" });
+    expect(section).toHaveTextContent("oxagen-admins");
+    expect(section).toHaveTextContent("Admin");
+    expect(within(section).queryByRole("textbox")).toBeNull();
+    expect(within(section).queryByRole("button")).toBeNull();
+  });
+
+  it("shows an owner on a plan without SSO the mappings read-only, with the plan notice (negative)", async () => {
+    await renderRoles(
+      readOk(catalog),
+      "owner",
+      readOk(ssoSettings({ entitled: false })),
+    );
+    const section = screen.getByRole("region", { name: "IdP group mappings" });
+    expect(section).toHaveTextContent("oxagen-admins");
+    expect(within(section).getByTestId("sso-plan-notice")).toHaveTextContent(
+      "Single sign-on is part of the Enterprise plan.",
+    );
+    expect(
+      within(section).getByRole("link", {
+        name: "Change the plan on Billing.",
+      }),
+    ).toHaveAttribute("href", "/acme/billing");
+    expect(within(section).queryByRole("textbox")).toBeNull();
+    expect(
+      within(section).queryByRole("button", { name: "Save mappings" }),
+    ).toBeNull();
+  });
+
+  it("says a refused SSO read in its own section and keeps the roles (negative)", async () => {
+    await renderRoles(readOk(catalog), "owner", {
+      ok: false,
+      reason: "denied",
+      permission: "list_sso_providers",
+    });
+    const section = screen.getByRole("region", { name: "IdP group mappings" });
+    expect(within(section).getByText(/list_sso_providers/)).toHaveAttribute(
+      "data-reason",
+      "denied",
+    );
+    expect(screen.getByRole("region", { name: "Roles" })).toBeInTheDocument();
   });
 });

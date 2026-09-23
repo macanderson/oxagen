@@ -117,6 +117,7 @@ const source: DataSource = {
     apiKeys: refuse,
     costCenters: refuse,
     modelCredential: refuse,
+    sso: refuse,
   },
   audit: { events, exportEvents },
   onboarding: { state: refuse, firstFrame: refuse },

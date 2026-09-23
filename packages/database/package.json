@@ -14,6 +14,7 @@
     "./tenant": "./src/tenant.ts",
     "./data-plane": "./src/data-plane-resolver.ts",
     "./model-credential": "./src/model-credential-resolver.ts",
+    "./sso-secrets": "./src/sso-secrets.ts",
     "./assistant-model-key": "./src/assistant-model-key.ts",
     "./model-credential-shape": "./src/model-credential-shape.ts"
   },

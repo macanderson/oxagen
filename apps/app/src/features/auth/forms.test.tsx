@@ -1,5 +1,11 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
@@ -21,6 +27,7 @@ const live = {
   liveSignUp: vi.fn(),
   liveVerifyTwoFactor: vi.fn(),
   liveSignInSocial: vi.fn(),
+  liveSignInSso: vi.fn(),
   rememberPendingNext: vi.fn(),
   takePendingNext: vi.fn(),
 };
@@ -150,6 +157,99 @@ describe("LoginForm", () => {
     await waitFor(() => {
       expect(router.replace).toHaveBeenCalledWith("/acme");
     });
+  });
+});
+
+describe("LoginForm SSO entry", () => {
+  const ssoForm = () => screen.getByRole("form", { name: "Single sign-on" });
+
+  it("starts closed, opens on demand, and starts SSO for the email toward next", async () => {
+    live.liveSignInSso.mockReturnValue(new Promise(() => {}));
+    renderWithIntl(<LoginForm next={routes.people("acme")} />);
+    expect(
+      screen.queryByRole("form", { name: "Single sign-on" }),
+    ).not.toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Sign in with SSO" }),
+    );
+    await userEvent.type(
+      within(ssoForm()).getByLabelText("Work email"),
+      "marcus.bell@acme.example",
+    );
+    await userEvent.click(
+      within(ssoForm()).getByRole("button", { name: "Continue with SSO" }),
+    );
+    expect(live.liveSignInSso).toHaveBeenCalledWith({
+      email: "marcus.bell@acme.example",
+      callbackURL: "/acme",
+    });
+    expect(live.liveSignIn).not.toHaveBeenCalled();
+  });
+
+  it("validates the email before calling anything", async () => {
+    renderWithIntl(<LoginForm next={routes.root()} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Sign in with SSO" }),
+    );
+    await userEvent.click(
+      within(ssoForm()).getByRole("button", { name: "Continue with SSO" }),
+    );
+    expect(
+      within(ssoForm()).getByText("Enter your work email."),
+    ).toBeInTheDocument();
+    expect(live.liveSignInSso).not.toHaveBeenCalled();
+  });
+
+  it("shows a domain with no provider in the SSO form", async () => {
+    live.liveSignInSso.mockResolvedValue({
+      ok: false,
+      outcome: "ssoNoProvider",
+    });
+    renderWithIntl(<LoginForm next={routes.root()} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Sign in with SSO" }),
+    );
+    await userEvent.type(
+      within(ssoForm()).getByLabelText("Work email"),
+      "a@nowhere.example",
+    );
+    await userEvent.click(
+      within(ssoForm()).getByRole("button", { name: "Continue with SSO" }),
+    );
+    expect(await within(ssoForm()).findByRole("alert")).toHaveTextContent(
+      "No single sign-on is set up for this email domain.",
+    );
+  });
+
+  it("opens by default under ?sso=required and says why", () => {
+    renderWithIntl(<LoginForm next={routes.people("acme")} ssoRequired />);
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Your organization requires single sign-on.",
+    );
+    expect(ssoForm()).toBeInTheDocument();
+  });
+
+  it("a password refused with SSO_REQUIRED says so and opens the SSO entry", async () => {
+    live.liveSignIn.mockResolvedValue({ ok: false, outcome: "ssoRequired" });
+    renderWithIntl(<LoginForm next={routes.root()} />);
+    await userEvent.type(screen.getByLabelText("Work email"), "a@acme.example");
+    await userEvent.type(screen.getByLabelText("Password"), "x");
+    await userEvent.click(screen.getByRole("button", { name: "Log in" }));
+    expect(await screen.findByTestId("login-outcome")).toHaveTextContent(
+      "Your organization requires single sign-on for this email.",
+    );
+    expect(ssoForm()).toBeInTheDocument();
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it("an identity-provider failure from ?error= shows in the SSO form, not the password form", () => {
+    renderWithIntl(
+      <LoginForm next={routes.root()} initialOutcome="ssoFailed" />,
+    );
+    expect(within(ssoForm()).getByRole("alert")).toHaveTextContent(
+      "Single sign-on did not finish.",
+    );
+    expect(screen.queryByTestId("login-outcome")).not.toBeInTheDocument();
   });
 });
 

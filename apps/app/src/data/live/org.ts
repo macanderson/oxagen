@@ -16,6 +16,7 @@ import { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
 import { costCenterList } from "@oxagen/oxagen/contracts/cost_center.list";
 import { iamRoleList } from "@oxagen/oxagen/contracts/iam.role.list";
 import { orgModelCredentialGet } from "@oxagen/oxagen/contracts/org.model_credential.get";
+import { orgSsoList } from "@oxagen/oxagen/contracts/org.sso.list";
 import { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
 import { listMembers } from "@oxagen/oxagen/contracts/workspace.member.list";
 import { captureError } from "@oxagen/telemetry";
@@ -26,6 +27,7 @@ import {
   MemberList,
   ModelCredential,
   RoleCatalog,
+  SsoSettings,
   WorkspaceList,
 } from "@/data/contracts/org";
 import type { DataSource } from "@/data/ports";
@@ -37,6 +39,7 @@ import {
   toMemberList,
   toModelCredential,
   toRoleCatalog,
+  toSsoSettings,
   toWorkspaceList,
 } from "./mappers/org";
 
@@ -186,5 +189,17 @@ export const org: DataSource["org"] = {
       toModelCredential(read.value),
       "org.modelCredential",
     );
+  },
+
+  // The organisation's identity providers and its SSO policy (ADR-145):
+  // org-scoped, Owner-or-Admin in its handler, no secret in the answer.
+  async sso(ctx) {
+    const read = await kernelRead(ctx, {
+      contract: orgSsoList,
+      input: {},
+      page: "organization",
+    });
+    if (!read.ok) return read;
+    return view(ctx.orgId, SsoSettings, toSsoSettings(read.value), "org.sso");
   },
 };

@@ -75,6 +75,9 @@ export const TwoFactorSchema = z.discriminatedUnion("method", [
 
 export const ForgotPasswordSchema = z.object({ email });
 
+/** Enterprise SSO: the email's domain names the identity provider. */
+export const SsoSignInSchema = z.object({ email });
+
 export const ResendVerificationSchema = z.object({ email });
 
 export const ResetPasswordSchema = z
