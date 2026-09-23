@@ -86,9 +86,15 @@ export type GatewayPolicyFormValues = {
   modelDeny: string;
 };
 
-type GatewayFormErrorKey = "sessionLimitInvalid" | "modelPatternInvalid";
+type GatewayFormErrorKey =
+  | "sessionLimitInvalid"
+  | "modelPatternInvalid"
+  | "modelListRequired";
 export type GatewayFieldErrors = Partial<
-  Record<"sessionLimit" | "modelAllow" | "modelDeny", GatewayFormErrorKey>
+  Record<
+    "mode" | "sessionLimit" | "modelAllow" | "modelDeny",
+    GatewayFormErrorKey
+  >
 >;
 
 /**
@@ -158,6 +164,14 @@ export const GatewayPolicyForm = z
     // Blank is no allowlist, which is not the same as one that permits
     // nothing. The two reach the contract as null and [].
     const modelAllow = allow.length > 0 ? allow : null;
+    if (form.mode === "enforced" && modelAllow === null && deny.length === 0) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["mode"],
+        message: "modelListRequired",
+      });
+      return z.NEVER;
+    }
     return {
       mode: form.mode,
       sessionLimitUsd,
@@ -177,6 +191,7 @@ export function gatewayFieldErrors(
       errors.sessionLimit = "sessionLimitInvalid";
     if (head === "modelAllow") errors.modelAllow = "modelPatternInvalid";
     if (head === "modelDeny") errors.modelDeny = "modelPatternInvalid";
+    if (head === "mode") errors.mode = "modelListRequired";
   }
   return errors;
 }

@@ -40,7 +40,7 @@
         "label": "Share of the identified savings by finding",
         "tail": "{count} smaller findings"
       },
-      "facts": "{findings} findings · {operators} operators involved · {high} high confidence · {medium} medium",
+      "facts": "{findings} findings \u00b7 {operators} operators involved \u00b7 {high} high confidence \u00b7 {medium} medium",
       "note": "Potential savings compare recorded costs with an alternative on the cited calls. They are estimates, not savings already achieved. Review the calculation and proposed change before acting.",
       "list": "Findings, largest saving first",
       "emptyTitle": "No finding is open",
@@ -64,7 +64,7 @@
       },
       "why": "Why it costs money:",
       "fixLabel": "Recommended change:",
-      "cites": "{runs} runs · {calls} calls",
+      "cites": "{runs} runs \u00b7 {calls} calls",
       "shareOfIdentified": "{share} of the identified savings",
       "shareUnknown": "share not comparable",
       "evidence": {
@@ -78,7 +78,7 @@
         "coveredValue": "{covered} of {calls}",
         "coveredNote": "the rest are cited and add nothing to the saving",
         "tokens": "Tokens",
-        "tokensValue": "{measured} measured · {counterfactual} counterfactual",
+        "tokensValue": "{measured} measured \u00b7 {counterfactual} counterfactual",
         "tokensNote": "what the covered calls carried, against the alternative",
         "measured": "What the cited calls cost",
         "counterfactual": "What the alternative would have cost",
@@ -206,7 +206,7 @@
       "rolling": "Rolling {days} days",
       "noLimit": "No ceiling",
       "disabled": "Not enforced",
-      "position": "{ratio} · {state}",
+      "position": "{ratio} \u00b7 {state}",
       "state": {
         "ok": "under the ceiling",
         "threshold_50": "past 50%",
@@ -289,7 +289,7 @@
         "provider": "Vendor",
         "model": "Model",
         "aliases": "Other names for this model",
-        "aliasesHint": "Separate them with commas. Leave it empty to keep the names already stored — an empty list would replace them.",
+        "aliasesHint": "Separate them with commas. Leave it empty to keep the names already stored \u2014 an empty list would replace them.",
         "effectiveFrom": "In effect from",
         "effectiveFromHint": "A UTC day, tomorrow or later. Leave it empty to start now. A rate cannot start in the past: runs already priced keep the rate they were priced with.",
         "rates": "Rates, in US dollars per one million units",
@@ -298,7 +298,7 @@
         "submit": "Set these rates",
         "pending": "Writing the rates",
         "errors": {
-          "providerInvalid": "Enter the vendor’s name, up to 128 characters.",
+          "providerInvalid": "Enter the vendor\u2019s name, up to 128 characters.",
           "modelInvalid": "Enter the model id, up to 256 characters.",
           "regionInvalid": "A region is at most 64 characters.",
           "aliasesInvalid": "Enter up to 32 names, each at most 256 characters.",
@@ -308,7 +308,7 @@
           "ratesEmpty": "Fill in at least one class. Nothing was written."
         },
         "partial": {
-          "written": "In effect now: {classes}. Setting a class again is safe — it supersedes its own row.",
+          "written": "In effect now: {classes}. Setting a class again is safe \u2014 it supersedes its own row.",
           "noneWritten": "Nothing was written. The price book is unchanged.",
           "notWritten": "Not written: {classes}. Those classes are still priced as they were."
         }
@@ -317,11 +317,11 @@
         "open": "Remove",
         "label": "Remove the negotiated rate for {model}, {class}",
         "title": "Fall back to the list price",
-        "body": "Ending your negotiated rate for {model}, {class} means every call from now on is priced at the provider’s list price instead. Nothing is deleted.",
+        "body": "Ending your negotiated rate for {model}, {class} means every call from now on is priced at the provider\u2019s list price instead. Nothing is deleted.",
         "kept": "The row is closed at this instant and kept, so a run priced before now still names the rate it was priced with. You can negotiate the class again at any time.",
         "submit": "End this rate, use the list price",
         "pending": "Ending the rate",
-        "unpricedTitle": "Rate ended — now unpriced",
+        "unpricedTitle": "Rate ended \u2014 now unpriced",
         "unpriced": "Your negotiated rate for {model}, {class} is ended. No list or override price covers this model and class, so calls from now on are UNPRICED, not priced at the list rate, until you set a new rate or a catalog publishes one.",
         "unpricedClose": "Close",
         "confirmUnpricedTitle": "This class would become unpriced",
@@ -357,17 +357,17 @@
     },
     "failure": {
       "denied": {
-        "title": "You cannot see this workspace’s spend",
+        "title": "You cannot see this workspace\u2019s spend",
         "body": "Your roles on this organization do not include {permission}. An owner can grant it, and the grant is recorded as a governed action."
       },
       "pending": {
-        "title": "Access to this workspace’s spend is waiting for approval",
+        "title": "Access to this workspace\u2019s spend is waiting for approval",
         "body": "Access request {request}"
       },
       "error": {
         "title": "Spend could not be loaded",
         "body": "Nothing was changed. Runs keep recording while this page is down: the gateway writes frames, not the operator console.",
-        "code": "{code} · {status}"
+        "code": "{code} \u00b7 {status}"
       }
     },
     "empty": {
@@ -391,7 +391,7 @@
         "windowDaysInvalid": "Enter a whole number of days above zero."
       },
       "alert": {
-        "denied": "Your role cannot set this ceiling. An organization owner, admin or billing member sets either ceiling; a workspace owner or admin sets this workspace’s own.",
+        "denied": "Your role cannot set this ceiling. An organization owner, admin or billing member sets either ceiling; a workspace owner or admin sets this workspace\u2019s own.",
         "failed": "The ceiling could not be confirmed. Open the Budgets tab to see what is set; setting it again replaces it."
       }
     },
@@ -416,7 +416,7 @@
         "monthInvalid": "Enter a month as YYYY-MM."
       },
       "alert": {
-        "denied": "Your roles on this organization do not let you export this workspace’s spend.",
+        "denied": "Your roles on this organization do not let you export this workspace\u2019s spend.",
         "deniedCostCenter": "Only an organization Owner, Admin or Billing member can export the chargeback statement.",
         "failed": "The report could not be built. Nothing was changed; try again."
       }
@@ -426,11 +426,11 @@
       "spendToday": "Spend today",
       "spendTodayNote": "{from}, UTC",
       "cacheHitRate": "Cache hit rate",
-      "cacheHitRateNote": "cache_read ÷ (input_uncached + cache_read)"
+      "cacheHitRateNote": "cache_read \u00f7 (input_uncached + cache_read)"
     },
     "gateway": {
       "title": "Gateway models",
-      "note": "Model lists apply to routed calls from Claude Code, Codex, and Stella’s Anthropic provider after an upgraded host refreshes its signed mandate. Cursor model calls are not routed. Agent budgets remain separate.",
+      "note": "Model lists apply to routed calls from Claude Code, Codex, and Stella\u2019s Anthropic provider after an upgraded host refreshes its signed mandate. Cursor model calls are not routed. Agent budgets remain separate.",
       "notApplied": "Lists disabled",
       "sessionLimit": "Recorded workspace ceiling (USD)",
       "sessionLimitHint": "This legacy value is recorded only. Set an enforced run budget on the agent mandate.",
@@ -452,7 +452,8 @@
       },
       "errors": {
         "sessionLimitInvalid": "Enter an amount above zero, or leave it blank for no limit.",
-        "modelPatternInvalid": "Each line is a model id, optionally ending in * to match by prefix. No other wildcard works."
+        "modelPatternInvalid": "Each line is a model id, optionally ending in * to match by prefix. No other wildcard works.",
+        "modelListRequired": "Add an allowed or denied model before enabling the lists."
       },
       "alert": {
         "denied": "Your role cannot change this policy. An organization or workspace owner or admin sets it.",

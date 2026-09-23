@@ -291,3 +291,21 @@ describe("the gateway policy section", () => {
     expect(screen.getByText(spend.spend.gateway.noAllowlist)).toBeTruthy();
   });
 });
+
+it("names the mode error when enabled lists are blank", async () => {
+  const user = userEvent.setup();
+  renderSection();
+  await user.selectOptions(
+    screen.getByLabelText(spend.spend.gateway.mode),
+    "enforced",
+  );
+  await user.click(screen.getByRole("button", { name: /save the policy/i }));
+  expect(
+    await screen.findByText(spend.spend.gateway.errors.modelListRequired),
+  ).toBeVisible();
+  expect(screen.getByLabelText(spend.spend.gateway.mode)).toHaveAttribute(
+    "aria-invalid",
+    "true",
+  );
+  expect(setGatewayPolicyAction).not.toHaveBeenCalled();
+});

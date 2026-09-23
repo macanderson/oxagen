@@ -191,6 +191,8 @@ export function GatewayPolicySection({
           </label>
           <select
             id="gateway-mode"
+            aria-invalid={errors.mode ? true : undefined}
+            aria-describedby={errors.mode ? "gateway-mode-error" : undefined}
             className={inputBase}
             value={values.mode}
             onChange={(event) =>
@@ -204,6 +206,15 @@ export function GatewayPolicySection({
             <option value="observed">{t("notApplied")}</option>
             <option value="enforced">{t("enforced")}</option>
           </select>
+          {errors.mode ? (
+            <p
+              id="gateway-mode-error"
+              role="alert"
+              className="text-xs text-destructive"
+            >
+              {message("mode")}
+            </p>
+          ) : null}
           <Field
             id="gateway-session-limit"
             name="sessionLimit"

@@ -4744,6 +4744,7 @@ type Messages = {
       errors: {
         sessionLimitInvalid: string;
         modelPatternInvalid: string;
+        modelListRequired: string;
       };
       alert: {
         denied: string;

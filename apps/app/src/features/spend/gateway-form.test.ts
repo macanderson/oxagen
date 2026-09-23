@@ -118,7 +118,7 @@ describe("gatewayFieldErrors", () => {
     });
   });
 
-  it("maps each list to its own key, and knows no mode field", () => {
+  it("maps list and mode errors to their own fields", () => {
     expect(
       gatewayFieldErrors([
         { path: ["modelAllow"] },
@@ -128,6 +128,7 @@ describe("gatewayFieldErrors", () => {
     ).toEqual({
       modelAllow: "modelPatternInvalid",
       modelDeny: "modelPatternInvalid",
+      mode: "modelListRequired",
     });
   });
 
@@ -136,4 +137,11 @@ describe("gatewayFieldErrors", () => {
       {},
     );
   });
+});
+
+it("requires a model list when enforcement is enabled", () => {
+  expect(refusal({ ...BLANK, mode: "enforced" })).toBe("modelListRequired");
+  expect(refusal({ ...BLANK, mode: "enforced", sessionLimit: "5" })).toBe(
+    "modelListRequired",
+  );
 });
