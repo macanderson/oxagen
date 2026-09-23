@@ -105,7 +105,7 @@ export function Instant({ at }: { at: string }) {
 }
 
 /** The backend gaps a list cell can name when it prints not recorded. */
-export type ListGap =
+type ListGap =
   | "steering"
   | "toolbelt"
   | "tokens"

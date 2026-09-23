@@ -44,11 +44,11 @@ import { RetireAgent } from "./agent-actions";
 import { AgentStatusBadge, NotRecordedValue } from "./parts";
 import { AssignRole } from "./role-controls";
 
-export type AgentRow = AgentPage["agents"][number];
-export type ColumnSet = "composition" | "operations";
+type AgentRow = AgentPage["agents"][number];
+type ColumnSet = "composition" | "operations";
 
 /** The page sizes the Rows control offers; `0` is All. */
-export const PAGE_SIZES = [5, 10, 25, 50, 0] as const;
+const PAGE_SIZES = [5, 10, 25, 50, 0] as const;
 const DEFAULT_PAGE_SIZE = 10;
 /** The most facet selects the controls draw, as `listify()` does. */
 const MAX_FACETS = 3;
@@ -63,7 +63,7 @@ type Health = "tamper" | "notEnrolled" | "observe" | "healthy";
  * agent is enrolled and no wrapped session has recorded a tier, because
  * "healthy" would then be a claim the record does not make.
  */
-export function healthOf(row: AgentRow): Health | null {
+function healthOf(row: AgentRow): Health | null {
   if (row.tamperIncidents > 0) return "tamper";
   if (row.status === "unenrolled") return "notEnrolled";
   if (row.enforcementTier === null) return null;
