@@ -70,7 +70,9 @@ const {
         <>{props.spendTiles}</>
       ),
     ),
-    Agents: vi.fn((_props: Record<string, unknown>) => null),
+    // Agents draws the page header only when it has agents to list, so the
+    // stub draws the header it is handed.
+    Agents: vi.fn((props: { header?: ReactNode }) => <>{props.header}</>),
     Agent: vi.fn((_props: Record<string, unknown>) => null),
     AgentSource: vi.fn((_props: Record<string, unknown>) => null),
     Steering: vi.fn((props: { searchParams: Record<string, string> }) => (
@@ -126,6 +128,7 @@ vi.mock("@/features/fleet", () => ({ Fleet, FleetRegister: () => null }));
 vi.mock("@/features/run", () => ({ Run }));
 vi.mock("@/features/agents", () => ({
   Agents,
+  AgentsLoading: () => null,
   Agent,
   AgentSource,
   AgentsCreate: () => null,
@@ -472,32 +475,35 @@ describe("the Agents pages", () => {
     requireViewer.mockResolvedValue(ctx);
   });
 
-  it("the identities page hands the workspace viewer, the data source and the cursor to Agents", async () => {
+  it("the agents page hands the workspace viewer, the data source, the cursor and its header to Agents", async () => {
     await expectPageTitle(
       await AGENTS(),
       routeProps(SEGMENTS, { cursor: "c2" }),
       title("agents"),
     );
     expect(requireViewer).toHaveBeenCalledWith(...WS);
-    expect(Agents.mock.calls.at(-1)?.[0]).toEqual({
+    expect(Agents.mock.calls.at(-1)?.[0]).toMatchObject({
       ctx,
       source,
       cursor: "c2",
-      view: "composition",
     });
+    expect(Object.keys(Agents.mock.calls.at(-1)?.[0] ?? {}).sort()).toEqual([
+      "ctx",
+      "cursor",
+      "header",
+      "source",
+    ]);
     expect(screen.queryByTestId("not-recorded")).toBeNull();
   });
 
-  it("the identities page hands the operations view to Agents when the URL names it", async () => {
+  it("the agents page ignores a view in the URL: the column set is the table's session state", async () => {
     await expectPageTitle(
       await AGENTS(),
       routeProps(SEGMENTS, { view: "operations" }),
       title("agents"),
     );
-    expect(Agents.mock.calls.at(-1)?.[0]).toMatchObject({
-      cursor: null,
-      view: "operations",
-    });
+    expect(Agents.mock.calls.at(-1)?.[0]).not.toHaveProperty("view");
+    expect(Agents.mock.calls.at(-1)?.[0]).toMatchObject({ cursor: null });
   });
 
   it("the agent page hands the agent, the tab and the cursor the URL names to Agent", async () => {

@@ -48,6 +48,7 @@
 import {
   appendFileSync,
   closeSync,
+  fdatasyncSync,
   fsyncSync,
   openSync,
   existsSync,
@@ -79,6 +80,7 @@ import {
   BodyIndexStore,
   parseStoredBody,
   readLinesFrom,
+  readTailLine,
   type StoredBody,
 } from "./wal-index";
 
@@ -104,6 +106,12 @@ export interface WalBodyFailure {
   session_uuid: string;
   operation: "append" | "read" | "cleanup";
   code: string;
+}
+
+/** An event line this process could not parse, reported rather than thrown. */
+export interface WalEventParseFailure {
+  session_uuid: string;
+  reason: string;
 }
 
 export interface WalStats {
@@ -143,6 +151,12 @@ export class Wal {
     { afterSeq: number; offset: number }
   >();
   private readonly bodyIndexes: BodyIndexStore;
+  /**
+   * Event and body files written since the last `flush`, so a group commit
+   * covers exactly what a tick or a drain touched rather than every file the
+   * WAL has ever opened. See `flush` for why this exists.
+   */
+  private readonly dirtyPaths = new Set<string>();
 
   constructor(
     dir: string,
@@ -151,6 +165,10 @@ export class Wal {
     ) => console.warn("WAL body unavailable", failure),
     private readonly reportChainGap: (gap: WalChainGap) => void = (gap) =>
       console.warn("WAL chain gap", gap),
+    private readonly reportEventParseFailure: (
+      failure: WalEventParseFailure,
+    ) => void = (failure) =>
+      console.warn("WAL event line unparseable", failure),
   ) {
     this.dir = dir;
     ensureDir(dir);
@@ -174,7 +192,55 @@ export class Wal {
   }
 
   private persistCursor(): void {
+    // Commit the WAL bytes this cursor answers for before the cursor itself
+    // lands. `shipped` and `sealed` are read back as claims about what the
+    // event and body files durably hold; writing the claim first and the
+    // bytes later is the ordering that lets a crash leave the two disagreeing.
+    this.flush();
     writeSensitiveFileAtomic(this.cursorPath, JSON.stringify(this.cursor));
+  }
+
+  /**
+   * Durably commit every WAL event and body file written since the last
+   * flush.
+   *
+   * `appendFileSync` returns once the write syscall completes, which is
+   * before the bytes are guaranteed to survive a crash: they can sit in the
+   * page cache indefinitely. An `fsync` per event would cost every append a
+   * disk round trip, so this is a group commit instead — one flush covers
+   * every session a tick or a drain touched, called by `persistCursor` (this
+   * file's own shipped/sealed bookkeeping) and by the daemon immediately
+   * before it persists the recorder state that answers for the same bytes.
+   */
+  flush(): void {
+    if (this.dirtyPaths.size === 0) return;
+    const paths = [...this.dirtyPaths];
+    this.dirtyPaths.clear();
+    for (const path of paths) {
+      let fd: number;
+      try {
+        fd = openSync(path, "r+");
+      } catch (error) {
+        // Gone since it was marked dirty (compacted, rewritten): nothing to
+        // commit, not a durability failure.
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT")
+          console.warn("WAL flush could not open file", {
+            path,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        continue;
+      }
+      try {
+        fdatasyncSync(fd);
+      } catch (error) {
+        console.warn("WAL flush failed", {
+          path,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      } finally {
+        closeSync(fd);
+      }
+    }
   }
 
   /** Write these bodies to their sessions' body files, one line each. */
@@ -192,13 +258,21 @@ export class Wal {
       bodyLines.set(body.session_uuid, lines);
     }
     for (const [session, lines] of bodyLines) {
+      const path = this.bodyFileFor(session);
       try {
         // Separate a prior torn tail from this batch, including after restart.
-        appendFileSync(this.bodyFileFor(session), `\n${lines.join("\n")}\n`, {
+        appendFileSync(path, `\n${lines.join("\n")}\n`, {
           mode: 0o600,
         });
+        this.dirtyPaths.add(path);
       } catch (error) {
         this.bodyFailure(session, "append", error);
+        // ENOSPC and friends must not be swallowed here: the event this
+        // body belongs to is sealed already, and a caller that thinks the
+        // body landed when it did not has nothing left to roll back once
+        // the event write below succeeds. Throwing lets the daemon's
+        // mark/seal/append/rollback helper undo the seal too.
+        throw error;
       }
     }
   }
@@ -231,7 +305,19 @@ export class Wal {
   /**
    * Bodies go first so ordinary writes ship content with its event. A crash
    * between files can leave an orphan body, which retention sweeps remove.
-   * A failed body write must still permit the sealed event to persist.
+   * A failed body write now throws (see `writeBodies`), so the sealed event
+   * this call was asked to persist alongside it never reaches the file
+   * either: the caller's mark/seal/append/rollback helper undoes the seal in
+   * memory to match, rather than leaving a recorder cursor ahead of a chain
+   * the WAL never durably held.
+   *
+   * Every event is also checked against this session's last known seq
+   * before anything is written. A seq at or behind it is refused rather than
+   * appended: a restart that restored a stale cursor, or a retry racing the
+   * write it is retrying, would otherwise land a second event at a seq the
+   * file already holds, which is exactly what let a ClickHouse
+   * `ReplacingMergeTree` keyed on seq silently keep the newer, wrong frame
+   * over the original.
    */
   append(
     events: readonly TachoEvent[],
@@ -239,41 +325,104 @@ export class Wal {
   ): void {
     this.writeBodies(bodies);
     const bySession = new Map<string, string[]>();
-    for (const event of events) {
-      const lines = bySession.get(event.session_uuid) ?? [];
-      lines.push(JSON.stringify(event));
-      bySession.set(event.session_uuid, lines);
-      if (
-        lines.length === 1 &&
-        !this.lastSeq.has(event.session_uuid) &&
-        !existsSync(this.fileFor(event.session_uuid))
-      ) {
-        // A session this write creates: its file will hold exactly these
-        // events, so the last seq is known without a read.
-        this.lastSeq.set(event.session_uuid, event.seq - 1);
-      }
-      const known = this.lastSeq.get(event.session_uuid);
-      if (known !== undefined && event.seq > known + 1) {
-        // The control plane refuses this chain from here on. Say so at the
-        // moment of writing, on this machine, rather than only in the ingest
-        // response the daemon cannot act on.
-        this.reportChainGap({
-          session_uuid: event.session_uuid,
-          after_seq: known,
-          seq: event.seq,
-          kind: event.kind,
-        });
-      }
-      if (known !== undefined && event.seq > known)
+    // What each touched session's bookkeeping held before this call, so a
+    // throw — a stale seq caught below, or a write that fails further down —
+    // can put back exactly what it found rather than leaving `lastSeq` (and
+    // a `cursor.sealed` entry) ahead of a file this call never actually
+    // wrote. Without this, a caller that retries the same rejected batch
+    // after fixing the underlying failure has its retry refused in turn: the
+    // seq guard below would see the seq this attempt already claimed.
+    const priorLastSeq = new Map<string, number | undefined>();
+    const priorSealed = new Map<string, string | undefined>();
+    const written = new Set<string>();
+    try {
+      for (const event of events) {
+        if (!priorLastSeq.has(event.session_uuid)) {
+          priorLastSeq.set(
+            event.session_uuid,
+            this.lastSeq.get(event.session_uuid),
+          );
+          priorSealed.set(
+            event.session_uuid,
+            this.cursor.sealed[event.session_uuid],
+          );
+        }
+        const lines = bySession.get(event.session_uuid) ?? [];
+        lines.push(JSON.stringify(event));
+        bySession.set(event.session_uuid, lines);
+        if (
+          lines.length === 1 &&
+          !this.lastSeq.has(event.session_uuid) &&
+          !existsSync(this.fileFor(event.session_uuid))
+        ) {
+          // A session this write creates: its file will hold exactly these
+          // events, so the last seq is known without a read.
+          this.lastSeq.set(event.session_uuid, event.seq - 1);
+        }
+        // A session this process has not touched yet, but whose file already
+        // exists, falls back to `lastSeqOf`, which reads the file once and
+        // caches the answer. Without this fallback `known` stayed
+        // `undefined` for exactly the restart case the seq guard below
+        // exists to catch.
+        const known =
+          this.lastSeq.get(event.session_uuid) ??
+          this.lastSeqOf(event.session_uuid);
+        if (event.seq <= known) {
+          throw new Error(
+            `WAL append refused for session ${event.session_uuid}: seq ${event.seq} is not after the last written seq ${known}`,
+          );
+        }
+        if (event.seq > known + 1) {
+          // The control plane refuses this chain from here on. Say so at
+          // the moment of writing, on this machine, rather than only in the
+          // ingest response the daemon cannot act on.
+          this.reportChainGap({
+            session_uuid: event.session_uuid,
+            after_seq: known,
+            seq: event.seq,
+            kind: event.kind,
+          });
+        }
         this.lastSeq.set(event.session_uuid, event.seq);
-      if (event.kind === "agent_stop") {
-        this.cursor.sealed[event.session_uuid] = event.ts;
+        if (event.kind === "agent_stop") {
+          this.cursor.sealed[event.session_uuid] = event.ts;
+        }
       }
-    }
-    for (const [session, lines] of bySession) {
-      appendFileSync(this.fileFor(session), `${lines.join("\n")}\n`, {
-        mode: 0o600,
-      });
+      for (const [session, lines] of bySession) {
+        const path = this.fileFor(session);
+        const preSize = existsSync(path) ? statSync(path).size : 0;
+        try {
+          appendFileSync(path, `${lines.join("\n")}\n`, {
+            mode: 0o600,
+          });
+          this.dirtyPaths.add(path);
+          written.add(session);
+        } catch (error) {
+          // A partial write (ENOSPC mid-buffer, most often) must not leave a
+          // torn line behind for the next read to trip over: cut the file
+          // back to exactly where it stood before this call.
+          try {
+            if (existsSync(path)) truncateSync(path, preSize);
+          } catch {
+            // The append already failed; a failed rollback leaves at most a
+            // stray tail for the next startup's `repairTail` to clean up.
+          }
+          throw error;
+        }
+      }
+    } catch (error) {
+      for (const session of bySession.keys()) {
+        // A session whose file this call actually appended to keeps its
+        // advanced bookkeeping, because it matches what is now on disk.
+        if (written.has(session)) continue;
+        const prior = priorLastSeq.get(session);
+        if (prior === undefined) this.lastSeq.delete(session);
+        else this.lastSeq.set(session, prior);
+        const priorSeal = priorSealed.get(session);
+        if (priorSeal === undefined) delete this.cursor.sealed[session];
+        else this.cursor.sealed[session] = priorSeal;
+      }
+      throw error;
     }
     if (events.some((event) => event.kind === "agent_stop")) {
       this.persistCursor();
@@ -379,14 +528,29 @@ export class Wal {
       .sort();
   }
 
-  /** Every event of one session, in seq order. */
+  /**
+   * Every event of one session, in seq order.
+   *
+   * A line that will not parse is reported and skipped rather than thrown:
+   * one torn write (a crash mid-append, before `repairTail` runs at the next
+   * startup) must not turn every reader of this session — `unshipped`,
+   * `stats`, `head`, `compact` all reach the file through here — into a
+   * daemon that stops shipping every session on the host.
+   */
   read(sessionUuid: string): TachoEvent[] {
     const path = this.fileFor(sessionUuid);
     if (!existsSync(path)) return [];
     const out: TachoEvent[] = [];
     for (const line of readLinesFrom(path)) {
       if (line.text.trim().length === 0) continue;
-      out.push(JSON.parse(line.text) as TachoEvent);
+      try {
+        out.push(JSON.parse(line.text) as TachoEvent);
+      } catch (error) {
+        this.reportEventParseFailure({
+          session_uuid: sessionUuid,
+          reason: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
     return out;
   }
@@ -589,6 +753,77 @@ export class Wal {
     return events[events.length - 1];
   }
 
+  /**
+   * The last sealed event of a session, read from the tail of its file
+   * rather than by parsing every line `head` does.
+   *
+   * Used once, at daemon startup, to check a restored recorder cursor
+   * against what the log actually holds before a new event is sealed on top
+   * of it — see the daemon's cursor reconciliation. A session with a torn
+   * last line (repaired by `repairTail` earlier in the same startup, in the
+   * ordinary case) answers `undefined` here rather than a guess, since a
+   * caller correcting a cursor from a bad reading is worse than one that
+   * found nothing to correct with.
+   */
+  lastEvent(sessionUuid: string): TachoEvent | undefined {
+    const path = this.fileFor(sessionUuid);
+    if (!existsSync(path)) return undefined;
+    const line = readTailLine(path);
+    if (line === undefined || !line.terminated || line.text.trim().length === 0)
+      return undefined;
+    try {
+      return JSON.parse(line.text) as TachoEvent;
+    } catch (error) {
+      this.reportEventParseFailure({
+        session_uuid: sessionUuid,
+        reason: error instanceof Error ? error.message : String(error),
+      });
+      return undefined;
+    }
+  }
+
+  /**
+   * Repair one session's event file if its last line is torn: a write that
+   * landed content but never the newline that closes it, most often because
+   * the process died mid-`appendFileSync`.
+   *
+   * Only the daemon calls this, once at startup, and never from this file's
+   * own constructor: a reader building a `Wal` for `tacho status` or `tacho
+   * export` must never rewrite a file the daemon might still be writing to,
+   * which is why every reader here already tolerates a torn trailing line
+   * instead of throwing on it (`read`, `eventsAfterShipped`). This is what
+   * turns that tolerance into "nothing left to tolerate" on the next read: a
+   * line that parses once completed is closed with the newline it was
+   * missing, and a line that will never parse (torn mid-write) is cut away
+   * entirely, since nothing durable was lost by a write that never finished.
+   */
+  repairTail(sessionUuid: string): "ok" | "terminated" | "truncated" {
+    const path = this.fileFor(sessionUuid);
+    if (!existsSync(path)) return "ok";
+    const line = readTailLine(path);
+    if (line === undefined || line.terminated) return "ok";
+    const complete =
+      line.text.trim().length > 0 &&
+      (() => {
+        try {
+          JSON.parse(line.text);
+          return true;
+        } catch {
+          return false;
+        }
+      })();
+    if (complete) {
+      appendFileSync(path, "\n");
+      this.dirtyPaths.add(path);
+      return "terminated";
+    }
+    truncateSync(path, line.offset);
+    this.lastSeq.delete(sessionUuid);
+    this.resume.delete(sessionUuid);
+    this.dirtyPaths.add(path);
+    return "truncated";
+  }
+
   /** The highest seq in a session's file, or -1 when it holds none. */
   private lastSeqOf(sessionUuid: string): number {
     const known = this.lastSeq.get(sessionUuid);
@@ -627,7 +862,20 @@ export class Wal {
       mark !== undefined && mark.afterSeq <= through ? mark.offset : 0;
     for (const line of readLinesFrom(path, from)) {
       if (line.text.trim().length === 0) continue;
-      const event = JSON.parse(line.text) as TachoEvent;
+      let event: TachoEvent;
+      try {
+        event = JSON.parse(line.text) as TachoEvent;
+      } catch (error) {
+        // Reported and skipped, not thrown: a shipper mid-drain must not
+        // stop on the one line a crash tore, and the resume mark is left
+        // where it was so the next walk tries this line again rather than
+        // silently stepping over it.
+        this.reportEventParseFailure({
+          session_uuid: sessionUuid,
+          reason: error instanceof Error ? error.message : String(error),
+        });
+        continue;
+      }
       if (event.seq > through) {
         yield event;
         continue;
@@ -660,16 +908,35 @@ export class Wal {
     this.persistCursor();
   }
 
+  /**
+   * How many events, sessions, and hosts a call to `health()` or `/status`
+   * answers with, without paying to parse them.
+   *
+   * `stats` used to answer this by reading every unshipped event of every
+   * session and counting them, which the Shipper's own `sendBatch` asks for
+   * on every batch — so a 45,000-event backlog draining at 200 events a
+   * batch cost roughly 45,000 x 225 event reads across one drain, quadratic
+   * in the backlog rather than linear. The count is now arithmetic —
+   * `lastSeqOf - shippedThrough`, which a dense chain (the ordinary case)
+   * answers exactly — and the one thing arithmetic cannot answer,
+   * `oldestUnshippedAt`, costs reading a single event per session with
+   * anything unshipped, not the whole tail. A session with an actual gap
+   * (already reported through `reportChainGap` when it was written) can
+   * undercount here; that is the cost of a status figure no longer costing
+   * the backlog it describes.
+   */
   stats(): WalStats {
     let unshipped = 0;
     let oldest: string | undefined;
     const sessions = this.sessions();
     for (const session of sessions) {
-      if (!this.hasUnshipped(session)) continue;
-      for (const event of this.eventsAfterShipped(session)) {
-        unshipped += 1;
-        if (oldest === undefined || event.ts < oldest) oldest = event.ts;
-      }
+      const last = this.lastSeqOf(session);
+      const through = this.shippedThrough(session);
+      if (last <= through) continue;
+      unshipped += last - through;
+      const first = this.eventsAfterShipped(session).next();
+      if (!first.done && (oldest === undefined || first.value.ts < oldest))
+        oldest = first.value.ts;
     }
     return {
       sessions: sessions.length,

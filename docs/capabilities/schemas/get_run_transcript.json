@@ -102,6 +102,41 @@
             "endSeq": {
               "type": "string"
             },
+            "subagent": {
+              "type": "object",
+              "properties": {
+                "sessionUuid": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "id": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "sessionUuid",
+                "id",
+                "type"
+              ],
+              "additionalProperties": false
+            },
             "at": {
               "type": "string"
             },
@@ -232,6 +267,10 @@
                   "properties": {
                     "seq": {
                       "type": "string"
+                    },
+                    "sessionUuid": {
+                      "type": "string",
+                      "format": "uuid"
                     },
                     "type": {
                       "type": "string"
@@ -887,6 +926,10 @@
                     "seq": {
                       "type": "string"
                     },
+                    "sessionUuid": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
                     "type": {
                       "type": "string"
                     },
@@ -1540,6 +1583,10 @@
                   "properties": {
                     "seq": {
                       "type": "string"
+                    },
+                    "sessionUuid": {
+                      "type": "string",
+                      "format": "uuid"
                     },
                     "decision": {
                       "type": "string"

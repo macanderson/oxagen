@@ -25,6 +25,9 @@ import {
   toToolbelt,
 } from "./mappers/agents";
 
+/** `list_agents`' largest page (agent.list.ts: limit max 100). */
+const LIST_PAGE = 100;
+
 /** The mapped value parsed at the boundary; a record the view refuses is `record_unmappable`, reported once. */
 function view<S extends z.ZodType>(
   orgId: string,
@@ -47,7 +50,13 @@ export const agents: DataSource["agents"] = {
   async list(ctx, q) {
     const read = await kernelRead(ctx, {
       contract: agentList,
-      input: q.cursor === null ? {} : { cursor: q.cursor },
+      // The contract's largest page: the list controls search, sort and page
+      // over the rows in hand, so the more of the workspace they hold the
+      // fewer agents sit behind the cursor.
+      input:
+        q.cursor === null
+          ? { limit: LIST_PAGE }
+          : { limit: LIST_PAGE, cursor: q.cursor },
       page: "agents",
     });
     if (!read.ok) return read;

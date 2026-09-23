@@ -236,6 +236,12 @@ export const transcriptBodySchema = z
   .object({
     /** The frame this half was recorded on. */
     seq: z.string().regex(/^\d+$/),
+    /**
+     * The subagent chain the frame was recorded on; absent on the run's own
+     * chain. A subagent's chain is numbered from 0 like the run's, so `seq`
+     * names a frame only together with this.
+     */
+    sessionUuid: z.string().uuid().optional(),
     /** The frame's recorded type or kind. */
     type: z.string(),
     /** sha256 over the redacted bytes; null when the frame carried no content. */
@@ -268,6 +274,8 @@ export const transcriptBodySchema = z
 export const transcriptDecisionSchema = z
   .object({
     seq: z.string().regex(/^\d+$/),
+    /** The subagent chain the decision was recorded on; absent on the run's own. */
+    sessionUuid: z.string().uuid().optional(),
     /** The recorded word: `allow`, `deny`, `route`, or whatever the rule wrote. */
     decision: z.string(),
     type: z.string(),
@@ -292,6 +300,24 @@ export const transcriptEntrySchema = z
     seq: z.string().regex(/^\d+$/),
     /** The last frame folded into the entry; equals `seq` for one frame. */
     endSeq: z.string().regex(/^\d+$/),
+    /**
+     * The subagent whose chain the opening frame was recorded on; absent on
+     * the run's own chain. A wrapped run's subagents record on chains of
+     * their own, each numbered from 0, and the transcript places each chain
+     * directly after the `subagent_start` that spawned it. `seq` and `endSeq`
+     * are positions on that chain, so they name a frame only together with
+     * `sessionUuid`; `get_run_frame_body` reads the run's own chain.
+     */
+    subagent: z
+      .object({
+        sessionUuid: z.string().uuid(),
+        /** The harness's id for the subagent; null when none was recorded. */
+        id: z.string().nullable(),
+        /** The subagent's type (`Explore`, `general-purpose`); null when none was recorded. */
+        type: z.string().nullable(),
+      })
+      .strict()
+      .optional(),
     /** RFC 3339: when the opening frame was observed. */
     at: z.string().datetime(),
     /**

@@ -1,302 +1,421 @@
-import { HarnessLabel } from "@/ui/harness-icon";
+// The Agents page (mockups/pages/agents.md): the registry of actors in this
+// workspace. Loaded, it is the header, four tiles and the table of agents with
+// its two column sets. Every not-loaded state replaces the page body and never
+// the shell, as the design draws it: empty, loading (`AgentsLoading`, the
+// Suspense fallback), error and access denied.
+//
+// **The tiles are rollups of records.** Agents here and Enrolled come from the
+// workspace's own count on `list_agents`; Holding a mandate counts the agents
+// whose principal holds an active mandate in `tools.mandates`; Tamper
+// incidents sums the tamper incidents recorded on each agent's hosts, the set
+// the Incidents column reads, and names the newest. The design scopes the
+// last two to the organization; `list_agents` answers for the workspace, so
+// each basis line says "counted in <workspace> only" where a touch device can
+// read it, and the organization count on Agents here prints as not recorded
+// until an organization rollup exists (#3854). "Listed below" is the number
+// of rows this read returned, not the workspace total.
+//
+// **Two controls the design asks for have no capability yet.** *Request
+// access* (denied, #3820) and *Open an incident* (error, #3847) open dialogs
+// that say what they would do (./state-actions.tsx). The trace id, region and
+// deciding policy are not on a failed read, so those words print as not
+// recorded beside the facts the read does carry.
 import { useLocale, useTranslations } from "next-intl";
+import type { ReactNode } from "react";
 import type { AgentPage } from "@/data/contracts/agents";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
-import { AgentCard } from "@/ui/agent-card";
-import { linkText, mono } from "@/ui/control-styles";
-import { Money } from "@/ui/money";
+import {
+  buttonSecondary,
+  mono,
+  panel,
+  statStrip,
+  statTile,
+} from "@/ui/control-styles";
+import { OutcomePanel } from "@/ui/form-feedback";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
-import { OperatorName } from "@/ui/operator";
-import { ReadFailure } from "@/ui/read-failure";
-import { cell, numericCell, Table } from "@/ui/table";
-import { RetireAgent } from "./agent-actions";
-import {
-  AgentStatusBadge,
-  NotRecordedValue,
-  Pager,
-  Panel,
-  Tile,
-} from "./parts";
+import { AgentsTable } from "./agents-table";
+import { RegisterAnAgent, WrapClaudeCode } from "./create-actions";
+import { AgentKeyPrefix, keyPrefixOf } from "./key-prefix";
+import { NotRecordedValue, Tile } from "./parts";
+import { OpenIncident, RequestAccess, TryAgain } from "./state-actions";
 
 type Place = { org: string; ws: string };
+type Failure = Exclude<Read<unknown>, { ok: true }>;
 
-function Tiles({ totals }: { totals: AgentPage["totals"] }) {
+function Tiles({ page, workspace }: { page: AgentPage; workspace: string }) {
   const t = useTranslations("agents.list.tiles");
+  const gaps = useTranslations("agents.list.gaps");
   const locale = useLocale();
+  const count = (n: number) => formatCount(n, locale);
+  const { totals, agents } = page;
+  const notEnrolled = totals.identities - totals.enrolled;
+  const observe = agents.filter((a) => a.enforcementTier === "observe").length;
+  const harness = agents.filter((a) => a.enforcementTier === "harness").length;
+  const otherTier = agents.length - observe - harness;
+  const { tamper } = totals;
+  const newest =
+    tamper.newest === null
+      ? null
+      : {
+          key: tamper.newest.agentKey,
+          kind: tamper.newest.kind,
+          // The day as the record stamps it (UTC), as the design prints it.
+          date: tamper.newest.detectedAt.slice(0, 10),
+        };
+  const holders = agents.filter((a) => (a.mandates ?? 0) > 0);
   return (
-    <section aria-label={t("label")} className="grid gap-3 sm:grid-cols-3">
+    <section aria-label={t("label")} className={statStrip}>
       <Tile
-        title={t("identities.title")}
-        value={formatCount(totals.identities, locale)}
-        basis={t("identities.basis")}
+        title={t("agentsHere.title")}
+        value={count(totals.identities)}
+        basis={
+          <span data-gap="organization" title={gaps("organization")}>
+            {t("agentsHere.basis", { listed: count(agents.length) })}
+          </span>
+        }
       />
       <Tile
         title={t("enrolled.title")}
-        value={formatCount(totals.enrolled, locale)}
-        basis={t("enrolled.basis", {
-          count: formatCount(totals.identities, locale),
-        })}
+        value={count(totals.enrolled)}
+        basis={
+          notEnrolled > 0
+            ? t("enrolled.notYet", { count: count(notEnrolled) })
+            : otherTier === 0
+              ? t("enrolled.observe", { count: count(observe) })
+              : t("enrolled.mixed", {
+                  observe: count(observe),
+                  harness: count(harness),
+                  other: count(otherTier),
+                })
+        }
+      />
+      <Tile
+        title={t("mandate.title")}
+        value={
+          totals.holdingMandate === null ? (
+            <NotRecordedValue />
+          ) : (
+            count(totals.holdingMandate)
+          )
+        }
+        basis={
+          totals.holdingMandate === null ? (
+            <NotRecordedValue />
+          ) : (
+            <span
+              data-scope="workspace"
+              title={t("mandate.scope", { workspace })}
+            >
+              {totals.holdingMandate === 0
+                ? t("mandate.none", { workspace })
+                : t("mandate.holders", {
+                    holders: holders
+                      .map((a) =>
+                        t("mandate.holder", {
+                          key: a.agentKey ?? a.slug,
+                          workspace,
+                        }),
+                      )
+                      .join(", "),
+                    workspace,
+                  })}
+            </span>
+          )
+        }
       />
       <Tile
         title={t("tamper.title")}
-        value={formatCount(totals.tamperIncidents, locale)}
-        basis={t("tamper.basis")}
+        value={count(tamper.recorded)}
+        critical={tamper.recorded > 0}
+        basis={
+          <span data-scope="workspace" title={t("tamper.scope", { workspace })}>
+            {newest === null
+              ? t("tamper.none", { workspace })
+              : tamper.open > 0
+                ? t("tamper.open", {
+                    ...newest,
+                    count: count(tamper.open),
+                    workspace,
+                  })
+                : t("tamper.resolved", { ...newest, workspace })}
+          </span>
+        }
       />
     </section>
   );
 }
 
-function EmptyIdentities({ workspace }: { workspace: string }) {
+function Empty({ workspace, org, ws }: { workspace: string } & Place) {
   const t = useTranslations("agents.list.empty");
   return (
-    <div
-      data-testid="agents-empty"
-      className="flex flex-col items-center gap-2 py-6 text-center text-sm"
+    <OutcomePanel
+      tone="neutral"
+      testId="agents-empty"
+      title={t("title", { workspace })}
+      actions={
+        <>
+          <WrapClaudeCode org={org} ws={ws} />
+          <RegisterAnAgent org={org} ws={ws} />
+        </>
+      }
     >
-      <h3 className="font-semibold">{t("title", { workspace })}</h3>
-      <p className="max-w-prose text-muted-foreground">{t("body")}</p>
-      <p className="max-w-prose text-muted-foreground">{t("register")}</p>
-      <code className={`${mono} rounded-md bg-muted px-2 py-1`}>
-        {t("command")}
-      </code>
-    </div>
+      {t.rich("body", {
+        mono: (chunks) => <span className={mono}>{chunks}</span>,
+      })}
+    </OutcomePanel>
   );
 }
 
-function IdentityRows({
-  page,
-  cursor,
-  org,
-  ws,
-  view,
+function Denied({
+  read,
+  ctx,
+  viewerName,
 }: {
-  page: AgentPage;
-  cursor: string | null;
-  view: "composition" | "operations";
-} & Place) {
-  const t = useTranslations("agents");
-  const locale = useLocale();
-  const columns = [
-    { label: t("list.columns.identity") },
-    ...(view === "composition"
-      ? [
-          { label: t("list.columns.principal") },
-          { label: t("list.columns.hosts"), numeric: true },
-          { label: t("list.columns.credentials"), numeric: true },
-        ]
-      : []),
-    { label: t("list.columns.harness") },
-    { label: t("list.columns.operator") },
-    { label: t("list.columns.status") },
-    { label: t("list.columns.runs"), numeric: true },
-    { label: t("list.columns.spend"), numeric: true },
-    { label: t("list.columns.incidents"), numeric: true },
-    { label: t("list.columns.actions") },
+  read: Extract<Failure, { reason: "denied" }>;
+  ctx: WsCtx;
+  viewerName: string;
+}) {
+  const t = useTranslations("agents.list.states.denied");
+  const gaps = useTranslations("agents.list.gaps");
+  const needed = t("neededValue", {
+    permission: read.permission,
+    ws: ctx.wsSlug,
+  });
+  const facts: readonly [string, ReactNode][] = [
+    [
+      t("signedIn"),
+      <span key="who">
+        {t("signedInValue", {
+          name: viewerName,
+          role: ctx.wsRole,
+          ws: ctx.wsSlug,
+        })}
+      </span>,
+    ],
+    [
+      t("needed"),
+      <span key="needed" className={mono}>
+        {needed}
+      </span>,
+    ],
+    [
+      t("decidedBy"),
+      <span key="decided">
+        {t.rich("decidedByValue", {
+          policy: () => (
+            <span
+              data-gap="policy"
+              title={gaps("policy")}
+              className={`${mono} text-muted-foreground`}
+            >
+              {t("policyUnrecorded")}
+            </span>
+          ),
+        })}
+      </span>,
+    ],
   ];
   return (
-    <>
-      <Table label={t("list.tableLabel")} columns={columns}>
-        {page.agents.map((agent) => (
-          <tr key={agent.id} data-testid="agent-row">
-            <td className={cell}>
-              <SafeLink
-                to={routes.agent(org, ws, agent.slug)}
-                className="rounded-sm focus-visible:outline-2 focus-visible:outline-ring"
-              >
-                <AgentCard
-                  agentKey={agent.agentKey}
-                  notRecorded={t("notRecorded")}
-                  sub={agent.name}
-                />
-              </SafeLink>
-            </td>
-            {view === "composition" ? (
-              <>
-                <td className={cell}>
-                  {agent.principalId ?? <NotRecordedValue />}
-                </td>
-                <td className={numericCell}>
-                  {agent.hosts === undefined ? (
-                    <NotRecordedValue />
-                  ) : (
-                    formatCount(agent.hosts, locale)
-                  )}
-                </td>
-                <td className={numericCell}>
-                  {agent.credentials === undefined ? (
-                    <NotRecordedValue />
-                  ) : (
-                    formatCount(agent.credentials, locale)
-                  )}
-                </td>
-              </>
-            ) : null}
-            <td className={`${cell} whitespace-nowrap`}>
-              <HarnessLabel harness={agent.harness}>
-                {t(`harness.${agent.harness}`)}
-              </HarnessLabel>
-            </td>
-            <td className={cell}>
-              {agent.operatorId === null ? (
-                <NotRecordedValue />
-              ) : (
-                // `list_agents` carries the operator's id and no name yet, so
-                // the id is the label until it does; the card keeps it copyable.
-                <OperatorName
-                  operator={{ id: agent.operatorId, name: null, kind: null }}
-                >
-                  <span className={mono}>{agent.operatorId}</span>
-                </OperatorName>
-              )}
-            </td>
-            <td className={cell}>
-              <AgentStatusBadge status={agent.status} />
-            </td>
-            <td className={numericCell}>
-              {formatCount(agent.runs30d, locale)}
-            </td>
-            <td className={numericCell}>
-              {agent.spend30d === null ? (
-                <NotRecordedValue />
-              ) : (
-                <>
-                  <Money value={agent.spend30d} />
-                  <span className="block font-mono text-[10.5px] text-muted-foreground">
-                    {agent.spend30d.basis ?? t("list.basisNotRecorded")}
-                  </span>
-                </>
-              )}
-            </td>
-            <td className={numericCell}>
-              {formatCount(agent.incidents, locale)}
-            </td>
-            <td className={cell}>
-              <span className="flex items-center gap-2 whitespace-nowrap">
-                <SafeLink
-                  to={routes.agent(org, ws, agent.slug, { tab: "definition" })}
-                  className={linkText}
-                >
-                  {t("list.edit")}
-                </SafeLink>
-                {agent.status === "retired" ? null : (
-                  <RetireAgent
-                    org={org}
-                    ws={ws}
-                    agentId={agent.id}
-                    name={agent.name}
-                    after={routes.agents(org, ws)}
-                  />
-                )}
-              </span>
-            </td>
-          </tr>
-        ))}
-      </Table>
-      <Pager
-        label={t("list.pager")}
-        first={
-          cursor === null
-            ? null
-            : { to: routes.agents(org, ws, { view }), text: t("list.first") }
-        }
-        next={
-          page.nextCursor === null
-            ? null
-            : {
-                to: routes.agents(org, ws, { cursor: page.nextCursor, view }),
-                text: t("list.next"),
-              }
-        }
-      />
-    </>
+    <OutcomePanel
+      tone="deny"
+      testId="agents-denied"
+      title={t("title")}
+      actions={
+        <>
+          <RequestAccess org={ctx.orgSlug} permission={needed} />
+          <SafeLink
+            to={routes.fleet(ctx.orgSlug, ctx.wsSlug)}
+            className={buttonSecondary}
+          >
+            {t("back")}
+          </SafeLink>
+        </>
+      }
+    >
+      <span className="flex flex-col gap-3">
+        <span>
+          {t.rich("body", {
+            org: ctx.orgName,
+            permission: read.permission,
+            ws: ctx.wsSlug,
+            strong: (chunks) => (
+              <strong className="font-semibold text-foreground">
+                {chunks}
+              </strong>
+            ),
+            mono: (chunks) => <span className={mono}>{chunks}</span>,
+          })}
+        </span>
+        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-left text-xs">
+          {facts.map(([term, value]) => (
+            <div key={term} className="contents">
+              <dt>{term}</dt>
+              <dd className="text-foreground">{value}</dd>
+            </div>
+          ))}
+        </dl>
+      </span>
+    </OutcomePanel>
   );
 }
 
-function Identities({
+function ReadError({
   read,
-  cursor,
-  workspace,
-  view,
-  org,
-  ws,
+  readAt,
 }: {
-  read: Read<AgentPage>;
-  cursor: string | null;
-  workspace: string;
-  view: "composition" | "operations";
-} & Place) {
-  const t = useTranslations("agents.list");
-  const title = t("title", { workspace });
+  read: Extract<Failure, { reason: "error" }>;
+  readAt: Date;
+}) {
+  const t = useTranslations("agents.list.states.error");
+  const gaps = useTranslations("agents.list.gaps");
+  const code = `${String(read.status)} ${read.code}`;
   return (
-    <Panel id="agents-identities" title={title}>
-      {!read.ok ? (
-        <ReadFailure read={read} section={title} />
-      ) : read.value.agents.length === 0 && cursor === null ? (
-        <EmptyIdentities workspace={workspace} />
-      ) : (
-        <IdentityRows
-          page={read.value}
-          cursor={cursor}
-          org={org}
-          ws={ws}
-          view={view}
-        />
-      )}
-    </Panel>
+    <OutcomePanel
+      tone="neutral"
+      testId="agents-error"
+      title={t("title")}
+      actions={
+        <>
+          <TryAgain />
+          <OpenIncident code={code} />
+        </>
+      }
+    >
+      <span className="flex flex-col gap-2">
+        <span>
+          {t.rich("body", {
+            status: String(read.status),
+            code: read.code,
+            mono: (chunks) => <span className={mono}>{chunks}</span>,
+          })}
+        </span>
+        <span data-testid="agents-trace" className={`${mono} text-xs`}>
+          {t.rich("trace", {
+            // The design's stamp: the instant the read failed, in UTC.
+            at: `${readAt.toISOString().slice(0, 19).replace("T", " ")}Z`,
+            trace: () => (
+              <span data-gap="trace" title={gaps("trace")}>
+                {t("traceUnrecorded")}
+              </span>
+            ),
+            region: () => (
+              <span data-gap="trace" title={gaps("trace")}>
+                {t("regionUnrecorded")}
+              </span>
+            ),
+          })}
+        </span>
+      </span>
+    </OutcomePanel>
   );
+}
+
+function Pending({ request }: { request: string }) {
+  const t = useTranslations("agents.list.states.pending");
+  return (
+    <OutcomePanel tone="neutral" testId="agents-pending" title={t("title")}>
+      {t("body", { request })}
+    </OutcomePanel>
+  );
+}
+
+/**
+ * The instant the read answered. Outside the component so the purity rule,
+ * which is syntactic, does not read an async server component's once-per-
+ * request clock as a render-time impurity (as `features/mandate` does).
+ */
+function instantAfterRead(): Date {
+  return new Date();
 }
 
 export async function Agents({
   ctx,
   source,
   cursor,
-  view = "composition",
+  header,
+  viewerName,
 }: {
   ctx: WsCtx;
   source: DataSource;
-  view?: "composition" | "operations";
-  /** The identities page the URL asked for; null is the first. */
+  /** The signed-in person's name, or their email when the account has none; the denied state names them. */
+  viewerName: string;
+  /** The agents page the URL asked for; null is the first. */
   cursor: string | null;
+  /** The page header, drawn only when the page has agents to show. */
+  header: ReactNode;
 }) {
   const read = await source.agents.list(ctx, { cursor });
+  const readAt = instantAfterRead();
+  const place = { org: ctx.orgSlug, ws: ctx.wsSlug };
+  if (!read.ok) {
+    switch (read.reason) {
+      case "denied":
+        return <Denied read={read} ctx={ctx} viewerName={viewerName} />;
+      case "pending_approval":
+        return <Pending request={read.accessRequestId} />;
+      case "error":
+        return <ReadError read={read} readAt={readAt} />;
+    }
+  }
+  const page = read.value;
+  if (page.agents.length === 0 && cursor === null)
+    return <Empty workspace={ctx.wsName} {...place} />;
   return (
-    <div className="flex flex-col gap-3.5">
-      {read.ok ? <Tiles totals={read.value.totals} /> : null}
-      <ListViews org={ctx.orgSlug} ws={ctx.wsSlug} view={view} />
-      <Identities
-        read={read}
-        view={view}
-        cursor={cursor}
-        workspace={ctx.wsName}
-        org={ctx.orgSlug}
-        ws={ctx.wsSlug}
-      />
-    </div>
+    <AgentKeyPrefix value={keyPrefixOf(page.agents.map((a) => a.agentKey))}>
+      {header}
+      <div className="flex flex-col gap-4">
+        <Tiles page={page} workspace={ctx.wsName} />
+        <AgentsTable
+          rows={page.agents}
+          org={place.org}
+          ws={place.ws}
+          workspace={ctx.wsName}
+          more={
+            page.nextCursor === null
+              ? null
+              : routes.agents(place.org, place.ws, { cursor: page.nextCursor })
+          }
+          first={cursor === null ? null : routes.agents(place.org, place.ws)}
+        />
+      </div>
+    </AgentKeyPrefix>
   );
 }
 
-function ListViews({
-  org,
-  ws,
-  view,
-}: Place & { view: "composition" | "operations" }) {
-  const t = useTranslations("agents.list.views");
+/** Four tile blocks and a panel of seven rows (agents.md, loading). */
+const TILES = [0, 1, 2, 3];
+const ROWS = [0, 1, 2, 3, 4, 5, 6];
+const bone = "animate-pulse rounded bg-muted motion-reduce:animate-none";
+
+export function AgentsLoading() {
+  const t = useTranslations("agents.list.states");
   return (
-    <nav aria-label={t("label")} className="flex gap-2">
-      {(["composition", "operations"] as const).map((name) => (
-        <SafeLink
-          key={name}
-          to={routes.agents(org, ws, { view: name })}
-          aria-current={view === name ? "page" : undefined}
-          className="inline-flex min-h-11 items-center rounded-md border border-border px-3 text-sm aria-[current=page]:bg-muted"
-        >
-          {t(name)}
-        </SafeLink>
-      ))}
-    </nav>
+    <div
+      role="status"
+      aria-busy="true"
+      data-testid="agents-loading"
+      className="flex flex-col gap-4"
+    >
+      <span className="sr-only">{t("loading")}</span>
+      <div className={statStrip}>
+        {TILES.map((tile) => (
+          <span key={tile} aria-hidden="true" className={statTile}>
+            <span className={`mb-2 block h-2.5 w-20 ${bone}`} />
+            <span className={`block h-6 w-16 ${bone}`} />
+            <span className={`mt-2 block h-2.5 w-28 ${bone}`} />
+          </span>
+        ))}
+      </div>
+      <div className={`${panel} flex flex-col gap-3 p-4`}>
+        <span aria-hidden="true" className={`h-4 w-44 ${bone}`} />
+        {ROWS.map((row) => (
+          <span key={row} aria-hidden="true" className={`h-9 ${bone}`} />
+        ))}
+      </div>
+    </div>
   );
 }

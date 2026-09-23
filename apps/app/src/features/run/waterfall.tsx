@@ -24,6 +24,8 @@ import { Money } from "@/ui/money";
 import { formatCount, formatDuration, ratioWidth } from "@/ui/money-format";
 import { ReadFailure } from "@/ui/read-failure";
 import { NoValue } from "./parts";
+import { entryKey } from "./transcript-model";
+import { isWhole } from "./whole-transcript";
 
 /** The narrowest a priced turn's bar is drawn, as a share of the run total. */
 const MIN_BAR = 0.005;
@@ -64,8 +66,13 @@ function buildBars(
     const width = Math.max(a.length, b.length);
     return a.padStart(width, "0") <= b.padStart(width, "0");
   };
+  // A subagent's step is numbered on its own chain, so the run's sequence
+  // range says nothing about it. It belongs to the turn it was recorded in,
+  // which the contract states on both reads alike (`turn`).
   const inRange = (step: TranscriptEntry, turn: TranscriptEntry): boolean =>
-    before(turn.seq, step.seq) && before(step.seq, turn.endSeq);
+    step.subagent !== undefined
+      ? turn.subagent === undefined && step.turn === turn.turn
+      : before(turn.seq, step.seq) && before(step.seq, turn.endSeq);
   const bars = turns.map((turn) => {
     const before = turn.cumulativeCost;
     const width =
@@ -120,7 +127,7 @@ function StepSegments({ bar }: { bar: Bar }) {
     <span className="absolute inset-0 flex" aria-hidden="true">
       {priced.map(({ step, share }) => (
         <span
-          key={`${step.seq}-${step.endSeq}`}
+          key={`${entryKey(step)}-${step.endSeq}`}
           data-testid="waterfall-step"
           title={t("step", { label: step.label })}
           style={{ width: ratioWidth(share) }}
@@ -173,7 +180,7 @@ export function Waterfall({
       <ol data-testid="waterfall" className="flex flex-col gap-1.5">
         {bars.map((bar) => (
           <li
-            key={`${bar.turn.seq}-${bar.turn.endSeq}`}
+            key={`${entryKey(bar.turn)}-${bar.turn.endSeq}`}
             data-testid="waterfall-bar"
             data-seq={bar.turn.seq}
             className="grid grid-cols-1 items-center gap-1 text-xs sm:grid-cols-[10rem_1fr_auto]"
@@ -218,7 +225,7 @@ export function Waterfall({
           </li>
         ))}
       </ol>
-      {turns.value.complete ? null : (
+      {isWhole(turns.value) && isWhole(steps.value) ? null : (
         <p
           data-testid="waterfall-cut"
           className="max-w-prose text-xs text-muted-foreground"

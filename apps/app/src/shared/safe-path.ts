@@ -348,6 +348,11 @@ export const routes = {
       : tab === "changes" && change !== undefined
         ? pathOf(org, ws, "repositories", tab, change)
         : pathOf(org, ws, "repositories", tab),
+  /** Runtimes: the hosts agents run on (roadmap mockups/pages/runtimes.md). */
+  runtimes: (org: string, ws: string): SafePath => pathOf(org, ws, "runtimes"),
+  /** One runtime, addressed by its enrollment's public id (`tch_…`). */
+  runtime: (org: string, ws: string, runtime: string): SafePath =>
+    pathOf(org, ws, "runtimes", runtime),
   /** Canonical Steering sections, with legacy query links retained for redirects. */
   steering: (
     org: string,

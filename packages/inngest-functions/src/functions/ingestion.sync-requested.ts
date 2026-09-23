@@ -91,6 +91,10 @@ export const [ingestionSyncRequested] = createFunction(
       return { skipped: true, reason: "connection_not_found" };
     }
 
+    if (conn.delivery_config?.["runOutcomesOnly"] === true) {
+      return { skipped: true, reason: "issue_connection_not_ingestible" };
+    }
+
     if (conn.status === "deleting" || conn.status === "deleted") {
       logger.warn(
         { connectionId, orgId, jobId, status: conn.status },
