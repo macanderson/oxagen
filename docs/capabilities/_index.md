@@ -141,6 +141,9 @@ after the registered name separately when their contract uses a dotted stem.
 
 | Capability | Contract | Declared surfaces |
 | --- | --- | --- |
+| [create_prepaid_invoice](billing.prepaid_invoice.create.md) | [billing.prepaid_invoice.create.ts](../../packages/oxagen/src/contracts/billing.prepaid_invoice.create.ts) | none |
+| [export_billing_statement](billing.statement.export.md) | [billing.statement.export.ts](../../packages/oxagen/src/contracts/billing.statement.export.ts) | api, mcp, cli |
+| [get_billing_statement](billing.statement.get.md) | [billing.statement.get.ts](../../packages/oxagen/src/contracts/billing.statement.get.ts) | api, mcp, cli |
 | [get_contract_rate](billing.contract_rate.get.md) | [billing.contract_rate.get.ts](../../packages/oxagen/src/contracts/billing.contract_rate.get.ts) | api, mcp, agent |
 | [get_evidence_retention](billing.evidence_retention.md) | [billing.evidence_retention.ts](../../packages/oxagen/src/contracts/billing.evidence_retention.ts) | api, mcp, agent |
 | [get_gau_bucket](billing.gau_bucket.get.md) | [billing.gau_bucket.get.ts](../../packages/oxagen/src/contracts/billing.gau_bucket.get.ts) | api, mcp |
@@ -149,10 +152,12 @@ after the registered name separately when their contract uses a dotted stem.
 | [get_subscription](billing.subscription.read.md) | [billing.subscription.read.ts](../../packages/oxagen/src/contracts/billing.subscription.read.ts) | api, mcp, agent |
 | [get_usage_breakdown](billing.usage.breakdown.md) | [billing.usage.breakdown.ts](../../packages/oxagen/src/contracts/billing.usage.breakdown.ts) | api, mcp, agent |
 | [list_invoices](billing.invoice.list.md) | [billing.invoice.list.ts](../../packages/oxagen/src/contracts/billing.invoice.list.ts) | api, mcp |
+| [list_prepaid_orders](billing.prepaid_order.list.md) | [billing.prepaid_order.list.ts](../../packages/oxagen/src/contracts/billing.prepaid_order.list.ts) | api, mcp |
 | [preview_action_cost](billing.action_estimate.md) | [billing.action_estimate.ts](../../packages/oxagen/src/contracts/billing.action_estimate.ts) | api, mcp, agent |
 | [purchase_credits](billing.credits.purchase.md) | [billing.credits.purchase.ts](../../packages/oxagen/src/contracts/billing.credits.purchase.ts) | api, mcp, agent |
 | [purchase_gau_bucket](billing.gau_bucket.purchase.md) | [billing.gau_bucket.purchase.ts](../../packages/oxagen/src/contracts/billing.gau_bucket.purchase.ts) | api, mcp, agent |
 | [set_auto_topup](billing.auto_topup.set.md) | [billing.auto_topup.set.ts](../../packages/oxagen/src/contracts/billing.auto_topup.set.ts) | api, mcp |
+| [set_contract_terms](billing.contract_terms.set.md) | [billing.contract_terms.set.ts](../../packages/oxagen/src/contracts/billing.contract_terms.set.ts) | none |
 | [set_org_billing_terms](billing.org_terms.set.md) | [billing.org_terms.set.ts](../../packages/oxagen/src/contracts/billing.org_terms.set.ts) | none |
 | [set_spend_budget](billing.budget.set.md) | [billing.budget.set.ts](../../packages/oxagen/src/contracts/billing.budget.set.ts) | api, mcp, agent, cli |
 | [start_subscription_upgrade](billing.subscription_upgrade.start.md) | [billing.subscription_upgrade.start.ts](../../packages/oxagen/src/contracts/billing.subscription_upgrade.start.ts) | api, mcp, agent |

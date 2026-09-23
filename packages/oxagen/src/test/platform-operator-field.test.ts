@@ -38,6 +38,10 @@ const GOVERNED = ["platformOperator", "createPlatformOperatorContext"] as const;
 const ALLOWED = new Set([
   "tools/scripts/billing-terms.ts",
   "tools/scripts/run-outcomes-access.ts",
+  // The shared invoke path of the enterprise-invoicing operator scripts
+  // (pnpm billing:contract-terms, pnpm billing:prepaid-invoice, ADR-158).
+  // The scripts themselves name neither identifier; they call through it.
+  "tools/scripts/lib/platform-operator-run.ts",
 ]);
 
 /** The package that owns the binding; everything under it is exempt. */

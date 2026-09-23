@@ -75,6 +75,9 @@ import { billingContractRateGet } from "@oxagen/oxagen/contracts/billing.contrac
 import { billingGauBucketGet } from "@oxagen/oxagen/contracts/billing.gau_bucket.get";
 import { billingGauBucketPurchase } from "@oxagen/oxagen/contracts/billing.gau_bucket.purchase";
 import { billingInvoiceList } from "@oxagen/oxagen/contracts/billing.invoice.list";
+import { billingPrepaidOrderList } from "@oxagen/oxagen/contracts/billing.prepaid_order.list";
+import { billingStatementGet } from "@oxagen/oxagen/contracts/billing.statement.get";
+import { billingStatementExport } from "@oxagen/oxagen/contracts/billing.statement.export";
 import { toolVersionList } from "@oxagen/oxagen/contracts/tool.version.list";
 import { toolClassificationSet } from "@oxagen/oxagen/contracts/tool.classification.set";
 import { toolImport } from "@oxagen/oxagen/contracts/tool.import";
@@ -196,6 +199,9 @@ import { billingContractRateGetRoute } from "./billing.contract_rate.get";
 import { billingGauBucketGetRoute } from "./billing.gau_bucket.get";
 import { billingGauBucketPurchaseRoute } from "./billing.gau_bucket.purchase";
 import { billingInvoiceListRoute } from "./billing.invoice.list";
+import { billingPrepaidOrderListRoute } from "./billing.prepaid_order.list";
+import { billingStatementGetRoute } from "./billing.statement.get";
+import { billingStatementExportRoute } from "./billing.statement.export";
 import { toolVersionListRoute } from "./tool.version.list";
 import { toolClassificationSetRoute } from "./tool.classification.set";
 import { toolImportRoute } from "./tool.import";
@@ -885,6 +891,43 @@ const ROUTES: ThinRoute[] = [
     capability: billingInvoiceList.name,
     body: { limit: 10 },
     invalidBody: { limit: 0 },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "billing.prepaid_order.list",
+    route: billingPrepaidOrderListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: billingPrepaidOrderList.name,
+    body: { limit: 10 },
+    invalidBody: { limit: 101 },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "billing.statement.get",
+    route: billingStatementGetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: billingStatementGet.name,
+    body: { period: "month", anchor: "2026-09-01" },
+    expectedInput: { period: "month", anchor: "2026-09-01", top: 25 },
+    invalidBody: { period: "fortnight", anchor: "2026-09-01" },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "billing.statement.export",
+    route: billingStatementExportRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: billingStatementExport.name,
+    body: { period: "quarter", anchor: "2026-07-01", format: "html" },
+    expectedInput: {
+      period: "quarter",
+      anchor: "2026-07-01",
+      format: "html",
+      limit: 10_000,
+    },
+    invalidBody: { period: "quarter", anchor: "2026-07-01", format: "pdf" },
     jsonGuard: true,
     status: 200,
   },

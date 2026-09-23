@@ -83,6 +83,22 @@ vi.mock("./gau-settlements", async (importOriginal) => {
   };
 });
 
+// The prepaid-order grant and close (prepaid-orders.ts) have their own
+// tests; here only the dispatch on the invoice's prepaid order is asserted.
+const grantPrepaidOrderMock = vi.fn().mockResolvedValue(undefined);
+const closePrepaidOrderMock = vi.fn().mockResolvedValue(undefined);
+vi.mock(
+  "./prepaid-orders",
+  () =>
+    ({
+      grantPrepaidOrder: grantPrepaidOrderMock,
+      closePrepaidOrder: closePrepaidOrderMock,
+    }) satisfies Pick<
+      typeof import("./prepaid-orders"),
+      "grantPrepaidOrder" | "closePrepaidOrder"
+    >,
+);
+
 vi.mock("drizzle-orm", async (importOriginal) => {
   const real = await importOriginal<typeof import("drizzle-orm")>();
   const { conditionMocks } = await import("./test-utils/gau-conditions");
@@ -1230,5 +1246,119 @@ describe("processStripeEvent — governed-action settlement invoices", () => {
     await expect(
       tenantScope.realWithTenantDb!(async () => undefined),
     ).rejects.toThrow("No active tenant scope");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Prepaid orders (prepaid-orders.ts, ADR-158)
+// ---------------------------------------------------------------------------
+
+describe("processStripeEvent: prepaid-order invoices", () => {
+  const ORDER = "0192d4a8-7c1e-7a00-8000-0000000000d1";
+  const CAP = { kind: "set" as const, capCents: 600_000 };
+
+  function prepaidInvoice(over: Partial<BillingInvoice> = {}): BillingInvoice {
+    return {
+      id: "in_pre_001",
+      providerInvoiceId: "in_pre_001",
+      number: "OXA-0042",
+      status: "paid",
+      amountDueCents: 12_500_000,
+      amountPaidCents: 12_500_000,
+      amountRemainingCents: 0,
+      currency: "usd",
+      periodStart: new Date("2026-09-23T00:00:00.000Z"),
+      periodEnd: new Date("2026-09-23T00:00:00.000Z"),
+      dueAt: null,
+      paidAt: new Date("2026-10-10T00:00:00.000Z"),
+      hostedInvoiceUrl: null,
+      invoicePdfUrl: null,
+      subscriptionId: null,
+      orgId: "org-ent",
+      billingReason: "manual",
+      gauSettlementId: null,
+      prepaidOrder: { orderId: ORDER, assistantSpendCap: CAP },
+      lineItems: [],
+      ...over,
+    };
+  }
+
+  async function deliver(
+    type: BillingWebhookEvent["type"],
+    invoice: BillingInvoice,
+  ) {
+    dbState.instance = makeDb([{ id: `row-pre-${type}` }]);
+    return processStripeEvent(
+      makeWebhookEvent({
+        providerEventId: `evt_pre_${type}`,
+        type,
+        subscriptionId: undefined,
+        invoice,
+      }),
+    );
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("grants the order on invoice.paid, naming the invoice and the cap instruction the metadata carries", async () => {
+    await expect(deliver("invoice.paid", prepaidInvoice())).resolves.toEqual({
+      status: "applied",
+    });
+    expect(grantPrepaidOrderMock).toHaveBeenCalledWith(ORDER, {
+      trigger: "paid",
+      stripeInvoiceId: "in_pre_001",
+      assistantSpendCap: CAP,
+    });
+    expect(closePrepaidOrderMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["invoice.voided", "void"],
+    ["invoice.marked_uncollectible", "uncollectible"],
+  ] as const)("mirrors %s onto the order as %s", async (type, status) => {
+    await deliver(type, prepaidInvoice({ status }));
+    expect(closePrepaidOrderMock).toHaveBeenCalledWith(ORDER, {
+      status,
+      stripeInvoiceId: "in_pre_001",
+    });
+    expect(grantPrepaidOrderMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "invoice.created",
+    "invoice.finalized",
+    "invoice.payment_failed",
+  ] as const)("does nothing to the order on %s", async (type) => {
+    await deliver(type, prepaidInvoice({ status: "open" }));
+    expect(grantPrepaidOrderMock).not.toHaveBeenCalled();
+    expect(closePrepaidOrderMock).not.toHaveBeenCalled();
+  });
+
+  it("never touches an order for an invoice that names none", async () => {
+    await deliver("invoice.paid", prepaidInvoice({ prepaidOrder: null }));
+    await deliver(
+      "invoice.voided",
+      prepaidInvoice({ prepaidOrder: undefined, status: "void" }),
+    );
+    expect(grantPrepaidOrderMock).not.toHaveBeenCalled();
+    expect(closePrepaidOrderMock).not.toHaveBeenCalled();
+  });
+
+  it("records a failed grant and rethrows, so Stripe redelivers", async () => {
+    grantPrepaidOrderMock.mockRejectedValueOnce(
+      new Error("Invoice in_pre_001 names order x, which records invoice y."),
+    );
+    await expect(deliver("invoice.paid", prepaidInvoice())).rejects.toThrow(
+      /records invoice y/,
+    );
+    expect(
+      dbState.instance!._processingInsertChain.onConflictDoUpdate,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        set: { processingError: expect.stringMatching(/records invoice y/) },
+      }),
+    );
   });
 });

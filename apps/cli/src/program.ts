@@ -394,6 +394,46 @@ export function buildProgram(): Command {
       await priceRemove(opts as Parameters<typeof priceRemove>[0]);
     });
 
+  // ── billing: the organization's statement (get_billing_statement /
+  //    export_billing_statement, ADR-158). Owner/Admin/Billing only. ────────
+
+  const billingCmd = program
+    .command("billing")
+    .description("The organization's billing statements");
+  billingCmd
+    .command("statement")
+    .description(
+      "Read or export the billing statement for a week, month, quarter, year or custom period",
+    )
+    .requiredOption(
+      "--period <period>",
+      "week | month | quarter | year | custom",
+    )
+    .option(
+      "--anchor <date>",
+      "A UTC date inside the week, month, quarter or year (YYYY-MM-DD); omit for today",
+    )
+    .option("--from <instant>", "custom: the first instant, RFC 3339")
+    .option(
+      "--to <instant>",
+      "custom: the first instant after the period, RFC 3339; more than 48 hours after --from",
+    )
+    .option(
+      "--format <format>",
+      "summary | csv | html (csv pages every billed governed action)",
+      "summary",
+    )
+    .option("--out <file>", "Write csv or html to this file instead of stdout")
+    .option("--top <n>", "summary: rows per breakdown, 1 to 100")
+    .option("--page-size <n>", "csv: ledger rows per request, 1 to 50000")
+    .option("--json", "Output JSON")
+    .action(async (opts: Record<string, unknown>) => {
+      const { billingStatement } = await import(
+        "./commands/billing-statement.js"
+      );
+      await billingStatement(opts as Parameters<typeof billingStatement>[0]);
+    });
+
   // ── context: a steering proposal on a lineage (propose_record) ──────────────
 
   const contextCmd = program

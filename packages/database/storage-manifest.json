@@ -344,6 +344,13 @@
       "writes": []
     },
     {
+      "domain": "billing",
+      "name": "create_prepaid_invoice",
+      "reads": [],
+      "surfaces": [],
+      "writes": []
+    },
+    {
       "domain": "iam",
       "name": "create_role",
       "reads": [],
@@ -733,6 +740,17 @@
       "writes": []
     },
     {
+      "domain": "billing",
+      "name": "export_billing_statement",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "conversation",
       "name": "export_conversation",
       "reads": [],
@@ -892,6 +910,17 @@
       "reads": [],
       "surfaces": [
         "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "billing",
+      "name": "get_billing_statement",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
         "mcp"
       ],
       "writes": []
@@ -2209,6 +2238,16 @@
       "writes": []
     },
     {
+      "domain": "billing",
+      "name": "list_prepaid_orders",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "cost",
       "name": "list_price_entries",
       "reads": [],
@@ -3177,6 +3216,13 @@
       "writes": []
     },
     {
+      "domain": "billing",
+      "name": "set_contract_terms",
+      "reads": [],
+      "surfaces": [],
+      "writes": []
+    },
+    {
       "domain": "spend",
       "name": "set_cost_center",
       "reads": [],
@@ -3918,7 +3964,7 @@
       "writes": []
     }
   ],
-  "contentHash": "613e10961fb81702a3a232ddd3426aa5902c001b7305f14064d35a442e4edb38",
+  "contentHash": "cba6921f5d2575a3c9f965e702a5914f2f143166f756da0d23be27203bbbe4c7",
   "domains": [
     {
       "name": "agent",

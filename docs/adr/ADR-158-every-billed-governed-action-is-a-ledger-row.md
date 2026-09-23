@@ -82,7 +82,7 @@ The recall of workspace memory that opens each turn now runs inside the turn's f
 
 ### 6. Enterprise orders are paid in advance on an invoice
 
-`billing.prepaid_orders` records an order a platform operator issues with `issue_prepaid_invoice` (platform-only). One order carries up to three lines on one Stripe invoice: the platform licence for a period, prepaid governed action units at the contracted rate, and prepaid usage credits for the in-app assistant. The units and credits are granted when the invoice is paid, or when it is issued for an order the operator marks `grant_on = 'issue'`. The grant is idempotent on the order. `set_contract_terms` (platform-only) writes the negotiated terms that `billing.contract_terms` previously received only by hand. A customer tops up at any time by card through `purchase_credits`, or the operator issues another prepaid order.
+`billing.prepaid_orders` records an order a platform operator issues with `create_prepaid_invoice` (platform-only). One order carries up to three lines on one Stripe invoice: the platform licence for a period, prepaid governed action units at the contracted rate, and prepaid usage credits for the in-app assistant. The units and credits are granted when the invoice is paid, or when it is issued for an order the operator marks `grant_on = 'issue'`. The grant is idempotent on the order. `set_contract_terms` (platform-only) writes the negotiated terms that `billing.contract_terms` previously received only by hand. A customer tops up at any time by card through `purchase_credits`, or the operator issues another prepaid order.
 
 ## Alternatives
 

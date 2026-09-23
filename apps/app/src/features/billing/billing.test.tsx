@@ -238,6 +238,7 @@ describe("section order", () => {
       "billing-this-period",
       "billing-meters",
       "billing-invoices",
+      "billing-statements",
       "billing-price-list",
       "billing-billable-units",
       "billing-auto-topup",
@@ -462,6 +463,19 @@ describe("Meters", () => {
       bucket: readOk(invoiceBucket({ pastDue: true })),
     });
     expect(section("Meters").querySelector("[data-mode]")).toBeNull();
+  });
+});
+
+describe("Statements", () => {
+  it("draws the Statements section in the left column, after Invoices", async () => {
+    await renderBilling();
+    const invoices = section("Invoices");
+    const statements = section("Statements");
+    expect(invoices.parentElement).toBe(statements.parentElement);
+    expect(
+      invoices.compareDocumentPosition(statements) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 });
 

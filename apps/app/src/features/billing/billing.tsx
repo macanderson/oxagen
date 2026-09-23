@@ -54,6 +54,7 @@ import { Meters } from "./meters";
 import { PriceList } from "./price-list";
 import { PurchaseForm } from "./purchase-form";
 import { statementFor } from "./statement";
+import { Statements } from "./statements";
 import {
   BillingDenied,
   BillingEmpty,
@@ -75,6 +76,12 @@ const PLAN_OPTIONS: readonly PlanOption[] = UPGRADE_PLANS.map((plan) => ({
 }));
 
 /** Who may start a plan change or buy: the roles `start_subscription_upgrade` and the purchases gate. */
+/** Who may download a statement: the roles `export_billing_statement` gates. */
+const readsStatements = (ctx: OrgCtx) =>
+  ctx.orgRole === "owner" ||
+  ctx.orgRole === "admin" ||
+  ctx.orgRole === "billing";
+
 const buysFor = (ctx: OrgCtx) =>
   ctx.orgRole === "owner" || ctx.orgRole === "billing";
 
@@ -285,6 +292,11 @@ export async function Billing({
             invoices={invoices.value}
             cursor={cursor}
             org={ctx.orgSlug}
+          />
+          <Statements
+            org={ctx.orgSlug}
+            today={new Date().toISOString().slice(0, 10)}
+            allowed={readsStatements(ctx)}
           />
         </div>
         <div className="flex min-w-0 flex-col gap-4">

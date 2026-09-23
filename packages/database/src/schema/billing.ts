@@ -1279,7 +1279,7 @@ export const gauLedger = billingSchema.table(
 // ADR-158: an enterprise order paid in advance on a Stripe invoice. One order
 // can carry up to three lines: the platform licence for a period, prepaid
 // governed action units, and prepaid usage credits for the in-app assistant.
-// A platform operator issues it (`issue_prepaid_invoice`, platformOnly); the
+// A platform operator issues it (`create_prepaid_invoice`, platformOnly); the
 // units and the credits are granted when the invoice is paid, or when it is
 // issued for an order marked `grant_on = 'issue'`. `units_granted_at` and
 // `credits_granted_at` are the grant's idempotency fence.
@@ -1336,7 +1336,7 @@ export const prepaidOrders = billingSchema.table(
       withTimezone: true,
       mode: "date",
     }),
-    /** The operator run's request id (createPlatformOperatorContext). */
+    /** The operator run's request id (the platform-operator binding's requestId). */
     issuedByRequestId: text("issued_by_request_id"),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
       .notNull()

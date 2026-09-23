@@ -32,6 +32,13 @@ const BILLING_PAGE_CONTRACTS = [
   // Change plan on the Billing page (#3309). A prepaid org at remaining = 0
   // is the one that needs to upgrade; without the flag the kernel refused it.
   "start_subscription_upgrade",
+  // Statements on the Billing page (ADR-158). A finance team reconciling a
+  // month at remaining = 0 is exactly the reader who needs one.
+  "get_billing_statement",
+  "export_billing_statement",
+  // ADR-158: the org's prepaid orders. An enterprise whose bucket is empty
+  // must still be able to read what it prepaid and whether it was granted.
+  "list_prepaid_orders",
 ] as const;
 
 /** INV-28: the §1.5 list — every rev1 invoke that is not a governed action. */
