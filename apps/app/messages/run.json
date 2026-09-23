@@ -25,7 +25,8 @@
       "empty": "Nothing resolved for this run yet.",
       "execution": "Execution",
       "reason": "Reason",
-      "resumedRun": "Resumed run"
+      "resumedRun": "Resumed run",
+      "more": "Showing the {count, number} most recent resolved approvals. This run has more."
     },
     "tabs": {
       "label": "Run sections",

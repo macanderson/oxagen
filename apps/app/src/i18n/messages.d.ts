@@ -3666,6 +3666,7 @@ type Messages = {
       execution: string;
       reason: string;
       resumedRun: string;
+      more: string;
     };
     tabs: {
       label: string;

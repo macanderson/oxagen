@@ -3,8 +3,15 @@
 // `ApprovalsPanel` so the tab reads top to bottom as "what is waiting, then
 // what already happened," the receipt `autoApprovePath` writes for a call a
 // decision rule released with no person, read back for the first time.
+//
+// The read stops at 1,000 rows. When the run holds more, the ledger says
+// `more` and the panel says the list is partial under the cards, so the first
+// 1,000 never read as the whole ledger (#3477).
 import { useTranslations } from "next-intl";
-import type { ResolvedApprovalItem } from "@/data/contracts/approvals";
+import type {
+  ResolvedApprovalItem,
+  ResolvedApprovalLedger,
+} from "@/data/contracts/approvals";
 import type { Read } from "@/data/read";
 import { mono, panel } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
@@ -73,7 +80,7 @@ function ResolvedApprovalRow({ item }: { item: ResolvedApprovalItem }) {
 export function ResolvedApprovalsPanel({
   approvals,
 }: {
-  approvals: Read<ResolvedApprovalItem[]>;
+  approvals: Read<ResolvedApprovalLedger>;
 }) {
   const t = useTranslations("run.resolvedApprovals");
   return (
@@ -88,14 +95,24 @@ export function ResolvedApprovalsPanel({
       </div>
       {!approvals.ok ? (
         <ReadFailure read={approvals} section={t("title")} />
-      ) : approvals.value.length === 0 ? (
+      ) : approvals.value.items.length === 0 ? (
         <p className="text-sm">{t("empty")}</p>
       ) : (
-        <ul className="grid gap-3 md:grid-cols-2">
-          {approvals.value.map((item) => (
-            <ResolvedApprovalRow key={item.id} item={item} />
-          ))}
-        </ul>
+        <>
+          <ul className="grid gap-3 md:grid-cols-2">
+            {approvals.value.items.map((item) => (
+              <ResolvedApprovalRow key={item.id} item={item} />
+            ))}
+          </ul>
+          {approvals.value.more ? (
+            <p
+              data-testid="resolved-approvals-more"
+              className="pt-3 text-sm text-muted-foreground"
+            >
+              {t("more", { count: approvals.value.items.length })}
+            </p>
+          ) : null}
+        </>
       )}
     </section>
   );

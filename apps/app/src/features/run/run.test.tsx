@@ -1384,7 +1384,7 @@ describe("approvals on the run", () => {
       {
         detail: ok(runDetail()),
         approvals: ok({ items: [], more: false }),
-        resolvedApprovals: ok([]),
+        resolvedApprovals: ok({ items: [], more: false }),
       },
       // Transcript, not Governed actions: the count reads on every tab.
       { tab: "transcript" },
@@ -1399,7 +1399,7 @@ describe("approvals on the run", () => {
       {
         detail: ok(runDetail()),
         approvals: ok({ items: [], more: false }),
-        resolvedApprovals: ok([]),
+        resolvedApprovals: ok({ items: [], more: false }),
       },
       { tab: "approvals" },
     );
@@ -1428,7 +1428,7 @@ describe("approvals on the run", () => {
           ],
           more: false,
         }),
-        resolvedApprovals: ok([]),
+        resolvedApprovals: ok({ items: [], more: false }),
       },
       { tab: "approvals" },
     );
@@ -1467,7 +1467,7 @@ describe("approvals on the run", () => {
           ],
           more: false,
         }),
-        resolvedApprovals: ok([]),
+        resolvedApprovals: ok({ items: [], more: false }),
       },
       { tab: "approvals" },
     );
@@ -1506,7 +1506,7 @@ describe("approvals on the run", () => {
           ],
           more: false,
         }),
-        resolvedApprovals: ok([]),
+        resolvedApprovals: ok({ items: [], more: false }),
         mandates: mandateList([mandateRow()]),
       },
       { tab: "approvals" },
@@ -1541,7 +1541,7 @@ describe("approvals on the run", () => {
           ],
           more: false,
         }),
-        resolvedApprovals: ok([]),
+        resolvedApprovals: ok({ items: [], more: false }),
       },
       { tab: "approvals" },
     );
@@ -1555,25 +1555,28 @@ describe("approvals on the run", () => {
       {
         detail: ok(runDetail()),
         approvals: ok({ items: [], more: false }),
-        resolvedApprovals: ok([
-          {
-            id: "apr_2",
-            runId: "tse_7k2m9q",
-            tool: "stripe__create_payment",
-            requester: null,
-            createdAt: new Date(NOW - 60_000).toISOString(),
-            expiresAt: new Date(NOW + 3_600_000).toISOString(),
-            resolvedAt: new Date(NOW - 30_000).toISOString(),
-            resolution: "approved",
-            execution: {
-              status: "succeeded",
-              runId: "arun_resumed",
-              reason: null,
+        resolvedApprovals: ok({
+          items: [
+            {
+              id: "apr_2",
+              runId: "tse_7k2m9q",
+              tool: "stripe__create_payment",
+              requester: null,
+              createdAt: new Date(NOW - 60_000).toISOString(),
+              expiresAt: new Date(NOW + 3_600_000).toISOString(),
+              resolvedAt: new Date(NOW - 30_000).toISOString(),
+              resolution: "approved",
+              execution: {
+                status: "succeeded",
+                runId: "arun_resumed",
+                reason: null,
+              },
+              resolvedBy: "policy:small-vendor-payments",
+              autoRuleRef: "small-vendor-payments",
             },
-            resolvedBy: "policy:small-vendor-payments",
-            autoRuleRef: "small-vendor-payments",
-          },
-        ]),
+          ],
+          more: false,
+        }),
       },
       { tab: "approvals" },
     );
@@ -1593,20 +1596,23 @@ describe("approvals on the run", () => {
       {
         detail: ok(runDetail()),
         approvals: ok({ items: [], more: false }),
-        resolvedApprovals: ok([
-          {
-            id: "apr_expired",
-            runId: "tse_7k2m9q",
-            tool: "delete_workspace",
-            requester: null,
-            createdAt: new Date(NOW - 600_000).toISOString(),
-            expiresAt: new Date(NOW - 300_000).toISOString(),
-            resolvedAt: new Date(NOW - 300_000).toISOString(),
-            resolution: "expired",
-            resolvedBy: null,
-            autoRuleRef: null,
-          },
-        ]),
+        resolvedApprovals: ok({
+          items: [
+            {
+              id: "apr_expired",
+              runId: "tse_7k2m9q",
+              tool: "delete_workspace",
+              requester: null,
+              createdAt: new Date(NOW - 600_000).toISOString(),
+              expiresAt: new Date(NOW - 300_000).toISOString(),
+              resolvedAt: new Date(NOW - 300_000).toISOString(),
+              resolution: "expired",
+              resolvedBy: null,
+              autoRuleRef: null,
+            },
+          ],
+          more: false,
+        }),
       },
       { tab: "approvals" },
     );
@@ -1615,6 +1621,70 @@ describe("approvals on the run", () => {
     );
     expect(screen.getByTestId("resolved-approver")).not.toHaveTextContent(
       "unknown",
+    );
+  });
+
+  // #3477: the resolved read stops at 1,000 rows. When the run holds more, the
+  // panel says the list is partial and the tab count reads as a floor.
+  it("says the resolved list is partial when the read stopped at its bound", async () => {
+    const resolvedRow = (i: number) => ({
+      id: `apr_r${i}`,
+      runId: "tse_7k2m9q",
+      tool: "stripe__create_payment",
+      requester: null,
+      createdAt: new Date(NOW - 60_000).toISOString(),
+      expiresAt: new Date(NOW + 3_600_000).toISOString(),
+      resolvedAt: new Date(NOW - 30_000).toISOString(),
+      resolution: "approved" as const,
+      resolvedBy: "policy:small-vendor-payments",
+      autoRuleRef: "small-vendor-payments",
+    });
+    await renderRun(
+      {
+        detail: ok(runDetail()),
+        approvals: ok({ items: [], more: false }),
+        resolvedApprovals: ok({
+          items: [resolvedRow(1), resolvedRow(2)],
+          more: true,
+        }),
+      },
+      { tab: "approvals" },
+    );
+    expect(screen.getByTestId("resolved-approvals-more")).toHaveTextContent(
+      "Showing the 2 most recent resolved approvals. This run has more.",
+    );
+    expect(screen.getByTestId("run-tab-count-actions")).toHaveTextContent("2+");
+  });
+
+  it("draws no partial note when the resolved read reached the end (negative)", async () => {
+    await renderRun(
+      {
+        detail: ok(runDetail()),
+        approvals: ok({ items: [], more: false }),
+        resolvedApprovals: ok({
+          items: [
+            {
+              id: "apr_r1",
+              runId: "tse_7k2m9q",
+              tool: "stripe__create_payment",
+              requester: null,
+              createdAt: new Date(NOW - 60_000).toISOString(),
+              expiresAt: new Date(NOW + 3_600_000).toISOString(),
+              resolvedAt: new Date(NOW - 30_000).toISOString(),
+              resolution: "approved",
+              resolvedBy: "policy:small-vendor-payments",
+              autoRuleRef: "small-vendor-payments",
+            },
+          ],
+          more: false,
+        }),
+      },
+      { tab: "approvals" },
+    );
+    expect(screen.getAllByTestId("resolved-approval")).toHaveLength(1);
+    expect(screen.queryByTestId("resolved-approvals-more")).toBeNull();
+    expect(screen.getByTestId("run-tab-count-actions")).toHaveTextContent(
+      /^1$/,
     );
   });
 

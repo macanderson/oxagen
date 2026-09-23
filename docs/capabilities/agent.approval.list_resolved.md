@@ -68,6 +68,12 @@ Only public ids leave the handler.
 - **Paging:** the cursor is the last row's `(resolved_at, public_id)`,
   descending, so a page after the cursor has no duplicate and no gap even when
   several rows share a `resolved_at`.
+- **The Run page's reading:** the Approvals tab walks this cursor for one run,
+  up to 10 pages of 100 rows. When the tenth page still carries a
+  `nextCursor`, the app keeps that as `more`, and the panel says it shows the
+  1,000 most recent resolved approvals and that the run has more. The first
+  1,000 never read as the whole ledger (#3477,
+  `apps/app/src/data/live/approvals.ts`).
 
 ## Side effects
 

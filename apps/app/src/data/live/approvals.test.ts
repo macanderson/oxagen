@@ -183,20 +183,23 @@ describe("approvals.resolved (#3153)", () => {
       readOk({ items: [resolvedItem], nextCursor: null }),
     );
     expect(await approvals.resolved(ctx, { runId: "arun_7k2m9q" })).toEqual(
-      readOk([
-        {
-          id: "apr_q8t1",
-          runId: "arun_7k2m9q",
-          tool: "stripe__create_payment",
-          requester: null,
-          createdAt: "2026-09-18T10:00:00.000Z",
-          expiresAt: "2026-09-18T10:05:00.000Z",
-          resolvedAt: "2026-09-18T10:00:01.000Z",
-          resolution: "approved",
-          resolvedBy: "policy:small-vendor-payments",
-          autoRuleRef: "small-vendor-payments",
-        },
-      ]),
+      readOk({
+        items: [
+          {
+            id: "apr_q8t1",
+            runId: "arun_7k2m9q",
+            tool: "stripe__create_payment",
+            requester: null,
+            createdAt: "2026-09-18T10:00:00.000Z",
+            expiresAt: "2026-09-18T10:05:00.000Z",
+            resolvedAt: "2026-09-18T10:00:01.000Z",
+            resolution: "approved",
+            resolvedBy: "policy:small-vendor-payments",
+            autoRuleRef: "small-vendor-payments",
+          },
+        ],
+        more: false,
+      }),
     );
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: agentApprovalListResolved,
@@ -220,10 +223,12 @@ describe("approvals.resolved (#3153)", () => {
         }),
       );
     const out = await approvals.resolved(ctx, { runId: "arun_7k2m9q" });
-    expect(out.ok && out.value.map((i) => i.id)).toEqual([
+    expect(out.ok && out.value.items.map((i) => i.id)).toEqual([
       "apr_q8t1",
       "apr_next",
     ]);
+    // The walk reached the end of the ledger, so nothing says it is partial.
+    expect(out.ok && out.value.more).toBe(false);
     expect(kernelRead).toHaveBeenCalledTimes(2);
     expect(kernelRead).toHaveBeenNthCalledWith(2, ctx, {
       contract: agentApprovalListResolved,
@@ -232,13 +237,47 @@ describe("approvals.resolved (#3153)", () => {
     });
   });
 
-  it("stops at MAX_RESOLVED_PAGES rather than paging a run's ledger forever (negative)", async () => {
-    kernelRead.mockImplementation(() =>
-      Promise.resolve(readOk({ items: [resolvedItem], nextCursor: "more" })),
-    );
+  // #3477: a run with more than 1,000 resolved approvals stops at the bound
+  // and says so, rather than dropping the last cursor and reading as complete.
+  it("stops at MAX_RESOLVED_PAGES and says the ledger holds more (negative)", async () => {
+    let n = 0;
+    kernelRead.mockImplementation(() => {
+      n += 1;
+      // Eleven full pages of 100: one more page than the bound takes.
+      return Promise.resolve(
+        readOk({
+          items: Array.from({ length: 100 }, (_, i) => ({
+            ...resolvedItem,
+            id: `apr_p${n}r${i}`,
+          })),
+          nextCursor: n < 11 ? `c${n + 1}` : null,
+        }),
+      );
+    });
     const out = await approvals.resolved(ctx, { runId: "arun_7k2m9q" });
     expect(kernelRead).toHaveBeenCalledTimes(10);
-    expect(out.ok && out.value).toHaveLength(10);
+    expect(out.ok && out.value.items).toHaveLength(1_000);
+    expect(out.ok && out.value.more).toBe(true);
+  });
+
+  it("reads exactly 1,000 rows as complete when the tenth page ends the ledger", async () => {
+    let n = 0;
+    kernelRead.mockImplementation(() => {
+      n += 1;
+      return Promise.resolve(
+        readOk({
+          items: Array.from({ length: 100 }, (_, i) => ({
+            ...resolvedItem,
+            id: `apr_p${n}r${i}`,
+          })),
+          nextCursor: n < 10 ? `c${n + 1}` : null,
+        }),
+      );
+    });
+    const out = await approvals.resolved(ctx, { runId: "arun_7k2m9q" });
+    expect(kernelRead).toHaveBeenCalledTimes(10);
+    expect(out.ok && out.value.items).toHaveLength(1_000);
+    expect(out.ok && out.value.more).toBe(false);
   });
 
   it("passes a failed read through, without paging further (negative)", async () => {

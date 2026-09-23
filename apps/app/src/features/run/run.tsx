@@ -6,7 +6,7 @@ import type { TranscriptKind } from "@/data/contracts/run";
 import { TRANSCRIPT_KINDS } from "@/data/contracts/run";
 import type {
   ApprovalQueue,
-  ResolvedApprovalItem,
+  ResolvedApprovalLedger,
 } from "@/data/contracts/approvals";
 import type { MandateRow } from "@/data/contracts/mandates";
 import type { RunCost, RunTranscript } from "@/data/contracts/run";
@@ -76,7 +76,7 @@ type Counted = {
   everything: Read<RunTranscript>;
   cost: Read<RunCost>;
   pending: Read<ApprovalQueue>;
-  resolved: Read<ResolvedApprovalItem[]>;
+  resolved: Read<ResolvedApprovalLedger>;
 };
 
 /**
@@ -104,11 +104,11 @@ function useTabCounts({
     issues: run.taskRef === null ? "0" : "1",
     actions:
       pending.ok && resolved.ok
-        ? pending.value.more
+        ? pending.value.more || resolved.value.more
           ? t("atLeast", {
-              count: pending.value.items.length + resolved.value.length,
+              count: pending.value.items.length + resolved.value.items.length,
             })
-          : String(pending.value.items.length + resolved.value.length)
+          : String(pending.value.items.length + resolved.value.items.length)
         : undefined,
     cost: runCost === null ? undefined : <Money value={runCost} />,
     policy: policy === null ? undefined : floor(policy.length),

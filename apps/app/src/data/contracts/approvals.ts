@@ -139,3 +139,21 @@ export const ResolvedApprovalItem = z.object({
   autoRuleRef: z.string().min(1).nullable(),
 });
 export type ResolvedApprovalItem = z.infer<typeof ResolvedApprovalItem>;
+
+/**
+ * A run's resolved approvals as the Approvals tab reads them, and whether the
+ * read stopped before the end of the ledger (#3477).
+ *
+ * `approvals.resolved` walks `list_resolved_approvals` to the end of its
+ * cursor under a bound of 1,000 rows. Before this shape it returned the rows
+ * alone and dropped the last cursor, so a run with more than 1,000 resolved
+ * calls showed the first 1,000 as the whole ledger. `more` carries that
+ * cursor's meaning to the panel, which says the list is partial, and to the
+ * tab count, which reads as a floor.
+ */
+export const ResolvedApprovalLedger = z.object({
+  items: z.array(ResolvedApprovalItem),
+  /** True when the run holds resolved approvals past the ones in `items`. */
+  more: z.boolean(),
+});
+export type ResolvedApprovalLedger = z.infer<typeof ResolvedApprovalLedger>;

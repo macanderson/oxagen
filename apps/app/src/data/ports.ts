@@ -14,7 +14,7 @@ import type {
 } from "./contracts/agents";
 import type {
   ApprovalQueue,
-  ResolvedApprovalItem,
+  ResolvedApprovalLedger,
 } from "./contracts/approvals";
 import type {
   AuditExport,
@@ -208,11 +208,14 @@ export interface DataSource {
      * list_resolved_approvals, narrowed to one run: the Run page's Approvals
      * tab reads back a resolved decision, including one a decision rule
      * auto-approved with no person, that `pending` never shows (#3153).
+     * Walked to the end of its cursor under a bound of 1,000 rows, with
+     * `more` set when the bound stopped the walk (#3477). Before that the
+     * port returned the rows alone and a partial ledger read as complete.
      */
     resolved(
       ctx: WsCtx,
       q: { runId: string },
-    ): Promise<Read<ResolvedApprovalItem[]>>;
+    ): Promise<Read<ResolvedApprovalLedger>>;
   };
   /**
    * The Agents pages (#2956), each read by the agent's public id or slug:
