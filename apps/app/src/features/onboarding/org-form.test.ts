@@ -93,7 +93,9 @@ describe("OrganizationForm", () => {
   // `onboarding.errors` is the one catalog both onboarding forms raise keys
   // from, so the exhaustive check covers the register form's keys (agent-form.ts)
   // as well: a key either form can raise has copy, and the catalog carries no
-  // copy no form can reach.
+  // copy no form can reach. A taken namespace is the one exception: its copy
+  // is `organization.namespaceTaken`, the alert above the fields, so the
+  // field itself is only marked bad.
   it("every key either onboarding form raises, and the failure alert, have catalog copy, and the catalog carries no other", () => {
     const keys = [
       "orgNameRequired",
@@ -101,7 +103,6 @@ describe("OrganizationForm", () => {
       "slugInvalid",
       "slugReserved",
       "namespaceInvalid",
-      "namespaceTaken",
       "workspaceNameRequired",
       "workspaceNameTooLong",
       "workspaceSlugInvalid",

@@ -16,8 +16,7 @@
       "agentDescriptionTooLong": "Use at most 1024 characters.",
       "agentHarnessInvalid": "Pick one of the harnesses Oxagen wraps.",
       "failed": "The organization could not be created. Nothing was saved; try again.",
-      "namespaceInvalid": "Use 2–6 lowercase letters or digits.",
-      "namespaceTaken": "That namespace belongs to another organization. Pick a different one."
+      "namespaceInvalid": "Use 2–6 lowercase letters or digits."
     },
     "organization": {
       "eyebrow": "Step 1 of 3",

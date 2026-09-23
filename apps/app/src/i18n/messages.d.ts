@@ -2196,7 +2196,6 @@ type Messages = {
       agentHarnessInvalid: string;
       failed: string;
       namespaceInvalid: string;
-      namespaceTaken: string;
     };
     organization: {
       eyebrow: string;
