@@ -4,5 +4,5 @@
 // else reaches into the folder (eslint: `@/features/*/*` is restricted).
 export { OnboardingGate } from "./gate";
 export { NewOrganizationScreen } from "./new-organization";
-export { RegisterAgent } from "./register";
+export { RegisterAgent, RegisterGate, RegisterSkeleton } from "./register";
 export { parseRegisterStep } from "./steps";

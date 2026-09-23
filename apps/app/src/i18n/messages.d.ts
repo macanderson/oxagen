@@ -2257,89 +2257,159 @@ type Messages = {
         todo: string;
       };
       caption: string;
+      cancel: string;
+      cancelling: string;
+      back: string;
+      loading: string;
       noAgent: {
         title: string;
         body: string;
         start: string;
+      };
+      denied: {
+        title: string;
+        body: string;
+        permission: string;
+        request: string;
+        back: string;
+        signedIn: string;
+        needed: string;
+        decidedBy: string;
+        decidedByValue: string;
+        dialogTitle: string;
+        dialogBody: string;
       };
       name: {
         title: string;
         lead: string;
         slug: string;
         slugHint: string;
-        agentName: string;
-        agentNameHint: string;
+        workspace: string;
+        workspaceValue: string;
+        noRepository: string;
+        workspaceHint: string;
         harness: string;
         harnessHint: string;
-        description: string;
-        descriptionHint: string;
+        tier: string;
+        tierHint: string;
+        tierNotSent: string;
         note: string;
-        submit: string;
+        reserved: string;
+        continue: string;
         pending: string;
-        registered: {
-          title: string;
-          body: string;
-          expires: string;
-          continue: string;
-        };
       };
       wrap: {
         title: string;
         lead: string;
-        agentKey: string;
-        harness: string;
-        notRecorded: string;
-        host: {
-          title: string;
-          body: string;
-          mint: string;
-          pending: string;
-          again: string;
+        tabsLabel: string;
+        tabs: {
+          "claude-code": {
+            name: string;
+            sub: string;
+          };
+          codex: {
+            name: string;
+            sub: string;
+          };
+          cursor: {
+            name: string;
+            sub: string;
+          };
+          sdk: {
+            name: string;
+            sub: string;
+          };
+        };
+        recommended: string;
+        body: {
+          "claude-code": string;
+          codex: string;
+          cursor: string;
+          sdk: string;
+        };
+        ladder: {
+          thisAgent: string;
+          nextRung: string;
+          topRung: string;
+          orObserve: string;
+        };
+        tierNote: string;
+        codexNote: string;
+        cursorNote: string;
+        download: {
+          eyebrow: string;
+          osLabel: string;
+          os: {
+            macos: string;
+            windows: string;
+            linux: string;
+          };
+          button: string;
+          notPublished: string;
         };
         token: {
           label: string;
-          once: string;
+          issue: string;
+          issuing: string;
           expires: string;
-          command: string;
+          orRun: string;
         };
-        back: string;
+        credential: {
+          eyebrow: string;
+          label: string;
+          none: string;
+          facts: string;
+          use: string;
+          issue: string;
+          issuing: string;
+          issueNote: string;
+          sdkNotPublished: string;
+        };
+        caption: string;
         continue: string;
         advancing: string;
-        unavailable: {
-          title: string;
-          body: string;
-        };
       };
       run: {
         title: string;
         lead: string;
         waiting: {
           title: string;
-          body: string;
-          again: string;
-          checking: string;
-        };
-        host: {
-          enrolled: string;
+          polling: string;
+          host: string;
+          noHost: string;
+          line: string;
+          start: string;
           none: string;
-          heartbeat: string;
-          noHeartbeat: string;
-          hooksOk: string;
-          hooksMissing: string;
-          hooksUnreported: string;
         };
+        log: {
+          enrolled: string;
+          enrolledNoKey: string;
+          collector: string;
+          collectorNoVersion: string;
+          hooksOk: string;
+          hooksOkNoFile: string;
+          hooksMissing: string;
+          bundle: string;
+          notRecorded: string;
+        };
+        caption: string;
+        again: string;
+        checking: string;
         received: {
+          connected: string;
           title: string;
-          body: string;
-          at: string;
+          framesUnread: string;
+          routed: string;
+          harness: string;
+          grade: string;
+          chainIntact: string;
+          chainGaps: string;
+          auto: string;
+          autoIn: string;
           open: string;
         };
-        repository: {
+        error: {
           title: string;
-          body: string;
-          bind: string;
-          binding: string;
-          skip: string;
         };
       };
       failure: {
