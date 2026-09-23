@@ -1,5 +1,5 @@
 /**
- * The enrollment contract for brokered credentials (ADR-138): take the model
+ * The enrollment contract for brokered credentials (ADR-143): take the model
  * vendor's key out of the harness's own files and put a run token in its
  * place, so the only credential the harness holds is one that works at the
  * gateway and nowhere else.

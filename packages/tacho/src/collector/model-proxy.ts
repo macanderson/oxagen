@@ -196,7 +196,7 @@ export type ModelRefusalCode =
   | CredentialRefusalCode;
 
 /**
- * The credential seam's refusals (ADR-138). The four `run_token_*` codes are
+ * The credential seam's refusals (ADR-143). The four `run_token_*` codes are
  * the token codec's own. `run_token_required`: the provider is brokered on
  * this host and the call brought no credential at all. `foreign_credential`:
  * the provider is brokered and the call brought a vendor credential of its
@@ -217,7 +217,7 @@ export interface ModelProxyPolicy {
 }
 
 /**
- * The credential seam (ADR-138): what the gateway holds in custody for a
+ * The credential seam (ADR-143): what the gateway holds in custody for a
  * provider, and how it checks the run token a harness presents in place of
  * a vendor key. A provider with nothing in custody is `harness_held`, and its
  * calls cross as they always did. A provider with a credential in custody is

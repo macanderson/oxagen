@@ -43,7 +43,7 @@ export interface StatusReport {
   /** Whether each harness's model base URL points at the proxy. */
   modelBaseUrls?: ModelBaseUrlHarnessState[];
   /**
-   * How each routed harness gets its model credential (ADR-138): a run token
+   * How each routed harness gets its model credential (ADR-143): a run token
    * the gateway swaps for the key in its custody, or its own key. Absent
    * when no harness the gateway routes is enrolled.
    */

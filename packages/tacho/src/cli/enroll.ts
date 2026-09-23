@@ -85,7 +85,7 @@ export interface EnrollOptions extends CredentialOptions {
   /** Harnesses to hook (default: `["claude-code"]`). */
   harnesses?: TachoHarness[];
   /**
-   * How the routed harnesses' model credentials are held (ADR-138).
+   * How the routed harnesses' model credentials are held (ADR-143).
    * `brokered` (the default) takes each vendor key into the gateway's
    * custody and leaves the harness a run token; `passthrough` leaves the
    * key with the harness and puts back any the gateway holds.
@@ -1136,7 +1136,7 @@ export async function enrollLocked(
             `model calls are not routed through Oxagen: ${error instanceof Error ? error.message : String(error)}`,
           );
         }
-        // The credential seam (ADR-138). Only once the base URL points at a
+        // The credential seam (ADR-143). Only once the base URL points at a
         // listening proxy: a harness holding a run token and no route to
         // the gateway that honours it has no credential at all.
         if (routedOk && writable.length > 0) {

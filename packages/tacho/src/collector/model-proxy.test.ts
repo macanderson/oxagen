@@ -1802,7 +1802,7 @@ describe("the loopback model proxy", () => {
   });
 });
 
-describe("the credential seam (ADR-138)", () => {
+describe("the credential seam (ADR-143)", () => {
   const cleanups: Array<() => Promise<void>> = [];
   afterEach(async () => {
     for (const cleanup of cleanups.splice(0).reverse()) await cleanup();

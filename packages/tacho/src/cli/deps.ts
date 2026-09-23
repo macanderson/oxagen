@@ -149,7 +149,7 @@ export interface RuntimeCommands {
   /**
    * Shell command line that runs `tacho credential issue --harness
    * claude-code`, which Claude Code runs as its `apiKeyHelper` on a brokered
-   * host (ADR-138). Computed beside the hook command so it names the same
+   * host (ADR-143). Computed beside the hook command so it names the same
    * binary layout: a helper that outlives its executable leaves Claude Code
    * with no credential at all.
    */
@@ -386,7 +386,7 @@ export interface CliDeps {
     read: (options: ModelBaseUrlOptions) => Promise<ModelBaseUrlState>;
   };
   /**
-   * The brokered credential contract (`host/model-credential.ts`, ADR-138):
+   * The brokered credential contract (`host/model-credential.ts`, ADR-143):
    * take a harness's vendor key out of its file and point it at the
    * gateway's run tokens, put it back, or report it. Optional for the same
    * reason `modelBaseUrls` is, and absent means no credential is ever taken

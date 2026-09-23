@@ -111,7 +111,7 @@ export const TACHO_METERING_OBSERVED = "observed" as const;
 export const TACHO_MODEL_SESSION_HEADER = "x-oxagen-session" as const;
 
 /**
- * Which process held the credential a model call was made with (ADR-138),
+ * Which process held the credential a model call was made with (ADR-143),
  * as `attrs[TACHO_CREDENTIAL_BASIS_ATTR]` on every frame the loopback proxy
  * seals. `gateway_brokered`: the harness presented a run token and the
  * gateway attached the vendor credential from its custody. `harness_held`:
@@ -881,7 +881,7 @@ export const daemonHealthSchema = z
       .max(8)
       .optional(),
     /**
-     * Which model providers this host brokers credentials for (ADR-138): the
+     * Which model providers this host brokers credentials for (ADR-143): the
      * gateway holds the vendor key and the harness holds a run token. A
      * provider absent from the list is `harness_held`. Names and a basis,
      * never a secret or a digest of one. Optional: a daemon that predates
