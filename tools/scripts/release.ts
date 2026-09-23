@@ -19,7 +19,11 @@
  *   --dry-run     compute + print, but write no files, no git, no npm
  *   --set X.Y.Z   set an exact version instead of bumping
  *   --from <ref>  base ref for the notes diff (default: newest tag); use this to
- *                 regenerate notes for an already-tagged release
+ *                 regenerate notes for an already-tagged release, or when the
+ *                 previous release was never tagged on main
+ *   --highlight <text>
+ *                 what the release leads with; the model opens the notes with
+ *                 it, as far as the diff supports it
  *   --no-notes    skip the Anthropic release-notes generation (plain changelog)
  *   --no-git      skip the commit + tag
  *   --no-npm      skip the CLI build + npm publish (even if NPM_TOKEN is available)
@@ -96,6 +100,7 @@ interface Options {
   bump: Bump | null;
   setVersion: string | null;
   fromRef: string | null;
+  highlight: string | null;
   dryRun: boolean;
   notes: boolean;
   git: boolean;
@@ -164,11 +169,13 @@ interface NotesInput {
   log: string;
   stat: string;
   diff: string;
+  highlight: string | null;
 }
 
 function collectHistory(
   version: string,
   overrideFrom: string | null,
+  highlight: string | null,
 ): NotesInput {
   // Base ref: explicit --from wins; otherwise the newest tag reachable from HEAD;
   // otherwise the root commit. (--from is how you regenerate notes for an
@@ -190,7 +197,7 @@ function collectHistory(
     fullDiff.length > MAX
       ? `${fullDiff.slice(0, MAX)}\n…(diff truncated at ${MAX} chars)…`
       : fullDiff;
-  return { fromRef, toRef: "HEAD", version, log, stat, diff };
+  return { fromRef, toRef: "HEAD", version, log, stat, diff, highlight };
 }
 
 /** Vercel AI Gateway (AI_GATEWAY_API_KEY): the platform's single AI path. Hits
@@ -399,6 +406,7 @@ function parseArgs(): Options {
     bump: null,
     setVersion: null,
     fromRef: null,
+    highlight: null,
     dryRun: false,
     notes: true,
     git: true,
@@ -420,6 +428,9 @@ function parseArgs(): Options {
     else if (a.startsWith("--set=")) opts.setVersion = a.slice("--set=".length);
     else if (a === "--from") opts.fromRef = args[++i] ?? null;
     else if (a.startsWith("--from=")) opts.fromRef = a.slice("--from=".length);
+    else if (a === "--highlight") opts.highlight = args[++i] ?? null;
+    else if (a.startsWith("--highlight="))
+      opts.highlight = a.slice("--highlight=".length);
     else {
       console.error(kleur.red(`[release] unknown argument: ${a}`));
       exit(2);
@@ -433,7 +444,7 @@ async function main(): Promise<void> {
   if (!opts.bump && !opts.setVersion) {
     console.error(
       kleur.red(
-        "[release] usage: release.ts <patch|minor|major> [--set X.Y.Z] [--from <ref>] [--dry-run] [--no-notes|--no-git|--no-npm]",
+        "[release] usage: release.ts <patch|minor|major> [--set X.Y.Z] [--from <ref>] [--highlight <text>] [--dry-run] [--no-notes|--no-git|--no-npm]",
       ),
     );
     exit(2);
@@ -488,7 +499,7 @@ async function main(): Promise<void> {
   const install = opts.installLinks ? installSection(next) : null;
   if (opts.notes) {
     console.log(kleur.bold("\n  Release notes:"));
-    const history = collectHistory(next, opts.fromRef);
+    const history = collectHistory(next, opts.fromRef, opts.highlight);
     console.log(kleur.dim(`    history range: ${history.fromRef}..HEAD`));
     notes = await generateNotes(history);
     if (!opts.dryRun) {

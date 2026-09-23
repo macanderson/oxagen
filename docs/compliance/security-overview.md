@@ -12,9 +12,9 @@ Wrapped harnesses send events and redacted frame bodies through [Tacho ingest](.
 
 ## Identity and authorization
 
-[Authentication configuration](../../packages/auth/src/auth.ts) supports email and password, configured social providers, and TOTP. Its login cookie expires after 30 days and refreshes after one day. [Machine-key scope](../../packages/iam/src/machine-key-scope.ts) restricts machine credentials by purpose and tenant. [IAM resolution](../../packages/iam/src/check-iam.ts) includes tier-dependent behavior, so sensitive handlers also enforce explicit organization roles.
+[Authentication configuration](../../packages/auth/src/auth.ts) supports email and password, configured social providers, and TOTP. A session expires 30 days after it was created or last extended, and use more than one day after its last update extends it. [Machine-key scope](../../packages/iam/src/machine-key-scope.ts) limits a key that carries a purpose to that purpose's capabilities. A plain organization key has no purpose and relies on handler role gates. [IAM resolution](../../packages/iam/src/check-iam.ts) includes tier-dependent behavior, so sensitive handlers also enforce explicit organization roles.
 
-Enterprise SSO is in [PR #3735](https://github.com/macanderson/oxagen/pull/3735), outside this baseline. [SCIM #3734](https://github.com/macanderson/oxagen/issues/3734) tracks identity-provider deprovisioning. Do not answer that automatic SCIM revocation is implemented. This baseline contains no passkey authentication plugin.
+Enterprise SSO over SAML and OIDC is in the [SSO plugin](../../packages/auth/src/sso/plugin.ts), merged in [PR #3735](https://github.com/macanderson/oxagen/pull/3735), for plans that include it. [SCIM #3734](https://github.com/macanderson/oxagen/issues/3734) tracks identity-provider deprovisioning. Do not answer that automatic SCIM revocation is implemented. This baseline contains no passkey authentication plugin.
 
 ## Encryption
 
@@ -40,6 +40,6 @@ No dated restore exercise, measured recovery time, or measured recovery point is
 
 ## Change control and response
 
-[CI](../../.github/workflows/pipeline.yml) checks source and gates deployment. [DB Migrate](../../.github/workflows/db-migrate.yml) applies Postgres migrations separately. Review the exact deployed commit and artifacts, since a successful superseded deploy job may skip publication.
+[CI](../../.github/workflows/pipeline.yml) checks source and gates deployment. Its `migration-gate` job applies pending production migrations after checks pass and before `deploy-node`. [DB Migrate](../../.github/workflows/db-migrate.yml) is the manual dispatch path. Review the exact deployed commit and artifacts, since a successful superseded deploy job may skip publication.
 
 [SECURITY.md](../../SECURITY.md) provides private reporting channels and response targets. Those targets are published policy, not measured response evidence. No independent penetration test report or external attestation accompanies this pack.
