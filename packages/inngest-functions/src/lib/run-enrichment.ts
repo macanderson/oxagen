@@ -113,7 +113,11 @@ export async function runNarrativeTurn(
   return { text, model: turn.modelId };
 }
 
-/** A stable suffix avoids title collisions without another charged model call. */
+/**
+ * A stable suffix avoids title collisions without another charged model call.
+ * The run id follows in parentheses, since a label joined with a separator
+ * character is hard to scan.
+ */
 export function uniqueRunName(name: string, runId: string): string {
-  return `${name.trim().slice(0, Math.max(1, 80 - runId.length - 3))} · ${runId}`;
+  return `${name.trim().slice(0, Math.max(1, 80 - runId.length - 3))} (${runId})`;
 }

@@ -2949,7 +2949,7 @@ describe("ingest_tacho_events: bodies and the seal", () => {
     await tachoEventsIngestHandler(batch(events), CONTEXT);
 
     expect(db.sessions.get(SESSION)).toMatchObject({
-      title: "oxagen · agent/pensive-volta",
+      title: "oxagen on agent/pensive-volta",
     });
   });
 
