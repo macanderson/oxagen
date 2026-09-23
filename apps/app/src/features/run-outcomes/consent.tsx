@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 import type { Read } from "@/data/read";
 import { buttonSecondary, panel } from "@/ui/control-styles";
+import { useNavigate } from "@/ui/navigation";
 import { FormAlert } from "@/ui/form-feedback";
 import { ReadFailure } from "@/ui/read-failure";
 import { setRunOutcomesConsentAction } from "./actions";
@@ -18,6 +19,7 @@ export function RunOutcomesConsent({
   canManage: boolean;
 }) {
   const t = useTranslations("runOutcomes");
+  const navigate = useNavigate();
   const [saved, setSaved] = useState<{
     base: RunOutcomesPolicy;
     value: RunOutcomesPolicy;
@@ -40,6 +42,7 @@ export function RunOutcomesConsent({
       );
       if (result.ok) {
         if (policy.ok) setSaved({ base: policy.value, value: result.value });
+        navigate.refresh();
       } else
         setError(result.reason === "denied" ? t("denied") : t("saveFailed"));
     } catch {

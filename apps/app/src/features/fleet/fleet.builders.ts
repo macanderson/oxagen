@@ -124,6 +124,7 @@ export function fleetSource(reads: FleetReads) {
       chain: refuse,
       outputs: refuse,
       work: refuse,
+      outcomesSettings: refuse,
       transcript: refuse,
     },
     approvals: {

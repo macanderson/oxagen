@@ -54,6 +54,7 @@ const source: DataSource = {
     chain: refuse,
     outputs: refuse,
     work: refuse,
+    outcomesSettings: refuse,
   },
   approvals: { pending: refuse, resolved: refuse },
   agents: {

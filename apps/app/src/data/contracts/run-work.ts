@@ -129,3 +129,13 @@ export const RunWork = z
   })
   .strict();
 export type RunWork = z.infer<typeof RunWork>;
+
+export const RunOutcomesPolicy = z
+  .object({
+    customerEnabled: z.boolean(),
+    platformDisabled: z.boolean(),
+    platformDisabledReason: z.string().nullable(),
+    effectiveEnabled: z.boolean(),
+  })
+  .strict();
+export type RunOutcomesPolicy = z.infer<typeof RunOutcomesPolicy>;

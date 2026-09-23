@@ -7,6 +7,7 @@ import { TRANSCRIPT_KINDS } from "@/data/contracts/run";
 import type { MandateRow } from "@/data/contracts/mandates";
 import type { DataSource } from "@/data/ports";
 import { PAGE_FAILURES, readError } from "@/data/read";
+import { RunOutcomesConsent } from "@/features/run-outcomes";
 import { ApprovalsPanel } from "@/features/fleet";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
@@ -187,6 +188,11 @@ export async function Run({
     .catch(() =>
       readError(PAGE_FAILURES.run.error.code, PAGE_FAILURES.run.error.status),
     );
+  const outcomesPolicy = source.runs
+    .outcomesSettings(ctx)
+    .catch(() =>
+      readError(PAGE_FAILURES.run.error.code, PAGE_FAILURES.run.error.status),
+    );
   let section: ReactNode;
   switch (selected) {
     case "transcript":
@@ -272,6 +278,11 @@ export async function Run({
         ws={place.ws}
       />
       <RunWorkSection read={await work} {...place} />
+      <RunOutcomesConsent
+        at={place}
+        policy={await outcomesPolicy}
+        canManage={ctx.orgRole === "owner" || ctx.orgRole === "admin"}
+      />
       <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-6">
           <RunSummary run={detail.run} org={place.org} ws={place.ws} />

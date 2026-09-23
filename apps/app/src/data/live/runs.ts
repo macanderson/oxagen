@@ -20,7 +20,8 @@ import { runFrameBodyGet } from "@oxagen/oxagen/contracts/run.frame_body.get";
 import { FRAME_LIMIT_DEFAULT, runGet } from "@oxagen/oxagen/contracts/run.get";
 import { runList } from "@oxagen/oxagen/contracts/run.list";
 import { runWorkGet } from "@oxagen/oxagen/contracts/run.work.get";
-import { RunWork } from "@/data/contracts/run-work";
+import { runOutcomesSettingsGet } from "@oxagen/oxagen/contracts/run.outcomes.settings.get";
+import { RunWork, RunOutcomesPolicy } from "@/data/contracts/run-work";
 import { runOutputsGet } from "@oxagen/oxagen/contracts/run.outputs.get";
 import {
   runTranscriptGet,
@@ -72,6 +73,20 @@ function view<S extends z.ZodType>(
 }
 
 export const runs: DataSource["runs"] = {
+  async outcomesSettings(ctx) {
+    const read = await kernelRead(ctx, {
+      contract: runOutcomesSettingsGet,
+      input: {},
+      page: "run",
+    });
+    if (!read.ok) return read;
+    return view(
+      ctx.orgId,
+      RunOutcomesPolicy,
+      read.value,
+      "runs.outcomesSettings",
+    );
+  },
   async work(ctx, runId) {
     const read = await kernelRead(ctx, {
       contract: runWorkGet,

@@ -582,6 +582,13 @@ export function runSource(reads: RunReads) {
     shell: { context: refuse, preferences: refuse },
     runs: {
       list: refuse,
+      outcomesSettings: async () =>
+        readOk({
+          customerEnabled: false,
+          platformDisabled: false,
+          platformDisabledReason: null,
+          effectiveEnabled: false,
+        }),
       work: async (_ctx, runId) =>
         readOk({
           runId,

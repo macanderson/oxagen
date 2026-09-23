@@ -130,6 +130,7 @@ export function orgSource(reads: OrgReads): {
       chain: refuse,
       outputs: refuse,
       work: refuse,
+      outcomesSettings: refuse,
     },
     approvals: { pending: refuse, resolved: refuse },
     agents: {
