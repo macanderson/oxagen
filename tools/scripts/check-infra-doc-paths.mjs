@@ -34,10 +34,6 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
  */
 const PROPOSED = new Map([
   [
-    "infra/modules/install-funnel/",
-    "proposed by docs/ops/stella-website-aws-deploy-plan.md, not built",
-  ],
-  [
     "infra/modules/kms-signing/",
     "proposed by docs/specs/run-evidence-ingress/03-evidence-ledger-plan.md, not built",
   ],
@@ -56,7 +52,6 @@ const ARCHIVED_REPO = "oxagen-aws-infra";
  */
 const MAY_NAME_ARCHIVED_REPO = new Set([
   "README.md",
-  "docs/ops/aws-deployment-plan.md",
   "infra/README.md",
   "tools/scripts/check-infra-doc-paths.mjs",
 ]);

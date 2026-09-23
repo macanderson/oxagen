@@ -1,4 +1,4 @@
-# env-manager
+# @oxagen/env-manager
 
 A local web UI with two pages:
 
@@ -14,6 +14,56 @@ Open that link to read and edit secrets. Stop the server when you are done.
 pnpm env:manager          # open the access link printed at startup
 pnpm env:secrets:pull     # refresh the /secrets mirror from GCP
 ```
+
+## Boundary
+
+- **Owns:** the local manager UI (`public/`), its loopback server and token
+  check (`src/server.ts`, `src/request-auth.ts`), the Vercel REST client
+  (`src/vercel.ts`), value resolution per source (`src/sources.ts`), and the
+  local SQLite mirror of Google Cloud Secret Manager (`src/secrets-db.ts`,
+  `src/pull-secrets.ts`).
+- **Does not own:** which variables exist, which services need them, or
+  where each value comes from. That is the env registry in
+  [`@oxagen/config`](../../packages/config/README.md)
+  (`packages/config/src/registry.ts`), which also drives `.env.example` and
+  `pnpm env:check`.
+- **Depends on:** `@oxagen/config`, for `ENV_REGISTRY`, `ENV_NAMES`,
+  `SERVICE_NAMES`, and `staticValueFor`.
+- **Used by:** no workspace package imports it. Run it through
+  `pnpm env:manager` and `pnpm env:secrets:pull`.
+
+## Seams
+
+| Seam | Kind | Source | Wired by |
+|---|---|---|---|
+| Env registry to catalog | adapter | `tools/env-manager/src/catalog.ts` | Derived from `ENV_REGISTRY` at load. Never edited by hand |
+| Vercel REST API (`VERCEL_TOKEN`, `VERCEL_TEAM_ID`, project ids) | boundary | `tools/env-manager/src/vercel.ts`, `src/config.ts` | The `/` page's deploy, push, and gaps actions |
+| `gcloud` CLI (Secret Manager) | boundary | `tools/env-manager/src/pull-secrets.ts` | `pnpm env:secrets:pull` |
+| Loopback listener with a per-process bearer token | boundary | `tools/env-manager/src/server.ts`, `src/request-auth.ts` | `pnpm env:manager`. Binds `127.0.0.1:ENV_MANAGER_PORT` |
+
+## Entry points
+
+- `src/server.ts` (`dev`, `start`): the manager server.
+- `src/pull-secrets.ts` (`pull`): refreshes the `/secrets` mirror.
+- `public/index.html` and `public/secrets.html`: the two pages.
+
+## Rules
+
+- Add a variable in `packages/config/src/registry.ts`, never in
+  `src/catalog.ts`.
+- On the `/` page, resolved values stay on the server and are never sent to
+  the browser.
+- The server binds `127.0.0.1` only and requires the token printed at
+  startup for every API call.
+
+## Tests
+
+```bash
+pnpm --filter @oxagen/env-manager test:unit src/request-auth.test.ts
+```
+
+Never put `--` before the filename. Tests sit beside their sources in
+`src/`.
 
 ## What it does
 
