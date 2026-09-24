@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-// The agent's Budgets panel: the ceilings it runs under with the basis of
-// every figure, the line that says no per-agent ceiling is recorded, and the
-// link to the page that sets one. Read-only in every state, including the ones
-// where the read failed.
+// The ceilings above an agent, inside the Permissions tab's Budgets panel:
+// the ceilings it runs under with the basis of every figure, the line that
+// says no per-agent ceiling is recorded, and the link to the page that sets
+// one. Read-only in every state, including the ones where the read failed.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -30,7 +30,7 @@ function renderPanel(read: Read<SpendBudgets>) {
       <BudgetSection read={read} spend={SPEND} />
     </IntlProvider>,
   );
-  return screen.getByRole("region", { name: "Budgets" });
+  return screen.getByRole("region", { name: "Ceilings above this agent" });
 }
 
 afterEach(async () => {

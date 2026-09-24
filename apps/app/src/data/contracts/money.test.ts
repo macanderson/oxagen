@@ -5,6 +5,7 @@
 import { describe, expect, it } from "vitest";
 import {
   Cost,
+  divMicros,
   isCurrencyCode,
   Money,
   microsFromDecimal,
@@ -308,5 +309,24 @@ describe("roundToCentsHalfEven", () => {
 
   it("refuses micros that are not an integer string (negative)", () => {
     expect(() => roundToCentsHalfEven(usd("1.5"))).toThrow(/micros/);
+  });
+});
+
+describe("divMicros", () => {
+  it("splits a figure over a whole count, truncated toward zero", () => {
+    expect(divMicros(usd("10000000"), 4)).toEqual(usd("2500000"));
+    expect(divMicros(usd("10"), 3)).toEqual(usd("3"));
+  });
+
+  it("is exact past what a double holds", () => {
+    expect(divMicros(usd("90071992547409930"), 10)).toEqual(
+      usd("9007199254740993"),
+    );
+  });
+
+  it("names no share for a count below one or not a whole number (negative)", () => {
+    expect(divMicros(usd("100"), 0)).toBeNull();
+    expect(divMicros(usd("100"), -2)).toBeNull();
+    expect(divMicros(usd("100"), 1.5)).toBeNull();
   });
 });
