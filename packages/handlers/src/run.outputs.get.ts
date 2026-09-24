@@ -98,7 +98,7 @@ async function wrappedNodes(
     const link = prLinkOf(row);
     if (link === null) continue;
     pulls.push({
-      seq: String(row.seq),
+      seq: String(row.first_seq),
       kind: "pr",
       name: `#${link.number}`,
       nameIsLocator: false,
@@ -106,7 +106,7 @@ async function wrappedNodes(
       state: "open",
       note: link.url,
       stat: null,
-      observedAt: chInstant(row.ts),
+      observedAt: chInstant(row.first_ts),
       digestBefore: null,
       digestAfter: null,
     });

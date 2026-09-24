@@ -512,6 +512,9 @@ const tachoColumns = {
     endedAt: sessions.endedAt,
     replayGrade: sessions.replayGrade,
     completenessGaps: sessions.completenessGaps,
+    // False from the first chain break on. `get_run_work` reports it beside
+    // the facts it reads, since it reads them from every frame (ADR-171).
+    chainVerified: sessions.chainVerified,
     enforcementTier: sessions.enforcementTier,
     // The sealed commitment (`terminalPatch`, `agent_stop`): the collector
     // stops checkpointing once `session.sealed` is written, so the last
@@ -799,6 +802,8 @@ export type TachoSessionColumns = GeneratedSummaryColumns & {
   /** Written by the seal at `agent_stop`; null while the session is open. */
   replayGrade: string | null;
   completenessGaps: unknown;
+  /** `tacho.sessions.chain_verified`: false from the first chain break on. Absent where a reader did not select it. */
+  chainVerified?: boolean;
   enforcementTier: string;
   /** The sealed commitment for the whole session; null while open. */
   finalHash: string | null;
