@@ -1,8 +1,8 @@
-// The resolved half of the Approvals tab: what has already been decided for
-// this run, from `list_resolved_approvals` (#3153). Sits below the pending
-// `ApprovalsPanel` so the tab reads top to bottom as "what is waiting, then
-// what already happened," the receipt `autoApprovePath` writes for a call a
-// decision rule released with no person, read back for the first time.
+// What has already been decided for this run, from `list_resolved_approvals`
+// (#3153), on the Policy tab below the run's policy decisions. The pending
+// half lives in the shell's approvals drawer, which an Outputs gate row opens
+// with Review. This is the receipt `autoApprovePath` writes for a call a
+// decision rule released with no person, read back.
 import { useTranslations } from "next-intl";
 import type { ResolvedApprovalItem } from "@/data/contracts/approvals";
 import type { Read } from "@/data/read";
