@@ -136,6 +136,11 @@ function Rig({ run, agent }: { run: RunRow; agent: Read<AgentDetail> | null }) {
           {t("effort", { value: run.effort })}
         </span>
       )}
+      {run.thinking == null ? null : (
+        <span data-testid="run-thinking" className={chip}>
+          {run.thinking ? t("thinkingOn") : t("thinkingOff")}
+        </span>
+      )}
       {run.permissionMode == null ? (
         <span className={missing}>{t("permissionModeNotRecorded")}</span>
       ) : (
@@ -393,7 +398,7 @@ function Subagents({ run, work }: { run: RunRow; work: Read<RunWork> }) {
             <SubagentChip
               key={subagent.id}
               subagent={subagent}
-              live={run.sealedAt === null}
+              live={run.status === "live"}
             />
           ))}
           {subagents.length > SUBAGENT_CHIPS ? (
@@ -484,11 +489,12 @@ function Usage({ run }: { run: RunRow }) {
 
 /**
  * The run's human title: the name its harness gave it or Oxagen generated,
- * unless the workspace turned automatic names off, then its task reference.
- * Null when the run carries neither.
+ * then its task reference. Null when the run carries neither. Turning
+ * automatic names off stops Oxagen writing one; it never hides the title the
+ * harness recorded, which the server answers as the name.
  */
 function titleOf(run: RunRow): string | null {
-  return (run.enrichmentEnabled === false ? null : run.name) ?? run.taskRef;
+  return run.name ?? run.taskRef;
 }
 
 /**
@@ -510,7 +516,7 @@ export function RunTitle({ id, run }: { id: string; run: RunRow | null }) {
   );
 }
 
-/** "started <t> by <operator> · sealed <t>". */
+/** "started <t> by <operator> · ended <t>". */
 function When({ run }: { run: RunRow }) {
   const t = useTranslations("run.header");
   const tr = useTranslations("run");
@@ -550,14 +556,24 @@ function When({ run }: { run: RunRow }) {
         <time dateTime={run.startedAt}>{when(run.startedAt)}</time>
       </span>
       <span data-testid="run-operator">
-        {t("by")} {operator}
+        {run.operatorAttribution === "host_enroller"
+          ? t("enrolledBy")
+          : t("by")}{" "}
+        {operator}
       </span>
       <span aria-hidden="true">·</span>
       {/* One definition of sealed across the header: the run's status, the
           same one RecordActions and summarize_run gate on. A run that ended
-          without a recorded seal instant says so rather than "still running". */}
+          without a recorded seal instant says so rather than "still running".
+          The recorder's end time wins over the seal, which is the server's
+          receipt time and can trail the run by the upload. */}
       {run.status === "live" ? (
         <span>{t("running")}</span>
+      ) : run.endedAt != null ? (
+        <span data-testid="run-ended">
+          {t("ended")}{" "}
+          <time dateTime={run.endedAt}>{when(run.endedAt)}</time>
+        </span>
       ) : run.sealedAt === null ? (
         <span>{t("sealNotRecorded")}</span>
       ) : (
@@ -670,6 +686,7 @@ export function RunHeader({
             status={run.status}
             source={run.source}
             enforcementTier={run.enforcementTier}
+            commandBlock={run.commandBlock}
             ingressRevoked={run.ingressRevoked}
             ingressPaused={run.ingressPaused}
             orgRole={orgRole}

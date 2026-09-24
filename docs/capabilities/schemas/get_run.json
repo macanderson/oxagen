@@ -353,6 +353,16 @@
               }
             ]
           },
+          "thinking": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "permissionMode": {
             "anyOf": [
               {

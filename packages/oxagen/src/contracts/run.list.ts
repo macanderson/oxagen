@@ -255,6 +255,12 @@ export const runItemSchema = z
      */
     effort: z.string().nullable().optional(),
     /**
+     * Whether the session had always-on thinking enabled, from the latest
+     * session config frame. Null when no frame recorded it, and for every
+     * ledger run. `get_run` answers it; `list_runs` leaves it out.
+     */
+    thinking: z.boolean().nullable().optional(),
+    /**
      * The permission mode the session ended in, falling back to the one it
      * started in. Null when none was recorded, and for every ledger run.
      */

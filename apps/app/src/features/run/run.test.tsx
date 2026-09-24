@@ -22,6 +22,7 @@ import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { mandateList, mandateRow } from "@/test/mandate-views";
+import { formatDuration } from "@/ui/money-format";
 import {
   NOW,
   runChain,
@@ -238,13 +239,13 @@ describe("header", () => {
     expect(screen.getByTestId("run-when")).toHaveTextContent("still running");
   });
 
-  it("leaves out the generated name when automatic names are disabled", async () => {
+  it("titles the run with its harness title when automatic names are off, and says only the summary is off", async () => {
     await renderRun({
       detail: ok(
         runDetail({
           run: runRow({
             enrichmentEnabled: false,
-            name: "Old generated name",
+            name: "Fix the billing proration",
             taskRef: "A derived project label",
             summary: null,
           }),
@@ -252,15 +253,87 @@ describe("header", () => {
       ),
       transcript: ok(runTranscript()),
     });
-    expect(screen.queryByText("Old generated name")).toBeNull();
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-      "A derived project label",
+      "Fix the billing proration",
     );
+    expect(
+      screen.getByText(/Automatic summaries are off for this workspace/),
+    ).toBeTruthy();
+    expect(screen.queryByText(/No summary yet/)).toBeNull();
     expect(
       screen.getByRole("checkbox", {
         name: "Automatic run names and summaries",
       }),
     ).not.toBeChecked();
+  });
+
+  it("notes why the last automatic summary failed beside the summary slot", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({ summary: null, enrichmentError: "credits_exhausted" }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-summary-failed")).toHaveTextContent(
+      "The last automatic summary failed (credits_exhausted).",
+    );
+    cleanup();
+    await renderRun({
+      detail: ok(runDetail({ run: runRow({ summary: null }) })),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.queryByTestId("run-summary-failed")).toBeNull();
+  });
+
+  it("labels the operator 'enrolled by' when the name comes from the host's enroller", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({ run: runRow({ operatorAttribution: "host_enroller" }) }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-operator")).toHaveTextContent(
+      "enrolled by Marcus Bell",
+    );
+    cleanup();
+    await renderRun({
+      detail: ok(runDetail({ run: runRow({ operatorAttribution: "initiator" }) })),
+      transcript: ok(runTranscript()),
+    });
+    const operator = screen.getByTestId("run-operator");
+    expect(operator).toHaveTextContent("by Marcus Bell");
+    expect(operator).not.toHaveTextContent("enrolled");
+  });
+
+  it("ends the when line and the wall clock at the recorder's end time, not the seal's receipt", async () => {
+    const base = runRow();
+    const endedAt = new Date(
+      new Date(base.startedAt).getTime() + 30 * 60_000,
+    ).toISOString();
+    await renderRun({
+      detail: ok(runDetail({ run: runRow({ endedAt }) })),
+      transcript: ok(runTranscript()),
+    });
+    const ended = screen.getByTestId("run-ended");
+    expect(ended).toHaveTextContent("ended");
+    expect(ended.querySelector("time")).toHaveAttribute("dateTime", endedAt);
+    const stats = within(screen.getByTestId("run-stats"));
+    expect(stats.getByText(formatDuration(30 * 60_000, "en"))).toBeTruthy();
+    cleanup();
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+    });
+    // Without an end time the seal still closes the line and the clock.
+    expect(screen.queryByTestId("run-ended")).toBeNull();
+    expect(screen.getByTestId("run-when")).toHaveTextContent("sealed");
+    expect(
+      within(screen.getByTestId("run-stats")).queryByText(
+        formatDuration(30 * 60_000, "en"),
+      ),
+    ).toBeNull();
   });
 
   it("titles a run that carries no name and no task reference by its id in mono (negative)", async () => {
@@ -304,6 +377,8 @@ describe("header", () => {
     expect(rig.getByText("version 2.1.0")).toBeTruthy();
     // The session row holds no effort or mode, so the rig says so.
     expect(rig.getByText("effort not recorded")).toBeTruthy();
+    // No frame recorded thinking, so the rig draws no thinking chip.
+    expect(rig.queryByTestId("run-thinking")).toBeNull();
     expect(rig.getByText("mode not recorded")).toBeTruthy();
     await expectNoAxe(container);
   });
@@ -314,6 +389,7 @@ describe("header", () => {
         runDetail({
           run: runRow({
             effort: "high",
+            thinking: true,
             permissionMode: "acceptEdits",
             reportedTokens: {
               input: 1200,
@@ -328,6 +404,7 @@ describe("header", () => {
     });
     const rig = within(screen.getByTestId("run-rig"));
     expect(rig.getByTestId("run-effort")).toHaveTextContent("effort high");
+    expect(rig.getByTestId("run-thinking")).toHaveTextContent("thinking on");
     expect(rig.getByTestId("run-permission-mode")).toHaveTextContent(
       "mode acceptEdits",
     );

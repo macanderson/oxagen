@@ -46,6 +46,10 @@ type Over = {
   sessionTitle?: string;
   /** The title read rejects, as a ClickHouse outage would. */
   titleFails?: boolean;
+  /** The effort and thinking the session's frames recorded; none by default. */
+  sessionConfig?: { effort: string | null; thinking: boolean | null };
+  /** The settings read rejects, as a ClickHouse outage would. */
+  configFails?: boolean;
   /** Runs after each fake sleep, with the count so far; a test lands events here. */
   onSleep?: (count: number, log: AttemptEventReadRecord[]) => void;
 };
@@ -86,6 +90,14 @@ function harness(over: Over = {}) {
         ? Promise.reject(new Error("clickhouse unreachable"))
         : Promise.resolve(
             sessionUuid === SESSION_UUID ? (over.sessionTitle ?? null) : null,
+          ),
+    sessionConfig: (sessionUuid) =>
+      over.configFails === true
+        ? Promise.reject(new Error("clickhouse unreachable"))
+        : Promise.resolve(
+            sessionUuid === SESSION_UUID && over.sessionConfig
+              ? over.sessionConfig
+              : { effort: null, thinking: null },
           ),
     now: () => clock,
     sleep: (ms) => {
@@ -453,6 +465,7 @@ describe("get_run", () => {
       readWitnessFor: async () => null,
       tachoFrames,
       sessionTitle: async () => null,
+      sessionConfig: async () => ({ effort: null, thinking: null }),
       now: () => 0,
       sleep: () => Promise.resolve(),
     });
@@ -543,5 +556,30 @@ describe("get_run witnessFor (ADR-064)", () => {
     const out = await get(input({ runId: TACHO_ID }), ctx());
     const plain = await harness().get(input({ runId: TACHO_ID }), ctx());
     expect(out.run.name).toBe(plain.run.name);
+  });
+
+  it("answers the effort and thinking the session's frames recorded", async () => {
+    const { get } = harness({
+      sessionConfig: { effort: "high", thinking: true },
+    });
+    const out = await get(input({ runId: TACHO_ID }), ctx());
+    expect(out.run.effort).toBe("high");
+    expect(out.run.thinking).toBe(true);
+  });
+
+  it("keeps the session row's effort when no frame recorded one", async () => {
+    const plain = await harness().get(input({ runId: TACHO_ID }), ctx());
+    const { get } = harness({
+      sessionConfig: { effort: null, thinking: false },
+    });
+    const out = await get(input({ runId: TACHO_ID }), ctx());
+    expect(out.run.effort).toBe(plain.run.effort ?? null);
+    expect(out.run.thinking).toBe(false);
+  });
+
+  it("still answers the run when its effort settings cannot be read", async () => {
+    const { get } = harness({ configFails: true });
+    const out = await get(input({ runId: TACHO_ID }), ctx());
+    expect(out.run.thinking).toBeUndefined();
   });
 });

@@ -197,6 +197,41 @@ export function prLinkOf(
     return null;
   return { owner, name, number, url: row.url };
 }
+/** The effort and thinking settings a wrapped session last recorded. */
+export type SessionConfig = { effort: string | null; thinking: boolean | null };
+
+/**
+ * The session's effort and thinking settings. Effort is the latest
+ * `effort_level_setting` from a session config frame, falling back to the
+ * latest non-empty `effort` any frame carried. Thinking is the latest
+ * `always_thinking_enabled`. Each is null when no frame recorded it.
+ */
+export async function readSessionConfig(
+  sessionUuid: string,
+): Promise<SessionConfig> {
+  const result = await chSelect<{
+    setting: string;
+    effort: string;
+    thinking: string;
+  }>({
+    query: `SELECT
+        argMaxIf(effort_level_setting, seq, effort_level_setting != '') AS setting,
+        argMaxIf(effort, seq, effort != '') AS effort,
+        ifNull(toString(argMaxIf(always_thinking_enabled, seq,
+          always_thinking_enabled IS NOT NULL)), '') AS thinking
+      FROM tacho_events FINAL
+      WHERE org_id = {orgId:UUID} AND workspace_id = {workspaceId:UUID}
+        AND session_uuid = {sessionUuid:UUID} AND chain_verified = true`,
+    params: { sessionUuid },
+  });
+  const row = result.data[0];
+  return {
+    effort: row?.setting.trim() || row?.effort.trim() || null,
+    thinking:
+      row?.thinking === "true" ? true : row?.thinking === "false" ? false : null,
+  };
+}
+
 /**
  * The title the harness last gave the session, from its latest
  * `oxagen:session_title` frame. Claude Code renames a session as the work

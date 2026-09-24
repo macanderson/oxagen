@@ -50,6 +50,7 @@ export function toRunRow(
             tier: run.model.tier,
           },
     effort: run.effort ?? null,
+    thinking: run.thinking ?? null,
     permissionMode: run.permissionMode ?? null,
     reportedTokens: run.reportedTokens ?? null,
     machine: run.machine,

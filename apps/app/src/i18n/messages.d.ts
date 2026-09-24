@@ -4598,6 +4598,8 @@ type Messages = {
       description: string;
     };
     noSummary: string;
+    summaryOff: string;
+    summaryFailed: string;
     source: {
       ledger: string;
       tacho: string;
@@ -5123,6 +5125,8 @@ type Messages = {
       harnessVersion: string;
       effort: string;
       effortNotRecorded: string;
+      thinkingOn: string;
+      thinkingOff: string;
       permissionMode: string;
       permissionModeNotRecorded: string;
       checkout: string;
@@ -5153,7 +5157,9 @@ type Messages = {
       sealed: string;
       running: string;
       sealNotRecorded: string;
+      ended: string;
       by: string;
+      enrolledBy: string;
       paused: string;
       copy: string;
       copyLabel: string;

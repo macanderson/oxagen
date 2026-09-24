@@ -24,7 +24,7 @@ import {
 } from "@oxagen/oxagen/contracts/run.get";
 import type { RunFrame } from "@oxagen/run-ledger";
 import { invalidCursor, microsString } from "./run.list";
-import { readSessionTitle } from "./lib/run-work";
+import { readSessionConfig, readSessionTitle } from "./lib/run-work";
 import { logger } from "./logger";
 import {
   defaultRunReadDeps,
@@ -106,6 +106,8 @@ export type RunGetDeps = RunReadDeps & {
   sleep: (ms: number) => Promise<void>;
   /** The harness's latest title for a wrapped session; null when it gave none. */
   sessionTitle: typeof readSessionTitle;
+  /** The session's latest effort and thinking settings. */
+  sessionConfig: typeof readSessionConfig;
 };
 
 export function createRunGetHandler(
@@ -135,18 +137,28 @@ export function createRunGetHandler(
     if (cursor === null) throw invalidCursor(runGet.name);
 
     const run = await resolveRun(deps, ctx, input.runId);
-    // The title is ClickHouse's to give. A failed read leaves the heading on
-    // the run id rather than failing the page.
-    const title =
+    // The title and the effort settings are ClickHouse's to give. A failed
+    // read leaves the heading on the run id and the settings on what the
+    // session row holds, rather than failing the page.
+    const [title, config] =
       run.source === "tacho"
-        ? await deps.sessionTitle(run.sessionUuid).catch((err: unknown) => {
-            logger.warn(
-              { err, runId: input.runId },
-              "get_run: the session title could not be read; the run id stands in",
-            );
-            return null;
-          })
-        : null;
+        ? await Promise.all([
+            deps.sessionTitle(run.sessionUuid).catch((err: unknown) => {
+              logger.warn(
+                { err, runId: input.runId },
+                "get_run: the session title could not be read; the run id stands in",
+              );
+              return null;
+            }),
+            deps.sessionConfig(run.sessionUuid).catch((err: unknown) => {
+              logger.warn(
+                { err, runId: input.runId },
+                "get_run: the session's effort settings could not be read",
+              );
+              return null;
+            }),
+          ])
+        : ([null, null] as const);
     // One frame past the page tells a full page from the end of the recording.
     // A sealed run whose page had nothing behind it answers no cursor, because
     // nothing will ever lie past it; a live run keeps its resume point, since
@@ -162,7 +174,16 @@ export function createRunGetHandler(
     const ended =
       batch.length <= input.frameLimit && run.item.status !== "live";
     return {
-      run: title === null ? run.item : { ...run.item, name: title },
+      run: {
+        ...run.item,
+        ...(title === null ? {} : { name: title }),
+        ...(config === null
+          ? {}
+          : {
+              effort: config.effort ?? run.item.effort ?? null,
+              thinking: config.thinking,
+            }),
+      },
       frames: {
         frames: frames.map(toFrame),
         cursor: last && !ended ? encodeFrameCursor(last.seq) : null,
@@ -178,6 +199,7 @@ export function defaultRunGetDeps(): RunGetDeps {
     now: () => Date.now(),
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     sessionTitle: readSessionTitle,
+    sessionConfig: readSessionConfig,
   };
 }
 

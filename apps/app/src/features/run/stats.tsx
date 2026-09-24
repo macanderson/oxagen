@@ -50,9 +50,21 @@ export function SummaryPanel({
       }
     >
       {run.summary === null ? (
-        <p className="text-sm text-muted-foreground">{t("noSummary")}</p>
+        // Turning enrichment off stops the generated summary only; the
+        // harness title and every recorded fact stay on the page.
+        <p className="text-sm text-muted-foreground">
+          {run.enrichmentEnabled === false ? t("summaryOff") : t("noSummary")}
+        </p>
       ) : (
         <GeneratedSummary summary={run.summary} layout="block" />
+      )}
+      {run.enrichmentError === undefined ? null : (
+        <p
+          data-testid="run-summary-failed"
+          className="text-xs text-muted-foreground"
+        >
+          {t("summaryFailed", { reason: run.enrichmentError })}
+        </p>
       )}
     </Panel>
   );
@@ -105,6 +117,8 @@ export function StatRow({
   const locale = useLocale();
   const rollup = cost.ok ? cost.value.rollup : null;
   const waste = wasted(rollup?.cost ?? null, rollup?.productiveRatio ?? null);
+  // The recorder's end time, else the seal, which is receipt time.
+  const endedAt = run.endedAt ?? run.sealedAt;
   // Before the rollup rebuilds a sealed run, the session's own sums over its
   // llm_call frames stand in, so a live run shows its tokens too. Those sums
   // are labelled provisional, since the rollup may still reprice or recount.
@@ -185,15 +199,16 @@ export function StatRow({
         {waste === null ? <NoValue /> : <Money value={waste} />}
       </Stat>
       <Stat label={t("wallClock")}>
-        {/* Keyed on the status, as the header's when line is: a run that
-            ended with no seal instant has no wall clock to show. */}
+        {/* Keyed on the status, as the header's when line is. The clock
+            ends at the recorder's end time, falling back to the seal; a run
+            with neither has no wall clock to show. */}
         {run.status === "live" ? (
           t("running")
-        ) : run.sealedAt === null ? (
+        ) : endedAt === null ? (
           <NoValue />
         ) : (
           formatDuration(
-              new Date(run.sealedAt).getTime() -
+              new Date(endedAt).getTime() -
                 new Date(run.startedAt).getTime(),
               locale,
             )
