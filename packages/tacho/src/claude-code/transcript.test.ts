@@ -251,9 +251,45 @@ describe("transcript normalization", () => {
       has_unknown_model_cost: false,
       models_used: { m: {} },
     });
-    expect(line({ type: "ai-title", aiTitle: "Probe" }).totals).toEqual({
-      session_title: "Probe",
+    const titled = line({ type: "ai-title", aiTitle: "Probe" });
+    expect(titled.totals).toEqual({ session_title: "Probe" });
+    expect(titled.drafts).toHaveLength(1);
+    expect(titled.drafts[0]).toMatchObject({
+      kind: "oxagen:session_title",
+      body: { session_title: "Probe" },
     });
     expect(line({ type: "ai-title", timestamp: "garbage" }).drafts).toEqual([]);
+  });
+});
+
+describe("pull requests the session opened", () => {
+  it("seals a pr-link line as a frame carrying the PR in attrs", () => {
+    const { drafts, totals } = line({
+      type: "pr-link",
+      sessionId: "s1",
+      prNumber: 3998,
+      prUrl: "https://github.com/macanderson/oxagen/pull/3998",
+      prRepository: "macanderson/oxagen",
+      timestamp: "2026-09-24T02:15:13.067Z",
+    });
+    expect(totals).toEqual({});
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0]).toMatchObject({
+      kind: "oxagen:pr_link",
+      ts: "2026-09-24T02:15:13.067Z",
+      body: {},
+      attrs: {
+        pr_number: "3998",
+        pr_url: "https://github.com/macanderson/oxagen/pull/3998",
+        pr_repository: "macanderson/oxagen",
+      },
+    });
+  });
+
+  it("seals nothing for a pr-link line without a number or a URL", () => {
+    expect(line({ type: "pr-link", prUrl: "https://x/pull/1" }).drafts).toEqual(
+      [],
+    );
+    expect(line({ type: "pr-link", prNumber: 1 }).drafts).toEqual([]);
   });
 });
