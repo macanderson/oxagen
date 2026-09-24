@@ -5,6 +5,7 @@
  * optional bundle refresh for the `defer` path. The daemon, the spool
  * replay, and (in PR 5) the Claude Agent SDK adapter all call this.
  */
+import { homedir } from "node:os";
 import { dirname, isAbsolute } from "node:path";
 import {
   hookInputSchema,
@@ -97,6 +98,7 @@ export interface HookHandlerDeps {
    */
   acknowledge?: (ack: CommandAcknowledgement) => void;
   now: () => number;
+  /** Home and platform for rule matching; absent, the host this runs on. */
   match?: MatchContext;
   /**
    * Which credential a successful `git push` went out with (ADR-151). The
@@ -334,6 +336,19 @@ const MESSAGE_BOUNDARIES = new Set([
 export const RESUMED_TEXT = "Resumed by the operator. Continue the task.";
 
 /**
+ * The most text one hook answer hands the agent, the steering prefix and the
+ * messages together with their joiners, whether it rides in
+ * `additionalContext`, a `Stop` block's reason or an interrupt's refusal.
+ * Claude Code keeps 10,000 characters of `additionalContext`; past that the
+ * text is saved to a file and the model reads a preview and a path, while
+ * every message in it would still be sealed `command_applied`.
+ */
+export const ADDITIONAL_CONTEXT_MAX_CHARS = 9_500;
+
+/** What an answer puts between the prefix and each message. */
+const CONTEXT_JOINER = "\n\n";
+
+/**
  * Inject the queued prompt content at this boundary and chain one
  * `oxagen:command_applied` per item: the `control.steer` frame of the
  * Mission Control spec (§8.2) in the wrapper vocabulary, carrying the
@@ -347,15 +362,25 @@ export const RESUMED_TEXT = "Resumed by the operator. Continue the task.";
  * an `expired` acknowledgement. The row is the host's once it left on the
  * wire (spec §7.4), so the host records that its expiry passed with no
  * boundary reached, and the chain holds no frame for it.
+ *
+ * `used` is how many characters the answer already carries (the steering
+ * prefix at SessionStart, or the room a mid-turn answer holds back). Items
+ * are taken in order while the answer stays under
+ * `ADDITIONAL_CONTEXT_MAX_CHARS`; the first that does not fit stays queued
+ * with everything behind it, for the next boundary. One longer than a whole
+ * answer could never be delivered, so it is acknowledged `failed` rather
+ * than left to hold up the queue.
  */
 function drainMessages(
   record: SessionRecord,
   deps: HookHandlerDeps,
   events: TachoEvent[],
+  used = 0,
 ): DeliveredPrompt[] {
   const delivered: DeliveredPrompt[] = [];
   const now = deps.now();
-  for (const message of record.control.messages.splice(0)) {
+  const queue = record.control.messages.splice(0);
+  for (const [index, message] of queue.entries()) {
     if (message.expiresAt !== null && Date.parse(message.expiresAt) < now) {
       deps.acknowledge?.({
         command_id: message.id,
@@ -365,6 +390,21 @@ function drainMessages(
       });
       continue;
     }
+    if (message.text.length > ADDITIONAL_CONTEXT_MAX_CHARS) {
+      deps.acknowledge?.({
+        command_id: message.id,
+        status: "failed",
+        session_uuid: record.recorder.sessionUuid,
+        detail: `longer than the ${ADDITIONAL_CONTEXT_MAX_CHARS} characters a hook delivers`,
+      });
+      continue;
+    }
+    const size = (used > 0 ? CONTEXT_JOINER.length : 0) + message.text.length;
+    if (used + size > ADDITIONAL_CONTEXT_MAX_CHARS) {
+      record.control.messages.unshift(...queue.slice(index));
+      break;
+    }
+    used += size;
     delivered.push({
       id: message.id,
       text: message.text,
@@ -443,6 +483,10 @@ function drainContinuation(
  * replay, whose answer reaches no harness. Each item leaves the queue as it
  * is sealed, and the daemon runs hooks one at a time, so parallel tool calls
  * cannot deliver the same steer twice.
+ *
+ * `used` is what the answer carries besides these texts (an interrupt's
+ * lead). Room for a resume's continuation is kept as well, so the whole
+ * answer stays under `ADDITIONAL_CONTEXT_MAX_CHARS`.
  */
 function drainMidTurn(
   input: HookInput,
@@ -450,6 +494,7 @@ function drainMidTurn(
   deps: HookHandlerDeps,
   events: TachoEvent[],
   replay: HookReplay | undefined,
+  used = 0,
 ): string[] {
   if (
     replay !== undefined ||
@@ -457,7 +502,11 @@ function drainMidTurn(
     !deliversMessages(record.harness, input.hook_event_name)
   )
     return [];
-  const texts = drainMessages(record, deps, events).map((m) => m.text);
+  const owed =
+    record.control.resumeOwed === undefined ? 0 : RESUMED_TEXT.length;
+  const texts = drainMessages(record, deps, events, used + owed).map(
+    (m) => m.text,
+  );
   const continuation = drainContinuation(record, events);
   if (continuation !== undefined) texts.push(continuation);
   return texts;
@@ -586,6 +635,7 @@ function evaluationRequestFor(
   toolInput: Record<string, unknown> | undefined,
   record: SessionRecord,
   deps: HookHandlerDeps,
+  input: HookInput,
 ): EvaluationInput {
   return {
     bundle: view.bundle,
@@ -600,11 +650,31 @@ function evaluationRequestFor(
     ...(view.mandateConfirmedAt !== undefined
       ? { mandateConfirmedAt: view.mandateConfirmedAt }
       : {}),
+    // Stella's own read-only claim for the tool, as `tacho-hook` reads it.
+    ...(input["tool_read_only"] === true ? { harnessReadOnly: true } : {}),
     now: deps.now(),
     context: {
-      ...deps.match,
+      ...(deps.match ?? hostMatchContext()),
       ...(record.cwd !== undefined ? { cwd: record.cwd } : {}),
     },
+  };
+}
+
+/**
+ * Home and platform for rule matching when the caller names none: the host
+ * this runs on, as `tacho-hook` reads them offline. Without them a `~/`
+ * rule never matched and a Windows path was not folded in the daemon.
+ */
+function hostMatchContext(): MatchContext {
+  let home: string | undefined;
+  try {
+    home = homedir();
+  } catch {
+    home = undefined;
+  }
+  return {
+    ...(home !== undefined && home.length > 0 ? { home } : {}),
+    platform: process.platform,
   };
 }
 
@@ -733,8 +803,14 @@ async function routeHook(
       // A replay's answer reaches no harness, so nothing drains there.
       const messages =
         block === undefined && replay === undefined
-          ? drainMessages(record, deps, events)
+          ? drainMessages(record, deps, events, context?.length ?? 0)
           : [];
+      const additional =
+        block === undefined
+          ? [context ?? "", ...messages.map((m) => m.text)]
+              .filter((s) => s.length > 0)
+              .join(CONTEXT_JOINER)
+          : "";
       events.push(
         ...record.recorder.ingestHook(payload, env, at, (draft) =>
           withReplay({
@@ -744,6 +820,9 @@ async function routeHook(
               ...(context !== null
                 ? { "oxagen.context_digest": digestText(context) }
                 : {}),
+              // How much text this answer hands the agent, prefix and
+              // messages together, to set against Claude Code's limit.
+              "oxagen.delivered_chars": String(additional.length),
               ...(block !== undefined
                 ? { "policy.reason_code": block.code }
                 : {}),
@@ -787,9 +866,6 @@ async function routeHook(
           ),
         );
       }
-      const additional = [context ?? "", ...messages.map((m) => m.text)].filter(
-        (s) => s.length > 0,
-      );
       return {
         events,
         response:
@@ -797,7 +873,7 @@ async function routeHook(
             ? {
                 hookSpecificOutput: {
                   hookEventName: "SessionStart",
-                  additionalContext: additional.join("\n\n"),
+                  additionalContext: additional,
                 },
               }
             : {},
@@ -844,7 +920,9 @@ async function routeHook(
             ? {
                 hookSpecificOutput: {
                   hookEventName: "UserPromptSubmit",
-                  additionalContext: messages.map((m) => m.text).join("\n\n"),
+                  additionalContext: messages
+                    .map((m) => m.text)
+                    .join(CONTEXT_JOINER),
                 },
               }
             : {},
@@ -859,13 +937,27 @@ async function routeHook(
       let evaluation =
         replay?.evaluation ??
         evaluatePreToolUse(
-          evaluationRequestFor(currentView, toolName, toolInput, record, deps),
+          evaluationRequestFor(
+            currentView,
+            toolName,
+            toolInput,
+            record,
+            deps,
+            input,
+          ),
         );
       if (evaluation.decision === "defer" && deps.refreshBundle) {
         await deps.refreshBundle();
         currentView = deps.policy();
         evaluation = evaluatePreToolUse(
-          evaluationRequestFor(currentView, toolName, toolInput, record, deps),
+          evaluationRequestFor(
+            currentView,
+            toolName,
+            toolInput,
+            record,
+            deps,
+            input,
+          ),
         );
       }
       if (evaluation.decision === "defer") {
@@ -899,9 +991,18 @@ async function routeHook(
           (message) => message.deliveryMode === "interrupt",
         )
       ) {
-        const texts = drainMidTurn(input, record, deps, events, replay);
+        // The space is part of the lead, so the room held back counts it.
+        const lead = "Your Oxagen operator interrupted this step. ";
+        const texts = drainMidTurn(
+          input,
+          record,
+          deps,
+          events,
+          replay,
+          lead.length,
+        );
         if (texts.length > 0) {
-          const reason = `Your Oxagen operator interrupted this step. ${texts.join("\n\n")}`;
+          const reason = `${lead}${texts.join(CONTEXT_JOINER)}`;
           evaluation = {
             ...evaluation,
             decision: "deny",
@@ -996,13 +1097,27 @@ async function routeHook(
       let evaluation =
         replay?.evaluation ??
         evaluatePreToolUse(
-          evaluationRequestFor(currentView, "Task", toolInput, record, deps),
+          evaluationRequestFor(
+            currentView,
+            "Task",
+            toolInput,
+            record,
+            deps,
+            input,
+          ),
         );
       if (evaluation.decision === "defer" && deps.refreshBundle) {
         await deps.refreshBundle();
         currentView = deps.policy();
         evaluation = evaluatePreToolUse(
-          evaluationRequestFor(currentView, "Task", toolInput, record, deps),
+          evaluationRequestFor(
+            currentView,
+            "Task",
+            toolInput,
+            record,
+            deps,
+            input,
+          ),
         );
       }
       if (evaluation.decision === "defer") {
@@ -1119,7 +1234,7 @@ async function routeHook(
             ? {
                 hookSpecificOutput: {
                   hookEventName: input.hook_event_name,
-                  additionalContext: texts.join("\n\n"),
+                  additionalContext: texts.join(CONTEXT_JOINER),
                 },
               }
             : {},
@@ -1150,7 +1265,7 @@ async function routeHook(
         events,
         response:
           texts.length > 0
-            ? { decision: "block", reason: texts.join("\n\n") }
+            ? { decision: "block", reason: texts.join(CONTEXT_JOINER) }
             : {},
         record,
       };

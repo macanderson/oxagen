@@ -38,6 +38,20 @@ import {
 import { type DaemonHandle, startDaemon } from "./daemon";
 import { HOOK_ID_REPLAY_WINDOW_MS } from "./registry";
 
+// The command test's session reports pid 59942, which is not running here, so
+// the first sweep would seal it and the inbox then refuses commands for it.
+// Treat the pids a test adds as alive.
+const alive = vi.hoisted(() => new Set<number>());
+vi.mock("../host/process-scan", async (importOriginal) => {
+  const original =
+    await importOriginal<typeof import("../host/process-scan")>();
+  return {
+    ...original,
+    isProcessAlive: (pid: number) =>
+      alive.has(pid) || original.isProcessAlive(pid),
+  };
+});
+
 /**
  * The connect budget a hook gets when the test needs it to REACH the daemon.
  *
@@ -358,6 +372,7 @@ describe("tachod", () => {
   const handles: DaemonHandle[] = [];
   afterEach(async () => {
     for (const handle of handles.splice(0)) await handle.stop();
+    alive.clear();
   });
 
   async function boot(
@@ -864,6 +879,7 @@ describe("tachod", () => {
   it(
     "applies pause, message, cancel, and revoke commands from the ingest response",
     async () => {
+      alive.add(59942);
       const plane = fakeControlPlane("etag-3");
       const killed: Array<[number, string]> = [];
       const { handle, paths } = await boot(plane, scratchPaths(), {

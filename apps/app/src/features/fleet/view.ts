@@ -9,7 +9,12 @@
 // not on `list_runs` yet, so there is no token sum to take and the tile says
 // so rather than printing a zero.
 import type { ApprovalItem } from "@/data/contracts/approvals";
-import { compareMicros, type Money, sumMoney } from "@/data/contracts/money";
+import {
+  compareMicros,
+  type Cost,
+  type Money,
+  sumMoney,
+} from "@/data/contracts/money";
 import type { RunRow } from "@/data/contracts/runs";
 
 /**
@@ -76,10 +81,30 @@ export function liveCount(rows: readonly ListedRun[]): number {
   return rows.filter((row) => row.state === "live").length;
 }
 
+type ShownCost = { value: Cost; reported: boolean; estimate: boolean };
+
 /**
- * Spend shown: the sum of the cost the rows listed recorded, the bases read
- * off those rows in the order they first appear, and how many rows had no
- * cost to add. `total` is null when no row carried a cost, or when the costs
+ * The cost a row shows: the rollup's figure when there is one, else what the
+ * agent reported, as the Run page shows it until a rollup lands. A running
+ * rollup and a report are both estimates.
+ */
+export function shownCost(run: RunRow): ShownCost | null {
+  if (run.cost !== null)
+    return {
+      value: run.cost,
+      reported: false,
+      estimate: run.costIsEstimate === true,
+    };
+  const reported = run.reportedCost ?? null;
+  return reported === null
+    ? null
+    : { value: reported, reported: true, estimate: true };
+}
+
+/**
+ * Spend shown: the sum of the cost the rows listed show, the bases read off
+ * those rows in the order they first appear, and how many rows had no cost
+ * to add. `total` is null when no row carried a cost, or when the costs
  * carry more than one currency, since no one was charged a sum across two.
  */
 export type SpendShown = {
@@ -89,16 +114,21 @@ export type SpendShown = {
   unbased: number;
   /** Rows with no cost recorded, left out of `total`. */
   unpriced: number;
-  /** Priced rows whose cost is a running estimate, counted in `total`. */
+  /**
+   * Priced rows whose cost is a running estimate or the agent's report,
+   * counted in `total`.
+   */
   estimated: number;
   /** True when the priced rows carry more than one currency. */
   mixedCurrency: boolean;
 };
 
 export function spendShown(rows: readonly ListedRun[]): SpendShown {
-  const costs = rows.flatMap(({ run }) =>
-    run.cost === null ? [] : [run.cost],
-  );
+  const shown = rows.flatMap(({ run }) => {
+    const cost = shownCost(run);
+    return cost === null ? [] : [cost];
+  });
+  const costs = shown.map((cost) => cost.value);
   const bases: string[] = [];
   let unbased = 0;
   for (const cost of costs) {
@@ -111,9 +141,7 @@ export function spendShown(rows: readonly ListedRun[]): SpendShown {
     bases,
     unbased,
     unpriced: rows.length - costs.length,
-    estimated: rows.filter(
-      ({ run }) => run.cost !== null && run.costIsEstimate === true,
-    ).length,
+    estimated: shown.filter((cost) => cost.estimate).length,
     mixedCurrency: costs.length > 0 && total === null,
   };
 }
@@ -227,8 +255,8 @@ function compare(
 ): number {
   switch (key) {
     case "cost": {
-      const x = a.run.cost;
-      const y = b.run.cost;
+      const x = shownCost(a.run)?.value ?? null;
+      const y = shownCost(b.run)?.value ?? null;
       // A row with no cost sorts after every priced row, in either direction
       // of the figures among themselves.
       if (x === null || y === null) return x === y ? 0 : x === null ? 1 : -1;
@@ -245,7 +273,7 @@ function compare(
 
 /** Whether a missing value keeps its place at the end whatever the direction. */
 function nullLast(row: ListedRun, key: SortKey): boolean {
-  return key === "cost" && row.run.cost === null;
+  return key === "cost" && shownCost(row.run) === null;
 }
 
 /** The distinct words a facet can pick from, sorted, over the rows given. */

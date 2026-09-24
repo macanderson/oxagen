@@ -20,7 +20,10 @@
  *   - the stripped document says the same thing the original did -> the
  *     original bytes go back, so the file is byte-identical;
  *   - the user edited it while enrolled -> their edit wins, the stripped
- *     document stays; only the mode is put back.
+ *     document stays; only the mode is put back;
+ *   - the file still carries a hook of an enrollment -> the strip did not
+ *     reach it (unenroll resolved another path), so it fails and the
+ *     receipt stays for the retry.
  *
  * Writes go through a symlink to the file it names, are atomic (sibling temp
  * file, fsync, rename) and refuse a file the user made read-only rather than
@@ -91,7 +94,23 @@ interface ReceiptsDocument {
 
 export interface SettleOutcome {
   path: string;
-  result: "restored" | "deleted" | "kept-user-edit" | "missing";
+  result: "restored" | "deleted" | "kept-user-edit" | "missing" | "failed";
+  /** Why the file could not be given back; set with `failed`. */
+  reason?: string;
+}
+
+/**
+ * A Tacho hook or MCP entry: `--enrollment tch_…` in a command line, the
+ * same pair as two members of an `args` array, or an HTTP hook's URL.
+ */
+const ENROLLMENT_MARKER =
+  /--enrollment(?:\s+|"\s*,\s*")tch_[a-z0-9]{22}|\/hook\/tch_[a-z0-9]{22}/;
+
+/** A byte order mark, which Windows Notepad writes and JSON does not allow. */
+const BOM = "\uFEFF";
+
+function withoutBom(text: string): string {
+  return text.startsWith(BOM) ? text.slice(BOM.length) : text;
 }
 
 /** The file a path names once links are followed, even when it does not exist yet. */
@@ -145,7 +164,7 @@ function digestOf(text: string): string {
 function isBlank(text: string): boolean {
   if (text.trim() === "") return true;
   try {
-    return isDeepStrictEqual(JSON.parse(text), {});
+    return isDeepStrictEqual(JSON.parse(withoutBom(text)), {});
   } catch {
     return false;
   }
@@ -155,7 +174,10 @@ function isBlank(text: string): boolean {
 function sameDocument(a: string, b: string): boolean {
   if (a === b) return true;
   try {
-    return isDeepStrictEqual(sortKeys(JSON.parse(a)), sortKeys(JSON.parse(b)));
+    return isDeepStrictEqual(
+      sortKeys(JSON.parse(withoutBom(a))),
+      sortKeys(JSON.parse(withoutBom(b))),
+    );
   } catch {
     return false;
   }
@@ -201,7 +223,8 @@ export class HarnessFiles {
     // An empty file is what `touch` leaves; every harness reads it as no settings.
     if (text.trim() === "") return undefined;
     try {
-      return JSON.parse(text);
+      // `write` puts the mark back on a file that had one.
+      return JSON.parse(withoutBom(text));
     } catch (error) {
       throw new HarnessFileError(
         path,
@@ -253,12 +276,18 @@ export class HarnessFiles {
       if (!existsSync(dir)) mkdirSync(dir, { mode: 0o700 });
     }
     mkdirSync(dirname(target), { recursive: true, mode: 0o700 });
+    // A file saved with a byte order mark keeps it: the writers serialize
+    // the parsed document, which has none.
+    const bom =
+      !text.startsWith(BOM) && this.readText(target)?.startsWith(BOM) === true
+        ? BOM
+        : "";
     // 0600 while enrolled: every one of these files carries the loopback
     // bearer. `settle` puts the user's own mode back.
-    writeAtomic(target, text, 0o600);
+    writeAtomic(target, `${bom}${text}`, 0o600);
     const receipt = receipts.files[path];
     if (receipt !== undefined) {
-      receipt.last_written = digestOf(text);
+      receipt.last_written = digestOf(`${bom}${text}`);
       receipt.vestigial = vestigial;
       this.save(receipts);
     }
@@ -272,7 +301,10 @@ export class HarnessFiles {
     const receipts = this.load();
     const outcomes: SettleOutcome[] = [];
     for (const [path, receipt] of Object.entries(receipts.files)) {
-      outcomes.push({ path, result: this.settleOne(path, receipt) });
+      const outcome = this.settleOne(path, receipt);
+      outcomes.push(outcome);
+      // A failed file keeps its receipt and its backup for the retry.
+      if (outcome.result === "failed") continue;
       delete receipts.files[path];
       this.save(receipts);
     }
@@ -280,7 +312,7 @@ export class HarnessFiles {
     return outcomes;
   }
 
-  private settleOne(path: string, receipt: Receipt): SettleOutcome["result"] {
+  private settleOne(path: string, receipt: Receipt): SettleOutcome {
     const target = realTarget(path);
     const backup =
       receipt.backup !== undefined && existsSync(receipt.backup)
@@ -293,6 +325,21 @@ export class HarnessFiles {
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
       current = undefined;
+    }
+    if (
+      current !== undefined &&
+      ENROLLMENT_MARKER.test(current) &&
+      (backup === undefined || !ENROLLMENT_MARKER.test(backup.toString("utf8")))
+    ) {
+      // Still carrying our hooks means the strip never reached this file,
+      // not that the user wrote them. Reading it as their edit would put the
+      // loopback bearer back under their looser mode and drop the original.
+      return {
+        path,
+        result: "failed",
+        reason:
+          "still carries Tacho's hooks, so it was not given back; run `tacho unenroll` again from the environment that enrolled, or remove the entries that name `--enrollment tch_`",
+      };
     }
     if (current === undefined) {
       result = "missing";
@@ -342,7 +389,7 @@ export class HarnessFiles {
         // Already gone, or the user has put something in it: theirs to keep.
       }
     }
-    return result;
+    return { path, result };
   }
 
   private takeReceipt(path: string, target: string): Receipt {

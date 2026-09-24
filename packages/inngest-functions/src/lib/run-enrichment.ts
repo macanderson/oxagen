@@ -93,7 +93,8 @@ const UNNAMED_BRANCHES = new Set(["main", "master", "HEAD"]);
 
 /**
  * A title that needs no model: the first sentence of the run's first prompt,
- * cut at a word boundary, then the branch when it names the work. The model's
+ * cut at a word boundary, then "on" and the branch when it names the work,
+ * the way a session title reads ("oxagen on agent/pensive-volta"). The model's
  * name replaces it once an account is written. Returns null when the prompt
  * holds no words.
  */
@@ -119,7 +120,7 @@ export function fallbackRunTitle(
   }
   const named = branch?.trim();
   if (!named || UNNAMED_BRANCHES.has(named)) return title;
-  return `${title} · ${named}`.slice(0, TITLE_CHARS);
+  return `${title} on ${named}`.slice(0, TITLE_CHARS);
 }
 
 /**
@@ -189,7 +190,11 @@ export async function runNarrativeTurn(
   return { text, model: turn.modelId };
 }
 
-/** A stable suffix avoids title collisions without another charged model call. */
+/**
+ * A stable suffix avoids title collisions without another charged model call.
+ * The run id follows in parentheses, since a label joined with a separator
+ * character is hard to scan.
+ */
 export function uniqueRunName(name: string, runId: string): string {
-  return `${name.trim().slice(0, Math.max(1, 80 - runId.length - 3))} · ${runId}`;
+  return `${name.trim().slice(0, Math.max(1, 80 - runId.length - 3))} (${runId})`;
 }

@@ -276,7 +276,7 @@
         "status": "What this copy has against what is published: the files under <code>.oxagen/</code> that are behind or changed here.",
         "propose": "Turns a local edit under <code>.oxagen/</code> into a proposal. Opening and merging its pull request happen here, because both gate on a role only a signed-in person holds."
       },
-      "syncNote": "Stella symlinks into this directory rather than copying it, so there is no second copy that could drift. A copy whose symlinks read <code>missing</code> is one where Stella will load nothing.",
+      "syncNote": "stella symlinks into this directory rather than copying it, so there is no second copy that could drift. A copy whose symlinks read <code>missing</code> is one where stella will load nothing.",
       "stale": "A copy that is behind is not a run that is behind. Steering reaches a run from the merged commit, whatever a directory on a laptop holds.",
       "label": "Working copies of this workspace",
       "columns": {

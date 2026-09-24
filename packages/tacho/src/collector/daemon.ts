@@ -56,6 +56,7 @@ import {
   applyControlFacts,
   currentEnrollment,
   type HostFile,
+  hostStatusInForce,
   readHostFile,
   mcpEndpointFor,
   modelProxyPortFor,
@@ -123,7 +124,10 @@ import {
   hookIdJournalEntry,
   restoreHookIdJournal,
 } from "./hook-id-journal";
-import { applyCommands } from "./inbox";
+import {
+  applyCommands as applyDeliveredCommands,
+  HandledCommands,
+} from "./inbox";
 import {
   createMcpGateway,
   type GatewayAttribution,
@@ -146,6 +150,7 @@ import {
   HOOK_ID_REPLAY_WINDOW_MS,
   parseRegistryState,
   pruneHookIds,
+  rememberBaseline,
   sessionMapKey,
   type SessionRecord,
   type RegistryState,
@@ -577,7 +582,11 @@ async function initializeDaemon(
     }
   }
 
-  let bundleVerified = verifyBundle(host.bundle, host.bundle_public_key_pem).ok;
+  let bundleVerified = verifyBundle(
+    host.bundle,
+    host.bundle_public_key_pem,
+    host.host_enrollment_id,
+  ).ok;
   /**
    * When the control plane last confirmed the cached mandate, as epoch ms.
    *
@@ -657,6 +666,14 @@ async function initializeDaemon(
   let stateDirty = journaledHookIds > 0;
   let stopped = false;
   const pendingAcks: CommandAcknowledgement[] = [];
+  // The control plane delivers a `sent` command again until its
+  // acknowledgement lands. Every delivery goes through this daemon's record
+  // of the commands it already answered, so a steer is queued once and a kill
+  // signalled once however often it arrives. In memory only: `daemon.json` is
+  // the registry's state and has no place for it.
+  const handledCommands = new HandledCommands();
+  const applyCommands: typeof applyDeliveredCommands = (commands, deps) =>
+    applyDeliveredCommands(commands, { ...deps, handled: handledCommands });
   const serial = new Serial();
 
   // Exponential backoff for the command poll, the same 2s→60s shape the
@@ -892,7 +909,7 @@ async function initializeDaemon(
       bundle: current.bundle,
       verified: bundleVerified,
       mandateConfirmedAt,
-      hostStatus: current.host_status,
+      hostStatus: hostStatusInForce(current, bundleVerified),
       denyGeneration: current.deny_generation,
       controlReachable:
         lastControlAt !== undefined &&
@@ -1140,6 +1157,7 @@ async function initializeDaemon(
       const verification = verifyBundle(
         response.bundle,
         host.bundle_public_key_pem,
+        host.host_enrollment_id,
       );
       if (!verification.ok) {
         log(
@@ -1225,7 +1243,9 @@ async function initializeDaemon(
         (result) => ({ events: result.events }),
       );
       pendingAcks.push(...result.acknowledgements);
-      interruptModelCalls(control.commands);
+      // Only the commands that took effect: an expired or refused kill must
+      // not cut a session's model calls.
+      interruptModelCalls(result.applied);
     }
   }
 
@@ -1345,6 +1365,9 @@ async function initializeDaemon(
   // --- end transcript tailer ---------------------------------------------
 
   async function sendAcks(): Promise<void> {
+    // A message whose session sealed before a boundary reached it is
+    // `expired`; left unsent, the operator reads it as still on its way.
+    pendingAcks.push(...registry.takeExpiredOnSeal());
     const lastEnvelopeAt = Math.max(
       lastIngestAt ?? -Infinity,
       lastCommandPollAt ?? -Infinity,
@@ -1794,14 +1817,8 @@ async function initializeDaemon(
       if (due) lastReconcileAt.set(harnessSessionId, at);
       // Every read runs at the worktree root, so an edit in a subdirectory and
       // one at the top describe the same checkout, and the baseline is
-      // retaken only when the work moves to another root.
+      // switched only when the work moves to another root.
       const cwd = (await readGitRoot(execAsync, dir)) ?? dir;
-      if (session.baselineRoot === undefined && session.baselineCommit)
-        session.baselineRoot = cwd;
-      if (session.baselineRoot !== undefined && session.baselineRoot !== cwd) {
-        delete session.baselineCommit;
-        delete session.baselineRoot;
-      }
       const facts = await gitFactsFor(cwd, want.force);
       // Undefined means `rev-parse HEAD` did not answer, which covers a
       // directory that is not a repository AND a repository whose first
@@ -1812,13 +1829,14 @@ async function initializeDaemon(
       // seals no frame. There is simply no git context to note for either.
       // The first read that answers in this worktree fixes the session's
       // baseline. Later reads measure from it rather than from a `HEAD`
-      // that the session's own commits keep moving. `ensure` clears the
-      // baseline when `cwd` changes, so a move to another repository
-      // captures that tree's HEAD instead of diffing against the old one.
-      if (facts !== undefined && session.baselineCommit === undefined) {
-        session.baselineCommit = facts.head_sha;
-        session.baselineRoot = cwd;
-      }
+      // that the session's own commits keep moving. The baseline is held
+      // per repository root: `rememberBaseline` puts back the one the
+      // session holds for this root, so a `cd` inside one repository keeps
+      // it and a move to another root captures that tree's HEAD, or finds
+      // the one taken there before. A root with no baseline and no HEAD
+      // leaves none in force, so this read never diffs against a commit in
+      // another repository.
+      rememberBaseline(session, cwd, facts?.head_sha);
       if (facts === undefined && !due) continue;
       found.push({
         session,
@@ -2123,6 +2141,10 @@ async function initializeDaemon(
           }),
       );
       state.agents = [];
+      // The host's tombstones are not this session's: carried here, every
+      // pending terminal held the whole list, and a restore put back ones
+      // spent since.
+      state.tombstones = [];
       const retention = retentionInForce();
       pending.terminal = {
         events: outcome.events,
@@ -2629,7 +2651,10 @@ async function initializeDaemon(
     registry,
     hostRecorder: () => hostRecorder,
     record,
-    policy: () => ({ bundle: host.bundle, hostStatus: host.host_status }),
+    policy: () => ({
+      bundle: host.bundle,
+      hostStatus: hostStatusInForce(host, bundleVerified),
+    }),
     upstreams: () => ({
       ...DEFAULT_MODEL_UPSTREAMS,
       ...displacedUpstreams,
@@ -2883,6 +2908,15 @@ async function initializeDaemon(
           const { record: session, created } = registry.ensure(sessionId, {
             ambient: true,
           });
+          // Its terminal is sealed but not yet in the WAL. A frame sealed now
+          // takes the seq after it and reaches the WAL first, so the records
+          // are dropped; a sealed chain takes them, marked after the stop.
+          if (session.pendingTerminal === true) {
+            log(
+              `OTel records for session ${sessionId} dropped: its end is not yet written`,
+            );
+            continue;
+          }
           if (created)
             log(
               `session ${sessionId} first seen through OTel; no hook stream yet`,

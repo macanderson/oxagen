@@ -14,7 +14,7 @@ export const HARNESS_LABEL: Record<Harness, string> = {
   "claude-code": "Claude Code",
   codex: "Codex",
   cursor: "Cursor",
-  stella: "Stella",
+  stella: "stella",
   "claude-desktop": "Claude Desktop",
 };
 
@@ -286,6 +286,28 @@ export function deregisterArgs(
     sidecar: "tacho",
     args: ["reassign", "--harness", remaining.join(",")],
   };
+}
+
+/**
+ * Whether de-registering this harness needs a live sign-in. With others left
+ * it is a `tacho reassign`, which revokes and enrolls again with the session;
+ * the last one is an `unenroll`, which finishes offline.
+ */
+export function deregisterNeedsSession(
+  enrolled: readonly string[],
+  harness: Harness,
+): boolean {
+  return deregisterArgs(enrolled, harness).args[0] === "reassign";
+}
+
+/**
+ * The collector in the wizard's confirmation. It read "starting…" for as
+ * long as the collector did not answer, which the app had no way to know.
+ */
+export function collectorText(daemonUp: boolean, port: number): string {
+  return daemonUp
+    ? `running on 127.0.0.1:${port}`
+    : `not answering on 127.0.0.1:${port}`;
 }
 
 /**

@@ -70,17 +70,29 @@ function parseRetryAfter(
   return Number.isNaN(at) ? undefined : Math.max(0, at - nowMs);
 }
 
+/**
+ * A numeric header, or undefined when it is absent or not a number.
+ * `Number(null)` and `Number("")` are both 0, which read a missing
+ * `X-RateLimit-Remaining` as a spent budget and held the drain to one batch
+ * per tick.
+ */
+function headerNumber(value: string | null): number | undefined {
+  if (value === null || value.trim().length === 0) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 function readRateLimitHint(
   headers: { get: (name: string) => string | null } | undefined,
   nowMs: number,
 ): RateLimitHint | undefined {
   if (!headers) return undefined;
   const hint: RateLimitHint = {};
-  const remaining = Number(headers.get("x-ratelimit-remaining"));
-  if (Number.isFinite(remaining)) hint.remaining = remaining;
+  const remaining = headerNumber(headers.get("x-ratelimit-remaining"));
+  if (remaining !== undefined) hint.remaining = remaining;
   // X-RateLimit-Reset is epoch SECONDS (see the API middleware), not a delta.
-  const reset = Number(headers.get("x-ratelimit-reset"));
-  if (Number.isFinite(reset) && reset > 0) hint.resetAtMs = reset * 1000;
+  const reset = headerNumber(headers.get("x-ratelimit-reset"));
+  if (reset !== undefined && reset > 0) hint.resetAtMs = reset * 1000;
   const retryAfter = parseRetryAfter(headers.get("retry-after"), nowMs);
   if (retryAfter !== undefined) hint.retryAfterMs = retryAfter;
   return Object.keys(hint).length > 0 ? hint : undefined;

@@ -30,7 +30,7 @@
         "claude-code": "Claude Code",
         "codex": "Codex",
         "cursor": "Cursor",
-        "stella": "Stella",
+        "stella": "stella",
         "claude-agent-sdk": "Claude Agent SDK",
         "custom": "Custom"
       },
@@ -88,7 +88,7 @@
       "subtitle": "An agent is a definition in a repository before it is a principal in a database.",
       "lead": "Merging this publishes the definition of <code>{slug}</code> in {workspace}. After merge, register it under the same slug to create its identity.",
       "fileDefinition": "the definition",
-      "fileGenerated": "generated from the definition, read by Claude Code, Cursor, and Stella",
+      "fileGenerated": "generated from the definition, read by Claude Code, Cursor, and stella",
       "codex": "Codex documents no subagent file, so the pull request writes none for it.",
       "checks": {
         "schema": {

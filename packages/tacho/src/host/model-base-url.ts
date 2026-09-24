@@ -87,6 +87,7 @@ import {
   type TomlLine,
   tomlStringValue,
 } from "./model-base-url-toml";
+import { harnessConfigDirs } from "./paths";
 import type { ModelRoutedHarness } from "../wire";
 
 /** The harnesses the route table gives a base URL. */
@@ -97,6 +98,14 @@ export interface ModelBaseUrlOptions {
   home: string;
   /** Stella's home, `$STELLA_HOME`; `~/.stella` when absent. */
   stellaHome?: string;
+  /**
+   * Claude Code's config directory, `$CLAUDE_CONFIG_DIR`. When absent it is
+   * resolved as `tachoPaths` resolves the hooks file (`harnessConfigDirs`),
+   * so the base URL lands in the same `settings.json` as the hooks.
+   */
+  claudeConfigDir?: string;
+  /** Codex's home, `$CODEX_HOME`, resolved the same way when absent. */
+  codexHome?: string;
   /** The loopback port the daemon's model proxy listens on. */
   port: number;
   harnesses: ModelBaseUrlHarness[];
@@ -188,11 +197,16 @@ export function isModelProxyBaseUrl(
   return typeof value === "string" && OURS[harness].test(value);
 }
 
-/** Where a harness's files live: the home directory, and Stella's own. */
+/** Where a harness's files live: the home directory, and each harness's own. */
 export interface ModelBaseUrlHomes {
   home: string;
   stellaHome?: string;
+  claudeConfigDir?: string;
+  codexHome?: string;
 }
+
+/** The Claude Code and Codex directories `options` names, or resolves. */
+type HarnessDirs = Pick<ModelBaseUrlHomes, "claudeConfigDir" | "codexHome">;
 
 /**
  * The file this contract edits for a harness. For Stella it is the file
@@ -205,8 +219,15 @@ export function modelBaseUrlFile(
   homes: ModelBaseUrlHomes,
 ): string {
   if (harness === "claude-code")
-    return join(homes.home, ".claude", "settings.json");
-  if (harness === "codex") return join(homes.home, ".codex", "config.toml");
+    return join(
+      homes.claudeConfigDir ?? harnessConfigDirs(homes.home).claudeConfigDir,
+      "settings.json",
+    );
+  if (harness === "codex")
+    return join(
+      homes.codexHome ?? harnessConfigDirs(homes.home).codexHome,
+      "config.toml",
+    );
   const stellaHome = homes.stellaHome ?? join(homes.home, ".stella");
   const toml = join(stellaHome, "stella.toml");
   const json = join(stellaHome, "settings.json");
@@ -233,15 +254,24 @@ export function modelBaseUrlBackupPath(
   harness: ModelBaseUrlHarness,
   home: string,
   stellaHome?: string,
+  dirs: HarnessDirs = {},
 ): string {
-  return sidecarFor(fileFor(harness, homesOf(home, stellaHome)));
+  return sidecarFor(fileFor(harness, homesOf(home, stellaHome, dirs)));
 }
 
 function homesOf(
   home: string,
   stellaHome: string | undefined,
+  dirs: HarnessDirs,
 ): ModelBaseUrlHomes {
-  return stellaHome !== undefined ? { home, stellaHome } : { home };
+  return {
+    home,
+    ...(stellaHome !== undefined ? { stellaHome } : {}),
+    ...(dirs.claudeConfigDir !== undefined
+      ? { claudeConfigDir: dirs.claudeConfigDir }
+      : {}),
+    ...(dirs.codexHome !== undefined ? { codexHome: dirs.codexHome } : {}),
+  };
 }
 
 function sha256(text: string): string {
@@ -389,7 +419,9 @@ function parseSettings(text: string | undefined, file: string): JsonObject {
   if (text === undefined || text.trim().length === 0) return {};
   let parsed: unknown;
   try {
-    parsed = JSON.parse(text);
+    // A byte order mark (Windows Notepad) is not JSON; `serializeLike` puts
+    // it back.
+    parsed = JSON.parse(text.replace(/^\uFEFF/, ""));
   } catch (error) {
     throw new Error(
       `${file} is not valid JSON, so it was left untouched: ${
@@ -425,7 +457,8 @@ function serializeLike(text: string | undefined, settings: JsonObject): string {
   const eol = text !== undefined && text.includes("\r\n") ? "\r\n" : "\n";
   const body = JSON.stringify(settings, null, indent).replace(/\n/g, eol);
   const final = text === undefined || /\r?\n$/.test(text) ? eol : "";
-  return `${body}${final}`;
+  const bom = text?.startsWith("\uFEFF") === true ? "\uFEFF" : "";
+  return `${bom}${body}${final}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -582,8 +615,9 @@ export function hasOrphanedModelBaseUrl(
   harness: ModelBaseUrlHarness,
   home: string,
   stellaHome?: string,
+  dirs: HarnessDirs = {},
 ): boolean {
-  const file = fileFor(harness, homesOf(home, stellaHome));
+  const file = fileFor(harness, homesOf(home, stellaHome, dirs));
   const text = readTextIfExists(file);
   try {
     return isModelProxyBaseUrl(harness, currentValue(harness, file, text));

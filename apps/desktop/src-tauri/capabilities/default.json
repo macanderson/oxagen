@@ -1,23 +1,14 @@
 {
   "$schema": "https://schema.tauri.app/config/2/capability",
   "identifier": "default",
-  "description": "The main window: read state through the app's own commands, run the two bundled sidecars with any arguments, open URLs and log files in the system handler, check for and install a signed update, and relaunch after one.",
+  "description": "The main window: read state through the app's own commands, spawn and kill the two bundled sidecars with any arguments, open URLs and log files in the system handler, check for and install a signed update, and relaunch after one.",
   "windows": ["main"],
   "permissions": [
     "core:default",
-    "core:window:allow-show",
-    "core:window:allow-set-focus",
     "opener:default",
     {
       "identifier": "opener:allow-open-path",
       "allow": [{ "path": "$HOME/.config/oxagen/**" }]
-    },
-    {
-      "identifier": "shell:allow-execute",
-      "allow": [
-        { "name": "binaries/tacho", "sidecar": true, "args": true },
-        { "name": "binaries/oxagen", "sidecar": true, "args": true }
-      ]
     },
     {
       "identifier": "shell:allow-spawn",
@@ -27,7 +18,6 @@
       ]
     },
     "shell:allow-kill",
-    "shell:allow-stdin-write",
     "updater:default",
     "process:allow-restart"
   ]

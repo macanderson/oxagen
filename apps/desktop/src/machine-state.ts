@@ -41,6 +41,23 @@ export function describeRemoval(report: RemovalReport, hint: string): string {
   return `${removed} Still on this machine: ${report.left.join(". ")}. ${hint}`;
 }
 
+/**
+ * Whether an uninstall left nothing behind. Only then is there nothing more
+ * the Uninstall panel can do, so it goes away; anything still on the machine
+ * keeps it on screen so the person can try again.
+ */
+export function uninstallFinished(report: RemovalReport): boolean {
+  return report.left.length === 0;
+}
+
+/** The toast after a finished uninstall: what happened, then the one step left to the person. */
+export function uninstallToast(hint: string): string {
+  return `Oxagen was removed from this machine. ${hint}`;
+}
+
+/** How long the uninstall toast stays up before it dismisses itself. */
+export const TOAST_MS = 8_000;
+
 /** What the Rust shell's `install_cli` reports. */
 export interface InstallResult {
   /** "linked", "already" or "skipped". */
@@ -104,6 +121,13 @@ export interface Poller {
    * dropped instead of overwriting the newer answer.
    */
   poll: (options?: { force?: boolean }) => Promise<void>;
+  /**
+   * Drop whatever read is out, and let the next poll start a fresh one. An
+   * action calls this before it changes the machine: a 20 s `tacho status`
+   * started before `reassign` would otherwise land after it and put the old
+   * machine back on screen.
+   */
+  invalidate: () => void;
 }
 
 /**
@@ -140,5 +164,28 @@ export function createPoller<T>(
   return {
     poll: (options) =>
       options?.force !== true && inFlight !== null ? inFlight : run(),
+    invalidate: () => {
+      latest += 1;
+      inFlight = null;
+    },
   };
+}
+
+/**
+ * The error banner after a `tacho status` read. A failure is shown once and
+ * not raised again while it repeats. A read that works clears the banner only
+ * when the banner still shows that failure: it used to leave a recovered
+ * failure on screen, and clearing whatever was shown would have hidden an
+ * action's own error.
+ */
+export function statusBanner(
+  banner: string | null,
+  lastStatusError: string | null,
+  outcome: { ok: true } | { ok: false; error: string },
+): string | null {
+  if (outcome.ok)
+    return lastStatusError !== null && banner === lastStatusError
+      ? null
+      : banner;
+  return outcome.error === lastStatusError ? banner : outcome.error;
 }

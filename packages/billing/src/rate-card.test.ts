@@ -54,6 +54,12 @@ describe("rateFor", () => {
     expect(rateFor("anthropic/claude-fable-5").cachedInputPer1M).toBe(1.0);
   });
 
+  it("prices Opus 4.1 at the original $15/$75, dotted or hyphenated", () => {
+    for (const slug of ["anthropic/claude-opus-4.1", "claude-opus-4-1"]) {
+      expect(rateFor(slug).outputPer1M, slug).toBe(75.0);
+    }
+  });
+
   it("prices Sonnet distinctly from Opus", () => {
     expect(rateFor("anthropic/claude-sonnet-4.6")).toEqual({
       inputPer1M: 3.0,

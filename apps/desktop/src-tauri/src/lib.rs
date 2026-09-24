@@ -163,6 +163,9 @@ struct DesktopState {
     app_version: String,
     config: CliConfigView,
     host: Option<Value>,
+    /// Why `host.json` is there and cannot be read, when it is. `host` is
+    /// then None, which alone reads as "not enrolled".
+    host_error: Option<String>,
     host_path: String,
     daemon: Option<Value>,
     log_path: String,
@@ -200,7 +203,10 @@ fn desktop_state(app: tauri::AppHandle, install_state: tauri::State<CliInstallSt
     let (config, _) = cli_config();
     let root = tacho_root();
     let host_path = root.join("host.json");
-    let host = read_json(&host_path);
+    let (host, host_error) = match machine::read_host(&host_path) {
+        Ok(host) => (host, None),
+        Err(e) => (None, Some(e)),
+    };
     let daemon = host.as_ref().and_then(daemon_status);
     let log_path = root.join("tachod.log");
     DesktopState {
@@ -209,6 +215,7 @@ fn desktop_state(app: tauri::AppHandle, install_state: tauri::State<CliInstallSt
         app_version: app.package_info().version.to_string(),
         config,
         host: host.as_ref().map(host_view),
+        host_error,
         host_path: host_path.display().to_string(),
         daemon,
         log_path: log_path.display().to_string(),
@@ -269,17 +276,22 @@ fn api_post(path: String, body: Value) -> Result<Value, String> {
 /// "Uninstall": everything the app put on this machine that `tacho unenroll`
 /// does not own. See `cli_install::remove_everything_in`. The report names
 /// what was removed and what is still there, so the UI says what happened
-/// instead of "everything is gone".
-#[tauri::command]
+/// instead of "everything is gone". `async` so Tauri runs it off the main
+/// thread: it can wait on the launch-time install, and `remove_dir_all` over
+/// the collector's spool and WAL is no quicker.
+#[tauri::command(async)]
 fn remove_local_data(install_state: tauri::State<CliInstallState>) -> Result<cli_install::RemovalReport, String> {
-    let report = cli_install::remove_everything_in(&cli_install::InstallEnv::real())?;
-    let view = CliInstallView {
-        state: "opted_out".to_string(),
-        note: "Removed. Oxagen links the command line tools again the next time it opens.".to_string(),
-        ..Default::default()
-    };
-    *install_state.0.lock().unwrap_or_else(|e| e.into_inner()) = view;
-    Ok(report)
+    cli_install::remove_everything_in(&cli_install::InstallEnv::real(), &install_state)
+}
+
+/// The environment to spawn a sidecar with, on top of the app's own:
+/// `TACHO_BIN_DIR` while the app runs from a transient directory and a
+/// durable copy exists. Asked per spawn, because a copy made during this
+/// launch cannot be exported to the app's own environment: see
+/// `cli_install::export_bin_dir`.
+#[tauri::command]
+fn sidecar_env() -> std::collections::BTreeMap<String, String> {
+    cli_install::sidecar_env()
 }
 
 /// The end of the collector log. Bounded: see `machine::tail_lines`.
@@ -290,10 +302,11 @@ fn log_tail(lines: usize) -> String {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Before any sidecar is spawned: a durable copy from an earlier launch
-    // is what tacho must write into hooks when the app runs from an
-    // AppImage or a mounted .dmg. `ensure_cli_installed` (below, off the
-    // main thread) refreshes this once it has made this launch's copy.
+    // Before any sidecar is spawned, and before any thread exists: a durable
+    // copy from an earlier launch is what tacho must write into hooks when
+    // the app runs from an AppImage or a mounted .dmg. A copy
+    // `ensure_cli_installed` makes later in this launch reaches the sidecars
+    // through `sidecar_env` instead; see `cli_install::export_bin_dir`.
     cli_install::export_bin_dir();
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
@@ -331,9 +344,8 @@ pub fn run() {
             // same managed state afterward if the user acts manually.
             let handle = app.handle().clone();
             std::thread::spawn(move || {
-                let outcome = cli_install::ensure_cli_installed();
                 if let Some(state) = handle.try_state::<CliInstallState>() {
-                    *state.0.lock().unwrap_or_else(|e| e.into_inner()) = outcome;
+                    cli_install::ensure_cli_installed(&state);
                 }
             });
 
@@ -345,6 +357,7 @@ pub fn run() {
             cli_install::install_cli,
             cli_install::uninstall_cli,
             remove_local_data,
+            sidecar_env,
             log_tail
         ])
         .run(tauri::generate_context!())

@@ -106,10 +106,10 @@
         "contextBody": "For an instruction or workflow change, review the finding and recommendation in the context-record wizard. Nothing is published until you review and merge its pull request.",
         "contextAction": "Draft a context PR",
         "codeTitle": "Code PR",
-        "codeBody": "Review a request for Stella to inspect the finding and plan a harness hook, custom tool, or code change. Opening a pull request depends on the repository tools and access available to Stella.",
+        "codeBody": "Review a request for stella to inspect the finding and plan a harness hook, custom tool, or code change. Opening a pull request depends on the repository tools and access available to stella.",
         "effort": "Implementation cost is not estimated. Potential savings exclude the cost of making the change.",
         "draft": "Finding {id} for {subject}. Window: {from} to {to}. Cites {runs} runs and {calls} calls. Potential savings: {amount} {currency}, estimated on {basis} cost data. Implementation cost is not estimated.\n\nRecommended change: {fix}\n\nObserved behavior: {why}",
-        "codeAction": "Plan a code PR with Stella",
+        "codeAction": "Plan a code PR with stella",
         "codeDraft": "Inspect this spend finding and read the cited calls before proposing a change. Plan the smallest harness hook, custom tool, or code fix that addresses the behavior, with tests. Separate measured costs from potential savings. Estimate implementation cost only with stated assumptions. Open a reviewable code PR only if repository tools and access are available. Otherwise report the missing access. Do not mark the finding fixed.\n\n{finding}"
       },
       "costData": "Cost data: {basis}",
@@ -518,7 +518,7 @@
     },
     "gateway": {
       "title": "Gateway models",
-      "note": "Model lists apply to routed calls from Claude Code, Codex, and Stella’s Anthropic provider after an upgraded host refreshes its signed mandate. Cursor model calls are not routed. Agent budgets remain separate.",
+      "note": "Model lists apply to routed calls from Claude Code, Codex, and stella’s Anthropic provider after an upgraded host refreshes its signed mandate. Cursor model calls are not routed. Agent budgets remain separate.",
       "notApplied": "Lists disabled",
       "sessionLimit": "Recorded workspace ceiling (USD)",
       "sessionLimitHint": "This legacy value is recorded only. Set an enforced run budget on the agent mandate.",

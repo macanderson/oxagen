@@ -18,6 +18,7 @@ type Listener = (payload: never) => void;
 interface FakeCommand {
   program: string;
   args: string[];
+  options?: { env?: Record<string, string> };
   stdout: { on: (event: string, fn: Listener) => void };
   stderr: { on: (event: string, fn: Listener) => void };
   on: (event: string, fn: Listener) => void;
@@ -31,7 +32,11 @@ const spawned: FakeCommand[] = [];
 let spawnFails: Error | undefined;
 vi.mock("@tauri-apps/plugin-shell", () => ({
   Command: {
-    sidecar: (program: string, args: string[]) => {
+    sidecar: (
+      program: string,
+      args: string[],
+      options?: { env?: Record<string, string> },
+    ) => {
       const listeners = new Map<string, Listener[]>();
       const on = (channel: string) => (event: string, fn: Listener) => {
         const key = `${channel}:${event}`;
@@ -40,6 +45,7 @@ vi.mock("@tauri-apps/plugin-shell", () => ({
       const command: FakeCommand = {
         program,
         args,
+        options,
         stdout: { on: on("stdout") },
         stderr: { on: on("stderr") },
         on: on("command"),
@@ -62,12 +68,17 @@ vi.mock("@tauri-apps/plugin-shell", () => ({
 
 import {
   apiPost,
+  checkLiveSession,
+  DETECT_TIMEOUT_MS,
+  detectHarnesses,
   installCli,
+  isUnauthorized,
   parseConnect,
   parseDetect,
   listOrganizations,
   listWorkspaces,
   logTail,
+  sidecarEnv,
   readState,
   removeLocalData,
   runSidecar,
@@ -297,5 +308,113 @@ describe("detect and connect parsing", () => {
         detail: "tacho verify exited ? without a result",
       },
     );
+  });
+});
+
+describe("the machine scan", () => {
+  it("resolves the detect document", async () => {
+    const pending = detectHarnesses();
+    await Promise.resolve();
+    expect(spawned[0]?.args).toEqual(["detect", "--json"]);
+    spawned[0]?.emit("stdout", '{"enrolled":false,"harnesses":[]}');
+    spawned[0]?.emit("close", { code: 0 });
+    expect(await pending).toEqual({ enrolled: false, harnesses: [] });
+  });
+
+  it("fails a scan that printed no document instead of reporting nothing found", async () => {
+    const withStderr = detectHarnesses();
+    await Promise.resolve();
+    spawned[0]?.emit("stdout", "warning: profile printed this");
+    spawned[0]?.emit("stderr", "tacho: cannot read host.json");
+    spawned[0]?.emit("close", { code: 1 });
+    await expect(withStderr).rejects.toThrow("tacho: cannot read host.json");
+    const silent = detectHarnesses();
+    await Promise.resolve();
+    spawned[1]?.emit("close", { code: 3 });
+    await expect(silent).rejects.toThrow(
+      "tacho detect exited 3 without a report",
+    );
+  });
+
+  it("gives four harnesses' login-shell probes time to finish", () => {
+    // Four harnesses, three probes each, 10 s apiece in tacho.
+    expect(DETECT_TIMEOUT_MS).toBeGreaterThanOrEqual(4 * 3 * 10_000);
+  });
+});
+
+describe("the session check before a reassign", () => {
+  it("answers live when the control plane lists the organizations", async () => {
+    expect(await checkLiveSession(async () => [])).toEqual({ live: true });
+  });
+
+  it("calls a 401 an expired session and says nothing was changed", async () => {
+    expect(
+      await checkLiveSession(async () => {
+        throw new Error("401: unauthorized");
+      }),
+    ).toEqual({
+      live: false,
+      expired: true,
+      message: "Sign in again first. Nothing was changed.",
+    });
+  });
+
+  it("refuses when the control plane cannot be reached, without calling the session dead", async () => {
+    const check = await checkLiveSession(async () => {
+      throw new Error("error sending request");
+    });
+    expect(check.live).toBe(false);
+    if (!check.live) {
+      expect(check.expired).toBe(false);
+      expect(check.message).toContain("error sending request");
+      expect(check.message).toContain("Nothing was changed.");
+    }
+  });
+
+  it("asks the organizations endpoint by default", async () => {
+    answers.set("api_post", { organizations: [] });
+    expect(await checkLiveSession()).toEqual({ live: true });
+    expect(invoked).toEqual([
+      {
+        cmd: "api_post",
+        args: { path: "/v1/user/organizations", body: {} },
+      },
+    ]);
+  });
+
+  it("reads only a leading 401 as unauthorized", () => {
+    expect(isUnauthorized(new Error("401: token expired"))).toBe(true);
+    expect(isUnauthorized("401")).toBe(true);
+    expect(isUnauthorized(new Error("500: upstream 401"))).toBe(false);
+  });
+});
+
+describe("the sidecar environment", () => {
+  it("passes the durable tools directory to a sidecar the app spawns", async () => {
+    answers.set("sidecar_env", { TACHO_BIN_DIR: "/Users/m/.oxagen/bin" });
+    const env = await sidecarEnv();
+    const pending = runSidecar("tacho", ["enroll"], undefined, { env });
+    await Promise.resolve();
+    expect(spawned.at(-1)?.options).toEqual({
+      env: { TACHO_BIN_DIR: "/Users/m/.oxagen/bin" },
+    });
+    spawned.at(-1)?.emit("close", { code: 0 });
+    await pending;
+  });
+
+  it("inherits the app's environment when there is nothing to add", async () => {
+    answers.set("sidecar_env", {});
+    const pending = runSidecar("tacho", ["enroll"], undefined, {
+      env: await sidecarEnv(),
+    });
+    await Promise.resolve();
+    expect(spawned.at(-1)?.options).toBeUndefined();
+    spawned.at(-1)?.emit("close", { code: 0 });
+    await pending;
+  });
+
+  it("reads an older shell with no sidecar_env command as nothing to add", async () => {
+    answers.delete("sidecar_env");
+    expect(await sidecarEnv()).toEqual({});
   });
 });

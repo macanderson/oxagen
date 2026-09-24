@@ -125,7 +125,7 @@ choose and which needs no secret to stay meaningful. ADR-084 has the reasoning.
 | `git_head_sha` | String | collector reads `.git/HEAD` at turn start |
 | `git_remote_digest` | String | sha256 of normalised origin URL (repo identity without leaking the URL) |
 | `git_dirty` | N(Bool) | collector `git status --porcelain` at turn start |
-| `worktree_path`, `worktree_branch` | String | transcript `worktree-state`, `WorktreeCreate` hook |
+| `worktree_path`, `worktree_branch` | String | transcript `worktree-state` |
 | `permission_mode` | LC | hook `permission_mode` |
 | `effort` | LC | env `CLAUDE_EFFORT` / transcript `effort` |
 | `model` | LC | OTel `model` / transcript `message.model` |
@@ -341,7 +341,7 @@ These come from the published hook and monitoring references and are modelled no
 | `task_name`, `task_id` | String | `TaskCreated` / `TaskCompleted` |
 | `cwd_previous`, `cwd_new` | String | `CwdChanged` |
 | `directory_added`, `directory_add_method` | String, LC | `DirectoryAdded` (`slash_command` \| `register_repo_root`) |
-| `worktree_reason` | LC | `WorktreeCreate` (`background_session` \| `isolation` \| `explicit_flag`) |
+| `worktree_reason` | LC | not recorded: Tacho no longer registers `WorktreeCreate`, because a registered `WorktreeCreate` hook replaces Claude Code's own worktree creation |
 | `elicitation_server`, `elicitation_message_type`, `elicitation_prompt_digest`, `elicitation_response_digest` | String, LC, String, String | `Elicitation` / `ElicitationResult` |
 | `setup_trigger` | LC | `Setup` (`init` \| `maintenance`) |
 | `teammate_name` | String | `TeammateIdle` |

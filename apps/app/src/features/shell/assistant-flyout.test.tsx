@@ -166,6 +166,8 @@ beforeAll(() => {
 beforeEach(() => {
   viewport.belowMd = false;
   viewport.listeners.clear();
+  // jsdom keeps cookies for the whole file, and the width tests write one.
+  document.cookie = "assistant_width=; Max-Age=0; Path=/";
   askAssistant.mockReset();
   refresh.mockReset();
   askAssistant.mockResolvedValue(turn());
@@ -174,7 +176,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("AssistantFlyout", () => {
-  it("is headed by the Stella wordmark, which names the dialog", async () => {
+  it("is headed by the stella wordmark, which names the dialog", async () => {
     const { flyout } = await openFlyout();
 
     const wordmark = screen.getByTestId("assistant-wordmark");
@@ -184,7 +186,7 @@ describe("AssistantFlyout", () => {
     const [letters, asterisk] = Array.from(wordmark.querySelectorAll("path"));
     expect(letters?.getAttribute("fill")).toBe("currentColor");
     expect(asterisk?.getAttribute("fill")).toBe("#D4AF37");
-    expect(screen.getByRole("dialog", { name: "Stella" })).toBe(flyout);
+    expect(screen.getByRole("dialog", { name: "stella" })).toBe(flyout);
     expect(flyout).not.toHaveTextContent("Assistant");
     await expectNoAxe(flyout);
   });
@@ -568,7 +570,7 @@ describe("AssistantFlyout", () => {
       "exhausted",
       "insufficient_credits",
       "assistant-noCredit",
-      "no credit left for Stella",
+      "no credit left for stella",
       false,
     ],
     [
@@ -596,7 +598,7 @@ describe("AssistantFlyout", () => {
       "unavailable",
       "kernel_failure",
       "assistant-unavailable",
-      "Stella could not be reached",
+      "stella could not be reached",
       true,
     ],
   ] as const)(
@@ -942,12 +944,12 @@ describe("AssistantFlyout", () => {
       await user.click(launcher);
       const flyout = screen.getByTestId("assistant-flyout");
       expect(document.activeElement).toBe(
-        screen.getByRole("button", { name: "Close Stella" }),
+        screen.getByRole("button", { name: "Close stella" }),
       );
 
       if (close === "escape") await user.keyboard("{Escape}");
       else
-        await user.click(screen.getByRole("button", { name: "Close Stella" }));
+        await user.click(screen.getByRole("button", { name: "Close stella" }));
 
       expect(flyout).toHaveAttribute("inert");
       // Not left on a control inside an inert panel, and not dropped to <body>.
@@ -970,7 +972,7 @@ describe("AssistantFlyout", () => {
       screen.getByRole("button", { name: "open assistant" }).click();
     });
     expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: "Close Stella" }),
+      screen.getByRole("button", { name: "Close stella" }),
     );
     opener.remove();
 
@@ -1062,7 +1064,7 @@ describe("AssistantFlyout", () => {
 
     expect(launcher).toHaveAttribute("inert");
     expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: "Close Stella" }),
+      screen.getByRole("button", { name: "Close stella" }),
     );
     // And Escape is heard again, because focus is inside the panel.
     await user.keyboard("{Escape}");
@@ -1105,7 +1107,7 @@ describe("AssistantFlyout", () => {
     });
     await user.click(launcher);
     expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: "Close Stella" }),
+      screen.getByRole("button", { name: "Close stella" }),
     );
 
     launcher.disabled = true;
@@ -1216,6 +1218,181 @@ describe("AssistantFlyout", () => {
       "Three runs are live.",
     );
     expect(screen.queryByTestId("assistant-answer-announced")).toBeNull();
+  });
+
+  // The right edge widens the panel to whatever width the person wants, and
+  // never narrower than the 430px it was designed at. jsdom lays nothing out,
+  // so the panel's left edge reads 0 and the window 1024px wide: the widest is
+  // 1024 - 0 - 56 = 968.
+  it("widens by its right edge from the keyboard, stops at its designed width, and remembers the width in a cookie", async () => {
+    const { user, flyout } = await openFlyout();
+    const edge = screen.getByRole("separator", { name: "Resize stella" });
+    expect(edge).toHaveAttribute("aria-controls", "shell-assistant");
+    expect(edge).toHaveAttribute("aria-orientation", "vertical");
+    expect(edge).toHaveAttribute("aria-valuemin", "430");
+    expect(edge).toHaveAttribute("aria-valuenow", "430");
+    // At the designed width the edge can only go right, and its cursor says so.
+    expect(edge).toHaveClass("cursor-e-resize");
+
+    act(() => {
+      edge.focus();
+    });
+    expect(edge).toHaveAttribute("aria-valuemax", "968");
+
+    await user.keyboard("{ArrowLeft}");
+    expect(edge).toHaveAttribute("aria-valuenow", "430");
+
+    await user.keyboard("{ArrowRight}");
+    expect(edge).toHaveAttribute("aria-valuenow", "446");
+    expect(edge).toHaveClass("cursor-ew-resize");
+    expect(flyout.style.getPropertyValue("--assistant-width")).toBe("446px");
+    expect(document.cookie).toContain("assistant_width=446");
+
+    await user.keyboard("{End}");
+    expect(edge).toHaveAttribute("aria-valuenow", "968");
+    expect(document.cookie).toContain("assistant_width=968");
+
+    await user.keyboard("{Home}");
+    expect(edge).toHaveAttribute("aria-valuenow", "430");
+    expect(document.cookie).toContain("assistant_width=430");
+  });
+
+  it("opens at the width the cookie remembers", async () => {
+    document.cookie = "assistant_width=612; Path=/";
+    const { flyout } = await openFlyout();
+    expect(flyout.style.getPropertyValue("--assistant-width")).toBe("612px");
+    expect(
+      screen.getByRole("separator", { name: "Resize stella" }),
+    ).toHaveAttribute("aria-valuenow", "612");
+  });
+
+  it("opens at its designed width when the cookie holds less (negative)", async () => {
+    document.cookie = "assistant_width=200; Path=/";
+    const { flyout } = await openFlyout();
+    expect(flyout.style.getPropertyValue("--assistant-width")).toBe("430px");
+  });
+
+  it("follows a drag of its right edge, and saves the width when the drag ends", async () => {
+    const { flyout } = await openFlyout();
+    const edge = screen.getByRole("separator", { name: "Resize stella" });
+
+    fireEvent.pointerDown(edge, { button: 0, pointerId: 1, clientX: 430 });
+    fireEvent.pointerMove(edge, { pointerId: 1, clientX: 700 });
+    expect(edge).toHaveAttribute("aria-valuenow", "700");
+    expect(flyout.style.getPropertyValue("--assistant-width")).toBe("700px");
+    // Nothing is written mid-drag.
+    expect(document.cookie).not.toContain("assistant_width");
+
+    fireEvent.pointerUp(edge, { pointerId: 1, clientX: 720 });
+    expect(edge).toHaveAttribute("aria-valuenow", "720");
+    expect(document.cookie).toContain("assistant_width=720");
+
+    // A move after the drag ended changes nothing.
+    fireEvent.pointerMove(edge, { pointerId: 1, clientX: 900 });
+    expect(edge).toHaveAttribute("aria-valuenow", "720");
+  });
+
+  it("stops a drag at its designed width and at the page's edge (negative)", async () => {
+    await openFlyout();
+    const edge = screen.getByRole("separator", { name: "Resize stella" });
+
+    fireEvent.pointerDown(edge, { button: 0, pointerId: 1, clientX: 430 });
+    fireEvent.pointerMove(edge, { pointerId: 1, clientX: 120 });
+    expect(edge).toHaveAttribute("aria-valuenow", "430");
+    fireEvent.pointerMove(edge, { pointerId: 1, clientX: 5000 });
+    expect(edge).toHaveAttribute("aria-valuenow", "968");
+    fireEvent.pointerUp(edge, { pointerId: 1, clientX: 5000 });
+    expect(document.cookie).toContain("assistant_width=968");
+  });
+
+  it("ignores a drag with any button but the primary (negative)", async () => {
+    await openFlyout();
+    const edge = screen.getByRole("separator", { name: "Resize stella" });
+
+    fireEvent.pointerDown(edge, { button: 2, pointerId: 1, clientX: 430 });
+    fireEvent.pointerMove(edge, { pointerId: 1, clientX: 800 });
+    fireEvent.pointerUp(edge, { pointerId: 1, clientX: 800 });
+    expect(edge).toHaveAttribute("aria-valuenow", "430");
+    expect(document.cookie).not.toContain("assistant_width");
+  });
+
+  it("keeps the width it had when a drag is cancelled", async () => {
+    await openFlyout();
+    const edge = screen.getByRole("separator", { name: "Resize stella" });
+
+    fireEvent.pointerDown(edge, { button: 0, pointerId: 1, clientX: 430 });
+    fireEvent.pointerMove(edge, { pointerId: 1, clientX: 640 });
+    fireEvent.pointerCancel(edge, { pointerId: 1 });
+    expect(edge).toHaveAttribute("aria-valuenow", "640");
+    expect(document.cookie).toContain("assistant_width=640");
+  });
+
+  describe("a reply the person has not seen", () => {
+    function UnreadProbe() {
+      const { assistantUnread } = useShellState();
+      return (
+        <output data-testid="unread">
+          {assistantUnread ? "unread" : "read"}
+        </output>
+      );
+    }
+
+    async function openWithProbe() {
+      const user = userEvent.setup();
+      render(
+        <IntlProvider>
+          <ShellStateProvider>
+            <OpenIt />
+            <UnreadProbe />
+            <AssistantFlyout />
+          </ShellStateProvider>
+        </IntlProvider>,
+      );
+      await user.click(screen.getByRole("button", { name: "open assistant" }));
+      return user;
+    }
+
+    it("marks the launcher unread when a turn settles after the panel was closed", async () => {
+      const settle = heldTurn();
+      const user = await openWithProbe();
+      await ask(user, "what is live?");
+      await user.click(screen.getByRole("button", { name: "Close stella" }));
+      expect(screen.getByTestId("unread")).toHaveTextContent(/^read$/);
+
+      settle();
+      await waitFor(() => {
+        expect(screen.getByTestId("unread")).toHaveTextContent(/^unread$/);
+      });
+
+      // Opening the panel is reading it.
+      await user.click(screen.getByRole("button", { name: "open assistant" }));
+      expect(screen.getByTestId("unread")).toHaveTextContent(/^read$/);
+    });
+
+    it("marks a refusal unread too, since the person has not seen it either", async () => {
+      let refuse: (value: unknown) => void = () => undefined;
+      askAssistant.mockReturnValueOnce(
+        new Promise((resolve) => {
+          refuse = resolve;
+        }),
+      );
+      const user = await openWithProbe();
+      await ask(user, "what is live?");
+      await user.click(screen.getByRole("button", { name: "Close stella" }));
+      refuse({ ok: false, reason: "denied", code: "forbidden" });
+      await waitFor(() => {
+        expect(screen.getByTestId("unread")).toHaveTextContent(/^unread$/);
+      });
+    });
+
+    it("leaves the launcher alone when the reply lands in an open panel (negative)", async () => {
+      const settle = heldTurn();
+      const user = await openWithProbe();
+      await ask(user, "what is live?");
+      settle();
+      await findAnswerText("Three runs are live.");
+      expect(screen.getByTestId("unread")).toHaveTextContent(/^read$/);
+    });
   });
 
   it("has no axe violations", async () => {

@@ -9,6 +9,7 @@
  * `unobserved_tail` gap (no `agent_stop`) produces no `session_end`, which
  * the oracles correctly read as a crash.
  */
+import { countsLlmCallUsage } from "../claude-code/llm-call-dedupe";
 import type { TachoEvent } from "../envelope";
 import type { Journal } from "./journal";
 import { TRACE_FORMAT, type TraceEvent } from "./types";
@@ -85,7 +86,12 @@ export function projectToTrace(
         break;
       }
       case "llm_call": {
-        if (turn === undefined) {
+        // One model call reaches the chain up to three times (proxy, OTel,
+        // transcript), and only the row the control plane counts is the
+        // call: a later sighting stamped `oxagen.llm_call_duplicate_of` or a
+        // span mirroring its log record would otherwise open a second
+        // prompt for a call that happened once.
+        if (turn === undefined || !countsLlmCallUsage(event)) {
           break;
         }
         // A prompt still open here was answered with text only: close it
