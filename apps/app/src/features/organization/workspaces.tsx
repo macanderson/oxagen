@@ -5,19 +5,28 @@
 //
 // `list_workspaces` records a workspace's name, slug, namespace and archival.
 // Main repo, Production branch and Linked repos come from `list_repositories`
-// and Agents from `list_agents`, read inside each workspace the viewer may
-// enter (`workspace-reads.ts`); a workspace they cannot enter, or an archived
-// one, says "not recorded" there. Nothing records a workspace's owner, and the
-// governance mode lives in `.oxagen/rules/governance.toml` on the main
-// repository, which no contract reads back: the Owner cell says "not
-// recorded", and the Governance chip says the mode is not recorded with the
-// namespace beneath it (#3933 for the owner, #3907 for the governance mode).
+// and Agents from `list_agents`, read inside each live workspace the viewer may
+// enter (the `org.workspaceFacts` port). Those facts are recorded for every
+// workspace, but a workspace-scoped read needs a membership: a workspace the
+// viewer is not a member of says "not readable without membership", and an
+// archived one, which is not read, says "not read while archived". Neither
+// says "not recorded", because the record holds them. Nothing records a
+// workspace's owner, and the governance mode lives in
+// `.oxagen/rules/governance.toml` on the main repository, which no contract
+// reads back: the Owner cell says "not recorded", and the Governance chip says
+// the mode is not recorded with the namespace beneath it (#3933 for the owner,
+// #3907 for the governance mode).
 //
 // Open goes to the workspace's Fleet. A workspace the viewer holds no
 // membership of cannot be opened (`requireViewer` answers not found), so its
 // Open is left off rather than offered as a link that fails.
 import { useTranslations } from "next-intl";
-import type { Workspace, WorkspaceList } from "@/data/contracts/org";
+import type {
+  Workspace,
+  WorkspaceFacts,
+  WorkspaceList,
+} from "@/data/contracts/org";
+import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
 import { Badge } from "@/ui/badge";
 import {
@@ -29,7 +38,6 @@ import {
   panelTitle,
 } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
-import type { ActionResult } from "@/server/kernel";
 import { type ListRow, ListTable } from "./list-table";
 import { NotRecorded, note } from "./parts";
 import {
@@ -37,29 +45,47 @@ import {
   CreateWorkspace,
   EditWorkspace,
 } from "./workspace-actions";
-import type { WorkspaceFacts } from "./workspace-reads";
 
 /** What the tab learned inside a workspace, by slug; absent for one it did not read. */
-export type FactsBySlug = ReadonlyMap<string, ActionResult<WorkspaceFacts>>;
+export type FactsBySlug = ReadonlyMap<string, Read<WorkspaceFacts>>;
 
 /** A row's value for the Production branch filter; none when the branch is not known. */
 function branchValue(branch: string | undefined): Record<string, string> {
   return branch === undefined ? {} : { branch };
 }
 
+/**
+ * Why a workspace's facts were not read: the viewer holds no membership of it,
+ * it is archived, or its read never arrived. The facts are recorded either
+ * way, so the cell names the reason rather than saying "not recorded".
+ */
+type Withheld = {
+  reason: "membership" | "archived" | "unread";
+  label: string;
+};
+
 /** The cells a workspace's facts fill: main repo, production branch, linked repos, agents. */
 function factCells(
-  facts: ActionResult<WorkspaceFacts> | undefined,
+  facts: Read<WorkspaceFacts> | Withheld,
   unread: string,
   none: string,
 ) {
-  if (facts === undefined) {
+  if (!("ok" in facts)) {
+    const withheld = (key: string) => (
+      <span
+        key={key}
+        data-facts-withheld={facts.reason}
+        className="text-[11.5px] text-dim"
+      >
+        {facts.label}
+      </span>
+    );
     return {
       cells: [
-        <NotRecorded key="main" />,
-        <NotRecorded key="branch" />,
-        <NotRecorded key="linked" />,
-        <NotRecorded key="agents" />,
+        withheld("main"),
+        withheld("branch"),
+        withheld("linked"),
+        withheld("agents"),
       ],
       branch: undefined,
     };
@@ -170,7 +196,7 @@ function Actions({
 }: {
   org: string;
   workspace: Workspace;
-  facts: ActionResult<WorkspaceFacts> | undefined;
+  facts: Read<WorkspaceFacts> | undefined;
 }) {
   const t = useTranslations("organization.workspaces");
   const live = workspace.archivedAt === null;
@@ -226,11 +252,25 @@ export function WorkspacesTab({
     { label: t("columns.governance") },
     { label: t("columns.actions"), hidden: true },
   ];
+  const withheldFor = (workspace: Workspace): Withheld => {
+    if (workspace.archivedAt !== null) {
+      return { reason: "archived", label: t("factsArchived") };
+    }
+    if (workspace.role === null) {
+      return { reason: "membership", label: t("factsNoMembership") };
+    }
+    // A live workspace the viewer belongs to whose read never arrived.
+    return { reason: "unread", label: t("factsUnread") };
+  };
   const branches = new Set<string>();
   const rows: ListRow[] = workspaces.workspaces.map((workspace) => {
     const read =
       workspace.archivedAt === null ? facts.get(workspace.slug) : undefined;
-    const known = factCells(read, t("factsUnread"), t("noLinked"));
+    const known = factCells(
+      read ?? withheldFor(workspace),
+      t("factsUnread"),
+      t("noLinked"),
+    );
     if (known.branch !== undefined) branches.add(known.branch);
     return {
       key: workspace.id,

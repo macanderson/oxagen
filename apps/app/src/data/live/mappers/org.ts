@@ -10,10 +10,12 @@
 // view field.
 import type { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
 import type { costCenterList } from "@oxagen/oxagen/contracts/cost_center.list";
+import type { agentList } from "@oxagen/oxagen/contracts/agent.list";
 import type { iamRoleList } from "@oxagen/oxagen/contracts/iam.role.list";
 import type { orgDataPlaneGet } from "@oxagen/oxagen/contracts/org.data_plane.get";
 import type { orgModelCredentialGet } from "@oxagen/oxagen/contracts/org.model_credential.get";
 import type { orgSsoList } from "@oxagen/oxagen/contracts/org.sso.list";
+import type { repositoryList } from "@oxagen/oxagen/contracts/repository.list";
 import type { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
 import type { listMembers } from "@oxagen/oxagen/contracts/workspace.member.list";
 import type { z } from "zod";
@@ -25,6 +27,7 @@ import type {
   ModelCredential,
   RoleCatalog,
   SsoSettings,
+  WorkspaceFacts,
   WorkspaceList,
 } from "@/data/contracts/org";
 import type { ContractOutput } from "@/server/kernel";
@@ -98,6 +101,25 @@ export function toWorkspaceList(
       archivedAt: workspace.archivedAt,
       costCenter: workspace.costCenter,
     })),
+  };
+}
+
+/**
+ * list_repositories and list_agents, read inside one workspace, to its
+ * Workspaces row: each binding's role, full name and approved production ref,
+ * and the identity total over the whole workspace (never the page length).
+ */
+export function toWorkspaceFacts(
+  repositories: ContractOutput<typeof repositoryList>,
+  agents: ContractOutput<typeof agentList>,
+): z.input<typeof WorkspaceFacts> {
+  return {
+    repositories: repositories.repositories.map((repo) => ({
+      role: repo.role,
+      fullName: repo.fullName,
+      defaultRef: repo.defaultRef,
+    })),
+    agents: agents.totals.identities,
   };
 }
 

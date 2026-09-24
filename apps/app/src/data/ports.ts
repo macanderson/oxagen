@@ -40,6 +40,7 @@ import type {
   ModelCredential,
   RoleCatalog,
   SsoSettings,
+  WorkspaceFacts,
   WorkspaceList,
 } from "./contracts/org";
 import type {
@@ -338,6 +339,13 @@ export interface DataSource {
     roles(ctx: OrgCtx): Promise<Read<RoleCatalog>>;
     /** list_workspaces, archived rows included */
     workspaces(ctx: OrgCtx): Promise<Read<WorkspaceList>>;
+    /**
+     * list_repositories and list_agents inside one workspace: its bound
+     * repositories and its agent count, for the Workspaces row. A `WsCtx`,
+     * because both reads are workspace-scoped; the tab makes one per workspace
+     * the viewer may enter.
+     */
+    workspaceFacts(ctx: WsCtx): Promise<Read<WorkspaceFacts>>;
     /** list_cost_centers, the organization's live chargeback labels (ADR-142) */
     costCenters(ctx: OrgCtx): Promise<Read<CostCenterList>>;
     /**

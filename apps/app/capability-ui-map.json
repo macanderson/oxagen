@@ -624,8 +624,8 @@
         {
           "route": "/[org]?tab=workspaces",
           "page": "apps/app/src/app/[org]/page.tsx",
-          "entry": "Organization › Workspaces: the Agents count of each workspace the viewer may enter, and the Agents fact in Edit workspace (features/organization/workspace-reads.ts, features/organization/workspaces.tsx)",
-          "proof": "apps/app/src/features/organization/workspace-reads.test.ts",
+          "entry": "Organization › Workspaces: the Agents count of each workspace the viewer may enter, and the Agents fact in Edit workspace (data/live/org.ts org.workspaceFacts, features/organization/workspaces.tsx)",
+          "proof": "apps/app/src/data/live/org.test.ts",
           "verifiedAt": "2026-09-24",
           "verifiedBy": "session_01Q41TYoTUbgPir4sajMJP42"
         }
@@ -804,7 +804,7 @@
         {
           "route": "/[org]?tab=workspaces",
           "page": "apps/app/src/app/[org]/page.tsx",
-          "entry": "Organization › Workspaces: Main repo, Production branch and Linked repos, read inside each workspace the viewer may enter, and the main repository and branch in Edit workspace (features/organization/workspace-reads.ts, features/organization/workspaces.tsx, features/organization/workspace-actions.tsx)",
+          "entry": "Organization › Workspaces: Main repo, Production branch and Linked repos, read inside each workspace the viewer may enter, and the main repository and branch in Edit workspace (data/live/org.ts org.workspaceFacts, features/organization/workspaces.tsx, features/organization/workspace-actions.tsx)",
           "proof": "apps/app/src/features/organization/workspaces.test.tsx",
           "verifiedAt": "2026-09-24",
           "verifiedBy": "session_01Q41TYoTUbgPir4sajMJP42"

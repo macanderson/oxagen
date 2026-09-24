@@ -226,6 +226,7 @@ export function fleetSource(reads: FleetReads) {
       costCenters: refuse,
       modelCredential: refuse,
       dataPlane: refuse,
+      workspaceFacts: refuse,
       sso: refuse,
     },
     // Fleet reads no mandate: the approval cards that draw a mandate bar are

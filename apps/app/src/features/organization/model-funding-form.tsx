@@ -378,6 +378,8 @@ export function ModelFundingForm({
           label={t("form.save")}
           pendingLabel={t("form.saving")}
           fullWidth={false}
+          // The header's Create a workspace is the screen's one gold action.
+          secondary
         />
         {credential.configured ? (
           confirmingRemove ? (

@@ -3131,6 +3131,8 @@ type Messages = {
       note: string;
       noMatch: string;
       factsUnread: string;
+      factsNoMembership: string;
+      factsArchived: string;
       noLinked: string;
       filters: {
         branch: string;

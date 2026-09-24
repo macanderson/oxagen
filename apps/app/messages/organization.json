@@ -457,6 +457,8 @@
       "note": "Changing which repository is main is an org-owner action with approval, recorded as a security event. A repository may be linked to more than one workspace, and it is main for at most one.",
       "noMatch": "No workspace matches this search.",
       "factsUnread": "could not be read",
+      "factsNoMembership": "not readable without membership",
+      "factsArchived": "not read while archived",
       "noLinked": "none",
       "filters": {
         "branch": "Production branch"

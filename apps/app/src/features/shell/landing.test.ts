@@ -81,6 +81,7 @@ const source = {
     costCenters: vi.fn(),
     modelCredential: vi.fn(),
     dataPlane: vi.fn(),
+    workspaceFacts: vi.fn(),
     sso: vi.fn(),
   },
   mandates: { list: vi.fn(), get: vi.fn() },

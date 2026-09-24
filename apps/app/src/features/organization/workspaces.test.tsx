@@ -2,7 +2,8 @@
 // Organization › Workspaces (pages/organization.md): the design's columns in
 // order, the recorded name, slug and namespace, the main repository,
 // production branch, linked repositories and agent count read inside each
-// workspace the viewer may enter, "not recorded" where nothing was read, the Governance chip that states the mode is
+// workspace the viewer may enter, why nothing was read for a workspace the
+// viewer cannot enter or an archived one, the Governance chip that states the mode is
 // not recorded with the namespace beneath it, Open only onto a workspace the
 // viewer can enter, Edit and Archive only on a live workspace, the panel's
 // Create a workspace, and the note. Checked with axe.
@@ -29,7 +30,6 @@ vi.mock("./actions", () => ({
 }));
 vi.mock("./workspace-reads", () => ({
   readRepositoryChoices: vi.fn(),
-  readWorkspaceFacts: vi.fn(),
 }));
 
 const { WorkspacesTab } = await import("./workspaces");
@@ -148,17 +148,40 @@ describe("Workspaces", () => {
     ).toHaveAttribute("data-issue", "3907");
   });
 
-  it("says not recorded for a workspace the viewer cannot enter, and for an archived one (negative)", async () => {
+  it("says why a non-member's or an archived workspace's facts are not shown, never not recorded (negative)", async () => {
     await renderTab();
-    for (const id of [
-      "wrk_1b2c3d4e5f6g7h8j9k0m1n",
-      "wrk_2c3d4e5f6g7h8j9k0m1n2p",
-    ]) {
+    const cases = [
+      [
+        "wrk_1b2c3d4e5f6g7h8j9k0m1n",
+        "membership",
+        "not readable without membership",
+      ],
+      ["wrk_2c3d4e5f6g7h8j9k0m1n2p", "archived", "not read while archived"],
+    ] as const;
+    for (const [id, reason, words] of cases) {
       const cells = within(row(id)).getAllByRole("cell");
-      for (const index of [1, 2, 3, 4, 5]) {
-        expect(cells[index]).toHaveTextContent("not recorded");
+      for (const index of [1, 2, 3, 4]) {
+        expect(cells[index]).toHaveTextContent(words);
+        expect(cells[index]).not.toHaveTextContent("not recorded");
+        expect(
+          cells[index]?.querySelector("[data-facts-withheld]"),
+        ).toHaveAttribute("data-facts-withheld", reason);
       }
+      // The owner is the one fact nothing records (#3933).
+      expect(cells[5]).toHaveTextContent("not recorded");
     }
+  });
+
+  it("says a live member workspace whose read never arrived could not be read", async () => {
+    await renderTab(list, new Map());
+    const cells = within(row("wrk_0a1b2c3d4e5f6g7h8j9k0m")).getAllByRole(
+      "cell",
+    );
+    expect(cells[1]).toHaveTextContent("could not be read");
+    expect(cells[1]?.querySelector("[data-facts-withheld]")).toHaveAttribute(
+      "data-facts-withheld",
+      "unread",
+    );
   });
 
   it("says a read that failed could not be read, never not recorded or zero (negative)", async () => {
@@ -169,8 +192,9 @@ describe("Workspaces", () => {
           "core-platform",
           {
             ok: false,
-            reason: "unavailable",
+            reason: "error",
             code: "installation_unreachable",
+            status: 502,
           },
         ],
       ]),
@@ -182,7 +206,7 @@ describe("Workspaces", () => {
       expect(cells[index]).toHaveTextContent("could not be read");
       expect(
         cells[index]?.querySelector("[data-facts-unread]"),
-      ).toHaveAttribute("data-facts-unread", "unavailable");
+      ).toHaveAttribute("data-facts-unread", "error");
     }
     expect(cells[4]).not.toHaveTextContent("0");
   });

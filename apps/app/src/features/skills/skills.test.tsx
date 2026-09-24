@@ -127,6 +127,7 @@ const source: DataSource = {
     costCenters: vi.fn(),
     modelCredential: vi.fn(),
     dataPlane: vi.fn(),
+    workspaceFacts: vi.fn(),
     sso: vi.fn(),
   },
   skills: { inventory: read, configuration: config },

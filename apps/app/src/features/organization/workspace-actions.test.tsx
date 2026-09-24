@@ -31,7 +31,6 @@ vi.mock("./actions", () => ({
 }));
 vi.mock("./workspace-reads", () => ({
   readRepositoryChoices,
-  readWorkspaceFacts: vi.fn(),
 }));
 
 const { workspaceRow } = await import("./organization.builders");

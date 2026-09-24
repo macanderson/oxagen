@@ -7,7 +7,7 @@
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import type { WorkspaceList } from "@/data/contracts/org";
-import type { OrgCtx } from "@/server/viewer";
+import { type OrgCtx, requireViewer } from "@/server/viewer";
 import {
   firstParam,
   type OrganizationQueryTab,
@@ -21,7 +21,6 @@ import { ModelFundingTab } from "./model-funding";
 import { OrganizationFrame } from "./frame";
 import { InvitationsTab, PeopleTab } from "./people";
 import { RolesTab } from "./roles";
-import { readWorkspaceFacts } from "./workspace-reads";
 import { WorkspacesTab } from "./workspaces";
 
 const QUERY_TABS: readonly OrganizationQueryTab[] = [
@@ -68,7 +67,7 @@ export function Organization({
               />
             );
           case "workspaces":
-            return workspacesTab(ctx, workspaces, enterable);
+            return workspacesTab(ctx, source, workspaces, enterable);
           case "dataPlane":
             return dataPlane(ctx, source, workspaces);
           case "costCenters":
@@ -90,21 +89,22 @@ export function Organization({
 
 /**
  * The Workspaces tab, with what each workspace the viewer may enter binds and
- * registers: one `list_repositories` and one `list_agents` inside each, made
- * together. A workspace the viewer is not a member of is not read, and its
- * row says "not recorded" for those cells.
+ * registers: `org.workspaceFacts` inside each, made together, each after
+ * `requireViewer(org, ws)` has checked the membership (INV-15). A workspace
+ * the viewer is not a member of is not read, and its row says so.
  */
 async function workspacesTab(
   ctx: OrgCtx,
+  source: DataSource,
   workspaces: WorkspaceList,
   enterable: readonly string[],
 ) {
   const facts = new Map(
     await Promise.all(
-      enterable.map(
-        async (slug) =>
-          [slug, await readWorkspaceFacts(ctx.orgSlug, slug)] as const,
-      ),
+      enterable.map(async (slug) => {
+        const wsCtx = await requireViewer(ctx.orgSlug, slug);
+        return [slug, await source.org.workspaceFacts(wsCtx)] as const;
+      }),
     ),
   );
   return (

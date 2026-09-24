@@ -691,6 +691,7 @@ export function runSource(reads: RunReads) {
       costCenters: refuse,
       modelCredential: refuse,
       dataPlane: refuse,
+      workspaceFacts: refuse,
       sso: refuse,
     },
     mandates: { list: answer("mandates", reads.mandates), get: refuse },

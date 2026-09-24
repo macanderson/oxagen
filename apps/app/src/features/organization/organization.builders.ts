@@ -17,6 +17,7 @@ import type {
   SsoProvider,
   SsoSettings,
   Workspace,
+  WorkspaceFacts,
   WorkspaceList,
 } from "@/data/contracts/org";
 import type { DataSource } from "@/data/ports";
@@ -169,6 +170,8 @@ type OrgReads = {
   dataPlane?: Read<DataPlane>;
   sso?: Read<SsoSettings>;
   costCenters?: Read<CostCenterList>;
+  /** What each workspace answers `org.workspaceFacts`, by slug. */
+  workspaceFacts?: Readonly<Record<string, Read<WorkspaceFacts>>>;
 };
 
 export function orgSource(reads: OrgReads): {
@@ -184,6 +187,7 @@ export function orgSource(reads: OrgReads): {
     dataPlane: [],
     sso: [],
     costCenters: [],
+    workspaceFacts: [],
   };
   const refuse = () => Promise.reject(new Error("not an Organization read"));
   const answer =
@@ -246,6 +250,16 @@ export function orgSource(reads: OrgReads): {
       modelCredential: answer(reads.modelCredential, "modelCredential"),
       dataPlane: answer(reads.dataPlane, "dataPlane"),
       sso: answer(reads.sso, "sso"),
+      workspaceFacts: (...args: unknown[]) => {
+        calls.workspaceFacts.push(args);
+        const { wsSlug } = args[0] as { wsSlug: string };
+        const read = reads.workspaceFacts?.[wsSlug];
+        return read === undefined
+          ? Promise.reject(
+              new Error(`org.workspaceFacts(${wsSlug}) was not expected`),
+            )
+          : Promise.resolve(read);
+      },
     },
     mandates: { list: refuse, get: refuse },
     audit: { events: refuse, exportEvents: refuse },

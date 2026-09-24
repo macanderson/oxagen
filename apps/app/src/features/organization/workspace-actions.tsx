@@ -20,7 +20,7 @@
 import { GOVERNANCE_MODES } from "@oxagen/oxagen/contracts/context.steering.shared";
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
-import type { Workspace } from "@/data/contracts/org";
+import type { Workspace, WorkspaceFacts } from "@/data/contracts/org";
 import { parsePullRequestUrl } from "@/shared/pull-request-url";
 import { routes } from "@/shared/safe-path";
 import { inputBase } from "@/ui/control-styles";
@@ -37,7 +37,6 @@ import { textValue, WriteDialog } from "./dialog";
 import {
   type RepositoryChoice,
   readRepositoryChoices,
-  type WorkspaceFacts,
 } from "./workspace-reads";
 
 /** The create form's draft: the name, and the main repository as chosen or typed. */
