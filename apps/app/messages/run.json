@@ -255,7 +255,13 @@
         "spentOnly": "<spent></spent> by here · {basis}",
         "spentNotRecorded": "spend by here not recorded",
         "basisNotRecorded": "basis not recorded",
-        "keys": "<k>←</k><k>→</k> step <k>home</k><k>end</k>"
+        "play": "play",
+        "pause": "pause",
+        "replay": "replay",
+        "playTitle": "Play or pause the playback (space)",
+        "speedLabel": "Playback speed",
+        "speed": "{speed}×",
+        "keys": "<k>←</k><k>→</k> step <k>space</k> play <k>home</k><k>end</k>"
       },
       "approvals": {
         "parked": "<b>Parked.</b> The call waits for a person to approve or deny it. Decide on its card opens both.",

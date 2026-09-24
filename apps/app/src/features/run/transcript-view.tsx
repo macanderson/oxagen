@@ -227,12 +227,13 @@ const txPlay = "ml-auto flex flex-wrap items-center gap-1 max-md:ml-0";
 /**
  * `.btn.sm` inside `.tx-play { padding:3px 8px; font-size:11.5px;
  * min-width:30px; justify-content:center }` over `.btn { border:1px solid
- * var(--border); background:var(--panel); border-radius:7px }` and
+ * var(--border); background:var(--panel); border-radius:7px;
+ * font-weight:500 }` and
  * `.btn:hover { border-color:var(--rule); background:var(--hl) }`; `.ghost`
  * drops the fill, and the play button is `min-width:74px`.
  */
 const buttonShape =
-  "inline-flex items-center justify-center gap-1 rounded-[7px] border border-border px-2 py-[3px] font-mono text-[11.5px] text-foreground transition-colors hover:border-rule hover:bg-hl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-45 max-md:min-h-9";
+  "inline-flex items-center justify-center gap-1 rounded-[7px] border border-border px-2 py-[3px] font-mono text-[11.5px] font-medium text-foreground transition-colors hover:border-rule hover:bg-hl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-45 max-md:min-h-9";
 const txButton = `${buttonShape} min-w-[30px] bg-card`;
 const txGhost = `${buttonShape} min-w-[30px] bg-transparent`;
 const txPlayButton = `${buttonShape} min-w-[74px] bg-card`;
@@ -245,7 +246,7 @@ const txPlayButton = `${buttonShape} min-w-[74px] bg-card`;
 const txSeg =
   "ml-1 inline-flex gap-0.5 rounded-lg border border-border bg-void p-0.5";
 const txSegButton =
-  "inline-flex min-w-[30px] items-center justify-center rounded-[7px] border border-transparent bg-transparent px-2 py-[3px] font-mono text-[11.5px] text-foreground hover:bg-hl aria-pressed:border-rule aria-pressed:bg-hl max-md:min-h-9";
+  "inline-flex min-w-[30px] items-center justify-center rounded-[7px] border border-transparent bg-transparent px-2 py-[3px] font-mono text-[11.5px] font-medium text-foreground hover:bg-hl aria-pressed:border-rule aria-pressed:bg-hl max-md:min-h-9";
 /** `.tx-play .cnt { font-size:10.5px; color:var(--dim); margin-left:4px }` */
 const txCount = "ml-1 whitespace-nowrap text-[10.5px] tabular-nums text-dim";
 /**
