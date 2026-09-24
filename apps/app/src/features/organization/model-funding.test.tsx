@@ -102,7 +102,10 @@ async function renderTab(read: Read<ModelCredential>, role: OrgRole = "owner") {
   const { source, calls } = orgSource({
     members: readOk({ members: [], invitations: [] }),
     roles: readOk(roleCatalog({ roles: [roleRow()] })),
-    workspaces: readOk({ workspaces: [workspaceRow()] }),
+    workspaces: readOk({
+      orgId: "org_7k2m9q4x8r1t5v3w6y0z2a",
+      workspaces: [workspaceRow()],
+    }),
     modelCredential: read,
   });
   // The route hands the frame its props; render the frame with the same ones.

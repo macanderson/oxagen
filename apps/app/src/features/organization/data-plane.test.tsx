@@ -19,6 +19,7 @@ import { dataPlane, workspaceRow } from "./organization.builders";
 afterEach(cleanup);
 
 const workspaces = {
+  orgId: "org_7k2m9q4x8r1t5v3w6y0z2a",
   workspaces: [
     workspaceRow(),
     workspaceRow({ id: "wrk_2", slug: "finops", namespace: "finops" }),

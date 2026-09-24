@@ -4233,6 +4233,9 @@ type Messages = {
     workspaces: {
       title: string;
       tableLabel: string;
+      orgId: string;
+      copyOrgId: string;
+      copyWorkspaceId: string;
       columns: {
         workspace: string;
         mainRepo: string;
@@ -4675,6 +4678,10 @@ type Messages = {
     page: {
       eyebrow: string;
       description: string;
+    };
+    copyId: {
+      copied: string;
+      copyFailed: string;
     };
     list: {
       all: string;

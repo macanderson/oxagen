@@ -576,7 +576,7 @@ export function buildProgram(): Command {
     .requiredOption("--mode <mode>", "solo | team | regulated")
     .option(
       "--workspace <id>",
-      "The ws_… workspace to change; the scoped workspace when omitted",
+      "The wrk_… workspace to change; the scoped workspace when omitted",
     )
     .option(
       "--apply-now",
