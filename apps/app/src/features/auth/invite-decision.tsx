@@ -71,11 +71,12 @@ export function InviteDecision({ token }: { token: string }) {
               : t("failed")}
         </FormAlert>
       ) : null}
-      <div className="flex flex-wrap items-center gap-2">
+      {/* Below md the two buttons stack, each full width (accept-invitation.md, Mobile). */}
+      <div className="flex flex-wrap items-center gap-2 max-md:flex-col max-md:items-stretch">
         <button
           type="button"
           data-touch-target=""
-          className={`${buttonPrimary} max-md:flex-1`}
+          className={`${buttonPrimary} max-md:w-full`}
           aria-disabled={pending !== null || undefined}
           onClick={() => void run("accept")}
         >
@@ -90,7 +91,7 @@ export function InviteDecision({ token }: { token: string }) {
         <button
           type="button"
           data-touch-target=""
-          className={`${buttonSecondary} max-md:flex-1`}
+          className={`${buttonSecondary} max-md:w-full`}
           aria-disabled={pending !== null || undefined}
           onClick={() => void run("decline")}
         >
