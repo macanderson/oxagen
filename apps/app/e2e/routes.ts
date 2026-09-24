@@ -64,6 +64,7 @@ export const SIGNED_IN_ROUTES: readonly RouteRow[] = [
   { path: `/${org}/${ws}/agents/${SEEDED_AGENT}/overview`, titleKey: "agent" },
   ...seededRows(),
   { path: `/${org}/${ws}/tools`, titleKey: "tools" },
+  { path: `/${org}/${ws}/tools/providers`, titleKey: "tools" },
   { path: `/${org}/${ws}/steering`, titleKey: "steering" },
   { path: `/${org}/${ws}/steering/library`, titleKey: "steering" },
   { path: `/${org}/${ws}/runtimes`, titleKey: "runtimes" },
