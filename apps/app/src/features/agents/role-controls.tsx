@@ -259,6 +259,7 @@ export function AssignRole({
                   name="roleName"
                   required
                   defaultValue={first?.name}
+                  data-touch-target=""
                   className={inputBase}
                 >
                   {offered.roles.map((role) => {
@@ -338,6 +339,7 @@ export function AssignRole({
                     maxLength={500}
                     autoComplete="off"
                     placeholder={t("whyPlaceholder")}
+                    data-touch-target=""
                     className={inputBase}
                   />
                 </div>

@@ -9,6 +9,8 @@
 // judged from them, the hooks written, the last checkpoint, and the counts
 // over hosts) renders as not recorded, carrying the gap that would record it.
 // A row opens the runtime: the hostname is the link, stretched over the row.
+// The table carries the design's list controls (`ListTable`): search, the
+// filters its rule offers, Rows, and the pager.
 //
 // States: the route's loading.tsx replaces the body while the read is in
 // flight; a refused or failed read replaces the body, header included; a
@@ -20,19 +22,21 @@ import type { DataSource } from "@/data/ports";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
 import { mono, panelBody, statStrip } from "@/ui/control-styles";
+import { type ListRow, ListTable } from "@/ui/list-table";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { PageHeader } from "@/ui/page-header";
-import { cell, numericCell, Table } from "@/ui/table";
 import { EnrollRuntime } from "./controls";
 import {
   HarnessNames,
   HealthBadge,
+  hooksReadBack,
+  isEnrolled,
   ModelSurface,
   NotBacked,
   Note,
+  OsLine,
   Panel,
-  PlatformName,
   Sub,
   TierLadder,
   Tile,
@@ -63,16 +67,19 @@ export function RuntimesHeader({
   );
 }
 
-/** Agents with a live enrollment in the workspace: distinct keys, a revoked enrollment excluded. */
-function hostedAgents(list: RuntimeList): number {
+/**
+ * Agents on a host that is still enrolled: distinct keys, a revoked or an
+ * expired enrollment excluded. It is the rule the Health cell reads, so the
+ * tile never counts an agent on a row the table calls not enrolled.
+ */
+function hostedAgents(list: RuntimeList, now: number): number {
   const keys = new Set<string>();
   for (const host of list.enrollments)
-    if (host.status !== "revoked" && host.agentKey !== "")
-      keys.add(host.agentKey);
+    if (isEnrolled(host, now) && host.agentKey !== "") keys.add(host.agentKey);
   return keys.size;
 }
 
-function StatStrip({ list }: { list: RuntimeList }) {
+function StatStrip({ list, now }: { list: RuntimeList; now: number }) {
   const t = useTranslations("runtimes.tiles");
   const locale = useLocale();
   return (
@@ -86,7 +93,7 @@ function StatStrip({ list }: { list: RuntimeList }) {
       <Tile
         testId="tile-agents"
         term={t("agentsHosted")}
-        value={formatCount(hostedAgents(list), locale)}
+        value={formatCount(hostedAgents(list, now), locale)}
         basis={t("agentsHostedBasis")}
       />
       <Tile
@@ -105,85 +112,99 @@ function StatStrip({ list }: { list: RuntimeList }) {
   );
 }
 
-function HostRow({
+/** The Runtime cell: the name, which opens the runtime, with the OS in mono under it. */
+function RuntimeName({
   host,
   org,
   ws,
-  now,
 }: {
   host: RuntimeEnrollment;
   org: string;
   ws: string;
-  now: number;
 }) {
+  const t = useTranslations("runtimes.hosts");
+  return (
+    <>
+      <SafeLink
+        to={routes.runtime(org, ws, host.id)}
+        aria-label={t("open", { hostname: host.hostname })}
+        data-touch-target=""
+        className="inline-flex items-center rounded-sm font-medium after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-ring"
+      >
+        {host.hostname}
+      </SafeLink>
+      <Sub monoFace>
+        <OsLine host={host} />
+      </Sub>
+    </>
+  );
+}
+
+/** The Agents cell (`td.num`): the count right-aligned, its sub-line under it. */
+function AgentsCell({ host }: { host: RuntimeEnrollment }) {
+  const t = useTranslations("runtimes.hosts");
+  return host.agentKey === "" ? (
+    <>
+      <span className="text-muted-foreground">0</span>
+      <Sub>{t("agentsNone")}</Sub>
+    </>
+  ) : (
+    <>
+      1<Sub monoFace>{host.agentKey}</Sub>
+    </>
+  );
+}
+
+function CollectorCell({ host }: { host: RuntimeEnrollment }) {
   const t = useTranslations("runtimes");
   return (
-    <tr
-      data-testid="runtime-row"
-      data-runtime={host.id}
-      className="relative cursor-pointer"
-    >
-      <td className={cell}>
-        <SafeLink
-          to={routes.runtime(org, ws, host.id)}
-          aria-label={t("hosts.open", { hostname: host.hostname })}
-          data-touch-target=""
-          className="inline-flex items-center rounded-sm font-medium after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-ring"
-        >
-          {host.hostname}
-        </SafeLink>
-        <Sub monoFace>
-          <PlatformName platform={host.platform} />
-        </Sub>
-      </td>
-      <td className={cell}>
-        <NotBacked gap="host" />
-      </td>
-      <td className={cell}>
-        <HarnessNames host={host} />
-      </td>
-      <td className={cell}>
-        <ModelSurface host={host} />
-      </td>
-      <td className={cell}>
-        <NotBacked gap="tier" />
-      </td>
-      {/* `td.num`: the count right-aligned, its sub-line under it. */}
-      <td className={numericCell} data-testid="runtime-agents">
-        {host.agentKey === "" ? (
-          <>
-            <span className="text-muted-foreground">0</span>
-            <Sub>{t("hosts.agentsNone")}</Sub>
-          </>
-        ) : (
-          <>
-            1<Sub monoFace>{host.agentKey}</Sub>
-          </>
-        )}
-      </td>
-      <td className={cell}>
-        {host.collectorVersion === null ? (
-          <span className="text-muted-foreground">{t("notReported")}</span>
-        ) : (
-          <span className={`${mono} text-xs`}>
-            {t("hosts.collector", { version: host.collectorVersion })}
-          </span>
-        )}
-        <Sub>
-          <NotBacked gap="gaps">{t("hosts.gaps")}</NotBacked>
-        </Sub>
-      </td>
-      <td className={numericCell} data-testid="runtime-hooks">
-        <NotBacked gap="hooks">{t("hosts.hookCount")}</NotBacked>
-      </td>
-      <td className={cell}>
-        <HealthBadge host={host} now={now} />
-      </td>
-      <td className={cell}>
-        <NotBacked gap="checkpoint" />
-      </td>
-    </tr>
+    <>
+      {host.collectorVersion === null ? (
+        <span className="text-muted-foreground">{t("notReported")}</span>
+      ) : (
+        <span className={`${mono} text-xs`}>
+          {t("hosts.collector", { version: host.collectorVersion })}
+        </span>
+      )}
+      <Sub>
+        <NotBacked gap="gaps">{t("hosts.gaps")}</NotBacked>
+      </Sub>
+    </>
   );
+}
+
+/** One enrollment as a list row, in the spec's column order. */
+function hostRow(
+  host: RuntimeEnrollment,
+  org: string,
+  ws: string,
+  now: number,
+  hookCount: ReactNode,
+  hookCountAll: ReactNode,
+): ListRow {
+  return {
+    key: host.id,
+    data: { "data-testid": "runtime-row", "data-runtime": host.id },
+    className: "relative cursor-pointer",
+    cells: [
+      <RuntimeName key="runtime" host={host} org={org} ws={ws} />,
+      <NotBacked key="kind" gap="host" />,
+      <HarnessNames key="harness" host={host} />,
+      <ModelSurface key="model" host={host} />,
+      <NotBacked key="tier" gap="tier" />,
+      <AgentsCell key="agents" host={host} />,
+      <CollectorCell key="collector" host={host} />,
+      hooksReadBack(host) ? (
+        <span key="hooks">{hookCountAll}</span>
+      ) : (
+        <NotBacked key="hooks" gap="hooks">
+          {hookCount}
+        </NotBacked>
+      ),
+      <HealthBadge key="health" host={host} now={now} />,
+      <NotBacked key="checkpoint" gap="checkpoint" />,
+    ],
+  };
 }
 
 function EnrolledHosts({
@@ -203,9 +224,11 @@ function EnrolledHosts({
     <Panel
       id="runtimes-hosts"
       title={t("title")}
-      count={list.enrollments.length}
+      // The design badges the runtime count. The record holds enrollments,
+      // not hosts (#3816), so the badge is not recorded, as the tile is.
+      count={<NotBacked gap="host" />}
     >
-      <Table
+      <ListTable
         label={t("title")}
         columns={[
           { label: t("columns.runtime") },
@@ -219,11 +242,10 @@ function EnrolledHosts({
           { label: t("columns.health") },
           { label: t("columns.checkpoint") },
         ]}
-      >
-        {list.enrollments.map((host) => (
-          <HostRow key={host.id} host={host} org={org} ws={ws} now={now} />
-        ))}
-      </Table>
+        rows={list.enrollments.map((host) =>
+          hostRow(host, org, ws, now, t("hookCount"), t("hookCountAll")),
+        )}
+      />
       {list.more ? (
         <p
           data-testid="runtimes-more"
@@ -266,7 +288,7 @@ function RuntimesLoaded({
 }) {
   return (
     <>
-      <StatStrip list={list} />
+      <StatStrip list={list} now={now} />
       <EnrolledHosts list={list} org={org} ws={ws} now={now} />
       <Ladder />
     </>
