@@ -978,7 +978,7 @@ export const IDLE_CLOSE_UNDONE = {
  * again (ADR-170): the idle close's columns, plus the two reasons a host's
  * `agent_stop` records and the idle close does not.
  */
-export const HOST_SEAL_UNDONE = {
+const HOST_SEAL_UNDONE = {
   ...IDLE_CLOSE_UNDONE,
   endReason: null,
   terminalReason: null,
