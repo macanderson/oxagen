@@ -88,6 +88,39 @@ describe("buildDiff", () => {
     expect(hunk?.afterStart).toBe(1);
   });
 
+  it("starts a side with no line in the hunk at line 1", () => {
+    // A created file's hunk is all additions and a deleted file's is all
+    // deletions, so one side has no numbered line to start from. The hunk
+    // says 1 for that side; `diff -U3` would print 0 (`@@ -0,0 +1,2 @@`).
+    const created = buildDiff("", "a\nb");
+    expect(created.hunks).toEqual([
+      {
+        beforeStart: 1,
+        afterStart: 1,
+        lines: [
+          { op: "add", text: "a", before: null, after: 1 },
+          { op: "add", text: "b", before: null, after: 2 },
+        ],
+      },
+    ]);
+    const deleted = buildDiff("a\nb", "");
+    expect(deleted.hunks).toHaveLength(1);
+    expect(deleted.hunks[0]?.beforeStart).toBe(1);
+    expect(deleted.hunks[0]?.afterStart).toBe(1);
+    expect(deleted.removed).toBe(2);
+    expect(deleted.added).toBe(0);
+  });
+
+  it("starts a hunk deep in a file at that line on both sides", () => {
+    const filler = Array.from({ length: 20 }, (_, i) => `line ${String(i)}`);
+    const before = [...filler, "old"].join("\n");
+    const after = [...filler, "new"].join("\n");
+    const hunk = buildDiff(before, after).hunks[0];
+    // Line 21 changed, so its three lines of context open the hunk at 18.
+    expect(hunk?.beforeStart).toBe(21 - DIFF_CONTEXT);
+    expect(hunk?.afterStart).toBe(21 - DIFF_CONTEXT);
+  });
+
   it("holds a one-line file in a single hunk", () => {
     const diff = buildDiff("before", "after");
     expect(diff.hunks).toHaveLength(1);

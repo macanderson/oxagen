@@ -820,6 +820,115 @@ describe("Spend › Findings", () => {
     expect(document.querySelectorAll("li[data-finding]")).toHaveLength(10);
   });
 
+  /** The strip, its legend's entries, and the slices drawn in it. */
+  function composition() {
+    const strip = screen.getByRole("img", {
+      name: "Share of the identified savings by finding",
+    });
+    const legend = strip.nextElementSibling;
+    if (!(legend instanceof HTMLElement)) throw new Error("no legend");
+    return {
+      slices: strip.querySelectorAll("[data-finding]"),
+      entries: within(legend).getAllByRole("listitem"),
+    };
+  }
+
+  function cardOf(id: string): HTMLElement {
+    const card = document.querySelector<HTMLElement>(
+      `li[data-finding="${id}"]`,
+    );
+    if (card === null) throw new Error(`no finding ${id}`);
+    return card;
+  }
+
+  it("prints no share and draws no slice when the identified total was not recorded (negative)", async () => {
+    byGroup.mockResolvedValue(report([]));
+    findings.mockResolvedValue(readOk(listed({ saving: null })));
+    await renderSpend({ tab: "findings" });
+    const { slices, entries } = composition();
+    // A slice's width is a share, and there is no total to take one of.
+    expect(slices).toHaveLength(0);
+    expect(entries).toHaveLength(2);
+    for (const entry of entries) {
+      expect(entry.querySelector('[data-recorded="false"]')).not.toBeNull();
+      expect(entry).not.toHaveTextContent("%");
+    }
+    for (const id of ["fnd_01k5rtgh", "fnd_01k5rteg"]) {
+      expect(cardOf(id)).toHaveTextContent("share not comparable");
+      expect(cardOf(id)).not.toHaveTextContent("of the identified savings");
+    }
+    // Each finding's own saving was recorded, so it still prints.
+    expect(cardOf("fnd_01k5rtgh")).toHaveTextContent("$984.60");
+  });
+
+  it("gives a finding in another currency no share, and rolls the tail it sits in into not recorded (negative)", async () => {
+    // Ten findings of $100 against a $1,000 total, except the last, which the
+    // job priced in euros: a euro is no share of a dollar total.
+    const many = Array.from({ length: 10 }, (_item, index) =>
+      found({
+        id: `fnd_0${String(index)}`,
+        saving:
+          index === 9
+            ? { micros: "100000000", currency: "EUR", basis: "estimated" }
+            : cost("100000000"),
+      }),
+    );
+    byGroup.mockResolvedValue(report([]));
+    findings.mockResolvedValue(
+      readOk(
+        listed({
+          saving: cost("1000000000"),
+          counts: { findings: 10, high: 10, medium: 0, operators: 1 },
+          findings: many,
+        }),
+      ),
+    );
+    await renderSpend({ tab: "findings" });
+    const { slices, entries } = composition();
+    expect(slices).toHaveLength(9);
+    expect(
+      Array.from(slices, (slice) => slice.getAttribute("data-finding")),
+    ).not.toContain("fnd_09");
+    // Eight named entries at 10% each, then the tail of two.
+    expect(entries).toHaveLength(9);
+    expect(screen.getAllByText("10%")).toHaveLength(8);
+    const tail = entries[8];
+    expect(tail).toHaveTextContent("2 smaller findings");
+    expect(tail?.querySelector('[data-recorded="false"]')).not.toBeNull();
+    // A tail share of 10% would hide the euro finding inside a dollar figure.
+    expect(tail).not.toHaveTextContent("%");
+    expect(cardOf("fnd_09")).toHaveTextContent("share not comparable");
+    expect(cardOf("fnd_08")).toHaveTextContent("10% of the identified savings");
+  });
+
+  it("lists a finding that saves nothing at a zero share but draws it no slice", async () => {
+    const nothing = found({
+      id: "fnd_01k5rzero",
+      kind: "cache_writes_never_read",
+      saving: cost("0"),
+    });
+    byGroup.mockResolvedValue(report([]));
+    findings.mockResolvedValue(
+      readOk(
+        listed({
+          saving: cost("984600000"),
+          counts: { findings: 2, high: 2, medium: 0, operators: 1 },
+          findings: [found(), nothing],
+        }),
+      ),
+    );
+    await renderSpend({ tab: "findings" });
+    const { slices, entries } = composition();
+    expect(
+      Array.from(slices, (slice) => slice.getAttribute("data-finding")),
+    ).toEqual(["fnd_01k5rtgh"]);
+    expect(entries[0]).toHaveTextContent("Unpaged results100%");
+    expect(entries[1]).toHaveTextContent("Cache written and never read0%");
+    expect(cardOf("fnd_01k5rzero")).toHaveTextContent(
+      "0% of the identified savings",
+    );
+  });
+
   it("says no finding is open, printing no total it was not given", async () => {
     byGroup.mockResolvedValue(report([]));
     findings.mockResolvedValue(

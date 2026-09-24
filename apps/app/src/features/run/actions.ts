@@ -210,8 +210,8 @@ export async function readRunExport(
  * is not one the read wrote" instead of "something went wrong".
  */
 /**
- * A half or a decision with its subagent chain named as the view model names
- * it (`chainRef`), and nothing named when it was recorded on the run's own.
+ * A decision with its subagent chain named as the view model names it
+ * (`chainRef`), and nothing named when it was recorded on the run's own.
  */
 function chained<T extends { sessionUuid?: string }>(
   value: T | null,
@@ -219,6 +219,75 @@ function chained<T extends { sessionUuid?: string }>(
   if (value === null) return null;
   const { sessionUuid, ...rest } = value;
   return sessionUuid === undefined ? rest : { ...rest, chainRef: sessionUuid };
+}
+
+/**
+ * One half of the exchange, projected into the view's text-based body the
+ * way the port's `toTranscriptBody` projects it: a recorded model stream
+ * arrives as `assembly.blocks` with `text` null, and the view reads `text`
+ * and `blocks`, so passing the half through would show every model reply on
+ * a later page with no text.
+ */
+function toTranscriptBody(
+  half: RunTranscriptGetOutput["entries"][number]["request"],
+): z.input<typeof RunTranscript>["entries"][number]["request"] {
+  if (half === null) return null;
+  const blocks = half.assembly?.blocks;
+  const message = blocks
+    ?.map((block) => {
+      switch (block.kind) {
+        case "text":
+        case "thinking":
+          return block.text;
+        case "tool_use":
+          return `${block.name}\n${typeof block.input === "string" ? block.input : JSON.stringify(block.input, null, 2)}`;
+        case "tool_result":
+          return block.summary;
+      }
+    })
+    .join("\n\n");
+  const shortened =
+    blocks?.some((block) =>
+      block.kind === "text" || block.kind === "thinking"
+        ? block.truncated
+        : block.kind === "tool_use" && block.inputFolded,
+    ) ?? false;
+  return {
+    seq: half.seq,
+    ...(half.sessionUuid === undefined ? {} : { chainRef: half.sessionUuid }),
+    type: half.type,
+    digest: half.digest,
+    bytesRef: half.bytesRef,
+    redactions: half.redactions,
+    fidelity: half.fidelity,
+    text: half.text ?? message ?? null,
+    truncated: half.truncated || shortened,
+    ...(blocks === undefined
+      ? {}
+      : {
+          blocks: blocks.map((block) => {
+            switch (block.kind) {
+              case "text":
+              case "thinking":
+                return { kind: block.kind, text: block.text };
+              case "tool_use":
+                return {
+                  kind: "tool_use" as const,
+                  name: block.name,
+                  input: block.input,
+                  callKey: block.callKey,
+                };
+              case "tool_result":
+                return {
+                  kind: "tool_result" as const,
+                  forRef: block.forId,
+                  ok: block.ok,
+                  summary: block.summary,
+                };
+            }
+          }),
+        }),
+  };
 }
 
 function toTranscriptPage(
@@ -254,8 +323,8 @@ function toTranscriptPage(
       usage: entry.usage ?? null,
       kinds: entry.kinds,
       turn: entry.turn,
-      request: chained(entry.request),
-      response: chained(entry.response),
+      request: toTranscriptBody(entry.request),
+      response: toTranscriptBody(entry.response),
       decision: chained(entry.decision),
       frames: entry.frames,
       cost: cost(entry.cost),

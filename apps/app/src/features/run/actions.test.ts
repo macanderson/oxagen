@@ -6,7 +6,10 @@
 // interface claim more than the control plane did: a command carries the run as
 // its target and nothing wider, and a steer is refused before the kernel when
 // its text is empty or past the contract's ceiling.
-import { STEER_TEXT_MAX } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
+import {
+  COMMAND_REASON_MAX,
+  STEER_TEXT_MAX,
+} from "@oxagen/oxagen/contracts/tacho.command.dispatch";
 import type { runTranscriptGet } from "@oxagen/oxagen/contracts/run.transcript.get";
 import type { ContractOutput } from "@/server/kernel";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -41,6 +44,7 @@ const {
   haltRun,
   readRunExport,
   readTranscriptPage,
+  setRunEnrichment,
   steerRun,
   summarizeRun,
 } = await import("./actions");
@@ -132,6 +136,37 @@ describe("haltRun", () => {
       await haltRun("acme", "core-platform", RUN, "pause", "stop"),
     ).toMatchObject({ ok: false, reason: "denied" });
   });
+
+  it("refuses a reason past the contract's ceiling on the reason field, before the kernel runs (negative)", async () => {
+    expect(
+      await haltRun(
+        "acme",
+        "core-platform",
+        RUN,
+        "cancel",
+        "x".repeat(COMMAND_REASON_MAX + 1),
+      ),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "command_reason",
+      field: "reason",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("holds the trimmed reason to the ceiling, so surrounding spaces never push a reason over it", async () => {
+    invoke.mockResolvedValue({ commandIds: ["tcm_5"] });
+    const atCeiling = "x".repeat(COMMAND_REASON_MAX);
+    expect(
+      await haltRun("acme", "core-platform", RUN, "pause", `  ${atCeiling}  `),
+    ).toEqual({ ok: true, value: { commandIds: ["tcm_5"] } });
+    expect(invoke.mock.calls[0]?.[1]).toEqual({
+      target: { kind: "run", id: RUN },
+      command: "pause",
+      reason: atCeiling,
+    });
+  });
 });
 
 describe("steerRun", () => {
@@ -205,6 +240,13 @@ describe("steerRun", () => {
       field: "requestedMode",
     });
     expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("returns a denial as denied (negative)", async () => {
+    invoke.mockRejectedValue(denied("dispatch_command"));
+    expect(
+      await steerRun("acme", "core-platform", RUN, "go on", "next_step"),
+    ).toMatchObject({ ok: false, reason: "denied" });
   });
 });
 
@@ -407,6 +449,13 @@ describe("bisectRuns", () => {
     }
     expect(invoke).not.toHaveBeenCalled();
   });
+
+  it("returns the handler's refusal of a run it cannot find as not_found with its reason (negative)", async () => {
+    invoke.mockRejectedValue({ code: "not_found", reason: "run_not_found" });
+    expect(
+      await bisectRuns("acme", "core-platform", RUN, "arun_gone"),
+    ).toMatchObject({ ok: false, reason: "not_found", code: "run_not_found" });
+  });
 });
 
 describe("readTranscriptPage", () => {
@@ -528,6 +577,229 @@ describe("readTranscriptPage", () => {
     });
   });
 
+  it("names the subagent chain on an entry and on each half recorded there, and nothing on a half recorded on the run's own", async () => {
+    const { toRunTranscript } = await import("@/data/live/mappers/run");
+    const CHAIN = "5f0c2a8e-1b3d-4c6e-9f7a-2d4b6c8e0a1f";
+    const half: Omit<
+      NonNullable<TranscriptOutput["entries"][number]["request"]>,
+      "seq"
+    > = {
+      type: "tool_use",
+      digest: `sha256:${"c".repeat(64)}`,
+      bytesRef: "blob://frames/tse_7k2m9q/12",
+      redactions: [],
+      fidelity: "full",
+      text: '{"path":"src/release/cut.ts"}',
+      truncated: false,
+      assembly: null,
+    };
+    const out: TranscriptOutput = {
+      zoom: "steps",
+      kinds: [],
+      entries: [
+        {
+          seq: "12",
+          endSeq: "13",
+          subagent: { sessionUuid: CHAIN, id: "agent_7", type: "Explore" },
+          at: "2026-09-15T08:10:04.000Z",
+          elapsedMs: 4000,
+          kind: "tool_call",
+          type: "tool_use",
+          label: "read_file ok",
+          callId: "tc_2",
+          kinds: ["tools"],
+          turn: 1,
+          request: { ...half, seq: "12", sessionUuid: CHAIN },
+          response: { ...half, seq: "13", type: "tool_result" },
+          decision: {
+            seq: "12",
+            sessionUuid: CHAIN,
+            decision: "allow",
+            type: "policy_decision",
+            at: "2026-09-15T08:10:04.100Z",
+          },
+          frames: 2,
+          // A subagent's step the gateway never priced carries no cost, and
+          // so no running total either: both stay null, never zero.
+          cost: null,
+          cumulativeCost: null,
+        },
+      ],
+      cursor: null,
+      complete: true,
+    };
+    invoke.mockResolvedValue(out);
+    const page = await readTranscriptPage(
+      "acme",
+      "core-platform",
+      RUN,
+      "steps",
+      [],
+      "ZjoxMQ",
+    );
+    expect(page).toEqual({ ok: true, value: toRunTranscript(out) });
+    if (!page.ok) throw new Error("the page was refused");
+    const entry = page.value.entries[0];
+    expect(entry?.subagent).toEqual({ chainRef: CHAIN, type: "Explore" });
+    expect(entry?.request?.chainRef).toBe(CHAIN);
+    expect(entry?.request).not.toHaveProperty("sessionUuid");
+    expect(entry?.response).not.toHaveProperty("chainRef");
+    expect(entry?.decision?.chainRef).toBe(CHAIN);
+    expect(entry?.cost).toBeNull();
+    expect(entry?.cumulativeCost).toBeNull();
+  });
+
+  it("shows a later page's model reply from its assembled blocks, as the port does", async () => {
+    const { toRunTranscript } = await import("@/data/live/mappers/run");
+    const block = { chars: 11, tokens: 3, partial: false, cost: null };
+    const out: TranscriptOutput = {
+      zoom: "steps",
+      kinds: [],
+      entries: [
+        {
+          seq: "20",
+          endSeq: "21",
+          at: "2026-09-15T08:12:00.000Z",
+          elapsedMs: 1200,
+          kind: "model_call",
+          type: "llm_request",
+          label: "claude reply",
+          callId: null,
+          kinds: ["responses"],
+          turn: 2,
+          request: null,
+          // A recorded model stream carries its message as blocks and no
+          // text; the view reads text and blocks, never assembly.
+          response: {
+            seq: "21",
+            type: "llm_response",
+            digest: `sha256:${"d".repeat(64)}`,
+            bytesRef: "blob://frames/tse_7k2m9q/21",
+            redactions: [],
+            fidelity: "full",
+            text: null,
+            truncated: false,
+            assembly: {
+              blocks: [
+                {
+                  ...block,
+                  id: "b1",
+                  kind: "text",
+                  text: "hello world",
+                  truncated: true,
+                },
+                {
+                  ...block,
+                  id: "b2",
+                  kind: "tool_use",
+                  name: "read_file",
+                  input: { path: "a.ts" },
+                  inputRaw: false,
+                  inputFolded: false,
+                  callKey: "tc_9",
+                  verdict: null,
+                },
+              ],
+              precis: "text, tool_use",
+              stopReason: "tool_use",
+              ttftMs: null,
+              durationMs: null,
+              tokensPerSecond: null,
+              usage: {
+                inputTokens: null,
+                cacheReadTokens: null,
+                cacheWriteTokens: null,
+                outputTokens: 6,
+              },
+              partial: false,
+              wire: { events: 4, bytes: 512 },
+            },
+          },
+          decision: null,
+          frames: 2,
+          cost: null,
+          cumulativeCost: null,
+        },
+      ],
+      cursor: null,
+      complete: true,
+    };
+    invoke.mockResolvedValue(out);
+    const page = await readTranscriptPage(
+      "acme",
+      "core-platform",
+      RUN,
+      "steps",
+      [],
+      "ZjoyMA",
+    );
+    expect(page).toEqual({ ok: true, value: toRunTranscript(out) });
+    if (!page.ok) throw new Error("the page was refused");
+    const response = page.value.entries[0]?.response;
+    expect(response?.text).toBe(
+      'hello world\n\nread_file\n{\n  "path": "a.ts"\n}',
+    );
+    expect(response?.truncated).toBe(true);
+    expect(response?.blocks).toEqual([
+      { kind: "text", text: "hello world" },
+      {
+        kind: "tool_use",
+        name: "read_file",
+        input: { path: "a.ts" },
+        callKey: "tc_9",
+      },
+    ]);
+  });
+
+  it("answers a refused read as denied, carrying the permission the page names (negative)", async () => {
+    invoke.mockRejectedValue(denied("get_run_transcript"));
+    expect(
+      await readTranscriptPage(
+        "acme",
+        "core-platform",
+        RUN,
+        "steps",
+        [],
+        "ZjoxMQ",
+      ),
+    ).toEqual({ ok: false, reason: "denied", code: "run.read" });
+  });
+
+  it("answers a read waiting on an access request as pending_approval with the request's id (negative)", async () => {
+    invoke.mockRejectedValue({
+      code: "pending_approval",
+      accessRequestId: "arq_7c1d",
+    });
+    expect(
+      await readTranscriptPage(
+        "acme",
+        "core-platform",
+        RUN,
+        "steps",
+        [],
+        "ZjoxMQ",
+      ),
+    ).toEqual({
+      ok: false,
+      reason: "pending_approval",
+      accessRequestId: "arq_7c1d",
+    });
+  });
+
+  it("answers any other read error as unavailable with its code, not as a bad cursor (negative)", async () => {
+    invoke.mockRejectedValue({ code: "not_found", reason: "run_not_found" });
+    expect(
+      await readTranscriptPage(
+        "acme",
+        "core-platform",
+        RUN,
+        "steps",
+        [],
+        "ZjoxMQ",
+      ),
+    ).toEqual({ ok: false, reason: "unavailable", code: "run_not_found" });
+  });
+
   // A page whose mapped shape the app's own `RunTranscript` schema refuses
   // cannot be produced through this file's fake boundary: `kernelRead`'s real
   // `contract.output.safeParse` already validates the mocked `invoke` result
@@ -537,4 +809,54 @@ describe("readTranscriptPage", () => {
   // proved directly against `data/live/runs.ts`'s `view()` helper instead
   // (`data/live/runs.test.ts`), which is the same defensive parse this file's
   // own copy of the mapping mirrors (see the doc comment on `toTranscriptPage`).
+});
+
+describe("setRunEnrichment", () => {
+  /** Every field `update_workspace_settings`' output schema requires. */
+  const settings = {
+    name: "Core platform",
+    slug: "core-platform",
+    description: null,
+    avatarUrl: null,
+    consequenceRoles: {},
+    steering: { autoSync: false, blockStaleRuns: false },
+    runEnrichmentEnabled: false,
+  };
+
+  it("writes the workspace's enrichment switch alone and answers the saved settings", async () => {
+    invoke.mockResolvedValue(settings);
+    expect(await setRunEnrichment("acme", "core-platform", false)).toEqual({
+      ok: true,
+      value: settings,
+    });
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    expect(invoke).toHaveBeenCalledWith(
+      "update_workspace_settings",
+      { runEnrichmentEnabled: false },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("refuses a value that is not a boolean before the kernel runs (negative)", async () => {
+    // A server action is an endpoint: the switch is typed, the request is not.
+    // `Reflect.apply` sends what a hand-built request could, with no cast.
+    const answer: unknown = await Reflect.apply(setRunEnrichment, undefined, [
+      "acme",
+      "core-platform",
+      "true",
+    ]);
+    expect(answer).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_enrichment_setting",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("returns a denial as denied (negative)", async () => {
+    invoke.mockRejectedValue(denied("update_workspace_settings"));
+    expect(await setRunEnrichment("acme", "core-platform", true)).toMatchObject(
+      { ok: false, reason: "denied" },
+    );
+  });
 });
