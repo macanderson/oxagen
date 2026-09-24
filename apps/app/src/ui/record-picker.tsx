@@ -57,14 +57,21 @@ type Source =
 /** How many matches the list draws. Typing narrows the rest. */
 const SHOWN = 50;
 
+/** The options of a list that has not loaded, one array so memos keep. */
+const NONE: readonly PickerOption[] = [];
+
 /** The multi picker's box: the input recipe, lit by the focus inside it. */
 const chipBox =
   "flex w-full min-w-0 flex-wrap items-center gap-1.5 rounded-md border border-input-border bg-input-bg px-2 py-1.5 text-[13px] text-input-fg " +
   "hover:border-input-border-hover focus-within:border-input-border-focus focus-within:outline-2 focus-within:outline-offset-0 focus-within:outline-input-ring " +
   "aria-disabled:bg-input-disabled-bg aria-disabled:text-input-disabled-fg";
 
-/** Characters that end a typed entry in a freeform multi picker. */
-const SEPARATOR = /[\s,]+/;
+/**
+ * Characters that end a typed entry in a freeform multi picker. A space does
+ * not: a member's name has one, and the lists these pickers replace were
+ * split on commas or lines.
+ */
+const SEPARATOR = /[,\n]+/;
 
 /**
  * The options that match `query`, best first: a label or value that starts
@@ -101,10 +108,10 @@ function useSource(
   load: (() => Promise<OptionLoad>) | undefined,
 ): [Source, () => void] {
   const [loaded, setLoaded] = useState<Source>({ status: "idle" });
-  const started = useRef(false);
+  const startedRef = useRef(false);
   const ensure = useCallback(() => {
-    if (started.current || load === undefined) return;
-    started.current = true;
+    if (startedRef.current || load === undefined) return;
+    startedRef.current = true;
     setLoaded({ status: "loading" });
     load().then(
       (result) => {
@@ -119,10 +126,13 @@ function useSource(
       },
     );
   }, [load]);
-  const source: Source =
-    options !== undefined
-      ? { status: "ready", page: { options, partial: false } }
-      : loaded;
+  const source = useMemo<Source>(
+    () =>
+      options !== undefined
+        ? { status: "ready", page: { options, partial: false } }
+        : loaded,
+    [options, loaded],
+  );
   return [source, ensure];
 }
 
@@ -262,13 +272,13 @@ function OptionList({
 /** The keyboard and highlight state both pickers share. */
 function useCombobox(rowCount: number) {
   const [open, setOpen] = useState(false);
-  const [highlight, setHighlight] = useState(0);
-  useEffect(() => {
-    if (highlight >= rowCount) setHighlight(Math.max(0, rowCount - 1));
-  }, [highlight, rowCount]);
+  const [wanted, setWanted] = useState(0);
+  const setHighlight = setWanted;
+  // The list can shrink under the highlight as the query narrows it.
+  const highlight = Math.min(wanted, Math.max(0, rowCount - 1));
   const move = (by: 1 | -1) => {
     if (rowCount === 0) return;
-    setHighlight((i) => (i + by + rowCount) % rowCount);
+    setHighlight((i) => (Math.min(i, rowCount - 1) + by + rowCount) % rowCount);
   };
   return { open, setOpen, highlight, setHighlight, move };
 }
@@ -322,8 +332,13 @@ export function RecordPicker({
   const [source, ensure] = useSource(options, load);
   const [own, setOwn] = useState(defaultValue);
   const value = controlled ?? own;
-  const all = source.status === "ready" ? source.page.options : [];
+  const all = source.status === "ready" ? source.page.options : NONE;
   const labelOf = (v: string) => all.find((o) => o.value === v)?.label ?? v;
+  // A prefilled value is shown by its label, so its list is read up front.
+  const prefilled = value !== "";
+  useEffect(() => {
+    if (prefilled) ensure();
+  }, [prefilled, ensure]);
   const [query, setQuery] = useState<string | null>(null);
   const text = query ?? (value === "" ? "" : labelOf(value));
   const matches = useMemo(
@@ -463,7 +478,7 @@ export function RecordMultiPicker({
   const [source, ensure] = useSource(options, load);
   const [own, setOwn] = useState<readonly string[]>(defaultValue);
   const values = controlled ?? own;
-  const all = source.status === "ready" ? source.page.options : [];
+  const all = source.status === "ready" ? source.page.options : NONE;
   const [query, setQuery] = useState("");
   const matches = useMemo(() => rank(all, query), [all, query]);
   const typed = typedRow(freeform, query, all);
@@ -473,6 +488,11 @@ export function RecordMultiPicker({
   const listId = useId();
   const optionId = (i: number) => `${listId}-o${String(i)}`;
   const inputRef = useRef<HTMLInputElement>(null);
+  // A prefilled value is shown by its label, so its list is read up front.
+  const prefilled = values.length > 0;
+  useEffect(() => {
+    if (prefilled) ensure();
+  }, [prefilled, ensure]);
 
   const commit = (next: string[]) => {
     if (controlled === undefined) setOwn(next);

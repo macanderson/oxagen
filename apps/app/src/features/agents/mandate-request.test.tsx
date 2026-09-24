@@ -9,12 +9,14 @@ import { routes } from "@/shared/safe-path";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 
-const { router, requestMandate } = vi.hoisted(() => ({
+const { router, requestMandate, choices } = vi.hoisted(() => ({
   router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
   requestMandate: vi.fn(),
+  choices: { chooseToolPatterns: vi.fn() },
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("./actions", () => ({ requestMandate }));
+vi.mock("@/features/shell/client", () => choices);
 
 const { RequestMandate } = await import("./mandate-request");
 
@@ -32,6 +34,33 @@ function draw() {
 }
 
 const dialog = () => screen.getByTestId("request-mandate");
+
+/** The tool patterns the registry offers: a whole tool, then one version. */
+const TOOL_PATTERNS = {
+  ok: true,
+  value: {
+    options: [
+      {
+        value: "stripe__create_payment@*",
+        label: "stripe__create_payment@*",
+        detail: "Create payment",
+      },
+      {
+        value: "stripe__refund@2",
+        label: "stripe__refund@2",
+        detail: "Refund a charge",
+      },
+    ],
+    partial: false,
+  },
+};
+
+/** What the tools picker's hidden input will submit. */
+function submittedTools(): string | undefined {
+  return dialog().querySelector<HTMLInputElement>(
+    'input[type="hidden"][name="tools"]',
+  )?.value;
+}
 
 async function open() {
   // `delay: null` keeps every interaction synchronous. The default wraps each
@@ -64,6 +93,8 @@ async function ask(user: ReturnType<typeof userEvent.setup>) {
 beforeEach(() => {
   router.replace.mockReset();
   requestMandate.mockReset();
+  choices.chooseToolPatterns.mockReset();
+  choices.chooseToolPatterns.mockResolvedValue(TOOL_PATTERNS);
 });
 afterEach(cleanup);
 
@@ -182,6 +213,34 @@ describe("RequestMandate", () => {
       "core-platform",
       expect.objectContaining({ consequenceTags: "moves_money,ships_code" }),
     );
+  });
+
+  it("finds a tool by its name and sends the patterns as a comma list", async () => {
+    requestMandate.mockResolvedValue({
+      ok: true,
+      value: { mandateId: "mnd_4f2a9c", status: "draft" },
+    });
+    draw();
+    const user = await open();
+    const tools = within(dialog()).getByRole("combobox", { name: "Tools" });
+    await user.type(tools, "refund a");
+    await user.keyboard("{Enter}");
+    // A typed pattern is kept as it is, beside the picked version.
+    await user.type(tools, "linear__*,");
+    expect(choices.chooseToolPatterns).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+    );
+    expect(submittedTools()).toBe("stripe__refund@2, linear__*");
+    await ask(user);
+    expect(requestMandate).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      expect.objectContaining({
+        tools: "stripe__refund@2, linear__*, stripe__create_payment@*",
+      }),
+    );
+    await expectNoAxe(document.body);
   });
 
   // A tool that carries a consequence and declares no numeric measure can only

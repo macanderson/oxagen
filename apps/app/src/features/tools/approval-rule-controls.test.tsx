@@ -19,19 +19,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 
-const { router, saveApprovalRule, setApprovalRuleEnabled, deleteApprovalRule } =
-  vi.hoisted(() => ({
-    router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
-    saveApprovalRule: vi.fn(),
-    setApprovalRuleEnabled: vi.fn(),
-    deleteApprovalRule: vi.fn(),
-  }));
+const {
+  router,
+  saveApprovalRule,
+  setApprovalRuleEnabled,
+  deleteApprovalRule,
+  chooseToolPatterns,
+} = vi.hoisted(() => ({
+  router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
+  saveApprovalRule: vi.fn(),
+  setApprovalRuleEnabled: vi.fn(),
+  deleteApprovalRule: vi.fn(),
+  chooseToolPatterns: vi.fn(),
+}));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("./actions", () => ({
   saveApprovalRule,
   setApprovalRuleEnabled,
   deleteApprovalRule,
 }));
+vi.mock("@/features/shell/client", () => ({ chooseToolPatterns }));
 
 const { RuleDelete, RuleEditor, RuleToggle } = await import(
   "./approval-rule-controls"
@@ -87,6 +94,44 @@ function fill(label: string | RegExp, value: string) {
   fireEvent.change(screen.getByLabelText(label), { target: { value } });
 }
 
+/**
+ * Adds each pattern to the Tools picker as a person does: type it, press
+ * Enter. A pattern the registry offers is picked; any other is kept as typed.
+ */
+function tools(...patterns: string[]) {
+  const input = screen.getByLabelText("Tools");
+  for (const pattern of patterns) {
+    fireEvent.change(input, { target: { value: pattern } });
+    fireEvent.keyDown(input, { key: "Enter" });
+  }
+}
+
+/** What the Tools picker's hidden input submits. */
+function submittedTools(): string | undefined {
+  return document.querySelector<HTMLInputElement>(
+    'input[type="hidden"][name="tools"]',
+  )?.value;
+}
+
+const REGISTRY = {
+  ok: true,
+  value: {
+    options: [
+      {
+        value: "stripe__create_refund@*",
+        label: "stripe__create_refund@*",
+        detail: "Create refund",
+      },
+      {
+        value: "stripe__create_refund@2",
+        label: "stripe__create_refund@2",
+        detail: "Create refund",
+      },
+    ],
+    partial: false,
+  },
+};
+
 async function openEditor(testId: string) {
   fireEvent.click(screen.getByTestId(testId));
   return screen.findByTestId("rule-editor");
@@ -102,6 +147,7 @@ beforeEach(() => {
   ]) {
     fn.mockReset();
   }
+  chooseToolPatterns.mockReset().mockResolvedValue(REGISTRY);
 });
 
 afterEach(async () => {
@@ -126,7 +172,9 @@ describe("RuleEditor › create", () => {
 
     fill("Rule id", "night-deploys");
     fill("Name", "Deploys to staging at night");
-    fill("Tools", "deploy__release\n\n  staging__* ");
+    tools("deploy__release", "  staging__* ");
+    // One pattern per line, as the textarea this picker replaced sent them.
+    expect(submittedTools()).toBe("deploy__release\nstaging__*");
     fill("Ceilings", "amount = 5000000");
     fill("Allow lists", "environment = staging, dev");
     fill("Standing approval window, in minutes", "30");
@@ -168,7 +216,7 @@ describe("RuleEditor › create", () => {
     const dialog = await openEditor("rule-create-open");
     fill("Rule id", "bare");
     fill("Name", "Bare rule");
-    fill("Tools", "deploy__release");
+    tools("deploy__release");
     fireEvent.click(screen.getByLabelText("On once saved"));
     fireEvent.submit(formOf(within(dialog).getByText("Create rule")));
     await waitFor(() => {
@@ -203,7 +251,7 @@ describe("RuleEditor › create", () => {
     const dialog = await openEditor("rule-create-open");
     fill("Rule id", "vendor-payouts");
     fill("Name", "Vendor payouts");
-    fill("Tools", "stripe__create_payment");
+    tools("stripe__create_payment");
     fill("Allow lists", "counterparty = vendor:* prod, cus_*");
     fireEvent.submit(formOf(within(dialog).getByText("Create rule")));
     await waitFor(() => {
@@ -239,7 +287,7 @@ describe("RuleEditor › create", () => {
       const dialog = await openEditor("rule-create-open");
       fill("Rule id", "night-deploys");
       fill("Name", "Night deploys");
-      fill("Tools", "deploy__release");
+      tools("deploy__release");
       fill(label, line);
       fireEvent.submit(formOf(within(dialog).getByText("Create rule")));
       expect(
@@ -248,6 +296,43 @@ describe("RuleEditor › create", () => {
       expect(saveApprovalRule).not.toHaveBeenCalled();
     },
   );
+
+  it("picks a tool from the registry by typing part of its name, and keeps a typed pattern", async () => {
+    saveApprovalRule.mockResolvedValue({
+      ok: true,
+      value: { ruleId: "refunds" },
+    });
+    withIntl(<RuleEditor at={at} existing={null} />);
+    const dialog = await openEditor("rule-create-open");
+    fill("Rule id", "refunds");
+    fill("Name", "Refunds");
+    const input = screen.getByLabelText("Tools");
+    fireEvent.change(input, { target: { value: "refund" } });
+    // The registry is read when the picker first opens, and not before.
+    expect(chooseToolPatterns).toHaveBeenCalledWith("acme", "core-platform");
+    expect(
+      await within(dialog).findByRole("option", {
+        name: /stripe__create_refund@2/,
+      }),
+    ).toBeVisible();
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    fireEvent.keyDown(input, { key: "Enter" });
+    // A comma ends a typed entry, so a pattern the registry lacks is kept.
+    fireEvent.change(input, { target: { value: "linear__*," } });
+    expect(submittedTools()).toBe("stripe__create_refund@2\nlinear__*");
+    fireEvent.submit(formOf(within(dialog).getByText("Create rule")));
+    await waitFor(() => {
+      expect(saveApprovalRule).toHaveBeenCalledWith(
+        "acme",
+        "core-platform",
+        "create",
+        expect.objectContaining({
+          tools: ["stripe__create_refund@2", "linear__*"],
+        }),
+        null,
+      );
+    });
+  });
 
   it("names a taken id where the person acted and navigates nowhere", async () => {
     saveApprovalRule.mockResolvedValue({
@@ -259,7 +344,7 @@ describe("RuleEditor › create", () => {
     const dialog = await openEditor("rule-create-open");
     fill("Rule id", "small-refunds");
     fill("Name", "Refunds");
-    fill("Tools", "stripe__create_refund@*");
+    tools("stripe__create_refund@*");
     fireEvent.submit(formOf(within(dialog).getByText("Create rule")));
     expect(await screen.findByTestId("rule-editor-failure")).toHaveTextContent(
       "A rule with that id already exists.",
@@ -273,7 +358,7 @@ describe("RuleEditor › create", () => {
     const dialog = await openEditor("rule-create-open");
     fill("Rule id", "night-deploys");
     fill("Name", "Night deploys");
-    fill("Tools", "deploy__release");
+    tools("deploy__release");
     fireEvent.submit(formOf(within(dialog).getByText("Create rule")));
     expect(await screen.findByTestId("rule-editor-failure")).toHaveTextContent(
       "action_failed",
@@ -286,7 +371,7 @@ describe("RuleEditor › create", () => {
     const dialog = await openEditor("rule-create-open");
     fill("Rule id", "night-deploys");
     fill("Name", "Night deploys");
-    fill("Tools", "deploy__release");
+    tools("deploy__release");
     fireEvent.submit(formOf(within(dialog).getByText("Create rule")));
     expect(await within(dialog).findByText("Saving")).toBeVisible();
   });

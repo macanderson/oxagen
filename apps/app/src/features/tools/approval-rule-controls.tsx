@@ -18,6 +18,7 @@
 import { useTranslations } from "next-intl";
 import { type ReactNode, type SyntheticEvent, useRef, useState } from "react";
 import type { ApprovalRule } from "@/data/contracts/tools";
+import { chooseToolPatterns } from "@/features/shell/client";
 import type { ActionResult } from "@/server/kernel";
 import {
   buttonPrimary,
@@ -27,6 +28,7 @@ import {
 } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
+import { RecordMultiPicker } from "@/ui/record-picker";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { UNANSWERED, useActionFailure } from "./action-failure";
 import {
@@ -295,13 +297,17 @@ export function RuleEditor({
             />
           </Field>
           <Field id="rule-tools" label={t("tools")} hint={t("toolsHint")}>
-            <textarea
+            {/* One chip per pattern, sent one per line as the textarea it
+                replaced sent them, so `splitLines` and `notCarried` still
+                read the same field. */}
+            <RecordMultiPicker
               id="rule-tools"
               name="tools"
-              rows={3}
               required
-              defaultValue={existing?.tools.join("\n") ?? ""}
-              className={`${inputBase} ${mono}`}
+              freeform
+              joiner={"\n"}
+              load={() => chooseToolPatterns(at.org, at.ws)}
+              defaultValue={existing?.tools ?? []}
             />
           </Field>
           <Field

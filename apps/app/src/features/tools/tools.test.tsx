@@ -11,6 +11,7 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from "@testing-library/react";
 import type { ReactNode } from "react";
@@ -40,6 +41,27 @@ import {
   mandateRow,
 } from "@/test/mandate-views";
 
+// The record pickers read their lists through these server actions; each
+// answers an empty list unless a test says otherwise.
+const { choices } = vi.hoisted(() => {
+  const none = () =>
+    Promise.resolve({ ok: true, value: { options: [], partial: false } });
+  return {
+    choices: {
+      chooseAgents: vi.fn(none),
+      chooseApprovers: vi.fn(none),
+      chooseMcpServers: vi.fn(none),
+      chooseModels: vi.fn(none),
+      chooseRuns: vi.fn(none),
+      chooseSwitchTargets: vi.fn(none),
+      chooseToolPatterns: vi.fn(none),
+    },
+  };
+});
+vi.mock("@/features/shell/client", () => ({
+  ...choices,
+  openApprovals: vi.fn(),
+}));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 vi.mock("next/navigation", () => ({
@@ -1204,17 +1226,22 @@ describe("Tools › mandates ledger › grant", () => {
     fireEvent.click(
       within(ledger()).getByRole("button", { name: "Grant a mandate" }),
     );
-    const picker = within(screen.getByTestId("grant-mandate")).getByLabelText(
-      "Agent",
+    fireEvent.focus(
+      within(screen.getByTestId("grant-mandate")).getByRole("combobox", {
+        name: "Agent",
+      }),
     );
-    expect(
-      within(picker)
-        .getAllByRole("option")
-        .map((option) => option.getAttribute("value")),
-    ).toEqual(["agt_invoicebot"]);
+    const listbox = within(screen.getByTestId("grant-mandate")).getByRole(
+      "listbox",
+    );
+    const offered = within(listbox)
+      .getAllByRole("option")
+      .map((option) => option.textContent);
+    expect(offered).toHaveLength(1);
+    expect(offered[0]).toContain("invoice-bot");
   });
 
-  it("says the picker holds one page when the agents read has more", async () => {
+  it("reads every agent when the page holds only the first page of them", async () => {
     await renderGrant(
       "owner",
       mandateList([mandateRow()]),
@@ -1223,9 +1250,14 @@ describe("Tools › mandates ledger › grant", () => {
     fireEvent.click(
       within(ledger()).getByRole("button", { name: "Grant a mandate" }),
     );
-    expect(screen.getByTestId("grant-mandate")).toHaveTextContent(
-      "The first page of this workspace's agents.",
+    fireEvent.focus(
+      within(screen.getByTestId("grant-mandate")).getByRole("combobox", {
+        name: "Agent",
+      }),
     );
+    await waitFor(() => {
+      expect(choices.chooseAgents).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("keeps the ledger when the agents read fails, and says why no agent is offered (negative)", async () => {

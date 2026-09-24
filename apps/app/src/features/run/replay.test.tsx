@@ -5,7 +5,7 @@
 // Fork is offered only on a sealed LEDGER run graded fork or retry, and it is
 // drawn disabled with the reason everywhere else, so a person is not sent to
 // a refusal the row already answers. Bisect reads receipts alone, so it is
-// offered on every run.
+// offered on every run, and its other run is picked by name or typed as an id.
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -14,11 +14,13 @@ import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { runRow } from "./run.builders";
 
-const { forkRun, bisectRuns } = vi.hoisted(() => ({
+const { forkRun, bisectRuns, choices } = vi.hoisted(() => ({
   forkRun: vi.fn(),
   bisectRuns: vi.fn(),
+  choices: { chooseRuns: vi.fn() },
 }));
 vi.mock("./actions", () => ({ forkRun, bisectRuns }));
+vi.mock("@/features/shell/client", () => choices);
 
 const { ReplayActions } = await import("./replay-actions");
 
@@ -33,6 +35,25 @@ function renderReplay(run: RunRow) {
 beforeEach(() => {
   forkRun.mockReset();
   bisectRuns.mockReset();
+  choices.chooseRuns.mockReset();
+  choices.chooseRuns.mockResolvedValue({
+    ok: true,
+    value: {
+      options: [
+        {
+          value: "tse_nightly1",
+          label: "Nightly invoices",
+          detail: "tse_nightly1",
+        },
+        {
+          value: "arun_release2",
+          label: "Release notes",
+          detail: "arun_release2",
+        },
+      ],
+      partial: false,
+    },
+  });
 });
 
 afterEach(cleanup);
@@ -44,7 +65,11 @@ describe("Fork", () => {
       value: { attemptId: "arun_9x2k", attemptNumber: 2 },
     });
     const user = userEvent.setup();
-    const run = runRow({ id: "tse_7k2m9q", source: "ledger", replayGrade: "fork" });
+    const run = runRow({
+      id: "tse_7k2m9q",
+      source: "ledger",
+      replayGrade: "fork",
+    });
     renderReplay(run);
     await user.click(screen.getByTestId("run-fork"));
     await user.type(screen.getByLabelText("Replay up to frame"), "120");
@@ -193,6 +218,66 @@ describe("Bisect", () => {
     },
   );
 
+  it("picks the other run by name and sends its id", async () => {
+    bisectRuns.mockResolvedValue({
+      ok: true,
+      value: { divergentSeq: null, keyA: null, keyB: null, aligned: 12 },
+    });
+    const user = userEvent.setup();
+    renderReplay(runRow());
+    await user.click(screen.getByTestId("run-bisect"));
+    await user.type(screen.getByLabelText("The other run"), "nightly");
+    await user.keyboard("{Enter}");
+    const form = screen.getByTestId("run-bisect-dialog");
+    expect(
+      form.querySelector<HTMLInputElement>('input[type="hidden"][name="runB"]')
+        ?.value,
+    ).toBe("tse_nightly1");
+    expect(choices.chooseRuns).toHaveBeenCalledWith("acme", "core-platform");
+    await user.click(
+      screen.getByRole("button", { name: "Find the divergence" }),
+    );
+    await waitFor(() => {
+      expect(bisectRuns).toHaveBeenCalledWith(
+        "acme",
+        "core-platform",
+        expect.any(String),
+        "tse_nightly1",
+      );
+    });
+  });
+
+  it("sends a pasted run id that no loaded run matches, as typed", async () => {
+    bisectRuns.mockResolvedValue({
+      ok: true,
+      value: { divergentSeq: null, keyA: null, keyB: null, aligned: 3 },
+    });
+    const user = userEvent.setup();
+    renderReplay(runRow());
+    await user.click(screen.getByTestId("run-bisect"));
+    await user.type(screen.getByLabelText("The other run"), "tse_elsewhere9");
+    await user.click(
+      screen.getByRole("button", { name: "Find the divergence" }),
+    );
+    await waitFor(() => {
+      expect(bisectRuns).toHaveBeenCalledWith(
+        "acme",
+        "core-platform",
+        expect.any(String),
+        "tse_elsewhere9",
+      );
+    });
+  });
+
+  it("passes an axe check with the bisect picker open", async () => {
+    const user = userEvent.setup();
+    const { container } = renderReplay(runRow());
+    await user.click(screen.getByTestId("run-bisect"));
+    await user.click(screen.getByLabelText("The other run"));
+    await screen.findByRole("option", { name: /Nightly invoices/ });
+    await expectNoAxe(container);
+  });
+
   it("renders the divergence frame and both keys when the two runs disagree", async () => {
     bisectRuns.mockResolvedValue({
       ok: true,
@@ -207,7 +292,9 @@ describe("Bisect", () => {
     renderReplay(runRow());
     await user.click(screen.getByTestId("run-bisect"));
     await user.type(screen.getByLabelText("The other run"), "tse_other1");
-    await user.click(screen.getByRole("button", { name: "Find the divergence" }));
+    await user.click(
+      screen.getByRole("button", { name: "Find the divergence" }),
+    );
     await waitFor(() => {
       expect(screen.getByTestId("bisect-diverged")).toHaveTextContent(
         "The runs diverge at frame 42, after 41 frames that agreed.",
@@ -226,7 +313,9 @@ describe("Bisect", () => {
     renderReplay(runRow());
     await user.click(screen.getByTestId("run-bisect"));
     await user.type(screen.getByLabelText("The other run"), "tse_other1");
-    await user.click(screen.getByRole("button", { name: "Find the divergence" }));
+    await user.click(
+      screen.getByRole("button", { name: "Find the divergence" }),
+    );
     await waitFor(() => {
       expect(screen.getByTestId("bisect-same")).toHaveTextContent(
         "The two runs agree at every frame. 431 frames were compared.",
@@ -248,7 +337,9 @@ describe("Bisect", () => {
     renderReplay(runRow());
     await user.click(screen.getByTestId("run-bisect"));
     await user.type(screen.getByLabelText("The other run"), "tse_other1");
-    await user.click(screen.getByRole("button", { name: "Find the divergence" }));
+    await user.click(
+      screen.getByRole("button", { name: "Find the divergence" }),
+    );
     await waitFor(() => {
       expect(screen.getByTestId("bisect-diverged")).toBeInTheDocument();
     });

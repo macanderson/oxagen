@@ -34,12 +34,15 @@ import {
   CONSEQUENCE_OTHER_MAX,
   MEASURE_NAME_MAX,
   PURPOSE_MAX,
+  STARTER_CONSEQUENCE_TAGS,
   UNIT_MAX,
 } from "@/data/contracts/mandates";
 import { type ReactNode, type SyntheticEvent, useState } from "react";
+import { chooseToolPatterns } from "@/features/shell/client";
 import { buttonSecondary, inputBase } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
+import { RecordMultiPicker } from "@/ui/record-picker";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { routes } from "@/shared/safe-path";
 import { UNANSWERED, useActionFailure } from "./action-failure";
@@ -50,20 +53,13 @@ const TESTID = "request-mandate";
 const PERIODS = ["daily", "weekly", "monthly"] as const;
 
 /**
- * The starter set of consequence tags (MC spec §6.9 part 1). More than one may
- * be named, and usually must be: a mandate covers a tool only when it names
- * every tag that tool declares, so naming one of a tool's two mints a mandate
- * that authorizes nothing. Nothing the app may call answers a tool version's
- * `consequence_tags`, so the operator states the set and the hint says the rule.
+ * More than one consequence may be named, and usually must be: a mandate
+ * covers a tool only when it names every tag that tool declares, so naming one
+ * of a tool's two mints a mandate that authorizes nothing. Nothing the app may
+ * call answers a tool version's `consequence_tags`, so the operator states the
+ * set and the hint says the rule.
  */
-const CONSEQUENCE_TAGS = [
-  "moves_money",
-  "destroys_data",
-  "alters_production",
-  "communicates_externally",
-  "changes_access",
-  "changes_entitlement",
-] as const;
+const CONSEQUENCE_TAGS = STARTER_CONSEQUENCE_TAGS;
 
 function Field({
   name,
@@ -278,11 +274,12 @@ export function RequestMandate({
             />
           </Field>
           <Field name="tools" label={t("tools")} hint={t("toolsHint")}>
-            <input
+            <RecordMultiPicker
               id={id("tools")}
               name="tools"
               required
-              className={inputBase}
+              freeform
+              load={() => chooseToolPatterns(org, ws)}
             />
           </Field>
           <Field name="purpose" label={t("purpose")} hint={t("purposeHint")}>

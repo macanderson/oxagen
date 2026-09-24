@@ -8,14 +8,17 @@
 // takes every pin. Re-importing an unchanged server changes nothing and says
 // so. Registering a server is the section under the registry.
 //
-// When the roster could not be read the field falls back to a typed `mcs_…`,
-// so a failed read costs the picker rather than the import.
+// When the page could not read the roster, the picker reads it again when it
+// opens and also takes a typed `mcs_…`, so a failed read costs the list rather
+// than the import.
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
+import { chooseMcpServers } from "@/features/shell/client";
 import { routes } from "@/shared/safe-path";
 import { buttonSecondary, inputBase, mono } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
+import { RecordPicker } from "@/ui/record-picker";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { UNANSWERED, useActionFailure } from "./action-failure";
 import { importTools } from "./actions";
@@ -39,6 +42,17 @@ export function ImportControls({
     published: number;
     unchanged: number;
   } | null>(null);
+  /** The roster the page read, or a second read of it that also keeps a typed id. */
+  const source =
+    servers === null
+      ? { freeform: true, load: () => chooseMcpServers(at.org, at.ws) }
+      : {
+          options: servers.map((server) => ({
+            value: server.id,
+            label: server.name,
+            detail: server.id,
+          })),
+        };
 
   async function submit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -100,42 +114,21 @@ export function ImportControls({
             >
               {t("serverId")}
             </label>
-            {servers === null ? (
-              <>
-                <input
-                  id="serverId"
-                  name="serverId"
-                  required
-                  placeholder={t("serverIdPlaceholder")}
-                  className={`${inputBase} ${mono}`}
-                />
-                <p className="text-xs text-muted-foreground">
-                  {t("serverFallbackHint")}
-                </p>
-              </>
-            ) : (
-              <>
-                <select
-                  id="serverId"
-                  name="serverId"
-                  required
-                  defaultValue=""
-                  className={inputBase}
-                >
-                  <option value="" disabled>
-                    {t("serverPick")}
-                  </option>
-                  {servers.map((server) => (
-                    <option key={server.id} value={server.id}>
-                      {server.name}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-muted-foreground">
-                  {servers.length === 0 ? t("serverNone") : t("serverPickHint")}
-                </p>
-              </>
-            )}
+            <RecordPicker
+              id="serverId"
+              name="serverId"
+              required
+              placeholder={t("serverPick")}
+              aria-describedby="serverId-hint"
+              {...source}
+            />
+            <p id="serverId-hint" className="text-xs text-muted-foreground">
+              {servers === null
+                ? t("serverFallbackHint")
+                : servers.length === 0
+                  ? t("serverNone")
+                  : t("serverPickHint")}
+            </p>
           </div>
           <div className="flex min-w-0 flex-col gap-1.5">
             <label

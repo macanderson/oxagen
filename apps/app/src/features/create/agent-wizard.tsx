@@ -12,13 +12,14 @@
 import { HarnessIcon } from "@/ui/harness-icon";
 import { SUBAGENT_FILE_HARNESSES } from "@oxagen/oxagen/contracts/agent.propose";
 import { useTranslations } from "next-intl";
-import { useEffect } from "react";
+import { useEffect, useId } from "react";
 import type { ActionResult } from "@/server/kernel";
 import { agentSourceSlug, renameAgentSource } from "@/shared/source-identity";
 import { parsePullRequestUrl } from "@/shared/pull-request-url";
 import { buttonSecondary, inputBase, mono } from "@/ui/control-styles";
 import { FormAlert } from "@/ui/form-feedback";
 import { PullRequestLink } from "@/ui/navigation";
+import { type PickerOption, RecordMultiPicker } from "@/ui/record-picker";
 import {
   type ProposedAgent,
   proposeAgent,
@@ -29,7 +30,6 @@ import {
   AGENT_HARNESSES,
   type AgentHarness,
   agentSlugFromDescription,
-  type BeltTool,
   beltPattern,
   draftAgentDefinition,
   isAgentSlug,
@@ -394,60 +394,13 @@ function DefinitionStep({ api }: StepProps<AgentDraft>) {
   );
 }
 
-function ToolRow({
-  tool,
-  picked,
-  onToggle,
-}: {
-  tool: BeltTool;
-  picked: boolean;
-  onToggle: () => void;
-}) {
-  const t = useTranslations("createAgent.toolbelt");
-  const pattern = beltPattern(tool);
-  const tag = "rounded-md border border-border px-1.5 py-0.5 text-[11px]";
-  return (
-    <li>
-      <label className="flex min-h-11 cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-border bg-card px-3 py-2 has-[:checked]:border-brand">
-        <input
-          type="checkbox"
-          checked={picked}
-          onChange={onToggle}
-          className="size-4 flex-none"
-        />
-        <span className="flex min-w-0 flex-1 flex-col">
-          <span className="font-medium text-foreground">{tool.name}</span>
-          <span className={`${mono} break-all text-xs text-muted-foreground`}>
-            {pattern}
-          </span>
-        </span>
-        <span className="flex flex-wrap items-center gap-1">
-          <span className={tag}>{t("risk", { grade: tool.riskGrade })}</span>
-          <span className={tag}>
-            {tool.sideEffect === null
-              ? t("unclassified")
-              : t(`effects.${tool.sideEffect}`)}
-          </span>
-          {tool.financial ? (
-            <span className={tag}>{t("financial")}</span>
-          ) : null}
-          {tool.killed ? <span className={tag}>{t("killed")}</span> : null}
-          {parks(tool) ? (
-            <span className={`${tag} font-medium text-foreground`}>
-              {t("parks")}
-            </span>
-          ) : null}
-        </span>
-      </label>
-    </li>
-  );
-}
-
 function ToolbeltStep({ api, ctx }: StepProps<AgentDraft>) {
   const t = useTranslations("createAgent.toolbelt");
   const file = useFile(api);
   const d = api.draft;
   const registry = d.registry;
+  const pickerId = useId();
+  const noteId = useId();
 
   useEffect(() => {
     if (api.draft.registry.state !== "idle") return;
@@ -472,13 +425,23 @@ function ToolbeltStep({ api, ctx }: StepProps<AgentDraft>) {
   const tools = registry.state === "loaded" ? registry.offer.tools : [];
   const picked = tools.filter((tool) => d.belt.includes(beltPattern(tool)));
   const parking = picked.filter(parks);
-  const toggle = (pattern: string) => {
-    api.update({
-      belt: d.belt.includes(pattern)
-        ? d.belt.filter((p) => p !== pattern)
-        : [...d.belt, pattern],
-    });
-  };
+  // Each tool is offered by its name. The second line carries what a row
+  // used to show beside it: the pattern a pick writes, its risk grade, its
+  // side effect, and whether it moves money, is stopped, or parks.
+  const options: PickerOption[] = tools.map((tool) => {
+    const pattern = beltPattern(tool);
+    const facts = [
+      pattern,
+      t("risk", { grade: tool.riskGrade }),
+      tool.sideEffect === null
+        ? t("unclassified")
+        : t(`effects.${tool.sideEffect}`),
+    ];
+    if (tool.financial) facts.push(t("financial"));
+    if (tool.killed) facts.push(t("killed"));
+    if (parks(tool)) facts.push(t("parks"));
+    return { value: pattern, label: tool.name, detail: facts.join(" · ") };
+  });
 
   return (
     <div className="flex flex-col gap-3 text-sm">
@@ -501,31 +464,28 @@ function ToolbeltStep({ api, ctx }: StepProps<AgentDraft>) {
             {t("empty")}
           </p>
         ) : (
-          <ul
-            aria-label={t("label")}
-            data-testid="belt"
-            className="flex flex-col gap-2"
-          >
-            {tools.map((tool) => {
-              const pattern = beltPattern(tool);
-              return (
-                <ToolRow
-                  key={pattern}
-                  tool={tool}
-                  picked={d.belt.includes(pattern)}
-                  onToggle={() => {
-                    toggle(pattern);
-                  }}
-                />
-              );
-            })}
-          </ul>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor={pickerId} className="text-xs font-medium">
+              {t("label")}
+            </label>
+            <RecordMultiPicker
+              id={pickerId}
+              options={options}
+              value={d.belt}
+              onChange={(belt) => {
+                api.update({ belt });
+              }}
+              placeholder={t("search")}
+              aria-describedby={noteId}
+              data-testid="belt"
+            />
+          </div>
         )}
       </div>
       {registry.state === "loaded" && registry.offer.more ? (
         <p className="text-xs text-muted-foreground">{t("more")}</p>
       ) : null}
-      <p data-testid="belt-note" className="text-muted-foreground">
+      <p id={noteId} data-testid="belt-note" className="text-muted-foreground">
         {picked.length === 0
           ? t.rich("nothing", {
               code: (chunks) => <span className={mono}>{chunks}</span>,

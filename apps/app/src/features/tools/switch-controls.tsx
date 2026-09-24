@@ -14,12 +14,14 @@
 // as a security event — before the confirming button, never after.
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
+import { STARTER_CONSEQUENCE_TAGS } from "@/data/contracts/mandates";
 import {
   type KillSwitch,
   type KillSwitchBoard,
   KillSwitchKind,
   KILL_SWITCH_KINDS,
 } from "@/data/contracts/tools";
+import { chooseSwitchTargets } from "@/features/shell/client";
 import { routes } from "@/shared/safe-path";
 import {
   buttonPrimary,
@@ -29,6 +31,7 @@ import {
 } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
+import { type PickerOption, RecordPicker } from "@/ui/record-picker";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { UNANSWERED, useActionFailure } from "./action-failure";
 import { flipKillSwitch } from "./actions";
@@ -38,6 +41,23 @@ import {
   type ToolsAt,
   textValue,
 } from "./view";
+
+/** The levels whose targets are records `chooseSwitchTargets` reads by public id. */
+type LoadedKind = Parameters<typeof chooseSwitchTargets>[2];
+
+function loadsTargets(kind: KillSwitch["target"]["kind"]): kind is LoadedKind {
+  return (
+    kind === "tool_server" ||
+    kind === "tool_version" ||
+    kind === "connection" ||
+    kind === "agent"
+  );
+}
+
+/** A class switch names a consequence tag: one of the starter set, or one typed. */
+const TAG_OPTIONS: readonly PickerOption[] = STARTER_CONSEQUENCE_TAGS.map(
+  (tag) => ({ value: tag, label: tag }),
+);
 
 export function FlipControls({
   at,
@@ -214,45 +234,6 @@ export function FlipControls({
                 >
                   {t("target")} · {t(`targetHint.${kind}`)}
                 </p>
-              ) : kind === "operator" ? (
-                // set_kill_switch resolves the member's `usr_…` public id
-                // within the org (#3147); the picker submits exactly that, so
-                // the dialog never asks for a uuid this page does not print.
-                <div className="flex min-w-0 flex-col gap-1.5">
-                  <label
-                    htmlFor="target"
-                    className="text-sm font-medium text-foreground"
-                  >
-                    {t("target")}
-                  </label>
-                  <select
-                    id="target"
-                    name="target"
-                    required
-                    defaultValue=""
-                    className={inputBase}
-                  >
-                    <option value="" disabled>
-                      {t("targetOperatorPlaceholder")}
-                    </option>
-                    {members.map((member) => (
-                      <option key={member.id} value={member.id}>
-                        {member.name === null
-                          ? member.email
-                          : `${member.name} (${member.email})`}
-                      </option>
-                    ))}
-                  </select>
-                  {members.length === 0 ? (
-                    <p className="text-xs text-destructive">
-                      {t("targetOperatorEmpty")}
-                    </p>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">
-                      {t(`targetHint.${kind}`)}
-                    </p>
-                  )}
-                </div>
               ) : (
                 <div className="flex min-w-0 flex-col gap-1.5">
                   <label
@@ -261,15 +242,59 @@ export function FlipControls({
                   >
                     {t("target")}
                   </label>
-                  <input
-                    id="target"
-                    name="target"
-                    required
-                    className={`${inputBase} ${mono}`}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    {t(`targetHint.${kind}`)}
-                  </p>
+                  {/* Keyed by level, so a target picked at one level is never
+                      sent at another, and a loaded list is read again for the
+                      level now chosen. */}
+                  {kind === "operator" ? (
+                    // set_kill_switch resolves the member's `usr_…` public id
+                    // within the org (#3147); the picker submits exactly that,
+                    // so the dialog never asks for a uuid this page does not
+                    // print.
+                    <RecordPicker
+                      key={kind}
+                      id="target"
+                      name="target"
+                      required
+                      placeholder={t("targetOperatorPlaceholder")}
+                      aria-describedby="target-hint"
+                      options={members.map((member) => ({
+                        value: member.id,
+                        label: member.name ?? member.email,
+                        detail: member.email,
+                      }))}
+                    />
+                  ) : loadsTargets(kind) ? (
+                    <RecordPicker
+                      key={kind}
+                      id="target"
+                      name="target"
+                      required
+                      aria-describedby="target-hint"
+                      load={() => chooseSwitchTargets(at.org, at.ws, kind)}
+                    />
+                  ) : (
+                    <RecordPicker
+                      key={kind}
+                      id="target"
+                      name="target"
+                      required
+                      freeform
+                      aria-describedby="target-hint"
+                      options={TAG_OPTIONS}
+                    />
+                  )}
+                  {kind === "operator" && members.length === 0 ? (
+                    <p id="target-hint" className="text-xs text-destructive">
+                      {t("targetOperatorEmpty")}
+                    </p>
+                  ) : (
+                    <p
+                      id="target-hint"
+                      className="text-xs text-muted-foreground"
+                    >
+                      {t(`targetHint.${kind}`)}
+                    </p>
+                  )}
                 </div>
               )}
             </>

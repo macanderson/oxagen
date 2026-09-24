@@ -548,9 +548,6 @@ type Messages = {
           toolsHint: string;
           denyTools: string;
           denyHint: string;
-          add: string;
-          addPlaceholder: string;
-          remove: string;
           sideEffects: string;
           read: string;
           write: string;
@@ -1745,6 +1742,7 @@ type Messages = {
       title: string;
       subtitle: string;
       label: string;
+      search: string;
       loading: string;
       empty: string;
       denied: string;
@@ -2062,11 +2060,10 @@ type Messages = {
       agents: string;
       all: string;
       none: string;
-      pick: string;
+      search: string;
       inFlight: string;
       inFlightNoTurn: string;
       idle: string;
-      idleSub: string;
       hint: string;
       noAgents: string;
       agentsUnread: string;
@@ -6902,7 +6899,6 @@ type Messages = {
       confirm: string;
       pending: string;
       done: string;
-      serverIdPlaceholder: string;
       serverPick: string;
       serverPickHint: string;
       serverFallbackHint: string;

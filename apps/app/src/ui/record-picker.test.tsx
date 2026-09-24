@@ -224,6 +224,56 @@ describe("RecordMultiPicker", () => {
     );
   });
 
+  it("keeps a space inside a freeform entry, so a two-word name still matches", async () => {
+    const user = userEvent.setup();
+    const people: PickerOption[] = [
+      {
+        value: "user:usr_1",
+        label: "Priya Natarajan",
+        detail: "priya@acme.test",
+      },
+    ];
+    const { container } = render(
+      <IntlProvider>
+        <label htmlFor="approvers">Approvers</label>
+        <RecordMultiPicker
+          id="approvers"
+          name="approvers"
+          options={people}
+          freeform
+        />
+      </IntlProvider>,
+    );
+    await user.type(screen.getByRole("combobox"), "Priya N");
+    await user.keyboard("{Enter}");
+    expect(hidden(container, "approvers")).toBe("user:usr_1");
+  });
+
+  it("reads its list up front when prefilled, so chips show names", async () => {
+    const load = vi.fn(
+      (): Promise<OptionLoad> =>
+        Promise.resolve({
+          ok: true,
+          value: { options: AGENTS, partial: false },
+        }),
+    );
+    render(
+      <IntlProvider>
+        <label htmlFor="agents">Agents</label>
+        <RecordMultiPicker
+          id="agents"
+          name="agents"
+          load={load}
+          defaultValue={["agt_2"]}
+        />
+      </IntlProvider>,
+    );
+    expect(
+      await screen.findByRole("button", { name: "Remove Release captain" }),
+    ).toBeInTheDocument();
+    expect(load).toHaveBeenCalledTimes(1);
+  });
+
   it("drops typed text that matches nothing when not freeform", async () => {
     const user = userEvent.setup();
     const { container } = render(

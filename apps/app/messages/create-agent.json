@@ -62,6 +62,7 @@
       "title": "The toolbelt",
       "subtitle": "What the definition asks for. A role grant is what hands it over.",
       "label": "Tools in this workspace’s registry",
+      "search": "Pick a tool by its name or slug",
       "loading": "Reading the tool registry.",
       "empty": "The tool registry of this workspace holds no tools yet. Import one or declare one on the Tools page. Until then the definition asks for the fallback belt.",
       "denied": "Reading the tool registry needs a workspace role. You can still continue: the definition asks for the fallback belt.",

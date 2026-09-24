@@ -3,7 +3,13 @@
 // All and None, the steering text, the Delivery block whose Interrupt switch is
 // disabled and says it is not yet available, the footer summary, and the
 // receipt the send answers, with an axe check in every case.
-import { cleanup, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
@@ -61,6 +67,18 @@ function renderDialog(
 }
 
 const dialog = () => screen.getByRole("dialog", { name: "Steer the fleet" });
+const picker = () => screen.getByTestId("steer-agents");
+const box = () => within(picker()).getByRole("combobox");
+/** The agent keys the picker holds, in its chip order. */
+const chips = () =>
+  [...picker().querySelectorAll("[data-chip]")].map((chip) =>
+    chip.getAttribute("data-chip"),
+  );
+/** The option row the open picker draws for `agentKey`. */
+const option = (agentKey: string) =>
+  screen
+    .getAllByRole("option")
+    .find((row) => row.getAttribute("data-value") === agentKey);
 const send = () => screen.getByRole("button", { name: "Steer" });
 
 beforeEach(() => {
@@ -79,19 +97,18 @@ describe("Steer the fleet", () => {
     expect(screen.getByTestId("steer-selected")).toHaveTextContent(
       "Agents · 2 of 2 selected",
     );
-    const release = screen.getByRole("checkbox", {
-      name: "Steer acme.core.release-bot",
-    });
-    expect(release).toBeChecked();
-    expect(release.closest("label")).toHaveTextContent(
-      "tse_live · turn 12 · Cut the 3.2 release branch",
+    expect(box()).toHaveAccessibleName("Agents · 2 of 2 selected");
+    expect(chips()).toEqual(["acme.core.release-bot", "acme.core.docs"]);
+    fireEvent.focus(box());
+    const release = option("acme.core.release-bot");
+    expect(release).toHaveAttribute("aria-selected", "true");
+    expect(release).toHaveTextContent(
+      "in flight · tse_live · turn 12 · Cut the 3.2 release branch",
     );
     // A sealed run is not in flight, so the agent is idle.
-    expect(
-      screen
-        .getByRole("checkbox", { name: "Steer acme.core.docs" })
-        .closest("label"),
-    ).toHaveTextContent("no run in flightidle");
+    expect(option("acme.core.docs")).toHaveTextContent(
+      "idle, no run in flight",
+    );
     expect(dialog()).toHaveTextContent(
       "Every agent in Core platform, selected by default.",
     );
@@ -121,14 +138,40 @@ describe("Steer the fleet", () => {
       "Agents · 0 of 2 selected",
     );
     expect(send()).toBeDisabled();
+    expect(chips()).toEqual([]);
     await user.click(screen.getByRole("button", { name: "All" }));
     expect(send()).toBeEnabled();
+    expect(chips()).toEqual(["acme.core.release-bot", "acme.core.docs"]);
     await user.click(
-      screen.getByRole("checkbox", { name: "Steer acme.core.docs" }),
+      screen.getByRole("button", { name: "Remove acme.core.docs" }),
     );
     expect(screen.getByTestId("steer-summary")).toHaveTextContent(
       "1 agent · 1 in flight · at the boundary",
     );
+  });
+
+  it("picks an agent by typing part of its key and steers only the picked", async () => {
+    steerFleet.mockResolvedValue({
+      ok: true,
+      value: { commandIds: [], refused: [] },
+    });
+    renderDialog();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "None" }));
+    await user.click(box());
+    await user.keyboard("docs");
+    expect(screen.getAllByRole("option")).toHaveLength(1);
+    await user.keyboard("{Enter}");
+    expect(chips()).toEqual(["acme.core.docs"]);
+    expect(screen.getByTestId("steer-selected")).toHaveTextContent(
+      "Agents · 1 of 2 selected",
+    );
+    await user.type(screen.getByLabelText("Steering text"), "Hold.");
+    await user.click(send());
+    expect(steerFleet).toHaveBeenCalledWith("acme", "core-platform", {
+      agentKeys: ["acme.core.docs"],
+      text: "Hold.",
+    });
   });
 
   it("sends the text to the selected agents and shows what it reached", async () => {
@@ -211,11 +254,10 @@ describe("Steer the fleet", () => {
 
   it("reads a parked run as parked for approval, not live", () => {
     renderDialog({ parkedRunIds: ["tse_live"] });
-    const release = screen
-      .getByRole("checkbox", { name: "Steer acme.core.release-bot" })
-      .closest("label");
-    expect(release).toHaveTextContent("parked for approval");
-    expect(release?.querySelector('[data-status="parked"]')).not.toBeNull();
+    fireEvent.focus(box());
+    expect(option("acme.core.release-bot")).toHaveTextContent(
+      "parked for approval · tse_live · turn 12",
+    );
   });
 
   it("counts the workspace's agents, not the ones listed, and says which a steer cannot reach", () => {

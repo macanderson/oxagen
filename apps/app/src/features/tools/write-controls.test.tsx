@@ -20,18 +20,30 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 
-const { router, importTools, setToolClassification, flipKillSwitch } =
-  vi.hoisted(() => ({
-    router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
-    importTools: vi.fn(),
-    setToolClassification: vi.fn(),
-    flipKillSwitch: vi.fn(),
-  }));
+const {
+  router,
+  importTools,
+  setToolClassification,
+  flipKillSwitch,
+  chooseMcpServers,
+  chooseSwitchTargets,
+} = vi.hoisted(() => ({
+  router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
+  importTools: vi.fn(),
+  setToolClassification: vi.fn(),
+  flipKillSwitch: vi.fn(),
+  chooseMcpServers: vi.fn(),
+  chooseSwitchTargets: vi.fn(),
+}));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("./actions", () => ({
   importTools,
   setToolClassification,
   flipKillSwitch,
+}));
+vi.mock("@/features/shell/client", () => ({
+  chooseMcpServers,
+  chooseSwitchTargets,
 }));
 
 const { ImportControls } = await import("./import-controls");
@@ -82,6 +94,25 @@ function fill(label: string | RegExp, value: string) {
   fireEvent.change(screen.getByLabelText(label), { target: { value } });
 }
 
+/** Types into a record picker and presses Enter, as a person picks a row. */
+function pick(label: string, typed: string) {
+  const input = screen.getByLabelText(label);
+  fireEvent.change(input, { target: { value: typed } });
+  fireEvent.keyDown(input, { key: "Enter" });
+}
+
+/** What a record picker's hidden input submits under `name`. */
+function submitted(name: string): string | undefined {
+  return document.querySelector<HTMLInputElement>(
+    `input[type="hidden"][name="${name}"]`,
+  )?.value;
+}
+
+/** A picker read that answered with these rows. */
+function loaded(options: { value: string; label: string; detail?: string }[]) {
+  return { ok: true, value: { options, partial: false } };
+}
+
 beforeEach(() => {
   for (const fn of [
     router.replace,
@@ -92,6 +123,8 @@ beforeEach(() => {
   ]) {
     fn.mockReset();
   }
+  chooseMcpServers.mockReset().mockResolvedValue(loaded([]));
+  chooseSwitchTargets.mockReset().mockResolvedValue(loaded([]));
 });
 
 afterEach(async () => {
@@ -128,7 +161,7 @@ describe("ImportControls", () => {
     });
     withIntl(<ImportControls at={at} servers={null} />);
     fireEvent.click(screen.getByTestId("tools-import-open"));
-    fill("Server", "mcs_01k5s1");
+    pick("Server", "mcs_01k5s1");
     fill("Tools", "get_page create_page");
     fireEvent.submit(formOf(screen.getByText("Import")));
     await waitFor(() => {
@@ -151,7 +184,7 @@ describe("ImportControls", () => {
     });
     withIntl(<ImportControls at={at} servers={null} />);
     fireEvent.click(screen.getByTestId("tools-import-open"));
-    fill("Server", "mcs_01k5s1");
+    pick("Server", "mcs_01k5s1");
     fireEvent.submit(formOf(screen.getByText("Import")));
     expect(await screen.findByTestId("tools-import-failure")).toHaveTextContent(
       "This needs an organization Owner or Admin.",
@@ -176,7 +209,10 @@ describe("ImportControls", () => {
     fireEvent.click(screen.getByTestId("tools-import-open"));
     // The picker shows the server's name; what goes to the kernel is the id
     // `import_tools` names a server by, never the name a person reads.
-    fill("Server", "mcs_01k5s2");
+    pick("Server", "GitHub");
+    expect(submitted("serverId")).toBe("mcs_01k5s2");
+    // The page already held the roster, so the picker read nothing more.
+    expect(chooseMcpServers).not.toHaveBeenCalled();
     fireEvent.submit(formOf(screen.getByText("Import")));
     await waitFor(() => {
       expect(importTools).toHaveBeenCalledWith("acme", "core-platform", {
@@ -196,20 +232,32 @@ describe("ImportControls", () => {
     ).toBeVisible();
   });
 
-  it("falls back to a typed id when the server roster could not be read", () => {
+  it("reads the roster again when the page could not, and picks a server by name", async () => {
+    chooseMcpServers.mockResolvedValue(
+      loaded([
+        {
+          value: "mcs_01k5s1",
+          label: "Stripe",
+          detail: "https://mcp.stripe.example",
+        },
+      ]),
+    );
     withIntl(<ImportControls at={at} servers={null} />);
     fireEvent.click(screen.getByTestId("tools-import-open"));
-    expect(screen.getByLabelText("Server")).toHaveAttribute(
-      "placeholder",
-      "mcs_\u2026",
-    );
+    expect(screen.getByText(/could not read the server roster/)).toBeVisible();
+    const input = screen.getByLabelText("Server");
+    fireEvent.change(input, { target: { value: "strip" } });
+    expect(chooseMcpServers).toHaveBeenCalledWith("acme", "core-platform");
+    expect(await screen.findByRole("option", { name: /Stripe/ })).toBeVisible();
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(submitted("serverId")).toBe("mcs_01k5s1");
   });
 
   it("names a write that threw before it answered", async () => {
     importTools.mockRejectedValue(new Error("network"));
     withIntl(<ImportControls at={at} servers={null} />);
     fireEvent.click(screen.getByTestId("tools-import-open"));
-    fill("Server", "mcs_01k5s1");
+    pick("Server", "mcs_01k5s1");
     fireEvent.submit(formOf(screen.getByText("Import")));
     expect(await screen.findByTestId("tools-import-failure")).toHaveTextContent(
       "action_failed",
@@ -373,7 +421,7 @@ describe("FlipControls", () => {
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(within(dialog).getByText(/deny generation 12 → 13/)).toBeVisible();
 
-    fill("Target", "moves_money");
+    pick("Target", "moves_money");
     fill(/^Reason/, "Suspected compromise.");
     fireEvent.submit(formOf(within(dialog).getByText("Deny now")));
     await waitFor(() => {
@@ -501,7 +549,7 @@ describe("FlipControls", () => {
       within(dialog).getByText(/if this flip changes the switch/),
     ).toBeVisible();
 
-    fill("Target", "moves_money");
+    pick("Target", "moves_money");
     fill(/^Reason/, "Suspected compromise.");
     fireEvent.submit(formOf(within(dialog).getByText("Deny now")));
     expect(await screen.findByTestId("tools-flip-unchanged")).toHaveTextContent(
@@ -625,12 +673,12 @@ describe("FlipControls", () => {
     fireEvent.change(screen.getByLabelText("Level"), {
       target: { value: "operator" },
     });
-    // No free-text uuid field: a select of the org's members, so the value it
-    // submits is always a usr_ id the contract can resolve.
-    expect(screen.queryByRole("textbox", { name: "Target" })).toBeNull();
-    fireEvent.change(screen.getByLabelText("Target"), {
-      target: { value: "usr_finops1" },
-    });
+    // A picker over the org's members, not a free-text field: the person
+    // finds them by name, and the value it submits is always the usr_ id the
+    // contract can resolve.
+    pick("Target", "priya");
+    expect(submitted("target")).toBe("usr_finops1");
+    expect(chooseSwitchTargets).not.toHaveBeenCalled();
     fill(/^Reason/, "Compromised laptop.");
     fireEvent.submit(formOf(within(dialog).getByText("Deny now")));
     await waitFor(() => {
@@ -641,6 +689,111 @@ describe("FlipControls", () => {
         reason: "Compromised laptop.",
       });
     });
+  });
+});
+
+describe("FlipControls target picker", () => {
+  it("picks an agent by name from the loaded roster and submits its id", async () => {
+    flipKillSwitch.mockResolvedValue({
+      ok: true,
+      value: {
+        switchId: "emd_new",
+        on: true,
+        changed: true,
+        denyGeneration: { org: 12, workspace: 5 },
+        grantsRevoked: 0,
+      },
+    });
+    chooseSwitchTargets.mockResolvedValue(
+      loaded([
+        { value: "agt_01k5r1", label: "Release bot", detail: "agt_01k5r1" },
+        { value: "agt_01k5r2", label: "Billing bot", detail: "agt_01k5r2" },
+      ]),
+    );
+    withIntl(
+      <FlipControls
+        at={at}
+        denyGeneration={GENERATION}
+        existing={null}
+        members={MEMBERS}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("tools-flip-open"));
+    const dialog = await screen.findByTestId("tools-flip-dialog");
+    fireEvent.change(screen.getByLabelText("Level"), {
+      target: { value: "agent" },
+    });
+    const input = screen.getByLabelText("Target");
+    fireEvent.change(input, { target: { value: "release" } });
+    expect(chooseSwitchTargets).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "agent",
+    );
+    expect(
+      await within(dialog).findByRole("option", { name: /Release bot/ }),
+    ).toBeVisible();
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(submitted("target")).toBe("agt_01k5r1");
+    fill(/^Reason/, "Runaway loop.");
+    fireEvent.submit(formOf(within(dialog).getByText("Deny now")));
+    await waitFor(() => {
+      expect(flipKillSwitch).toHaveBeenCalledWith("acme", "core-platform", {
+        kind: "agent",
+        target: "agt_01k5r1",
+        on: true,
+        reason: "Runaway loop.",
+      });
+    });
+  });
+
+  it("drops a picked target when the level changes", async () => {
+    chooseSwitchTargets.mockResolvedValue(
+      loaded([{ value: "agt_01k5r1", label: "Release bot" }]),
+    );
+    withIntl(
+      <FlipControls
+        at={at}
+        denyGeneration={GENERATION}
+        existing={null}
+        members={MEMBERS}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("tools-flip-open"));
+    const dialog = await screen.findByTestId("tools-flip-dialog");
+    fireEvent.change(screen.getByLabelText("Level"), {
+      target: { value: "agent" },
+    });
+    const input = screen.getByLabelText("Target");
+    fireEvent.change(input, { target: { value: "release" } });
+    await within(dialog).findByRole("option", { name: /Release bot/ });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(submitted("target")).toBe("agt_01k5r1");
+    // An agent id is no connection id, so the next level starts empty.
+    fireEvent.change(screen.getByLabelText("Level"), {
+      target: { value: "connection" },
+    });
+    expect(submitted("target")).toBe("");
+  });
+
+  it("offers the starter consequence tags at the class level", async () => {
+    withIntl(
+      <FlipControls
+        at={at}
+        denyGeneration={GENERATION}
+        existing={null}
+        members={MEMBERS}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("tools-flip-open"));
+    const dialog = await screen.findByTestId("tools-flip-dialog");
+    fireEvent.change(screen.getByLabelText("Target"), {
+      target: { value: "money" },
+    });
+    expect(
+      within(dialog).getByRole("option", { name: /moves_money/ }),
+    ).toBeVisible();
+    expect(chooseSwitchTargets).not.toHaveBeenCalled();
   });
 });
 
