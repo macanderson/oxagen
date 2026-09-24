@@ -40,6 +40,10 @@ for (const row of SIGNED_IN_ROUTES) {
     page,
   }) => {
     await loadsAndTitlesItself(page, row);
+    // A route with a loading.tsx streams its page into a hidden node beside
+    // the skeleton's own main#main before React swaps them, so wait for the
+    // one main the settled page keeps.
+    await expect(page.locator("main#main")).toHaveCount(1, { timeout: 15_000 });
     await expect(page.locator("main#main")).toBeVisible();
     const desktopPath = test.info().outputPath("desktop.png");
     await page.screenshot({
@@ -60,23 +64,26 @@ for (const row of SIGNED_IN_ROUTES) {
     await test
       .info()
       .attach("phone", { path: phonePath, contentType: "image/png" });
-    if (row.titleKey === "steering") {
-      // Each tab is its own route segment, and with Cache Components the page
-      // navigated away from stays mounted but hidden, so its tab bar is still
-      // in the DOM. Only the visible bar is the one the person is using.
-      const freshness = page.locator('[data-tab="freshness"]:visible');
-      await freshness.click();
-      await expect(freshness).toHaveAttribute("aria-current", "page");
-      await expect(page).toHaveURL(/\/steering\/freshness(?:\?|$)/);
+    if (row.path.endsWith("/steering")) {
+      // The tabs are path segments: Gates carries the freshness gates the
+      // one-route page called Settings (roadmap pages/steering.md).
+      // Cache Components keeps the previous route's tab bar mounted but
+      // hidden after navigation, so only the visible bar is asserted.
+      await page.locator('[data-tab="gates"]:visible').click();
+      await expect(page).toHaveURL(/\/steering\/gates(?:\?|$)/);
+      await expect(page.locator('[data-tab="gates"]:visible')).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
       await page.setViewportSize({ width: 1280, height: 720 });
       await page.screenshot({
-        path: test.info().outputPath("freshness-desktop.png"),
+        path: test.info().outputPath("gates-desktop.png"),
         fullPage: true,
         animations: "disabled",
       });
       await page.setViewportSize({ width: 390, height: 844 });
       await page.screenshot({
-        path: test.info().outputPath("freshness-phone.png"),
+        path: test.info().outputPath("gates-phone.png"),
         fullPage: true,
         animations: "disabled",
       });

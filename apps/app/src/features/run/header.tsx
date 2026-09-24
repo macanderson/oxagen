@@ -374,7 +374,9 @@ function SubagentChip({
           {t("subagentTypeNotRecorded")}
         </span>
       )}
-      <span className="text-muted-foreground">{subagent.agentRef.slice(0, 7)}</span>
+      <span className="text-muted-foreground">
+        {subagent.agentRef.slice(0, 7)}
+      </span>
       {subagent.stopped ? null : (
         <span className="text-muted-foreground">
           {live ? t("subagentRunning") : t("subagentNoStop")}

@@ -24,7 +24,7 @@ export const agentMemoryUpdate = registerCapability({
     "Edit an AgentMemory: change its lesson, kind, source, confidence/enforcement scores, or status. Re-embeds when the lesson changes so semantic recall stays accurate. Class changes go through agent.memory.promote.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "memory" },
   sensitivity: "medium",
