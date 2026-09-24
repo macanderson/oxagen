@@ -141,7 +141,14 @@
         "needed": "Needed",
         "decidedBy": "Decided by",
         "decidedByValue": "<code>{policy}</code> · deny wins over every allow",
-        "policyNotRecorded": "The refusal does not record which policy decided it."
+        "policyNotRecorded": "policy not recorded · deny wins over every allow"
+      },
+      "notFound": {
+        "title": "No page has this address",
+        "bodyWorkspace": "Nothing in workspace <b>{ws}</b> is at <code>{path}</code>. The link may be mistyped, or the run, agent or record it names may not exist.",
+        "bodyOrganization": "Nothing in organization <b>{org}</b> is at <code>{path}</code>. The link may be mistyped, or the record it names may not exist.",
+        "backFleet": "Back to Fleet",
+        "backOrganization": "Back to Organization"
       }
     },
     "list": {

@@ -344,6 +344,9 @@ describe("loading", () => {
     expect(skeleton).toHaveAttribute("aria-busy", "true");
     expect(skeleton.querySelectorAll('[data-skeleton="tile"]')).toHaveLength(4);
     expect(skeleton.querySelectorAll('[data-skeleton="row"]')).toHaveLength(7);
+    // Every bone is the design's shimmer, as on every other page, and none pulses.
+    expect(skeleton.querySelectorAll(".skeleton")).toHaveLength(12);
+    expect(skeleton.querySelector(".animate-pulse")).toBeNull();
     expect(skeleton).not.toHaveTextContent(/\d/);
     await expectNoAxe(view.container);
   });

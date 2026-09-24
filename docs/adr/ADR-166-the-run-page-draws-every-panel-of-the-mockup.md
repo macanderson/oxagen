@@ -29,3 +29,7 @@ A reader sees the whole shape of a run, including what Oxagen does not record ye
 The page carries more components with no data behind them today. Each one is a place a future contract lands without a layout change, and each one is held by a test that it prints "not recorded" rather than a zero.
 
 The roadmap spec `mockups/pages/run.md` still lists Spend by area as the third side panel. The mockup moved it to the Cost tab, and the build follows the mockup.
+
+## Amendment, 2026-09-24 (#4067)
+
+The per-turn ledger leaves the one derivation. The Cost tab reads it from `get_run_turns`, which counts every frame of the run in one grouped ClickHouse read: the waterfall, its table, and the Cost so far and Shape of the run instruments. Summed from the whole-run transcript, the ledger took 68 transcript reads on a 250,000-frame run and stopped at the transcript's 10,000-frame fold, so a long run drew only its first turns. A turn's cost is still the sum of the costs the transcript's entries carry for it, and the ledger's steps and frames are still the Shape of the run instrument's. Every other figure on the page still reads the one derivation.

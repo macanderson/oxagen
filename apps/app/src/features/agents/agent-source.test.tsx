@@ -218,6 +218,12 @@ describe("AgentSource", () => {
     expect(screen.getByTestId("state-trace")).toHaveTextContent(
       "502 git_read_unreachable · read at",
     );
+    // The design's error glyph in the failed tone, with no panel around it.
+    expect(error.querySelector("[data-state-icon]")).toHaveAttribute(
+      "data-state-icon",
+      "failed",
+    );
+    expect(error).not.toHaveClass("app-panel");
     expect(
       within(error).getByRole("link", { name: "Try again" }),
     ).toHaveAttribute("href", AFTER);
@@ -238,6 +244,11 @@ describe("AgentSource", () => {
     const loading = screen.getByRole("status");
     expect(loading).toHaveAttribute("aria-busy", "true");
     expect(loading).toHaveTextContent("Loading this agent");
+    // Four tiles, the title bar and seven rows, each the design's shimmer.
+    expect(loading.querySelectorAll("[data-skeleton-tile]")).toHaveLength(4);
+    expect(loading.querySelectorAll("[data-skeleton-row]")).toHaveLength(7);
+    expect(loading.querySelectorAll(".skeleton")).toHaveLength(12);
+    expect(loading.querySelector(".animate-pulse")).toBeNull();
     expect(screen.queryByRole("textbox")).toBeNull();
     // The streamed page owns main#main; the fallback beside it must not.
     expect(document.getElementById("main")).toBeNull();

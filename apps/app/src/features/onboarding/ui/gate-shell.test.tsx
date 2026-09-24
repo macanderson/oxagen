@@ -137,8 +137,11 @@ describe("GateSkeleton", () => {
     );
     const skeleton = screen.getByTestId("page-state-loading");
     expect(skeleton).toHaveAttribute("aria-busy", "true");
-    expect(skeleton.firstElementChild?.children).toHaveLength(4);
-    expect(skeleton.querySelectorAll(".h-9")).toHaveLength(7);
+    expect(skeleton.querySelectorAll("[data-skeleton-tile]")).toHaveLength(4);
+    expect(skeleton.querySelectorAll("[data-skeleton-row]")).toHaveLength(7);
+    // Every bone is the design's shimmer: the tiles, the title bar, the rows.
+    expect(skeleton.querySelectorAll(".skeleton")).toHaveLength(12);
+    expect(skeleton.querySelector(".animate-pulse")).toBeNull();
     expect(skeleton).toHaveTextContent("");
   });
 });

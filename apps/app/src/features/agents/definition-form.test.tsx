@@ -644,13 +644,15 @@ describe("DefinitionForm over a file it cannot fully read", () => {
 });
 
 describe("DefinitionForm edits that change nothing", () => {
-  it("writes no draft for a blank entry, an unchanged name or a budget past what the file can hold (negative)", () => {
+  it("writes no draft for a blank entry, a repeated chip, an unchanged name or a budget past what the file can hold (negative)", () => {
     renderForm();
-    // Whitespace is not a chip, whether it is entered or left behind. A value
-    // already chosen is no longer part of this case: the picker is a combobox,
-    // so entering one that is already a chip removes it.
+    // Whitespace is not a chip, whether it is entered or left behind. Typing
+    // the exact text of a chip already chosen keeps it: picking the same row
+    // from a search still removes it, but retyping a name never does.
     const add = screen.getByRole("combobox", { name: "tools" });
     fireEvent.change(add, { target: { value: "   " } });
+    fireEvent.keyDown(add, { key: "Enter" });
+    fireEvent.change(add, { target: { value: "github__*" } });
     fireEvent.keyDown(add, { key: "Enter" });
     fireEvent.blur(add);
     expect(dirtyBar()).toBeNull();

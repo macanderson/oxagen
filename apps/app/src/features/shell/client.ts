@@ -12,6 +12,7 @@ export {
   chooseAgents,
   chooseApprovers,
   chooseModels,
+  chooseServerTools,
   chooseSwitchTargets,
   chooseToolPatterns,
 } from "./choice-actions";

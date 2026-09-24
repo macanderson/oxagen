@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 // The run waterfall (spec §12.9; pages/run.md, Cost): one bar per turn on the
 // dearest turn's scale, the cost accumulating across them, and the per-turn
-// table with its total row, all read from the per-turn ledger `runMetrics`
-// derives (`metrics.turns`) and `ledgerOf` sums.
+// table with its total row, all read from the per-turn ledger `get_run_turns`
+// answers (`turnFigures`) and `ledgerOf` sums.
 //
 // The rule these hold is the file's own: a turn whose cost the recording did
 // not carry draws no bar and says "not recorded" in its Cost cell, because a
@@ -10,7 +10,7 @@
 // made. The total row is the sum of the rows, set against the recorded cost.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import type { RunTranscript } from "@/data/contracts/run";
+import type { RunTurns } from "@/data/contracts/run";
 import { type Read, readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
@@ -60,23 +60,31 @@ function turn(overrides: Partial<TurnFigure>): TurnFigure {
   };
 }
 
+/**
+ * The panel over `turns`, as the Cost tab hands it: the ledger summed from
+ * the rows, and whether the read reached the last turn. A failed `read` is
+ * handed on as it is.
+ */
 function renderPanel(
-  turns: TurnFigure[] | null,
+  turns: TurnFigure[],
   {
-    transcript = TRANSCRIPT,
+    read = readOk<RunTurns>({ turns: [], complete: true }),
     overrides = {},
   }: {
-    transcript?: Read<RunTranscript>;
+    read?: Read<RunTurns>;
     overrides?: Partial<RunMetrics>;
   } = {},
 ) {
-  const m = metrics({ turns, ...overrides });
+  const m = metrics(overrides);
   return render(
     <IntlProvider>
       <WaterfallPanel
         metrics={m}
-        ledger={ledgerOf(turns ?? [])}
-        transcript={transcript}
+        turns={
+          read.ok
+            ? readOk({ ledger: ledgerOf(turns), complete: read.value.complete })
+            : read
+        }
       />
     </IntlProvider>,
   );
@@ -169,14 +177,18 @@ describe("WaterfallPanel", () => {
     expect(screen.queryByTestId("waterfall-total")).toBeNull();
   });
 
-  it("names the transcript read's failure rather than drawing an empty chart (negative)", () => {
-    renderPanel(null, {
-      transcript: readError("frame_store_unreachable", 502),
+  it("names the per-turn read's failure rather than drawing an empty chart (negative)", () => {
+    renderPanel([], {
+      read: readError("frame_store_unreachable", 502),
     });
     expect(screen.getByTestId("waterfall-panel")).toHaveTextContent(
       "frame_store_unreachable",
     );
     expect(screen.queryByTestId("waterfall-empty")).toBeNull();
+    // No turn count is claimed for a read that did not answer.
+    expect(screen.getByTestId("waterfall-panel")).not.toHaveTextContent(
+      "0 turns",
+    );
   });
 
   it("counts the turns alone when the run recorded no cost, and says the total has nothing to be set against (negative)", () => {
@@ -231,10 +243,20 @@ describe("WaterfallPanel", () => {
     );
   });
 
-  it("says the ledger stops short when the transcript was not read to its end (negative)", () => {
+  it("says the ledger shows the first turns when the run has more than one read carries (negative)", () => {
+    renderPanel([turn({ turn: 1, seq: "1" }), turn({ turn: 2, seq: "10" })], {
+      read: readOk({ turns: [], complete: false }),
+    });
+    expect(screen.getByTestId("waterfall-cut")).toHaveTextContent(
+      "The run is longer than one read carries, so this shows its first 2 turns.",
+    );
+  });
+
+  it("draws every turn with no cut note when the page's transcript stopped short (negative)", () => {
     renderPanel([turn({ turn: 1, seq: "1" })], {
       overrides: { whole: false },
     });
-    expect(screen.getByTestId("waterfall-cut")).toBeTruthy();
+    expect(screen.getAllByTestId("waterfall-row")).toHaveLength(1);
+    expect(screen.queryByTestId("waterfall-cut")).toBeNull();
   });
 });

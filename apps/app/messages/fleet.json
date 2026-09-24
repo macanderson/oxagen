@@ -221,7 +221,7 @@
     },
     "empty": {
       "title": "No runs yet in {workspace}",
-      "body": "Nothing has reached Oxagen from this workspace. A run appears the moment a registered agent makes its first model call — you do not create runs here, agents do.",
+      "body": "Nothing has reached Oxagen from this workspace. A run appears the moment a registered agent makes its first model call. You do not create runs here. Agents do.",
       "register": "Register Agent",
       "agents": "Open Agents"
     },

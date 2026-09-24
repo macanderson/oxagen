@@ -634,6 +634,11 @@ describe("Runtimes, not loaded", () => {
     expect(loading).toHaveAttribute("aria-busy", "true");
     expect(loading).toHaveTextContent("Reading the runtimes of this workspace");
     expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
+    expect(loading.querySelectorAll("[data-skeleton-tile]")).toHaveLength(4);
+    expect(loading.querySelectorAll("[data-skeleton-row]")).toHaveLength(7);
+    // Every bone is the design's shimmer, as on every other page.
+    expect(loading.querySelectorAll(".skeleton")).toHaveLength(12);
+    expect(loading.querySelector(".animate-pulse")).toBeNull();
   });
 });
 

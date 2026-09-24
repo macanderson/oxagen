@@ -18,6 +18,7 @@ import {
   frameCost,
   type Frames,
   isOperatorPrompt,
+  mergeEntries,
   stepDigest,
   stepTool,
   type TranscriptStep,
@@ -665,6 +666,44 @@ describe("a subagent's entries in the run's transcript", () => {
     const [turn] = buildTranscript([own, theirs]);
     const ids = turn?.steps.map((s) => s.id) ?? [];
     expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe("mergeEntries", () => {
+  const CHAIN = "0192d4a8-7c1e-7a00-8000-0000000000c1";
+  const sub = { chainRef: CHAIN, type: "Explore" };
+  const entry = (seq: string, over: Partial<TranscriptEntry> = {}) =>
+    transcriptEntry({ seq, endSeq: seq, frames: 1, ...over });
+
+  it("replaces an entry a page sends again where it stands, and appends the new ones in order", () => {
+    const held = [entry("1"), entry("2"), entry("3")] as const;
+    const grown = entry("2", { endSeq: "7", frames: 4, label: "Task ok" });
+    const merged = mergeEntries(held, [grown, entry("8"), entry("9")]);
+    expect(merged.map((e) => [e.seq, e.endSeq])).toEqual([
+      ["1", "1"],
+      ["2", "7"],
+      ["3", "3"],
+      ["8", "8"],
+      ["9", "9"],
+    ]);
+    expect(merged[1]).toBe(grown);
+    // The held list is not changed under the reader.
+    expect(held[1].endSeq).toBe("2");
+  });
+
+  it("keeps the run's seq 1 and a subagent's seq 1 as two entries (negative)", () => {
+    const merged = mergeEntries(
+      [entry("1")],
+      [entry("1", { subagent: sub }), entry("1", { subagent: sub, frames: 3 })],
+    );
+    expect(merged.map(entryKey)).toEqual(["1", `${CHAIN}:1`]);
+    // The second copy of the subagent's entry replaced the first.
+    expect(merged[1]?.frames).toBe(3);
+  });
+
+  it("answers the held entries for an empty page", () => {
+    const held = [entry("1")] as const;
+    expect(mergeEntries(held, [])).toEqual([entry("1")]);
   });
 });
 

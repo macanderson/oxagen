@@ -32,7 +32,6 @@ function metrics(overrides: Partial<RunMetrics> = {}): RunMetrics {
       parts: null,
       lead: null,
     },
-    turns: null,
     modelCalls: null,
     toolCalls: [],
     families: null,

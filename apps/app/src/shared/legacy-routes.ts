@@ -1,6 +1,8 @@
 // Appendix F legacy redirects as data (ARCHITECTURE.md §7.3). Each row maps a
-// route `apps/app_deprecated` shipped to the §1.2 page that absorbed it;
-// `proxy.ts` applies the table with a 308 for one release.
+// path that no longer has a page to the §1.2 page that absorbed it: the routes
+// `apps/app_deprecated` shipped, and `agent-iam`, the path of the page the
+// rev1 nav called Agent IAM before it became Agents (#4048). `proxy.ts`
+// applies the table with a 308 for one release.
 //
 // Placeholders: `{org}` and `{ws}` match one path segment and carry it to the
 // target; `{id}` matches one segment and is dropped; a trailing `/**` matches
@@ -106,6 +108,10 @@ export const LEGACY_ROUTES: readonly LegacyRoute[] = [
   { from: "/{org}/{ws}/workbench/agents/{id}", to: "/{org}/{ws}/agents" },
   { from: "/{org}/{ws}/workbench/environments", to: "/{org}/{ws}/agents" },
   { from: "/{org}/{ws}/settings/agent-defaults", to: "/{org}/{ws}/agents" },
+  // Agent IAM is the Agents page now. The row is workspace-scoped only: an
+  // organization row `/{org}/agent-iam` would need the segment in
+  // RESERVED_WORKSPACE_SLUGS, or it would shadow a workspace of that name.
+  { from: "/{org}/{ws}/agent-iam/**", to: "/{org}/{ws}/agents" },
   { from: "/{org}/{ws}/workbench/tools", to: "/{org}/{ws}/tools" },
   { from: "/{org}/{ws}/workbench/tools/capabilities", to: "/{org}/{ws}/tools" },
   { from: "/{org}/{ws}/workbench/tools/mcp", to: "/{org}/{ws}/tools" },

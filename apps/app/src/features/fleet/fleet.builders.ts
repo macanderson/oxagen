@@ -175,6 +175,7 @@ export function fleetSource(reads: FleetReads) {
       get: refuse,
       frameBody: refuse,
       cost: refuse,
+      turns: refuse,
       chain: refuse,
       outputs: refuse,
       work: refuse,
