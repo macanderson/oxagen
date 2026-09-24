@@ -3,17 +3,17 @@ set_id = "macanderson.oxagen"
 
 [[record]]
 lineage_id = "ctx.product.do-not-build-typecheck"
-record_id = "rec_product_do_not_build_typecheck_00bb6133554b"
-record_hash = "sha256:a11ca09e952f4a141c7d06bc00aa5d0869b5b8a5d451a67e4f5b94e62a9e7217"
+record_id = "rec_product_do_not_build_typecheck_502af4c44337"
+record_hash = "sha256:aebdc62b7968eff0dbe64d4d8d589ca3a495b91d4161e084664611af21ff5c16"
 kind = "constraint"
-statement = "Do not build, typecheck, or run all unit tests in the monorepo when working on a feature or fixing a bug. Only run them when explicitly permissioned to do so. Always be aware of memory availability, you will be more than likely operating in a compute environment shared with at least 10 other agents. Running the full suite or building the full package will force other agents to timeout. Let CI handle the automation around checking types, running unit tests, and compiling all packages. Only execute the tests you have changed in your run prior to pushing and creating a PR."
+statement = "Do not build, typecheck, or run all unit tests. Leverage CI for this work."
 origin = "user"
 sharing_scope = "workspace"
 status = "active"
 
 [record.provenance]
 source_kind = "proposal"
-source_uri = "oxagen:proposal/prp_t18er7jzf8m776fckchgpx"
+source_uri = "oxagen:proposal/prp_79bg60mwhtr856ttrbgvxg"
 
 [record.steering]
 force = "must"
