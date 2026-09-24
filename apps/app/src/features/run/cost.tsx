@@ -2,10 +2,11 @@
 // spec's order: Model fit, the instruments strip, Spend by area, Tool calls,
 // the Waterfall, Spend by token class and Prompt composition.
 //
-// The run's `cost.run_totals` row is rebuilt from the frames after a run
-// seals, so it is null until that has happened. The tab says that in words
-// rather than printing zeros: a zero is a figure the rollup measured, and "not
-// yet rolled up" is not.
+// The run's `cost.run_totals` row is rebuilt from the frames while the run
+// records them and again when it seals (#3980). A row built from an open run
+// is an estimate, and the tab says so above its figures. Before the first
+// rollup the tab says that in words rather than printing zeros: a zero is a
+// figure the rollup measured, and "not yet rolled up" is not.
 //
 // Every money figure carries the basis that says who observed it (INV-10).
 // The instruments, the token-class table and the stat row above the tabs all
@@ -486,11 +487,24 @@ function TokenClasses({ rollup }: { rollup: RunCostRollup }) {
   );
 }
 
+/**
+ * When the rollup built the row and what it priced with. A row built while the
+ * run was open is an estimate (#3980), and the line says so first, since
+ * every figure above it reads from that row.
+ */
 function RolledUp({ rollup }: { rollup: RunCostRollup }) {
   const t = useTranslations("run.cost");
   const format = useFormatter();
   return (
     <p className={`${mono} text-[11px] text-muted-foreground`}>
+      {rollup.isEstimate === true ? (
+        <span
+          data-testid="cost-estimate"
+          className="mb-1 block max-w-prose font-sans text-sm"
+        >
+          {t("estimate")}
+        </span>
+      ) : null}
       {t("rolledUp", {
         at: format.dateTime(new Date(rollup.rolledUpAt), {
           dateStyle: "medium",

@@ -9,6 +9,7 @@ import {
   isReplayGrade,
   REPLAY_GRADES,
   replayGradeRank,
+  sealTachoSession,
 } from "./replay-grade";
 
 const clean = {
@@ -227,5 +228,128 @@ describe("isContentBearingFrame", () => {
       expect(isContentBearingFrame(type)).toBe(true);
     }
     expect(isContentBearingFrame("turn_start")).toBe(false);
+  });
+});
+
+describe("sealTachoSession", () => {
+  const clean = {
+    hostGaps: [],
+    chainVerified: true,
+    unobservedTail: false,
+    telemetryGapCount: 0,
+    retentionMode: "content_exact",
+    contentFrames: 2,
+    bodyFrames: 2,
+    toolCalls: 1,
+    toolBodyFrames: 1,
+    enforcementTier: "gateway",
+  };
+
+  it.each(["gateway", "contained"])(
+    "grades fork on a %s run with every body",
+    (enforcementTier) => {
+      expect(sealTachoSession({ ...clean, enforcementTier })).toEqual({
+        completenessGaps: [],
+        replayGrade: "fork",
+      });
+    },
+  );
+
+  it("grades view with tool_bodies on a gateway session whose tool calls kept no result body (negative)", () => {
+    expect(
+      sealTachoSession({ ...clean, toolBodyFrames: 0, toolCalls: 3 }),
+    ).toEqual({ completenessGaps: ["tool_bodies"], replayGrade: "view" });
+  });
+
+  it("adds no tool_bodies gap when the session made no tool call", () => {
+    expect(
+      sealTachoSession({ ...clean, toolCalls: 0, toolBodyFrames: 0 }),
+    ).toEqual({ completenessGaps: [], replayGrade: "fork" });
+  });
+
+  it("keeps the host's gaps and adds what the control plane observed", () => {
+    expect(
+      sealTachoSession({
+        ...clean,
+        hostGaps: ["tool_bodies"],
+        chainVerified: false,
+        unobservedTail: true,
+        telemetryGapCount: 2,
+      }),
+    ).toEqual({
+      completenessGaps: [
+        "tool_bodies",
+        "chain_break",
+        "unobserved_tail",
+        "telemetry_gap",
+      ],
+      replayGrade: "inspect",
+    });
+  });
+
+  it("grades digest_only over body_missing, and body_missing from the counters", () => {
+    // A digest_only workspace retains no tool result body either, the same
+    // two gaps the ledger seal records for it.
+    expect(
+      sealTachoSession({
+        ...clean,
+        retentionMode: "digest_only",
+        bodyFrames: 0,
+        toolBodyFrames: 0,
+      }).completenessGaps,
+    ).toEqual(["digest_only", "tool_bodies"]);
+    expect(sealTachoSession({ ...clean, bodyFrames: 1 })).toEqual({
+      completenessGaps: ["body_missing"],
+      replayGrade: "inspect",
+    });
+  });
+
+  it("grades inspect on an empty record: no content frame and no body (negative)", () => {
+    expect(
+      sealTachoSession({
+        ...clean,
+        contentFrames: 0,
+        bodyFrames: 0,
+        toolCalls: 0,
+        toolBodyFrames: 0,
+      }),
+    ).toEqual({ completenessGaps: [], replayGrade: "inspect" });
+  });
+
+  it("keeps a gap word outside the vocabulary and grades inspect", () => {
+    expect(sealTachoSession({ ...clean, hostGaps: ["hooks_missing"] })).toEqual(
+      { completenessGaps: ["hooks_missing"], replayGrade: "inspect" },
+    );
+  });
+
+  it("grades an observe-tier session inspect and a harness-tier session view", () => {
+    expect(
+      sealTachoSession({ ...clean, enforcementTier: "observe" }).replayGrade,
+    ).toBe("inspect");
+    expect(
+      sealTachoSession({ ...clean, enforcementTier: "harness" }).replayGrade,
+    ).toBe("view");
+  });
+});
+
+describe("sealTachoSession for the control plane's idle close", () => {
+  it("grades a session with an unobserved tail and no host gaps inspect", () => {
+    expect(
+      sealTachoSession({
+        hostGaps: [],
+        chainVerified: true,
+        unobservedTail: true,
+        telemetryGapCount: 0,
+        retentionMode: "content_exact",
+        contentFrames: 2,
+        bodyFrames: 2,
+        toolCalls: 1,
+        toolBodyFrames: 1,
+        enforcementTier: "gateway",
+      }),
+    ).toEqual({
+      completenessGaps: ["unobserved_tail"],
+      replayGrade: "inspect",
+    });
   });
 });

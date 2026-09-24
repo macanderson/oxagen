@@ -268,11 +268,26 @@ export function StatRow({
   // the read's frame cap, the prompt count is a floor.
   const cut = transcript.ok && !isWhole(transcript.value);
   const runCost = rollup?.cost ?? run.cost;
-  // A finalized rollup wins. Otherwise the agent-reported cost is provisional.
+  // The rollup's figure wins over the agent's own report. It is an estimate
+  // while the rollup was built from an open run, and final once it priced the
+  // sealed one. With no rollup yet, the agent's report stands in as an
+  // estimate of its own.
   const displayedCost = runCost ?? run.reportedCost ?? null;
+  // An open run's figure is an estimate whatever its row says: a row the
+  // control plane's idle close sealed reads final until it is rebuilt open
+  // (#3980). The estimate is the Cost box's provisional marking, beside its
+  // basis.
+  const costIsEstimate =
+    run.sealedAt === null ||
+    (rollup === null
+      ? run.costIsEstimate === true
+      : rollup.isEstimate === true);
+  // A run Oxagen closed for silence has no recorded end: the seal is when the
+  // close ran, 12 hours after the last event, so no wall clock is claimed.
+  const endUnrecorded = run.sealSource === "idle_timeout";
   const missingRollup = cost.ok && rollup === null ? t("noRollup") : null;
-  // Before the rollup rebuilds a run, the session's own sums over its
-  // llm_call frames stand in, so a live run shows its tokens too. Those sums
+  // Before the rollup has built a row for the run, the session's own sums
+  // over its llm_call frames stand in, so a live run shows its tokens too. Those sums
   // are labelled provisional, since the rollup may still reprice or recount.
   const reported = rollup === null ? (run.reportedTokens ?? null) : null;
   const tokens =
@@ -294,7 +309,7 @@ export function StatRow({
   const wall =
     run.status === "live"
       ? at - new Date(run.startedAt).getTime()
-      : ended === null
+      : endUnrecorded || ended === null
         ? null
         : new Date(ended).getTime() - new Date(run.startedAt).getTime();
   return (
@@ -349,6 +364,14 @@ export function StatRow({
               {runCost === null
                 ? tr("costReportedProvisional")
                 : (runCost.basis ?? tc("basisNotRecorded"))}
+              {runCost !== null && costIsEstimate ? (
+                <>
+                  {" · "}
+                  <span data-testid="run-cost-estimate">
+                    {tr("costEstimate")}
+                  </span>
+                </>
+              ) : null}
             </span>
           )
         }
@@ -376,7 +399,13 @@ export function StatRow({
       </Stat>
       <Stat
         label={t("wallClock")}
-        note={run.status === "live" ? t("soFar") : t("splitNotRecorded")}
+        note={
+          endUnrecorded
+            ? t("noEnd")
+            : run.status === "live"
+              ? t("soFar")
+              : t("splitNotRecorded")
+        }
       >
         {wall === null ? (
           <NoValue />

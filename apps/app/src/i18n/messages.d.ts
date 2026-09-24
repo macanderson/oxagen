@@ -2896,6 +2896,7 @@ type Messages = {
         noBasis: string;
         unbased: string;
         unpriced: string;
+        estimated: string;
         notRecorded: string;
         mixed: string;
       };
@@ -3002,6 +3003,7 @@ type Messages = {
       parked: string;
       notRecorded: string;
       basisNotRecorded: string;
+      estimate: string;
       source: {
         ledger: string;
         tacho: string;
@@ -5971,6 +5973,7 @@ type Messages = {
     cost: {
       title: string;
       notRolledUp: string;
+      estimate: string;
       basisNotRecorded: string;
       rolledUp: string;
       pricesNotRecorded: string;
@@ -6400,6 +6403,7 @@ type Messages = {
       };
     };
     costReportedProvisional: string;
+    costEstimate: string;
     tokenUsage: {
       title: string;
       missing: string;
@@ -6433,6 +6437,8 @@ type Messages = {
       moreSubagents: string;
       started: string;
       sealed: string;
+      closedIdle: string;
+      closedIdleWhy: string;
       sealNotRecorded: string;
       ended: string;
       paused: string;
@@ -6485,6 +6491,7 @@ type Messages = {
       tokensProvisional: string;
       promptsCut: string;
       noRollup: string;
+      noEnd: string;
       noPrompt: string;
       oneShot: string;
       corrective: string;
@@ -6639,6 +6646,7 @@ type Messages = {
       more: string;
       spend: string;
       noSpend: string;
+      estimate: string;
       spendProvisional: string;
       toolCalls: string;
       callCount: string;
@@ -8194,6 +8202,7 @@ type Messages = {
       observedNote: string;
       wasted: string;
       wastedShare: string;
+      estimated: string;
     };
     states: {
       loading: string;

@@ -269,8 +269,18 @@ export const runItemSchema = z
     steps: z.number().int().nonnegative(),
     /** Recorded events (ledger) or hash-chained events (tacho). */
     frames: z.number().int().nonnegative(),
-    /** Null until the rollup has priced the run's frames after its seal. */
+    /**
+     * The run's priced cost, from its rollup row; null until a rollup has
+     * priced any of its frames. The row is rebuilt as the run records frames
+     * and again at its seal (#3980), so an open run carries a figure too.
+     */
     cost: runCostSchema.nullable(),
+    /**
+     * True while `cost` is a running estimate: the run is still open, or its
+     * row was last rebuilt before the seal. False once the rollup has priced
+     * the sealed run, and false when there is no cost.
+     */
+    costIsEstimate: z.boolean().optional(),
     reportedCost: runCostSchema.nullable().optional(),
     /**
      * The goal a ledger run was admitted for. Null for a wrapped session: no
@@ -288,9 +298,18 @@ export const runItemSchema = z
      */
     sealedAt: z.string().datetime().nullable(),
     /**
+     * What sealed a wrapped session: `agent_stop`, its host's own end, or
+     * `idle_timeout`, the control plane closing a run that sent nothing for
+     * twelve hours, which the run's next event reopens. Null while the run is
+     * open, and for a ledger run.
+     */
+    sealSource: z.enum(["agent_stop", "idle_timeout"]).nullable().optional(),
+    /**
      * RFC 3339; when the run stopped, by the recorder's own clock: the stop
      * event's timestamp for a wrapped session, the seal for a ledger run.
-     * Null while the run is live or no stop was recorded.
+     * For a session Oxagen closed for silence (`sealSource: idle_timeout`)
+     * it is the last event recorded, since no stop was. Null while the run is
+     * live or no stop was recorded.
      */
     endedAt: z.string().datetime().nullable(),
     /**

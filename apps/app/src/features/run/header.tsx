@@ -437,6 +437,8 @@ function Subagents({ run, work }: { run: RunRow; work: Read<RunWork> }) {
  * the recorder's clock and "· sealed <t>" by the server's receipt. Keyed on
  * the run's status, the one definition of sealed the header's actions use, so
  * an ended run with no seal instant says so rather than reading as running.
+ * A run Oxagen closed for silence reads "· closed <t> (no event for 12
+ * hours)" in place of the end and the seal (#3980).
  */
 function When({ run }: { run: RunRow }) {
   const t = useTranslations("run.header");
@@ -463,7 +465,19 @@ function When({ run }: { run: RunRow }) {
         {t("started")}{" "}
         <time dateTime={run.startedAt}>{when(run.startedAt)}</time>
       </span>
-      {run.status === "live" ? null : (
+      {run.status === "live" ? null : run.sealSource === "idle_timeout" &&
+        run.sealedAt != null ? (
+        // Oxagen closed it for silence (#3980): the host never said it ended,
+        // so no end is claimed, and its next event reopens the run.
+        <>
+          <span aria-hidden="true">·</span>
+          <span data-testid="run-closed-idle">
+            {t("closedIdle")}{" "}
+            <time dateTime={run.sealedAt}>{when(run.sealedAt)}</time> (
+            {t("closedIdleWhy")})
+          </span>
+        </>
+      ) : (
         <>
           {run.endedAt == null ? null : (
             <>

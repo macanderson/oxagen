@@ -122,7 +122,7 @@ describe("StatRow › the Cost box", () => {
     });
     expect(tile("Cost")).toHaveTextContent("$0.70");
     expect(tile("Cost")).toHaveTextContent(
-      "Agent reported. Provisional until finalized.",
+      "Estimate reported by the agent. Final when the run seals.",
     );
   });
 

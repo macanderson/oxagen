@@ -222,6 +222,11 @@ export const RunRow = z.object({
   steps: z.number().int().nonnegative(),
   frames: z.number().int().nonnegative(),
   cost: Cost.nullable(),
+  /**
+   * True while `cost` is a running estimate: the run is open, or its rollup
+   * predates the seal. The page labels such a figure an estimate.
+   */
+  costIsEstimate: z.boolean().optional(),
   reportedCost: Cost.nullable().optional(),
   model: RunModel.nullable(),
   /** The effort level the harness reported; null when it reported none. */
@@ -268,6 +273,12 @@ export const RunRow = z.object({
   startedAt: z.iso.datetime({ offset: true }),
   /** When the server recorded the seal; receipt time, so never a wall-clock end. */
   sealedAt: z.iso.datetime({ offset: true }).nullable(),
+  /**
+   * What sealed the run: `agent_stop`, its host's own end, or `idle_timeout`,
+   * Oxagen closing a run that sent nothing for 12 hours. Null while open and
+   * for a ledger run.
+   */
+  sealSource: z.enum(["agent_stop", "idle_timeout"]).nullable().optional(),
   /** When the run stopped, by the recorder's clock; the end of a wall clock. */
   endedAt: z.iso.datetime({ offset: true }).nullable().optional(),
   /**

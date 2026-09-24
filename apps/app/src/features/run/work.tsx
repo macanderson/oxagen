@@ -407,10 +407,22 @@ export function SpendByArea({
     <Panel
       title={t("spend")}
       aside={
-        rollup.cost === null ? undefined : (
+        // The total and its basis, and while the run is open the mark that
+        // the row is an estimate the next rollup replaces (#3980).
+        rollup.cost === null && rollup.isEstimate !== true ? undefined : (
           <span className={`${mono} text-[11px] text-muted-foreground`}>
-            <Money value={rollup.cost} /> ·{" "}
-            {rollup.cost.basis ?? t("basisNotRecorded")}
+            {rollup.cost === null ? null : (
+              <>
+                <Money value={rollup.cost} /> ·{" "}
+                {rollup.cost.basis ?? t("basisNotRecorded")}
+              </>
+            )}
+            {rollup.isEstimate === true ? (
+              <>
+                {rollup.cost === null ? null : " · "}
+                <span data-testid="run-spend-estimate">{t("estimate")}</span>
+              </>
+            ) : null}
           </span>
         )
       }

@@ -108,6 +108,8 @@ describe("toRunPage", () => {
             currency: "USD",
             basis: "gateway_observed",
           },
+          // The capability said nothing and the run has sealed: final.
+          costIsEstimate: false,
           reportedCost: null,
           reportedTokens: null,
           effort: null,
@@ -136,6 +138,7 @@ describe("toRunPage", () => {
           canSummarize: true,
           startedAt: "2026-09-15T08:00:00.000Z",
           sealedAt: "2026-09-15T08:40:00.000Z",
+          sealSource: null,
           endedAt: "2026-09-15T08:40:00.000Z",
         },
       ],
@@ -212,6 +215,44 @@ describe("toRunPage", () => {
       commandBlock: "host_offline",
       steerBlock: "no_prompt_carrier",
     });
+  });
+
+  it("carries an open run's cost as the estimate it is, and what sealed a run (#3980)", () => {
+    const page = toRunPage({
+      runs: [
+        {
+          ...ledgerRun,
+          status: "live",
+          sealedAt: null,
+          costIsEstimate: true,
+        },
+        {
+          ...ledgerRun,
+          id: "tse_0000000000000000000001",
+          source: "tacho",
+          sealSource: "idle_timeout",
+        },
+      ],
+      nextCursor: null,
+    });
+    expect(page.runs[0]).toMatchObject({ costIsEstimate: true });
+    expect(page.runs[1]).toMatchObject({
+      costIsEstimate: false,
+      sealSource: "idle_timeout",
+    });
+    expect(RunPage.safeParse(page).success).toBe(true);
+  });
+
+  it("reads an open run's cost as an estimate from a server that predates the field", () => {
+    const { costIsEstimate: _, ...older } = {
+      ...ledgerRun,
+      status: "live" as const,
+      sealedAt: null,
+      costIsEstimate: undefined,
+    };
+    expect(
+      toRunPage({ runs: [older], nextCursor: null }).runs[0]?.costIsEstimate,
+    ).toBe(true);
   });
 
   it("maps an empty page to an empty page", () => {

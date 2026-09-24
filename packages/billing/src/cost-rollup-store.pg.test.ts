@@ -13,6 +13,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { RunTotalsRecord } from "./cost-rollup";
 import {
   type IncompleteCostRun,
+  listRunsAwaitingRollup,
+  rebuildDailyTotals,
   listRunsWithIncompleteCost,
   listRunsWithUnassignedCostCenter,
   upsertRunTotals,
@@ -261,9 +263,14 @@ describe.skipIf(!enabled)(
     };
 
     afterAll(async () => {
-      await withSystemDb((tx) =>
-        tx.delete(totals).where(eq(totals.workspaceId, scope.workspaceId)),
-      );
+      await withSystemDb(async (tx) => {
+        await tx
+          .delete(totals)
+          .where(eq(totals.workspaceId, scope.workspaceId));
+        await tx
+          .delete(schema.tachoSessions)
+          .where(eq(schema.tachoSessions.workspaceId, scope.workspaceId));
+      });
       await closeDatabase();
     });
 
@@ -372,6 +379,108 @@ describe.skipIf(!enabled)(
       );
       expect(row?.costBasis).toBe(null);
       expect(row?.modelCalls).toBe(3);
+    });
+
+    // An open run is rolled up as it goes, and a progress rebuild that read
+    // the run before its `agent_stop` landed can write after the seal's
+    // rebuild did (#3980). What decides is the run's seal as it stands now.
+    const session = (id: string, sealed: boolean) =>
+      withSystemDb((tx) =>
+        tx.insert(schema.tachoSessions).values({
+          publicId: id,
+          ...scope,
+          sessionUuid: crypto.randomUUID(),
+          harnessSessionId: `sess-${id}`,
+          agentKey: `acme.core.g1-${tag}`,
+          rootSessionUuid: crypto.randomUUID(),
+          runtime: "claude-code",
+          harness: "claude-code",
+          startedAt: new Date("2001-06-01T00:00:00.000Z"),
+          lastEventAt: new Date("2001-06-01T00:05:00.000Z"),
+          sealedAt: sealed ? new Date("2001-06-01T00:05:00.000Z") : null,
+        }),
+      );
+    const readRow = async (id: string) =>
+      (
+        await withSystemDb((tx) =>
+          tx.select().from(totals).where(eq(totals.runId, id)).limit(1),
+        )
+      )[0];
+
+    it("refuses an open run's stale rebuild over its sealed row", async () => {
+      const id = runId("sealrace");
+      await session(id, true);
+      await upsertRunTotals({ ...priced, runId: id }, new Date());
+      await upsertRunTotals(
+        { ...priced, runId: id, sealedAt: null, modelCalls: 1, steps: 1 },
+        new Date(),
+      );
+      const row = await readRow(id);
+      expect(row?.sealedAt).toEqual(new Date("2001-06-01T00:05:00.000Z"));
+      expect(row?.modelCalls).toBe(2);
+    });
+
+    it("refuses it with as many frames as the sealed row: the stop-only batch", async () => {
+      // The `agent_stop` batch carries no model or tool frame, so the stale
+      // progress read and the seal's rebuild count the same frames. That is
+      // the common shape of the race.
+      const id = runId("stoponly");
+      await session(id, true);
+      await upsertRunTotals({ ...priced, runId: id }, new Date());
+      await upsertRunTotals(
+        { ...priced, runId: id, sealedAt: null, costMicros: 4000n },
+        new Date(),
+      );
+      const row = await readRow(id);
+      expect(row?.sealedAt).toEqual(new Date("2001-06-01T00:05:00.000Z"));
+      expect(row?.costMicros).toBe(4500n);
+    });
+
+    it("applies an open rebuild over a sealed row once the run is open again, whatever it counted", async () => {
+      // The control plane's idle close was withdrawn by the session's next
+      // frame, which carried no model call: the count did not move.
+      const id = runId("reopened");
+      await session(id, false);
+      await upsertRunTotals({ ...priced, runId: id }, new Date());
+      await upsertRunTotals(
+        { ...priced, runId: id, sealedAt: null, costMicros: 4500n },
+        new Date(),
+      );
+      const row = await readRow(id);
+      expect(row?.sealedAt).toBeNull();
+    });
+
+    it("never reopens a ledger run's sealed row (negative)", async () => {
+      const id = `arun_pgtest_g1_${tag}_ledger`;
+      await upsertRunTotals(
+        { ...priced, runId: id, runSource: "ledger" },
+        new Date(),
+      );
+      await upsertRunTotals(
+        { ...priced, runId: id, runSource: "ledger", sealedAt: null },
+        new Date(),
+      );
+      expect((await readRow(id))?.sealedAt).toEqual(
+        new Date("2001-06-01T00:05:00.000Z"),
+      );
+    });
+
+    it("lets the seal's rebuild land over an open row even when it prices less", async () => {
+      // A seal that read a stale book is the repricer's to repair. Refused,
+      // the run would be listed as awaiting its seal's rollup every night.
+      const id = runId("sealless");
+      await session(id, true);
+      await upsertRunTotals(
+        { ...priced, runId: id, sealedAt: null },
+        new Date(),
+      );
+      await upsertRunTotals(
+        { ...priced, runId: id, costMicros: null, costBasis: null },
+        new Date(),
+      );
+      const row = await readRow(id);
+      expect(row?.sealedAt).toEqual(new Date("2001-06-01T00:05:00.000Z"));
+      expect(row?.costBasis).toBeNull();
     });
 
     it("keeps a run's first cost center on a later rebuild and fills a null (ADR-142)", async () => {
@@ -629,3 +738,124 @@ describe.skipIf(!enabled)(
     });
   },
 );
+
+// The nightly sweep and the day rebuild the running rollup leans on (#3980):
+// a sealed run whose row was built while it was open is swept even when the
+// row postdates the seal, and concurrent rebuilds of one workspace-day do not
+// collide on `daily_totals_group_idx`.
+describe.skipIf(!enabled)("running rollups against Postgres", () => {
+  const tag = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
+  const scope = {
+    orgId: crypto.randomUUID(),
+    workspaceId: crypto.randomUUID(),
+  };
+  const sessions = schema.tachoSessions;
+  const sealedAt = new Date("2001-08-01T00:05:00.000Z");
+  const publicId = (name: string) =>
+    `tse_${tag}${name.padEnd(14, "0").slice(0, 14)}`;
+  const uuids = { open: crypto.randomUUID(), done: crypto.randomUUID() };
+
+  const record = (runId: string, over: Partial<RunTotalsRecord> = {}) =>
+    ({
+      runId,
+      runSource: "tacho",
+      ...scope,
+      operatorPrincipalId: null,
+      operatorKey: `prn_${tag}`,
+      agentPrincipalId: null,
+      agentKey: `acme.core.${tag}`,
+      taskRef: null,
+      costCenter: null,
+      startedAt: new Date("2001-08-01T00:00:00.000Z"),
+      sealedAt,
+      turns: 1,
+      retries: null,
+      enforcementTier: null,
+      replayGrade: null,
+      steps: 1,
+      modelCalls: 1,
+      toolCalls: 0,
+      tokens: {
+        input_uncached: 10,
+        cache_read: 0,
+        cache_write_5m: 0,
+        cache_write_1h: 0,
+        output: 5,
+        reasoning: 0,
+      },
+      costMicros: 100n,
+      currency: "USD",
+      costBasis: "client_attested",
+      priceEntryIds: [],
+      cacheHitRate: null,
+      breakdown: { models: [], tools: [] },
+      verdict: null,
+      accepted: null,
+      productiveRatio: null,
+      ...over,
+    }) satisfies RunTotalsRecord;
+
+  beforeAll(async () => {
+    await withSystemDb((tx) =>
+      tx.insert(sessions).values(
+        (["open", "done"] as const).map((name) => ({
+          publicId: publicId(name),
+          ...scope,
+          sessionUuid: uuids[name],
+          harnessSessionId: `sess-${name}-${tag}`,
+          agentKey: `acme.core.${tag}`,
+          rootSessionUuid: uuids[name],
+          runtime: "claude-code",
+          harness: "claude-code",
+          startedAt: new Date("2001-08-01T00:00:00.000Z"),
+          lastEventAt: sealedAt,
+          sealedAt,
+        })),
+      ),
+    );
+    // Both rows were rolled up after the seal. One was built while the run
+    // was open (a progress rebuild that read it before the seal committed);
+    // the other after.
+    const later = new Date("2001-08-01T00:06:00.000Z");
+    await upsertRunTotals(record(publicId("open"), { sealedAt: null }), later);
+    await upsertRunTotals(record(publicId("done")), later);
+  });
+
+  afterAll(async () => {
+    await withSystemDb(async (tx) => {
+      await tx.delete(totals).where(eq(totals.workspaceId, scope.workspaceId));
+      await tx
+        .delete(schema.dailyTotals)
+        .where(eq(schema.dailyTotals.workspaceId, scope.workspaceId));
+      await tx
+        .delete(sessions)
+        .where(eq(sessions.workspaceId, scope.workspaceId));
+    });
+    await closeDatabase();
+  });
+
+  it("sweeps a sealed run whose row was built while it was open, and not one rolled up after", async () => {
+    const pending = await listRunsAwaitingRollup({ limit: 10_000 });
+    expect(pending).toContain(publicId("open"));
+    expect(pending).not.toContain(publicId("done"));
+  });
+
+  it("lets concurrent rebuilds of one workspace-day all land", async () => {
+    const day = { ...scope, day: "2001-08-01" };
+    await Promise.all([
+      rebuildDailyTotals(day),
+      rebuildDailyTotals(day),
+      rebuildDailyTotals(day),
+    ]);
+    const rows = await withSystemDb((tx) =>
+      tx
+        .select()
+        .from(schema.dailyTotals)
+        .where(eq(schema.dailyTotals.workspaceId, scope.workspaceId)),
+    );
+    // One operator, one agent and the unassigned cost center, each over both
+    // runs: one rebuild's rows, not three.
+    expect(rows).toHaveLength(3);
+    expect(rows.every((row) => row.runs === 2)).toBe(true);
+  });
+});

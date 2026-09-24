@@ -189,7 +189,8 @@
     },
     "cost": {
       "title": "Cost",
-      "notRolledUp": "The rollup has not rebuilt this run yet. It runs after a run seals, and until it has there is no figure to show. A zero here would be a measurement, and nothing has measured one.",
+      "notRolledUp": "The rollup has not priced this run yet. It prices a run as its calls are recorded, or once the run seals. A zero here would be a measurement, and nothing has measured one.",
+      "estimate": "Estimate. The run is still open, so these figures cover the calls recorded so far and grow as it adds more. They are final once the run seals.",
       "basisNotRecorded": "basis not recorded",
       "rolledUp": "rolled up {at} · priced with {prices}",
       "pricesNotRecorded": "no price entry recorded",
@@ -618,7 +619,8 @@
         "withheld": "withheld"
       }
     },
-    "costReportedProvisional": "Agent reported. Provisional until finalized.",
+    "costReportedProvisional": "Estimate reported by the agent. Final when the run seals.",
+    "costEstimate": "Estimate from the calls so far. Final when the run seals.",
     "tokenUsage": {
       "title": "Reported tokens",
       "missing": "Token usage was not recorded for these frames.",
@@ -652,6 +654,8 @@
       "moreSubagents": "{count} more",
       "started": "started",
       "sealed": "sealed",
+      "closedIdle": "closed",
+      "closedIdleWhy": "no event for 12 hours",
       "sealNotRecorded": "ended with no seal recorded",
       "ended": "ended",
       "paused": "Ingress is paused. The agent takes no new step until you resume it.",
@@ -704,6 +708,7 @@
       "tokensProvisional": "provisional until the rollup",
       "promptsCut": "at least this many",
       "noRollup": "no rollup yet",
+      "noEnd": "no end recorded",
       "noPrompt": "no prompt recorded",
       "oneShot": "one-shot session",
       "corrective": "{count} corrective",
@@ -857,7 +862,8 @@
       "openDiff": "Open the diff in the transcript",
       "more": "{count} more in the outputs",
       "spend": "Spend by area",
-      "noSpend": "No cost rollup yet. It is built after the run seals.",
+      "noSpend": "No cost rollup yet. It is built as the run records calls, or once it seals.",
+      "estimate": "Estimate while the run is open",
       "spendProvisional": "Provisional until the rollup. Priced from the cost each call reported.",
       "toolCalls": "Tool calls",
       "callCount": "{count, plural, one {# call} other {# calls}}",
