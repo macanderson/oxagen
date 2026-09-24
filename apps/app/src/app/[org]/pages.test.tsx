@@ -231,6 +231,8 @@ const FLEET: Load = () => import("./[ws]/(fleet)/page");
 const AGENTS: Load = () => import("./[ws]/agents/page");
 const AGENT: Load = () => import("./[ws]/agents/[agent]/page");
 const AGENT_SOURCE: Load = () => import("./[ws]/agents/[agent]/source/page");
+/** The agent page with its tab as a path segment; its params carry `tab`. */
+const AGENT_TAB = () => import("./[ws]/agents/[agent]/[tab]/page");
 const SPEND: Load = () => import("./[ws]/spend/[[...tab]]/page");
 
 const RUN: Load = () => import("./[ws]/runs/[run]/page");
@@ -580,6 +582,32 @@ describe("the Agents pages", () => {
       title("agents"),
     );
     expect(Agents.mock.calls.at(-1)?.[0]).toMatchObject({ cursor: null });
+  });
+
+  it("the agent tab page hands the tab its path names, and the cursor, to Agent", async () => {
+    const page = await AGENT_TAB();
+    await expectBodyTitled(
+      page,
+      routeProps({ ...SEGMENTS, tab: "activity" }, { cursor: "c3" }),
+      title("agent"),
+    );
+    expect(requireViewer).toHaveBeenCalledWith(...WS);
+    expect(Agent.mock.calls.at(-1)?.[0]).toEqual({
+      ctx,
+      source,
+      agent: "release-bot",
+      tab: "activity",
+      cursor: "c3",
+    });
+    await expectBodyTitled(
+      page,
+      routeProps({ ...SEGMENTS, tab: "identity" }),
+      title("agent"),
+    );
+    expect(Agent.mock.calls.at(-1)?.[0]).toMatchObject({
+      tab: "identity",
+      cursor: null,
+    });
   });
 
   it("the source page hands the agent to AgentSource", async () => {
