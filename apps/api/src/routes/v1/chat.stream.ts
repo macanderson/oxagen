@@ -10,6 +10,7 @@ import {
   assistantPageContextSchema,
 } from "@oxagen/oxagen/contracts/assistant.ask";
 import { capabilityContext } from "../../lib/context";
+import { ASSISTANT_TURN_ERROR_STATUS } from "../../middleware/error";
 import type { AppEnv } from "../../app";
 import {
   createApiStreamTranslator,
@@ -198,12 +199,15 @@ chatStreamRoute.post("/", async (c) => {
   });
 });
 
-/** The failure codes a turn's stream names; any other error carries no code. */
-const STREAM_ERROR_CODES: ReadonlySet<string> = new Set([
-  "engine_unavailable",
-  "assistant_run_not_recorded",
-  "engine_aborted",
-]);
+/**
+ * The failure codes a turn's stream names; any other error carries no code.
+ * Read from the error middleware's table, so a turn failure the non-streaming
+ * route answers by code is named here too: a hand-kept copy of the list
+ * missed `model_call_failed` the day that code was added.
+ */
+const STREAM_ERROR_CODES: ReadonlySet<string> = new Set(
+  Object.keys(ASSISTANT_TURN_ERROR_STATUS),
+);
 
 /** The stable code a surface shows, read from the error's shape: a handler refusal's reason, or a turn failure's code. */
 function errorCode(err: unknown): string | undefined {
