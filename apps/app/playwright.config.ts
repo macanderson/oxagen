@@ -65,7 +65,15 @@ export default defineConfig({
     // `next start` on the .next the Build step produced: apps/app is built
     // once, and the sentinel scan (scripts/scan-build-sentinels.mjs) reads
     // that same build.
-    command: "pnpm --filter @oxagen/app start",
+    //
+    // The output goes through `cat` so that only this shell and `cat` hold
+    // the pipes Playwright reads. At teardown Playwright SIGKILLs the
+    // command's process group and then waits for those pipes to close. A
+    // descendant that left the group kept them open on 2026-09-24: all 19
+    // tests passed in 24 seconds and the run then waited 600 seconds for "the
+    // teardown for plugin setup". With the pipe, a process outside the group
+    // can hold only the pipe into `cat`, and `cat` dies with the group.
+    command: "pnpm --filter @oxagen/app start </dev/null 2>&1 | cat",
     url: `${appUrl}/login`,
     reuseExistingServer: !isCI,
     timeout: 120_000,
