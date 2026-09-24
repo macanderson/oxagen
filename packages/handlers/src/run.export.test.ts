@@ -48,6 +48,7 @@ const LEDGER_ID = "arun_5f0c2e9a1b7d4c3e8f6a02";
 const TACHO_ID = "tse_4q8r1t6v3x5z0b2d7h2k9m";
 const LIVE_ID = "tse_livelivelivelivelivel";
 const DIGEST_ONLY_ID = "tse_digestdigestdigestdig";
+const IDLE_ID = "tse_idleidleidleidleidlei";
 
 function harness(role: string | null, keyCreator: string | null = KEY_CREATOR) {
   mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
@@ -70,6 +71,15 @@ function harness(role: string | null, keyCreator: string | null = KEY_CREATOR) {
       tachoSession({
         publicId: DIGEST_ONLY_ID,
         session: { replayGrade: "inspect", completenessGaps: ["digest_only"] },
+      }),
+      tachoSession({
+        publicId: IDLE_ID,
+        session: {
+          outcome: "unknown",
+          sealSource: "idle_timeout",
+          replayGrade: "inspect",
+          completenessGaps: ["unobserved_tail"],
+        },
       }),
     ],
   );
@@ -194,6 +204,14 @@ describe("export_run", () => {
   it("refuses a live run: the attestation signs the seal (negative)", async () => {
     const h = harness("Owner");
     await expect(h.exportRun({ runId: LIVE_ID }, ctx())).rejects.toSatisfy(
+      conflict("run_not_sealed"),
+    );
+    expect(h.insertExport).not.toHaveBeenCalled();
+  });
+
+  it("refuses a run Oxagen closed for silence: its next frame undoes the close (negative, #3980)", async () => {
+    const h = harness("Owner");
+    await expect(h.exportRun({ runId: IDLE_ID }, ctx())).rejects.toSatisfy(
       conflict("run_not_sealed"),
     );
     expect(h.insertExport).not.toHaveBeenCalled();

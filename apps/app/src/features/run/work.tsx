@@ -158,7 +158,19 @@ export function SpendByArea({ read }: { read: Read<RunCost> }) {
   }
   const provisional = read.value.rollup === null;
   return (
-    <Panel title={t("spend")}>
+    <Panel
+      title={t("spend")}
+      aside={
+        read.value.rollup?.isEstimate === true ? (
+          <span
+            data-testid="run-spend-estimate"
+            className="text-xs text-muted-foreground"
+          >
+            {t("estimate")}
+          </span>
+        ) : undefined
+      }
+    >
       {provisional ? (
         <p
           data-testid="run-spend-provisional"

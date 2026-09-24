@@ -611,7 +611,8 @@
       "observed": "Observed by the gateway",
       "observedNote": "of tokens counted by the proxy",
       "wasted": "Wasted",
-      "wastedShare": "{share} of spend"
+      "wastedShare": "{share} of spend",
+      "estimated": "{count, plural, one {includes an estimate for # open run} other {includes estimates for # open runs}}"
     },
     "states": {
       "loading": "Loading spend",

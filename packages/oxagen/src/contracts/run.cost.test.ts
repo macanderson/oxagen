@@ -46,6 +46,7 @@ describe("get_run_cost contract", () => {
       byTool: [{ name: "Bash", calls: 5 }],
       priceEntryIds: ["0f2c2a3e-1b6a-4c1d-9c3e-1234567890ab"],
       rolledUpAt: "2026-09-14T10:06:31.000Z",
+      isEstimate: false,
     };
     expect(
       runCostGet.output.parse({ runId: "tse_abc123", rollup }).rollup,
@@ -55,6 +56,19 @@ describe("get_run_cost contract", () => {
         runId: "tse_abc123",
         rollup: { ...rollup, cacheHitRate: 2 },
       }).success,
+    ).toBe(false);
+    // A row built while the run was open is an estimate, and every row says
+    // which it is (#3980).
+    expect(
+      runCostGet.output.parse({
+        runId: "tse_abc123",
+        rollup: { ...rollup, isEstimate: true },
+      }).rollup?.isEstimate,
+    ).toBe(true);
+    const { isEstimate: _omitted, ...unlabelled } = rollup;
+    expect(
+      runCostGet.output.safeParse({ runId: "tse_abc123", rollup: unlabelled })
+        .success,
     ).toBe(false);
     // A model group none of whose frames was priced carries no figure.
     expect(

@@ -33,21 +33,10 @@ import {
   type SteeringManifest,
 } from "@oxagen/tacho";
 import { FAIL_OPEN_HOOK_PATHS } from "@oxagen/tacho/claude-code";
-import { schema, type Tx } from "@oxagen/database";
+import { readLatestRetentionPolicy, schema, type Tx } from "@oxagen/database";
 import { RETENTION_CONTENT_CLASSES } from "@oxagen/run-ledger";
 import { selectAgentDaySpend } from "@oxagen/telemetry";
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  gt,
-  inArray,
-  isNull,
-  lte,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import type { z } from "zod";
 import { type BundleSigner, bundleSignerFromEnv } from "./tacho-bundle-signing";
 import { tachoHostApiKeyScopeSchema } from "./tacho-enrollment";
@@ -228,14 +217,8 @@ export async function readWorkspaceRetention(
   orgId: string,
   workspaceId: string,
 ): Promise<BundleRetention> {
-  const row = (await tx.query.retentionPolicyVersions.findFirst({
-    where: and(
-      eq(schema.retentionPolicyVersions.orgId, orgId),
-      eq(schema.retentionPolicyVersions.workspaceId, workspaceId),
-    ),
-    orderBy: [desc(schema.retentionPolicyVersions.version)],
-    columns: { mode: true, retainedContentClasses: true },
-  })) as { mode: string; retainedContentClasses: string[] } | undefined;
+  // The same read the control plane's idle close grades a session with.
+  const row = await readLatestRetentionPolicy(tx, orgId, workspaceId);
   if (!row) {
     return { mode: "content_exact", classes: [...RETENTION_CONTENT_CLASSES] };
   }
