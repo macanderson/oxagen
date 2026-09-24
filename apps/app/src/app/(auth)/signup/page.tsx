@@ -5,6 +5,7 @@ import {
   AFTER_SIGNUP,
   AuthTags,
   SignupForm,
+  queryEmail,
   signupIncludesAllowance,
 } from "@/features/auth";
 import { readNext, routes } from "@/shared/safe-path";
@@ -48,7 +49,8 @@ async function Signup({
         title={pages("signup")}
         description={t("signup.lead")}
       />
-      <SignupForm next={next} />
+      {/* Verify email's Change it returns the address here, editable. */}
+      <SignupForm next={next} email={queryEmail(params.email)} />
       <AuthFooter>
         {t("signup.haveAccount")}{" "}
         <SafeLink

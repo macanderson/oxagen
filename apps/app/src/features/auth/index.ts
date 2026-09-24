@@ -21,6 +21,7 @@ export {
 export { oauthQueryOutcome } from "./auth-errors";
 export { LoginForm } from "./login-form";
 export { ForgotPasswordForm, ResetPasswordForm } from "./password-reset-forms";
+export { queryEmail } from "./query-email";
 export { AFTER_SIGNUP } from "./routes";
 export { SignedInNotice } from "./signed-in-notice";
 export { SignupForm } from "./signup-form";

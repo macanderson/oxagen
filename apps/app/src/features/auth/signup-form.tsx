@@ -3,7 +3,8 @@
 // GitHub, the "or" rule, then name, work email and a password with its meter
 // and requirement list, the submit and the terms line. A new account goes to
 // email verification when the deployment requires it, otherwise straight to
-// creating its organization.
+// creating its organization. An address handed back by Verify email's Change
+// it fills the email field, which stays editable.
 
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
@@ -30,7 +31,14 @@ type SignupField = "name" | "email" | "password";
 const PASSWORD_ID = "signup-password";
 const REQUIREMENTS_ID = `${PASSWORD_ID}-requirements`;
 
-export function SignupForm({ next = AFTER_SIGNUP }: { next?: SafePath }) {
+export function SignupForm({
+  next = AFTER_SIGNUP,
+  email = null,
+}: {
+  next?: SafePath;
+  /** The address to start from, already checked for shape (`queryEmail`). */
+  email?: string | null;
+}) {
   const t = useTranslations("auth");
   const navigate = useNavigate();
   const [errors, setErrors] = useState<FieldErrors<SignupField>>({});
@@ -102,6 +110,7 @@ export function SignupForm({ next = AFTER_SIGNUP }: { next?: SafePath }) {
           type="email"
           inputMode="email"
           autoComplete="email"
+          defaultValue={email ?? undefined}
           label={t("fields.email")}
           error={message(errors.email)}
           // A registered address marks the field; the alert above says why.

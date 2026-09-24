@@ -25,6 +25,9 @@ vi.mock("@/features/auth", async () => ({
   ...(await vi.importActual<typeof import("@/features/auth/routes")>(
     "@/features/auth/routes",
   )),
+  ...(await vi.importActual<typeof import("@/features/auth/query-email")>(
+    "@/features/auth/query-email",
+  )),
   // Forms whose full-card states replace the header render it themselves;
   // the stand-ins render the header they are handed.
   ForgotPasswordForm: ({ header }: { header: ReactNode }) => header,
@@ -52,7 +55,9 @@ vi.mock("@/features/auth", async () => ({
       <p data-testid="reset-token" data-token={token} />
     </>
   ),
-  SignupForm: () => <form />,
+  SignupForm: ({ email }: { email: string | null }) => (
+    <form data-testid="signup-form" data-email={email ?? "none"} />
+  ),
   TwoFactorForm: ({ title }: { title: string }) => <h1>{title}</h1>,
   VerifyPanel: ({
     email,
@@ -145,6 +150,22 @@ describe("signup query", () => {
     await renderAt(load, {});
     expect(logIn()).toHaveAttribute("href", "/login");
   });
+
+  it("hands the form an address Verify email's Change it returned", async () => {
+    await renderAt(load, { email: " marcus@a-intel.com " });
+    expect(screen.getByTestId("signup-form")).toHaveAttribute(
+      "data-email",
+      "marcus@a-intel.com",
+    );
+  });
+
+  it("hands the form no malformed address (negative)", async () => {
+    await renderAt(load, { email: "not an email" });
+    expect(screen.getByTestId("signup-form")).toHaveAttribute(
+      "data-email",
+      "none",
+    );
+  });
 });
 
 describe("signup allowance tag", () => {
@@ -203,6 +224,26 @@ describe("verify query", () => {
       expect(panel()).toHaveAttribute("data-email", "none");
     },
   );
+
+  it("Change it returns to sign-up with the address and the destination", async () => {
+    await renderAt(load, {
+      email: "marcus@a-intel.com",
+      next: "/invite/invi_1",
+    });
+    expect(
+      screen.getByRole("link", { name: auth("verify.changeIt") }),
+    ).toHaveAttribute(
+      "href",
+      "/signup?next=%2Finvite%2Finvi_1&email=marcus%40a-intel.com",
+    );
+  });
+
+  it("Change it carries no address it would not echo, and no default destination (negative)", async () => {
+    await renderAt(load, { email: "not an email" });
+    expect(
+      screen.getByRole("link", { name: auth("verify.changeIt") }),
+    ).toHaveAttribute("href", "/signup");
+  });
 
   it("an ?error= from a spent link tells the panel the link expired", async () => {
     await renderAt(load, { error: "TOKEN_EXPIRED" });
