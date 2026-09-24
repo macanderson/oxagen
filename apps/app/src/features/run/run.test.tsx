@@ -568,6 +568,7 @@ describe("header", () => {
             headSha: null,
             headRef: "release/3.2",
             association: "recorded",
+            closingIssues: null,
             checkoutRefs: [],
             observedAt: "2026-09-23T10:00:00.000Z",
             current: true,
