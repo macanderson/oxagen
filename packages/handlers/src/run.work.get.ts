@@ -15,8 +15,11 @@ import {
   connectedRunRepositories,
   readWorkContexts,
   readWorkDiffs,
+  readWorkSubagents,
+  subagentOf,
   WORK_CONTEXT_CAP,
   WORK_DIFF_CAP,
+  WORK_SUBAGENT_CAP,
 } from "./lib/run-work";
 import { readWorkPullRequests, type RecordedRunPr } from "./lib/run-work-prs";
 import { runScope } from "./run.list";
@@ -24,6 +27,7 @@ import { runScope } from "./run.list";
 export type RunWorkDeps = RunReadDeps & {
   contexts: typeof readWorkContexts;
   diffs: typeof readWorkDiffs;
+  subagents: typeof readWorkSubagents;
   repositories: typeof connectedRunRepositories;
   pullRequests: typeof readWorkPullRequests;
 };
@@ -90,6 +94,7 @@ export function createRunWorkGetHandler(
         checkouts: [],
         diffs: [],
         pullRequests: prs.pullRequests,
+        subagents: [],
         complete: false,
         warnings: [
           "checkout_context_not_recorded",
@@ -98,9 +103,10 @@ export function createRunWorkGetHandler(
         ],
       };
     }
-    const [contexts, diffs, repositories] = await Promise.all([
+    const [contexts, diffs, subagents, repositories] = await Promise.all([
       deps.contexts(run.sessionUuid),
       deps.diffs(run.sessionUuid),
+      deps.subagents(run.sessionUuid),
       deps.repositories(scope),
     ]);
     const checkouts = contexts
@@ -110,6 +116,7 @@ export function createRunWorkGetHandler(
     const warnings = [...prs.warnings];
     if (contexts.length > WORK_CONTEXT_CAP) warnings.push("checkout_limit");
     if (diffs.length > WORK_DIFF_CAP) warnings.push("captured_diff_limit");
+    if (subagents.length > WORK_SUBAGENT_CAP) warnings.push("subagent_limit");
     if (!contexts.length) warnings.push("checkout_context_not_recorded");
     return {
       runId: input.runId,
@@ -117,6 +124,7 @@ export function createRunWorkGetHandler(
       checkouts,
       diffs: diffs.slice(0, WORK_DIFF_CAP).map(capturedDiffOf),
       pullRequests: prs.pullRequests,
+      subagents: subagents.slice(0, WORK_SUBAGENT_CAP).map(subagentOf),
       complete: warnings.length === 0,
       warnings,
     };
@@ -126,6 +134,7 @@ export const runWorkGetHandler = createRunWorkGetHandler({
   ...defaultRunReadDeps(),
   contexts: readWorkContexts,
   diffs: readWorkDiffs,
+  subagents: readWorkSubagents,
   repositories: connectedRunRepositories,
   pullRequests: readWorkPullRequests,
 });

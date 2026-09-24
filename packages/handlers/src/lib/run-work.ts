@@ -6,6 +6,7 @@ import type {
   RunCapturedDiff,
   RunCheckout,
   RunRepository,
+  RunSubagent,
 } from "@oxagen/oxagen/contracts/run.work.get";
 import type { RunScope } from "../run.list";
 
@@ -32,7 +33,15 @@ export interface WorkDiffRow extends WorkContextRow {
   limitations: string;
   omitted: string;
 }
+export interface WorkSubagentRow {
+  id: string;
+  type: string;
+  first_seq: number | string;
+  last_seq: number | string;
+  stopped: number | string;
+}
 export const WORK_CONTEXT_CAP = 200;
+export const WORK_SUBAGENT_CAP = 200;
 export const WORK_DIFF_CAP = 200;
 export const workDigest = (value: string) =>
   `sha256:${createHash("sha256").update(value).digest("hex")}`;
@@ -101,6 +110,38 @@ export async function readWorkContexts(
     params: { sessionUuid, limit: WORK_CONTEXT_CAP + 1 },
   });
   return result.data;
+}
+/**
+ * The subagents a session started, one row per `hook.agent_id`, from the
+ * `subagent_start` and `subagent_stop` hook frames. An in-process subagent
+ * shares its parent's session, so these frames are the only record of it.
+ */
+export async function readWorkSubagents(
+  sessionUuid: string,
+): Promise<WorkSubagentRow[]> {
+  const result = await chSelect<WorkSubagentRow>({
+    query: `SELECT attrs['hook.agent_id'] AS id,
+      argMaxIf(attrs['hook.agent_type'], seq, attrs['hook.agent_type'] != '') AS type,
+      min(seq) AS first_seq, max(seq) AS last_seq,
+      max(kind = 'subagent_stop') AS stopped
+      FROM tacho_events FINAL
+      WHERE org_id = {orgId:UUID} AND workspace_id = {workspaceId:UUID}
+        AND session_uuid = {sessionUuid:UUID} AND chain_verified = true
+        AND kind IN ('subagent_start', 'subagent_stop')
+        AND attrs['hook.agent_id'] != ''
+      GROUP BY id ORDER BY first_seq ASC LIMIT {limit:UInt32}`,
+    params: { sessionUuid, limit: WORK_SUBAGENT_CAP + 1 },
+  });
+  return result.data;
+}
+export function subagentOf(row: WorkSubagentRow): RunSubagent {
+  return {
+    id: row.id,
+    type: nullable(row.type),
+    firstSeq: String(row.first_seq),
+    lastSeq: String(row.last_seq),
+    stopped: Number(row.stopped) === 1,
+  };
 }
 export async function readWorkDiffs(
   sessionUuid: string,

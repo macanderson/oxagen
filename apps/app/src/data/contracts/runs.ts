@@ -165,6 +165,15 @@ export function acceptsCommands(tier: EnforcementTier): boolean {
   return tier !== "observe";
 }
 
+/** Token totals by kind, as the recorder counted them. */
+export const RunTokens = z.object({
+  input: z.number().int().nonnegative(),
+  output: z.number().int().nonnegative(),
+  cacheRead: z.number().int().nonnegative(),
+  cacheWrite: z.number().int().nonnegative(),
+});
+export type RunTokens = z.infer<typeof RunTokens>;
+
 export const RunRow = z.object({
   id: PublicId,
   /** Which store recorded the run: the evidence ledger or a wrapped agent's session. */
@@ -185,6 +194,12 @@ export const RunRow = z.object({
   cost: Cost.nullable(),
   reportedCost: Cost.nullable().optional(),
   model: RunModel.nullable(),
+  /** The effort level the harness reported; null when it reported none. */
+  effort: z.string().min(1).nullable().optional(),
+  /** The permission mode the session ended in; null when none was recorded. */
+  permissionMode: z.string().min(1).nullable().optional(),
+  /** Token totals from the session's counted model calls; null when none were recorded. */
+  reportedTokens: RunTokens.nullable().optional(),
   machine: RunMachine.nullable(),
   harness: z
     .object({

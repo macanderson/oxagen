@@ -42,6 +42,10 @@ function setup() {
       },
     ]),
     diffs: vi.fn().mockResolvedValue([]),
+    subagents: vi.fn().mockResolvedValue([
+      { id: "a0182b6cd3a21d284", type: "Explore", first_seq: 3, last_seq: 9, stopped: 1 },
+      { id: "a079426c9a96dd3cb", type: "", first_seq: 12, last_seq: 12, stopped: 0 },
+    ]),
     repositories: vi.fn().mockResolvedValue([]),
     pullRequests: vi.fn().mockResolvedValue({
       pullRequests: [],
@@ -80,5 +84,25 @@ describe("get_run_work", () => {
       checkouts: [{ path: "/repo", branch: "main" }],
       warnings: ["repository_not_connected"],
     });
+  });
+  it("lists the subagents the session started from their hook frames", async () => {
+    const { handler } = setup();
+    const result = await handler({ runId: RUN_ID }, ctx());
+    expect(result.subagents).toEqual([
+      {
+        id: "a0182b6cd3a21d284",
+        type: "Explore",
+        firstSeq: "3",
+        lastSeq: "9",
+        stopped: true,
+      },
+      {
+        id: "a079426c9a96dd3cb",
+        type: null,
+        firstSeq: "12",
+        lastSeq: "12",
+        stopped: false,
+      },
+    ]);
   });
 });
