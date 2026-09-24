@@ -24,7 +24,7 @@ type AgentItem = ContractOutput<typeof agentList>["items"][number];
  * Claude Code is routed and Codex goes direct is `mixed`, because reading it
  * as routed would claim the proxy sees calls it never sees.
  */
-export function modelRouteOf(host: HostSummary): {
+function modelRouteOf(host: HostSummary): {
   route: ModelRoute | null;
   shadowedBy: string | null;
 } {
