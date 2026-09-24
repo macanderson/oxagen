@@ -6699,6 +6699,8 @@ type Messages = {
     };
     listTable: {
       search: string;
+      facetAll: string;
+      facetLabel: string;
       rows: string;
       all: string;
       noMatch: string;
@@ -6707,20 +6709,6 @@ type Messages = {
       previous: string;
       next: string;
       pages: string;
-    };
-    list: {
-      search: string;
-      facetAll: string;
-      facetLabel: string;
-      rows: string;
-      all: string;
-      range: string;
-      pager: string;
-      previous: string;
-      next: string;
-      page: string;
-      sortBy: string;
-      noMatch: string;
     };
   };
 };

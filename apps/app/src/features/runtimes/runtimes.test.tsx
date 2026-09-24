@@ -198,9 +198,9 @@ describe("Runtimes, loaded", () => {
     expect(within(hosts).getByRole("combobox", { name: "Rows" })).toHaveValue(
       "10",
     );
-    expect(within(hosts).getByTestId("list-pager")).toHaveTextContent(
-      "1–4 of 4",
-    );
+    expect(
+      within(hosts).getByRole("navigation", { name: "Enrolled hosts pages" }),
+    ).toHaveTextContent("1–4 of 4");
     // Four rows, and Health reads two values: the design's rule offers it.
     // Kind reads not recorded on every row and offers nothing.
     const health = within(hosts).getByRole("combobox", {
@@ -345,12 +345,14 @@ describe("Runtimes, loaded", () => {
     const shown = () =>
       screen
         .getAllByTestId("runtime-row")
-        .filter((row) => !row.hidden)
+        .filter((row) => row.style.display !== "none")
         .map((row) => row.querySelector("a")?.textContent);
-    const pager = screen.getByTestId("list-pager");
+    const pager = screen.getByRole("navigation", {
+      name: "Enrolled hosts pages",
+    });
     expect(pager).toHaveTextContent("1–10 of 12");
     expect(shown()).toHaveLength(10);
-    fireEvent.click(within(pager).getByRole("button", { name: "Page 2" }));
+    fireEvent.click(within(pager).getByRole("button", { name: "2" }));
     expect(pager).toHaveTextContent("11–12 of 12");
     expect(shown()).toEqual(["host-10", "host-11"]);
 
@@ -372,9 +374,7 @@ describe("Runtimes, loaded", () => {
         target: { value: "nothing like this" },
       },
     );
-    expect(screen.getByTestId("list-no-match")).toHaveTextContent(
-      "No rows match.",
-    );
+    expect(screen.getByText("No rows match.")).toBeInTheDocument();
     fireEvent.change(
       screen.getByRole("searchbox", { name: "Search this list" }),
       {
@@ -629,9 +629,11 @@ describe("One runtime", () => {
     expect(nth(within(row).getAllByRole("cell"), 0, "cell")).toHaveTextContent(
       "acme.core.release-managerClaude Code",
     );
-    expect(within(agents).getByTestId("list-pager")).toHaveTextContent(
-      "1–1 of 1",
-    );
+    expect(
+      within(agents).getByRole("navigation", {
+        name: "Agents on this host pages",
+      }),
+    ).toHaveTextContent("1–1 of 1");
     expect(within(row).getByRole("link")).toHaveAttribute(
       "href",
       "/acme/core-platform/agents/release-manager",

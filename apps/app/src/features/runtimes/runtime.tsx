@@ -20,11 +20,12 @@ import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
 import { AgentCard } from "@/ui/agent-card";
 import { buttonSecondary, mono, panelBody } from "@/ui/control-styles";
+import { type ListRow, ListTable } from "@/ui/list-table";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { type OperatorIdentity, OperatorName } from "@/ui/operator";
 import { ReadFailure } from "@/ui/read-failure";
-import { type ListRow, ListTable } from "./list-table";
+import { cell } from "@/ui/table";
 import { SmokeSession, Unenroll } from "./controls";
 import {
   Facts,
@@ -241,10 +242,8 @@ function agentRow({
   );
   return {
     key: agentKey,
-    props: {
-      "data-testid": "runtime-agent-row",
-      className: agent === null ? undefined : "relative cursor-pointer",
-    },
+    data: { "data-testid": "runtime-agent-row" },
+    className: agent === null ? undefined : "relative cursor-pointer",
     cells: [
       // A row opens the agent: the card's link is stretched over the row,
       // and the operator cell sits above it so its identity card still opens.
@@ -316,17 +315,15 @@ function AgentsPanel({
           )}
           <ListTable
             label={t("title")}
-            testId="runtime-agents-list"
             columns={[
-              { key: "agent", label: t("columns.agent") },
+              { label: t("columns.agent") },
               {
-                key: "operator",
                 label: t("columns.operator"),
-                cellClassName: "relative z-[1]",
+                className: `${cell} relative z-[1]`,
               },
-              { key: "tier", label: t("columns.tier") },
-              { key: "principal", label: t("columns.principal") },
-              { key: "runs", label: t("columns.runs"), numeric: true },
+              { label: t("columns.tier") },
+              { label: t("columns.principal") },
+              { label: t("columns.runs"), numeric: true },
             ]}
             rows={[
               agentRow({

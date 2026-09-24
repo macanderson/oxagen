@@ -22,10 +22,10 @@ import type { DataSource } from "@/data/ports";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
 import { mono, panelBody, statStrip } from "@/ui/control-styles";
+import { type ListRow, ListTable } from "@/ui/list-table";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { PageHeader } from "@/ui/page-header";
-import { type ListRow, ListTable } from "./list-table";
 import { EnrollRuntime } from "./controls";
 import {
   HarnessNames,
@@ -182,11 +182,8 @@ function hostRow(
 ): ListRow {
   return {
     key: host.id,
-    props: {
-      "data-testid": "runtime-row",
-      "data-runtime": host.id,
-      className: "relative cursor-pointer",
-    },
+    data: { "data-testid": "runtime-row", "data-runtime": host.id },
+    className: "relative cursor-pointer",
     cells: [
       <RuntimeName key="runtime" host={host} org={org} ws={ws} />,
       <NotBacked key="kind" gap="host" />,
@@ -227,28 +224,17 @@ function EnrolledHosts({
     >
       <ListTable
         label={t("title")}
-        testId="runtimes-hosts-list"
         columns={[
-          { key: "runtime", label: t("columns.runtime") },
-          { key: "kind", label: t("columns.kind") },
-          { key: "harness", label: t("columns.harness") },
-          { key: "modelSurface", label: t("columns.modelSurface") },
-          { key: "tier", label: t("columns.tier") },
-          {
-            key: "agents",
-            label: t("columns.agents"),
-            numeric: true,
-            cellTestId: "runtime-agents",
-          },
-          { key: "collector", label: t("columns.collector") },
-          {
-            key: "hooks",
-            label: t("columns.hooks"),
-            numeric: true,
-            cellTestId: "runtime-hooks",
-          },
-          { key: "health", label: t("columns.health") },
-          { key: "checkpoint", label: t("columns.checkpoint") },
+          { label: t("columns.runtime") },
+          { label: t("columns.kind") },
+          { label: t("columns.harness") },
+          { label: t("columns.modelSurface") },
+          { label: t("columns.tier") },
+          { label: t("columns.agents"), numeric: true },
+          { label: t("columns.collector") },
+          { label: t("columns.hooks"), numeric: true },
+          { label: t("columns.health") },
+          { label: t("columns.checkpoint") },
         ]}
         rows={list.enrollments.map((host) =>
           hostRow(host, org, ws, now, t("hookCount")),
