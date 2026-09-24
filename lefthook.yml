@@ -48,6 +48,29 @@ pre-commit:
       run: pnpm exec eslint --fix --no-warn-ignored {staged_files}
       stage_fixed: true
 
+    # The root config ignores apps/app, apps/app_deprecated and apps/docs,
+    # because each lints with its own eslint.config.mjs. The command above
+    # therefore skipped every file in them, and --no-warn-ignored hid the skip,
+    # so a commit there reported lint passed having checked nothing. #4066
+    # reached CI with four lint errors that way. Each app gets its own command,
+    # run from the app's directory so ESLint finds that app's config, with the
+    # warning limit that app's own `lint` script sets.
+    lint-app:
+      root: "apps/app/"
+      glob: "*.{ts,tsx,js,jsx,mjs,mts,cts}"
+      run: pnpm exec eslint --fix --no-warn-ignored --max-warnings 0 {staged_files}
+      stage_fixed: true
+    lint-app-deprecated:
+      root: "apps/app_deprecated/"
+      glob: "*.{ts,tsx,js,jsx,mjs,mts,cts}"
+      run: pnpm exec eslint --fix --no-warn-ignored {staged_files}
+      stage_fixed: true
+    lint-docs:
+      root: "apps/docs/"
+      glob: "*.{ts,tsx,js,jsx,mjs,mts,cts}"
+      run: pnpm exec eslint --fix --no-warn-ignored {staged_files}
+      stage_fixed: true
+
     # Typecheck ONLY the staged files, never the whole repo. The wrapper groups
     # the changed files by their owning package tsconfig and runs `tsc-files`
     # per group, so tsc loads only those files plus their import closure — fast,
