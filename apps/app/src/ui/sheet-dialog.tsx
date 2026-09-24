@@ -44,6 +44,7 @@ export function SheetDialog({
   closeLabel,
   headerClose = false,
   wide = false,
+  headerClose = false,
   side = false,
   dismissible = true,
   testId,
@@ -77,6 +78,11 @@ export function SheetDialog({
   headerClose?: boolean;
   /** The mockup's dialog width (600px) for editors that need two columns. */
   wide?: boolean;
+  /**
+   * The mockup's × in the header's corner (`.dlg-h .x`), beside the footer's
+   * Close or Cancel, for a dialog whose design draws one.
+   */
+  headerClose?: boolean;
   /** Organization activity opens beside the page on desktop. */
   side?: boolean;
   testId: string;

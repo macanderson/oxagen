@@ -14,10 +14,8 @@ import { invoke } from "@oxagen/oxagen";
 import { runInTenantScope } from "@oxagen/tenancy";
 import type { GraphStatsOutput } from "@oxagen/oxagen/contracts/graph.stats";
 import type { ConnectionListOutput } from "@oxagen/oxagen/contracts/connection.list";
-import type { ComponentType, SVGProps } from "react";
 import Link from "next/link";
-import { Network, Boxes, GitGraph, Plug } from "lucide-react";
-import { GithubIcon } from "@/components/brand/github-icon";
+import { Network, Boxes, GitGraph, Github, Plug } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { workspace } from "@/lib/routes";
 import { EmptyState, ErrorState } from "../_shared/components";
@@ -61,7 +59,7 @@ interface StatCell {
   key: string;
   label: string;
   value: number;
-  Icon: ComponentType<SVGProps<SVGSVGElement>>;
+  Icon: typeof Boxes;
 }
 
 export async function GraphHero({
@@ -131,7 +129,7 @@ export async function GraphHero({
       value: stats?.edgeCount ?? 0,
       Icon: GitGraph,
     },
-    { key: "repos", label: "Repos", value: repoCount, Icon: GithubIcon },
+    { key: "repos", label: "Repos", value: repoCount, Icon: Github },
     { key: "sources", label: "Data sources", value: sourceCount, Icon: Plug },
   ];
 
