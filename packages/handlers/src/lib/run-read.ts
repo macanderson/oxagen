@@ -38,6 +38,7 @@ import {
   type LedgerRunRow,
   postgresReadRunRollups,
   postgresRunQueries,
+  postgresTachoChildSessions,
   type ReadRunRollups,
   type RunQueries,
   runScope,
@@ -46,6 +47,7 @@ import {
   toLedgerRunItem,
   toTachoRunItem,
 } from "../run.list";
+import { requireScope } from "@oxagen/tenancy";
 import { readWitnessFor } from "./proof";
 
 /** The most frames one read of either store returns. */
@@ -92,6 +94,13 @@ export type RunReadDeps = {
    * when it is absent.
    */
   tachoSubagentFrames?: TachoSubagentFrameReader;
+  /**
+   * The `session_uuid` of every subagent chain under a root session, from
+   * Postgres. With it, the subagent read names its chains and ClickHouse
+   * reads only their ranges; without it, the read filters on the root alone
+   * and scans every chain in the workspace.
+   */
+  tachoChildSessions?: (rootSessionUuid: string) => Promise<string[]>;
   readEnrichmentEnabled?: typeof readRunEnrichmentEnabled;
 };
 
@@ -109,16 +118,19 @@ export async function resolveRun(
   publicId: string,
 ): Promise<ResolvedRun> {
   const scope = runScope(ctx);
-  const run = await resolveSource(deps, scope, publicId);
-  const enabled = deps.readEnrichmentEnabled
-    ? await deps.readEnrichmentEnabled(scope)
-    : true;
+  // The three reads are independent; each is fenced to the caller's scope.
+  const [run, enabled, witnessFor] = await Promise.all([
+    resolveSource(deps, scope, publicId),
+    deps.readEnrichmentEnabled
+      ? deps.readEnrichmentEnabled(scope)
+      : Promise.resolve(true),
+    deps.readWitnessFor(scope, publicId),
+  ]);
   run.item = {
     ...run.item,
     enrichmentEnabled: enabled,
     ...(enabled ? {} : { name: null, summary: null, canSummarize: false }),
   };
-  const witnessFor = await deps.readWitnessFor(scope, publicId);
   if (witnessFor !== null && ctx.apiKeyId !== null) throw runNotFound();
   return { ...run, witnessFor };
 }
@@ -129,9 +141,11 @@ async function resolveSource(
   publicId: string,
 ): Promise<ResolvedSource> {
   if (publicId.startsWith("tse_")) {
-    const row = await deps.queries.tachoSession(scope, publicId);
+    const [row, costs] = await Promise.all([
+      deps.queries.tachoSession(scope, publicId),
+      deps.readRunRollups(scope, [publicId]),
+    ]);
     if (!row) throw runNotFound();
-    const costs = await deps.readRunRollups(scope, [publicId]);
     return {
       source: "tacho",
       sessionUuid: row.session.sessionUuid,
@@ -165,7 +179,17 @@ export function startCursorSeq(run: ResolvedRun): string {
   return run.source === "ledger" ? "0" : "-1";
 }
 
-/** The frames strictly after `afterSeq`, ascending, at most `limit`. */
+/**
+ * The frames strictly after `afterSeq`, ascending, at most `limit`.
+ *
+ * A wrapped session's read is bounded above as well: `tacho_events` is read
+ * with `FINAL`, and without an upper bound ClickHouse reads the chain from
+ * `afterSeq` to its end whatever the limit says. A chain numbers its frames
+ * without holes, so `afterSeq + limit` is the last seq a full read can reach.
+ * A chain with a recorded break can skip seqs, and then the window holds
+ * fewer frames than asked; the rest are read past the window, unbounded,
+ * only in that case.
+ */
 export async function readFrames(
   deps: RunReadDeps,
   run: ResolvedRun,
@@ -180,18 +204,32 @@ export async function readFrames(
     );
     return events.map(ledgerFrame);
   }
+  const after = Number(afterSeq);
+  const through = after + limit;
   const rows = await deps.tachoFrames({
     sessionUuid: run.sessionUuid,
-    afterSeq: Number(afterSeq),
+    afterSeq: after,
+    throughSeq: through,
     limit,
   });
+  const head = run.row.session.seqCount - 1;
+  const last = rows.at(-1)?.seq;
+  if (rows.length < limit && (through < head || last === through)) {
+    const rest = await deps.tachoFrames({
+      sessionUuid: run.sessionUuid,
+      afterSeq: through,
+      limit: limit - rows.length,
+    });
+    rows.push(...rest);
+  }
   return rows.map(tachoFrame);
 }
 
 /**
- * Every frame of the run up to `cap`, read page by page. Answers whether the
- * cap cut the read short, so a caller can say so rather than present a
- * prefix as the whole.
+ * Every frame of the run up to `cap`. Answers whether the cap cut the read
+ * short, so a caller can say so rather than present a prefix as the whole.
+ * A wrapped session reads in one bounded query; the ledger reads page by
+ * page.
  */
 export async function readAllFrames(
   deps: RunReadDeps,
@@ -200,13 +238,14 @@ export async function readAllFrames(
 ): Promise<{ frames: RunFrame[]; complete: boolean }> {
   const frames: RunFrame[] = [];
   let after = startCursorSeq(run);
+  const page = run.source === "tacho" ? cap + 1 : FRAME_READ_MAX;
   for (;;) {
-    const want = Math.min(FRAME_READ_MAX, cap - frames.length + 1);
+    const want = Math.min(page, cap - frames.length + 1);
     if (want <= 0) break;
-    const page = await readFrames(deps, run, after, want);
-    frames.push(...page);
-    const last = page.at(-1);
-    if (!last || page.length < want) break;
+    const read = await readFrames(deps, run, after, want);
+    frames.push(...read);
+    const last = read.at(-1);
+    if (!last || read.length < want) break;
     after = last.seq;
   }
   if (frames.length > cap) {
@@ -231,40 +270,49 @@ export async function readRunFrames(
   run: ResolvedRun,
   cap: number,
 ): Promise<{ frames: RunFrame[]; complete: boolean }> {
-  const own = await readAllFrames(deps, run, cap);
   if (run.source !== "tacho" || deps.tachoSubagentFrames === undefined) {
-    return own;
+    return readAllFrames(deps, run, cap);
   }
-  const children: RunFrame[] = [];
-  let after: { sessionUuid: string; seq: number } | null = null;
-  let complete = own.complete;
-  for (;;) {
-    const room = cap - own.frames.length - children.length;
-    if (room <= 0) {
-      // Past the cap: ask for one more row only to learn whether one exists.
-      const probe = await deps.tachoSubagentFrames({
-        rootSessionUuid: run.sessionUuid,
-        after,
-        limit: 1,
-      });
-      if (probe.length > 0) complete = false;
-      break;
-    }
-    const want = Math.min(FRAME_READ_MAX, room);
-    const page = await deps.tachoSubagentFrames({
-      rootSessionUuid: run.sessionUuid,
-      after,
-      limit: want,
-    });
-    children.push(...page.map(tachoFrame));
-    const last = page.at(-1);
-    if (!last || page.length < want || last.sessionUuid === undefined) break;
-    after = { sessionUuid: last.sessionUuid, seq: last.seq };
-  }
+  const [own, children] = await Promise.all([
+    readAllFrames(deps, run, cap),
+    readSubagentFrames(deps, deps.tachoSubagentFrames, run.sessionUuid, cap),
+  ]);
+  // The run's own chain comes first; subagent frames fill what is left.
+  const kept = children.frames.slice(0, Math.max(0, cap - own.frames.length));
   return {
-    frames: spliceSubagentChains(own.frames, children),
-    complete,
+    frames: spliceSubagentChains(own.frames, kept),
+    complete:
+      own.complete &&
+      children.complete &&
+      kept.length === children.frames.length,
   };
+}
+
+/**
+ * The frames of every subagent chain under a root, up to `cap`, in one read
+ * of `cap + 1` rows so a full read can be told from a cut one.
+ */
+async function readSubagentFrames(
+  deps: RunReadDeps,
+  read: TachoSubagentFrameReader,
+  rootSessionUuid: string,
+  cap: number,
+): Promise<{ frames: RunFrame[]; complete: boolean }> {
+  let sessionUuids: string[] | undefined;
+  if (deps.tachoChildSessions !== undefined) {
+    sessionUuids = await deps.tachoChildSessions(rootSessionUuid);
+    if (sessionUuids.length === 0) return { frames: [], complete: true };
+  }
+  const rows = await read({
+    rootSessionUuid,
+    after: null,
+    limit: cap + 1,
+    ...(sessionUuids === undefined ? {} : { sessionUuids }),
+  });
+  const frames = rows.map(tachoFrame);
+  return frames.length > cap
+    ? { frames: frames.slice(0, cap), complete: false }
+    : { frames, complete: true };
 }
 
 /** The one frame at `seq`, or null. */
@@ -273,6 +321,17 @@ export async function readFrameAt(
   run: ResolvedRun,
   seq: string,
 ): Promise<RunFrame | null> {
+  if (run.source === "tacho") {
+    // Bounded at `seq` itself, so a missing frame reads nothing past it.
+    const [row] = await deps.tachoFrames({
+      sessionUuid: run.sessionUuid,
+      afterSeq: Number(seq) - 1,
+      throughSeq: Number(seq),
+      limit: 1,
+    });
+    const frame = row ? tachoFrame(row) : undefined;
+    return frame && frame.seq === seq ? frame : null;
+  }
   const before = (BigInt(seq) - 1n).toString();
   const [frame] = await readFrames(deps, run, before, 1);
   return frame && frame.seq === seq ? frame : null;
@@ -302,6 +361,8 @@ export function defaultRunReadDeps(): RunReadDeps {
     readWitnessFor,
     tachoFrames: selectTachoEvents,
     tachoSubagentFrames: selectTachoSubagentEvents,
+    tachoChildSessions: (root) =>
+      postgresTachoChildSessions(requireScope(), root),
     readEnrichmentEnabled: readRunEnrichmentEnabled,
   };
 }

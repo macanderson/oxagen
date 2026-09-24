@@ -74,6 +74,7 @@ import {
   inArray,
   isNull,
   lt,
+  ne,
   notInArray,
   or,
   type SQL,
@@ -603,6 +604,30 @@ export function tachoSessionQuery(
       ),
     )
     .limit(1);
+}
+
+/**
+ * The subagent chains under a root session, by `session_uuid`. Ingest writes
+ * a `tacho.sessions` row for every chain before it writes the chain's frames
+ * to ClickHouse, so this list names every chain a frame read can find, and
+ * `tacho_sessions_root_idx` answers it.
+ */
+export function tachoChildSessionsQuery(
+  db: QueryDb,
+  scope: RunScope,
+  rootSessionUuid: string,
+) {
+  return db
+    .select({ sessionUuid: sessions.sessionUuid })
+    .from(sessions)
+    .where(
+      and(
+        eq(sessions.orgId, scope.orgId),
+        eq(sessions.workspaceId, scope.workspaceId),
+        eq(sessions.rootSessionUuid, rootSessionUuid),
+        ne(sessions.sessionUuid, rootSessionUuid),
+      ),
+    );
 }
 
 // ---- Records and mapping -------------------------------------------------------------
@@ -1300,6 +1325,17 @@ export const postgresRunQueries: RunQueries = {
     return rows[0] ?? null;
   },
 };
+
+/** The subagent chains under a root session in the scope's workspace. */
+export async function postgresTachoChildSessions(
+  scope: RunScope,
+  rootSessionUuid: string,
+): Promise<string[]> {
+  const rows = await withTenantDb((tx) =>
+    tachoChildSessionsQuery(tx, scope, rootSessionUuid),
+  );
+  return rows.map((r) => r.sessionUuid);
+}
 
 /** Seals and event rollups for a set of ledger runs, in parallel. */
 export async function ledgerEnrichment(

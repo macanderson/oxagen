@@ -186,6 +186,13 @@ function nullableCount(
 export async function selectTachoEvents(args: {
   sessionUuid: string;
   afterSeq: number;
+  /**
+   * The last seq to read. Give it whenever the caller knows it: under `FINAL`
+   * a read with no upper bound scans the chain from `afterSeq` to its end
+   * whatever `limit` says. On a 240,000-frame chain, 500 frames past seq
+   * 100,000 read 155,000 rows unbounded and 5,000 bounded.
+   */
+  throughSeq?: number;
   limit: number;
 }): Promise<TachoFrameRow[]> {
   const res = await chSelect<RawTachoFrameRow>({
@@ -196,12 +203,14 @@ export async function selectTachoEvents(args: {
         AND workspace_id = {workspaceId:UUID}
         AND session_uuid = {sessionUuid:UUID}
         AND seq > {afterSeq:Int64}
+        ${args.throughSeq === undefined ? "" : "AND seq <= {throughSeq:Int64}"}
       ORDER BY seq ASC
       LIMIT {limit:UInt32}
     `,
     params: {
       sessionUuid: args.sessionUuid,
       afterSeq: args.afterSeq,
+      ...(args.throughSeq === undefined ? {} : { throughSeq: args.throughSeq }),
       limit: args.limit,
     },
   });
@@ -265,6 +274,14 @@ export interface TachoChainPosition {
  */
 export async function selectTachoSubagentEvents(args: {
   rootSessionUuid: string;
+  /**
+   * The subagent chains to read, when the caller has listed them (from
+   * `tacho.sessions`). The list puts `session_uuid` in the primary key's
+   * range, so ClickHouse reads those chains alone. Without it the read filters
+   * on `root_session_uuid`, which no index covers, and scans every chain in
+   * the workspace: 855,000 rows for 500 frames on the benchmark table.
+   */
+  sessionUuids?: readonly string[];
   after: TachoChainPosition | null;
   limit: number;
 }): Promise<TachoFrameRow[]> {
@@ -276,6 +293,11 @@ export async function selectTachoSubagentEvents(args: {
       FROM ${TACHO_EVENTS_TABLE} FINAL
       WHERE org_id = {orgId:UUID}
         AND workspace_id = {workspaceId:UUID}
+        ${
+          args.sessionUuids === undefined
+            ? ""
+            : "AND session_uuid IN {sessionUuids:Array(UUID)}"
+        }
         AND root_session_uuid = {rootSessionUuid:UUID}
         AND session_uuid != {rootSessionUuid:UUID}
         ${
@@ -288,6 +310,9 @@ export async function selectTachoSubagentEvents(args: {
     `,
     params: {
       rootSessionUuid: args.rootSessionUuid,
+      ...(args.sessionUuids === undefined
+        ? {}
+        : { sessionUuids: args.sessionUuids }),
       ...(args.after === null
         ? {}
         : { afterSession: args.after.sessionUuid, afterSeq: args.after.seq }),
