@@ -155,11 +155,7 @@ describe("AgentsTable › sorting", () => {
     expect(keysInOrder()).toEqual([href("mike"), href("zulu"), href("bravo")]);
   });
 
-  it("sorts rows with no spend last ascending, and first descending (characterization)", () => {
-    // A defect, pinned rather than fixed: compare() says a value the store
-    // did not record "sorts last in either direction", but the table
-    // multiplies its answer by the direction's sign, so descending puts the
-    // unrecorded rows first.
+  it("sorts rows with no spend last in both directions", () => {
     renderTable([
       row("none-a", { spend30d: null }),
       row("low", {
@@ -177,10 +173,10 @@ describe("AgentsTable › sorting", () => {
     );
     sortBy("Spend 30d");
     const descending = keysInOrder();
-    expect(descending.slice(0, 2).sort()).toEqual(
+    expect(descending.slice(0, 2)).toEqual([href("high"), href("low")]);
+    expect(descending.slice(2).sort()).toEqual(
       [href("none-a"), href("none-b")].sort(),
     );
-    expect(descending.slice(2)).toEqual([href("high"), href("low")]);
   });
 
   it("sorts a text column by its words", () => {
