@@ -880,6 +880,7 @@ export function runWork(overrides: Partial<RunWork> = {}): RunWork {
         state: "open",
         headSha: null,
         headRef: "release/3.2",
+        baseRef: "main",
         association: "recorded",
         closingIssues: null,
         checkoutRefs: ["co_1"],
