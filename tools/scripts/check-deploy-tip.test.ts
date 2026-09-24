@@ -136,6 +136,15 @@ describe("guardProblems", () => {
     }
   });
 
+  it("holds the installer publish to the same rule as the deploys", () => {
+    const steps = deployJobSteps(pipeline, "publish-installers") ?? [];
+    expect(steps.findIndex((s) => s.id === "tip")).toBe(1);
+    expect(steps.at(-1)?.name).toBe(
+      "Dispatch the desktop build for this commit",
+    );
+    expect(steps.at(-1)?.gated).toBe(true);
+  });
+
   it("fails when one step after the tip step loses its gate", () => {
     const gate = `        if: ${TIP_GATE}`;
     const at = pipeline.lastIndexOf(gate);

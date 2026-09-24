@@ -1391,6 +1391,48 @@ jobs:
           pnpm inngest:verify --url https://api.oxagen.sh/api/inngest
 
 
+  publish-installers:
+    name: publish the desktop installers
+    # Every production deploy publishes the desktop app built from the same
+    # commit, for every platform, to https://downloads.oxagen.sh/ (ADR-158).
+    # This job only dispatches desktop.yml: the four builds need macOS and
+    # Windows runners and take most of an hour, and a separate run keeps that
+    # hour out of this one and gives the builds their own concurrency group,
+    # where a newer deploy replaces a waiting build rather than queueing
+    # behind it. A dispatch made with GITHUB_TOKEN starts a workflow; a push
+    # made with it would not.
+    #
+    # `needs: deploy-node` means every service shipped: a failed leg publishes
+    # nothing, so the installers never run ahead of the platform they talk to.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [deploy-node]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: tools/scripts
+
+      # A superseded run's deploy skipped its publish; so does this.
+      - name: Refuse to ship a commit that is no longer the tip of main
+        id: tip
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node tools/scripts/check-deploy-tip.mjs
+
+      - name: Dispatch the desktop build for this commit
+        if: steps.tip.outputs.at_tip == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run desktop.yml --repo "$GITHUB_REPOSITORY" --ref main \
+            -f publish=true -f sha="$GITHUB_SHA"
+          echo "Dispatched the desktop build of $GITHUB_SHA; it publishes to https://downloads.oxagen.sh/ when every platform has built." >> "$GITHUB_STEP_SUMMARY"
+
   manual-app-deploy:
     name: Manual production app deployment
     # The break-glass path, and the one deploy `migration-gate` does not stand

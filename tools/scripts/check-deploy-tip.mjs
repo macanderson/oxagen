@@ -22,8 +22,8 @@
  *    deploy on an API blip is the outage #2730 already was once.
  *
  * 2. Run as `node tools/scripts/check-deploy-tip.mjs --guard` from
- *    `check:contracts`, it reads pipeline.yml and asserts the shape: both
- *    deploy jobs start with the tip step, and every step after it is gated
+ *    `check:contracts`, it reads pipeline.yml and asserts the shape: every
+ *    deploy job (the installer publish included) starts with the tip step, and every step after it is gated
  *    on its output. Removing the gate from one step would look like a
  *    tidy-up in review and would ship that step from a stale commit.
  */
@@ -36,7 +36,7 @@ const pipelinePath = join(repoRoot, ".github", "workflows", "pipeline.yml");
 
 export const TIP_STEP_ID = "tip";
 export const TIP_GATE = `steps.${TIP_STEP_ID}.outputs.at_tip == 'true'`;
-export const DEPLOY_JOBS = ["deploy-web", "deploy-node"];
+export const DEPLOY_JOBS = ["deploy-web", "deploy-node", "publish-installers"];
 
 /**
  * The deploy decision, separated from I/O so the ordering case is testable.
@@ -195,7 +195,7 @@ if (isEntrypoint) {
       );
       process.exit(1);
     }
-    console.log("check-deploy-tip: both deploy jobs skip when superseded.");
+    console.log("check-deploy-tip: every deploy job skips when superseded.");
   } else {
     const sha = process.env.GITHUB_SHA;
     const repository = process.env.GITHUB_REPOSITORY;
