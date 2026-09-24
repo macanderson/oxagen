@@ -516,7 +516,7 @@ describe("header", () => {
     await expectNoAxe(container);
   });
 
-  it("says paused over parked, and offers Resume in the banner to a viewer who may resume", async () => {
+  it("says paused over parked, and offers Resume once, with the run's other controls", async () => {
     const { container } = await renderRun({
       detail: ok(
         runDetail({
@@ -533,29 +533,12 @@ describe("header", () => {
     });
     expect(screen.getByTestId("run-status")).toHaveTextContent(/^paused$/);
     expect(screen.getByTestId("run-paused")).toHaveTextContent("Paused.");
-    expect(screen.getByTestId("banner-resume")).toHaveTextContent("Resume run");
+    // Resume sits with Pause and Cancel in the header; the banner only says
+    // why the run is waiting.
+    expect(screen.getByTestId("run-resume")).toHaveTextContent("Resume run");
+    expect(screen.getAllByRole("button", { name: /resume/i })).toHaveLength(1);
+    expect(screen.getByTestId("run-paused").querySelector("button")).toBeNull();
     await expectNoAxe(container);
-  });
-
-  it("offers no banner Resume to a viewer the command write refuses (negative)", async () => {
-    await renderRun(
-      {
-        detail: ok(
-          runDetail({
-            run: runRow({
-              status: "live",
-              sealedAt: null,
-              source: "ledger",
-              ingressPaused: true,
-            }),
-          }),
-        ),
-        transcript: ok(runTranscript()),
-      },
-      { viewer: viewerCtx },
-    );
-    expect(screen.getByTestId("run-paused")).toBeTruthy();
-    expect(screen.queryByTestId("banner-resume")).toBeNull();
   });
 
   it("reads an ended run's outcome, not parked, whatever is still parked on it (negative)", async () => {

@@ -41,7 +41,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace, refresh }),
 }));
 
-const { PauseBannerResume, RunControls } = await import("./run-controls");
+const { RunControls } = await import("./run-controls");
 const { ExportAction, SummarizeAction } = await import("./record-actions");
 
 const RUN = "tse_7k2m9q";
@@ -683,86 +683,5 @@ describe("record writes", () => {
     expect(screen.getByTestId("run-export").getAttribute("title")).toContain(
       "Export this run once it seals",
     );
-  });
-});
-
-describe("pause banner resume", () => {
-  const banner = (
-    props: Partial<Parameters<typeof PauseBannerResume>[0]> = {},
-  ) =>
-    render(
-      <IntlProvider>
-        <PauseBannerResume
-          org="acme"
-          ws="core-platform"
-          runId="arun_record1"
-          status="live"
-          source="ledger"
-          orgRole="owner"
-          wsRole="owner"
-          {...props}
-        />
-      </IntlProvider>,
-    );
-
-  it("resumes a paused run from the banner, behind the header's own dialog", async () => {
-    haltRun.mockResolvedValue({
-      ok: true,
-      value: { commandIds: ["tcm_resume"] },
-    });
-    const user = userEvent.setup();
-    const { container } = banner();
-    await expectNoAxe(container);
-    await user.click(screen.getByTestId("banner-resume"));
-    expect(screen.getByTestId("banner-resume-dialog")).toBeTruthy();
-    await user.click(
-      screen.getByRole("button", { name: "Resume evidence ingress" }),
-    );
-    await waitFor(() => {
-      expect(haltRun).toHaveBeenCalledWith(
-        "acme",
-        "core-platform",
-        "arun_record1",
-        "resume",
-        "",
-      );
-    });
-    expect(await screen.findByTestId("queued-command")).toHaveTextContent(
-      "tcm_resume",
-    );
-  });
-
-  it("queues a wrapped run's resume as a command, not an ingress change", async () => {
-    haltRun.mockResolvedValue({ ok: true, value: { commandIds: ["tcm_w"] } });
-    const user = userEvent.setup();
-    banner({ source: "tacho", orgRole: "member", wsRole: "member" });
-    await user.click(screen.getByTestId("banner-resume"));
-    expect(screen.getByRole("dialog")).toHaveTextContent(
-      "The agent carries on from where it paused.",
-    );
-    await user.click(screen.getByRole("button", { name: "Queue the resume" }));
-    await waitFor(() => {
-      expect(haltRun).toHaveBeenCalledWith(
-        "acme",
-        "core-platform",
-        "arun_record1",
-        "resume",
-        "",
-      );
-    });
-  });
-
-  it.each<[string, Partial<Parameters<typeof PauseBannerResume>[0]>]>([
-    [
-      "a viewer the command write refuses",
-      { orgRole: "viewer", wsRole: "viewer" },
-    ],
-    ["a sealed run", { status: "sealed" }],
-    ["a revoked ingress", { ingressRevoked: true }],
-    ["a host no command reaches", { source: "tacho", commandBlock: "no_host" }],
-  ])("offers no Resume to %s (negative)", (_, props) => {
-    const { container } = banner(props);
-    expect(screen.queryByTestId("banner-resume")).toBeNull();
-    expect(container).toBeEmptyDOMElement();
   });
 });
