@@ -1,6 +1,7 @@
 // The Run page's side column panels (mockup `pRun`, spec pages/run.md):
 // Changes, from the outputs the run recorded, and Spend by area, from the
-// cost rollup's per-model rows. The Outputs spine sits between them and is
+// cost rollup's per-model rows (or a wrapped run's provisional figures until
+// the rollup exists). The Outputs spine sits between them and is
 // drawn by outputs.tsx.
 //
 // Changes counts only what the outputs read carries: pull requests, commits
@@ -145,19 +146,22 @@ export function SpendByArea({ read }: { read: Read<RunCost> }) {
       </Panel>
     );
   }
-  const rollup = read.value.rollup;
-  if (rollup === null) {
+  // The rollup is the figure of record. Before it exists, a wrapped run's
+  // running figures stand in, labelled provisional.
+  const figures = read.value.rollup ?? read.value.provisional ?? null;
+  if (figures === null) {
     return (
       <Panel title={t("spend")}>
         <p className="text-sm text-muted-foreground">{t("noSpend")}</p>
       </Panel>
     );
   }
+  const provisional = read.value.rollup === null;
   return (
     <Panel
       title={t("spend")}
       aside={
-        rollup.isEstimate === true ? (
+        read.value.rollup?.isEstimate === true ? (
           <span
             data-testid="run-spend-estimate"
             className="text-xs text-muted-foreground"
@@ -167,11 +171,19 @@ export function SpendByArea({ read }: { read: Read<RunCost> }) {
         ) : undefined
       }
     >
+      {provisional ? (
+        <p
+          data-testid="run-spend-provisional"
+          className="mb-2 text-xs text-muted-foreground"
+        >
+          {t("spendProvisional")}
+        </p>
+      ) : null}
       <ul
         data-testid="run-spend"
         className="flex flex-col divide-y divide-border text-sm"
       >
-        {rollup.byModel.map((row) => (
+        {figures.byModel.map((row) => (
           <li
             key={`${row.provider ?? ""}/${row.model}`}
             className="flex items-baseline justify-between gap-3 py-2"
@@ -191,7 +203,7 @@ export function SpendByArea({ read }: { read: Read<RunCost> }) {
       <dl className="mt-3 flex gap-2 text-xs">
         <dt className="text-muted-foreground">{t("toolCalls")}</dt>
         <dd className="tabular-nums">
-          {formatCount(rollup.toolCalls, locale)}
+          {formatCount(figures.toolCalls, locale)}
         </dd>
       </dl>
     </Panel>

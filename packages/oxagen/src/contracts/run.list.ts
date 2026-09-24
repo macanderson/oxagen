@@ -265,6 +265,38 @@ export const runItemSchema = z
      * when the store recorded no model, which is every ledger run.
      */
     model: runModelSchema.nullable(),
+    /**
+     * The effort level the harness reported in its context frames, as it
+     * reported it. Null when the harness reported none, and for every ledger
+     * run. Oxagen never infers one.
+     */
+    effort: z.string().nullable().optional(),
+    /**
+     * Whether the session had always-on thinking enabled, from the latest
+     * session config frame. Null when no frame recorded it, and for every
+     * ledger run. `get_run` answers it; `list_runs` leaves it out.
+     */
+    thinking: z.boolean().nullable().optional(),
+    /**
+     * The permission mode the session ended in, falling back to the one it
+     * started in. Null when none was recorded, and for every ledger run.
+     */
+    permissionMode: z.string().nullable().optional(),
+    /**
+     * Token totals ingest folded from the session's counted model calls. Null
+     * when the session recorded no usage, and for every ledger run. The
+     * rollup's totals win over these once it has priced the run.
+     */
+    reportedTokens: z
+      .object({
+        input: z.number().int().nonnegative(),
+        output: z.number().int().nonnegative(),
+        cacheRead: z.number().int().nonnegative(),
+        cacheWrite: z.number().int().nonnegative(),
+      })
+      .strict()
+      .nullable()
+      .optional(),
     /** The machine the run ran on; null for a ledger run. */
     machine: runMachineSchema.nullable(),
     /** The recorded agent harness, independent of its model and wrapper. */

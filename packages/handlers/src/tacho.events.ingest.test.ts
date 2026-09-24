@@ -89,6 +89,7 @@ import {
   enforcementTierOf,
   foldDelta,
   isObservedModelCall,
+  lastRecordedContext,
   tachoEventsIngestHandler,
   usageCountedEvents,
 } from "./tacho.events.ingest";
@@ -4821,5 +4822,35 @@ describe("running cost and the idle close", () => {
     // The late frame's cost is still counted: the sealed run is rolled up
     // again, as the final figure it is.
     expect(sentNames()).toEqual(["cost/run.progressed"]);
+  });
+});
+
+describe("lastRecordedContext", () => {
+  const frame = (context?: Record<string, unknown>) =>
+    ({ kind: "tool_call", context }) as unknown as TachoEvent;
+
+  it("keeps the last recorded value when the batch ends on a frame with no context", () => {
+    expect(
+      lastRecordedContext([
+        frame({ model: "claude-opus-4-1", permission_mode: "default" }),
+        frame({ model: "claude-sonnet-4-5", effort: "high" }),
+        frame(),
+        frame({}),
+      ]),
+    ).toEqual({
+      model: "claude-sonnet-4-5",
+      permissionMode: "default",
+      effort: "high",
+      gitHeadSha: null,
+    });
+  });
+
+  it("returns nulls for a batch that recorded none of them", () => {
+    expect(lastRecordedContext([frame(), frame({ cwd: "/repo" })])).toEqual({
+      model: null,
+      permissionMode: null,
+      effort: null,
+      gitHeadSha: null,
+    });
   });
 });

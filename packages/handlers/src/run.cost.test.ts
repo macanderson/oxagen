@@ -1,6 +1,6 @@
 import { runCostGet } from "@oxagen/oxagen/contracts/run.cost";
 import { describe, expect, it, vi } from "vitest";
-import { createRunCostHandler } from "./run.cost";
+import { createRunCostHandler, provisionalOf } from "./run.cost";
 import { ctx, pricedRun, run, SCOPE } from "./spend.test-support";
 
 const ROLLED_UP_AT = new Date("2026-09-10T12:31:00.000Z");
@@ -92,5 +92,127 @@ describe("get_run_cost", () => {
     expect(out.rollup?.steps).toBe(1);
     expect(out.rollup?.byModel).toEqual([]);
     expect(() => runCostGet.output.parse(out)).not.toThrow();
+  });
+
+  it("answers the wrapped run's provisional figures while no rollup row exists", async () => {
+    const provisional = {
+      byModel: [
+        {
+          model: "claude-sonnet-5",
+          provider: "anthropic",
+          calls: 3,
+          cost: { micros: "900", currency: "USD", basis: "client_attested" as const },
+        },
+      ],
+      toolCalls: 4,
+      asOf: "2026-09-23T10:00:00.000Z",
+    };
+    const readProvisional = vi.fn(async () => provisional);
+    const handler = createRunCostHandler({
+      readRunTotalsByIds: async () => new Map(),
+      readProvisional,
+    });
+    const runId = "tse_0000000000000000000002";
+    const out = await handler({ runId }, ctx());
+    expect(readProvisional).toHaveBeenCalledWith(SCOPE, runId);
+    expect(out).toEqual({ runId, rollup: null, provisional });
+    expect(() => runCostGet.output.parse(out)).not.toThrow();
+  });
+
+  it("does not read provisional figures once the rollup row exists", async () => {
+    const row = pricedRun(10n);
+    const readProvisional = vi.fn(async () => null);
+    const handler = createRunCostHandler({
+      readRunTotalsByIds: async () =>
+        new Map([[row.runId, { ...row, rolledUpAt: ROLLED_UP_AT }]]),
+      readProvisional,
+    });
+    const out = await handler({ runId: row.runId }, ctx());
+    expect(readProvisional).not.toHaveBeenCalled();
+    expect(out).not.toHaveProperty("provisional");
+  });
+
+  it("answers rollup: null alone when no wrapped session matches", async () => {
+    const handler = createRunCostHandler({
+      readRunTotalsByIds: async () => new Map(),
+      readProvisional: async () => null,
+    });
+    const runId = "run_0000000000000000000003";
+    expect(await handler({ runId }, ctx())).toEqual({ runId, rollup: null });
+  });
+});
+
+describe("provisionalOf", () => {
+  const at = new Date("2026-09-23T10:00:00.000Z");
+  const base = { toolCalls: 7, lastEventAt: at };
+
+  it("answers null when no session matched", () => {
+    expect(provisionalOf([])).toBeNull();
+  });
+
+  it("answers an empty model list for a session with no model rows yet", () => {
+    expect(
+      provisionalOf([
+        {
+          ...base,
+          model: null,
+          provider: null,
+          requests: null,
+          costMicros: null,
+          costBasis: null,
+        },
+      ]),
+    ).toEqual({ byModel: [], toolCalls: 7, asOf: at.toISOString() });
+  });
+
+  it("keeps a known basis, reads an unknown one as client_attested, and nulls a zero cost", () => {
+    const out = provisionalOf([
+      {
+        ...base,
+        model: "claude-opus-5-5",
+        provider: "anthropic",
+        requests: 2,
+        costMicros: 1500,
+        costBasis: "gateway_observed",
+      },
+      {
+        ...base,
+        model: "claude-sonnet-5",
+        provider: null,
+        requests: 1,
+        costMicros: 40,
+        costBasis: "harness",
+      },
+      {
+        ...base,
+        model: "gpt-5",
+        provider: "openai",
+        requests: 1,
+        costMicros: 0,
+        costBasis: null,
+      },
+    ]);
+    expect(out?.byModel).toEqual([
+      {
+        model: "claude-opus-5-5",
+        provider: "anthropic",
+        calls: 2,
+        cost: { micros: "1500", currency: "USD", basis: "gateway_observed" },
+      },
+      {
+        model: "claude-sonnet-5",
+        provider: null,
+        calls: 1,
+        cost: { micros: "40", currency: "USD", basis: "client_attested" },
+      },
+      { model: "gpt-5", provider: "openai", calls: 1, cost: null },
+    ]);
+    expect(() =>
+      runCostGet.output.parse({
+        runId: "tse_0000000000000000000004",
+        rollup: null,
+        provisional: out,
+      }),
+    ).not.toThrow();
   });
 });

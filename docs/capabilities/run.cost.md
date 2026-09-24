@@ -26,6 +26,7 @@ The Run page's cost strip and Cost tab (Mission Control spec §12.6, §12.7; ADR
 |---|---|---|
 | `runId` | string | as asked |
 | `rollup` | object or null | null until the rollup has built a row for the run, or for an id with no row in the caller's workspace |
+| `provisional` | object, null or absent | present only while `rollup` is null and the id names a wrapped session in the caller's workspace |
 
 The rollup:
 
@@ -44,6 +45,16 @@ The rollup:
 | `rolledUpAt` | string | RFC 3339; when the row was last rebuilt |
 | `isEstimate` | boolean | true when the row was rebuilt while the run was open: every figure covers the frames recorded so far, and the run may add more. False once the rollup has rebuilt the sealed run |
 
+The provisional figures come from `tacho.session_models` and the root session's tool-call counter. Ingest adds each counted `llm_call` frame to them as it lands, so they cover the run up to its last recorded event. The rollup replaces them once it rebuilds the run.
+
+| Field | Type | Description |
+|---|---|---|
+| `byModel` | object[] | `{ model, provider, calls, cost }`, one per model; `cost` is the sum of each call's reported cost with the row's basis, `client_attested` when the row carries none the contract knows, or null when no call reported a cost |
+| `toolCalls` | integer | the root session's tool-call count |
+| `asOf` | string | RFC 3339; the run's last recorded event |
+
+Subagent sessions are not included. They are separate sessions until the rollup folds them into the run.
+
 ## Honesty
 
-A run with no row answers `rollup: null` and a page renders that slice as not recorded; a row whose frames priced nothing answers `cost: null`. Neither is a zero. A figure with `isEstimate: true` is labelled an estimate wherever it renders. The read names `org_id` and `workspace_id` beside RLS, so another workspace's run answers `rollup: null` as well.
+A run with no row answers `rollup: null` and a page renders that slice as not recorded; a row whose frames priced nothing answers `cost: null`. Neither is a zero. The read names `org_id` and `workspace_id` beside RLS, so another workspace's run answers `rollup: null` as well. A figure with `isEstimate: true` is labelled an estimate wherever it renders. The Run page labels provisional figures as provisional, because the rollup may reprice or recount them.

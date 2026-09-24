@@ -261,12 +261,12 @@ function Tiles({
 
 // ── Row words and cells ──────────────────────────────────────────────────
 
-// A run's second line: its generated name, else its task reference, the same
-// fallback the Run page's header reads. A workspace that turned enrichment off
-// shows no generated name anywhere, so its runs fall back to the task
-// reference, and a run with neither shows only its id.
+// A run's second line: its name (the harness title, else the generated one),
+// else its task reference, the same fallback the Run page's header reads.
+// Turning enrichment off stops Oxagen generating names; it never hides the
+// title the harness recorded. A run with neither shows only its id.
 function runTitle(run: RunRow): string | null {
-  return (run.enrichmentEnabled === false ? null : run.name) ?? run.taskRef;
+  return run.name ?? run.taskRef;
 }
 
 function useRowWords(listed: readonly ListedRun[]): RowWords[] {

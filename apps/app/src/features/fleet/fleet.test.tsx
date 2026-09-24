@@ -468,7 +468,7 @@ describe("the Runs panel", () => {
   // A workspace that turned enrichment off shows no generated name anywhere
   // (the Run page's header reads the same fallback), so a row falls back to
   // its task reference, and a run with neither shows only its id.
-  it("shows no generated name for a run whose workspace turned enrichment off (negative)", async () => {
+  it("keeps a run's recorded name when its workspace turned enrichment off", async () => {
     await renderFleet({
       runs: runPage([
         runRow({ id: "tse_off", enrichmentEnabled: false }),
@@ -481,8 +481,9 @@ describe("the Runs panel", () => {
       ]),
       approvals: NO_APPROVALS,
     });
-    expect(row("tse_off")).toHaveTextContent("ENG-4121 cut the 3.2 release");
-    expect(row("tse_off")).not.toHaveTextContent("Cut the 3.2 release branch");
+    // Enrichment off stops Oxagen writing names; it never hides the one the
+    // run carries, which for a wrapped session is its harness title.
+    expect(row("tse_off")).toHaveTextContent("Cut the 3.2 release branch");
     expect(row("tse_bare").querySelector("td")?.textContent).toBe("tse_bare");
   });
 

@@ -1043,6 +1043,59 @@ describe("a run row names who ran it, on what, with which model", () => {
     expect((await list({ limit: 50 }, ctx())).runs[0]?.model).toBeNull();
   });
 
+  it("reports the effort, the final permission mode and the token counters the session recorded", async () => {
+    const { list } = handlerOver(
+      [],
+      [
+        tachoSession({
+          publicId: "tse_facts",
+          session: {
+            effort: "high",
+            permissionModeInitial: "default",
+            permissionModeFinal: "acceptEdits",
+            inputTokens: 1200,
+            outputTokens: 340,
+            cacheReadTokens: 56000,
+            cacheCreationTokens: 7800,
+          },
+        }),
+      ],
+    );
+    const run = (await list({ limit: 50 }, ctx())).runs[0];
+    expect(run?.effort).toBe("high");
+    expect(run?.permissionMode).toBe("acceptEdits");
+    expect(run?.reportedTokens).toEqual({
+      input: 1200,
+      output: 340,
+      cacheRead: 56000,
+      cacheWrite: 7800,
+    });
+  });
+
+  it("falls back to the first permission mode and answers null for unrecorded facts (negative)", async () => {
+    const { list } = handlerOver(
+      [],
+      [
+        tachoSession({
+          publicId: "tse_nofacts",
+          session: {
+            effort: null,
+            permissionModeInitial: "plan",
+            permissionModeFinal: null,
+            inputTokens: 0,
+            outputTokens: 0,
+            cacheReadTokens: 0,
+            cacheCreationTokens: 0,
+          },
+        }),
+      ],
+    );
+    const run = (await list({ limit: 50 }, ctx())).runs[0];
+    expect(run?.effort).toBeNull();
+    expect(run?.permissionMode).toBe("plan");
+    expect(run?.reportedTokens).toBeNull();
+  });
+
   it("preserves the recorded harness version separately from the model", async () => {
     const { list } = handlerOver(
       [],

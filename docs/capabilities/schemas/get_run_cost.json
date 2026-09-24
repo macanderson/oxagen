@@ -1,7 +1,7 @@
 {
   "name": "get_run_cost",
   "domain": "run",
-  "description": "Read one run's cost rollup: total cost with its basis, tokens by class, cache hit rate, turns, steps, model and tool calls, and the per-model and per-tool breakdown, marked as an estimate while the run is still open; null until the rollup has built the run from its frames.",
+  "description": "Read one run's cost rollup: total cost with its basis, tokens by class, cache hit rate, turns, steps, model and tool calls, and the per-model and per-tool breakdown, marked as an estimate while the run is still open; null until the rollup has rebuilt the run from its frames, with provisional per-model figures for a wrapped run in the meantime.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -321,6 +321,96 @@
               "priceEntryIds",
               "rolledUpAt",
               "isEstimate"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "provisional": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "byModel": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "model": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "calls": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "cost": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "micros": {
+                              "type": "string"
+                            },
+                            "currency": {
+                              "type": "string"
+                            },
+                            "basis": {
+                              "type": "string",
+                              "enum": [
+                                "gateway_observed",
+                                "client_attested",
+                                "mixed",
+                                "estimated"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "micros",
+                            "currency",
+                            "basis"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "model",
+                    "provider",
+                    "calls",
+                    "cost"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "toolCalls": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "asOf": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "byModel",
+              "toolCalls",
+              "asOf"
             ],
             "additionalProperties": false
           },
