@@ -441,14 +441,16 @@ packages/oxagen/src/contracts/router.policy.get.ts
 
 ## 15. Completion and replay UI deferred (2026-09-20)
 
-[ADR-130](docs/adr/ADR-130-spend-and-operator-feedback-ui.md) removes completion, witness, proof, and scores from the app's current presentation. The replay write components remain in place with their tests and backend contracts:
+[ADR-130](docs/adr/ADR-130-spend-and-operator-feedback-ui.md) removes completion, witness, proof, and scores from the app's current presentation. The replay write components remained in place with their tests and backend contracts:
 
 - `apps/app/src/features/run/replay-actions.tsx`
 - `forkRun` and `bisectRuns` in `apps/app/src/features/run/actions.ts`
 
-The app's Knip configuration excludes only this retained file from unused-file reporting. The two retained exports carry `@deregistered`. They still compile and their tests remain. No production route imports the component. The shrink-only baseline stays empty.
+The app's Knip configuration excluded only this retained file from unused-file reporting, and the two retained exports carried `@deregistered`. They compiled and kept their tests while no production route imported the component.
 
-On 2026-09-23 the Run page spec (`mockups/pages/run.md` in the roadmap repository) restored the Chain and seal tab and the replay grade badge, which it marks as built. `chain.tsx`, `replay-grade.tsx` and `ChainCheckpoint` left this register then. Fork and Bisect stay here because the same spec marks them as later work.
+On 2026-09-23 the Run page spec (`mockups/pages/run.md` in the roadmap repository) restored the Chain and seal tab and the replay grade badge, which it marks as built. `chain.tsx`, `replay-grade.tsx` and `ChainCheckpoint` left this register then.
+
+On 2026-09-24 [ADR-158](docs/adr/ADR-158-the-run-page-draws-every-panel-of-the-mockup.md) returned Fork replay and Bisect to a sealed run's header, as the mockup draws them. `replay-actions.tsx`, `forkRun` and `bisectRuns` left this register then, and the Knip exclusion for the file was removed. Fork keeps its gate: it is offered on a ledger run graded `fork` or `retry`, and drawn disabled with the reason everywhere else.
 
 ### Run summary implementation (ADR-153)
 

@@ -20,6 +20,7 @@ import type {
   ResolvedApprovalItem,
 } from "@/data/contracts/approvals";
 import type { MandateList } from "@/data/contracts/mandates";
+import type { RunWork } from "@/data/contracts/run-work";
 import type { RunRow } from "@/data/contracts/runs";
 import type { DataSource } from "@/data/ports";
 import type { AgentDetail } from "@/data/contracts/agents";
@@ -511,6 +512,12 @@ export function runOutputs(
 type RunReads = {
   detail: Read<RunDetail>;
   /**
+   * `get_run_work`, started with the page and awaited by the header's
+   * checkout strip and the Changes panel. A test that says nothing about it
+   * gets a run whose host enrolled no checkout and opened no pull request.
+   */
+  work?: Read<RunWork>;
+  /**
    * The spine above the tabs, read with the page and not with a tab. A test
    * that says nothing about it gets a run that produced nothing, so a test
    * about the header or a tab is not also a test about the spine. A function
@@ -619,15 +626,16 @@ export function runSource(reads: RunReads) {
         ),
       work: (_ctx, runId) =>
         Promise.resolve(
-          readOk({
-            runId,
-            machine: null,
-            checkouts: [],
-            diffs: [],
-            pullRequests: [],
-            complete: false,
-            warnings: ["checkout_context_not_recorded"],
-          }),
+          reads.work ??
+            readOk({
+              runId,
+              machine: null,
+              checkouts: [],
+              diffs: [],
+              pullRequests: [],
+              complete: false,
+              warnings: ["checkout_context_not_recorded"],
+            }),
         ),
       get: answer("get", reads.detail),
       frameBody: answer("frameBody", reads.frameBody),
@@ -716,3 +724,74 @@ export function runSource(reads: RunReads) {
 }
 
 export const ok = readOk;
+
+/** A checkout the host enrolled, on a pull request the run pushed to. */
+export function runWork(overrides: Partial<RunWork> = {}): RunWork {
+  const repository = {
+    host: "github.com",
+    owner: "acme",
+    name: "platform",
+    url: "https://github.com/acme/platform",
+    connected: true,
+  };
+  return {
+    runId: "tse_7k2m9q",
+    machine: { name: "mac-studio.local" },
+    checkouts: [
+      {
+        ref: "co_1",
+        path: "~/src/platform/.worktrees/release-3.2",
+        branch: "release/3.2",
+        headSha: null,
+        remoteDigest: null,
+        repository,
+        firstSeq: "1",
+        lastSeq: "431",
+      },
+    ],
+    diffs: [],
+    pullRequests: [
+      {
+        repository,
+        number: 482,
+        url: "https://github.com/acme/platform/pull/482",
+        title: "Release 3.2",
+        state: "open",
+        headSha: null,
+        headRef: "release/3.2",
+        association: "recorded",
+        checkoutRefs: ["co_1"],
+        observedAt: at(-300),
+        current: true,
+        ci: {
+          overall: "passing",
+          counts: {
+            total: 2,
+            passed: 2,
+            failed: 0,
+            pending: 0,
+            skipped: 0,
+            neutral: 0,
+          },
+          runs: [
+            {
+              name: "test",
+              status: "completed",
+              conclusion: "success",
+              url: null,
+              startedAt: null,
+              completedAt: null,
+              durationMs: null,
+              app: null,
+            },
+          ],
+          complete: true,
+        },
+        diff: null,
+      },
+    ],
+    complete: true,
+    warnings: [],
+    ...overrides,
+  };
+}

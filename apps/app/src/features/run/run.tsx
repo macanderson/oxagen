@@ -91,22 +91,31 @@ function Tabs({
   );
 }
 
-function Section({ tab, props }: { tab: Tab; props: RunTabProps }): ReactNode {
+/**
+ * The open tab's body. Each tab is a function the page awaits, not an
+ * element it renders: a tab makes its own reads and answers the tree of
+ * synchronous components those reads fill, so the page renders the same way
+ * on the server and in a test.
+ */
+function sectionOf(
+  tab: Tab,
+  props: RunTabProps,
+): Promise<ReactNode> | ReactNode {
   switch (tab) {
     case "transcript":
-      return <TranscriptTab {...props} />;
+      return TranscriptTab(props);
     case "issues":
-      return <IssuesTab {...props} />;
+      return IssuesTab(props);
     case "actions":
-      return <GovernedActionsTab {...props} />;
+      return GovernedActionsTab(props);
     case "cost":
-      return <CostTab {...props} />;
+      return CostTab(props);
     case "policy":
-      return <PolicyTab {...props} />;
+      return PolicyTab(props);
     case "context":
-      return <ContextTab {...props} />;
+      return ContextTab(props);
     case "chain":
-      return <ChainTab {...props} />;
+      return ChainTab(props);
   }
 }
 
@@ -232,6 +241,7 @@ export async function Run({
     now,
   };
   const parked = pending.ok && pending.value.items.length > 0;
+  const section = await sectionOf(selected, props);
   return (
     <div data-testid="run-page" className="flex flex-col">
       <RunHeader
@@ -266,7 +276,7 @@ export async function Run({
             data-testid={`run-tab-${selected}`}
             className="flex flex-col gap-3.5"
           >
-            <Section tab={selected} props={props} />
+            {section}
           </div>
         </div>
         <RunSide>

@@ -515,15 +515,16 @@ describe("the Run page", () => {
   });
 
   // The spec (pages/run.md) makes the run's id the h1 and "Run" the eyebrow,
-  // so the tab title and the h1 differ here, unlike every other page.
+  // so the tab title and the h1 differ here, unlike every other page. The Run
+  // feature draws that header itself (its not-loaded states replace it), so
+  // the route names the document and hands the whole body to Run; the h1 is
+  // held in features/run/run.test.tsx.
   async function expectRunTitle(props: RouteProps<typeof SEGMENTS>) {
     const page = await RUN();
     const metadata = await page.generateMetadata(props);
     const container = await renderPage(await page.default(props));
-    const headings = [...container.querySelectorAll("h1")];
-    expect(headings.map((h) => h.textContent)).toEqual(["arun_1"]);
-    expect(headings[0]?.className).toContain("font-mono");
-    expect(container).toHaveTextContent(title("run"));
+    expect(container.querySelectorAll("h1")).toHaveLength(0);
+    expect(screen.getByTestId("run-body")).toBeTruthy();
     expect(metadata.title).toBe(title("run"));
   }
 

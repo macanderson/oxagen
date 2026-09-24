@@ -24,7 +24,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh }),
 }));
 
-const { RecordActions } = await import("./record-actions");
+const { ExportAction } = await import("./record-actions");
 
 // The dialog's poll timing, mirrored from record-actions.tsx: the first read
 // at 2s, each wait 1.5 times the last, and reading stops after 120s.
@@ -81,13 +81,11 @@ async function queueExport() {
   const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
   const view = render(
     <IntlProvider>
-      <RecordActions
+      <ExportAction
         org="acme"
         ws="core-platform"
         runId={RUN}
         sealed
-        hasSummary
-        summarizable
         orgRole="owner"
       />
     </IntlProvider>,

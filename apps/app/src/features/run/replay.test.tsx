@@ -44,7 +44,11 @@ describe("Fork", () => {
       value: { attemptId: "arun_9x2k", attemptNumber: 2 },
     });
     const user = userEvent.setup();
-    const run = runRow({ id: "tse_7k2m9q", source: "ledger", replayGrade: "fork" });
+    const run = runRow({
+      id: "tse_7k2m9q",
+      source: "ledger",
+      replayGrade: "fork",
+    });
     renderReplay(run);
     await user.click(screen.getByTestId("run-fork"));
     await user.type(screen.getByLabelText("Replay up to frame"), "120");
@@ -67,7 +71,7 @@ describe("Fork", () => {
     const run = runRow({ source: "ledger", replayGrade: "retry" });
     renderReplay(run);
     expect(screen.getByTestId("run-fork")).not.toBeDisabled();
-    expect(screen.queryByTestId("fork-refused")).toBeNull();
+    expect(screen.getByTestId("run-fork")).not.toHaveAttribute("title");
   });
 
   it("draws Fork disabled with the needs-a-ledger-run reason on a tacho run, and opens no dialog and calls nothing (negative)", async () => {
@@ -76,7 +80,8 @@ describe("Fork", () => {
     renderReplay(run);
     const button = screen.getByTestId("run-fork");
     expect(button).toBeDisabled();
-    expect(screen.getByTestId("fork-refused")).toHaveTextContent(
+    expect(screen.getByTestId("run-fork")).toHaveAttribute(
+      "title",
       "Forking replays an attempt from the evidence ledger. This run was recorded by a wrapped agent, which has no attempt to branch from.",
     );
     await user.click(button);
@@ -99,7 +104,7 @@ describe("Fork", () => {
       const run = runRow({ source: "ledger", replayGrade: grade });
       renderReplay(run);
       expect(screen.getByTestId("run-fork")).toBeDisabled();
-      expect(screen.getByTestId("fork-refused")).toHaveTextContent(sentence);
+      expect(screen.getByTestId("run-fork")).toHaveAttribute("title", sentence);
     },
   );
 
@@ -107,7 +112,8 @@ describe("Fork", () => {
     const run = runRow({ source: "ledger", replayGrade: null });
     renderReplay(run);
     expect(screen.getByTestId("run-fork")).toBeDisabled();
-    expect(screen.getByTestId("fork-refused")).toHaveTextContent(
+    expect(screen.getByTestId("run-fork")).toHaveAttribute(
+      "title",
       "This run's seal recorded no replay grade, so Oxagen cannot say the recording is complete enough to fork.",
     );
   });
@@ -207,7 +213,9 @@ describe("Bisect", () => {
     renderReplay(runRow());
     await user.click(screen.getByTestId("run-bisect"));
     await user.type(screen.getByLabelText("The other run"), "tse_other1");
-    await user.click(screen.getByRole("button", { name: "Find the divergence" }));
+    await user.click(
+      screen.getByRole("button", { name: "Find the divergence" }),
+    );
     await waitFor(() => {
       expect(screen.getByTestId("bisect-diverged")).toHaveTextContent(
         "The runs diverge at frame 42, after 41 frames that agreed.",
@@ -226,7 +234,9 @@ describe("Bisect", () => {
     renderReplay(runRow());
     await user.click(screen.getByTestId("run-bisect"));
     await user.type(screen.getByLabelText("The other run"), "tse_other1");
-    await user.click(screen.getByRole("button", { name: "Find the divergence" }));
+    await user.click(
+      screen.getByRole("button", { name: "Find the divergence" }),
+    );
     await waitFor(() => {
       expect(screen.getByTestId("bisect-same")).toHaveTextContent(
         "The two runs agree at every frame. 431 frames were compared.",
@@ -248,7 +258,9 @@ describe("Bisect", () => {
     renderReplay(runRow());
     await user.click(screen.getByTestId("run-bisect"));
     await user.type(screen.getByLabelText("The other run"), "tse_other1");
-    await user.click(screen.getByRole("button", { name: "Find the divergence" }));
+    await user.click(
+      screen.getByRole("button", { name: "Find the divergence" }),
+    );
     await waitFor(() => {
       expect(screen.getByTestId("bisect-diverged")).toBeInTheDocument();
     });

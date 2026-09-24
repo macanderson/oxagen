@@ -35,6 +35,7 @@ import {
   mockupTranscript,
   runSource,
   runTranscript,
+  runWork,
   transcriptBody,
   transcriptEntry,
 } from "./run.builders";
@@ -153,11 +154,30 @@ async function renderRun(
     spine: view.spine ?? null,
     now: NOW,
   });
-  const { container } = render(<IntlProvider>{element}</IntlProvider>);
+  // Inside an async act, so the work read the header and the Changes panel
+  // suspend on has settled before the test reads the page.
+  let container!: HTMLElement;
+  await act(async () => {
+    ({ container } = render(<IntlProvider>{element}</IntlProvider>));
+  });
   return { container, calls };
 }
 
 const ok = readOk;
+
+/** One call parked on this run, as `list_approvals` answers it. */
+const approval = () => ({
+  id: "apr_1",
+  runId: "tse_7k2m9q",
+  tool: "create_release",
+  agentKey: "acme.core.release-bot",
+  requester: "usr_marcusbell",
+  mandateId: null,
+  rule: null,
+  autoEligibility: null,
+  createdAt: new Date(NOW - 60_000).toISOString(),
+  expiresAt: new Date(NOW + 3_600_000).toISOString(),
+});
 
 afterEach(() => {
   cleanup();
@@ -165,19 +185,34 @@ afterEach(() => {
 });
 
 describe("header", () => {
-  it("titles the when line with the generated name and draws the model's summary as generated", async () => {
+  it("heads the page with the eyebrow and the run id as a mono h1", async () => {
     const { container } = await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+    });
+    const h1 = screen.getByRole("heading", { level: 1 });
+    expect(h1).toHaveTextContent(/^tse_7k2m9q$/);
+    expect(h1.className).toContain("font-mono");
+    expect(
+      within(screen.getByTestId("run-header")).getByText("Run"),
+    ).toBeTruthy();
+    await expectNoAxe(container);
+  });
+
+  it("titles the when line with the generated name and draws the model's summary as generated", async () => {
+    await renderRun({
       detail: ok(runDetail()),
       transcript: ok(runTranscript()),
     });
     expect(screen.getByTestId("run-when")).toHaveTextContent(
       "Cut the 3.2 release branch",
     );
-    const summary = screen.getByTestId("generated-summary");
-    expect(summary).toHaveTextContent("Cut release/3.2 from main");
-    expect(summary).toHaveTextContent("generated");
-    expect(summary).toHaveTextContent("Written by z-ai/glm-flash-latest on");
-    await expectNoAxe(container);
+    const summary = within(screen.getByTestId("run-summary"));
+    expect(summary.getByTestId("generated-summary")).toHaveTextContent(
+      "Cut release/3.2 from main",
+    );
+    expect(summary.getByText("generated · not the record")).toBeTruthy();
+    expect(summary.getByText("z-ai/glm-flash-latest")).toBeTruthy();
   });
 
   it("titles a run with its task reference when no generated name exists", async () => {
@@ -201,17 +236,18 @@ describe("header", () => {
           run: runRow({
             cost: null,
             turns: null,
+            status: "live",
             sealedAt: null,
             replayGrade: null,
           }),
         }),
       ),
-      transcript: ok(runTranscript()),
+      transcript: readError("frame_store_unreachable", 502),
       cost: ok(runCost({ rollup: null })),
     });
     const stats = within(screen.getByTestId("run-stats"));
-    expect(stats.getAllByText("not recorded").length).toBeGreaterThanOrEqual(3);
-    expect(stats.getByText("still running")).toBeTruthy();
+    // Tokens, prompts, cost, wasted, wall clock and cache hit: nothing backs any.
+    expect(stats.getAllByText("not recorded")).toHaveLength(6);
     expect(screen.queryByText("$0.00")).toBeNull();
   });
 
@@ -230,26 +266,32 @@ describe("header", () => {
       transcript: ok(runTranscript()),
     });
     expect(screen.queryByText("Old generated name")).toBeNull();
+    expect(screen.getByTestId("run-when")).toHaveTextContent(
+      "A derived project label",
+    );
     expect(
-      within(screen.getByTestId("run-when")).getByText(
-        "A derived project label",
-      ),
-    ).toBeTruthy();
-    expect(
-      screen.getByRole("checkbox", {
+      within(screen.getByTestId("run-summary")).getByRole("checkbox", {
         name: "Automatic run names and summaries",
       }),
     ).not.toBeChecked();
   });
 
-  it("draws the agent, status and tier chips, and the rig the run ran on", async () => {
+  it("draws the agent, status, tier and task chips, and the rig the run ran on", async () => {
     const { container } = await renderRun({
       detail: ok(runDetail()),
       transcript: ok(runTranscript()),
     });
     const chips = within(screen.getByTestId("run-chips"));
-    expect(chips.getByTestId("run-tier")).toBeTruthy();
-    expect(chips.getByTestId("run-task")).toHaveTextContent("ENG-4121");
+    // The tier is its own recorded word, with the longer reading on hover.
+    expect(chips.getByTestId("run-tier")).toHaveTextContent(/^harness$/);
+    expect(chips.getByTestId("run-tier")).toHaveAttribute(
+      "title",
+      "observed at the harness",
+    );
+    expect(chips.getByTestId("run-task")).toHaveTextContent(
+      "task ENG-4121 cut the 3.2 release",
+    );
+    expect(chips.getByText("fork replay")).toBeTruthy();
     const rig = within(screen.getByTestId("run-rig"));
     expect(rig.getByText("claude-sonnet-5")).toHaveAttribute(
       "title",
@@ -257,38 +299,61 @@ describe("header", () => {
     );
     // The session recorded its harness, so the rig names it and its version.
     expect(rig.getByText("Claude Code")).toBeTruthy();
-    expect(rig.getByText("version 2.1.0")).toBeTruthy();
-    expect(rig.getByText("effort not captured")).toBeTruthy();
+    expect(rig.getByText("2.1.0")).toBeTruthy();
+    // Oxagen never guesses an effort value.
+    expect(screen.getByTestId("run-effort")).toHaveTextContent(
+      "effort not captured",
+    );
     await expectNoAxe(container);
   });
 
-  it("names the operator and the machine the run ran on, with a copy button for the host", async () => {
+  it("prints the checkout the host enrolled: the repository, the branch, the pull request and a copyable path", async () => {
     const { container } = await renderRun({
       detail: ok(runDetail()),
       transcript: ok(runTranscript()),
+      work: ok(runWork()),
     });
-    const when = within(screen.getByTestId("run-when"));
-    expect(when.getByText("Marcus Bell")).toBeTruthy();
-    // The id is a key, not a label: it is in the hover card, never in the line.
-    expect(when.queryByText("prn_marcusbell")).toBeNull();
-    await userEvent.hover(when.getByTestId("run-operator-name"));
-    expect(when.getByTestId("operator-card")).toHaveTextContent(
-      "prn_marcusbell",
+    const checkout = within(await screen.findByTestId("run-checkout"));
+    expect(
+      (
+        await checkout.findByRole("link", { name: "acme/platform" })
+      ).getAttribute("href"),
+    ).toBe("https://github.com/acme/platform");
+    // A branch that is a pull request's head links to the pull request.
+    expect(
+      checkout.getByRole("link", { name: "release/3.2" }).getAttribute("href"),
+    ).toBe("https://github.com/acme/platform/pull/482");
+    expect(
+      checkout
+        .getByRole("link", { name: "acme/platform#482" })
+        .getAttribute("href"),
+    ).toBe("https://github.com/acme/platform/pull/482");
+    const path = checkout.getByTestId("run-checkout-path");
+    expect(path).toHaveTextContent(
+      "mac-studio.local:~/src/platform/.worktrees/release-3.2",
     );
-    const checkout = within(screen.getByTestId("run-checkout"));
-    expect(checkout.getByText("mac-studio.local")).toBeTruthy();
-    expect(checkout.getByRole("button", { name: /Copy/ })).toBeTruthy();
-    expect(checkout.getByText("path not captured")).toBeTruthy();
-    const machine = within(screen.getByTestId("run-machine"));
-    expect(
-      machine.getByText("Session machine facts not recorded."),
-    ).toBeTruthy();
-    expect(
-      machine.getByText(
-        "Enrollment hostname and facts: darwin · 15.6 · arm64 · v24.4.0",
-      ),
-    ).toBeTruthy();
+    expect(path.getAttribute("title")).toContain(
+      "Oxagen recorded this checkout on mac-studio.local.",
+    );
     await expectNoAxe(container);
+  });
+
+  it("names the host with no enrolled checkout and says no path is held, with the host's facts on hover", async () => {
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+    });
+    const machine = await screen.findByTestId("run-machine");
+    expect(machine).toHaveTextContent("mac-studio.local");
+    expect(machine).toHaveTextContent("path not captured");
+    const title = machine.getAttribute("title") ?? "";
+    expect(title).toContain("Session machine facts not recorded.");
+    expect(title).toContain(
+      "Enrollment hostname and facts: darwin · 15.6 · arm64 · v24.4.0",
+    );
+    expect(
+      within(screen.getByTestId("run-checkout")).getByText("no pull request"),
+    ).toBeTruthy();
   });
 
   it("labels session host observations separately from enrollment facts", async () => {
@@ -315,18 +380,13 @@ describe("header", () => {
       ),
       transcript: ok(runTranscript()),
     });
-    const machine = within(screen.getByTestId("run-machine"));
-    expect(
-      machine.getByText("Recorded in this session: linux · 6.12 · x64"),
-    ).toBeTruthy();
-    expect(
-      machine.getByText(
-        "Enrollment hostname and facts: darwin · 15.6 · arm64 · v24.4.0",
-      ),
-    ).toBeTruthy();
-    expect(
-      machine.queryByText("Session machine facts not recorded."),
-    ).toBeNull();
+    const title =
+      (await screen.findByTestId("run-machine")).getAttribute("title") ?? "";
+    expect(title).toContain("Recorded in this session: linux · 6.12 · x64");
+    expect(title).toContain(
+      "Enrollment hostname and facts: darwin · 15.6 · arm64 · v24.4.0",
+    );
+    expect(title).not.toContain("Session machine facts not recorded.");
   });
 
   it("reads a model and a machine the run does not carry as not recorded, never a placeholder", async () => {
@@ -347,15 +407,12 @@ describe("header", () => {
     expect(rig.getByText("model not recorded")).toBeTruthy();
     // No session harness and a denied agent read: the harness is not guessed.
     expect(rig.getByText("harness not recorded")).toBeTruthy();
-    expect(
-      within(screen.getByTestId("run-checkout")).getByText(
-        "machine not recorded",
-      ),
-    ).toBeTruthy();
-    expect(
-      screen.getByText("The evidence ledger records no host for a run."),
-    ).toBeTruthy();
-    expect(screen.queryByTestId("run-machine")).toBeNull();
+    const machine = await screen.findByTestId("run-machine");
+    expect(machine).toHaveTextContent("machine not recorded");
+    expect(machine).toHaveAttribute(
+      "title",
+      "The evidence ledger records no host for a run.",
+    );
     expect(screen.queryByText("unknown")).toBeNull();
   });
 
@@ -402,17 +459,17 @@ describe("header", () => {
     });
     const operator = screen.getByTestId("run-operator");
     expect(operator).not.toHaveTextContent("A person, name not recorded");
-    expect(operator).toHaveTextContent("by not recorded");
+    expect(operator).toHaveTextContent(/^not recorded$/);
   });
 
   it("draws the pause banner only while ingress is paused", async () => {
     await renderRun({
-      detail: ok(runDetail({ run: runRow({ ingressPaused: true }) })),
+      detail: ok(
+        runDetail({ run: runRow({ status: "live", ingressPaused: true }) }),
+      ),
       transcript: ok(runTranscript()),
     });
-    expect(screen.getByTestId("run-paused")).toHaveTextContent(
-      "Ingress is paused",
-    );
+    expect(screen.getByTestId("run-paused")).toHaveTextContent("Paused.");
     cleanup();
     await renderRun({
       detail: ok(runDetail()),
@@ -435,21 +492,29 @@ describe("header", () => {
       transcript: ok(runTranscript()),
     });
     expect(screen.getByTestId("run-operator-name")).toHaveTextContent(
-      /^prn_unknown_kind$/,
+      /^prn_unknown_kindoperator$/,
     );
     expect(screen.getByTestId("run-operator")).not.toHaveTextContent(
       "not recorded",
     );
   });
 
-  it("names the operator on the started line with its hover card", async () => {
+  it("names the operator the agent acted for, with its hover card", async () => {
     await renderRun({
       detail: ok(runDetail()),
       transcript: ok(runTranscript()),
     });
     const operator = screen.getByTestId("run-operator-name");
-    expect(operator).toHaveTextContent(/^Marcus Bell$/);
+    expect(operator).toHaveTextContent(/^Marcus Belloperator$/);
     expect(operator.getAttribute("data-operator-id")).toBe("prn_marcusbell");
+    // The id is a key, not a label: it is in the hover card, never in the line.
+    expect(
+      within(screen.getByTestId("run-involved")).queryByText("prn_marcusbell"),
+    ).toBeNull();
+    await userEvent.hover(operator);
+    expect(screen.getByTestId("operator-card")).toHaveTextContent(
+      "prn_marcusbell",
+    );
   });
 
   it("omits witness details from the operator view", async () => {
@@ -500,14 +565,54 @@ describe("controls", () => {
     expect(screen.getByTestId("role-no-control")).toBeTruthy();
   });
 
-  it("offers no control on a sealed run, and offers the record writes instead", async () => {
+  it("names the controls as the design does, with Cancel as the one danger action", async () => {
+    await renderRun({
+      detail: ok(runDetail({ run: runRow({ status: "live" }) })),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-pause")).toHaveTextContent("❙❙ Pause run");
+    expect(screen.getByTestId("run-resume")).toHaveTextContent("▶ Resume run");
+    expect(screen.getByTestId("run-cancel").className).toContain(
+      "text-error-ink",
+    );
+    expect(screen.getByTestId("run-steer").className).not.toContain(
+      "text-error-ink",
+    );
+  });
+
+  it("ends a live run's actions on Export, drawn disabled until the run seals", async () => {
+    await renderRun({
+      detail: ok(runDetail({ run: runRow({ status: "live" }) })),
+      transcript: ok(runTranscript()),
+    });
+    const actions = within(screen.getByTestId("run-actions"));
+    const buttons = actions.getAllByRole("button");
+    expect(buttons.at(-1)).toBe(actions.getByTestId("run-export"));
+    expect(actions.getByTestId("run-export")).toBeDisabled();
+    expect(actions.getByTestId("run-export")).toHaveAttribute(
+      "data-reason",
+      "export-live",
+    );
+  });
+
+  it("offers Fork replay, Bisect and Export on a sealed run, and no command", async () => {
     await renderRun({
       detail: ok(runDetail()),
       transcript: ok(runTranscript()),
     });
-    expect(screen.queryByTestId("run-pause")).toBeNull();
-    expect(screen.getByTestId("run-resummarize")).toBeTruthy();
-    expect(screen.getByTestId("run-export")).toBeTruthy();
+    const actions = within(screen.getByTestId("run-actions"));
+    expect(actions.queryByTestId("run-pause")).toBeNull();
+    // A wrapped session has no ledger attempt to branch from, and says so.
+    expect(actions.getByTestId("run-fork")).toBeDisabled();
+    expect(actions.getByTestId("run-fork").getAttribute("title")).toContain(
+      "Forking replays an attempt from the evidence ledger",
+    );
+    expect(actions.getByRole("button", { name: "Bisect" })).toBeEnabled();
+    expect(actions.getByTestId("run-export")).toBeEnabled();
+    // Summarize is the Summary panel's, beside what it writes.
+    expect(
+      within(screen.getByTestId("run-summary")).getByTestId("run-resummarize"),
+    ).toBeTruthy();
   });
 
   it("offers Summarize on a sealed run that has none", async () => {
@@ -523,10 +628,10 @@ describe("controls", () => {
       { detail: ok(runDetail()), transcript: ok(runTranscript()) },
       { viewer: memberCtx },
     );
-    expect(screen.getByTestId("run-export")).toBeDisabled();
-    expect(screen.getByTestId("export-no-role")).toHaveTextContent(
-      "Owner or Admin role",
-    );
+    const exportButton = screen.getByTestId("run-export");
+    expect(exportButton).toBeDisabled();
+    expect(exportButton).toHaveAttribute("data-reason", "export-no-role");
+    expect(exportButton.getAttribute("title")).toContain("Owner or Admin role");
     expect(screen.getByTestId("run-resummarize")).not.toBeDisabled();
     await expectNoAxe(container);
   });
@@ -537,7 +642,10 @@ describe("controls", () => {
       { viewer: viewerCtx },
     );
     expect(screen.getByTestId("run-resummarize")).toBeDisabled();
-    expect(screen.getByTestId("summarize-no-role")).toBeTruthy();
+    expect(screen.getByTestId("run-resummarize")).toHaveAttribute(
+      "data-reason",
+      "summarize-no-role",
+    );
     expect(screen.getByTestId("run-export")).toBeDisabled();
   });
 
@@ -547,7 +655,7 @@ describe("controls", () => {
       transcript: ok(runTranscript()),
     });
     expect(screen.getByTestId("run-export")).not.toBeDisabled();
-    expect(screen.queryByTestId("export-no-role")).toBeNull();
+    expect(screen.getByTestId("run-export")).not.toHaveAttribute("data-reason");
   });
 });
 
@@ -567,7 +675,7 @@ describe("the outputs spine", () => {
     const work = screen.getByRole("complementary", { name: "The work" });
     const spine = within(work).getByTestId("run-outputs");
     expect(spine).toHaveTextContent("src/cut.ts");
-    const tabs = screen.getByRole("navigation", { name: "Run sections" });
+    const tabs = screen.getByRole("tablist", { name: "Run sections" });
     // `DOCUMENT_POSITION_FOLLOWING` is 4: the side column follows the main
     // column, so a phone reads the tabs first.
     expect(tabs.compareDocumentPosition(work) & 4).toBe(4);
@@ -580,7 +688,7 @@ describe("the outputs spine", () => {
       transcript: ok(runTranscript()),
       outputs: () => Promise.reject(new Error("outputs store down")),
     });
-    expect(screen.getByRole("region", { name: "Transcript" })).toBeTruthy();
+    expect(screen.getByTestId("run-tab-transcript")).toBeTruthy();
     expect(
       screen.getByText(
         /What this run produced could not be loaded.*frame_store_unreachable/,
@@ -595,7 +703,7 @@ describe("tabs", () => {
       detail: ok(runDetail()),
       transcript: ok(runTranscript()),
     });
-    expect(screen.getByRole("region", { name: "Transcript" })).toBeTruthy();
+    expect(screen.getByTestId("run-tab-transcript")).toBeTruthy();
     // The stat row, the tab counts, Policy, Context and the Transcript tab
     // share one read.
     expect(calls.transcript).toEqual([
@@ -605,74 +713,88 @@ describe("tabs", () => {
     expect(calls.chain).toHaveLength(0);
   });
 
-  it("reads every frame once and opens it at Steps when the zoom is not a level (negative)", async () => {
+  it("reads every frame once whatever zoom the URL names (negative)", async () => {
     const { calls } = await renderRun(
       { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
       { zoom: "everything-else" },
     );
-    expect(calls.transcript[0]).toEqual([
-      ctx,
-      "tse_7k2m9q",
-      "everything",
-      { kinds: [] },
+    expect(calls.transcript).toEqual([
+      [ctx, "tse_7k2m9q", "everything", { kinds: [] }],
     ]);
-    expect(screen.getByRole("button", { name: "Steps" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
   });
 
-  it("opens the transcript at the level the URL asked for, from the same read", async () => {
-    const { calls } = await renderRun(
-      { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
-      { zoom: "turns" },
-    );
-    expect(calls.transcript[0]).toEqual([
-      ctx,
-      "tse_7k2m9q",
-      "everything",
-      { kinds: [] },
-    ]);
-    expect(screen.getByRole("button", { name: "Turns" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-  });
-
-  it("opens Transcript for a tab that is not a section (negative)", async () => {
+  it("opens Transcript for a tab that is not a section, and Cost for the retired proof tab (negative)", async () => {
     const { calls } = await renderRun(
       { detail: ok(runDetail()), transcript: ok(runTranscript()) },
-      { tab: "proof" },
+      { tab: "no-such-tab" },
     );
-    expect(screen.getByRole("region", { name: "Transcript" })).toBeTruthy();
+    expect(screen.getByTestId("run-tab-transcript")).toBeTruthy();
     expect(calls.chain).toHaveLength(0);
+    for (const tab of ["proof", "dod", "ladder"]) {
+      cleanup();
+      await renderRun(
+        { detail: ok(runDetail()), transcript: ok(runTranscript()) },
+        { tab },
+      );
+      expect(screen.getByRole("tab", { name: /Cost/ })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+    }
   });
 
   it("lists the seven tabs in the spec's order, each with its count", async () => {
-    await renderRun({
+    const { container } = await renderRun({
       detail: ok(runDetail()),
       transcript: ok(runTranscript()),
     });
-    const tabs = within(
-      screen.getByRole("navigation", { name: "Run sections" }),
-    );
+    const tabs = within(screen.getByRole("tablist", { name: "Run sections" }));
     expect(
-      tabs.getAllByRole("link").map((link) => link.getAttribute("href")),
+      tabs.getAllByRole("tab").map((tab) => tab.getAttribute("href")),
     ).toEqual(
-      ["transcript", "issues", "actions", "cost", "policy", "context", "chain"]
-        .map((tab) => `/acme/core-platform/runs/tse_7k2m9q?tab=${tab}`)
-        // The Transcript tab keeps the zoom it was opened at.
-        .map((href, index) => (index === 0 ? `${href}&zoom=steps` : href)),
+      [
+        "transcript",
+        "issues",
+        "actions",
+        "cost",
+        "policy",
+        "context",
+        "chain",
+      ].map((tab) => `/acme/core-platform/runs/tse_7k2m9q?tab=${tab}`),
     );
-    expect(tabs.getByRole("link", { name: /Transcript/ })).toHaveAttribute(
-      "aria-current",
-      "page",
+    expect(tabs.getByRole("tab", { name: /Transcript/ })).toHaveAttribute(
+      "aria-selected",
+      "true",
     );
     expect(screen.getByTestId("run-tab-count-issues")).toHaveTextContent("1");
-    expect(screen.getByTestId("run-tab-count-actions")).toHaveTextContent("0");
+    // A run with no policy decision has nothing governed to list: the tab is
+    // the frame player, and it counts the frames.
+    expect(tabs.getByRole("tab", { name: /Player/ })).toBeTruthy();
+    expect(screen.getByTestId("run-tab-count-actions")).toHaveTextContent(
+      "431",
+    );
+    expect(screen.getByTestId("run-tab-count-cost")).toHaveTextContent("$4.13");
     expect(screen.getByTestId("run-tab-count-chain")).toHaveTextContent(
       "sealed",
     );
+    await expectNoAxe(container);
+  });
+
+  it("names the tab Governed actions and marks it when a call is parked on the run", async () => {
+    const entries = mockupTranscript().entries.map((entry) =>
+      entry.type === "policy_decision"
+        ? { ...entry, kinds: [...entry.kinds, "policy" as const] }
+        : entry,
+    );
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(mockupTranscript({ entries })),
+      approvals: ok({ items: [approval()], more: false }),
+    });
+    expect(screen.getByRole("tab", { name: /Governed actions/ })).toBeTruthy();
+    expect(screen.getByTestId("run-tab-count-actions")).toHaveTextContent("2");
+    expect(screen.getByTestId("run-tab-parked-actions")).toBeTruthy();
+    expect(screen.getByTestId("run-tab-parked-policy")).toBeTruthy();
   });
 
   it("marks a count read from a transcript that stopped short as a floor", async () => {
@@ -683,16 +805,17 @@ describe("tabs", () => {
     expect(screen.getByTestId("run-tab-count-policy")).toHaveTextContent(/\+$/);
   });
 
-  it("opens Governed actions for the retired frames and approvals tab names", async () => {
-    for (const tab of ["frames", "approvals"]) {
+  it("opens Governed actions for the retired frames, approvals and player tab names", async () => {
+    for (const tab of ["frames", "approvals", "player"]) {
       cleanup();
       await renderRun(
         { detail: ok(runDetail()), transcript: ok(runTranscript()) },
         { tab },
       );
-      expect(
-        screen.getByRole("link", { name: /Governed actions/ }),
-      ).toHaveAttribute("aria-current", "page");
+      expect(screen.getByRole("tab", { name: /Player/ })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
     }
   });
 });
@@ -1269,16 +1392,57 @@ describe("failures", () => {
     expect(notFound).toHaveBeenCalledOnce();
   });
 
-  it("names the store that is down and says runs kept recording (negative)", async () => {
+  it("replaces the body with the error state: the code, Try again, Open an incident and the trace line (negative)", async () => {
     const { container } = await renderRun({ detail: DOWN });
-    expect(screen.getByText(/frame_store_unreachable/)).toBeTruthy();
-    expect(screen.getByText(/runs kept recording/)).toBeTruthy();
+    const state = within(screen.getByTestId("run-error"));
+    expect(
+      state.getByRole("heading", { name: "This run could not be loaded" }),
+    ).toBeTruthy();
+    expect(state.getByText("502 frame_store_unreachable")).toBeTruthy();
+    expect(state.getByText(/Runs kept recording/)).toBeTruthy();
+    expect(state.getByRole("button", { name: "Try again" })).toBeTruthy();
+    expect(
+      state.getByRole("button", { name: "Open an incident" }),
+    ).toBeTruthy();
+    // A failed read carries no trace id or region: the line says so and
+    // prints the instant the read failed.
+    expect(state.getByTestId("run-error-trace")).toHaveTextContent(
+      "trace and region not recorded · 2026-09-15 09:00:00Z",
+    );
+    expect(screen.queryByTestId("run-header")).toBeNull();
     await expectNoAxe(container);
   });
 
-  it("names the permission a denied viewer lacks (negative)", async () => {
-    await renderRun({ detail: DENIED });
-    expect(screen.getByText(/Your roles do not include run.read/)).toBeTruthy();
+  it("names the permission a denied viewer lacks and offers Request access (negative)", async () => {
+    const { container } = await renderRun({ detail: DENIED });
+    const state = within(screen.getByTestId("run-denied"));
+    expect(
+      state.getByRole("heading", { name: "You cannot see this run" }),
+    ).toBeTruthy();
+    expect(state.getAllByText("run.read on core-platform")).toHaveLength(2);
+    expect(state.getByRole("button", { name: "Request access" })).toBeTruthy();
+    expect(
+      state.getByRole("link", { name: "Back to Fleet" }).getAttribute("href"),
+    ).toBe("/acme/core-platform");
+    await expectNoAxe(container);
+  });
+
+  it("says a run with no frames yet has cost nothing, and offers the way back (negative)", async () => {
+    const { container, calls } = await renderRun({
+      detail: ok(runDetail({ run: runRow({ frames: 0 }) })),
+    });
+    const state = within(screen.getByTestId("run-empty"));
+    expect(
+      state.getByRole("heading", { name: "This run has no frames yet" }),
+    ).toBeTruthy();
+    expect(
+      state.getByText(/has cost nothing and is not billable/),
+    ).toBeTruthy();
+    expect(state.getByRole("link", { name: "Back to Fleet" })).toBeTruthy();
+    // Nothing else is read for a run with nothing to read.
+    expect(calls.transcript).toHaveLength(0);
+    expect(calls.cost).toHaveLength(0);
+    await expectNoAxe(container);
   });
 });
 
@@ -1672,7 +1836,7 @@ describe("cost", () => {
 });
 
 describe("figures", () => {
-  it("draws the six figures from the rollup, with the cost's basis beside it", async () => {
+  it("draws the six figures from the one derivation, each with its line", async () => {
     const { container } = await renderRun({
       detail: ok(runDetail()),
       transcript: ok(
@@ -1684,16 +1848,38 @@ describe("figures", () => {
         }),
       ),
     });
-    const stats = within(screen.getByTestId("run-stats"));
-    expect(stats.getByText("128,343")).toBeTruthy();
-    expect(stats.getByText("1")).toBeTruthy();
-    expect(stats.getByText("$4.13")).toBeTruthy();
-    expect(stats.getByText("Finalized rollup (gateway_observed)")).toBeTruthy();
+    const stat = (id: string) => within(screen.getByTestId(`run-stat-${id}`));
+    // 18,204 + 91,022 + 4,102 in, 12,004 + 3,011 out.
+    expect(stat("tokens").getByText("128,343")).toBeTruthy();
+    expect(stat("tokens").getByText("113,328 in, 15,015 out")).toBeTruthy();
+    expect(stat("prompts").getByText("1")).toBeTruthy();
+    expect(stat("prompts").getByText("one-shot session")).toBeTruthy();
+    expect(stat("cost").getByText("$4.13")).toBeTruthy();
+    expect(stat("cost").getByText("gateway_observed")).toBeTruthy();
     // 29% of $4.131265 that the rollup did not count as productive.
-    expect(stats.getByText("$1.20")).toBeTruthy();
-    expect(stats.getByText("derived from the productive share")).toBeTruthy();
-    expect(stats.getByText("83%")).toBeTruthy();
+    expect(stat("wasted").getByText("$1.20")).toBeTruthy();
+    expect(
+      stat("wasted").getByText("steps that did not advance the task"),
+    ).toBeTruthy();
+    expect(stat("cache").getByText("83%")).toBeTruthy();
     await expectNoAxe(container);
+  });
+
+  it("counts every prompt after the first as corrective, in the approval hue above two", async () => {
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(
+        runTranscript({
+          entries: ["1", "2", "3"].map((seq) =>
+            transcriptEntry({ seq, endSeq: seq, kinds: ["prompt"] }),
+          ),
+        }),
+      ),
+    });
+    const prompts = screen.getByTestId("run-stat-prompts");
+    expect(within(prompts).getByText("3")).toBeTruthy();
+    expect(within(prompts).getByText("2 corrective")).toBeTruthy();
+    expect(within(prompts).getByText("3").className).toContain("text-info");
   });
 
   it("marks a prompt count from a transcript that stopped short as a floor (negative)", async () => {
@@ -1706,76 +1892,71 @@ describe("figures", () => {
         }),
       ),
     });
-    const stats = within(screen.getByTestId("run-stats"));
-    expect(stats.getByText("1+")).toBeTruthy();
-    expect(stats.getByText("at least this many")).toBeTruthy();
+    expect(
+      within(screen.getByTestId("run-stat-prompts")).getByText("1+"),
+    ).toBeTruthy();
   });
 });
 
 describe("the work", () => {
-  it("counts the pull requests, commits and changed lines the outputs recorded", async () => {
+  it("lists the pull request with its state, the checks, the diff and each changed file", async () => {
     const { container } = await renderRun({
       detail: ok(runDetail()),
       transcript: ok(runTranscript()),
-      outputs: ok(
-        runOutputs([
-          runOutputNode({ seq: "90", kind: "pr", name: "#4121", stat: null }),
-          runOutputNode({
-            seq: "91",
-            kind: "commit",
-            name: "a1b2c3d",
-            stat: null,
-          }),
-          runOutputNode(),
-        ]),
-      ),
+      work: ok(runWork()),
+      outputs: ok(runOutputs([runOutputNode()])),
     });
     const work = within(
       screen.getByRole("complementary", { name: "The work" }),
     );
-    const changes = within(work.getByRole("region", { name: "Changes" }));
-    expect(changes.getByText("#4121")).toBeTruthy();
-    expect(changes.getByText("41 added, 6 removed in 1 file")).toBeTruthy();
+    const changes = within(await work.findByTestId("run-changes"));
+    expect(
+      changes
+        .getByRole("link", { name: "acme/platform#482" })
+        .getAttribute("href"),
+    ).toBe("https://github.com/acme/platform/pull/482");
+    expect(changes.getAllByText("passed").length).toBeGreaterThan(0);
+    expect(changes.getByText("test success")).toBeTruthy();
+    expect(changes.getByText("in 1 file")).toBeTruthy();
     expect(
       within(changes.getByTestId("run-changed-files")).getByText(
         "src/release/cut.ts",
       ),
     ).toBeTruthy();
+    // No read carries the base branch, so it is not named.
+    expect(changes.getByText("not recorded")).toBeTruthy();
     await expectNoAxe(container);
   });
 
-  it("says no file change was recorded rather than printing a zero diff (negative)", async () => {
+  it("names the same pull request as the checkout strip, from the one work read", async () => {
     await renderRun({
       detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      work: ok(runWork()),
+    });
+    const strip = within(await screen.findByTestId("run-checkout"));
+    const changes = within(screen.getByTestId("run-changes"));
+    expect(strip.getByRole("link", { name: "acme/platform#482" })).toBeTruthy();
+    expect(
+      changes.getByRole("link", { name: "acme/platform#482" }),
+    ).toBeTruthy();
+  });
+
+  it("says no file change was recorded and no pull request exists rather than printing zeros (negative)", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({ run: runRow({ status: "live", sealedAt: null }) }),
+      ),
       transcript: ok(runTranscript()),
       outputs: ok(runOutputs([])),
     });
-    const changes = within(screen.getByRole("region", { name: "Changes" }));
+    const changes = within(await screen.findByTestId("run-changes"));
     expect(changes.getByText("no file change recorded")).toBeTruthy();
-    expect(changes.getByText("none recorded")).toBeTruthy();
-  });
-
-  it("splits the spend by model, each row with its calls and its money", async () => {
-    await renderRun({
-      detail: ok(runDetail()),
-      transcript: ok(runTranscript()),
-    });
-    const spend = within(screen.getByTestId("run-spend"));
-    expect(spend.getByText("claude-opus-5")).toBeTruthy();
-    expect(spend.getByText("54 calls")).toBeTruthy();
-    expect(spend.getByText("$4.13")).toBeTruthy();
-  });
-
-  it("says the rollup is not built yet rather than drawing an empty split (negative)", async () => {
-    await renderRun({
-      detail: ok(runDetail()),
-      transcript: ok(runTranscript()),
-      cost: ok(runCost({ rollup: null })),
-    });
-    expect(screen.queryByTestId("run-spend")).toBeNull();
     expect(
-      screen.getByText("No cost rollup yet. It is built after the run seals."),
+      changes.getByText("none yet, the run is still working"),
     ).toBeTruthy();
+    expect(changes.getByText("none reported")).toBeTruthy();
+    expect(changes.queryByText("+0")).toBeNull();
   });
 });
 
@@ -1963,7 +2144,7 @@ describe("loading", () => {
     await expectNoAxe(container);
   });
 
-  it("keeps the page's own main container and header, rather than exporting the skeleton alone", () => {
+  it("keeps the page's own main container, and draws four blocks and seven rows with no figure", () => {
     render(
       <IntlProvider>
         <RunLoading />
@@ -1976,8 +2157,11 @@ describe("loading", () => {
     const main = document.getElementById("main");
     expect(main).not.toBeNull();
     expect(main?.tagName).toBe("MAIN");
-    expect(main).toContainElement(screen.getByRole("heading", { name: "Run" }));
     expect(main).toContainElement(screen.getByRole("status"));
+    // The design's skeleton: shapes only, so nothing reads as a figure.
+    expect(screen.getByTestId("run-loading")).toHaveTextContent(
+      /^Loading this run$/,
+    );
   });
 });
 

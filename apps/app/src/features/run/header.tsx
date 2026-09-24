@@ -7,7 +7,7 @@
 // (a harness version the session did not report, the effort setting, a
 // checkout the host did not enroll) is said to be missing in words rather
 // than left blank or guessed.
-import { Folder, FolderTree, GitBranch, GitPullRequest } from "lucide-react";
+import { Folder, GitBranch, GitPullRequest } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Suspense, use } from "react";
 import type { AgentDetail } from "@/data/contracts/agents";
@@ -156,6 +156,70 @@ function Rig({
   );
 }
 
+function joinFacts(parts: readonly (string | null)[]): string {
+  return parts.filter((part): part is string => part !== null).join(" · ");
+}
+
+/**
+ * What the record says about the host, for the machine chip's hover text.
+ * A session observation and the enrollment record keep separate labels, so
+ * an old enrollment is never read as what the session saw.
+ */
+function useHostFacts(run: RunRow): string {
+  const t = useTranslations("run.header");
+  const machine = run.machine;
+  if (machine === null) return t("noMachineOnLedger");
+  const recorded = machine.recorded;
+  return [
+    recorded === undefined
+      ? t("machineNotRecorded")
+      : t("machineRecorded", {
+          facts: joinFacts([
+            recorded.platform,
+            recorded.osVersion,
+            recorded.arch,
+          ]),
+        }),
+    t("machineEnrollment", {
+      facts: joinFacts([
+        machine.platform,
+        machine.osVersion,
+        machine.arch,
+        machine.nodeVersion,
+      ]),
+    }),
+  ].join(" ");
+}
+
+/** The host with no enrolled checkout: its name, and that no path is held. */
+function MachineChip({
+  run,
+  machine,
+}: {
+  run: RunRow;
+  machine: string | null;
+}) {
+  const t = useTranslations("run.header");
+  const facts = useHostFacts(run);
+  if (machine === null)
+    return (
+      <Chip testId="run-machine" title={facts}>
+        <span className="text-dim">{t("noMachine")}</span>
+      </Chip>
+    );
+  return (
+    <Chip
+      code
+      testId="run-machine"
+      title={`${t("pathNotEnrolled", { machine })} ${facts}`}
+    >
+      <Folder aria-hidden="true" className="size-3 flex-none" />
+      {machine}
+      <span className="text-dim">{t("pathNotCaptured")}</span>
+    </Chip>
+  );
+}
+
 /**
  * The checkout strip from what the outputs recorded, while the work read is
  * still in flight or when it failed: the pull requests, and the host.
@@ -183,12 +247,7 @@ function WhereFromOutputs({
           </Chip>
         ))
       )}
-      {run.machine === null ? null : (
-        <Chip code>
-          <FolderTree aria-hidden="true" className="size-3 flex-none" />
-          {run.machine.hostname}
-        </Chip>
-      )}
+      <MachineChip run={run} machine={run.machine?.hostname ?? null} />
     </WhereRow>
   );
 }
@@ -250,6 +309,7 @@ function WhereFromWork({
   pulls: readonly RunOutputNode[] | null;
 }) {
   const t = useTranslations("run.header");
+  const facts = useHostFacts(run);
   const work = use(read);
   if (!work.ok) return <WhereFromOutputs run={run} pulls={pulls} />;
   const checkout = work.value.checkouts[0] ?? null;
@@ -300,16 +360,12 @@ function WhereFromWork({
           </ForgeChip>
         ))
       )}
-      {machine === null ? null : checkout === null ? (
-        <Chip code title={t("pathNotEnrolled", { machine })}>
-          <Folder aria-hidden="true" className="size-3 flex-none" />
-          {machine}
-          <span className="text-dim">{t("pathNotCaptured")}</span>
-        </Chip>
+      {machine === null || checkout === null ? (
+        <MachineChip run={run} machine={machine} />
       ) : (
         <CopyPath
           text={`${machine}:${checkout.path}`}
-          title={t("pathRecorded", { machine })}
+          title={`${t("pathRecorded", { machine })} ${facts}`}
         />
       )}
     </WhereRow>
