@@ -176,21 +176,30 @@ export async function agentListHandler(
       scope,
       all.flatMap((r) => (r.principalId === null ? [] : [r.principalId])),
     );
-    const holdingMandate = all.filter(
+    // The holders' keys come from the same filter as the count, so the tile
+    // names exactly the agents it counts. `all` is in slug order.
+    const holders = all.filter(
       (r) =>
         r.principalId !== null && (allMandates.get(r.principalId) ?? 0) > 0,
-    ).length;
+    );
+    const holdingMandate = holders.length;
+    const mandateHolders = holders
+      .slice(0, 100)
+      .map((r) => allKeys.get(r.id) ?? r.slug);
 
-    const enrolled = all.filter(
-      (r) =>
-        identityStatus(r, {
-          credentials: allCredentials.get(r.publicId) ?? 0,
-          hosts: (() => {
-            const k = allKeys.get(r.id);
-            return k ? (allHosts.get(k) ?? 0) : 0;
-          })(),
-        }) === "enrolled",
-    ).length;
+    // Each agent's status, derived once. Retired and suspended agents are
+    // neither enrolled nor waiting to enroll, so both tiles count by status.
+    const statuses = all.map((r) =>
+      identityStatus(r, {
+        credentials: allCredentials.get(r.publicId) ?? 0,
+        hosts: (() => {
+          const k = allKeys.get(r.id);
+          return k ? (allHosts.get(k) ?? 0) : 0;
+        })(),
+      }),
+    );
+    const enrolled = statuses.filter((s) => s === "enrolled").length;
+    const unenrolled = statuses.filter((s) => s === "unenrolled").length;
 
     const last = page[page.length - 1];
     return {
@@ -218,7 +227,9 @@ export async function agentListHandler(
       totals: {
         identities: all.length,
         enrolled,
+        unenrolled,
         holdingMandate,
+        mandateHolders,
         tamperIncidents: tamperOpen,
         tamper: {
           recorded: tamperRecorded,

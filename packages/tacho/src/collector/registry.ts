@@ -109,6 +109,22 @@ export interface SessionControl {
   cancelled: string | null;
   /** Operator prompt content to inject at the next boundary. */
   messages: QueuedPrompt[];
+  /**
+   * What the current pause did to the agent. `refused`: a boundary denied
+   * the agent a tool call because of it, so the agent may be about to end
+   * its turn on that refusal. `stopped`: the agent ended its turn while
+   * paused (a `Stop` or a `StopFailure`), so nothing is running to resume.
+   * Absent while the pause has touched nothing. Resume reads it to decide
+   * whether the agent is owed a continuation (`resumeOwed`).
+   */
+  pauseEffect?: "refused" | "stopped";
+  /**
+   * The id of a resume that owes the agent a continuation: the next boundary
+   * that can carry text tells it the operator resumed it. The resume command
+   * was acknowledged when it applied, so delivering this seals a frame and
+   * sends no second acknowledgement.
+   */
+  resumeOwed?: string;
 }
 
 export interface SessionFacts {
@@ -605,7 +621,11 @@ export class SessionRegistry {
       }
       const outcome =
         gone && record.lastHookEvent === "Stop" ? "completed" : "crashed";
-      out.push(...record.recorder.finalize(outcome, this.ts()));
+      // The session ended when it was last seen, not when the sweep noticed:
+      // an idle session swept six hours late would otherwise read as having
+      // run six hours longer (#4024). `lastSeenAt` is the receipt time of its
+      // last activity, so it is at or after every event its hooks sealed.
+      out.push(...record.recorder.finalize(outcome, record.lastSeenAt));
       record.sealed = true;
     }
     return out;
@@ -621,6 +641,12 @@ export class SessionRegistry {
           paused: record.control.paused,
           cancelled: record.control.cancelled,
           messages: [...record.control.messages],
+          ...(record.control.pauseEffect !== undefined
+            ? { pauseEffect: record.control.pauseEffect }
+            : {}),
+          ...(record.control.resumeOwed !== undefined
+            ? { resumeOwed: record.control.resumeOwed }
+            : {}),
         },
         startedAt: record.startedAt,
         lastSeenAt: record.lastSeenAt,
@@ -669,6 +695,13 @@ export class SessionRegistry {
             expiresAt: null,
             ...m,
           })),
+          // Absent in state files written before resume owed a continuation.
+          ...(persisted.control.pauseEffect !== undefined
+            ? { pauseEffect: persisted.control.pauseEffect }
+            : {}),
+          ...(persisted.control.resumeOwed !== undefined
+            ? { resumeOwed: persisted.control.resumeOwed }
+            : {}),
         },
         startedAt: persisted.startedAt,
         lastSeenAt: persisted.lastSeenAt,

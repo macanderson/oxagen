@@ -748,6 +748,39 @@ export class SessionRecorder {
     return event;
   }
 
+  /**
+   * Seal a collector event on the chain a hook's subagent identity names, the
+   * same chain `ingestHook` routes that hook to. A subagent's `PreToolUse`
+   * decision sealed on the root chain left its `tool_requested` on the
+   * subagent chain with no decision beside it, and the root chain holding a
+   * decision for a call it never recorded.
+   *
+   * Opening the subagent chain here seals its genesis first, so the genesis
+   * is returned ahead of the event and the later `ingestHook` does not
+   * return it a second time. `spawnToolUseId` is the id `ingestHook` would
+   * take from the same payload, so the chain opens identically either way.
+   */
+  sealCollectorEventOn(
+    subagent: { subagent_id: string; subagent_type?: string } | undefined,
+    spawnToolUseId: string | undefined,
+    kind: TachoKind,
+    body: Record<string, unknown>,
+    fields: Parameters<SessionRecorder["sealCollectorEvent"]>[2] = {},
+  ): TachoEvent[] {
+    if (subagent === undefined || this.options.parent !== undefined)
+      return [this.sealCollectorEvent(kind, body, fields)];
+    const child = this.child(
+      subagent.subagent_id,
+      subagent.subagent_type,
+      spawnToolUseId,
+      fields.ts,
+    );
+    return [
+      ...this.pendingChildGenesis.splice(0),
+      child.sealCollectorEvent(kind, body, fields),
+    ];
+  }
+
   get hasStarted(): boolean {
     return this.started;
   }

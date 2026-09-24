@@ -1,14 +1,21 @@
 "use client";
 // A list table with the controls every list in the design carries (the
 // mockup's `ltTable`, engine.js, and the `.lt`, `.lp` and `th.sortable` rules
-// in engine.css): a "Search this list" box, a Rows select (5, 10, 25, 50,
-// All), a header that sorts its column on a click (ascending, descending, then
-// the order the caller gave), and a "1–N of N ‹ 1 ›" pager under the table.
+// in engine.css): a "Search this list" box, a filter per small enumeration
+// column ("All · Health"), a Rows select (5, 10, 25, 50, All), a header that
+// sorts its column on a click (ascending, descending, then the order the
+// caller gave), and a "1–N of N ‹ 1 ›" pager under the table.
 //
-// The caller gives cells as nodes. Search and sort read the text each cell
-// renders, measured from the DOM when the reader types or sorts, the way the
-// mockup reads `textContent`, so a caller never writes a figure twice to make
-// it searchable. A cell whose text leads with a number (money, counts) sorts
+// A column earns a filter by the mockup's rule (`ltFacets`): at least four
+// rows, and two to eight distinct values of 28 characters or fewer that are
+// not one per row. Status-like columns come first, then the one with fewer
+// values, three at most. A column whose every row reads "not recorded" has
+// one value and offers no filter.
+//
+// The caller gives cells as nodes. Search, the filters and sort read the text
+// each cell renders, measured from the DOM once the rows mount and again when
+// the reader types or sorts, the way the mockup reads `textContent`, so a
+// caller never writes a figure twice to make it searchable. A cell whose text leads with a number (money, counts) sorts
 // as a number; an ISO date and anything else sorts as text. Every row stays
 // in the DOM and a row outside the page is hidden, so the texts stay
 // measurable and a row that holds a form keeps its state across a page turn.
@@ -18,7 +25,7 @@
 // (a link) names itself to assistive tech through aria-label and carries no
 // text, so its card cell has no label.
 import { useTranslations } from "next-intl";
-import { type ReactNode, useId, useRef, useState } from "react";
+import { type ReactNode, useCallback, useId, useRef, useState } from "react";
 import { cell, headCell, numericCell } from "@/ui/table";
 
 export type ListColumn = {
@@ -44,6 +51,59 @@ const LIST_PAGE_SIZES = [5, 10, 25, 50, 0] as const;
 const DEFAULT_PER = 10;
 
 type Sort = { column: number; dir: 1 | -1 } | null;
+
+const MIN_FACET_ROWS = 4;
+const MAX_FACET_VALUES = 8;
+const MAX_FACET_VALUE_LENGTH = 28;
+const MAX_FACETS = 3;
+/** `LT_FACET` in the mockup's engine: a column whose header reads like a status offers its filter first. */
+const STATUS_LIKE =
+  /status|state|tier|kind|role|risk|severity|result|health|effect|mode|side|level|verdict|decision|origin|scope|period|basis|algorithm|trend|position|governance|two-factor|sso|replay/i;
+
+/** A column's filter: its index and the values its cells show, in code-unit order as the mockup sorts them. */
+export type ListFacet = { column: number; values: readonly string[] };
+
+/**
+ * The filters the design's rule offers over what the cells show
+ * (the mockup's `ltFacets`).
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
+export function facetsOf(
+  columns: readonly ListColumn[],
+  texts: readonly (readonly string[])[],
+): ListFacet[] {
+  if (texts.length < MIN_FACET_ROWS) return [];
+  return columns
+    .flatMap((column, index): ListFacet[] => {
+      if (column.numeric === true || column.hidden === true) return [];
+      if (column.label.trim() === "") return [];
+      const values = new Set<string>();
+      let short = true;
+      for (const row of texts) {
+        const value = row[index] ?? "";
+        if (value === "") continue;
+        if (value.length > MAX_FACET_VALUE_LENGTH) short = false;
+        values.add(value);
+      }
+      const n = values.size;
+      if (!short || n < 2 || n > MAX_FACET_VALUES || n >= texts.length)
+        return [];
+      return [
+        {
+          column: index,
+          values: [...values].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)),
+        },
+      ];
+    })
+    .sort(
+      (a, b) =>
+        Number(!STATUS_LIKE.test(columns[a.column]?.label ?? "")) -
+          Number(!STATUS_LIKE.test(columns[b.column]?.label ?? "")) ||
+        a.values.length - b.values.length,
+    )
+    .slice(0, MAX_FACETS);
+}
 
 /**
  * The number a cell's text leads with, or null (the mockup's `ltNum`).
@@ -79,8 +139,12 @@ function compare(a: string, b: string, numeric: boolean): number {
   });
 }
 
-/** The page numbers the pager shows, with an ellipsis on either side past seven pages. */
-function pageList(
+/**
+ * The page numbers the pager shows, one-based, with an ellipsis on either side
+ * past seven pages: the design's `ltPager`. Exported so a list with its own
+ * pager (Agents) windows its buttons by the same rule.
+ */
+export function pageList(
   page: number,
   pages: number,
 ): (number | "gap-before" | "gap-after")[] {
@@ -99,7 +163,24 @@ const pagerButton =
   "inline-flex min-h-7 min-w-7 items-center justify-center rounded-[7px] border border-button-default-border bg-button-default-bg px-2 py-0.5 text-[12px] tabular-nums text-button-default-fg hover:bg-button-default-hover-bg disabled:cursor-default disabled:opacity-40 aria-[current=page]:border-gold aria-[current=page]:text-accent-text max-md:min-h-11 max-md:min-w-11";
 
 const controlSelect =
-  "rounded-lg border border-input-border bg-input-bg px-2 py-[5px] text-[12px] text-input-fg focus-visible:border-input-border-focus focus-visible:outline-none";
+  "rounded-lg border border-input-border bg-input-bg px-2 py-[5px] text-[12px] text-input-fg focus-visible:border-input-border-focus focus-visible:outline-none max-md:text-base";
+
+/** What each row in a body renders, by the row's key, whitespace collapsed. */
+function readTexts(
+  tbody: HTMLTableSectionElement | null,
+): ReadonlyMap<string, readonly string[]> {
+  const next = new Map<string, readonly string[]>();
+  if (tbody === null) return next;
+  for (const tr of tbody.querySelectorAll<HTMLTableRowElement>(
+    "tr[data-lt-key]",
+  )) {
+    next.set(
+      tr.getAttribute("data-lt-key") ?? "",
+      [...tr.cells].map((td) => td.textContent.replace(/\s+/g, " ").trim()),
+    );
+  }
+  return next;
+}
 
 export function ListTable({
   label,
@@ -113,6 +194,7 @@ export function ListTable({
 }) {
   const t = useTranslations("ui.listTable");
   const [query, setQuery] = useState("");
+  const [filters, setFilters] = useState<Readonly<Record<number, string>>>({});
   const [sort, setSort] = useState<Sort>(null);
   const [per, setPer] = useState<number>(DEFAULT_PER);
   const [page, setPage] = useState(1);
@@ -122,30 +204,41 @@ export function ListTable({
   const bodyRef = useRef<HTMLTableSectionElement>(null);
   const searchId = useId();
 
-  /** What each row renders, read from the DOM; called from an event, never during render. */
-  const measure = (): ReadonlyMap<string, readonly string[]> => {
-    const next = new Map<string, readonly string[]>();
-    const tbody = bodyRef.current;
-    if (tbody === null) return next;
-    for (const tr of tbody.querySelectorAll<HTMLTableRowElement>(
-      "tr[data-lt-key]",
-    )) {
-      next.set(
-        tr.getAttribute("data-lt-key") ?? "",
-        [...tr.cells].map((td) => td.textContent.replace(/\s+/g, " ").trim()),
-      );
-    }
-    return next;
-  };
+  /** What each row renders, read from the DOM; called from an event or a ref, never during render. */
+  const measure = (): ReadonlyMap<string, readonly string[]> =>
+    readTexts(bodyRef.current);
+
+  // The first read, once the rows are in the DOM, and again when the caller
+  // hands different rows: the filters are offered from what the cells show,
+  // before the reader has typed anything. A callback ref rather than an
+  // effect, so the filters draw in the same commit as the rows.
+  const mountBody = useCallback(
+    (tbody: HTMLTableSectionElement | null) => {
+      bodyRef.current = tbody;
+      if (tbody === null || rows.length === 0) return;
+      setTexts(readTexts(tbody));
+    },
+    [rows],
+  );
 
   const textOf = (key: string) => texts.get(key) ?? [];
+  const facets = facetsOf(
+    columns,
+    rows.flatMap((row) => {
+      const text = texts.get(row.key);
+      return text === undefined ? [] : [text];
+    }),
+  );
   const q = query.trim().toLowerCase();
   // A row that arrived after the last measure has no text yet: it stays in.
   let order = rows.filter((row) => {
     const text = texts.get(row.key);
-    return (
-      q === "" || text === undefined || text.join(" ").toLowerCase().includes(q)
-    );
+    if (text === undefined) return true;
+    if (q !== "" && !text.join(" ").toLowerCase().includes(q)) return false;
+    return facets.every(({ column }) => {
+      const chosen = filters[column] ?? "";
+      return chosen === "" || text[column] === chosen;
+    });
   });
   if (sort !== null) {
     const numeric = columns[sort.column]?.numeric === true;
@@ -226,8 +319,32 @@ export function ListTable({
             setPage(1);
           }}
           data-touch-target=""
-          className="min-w-[140px] flex-[1_1_200px] rounded-lg border border-input-border bg-input-bg px-2.5 py-1.5 text-[12.5px] text-input-fg placeholder:text-dim focus-visible:border-input-border-focus focus-visible:outline-none max-md:basis-full"
+          className="min-w-[140px] flex-[1_1_200px] rounded-lg border border-input-border bg-input-bg px-2.5 py-1.5 text-[12.5px] text-input-fg placeholder:text-dim focus-visible:border-input-border-focus focus-visible:outline-none max-md:basis-full max-md:text-base"
         />
+        {facets.map(({ column, values }) => {
+          const name = columns[column]?.label ?? "";
+          return (
+            <select
+              key={name}
+              aria-label={t("facetLabel", { column: name })}
+              value={filters[column] ?? ""}
+              onChange={(event) => {
+                const value = event.currentTarget.value;
+                setFilters((was) => ({ ...was, [column]: value }));
+                setPage(1);
+              }}
+              data-touch-target=""
+              className={`${controlSelect} max-w-[220px]`}
+            >
+              <option value="">{t("facetAll", { column: name })}</option>
+              {values.map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+          );
+        })}
         <label className="ml-auto inline-flex items-center gap-1.5 whitespace-nowrap text-[11.5px] text-muted-foreground max-md:ml-0">
           {t("rows")}
           <select
@@ -295,7 +412,7 @@ export function ListTable({
               })}
             </tr>
           </thead>
-          <tbody ref={bodyRef}>
+          <tbody ref={mountBody}>
             {order.map((row) => renderRow(row, shown.get(row.key) ?? null))}
             {hiddenRows.map((row) => renderRow(row, null))}
             {total === 0 ? (
