@@ -9,14 +9,10 @@
 //   3. Resolve target membership — verify the target userId belongs to ctx.orgId
 //      (IDOR guard: `not_found` if target is not in this org).
 //   4. Last-owner guard — `conflict` if target is the only remaining org Owner.
-//   5. In a transaction:
-//      a. Resolve the target's principal.
-//      b. Soft-delete all principal_role_assignments for the target's principal
-//         in this org (set deletedAt = now), at every scope.
-//      c. Mark the target's principal status = 'deleted'.
-//      d. Delete the org_users membership row.
-//      e. Delete the target's workspace_users rows in this org's workspaces.
-//      f. Soft-delete the target's CLI session keys in this org.
+//   5. In the same transaction, removeOrgMemberInTx (shared with the SSO deny
+//      sign-in and SCIM deprovisioning, @oxagen/database/member-lifecycle):
+//      role assignments at every scope, the principal, the org_users and
+//      workspace_users rows, and the target's CLI session keys.
 //   6. Emit org.member_removed security event (fire-and-forget).
 //
 // WHY withSystemDb AND NOT withTenantDb: removal is an organization-level act
@@ -27,10 +23,10 @@
 // `auth.api_keys` is `standard`, `workspace.workspace_users` is `workspace_only`
 // (packages/database/src/tenant-policy.manifest.ts) — so under that sentinel the
 // RLS USING clause admitted only rows carrying no workspace, or no rows at all.
-// Step (b) deliberately omits a workspace predicate because its intent is to
+// The role revocation deliberately omits a workspace predicate because its intent is to
 // revoke the principal's roles at EVERY scope; RLS narrowed it back to the
-// org-wide ones and the UPDATE touched nothing else, silently. Step (c) does not
-// compensate: packages/iam/src/fetch-authz.ts resolves a principal on
+// org-wide ones and the UPDATE touched nothing else, silently. Marking the
+// principal deleted does not compensate: packages/iam/src/fetch-authz.ts resolves a principal on
 // (orgId, parentUserId, kind='human') with no status filter, and iam-provision's
 // onConflictDoNothing reuses that same row when the person is invited back, so
 // the surviving workspace-scoped assignments come back with them.
@@ -57,8 +53,8 @@ import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { orgMemberRemove } from "@oxagen/oxagen/contracts/org.member.remove";
 import { schema, withSystemDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
-import { CLI_SESSION_SCOPE_PURPOSE } from "@oxagen/oxagen/cli-session";
-import { and, eq, inArray, isNull, count, sql } from "drizzle-orm";
+import { removeOrgMemberInTx } from "@oxagen/database/member-lifecycle";
+import { and, eq, isNull, count } from "drizzle-orm";
 import { resolveMemberUserId } from "./lib/org-member";
 import { logger } from "./logger";
 
@@ -166,6 +162,7 @@ export const orgMemberRemoveHandler: CapabilityHandler<
   // throw rolls the (so-far read-only) transaction back and propagates its
   // HandlerError to the surface. Every statement fences on ctx.orgId — see the
   // header for why that fence, not RLS, is the isolation here.
+  // tenancy: every statement is filtered by orgId = ctx.orgId after the verified Owner or Admin membership check above.
   await withSystemDb(async (tx) => {
     // ── Resolve the target's user id ────────────────────────────────────────────
     // The console names a member by public id (`usr_…`) and never by uuid, which
@@ -278,136 +275,41 @@ export const orgMemberRemoveHandler: CapabilityHandler<
     }
 
     // ── Remove membership + IAM cleanup ─────────────────────────────────────────
-    // (a) Resolve target principal (may not exist for pre-IAM members).
-    const [targetPrincipal] = await tx
-      .select({ id: schema.principals.id })
-      .from(schema.principals)
-      .where(
-        and(
-          eq(schema.principals.orgId, ctx.orgId),
-          eq(schema.principals.parentUserId, target),
-          eq(schema.principals.kind, "human"),
-        ),
-      )
-      .limit(1);
-
-    if (targetPrincipal) {
-      // (b) Soft-delete EVERY live principal_role_assignment for this principal
-      // in this org — org-wide and workspace-scoped alike. No workspace
-      // predicate is intended; the eq(orgId) + eq(principalId) pair is the
-      // fence. `returning` turns this from a write nobody checks into one that
-      // reports what it did, which is how the RLS narrowing this replaced
-      // stayed invisible: an UPDATE that matches nothing is not an error.
-      const revokedAssignments = await tx
-        .update(schema.principalRoleAssignments)
-        .set({
-          deletedAt: new Date(),
-          deletedById: actorId,
-          updatedAt: new Date(),
-          updatedById: actorId,
-        })
-        .where(
-          and(
-            eq(schema.principalRoleAssignments.orgId, ctx.orgId),
-            eq(schema.principalRoleAssignments.principalId, targetPrincipal.id),
-            isNull(schema.principalRoleAssignments.deletedAt),
-          ),
-        )
-        .returning({
-          id: schema.principalRoleAssignments.id,
-          workspaceId: schema.principalRoleAssignments.workspaceId,
-        });
-      logger.info(
-        {
-          orgId: ctx.orgId,
-          principalId: targetPrincipal.id,
-          revoked: revokedAssignments.length,
-          workspaceScoped: revokedAssignments.filter(
-            (r) => r.workspaceId !== null,
-          ).length,
-        },
-        "org.member.remove: role assignments revoked",
-      );
-
-      // (c) Deactivate/soft-delete the principal.
-      await tx
-        .update(schema.principals)
-        .set({
-          status: "deleted",
-          updatedAt: new Date(),
-          updatedById: actorId,
-        })
-        .where(eq(schema.principals.id, targetPrincipal.id));
-    }
-
-    // (d) Delete the org_users membership row.
-    await tx
-      .delete(schema.orgUsers)
-      .where(
-        and(
-          eq(schema.orgUsers.orgId, ctx.orgId),
-          eq(schema.orgUsers.userId, target),
-        ),
-      );
-
-    // (e) Drop the target's workspace memberships in this org's workspaces.
-    // Without this the person keeps every workspace row they held, so an
-    // invitation back restores their workspace access before anyone grants it,
-    // and resolveApiKey's workspace-membership check keeps passing for them.
-    // `workspace.workspace_users` carries no org_id, so the org fence is the
-    // join to workspace.workspaces.
-    const orgWorkspaceIds = await tx
-      .select({ id: schema.workspaces.id })
-      .from(schema.workspaces)
-      .where(eq(schema.workspaces.orgId, ctx.orgId));
-    if (orgWorkspaceIds.length > 0) {
-      const removedMemberships = await tx
-        .delete(schema.workspaceUsers)
-        .where(
-          and(
-            inArray(
-              schema.workspaceUsers.workspaceId,
-              orgWorkspaceIds.map((w) => w.id),
-            ),
-            eq(schema.workspaceUsers.userId, target),
-          ),
-        )
-        .returning({ id: schema.workspaceUsers.id });
-      logger.info(
-        {
-          orgId: ctx.orgId,
-          removedWorkspaceMemberships: removedMemberships.length,
-        },
-        "org.member.remove: workspace memberships removed",
-      );
-    }
-
-    // (f) Revoke the CLI session keys the target minted in this org. A CLI
-    // session key authenticates as its creator, so it must not outlive the
-    // membership (resolveApiKey also refuses one whose creator left, which is
-    // why this step failing silently under the sentinel was a stale row rather
-    // than a live credential — but a revoked key must also read as revoked).
-    const revokedAt = new Date();
-    const revokedKeys = await tx
-      .update(schema.apiKeys)
-      .set({
-        deletedAt: revokedAt,
-        deletedById: actorId,
-        updatedAt: revokedAt,
-        updatedById: actorId,
-      })
-      .where(
-        and(
-          eq(schema.apiKeys.orgId, ctx.orgId),
-          eq(schema.apiKeys.createdById, target),
-          sql`${schema.apiKeys.scope}->>'purpose' = ${CLI_SESSION_SCOPE_PURPOSE}`,
-          isNull(schema.apiKeys.deletedAt),
-        ),
-      )
-      .returning({ id: schema.apiKeys.id });
+    // The shared removal transaction (@oxagen/database/member-lifecycle), which
+    // an SSO deny sign-in and a SCIM deprovision also run. For a manual
+    // removal it:
+    //   - soft-deletes EVERY live role assignment of the target's principal in
+    //     this org, org-wide and workspace-scoped alike (no workspace
+    //     predicate: the orgId + principalId pair is the fence), and marks the
+    //     principal deleted;
+    //   - deletes the org_users row and the target's workspace_users rows in
+    //     this org's workspaces, so an invitation back does not restore
+    //     workspace access before anyone grants it;
+    //   - soft-deletes the CLI session keys the target minted here, because a
+    //     CLI session key authenticates as its creator, and writes an
+    //     api_key.revoked row for each.
+    // Sessions stay: a session is the person's, not this org's, and a manual
+    // removal from one org must not sign them out of the others.
+    const removal = await removeOrgMemberInTx(tx, {
+      orgId: ctx.orgId,
+      userId: target,
+      actorId,
+      trigger: "manual",
+      endSessions: false,
+      keys: "cli_sessions",
+      refuseOwner: false,
+      principalStatus: "deleted",
+      summaryEvent: null,
+      requestId: ctx.requestId ?? null,
+    });
     logger.info(
-      { orgId: ctx.orgId, revokedCliKeys: revokedKeys.length },
-      "org.member.remove: CLI session keys revoked",
+      {
+        orgId: ctx.orgId,
+        revokedAssignments: removal.roleAssignmentsRevoked,
+        removedWorkspaceMemberships: removal.workspaceMembershipsRemoved,
+        revokedCliKeys: removal.apiKeyIds.length,
+      },
+      "org.member.remove: membership, roles and CLI session keys removed",
     );
   });
 

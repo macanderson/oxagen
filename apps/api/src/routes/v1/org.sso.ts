@@ -6,6 +6,9 @@ import { orgSsoList } from "@oxagen/oxagen/contracts/org.sso.list";
 import { orgSsoPolicySet } from "@oxagen/oxagen/contracts/org.sso.policy.set";
 import { orgSsoUpdate } from "@oxagen/oxagen/contracts/org.sso.update";
 import { orgSsoVerifyDomain } from "@oxagen/oxagen/contracts/org.sso.verify_domain";
+import { orgScimTokenCreate } from "@oxagen/oxagen/contracts/org.scim_token.create";
+import { orgScimTokenRevoke } from "@oxagen/oxagen/contracts/org.scim_token.revoke";
+import { orgScimTokenRotate } from "@oxagen/oxagen/contracts/org.scim_token.rotate";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { capabilityContext } from "../../lib/context";
 import type { AppEnv } from "../../app";
@@ -24,6 +27,9 @@ import type { AppEnv } from "../../app";
  * POST   /providers/:providerId/verify-domain → check the DNS TXT record
  * PUT    /providers/:providerId/group-roles   → replace the group-role table
  * PUT    /policy                              → require SSO, or stop
+ * POST   /scim-token                          → mint the SCIM token (shown once)
+ * POST   /scim-token/rotate                   → replace the SCIM token
+ * DELETE /scim-token                          → revoke the SCIM token
  */
 export const orgSsoRoute = new Hono<AppEnv>();
 
@@ -87,5 +93,30 @@ orgSsoRoute.put("/policy", async (c) => {
   const ctx = capabilityContext(c);
   return c.json(
     await invoke(orgSsoPolicySet.name, body, ctx, { surface: "api" }),
+  );
+});
+
+orgSsoRoute.post("/scim-token", async (c) => {
+  const input = orgScimTokenCreate.input.parse({});
+  const ctx = capabilityContext(c);
+  return c.json(
+    await invoke(orgScimTokenCreate.name, input, ctx, { surface: "api" }),
+    201,
+  );
+});
+
+orgSsoRoute.post("/scim-token/rotate", async (c) => {
+  const input = orgScimTokenRotate.input.parse({});
+  const ctx = capabilityContext(c);
+  return c.json(
+    await invoke(orgScimTokenRotate.name, input, ctx, { surface: "api" }),
+  );
+});
+
+orgSsoRoute.delete("/scim-token", async (c) => {
+  const input = orgScimTokenRevoke.input.parse({});
+  const ctx = capabilityContext(c);
+  return c.json(
+    await invoke(orgScimTokenRevoke.name, input, ctx, { surface: "api" }),
   );
 });

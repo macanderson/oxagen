@@ -1,10 +1,19 @@
 // The screen is an async Server Component; the tests call it and walk the
 // element tree it returns, which covers both branches without an RSC renderer.
+// The request's host and the signed-in email reach the form: the address is
+// printed under the host, and the denied state names the email.
 import { isValidElement, type ReactElement, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const requireUser = vi.fn();
 vi.mock("@/server/viewer", () => ({ requireUser }));
+const host = vi.fn<() => string | null>(() => "oxagen.test");
+vi.mock("next/headers", () => ({
+  headers: () => Promise.resolve({ get: () => host() }),
+}));
+vi.mock("@/server/session", () => ({
+  getAuthUser: () => Promise.resolve({ email: "marcus@acme.example" }),
+}));
 
 const { NewOrganizationScreen } = await import("./new-organization");
 const { OrganizationForm } = await import("./ui/organization-form");
@@ -46,6 +55,16 @@ describe("NewOrganizationScreen", () => {
     );
     const form = tree.find((e) => e.type === OrganizationForm);
     expect(form?.props.destination).toBeUndefined();
+    expect(form?.props.host).toBe("oxagen.test");
+    expect(form?.props.email).toBe("marcus@acme.example");
+  });
+
+  it("prints the address under the fallback host when the request names none", async () => {
+    host.mockReturnValueOnce(null);
+    const form = elements(
+      await NewOrganizationScreen({ searchParams: Promise.resolve({}) }),
+    ).find((e) => e.type === OrganizationForm);
+    expect(form?.props.host).toBe("app.oxagen.sh");
   });
 
   it("carries a requested destination through log in and to the form", async () => {

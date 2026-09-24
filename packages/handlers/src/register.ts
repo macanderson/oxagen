@@ -406,6 +406,32 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./org.sso.verify_domain"))
         .orgSsoVerifyDomainHandler as CapabilityHandlerFn,
   );
+  // SCIM provisioning (#3734): the organization's bearer token, and the one
+  // capability the /api/scim/v2 route invokes for every request.
+  registerHandler(
+    "create_scim_token",
+    async () =>
+      (await import("./org.scim_token.create"))
+        .orgScimTokenCreateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "rotate_scim_token",
+    async () =>
+      (await import("./org.scim_token.rotate"))
+        .orgScimTokenRotateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "revoke_scim_token",
+    async () =>
+      (await import("./org.scim_token.revoke"))
+        .orgScimTokenRevokeHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "execute_scim_request",
+    async () =>
+      (await import("./scim.request"))
+        .scimRequestHandler as CapabilityHandlerFn,
+  );
   registerHandler(
     "set_sso_policy",
     async () =>

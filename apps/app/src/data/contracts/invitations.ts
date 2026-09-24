@@ -23,6 +23,10 @@ export const InvitationView = z.object({
   status: InvitationStatus,
   invitedAt: z.iso.datetime(),
   expiresAt: z.iso.datetime().nullable(),
+  /** Who sent it, as the invitation email names them; null when the record has no name for them. */
+  inviterName: z.string().min(1).nullable(),
+  /** The inviter's current organization role; null when they have left or the stored role is unknown. */
+  inviterRole: OrgRole.nullable(),
 });
 export type InvitationView = z.infer<typeof InvitationView>;
 

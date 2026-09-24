@@ -45,7 +45,7 @@ export function CostCenterTable({ report }: { report: SpendReport }) {
               <HeaderCell>{t("groups.cost_center.key")}</HeaderCell>
               <HeaderCell numeric>{t("columns.runs")}</HeaderCell>
               <HeaderCell numeric>{t("columns.spend")}</HeaderCell>
-              <HeaderCell numeric>{t("columns.share")}</HeaderCell>
+              <HeaderCell numeric>{t("columns.shareOfSpend")}</HeaderCell>
             </tr>
           </thead>
           <tbody>
