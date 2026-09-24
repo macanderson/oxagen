@@ -94,6 +94,21 @@ describe("buildDiff", () => {
     expect(diff.hunks[0]?.lines.map((line) => line.op)).toEqual(["del", "add"]);
   });
 
+  it("starts a hunk at line 1 on the side that has no lines at all", () => {
+    const created = buildDiff("", "a\nb");
+    expect(created.hunks).toHaveLength(1);
+    expect(created.hunks[0]?.beforeStart).toBe(1);
+    expect(created.hunks[0]?.afterStart).toBe(1);
+    expect(created.hunks[0]?.lines.every((line) => line.before === null)).toBe(
+      true,
+    );
+    const emptied = buildDiff("a\nb", "");
+    expect(emptied.hunks[0]?.afterStart).toBe(1);
+    expect(emptied.hunks[0]?.lines.every((line) => line.after === null)).toBe(
+      true,
+    );
+  });
+
   it("returns no hunks when nothing changed", () => {
     const diff = buildDiff("a\nb", "a\nb");
     expect(diff.hunks).toEqual([]);
