@@ -16,13 +16,15 @@ import { readToActionResult } from "@/server/kernel";
 import { requireViewer, type WsCtx } from "@/server/viewer";
 import type { OptionPage, PickerOption } from "@/ui/record-picker";
 
-/**
- * What every list here answers: INV-19's `ActionResult`, the one shape a
- * Server Action returns. A picker reads only `ok`, and `OptionLoad` in
- * `@/ui/record-picker` is the structural half it takes, so a refusal keeps
- * its reason for the next reader without the picker having to know one.
- */
-type Choices = ActionResult<OptionPage>;
+// What every list here answers is INV-19's `ActionResult`, the one shape a
+// Server Action returns. A picker reads only `ok`, and `OptionLoad` in
+// `@/ui/record-picker` is the structural half it takes, so a refusal keeps its
+// reason for the next reader without the picker having to know one.
+//
+// Each action spells `Promise<ActionResult<OptionPage>>` out rather than
+// sharing an alias for it. actions.test.ts reads the annotation as written,
+// not as resolved, so an alias is invisible to it and the module fails the
+// INV-19 check with six `return-type:` violations while being correct.
 
 /** The most cursor pages one list reads before it stops and says it is partial. */
 const PAGE_BOUND = 10;
@@ -54,7 +56,10 @@ async function walk<T>(
   return { ok: true, items, partial: true };
 }
 
-function loaded(options: PickerOption[], partial = false): Choices {
+function loaded(
+  options: PickerOption[],
+  partial = false,
+): ActionResult<OptionPage> {
   return { ok: true, value: { options, partial } };
 }
 
@@ -65,7 +70,7 @@ function loaded(options: PickerOption[], partial = false): Choices {
 export async function chooseToolPatterns(
   org: string,
   ws: string,
-): Promise<Choices> {
+): Promise<ActionResult<OptionPage>> {
   const ctx = await requireViewer(org, ws);
   const list = await walk(PAGE_BOUND, (cursor) =>
     dataSource().tools.versions(ctx, { category: null, cursor }),
@@ -88,7 +93,9 @@ export async function chooseToolPatterns(
 }
 
 /** Who may answer a parked call: the four approver roles, then every member. */
-export async function chooseApprovers(org: string): Promise<Choices> {
+export async function chooseApprovers(
+  org: string,
+): Promise<ActionResult<OptionPage>> {
   const ctx = await requireViewer(org);
   const read = await dataSource().org.members(ctx);
   if (!read.ok) return readToActionResult<OptionPage>(read);
@@ -105,7 +112,7 @@ export async function chooseApprovers(org: string): Promise<Choices> {
   ]);
 }
 
-async function agentOptions(ctx: WsCtx): Promise<Choices> {
+async function agentOptions(ctx: WsCtx): Promise<ActionResult<OptionPage>> {
   const list = await walk(PAGE_BOUND, async (cursor) => {
     const read = await dataSource().agents.list(ctx, { cursor });
     return read.ok
@@ -135,7 +142,7 @@ async function agentOptions(ctx: WsCtx): Promise<Choices> {
 export async function chooseAgents(
   org: string,
   ws: string,
-): Promise<Choices> {
+): Promise<ActionResult<OptionPage>> {
   return agentOptions(await requireViewer(org, ws));
 }
 
@@ -144,7 +151,10 @@ export async function chooseAgents(
  *
  * @deregistered Retained with the replay UI under ADR-130.
  */
-export async function chooseRuns(org: string, ws: string): Promise<Choices> {
+export async function chooseRuns(
+  org: string,
+  ws: string,
+): Promise<ActionResult<OptionPage>> {
   const ctx = await requireViewer(org, ws);
   const list = await walk(RUN_PAGE_BOUND, async (cursor) => {
     const read = await dataSource().runs.list(ctx, { cursor });
@@ -171,7 +181,10 @@ export async function chooseRuns(org: string, ws: string): Promise<Choices> {
  * caller is `chooseSwitchTargets` below, and every export of a `"use server"`
  * module is a server action any client can call.
  */
-async function chooseMcpServers(org: string, ws: string): Promise<Choices> {
+async function chooseMcpServers(
+  org: string,
+  ws: string,
+): Promise<ActionResult<OptionPage>> {
   const ctx = await requireViewer(org, ws);
   const read = await dataSource().tools.mcpServers(ctx);
   if (!read.ok) return readToActionResult<OptionPage>(read);
@@ -193,7 +206,7 @@ export async function chooseSwitchTargets(
   org: string,
   ws: string,
   kind: "tool_server" | "tool_version" | "connection" | "agent",
-): Promise<Choices> {
+): Promise<ActionResult<OptionPage>> {
   if (kind === "tool_server") return chooseMcpServers(org, ws);
   const ctx = await requireViewer(org, ws);
   if (kind === "agent") return agentOptions(ctx);
@@ -232,7 +245,7 @@ export async function chooseSwitchTargets(
 export async function chooseModels(
   org: string,
   ws: string,
-): Promise<Choices> {
+): Promise<ActionResult<OptionPage>> {
   const ctx = await requireViewer(org, ws);
   const [book, unpriced] = await Promise.all([
     dataSource().spend.priceBook(ctx),

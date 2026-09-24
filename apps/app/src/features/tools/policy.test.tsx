@@ -602,9 +602,11 @@ describe("Tools › mandates ledger › grant", () => {
     const form = screen.getByTestId("grant-mandate");
     fireEvent.focus(within(form).getByRole("combobox", { name: "Agent" }));
     expect(choices.chooseAgents).toHaveBeenCalledWith("acme", "core-platform");
-    expect(await within(form).findByRole("option")).toHaveTextContent(
-      "Docs bot",
-    );
+    // Scoped to the picker's listbox, as the retired-agent test above is: the
+    // form's period `<select>` carries native `<option>` elements, and those
+    // hold the implicit `option` role too, so a form-wide query reads four.
+    const agents = await within(form).findByRole("listbox");
+    expect(within(agents).getByRole("option")).toHaveTextContent("Docs bot");
   });
 
   it("keeps the ledger when the agents read fails, and says why no agent is offered (negative)", async () => {
