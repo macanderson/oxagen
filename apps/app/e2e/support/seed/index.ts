@@ -12,11 +12,17 @@
 //      resolved the way admission resolves it: an agent definition created
 //      through the kernel (its delegated principal comes with it), the
 //      owner's human principal, a pinned authorization snapshot from
-//      @oxagen/iam, and a retention policy version.
+//      @oxagen/iam, and a retention policy version;
+//   4. one active mandate on that agent, so both Mandate addresses have a
+//      record to load: a tool declaration that moves money and declares an
+//      `amount` measure (`publish_tool_declaration`, which `grant_mandate`
+//      requires before it grants a limit over a tool), then the grant, both
+//      through the kernel (#3927).
 //
 // Nothing else: no invitation, no billing row. Idempotent — keyed on the
-// email, the org slug, the agent slug and the presence of a V2 run in the
-// workspace — so two runs leave the same row counts. Writes go through
+// email, the org slug, the agent slug, the presence of a V2 run in the
+// workspace, the tool's unchanged manifest and the mandate's purpose on the
+// agent — so two runs leave the same row counts. Writes go through
 // package APIs only; the one table no package writes today,
 // evidence.retention_policy_versions, is written through @oxagen/database's
 // typed schema inside the tenant transaction.
@@ -34,7 +40,10 @@ import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
 import { createAgentRunAuthorizationSnapshot } from "@oxagen/iam";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import { agentDefinitionCreate } from "@oxagen/oxagen/contracts/agent.definition.create";
+import { billingCreditsPurchase } from "@oxagen/oxagen/contracts/billing.credits.purchase";
+import { mandateGrant } from "@oxagen/oxagen/contracts/mandate.grant";
 import { organizationCreate } from "@oxagen/oxagen/contracts/org.create";
+import { toolDeclarationPublish } from "@oxagen/oxagen/contracts/tool.declaration.publish";
 import { invoke } from "@oxagen/oxagen/kernel";
 import {
   createPostgresRunStore,
@@ -49,6 +58,18 @@ import { AUTH_DIR, SEED, SEED_RECORD } from "../index";
 
 /** The agent the seeded run is attributed to; created through the kernel. */
 const AGENT = { slug: "e2e-agent", name: "E2E agent" } as const;
+
+/**
+ * The tool the seeded mandate governs. `publish_tool_declaration` classifies a
+ * declaration only when its name is a capability `invoke()` dispatches, because
+ * the mandate gate runs inside `invoke()`; `purchase_credits` is one that moves
+ * money. The gate applies to agent principals alone, so this declaration
+ * changes nothing for the owner's own Billing page (pay.spec.ts).
+ */
+const MANDATE_TOOL = billingCreditsPurchase.name;
+
+/** The seeded mandate's purpose; the seed finds its own mandate by it. */
+const MANDATE_PURPOSE = "Seeded mandate for the e2e suite";
 
 /** The goal on the seeded run; what the Run header prints. */
 const RUN_GOAL = "Seeded run for the e2e suite";
@@ -208,6 +229,7 @@ async function seedAgent(
   userId: string,
 ): Promise<{
   agentId: string;
+  agentPublicId: string;
   agentPrincipalId: string;
   agentVersionId: string;
   agentVersionChecksum: string;
@@ -217,6 +239,7 @@ async function seedAgent(
       const [agent] = await tx
         .select({
           id: schema.agents.id,
+          publicId: schema.agents.publicId,
           principalId: schema.agents.principalId,
         })
         .from(schema.agents)
@@ -246,6 +269,7 @@ async function seedAgent(
       }
       return {
         agentId: agent.id,
+        agentPublicId: agent.publicId,
         agentPrincipalId: agent.principalId,
         agentVersionId: version.id,
         // create_agent_def leaves the v1 checksum null until publish; the run
@@ -481,15 +505,96 @@ async function seedRun(scope: Scope, userId: string): Promise<string> {
   return run.publicId;
 }
 
+// ── 4. The mandate ─────────────────────────────────────────────────────────
+
+/**
+ * One active mandate on the seeded agent, over a declared tool that moves
+ * money. Returns its `mnd_…` public id, which the page-load oracle needs
+ * because a mandate's address carries it (`e2e/routes.ts`).
+ */
+async function seedMandate(scope: Scope, userId: string): Promise<string> {
+  const agent = await seedAgent(scope, userId);
+  // Idempotent on an unchanged manifest: a second seed publishes no version.
+  await invoke(
+    toolDeclarationPublish.name,
+    {
+      name: MANDATE_TOOL,
+      description: "Buy usage credits through Stripe Checkout",
+      input_schema: {
+        type: "object",
+        properties: { amountUsd: { type: "number", minimum: 5 } },
+        required: ["amountUsd"],
+      },
+      risk_grade: "high",
+      source: "custom",
+      manifest: { name: MANDATE_TOOL, seed: "e2e" },
+      consequence_tags: ["moves_money"],
+      measures: {
+        amount: { path: "amountUsd", type: "amount", unit: "USD" },
+      },
+    },
+    tenantCtx(scope, userId),
+  );
+
+  const existing = await withTenantDb((tx) =>
+    tx
+      .select({ publicId: schema.mandates.publicId })
+      .from(schema.mandates)
+      .where(
+        and(
+          eq(schema.mandates.workspaceId, scope.workspaceId),
+          eq(schema.mandates.agentPrincipalId, agent.agentPrincipalId),
+          eq(schema.mandates.purpose, MANDATE_PURPOSE),
+          eq(schema.mandates.status, "active"),
+        ),
+      )
+      .limit(1),
+  );
+  if (existing[0]) {
+    log("mandate already exists", { mandatePublicId: existing[0].publicId });
+    return existing[0].publicId;
+  }
+
+  // In effect from the start of this year for five years, so a seed reused
+  // across runs keeps an active mandate and the page renders its loaded state.
+  const year = new Date().getUTCFullYear();
+  const granted = (await invoke(
+    mandateGrant.name,
+    {
+      agentId: agent.agentPublicId,
+      consequenceTags: ["moves_money"],
+      limits: {
+        amount: {
+          perCall: "250000000",
+          perPeriod: "2000000000",
+          period: "monthly",
+          currencyOrUnit: "USD",
+        },
+      },
+      tools: [MANDATE_TOOL],
+      purpose: MANDATE_PURPOSE,
+      validFrom: new Date(Date.UTC(year, 0, 1)).toISOString(),
+      validTo: new Date(Date.UTC(year + 5, 0, 1)).toISOString(),
+    },
+    tenantCtx(scope, userId),
+  )) as { id: string };
+  log("mandate granted", { mandatePublicId: granted.id });
+  return granted.id;
+}
+
 // ── Entry ──────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
   const { userId } = await seedOwner();
   const scope = await seedOrg(userId);
-  const runPublicId = await runInTenantScope({ ...scope, userId }, () =>
-    seedRun(scope, userId),
+  const { runPublicId, mandatePublicId } = await runInTenantScope(
+    { ...scope, userId },
+    async () => ({
+      runPublicId: await seedRun(scope, userId),
+      mandatePublicId: await seedMandate(scope, userId),
+    }),
   );
-  const record = { runPublicId };
+  const record = { runPublicId, mandatePublicId };
   mkdirSync(AUTH_DIR, { recursive: true });
   writeFileSync(SEED_RECORD, `${JSON.stringify(record, null, 2)}\n`);
   log("done", { record: SEED_RECORD });

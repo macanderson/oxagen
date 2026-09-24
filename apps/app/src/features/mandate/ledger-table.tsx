@@ -26,10 +26,11 @@ import type { MandateDraw, MandateMovement } from "@/data/contracts/mandates";
 import { Badge, type BadgeTone } from "@/ui/badge";
 import { inputBase, mono } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
-import { Measure, NamedMeasure } from "@/ui/measure";
+import { Measure, NamedMeasure, useMeasureText } from "@/ui/measure";
 import { cell, headCell, numericCell } from "@/ui/table";
 import { NotBacked } from "./state";
 import {
+  costOf,
   DEFAULT_PAGE_SIZE,
   type LedgerView,
   ledgerPage,
@@ -75,6 +76,40 @@ function ExternalCell({ row }: { row: MandateDraw }) {
         ? "releasedNoEffect"
         : "notRecorded";
   return <span className="text-xs text-muted-foreground">{t(key)}</span>;
+}
+
+/**
+ * The design's Amount cell: what the draw cost. A released draw moved nothing,
+ * so it prints zero (the design's `$0.00`), with the figure its reservation
+ * held underneath so the row still says what was given back.
+ */
+function AmountCell({
+  row,
+  primary,
+}: {
+  row: MandateDraw;
+  primary: string | null;
+}) {
+  const t = useTranslations("mandate.ledger");
+  const measureText = useMeasureText();
+  const cost = costOf(row);
+  return (
+    <>
+      {row.measure === primary ? (
+        <Measure value={cost} />
+      ) : (
+        <NamedMeasure measure={row.measure} value={cost} />
+      )}
+      {row.state === "release" ? (
+        <span
+          data-state="released-figure"
+          className="block text-[11px] text-muted-foreground"
+        >
+          {t("releasedFigure", { value: measureText(row.value) })}
+        </span>
+      ) : null}
+    </>
+  );
 }
 
 /** The design's When cell: the time for today's draw, the day for an older one. */
@@ -291,11 +326,7 @@ export function LedgerTable({
                     </NotBacked>
                   </td>
                   <td className={numericCell}>
-                    {row.measure === primary ? (
-                      <Measure value={row.value} />
-                    ) : (
-                      <NamedMeasure measure={row.measure} value={row.value} />
-                    )}
+                    <AmountCell row={row} primary={primary} />
                   </td>
                   <td className={cell}>
                     <Badge tone={TONE[row.state]}>

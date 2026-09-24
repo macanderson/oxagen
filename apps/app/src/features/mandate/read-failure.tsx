@@ -11,13 +11,15 @@
 // **Denied names the permission and not the person's shortcoming.** The read
 // is `get_mandate`, and `PAGE_FAILURES.mandates` names `org.billing`, the
 // finance role the design names. Request access and Open an incident have no
-// write behind them yet, so each opens a dialog that says so (`StubDialog`)
-// rather than pretending to file anything.
+// write behind them yet, so each opens the design's dialog with its send drawn
+// disabled beside the sentence that says why (`stub-dialog.tsx`), rather than
+// pretending to file anything.
 //
 // **Error names what the read answered.** The code and status are the kernel
-// seam's. The design's trace line also carries a trace id and a region; the
-// read path returns neither, so the line names the instant the read failed and
-// says the trace is not recorded.
+// seam's. The design's trace line is `trace <id> · <region> · <instant>`; the
+// read path returns no trace id and no region (#3847, #3841), so those two
+// render as not recorded and the line keeps the instant the read failed, in
+// the design's `YYYY-MM-DD HH:MM:SSZ`.
 import { useTranslations } from "next-intl";
 import type { Read } from "@/data/read";
 import type { WsRole } from "@/server/viewer";
@@ -26,7 +28,7 @@ import { buttonPrimary, buttonSecondary, mono } from "@/ui/control-styles";
 import { OutcomePanel } from "@/ui/form-feedback";
 import { SafeLink } from "@/ui/navigation";
 import { NotBacked, StateWrap } from "./state";
-import { StubDialog } from "./stub-dialog";
+import { IncidentDialog, RequestAccessDialog } from "./stub-dialog";
 
 type Failure = Exclude<Read<unknown>, { ok: true }>;
 
@@ -37,6 +39,7 @@ export function MandateReadFailure({
   org,
   ws,
   retry,
+  mandate,
   readAt,
 }: {
   read: Failure;
@@ -47,7 +50,9 @@ export function MandateReadFailure({
   ws: string;
   /** Where Try again points: this same page. */
   retry: SafePath;
-  /** The instant the read was attempted, formatted by the caller. */
+  /** The mandate id the route names. */
+  mandate: string;
+  /** The instant the read was attempted, as `YYYY-MM-DD HH:MM:SSZ`. */
   readAt: string;
 }) {
   const t = useTranslations("mandate.failure");
@@ -61,16 +66,7 @@ export function MandateReadFailure({
           testId="mandate-denied"
           actions={
             <>
-              <StubDialog
-                primary
-                label={t("denied.requestAccess")}
-                title={t("denied.requestAccess")}
-                body={t("denied.requestAccessBody", {
-                  permission: read.permission,
-                })}
-                gap="access-request"
-                testId="request-access"
-              />
+              <RequestAccessDialog permission={read.permission} />
               <SafeLink to={routes.fleet(org, ws)} className={buttonSecondary}>
                 {t("back")}
               </SafeLink>
@@ -135,16 +131,11 @@ export function MandateReadFailure({
               <SafeLink to={retry} className={buttonPrimary}>
                 {t("error.retry")}
               </SafeLink>
-              <StubDialog
-                label={t("error.incident")}
-                title={t("error.incident")}
-                body={t("error.incidentBody", {
-                  status: String(read.status),
-                  code: read.code,
-                  at: readAt,
-                })}
-                gap="incident-write"
-                testId="open-incident"
+              <IncidentDialog
+                status={read.status}
+                code={read.code}
+                mandate={mandate}
+                at={readAt}
               />
             </>
           }
@@ -153,7 +144,14 @@ export function MandateReadFailure({
               data-testid="mandate-trace"
               className={`${mono} mt-4 text-[11.5px] text-dim`}
             >
-              {t("error.trace", { at: readAt })}
+              {t("error.trace")}{" "}
+              <NotBacked gap="trace-id">
+                {t("error.traceNotRecorded")}
+              </NotBacked>
+              {" · "}
+              <NotBacked gap="region">{t("error.regionNotRecorded")}</NotBacked>
+              {" · "}
+              <time dateTime={readAt.replace(" ", "T")}>{readAt}</time>
             </p>
           }
         >

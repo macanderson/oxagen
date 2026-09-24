@@ -196,9 +196,24 @@ export function nextSort(
   return was.dir === 1 ? { column, dir: -1 } : null;
 }
 
-/** A draw's amount as an integer string in its smallest unit: micros for money, the count itself otherwise. */
+/**
+ * What a draw cost: its value, except on a released draw, which moved nothing
+ * and so cost zero in the same currency or unit (the design prints `$0.00` on a
+ * released row). The figure the reservation held is still the row's `value`,
+ * and the table prints it beside the zero so the release says what it gave
+ * back. A reader summing the Amount column gets what the mandate paid.
+ */
+export function costOf(row: MandateDraw): MeasureValue {
+  if (row.state !== "release") return row.value;
+  return row.value.kind === "money"
+    ? { kind: "money", money: { ...row.value.money, micros: "0" } }
+    : { kind: "count", count: "0", unit: row.value.unit };
+}
+
+/** A draw's cost as an integer string in its smallest unit: micros for money, the count itself otherwise. */
 function amountOf(row: MandateDraw): string {
-  return row.value.kind === "money" ? row.value.money.micros : row.value.count;
+  const cost = costOf(row);
+  return cost.kind === "money" ? cost.money.micros : cost.count;
 }
 
 const STATE_ORDER: Record<MandateMovement, number> = {
@@ -403,4 +418,13 @@ export function whenOf(
     hourCycle: "h23",
   }).format(new Date(Date.parse(at)));
   return { kind: "time", text };
+}
+
+/**
+ * The error state's trace time as the design prints it: `2026-09-11 09:16:04Z`,
+ * the instant in UTC to the second. The Billing lane prints its trace line by
+ * the same rule (`traceTime` in `features/billing/billing.tsx`).
+ */
+export function traceTime(at: Date): string {
+  return `${at.toISOString().slice(0, 19).replace("T", " ")}Z`;
 }

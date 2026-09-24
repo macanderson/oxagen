@@ -82,6 +82,7 @@
       },
       "noEffectYet": "no effect yet",
       "releasedNoEffect": "released, no effect",
+      "releasedFigure": "{value} held, then released",
       "notRecorded": "not recorded",
       "filteredEmpty": "No draw matches this search",
       "readBound": "Read from the newest {shown} ledger movements, the most this page reads at once. This mandate has recorded at least that many, and this page cannot tell you whether it has recorded more.",
@@ -140,12 +141,14 @@
         "approvalAbove": "Approval above ({unit})",
         "approvalHint": "A call above this parks for a human, and no rule elsewhere can release it.",
         "validTo": "Valid to",
-        "note": "Lowering a ceiling below what is already reserved does not claw the reservation back. It applies from the next call. A field left blank keeps what is stored.",
+        "note": "Lowering a ceiling below what is already reserved does not claw the reservation back. It applies from the next call.",
         "windows": {
           "daily": "day",
           "weekly": "week",
           "monthly": "month"
-        }
+        },
+        "secondApprover": "Widening one takes no second approver yet, because a mandate records none.",
+        "blankKeeps": "A field left blank keeps what is stored."
       },
       "revoke": {
         "open": "Revoke",
@@ -200,8 +203,6 @@
       "denied": {
         "title": "You cannot see this mandate",
         "body": "Your roles on <b>{org}</b> do not include <code>{permission}</code>, the finance role mandates are read with. An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
-        "requestAccess": "Request access",
-        "requestAccessBody": "Oxagen does not record access requests for a role yet, so nothing is filed from here. Ask an organization owner to grant {permission}. The grant lands in the audit record with your name on it.",
         "signedIn": "Signed in as",
         "needed": "Needed",
         "decidedBy": "Decided by",
@@ -216,11 +217,33 @@
         "title": "This mandate could not be loaded",
         "body": "The control plane answered <c>{status} {code}</c>. Nothing was changed. Runs kept recording while this page was down. Frames are written by the collector on each host, not by Oxagen.",
         "retry": "Try again",
-        "incident": "Open an incident",
-        "incidentBody": "Oxagen does not record incidents opened from this page yet, so nothing is filed from here. Report the answer {status} {code} and the time {at} to whoever runs your Oxagen deployment.",
-        "trace": "Trace not recorded. Read at {at}."
+        "trace": "trace",
+        "traceNotRecorded": "not recorded",
+        "regionNotRecorded": "region not recorded"
       },
-      "stubCancel": "Cancel"
+      "requestAccess": {
+        "title": "Request access",
+        "role": "Role requested",
+        "why": "Why",
+        "note": "Granting a role is a governed action. It will appear in the audit record with the granter’s name, your name, and this reason.",
+        "send": "Send the request",
+        "cancel": "Cancel",
+        "unbacked": "Oxagen does not record access requests for a role yet, so this cannot be sent. Ask an organization owner to grant {permission}. The grant lands in the audit record with your name on it."
+      },
+      "incident": {
+        "title": "Open an incident",
+        "subject": "Subject",
+        "severity": "Severity",
+        "severities": {
+          "critical": "critical — money moved that Oxagen did not govern",
+          "warning": "warning",
+          "info": "info"
+        },
+        "attach": "Attach",
+        "raise": "Raise it",
+        "cancel": "Cancel",
+        "unbacked": "Oxagen does not record incidents opened from this page yet, so this cannot be sent. Report the answer {status} {code} and the time {at} to whoever runs your Oxagen deployment."
+      }
     }
   }
 }

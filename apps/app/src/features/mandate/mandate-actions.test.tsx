@@ -140,8 +140,13 @@ describe("mandateedit", () => {
       "A call above this parks for a human, and no rule elsewhere can release it.",
     );
     expect(form).toHaveTextContent(
-      "Lowering a ceiling below what is already reserved does not claw the reservation back. It applies from the next call.",
+      "Lowering a ceiling below what is already reserved does not claw the reservation back. It applies from the next call. Widening one takes no second approver yet, because a mandate records none. A field left blank keeps what is stored.",
     );
+    // The design names the second approver a widening needs; a mandate
+    // stores none (#3872), so the clause renders as not recorded.
+    expect(
+      form.querySelector('[data-state="not-backed"][data-gap="G1"]'),
+    ).toHaveTextContent("Widening one takes no second approver yet");
     // The design's header close, labelled, beside the footer's Cancel.
     expect(
       within(form).getByRole("button", { name: "Close" }),
