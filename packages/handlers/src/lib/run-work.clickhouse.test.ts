@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { clickhouse, closeClickhouse } from "@oxagen/telemetry";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   readSessionConfig,
@@ -104,6 +103,11 @@ const read = <T>(fn: () => Promise<T>) => runInTenantScope(scope, fn);
 
 describe.skipIf(!reachable)("run work reads on ClickHouse", () => {
   beforeAll(async () => {
+    // Imported here, not at the top: the tenancy-seam lint rule (OXA-1515)
+    // forbids a static `clickhouse` import outside @oxagen/telemetry, and
+    // seeding a fixture needs the raw client. run.turns.get.integration.test.ts
+    // seeds the same table the same way.
+    const { clickhouse } = await import("@oxagen/telemetry");
     await clickhouse().insert({
       table: "tacho_events",
       format: "JSONEachRow",
@@ -111,6 +115,7 @@ describe.skipIf(!reachable)("run work reads on ClickHouse", () => {
     });
   });
   afterAll(async () => {
+    const { closeClickhouse } = await import("@oxagen/telemetry");
     await closeClickhouse();
   });
 
