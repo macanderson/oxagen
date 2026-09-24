@@ -55,8 +55,6 @@ const { Spend } = await import("./spend");
 const { SpendLoading } = await import("./states");
 const { parseSpendView } = await import("./view");
 
-// The fields, kept as a plain object: spreading a minted context would copy
-// its fields off the prototype it was minted with.
 const CTX_FIELDS = {
   userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
   orgId: "7a000000-0000-4000-8000-0000000000a1",
