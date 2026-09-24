@@ -3,3 +3,4 @@
 // restricted).
 export { Tools, ToolsLoading } from "./tools";
 export { parseToolsTab } from "./view";
+export { handleMcpOAuthCallback } from "./oauth-callback";

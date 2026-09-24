@@ -9203,7 +9203,6 @@ type Messages = {
         s3: string;
       };
       provider: string;
-      newProvider: string;
       name: string;
       nameHint: string;
       endpoint: string;
@@ -9215,6 +9214,7 @@ type Messages = {
         none: string;
         bearer: string;
         header: string;
+        oauth: string;
       };
       authConfig: string;
       authConfigHint: string;
@@ -9238,6 +9238,86 @@ type Messages = {
       importCount: string;
       importing: string;
       done: string;
+      addTitle: string;
+      theProvider: string;
+      pickProvider: string;
+      source: {
+        label: string;
+        browse: string;
+        custom: string;
+        existing: string;
+      };
+      browse: {
+        search: string;
+        searchPlaceholder: string;
+        sourceNote: string;
+        searching: string;
+        results: string;
+        empty: string;
+        more: string;
+        registryUnreachable: string;
+        verified: string;
+        publisher: string;
+        publisherVerified: string;
+        website: string;
+        docs: string;
+        source: string;
+        pick: string;
+        pickNamed: string;
+        change: string;
+        stdioOnly: string;
+        noRemote: string;
+        token: string;
+        header: string;
+        headerValue: string;
+        secretHint: string;
+        noAuth: string;
+        auth: {
+          oauth: string;
+          oauthClient: string;
+          bearer: string;
+          header: string;
+          none: string;
+          unknown: string;
+        };
+        version: string;
+      };
+      oauth: {
+        authorize: string;
+        explain: string;
+        explainUnknown: string;
+        ownClient: string;
+        clientRequired: string;
+        redirect: string;
+        redirectHint: string;
+        copy: string;
+        copied: string;
+        clientId: string;
+        clientSecret: string;
+        clientSecretHint: string;
+        scopes: string;
+        scopesHint: string;
+        docs: string;
+        starting: string;
+        waiting: string;
+        blocked: string;
+        openSignIn: string;
+        cancel: string;
+        notOAuth: string;
+        connectOpen: string;
+        failure: {
+          access_denied: string;
+          authorization_expired: string;
+          authorization_failed: string;
+          authorization_discovery_failed: string;
+          authorization_url_invalid: string;
+          endpoint_not_public: string;
+          redirect_url_invalid: string;
+          server_not_found: string;
+          org_role_required: string;
+        };
+      };
+      another: string;
     };
     connections: {
       title: string;
@@ -9814,7 +9894,6 @@ type Messages = {
         actions: string;
       };
       transportNote: string;
-      attentionNotBacked: string;
       open: string;
       openNamed: string;
       wireLine: string;
@@ -9853,19 +9932,6 @@ type Messages = {
         note: string;
         confirm: string;
       };
-      oauth: {
-        open: string;
-        title: string;
-        clientId: string;
-        clientSecret: string;
-        authUrl: string;
-        scopes: string;
-        redirect: string;
-        redirectHint: string;
-        refusal: string;
-        note: string;
-        confirm: string;
-      };
       drill: {
         subtitle: string;
         healthWarning: {
@@ -9887,7 +9953,6 @@ type Messages = {
         schemas: string;
         atLeast: string;
         authTitle: string;
-        authNotBacked: string;
         keyInstead: string;
         keyTitle: string;
         keyNote: string;
@@ -9903,8 +9968,60 @@ type Messages = {
           calls: string;
         };
         transportMcp: string;
+        reviewNotBacked: string;
       };
       transportMcp: string;
+      status: {
+        lights: {
+          green: string;
+          yellow: string;
+          red: string;
+        };
+        short: {
+          ok: string;
+          unchecked: string;
+          degraded: string;
+          tokenLapsed: string;
+          unreachable: string;
+          tokenExpired: string;
+          needsReauth: string;
+          revoked: string;
+          notConnected: string;
+        };
+        reasons: {
+          ok: string;
+          unchecked: string;
+          degraded: string;
+          tokenLapsed: string;
+          unreachable: string;
+          tokenExpired: string;
+          needsReauth: string;
+          revoked: string;
+          notConnected: string;
+        };
+        kinds: {
+          oauth: string;
+          bearer: string;
+          header: string;
+          none: string;
+        };
+        states: {
+          connected: string;
+          needs_reauth: string;
+          revoked: string;
+          not_connected: string;
+        };
+        expires: string;
+        refreshable: string;
+        notRefreshable: string;
+        attention: string;
+      };
+      reconnect: {
+        open: string;
+        pending: string;
+        named: string;
+        clientRequired: string;
+      };
     };
     toolbelts: {
       title: string;
@@ -9988,6 +10105,13 @@ type Messages = {
         plain: string;
       };
       versionsTable: string;
+    };
+    oauthCallback: {
+      doneTitle: string;
+      done: string;
+      failedTitle: string;
+      denied: string;
+      failed: string;
     };
   };
   ui: {

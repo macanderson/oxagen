@@ -379,6 +379,18 @@ export type McpAuthStrategy = z.infer<typeof McpAuthStrategy>;
  */
 const McpHealth = z.enum(["healthy", "degraded", "unreachable", "unknown"]);
 
+/**
+ * An OAuth provider's stored authorization (#4132): whether a token is held,
+ * when it lapses and whether it renews without a person. Never the token.
+ */
+export const McpAuthorization = z.object({
+  state: z.enum(["connected", "needs_reauth", "revoked", "not_connected"]),
+  expiresAt: Instant.nullable(),
+  refreshable: z.boolean(),
+  lastRefreshedAt: Instant.nullable(),
+});
+export type McpAuthorization = z.infer<typeof McpAuthorization>;
+
 export const McpServer = z.object({
   /** `mcs_…`: the id `import_tools` names a server by. */
   id: PublicId,
@@ -389,8 +401,49 @@ export const McpServer = z.object({
   lastHealthcheckAt: Instant.nullable(),
   /** Pins discovered at the last health check, not versions in the registry. */
   toolCount: Count,
+  /** How the workspace authenticates to it: OAuth, or a static strategy. */
+  authKind: z.enum(["oauth", "bearer", "header", "none"]),
+  /** An https icon from the registry entry it was added from. */
+  iconUrl: z.url({ protocol: /^https$/ }).nullable(),
+  /** Null unless `authKind` is `oauth`. */
+  authorization: McpAuthorization.nullable(),
 });
 export type McpServer = z.infer<typeof McpServer>;
+
+/**
+ * One `search_mcp_registry` result: a server a workspace can add, from the
+ * verified first-party list or the official MCP Registry. Every URL is https.
+ */
+export const RegistryServer = z.object({
+  /** The registry's name for it (`app.linear/linear`), or `verified/<slug>`. Not an Oxagen id. */
+  registryRef: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string(),
+  publisher: z.string(),
+  publisherVerified: z.boolean(),
+  source: z.enum(["verified", "registry"]),
+  version: z.string().nullable(),
+  iconUrl: z.url({ protocol: /^https$/ }).nullable(),
+  websiteUrl: z.url({ protocol: /^https$/ }).nullable(),
+  docsUrl: z.url({ protocol: /^https$/ }).nullable(),
+  repositoryUrl: z.url({ protocol: /^https$/ }).nullable(),
+  endpointUrl: z.url({ protocol: /^https$/ }).nullable(),
+  transports: z.array(z.enum(["streamable-http", "sse", "stdio"])),
+  auth: z.enum(["oauth", "bearer", "header", "none", "unknown"]),
+  authHeader: z.string().nullable(),
+  oauthRegistration: z
+    .enum(["dynamic", "client_required", "unknown"])
+    .nullable(),
+  connectable: z.boolean(),
+});
+export type RegistryServer = z.infer<typeof RegistryServer>;
+
+export const RegistryPage = z.object({
+  servers: z.array(RegistryServer),
+  nextCursor: z.string().nullable(),
+  registryReachable: z.boolean(),
+});
+export type RegistryPage = z.infer<typeof RegistryPage>;
 
 /** Every registered server in the workspace: the contract takes no filter and no cursor. */
 export const McpServerList = z.object({

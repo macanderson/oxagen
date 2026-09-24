@@ -22,6 +22,7 @@ import type { Read } from "@/data/read";
 import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider, translator } from "@/test/intl";
+import { stubPopup } from "@/test/popup";
 
 const { router, actions } = vi.hoisted(() => ({
   router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
@@ -36,6 +37,22 @@ const { router, actions } = vi.hoisted(() => ({
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("./actions", () => actions);
+const { startProviderAuthorization, navigatePopup } = vi.hoisted(() => ({
+  startProviderAuthorization: vi.fn(),
+  navigatePopup: vi.fn(),
+}));
+vi.mock("@/ui/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/ui/navigation")>()),
+  navigatePopup,
+}));
+vi.mock("./provider-auth-actions", () => ({
+  searchRegistry: vi.fn(),
+  startProviderAuthorization,
+  providerRedirectUrl: vi.fn().mockResolvedValue({
+    ok: true,
+    value: { redirectUrl: "https://app.oxagen.sh/api/v1/mcp/oauth/callback" },
+  }),
+}));
 
 const { Providers } = await import("./providers");
 const { credentialGrantPage, connectionList, mcpServerList, toolVersionPage } =
@@ -292,9 +309,9 @@ describe("Providers › drill-down", () => {
   it("offers a reader who may not administer the facts and no write, not even authorization", async () => {
     renderProviders({ canAdminister: false, orgRole: "member" });
     const dialog = await openDrill();
-    expect(dialog.getByText(drill("authNotBacked"))).toBeVisible();
+    expect(dialog.getByText(drill("reviewNotBacked"))).toBeVisible();
     expect(
-      dialog.queryByRole("button", { name: "Connect with OAuth" }),
+      dialog.queryByRole("button", { name: /Reconnect/ }),
     ).not.toBeInTheDocument();
     expect(
       dialog.queryByTestId("provider-reimport-mcs_01k5s1"),
@@ -464,5 +481,143 @@ describe("Providers › Re-import", () => {
       await screen.findByTestId("provider-reimport-done"),
     ).toHaveTextContent("No new version, nothing unchanged.");
     expect(router.refresh).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Providers › status light and reconnect (#4132)", () => {
+  const status = translator("tools.providers.status");
+  const HOUR = 3_600_000;
+  const oauthServer = (
+    authorization: Partial<NonNullable<ServerRow["authorization"]>>,
+    health: ServerRow["healthStatus"] = "healthy",
+  ): Partial<ServerRow> => ({
+    healthStatus: health,
+    authKind: "oauth",
+    iconUrl: "https://linear.app/favicon.ico",
+    authorization: {
+      state: "connected",
+      expiresAt: new Date(Date.now() + HOUR).toISOString(),
+      refreshable: true,
+      lastRefreshedAt: null,
+      ...authorization,
+    },
+  });
+
+  const light = () => screen.getByTestId("provider-status-mcs_01k5s1");
+
+  it("shows green with the token's expiry for a signed-in OAuth provider", () => {
+    renderProviders(oneProvider(oauthServer({}), []));
+    expect(light()).toHaveAttribute("data-light", "green");
+    expect(light()).toHaveTextContent(status("lights.green"));
+    expect(screen.getByText(status("states.connected"))).toBeVisible();
+    expect(screen.getByText(status("refreshable"))).toBeVisible();
+    expect(
+      screen.queryByTestId("tools-providers-attention"),
+    ).not.toBeInTheDocument();
+  });
+
+  it.each<[string, Partial<ServerRow>, "yellow" | "red", string]>([
+    [
+      "a lapsed token that renews",
+      oauthServer({ expiresAt: new Date(Date.now() - HOUR).toISOString() }),
+      "yellow",
+      "tokenLapsed",
+    ],
+    [
+      "a lapsed token with no refresh",
+      oauthServer({
+        expiresAt: new Date(Date.now() - HOUR).toISOString(),
+        refreshable: false,
+      }),
+      "red",
+      "tokenExpired",
+    ],
+    [
+      "a refused refresh",
+      oauthServer({ state: "needs_reauth" }),
+      "red",
+      "needsReauth",
+    ],
+    ["a degraded server", oauthServer({}, "degraded"), "yellow", "degraded"],
+    [
+      "an unreachable server",
+      oauthServer({}, "unreachable"),
+      "red",
+      "unreachable",
+    ],
+  ])("shows %s as %s", (_case, server, colour, reason) => {
+    renderProviders(oneProvider(server, []));
+    expect(light()).toHaveAttribute("data-light", colour);
+    expect(light()).toHaveAttribute("data-reason", reason);
+    expect(screen.getByTestId("tools-providers-attention")).toBeVisible();
+  });
+
+  it("reconnects a red OAuth provider in a popup and re-reads the tab when it answers", async () => {
+    const popup = stubPopup();
+    startProviderAuthorization.mockResolvedValue({
+      ok: true,
+      value: {
+        status: "authorized",
+        serverId: "mcs_01k5s1",
+        healthStatus: "healthy",
+        discoveredTools: [],
+      },
+    });
+    renderProviders(oneProvider(oauthServer({ state: "needs_reauth" }), []));
+    fireEvent.click(screen.getByTestId("provider-reconnect-mcs_01k5s1"));
+    await waitFor(() => {
+      expect(router.refresh).toHaveBeenCalled();
+    });
+    expect(startProviderAuthorization).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      { mode: "reconnect", serverId: "mcs_01k5s1" },
+    );
+    expect(popup.open).toHaveBeenCalled();
+    expect(popup.close).toHaveBeenCalled();
+    popup.open.mockRestore();
+    popup.remove();
+  });
+
+  it("points the popup at the sign-in page and waits for it", async () => {
+    const popup = stubPopup();
+    startProviderAuthorization.mockResolvedValue({
+      ok: true,
+      value: {
+        status: "redirect",
+        authorizationUrl: "https://mcp.linear.app/authorize?state=s",
+        state: "s".repeat(32),
+      },
+    });
+    renderProviders(oneProvider(oauthServer({ state: "revoked" }), []));
+    fireEvent.click(screen.getByTestId("provider-reconnect-mcs_01k5s1"));
+    await waitFor(() => {
+      expect(navigatePopup).toHaveBeenCalledWith(
+        popup.win,
+        "https://mcp.linear.app/authorize?state=s",
+      );
+    });
+    expect(
+      await screen.findByText(
+        "Waiting for you to sign in to Stripe in the other window.",
+      ),
+    ).toBeVisible();
+    popup.open.mockRestore();
+    popup.remove();
+  });
+
+  it("offers no Reconnect for a static provider or to a reader who may not administer", () => {
+    renderProviders(oneProvider({}, []));
+    expect(
+      screen.queryByTestId("provider-reconnect-mcs_01k5s1"),
+    ).not.toBeInTheDocument();
+    cleanup();
+    renderProviders({
+      ...oneProvider(oauthServer({ state: "needs_reauth" }), []),
+      canAdminister: false,
+    });
+    expect(
+      screen.queryByTestId("provider-reconnect-mcs_01k5s1"),
+    ).not.toBeInTheDocument();
   });
 });

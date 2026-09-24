@@ -27,7 +27,7 @@ export async function markCredentialNeedsReauth(
 
   // 2. Resolve notification context: server name, org name, and — crucially —
   // the org + workspace SLUGS. The deep link must be a real, navigable app URL
-  // (/{orgSlug}/{workspaceSlug}/workbench/tools/mcp), so raw UUIDs won't do.
+  // (/{orgSlug}/{workspaceSlug}/tools/providers), so raw UUIDs won't do.
   // Join the listing → organization (slug + name) and the workspace (slug).
   const listing = await withSystemDb(async (tx) => {
     const [row] = await tx
@@ -60,12 +60,11 @@ export async function markCredentialNeedsReauth(
   const serverName = listing.title ?? listing.name;
   const appUrl = process.env["APP_URL"] ?? "https://app.oxagen.sh";
 
-  // Deep-link to the real MCP Servers page for this workspace, with ?reauth=
-  // highlighting the server that needs re-authentication. That page renders the
-  // "Re-authenticate" action (→ GET /api/v1/mcp/oauth/authorize) for the row.
-  const deepLink =
-    `${appUrl}/${listing.orgSlug}/${listing.workspaceSlug}` +
-    `/workbench/tools/mcp?reauth=${encodeURIComponent(orgListingId)}`;
+  // Deep-link to the workspace's Providers tab, where the provider's status
+  // light reads red and its row offers Reconnect (#4132). The deprecated
+  // /workbench/tools/mcp page this pointed at 308s to the Tools tab, one tab
+  // away from the fix.
+  const deepLink = `${appUrl}/${listing.orgSlug}/${listing.workspaceSlug}/tools/providers`;
 
   const { subject, text, html } = reauthEmailTemplate({
     serverName,
