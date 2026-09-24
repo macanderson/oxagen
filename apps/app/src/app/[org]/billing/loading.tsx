@@ -2,11 +2,10 @@
 // shell while the page's reads resolve (pages/billing.md, loading). No figure
 // and no zero renders until a read answers.
 //
-// The frame is a busy region, not `main#main`. While the page streams in, the
-// document holds this fallback and the hidden page together, and only the
-// page may own the landmark: two would give the skip link two targets and
-// fail the page-load oracle's strict locator, as the onboarding gate did on
-// 2026-09-24 (#4036).
+// A busy region, not the page's `main`: while the page streams in, this
+// fallback and the page are in the document together, and only the page may
+// own main#main. Two gave the skip link two targets and failed page-load's
+// strict locator on 2026-09-24 (arch/loading-landmarks.test.ts).
 import { BillingSkeleton } from "@/features/billing";
 
 export default function BillingLoading() {
