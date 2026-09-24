@@ -143,6 +143,59 @@ describe("runMetrics", () => {
     expect(live.wall.sealed).toBe(false);
   });
 
+  it("counts a parked call's wait as the person's, not the tool's", () => {
+    const entry = (
+      seq: number,
+      type: string,
+      kind: "tool_call" | "frame",
+      label: string,
+      atS: number,
+    ) =>
+      transcriptEntry({
+        seq: String(seq),
+        endSeq: String(seq),
+        type,
+        kind,
+        label,
+        turn: 1,
+        frames: 1,
+        request: null,
+        response: null,
+        callKey: "call_1",
+        at: new Date(
+          Date.parse("2026-09-15T08:00:00.000Z") + atS * 1000,
+        ).toISOString(),
+        elapsedMs: atS * 1000,
+        cost: null,
+        cumulativeCost: null,
+      });
+    const entries = [
+      entry(1, "tool_requested", "tool_call", "create_release", 0),
+      entry(
+        2,
+        "approval_request",
+        "frame",
+        "approval_request create_release",
+        1,
+      ),
+      entry(3, "approval_decision", "frame", "approve create_release", 601),
+      entry(4, "tool_call", "tool_call", "create_release ok", 603),
+    ];
+    const m = runMetrics({
+      run: runRow({
+        startedAt: "2026-09-15T08:00:00.000Z",
+        sealedAt: "2026-09-15T08:10:03.000Z",
+      }),
+      cost: readOk(runCost()),
+      transcript: readOk(mockupTranscript({ entries })),
+      book: null,
+    });
+    expect(m.wall.parts?.waiting).toBe(600_000);
+    expect(m.wall.parts?.tool).toBe(3_000);
+    expect(m.wall.lead).toBe("waiting");
+    expect(m.toolCalls?.[0]?.ms).toBe(3_000);
+  });
+
   it("answers null for every figure a failed read cannot back, never a zero (negative)", () => {
     const m = runMetrics({
       run: runRow({ cost: null, sealedAt: null, status: "live" }),

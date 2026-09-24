@@ -334,7 +334,10 @@ function turnFigures(turns: readonly TranscriptTurn[]): TurnFigure[] {
  * the calls between two model steps: one model reply asks for them, and the
  * next model call reads their results.
  */
-function toolCallsOf(turns: readonly TranscriptTurn[]): ToolCall[] {
+function toolCallsOf(
+  turns: readonly TranscriptTurn[],
+  waits: readonly Wait[],
+): ToolCall[] {
   const calls: ToolCall[] = [];
   let batch = -1;
   let open = false;
@@ -353,7 +356,10 @@ function toolCallsOf(turns: readonly TranscriptTurn[]): ToolCall[] {
       calls.push({
         name: digest.name,
         group: groupOf(digest.name),
-        ms: digest.durationMs,
+        ms:
+          digest.durationMs === null
+            ? null
+            : Math.max(0, digest.durationMs - waitIn(step, waits)),
         failed: digest.node === "deny",
         seq: step.first.seq,
         batch,
@@ -436,21 +442,47 @@ function batchesOf(
   };
 }
 
-/** From each parked call to the frame after it: the time a person held the run. */
-function waitingMs(entries: readonly TranscriptEntry[]): number {
-  let total = 0;
+/** One parked call: when it parked, and how long until the frame after it. */
+type Wait = { at: number; ms: number };
+
+/**
+ * Each parked call's wait: from the approval request to the frame after it,
+ * which is the time a person held the run.
+ */
+function waitsOf(entries: readonly TranscriptEntry[]): Wait[] {
+  const waits: Wait[] = [];
   entries.forEach((entry, index) => {
     if (entry.type !== APPROVAL_REQUEST) return;
     const next = entries[index + 1];
-    if (next !== undefined) total += Math.max(0, timeOf(next) - timeOf(entry));
+    if (next !== undefined)
+      waits.push({
+        at: timeOf(entry),
+        ms: Math.max(0, timeOf(next) - timeOf(entry)),
+      });
   });
-  return total;
+  return waits;
+}
+
+/**
+ * The wait a step's span holds. A parked tool call's step runs from the
+ * request to the result, so its span includes the time a person took to
+ * answer; that time is the person's, not the tool's. The approval frame is a
+ * step of its own, so the wait is found by where it falls, not by frame.
+ */
+function waitIn(step: TranscriptStep, waits: readonly Wait[]) {
+  const from = timeOf(step.first);
+  const to = timeOf(step.last);
+  return waits.reduce(
+    (sum, wait) => (wait.at >= from && wait.at < to ? sum + wait.ms : sum),
+    0,
+  );
 }
 
 function wallClock(
   run: RunRow,
   entries: readonly TranscriptEntry[] | null,
   turns: readonly TranscriptTurn[] | null,
+  waits: readonly Wait[],
 ): WallClock {
   const sealedAt = run.sealedAt;
   const sealed = sealedAt !== null;
@@ -467,10 +499,11 @@ function wallClock(
   for (const turn of turns) {
     for (const step of turn.steps) {
       if (step.kind === "model") model += spanOf(step);
-      else if (step.kind === "tool") tool += spanOf(step);
+      else if (step.kind === "tool")
+        tool += Math.max(0, spanOf(step) - waitIn(step, waits));
     }
   }
-  const waiting = waitingMs(entries);
+  const waiting = waits.reduce((sum, wait) => sum + wait.ms, 0);
   const parts: WallParts = {
     model,
     tool,
@@ -499,7 +532,8 @@ export function runMetrics({
   const rollup = cost.ok ? cost.value.rollup : null;
   const entries = transcript.ok ? transcript.value.entries : null;
   const turns = entries === null ? null : buildTranscript(entries);
-  const calls = turns === null ? null : toolCallsOf(turns);
+  const waits = entries === null ? [] : waitsOf(entries);
+  const calls = turns === null ? null : toolCallsOf(turns, waits);
   const runCost = rollup?.cost ?? run.cost;
   const tokens = rollup === null ? null : tokenFigures(rollup);
   const promptCount =
@@ -518,7 +552,7 @@ export function runMetrics({
       promptCount === null
         ? null
         : { count: promptCount, corrective: Math.max(0, promptCount - 1) },
-    wall: wallClock(run, entries, turns),
+    wall: wallClock(run, entries, turns, waits),
     turns: turns === null ? null : turnFigures(turns),
     modelCalls:
       rollup?.modelCalls ??
