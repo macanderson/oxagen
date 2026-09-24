@@ -20,8 +20,8 @@
 // `subagent_start` that spawned it, so an entry from a subagent carries
 // `subagent` and its halves carry `sessionUuid`: its `seq` names a frame only
 // together with that chain. Pages are therefore cut on each frame's position
-// in the run as read, and a cursor names its frame as `t:<seq>` on the run's
-// own chain or `t:<session uuid>:<seq>` on a subagent's.
+// in the run as read, and a cursor names its frames as `<seq>` on the run's
+// own chain or `<session uuid>:<seq>` on a subagent's (`TranscriptCursor`).
 //
 // Bodies are read a few at a time; a body that is not text, or that no longer
 // hashes to its recorded digest, leaves its half with `text: null` rather than
@@ -102,30 +102,56 @@ const decoder = new TextDecoder("utf-8", { fatal: true });
 // ---- Cursor ---------------------------------------------------------------------------
 
 /**
- * The cursor for an entry: the last frame it folded, wrapped so the shape
- * stays ours. The frame is named by `frameKey`: its `seq` on the run's own
- * chain (`t:<seq>`, the only form before subagent chains were read), and its
- * chain and `seq` on a subagent's (`t:<session uuid>:<seq>`).
+ * Where a reader stands in a transcript: two frames, each named by `frameKey`
+ * (`<seq>` on the run's own chain, `<session uuid>:<seq>` on a subagent's).
+ *
+ * `through` opens the last entry the reader was sent in fold order. The next
+ * page starts at the entry after it. `high` is the latest frame any page has
+ * delivered. An entry at or before `through` whose last frame now lies past
+ * `high` has grown since it was sent (a turn that gained a step, a tool call
+ * that gained its result), and is sent once more with what it gained.
+ *
+ * One frame could not do both jobs. An entry's range can overlap the next
+ * one's (parallel tool calls fold `start A, start B, done A, done B` into A
+ * over 1..3 and B over 2..4), so a single end position cannot say which
+ * entries were sent. The single-frame cursor that did re-sent a grown entry
+ * together with every entry after it, and left the cursor where it was, so
+ * each read of a live run returned the same page again (#4048).
  */
-export function encodeTranscriptCursor(endKey: string): string {
-  return Buffer.from(`t:${endKey}`, "utf8").toString("base64url");
+export interface TranscriptCursor {
+  through: string;
+  high: string;
+}
+
+export function encodeTranscriptCursor(cursor: TranscriptCursor): string {
+  return Buffer.from(`t:${cursor.through},${cursor.high}`, "utf8").toString(
+    "base64url",
+  );
 }
 
 const CHAIN_KEY =
   /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}):(\d{1,19})$/i;
 
-/**
- * The frame key a cursor names, or null for a cursor this handler did not
- * write. Both forms are read: `t:<seq>`, which every cursor issued before
- * subagent chains were read carries, and `t:<session uuid>:<seq>`.
- */
-export function decodeTranscriptCursor(raw: string): string | null {
-  const text = Buffer.from(raw, "base64url").toString("utf8");
-  if (!text.startsWith("t:")) return null;
-  const key = text.slice(2);
+function decodeKey(key: string): string | null {
   if (key === TACHO_START) return key;
   if (CHAIN_KEY.test(key)) return key.toLowerCase();
   return DECIMAL.test(key) && key.length <= 19 ? key : null;
+}
+
+/**
+ * The position a cursor names, or null for a cursor this handler did not
+ * write. A cursor issued before `high` existed names one frame, the last one
+ * its page held (`t:<key>`), and reads as both halves.
+ */
+export function decodeTranscriptCursor(raw: string): TranscriptCursor | null {
+  const text = Buffer.from(raw, "base64url").toString("utf8");
+  if (!text.startsWith("t:")) return null;
+  const parts = text.slice(2).split(",");
+  if (parts.length > 2) return null;
+  const through = decodeKey(parts[0] as string);
+  const high = parts.length === 2 ? decodeKey(parts[1] as string) : through;
+  if (through === null || high === null) return null;
+  return { through, high };
 }
 
 /**
@@ -160,66 +186,75 @@ export function cursorPosition(
   return session === null ? -1 : frames.length - 1;
 }
 
+/** An entry's extent: the positions of its opening and last frames in the run. */
+export interface FoldSpan {
+  open: number;
+  end: number;
+}
+
+/** What one page sends, and where the reader stands after it. */
+export interface TranscriptPagePlan {
+  /** Fold indexes, in the order sent: grown entries first, then new ones. */
+  indexes: number[];
+  /** The last fold index sent in fold order; -1 before the first. */
+  through: number;
+  /** The latest frame position delivered; -1 before the first. */
+  high: number;
+}
+
 /**
- * The fold index a page starts at after `after` (the endSeq of the last fold
- * the previous page returned), or -1 when nothing remains.
+ * The folds a page sends after `cursor` (fold index and frame position, as
+ * `TranscriptCursor` describes), at most `limit` of them.
  *
- * Folds are not stable, non-overlapping sequence ranges. Parallel tool calls
- * produce `start A, start B, complete A, complete B`, so fold A owns 1..3 and
- * fold B owns 2..4. Comparing `opening.seq > after` against an endSeq cursor
- * skips B after a page that returned A (finding 4052061731). Resume in fold
- * order: the fold that owned the cursor is the one whose endSeq equals it
- * (the fold the previous page returned). A cursor can sit inside several
- * overlapping folds once an earlier fold grows past a later fold's opening,
- * so ownership must not be inferred from the first containing range
- * (finding 4052307522). When an earlier fold has grown past that exact
- * owner (parallel B finished before A; the client holds B's endSeq while A
- * then completes), re-emit the earlier grown fold before advancing past the
- * exact match — otherwise A's response is never emitted (Codex P1 on #3352).
- * When no fold ends at the cursor anymore, re-emit the last fold that still
- * contains it and has grown past it. Otherwise advance to the next fold
- * whose opening is after the cursor.
+ * A grown entry is sent once per growth: after the page, `high` covers its new
+ * last frame, so the next read finds it unchanged. Several grown entries are
+ * sent in the order their last frames landed, so a page cut short by `limit`
+ * leaves only entries that end past the new `high`, and the next page sends
+ * them. New entries fill whatever room the grown ones leave.
  */
-export function foldPageStart(
-  folds: readonly { opening: { seq: string }; endSeq: string }[],
-  after: string | null,
+export function planTranscriptPage(
+  folds: readonly FoldSpan[],
+  cursor: { through: number; high: number } | null,
+  limit: number,
+): TranscriptPagePlan {
+  const through = cursor?.through ?? -1;
+  let high = cursor?.high ?? -1;
+  const grown: number[] = [];
+  for (let i = 0; i <= through && i < folds.length; i += 1) {
+    const fold = folds[i] as FoldSpan;
+    if (fold.end > high) grown.push(i);
+  }
+  grown.sort((a, b) => (folds[a] as FoldSpan).end - (folds[b] as FoldSpan).end);
+  const resent = grown.slice(0, limit);
+  const room = limit - resent.length;
+  const fresh: number[] = [];
+  for (let i = through + 1; i < folds.length && fresh.length < room; i += 1) {
+    fresh.push(i);
+  }
+  const indexes = [...resent, ...fresh];
+  for (const i of indexes) high = Math.max(high, (folds[i] as FoldSpan).end);
+  return { indexes, through: fresh.at(-1) ?? through, high };
+}
+
+/**
+ * The fold index `key` opens, or when no fold opens there any longer (its
+ * opening frame was a model call's copy a richer one replaced), the last fold
+ * that opens at or before the frame's position.
+ */
+function foldThrough(
+  spans: readonly FoldSpan[],
+  openKeys: readonly string[],
+  shown: readonly RunFrame[],
+  key: string,
 ): number {
-  if (after === null) return folds.length === 0 ? -1 : 0;
-  const cursor = BigInt(after);
-  const owned = folds.findIndex((fold) => BigInt(fold.endSeq) === cursor);
-  if (owned !== -1) {
-    // An earlier fold that grew past the exact owner still needs a page.
-    // Walked backwards rather than with findLastIndex (ES2023), same as below.
-    for (let i = owned - 1; i >= 0; i -= 1) {
-      const fold = folds[i];
-      if (
-        fold !== undefined &&
-        BigInt(fold.opening.seq) <= cursor &&
-        BigInt(fold.endSeq) > cursor
-      ) {
-        return i;
-      }
-    }
-    const next = owned + 1;
-    return next < folds.length ? next : -1;
+  const exact = openKeys.indexOf(key);
+  if (exact !== -1) return exact;
+  const position = cursorPosition(shown, key);
+  let through = -1;
+  for (let i = 0; i < spans.length; i += 1) {
+    if ((spans[i] as FoldSpan).open <= position) through = i;
   }
-  // No fold ends at the cursor: the fold the previous page returned has
-  // grown. Prefer the last containing range so an earlier fold that expanded
-  // over a later fold's opening does not reclaim the cursor.
-  let grown = -1;
-  for (let i = folds.length - 1; i >= 0; i -= 1) {
-    const fold = folds[i];
-    if (
-      fold !== undefined &&
-      BigInt(fold.opening.seq) <= cursor &&
-      BigInt(fold.endSeq) > cursor
-    ) {
-      grown = i;
-      break;
-    }
-  }
-  if (grown !== -1) return grown;
-  return folds.findIndex((fold) => BigInt(fold.opening.seq) > cursor);
+  return through;
 }
 
 // ---- Bodies ---------------------------------------------------------------------------
@@ -445,31 +480,57 @@ export function createRunTranscriptGetHandler(
     // live run keeps a resume point even when caught up, so the next read can
     // pick up frames that have not landed yet.
     const live = run.item.status === "live";
-    const resumeCursor = (): string =>
-      encodeTranscriptCursor(after ?? startCursorSeq(run));
+    const startKey = startCursorSeq(run);
 
     // Pages are cut on each frame's position in the run as read, not on its
     // `seq`: a subagent's chain is numbered from 0 like the root's, so a
     // sequence alone no longer orders the frames of a run.
     const position = new Map(shown.map((frame, i) => [frame, i]));
-    const at = (frame: RunFrame): string => String(position.get(frame) ?? -1);
-    const start = foldPageStart(
-      folds.map((fold) => ({
-        opening: { seq: at(fold.opening) },
-        endSeq: at(fold.last),
-      })),
-      after === null ? null : String(cursorPosition(shown, after)),
+    const at = (frame: RunFrame): number => position.get(frame) ?? -1;
+    const spans = folds.map((fold) => ({
+      open: at(fold.opening),
+      end: at(fold.last),
+    }));
+    const plan = planTranscriptPage(
+      spans,
+      after === null
+        ? null
+        : {
+            through: foldThrough(
+              spans,
+              folds.map((fold) => frameKey(fold.opening)),
+              shown,
+              after.through,
+            ),
+            high: cursorPosition(shown, after.high),
+          },
+      input.limit,
     );
-    if (start === -1) {
+    const page = plan.indexes.map((i) => folds[i] as TranscriptFold);
+    // The cursor names frames by key, so it survives a later read that holds
+    // more frames, or hides one this read showed.
+    const nextCursor = (): string =>
+      encodeTranscriptCursor({
+        through:
+          plan.through === -1
+            ? (after?.through ?? startKey)
+            : frameKey((folds[plan.through] as TranscriptFold).opening),
+        high:
+          plan.high === -1
+            ? (after?.high ?? startKey)
+            : frameKey(shown[plan.high] as RunFrame),
+      });
+    const more = plan.through + 1 < folds.length;
+    const cursor = live || more ? nextCursor() : null;
+    if (page.length === 0) {
       return {
         zoom: input.zoom,
         kinds: input.kinds,
         entries: [],
-        cursor: live ? resumeCursor() : null,
+        cursor,
         complete: read.complete,
       };
     }
-    const page = folds.slice(start, start + input.limit);
     const runStartedAt = Date.parse(run.item.startedAt);
 
     // A folded zoom carries an excerpt; `everything` carries the whole body.
@@ -543,15 +604,6 @@ export function createRunTranscriptGetHandler(
       };
     });
 
-    const last = page.at(-1);
-    const more = start + page.length < folds.length;
-    const cursor = live
-      ? last
-        ? encodeTranscriptCursor(frameKey(last.last))
-        : resumeCursor()
-      : more && last
-        ? encodeTranscriptCursor(frameKey(last.last))
-        : null;
     return {
       zoom: input.zoom,
       kinds: input.kinds,
