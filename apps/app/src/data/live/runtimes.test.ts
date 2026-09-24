@@ -136,6 +136,7 @@ describe("runtimes.list", () => {
             modelRoute: "loopback",
             shadowedBy: null,
             managed: false,
+            hooksOk: true,
             lastSeenAt: "2026-09-23T09:12:44.000Z",
             createdAt: "2026-09-01T10:00:00.000Z",
             expiresAt: "2099-09-01T10:00:00.000Z",

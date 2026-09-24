@@ -28,10 +28,12 @@ import { ReadFailure } from "@/ui/read-failure";
 import { cell } from "@/ui/table";
 import { SmokeSession, Unenroll } from "./controls";
 import {
+  COMMAND_HOOKS,
   Facts,
   HarnessLabel,
   HarnessNames,
   HealthBadge,
+  hooksReadBack,
   ModelSurface,
   NotBacked,
   Note,
@@ -108,7 +110,16 @@ function HostPanel({
     },
     {
       term: t("detail.facts.hooksWritten"),
-      value: <NotBacked gap="hooks" />,
+      // The list the collector read back, when the record holds all five;
+      // otherwise not recorded (#3818).
+      value: hooksReadBack(host) ? (
+        <>
+          <span className={`${mono} text-[11.5px]`}>{COMMAND_HOOKS}</span>
+          <Sub>{t("detail.hooksFive")}</Sub>
+        </>
+      ) : (
+        <NotBacked gap="hooks" />
+      ),
       testId: "fact-hooks-written",
     },
     {

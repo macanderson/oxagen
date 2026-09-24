@@ -30,6 +30,7 @@ import { EnrollRuntime } from "./controls";
 import {
   HarnessNames,
   HealthBadge,
+  hooksReadBack,
   isEnrolled,
   ModelSurface,
   NotBacked,
@@ -179,6 +180,7 @@ function hostRow(
   ws: string,
   now: number,
   hookCount: ReactNode,
+  hookCountAll: ReactNode,
 ): ListRow {
   return {
     key: host.id,
@@ -192,9 +194,13 @@ function hostRow(
       <NotBacked key="tier" gap="tier" />,
       <AgentsCell key="agents" host={host} />,
       <CollectorCell key="collector" host={host} />,
-      <NotBacked key="hooks" gap="hooks">
-        {hookCount}
-      </NotBacked>,
+      hooksReadBack(host) ? (
+        <span key="hooks">{hookCountAll}</span>
+      ) : (
+        <NotBacked key="hooks" gap="hooks">
+          {hookCount}
+        </NotBacked>
+      ),
       <HealthBadge key="health" host={host} now={now} />,
       <NotBacked key="checkpoint" gap="checkpoint" />,
     ],
@@ -237,7 +243,7 @@ function EnrolledHosts({
           { label: t("columns.checkpoint") },
         ]}
         rows={list.enrollments.map((host) =>
-          hostRow(host, org, ws, now, t("hookCount")),
+          hostRow(host, org, ws, now, t("hookCount"), t("hookCountAll")),
         )}
       />
       {list.more ? (

@@ -4668,6 +4668,7 @@ type Messages = {
       collector: string;
       gaps: string;
       hookCount: string;
+      hookCountAll: string;
       note: string;
     };
     modelSurface: {
@@ -4770,6 +4771,7 @@ type Messages = {
       collectorGaps: string;
       hookEnforce: string;
       hookObserve: string;
+      hooksFive: string;
       modelLoopback: string;
       modelMixed: string;
       modelDirect: string;

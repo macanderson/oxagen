@@ -65,6 +65,13 @@ export const RuntimeEnrollment = z.object({
    * at enrollment.
    */
   managed: z.boolean(),
+  /**
+   * Claude Code's settings file as the collector last read it back: `true`
+   * when every hook Tacho writes was present with its environment, `false`
+   * when anything was missing, null before the first read or for a host with
+   * no Claude Code.
+   */
+  hooksOk: z.boolean().nullable(),
   lastSeenAt: Instant.nullable(),
   createdAt: Instant,
   expiresAt: Instant,

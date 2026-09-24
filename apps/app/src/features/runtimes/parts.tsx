@@ -193,6 +193,30 @@ export function isEnrolled(host: RuntimeEnrollment, now: number): boolean {
 }
 
 /**
+ * The five command hooks Tacho writes into Claude Code's settings, in the
+ * order the design prints them (`COMMAND_HOOK_EVENTS`,
+ * packages/tacho/src/host/settings-writer.ts). They are event names, printed
+ * as the harness spells them.
+ */
+export const COMMAND_HOOKS =
+  "SessionStart, UserPromptSubmit, PreToolUse, PermissionRequest, Stop";
+
+/**
+ * Whether the record holds all five command hooks as written: a host whose
+ * only harness is Claude Code, whose settings file the collector last read
+ * back with every hook in place (`hooksOk`). `false` names no count, and no
+ * other harness reports a read-back, so every other host's hooks are not
+ * recorded (#3818).
+ */
+export function hooksReadBack(host: RuntimeEnrollment): boolean {
+  return (
+    host.hooksOk === true &&
+    host.harnesses.length === 1 &&
+    host.harnesses[0] === "claude-code"
+  );
+}
+
+/**
  * `rtHealth()`, in the design's three words: healthy, degraded and not
  * enrolled. A revoked or expired enrollment is not enrolled, a dot and a word
  * so the state survives greyscale. Healthy and degraded are judged from the

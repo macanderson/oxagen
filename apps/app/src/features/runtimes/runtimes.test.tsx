@@ -296,6 +296,44 @@ describe("Runtimes, loaded", () => {
     ).toHaveAttribute("data-gap", "#3817");
   });
 
+  it("reads five of five hooks only where Claude Code's settings were read back whole", async () => {
+    await renderList({
+      list: runtimeList([
+        enrollment({ id: "tch_readbackaaaaaaaaaaaaaaa", hooksOk: true }),
+        enrollment({ id: "tch_missingaaaaaaaaaaaaaaaa", hooksOk: false }),
+        enrollment({
+          id: "tch_twoharnessaaaaaaaaaaaa",
+          hooksOk: true,
+          harnesses: ["claude-code", "codex"],
+        }),
+      ]),
+    });
+    const hooks = (id: string) =>
+      nth(
+        within(
+          document.querySelector(`[data-runtime="${id}"]`) as HTMLElement,
+        ).getAllByRole("cell"),
+        7,
+        "cell",
+      );
+    expect(hooks("tch_readbackaaaaaaaaaaaaaaa")).toHaveTextContent(/^5 of 5$/);
+    expect(
+      hooks("tch_readbackaaaaaaaaaaaaaaa").querySelector("[data-not-backed]"),
+    ).toBeNull();
+    // A read-back that found something missing names no count, and a
+    // read-back of Claude Code's settings says nothing of Codex's (negative).
+    for (const id of [
+      "tch_missingaaaaaaaaaaaaaaaa",
+      "tch_twoharnessaaaaaaaaaaaa",
+    ]) {
+      expect(hooks(id)).toHaveTextContent(/^count not recorded$/);
+      expect(hooks(id).querySelector("[data-not-backed]")).toHaveAttribute(
+        "data-gap",
+        "#3818",
+      );
+    }
+  });
+
   it("reads an unreported model route, a missing hook report, an expired enrollment and a row with no agent", async () => {
     await renderList({
       list: runtimeList(
@@ -694,6 +732,17 @@ describe("One runtime", () => {
     expect(screen.getByTestId("runtime-operator")).toHaveTextContent(
       /^Operator$/,
     );
+  });
+
+  it("lists the five command hooks when the collector read them back", async () => {
+    await renderDetail({
+      list: runtimeList([enrollment({ hooksOk: true })]),
+    });
+    const written = screen.getByTestId("fact-hooks-written");
+    expect(written).toHaveTextContent(
+      "SessionStart, UserPromptSubmit, PreToolUse, PermissionRequest, StopFive run as command hooks. The first four can refuse.",
+    );
+    expect(written.querySelector("[data-not-backed]")).toBeNull();
   });
 
   it("names managed settings when the installer wrote the hooks there", async () => {
