@@ -406,8 +406,8 @@ export const systemLookups: SystemLookups = {
   },
 
   async freePlanIncludedGau() {
-    // tenancy: billing.plans holds the published terms, which belong to no
-    // tenant; the read is keyed by the Free plan's slug alone.
+    // tenancy: global read of billing.plans, the published plan terms, which
+    // carry no org_id. The query is filtered by the Free plan's slug alone.
     const rows = await withSystemDb((tx) =>
       tx
         .select({ included: schema.plans.includedGauPerMonth })
