@@ -11,6 +11,7 @@
 // *Open an incident* would file one; no contract does either (#3846, #3847).
 // Each renders as a disabled button that says why, so the reader learns the
 // route that does exist rather than pressing a control that does nothing.
+import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
   createContext,
@@ -222,13 +223,18 @@ export function PageError({
 }
 
 /**
- * The name of the page the route is on, as the sidebar prints it ("Fleet").
- * The shell provides it around every page it frames, above the route error
- * boundaries, so `RouteError` can title the failure "Fleet could not be
- * loaded" the way the mock's `errorState("Fleet", …)` does. Outside the shell,
- * or on a path no nav item holds, it is null and the title stays generic.
+ * Names the page a path is on, as the sidebar prints it ("Fleet"). The shell
+ * provides it around every page it frames, above the route error boundaries,
+ * so `RouteError` can title the failure "Fleet could not be loaded" the way
+ * the mock's `errorState("Fleet", …)` does. It carries the resolver, not the
+ * name: the path is runtime data, and reading it above every page would block
+ * prerendering a static route, so only the boundary reads it, after a page has
+ * thrown. Outside the shell, or on a path no nav item holds, the title stays
+ * generic.
  */
-export const RoutePageName = createContext<string | null>(null);
+export const RoutePageName = createContext<
+  ((pathname: string) => string | null) | null
+>(null);
 
 /** `YYYY-MM-DD hh:mm:ssZ`, the instant a boundary caught the failure, as the mock's trace line prints it. */
 export function utcInstant(at: Date): string {
@@ -260,8 +266,14 @@ export function RouteError({
   page?: string | null;
 }) {
   const t = useTranslations("ui.pageState.error");
-  const framed = useContext(RoutePageName);
-  const name = page === undefined ? framed : page;
+  const nameOf = useContext(RoutePageName);
+  const pathname = usePathname();
+  const name =
+    page === undefined
+      ? nameOf === null || pathname === null
+        ? null
+        : nameOf(pathname)
+      : page;
   const navigate = useNavigate();
   const [at, setAt] = useState<string | null>(null);
   useEffect(() => {

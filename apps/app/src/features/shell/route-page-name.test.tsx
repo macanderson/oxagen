@@ -10,9 +10,15 @@ import { IntlProvider } from "@/test/intl";
 import { RouteError } from "@/ui/page-states";
 import { ShellRoutePageName } from "./route-page-name";
 
-const nav = vi.hoisted(() => ({ pathname: "/acme/core-platform" }));
+const nav = vi.hoisted(() => ({
+  pathname: "/acme/core-platform",
+  reads: 0,
+}));
 vi.mock("next/navigation", () => ({
-  usePathname: () => nav.pathname,
+  usePathname: () => {
+    nav.reads += 1;
+    return nav.pathname;
+  },
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
 
@@ -45,6 +51,22 @@ describe("ShellRoutePageName", () => {
   ])("titles a failure on %s with the page's name", (pathname, title) => {
     renderAt(pathname);
     expect(screen.getByRole("heading", { name: title })).toBeInTheDocument();
+  });
+
+  // The provider wraps every page outside any <Suspense>. A path read there is
+  // runtime data that stops Next.js prerendering a static route (the Skills
+  // redirect failed the build that way), so only the boundary may read it.
+  it("reads no path while the page renders without an error (negative)", () => {
+    nav.reads = 0;
+    render(
+      <IntlProvider>
+        <ShellRoutePageName>
+          <p>page body</p>
+        </ShellRoutePageName>
+      </IntlProvider>,
+    );
+    expect(screen.getByText("page body")).toBeInTheDocument();
+    expect(nav.reads).toBe(0);
   });
 
   it("keeps the generic title on a path no nav item holds (negative)", () => {

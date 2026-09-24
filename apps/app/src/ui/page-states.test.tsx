@@ -22,6 +22,7 @@ import {
 
 const refresh = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({
+  usePathname: () => "/acme/core-platform",
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh }),
 }));
 vi.mock("next/link", () => ({
@@ -159,7 +160,7 @@ describe("RouteError", () => {
   it("names the page the shell resolved from the path, as the mock's title does", () => {
     render(
       <IntlProvider>
-        <RoutePageName value="Fleet">
+        <RoutePageName value={() => "Fleet"}>
           <RouteError error={new Error("boom")} reset={vi.fn()} />
         </RoutePageName>
       </IntlProvider>,
