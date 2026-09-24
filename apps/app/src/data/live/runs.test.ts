@@ -119,6 +119,11 @@ describe("runs.list", () => {
             cost: null,
             reportedCost: null,
             model: viewModel,
+            // No frame of this session reported them, so each reads null.
+            effort: null,
+            thinking: null,
+            permissionMode: null,
+            reportedTokens: null,
             harness: null,
             machine,
             taskRef: null,
@@ -449,7 +454,11 @@ describe("runs.cost", () => {
               model: "claude-sonnet-5",
               provider: "anthropic",
               calls: 3,
-              cost: { micros: "2500000", currency: "USD", basis: "client_attested" },
+              cost: {
+                micros: "2500000",
+                currency: "USD",
+                basis: "client_attested",
+              },
             },
             { model: "gpt-5", provider: null, calls: 1, cost: null },
           ],
@@ -839,11 +848,20 @@ describe("runs.work", () => {
         diff: null,
       },
     ],
+    subagents: [
+      {
+        id: "a0182b6cd3a21d284",
+        type: "Explore",
+        firstSeq: "12",
+        lastSeq: "30",
+        stopped: true,
+      },
+    ],
     complete: true,
     warnings: [],
   };
 
-  it("reads get_run_work and renames the wire's checkout ids to the view's refs", async () => {
+  it("reads get_run_work and renames the wire's checkout and subagent ids to the view's refs", async () => {
     kernelRead.mockResolvedValue(readOk(work));
     const read = await runs.work(ctx, "tse_4f0a");
     if (!read.ok) throw new Error("expected an ok read");
@@ -859,6 +877,15 @@ describe("runs.work", () => {
       checkoutRefs: ["chk_1"],
     });
     expect(read.value.pullRequests[0]).not.toHaveProperty("checkoutIds");
+    expect(read.value.subagents).toEqual([
+      {
+        ref: "a0182b6cd3a21d284",
+        type: "Explore",
+        firstSeq: "12",
+        lastSeq: "30",
+        stopped: true,
+      },
+    ]);
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: runWorkGet,
       input: { runId: "tse_4f0a" },

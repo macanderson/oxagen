@@ -154,7 +154,14 @@ async function renderRun(
     spine: view.spine ?? null,
     now: NOW,
   });
-  const { container } = render(<IntlProvider>{element}</IntlProvider>);
+  // The header's checkout and subagent strips and the work section suspend on
+  // `use(work)`. A synchronous render (plain `render`) ends its act scope while
+  // they are suspended, and React drops the queued retry with that scope, so
+  // they would stay on their fallbacks. An awaited act lets the resolved read
+  // settle before the test reads the page.
+  const { container } = await act(() =>
+    Promise.resolve(render(<IntlProvider>{element}</IntlProvider>)),
+  );
   return { container, calls };
 }
 
@@ -174,7 +181,9 @@ describe("header", () => {
     const h1 = screen.getByRole("heading", { level: 1 });
     expect(h1).toHaveTextContent("Cut the 3.2 release branch");
     expect(h1.className).not.toContain("font-mono");
-    expect(screen.getByRole("button", { name: "Copy tse_7k2m9q" })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Copy tse_7k2m9q" }),
+    ).toBeTruthy();
     // The title is the h1's alone, never repeated in the when line.
     expect(screen.getByTestId("run-when")).not.toHaveTextContent(
       "Cut the 3.2 release branch",
@@ -225,7 +234,9 @@ describe("header", () => {
 
   it("reads sealed from the run's status in the when line, the same status the record actions gate on", async () => {
     await renderRun({
-      detail: ok(runDetail({ run: runRow({ status: "halted", sealedAt: null }) })),
+      detail: ok(
+        runDetail({ run: runRow({ status: "halted", sealedAt: null }) }),
+      ),
       transcript: ok(runTranscript()),
     });
     const when = screen.getByTestId("run-when");
@@ -233,7 +244,9 @@ describe("header", () => {
     expect(when).not.toHaveTextContent("still running");
     cleanup();
     await renderRun({
-      detail: ok(runDetail({ run: runRow({ status: "live", sealedAt: null }) })),
+      detail: ok(
+        runDetail({ run: runRow({ status: "live", sealedAt: null }) }),
+      ),
       transcript: ok(runTranscript()),
     });
     expect(screen.getByTestId("run-when")).toHaveTextContent("still running");
@@ -299,7 +312,9 @@ describe("header", () => {
     );
     cleanup();
     await renderRun({
-      detail: ok(runDetail({ run: runRow({ operatorAttribution: "initiator" }) })),
+      detail: ok(
+        runDetail({ run: runRow({ operatorAttribution: "initiator" }) }),
+      ),
       transcript: ok(runTranscript()),
     });
     const operator = screen.getByTestId("run-operator");
@@ -339,14 +354,18 @@ describe("header", () => {
   it("titles a run that carries no name and no task reference by its id in mono (negative)", async () => {
     await renderRun({
       detail: ok(
-        runDetail({ run: runRow({ name: null, taskRef: null, summary: null }) }),
+        runDetail({
+          run: runRow({ name: null, taskRef: null, summary: null }),
+        }),
       ),
       transcript: ok(runTranscript()),
     });
     const h1 = screen.getByRole("heading", { level: 1 });
     expect(h1).toHaveTextContent("tse_7k2m9q");
     expect(h1.className).toContain("font-mono");
-    expect(screen.queryByRole("button", { name: "Copy tse_7k2m9q" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Copy tse_7k2m9q" }),
+    ).toBeNull();
   });
 
   it("titles a run whose read failed by the id the URL named", async () => {
@@ -479,14 +498,14 @@ describe("header", () => {
         pullRequests: [],
         subagents: [
           {
-            id: "a0182b6cd3a21d284",
+            ref: "a0182b6cd3a21d284",
             type: "Explore",
             firstSeq: "12",
             lastSeq: "30",
             stopped: true,
           },
           {
-            id: "b77c01e9f2d4a8c10",
+            ref: "b77c01e9f2d4a8c10",
             type: null,
             firstSeq: "31",
             lastSeq: "31",
@@ -2186,7 +2205,9 @@ describe("the work", () => {
       "Provisional until the rollup. Priced from the cost each call reported.",
     );
     expect(
-      screen.queryByText("No cost rollup yet. It is built after the run seals."),
+      screen.queryByText(
+        "No cost rollup yet. It is built after the run seals.",
+      ),
     ).toBeNull();
   });
 

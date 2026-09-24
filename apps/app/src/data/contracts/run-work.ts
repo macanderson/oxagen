@@ -118,10 +118,14 @@ const runWorkPrSchema = z
   })
   .strict();
 
-/** One subagent the session started, as its hook frames recorded it. */
+/**
+ * One subagent the session started, as its hook frames recorded it. `ref` is
+ * the agent id the harness put on those frames, not an id Oxagen mints, so it
+ * is a `…Ref` (INV-11), as a checkout's `ref` is.
+ */
 export const RunSubagent = z
   .object({
-    id: z.string(),
+    ref: z.string(),
     type: z.string().nullable(),
     firstSeq: z.string(),
     lastSeq: z.string(),
