@@ -25,6 +25,7 @@ export * from "./error-clusters";
 export * from "./usage-events";
 export * from "./stella-operational-events";
 export * from "./tacho-events";
+export * from "./tacho-turns";
 export * from "./tacho-events-ddl";
 export * from "./cost-frames";
 export { chInsert, chSelect } from "./tenant";

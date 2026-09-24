@@ -33,6 +33,7 @@ export function mandateSource(read: Read<MandateDetail> | undefined) {
       get: refuse,
       frameBody: refuse,
       cost: refuse,
+      turns: refuse,
       transcript: refuse,
       chain: refuse,
       outputs: refuse,

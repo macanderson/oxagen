@@ -1,5 +1,5 @@
 /**
- * `oxagen run export`, `export-status`, `download` and `chain` output
+ * `oxagen run export`, `export-status`, `download`, `chain` and `turns` output
  * discipline: --json emits the exact contract payload, pretty mode prints
  * what to do next, and an API failure goes to stderr. The shared API client,
  * the configured API origin and `fetch` are mocked; no network is needed.
@@ -30,6 +30,7 @@ import {
   runDownload,
   runExport,
   runExportStatus,
+  runTurns,
 } from "../run.js";
 import { apiPostOrThrow } from "../../lib/api.js";
 
@@ -187,6 +188,115 @@ describe("oxagen run chain", () => {
     post.mockRejectedValue(new Error("404 not_found: run_not_found"));
     const { writer, out, err } = memoryWriter();
     await runChain("tse_nope", {}, writer);
+    expect(out).toEqual([]);
+    expect(err.join("\n")).toMatch(/run_not_found/);
+  });
+});
+
+const TURNS = {
+  runId: "tse_0a1b2c",
+  turns: [
+    {
+      turn: 1,
+      seq: "1",
+      at: "2026-09-11T09:00:01.000Z",
+      frames: 22,
+      modelSteps: 4,
+      toolSteps: 4,
+      cost: { micros: "121000", currency: "USD", basis: "client_attested" },
+      cumulativeCost: {
+        micros: "126000",
+        currency: "USD",
+        basis: "client_attested",
+      },
+      tokens: { inputUncached: 16, cacheRead: 48 },
+    },
+    {
+      turn: 2,
+      seq: "17",
+      at: "2026-09-11T09:00:30.000Z",
+      frames: 7,
+      modelSteps: 2,
+      toolSteps: 3,
+      cost: null,
+      cumulativeCost: {
+        micros: "126000",
+        currency: "USD",
+        basis: "client_attested",
+      },
+      tokens: { inputUncached: null, cacheRead: null },
+    },
+  ],
+  complete: true,
+};
+
+describe("oxagen run turns", () => {
+  beforeEach(() => {
+    post.mockReset();
+  });
+
+  it("posts the run id to runs/turns and emits the exact payload as JSON", async () => {
+    post.mockResolvedValue(TURNS);
+    const { writer, out, err } = memoryWriter();
+    await runTurns("tse_0a1b2c", { json: true }, writer);
+    expect(post).toHaveBeenCalledWith("runs/turns", { runId: "tse_0a1b2c" });
+    expect(JSON.parse(out[0] as string)).toEqual(TURNS);
+    expect(err).toEqual([]);
+  });
+
+  it("prints one row per turn with its steps, frames, cache hit, cost and cost so far", async () => {
+    post.mockResolvedValue(TURNS);
+    const { writer, out } = memoryWriter();
+    await runTurns("tse_0a1b2c", {}, writer);
+    expect(out[0]).toBe("tse_0a1b2c: 2 turn(s), $0.1260 so far");
+    const header = out[2] ?? "";
+    expect(header).toMatch(
+      /^Turn\s+Model\s+Tool\s+Frames\s+Cache hit\s+Cost\s+So far$/,
+    );
+    expect((out[3] ?? "").split(/\s{2,}/)).toEqual([
+      "1",
+      "4",
+      "4",
+      "22",
+      "75%",
+      "$0.1210",
+      "$0.1260",
+    ]);
+  });
+
+  it("says what was not recorded rather than printing a zero (negative)", async () => {
+    post.mockResolvedValue(TURNS);
+    const { writer, out } = memoryWriter();
+    await runTurns("tse_0a1b2c", {}, writer);
+    const second = (out[4] ?? "").split(/\s{2,}/);
+    expect(second.slice(4, 6)).toEqual(["not recorded", "not recorded"]);
+    expect(out.join("\n")).not.toMatch(/\$0(\s|$)/);
+  });
+
+  it("says a run with no turn recorded none, and a cut list is cut", async () => {
+    post.mockResolvedValueOnce({
+      runId: "arun_5f0c",
+      turns: [],
+      complete: true,
+    });
+    const empty = memoryWriter();
+    await runTurns("arun_5f0c", {}, empty.writer);
+    expect(empty.out).toEqual([
+      "arun_5f0c: 0 turn(s), not recorded so far",
+      "The run has recorded no turn yet.",
+    ]);
+    post.mockResolvedValueOnce({ ...TURNS, complete: false });
+    const cut = memoryWriter();
+    await runTurns("tse_0a1b2c", {}, cut.writer);
+    expect(cut.out.at(-1)).toBe(
+      "The run is longer than one read carries. These are its first 2 turns.",
+    );
+  });
+
+  it("routes an API failure to stderr and writes nothing to stdout (negative)", async () => {
+    post.mockRejectedValue(new Error("404 not_found: run_not_found"));
+    const { writer, out, err } = memoryWriter();
+    await runTurns("tse_nope", {}, writer);
     expect(out).toEqual([]);
     expect(err.join("\n")).toMatch(/run_not_found/);
   });

@@ -291,6 +291,7 @@ Shell chrome in `apps/app/src/features/shell/` must use the component-level desi
 | Area | Use these tokens | Not these |
 |---|---|---|
 | Content panel | `bg-app-panel-bg`, `text-app-panel-fg` | `bg-background`, `text-foreground` |
+| Drawers, flyout, phone-bar count pills | `bg-app-raised-bg`, `text-app-raised-fg` | `bg-card`, `bg-app-panel-bg` |
 | Topbar / header | `bg-app-topbar-bg`, `text-app-topbar-fg`, `border-app-topbar-border` | `bg-background`, `border-border` |
 | App chrome links | `text-app-link-fg`, `hover:text-app-link-hover-fg`, `text-app-link-active-fg` | `text-muted-foreground`, `text-foreground` |
 | Sidebar surface | `bg-sidebar-bg`, `text-sidebar-fg` | `bg-sidebar`, `text-sidebar-foreground` |

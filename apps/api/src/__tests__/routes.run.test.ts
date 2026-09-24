@@ -1,7 +1,7 @@
 /**
  * Unit tests for the run recorder routes (#2952, ADR-058):
- *   run.frame_body.get, run.transcript.get, run.bisect, run.fork,
- *   run.export, run.export.get, run.summarize
+ *   run.frame_body.get, run.transcript.get, run.turns.get, run.bisect,
+ *   run.fork, run.export, run.export.get, run.summarize
  *
  * Pattern: mock at the adapter seam (@oxagen/auth, @oxagen/oxagen/kernel,
  * @oxagen/billing, @oxagen/handlers, middleware/logger); assert the happy
@@ -124,6 +124,36 @@ interface RouteCase {
 }
 
 const CASES: RouteCase[] = [
+  {
+    path: "/runs/turns",
+    contract: "get_run_turns",
+    input: { runId: TACHO_ID },
+    output: {
+      runId: TACHO_ID,
+      turns: [
+        {
+          turn: 1,
+          seq: "1",
+          at: "2026-09-11T09:00:01.000Z",
+          frames: 22,
+          modelSteps: 4,
+          toolSteps: 4,
+          cost: { micros: "121", currency: "USD", basis: "client_attested" },
+          cumulativeCost: {
+            micros: "126",
+            currency: "USD",
+            basis: "client_attested",
+          },
+          tokens: { inputUncached: 16, cacheRead: 105 },
+        },
+      ],
+      complete: true,
+    },
+    refused: {
+      "run id of neither store": { runId: "run_01K5RQ8M4" },
+      "unknown field": { runId: TACHO_ID, zoom: "turns" },
+    },
+  },
   {
     path: "/runs/proof",
     contract: "get_run_proof",

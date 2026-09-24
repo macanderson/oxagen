@@ -17,6 +17,7 @@ import type { ClaudeCodeContext } from "../claude-code/context";
 import { type RecorderState, SessionRecorder } from "../claude-code/recorder";
 import { isSha256Digest } from "../digest";
 import type { TachoEvent, TachoRuntime } from "../envelope";
+import { COMMAND_HOOK_TIMEOUTS_S } from "../host/settings-writer";
 import { toProtocolTimestamp } from "../timestamp";
 import {
   type CommandAcknowledgement,
@@ -229,16 +230,21 @@ export interface SessionRecord extends SessionFacts {
    */
   toolUseIds: Record<string, string>;
   /**
-   * The most recent `hook_id`s this session recorded, oldest first, bounded
-   * to `HOOK_ID_LEDGER_CAPACITY`. `tacho-hook` generates one when it reads
-   * stdin and sends it on both the live request and the spool file it falls
-   * back to when that request times out on the client's own side. A client
-   * timeout does not mean the daemon never got the hook — only that this
-   * process stopped waiting for the answer — so the same hook can arrive
-   * twice: once live, once as a later spool replay. See `sawHookId` and
-   * `rememberHookId`.
+   * The hooks this session recorded, as `ledger key -> epoch ms` in the
+   * order they were recorded. `tacho-hook` generates a `hook_id` when it
+   * reads stdin and sends it on both the live request and the spool file it
+   * falls back to when that request times out on the client's own side. A
+   * client timeout does not mean the daemon never got the hook, only that
+   * the client stopped waiting for the answer, so the same hook can arrive
+   * twice: once live, once as a later spool replay. A hook sent without a
+   * `hook_id` is keyed on its harness tool-call id where it has one (see
+   * `hookLedgerKey` in the hook handler).
+   *
+   * A key stays until a complete spool drain runs `HOOK_ID_REPLAY_WINDOW_MS`
+   * past it (see `pruneHookIds`), with `HOOK_ID_LEDGER_CEILING` as a
+   * backstop. See `sawHookId` and `rememberHookId`.
    */
-  recentHookIds: string[];
+  hookIds: Map<string, number>;
 }
 
 export interface PersistedSession extends SessionFacts {
@@ -254,7 +260,12 @@ export interface PersistedSession extends SessionFacts {
   ambient: boolean;
   /** Absent in files written before derived tool-use ids were numbered. */
   toolUseIds?: Record<string, string>;
-  /** Absent in files written before the hook-id replay ledger existed. */
+  /** `SessionRecord.hookIds` as `[key, epoch ms]` pairs, oldest first. */
+  hookIds?: Array<[string, number]>;
+  /**
+   * The ledger as files written before it carried times held it: ids only,
+   * capped at 64. `restore` dates each one at the session's `lastSeenAt`.
+   */
   recentHookIds?: string[];
 }
 
@@ -620,7 +631,7 @@ export class SessionRegistry {
       lastCheckpointSeq: -1,
       ambient: facts.ambient ?? false,
       toolUseIds: {},
-      recentHookIds: [],
+      hookIds: new Map(),
       ...optionalFacts(facts),
     };
     this.sessions.set(this.key(harnessSessionId, facts), record);
@@ -859,9 +870,7 @@ export class SessionRegistry {
         ...(Object.keys(record.toolUseIds).length > 0
           ? { toolUseIds: { ...record.toolUseIds } }
           : {}),
-        ...(record.recentHookIds.length > 0
-          ? { recentHookIds: [...record.recentHookIds] }
-          : {}),
+        ...(record.hookIds.size > 0 ? { hookIds: [...record.hookIds] } : {}),
         ...optionalFacts(record),
       })),
       agents: [...this.roster.values()].map((entry) => ({ ...entry })),
@@ -915,7 +924,7 @@ export class SessionRegistry {
         lastCheckpointSeq: persisted.lastCheckpointSeq,
         ambient: persisted.ambient,
         toolUseIds: { ...persisted.toolUseIds },
-        recentHookIds: [...(persisted.recentHookIds ?? [])],
+        hookIds: restoredHookIds(persisted),
         ...optionalFacts(persisted),
       });
     }
@@ -932,47 +941,94 @@ export class SessionRegistry {
 }
 
 /**
- * The most recent hook ids one session's replay-dedup ledger keeps. A
- * client's fallback spool never queues faster than a person or an agent
- * drives hooks, so a few dozen is generous room for a spool replay to still
- * find its live sighting.
+ * How long a hook stays in a session's ledger once a complete spool drain
+ * could have seen its replay: the longest a harness lets `tacho-hook` run
+ * (`COMMAND_HOOK_TIMEOUTS_S.PermissionRequest`), plus a minute for the
+ * client to write its spool file after it gives up. A client names a hook
+ * when it reads stdin, before the daemon receives it, so every spool file
+ * for a hook the daemon recorded at `t` exists by `t` plus this window.
  */
-export const HOOK_ID_LEDGER_CAPACITY = 64;
+export const HOOK_ID_REPLAY_WINDOW_MS =
+  (Math.max(...Object.values(COMMAND_HOOK_TIMEOUTS_S)) + 60) * 1_000;
 
 /**
- * Whether this session's ledger already holds this hook id — a client-side
+ * The most hooks one session's ledger holds whatever their age. It only
+ * matters when the spool never drains to empty (a file that keeps failing
+ * transiently), and it holds about an hour of an agent's busiest pace.
+ */
+export const HOOK_ID_LEDGER_CEILING = 4_096;
+
+/**
+ * Whether this session's ledger already holds this key: a client-side
  * timeout followed by a spool replay of the hook the daemon already
- * processed live. See `SessionRecord.recentHookIds`.
+ * processed live. See `SessionRecord.hookIds`.
  */
 export function sawHookId(
-  record: Pick<SessionRecord, "recentHookIds">,
-  hookId: string,
+  record: Pick<SessionRecord, "hookIds">,
+  key: string,
 ): boolean {
-  return record.recentHookIds.includes(hookId);
-}
-
-/** Record a hook id as seen, bounded to `HOOK_ID_LEDGER_CAPACITY`. */
-export function rememberHookId(
-  record: Pick<SessionRecord, "recentHookIds">,
-  hookId: string,
-): void {
-  if (record.recentHookIds.includes(hookId)) return;
-  record.recentHookIds.push(hookId);
-  const over = record.recentHookIds.length - HOOK_ID_LEDGER_CAPACITY;
-  if (over > 0) record.recentHookIds.splice(0, over);
+  return record.hookIds.has(key);
 }
 
 /**
- * Drop a hook id from the ledger. The daemon calls this when a hook routed
+ * Record a key as seen at `at` (epoch ms), evicting the oldest past
+ * `HOOK_ID_LEDGER_CEILING`. A key already held keeps its first time.
+ */
+export function rememberHookId(
+  record: Pick<SessionRecord, "hookIds">,
+  key: string,
+  at: number,
+): void {
+  if (record.hookIds.has(key)) return;
+  record.hookIds.set(key, at);
+  for (const oldest of record.hookIds.keys()) {
+    if (record.hookIds.size <= HOOK_ID_LEDGER_CEILING) break;
+    record.hookIds.delete(oldest);
+  }
+}
+
+/**
+ * Drop a key from the ledger. The daemon calls this when a hook routed
  * but its frames never reached the WAL: the client saw a failure and spools
  * the same id, and that replay has to be sealed, not dropped as a repeat.
  */
 export function forgetHookId(
-  record: Pick<SessionRecord, "recentHookIds">,
-  hookId: string,
+  record: Pick<SessionRecord, "hookIds">,
+  key: string,
 ): void {
-  const at = record.recentHookIds.indexOf(hookId);
-  if (at !== -1) record.recentHookIds.splice(at, 1);
+  record.hookIds.delete(key);
+}
+
+/**
+ * Drop every key recorded before `before` (epoch ms) and return how many
+ * went. The daemon calls this after a spool drain that left nothing behind,
+ * with `before` set `HOOK_ID_REPLAY_WINDOW_MS` earlier than the moment it
+ * listed the spool: any replay of an older key was in that listing.
+ */
+export function pruneHookIds(
+  record: Pick<SessionRecord, "hookIds">,
+  before: number,
+): number {
+  let removed = 0;
+  for (const [key, at] of record.hookIds) {
+    if (at >= before) continue;
+    record.hookIds.delete(key);
+    removed += 1;
+  }
+  return removed;
+}
+
+/**
+ * The ledger a state file holds. A file written before the ledger carried
+ * times has ids only, so each is dated at the session's `lastSeenAt`, which
+ * is no earlier than when the daemon recorded it.
+ */
+function restoredHookIds(persisted: PersistedSession): Map<string, number> {
+  if (persisted.hookIds !== undefined) return new Map(persisted.hookIds);
+  const at = Date.parse(persisted.lastSeenAt);
+  return new Map(
+    (persisted.recentHookIds ?? []).map((id): [string, number] => [id, at]),
+  );
 }
 
 /**

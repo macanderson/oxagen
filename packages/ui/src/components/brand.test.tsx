@@ -140,6 +140,12 @@ describe("StellaWordmark — the mark is inside the word", () => {
 });
 
 describe("StellaIcon — the asterisk IS the metal", () => {
+  it("is named stella, in lowercase like the wordmark", () => {
+    const { getByRole, queryByRole } = render(<StellaIcon />);
+    expect(getByRole("img", { name: "stella" })).toBeInTheDocument();
+    expect(queryByRole("img", { name: "Stella" })).toBeNull();
+  });
+
   it("ships gold", () => {
     const { container } = render(<StellaIcon />);
     expect(container.querySelector("path")?.getAttribute("fill")).toBe(

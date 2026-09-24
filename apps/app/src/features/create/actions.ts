@@ -15,6 +15,7 @@ import { contextProposalCreate } from "@oxagen/oxagen/contracts/context.proposal
 import { contextSteeringFreshness } from "@oxagen/oxagen/contracts/context.steering.freshness";
 import { skillPropose } from "@oxagen/oxagen/contracts/skill.propose";
 import { toolVersionList } from "@oxagen/oxagen/contracts/tool.version.list";
+import type { Read } from "@/data/read";
 import type { ActionResult, ContractOutput } from "@/server/kernel";
 import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
@@ -107,8 +108,10 @@ export async function proposeSkill(
 
 // ── The agent wizard (roadmap creation-spec §1; MC spec §6.2) ────────────────
 
-/** One page of the workspace's tool registry is the belt the wizard offers. */
+/** The registry is read in pages of this many versions. */
 const BELT_PAGE = 100;
+/** The most pages the belt reads, so a picker can find any of 1,000 versions. */
+const BELT_PAGES = 10;
 
 export type ToolbeltOffer = {
   tools: {
@@ -120,7 +123,7 @@ export type ToolbeltOffer = {
     financial: boolean;
     killed: boolean;
   }[];
-  /** More versions exist than the one page the step shows. */
+  /** More versions exist than the pages the step read. */
   more: boolean;
 };
 
@@ -134,17 +137,31 @@ export async function readToolbelt(
   ws: string,
 ): Promise<ActionResult<ToolbeltOffer>> {
   const ctx = await requireViewer(org, ws);
-  const read = await kernelRead(ctx, {
-    contract: toolVersionList,
-    input: { limit: BELT_PAGE },
-    page: "tools",
-  });
-  const result = readToActionResult(read);
-  if (!result.ok) return result;
+  const items: ContractOutput<typeof toolVersionList>["items"] = [];
+  let cursor: string | null = null;
+  for (let page = 0; page < BELT_PAGES; page += 1) {
+    // Annotated: the loop narrows `cursor` from this read's own answer, which
+    // is circular for inference.
+    const read: Read<ContractOutput<typeof toolVersionList>> = await kernelRead(
+      ctx,
+      {
+        contract: toolVersionList,
+        input:
+          cursor === null ? { limit: BELT_PAGE } : { limit: BELT_PAGE, cursor },
+        page: "tools",
+      },
+    );
+    const result: ActionResult<ContractOutput<typeof toolVersionList>> =
+      readToActionResult(read);
+    if (!result.ok) return result;
+    items.push(...result.value.items);
+    cursor = result.value.nextCursor;
+    if (cursor === null) break;
+  }
   return {
     ok: true,
     value: {
-      tools: result.value.items.map((v) => ({
+      tools: items.map((v) => ({
         slug: v.slug,
         name: v.name,
         version: v.version,
@@ -154,7 +171,7 @@ export async function readToolbelt(
           v.classification?.consequenceTags.includes("moves_money") ?? false,
         killed: v.gate.kind !== "open",
       })),
-      more: result.value.nextCursor !== null,
+      more: cursor !== null,
     },
   };
 }

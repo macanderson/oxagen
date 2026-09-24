@@ -1174,6 +1174,40 @@ describe("subagent chains in the run's frames", () => {
     expect(spliceSubagentChains(root, [])).toEqual(root);
   });
 
+  it("gives two chains one agent id names to that id's spawns in the order the chains began, whatever the order the store read them in", () => {
+    // A subagent resumed under the id it had: two spawns name `agent-r`, and
+    // neither recorded the spawning call. The chain that began first answers
+    // the first spawn. The later chain is listed first here, as ClickHouse
+    // may list it, since it sorts a UUID by its last eight bytes.
+    const root = [
+      tachoRow(0, "turn_start", { ts: at(0) }),
+      tachoRow(1, "subagent_start", {
+        ts: at(1),
+        attrs: { "hook.agent_id": "agent-r" },
+      }),
+      tachoRow(2, "turn_start", { ts: at(20) }),
+      tachoRow(3, "subagent_start", {
+        ts: at(21),
+        attrs: { "hook.agent_id": "agent-r" },
+      }),
+    ].map(tachoFrame);
+    const resumed = { subagentId: "agent-r", toolUseId: "" };
+    const children = [
+      childRow(CHILD_A, 0, "llm_call", { ...resumed, ts: at(22) }),
+      childRow(CHILD_B, 0, "llm_call", { ...resumed, ts: at(2) }),
+    ].map(tachoFrame);
+    const merged = spliceSubagentChains(root, children);
+    expect(merged.map(frameKey)).toEqual([
+      "0",
+      "1",
+      `${CHILD_B}:0`,
+      "2",
+      "3",
+      `${CHILD_A}:0`,
+    ]);
+    expect(turnOrdinals(merged)).toEqual([1, 1, 1, 2, 2, 2]);
+  });
+
   it("a subagent's own turn_start opens no turn of the run and takes no turn number", () => {
     const root = [
       tachoRow(0, "turn_start", { ts: at(0), turnSeq: 1 }),

@@ -327,6 +327,30 @@ async function readSubagentFrames(
     : { frames, complete: true };
 }
 
+/**
+ * A wrapped run's frames with the harness's reports of model calls the proxy
+ * had already begun observing stripped of their cost and usage.
+ *
+ * Once the loopback proxy observes a chain's model calls, it meters them. The
+ * harness's own report of a later call on the same chain is a second account
+ * of a call already counted. Chains are metered one by one, so the rule holds
+ * per chain, in the order each chain recorded its frames. The intake folds
+ * session totals by the same rule (`usageCountedEvents`). `get_run_transcript`
+ * and `get_run_turns` both apply it. Mutates and returns `frames`.
+ */
+export function withoutLateReports<T extends RunFrame[]>(frames: T): T {
+  const observed = new Set<string>();
+  for (const frame of frames) {
+    const chain = frame.chain?.sessionUuid ?? "";
+    if (frame.usageObserved) observed.add(chain);
+    else if (observed.has(chain) && frame.type === "llm_call") {
+      frame.usage = null;
+      frame.costMicros = null;
+    }
+  }
+  return frames;
+}
+
 /** The one frame at `seq`, or null. */
 export async function readFrameAt(
   deps: RunReadDeps,

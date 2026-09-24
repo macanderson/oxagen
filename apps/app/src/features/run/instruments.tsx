@@ -3,10 +3,10 @@
 // run, Tool calls and Productive ratio. Each tile is one figure, one line
 // under it, a small chart and a foot.
 //
-// Every figure is read from `runMetrics` and the ledger `cost-figures.ts`
-// sums from it, so the Tokens tile is the stat row's Tokens figure and the
-// total row of Spend by token class, and the Shape tile's steps and frames are
-// the waterfall's total row. What the record does not carry (this agent's
+// Every figure is read from `runMetrics` and from the per-turn ledger
+// `cost-figures.ts` sums from `get_run_turns`, so the Tokens tile is the stat
+// row's Tokens figure and the total row of Spend by token class, and the Shape
+// tile's steps and frames are the waterfall's total row. What the record does not carry (this agent's
 // median run, its 30-day productive ratio) is named as not recorded where the
 // mockup draws a figure.
 import { useLocale, useTranslations } from "next-intl";
@@ -217,7 +217,8 @@ function CostTile({
   live,
 }: {
   metrics: RunMetrics;
-  ledger: Ledger;
+  /** Null when the per-turn read failed. */
+  ledger: Ledger | null;
   live: boolean;
 }) {
   const t = useTranslations("run.cost.inst");
@@ -229,8 +230,9 @@ function CostTile({
   // to report; one that did and has none recorded says so.
   const readCache = (metrics.tokens?.byClass.cache_read ?? 0) > 0;
   // The mean of the bars below it, so "per turn" is read off the same ledger.
-  const each = perTurn(ledger.cost, ledger.rows.length);
-  const max = ledger.max;
+  const each =
+    ledger === null ? null : perTurn(ledger.cost, ledger.rows.length);
+  const max = ledger?.max ?? null;
   const money = (value: Money) =>
     formatMoney(value, { locale, precision: "cents" });
   return (
@@ -256,7 +258,7 @@ function CostTile({
                 ? null
                 : t.rich("perTurn", { cost: () => <b>{money(each)}</b> }),
             dearest:
-              ledger.dearest === null
+              ledger === null || ledger.dearest === null
                 ? null
                 : t("dearest", { turn: ledger.dearest }),
             median: t("median"),
@@ -264,7 +266,7 @@ function CostTile({
         />
       }
       chart={
-        ledger.rows.length === 0 ? undefined : (
+        ledger === null || ledger.rows.length === 0 ? undefined : (
           <div>
             <div role="img" aria-label={t("costChart")} className={cols}>
               {ledger.rows.map((row, index) => {
@@ -275,7 +277,7 @@ function CostTile({
                     ? null
                     : ratioOfIntegers(row.cost.micros, max.micros);
                 const last = index === ledger.rows.length - 1;
-                const turn = row.turn ?? index + 1;
+                const { turn } = row;
                 return (
                   <span
                     key={row.seq}
@@ -523,15 +525,17 @@ function ShapeTile({
 }: {
   run: RunRow;
   metrics: RunMetrics;
-  ledger: Ledger;
+  /** Null when the per-turn read failed. */
+  ledger: Ledger | null;
   live: boolean;
 }) {
   const t = useTranslations("run.cost.inst");
   const locale = useLocale();
   const count = (value: number) => formatCount(value, locale);
-  const widest = Math.max(0, ...ledger.rows.map((row) => row.steps));
+  const rows = ledger?.rows ?? [];
+  const widest = Math.max(0, ...rows.map((row) => row.steps));
   // `.lab` names the busiest turn once, over the first column that reaches it.
-  const labelled = ledger.rows.findIndex((row) => row.steps === widest);
+  const labelled = rows.findIndex((row) => row.steps === widest);
   const calls = metrics.toolCalls?.length ?? null;
   const { batches } = metrics;
   return (
@@ -540,7 +544,7 @@ function ShapeTile({
       title={t("shape")}
       basis={t("framesInRun", { count: run.frames })}
       value={
-        metrics.turns === null ? (
+        ledger === null ? (
           <NoValue />
         ) : (
           <>
@@ -557,11 +561,11 @@ function ShapeTile({
       }
       line={t("shapeLine")}
       chart={
-        ledger.rows.length === 0 ? undefined : (
+        ledger === null || ledger.rows.length === 0 ? undefined : (
           <div>
             <div role="img" aria-label={t("stepsChart")} className={cols}>
               {ledger.rows.map((row, index) => {
-                const turn = row.turn ?? index + 1;
+                const { turn } = row;
                 return (
                   <span
                     key={row.seq}
@@ -789,7 +793,8 @@ export function Instruments({
 }: {
   run: RunRow;
   metrics: RunMetrics;
-  ledger: Ledger;
+  /** The per-turn ledger from `get_run_turns`; null when that read failed. */
+  ledger: Ledger | null;
   prices: ClassPrices;
   /** The rollup's retries; null when the rollup has not run or did not count them. */
   retries: number | null;

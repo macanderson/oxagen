@@ -184,7 +184,10 @@
     --code-bg: color-mix(in oklab, var(--ox-panel) 55%, var(--ox-ink));
     --button-disabled-bg: var(--hl);
     --input-disabled-bg: var(--hl);
-    --app-panel-bg: var(--panel);
+    /* `body` and `#viewport` sit on the ink and `.main` draws no fill of its
+       own (engine.css), so the page body is ink in the dark theme. Panels,
+       tiles and the drawers stay on the panel. */
+    --app-panel-bg: var(--ink);
     --shadow: 0 1px 0 rgba(255, 255, 255, 0.03), 0 18px 44px rgba(0, 0, 0, 0.5);
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   }
@@ -219,7 +222,7 @@
       --code-bg: color-mix(in oklab, var(--ox-panel) 55%, var(--ox-ink));
       --button-disabled-bg: var(--hl);
       --input-disabled-bg: var(--hl);
-      --app-panel-bg: var(--panel);
+      --app-panel-bg: var(--ink);
       --shadow:
         0 1px 0 rgba(255, 255, 255, 0.03), 0 18px 44px rgba(0, 0, 0, 0.5);
       --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
@@ -296,6 +299,39 @@
 }
 [data-shell-page] main#main > :nth-child(n + 5) {
   animation-delay: 160ms;
+}
+
+/*
+ * `.sk` (engine.css, "state surfaces"): a skeleton bone is a band of the
+ * panel sweeping across the wash, left to right, every 1.5s. Every loading
+ * state draws its bones with this one class, so they all read alike. Each
+ * bone sets its own height and corners. Under reduced motion the sweep stops
+ * and the wash stays. The kit's kill-switch only shortens an animation, and a
+ * 0.01ms infinite sweep would flicker, so this one is switched off outright.
+ */
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 130% 0;
+  }
+  100% {
+    background-position: -30% 0;
+  }
+}
+
+@utility skeleton {
+  display: block;
+  background: linear-gradient(
+    90deg,
+    var(--hl) 25%,
+    var(--panel) 50%,
+    var(--hl) 75%
+  );
+  background-size: 220% 100%;
+  animation: skeleton-shimmer 1.5s linear infinite;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
 }
 
 /*

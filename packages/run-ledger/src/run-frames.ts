@@ -1252,8 +1252,9 @@ export function turnOrdinals(frames: readonly RunFrame[]): (number | null)[] {
  * chain under it, so a reader of the run reads them as one sequence: each
  * chain is placed, whole and in its own order, directly after the
  * `subagent_start` that spawned it (matched on the spawning tool call's id,
- * then on the subagent id), and a chain that spawned subagents of its own has
- * theirs placed the same way inside it.
+ * then on the subagent id, trying the chain that began first when two could
+ * answer one spawn), and a chain that spawned subagents of its own has theirs
+ * placed the same way inside it.
  *
  * A chain is kept whole rather than interleaved by timestamp because the
  * transcript pairs a request with its result by call id, and by adjacency
@@ -1290,6 +1291,8 @@ export function spliceSubagentChains(
       ? parent
       : ROOT;
   };
+  const firstAt = (id: string): number =>
+    chains.get(id)?.[0]?.observedAt.getTime() ?? Number.POSITIVE_INFINITY;
   const childrenOf = new Map<string, string[]>();
   for (const id of chains.keys()) {
     const parent = parentOf(id);
@@ -1297,11 +1300,19 @@ export function spliceSubagentChains(
     list.push(id);
     childrenOf.set(parent, list);
   }
+  // Where two chains could answer one spawn (a subagent resumed under the id
+  // it had, with no spawning call recorded), the one that began first is
+  // tried first, then the lower session id. The order the store read the
+  // chains in is not an order: ClickHouse sorts a UUID by its last eight
+  // bytes first. `get_run_turns` places chains by this same rule, so a
+  // chain's frames fall in the same turn on the transcript and on the ledger.
+  for (const list of childrenOf.values())
+    list.sort(
+      (a, b) => firstAt(a) - firstAt(b) || (a < b ? -1 : a > b ? 1 : 0),
+    );
   const placed = new Set<string>();
   const out: RunFrame[] = [];
 
-  const firstAt = (id: string): number =>
-    chains.get(id)?.[0]?.observedAt.getTime() ?? Number.POSITIVE_INFINITY;
   const facts = (id: string): FrameChain | undefined =>
     chains.get(id)?.[0]?.chain;
 

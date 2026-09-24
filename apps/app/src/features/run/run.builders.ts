@@ -11,6 +11,7 @@ import type {
   RunOutputNode,
   RunOutputs,
   RunTranscript,
+  RunTurns,
   TranscriptBody,
   TranscriptEntry,
   TranscriptKind,
@@ -447,6 +448,46 @@ export function runTranscript(
   };
 }
 
+/**
+ * `get_run_turns` for a two-turn run: the first priced, with a cache hit, and
+ * the second with nothing priced and no input reported.
+ */
+export function runTurns(overrides: Partial<RunTurns> = {}): RunTurns {
+  const usd = (micros: string) => ({
+    micros,
+    currency: "USD",
+    basis: "gateway_observed" as const,
+  });
+  return {
+    turns: [
+      {
+        turn: 1,
+        seq: "1",
+        at: "2026-09-15T08:00:01.000Z",
+        frames: 9,
+        modelSteps: 2,
+        toolSteps: 2,
+        cost: usd("18240"),
+        cumulativeCost: usd("18240"),
+        tokens: { inputUncached: 1834, cacheRead: 12_000 },
+      },
+      {
+        turn: 2,
+        seq: "10",
+        at: "2026-09-15T08:01:12.000Z",
+        frames: 4,
+        modelSteps: 1,
+        toolSteps: 1,
+        cost: null,
+        cumulativeCost: usd("18240"),
+        tokens: { inputUncached: null, cacheRead: null },
+      },
+    ],
+    complete: true,
+    ...overrides,
+  };
+}
+
 export function runCost(overrides: Partial<RunCost> = {}): RunCost {
   return {
     rollup: {
@@ -576,8 +617,8 @@ type RunReads = {
   frameBody?: Read<RunFrameBody>;
   /**
    * The whole-run transcript at `everything`, read with the page: the
-   * figures, the Cost tab's waterfall, the Policy and Context tabs and the tab
-   * counts all derive from it. The Transcript tab reads it again only through
+   * figures, the Policy and Context tabs and the tab counts all derive from
+   * it. The Transcript tab reads it again only through
    * pressed chips. A function answers per zoom level, for a test that needs
    * to tell the reads apart. A test that says nothing about it gets one step.
    */
@@ -586,6 +627,11 @@ type RunReads = {
     | ((zoom: TranscriptZoom) => Read<RunTranscript>);
   /** Only read when the Chain and seal tab is open; refused when absent. */
   chain?: Read<RunChain>;
+  /**
+   * `get_run_turns`, only read when the Cost tab is open. A test that says
+   * nothing about it gets the two turns `runTurns` builds.
+   */
+  turns?: Read<RunTurns>;
   /**
    * Read with the page for the Governed actions count, and drawn on that
    * tab. A test that says nothing about them gets an empty queue.
@@ -629,6 +675,7 @@ export function runSource(reads: RunReads) {
     approvals: unknown[][];
     resolvedApprovals: unknown[][];
     chain: unknown[][];
+    turns: unknown[][];
     mandates: unknown[][];
     outputs: unknown[][];
     agent: unknown[][];
@@ -642,6 +689,7 @@ export function runSource(reads: RunReads) {
     approvals: [],
     resolvedApprovals: [],
     chain: [],
+    turns: [],
     mandates: [],
     outputs: [],
     agent: [],
@@ -703,6 +751,7 @@ export function runSource(reads: RunReads) {
         );
       },
       chain: answer("chain", reads.chain),
+      turns: answer("turns", reads.turns ?? readOk(runTurns())),
       outputs: (...args: unknown[]) => {
         calls.outputs.push(args);
         const asked = reads.outputs ?? readOk(runOutputs());

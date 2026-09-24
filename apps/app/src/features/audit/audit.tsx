@@ -355,7 +355,8 @@ export function traceTime(epochMs: number): string {
 
 export function AuditSkeleton() {
   const t = useTranslations("audit");
-  const block = "animate-pulse rounded bg-muted motion-reduce:animate-none";
+  // The design's `.sk` shimmer (globals.css), the one every skeleton draws.
+  const block = "skeleton rounded-md";
   return (
     <section
       aria-busy="true"

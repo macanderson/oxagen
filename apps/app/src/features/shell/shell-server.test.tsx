@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 // The server half: the chrome renders what the source read for the context the
 // layout resolved; the frame streams a skeleton and the pre-paint theme script.
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { cleanup, render, screen } from "@testing-library/react";
 import { isValidElement, type ReactElement, type ReactNode, use } from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -75,6 +77,7 @@ function stubSource() {
       get: vi.fn(),
       frameBody: vi.fn(),
       cost: vi.fn(),
+      turns: vi.fn(),
       transcript: vi.fn(),
       chain: vi.fn(),
       outputs: vi.fn(),
@@ -251,6 +254,39 @@ describe("ShellFrame", () => {
     const shell = screen.getByTestId("shell");
     expect(shell.className).toContain("bg-app-panel-bg");
     expect(shell.className).not.toContain("bg-app-canvas");
+  });
+
+  it("puts the page body on the ink in the dark theme, as the design's body and viewport are", () => {
+    // engine.css: `body` and `#viewport` sit on `--ink` and `.main` draws no
+    // fill, so the token the frame paints with is the ink in both dark
+    // blocks (the `.dark` class and the system preference before the theme
+    // script runs). Panels and drawers stay on the panel.
+    // Vitest runs from apps/app, as messages/ is read in src/i18n/request.ts.
+    const css = readFileSync(
+      path.join(process.cwd(), "src/app/globals.css"),
+      "utf8",
+    );
+    const declarations = [...css.matchAll(/--app-panel-bg:\s*([^;]+);/g)].map(
+      (match) => match[1],
+    );
+    expect(declarations).toEqual(["var(--ink)", "var(--ink)"]);
+  });
+
+  it("keeps the drawers on a raised token that the app's ink does not move", () => {
+    // The drawers, the flyout and the phone bar's count pills paint with
+    // `--app-raised-bg`. The house kit maps it to the card and gives it a
+    // Tailwind colour. The app leaves it alone, so the ink stays behind them.
+    const kit = readFileSync(
+      path.join(process.cwd(), "../../packages/ui/src/styles/globals.css"),
+      "utf8",
+    );
+    expect(kit).toMatch(/--app-raised-bg:\s*var\(--card\);/);
+    expect(kit).toMatch(/--color-app-raised-bg:\s*var\(--app-raised-bg\);/);
+    const app = readFileSync(
+      path.join(process.cwd(), "src/app/globals.css"),
+      "utf8",
+    );
+    expect(app).not.toMatch(/--app-raised-bg:/);
   });
 
   it("streams a labelled skeleton while the chrome loads", async () => {

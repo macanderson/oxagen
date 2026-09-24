@@ -58,7 +58,7 @@ function SlotCount({
   return count === null ? (
     <span
       data-count-unrecorded=""
-      className="absolute left-[calc(50%+6px)] top-0.5 min-w-[18px] rounded-full border border-dashed border-border bg-app-panel-bg px-1 text-center font-mono text-[10px] text-muted-foreground"
+      className="absolute left-[calc(50%+6px)] top-0.5 min-w-[18px] rounded-full border border-dashed border-border bg-app-raised-bg px-1 text-center font-mono text-[10px] text-muted-foreground"
     >
       <span aria-hidden="true">?</span>
       <span className="sr-only">{label}</span>
@@ -66,7 +66,7 @@ function SlotCount({
   ) : (
     <span
       data-count={count}
-      className="absolute left-[calc(50%+6px)] top-0.5 min-w-[18px] rounded-full border border-info/40 bg-app-panel-bg px-1 text-center font-mono text-[10px] text-info"
+      className="absolute left-[calc(50%+6px)] top-0.5 min-w-[18px] rounded-full border border-info/40 bg-app-raised-bg px-1 text-center font-mono text-[10px] text-info"
     >
       <span aria-hidden="true">
         {count}

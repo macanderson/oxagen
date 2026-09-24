@@ -188,6 +188,10 @@ describe("AssistantFlyout", () => {
     expect(asterisk?.getAttribute("fill")).toBe("#D4AF37");
     expect(screen.getByRole("dialog", { name: "stella" })).toBe(flyout);
     expect(flyout).not.toHaveTextContent("Assistant");
+    // `.asst { background: var(--panel) }`: the flyout stays on the panel
+    // while the page body behind it is on the ink.
+    expect(flyout).toHaveClass("bg-app-raised-bg", "text-app-raised-fg");
+    expect(flyout).not.toHaveClass("bg-app-panel-bg");
     await expectNoAxe(flyout);
   });
 
@@ -1327,6 +1331,101 @@ describe("AssistantFlyout", () => {
     expect(document.cookie).toContain("assistant_width=640");
   });
 
+  it("follows only the pointer that grabbed the edge (negative)", async () => {
+    await openFlyout();
+    const edge = screen.getByRole("separator", { name: "Resize stella" });
+
+    fireEvent.pointerDown(edge, { button: 0, pointerId: 1, clientX: 430 });
+    fireEvent.pointerMove(edge, { pointerId: 1, clientX: 600 });
+
+    // A second finger lands, moves, lifts, and is cancelled. None of it
+    // moves the edge, saves a width, or ends the first finger's drag.
+    fireEvent.pointerDown(edge, { button: 0, pointerId: 2, clientX: 900 });
+    fireEvent.pointerMove(edge, { pointerId: 2, clientX: 900 });
+    expect(edge).toHaveAttribute("aria-valuenow", "600");
+    fireEvent.pointerUp(edge, { pointerId: 2, clientX: 900 });
+    fireEvent.pointerCancel(edge, { pointerId: 2 });
+    expect(edge).toHaveAttribute("aria-valuenow", "600");
+    expect(document.cookie).not.toContain("assistant_width");
+
+    fireEvent.pointerMove(edge, { pointerId: 1, clientX: 650 });
+    fireEvent.pointerUp(edge, { pointerId: 1, clientX: 660 });
+    expect(edge).toHaveAttribute("aria-valuenow", "660");
+    expect(document.cookie).toContain("assistant_width=660");
+  });
+
+  it("saves nothing for a cancelled pointer that never grabbed the edge (negative)", async () => {
+    await openFlyout();
+    const edge = screen.getByRole("separator", { name: "Resize stella" });
+
+    fireEvent.pointerCancel(edge, { pointerId: 1 });
+    expect(edge).toHaveAttribute("aria-valuenow", "430");
+    expect(document.cookie).not.toContain("assistant_width");
+  });
+
+  // A browser keeps sending a captured pointer's moves to the edge after the
+  // pointer leaves its 8px strip, which is what makes a fast drag work. jsdom
+  // implements no capture, so the edge is handed one to observe.
+  it("captures the pointer that grabs the edge, and only a primary press", async () => {
+    await openFlyout();
+    const edge = screen.getByRole("separator", { name: "Resize stella" });
+    const capture = vi.fn<(pointerId: number) => void>();
+    edge.setPointerCapture = capture;
+
+    fireEvent.pointerDown(edge, { button: 2, pointerId: 3, clientX: 430 });
+    expect(capture).not.toHaveBeenCalled();
+
+    fireEvent.pointerDown(edge, { button: 0, pointerId: 7, clientX: 430 });
+    expect(capture).toHaveBeenCalledOnce();
+    expect(capture).toHaveBeenCalledWith(7);
+  });
+
+  // The window here is 1024px wide, so a width remembered on a wider screen is
+  // more than this one can show. CSS caps what shows, and the handle reads and
+  // steps from what shows, not from the number in the cookie.
+  it("reads a remembered width wider than this screen as the screen's limit, and steps from there", async () => {
+    document.cookie = "assistant_width=2000; Path=/";
+    const { user, flyout } = await openFlyout();
+    const edge = screen.getByRole("separator", { name: "Resize stella" });
+    expect(flyout.style.getPropertyValue("--assistant-width")).toBe("2000px");
+
+    act(() => {
+      edge.focus();
+    });
+    expect(edge).toHaveAttribute("aria-valuemax", "968");
+    expect(edge).toHaveAttribute("aria-valuenow", "968");
+
+    await user.keyboard("{ArrowLeft}");
+    expect(edge).toHaveAttribute("aria-valuenow", "952");
+    expect(document.cookie).toContain("assistant_width=952");
+  });
+
+  it("leaves a key it does not use alone, so Tab still moves on (negative)", async () => {
+    const { user } = await openFlyout();
+    const edge = screen.getByRole("separator", { name: "Resize stella" });
+    act(() => {
+      edge.focus();
+    });
+
+    await user.keyboard("{ArrowUp}");
+    expect(edge).toHaveAttribute("aria-valuenow", "430");
+    expect(document.cookie).not.toContain("assistant_width");
+
+    await user.keyboard("{Tab}");
+    expect(document.activeElement).not.toBe(edge);
+    expect(document.cookie).not.toContain("assistant_width");
+  });
+
+  it("closes on Escape from the edge, like anywhere else in the panel", async () => {
+    const { user, flyout } = await openFlyout();
+    act(() => {
+      screen.getByRole("separator", { name: "Resize stella" }).focus();
+    });
+
+    await user.keyboard("{Escape}");
+    expect(flyout).toHaveAttribute("inert");
+  });
+
   describe("a reply the person has not seen", () => {
     function UnreadProbe() {
       const { assistantUnread } = useShellState();
@@ -1383,6 +1482,32 @@ describe("AssistantFlyout", () => {
       await waitFor(() => {
         expect(screen.getByTestId("unread")).toHaveTextContent(/^unread$/);
       });
+    });
+
+    // The third way a turn settles: the action throws, and the panel says
+    // stella could not be reached. The cue is raised in `finally`, so this
+    // path raises it too.
+    it("marks a turn that could not reach stella unread too", async () => {
+      let breakTurn: (reason: unknown) => void = () => undefined;
+      askAssistant.mockReturnValueOnce(
+        new Promise((_resolve, reject) => {
+          breakTurn = reject;
+        }),
+      );
+      const user = await openWithProbe();
+      await ask(user, "what is live?");
+      await user.click(screen.getByRole("button", { name: "Close stella" }));
+      expect(screen.getByTestId("unread")).toHaveTextContent(/^read$/);
+
+      breakTurn(new Error("network"));
+      await waitFor(() => {
+        expect(screen.getByTestId("unread")).toHaveTextContent(/^unread$/);
+      });
+
+      // What the cue points at is waiting in the panel.
+      await user.click(screen.getByRole("button", { name: "open assistant" }));
+      expect(screen.getByTestId("assistant-unavailable")).toBeInTheDocument();
+      expect(screen.getByTestId("unread")).toHaveTextContent(/^read$/);
     });
 
     it("leaves the launcher alone when the reply lands in an open panel (negative)", async () => {

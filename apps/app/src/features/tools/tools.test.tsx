@@ -346,6 +346,11 @@ describe("Tools › not loaded", () => {
     const dialog = await screen.findByTestId("tools-incident");
     expect(within(dialog).getByTestId("tools-incident-confirm")).toBeDisabled();
     expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
+    // The design's error glyph in the failed tone, not the denied lock.
+    expect(panel.querySelector("[data-state-icon]")).toHaveAttribute(
+      "data-state-icon",
+      "failed",
+    );
   });
 
   it("names the access request while one is waiting", async () => {
@@ -403,6 +408,9 @@ describe("ToolsLoading", () => {
     expect(skeleton).toHaveAttribute("aria-busy", "true");
     expect(skeleton.querySelectorAll('[data-skeleton="tile"]')).toHaveLength(4);
     expect(skeleton.querySelectorAll('[data-skeleton="row"]')).toHaveLength(7);
+    // Every bone is the design's shimmer, as on every other page, and none pulses.
+    expect(skeleton.querySelectorAll(".skeleton")).toHaveLength(12);
+    expect(skeleton.querySelector(".animate-pulse")).toBeNull();
     expect(skeleton.textContent).toBe("");
   });
 });

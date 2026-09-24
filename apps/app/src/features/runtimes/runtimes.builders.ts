@@ -133,6 +133,7 @@ export function runtimesSource(reads: {
       get: refuse,
       frameBody: refuse,
       cost: refuse,
+      turns: refuse,
       transcript: refuse,
       chain: refuse,
       outputs: refuse,

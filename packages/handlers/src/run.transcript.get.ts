@@ -69,6 +69,7 @@ import {
   resolveRun,
   startCursorSeq,
   type RunReadDeps,
+  withoutLateReports,
 } from "./lib/run-read";
 
 /** The most frames a transcript folds; past it the transcript is incomplete. */
@@ -454,18 +455,8 @@ export function createRunTranscriptGetHandler(
     // where it was spawned (`readRunFrames`).
     const read = await readRunFrames(deps, run, TRANSCRIPT_FRAME_CAP);
     // Once a chain's model calls are observed by the proxy, the harness's own
-    // report of the same calls counts neither its tokens nor its cost: the
-    // rule the intake folds session totals by (`usageCountedEvents`), per
-    // chain, because each chain is metered on its own.
-    const observedChains = new Set<string>();
-    for (const frame of read.frames) {
-      const chain = frame.chain?.sessionUuid ?? "";
-      if (frame.usageObserved) observedChains.add(chain);
-      else if (observedChains.has(chain) && frame.type === "llm_call") {
-        frame.usage = null;
-        frame.costMicros = null;
-      }
-    }
+    // report of the same calls counts neither its tokens nor its cost.
+    withoutLateReports(read.frames);
     // One model call reported by several sources is one step
     // (`withoutDuplicateModelCalls`): a proxied call drew twice.
     const shown = withoutDuplicateModelCalls(read.frames);
