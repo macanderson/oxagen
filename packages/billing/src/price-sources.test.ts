@@ -1122,7 +1122,7 @@ describe("the in-code card alone, with no catalog response", () => {
       usdPerMillionToMicros(3.0),
     );
     expect(priced(book, "anthropic/claude-opus-4.8")?.microsPerMillion).toBe(
-      usdPerMillionToMicros(15.0),
+      usdPerMillionToMicros(5.0),
     );
     // The bare form of each resolves too: a direct caller passes it without a
     // vendor prefix.
@@ -1133,7 +1133,7 @@ describe("the in-code card alone, with no catalog response", () => {
       usdPerMillionToMicros(3.0),
     );
     expect(priced(book, "claude-opus-4.8")?.microsPerMillion).toBe(
-      usdPerMillionToMicros(15.0),
+      usdPerMillionToMicros(5.0),
     );
     // A stamped snapshot of the dotted release still inherits, as the stamp
     // rule allows.
@@ -1206,11 +1206,10 @@ describe("the in-code card alone, with no catalog response", () => {
       ["grok-4.5", "grok-4.5", 2.0],
       ["glm", "glm", 0.95],
       ["glm-5.2", "glm-5.2", 1.4],
-      // Same price today, so the row that matched is the only proof they are
-      // still two identities.
+      // Legacy Opus 4 keeps $15. Opus 4.8 is $5 (#3944).
       ["claude-opus-4", "claude-opus-4", 15.0],
-      ["claude-opus-4-8", "claude-opus-4-8", 15.0],
-      ["claude-opus-4.8", "claude-opus-4-8", 15.0],
+      ["claude-opus-4-8", "claude-opus-4-8", 5.0],
+      ["claude-opus-4.8", "claude-opus-4-8", 5.0],
     ];
     for (const [modelId, expectedRow, usd] of pairs) {
       const entry = priced(book, modelId);
