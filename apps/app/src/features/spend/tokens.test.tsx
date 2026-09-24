@@ -6,6 +6,7 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import type { SpendReport } from "@/data/contracts/spend";
 import { readError, readOk } from "@/data/read";
 import { IntlProvider } from "@/test/intl";
@@ -40,7 +41,13 @@ const report = (rows: SpendReport["rows"]): SpendReport => ({
   rows,
 });
 
-afterEach(cleanup);
+afterEach(async () => {
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
+});
 
 describe("Tokens", () => {
   it("prints no share of a month with no tokens, and nothing per run for an agent with no runs", () => {
