@@ -2,14 +2,19 @@
 // The toast stack: a row per event in one polite live region, newest last,
 // each gone after the design's 4.2 seconds.
 import { act, cleanup, render, screen } from "@testing-library/react";
+import { useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TOAST_MS, ToastStack, type ToastTone, useToasts } from "./toast";
 
 let push: (text: string, tone?: ToastTone) => void = () => undefined;
 
+// The stack's `toast` reaches the test through an effect, not an assignment
+// during render: the React compiler rejects writing an outer variable there.
 function Host() {
   const { toasts, toast } = useToasts();
-  push = toast;
+  useEffect(() => {
+    push = toast;
+  }, [toast]);
   return <ToastStack toasts={toasts} testId="toasts" />;
 }
 

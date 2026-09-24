@@ -934,7 +934,7 @@ describe("the other tabs", () => {
     expect(failed).toHaveTextContent("the promoter");
     expect(screen.getByTestId("change-open-prp_open1")).toHaveAttribute(
       "href",
-      "/acme/core-platform/steering/proposals/prs?proposal=prp_open1",
+      "/acme/core-platform/steering?tab=prs&proposal=prp_open1",
     );
     expect(screen.getByTestId("changes-who-opens")).toHaveTextContent(
       "Drift is reported, never repaired in place.",

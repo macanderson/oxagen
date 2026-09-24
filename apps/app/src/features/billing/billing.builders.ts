@@ -279,7 +279,6 @@ export function billingSource(overrides: Partial<BillingReads> = {}) {
       proposals: refuse,
       contextPr: refuse,
       freshness: refuse,
-      hub: refuse,
       deliveries: refuse,
     },
     tools: {
