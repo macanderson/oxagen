@@ -51,7 +51,6 @@ const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const { Agents, AgentsLoading } = await import("./agents");
 const { AgentsCreate } = await import("./create-actions");
-const { pagerItems } = await import("./agents-table");
 
 const t = translator("agents.list");
 
@@ -785,19 +784,6 @@ describe("Agents list controls", () => {
     expect(
       within(beyond).getByRole("link", { name: "First agents" }),
     ).toHaveAttribute("href", "/acme/core-platform/agents");
-  });
-});
-
-describe("pagerItems", () => {
-  it("draws every page up to seven, then the first, the neighbours of the current page and the last", () => {
-    expect(pagerItems(1, 0)).toEqual([0]);
-    expect(pagerItems(7, 6)).toEqual([0, 1, 2, 3, 4, 5, 6]);
-    expect(pagerItems(8, 0)).toEqual([0, 1, null, 7]);
-    expect(pagerItems(20, 9)).toEqual([0, null, 8, 9, 10, null, 19]);
-    expect(pagerItems(20, 19)).toEqual([0, null, 18, 19]);
-    // As in the design, an ellipsis can stand in for one page.
-    expect(pagerItems(8, 3)).toEqual([0, null, 2, 3, 4, null, 7]);
-    expect(pagerItems(8, 2)).toEqual([0, 1, 2, 3, null, 7]);
   });
 });
 

@@ -7,7 +7,6 @@
 // The actions are the seam. They are proven against the real kernel seam in
 // actions.test.ts; here they answer the way the capabilities answer, so what
 // is under test is the page.
-import { nth } from "@/test/nth";
 import {
   cleanup,
   render,
@@ -156,25 +155,28 @@ const LINKED_TREE: RepositoryTree = {
   readAt: "2026-09-19T10:00:00.000Z",
 };
 
+/** The open change the Changes tab lists first. */
+const OPEN_CHANGE: RepositoryChanges["changes"][number] = {
+  proposalId: "prp_open1",
+  lineage: "ctx.scr.001-never-push-to-main",
+  statement: "Never push to main",
+  why: "Main is shared and contested.",
+  kind: "context_record",
+  pullRequest: {
+    number: 42,
+    url: "https://github.com/acme/platform/pull/42",
+    repository: "acme/platform",
+    branch: "oxagen/prp_open1",
+  },
+  openedBy: "the promoter",
+  status: "checks_failed",
+  checks: { passed: 3, total: 6 },
+  openedAt: "2026-09-18T10:00:00.000Z",
+};
+
 const CHANGES: RepositoryChanges = {
   changes: [
-    {
-      proposalId: "prp_open1",
-      lineage: "ctx.scr.001-never-push-to-main",
-      statement: "Never push to main",
-      why: "Main is shared and contested.",
-      kind: "context_record",
-      pullRequest: {
-        number: 42,
-        url: "https://github.com/acme/platform/pull/42",
-        repository: "acme/platform",
-        branch: "oxagen/prp_open1",
-      },
-      openedBy: "the promoter",
-      status: "checks_failed",
-      checks: { passed: 3, total: 6 },
-      openedAt: "2026-09-18T10:00:00.000Z",
-    },
+    OPEN_CHANGE,
     {
       proposalId: "prp_done1",
       lineage: "ctx.scr.002-run-tests-before-a-pr",
@@ -1385,7 +1387,7 @@ describe("the other tabs", () => {
         changes: [
           ...CHANGES.changes,
           {
-            ...nth(CHANGES.changes, 0, "change"),
+            ...OPEN_CHANGE,
             proposalId: "prp_run1",
             lineage: "ctx.scr.003-running",
             status: "checks_running",

@@ -41,7 +41,8 @@ import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { AgentsTable } from "./agents-table";
 import { RegisterAnAgent, WrapClaudeCode } from "./create-actions";
-import { AgentKeyPrefix, keyPrefixOf } from "./key-prefix";
+import { AgentKeyPrefix } from "./key-prefix";
+import { keyPrefixOf } from "./key-prefix-of";
 import { NotRecordedValue, Tile } from "./parts";
 import { OpenIncident, RequestAccess, TryAgain } from "./state-actions";
 

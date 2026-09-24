@@ -20,11 +20,12 @@ import type { RepositoryChange } from "@/data/contracts/repository";
 import type { ContextPr } from "@/data/contracts/steering";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import type { closeRepositoryChange } from "./actions";
 
 const actions = vi.hoisted(() => ({
   readRepositoryChange: vi.fn(),
   mergeRepositoryChange: vi.fn(),
-  closeRepositoryChange: vi.fn(),
+  closeRepositoryChange: vi.fn<typeof closeRepositoryChange>(),
 }));
 vi.mock("./actions", () => actions);
 
@@ -414,9 +415,8 @@ describe("closing without merging", () => {
     await waitFor(() => {
       expect(actions.closeRepositoryChange).toHaveBeenCalledOnce();
     });
-    const call: readonly unknown[] =
+    const [org, ws, proposalId, sent] =
       actions.closeRepositoryChange.mock.calls[0] ?? [];
-    const [org, ws, proposalId, sent] = call;
     expect([org, ws, proposalId]).toEqual([
       "acme",
       "core-platform",

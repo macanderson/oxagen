@@ -10,6 +10,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   ControlUnreachable,
   createControlClient,
+  TACHO_INGEST_TIMEOUT_MS,
   type FetchLike,
 } from "./control-client";
 
@@ -94,5 +95,32 @@ describe("control client request timeout", () => {
     await expect(client(fetch).bundle()).rejects.not.toBeInstanceOf(
       ControlUnreachable,
     );
+  });
+
+  // Production ingest ran 6 to 16 seconds a batch while the route wrote every
+  // body, and a host that gave up at the 15 seconds every other call gets
+  // abandoned batches the server then committed.
+  it("gives an ingest call its own longer bound than the other calls", async () => {
+    vi.useFakeTimers();
+    try {
+      let aborted = false;
+      const fetch: FetchLike = (_url, init) =>
+        new Promise((_resolve, reject) => {
+          init.signal?.addEventListener("abort", () => {
+            aborted = true;
+            reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+          });
+        });
+      const rejection = expect(client(fetch).ingest([])).rejects.toThrow(
+        ControlUnreachable,
+      );
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(aborted).toBe(false);
+      await vi.advanceTimersByTimeAsync(TACHO_INGEST_TIMEOUT_MS - 5_000);
+      await rejection;
+      expect(aborted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

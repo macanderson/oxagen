@@ -550,7 +550,7 @@ function searchText(row: AgentRow, harness: string): string {
  * page 10 is 1 … 9 10 11 … 20, so it fits a phone's width. The window is the
  * shared list table's (`pageList`), so the two pagers cannot drift apart.
  */
-export function pagerItems(
+function pagerItems(
   pages: number,
   current: number,
 ): readonly (number | null)[] {
