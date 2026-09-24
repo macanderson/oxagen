@@ -4312,59 +4312,93 @@ type Messages = {
     };
     chain: {
       title: string;
-      hashRule: string;
-      frameCount: string;
-      range: string;
-      merkleRoot: string;
-      tierLabel: string;
-      gradeLabel: string;
-      gapsTitle: string;
-      prefix: string;
-      noGaps: string;
-      missingFrames: string;
-      missingBodies: string;
-      missingSequences: string;
-      recordedGaps: string;
-      sealTitle: string;
-      attemptLabel: string;
-      sealedAt: string;
-      terminalStatus: string;
-      sealedFrames: string;
-      finalSeq: string;
-      finalDigest: string;
-      streamDigest: string;
-      archive: string;
-      unsealed: string;
-      checkpointsTitle: string;
-      noCheckpoints: string;
-      ladderTitle: string;
-      ladderWhy: string;
-      ladderNoGrade: string;
-      rungMet: string;
-      rungUnmet: string;
-      columns: {
-        seq: string;
-        head: string;
+      hash: {
+        title: string;
+        clean: string;
+        cleanPart: string;
+        gapsFound: string;
         frames: string;
-        signed: string;
-        countersigned: string;
-        anchor: string;
+        framesCount: string;
+        framesRange: string;
+        rule: string;
+        rules: {
+          tacho: string;
+          ledger: string;
+        };
+        telemetry: string;
+        telemetryNone: string;
+        telemetryRecorded: string;
+        telemetryUnsealed: string;
+        checkpoints: string;
+        checkpointsValue: string;
+        checkpointsNone: {
+          tacho: string;
+          ledger: string;
+        };
+        completeness: string;
+        gapsNone: string;
+        missingFrames: string;
+        missingBodies: string;
+        note: {
+          tacho: string;
+          ledger: string;
+        };
+        prefix: string;
+      };
+      seal: {
+        title: string;
+        sealed: string;
+        unsealed: string;
+        signature: string;
+        signsOver: string;
+        notInRead: string;
+        merkleRoot: string;
+        tier: string;
+        archive: string;
+        sealedAt: string;
+        terminalStatus: string;
+        over: string;
+        overValue: string;
+        finalSeq: string;
+        finalDigest: string;
+        streamDigest: string;
+        verify: string;
+        export: string;
+        attempt: string;
       };
       grade: {
-        inspect: string;
-        view: string;
-        fork: string;
-        retry: string;
+        title: string;
+        noGrade: string;
+        grade: string;
+        recorded: string;
+        allows: string;
+        allowsText: {
+          inspect: string;
+          view: string;
+          fork: string;
+          retry: string;
+        };
+        met: string;
+        unmet: string;
+        why: string;
+        whyNoGrade: string;
       };
-      gap: {
-        digest_only: string;
-        body_missing: string;
-        tool_bodies: string;
-        model_calls: string;
-        hooks_partial: string;
-        unobserved_tail: string;
-        chain_break: string;
-        telemetry_gap: string;
+      checkpoints: {
+        title: string;
+        count: string;
+        frame: string;
+        head: string;
+        covers: string;
+        signature: string;
+        signed: string;
+        countersigned: string;
+        countersignedAt: string;
+        notCountersigned: string;
+        anchored: string;
+        none: {
+          tacho: string;
+          ledger: string;
+        };
       };
     };
     waterfall: {
@@ -4407,6 +4441,9 @@ type Messages = {
         keyB: string;
         noFrame: string;
       };
+      forkFrom: string;
+      forkAny: string;
+      bisectAgainst: string;
     };
     loading: string;
     outputs: {
@@ -4545,29 +4582,185 @@ type Messages = {
     };
     issues: {
       title: string;
-      reference: string;
+      count: string;
+      issue: string;
+      status: string;
       relation: string;
+      edge: string;
+      viewColumn: string;
+      view: string;
+      viewLabel: string;
+      noLink: string;
       task: string;
+      statusWhy: string;
       empty: string;
       note: string;
+      linked: {
+        title: string;
+        edge: {
+          observed: string;
+          stated: string;
+          inferred: string;
+          commit: string;
+          branch: string;
+        };
+        edgeHelp: {
+          observed: string;
+          stated: string;
+          inferred: string;
+          commit: string;
+          branch: string;
+        };
+        inferredCount: string;
+        repositories: string;
+        artifacts: string;
+        noRepositories: string;
+        noArtifacts: string;
+        outputsUnread: string;
+        repoNotIdentified: string;
+        fromPullRequest: string;
+        onBranch: string;
+        branchNotRecorded: string;
+        head: string;
+        stale: string;
+        pr: {
+          open: string;
+          merged: string;
+          closed: string;
+        };
+        ci: {
+          passing: string;
+          failing: string;
+          pending: string;
+          neutral: string;
+          unknown: string;
+        };
+        ciMissing: string;
+        checks: string;
+        checksPartial: string;
+        failing: string;
+        files: string;
+        filesCount: string;
+        filesBasis: string;
+        noPatch: string;
+        captured: string;
+        capturedBasis: string;
+        capture: {
+          complete: string;
+          partial: string;
+          not_retained: string;
+          not_captured: string;
+        };
+        frame: string;
+        frameTitle: string;
+        incomplete: string;
+        loading: string;
+      };
     };
     policy: {
       title: string;
       frame: string;
       call: string;
       outcome: string;
-      type: string;
+      rules: string;
+      taint: string;
+      latency: string;
+      unrecorded: string;
       empty: string;
       cut: string;
-      at: string;
+      note: string;
     };
     context: {
-      title: string;
-      frame: string;
-      what: string;
-      at: string;
-      empty: string;
-      cut: string;
+      prompt: {
+        title: string;
+        writtenNotRecorded: string;
+        sent: string;
+        sentNotRecorded: string;
+        openWindow: string;
+        writtenBy: string;
+        writtenByUnknown: string;
+        quote: string;
+        noPrompt: string;
+        textNotRetained: string;
+        firstRequest: string;
+        words: string;
+        toolsSteering: string;
+        systemBrief: string;
+        cache: string;
+        cachedOnly: string;
+        noUsage: string;
+        splitNotRecorded: string;
+        noRequest: string;
+      };
+      manifest: {
+        label: string;
+        title: string;
+        renderedCount: string;
+        cutCount: string;
+        tokens: string;
+        preview: string;
+        previewMissing: string;
+        observeTitle: string;
+        observe: string;
+        rendered: string;
+        cutState: string;
+        noReason: string;
+        why: {
+          budget: string;
+          tier: string;
+          superseded: string;
+        };
+        moreCut: string;
+        foot: string;
+        footNoBundle: string;
+        none: string;
+        unread: {
+          unretained: string;
+          unparsed: string;
+          failed: string;
+        };
+      };
+      window: {
+        title: string;
+        request: string;
+        input: string;
+        inputNotRecorded: string;
+        blocksNotRecorded: string;
+        note: string;
+        noneTitle: string;
+        none: string;
+      };
+      frames: {
+        title: string;
+        kind: string;
+        frame: string;
+        tok: string;
+        score: string;
+        cited: string;
+        unrecorded: string;
+        empty: string;
+        cut: string;
+        note: string;
+      };
+      walk: {
+        title: string;
+        stop: string;
+        frame: string;
+        tokens: string;
+        empty: string;
+      };
+      retrieval: {
+        title: string;
+        budget: string;
+        scored: string;
+        admitted: string;
+        held: string;
+        floor: string;
+        headroom: string;
+        digest: string;
+        assembledAt: string;
+        note: string;
+      };
     };
     work: {
       label: string;
@@ -4603,53 +4796,6 @@ type Messages = {
       noPullRequestLive: string;
       check: string;
       inFiles: string;
-      loading: string;
-    };
-    workCi: {
-      title: string;
-      basis: string;
-      failedChecks: string;
-      stale: string;
-      checkouts: string;
-      onMachine: string;
-      machineMissing: string;
-      locationMissing: string;
-      repoMissing: string;
-      branchMissing: string;
-      copyLocation: string;
-      copied: string;
-      copyFailed: string;
-      pullRequests: string;
-      prMissing: string;
-      ciMissing: string;
-      association: {
-        recorded: string;
-        head_commit: string;
-        branch: string;
-      };
-      ci: {
-        passing: string;
-        failing: string;
-        pending: string;
-        neutral: string;
-        unknown: string;
-      };
-      checkCounts: string;
-      checksPartial: string;
-      diffFiles: string;
-      diffComplete: string;
-      diffPartial: string;
-      evidence: string;
-      diffBasis: string;
-      diffMissing: string;
-      frame: string;
-      capture: {
-        complete: string;
-        partial: string;
-        not_retained: string;
-        not_captured: string;
-      };
-      incomplete: string;
       loading: string;
     };
     states: {

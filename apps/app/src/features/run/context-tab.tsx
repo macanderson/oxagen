@@ -1,0 +1,780 @@
+// The Context tab (mockup `promptRow`, `runManifestPanel` and `contextTab`;
+// pages/run.md, Context): what the operator wrote, what the assembler put in
+// front of the agent and cut, the first request's window, the frames that
+// recorded what went into context, and the retrieval figures.
+//
+// The record carries the operator's first prompt (the `turn_start` body),
+// the input the first model call reported, the `steering.manifest` frame the
+// host sealed at the session's start, and the recall frames. It does not
+// carry the window block by block, a context frame's score or citation, or
+// the retrieval figures (gap G10), so those panels are drawn and say so. A
+// token is never estimated here.
+import { useLocale, useTranslations } from "next-intl";
+import type { ReactNode } from "react";
+import type { RunTranscript, TranscriptEntry } from "@/data/contracts/run";
+import type { RunRow } from "@/data/contracts/runs";
+import type { Read } from "@/data/read";
+import { routes } from "@/shared/safe-path";
+import { Badge } from "@/ui/badge";
+import { buttonSecondary, eyebrowQuiet, mono } from "@/ui/control-styles";
+import { type ListRow, ListTable } from "@/ui/list-table";
+import { formatCount } from "@/ui/money-format";
+import { SafeLink } from "@/ui/navigation";
+import { ReadFailure } from "@/ui/read-failure";
+import { cell } from "@/ui/table";
+import {
+  bodyOf,
+  type FirstPrompt,
+  type FirstRequest,
+  firstPrompt,
+  firstRequest,
+  type ManifestItem,
+  type ManifestRead,
+  manifestEntry,
+  parseManifest,
+  tallyOf,
+} from "./context-model";
+import { Fact, Facts, Meter, Note, NoValue, Panel, PanelBody } from "./parts";
+import { FrameLink } from "./policy-tab";
+import { entriesOf } from "./recorded-entries";
+import type { Place, RunTabProps } from "./tab-props";
+import { entryKey } from "./transcript-model";
+import { isWhole } from "./whole-transcript";
+
+/** Where "Open the window" lands: the Prompt window panel below. */
+const WINDOW_ANCHOR = "run-context-window";
+
+/**
+ * A numeric cell of the narrow context frames table: right-aligned and mono
+ * like `numericCell`, but free to wrap, so "not recorded" does not push the
+ * last column out of the split's detail column.
+ */
+const wrappingNumber = `${cell} text-right font-mono tabular-nums`;
+
+/** How many cut items the spine shows before it folds the rest. */
+const CUTS_SHOWN = 3;
+
+/**
+ * `.pr-bar { grid-template-columns:minmax(0,22ch) 1fr auto; gap:9px;
+ * font-size:11.5px; color:var(--muted) }`, its `.t` track (7px on the wash)
+ * and its `.v` figure (mono 10.5px): one part of the first request.
+ */
+const promptBar =
+  "grid grid-cols-[minmax(0,22ch)_1fr_auto] items-center gap-[9px] text-[11.5px] text-muted-foreground";
+
+/**
+ * `.ro-dot { position:absolute; left:-30px; top:6px; width:23px; height:23px;
+ * border-radius:50%; border:1px solid var(--border) }`, dashed and dim on a
+ * cut item (`.stg-mf .ro-n.s-withheld .ro-dot`).
+ */
+const spineDot =
+  "absolute -left-[30px] top-1.5 grid size-[23px] place-items-center rounded-full border border-border bg-card";
+
+/**
+ * `.ctxi { display:flex; gap:9px; padding:7px 9px; border-radius:8px;
+ * font-size:12.5px; color:var(--muted) }`, the wash on hover, and its `.sw`
+ * swatch (8px, radius 2px) and `.tk` figure (mono 10.5px, dim).
+ */
+const windowItem =
+  "flex w-full items-center gap-[9px] rounded-lg px-[9px] py-[7px] text-left text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-hl hover:text-foreground";
+
+/** The kind's glyph on the spine: a gate for a policy, a page for a skill, a mark for the rest. */
+function ItemGlyph({ kind }: { kind: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className="size-[13px]"
+    >
+      {kind === "policy" ? (
+        <>
+          <rect x="4" y="11" width="16" height="10" rx="2" />
+          <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+        </>
+      ) : kind === "skill" ? (
+        <>
+          <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+          <path d="M14 3v5h5" />
+        </>
+      ) : kind === "steer" ? (
+        <path d="M4 5h16v10H9l-5 4z" />
+      ) : (
+        <path d="M6 3h12v18l-6-4-6 4z" />
+      )}
+    </svg>
+  );
+}
+
+/** Who wrote the prompt: the run's operator, by name where the record holds one. */
+function operatorOf(run: RunRow): string | null {
+  return run.operatorName ?? run.operatorId;
+}
+
+function PromptPanel({
+  run,
+  prompt,
+  request,
+}: {
+  run: RunRow;
+  prompt: FirstPrompt | null;
+  request: FirstRequest | null;
+}) {
+  const t = useTranslations("run.context.prompt");
+  const locale = useLocale();
+  const operator = operatorOf(run);
+  const parts = [t("words"), t("toolsSteering"), t("systemBrief")];
+  return (
+    <Panel
+      title={t("title")}
+      testId="run-context-prompt"
+      aside={
+        <>
+          <span className="font-mono text-[11px] text-dim">
+            {t("writtenNotRecorded")} ·{" "}
+            {request === null || request.input === null
+              ? t("sentNotRecorded")
+              : t("sent", { count: formatCount(request.input, locale) })}
+          </span>
+          {/* A fragment on this page: WINDOW_ANCHOR, written out because a link's target is never computed (INV-13). */}
+          <a
+            href="#run-context-window"
+            className={`${buttonSecondary} min-h-7 px-2.5 text-xs`}
+          >
+            {t("openWindow")}
+          </a>
+        </>
+      }
+    >
+      <div className="grid gap-[18px] md:grid-cols-2">
+        <div className="min-w-0">
+          <p className={`${eyebrowQuiet} mb-1.5`}>
+            {operator === null
+              ? t("writtenByUnknown")
+              : t("writtenBy", { name: operator })}
+          </p>
+          <p
+            data-testid="run-context-first-prompt"
+            className="m-0 max-w-[52ch] text-[14.5px] leading-[1.55] text-foreground [overflow-wrap:anywhere]"
+          >
+            {prompt === null
+              ? t("noPrompt")
+              : prompt.text === null
+                ? t("textNotRetained")
+                : t("quote", { text: prompt.text })}
+          </p>
+        </div>
+        <div className="min-w-0">
+          <p className={`${eyebrowQuiet} mb-1.5`}>{t("firstRequest")}</p>
+          {request === null ? (
+            <p className="m-0 text-[11.5px] text-muted-foreground">
+              {t("noRequest")}
+            </p>
+          ) : (
+            <>
+              <div className="grid gap-1.5" data-testid="run-context-bars">
+                {parts.map((part) => (
+                  <div key={part} className={promptBar}>
+                    <span className="truncate">{part}</span>
+                    <span className="block h-[7px] min-w-0 overflow-hidden rounded-[4px] bg-hl" />
+                    <span className="font-mono text-[10.5px]">
+                      <NoValue />
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <p className="mb-0 mt-2 text-[11.5px] text-muted-foreground">
+                {request.input !== null && request.cached !== null
+                  ? t("cache", {
+                      total: formatCount(request.input, locale),
+                      cached: formatCount(request.cached, locale),
+                    })
+                  : request.cached !== null
+                    ? t("cachedOnly", {
+                        cached: formatCount(request.cached, locale),
+                      })
+                    : t("noUsage")}{" "}
+                {t("splitNotRecorded")}
+              </p>
+            </>
+          )}
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+/** One item of the manifest, as the spine draws it. */
+function SpineNode({ item }: { item: ManifestItem }) {
+  const t = useTranslations("run.context.manifest");
+  const locale = useLocale();
+  const cut = item.outcome === "cut";
+  const why = !cut
+    ? null
+    : item.superseded_by !== undefined
+      ? t("why.superseded", { id: item.superseded_by })
+      : item.reason === "budget"
+        ? t("why.budget")
+        : item.reason === "tier"
+          ? t("why.tier")
+          : null;
+  return (
+    <li
+      data-testid="run-manifest-item"
+      data-outcome={item.outcome}
+      className="relative min-w-0 py-[7px]"
+    >
+      <span
+        className={`${spineDot} ${cut ? "border-dashed text-dim" : "text-muted-foreground"}`}
+      >
+        <ItemGlyph kind={item.kind} />
+      </span>
+      <div className="min-w-0">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <span
+            className={`${mono} min-w-0 break-all text-[12.5px] ${cut ? "text-muted-foreground" : "font-semibold text-foreground"}`}
+          >
+            {item.id}
+          </span>
+          {cut ? (
+            <Badge tone="quiet" dot={false}>
+              {t("cutState", { reason: item.reason ?? t("noReason") })}
+            </Badge>
+          ) : (
+            <Badge tone="allowed">{t("rendered")}</Badge>
+          )}
+          <Badge tone="quiet" dot={false}>
+            {item.kind}
+          </Badge>
+          <Badge tone="quiet" dot={false}>
+            {item.force}
+          </Badge>
+          <Badge tone="quiet" dot={false} mono>
+            {t("tokens", { count: formatCount(item.tokens, locale) })}
+          </Badge>
+        </div>
+        {why === null ? null : (
+          <p className="mb-0 mt-[3px] text-[11.5px] leading-[1.5] text-muted-foreground">
+            {why}
+          </p>
+        )}
+      </div>
+    </li>
+  );
+}
+
+/**
+ * `.ro.stg-mf`: the manifest frame as a spine, the rendered items first in
+ * the assembler's rank order and the cuts after them, dashed, three shown and
+ * the rest folded.
+ */
+function ManifestSpine({
+  manifest,
+  run,
+}: {
+  manifest: ManifestRead | null;
+  run: RunRow;
+}) {
+  const t = useTranslations("run.context.manifest");
+  const locale = useLocale();
+  const read = manifest?.state === "read" ? manifest.body : null;
+  const tally = read === null ? null : tallyOf(read);
+  const rendered =
+    read?.items.filter((item) => item.outcome === "included") ?? [];
+  const cuts = read?.items.filter((item) => item.outcome === "cut") ?? [];
+  return (
+    <section
+      aria-label={t("label")}
+      data-testid="run-manifest"
+      className="rounded-xl border border-border bg-card px-[18px] pb-[13px] pt-[15px] text-card-foreground"
+    >
+      <div className="mb-3 flex flex-wrap items-center gap-2.5">
+        <h3 className={`${eyebrowQuiet} m-0`}>{t("title")}</h3>
+        {tally === null ? null : (
+          <span
+            data-testid="run-manifest-tally"
+            className="ml-auto font-mono text-[11px] text-dim"
+          >
+            {t("renderedCount", { count: formatCount(tally.rendered, locale) })}{" "}
+            · {t("cutCount", { count: formatCount(tally.cut, locale) })} ·{" "}
+            {t("tokens", { count: formatCount(tally.tokens, locale) })}
+          </span>
+        )}
+        {/*
+          `.ro-link`. Steering has no Preview tab yet, so the button says so
+          on itself rather than opening a page that is not there.
+        */}
+        <span id="run-manifest-preview-why" className="sr-only">
+          {t("previewMissing")}
+        </span>
+        <button
+          type="button"
+          disabled
+          title={t("previewMissing")}
+          aria-describedby="run-manifest-preview-why"
+          className={`${tally === null ? "ml-auto" : ""} cursor-not-allowed text-[11.5px] text-muted-foreground underline decoration-rule underline-offset-2 opacity-70`}
+        >
+          {t("preview")}
+        </button>
+      </div>
+      {manifest !== null && run.enforcementTier === "observe" ? (
+        <p
+          data-testid="run-manifest-observe"
+          className="mb-2.5 rounded-[10px] border border-critical/45 bg-critical/10 px-3.5 py-[11px] text-[12.5px] text-foreground"
+        >
+          <b className="text-critical">{t("observeTitle")}</b> {t("observe")}
+        </p>
+      ) : null}
+      {manifest === null ? (
+        <p className="m-0 text-[12.5px] text-muted-foreground">{t("none")}</p>
+      ) : read === null ? (
+        <p className="m-0 text-[12.5px] text-muted-foreground">
+          {t(`unread.${manifest.state === "read" ? "failed" : manifest.state}`)}
+        </p>
+      ) : (
+        // `.ro-spine { padding-left:30px }` and its rule, 1px at 11px in.
+        <ol className="relative m-0 list-none pl-[30px] before:absolute before:bottom-1.5 before:left-[11px] before:top-1.5 before:w-px before:bg-rule">
+          {rendered.map((item) => (
+            <SpineNode key={`in:${item.id}`} item={item} />
+          ))}
+          {cuts.slice(0, CUTS_SHOWN).map((item) => (
+            <SpineNode key={`cut:${item.id}`} item={item} />
+          ))}
+          {cuts.length > CUTS_SHOWN ? (
+            <li className="relative py-[5px]">
+              <details className="group">
+                <summary className="cursor-pointer list-none text-[11.5px] text-muted-foreground underline decoration-rule underline-offset-2 hover:text-foreground [&::-webkit-details-marker]:hidden">
+                  {t("moreCut", {
+                    count: formatCount(cuts.length - CUTS_SHOWN, locale),
+                  })}
+                </summary>
+                <ol className="m-0 list-none p-0">
+                  {cuts.slice(CUTS_SHOWN).map((item) => (
+                    <SpineNode key={`cut:${item.id}`} item={item} />
+                  ))}
+                </ol>
+              </details>
+            </li>
+          ) : null}
+        </ol>
+      )}
+      {manifest === null ? null : (
+        <p className="mb-0 mt-[11px] border-t border-border pt-2.5 text-[11px] text-dim">
+          {read?.bundle_version === undefined
+            ? t("footNoBundle", { seq: manifest.entry.seq })
+            : t("foot", {
+                seq: manifest.entry.seq,
+                version: String(read.bundle_version),
+              })}
+        </p>
+      )}
+    </section>
+  );
+}
+
+/** The first request's window: its total, and the split the record does not carry. */
+function PromptWindow({
+  request,
+  runId,
+}: {
+  request: FirstRequest | null;
+  runId: string;
+}) {
+  const t = useTranslations("run.context.window");
+  const locale = useLocale();
+  if (request === null)
+    return (
+      <div id={WINDOW_ANCHOR}>
+        <section
+          data-testid="run-context-no-window"
+          aria-label={t("noneTitle")}
+          className="rounded-xl border border-border bg-card px-[18px] py-4 text-card-foreground"
+        >
+          <p className={`${eyebrowQuiet} mb-1.5`}>{t("noneTitle")}</p>
+          <p className="m-0 text-[13px]">{t("none", { run: runId })}</p>
+        </section>
+      </div>
+    );
+  return (
+    <div id={WINDOW_ANCHOR}>
+      <Panel
+        title={t("title")}
+        testId="run-context-window"
+        aside={
+          <>
+            <Badge tone="quiet" dot={false} mono>
+              {t("request", {
+                type: request.entry.type,
+                seq: request.entry.seq,
+              })}
+            </Badge>
+            <Badge tone="quiet" dot={false}>
+              {request.input === null
+                ? t("inputNotRecorded")
+                : t("input", { count: formatCount(request.input, locale) })}
+            </Badge>
+          </>
+        }
+      >
+        {/* `.compbar { height:30px; border-radius:9px; border:1px solid var(--border); background:var(--hl) }`, with no band the record can fill. */}
+        <div className="flex h-[30px] items-center justify-center rounded-[9px] border border-border bg-hl font-mono text-[10.5px] text-dim">
+          {t("blocksNotRecorded")}
+        </div>
+        <div className="mt-[13px]">
+          <Note>{t("note")}</Note>
+        </div>
+      </Panel>
+    </div>
+  );
+}
+
+/** A cell the record does not carry yet, with the gap on hover. */
+function Unrecorded() {
+  const t = useTranslations("run.context.frames");
+  return (
+    <span title={t("unrecorded")} className="font-sans text-[12px]">
+      <NoValue />
+    </span>
+  );
+}
+
+function frameRow(
+  entry: TranscriptEntry,
+  manifest: ManifestRead | null,
+  place: Place,
+  tokens: (count: number) => string,
+): ListRow {
+  const counted =
+    manifest?.state === "read" && manifest.entry === entry
+      ? tallyOf(manifest.body).tokens
+      : null;
+  return {
+    key: entryKey(entry),
+    data: { "data-testid": "run-context-frame" },
+    cells: [
+      <Badge key="kind" tone="quiet" dot={false} mono>
+        {entry.type}
+      </Badge>,
+      <span key="frame" className="flex min-w-0 flex-wrap items-baseline gap-2">
+        <FrameLink
+          seq={entry.seq}
+          chainRef={entry.subagent?.chainRef}
+          place={place}
+        />
+        {/* A label that only repeats the kind says nothing the Kind column does not. */}
+        {entry.label === entry.type ? null : (
+          <span className={`${mono} text-[11.5px] text-foreground`}>
+            {entry.label}
+          </span>
+        )}
+      </span>,
+      counted === null ? <Unrecorded key="tok" /> : tokens(counted),
+      <Unrecorded key="score" />,
+      <Unrecorded key="cited" />,
+    ],
+  };
+}
+
+/** `context.frames`: every frame that recorded what went into the model's context. */
+function ContextFrames({
+  read,
+  manifest,
+  place,
+}: {
+  read: Read<RunTranscript>;
+  manifest: ManifestRead | null;
+  place: Place;
+}) {
+  const t = useTranslations("run.context.frames");
+  const locale = useLocale();
+  const entries = entriesOf(read, "recall");
+  if (entries === null || !read.ok)
+    return (
+      <Panel title={t("title")} testId="run-context-frames">
+        {read.ok ? null : <ReadFailure read={read} section={t("title")} />}
+      </Panel>
+    );
+  return (
+    <Panel
+      title={t("title")}
+      testId="run-context-frames"
+      flush
+      aside={
+        <Badge tone="quiet" dot={false}>
+          {formatCount(entries.length, locale)}
+        </Badge>
+      }
+    >
+      {entries.length === 0 ? (
+        <PanelBody>
+          <p className="text-sm text-muted-foreground">{t("empty")}</p>
+        </PanelBody>
+      ) : (
+        // `table.narrow`: the split's detail column is narrower than a list
+        // table's minimum, so the columns wrap rather than scroll.
+        <div className="[&_table]:min-w-0">
+          <ListTable
+            label={t("title")}
+            columns={[
+              { label: t("kind") },
+              { label: t("frame") },
+              { label: t("tok"), numeric: true, className: wrappingNumber },
+              { label: t("score"), numeric: true, className: wrappingNumber },
+              { label: t("cited") },
+            ]}
+            rows={entries.map((entry) =>
+              frameRow(entry, manifest, place, (count) =>
+                formatCount(count, locale),
+              ),
+            )}
+          />
+        </div>
+      )}
+      <PanelBody rule={entries.length > 0}>
+        <div className="flex flex-col gap-2">
+          <Note>{t("note")}</Note>
+          {isWhole(read.value) ? null : (
+            <p className="text-xs text-muted-foreground">{t("cut")}</p>
+          )}
+        </div>
+      </PanelBody>
+    </Panel>
+  );
+}
+
+/** One stop on the walk: a swatch in the frame kind's hue, the frame, and what it counted. */
+type Stop = {
+  entry: TranscriptEntry;
+  /** A frame-kind hue class (engine.css `.fk-*`). */
+  hue: string;
+  figure: string | null;
+};
+
+/** The frames that fed the window, in the order they were recorded, each opening its frame. */
+function WalkWindow({
+  stops,
+  place,
+}: {
+  stops: readonly Stop[];
+  place: Place;
+}) {
+  const t = useTranslations("run.context.walk");
+  return (
+    <Panel title={t("title")} testId="run-context-walk" flush>
+      {stops.length === 0 ? (
+        <PanelBody>
+          <p className="text-sm text-muted-foreground">{t("empty")}</p>
+        </PanelBody>
+      ) : (
+        // `.stack { padding:7px; max-height:560px; overflow-y:auto }`
+        <ol className="m-0 max-h-[560px] list-none overflow-y-auto p-[7px]">
+          {stops.map((stop) => (
+            <li key={entryKey(stop.entry)}>
+              <SafeLink
+                to={routes.run(place.org, place.ws, place.runId, {
+                  tab: "actions",
+                  body: stop.entry.seq,
+                })}
+                className={windowItem}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`size-2 flex-none rounded-[2px] ${stop.hue}`}
+                />
+                <span className="min-w-0 flex-1 truncate font-mono text-[11.5px]">
+                  {t("stop", { type: stop.entry.type, seq: stop.entry.seq })}
+                </span>
+                <span className="flex-none font-mono text-[10.5px] tabular-nums text-dim">
+                  {stop.figure ?? t("frame", { seq: stop.entry.seq })}
+                </span>
+              </SafeLink>
+            </li>
+          ))}
+        </ol>
+      )}
+    </Panel>
+  );
+}
+
+function RetrievalStats({
+  assembled,
+  place,
+}: {
+  assembled: TranscriptEntry | null;
+  place: Place;
+}) {
+  const t = useTranslations("run.context.retrieval");
+  return (
+    <Panel title={t("title")} testId="run-context-retrieval">
+      <Meter
+        label={t("budget")}
+        value={<NoValue />}
+        share={null}
+        hue="bg-proven"
+      />
+      <div className="mt-[13px]">
+        <Facts>
+          <Fact label={t("scored")}>
+            <NoValue />
+          </Fact>
+          <Fact label={t("admitted")}>
+            <NoValue />
+          </Fact>
+          <Fact label={t("held")}>
+            <NoValue />
+          </Fact>
+          <Fact label={t("floor")}>
+            <NoValue />
+          </Fact>
+          <Fact label={t("headroom")}>
+            <NoValue />
+          </Fact>
+          <Fact label={t("digest")}>
+            <NoValue />
+          </Fact>
+          {assembled === null ? null : (
+            <Fact label={t("assembledAt")}>
+              <FrameLink
+                seq={assembled.seq}
+                chainRef={undefined}
+                place={place}
+              />
+            </Fact>
+          )}
+        </Facts>
+      </div>
+      <div className="mt-3">
+        <Note>{t("note")}</Note>
+      </div>
+    </Panel>
+  );
+}
+
+function ContextBody({
+  run,
+  read,
+  manifest,
+  place,
+}: {
+  run: RunRow;
+  read: Read<RunTranscript>;
+  manifest: ManifestRead | null;
+  place: Place;
+}) {
+  const t = useTranslations("run.context");
+  const locale = useLocale();
+  if (!read.ok)
+    return (
+      <Panel title={t("prompt.title")} testId="run-context-prompt">
+        <ReadFailure read={read} section={t("prompt.title")} />
+      </Panel>
+    );
+  const entries = read.value.entries;
+  const prompt = firstPrompt(entries);
+  const request = firstRequest(entries);
+  const recalls = entriesOf(read, "recall") ?? [];
+  const assembled =
+    recalls.find(
+      (entry) =>
+        entry.type === "context.assembled" && entry.subagent === undefined,
+    ) ?? null;
+  const stopOf = (entry: TranscriptEntry): Stop | null => {
+    if (entry.subagent !== undefined) return null;
+    if (manifest !== null && entry === manifest.entry)
+      return {
+        entry,
+        hue: "bg-kind-rule",
+        figure:
+          manifest.state === "read"
+            ? t("walk.tokens", {
+                count: formatCount(tallyOf(manifest.body).tokens, locale),
+              })
+            : null,
+      };
+    if (entry.kinds.includes("recall"))
+      return { entry, hue: "bg-fk-ctx", figure: null };
+    if (
+      prompt !== null &&
+      entry.seq === prompt.seq &&
+      entry.type === "turn_start"
+    )
+      return { entry, hue: "bg-fk-op", figure: null };
+    if (request !== null && entry === request.entry)
+      return {
+        entry,
+        hue: "bg-fk-model",
+        figure:
+          request.input === null
+            ? null
+            : t("walk.tokens", { count: formatCount(request.input, locale) }),
+      };
+    return null;
+  };
+  const stops = entries.flatMap((entry) => {
+    const stop = stopOf(entry);
+    return stop === null ? [] : [stop];
+  });
+  return (
+    <>
+      <PromptPanel run={run} prompt={prompt} request={request} />
+      <ManifestSpine manifest={manifest} run={run} />
+      <PromptWindow request={request} runId={run.id} />
+      {/* `.split { grid-template-columns:minmax(0,1fr) 340px }`, one column under 1080px. */}
+      <div className="grid items-start gap-3.5 min-[67.5rem]:grid-cols-[minmax(0,1fr)_340px]">
+        <ContextFrames read={read} manifest={manifest} place={place} />
+        <div className="flex min-w-0 flex-col gap-3.5">
+          <WalkWindow stops={stops} place={place} />
+          <RetrievalStats assembled={assembled} place={place} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+/**
+ * The manifest's items. The transcript carries a frame's text up to a
+ * ceiling; a manifest cut there, or carried without its text, is read from
+ * the frame's own bytes (`get_run_frame_body`).
+ */
+async function readManifest(
+  { ctx, source, run }: RunTabProps,
+  entry: TranscriptEntry,
+): Promise<ManifestRead> {
+  const body = bodyOf(entry);
+  if (body?.fidelity === "digest_only") return { state: "unretained", entry };
+  let text = body !== null && !body.truncated ? body.text : null;
+  if (text === null) {
+    const read = await source.runs
+      .frameBody(ctx, run.id, entry.seq)
+      .catch(() => null);
+    if (read === null || !read.ok) return { state: "failed", entry };
+    if (read.value.text === null) return { state: "unretained", entry };
+    text = read.value.text;
+  }
+  const parsed = parseManifest(text);
+  return parsed === null
+    ? { state: "unparsed", entry }
+    : { state: "read", entry, body: parsed };
+}
+
+/**
+ * The Context tab. Its one read of its own is the manifest frame's body, and
+ * only when the transcript did not carry all of it.
+ */
+export async function ContextTab(props: RunTabProps): Promise<ReactNode> {
+  const { everything, run, place } = props;
+  const entry = everything.ok ? manifestEntry(everything.value.entries) : null;
+  const manifest = entry === null ? null : await readManifest(props, entry);
+  return (
+    <ContextBody
+      run={run}
+      read={everything}
+      manifest={manifest}
+      place={place}
+    />
+  );
+}
