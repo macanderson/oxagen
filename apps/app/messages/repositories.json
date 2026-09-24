@@ -56,6 +56,20 @@
         "attach": "Use this installation",
         "attaching": "Attaching…",
         "none": "Choose an installation first."
+      },
+      "gitlab": {
+        "heading": "Or connect a GitLab project",
+        "body": "Keep steering in a gitlab.com project. Create a project access token on the project with the api scope and the Developer role, then paste it here. With the Maintainer role, Oxagen also registers a webhook for merge request events. Oxagen stores the token encrypted and never shows it again.",
+        "reconnectHeading": "Connect the project again",
+        "reconnectBody": "Paste a new project access token for {project}. The binding stays on the same project.",
+        "pathLabel": "Project path",
+        "pathHint": "group/project or group/subgroup/project",
+        "tokenLabel": "Project access token",
+        "selfManaged": "gitlab.com only. Self-managed GitLab is not supported yet.",
+        "submit": "Connect and bind",
+        "submitting": "Connecting…",
+        "webhookRefused": "Connected and bound. The token's role cannot register a webhook, so Oxagen reads merge request state only when you act on a proposal. Use a Maintainer token to add the webhook.",
+        "open": "Open on GitLab"
       }
     },
     "failure": {
@@ -84,7 +98,11 @@
       "workspaceTomlInvalid": "workspace.toml is not valid TOML. Fix the file and open the pull request again.",
       "secretFound": "A file carries a credential or personal data. Nothing was pushed. Take it out and open the pull request again.",
       "authorityDeclared": "A file declares a grant of authority, which the init tree never carries. Nothing was pushed. Take it out and open the pull request again.",
-      "githubRefused": "GitHub refused the write. Nothing reached the production branch. Check that the App can write to this repository, then try again."
+      "githubRefused": "GitHub refused the write. Nothing reached the production branch. Check that the App can write to this repository, then try again.",
+      "gitlabRefused": "GitLab refused the write. Nothing was published. Check that the project access token still has the api scope and the Developer role, then try again.",
+      "gitlabCredentialRejected": "GitLab no longer accepts the project access token stored for this project. Nothing was changed. Connect the project again with a new token.",
+      "gitlabNotConnected": "This workspace has no GitLab project connected. Connect the project with a project access token first.",
+      "repositoryHostUnsupported": "This is a GitLab project. This action works on GitHub repositories only today. Context PRs and steering publication work on GitLab."
     },
     "page": {
       "title": "Repositories",

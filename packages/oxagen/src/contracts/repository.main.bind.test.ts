@@ -10,9 +10,13 @@ describe("bind_main_repository contract", () => {
       Owner: "allow",
       Admin: "allow",
     });
-    expect(Object.keys(repositoryMainBind.input.shape)).toEqual([
-      "owner",
-      "name",
+    // Two arms: a GitHub repository by owner and name, or a GitLab project
+    // by path. Neither names an installation or a token.
+    expect(
+      repositoryMainBind.input.options.map((arm) => Object.keys(arm.shape)),
+    ).toEqual([
+      ["provider", "owner", "name"],
+      ["provider", "projectPath"],
     ]);
     expect(
       repositoryMainBind.input.safeParse({
@@ -37,10 +41,29 @@ describe("bind_main_repository contract", () => {
     }
   });
 
+  it("accepts a gitlab.com project path with nested groups, and nothing else on that arm", () => {
+    expect(
+      repositoryMainBind.input.parse({
+        provider: "gitlab",
+        projectPath: "acme/platform/rules",
+      }),
+    ).toEqual({ provider: "gitlab", projectPath: "acme/platform/rules" });
+    for (const bad of [
+      { provider: "gitlab", projectPath: "rules" },
+      { provider: "gitlab", projectPath: "/acme/rules" },
+      { provider: "gitlab", projectPath: "acme/rules", token: "glpat-x" },
+      { provider: "gitlab", owner: "acme", name: "rules" },
+      { provider: "bitbucket", owner: "acme", name: "rules" },
+    ]) {
+      expect(repositoryMainBind.input.safeParse(bad).success).toBe(false);
+    }
+  });
+
   it("answers the binding, the connection, the default ref and whether the provisional window closed", () => {
     const out = {
       bindingId: "rpb_0123456789abcdef",
       connectionId: "con_0123456789",
+      provider: "github",
       fullName: "acme/widgets",
       defaultRef: "main",
       boundAt: "2026-09-15T12:06:00.000Z",

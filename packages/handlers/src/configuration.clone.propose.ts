@@ -13,10 +13,8 @@ import {
 } from "./agent.propose";
 import { createProposeSkillHandler } from "./skill.propose";
 import { createProposeRecordHandler } from "./context.proposal.create";
-import {
-  createSteeringGitHub,
-  type SteeringGitHub,
-} from "./context.steering.github";
+import { type SteeringGitHub } from "./context.steering.github";
+import { createSteeringHost } from "./context.steering.host";
 import {
   postgresSteeringStore,
   type SteeringStore,
@@ -200,7 +198,7 @@ export const configurationCloneProposeHandler =
   createConfigurationCloneProposeHandler({
     source: readConfigurationSource,
     taken: configurationNameTaken,
-    github: createSteeringGitHub(),
+    github: createSteeringHost(),
     facts: readAgentProposalFacts,
     store: postgresSteeringStore,
   });

@@ -35,6 +35,8 @@
 
 type MainRepository = {
   bindingId: string;
+  /** The host: a GitHub repository or a gitlab.com project (#3762). */
+  provider: "github" | "gitlab";
   owner: string;
   name: string;
   /** `owner/name` as GitHub reports it; what the dialog cites. */

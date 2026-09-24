@@ -179,6 +179,13 @@
                     "url": {
                       "type": "string"
                     },
+                    "provider": {
+                      "type": "string",
+                      "enum": [
+                        "github",
+                        "gitlab"
+                      ]
+                    },
                     "repository": {
                       "type": "string"
                     },
@@ -189,6 +196,7 @@
                   "required": [
                     "number",
                     "url",
+                    "provider",
                     "repository",
                     "branch"
                   ],
