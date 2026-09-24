@@ -5236,7 +5236,6 @@ type Messages = {
         responses: string;
         thinking: string;
         tools: string;
-        policy: string;
         recall: string;
         usage: string;
         seal: string;
