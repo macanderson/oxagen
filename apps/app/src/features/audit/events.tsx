@@ -31,7 +31,6 @@ import { Badge, type BadgeTone } from "@/ui/badge";
 import {
   buttonSecondary,
   inputBase,
-  linkText,
   mono,
   panel,
   panelHeader,
@@ -44,6 +43,7 @@ import {
 } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
 import { SafeForm, SafeLink } from "@/ui/navigation";
+import { type PageListItem, pageList, pagerButton } from "@/ui/page-list";
 import { cell, Table } from "@/ui/table";
 import { CsvDialog } from "./dialogs";
 import { FilterSelect } from "./filter-select";
@@ -441,9 +441,23 @@ function EventsTable({
 }
 
 /**
- * Where this page sits in the filtered record. The total is known only when
- * the window read held every row, and then it is those rows through the same
- * result filter the table applies.
+ * How many events the filters select: the window's rows through the same
+ * result filter the table applies. It is exact only when the window read held
+ * every row, so the pager draws a total and the CSV dialog a bare count only
+ * then.
+ */
+function selected(query: AuditQuery, rows: AuditWindowRows): number {
+  return rows.events.filter(
+    (event) => query.outcome === null || event.outcome === query.outcome,
+  ).length;
+}
+
+/**
+ * Where this page sits in the filtered record, and the design's numbered pager
+ * (`‹ 1 2 … 45 ›`), each page a link at the Rows size that keeps the filters.
+ * The page count is known only when the window read held every row; when it
+ * did not, the pager numbers the pages read so far, then the next page and an
+ * ellipsis while an older page exists, and claims no last page.
  */
 function Pager({
   org,
@@ -459,12 +473,18 @@ function Pager({
   const t = useTranslations("audit.events");
   const start = page.events.length === 0 ? 0 : page.offset + 1;
   const end = page.offset + page.events.length;
-  const total = rows.complete
-    ? rows.events.filter(
-        (event) => query.outcome === null || event.outcome === query.outcome,
-      ).length
-    : null;
-  const newer = page.offset - page.limit;
+  const total = rows.complete ? selected(query, rows) : null;
+  const size = Math.max(1, page.limit);
+  const current = Math.floor(page.offset / size) + 1;
+  const pages =
+    total === null
+      ? current + (page.hasMore ? 1 : 0)
+      : Math.max(current, Math.ceil(total / size));
+  const numbers: (PageListItem | "more")[] = pageList(current, pages);
+  if (total === null && page.hasMore) numbers.push("more");
+  const hasOlder = total === null ? page.hasMore : current < pages;
+  const to = (n: number) =>
+    routes.audit(org, auditQueryParams(query, { offset: (n - 1) * size }));
   return (
     <nav
       aria-label={t("pager")}
@@ -475,28 +495,62 @@ function Pager({
           ? t("shownOpen", { start, end })
           : t("shown", { start, end, total })}
       </span>
-      <span className="flex items-center gap-3">
-        {newer >= 0 ? (
+      <span className="flex flex-wrap items-center gap-1">
+        {current > 1 ? (
           <SafeLink
-            to={routes.audit(org, auditQueryParams(query, { offset: newer }))}
-            data-page="newer"
-            className={`${linkText} max-md:inline-flex max-md:min-h-11 max-md:items-center`}
+            to={to(current - 1)}
+            data-page="previous"
+            aria-label={t("previous")}
+            className={pagerButton}
           >
-            {t("newer")}
+            ‹
           </SafeLink>
-        ) : null}
-        {page.hasMore ? (
+        ) : (
+          <button
+            type="button"
+            disabled
+            aria-label={t("previous")}
+            className={pagerButton}
+          >
+            ‹
+          </button>
+        )}
+        {numbers.map((n) =>
+          typeof n === "string" ? (
+            <span key={n} aria-hidden="true" className="px-1 text-dim">
+              …
+            </span>
+          ) : (
+            <SafeLink
+              key={n}
+              to={to(n)}
+              data-page={n}
+              aria-current={n === current ? "page" : undefined}
+              className={pagerButton}
+            >
+              {n}
+            </SafeLink>
+          ),
+        )}
+        {hasOlder ? (
           <SafeLink
-            to={routes.audit(
-              org,
-              auditQueryParams(query, { offset: page.offset + page.limit }),
-            )}
-            data-page="older"
-            className={`${linkText} max-md:inline-flex max-md:min-h-11 max-md:items-center`}
+            to={to(current + 1)}
+            data-page="next"
+            aria-label={t("next")}
+            className={pagerButton}
           >
-            {t("older")}
+            ›
           </SafeLink>
-        ) : null}
+        ) : (
+          <button
+            type="button"
+            disabled
+            aria-label={t("next")}
+            className={pagerButton}
+          >
+            ›
+          </button>
+        )}
       </span>
     </nav>
   );
@@ -516,6 +570,9 @@ export function EventsPanel({
   actors: readonly AuditActor[];
 }) {
   const t = useTranslations("audit.events");
+  const tiles = useTranslations("audit.tiles");
+  const format = useFormatter();
+  const count = selected(query, rows);
   return (
     <section
       aria-labelledby="audit-events"
@@ -540,6 +597,15 @@ export function EventsPanel({
               org,
               auditQueryParams(query, { offset: 0, format: "csv" }),
             )}
+            count={
+              rows.complete
+                ? format.number(count)
+                : tiles("atLeast", { count: format.number(count) })
+            }
+            n={count}
+            range={
+              query.from !== null || query.to !== null ? "days" : query.range
+            }
           />
         </span>
       </header>

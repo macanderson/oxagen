@@ -67,6 +67,10 @@ function DialogButton({
         testId={testId}
         footer={footer}
         closeLabel={t("cancel")}
+        // The design's header close (`.dlg-h .iconbtn.x`, "Close") on every
+        // Audit dialog and phone sheet. Every footer dismiss reads Cancel, so
+        // no dialog carries two controls with one name.
+        headerClose
       >
         {typeof children === "function"
           ? children(() => setOpen(false))
@@ -196,7 +200,9 @@ export function BundleDialog({ org, gap }: { org: string; gap: Gap }) {
             aria-describedby={fields}
             className="flex flex-col gap-3"
           >
-            <span className="grid grid-cols-2 gap-3">
+            {/* Side by side on a desktop; stacked full width on a phone, as
+                the design's sheet draws them. */}
+            <span className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <label className={field}>
                 <span className={label}>{t("from")}</span>
                 <input type="date" className={control} />
@@ -243,8 +249,26 @@ export function BundleDialog({ org, gap }: { org: string; gap: Gap }) {
   );
 }
 
-/** `exportevents`: the signed CSV over the table's own filters. */
-export function CsvDialog({ href }: { href: SafePath }) {
+/**
+ * `exportevents`: the signed CSV over the table's own filters. The body opens
+ * on how many events the file holds, counted off the same window read the
+ * tiles count, so it is a lower bound (`200+`) when that read did not hold the
+ * whole window.
+ */
+export function CsvDialog({
+  href,
+  count,
+  n,
+  range,
+}: {
+  href: SafePath;
+  /** The event count as the page prints it: `42`, or `200+` for a lower bound. */
+  count: string;
+  /** The count as a number, for the plural. */
+  n: number;
+  /** The window the count covers: a preset range, or `days` for chosen dates. */
+  range: "48h" | "7d" | "30d" | "days";
+}) {
   const t = useTranslations("audit.csv");
   return (
     <DialogButton
@@ -261,7 +285,12 @@ export function CsvDialog({ href }: { href: SafePath }) {
         </DownloadLink>
       }
     >
-      <p className="text-[13px] text-muted-foreground">{t("body")}</p>
+      <p
+        data-testid="audit-csv-body"
+        className="text-[13px] text-muted-foreground"
+      >
+        {t("body", { count, n, range })}
+      </p>
     </DialogButton>
   );
 }
@@ -425,6 +454,7 @@ export function RequestAccessDialog({
           <span className={label}>{t("why")}</span>
           <textarea rows={3} className={control} />
         </label>
+        <Callout>{t("callout")}</Callout>
         <Missing id={note} gap={gap} text={t("notRecorded")} />
       </fieldset>
     </DialogButton>

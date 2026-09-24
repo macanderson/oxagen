@@ -67,8 +67,8 @@
       "shown": "{start}–{end} of {total}",
       "shownOpen": "{start}–{end}",
       "pager": "Pages of the audit record",
-      "newer": "Newer events",
-      "older": "Older events",
+      "previous": "Previous page",
+      "next": "Next page",
       "actorKinds": {
         "human": "Humans",
         "agent": "Agents",
@@ -86,7 +86,7 @@
       "open": "CSV",
       "title": "Export events",
       "subtitle": "CSV of the same rows the API and MCP return",
-      "body": "The file holds the events this table reads over the same actor, range and result, with the event id, actor, capability, result, workspace, IP address, user agent and request id. It is signed with HMAC-SHA256 and the signature travels in the response headers. Nothing in a control-plane event is a prompt or tool body, so this export carries no redaction step.",
+      "body": "{count} {n, plural, one {event} other {events}} in {range, select, 48h {the last 48 hours} 7d {the last 7 days} days {the chosen days} other {the last 30 days}}, with the event id, actor, capability, result, workspace, IP address, user agent and request id. It is signed with HMAC-SHA256 and the signature travels in the response headers. Nothing in a control-plane event is a prompt or tool body, so this export carries no redaction step.",
       "download": "Download CSV"
     },
     "bundle": {
@@ -258,6 +258,7 @@
       "title": "Request access",
       "role": "Role requested",
       "why": "Why",
+      "callout": "Granting a role is a governed action. It will appear in the audit record with the granter’s name, your name, and this reason.",
       "notRecorded": "No write sends an access request yet. Ask an organization owner to grant the role, and the grant lands in the audit record.",
       "submit": "Send the request"
     },
