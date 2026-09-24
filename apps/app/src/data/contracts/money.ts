@@ -91,18 +91,6 @@ export function perMillionTokens(cost: Money, tokens: number): Money | null {
 }
 
 /**
- * `a − b`, exact, or null when the two carry different currencies: a
- * difference across currencies is not an amount anyone saved or spent.
- */
-export function subMoney(a: Money, b: Money): Money | null {
-  if (a.currency !== b.currency) return null;
-  return {
-    micros: (toBigInt(a.micros) - toBigInt(b.micros)).toString(),
-    currency: a.currency,
-  };
-}
-
-/**
  * The sum of `values`, exact at any magnitude, or null when there is nothing
  * to sum or the values carry more than one currency: a total across currencies
  * is not a figure anyone was charged.
