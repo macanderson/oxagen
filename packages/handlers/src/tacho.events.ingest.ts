@@ -91,7 +91,10 @@ import {
   promotedTier,
 } from "./lib/tacho-containment";
 import { machineSnapshotOf } from "./lib/machine-facts";
-import { rollupFiles } from "./lib/file-facts-rollup";
+import {
+  rollupFiles,
+  sessionChangedFilesWhere,
+} from "./lib/file-facts-rollup";
 import { latestHarnessTitle } from "./lib/harness-title";
 import { unlockOnboardingGate } from "./lib/onboarding";
 import {
@@ -313,6 +316,24 @@ export function lastRecordedContext(fresh: readonly TachoEvent[]): {
     facts.gitHeadSha = str(context.git_head_sha) ?? facts.gitHeadSha;
   }
   return facts;
+}
+
+/**
+ * The first harness version any frame in the batch carries, or null.
+ *
+ * A Claude Code session usually opens on a hook, and a hook payload has no
+ * version. The recorder learns it later, from the first OTel record or
+ * transcript line, and stamps the frames after that. Reading the genesis
+ * frame alone left `harness_version` null for the whole run.
+ */
+export function batchHarnessVersion(
+  fresh: readonly TachoEvent[],
+): string | null {
+  for (const event of fresh) {
+    const version = str(event.agent.harness_version);
+    if (version !== null) return version;
+  }
+  return null;
 }
 
 /**
@@ -902,7 +923,7 @@ function genesisRow(
     apiKeySource: anthropic.api_key_source ?? null,
     runtime: first.agent.runtime,
     harness: first.agent.harness,
-    harnessVersion: first.agent.harness_version ?? null,
+    harnessVersion: batchHarnessVersion(events),
     wrapperVersion: first.agent.wrapper_version,
     entrypoint: context.entrypoint ?? null,
     querySourceInitial: context.query_source ?? null,
@@ -1576,6 +1597,7 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
           : {};
       const tail = fresh.at(-1);
       const latest = lastRecordedContext(fresh);
+      const harnessVersion = batchHarnessVersion(fresh);
       const increments = {
         numTurns: sql`${schema.tachoSessions.numTurns} + ${delta.numTurns}`,
         numPrompts: sql`${schema.tachoSessions.numPrompts} + ${delta.numPrompts}`,
@@ -1655,6 +1677,13 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
                 ? {}
                 : {
                     effort: sql`COALESCE(${schema.tachoSessions.effort}, ${latest.effort})`,
+                  }),
+              // The same for the harness version, which the genesis frame of
+              // a hook-opened session never carries.
+              ...(harnessVersion === null
+                ? {}
+                : {
+                    harnessVersion: sql`COALESCE(${schema.tachoSessions.harnessVersion}, ${harnessVersion})`,
                   }),
               ...(latest.permissionMode === null
                 ? {}
@@ -2680,20 +2709,7 @@ async function refreshSessionTitle(
     tx
       .select({ count: sql<number>`count(*)::int` })
       .from(schema.tachoSessionFiles)
-      .where(
-        and(
-          eq(schema.tachoSessionFiles.sessionId, sessionId),
-          // A file changed by a shell command, a formatter or a build has
-          // no attested write, edit or delete, only the `observed_status`
-          // the reconciliation gave it. Counting the attested columns alone
-          // titled a run that plainly changed files as though it had
-          // changed none, and fell back to the command count.
-          observedStatusColumn
-            ? sql`${schema.tachoSessionFiles.writes} + ${schema.tachoSessionFiles.edits} + ${schema.tachoSessionFiles.deletes} > 0
-              OR ${schema.tachoSessionFiles.observedStatus} IN ('added', 'modified', 'deleted', 'renamed')`
-            : sql`${schema.tachoSessionFiles.writes} + ${schema.tachoSessionFiles.edits} + ${schema.tachoSessionFiles.deletes} > 0`,
-        ),
-      ),
+      .where(sessionChangedFilesWhere(sessionId, observedStatusColumn)),
     tx
       .select({ count: sql<number>`count(*)::int` })
       .from(schema.tachoSessionCommands)

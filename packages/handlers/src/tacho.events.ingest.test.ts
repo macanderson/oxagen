@@ -3200,6 +3200,99 @@ describe("ingest_tacho_events: bodies and the seal", () => {
     });
   });
 
+  /**
+   * A Claude Code session usually opens on a hook, and a hook says nothing
+   * about the version. The recorder learns it from the first OTel record or
+   * transcript line and stamps every frame after that one. The column was
+   * written from the genesis frame alone, so it stayed null for the run.
+   */
+  describe("harness version learned after the genesis frame", () => {
+    const VERSION = "2.1.281";
+    const versioned = (kind: UnsealedTachoEvent["kind"]) =>
+      unsealed(
+        kind,
+        { tool_use_id: "t1", tool_status: "ok" },
+        "otel_log",
+        CLAUDE_CODE,
+        {
+          agent: {
+            agent_key: "acme.core.cc-laptop",
+            fleet_id: "wrk_1",
+            ...CLAUDE_CODE,
+            harness_version: VERSION,
+            wrapper_version: "2.1.1",
+            host_enrollment_id: HOST_PUBLIC,
+          },
+        },
+      );
+    const sealAll = (drafts: UnsealedTachoEvent[]): TachoEvent[] => {
+      let cursor: ChainCursor = GENESIS_CURSOR;
+      return drafts.map((draft) => {
+        const sealed = sealEvent(draft, cursor);
+        cursor = sealed.next;
+        return sealed.event;
+      });
+    };
+    const opening = () =>
+      unsealed("agent_start", { session_start_source: "startup" });
+
+    it("opens the session with the version a later frame in the batch carries", async () => {
+      const db = fakeDb();
+      wire(db);
+      await tachoEventsIngestHandler(
+        batch(sealAll([opening(), versioned("tool_call")])),
+        CONTEXT,
+      );
+      expect(db.sessions.get(SESSION)).toMatchObject({
+        harnessVersion: VERSION,
+      });
+    });
+
+    it("fills a session opened without one from the first later batch that has it", async () => {
+      const db = fakeDb();
+      wire(db);
+      const events = sealAll([opening(), versioned("tool_call")]);
+      await tachoEventsIngestHandler(batch(events.slice(0, 1)), CONTEXT);
+      const row = db.sessions.get(SESSION) as Record<string, unknown>;
+      expect(row["harnessVersion"]).toBeNull();
+      Object.assign(row, {
+        seqCount: 1,
+        lastHash: (events[0] as TachoEvent).hash,
+        chainVerified: true,
+      });
+      db.updates.length = 0;
+      await tachoEventsIngestHandler(batch(events.slice(1)), CONTEXT);
+      const update = db.updates.find((u) => u.table === "sessions");
+      // COALESCE, so a version already recorded is never overwritten.
+      const query = new PgDialect().sqlToQuery(
+        update?.values["harnessVersion"] as SQL,
+      );
+      expect(query.sql).toBe(
+        'COALESCE("tacho"."sessions"."harness_version", $1)',
+      );
+      expect(query.params).toEqual([VERSION]);
+    });
+
+    it("leaves the column alone when the batch carries no version", async () => {
+      const db = fakeDb();
+      wire(db);
+      const events = sealAll([
+        opening(),
+        unsealed("tool_call", { tool_use_id: "t1", tool_status: "ok" }),
+      ]);
+      await tachoEventsIngestHandler(batch(events.slice(0, 1)), CONTEXT);
+      Object.assign(db.sessions.get(SESSION) as Record<string, unknown>, {
+        seqCount: 1,
+        lastHash: (events[0] as TachoEvent).hash,
+        chainVerified: true,
+      });
+      db.updates.length = 0;
+      await tachoEventsIngestHandler(batch(events.slice(1)), CONTEXT);
+      const update = db.updates.find((u) => u.table === "sessions");
+      expect(update?.values).not.toHaveProperty("harnessVersion");
+    });
+  });
+
   it("refuses a body whose class the workspace did not authorise", async () => {
     // `content_exact` says exact bytes MAY be kept. The classes say which.
     // A workspace that authorised the model exchange and nothing else must
