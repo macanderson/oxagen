@@ -237,7 +237,7 @@ const HARNESS_NAMES = [
 type HarnessName = (typeof HARNESS_NAMES)[number];
 
 function isHarnessName(value: string): value is HarnessName {
-  return (HARNESS_NAMES as readonly string[]).includes(value);
+  return HARNESS_NAMES.some((name) => name === value);
 }
 
 /**
