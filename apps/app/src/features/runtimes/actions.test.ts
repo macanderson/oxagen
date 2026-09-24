@@ -4,8 +4,8 @@
 // for. A refusal comes back unchanged, so the dialog can name it.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const kernelWrite = vi.fn();
-const requireViewer = vi.fn();
+const kernelWrite = vi.fn<(...args: unknown[]) => unknown>();
+const requireViewer = vi.fn<(...args: unknown[]) => unknown>();
 vi.mock("@/server/kernel", () => ({
   kernelWrite: (...args: unknown[]) => kernelWrite(...args),
 }));

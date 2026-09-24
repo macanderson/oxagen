@@ -54,11 +54,13 @@ vi.mock("./actions", async (importOriginal) => ({
 }));
 vi.mock("@/server/session", () => ({
   getSession: vi.fn(),
-  getAuthUser: vi.fn(async () => ({
-    id: "usr_marcusbell",
-    name: "Marcus Bell",
-    email: "marcus@acme.example",
-  })),
+  getAuthUser: vi.fn(() =>
+    Promise.resolve({
+      id: "usr_marcusbell",
+      name: "Marcus Bell",
+      email: "marcus@acme.example",
+    }),
+  ),
 }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 

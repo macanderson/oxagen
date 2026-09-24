@@ -4,6 +4,7 @@
 // shifting.
 import { describe, expect, it } from "vitest";
 import {
+  compareMicros,
   Cost,
   isCurrencyCode,
   Money,
@@ -76,6 +77,29 @@ describe("ratioOfMicros", () => {
     expect(() => ratioOfMicros(usd("1.5"), usd("3000000"))).toThrow(
       "micros must be an integer string",
     );
+  });
+});
+
+describe("compareMicros", () => {
+  const usd = (micros: string) => ({ micros, currency: "USD" });
+
+  it("orders amounts by their micros", () => {
+    expect(compareMicros(usd("5"), usd("12"))).toBe(-1);
+    expect(compareMicros(usd("12"), usd("5"))).toBe(1);
+    expect(compareMicros(usd("7"), usd("7"))).toBe(0);
+  });
+
+  it("stays exact past the range a float holds", () => {
+    // 2^53 + 1 and 2^53 are the same float; as BigInt they differ.
+    expect(
+      compareMicros(usd("9007199254740993"), usd("9007199254740992")),
+    ).toBe(1);
+  });
+
+  it("orders different currencies by code, not by amount", () => {
+    expect(
+      compareMicros({ micros: "1", currency: "EUR" }, usd("999")),
+    ).toBeLessThan(0);
   });
 });
 
