@@ -16,7 +16,6 @@ import {
   moneyFromMicros,
   mulMicros,
   perMillionTokens,
-  priceTokens,
   ratioOfIntegers,
   ratioOfMicros,
   roundToCentsHalfEven,
@@ -109,30 +108,6 @@ describe("compareMicros", () => {
   });
 });
 
-describe("priceTokens", () => {
-  const rate = { micros: "3000000", currency: "USD" };
-
-  it("prices a count at a rate per million: 607,784 tokens at $3.00 is $1.823352", () => {
-    expect(priceTokens(rate, 607_784)).toEqual({
-      micros: "1823352",
-      currency: "USD",
-    });
-  });
-
-  it("truncates toward zero below a micro, and prices nothing at zero", () => {
-    expect(priceTokens(rate, 1).micros).toBe("3");
-    expect(priceTokens({ micros: "300000", currency: "USD" }, 1).micros).toBe(
-      "0",
-    );
-    expect(priceTokens(rate, 0).micros).toBe("0");
-  });
-
-  it("refuses a count that is not a whole, non-negative number (negative)", () => {
-    expect(() => priceTokens(rate, 1.5)).toThrow("safe integer");
-    expect(() => priceTokens(rate, -1)).toThrow("safe integer");
-  });
-});
-
 describe("perMillionTokens", () => {
   it("answers the rate a cost for a count works out to: $1.823352 for 607,784 tokens is $3.00 a million", () => {
     expect(
@@ -140,10 +115,13 @@ describe("perMillionTokens", () => {
     ).toEqual({ micros: "3000000", currency: "USD" });
   });
 
-  it("inverts priceTokens at a magnitude a float cannot hold", () => {
-    const rate = { micros: "1500000", currency: "USD" };
-    const cost = priceTokens(rate, 9_007_199_254_740_000);
-    expect(perMillionTokens(cost, 9_007_199_254_740_000)).toEqual(rate);
+  it("answers the exact rate at a magnitude a float cannot hold", () => {
+    // 9,007,199,254,740,000 tokens at $1.50 a million.
+    const cost = { micros: "13510798882110000", currency: "USD" };
+    expect(perMillionTokens(cost, 9_007_199_254_740_000)).toEqual({
+      micros: "1500000",
+      currency: "USD",
+    });
   });
 
   it("answers null for no tokens and refuses a count that is not whole (negative)", () => {

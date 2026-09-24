@@ -1,12 +1,14 @@
 // The one derivation: every figure from the record the page holds, and null
 // for a figure it does not carry. The tests hold the reconciliations the page
 // promises (the Tokens figure to the classes, the in and out split to the
-// classes) and the refusals (no rollup, no transcript, no price book).
+// classes, the class costs to the rollup's recorded cost) and the refusals (no
+// rollup, no transcript, no recorded split or saving). It reads no price book:
+// every cost is the one the rollup recorded (#4069).
 import { describe, expect, it } from "vitest";
 import { readError, readOk } from "@/data/read";
-import type { TranscriptEntry } from "@/data/contracts/run";
-import type { PriceBook } from "@/data/contracts/spend";
-import { runMetrics, TOKEN_CLASSES, type TokenClass } from "./metrics";
+import { sumMoney } from "@/data/contracts/money";
+import type { RunCostRollup, TranscriptEntry } from "@/data/contracts/run";
+import { runMetrics, TOKEN_CLASSES } from "./metrics";
 import {
   mockupTranscript,
   runCost,
@@ -14,39 +16,18 @@ import {
   transcriptEntry,
 } from "./run.builders";
 
-/** A book with one list-price row per class `rates` names, for the one model. */
-const book = (rates: Partial<Record<TokenClass, string>>): PriceBook => ({
-  at: "2026-09-15T00:00:00.000Z",
-  entries: TOKEN_CLASSES.flatMap((tokenClass) => {
-    const micros = rates[tokenClass];
-    return micros === undefined
-      ? []
-      : [
-          {
-            provider: "anthropic",
-            model: "claude-opus-5",
-            modelAliases: [],
-            region: null,
-            tokenClass,
-            unit: "token" as const,
-            ratePerMillion: { micros, currency: "USD" },
-            effectiveFrom: "2026-01-01T00:00:00.000Z",
-            effectiveTo: null,
-            source: "list" as const,
-            negotiated: false,
-          },
-        ];
-  }),
-});
+/** The builder's rollup, which carries one model's recorded split and saving. */
+function builderRollup(): RunCostRollup {
+  const rollup = runCost().rollup;
+  if (rollup === null) throw new Error("the builder's rollup is present");
+  return rollup;
+}
 
-const RATES = {
-  input_uncached: "15000000",
-  cache_read: "1500000",
-  cache_write_5m: "18750000",
-  cache_write_1h: "30000000",
-  output: "75000000",
-  reasoning: "75000000",
-};
+const usd = (micros: string) => ({
+  micros,
+  currency: "USD",
+  basis: "gateway_observed" as const,
+});
 
 describe("runMetrics", () => {
   it("splits the tokens into in and out that sum to the total of the classes", () => {
@@ -54,7 +35,6 @@ describe("runMetrics", () => {
       run: runRow(),
       cost: readOk(runCost()),
       transcript: readOk(mockupTranscript()),
-      book: null,
     });
     // The builder's rollup: 18,204 + 91,022 + 4,102 + 0 in, 12,004 + 3,011 out.
     expect(m.tokens?.input).toBe(113_328);
@@ -65,39 +45,91 @@ describe("runMetrics", () => {
       0,
     );
     expect(sum).toBe(m.tokens?.total);
-    expect(m.priced).toBeNull();
   });
 
-  it("prices each class from the book and says what the cache saved against uncached input", () => {
+  it("takes each class's cost and the cache's saving from what the rollup recorded, and they sum to its cost", () => {
     const m = runMetrics({
       run: runRow(),
       cost: readOk(runCost()),
       transcript: readOk(mockupTranscript()),
-      book: book(RATES),
     });
-    // 91,022 cache reads at $15.00 less $1.50 per million: $1.228797.
+    // The builder's model recorded a $1.228797 saving and $0.136533 of cache reads.
     expect(m.priced?.cacheSaved).toEqual({
       micros: "1228797",
       currency: "USD",
     });
-    expect(m.priced?.byClass.cache_read).toEqual({
+    expect(m.priced?.byClass.cache_read).toMatchObject({
       micros: "136533",
       currency: "USD",
     });
     // A class the run spent nothing in costs nothing.
     expect(m.priced?.byClass.cache_write_1h?.micros).toBe("0");
+    expect(m.priced?.hasUnpriced).toBe(false);
+    // The six recorded classes add up to the rollup's cost, to the micro.
+    const classes = TOKEN_CLASSES.map((tokenClass) => {
+      const part = m.priced?.byClass[tokenClass];
+      if (part == null) throw new Error(`${tokenClass} has a recorded cost`);
+      return part;
+    });
+    expect(sumMoney(classes)?.micros).toBe(builderRollup().cost?.micros);
   });
 
-  it("leaves a class unpriced when the book has no row for it, never a partial sum", () => {
-    const { output: _drop, ...rest } = RATES;
+  it("sums the models' recorded splits, and leaves a class without a cost when a model spent in it with no split recorded, never a partial sum", () => {
+    const rollup = builderRollup();
+    const opus = rollup.byModel[0];
+    if (opus === undefined) throw new Error("the builder has one model");
+    const tokens = {
+      inputUncached: 0,
+      cacheRead: 0,
+      cacheWrite5m: 0,
+      cacheWrite1h: 0,
+      output: 500,
+      reasoning: 0,
+    };
+    const priced = {
+      ...opus,
+      model: "claude-haiku-4-5",
+      calls: 1,
+      cost: usd("2500"),
+      tokens,
+      costByClass: {
+        inputUncached: usd("0"),
+        cacheRead: usd("0"),
+        cacheWrite5m: usd("0"),
+        cacheWrite1h: usd("0"),
+        output: usd("2500"),
+        reasoning: usd("0"),
+      },
+      cacheSaving: usd("0"),
+      hasUnpriced: false,
+    };
+    const two = runMetrics({
+      run: runRow(),
+      cost: readOk(runCost({ rollup: { ...rollup, byModel: [opus, priced] } })),
+      transcript: readOk(mockupTranscript()),
+    });
+    // $2.034842 recorded for the first model's output, $0.0025 for the second's.
+    expect(two.priced?.byClass.output?.micros).toBe("2037342");
+    const unpriced = {
+      ...priced,
+      cost: null,
+      costByClass: null,
+      cacheSaving: null,
+      hasUnpriced: true,
+    };
     const m = runMetrics({
       run: runRow(),
-      cost: readOk(runCost()),
+      cost: readOk(
+        runCost({ rollup: { ...rollup, byModel: [opus, unpriced] } }),
+      ),
       transcript: readOk(mockupTranscript()),
-      book: book(rest),
     });
     expect(m.priced?.byClass.output).toBeNull();
-    expect(m.priced?.byClass.reasoning).not.toBeNull();
+    // The second model spent nothing in the other classes, so they stand.
+    expect(m.priced?.byClass.reasoning?.micros).toBe("560000");
+    // It read nothing from the cache either, so the first model's saving stands.
+    expect(m.priced?.cacheSaved?.micros).toBe("1228797");
+    expect(m.priced?.hasUnpriced).toBe(true);
   });
 
   it("counts the operator's prompts and calls every one after the first corrective", () => {
@@ -105,7 +137,6 @@ describe("runMetrics", () => {
       run: runRow(),
       cost: readOk(runCost()),
       transcript: readOk(mockupTranscript()),
-      book: null,
     });
     expect(m.prompts).toEqual({ count: 2, corrective: 1 });
   });
@@ -130,7 +161,6 @@ describe("runMetrics", () => {
       run: runRow(),
       cost: readOk(runCost()),
       transcript: readOk(mockupTranscript({ entries })),
-      book: null,
     });
     expect(m.prompts).toEqual({ count: 1, corrective: 0 });
   });
@@ -140,7 +170,6 @@ describe("runMetrics", () => {
       run: runRow(),
       cost: readOk(runCost()),
       transcript: readOk(mockupTranscript()),
-      book: null,
     });
     expect(m.turns?.map((turn) => turn.turn)).toEqual([1, 2]);
     expect(m.turns?.[0]?.cost).toEqual({ micros: "380000", currency: "USD" });
@@ -158,7 +187,6 @@ describe("runMetrics", () => {
       run: runRow(),
       cost: readOk(runCost()),
       transcript: readOk(mockupTranscript()),
-      book: null,
     });
     expect(sealed.wall.ms).toBe(3_300_000);
     expect(sealed.wall.sealed).toBe(true);
@@ -166,7 +194,6 @@ describe("runMetrics", () => {
       run: runRow({ status: "live", sealedAt: null }),
       cost: readOk(runCost()),
       transcript: readOk(mockupTranscript()),
-      book: null,
     });
     expect(live.wall.ms).toBe(24_000);
     expect(live.wall.sealed).toBe(false);
@@ -217,7 +244,6 @@ describe("runMetrics", () => {
       }),
       cost: readOk(runCost()),
       transcript: readOk(mockupTranscript({ entries })),
-      book: null,
     });
     expect(m.wall.parts?.waiting).toBe(600_000);
     expect(m.wall.parts?.tool).toBe(3_000);
@@ -230,7 +256,6 @@ describe("runMetrics", () => {
       run: runRow({ cost: null, sealedAt: null, status: "live" }),
       cost: readError("down", 502),
       transcript: readError("down", 502),
-      book: null,
     });
     expect(m.tokens).toBeNull();
     expect(m.cost).toBeNull();
@@ -249,7 +274,6 @@ describe("runMetrics", () => {
       transcript: readOk(
         mockupTranscript({ cursor: "next", entries: [transcriptEntry()] }),
       ),
-      book: null,
     });
     expect(m.whole).toBe(false);
   });
@@ -323,76 +347,48 @@ function usage(
 }
 
 describe("runMetrics over a partial record", () => {
-  it("says nothing about the cache's saving when the book cannot price a cache read against uncached input (negative)", () => {
-    const { cache_read: _read, ...noCacheRate } = RATES;
-    const noRead = runMetrics({
-      run: runRow(),
-      cost: readOk(runCost()),
-      transcript: readOk(mockupTranscript()),
-      book: book(noCacheRate),
-    });
-    expect(noRead.priced?.cacheSaved).toBeNull();
-    expect(noRead.priced?.byClass.cache_read).toBeNull();
-    const { input_uncached: _fresh, ...noFreshRate } = RATES;
-    const noFresh = runMetrics({
-      run: runRow(),
-      cost: readOk(runCost()),
-      transcript: readOk(mockupTranscript()),
-      book: book(noFreshRate),
-    });
-    expect(noFresh.priced?.cacheSaved).toBeNull();
-    // The rate it can price is still priced.
-    expect(noFresh.priced?.byClass.cache_read).toEqual({
-      micros: "136533",
-      currency: "USD",
-    });
-  });
-
-  it("prices from a book row that names the model by alias, and passes over regional and non-token rows", () => {
-    const row = (
-      overrides: Partial<PriceBook["entries"][number]>,
-    ): PriceBook["entries"][number] => ({
-      provider: "anthropic",
-      model: "claude-opus-5-20260101",
-      modelAliases: ["claude-opus-5"],
-      region: null,
-      tokenClass: "output",
-      unit: "token",
-      ratePerMillion: { micros: "75000000", currency: "USD" },
-      effectiveFrom: "2026-01-01T00:00:00.000Z",
-      effectiveTo: null,
-      source: "list",
-      negotiated: false,
-      ...overrides,
-    });
+  it("says the cache's saving is not recorded on a row rolled up before savings were, never a zero (negative)", () => {
+    const rollup = builderRollup();
     const m = runMetrics({
       run: runRow(),
-      cost: readOk(runCost()),
+      cost: readOk(
+        runCost({
+          rollup: {
+            ...rollup,
+            byModel: rollup.byModel.map((row) => ({
+              ...row,
+              cacheSaving: null,
+            })),
+          },
+        }),
+      ),
       transcript: readOk(mockupTranscript()),
-      book: {
-        at: "2026-09-15T00:00:00.000Z",
-        entries: [
-          // A regional rate and a rate per request are not the run's rate.
-          row({
-            region: "eu-west-1",
-            ratePerMillion: { micros: "1", currency: "USD" },
-          }),
-          row({
-            unit: "request",
-            ratePerMillion: { micros: "2", currency: "USD" },
-          }),
-          row({}),
-        ],
-      },
     });
-    // 12,004 output tokens at $75.00 a million, from the aliased row.
-    expect(m.priced?.byClass.output).toEqual({
-      micros: "900300",
-      currency: "USD",
-    });
-    // The book prices no other class, so none of them is priced.
-    expect(m.priced?.byClass.input_uncached).toBeNull();
     expect(m.priced?.cacheSaved).toBeNull();
+    // The class split was recorded, so it stands.
+    expect(m.priced?.byClass.cache_read?.micros).toBe("136533");
+  });
+
+  it("marks the figures incomplete when the rollup could not price some call (negative)", () => {
+    const rollup = builderRollup();
+    const m = runMetrics({
+      run: runRow(),
+      cost: readOk(
+        runCost({
+          rollup: {
+            ...rollup,
+            byModel: rollup.byModel.map((row) => ({
+              ...row,
+              hasUnpriced: true,
+            })),
+          },
+        }),
+      ),
+      transcript: readOk(mockupTranscript()),
+    });
+    expect(m.priced?.hasUnpriced).toBe(true);
+    // What was recorded is still shown, marked, rather than dropped.
+    expect(m.priced?.byClass.output?.micros).toBe("2034842");
   });
 
   it("takes a wait off only the call it fell inside", () => {
@@ -439,7 +435,6 @@ describe("runMetrics over a partial record", () => {
       }),
       cost: readOk(runCost()),
       transcript: readOk(mockupTranscript({ entries })),
-      book: null,
     });
     // The first call ran 2s and was never parked; the second ran 62s, 60 of them waiting on a person.
     expect(m.toolCalls?.map((call) => call.ms)).toEqual([2000, 2000]);
@@ -447,8 +442,7 @@ describe("runMetrics over a partial record", () => {
   });
 
   it("claims no saving for a run that read nothing from the cache, rather than a saving of zero", () => {
-    const rollup = runCost().rollup;
-    if (rollup === null) throw new Error("the builder's rollup is present");
+    const rollup = builderRollup();
     const tokens = { ...rollup.tokens, cacheRead: 0 };
     const m = runMetrics({
       run: runRow(),
@@ -457,50 +451,106 @@ describe("runMetrics over a partial record", () => {
           rollup: {
             ...rollup,
             tokens,
-            byModel: rollup.byModel.map((row) => ({ ...row, tokens })),
+            byModel: rollup.byModel.map((row) => ({
+              ...row,
+              tokens,
+              costByClass:
+                row.costByClass === null
+                  ? null
+                  : { ...row.costByClass, cacheRead: usd("0") },
+              // A rollup records a zero saving for a model that read nothing.
+              cacheSaving: usd("0"),
+            })),
           },
         }),
       ),
       transcript: readOk(mockupTranscript()),
-      book: book(RATES),
     });
     expect(m.priced?.byClass.cache_read).toEqual({
       micros: "0",
       currency: "USD",
     });
+    // A model that read nothing saved nothing, so no saving is claimed.
     expect(m.priced?.cacheSaved).toBeNull();
   });
 
-  it("prices nothing when the rollup names no model the book could price against (negative)", () => {
-    const rollup = runCost().rollup;
-    if (rollup === null) throw new Error("the builder's rollup is present");
+  it("shows no class cost when the rollup names no model to take one from (negative)", () => {
+    const rollup = builderRollup();
     const m = runMetrics({
       run: runRow(),
       cost: readOk(runCost({ rollup: { ...rollup, byModel: [] } })),
       transcript: readOk(mockupTranscript()),
-      book: book(RATES),
     });
     expect(m.priced).toBeNull();
-    // The token figures do not depend on the book.
+    // The token figures do not depend on the per-model rows.
     expect(m.tokens?.total).toBe(128_343);
   });
 
-  it("prices a class nobody spent in as nothing only when the rollup carries a currency to say it in (negative)", () => {
-    const rollup = runCost().rollup;
-    if (rollup === null) throw new Error("the builder's rollup is present");
+  it("costs a class nobody spent in as nothing only when the rollup carries a currency to say it in (negative)", () => {
+    const rollup = builderRollup();
     const m = runMetrics({
       run: runRow(),
-      cost: readOk(runCost({ rollup: { ...rollup, cost: null } })),
+      cost: readOk(
+        runCost({
+          rollup: {
+            ...rollup,
+            cost: null,
+            // The rollup priced none of the model's calls.
+            byModel: rollup.byModel.map((row) => ({
+              ...row,
+              cost: null,
+              costByClass: null,
+              cacheSaving: null,
+              hasUnpriced: true,
+            })),
+          },
+        }),
+      ),
       transcript: readOk(mockupTranscript()),
-      book: book(RATES),
     });
-    // No run spent a 1h cache write, and no currency is recorded to price zero in.
+    // No run spent a 1h cache write, and no currency is recorded to say zero in.
     expect(m.priced?.byClass.cache_write_1h).toBeNull();
-    // A class the run did spend in is priced from the book regardless.
-    expect(m.priced?.byClass.output).toEqual({
-      micros: "900300",
-      currency: "USD",
+    // A class the run did spend in has no recorded cost to show.
+    expect(m.priced?.byClass.output).toBeNull();
+  });
+
+  it("keeps an estimated frame's cost, which the rollup files under output, for a model that counted no output tokens", () => {
+    const rollup = builderRollup();
+    const opus = rollup.byModel[0];
+    if (opus === undefined) throw new Error("the builder has one model");
+    const estimated = {
+      ...opus,
+      model: "gpt-5",
+      calls: 1,
+      cost: { ...usd("7000"), basis: "estimated" as const },
+      tokens: {
+        inputUncached: 0,
+        cacheRead: 0,
+        cacheWrite5m: 0,
+        cacheWrite1h: 0,
+        output: 0,
+        reasoning: 0,
+      },
+      costByClass: {
+        inputUncached: usd("0"),
+        cacheRead: usd("0"),
+        cacheWrite5m: usd("0"),
+        cacheWrite1h: usd("0"),
+        output: usd("7000"),
+        reasoning: usd("0"),
+      },
+      cacheSaving: usd("0"),
+      hasUnpriced: false,
+    };
+    const m = runMetrics({
+      run: runRow(),
+      cost: readOk(
+        runCost({ rollup: { ...rollup, byModel: [opus, estimated] } }),
+      ),
+      transcript: readOk(mockupTranscript()),
     });
+    // $2.034842 for the first model's output and the second's $0.007 estimate.
+    expect(m.priced?.byClass.output?.micros).toBe("2041842");
   });
 
   it("takes the run row's cost when the rollup carries none, and prices the waste against it with its basis", () => {
@@ -512,7 +562,6 @@ describe("runMetrics over a partial record", () => {
       }),
       cost: readOk(runCost({ rollup: { ...rollup, cost: null } })),
       transcript: readOk(mockupTranscript()),
-      book: null,
     });
     expect(m.cost).toEqual({
       micros: "1000000",
@@ -532,7 +581,6 @@ describe("runMetrics over a partial record", () => {
       run: runRow(),
       cost: readOk(runCost()),
       transcript: readOk(mockupTranscript()),
-      book: null,
     });
     // $4.131265 times 0.29 is $1.19806685, which truncates to $1.198066.
     expect(m.wasted).toEqual({
@@ -557,7 +605,6 @@ describe("runMetrics over a partial record", () => {
         run: runRow(),
         cost: readOk(runCost({ rollup: { ...rollup, productiveRatio } })),
         transcript: readOk(mockupTranscript()),
-        book: null,
       });
       expect(m.wasted).toBeNull();
       expect(m.cost?.micros).toBe("4131265");
@@ -569,7 +616,6 @@ describe("runMetrics over a partial record", () => {
       run: runRow(),
       cost: readError("down", 502),
       transcript: readOk(mockupTranscript()),
-      book: null,
     });
     // The request and response of turn 1 are one call; turn 2's llm_call is the other.
     expect(m.modelCalls).toBe(2);
@@ -586,7 +632,6 @@ describe("runMetrics over a partial record", () => {
       run: runRow(),
       cost: readOk(runCost()),
       transcript: readOk(mockupTranscript()),
-      book: null,
     });
     // 113,328 input tokens over 54 calls is 2,098.67, rounded to 2,099.
     expect(counted.perModelCall).toBe(2099);
@@ -596,7 +641,6 @@ describe("runMetrics over a partial record", () => {
       run: runRow(),
       cost: readOk(runCost({ rollup: { ...rollup, modelCalls: 0 } })),
       transcript: readOk(mockupTranscript()),
-      book: null,
     });
     expect(none.perModelCall).toBeNull();
     expect(none.modelCalls).toBe(0);
@@ -618,7 +662,6 @@ describe("runMetrics over a partial record", () => {
       run: runRow(),
       cost: readOk(runCost()),
       transcript: readOk(mockupTranscript({ entries })),
-      book: null,
     });
     expect(m.turns?.map((turn) => turn.cacheHit)).toEqual([
       // 400 read of 500 counted input.
@@ -652,7 +695,6 @@ describe("runMetrics over a partial record", () => {
       run: runRow(),
       cost: readOk(runCost()),
       transcript: readOk(mockupTranscript({ entries })),
-      book: null,
     });
     expect(m.toolCalls?.map((call) => [call.name, call.ms])).toEqual([
       ["Bash", null],
@@ -686,7 +728,6 @@ describe("runMetrics over a partial record", () => {
       run: runRow(),
       cost: readOk(runCost()),
       transcript: readOk(mockupTranscript({ entries })),
-      book: null,
     });
     expect(m.toolCalls?.map((call) => call.failed)).toEqual([true, false]);
     expect(m.families).toEqual([
@@ -705,7 +746,6 @@ describe("runMetrics over a partial record", () => {
       run: runRow(),
       cost: readOk(runCost()),
       transcript: readOk(mockupTranscript({ entries })),
-      book: null,
     });
     expect(m.toolCalls?.map((call) => call.batch)).toEqual([0, 1]);
     expect(m.batches).toMatchObject({
@@ -723,7 +763,6 @@ describe("runMetrics over a partial record", () => {
       run: runRow(),
       cost: readOk(runCost()),
       transcript: readOk(mockupTranscript({ entries })),
-      book: null,
     });
     expect(m.toolCalls).toEqual([]);
     expect(m.families).toEqual([]);
@@ -745,7 +784,6 @@ describe("runMetrics over a partial record", () => {
       run: runRow(),
       cost: readOk(runCost()),
       transcript: readOk(mockupTranscript({ entries })),
-      book: null,
     });
     expect(m.errors).toBe(2);
   });
@@ -768,7 +806,6 @@ describe("runMetrics over a partial record", () => {
       run: runRow({ status: "live", sealedAt: null }),
       cost: readOk(runCost()),
       transcript: readOk(mockupTranscript({ entries })),
-      book: null,
     });
     // The live clock stops at the last frame, the request, so no wait has been recorded.
     expect(m.wall.ms).toBe(4000);
@@ -781,7 +818,6 @@ describe("runMetrics over a partial record", () => {
       run: runRow({ sealSource: "idle_timeout" }),
       cost: readOk(runCost()),
       transcript: readOk(mockupTranscript()),
-      book: null,
     });
     expect(m.wall).toEqual({
       ms: null,
@@ -803,7 +839,6 @@ describe("runMetrics over a partial record", () => {
         run: runRow(run),
         cost: readOk(runCost({ rollup: { ...rollup, isEstimate } })),
         transcript: readOk(mockupTranscript()),
-        book: null,
       }).costIsEstimate;
     expect(estimateOf({ sealedAt: null }, false)).toBe(true);
     expect(estimateOf({}, true)).toBe(true);
@@ -815,7 +850,6 @@ describe("runMetrics over a partial record", () => {
         run: runRow({ costIsEstimate }),
         cost: readOk(runCost({ rollup: null })),
         transcript: readOk(mockupTranscript()),
-        book: null,
       }).costIsEstimate;
     expect(rowOnly(true)).toBe(true);
     expect(rowOnly(false)).toBe(false);
@@ -826,7 +860,6 @@ describe("runMetrics over a partial record", () => {
       run: runRow(),
       cost: readOk(runCost()),
       transcript: readError("down", 502),
-      book: null,
     });
     expect(m.wall).toEqual({
       ms: 3_300_000,
@@ -849,7 +882,6 @@ describe("runMetrics over a partial record", () => {
       }),
       cost: readOk(runCost()),
       transcript: readOk(mockupTranscript()),
-      book: null,
     });
     expect(instant.wall).toEqual({
       ms: 0,
@@ -865,7 +897,6 @@ describe("runMetrics over a partial record", () => {
       }),
       cost: readOk(runCost()),
       transcript: readOk(mockupTranscript()),
-      book: null,
     });
     expect(backwards.wall.ms).toBe(0);
   });
@@ -875,7 +906,6 @@ describe("runMetrics over a partial record", () => {
       run: runRow({ status: "live", sealedAt: null }),
       cost: readOk(runCost()),
       transcript: readOk(mockupTranscript({ entries: [] })),
-      book: null,
     });
     expect(m.wall).toEqual({
       ms: null,
@@ -898,7 +928,6 @@ describe("runMetrics over a partial record", () => {
       }),
       cost: readOk(runCost()),
       transcript: readOk(mockupTranscript({ entries })),
-      book: null,
     });
     expect(m.wall.parts).toEqual({
       model: 0,

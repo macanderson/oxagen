@@ -13,8 +13,8 @@
 // agent's median run) is drawn where the mockup draws it and reads "not
 // recorded".
 //
-// The tab makes no read of its own: the page read the rollup, the whole-run
-// transcript and the price book for the header and the stat row, and the
+// The tab makes no read of its own: the page read the rollup and the whole-run
+// transcript for the header and the stat row, and the
 // metrics hold what this tab draws from them. `run.tsx` calls `CostTab` as a
 // function, so it calls no hook itself; the sections it returns do.
 import { useTranslations } from "next-intl";

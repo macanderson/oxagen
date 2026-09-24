@@ -1,8 +1,7 @@
 // What every Run tab receives (pages/run.md, Tabs). The page makes the reads
 // the header, the stat row, the side column and the tab counts share, derives
 // the figures once (`runMetrics`), and hands the whole bundle to the open tab.
-// A tab that needs a read of its own (the chain, a frame body, the price book
-// per model) makes it itself from `source` and `ctx`, so opening one tab
+// A tab that needs a read of its own (the chain, a frame body) makes it itself from `source` and `ctx`, so opening one tab
 // never costs the reads of another.
 import type { AgentDetail } from "@/data/contracts/agents";
 import type {
@@ -14,7 +13,6 @@ import type {
 } from "@/data/contracts/run";
 import type { RunWork } from "@/data/contracts/run-work";
 import type { RunRow } from "@/data/contracts/runs";
-import type { PriceBook } from "@/data/contracts/spend";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import type { WsCtx } from "@/server/viewer";
@@ -56,7 +54,6 @@ export type RunTabProps = {
   work: Promise<Read<RunWork>>;
   /** `get_agent` for the run's agent; null when the run names none. */
   agent: Read<AgentDetail> | null;
-  book: PriceBook | null;
   /**
    * Pins the instant a tab counts a clock from. Only a test passes it; the
    * page leaves it out.

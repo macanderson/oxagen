@@ -144,13 +144,12 @@ async function renderTab(setup: Setup = {}) {
       frames: setup.page ?? null,
       body: setup.body ?? null,
     },
-    metrics: runMetrics({ run, cost, transcript: everything, book: null }),
+    metrics: runMetrics({ run, cost, transcript: everything }),
     everything,
     cost,
     outputs: ok(runOutputs()),
     work: source.runs.work(ctx, run.id),
     agent: null,
-    book: null,
     now: NOW,
   });
   const { container } = render(<IntlProvider>{element}</IntlProvider>);

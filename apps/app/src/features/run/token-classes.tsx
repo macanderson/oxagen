@@ -1,18 +1,18 @@
 // Spend by token class beside Prompt composition, the last row of the Cost
 // tab (pages/run.md, Cost; the mockup's `costTab`).
 //
-// Spend by token class lists the six classes of spec §12.6 with the count the
-// rollup recorded and the cost the price book puts on it, per model, as
-// `runMetrics` priced it. Its total row is the stat row's Tokens figure and
-// the Tokens instrument's, and its cost is the sum of the rows: the note sets
-// it against the run's recorded cost rather than printing that as the total,
-// because a book price and a gateway's observation are two figures.
+// Spend by token class lists the six classes of spec §12.6 with the count and
+// the cost the rollup recorded, summed over the models by `runMetrics`. The
+// rollup priced each call at its own instant (ADR-060), so nothing here is
+// priced by the page. Its total row is the stat row's Tokens figure and the
+// Tokens instrument's, and its cost is the sum of the rows; the note sets it
+// against the run's recorded cost, which the run row can carry on its own.
 //
 // Prompt composition would split the mean model request into conversation,
 // context frames, tool definitions, steering and system. That split is not
 // recorded (G3), so its meters draw empty tracks and say so. The facts under
 // them are recorded or derived: the effective input price is the input
-// classes' book cost over the input tokens.
+// classes' recorded cost over the input tokens.
 import { useLocale, useTranslations } from "next-intl";
 import type { RunCost } from "@/data/contracts/run";
 import type { Read } from "@/data/read";
@@ -166,10 +166,12 @@ function TokenClasses({
           <PanelBody rule>
             <Note testId="token-class-note">
               {priced === null
-                ? t("classes.noBook")
+                ? t("classes.noModels")
                 : prices.total === null
                   ? t("classes.unpriced")
-                  : t("classes.priced")}{" "}
+                  : priced.hasUnpriced
+                    ? t("classes.incomplete")
+                    : t("classes.priced")}{" "}
               {recorded === null
                 ? null
                 : t.rich("classes.recorded", {
