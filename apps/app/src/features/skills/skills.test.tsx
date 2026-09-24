@@ -364,6 +364,10 @@ describe("Skills › refusals", () => {
     read.mockResolvedValue(readError("session_store_unavailable", 503));
     await renderSkills("c1");
     expect(state()).toBe("error");
+    // The design's error state: the state wrap in the failed tone.
+    expect(
+      screen.getByTestId("skills-error").querySelector("[data-state-icon]"),
+    ).toHaveAttribute("data-state-icon", "failed");
     expect(
       screen.getByRole("heading", { name: "Skills could not be loaded" }),
     ).toBeInTheDocument();

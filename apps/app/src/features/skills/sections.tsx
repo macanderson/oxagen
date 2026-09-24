@@ -2,16 +2,24 @@
 // names the window's sessions reported, the window with nothing reported, the
 // skeleton while the read runs, and a refused, pending or failed read. Each
 // replaces the page body under the header and never the shell. A row prints
-// what the record carries — the name, the sessions that reported it, their
-// harnesses and when it was last seen — and nothing the record does not.
+// what the record carries (the name, the sessions that reported it, their
+// harnesses and when it was last seen) and nothing the record does not. The
+// empty and failed states are the shared StateWrap, the design's .state-wrap.
 import { GraduationCap } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { SkillInventory } from "@/data/contracts/skills";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
-import { linkText, mono, panel } from "@/ui/control-styles";
+import {
+  buttonPrimary,
+  buttonSecondary,
+  linkText,
+  mono,
+  panel,
+} from "@/ui/control-styles";
 import { CloneButton } from "@/ui/clone-button";
 import { SafeLink } from "@/ui/navigation";
+import { StateWrap, stateCode, stateTrace } from "@/ui/state-wrap";
 import { useFormatter } from "@/ui/formatter";
 
 /** Where the section renders: the workspace and the page of the inventory it read. */
@@ -23,8 +31,6 @@ type SkillsAt = {
 };
 
 type Failed = Extract<Read<never>, { ok: false }>;
-
-const box = `${panel} flex flex-col gap-2 p-6`;
 
 function WindowLines({ inventory }: { inventory: SkillInventory }) {
   const t = useTranslations("skills.inventory");
@@ -73,21 +79,17 @@ export function SkillsInventory({
   const format = useFormatter();
   if (inventory.skills.length === 0)
     return (
-      <section
+      <StateWrap
         data-state="empty"
-        aria-labelledby="skills-empty"
-        className={box}
+        tone="neutral"
+        titleId="skills-empty"
+        title={t("empty.title")}
+        after={<WindowLines inventory={inventory} />}
       >
-        <h2 id="skills-empty" className="text-base font-semibold">
-          {t("empty.title")}
-        </h2>
-        <WindowLines inventory={inventory} />
-        <p className="text-sm text-muted-foreground">
-          {t.rich("empty.hint", {
-            code: (chunks) => <code className={mono}>{chunks}</code>,
-          })}
-        </p>
-      </section>
+        {t.rich("empty.hint", {
+          code: (chunks) => <code className={stateCode}>{chunks}</code>,
+        })}
+      </StateWrap>
     );
   return (
     <section
@@ -182,44 +184,65 @@ export function SkillsFailure({ read, at }: { read: Failed; at: SkillsAt }) {
   switch (read.reason) {
     case "denied":
       return (
-        <section data-state="denied" className={box}>
-          <h2 className="text-base font-semibold">{t("denied.title")}</h2>
-          <p className="text-sm text-muted-foreground">
-            {t("denied.body", { permission: read.permission })}
-          </p>
-          <SafeLink to={routes.fleet(at.org, at.ws)} className={linkText}>
-            {t("back")}
-          </SafeLink>
-        </section>
+        <StateWrap
+          data-state="denied"
+          tone="denied"
+          testId="skills-denied"
+          title={t("denied.title")}
+          actions={
+            <SafeLink
+              to={routes.fleet(at.org, at.ws)}
+              className={buttonSecondary}
+            >
+              {t("back")}
+            </SafeLink>
+          }
+        >
+          {t("denied.body", { permission: read.permission })}
+        </StateWrap>
       );
     case "pending_approval":
       return (
-        <section data-state="pending_approval" className={box}>
-          <h2 className="text-base font-semibold">{t("pending.title")}</h2>
-          <p className={`text-sm text-muted-foreground ${mono}`}>
-            {t("pending.body", { request: read.accessRequestId })}
-          </p>
-        </section>
+        <StateWrap
+          data-state="pending_approval"
+          tone="neutral"
+          glyph="lock"
+          testId="skills-pending"
+          title={t("pending.title")}
+        >
+          {t("pending.body", { request: read.accessRequestId })}
+        </StateWrap>
       );
     case "error":
       return (
-        <section data-state="error" className={box}>
-          <h2 className="text-base font-semibold">{t("error.title")}</h2>
-          <p className="text-sm text-muted-foreground">{t("error.body")}</p>
-          <p className={`text-xs text-muted-foreground ${mono}`}>
-            {t("error.code", { code: read.code, status: String(read.status) })}
-          </p>
-          <SafeLink
-            to={routes.steering(at.org, at.ws, {
-              tab: "skills",
-              cursor: at.cursor ?? undefined,
-              view: at.view === "catalog" ? undefined : at.view,
-            })}
-            className={linkText}
-          >
-            {t("retry")}
-          </SafeLink>
-        </section>
+        <StateWrap
+          data-state="error"
+          tone="failed"
+          testId="skills-error"
+          title={t("error.title")}
+          actions={
+            <SafeLink
+              to={routes.steering(at.org, at.ws, {
+                tab: "skills",
+                cursor: at.cursor ?? undefined,
+                view: at.view === "catalog" ? undefined : at.view,
+              })}
+              className={buttonPrimary}
+            >
+              {t("retry")}
+            </SafeLink>
+          }
+          after={
+            <p className={stateTrace}>
+              {t("error.code", {
+                code: read.code,
+                status: String(read.status),
+              })}
+            </p>
+          }
+        >
+          {t("error.body")}
+        </StateWrap>
       );
   }
 }
