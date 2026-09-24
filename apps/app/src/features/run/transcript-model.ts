@@ -136,7 +136,7 @@ const CONTROL: ReadonlySet<string> = new Set([
  * are what they always were — more evidence for the same step — and the
  * reader sees one line per thing the agent did. Nothing is dropped: every
  * folded frame is still in the step's `frames`, still drawn when the step is
- * opened, and still on the Frames tab.
+ * opened, and still on the Governed actions tab.
  */
 const EFFECT: ReadonlySet<string> = new Set(["command", "file_io", "network"]);
 
@@ -679,7 +679,7 @@ export function stepModel(step: TranscriptStep): ToolDetail | null {
  * The steps of a turn worth a row. A step with nothing to read on any frame
  * and no decision is bookkeeping (a hook registering, a queue tick) or a
  * digest-only duplicate of a call another source sealed with its body; the
- * Frames tab still has every one of them.
+ * Governed actions tab still has every one of them.
  */
 export function visibleSteps(turn: TranscriptTurn): TranscriptStep[] {
   return turn.steps.filter((step) =>

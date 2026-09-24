@@ -38,7 +38,8 @@
         "sealed": "sealed",
         "halted": "halted"
       },
-      "parked": "a call is parked"
+      "parked": "a call is parked",
+      "player": "Player"
     },
     "transcript": {
       "title": "Transcript",
@@ -90,7 +91,7 @@
         "full": "body retained",
         "digest_only": "digest only"
       },
-      "envelope": "Frame {seq} on the Frames tab",
+      "envelope": "Frame {seq} on the Governed actions tab",
       "recording": "Recording. Every frame is hash-chained to its predecessor as it arrives, and this view follows the run's head and reads what it records.",
       "chipsLabel": "Filter the transcript",
       "chip": {
@@ -119,7 +120,7 @@
       "decision": "Decision: {decision}, at frame {seq}",
       "decisionOn": "Decision: {decision} on {subject}, at frame {seq}",
       "calledWith": "Called with",
-      "noHalves": "Neither half of this exchange was recorded. Its envelope is on the Frames tab.",
+      "noHalves": "Neither half of this exchange was recorded. Its envelope is on the Governed actions tab.",
       "showAll": "Show all",
       "loadedSkill": "Loaded skill",
       "pane": {
@@ -157,7 +158,12 @@
       "noMatch": "No entry on this page matches that search.",
       "first": "First frame",
       "last": "Last frame",
-      "index": "{n} / {total}"
+      "index": "{n} / {total}",
+      "thinking": "thinking",
+      "expandThinking": "expand thinking",
+      "collapseThinking": "collapse thinking",
+      "chipsNone": "none",
+      "noneShown": "Every kind is off, so no entry is shown. Press a chip, or all, to show entries."
     },
     "frames": {
       "title": "Frames",
@@ -218,22 +224,30 @@
         "wallClock": "Wall clock",
         "soFar": "so far",
         "startToSeal": "start to seal",
-        "splitNotRecorded": "model, tool, waiting and harness time not recorded",
+        "splitNotRecorded": "model, tool, waiting and harness time not recorded (#3891)",
         "tokens": "Tokens",
         "inAndOut": "in and out",
-        "inOut": "{in} in, {out} out",
+        "inOut": "{in} in · {out} out",
         "tokenSplit": "cache read {cacheRead} · fresh input {fresh} · output {output}",
         "perCall": "{tokens} per model call",
         "noModelCall": "no model call recorded",
         "shape": "Shape of the run",
         "shapeValue": "{turns} turns · {steps} steps · {frames} frames",
         "stepsPerTurn": "{value} steps per turn",
-        "batchesNotRecorded": "tools per batch not recorded",
+        "batchesNotRecorded": "tools per batch not recorded (#3891)",
         "toolCalls": "Tool calls",
         "families": "{count, plural, one {# family} other {# families}}",
-        "failedNotRecorded": "failed calls not recorded",
+        "failedNotRecorded": "failed calls not recorded (#3891)",
         "productive": "Productive ratio",
-        "productiveNote": "the share of steps the rollup counted as advancing the run"
+        "productiveNote": "the share of steps the rollup counted as advancing the run",
+        "perTurnChart": "Cost of each of {count} priced turns",
+        "medianNotRecorded": "delta against the agent’s median run not recorded (#3984)",
+        "savedNotRecorded": "cache saving not recorded (#3892)",
+        "batchedNotRecorded": "batches together against one at a time not recorded (#3891)",
+        "priceNotRecorded": "effective input price not recorded (#3892)",
+        "parallelNotRecorded": "batches in parallel not recorded (#3891)",
+        "advancedNotRecorded": "steps advanced against did not not recorded (#3984)",
+        "trendNotRecorded": "delta against the last 30 days not recorded (#3984)"
       },
       "tools": {
         "title": "Tool calls",
@@ -309,7 +323,7 @@
         "body": "When the command is applied, Oxagen revokes the run token so no further governed call succeeds. Killing the process itself is best effort, and either way it is recorded.",
         "confirm": "Cancel the run",
         "pending": "Cancelling",
-        "queued": "The cancel is queued. Nothing has changed yet: the token is revoked and the process kill attempted when the command is applied, so until then the run can still make governed calls."
+        "queued": "Cancel issued. The run token is revoked when the command is applied. Process kill is best effort and recorded."
       },
       "failure": {
         "orgRoleRequired": "This needs an organization Owner or Admin role.",
@@ -355,7 +369,7 @@
       "ledgerCancel": {
         "body": "Cancel revokes this run’s evidence credentials and refuses further appends. It does not stop the external process or prove that its work has stopped.",
         "confirm": "Cancel evidence ingress",
-        "applied": "Further appends are refused and the run’s evidence credentials are revoked. The external process may still be running."
+        "applied": "Cancel issued. Run token revoked; process kill is best effort and recorded."
       },
       "ledgerRevoked": "Evidence ingress is revoked. This run cannot append more frames or receive a fresh run credential. Its external process may still be running.",
       "ledgerPaused": "Evidence ingress is paused. New batches are refused until you resume. The external process may still be running.",
@@ -369,7 +383,9 @@
         "confirm": "Resume evidence ingress",
         "applied": "Evidence ingress is open. This does not claim that the external process has resumed."
       },
-      "ledgerReasonHelp": "The reason is recorded with the command. Oxagen does not send it to the external process."
+      "ledgerReasonHelp": "The reason is recorded with the command. Oxagen does not send it to the external process.",
+      "pauseFrame": "Open the pause frame",
+      "pauseFrameGap": "No read names the frame this pause landed on yet (#3972)."
     },
     "record": {
       "reread": "Re-read the run",
@@ -497,6 +513,12 @@
         "view": "read every retained body",
         "fork": "replay to a frame and run on from it",
         "retry": "replay the whole run against its recording"
+      },
+      "actions": {
+        "fork": "Fork replay from frame {seq}",
+        "forkNoSeq": "Fork replay",
+        "bisect": "Bisect against another run",
+        "export": "Export the bundle"
       }
     },
     "waterfall": {
@@ -638,7 +660,12 @@
       "branchNotCaptured": "branch not captured",
       "pathWhy": "The checkout path is not on the run record, so it is not shown.",
       "pausedTitle": "Paused.",
-      "pathRecorded": "Recorded by the collector on this host, frames {from} to {to}."
+      "pathRecorded": "Recorded by the collector on this host, frames {from} to {to}.",
+      "pausedFacts": "The turn, step, actor, time and reason of this pause are not recorded on the run yet (#3972).",
+      "runs30d": "{count} runs 30d",
+      "copiedText": "Copied {text}",
+      "statusPaused": "paused",
+      "statusParked": "parked"
     },
     "summary": {
       "title": "Summary",
@@ -662,7 +689,6 @@
       "noPrompt": "no prompt recorded",
       "oneShot": "one-shot session",
       "corrective": "{count} corrective",
-      "correctivePrompts": "{count, plural, one {# corrective prompt} other {# corrective prompts}}",
       "nothingWasted": "nothing bought nothing",
       "unproductive": "unproductive steps",
       "soFar": "so far",
@@ -695,9 +721,9 @@
       "note": "A session can touch more than one issue: the task it was started for, and any it read, referenced or closed on the way. The relation says which and the edge says how Oxagen knows. The run record keeps one task reference, and the tracker's status is not read yet.",
       "linked": {
         "title": "Linked work",
-        "observed": "observed: written by Oxagen from a frame it recorded",
-        "stated": "stated: carried by the task",
-        "inferred": "inferred: matched on the branch or proposed from the frames, not recorded. {inferred} of {total}",
+        "observed": "written by Oxagen from a frame it recorded",
+        "stated": "carried by the task",
+        "inferred": "matched on the branch the run worked on, not recorded. {inferred} of {total}",
         "cut": "The outputs read stopped at its cap, so this list is a prefix.",
         "repositories": "Repositories",
         "repositoryNotCaptured": "The run record does not name the repository it worked in.",
@@ -709,7 +735,8 @@
           "pr": "pull request",
           "commit": "commit"
         }
-      }
+      },
+      "titleNotRead": "title not read from the tracker (#3970)"
     },
     "policy": {
       "title": "Policy decisions",
@@ -731,7 +758,7 @@
         "none": "The first request's window is not on the record, so the tokens written and sent are not shown. It needs the USED_CONTEXT edges Oxagen does not write yet (G10)."
       },
       "manifest": {
-        "title": "Steering manifest",
+        "title": "Manifest frame",
         "none": "This run sealed no steering.manifest frame. A wrapped session seals one at its start when its bundle carries a manifest.",
         "unreadable": "Frame {seq} does not carry a manifest this page can read.",
         "tally": "{rendered} rendered · {cut} cut · {tokens} tok",
@@ -751,7 +778,9 @@
           "unrecorded": "no reason recorded"
         },
         "supersededBy": "replaced by {by}",
-        "footer": "bundle v{version} · frame {seq} · budget {budget} tok"
+        "footer": "bundle v{version} · frame {seq} · budget {budget} tok",
+        "preview": "Open in Preview",
+        "previewGap": "Steering has no Preview that runs the assembler for one agent and one prompt yet (#3879)."
       },
       "window": {
         "title": "Prompt window",
@@ -768,6 +797,10 @@
       "stats": {
         "title": "Retrieval stats",
         "none": "Candidates scored, admitted, held back and below the floor are not recorded (G10)."
+      },
+      "walk": {
+        "title": "Walk the window",
+        "none": "Walking the window block by block needs the model request’s window on the record, which needs the USED_CONTEXT edges Oxagen does not write yet (G10, #3894)."
       }
     },
     "work": {
@@ -789,9 +822,9 @@
       "inFiles": "in {count, plural, one {# file} other {# files}}",
       "basisNotRecorded": "basis not recorded",
       "areasNotRecorded": "The rollup does not split this run's cost by area yet. The initial prompt, follow-ups, context retrievals, tool definitions, tool calls, system prompt and model output need token columns cost.run_totals does not carry (G3).",
-      "dearestTools": "Dearest tools",
+      "dearestTools": "Most called tools",
       "noTools": "This run called no tool.",
-      "toolCostNotRecorded": "cost not recorded",
+      "toolCostNotRecorded": "cost not recorded (#3892)",
       "allTools": "All {count} tools on Cost",
       "splitNote": "Tools are ranked by calls. The rollup counts each tool's calls and not its money, so no tool carries a cost here.",
       "state": {
@@ -898,14 +931,71 @@
       "timeoutTitle": "If nobody answers",
       "timeoutNotRecorded": "No timeout is recorded on this interjection.",
       "pending": "pending",
-      "waitsOn": "waits on the answer",
       "notHappened": "{count, select, 1 {The greyed frame has} 2 {The two greyed frames have} other {The three greyed frames have}} not happened. A run that is waiting is a run that has written down that it is waiting.",
       "skillLoaded": "Skill loaded",
       "workspaceCreated": "Workspace created",
       "operatorNotRecorded": "the operator",
       "cut": "This read stopped before the end of the recording, so later frames are not listed.",
       "linkTo": "to {ws}",
-      "promptNotRecorded": "The operator's first message is not on the record."
+      "promptNotRecorded": "The operator's first message is not on the record.",
+      "remoteNotCaptured": "remote not captured",
+      "createAs": "a workspace whose name is not proposed yet",
+      "cardNotRecorded": "What this path inherits is not worked out yet (#3941).",
+      "midRunNotRecorded": "What a new workspace ships with is not recorded, so this page cannot say what the second path changes in the middle of this run (#3941).",
+      "notYet": {
+        "skillsResolved": "waits on the answer",
+        "contextAssembled": "waits on the answer",
+        "modelRequest": "the first model call of the run has not happened"
+      }
+    },
+    "player": {
+      "timeline": "Timeline",
+      "shown": "{shown} frames shown · {total} in the run",
+      "legend": "Frame kinds",
+      "family": {
+        "label": "Kind",
+        "model": "model calls",
+        "tool": "tool calls",
+        "governance": "governance",
+        "context": "context",
+        "operator": "operator",
+        "lifecycle": "lifecycle"
+      },
+      "turn": "Turn {turn}",
+      "turnAfterSteer": "Turn {turn} · after steer",
+      "tickLabel": "Frame {seq}, {type}",
+      "tickTitle": "{seq} · {type} · {summary}",
+      "end": "+{elapsed} · {at} · {status}",
+      "status": {
+        "live": "live",
+        "sealed": "sealed",
+        "halted": "halted"
+      },
+      "hint": "Every tick is a frame; the taller ones need a person. Click one to open it in the Player; hover for the record.",
+      "turnsInView": "{count, plural, one {# turn} other {# turns}} in view",
+      "first": "First frame",
+      "previous": "Previous frame",
+      "next": "Next frame",
+      "last": "Last frame",
+      "replay": "▶ replay",
+      "pause": "❙❙ pause",
+      "scrub": "Frame position",
+      "position": "{at} / {of} · seq {seq} · {time}",
+      "unpriced": "No frame up to here carries a price.",
+      "of": "of",
+      "byHere": "by here",
+      "speed": "Replay speed",
+      "keys": "← → step · space play · home · end",
+      "frameTitle": "Frame {seq} · {type}",
+      "stage": "Stage",
+      "digest": "Digest",
+      "body": "Body",
+      "cost": "Cost",
+      "unpricedFrame": "not priced",
+      "previousFrame": "◀ Previous",
+      "nextFrame": "Next ▶",
+      "frameOf": "frame {at} of {shown} shown · {total} in the run",
+      "empty": "This run has no frames on this page."
     }
   }
 }

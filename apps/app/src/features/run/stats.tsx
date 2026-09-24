@@ -5,9 +5,15 @@
 // Each figure is read from the record or left saying why it is missing. The
 // mockup computes waste from a heuristic over its fixture; here it is the
 // rollup's cost times the share the rollup did not count as productive, shown
-// only when the rollup holds both. A prompt after the first is corrective, and
-// the Prompts box and the Wasted caption read that one count. A prompt count
-// read from a transcript that stopped short is a floor, and says so.
+// only when the rollup holds both, and captioned "unproductive steps" because
+// that is what it measures. It is not a corrective-prompt figure, so its
+// caption never names the Prompts box's count. A prompt after the first is
+// corrective, and a prompt count read from a transcript that stopped short is
+// a floor, and says so.
+//
+// The Summary panel holds what the spec gives it and nothing more. Summarize
+// is offered only where there is no summary yet, as the way in; the workspace
+// switch for generated names and summaries sits on the Issues tab.
 import { useLocale, useTranslations } from "next-intl";
 import {
   compareIntegers,
@@ -18,7 +24,7 @@ import type { RunCost, RunTranscript, TokenCounts } from "@/data/contracts/run";
 import type { AgentDetail } from "@/data/contracts/agents";
 import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
-import type { OrgRole, WsRole } from "@/server/viewer";
+import type { OrgRole } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
 import { AgentCard } from "@/ui/agent-card";
 import {
@@ -36,7 +42,6 @@ import { Money } from "@/ui/money";
 import { formatCount, formatDuration, formatRatio } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { OperatorName } from "@/ui/operator";
-import { EnrichmentSwitch } from "./enrichment-switch";
 import { useHarness } from "./header";
 import { NoValue } from "./parts";
 import { SummarizeAction } from "./record-actions";
@@ -102,7 +107,6 @@ export function SummaryPanel({
   org,
   ws,
   orgRole,
-  wsRole,
 }: {
   run: RunRow;
   /** `get_agent` for the run's agent: the harness label the agent card carries. */
@@ -110,7 +114,6 @@ export function SummaryPanel({
   org: string;
   ws: string;
   orgRole: OrgRole;
-  wsRole: WsRole;
 }) {
   const t = useTranslations("run");
   const harness = useHarness(run, agent)?.name ?? null;
@@ -176,25 +179,14 @@ export function SummaryPanel({
             orgRole={orgRole}
           />
         ) : (
-          <span className="flex flex-col items-start gap-2">
-            <span className={`${mono} text-[11px] text-muted-foreground`}>
-              {t("summary.generatedBy", {
-                model: summary.model,
-                when: format.dateTime(new Date(summary.generatedAt), {
-                  dateStyle: "medium",
-                  timeStyle: "short",
-                }),
-              })}
-            </span>
-            <SummarizeAction
-              org={org}
-              ws={ws}
-              runId={run.id}
-              sealed={run.status !== "live"}
-              hasSummary
-              summarizable={run.canSummarize}
-              orgRole={orgRole}
-            />
+          <span className={`${mono} text-[11px] text-muted-foreground`}>
+            {t("summary.generatedBy", {
+              model: summary.model,
+              when: format.dateTime(new Date(summary.generatedAt), {
+                dateStyle: "medium",
+                timeStyle: "short",
+              }),
+            })}
           </span>
         )}
         <SafeLink
@@ -204,15 +196,6 @@ export function SummaryPanel({
           {t("summary.check")}
         </SafeLink>
       </div>
-      <EnrichmentSwitch
-        org={org}
-        ws={ws}
-        enabled={run.enrichmentEnabled !== false}
-        canEdit={
-          ["owner", "admin"].includes(orgRole) ||
-          ["owner", "admin"].includes(wsRole)
-        }
-      />
     </section>
   );
 }
@@ -279,7 +262,6 @@ export function StatRow({
   // The page's whole-run read is one page of entries. Past that page, or past
   // the read's frame cap, the prompt count is a floor.
   const cut = transcript.ok && !isWhole(transcript.value);
-  const corrective = prompts === null ? null : Math.max(0, prompts - 1);
   const runCost = rollup?.cost ?? run.cost;
   // A finalized rollup wins. Otherwise the agent-reported cost is provisional.
   const displayedCost = runCost ?? run.reportedCost ?? null;
@@ -354,11 +336,9 @@ export function StatRow({
         note={
           waste === null
             ? missingRollup
-            : corrective !== null && corrective > 0 && !cut
-              ? t("correctivePrompts", { count: corrective })
-              : wasteSign === 0
-                ? t("nothingWasted")
-                : t("unproductive")
+            : wasteSign === 0
+              ? t("nothingWasted")
+              : t("unproductive")
         }
       >
         {waste === null ? <NoValue /> : <Money value={waste} />}

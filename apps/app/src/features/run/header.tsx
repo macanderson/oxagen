@@ -8,8 +8,9 @@
 // rather than left blank or guessed. The model-fit badges the mockup draws
 // beside the rig need a fit reading nothing records (G14), so they are not
 // drawn; the Cost tab's Model fit panel names that gap.
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Suspense } from "react";
+import type { Cost } from "@/data/contracts/money";
 import type { AgentDetail } from "@/data/contracts/agents";
 import type { RunOutputNode } from "@/data/contracts/run";
 import type { RunWork } from "@/data/contracts/run-work";
@@ -17,10 +18,13 @@ import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import type { OrgRole, WsRole } from "@/server/viewer";
 import { AgentCard } from "@/ui/agent-card";
+import { Badge } from "@/ui/badge";
 import { eyebrow, mono } from "@/ui/control-styles";
 import { EnforcementTierBadge } from "@/ui/enforcement-tier";
 import { useFormatter } from "@/ui/formatter";
 import { HarnessIcon } from "@/ui/harness-icon";
+import { Money } from "@/ui/money";
+import { formatCount } from "@/ui/money-format";
 import { ReplayGradeBadge } from "@/ui/replay-grade";
 import { StatusBadge } from "@/ui/status-badge";
 import { CopyText } from "./copy-text";
@@ -37,7 +41,7 @@ import {
 } from "./work-ci";
 import { ExportAction } from "./record-actions";
 import { ReplayActions } from "./replay-actions";
-import { RunControls } from "./run-controls";
+import { PauseBannerActions, RunControls } from "./run-controls";
 
 const chip = `${mono} inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border border-border px-2 py-0.5 text-[11.5px]`;
 const missing = "text-[11.5px] text-muted-foreground";
@@ -343,9 +347,43 @@ function When({ run }: { run: RunRow }) {
   );
 }
 
+/** The agent's last 30 days as `list_agents` counts them: the card's sub line. */
+export type AgentFigures = { runs30d: number; spend30d: Cost | null };
+
+/** "<harness> · N runs 30d · $X": the compact agent card's sub line. */
+function AgentSub({
+  harness,
+  figures,
+}: {
+  harness: string | null;
+  figures: AgentFigures | null;
+}) {
+  const t = useTranslations("run.header");
+  const locale = useLocale();
+  return (
+    <span data-testid="run-agent-sub">
+      {harness ?? t("harnessNotRecorded")}
+      {figures === null ? null : (
+        <>
+          {" · "}
+          {t("runs30d", { count: formatCount(figures.runs30d, locale) })}
+          {figures.spend30d === null ? null : (
+            <>
+              {" · "}
+              <Money value={figures.spend30d} />
+            </>
+          )}
+        </>
+      )}
+    </span>
+  );
+}
+
 export function RunHeader({
   run,
   agent,
+  figures = null,
+  parked = false,
   pulls,
   work,
   orgRole,
@@ -356,6 +394,10 @@ export function RunHeader({
   run: RunRow;
   /** `get_agent` for the run's agent; null when the run names no agent. */
   agent: Read<AgentDetail> | null;
+  /** The agent's row from `list_agents`; null when the read did not find it. */
+  figures?: AgentFigures | null;
+  /** True while a call on this run waits on a person: the status word reads parked. */
+  parked?: boolean;
   pulls: readonly RunOutputNode[] | null;
   /**
    * `get_run_work`, started by the page and never awaited by it: the
@@ -405,10 +447,23 @@ export function RunHeader({
               agentKey={run.agentKey}
               notRecorded={t("notRecorded")}
               sub={
-                harness === null ? t("header.harnessNotRecorded") : harness.name
+                <AgentSub harness={harness?.name ?? null} figures={figures} />
               }
             />
-            <StatusBadge status={run.status} outcome={run.outcome} />
+            {/* A live run that is paused or has a call parked says which, in
+                the word and the dot, because "live" alone hides that nothing
+                is moving. An ended run reads its recorded outcome. */}
+            {run.status === "live" && run.ingressPaused === true ? (
+              <Badge tone="approval" data-testid="run-status-word">
+                {t("header.statusPaused")}
+              </Badge>
+            ) : run.status === "live" && parked ? (
+              <Badge tone="approval" data-testid="run-status-word">
+                {t("header.statusParked")}
+              </Badge>
+            ) : (
+              <StatusBadge status={run.status} outcome={run.outcome} />
+            )}
             <EnforcementTierBadge
               tier={run.enforcementTier}
               testId="run-tier"
@@ -461,15 +516,36 @@ export function RunHeader({
           )}
         </div>
       </div>
-      {run.ingressPaused === true ? (
-        <p
+      {run.ingressPaused === true && run.status === "live" ? (
+        <div
           role="status"
           data-testid="run-paused"
-          className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-2.5 text-sm text-foreground"
+          className="flex flex-col gap-2 rounded-lg border border-warning/40 bg-warning/10 px-4 py-2.5 text-sm text-foreground sm:flex-row sm:items-center sm:justify-between"
         >
-          <strong className="font-semibold">{t("header.pausedTitle")}</strong>{" "}
-          {t("header.paused")}
-        </p>
+          <span className="flex flex-col gap-0.5">
+            <span>
+              <strong className="font-semibold">
+                {t("header.pausedTitle")}
+              </strong>{" "}
+              {t("header.paused")}
+            </span>
+            <span
+              data-gap="pause-facts"
+              className="text-xs text-muted-foreground"
+            >
+              {t("header.pausedFacts")}
+            </span>
+          </span>
+          <PauseBannerActions
+            org={org}
+            ws={ws}
+            runId={run.id}
+            source={run.source}
+            ingressRevoked={run.ingressRevoked}
+            orgRole={orgRole}
+            wsRole={wsRole}
+          />
+        </div>
       ) : null}
     </header>
   );

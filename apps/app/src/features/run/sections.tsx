@@ -25,7 +25,7 @@ import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
 import { Badge } from "@/ui/badge";
-import { mono } from "@/ui/control-styles";
+import { buttonSecondary, mono } from "@/ui/control-styles";
 import { formatCount, formatDuration } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
@@ -250,15 +250,31 @@ function Manifest({
     <Panel
       title={t("title")}
       aside={
-        <span
-          data-testid="run-manifest-tally"
-          className={`${mono} text-xs text-muted-foreground`}
-        >
-          {t("tally", {
-            rendered: count(manifest.included),
-            cut: count(manifest.cut),
-            tokens: count(manifest.spent_tokens),
-          })}
+        <span className="flex flex-wrap items-center gap-2">
+          <span
+            data-testid="run-manifest-tally"
+            className={`${mono} text-xs text-muted-foreground`}
+          >
+            {t("tally", {
+              rendered: count(manifest.included),
+              cut: count(manifest.cut),
+              tokens: count(manifest.spent_tokens),
+            })}
+          </span>
+          <button
+            type="button"
+            disabled
+            title={t("previewGap")}
+            aria-describedby="run-manifest-preview-why"
+            data-testid="run-manifest-preview"
+            data-gap="steering-preview"
+            className={`${buttonSecondary} disabled:cursor-not-allowed disabled:opacity-60`}
+          >
+            {t("preview")}
+          </button>
+          <span id="run-manifest-preview-why" className="sr-only">
+            {t("previewGap")}
+          </span>
         </span>
       }
     >
@@ -396,6 +412,9 @@ export function ContextSection({
           <p className="pt-3 text-xs text-muted-foreground">{t("cut")}</p>
         ) : null}
       </Panel>
+      <Unrecorded title={t("walk.title")} gap="G10">
+        {t("walk.none")}
+      </Unrecorded>
       <Unrecorded title={t("stats.title")} gap="G10">
         {t("stats.none")}
       </Unrecorded>

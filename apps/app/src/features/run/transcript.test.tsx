@@ -76,6 +76,7 @@ type SectionView = {
   kinds?: TranscriptKind[];
   zoom?: RunTranscript["zoom"];
   status?: RunRow["status"];
+  none?: boolean;
 };
 
 function renderSection(view: SectionView = {}) {
@@ -84,6 +85,7 @@ function renderSection(view: SectionView = {}) {
     kinds = [],
     zoom = "steps",
     status = RUN.status,
+    none = false,
   } = view;
   return render(
     <IntlProvider>
@@ -91,6 +93,7 @@ function renderSection(view: SectionView = {}) {
         read={read}
         zoom={zoom}
         kinds={kinds}
+        none={none}
         run={{ status, replayGrade: RUN.replayGrade }}
         {...PLACE}
       />
@@ -317,7 +320,13 @@ describe("the filter chips", () => {
     const row = screen.getByTestId("transcript-chips");
     const names = Array.from(row.querySelectorAll('[data-testid^="chip-"]'))
       .map((node) => node.getAttribute("data-testid"))
-      .filter((id) => id !== null && !id.startsWith("chip-count-"));
+      .filter(
+        (id) =>
+          id !== null &&
+          !id.startsWith("chip-count-") &&
+          id !== "chip-none" &&
+          id !== "chip-clear",
+      );
     expect(names).toEqual([
       "chip-prompt",
       "chip-responses",
@@ -326,9 +335,10 @@ describe("the filter chips", () => {
       "chip-usage",
       "chip-recall",
       "chip-seal",
-      "chip-policy",
       "chip-errors",
     ]);
+    // The contract's policy kind has no chip: the spec draws none.
+    expect(screen.queryByTestId("chip-policy")).toBeNull();
     for (const gap of ["thinking", "seal"]) {
       const chip = screen.getByTestId(`chip-${gap}`);
       expect(chip.tagName).toBe("SPAN");
@@ -367,6 +377,52 @@ describe("the filter chips", () => {
     expect(screen.getByTestId("chip-count-errors")).toHaveTextContent("1");
     expect(screen.getByTestId("chip-count-prompt")).toHaveTextContent("0");
     expect(screen.queryByTestId("chip-count-seal")).toBeNull();
+  });
+
+  it("offers none while every entry shows, and all once every chip is off", () => {
+    renderSection();
+    expect(screen.getByTestId("chip-none")).toHaveAttribute(
+      "href",
+      expect.stringContaining("kinds=none"),
+    );
+    expect(screen.queryByTestId("chip-clear")).toBeNull();
+    cleanup();
+    renderSection({ none: true });
+    expect(screen.getByTestId("transcript-none")).toHaveTextContent(
+      "Every kind is off",
+    );
+    expect(screen.queryByTestId("transcript-step")).toBeNull();
+    expect(screen.getByTestId("chip-clear")).toHaveTextContent("all");
+    expect(screen.getByTestId("chip-clear")).not.toHaveAttribute(
+      "href",
+      expect.stringContaining("kinds="),
+    );
+    expect(screen.queryByTestId("chip-none")).toBeNull();
+  });
+
+  it("draws the reasoning the recorder kept under its step only once thinking is expanded", () => {
+    const thought = transcriptEntry({
+      seq: "3",
+      endSeq: "3",
+      kinds: ["responses"],
+      response: transcriptBody({
+        blocks: [
+          { kind: "thinking", text: "Group by label first." },
+          { kind: "text", text: "Grouping." },
+        ],
+      }),
+    });
+    renderSection({ read: readOk(runTranscript({ entries: [thought] })) });
+    expect(screen.queryByTestId("step-thinking")).toBeNull();
+    const toggle = screen.getByTestId("transcript-thinking");
+    expect(toggle).toHaveTextContent("expand thinking");
+    fireEvent.click(toggle);
+    expect(toggle).toHaveTextContent("collapse thinking");
+    expect(screen.getByTestId("step-thinking")).toHaveTextContent(
+      "Group by label first.",
+    );
+    fireEvent.click(toggle);
+    expect(screen.queryByTestId("step-thinking")).toBeNull();
   });
 
   it("gives no chip a count when the whole-run read failed (negative)", () => {

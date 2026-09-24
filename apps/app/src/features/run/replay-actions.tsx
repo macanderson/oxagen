@@ -37,10 +37,16 @@ function ForkDialog({
   org,
   ws,
   runId,
+  label,
+  prefix = "run",
 }: {
   org: string;
   ws: string;
   runId: string;
+  /** The button's words where they differ from the header's. */
+  label?: string;
+  /** The test id's prefix; set where a second copy sits on the page. */
+  prefix?: string;
 }) {
   const t = useTranslations("run.replay.fork");
   const failureText = useActionFailure();
@@ -80,13 +86,13 @@ function ForkDialog({
     <>
       <button
         type="button"
-        data-testid="run-fork"
+        data-testid={`${prefix}-fork`}
         className={buttonSecondary}
         onClick={() => {
           setOpen(true);
         }}
       >
-        {t("open")}
+        {label ?? t("open")}
       </button>
       <SheetDialog
         open={open}
@@ -144,10 +150,16 @@ function BisectDialog({
   org,
   ws,
   runId,
+  label,
+  prefix = "run",
 }: {
   org: string;
   ws: string;
   runId: string;
+  /** The button's words where they differ from the header's. */
+  label?: string;
+  /** The test id's prefix; set where a second copy sits on the page. */
+  prefix?: string;
 }) {
   const t = useTranslations("run.replay.bisect");
   const failureText = useActionFailure();
@@ -187,13 +199,13 @@ function BisectDialog({
     <>
       <button
         type="button"
-        data-testid="run-bisect"
+        data-testid={`${prefix}-bisect`}
         className={buttonSecondary}
         onClick={() => {
           setOpen(true);
         }}
       >
-        {t("open")}
+        {label ?? t("open")}
       </button>
       <SheetDialog
         open={open}
@@ -268,12 +280,18 @@ export function ReplayActions({
   ws,
   run,
   after,
+  labels,
+  prefix = "run",
 }: {
   org: string;
   ws: string;
   run: RunRow;
   /** The header's last action (Export), drawn in the same row. */
   after?: ReactNode;
+  /** The Chain and seal tab's longer words for the same two actions. */
+  labels?: { fork: string; bisect: string };
+  /** The test id's prefix; set where a second copy sits on the page. */
+  prefix?: string;
 }) {
   const t = useTranslations("run.replay");
   // `fork_run` refuses a wrapped session by name and a recording graded below
@@ -292,23 +310,37 @@ export function ReplayActions({
     <div className="flex flex-col items-start gap-2 lg:items-end">
       <div className="flex flex-wrap gap-2">
         {forkable ? (
-          <ForkDialog org={org} ws={ws} runId={run.id} />
+          <ForkDialog
+            org={org}
+            ws={ws}
+            runId={run.id}
+            label={labels?.fork}
+            prefix={prefix}
+          />
         ) : (
           <button
             type="button"
             disabled
-            data-testid="run-fork"
+            data-testid={`${prefix}-fork`}
             className={buttonSecondary}
           >
-            {t("fork.open")}
+            {labels?.fork ?? t("fork.open")}
           </button>
         )}
-        <BisectDialog org={org} ws={ws} runId={run.id} />
+        <BisectDialog
+          org={org}
+          ws={ws}
+          runId={run.id}
+          label={labels?.bisect}
+          prefix={prefix}
+        />
         {after}
       </div>
       {forkable ? null : (
         <p
-          data-testid="fork-refused"
+          data-testid={
+            prefix === "run" ? "fork-refused" : `${prefix}-fork-refused`
+          }
           className="max-w-prose text-xs text-muted-foreground lg:text-right"
         >
           {reason}

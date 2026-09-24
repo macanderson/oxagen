@@ -125,6 +125,11 @@ vi.mock("@/server/session", () => ({
 }));
 vi.mock("@/features/fleet", () => ({ Fleet }));
 vi.mock("@/features/run", () => ({ Run }));
+// The Run route reads the signed-in person's name for the denied state's
+// Signed in as line; the session itself is the auth lane's test.
+vi.mock("@/features/auth", () => ({
+  getAuthUser: () => Promise.resolve({ name: "Marcus Bell" }),
+}));
 vi.mock("@/features/agents", () => ({
   Agents,
   AgentsLoading: () => null,
@@ -550,6 +555,7 @@ describe("the Run page", () => {
       body: null,
       reads: "hide",
       spine: "0,3",
+      viewerName: "Marcus Bell",
     });
     expect(screen.queryByTestId("not-recorded")).toBeNull();
   });

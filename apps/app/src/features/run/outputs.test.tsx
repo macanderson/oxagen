@@ -80,7 +80,7 @@ describe("the spine", () => {
     expect(within(spine).getByText("9f3c1de")).toBeTruthy();
     expect(within(spine).getByText("created")).toBeTruthy();
     expect(within(spine).getByText("pushed")).toBeTruthy();
-    // The frame chip opens the Frames tab on the frame that produced the node.
+    // The frame chip opens the Governed actions tab on the frame that produced the node.
     expect(
       within(spine).getByRole("link", { name: "fr 40" }).getAttribute("href"),
     ).toBe("/acme/core-platform/runs/tse_7k2m9q?tab=actions&body=40");

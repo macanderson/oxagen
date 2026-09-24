@@ -32,7 +32,9 @@
 import { TokenUsage } from "./token-usage";
 import { useLocale, useTranslations } from "next-intl";
 import {
+  createContext,
   type ReactNode,
+  use,
   useCallback,
   useEffect,
   useMemo,
@@ -122,9 +124,9 @@ const NAME: Record<StepNode, string> = {
 const chip =
   "whitespace-nowrap rounded-full border border-border bg-card px-2 font-mono text-[10.5px] leading-[1.8] text-muted-foreground";
 const segButton =
-  "border-r border-border px-2 py-1 text-[11px] text-muted-foreground last:border-r-0 hover:text-foreground aria-pressed:bg-card aria-pressed:font-semibold aria-pressed:text-foreground";
+  "min-h-11 border-r border-border px-2 py-1 text-[11px] sm:min-h-0 text-muted-foreground last:border-r-0 hover:text-foreground aria-pressed:bg-card aria-pressed:font-semibold aria-pressed:text-foreground";
 const tpButton =
-  "grid size-[30px] shrink-0 place-items-center rounded-md border border-border bg-card text-foreground hover:border-foreground/40 disabled:cursor-not-allowed disabled:opacity-35";
+  "grid size-11 shrink-0 sm:size-[30px] place-items-center rounded-md border border-border bg-card text-foreground hover:border-foreground/40 disabled:cursor-not-allowed disabled:opacity-35";
 
 function Chevron() {
   return (
@@ -395,7 +397,7 @@ function FrameDetail({
  * envelopes rather than below them. It is a *reading* of the record and never
  * a replacement for it: every byte it draws came out of a body the recorder
  * kept, and the frames it was read from are directly beneath, unchanged, with
- * their digests and their links into the Frames tab.
+ * their digests and their links into the Governed actions tab.
  */
 function ToolPanes({ detail }: { detail: ToolDetail }) {
   const t = useTranslations("run.transcript");
@@ -446,6 +448,36 @@ function ToolPanes({ detail }: { detail: ToolDetail }) {
   );
 }
 
+/**
+ * Whether the reasoning the recorder kept is drawn under each model step
+ * (spec: "expand thinking"). Off by default: a reasoning block is the model's
+ * working, and the step's own line already says what it did.
+ */
+const ThinkingOpenContext = createContext(false);
+
+/**
+ * The reasoning blocks the recorder kept for a step, in frame order, each
+ * keyed by its frame and its place in that frame, which a recorded frame
+ * never changes.
+ */
+function thoughtsOf(step: TranscriptStep): { id: string; text: string }[] {
+  return step.frames.flatMap((frame) =>
+    [frame.request, frame.response].flatMap((half, side) => {
+      const blocks = half?.blocks ?? [];
+      return blocks.flatMap((block, at) =>
+        block.kind === "thinking" && block.text.trim() !== ""
+          ? [
+              {
+                id: `${frame.seq}:${String(side)}:${String(at)}`,
+                text: block.text,
+              },
+            ]
+          : [],
+      );
+    }),
+  );
+}
+
 function StepRow({
   step,
   digest,
@@ -469,6 +501,8 @@ function StepRow({
   // Held across renders because it parses the recorded body, where the digest
   // beside it is cheap enough to recompute.
   const detail = useMemo(() => stepTool(step) ?? stepModel(step), [step]);
+  const thinking = use(ThinkingOpenContext);
+  const thoughts = useMemo(() => thoughtsOf(step), [step]);
   // The tool's own name beats the label's first word wherever the body was
   // kept. A skill load is the one exception: it is the step that changes what
   // the agent CAN do rather than recording what it did, so the line says so
@@ -488,128 +522,148 @@ function StepRow({
   // behind a disclosure that would reveal nothing new.
   const panes = detail === null || detail.panes.length === 0 ? null : detail;
   return (
-    <details
-      data-testid="transcript-step"
-      data-node={digest.node}
-      data-now={isNow ? "true" : undefined}
-      open={open}
-      onToggle={(e) => {
-        onToggle(step.id, e.currentTarget.open);
-      }}
-      className={`group border-b border-border last:border-b-0 ${isFuture ? "opacity-35" : ""}`}
-    >
-      <summary
-        className={`cursor-pointer list-none py-1.5 pr-3 select-none hover:bg-muted [&::-webkit-details-marker]:hidden ${isNow ? "bg-muted shadow-[inset_3px_0_0_var(--color-brand)]" : ""}`}
+    <>
+      <details
+        data-testid="transcript-step"
+        data-node={digest.node}
+        data-now={isNow ? "true" : undefined}
+        open={open}
+        onToggle={(e) => {
+          onToggle(step.id, e.currentTarget.open);
+        }}
+        className={`group border-b border-border last:border-b-0 ${isFuture ? "opacity-35" : ""}`}
       >
-        <div className="grid grid-cols-[46px_30px_1fr] items-baseline">
-          <time
-            dateTime={first.at}
-            className="pr-2 text-right font-mono text-[10.5px] tabular-nums text-muted-foreground"
-          >
-            {formatClock(first.elapsedMs / 1000, locale)}
-          </time>
-          <span className="relative text-center before:absolute before:-top-3 before:-bottom-3 before:left-1/2 before:w-px before:bg-border">
-            <span
-              aria-hidden="true"
-              className={`relative z-10 inline-block size-[7px] rounded-full border-2 bg-card ${DOT[digest.node]}`}
-            />
-          </span>
-          <span className="flex min-w-0 flex-wrap items-baseline gap-2">
-            <Chevron />
-            <span
-              className={`flex shrink-0 items-baseline gap-1.5 font-mono text-xs font-semibold ${NAME[digest.node]}`}
+        <summary
+          className={`cursor-pointer list-none py-1.5 pr-3 select-none hover:bg-muted [&::-webkit-details-marker]:hidden ${isNow ? "bg-muted shadow-[inset_3px_0_0_var(--color-brand)]" : ""}`}
+        >
+          <div className="grid grid-cols-[46px_30px_1fr] items-baseline">
+            <time
+              dateTime={first.at}
+              className="pr-2 text-right font-mono text-[10.5px] tabular-nums text-muted-foreground"
             >
-              {/* The mark takes its colour from this span, so the palette on
+              {formatClock(first.elapsedMs / 1000, locale)}
+            </time>
+            <span className="relative text-center before:absolute before:-top-3 before:-bottom-3 before:left-1/2 before:w-px before:bg-border">
+              <span
+                aria-hidden="true"
+                className={`relative z-10 inline-block size-[7px] rounded-full border-2 bg-card ${DOT[digest.node]}`}
+              />
+            </span>
+            <span className="flex min-w-0 flex-wrap items-baseline gap-2">
+              <Chevron />
+              <span
+                className={`flex shrink-0 items-baseline gap-1.5 font-mono text-xs font-semibold ${NAME[digest.node]}`}
+              >
+                {/* The mark takes its colour from this span, so the palette on
                   the rail stays the four the node already spends and a new
                   tool family can never add a fifth. */}
-              <StepIcon node={digest.node} group={detail?.group ?? null} />
-              {name}
-            </span>
-            {arg === null ? null : (
-              <span className="max-w-[46ch] overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[11.5px] text-muted-foreground">
-                {arg}
+                <StepIcon node={digest.node} group={detail?.group ?? null} />
+                {name}
               </span>
-            )}
-            {detail?.detail == null ? null : (
-              <span className="shrink-0 font-mono text-[11px] text-muted-foreground/80">
-                {detail.detail}
+              {arg === null ? null : (
+                <span className="max-w-[46ch] overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[11.5px] text-muted-foreground">
+                  {arg}
+                </span>
+              )}
+              {detail?.detail == null ? null : (
+                <span className="shrink-0 font-mono text-[11px] text-muted-foreground/80">
+                  {detail.detail}
+                </span>
+              )}
+              <span className="ml-auto flex flex-wrap gap-1.5">
+                {step.kind === "model" && detail !== null ? (
+                  <Chip>
+                    <span data-testid="step-model">{digest.name}</span>
+                  </Chip>
+                ) : null}
+                {digest.outcome === null ? null : (
+                  <Chip tone={digest.node === "deny" ? "warn" : undefined}>
+                    {digest.outcome}
+                  </Chip>
+                )}
+                {digest.status === null ? null : (
+                  <Chip tone={digest.node === "deny" ? "warn" : undefined}>
+                    {digest.status}
+                  </Chip>
+                )}
+                {digest.durationMs === null ? null : (
+                  <Chip>
+                    {t("ms", { ms: formatCount(digest.durationMs, locale) })}
+                  </Chip>
+                )}
+                {digest.repeats !== null ? (
+                  <Chip>
+                    <span data-testid="step-repeats">
+                      {t("repeats", {
+                        count: formatCount(digest.repeats, locale),
+                      })}
+                    </span>
+                  </Chip>
+                ) : step.frames.length > 1 ? (
+                  <Chip>{t("frameCount", { count: step.frames.length })}</Chip>
+                ) : null}
+                {digest.cost === null ? null : (
+                  <Chip tone="cost">
+                    <Money value={digest.cost} precision="exact" />
+                  </Chip>
+                )}
               </span>
-            )}
-            <span className="ml-auto flex flex-wrap gap-1.5">
-              {step.kind === "model" && detail !== null ? (
-                <Chip>
-                  <span data-testid="step-model">{digest.name}</span>
-                </Chip>
-              ) : null}
-              {digest.outcome === null ? null : (
-                <Chip tone={digest.node === "deny" ? "warn" : undefined}>
-                  {digest.outcome}
-                </Chip>
-              )}
-              {digest.status === null ? null : (
-                <Chip tone={digest.node === "deny" ? "warn" : undefined}>
-                  {digest.status}
-                </Chip>
-              )}
-              {digest.durationMs === null ? null : (
-                <Chip>
-                  {t("ms", { ms: formatCount(digest.durationMs, locale) })}
-                </Chip>
-              )}
-              {digest.repeats !== null ? (
-                <Chip>
-                  <span data-testid="step-repeats">
-                    {t("repeats", {
-                      count: formatCount(digest.repeats, locale),
-                    })}
-                  </span>
-                </Chip>
-              ) : step.frames.length > 1 ? (
-                <Chip>{t("frameCount", { count: step.frames.length })}</Chip>
-              ) : null}
-              {digest.cost === null ? null : (
-                <Chip tone="cost">
-                  <Money value={digest.cost} precision="exact" />
-                </Chip>
-              )}
             </span>
-          </span>
-        </div>
-      </summary>
-      {open ? (
-        <div className="pr-3 pb-2.5 pl-3 md:pl-[76px]">
-          {panes === null ? null : <ToolPanes detail={panes} />}
-          {/* The record under the reading of it. Where the panes above already
+          </div>
+        </summary>
+        {open ? (
+          <div className="pr-3 pb-2.5 pl-3 md:pl-[76px]">
+            {panes === null ? null : <ToolPanes detail={panes} />}
+            {/* The record under the reading of it. Where the panes above already
               say what the step did, the envelopes they were read from fold
               away behind one more click — still one step away, never a page
               away — and where there are no panes the frames ARE the reading,
               so they stay open. A digest-only duplicate of a frame whose body
               is already shown elsewhere in the step is left out here too. */}
-          {panes === null ? (
-            <div className="overflow-hidden rounded-md border border-border bg-background">
-              {visibleFrames(step).map((frame) => (
-                <FrameDetail key={entryKey(frame)} frame={frame} {...place} />
-              ))}
-            </div>
-          ) : (
-            <details className="group/raw overflow-hidden rounded-md border border-border bg-background">
-              <summary className="cursor-pointer list-none px-3 py-1.5 text-[11px] text-muted-foreground select-none hover:text-foreground group-open/raw:border-b group-open/raw:border-border [&::-webkit-details-marker]:hidden">
-                <span
-                  aria-hidden="true"
-                  className="mr-1.5 inline-block text-[8px] transition-transform group-open/raw:rotate-90"
-                >
-                  ▶
-                </span>
-                {t("frameCount", { count: step.frames.length })}
-              </summary>
-              {visibleFrames(step).map((frame) => (
-                <FrameDetail key={entryKey(frame)} frame={frame} {...place} />
-              ))}
-            </details>
-          )}
+            {panes === null ? (
+              <div className="overflow-hidden rounded-md border border-border bg-background">
+                {visibleFrames(step).map((frame) => (
+                  <FrameDetail key={entryKey(frame)} frame={frame} {...place} />
+                ))}
+              </div>
+            ) : (
+              <details className="group/raw overflow-hidden rounded-md border border-border bg-background">
+                <summary className="cursor-pointer list-none px-3 py-1.5 text-[11px] text-muted-foreground select-none hover:text-foreground group-open/raw:border-b group-open/raw:border-border [&::-webkit-details-marker]:hidden">
+                  <span
+                    aria-hidden="true"
+                    className="mr-1.5 inline-block text-[8px] transition-transform group-open/raw:rotate-90"
+                  >
+                    ▶
+                  </span>
+                  {t("frameCount", { count: step.frames.length })}
+                </summary>
+                {visibleFrames(step).map((frame) => (
+                  <FrameDetail key={entryKey(frame)} frame={frame} {...place} />
+                ))}
+              </details>
+            )}
+          </div>
+        ) : null}
+      </details>
+      {thinking && thoughts.length > 0 ? (
+        <div
+          data-testid="step-thinking"
+          className={`border-b border-border py-2 pr-3 pl-3 md:pl-[76px] ${isFuture ? "opacity-35" : ""}`}
+        >
+          <p className="m-0 pb-1 font-mono text-[10.5px] uppercase tracking-[0.1em] text-muted-foreground">
+            {t("thinking")}
+          </p>
+          {thoughts.map((thought) => (
+            <p
+              key={thought.id}
+              className="m-0 max-w-[70ch] whitespace-pre-wrap border-l-2 border-border pl-3 text-[12.5px] italic leading-relaxed text-muted-foreground"
+            >
+              {thought.text}
+            </p>
+          ))}
         </div>
       ) : null}
-    </details>
+    </>
   );
 }
 
@@ -844,6 +898,7 @@ export function TranscriptView({
   // The search narrows the turns drawn, never the frames the transport walks,
   // so the playhead and a live follow keep their place while a person looks.
   const [query, setQuery] = useState("");
+  const [thinking, setThinking] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
 
   const following = pinned === null;
@@ -1056,7 +1111,7 @@ export function TranscriptView({
       data-testid="transcript"
       className="overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm"
     >
-      <div className="border-b border-border px-3 py-2.5">
+      <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2.5">
         <input
           type="search"
           value={query}
@@ -1068,6 +1123,17 @@ export function TranscriptView({
           }}
           className="h-11 w-full max-w-sm rounded-md border border-border bg-background px-3 font-mono text-base sm:h-9 sm:text-[13px]"
         />
+        <button
+          type="button"
+          data-testid="transcript-thinking"
+          aria-pressed={thinking}
+          onClick={() => {
+            setThinking((open) => !open);
+          }}
+          className={`${segButton} rounded-md border`}
+        >
+          {thinking ? t("collapseThinking") : t("expandThinking")}
+        </button>
       </div>
       <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted px-3 py-2.5">
         {stream === "denied" ? null : status !== "live" ? (
@@ -1266,17 +1332,19 @@ export function TranscriptView({
             {t("noMatch")}
           </p>
         ) : null}
-        {drawn.map((turn) => (
-          <TurnBlock
-            key={turn.id}
-            turn={turn}
-            pos={pos}
-            running={activelyLive && turn.id === lastTurnId}
-            openIds={shown}
-            onToggle={toggle}
-            place={place}
-          />
-        ))}
+        <ThinkingOpenContext value={thinking}>
+          {drawn.map((turn) => (
+            <TurnBlock
+              key={turn.id}
+              turn={turn}
+              pos={pos}
+              running={activelyLive && turn.id === lastTurnId}
+              openIds={shown}
+              onToggle={toggle}
+              place={place}
+            />
+          ))}
+        </ThinkingOpenContext>
       </div>
       <div className="flex flex-wrap items-center gap-2 border-t border-border bg-muted px-3 py-2.5 text-xs text-muted-foreground">
         <span

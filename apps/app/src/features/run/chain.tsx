@@ -11,6 +11,7 @@
 // nine frames says so with the sequences it dropped, and a walk that stopped
 // short says its gaps are a prefix's.
 import { useLocale, useTranslations } from "next-intl";
+import type { ReactNode } from "react";
 import type { ChainCheckpoint, RunChain } from "@/data/contracts/run";
 import type { Read } from "@/data/read";
 import { mono } from "@/ui/control-styles";
@@ -280,7 +281,17 @@ function Seal({
   );
 }
 
-export function ChainSection({ read }: { read: Read<RunChain> }) {
+export function ChainSection({
+  read,
+  actions,
+}: {
+  read: Read<RunChain>;
+  /**
+   * The tab's foot (spec: Fork replay from frame N, Bisect against another
+   * run, Export the bundle), given the chain's last seq for the fork label.
+   */
+  actions?: (lastSeq: string | null) => ReactNode;
+}) {
   const t = useTranslations("run.chain");
   const locale = useLocale();
   if (!read.ok) {
@@ -359,6 +370,9 @@ export function ChainSection({ read }: { read: Read<RunChain> }) {
       </Panel>
       <ReplayGrade ladder={chain.ladder} recordedGrade={chain.recordedGrade} />
       <Checkpoints checkpoints={chain.checkpoints} />
+      {actions === undefined ? null : (
+        <div data-testid="chain-actions">{actions(chain.lastSeq)}</div>
+      )}
     </div>
   );
 }

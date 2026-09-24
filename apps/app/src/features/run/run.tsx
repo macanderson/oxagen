@@ -5,12 +5,11 @@ import { TranscriptZoom } from "@/data/contracts/run";
 import type { TranscriptKind } from "@/data/contracts/run";
 import { TRANSCRIPT_KINDS } from "@/data/contracts/run";
 import type { ApprovalQueue } from "@/data/contracts/approvals";
-import type { MandateRow } from "@/data/contracts/mandates";
 import type { RunCost, RunTranscript } from "@/data/contracts/run";
+import type { RunWork } from "@/data/contracts/run-work";
 import type { RunRow } from "@/data/contracts/runs";
 import type { DataSource } from "@/data/ports";
 import { PAGE_FAILURES, type Read, readError } from "@/data/read";
-import { ApprovalsPanel } from "@/features/fleet";
 import {
   RunOutcomesConsent,
   RunIssueConnections,
@@ -21,11 +20,14 @@ import { Money } from "@/ui/money";
 import { SafeLink } from "@/ui/navigation";
 import { ChainSection } from "./chain";
 import { CostSection } from "./cost";
-import { FramesSection } from "./frames";
-import { RunHeader } from "./header";
+import { EnrichmentSwitch } from "./enrichment-switch";
+import { GovernedActionsSection } from "./frames";
+import { type AgentFigures, RunHeader } from "./header";
 import { interjectionOf, RunInterjection } from "./interjection";
-import { IssuesSection } from "./issues";
+import { issueCount, IssuesSection } from "./issues";
 import { OutputsSpine } from "./outputs";
+import { ExportAction } from "./record-actions";
+import { ReplayActions } from "./replay-actions";
 import { ResolvedApprovalsPanel } from "./resolved-approvals";
 import {
   ContextSection,
@@ -35,10 +37,10 @@ import {
 } from "./sections";
 import { StatRow, SummaryPanel } from "./stats";
 import { RunEmpty, RunReadFailure } from "./states";
-import { kindsParam, TranscriptSection } from "./transcript";
+import { KINDS_NONE, kindsParam, TranscriptSection } from "./transcript";
 import { ChangesPanel, SpendByArea } from "./work";
 import { isWhole, readWholeTranscript } from "./whole-transcript";
-import { readRunWork, WithWork } from "./work-ci";
+import { checkoutOf, readRunWork, WithWork, workOf } from "./work-ci";
 
 /** The seven tabs, in the spec's order (pages/run.md). */
 const TABS = [
@@ -109,8 +111,15 @@ function useTabCounts({
     transcript: everything.ok
       ? floor(everything.value.entries.length)
       : undefined,
-    issues: run.taskRef === null ? "0" : "1",
-    actions: policy === null ? undefined : floor(policy.length),
+    issues: String(issueCount(run)),
+    // A run with no policy decision names the tab by its player and counts
+    // the frames it plays (spec: "Player" with the frame count).
+    actions:
+      policy === null
+        ? undefined
+        : policy.length === 0
+          ? String(run.frames)
+          : floor(policy.length),
     cost: runCost === null ? undefined : <Money value={runCost} />,
     policy: policy === null ? undefined : floor(policy.length),
     context: recall === null ? undefined : floor(recall.length),
@@ -130,9 +139,71 @@ function firstPrompt(
   return entry === undefined || text === null ? null : { text, at: entry.at };
 }
 
+/** True when the run recorded no policy decision: the Governed actions tab reads "Player". */
+function isPlayer(everything: Read<RunTranscript>): boolean {
+  const policy = entriesOf(everything, "policy");
+  return policy !== null && policy.length === 0;
+}
+
+/**
+ * `github.com/a-intel/edge-proxy@e7c41a9`: the repository the first recorded
+ * checkout named and the commit it was at. Null when the collector recorded
+ * no checkout, no repository or no commit, so the meta line says the remote
+ * was not captured rather than guessing one.
+ */
+function remoteOf(work: RunWork | null): string | null {
+  const checkout = checkoutOf(work);
+  const repository = checkout?.repository ?? null;
+  if (checkout === null || repository === null || checkout.headSha === null)
+    return null;
+  return `${repository.host}/${repository.owner}/${repository.name}@${checkout.headSha.slice(0, 7)}`;
+}
+
 /** A call parked on this run: the dot the Governed actions and Policy tabs carry. */
 function isParked(pending: Read<ApprovalQueue>): boolean {
   return pending.ok && pending.value.items.length > 0;
+}
+
+/**
+ * The Chain and seal tab's three actions (spec): Fork replay from frame N,
+ * Bisect against another run, and Export the bundle. The same dialogs the
+ * header opens, under the tab's longer names.
+ */
+function ChainActions({
+  run,
+  lastSeq,
+  orgRole,
+  org,
+  ws,
+}: {
+  run: RunRow;
+  lastSeq: string | null;
+  orgRole: WsCtx["orgRole"];
+} & Place) {
+  const t = useTranslations("run.chain.actions");
+  return (
+    <ReplayActions
+      org={org}
+      ws={ws}
+      run={run}
+      prefix="chain"
+      labels={{
+        fork: lastSeq === null ? t("forkNoSeq") : t("fork", { seq: lastSeq }),
+        bisect: t("bisect"),
+      }}
+      after={
+        <ExportAction
+          org={org}
+          ws={ws}
+          runId={run.id}
+          sealed={run.status !== "live"}
+          orgRole={orgRole}
+          prefix="chain"
+          label={t("export")}
+        />
+      }
+    />
+  );
 }
 
 /** The side column: what the run changed, what it produced, and where it spent. */
@@ -189,7 +260,9 @@ function Tabs({
           aria-current={tab === selected ? "page" : undefined}
           className="inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent px-3 text-[13px] font-medium text-muted-foreground hover:text-foreground aria-selected:border-accent aria-selected:text-foreground"
         >
-          {t(tab)}
+          {tab === "actions" && isPlayer(counts.everything)
+            ? t("player")
+            : t(tab)}
           {shown[tab] === undefined ? null : (
             <span
               data-testid={`run-tab-count-${tab}`}
@@ -213,12 +286,8 @@ function Tabs({
 }
 
 /**
- * The run's pending approvals, the mandates their cards draw a bar from, and
- * the instant their clocks start from.
- *
- * The ledger is read only when a parked call names a mandate, the same rule
- * `readFleet` follows, so a run whose approvals drew on none makes one read and
- * a viewer who may not read the ledger sees the cards without their bars.
+ * The run's parked calls, which put the dot on the Governed actions and
+ * Policy tabs, and the instant the page reads its clocks against.
  *
  * `Date.now()` lives here rather than in the page or the component body: a
  * component's render must be pure, and the route's render is a render too, so
@@ -235,17 +304,39 @@ async function readApprovals(
   fixed: number | undefined,
 ) {
   const approvals = await source.approvals.pending(ctx, { runId });
-  const named =
-    approvals.ok &&
-    approvals.value.items.some((item) => item.mandateId !== null);
-  const mandates = new Map<string, MandateRow>();
-  if (named) {
-    const read = await source.mandates.list(ctx, { agentId: null });
-    if (read.ok)
-      for (const mandate of read.value.mandates)
-        mandates.set(mandate.id, mandate);
+  return { approvals, at: fixed ?? Date.now() };
+}
+
+/** How many `list_agents` pages the header walks looking for the run's agent. */
+const AGENT_PAGES = 4;
+
+/**
+ * The agent's last 30 days, from its `list_agents` row: the runs and the spend
+ * the compact agent card prints. `list_agents` has no filter, so this walks at
+ * most `AGENT_PAGES` pages; an agent it does not reach, or a read that fails,
+ * leaves the card with its harness alone rather than a guessed figure.
+ */
+async function readAgentFigures(
+  source: DataSource,
+  ctx: WsCtx,
+  slug: string | null,
+): Promise<AgentFigures | null> {
+  if (slug === null) return null;
+  let cursor: string | null = null;
+  try {
+    for (let page = 0; page < AGENT_PAGES; page += 1) {
+      const read = await source.agents.list(ctx, { cursor });
+      if (!read.ok) return null;
+      const row = read.value.agents.find((agent) => agent.slug === slug);
+      if (row !== undefined)
+        return { runs30d: row.runs30d, spend30d: row.spend30d };
+      cursor = read.value.nextCursor;
+      if (cursor === null) return null;
+    }
+  } catch {
+    return null;
   }
-  return { approvals, mandates, at: fixed ?? Date.now() };
+  return null;
 }
 
 /** The run's header read, and the instant it answered: the error state names that instant. */
@@ -271,6 +362,7 @@ export async function Run({
   body,
   reads,
   spine,
+  viewerName = null,
   now,
 }: {
   ctx: WsCtx;
@@ -291,6 +383,8 @@ export async function Run({
   reads: string | null;
   /** `?spine=`, the spine groups a person opened, comma-separated. */
   spine: string | null;
+  /** The signed-in person's name, which the denied state prints; null when none is recorded. */
+  viewerName?: string | null;
   /**
    * Pins the clock the page reads. Only a test passes it; the page leaves it
    * out and the read helpers take the clock beside their reads.
@@ -315,6 +409,7 @@ export async function Run({
         ws={ctx.wsSlug}
         orgName={ctx.orgName}
         wsSlug={ctx.wsSlug}
+        viewerName={viewerName}
         orgRole={ctx.orgRole}
         wsRole={ctx.wsRole}
         retry={routes.run(ctx.orgSlug, ctx.wsSlug, runId)}
@@ -333,14 +428,18 @@ export async function Run({
   if (interject !== null) {
     // The agent's pane opens on the operator's first message, which is the
     // transcript's first prompt entry.
-    const prompts = await source.runs.transcript(ctx, run.id, "everything", {
-      kinds: ["prompt"],
-    });
+    const [prompts, work] = await Promise.all([
+      source.runs.transcript(ctx, run.id, "everything", {
+        kinds: ["prompt"],
+      }),
+      readRunWork(ctx, source, run.id),
+    ]);
     return (
       <RunInterjection
         detail={detail}
         interject={interject}
         prompt={firstPrompt(prompts)}
+        remote={remoteOf(workOf(work))}
         ws={place.ws}
       />
     );
@@ -351,19 +450,24 @@ export async function Run({
   // the Policy and Context tabs and their counts, and the Transcript tab too
   // when no chip is pressed.
   const agentSlug = run.agentKey?.split(".").at(-1) ?? null;
-  const [outputs, everything, cost, pending, agent] = await Promise.all([
-    // A thrown outputs read folds to the Run page's own read error, so
-    // the spine says the read failed rather than the page throwing.
-    source.runs
-      .outputs(ctx, run.id)
-      .catch(() =>
-        readError(PAGE_FAILURES.run.error.code, PAGE_FAILURES.run.error.status),
-      ),
-    source.runs.transcript(ctx, run.id, "everything"),
-    source.runs.cost(ctx, run.id),
-    readApprovals(source, ctx, run.id, now),
-    agentSlug === null ? null : source.agents.get(ctx, agentSlug),
-  ]);
+  const [outputs, everything, cost, pending, agent, figures] =
+    await Promise.all([
+      // A thrown outputs read folds to the Run page's own read error, so
+      // the spine says the read failed rather than the page throwing.
+      source.runs
+        .outputs(ctx, run.id)
+        .catch(() =>
+          readError(
+            PAGE_FAILURES.run.error.code,
+            PAGE_FAILURES.run.error.status,
+          ),
+        ),
+      source.runs.transcript(ctx, run.id, "everything"),
+      source.runs.cost(ctx, run.id),
+      readApprovals(source, ctx, run.id, now),
+      agentSlug === null ? null : source.agents.get(ctx, agentSlug),
+      readAgentFigures(source, ctx, agentSlug),
+    ]);
   // Started, never awaited here: provider latency (GitHub pull requests,
   // checks, diffs) streams inside the Suspense boundaries of the checkout
   // strip and the Changes panel, and cannot hold the rest of the page.
@@ -374,6 +478,7 @@ export async function Run({
     case "transcript":
       section = (
         <TranscriptSection
+          none={kinds === KINDS_NONE}
           read={
             chips.length === 0
               ? everything
@@ -417,37 +522,36 @@ export async function Run({
             enabled={outcomesPolicy.ok && outcomesPolicy.value.effectiveEnabled}
             canManage={canManageOutcomes}
           />
+          {/* The workspace's switch for generated run names and summaries
+              sits with the organization's follow-through setting: both say
+              whether a model reads this run's turns. */}
+          <EnrichmentSwitch
+            org={place.org}
+            ws={place.ws}
+            enabled={run.enrichmentEnabled !== false}
+            canEdit={
+              ["owner", "admin"].includes(ctx.orgRole) ||
+              ["owner", "admin"].includes(ctx.wsRole)
+            }
+          />
         </IssuesSection>
       );
       break;
     }
     case "actions": {
       const seq = body !== null && FRAME_SEQ.test(body) ? body : null;
-      const resolved = await source.approvals.resolved(ctx, {
-        runId: run.id,
-      });
       section = (
-        <div className="flex flex-col gap-4">
-          <FramesSection
-            read={read}
-            frames={frames}
-            body={
-              seq === null
-                ? null
-                : { seq, read: await source.runs.frameBody(ctx, run.id, seq) }
-            }
-            {...place}
-          />
-          <ApprovalsPanel
-            approvals={pending.approvals}
-            mandates={pending.mandates}
-            now={pending.at}
-            on="run"
-            org={place.org}
-            ws={place.ws}
-          />
-          <ResolvedApprovalsPanel approvals={resolved} />
-        </div>
+        <GovernedActionsSection
+          read={read}
+          frames={frames}
+          run={run}
+          body={
+            seq === null
+              ? null
+              : { seq, read: await source.runs.frameBody(ctx, run.id, seq) }
+          }
+          {...place}
+        />
       );
       break;
     }
@@ -478,15 +582,23 @@ export async function Run({
     // whole-run read is its first page, which listed a long run's first
     // decisions as if they were all of them.
     case "policy":
+      // The calls a rule or a person already decided sit under the policy
+      // decisions, because the rule that auto-approved a call is a policy
+      // record (#3153). Parked calls live in the approvals drawer.
       section = (
-        <PolicySection
-          read={
-            await readWholeTranscript(source, ctx, run.id, "everything", [
-              "policy",
-            ])
-          }
-          place={place}
-        />
+        <div className="flex flex-col gap-4">
+          <PolicySection
+            read={
+              await readWholeTranscript(source, ctx, run.id, "everything", [
+                "policy",
+              ])
+            }
+            place={place}
+          />
+          <ResolvedApprovalsPanel
+            approvals={await source.approvals.resolved(ctx, { runId: run.id })}
+          />
+        </div>
       );
       break;
     case "context": {
@@ -513,7 +625,19 @@ export async function Run({
       break;
     }
     case "chain":
-      section = <ChainSection read={await source.runs.chain(ctx, run.id)} />;
+      section = (
+        <ChainSection
+          read={await source.runs.chain(ctx, run.id)}
+          actions={(lastSeq) => (
+            <ChainActions
+              run={run}
+              lastSeq={lastSeq}
+              orgRole={ctx.orgRole}
+              {...place}
+            />
+          )}
+        />
+      );
       break;
   }
   return (
@@ -521,6 +645,8 @@ export async function Run({
       <RunHeader
         run={run}
         agent={agent}
+        figures={figures}
+        parked={isParked(pending.approvals)}
         pulls={
           outputs.ok
             ? outputs.value.nodes.filter((node) => node.kind === "pr")
@@ -540,7 +666,6 @@ export async function Run({
             org={place.org}
             ws={place.ws}
             orgRole={ctx.orgRole}
-            wsRole={ctx.wsRole}
           />
           <StatRow
             run={run}

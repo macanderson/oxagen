@@ -43,8 +43,7 @@ import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { haltRun, type QueuedCommand, steerRun } from "./actions";
 
-const COMMANDS = ["pause", "resume", "steer", "cancel"] as const;
-type Command = (typeof COMMANDS)[number];
+type Command = "pause" | "resume" | "steer" | "cancel";
 
 /**
  * The delivery modes `dispatch_command`'s `payload.requestedMode` accepts, in
@@ -109,10 +108,13 @@ function CommandDialog({
   runId,
   write,
   ledgerControl = false,
+  testIdPrefix = "run",
 }: {
   command: Command;
   runId: string;
   ledgerControl?: boolean;
+  /** Set where a second copy of a control sits on the page (the pause banner). */
+  testIdPrefix?: string;
   /**
    * The reason a pause carries, or the text a steer sends with the delivery
    * mode picked for it. A halt ignores the mode: the contract refuses a
@@ -171,7 +173,7 @@ function CommandDialog({
     <>
       <button
         type="button"
-        data-testid={`run-${command}`}
+        data-testid={`${testIdPrefix}-${command}`}
         className={command === "cancel" ? buttonDanger : buttonSecondary}
         onClick={() => {
           setOpen(true);
@@ -296,19 +298,30 @@ function CommandLabel({ command }: { command: Command }) {
   );
 }
 
+/**
+ * The header's commands for a run in one pause state: Pause run on a run that
+ * is taking steps, Resume run on one that is paused, never both, then Steer
+ * and Cancel (spec pages/run.md, Actions depend on status).
+ */
+function commandsFor(paused: boolean): readonly Command[] {
+  return [paused ? "resume" : "pause", "steer", "cancel"];
+}
+
 function DisabledControls({
   reason,
   testId,
+  paused,
   after,
 }: {
   reason: string;
   testId: string;
+  paused: boolean;
   after?: ReactNode;
 }) {
   return (
     <div className="flex flex-col items-start gap-2 lg:items-end">
       <div className="flex flex-wrap gap-2">
-        {COMMANDS.map((command) => (
+        {commandsFor(paused).map((command) => (
           <button
             key={command}
             type="button"
@@ -359,12 +372,17 @@ export function RunControls({
   after?: ReactNode;
 }) {
   const t = useTranslations("run.commands");
+  // The one pause state the run record carries. A wrapped session records no
+  // paused flag on get_run yet (#3972), so it reads as taking steps and offers
+  // Pause run; its Fleet row still offers Resume.
+  const paused = ingressPaused;
   if (status !== "live") return null;
   if (source !== "ledger" && !acceptsCommands(enforcementTier)) {
     return (
       <DisabledControls
         reason={t("observeReason")}
         testId="observe-no-control"
+        paused={paused}
         after={after}
       />
     );
@@ -374,6 +392,7 @@ export function RunControls({
       <DisabledControls
         reason={t("roleReason")}
         testId="role-no-control"
+        paused={paused}
         after={after}
       />
     );
@@ -383,6 +402,7 @@ export function RunControls({
       <DisabledControls
         reason={t("ledgerRevoked")}
         testId="ledger-ingress-revoked"
+        paused={paused}
         after={after}
       />
     );
@@ -425,7 +445,7 @@ export function RunControls({
   }
   return (
     <div className="flex flex-wrap gap-2">
-      {COMMANDS.map((command) => (
+      {commandsFor(paused).map((command) => (
         <CommandDialog
           key={command}
           command={command}
@@ -439,5 +459,72 @@ export function RunControls({
       ))}
       {after}
     </div>
+  );
+}
+
+/**
+ * The pause banner's two actions (spec pages/run.md): ▶ Resume run, the same
+ * command the header offers, and Open the pause frame. No read names the
+ * frame a pause landed on yet (#3972), so that one is a disabled button that
+ * says so rather than a link to a guessed frame.
+ */
+export function PauseBannerActions({
+  org,
+  ws,
+  runId,
+  source,
+  ingressRevoked = false,
+  orgRole,
+  wsRole,
+}: {
+  org: string;
+  ws: string;
+  runId: string;
+  source: RunRow["source"];
+  ingressRevoked?: boolean;
+  orgRole: OrgRole;
+  wsRole: WsRole;
+}) {
+  const t = useTranslations("run.commands");
+  const allowed = canCommandRun(orgRole, wsRole) && !ingressRevoked;
+  return (
+    <span className="flex flex-col items-start gap-1.5">
+      <span className="flex flex-wrap gap-2">
+        {allowed ? (
+          <CommandDialog
+            command="resume"
+            runId={runId}
+            ledgerControl={source === "ledger"}
+            testIdPrefix="banner"
+            write={(text) => haltRun(org, ws, runId, "resume", text)}
+          />
+        ) : (
+          <button
+            type="button"
+            disabled
+            data-testid="banner-resume"
+            className={buttonSecondary}
+          >
+            <CommandLabel command="resume" />
+          </button>
+        )}
+        <button
+          type="button"
+          disabled
+          aria-describedby="run-pause-frame-why"
+          data-testid="banner-pause-frame"
+          data-gap="pause-frame"
+          className={`${buttonSecondary} disabled:cursor-not-allowed disabled:opacity-60`}
+        >
+          {t("pauseFrame")}
+        </button>
+      </span>
+      <span
+        id="run-pause-frame-why"
+        className="text-[11px] text-muted-foreground"
+      >
+        {t("pauseFrameGap")}
+      </span>
+    </span>
   );
 }

@@ -23,7 +23,7 @@ import type { MandateList } from "@/data/contracts/mandates";
 import type { RunWork } from "@/data/contracts/run-work";
 import type { RunRow } from "@/data/contracts/runs";
 import type { DataSource } from "@/data/ports";
-import type { AgentDetail } from "@/data/contracts/agents";
+import type { AgentDetail, AgentPage } from "@/data/contracts/agents";
 import { type Read, readOk } from "@/data/read";
 
 /** The instant every Run test renders at. */
@@ -658,6 +658,12 @@ type RunReads = {
    */
   agent?: Read<AgentDetail>;
   /**
+   * list_agents, read with the page for the agent card's 30-day figures. A
+   * test that says nothing about it gets a refusal, so the card prints the
+   * harness alone.
+   */
+  agents?: Read<AgentPage>;
+  /**
    * Only read when a parked call on this run names a mandate, the same rule
    * Fleet follows; refused when absent, which is what a run whose approvals
    * drew on none must not reach.
@@ -667,6 +673,13 @@ type RunReads = {
 
 /** The agent read a test left out: refused, so nothing about the agent is invented. */
 const AGENT_UNREAD: Read<AgentDetail> = {
+  ok: false,
+  reason: "denied",
+  permission: "agent.read",
+};
+
+/** The agents list a test left out: refused, so no 30-day figure is invented. */
+const AGENTS_UNREAD: Read<AgentPage> = {
   ok: false,
   reason: "denied",
   permission: "agent.read",
@@ -685,6 +698,7 @@ export function runSource(reads: RunReads) {
     mandates: unknown[][];
     outputs: unknown[][];
     agent: unknown[][];
+    agents: unknown[][];
   } = {
     get: [],
     frameBody: [],
@@ -696,6 +710,7 @@ export function runSource(reads: RunReads) {
     mandates: [],
     outputs: [],
     agent: [],
+    agents: [],
   };
   const refuse = () => Promise.reject(new Error("not a Run read"));
   const answer = <T>(
@@ -765,7 +780,7 @@ export function runSource(reads: RunReads) {
       ),
     },
     agents: {
-      list: refuse,
+      list: answer("agents", reads.agents ?? AGENTS_UNREAD),
       get: answer("agent", reads.agent ?? AGENT_UNREAD),
       toolbelt: refuse,
       incidents: refuse,

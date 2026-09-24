@@ -30,6 +30,13 @@ const AFTER_ANSWER = [
   "model.request",
 ] as const;
 
+/** The summary each greyed frame carries, keyed for the catalogue (which refuses dots). */
+const NOT_YET = {
+  "skills.resolved": "skillsResolved",
+  "context.assembled": "contextAssembled",
+  "model.request": "modelRequest",
+} as const satisfies Record<(typeof AFTER_ANSWER)[number], string>;
+
 /** The run's interjection frame, when its recording carries one. */
 export function interjectionOf(detail: RunDetail): RunFrame | null {
   return detail.frames.frames.find((frame) => frame.type === INTERJECT) ?? null;
@@ -107,8 +114,14 @@ export function RunInterjection({
   detail,
   interject,
   prompt,
+  remote = null,
   ws,
 }: {
+  /**
+   * `<host>/<owner>/<repo>@<sha>` from the checkout the collector recorded;
+   * null when the run's checkout was not captured.
+   */
+  remote?: string | null;
   detail: RunDetail;
   /**
    * The operator's first message, from the run's transcript: the text the
@@ -144,6 +157,9 @@ export function RunInterjection({
     run.operatorName,
     t("tier", { tier: run.enforcementTier }),
   ].filter((part): part is string => part !== null);
+  // The remote and commit the checkout recorded; a run whose checkout was not
+  // captured says so in place rather than dropping the part.
+  const remoteText = remote ?? t("remoteNotCaptured");
   return (
     <div data-testid="run-interjection" className="flex flex-col gap-5">
       <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -157,6 +173,13 @@ export function RunInterjection({
             className={`${mono} text-[12.5px] text-muted-foreground`}
           >
             {meta.join(" · ")}
+            {" · "}
+            <span
+              data-testid="interjection-remote"
+              data-gap={remote === null ? "run-work" : undefined}
+            >
+              {remoteText}
+            </span>
           </p>
         </div>
         <Badge tone={answer === null ? "approval" : "allowed"}>
@@ -266,11 +289,9 @@ export function RunInterjection({
                 >
                   {t(path)}
                 </h3>
-                {path === "linkPath" ? (
-                  <p className="text-xs text-muted-foreground">
-                    {t("linkTo", { ws })}
-                  </p>
-                ) : null}
+                <p className="text-xs text-muted-foreground">
+                  {path === "linkPath" ? t("linkTo", { ws }) : t("createAs")}
+                </p>
                 <p
                   data-gap="interjection-consequences"
                   className="text-xs text-muted-foreground"
@@ -280,6 +301,13 @@ export function RunInterjection({
               </section>
             ))}
           </div>
+          <p
+            data-testid="interjection-midrun"
+            data-gap="interjection-defaults"
+            className="border-l-2 border-gold pl-3 text-xs text-muted-foreground"
+          >
+            {t("midRunNotRecorded")}
+          </p>
           <section
             aria-labelledby="interjection-timeout"
             className="rounded-lg border border-border p-3"
@@ -324,7 +352,11 @@ export function RunInterjection({
             {greyed.map((kind) => (
               <FrameRow
                 key={kind}
-                frame={{ type: kind, summary: t("waitsOn"), at: null }}
+                frame={{
+                  type: kind,
+                  summary: t(`notYet.${NOT_YET[kind]}`),
+                  at: null,
+                }}
                 pending
               />
             ))}

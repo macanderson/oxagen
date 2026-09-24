@@ -4058,6 +4058,7 @@ type Messages = {
         halted: string;
       };
       parked: string;
+      player: string;
     };
     transcript: {
       title: string;
@@ -4177,6 +4178,11 @@ type Messages = {
       first: string;
       last: string;
       index: string;
+      thinking: string;
+      expandThinking: string;
+      collapseThinking: string;
+      chipsNone: string;
+      noneShown: string;
     };
     frames: {
       title: string;
@@ -4253,6 +4259,14 @@ type Messages = {
         failedNotRecorded: string;
         productive: string;
         productiveNote: string;
+        perTurnChart: string;
+        medianNotRecorded: string;
+        savedNotRecorded: string;
+        batchedNotRecorded: string;
+        priceNotRecorded: string;
+        parallelNotRecorded: string;
+        advancedNotRecorded: string;
+        trendNotRecorded: string;
       };
       tools: {
         title: string;
@@ -4389,6 +4403,8 @@ type Messages = {
         applied: string;
       };
       ledgerReasonHelp: string;
+      pauseFrame: string;
+      pauseFrameGap: string;
     };
     record: {
       reread: string;
@@ -4516,6 +4532,12 @@ type Messages = {
         view: string;
         fork: string;
         retry: string;
+      };
+      actions: {
+        fork: string;
+        forkNoSeq: string;
+        bisect: string;
+        export: string;
       };
     };
     waterfall: {
@@ -4658,6 +4680,11 @@ type Messages = {
       pathWhy: string;
       pausedTitle: string;
       pathRecorded: string;
+      pausedFacts: string;
+      runs30d: string;
+      copiedText: string;
+      statusPaused: string;
+      statusParked: string;
     };
     summary: {
       title: string;
@@ -4681,7 +4708,6 @@ type Messages = {
       noPrompt: string;
       oneShot: string;
       corrective: string;
-      correctivePrompts: string;
       nothingWasted: string;
       unproductive: string;
       soFar: string;
@@ -4729,6 +4755,7 @@ type Messages = {
           commit: string;
         };
       };
+      titleNotRead: string;
     };
     policy: {
       title: string;
@@ -4771,6 +4798,8 @@ type Messages = {
         };
         supersededBy: string;
         footer: string;
+        preview: string;
+        previewGap: string;
       };
       window: {
         title: string;
@@ -4785,6 +4814,10 @@ type Messages = {
         cited: string;
       };
       stats: {
+        title: string;
+        none: string;
+      };
+      walk: {
         title: string;
         none: string;
       };
@@ -4917,7 +4950,6 @@ type Messages = {
       timeoutTitle: string;
       timeoutNotRecorded: string;
       pending: string;
-      waitsOn: string;
       notHappened: string;
       skillLoaded: string;
       workspaceCreated: string;
@@ -4925,6 +4957,64 @@ type Messages = {
       cut: string;
       linkTo: string;
       promptNotRecorded: string;
+      remoteNotCaptured: string;
+      createAs: string;
+      cardNotRecorded: string;
+      midRunNotRecorded: string;
+      notYet: {
+        skillsResolved: string;
+        contextAssembled: string;
+        modelRequest: string;
+      };
+    };
+    player: {
+      timeline: string;
+      shown: string;
+      legend: string;
+      family: {
+        label: string;
+        model: string;
+        tool: string;
+        governance: string;
+        context: string;
+        operator: string;
+        lifecycle: string;
+      };
+      turn: string;
+      turnAfterSteer: string;
+      tickLabel: string;
+      tickTitle: string;
+      end: string;
+      status: {
+        live: string;
+        sealed: string;
+        halted: string;
+      };
+      hint: string;
+      turnsInView: string;
+      first: string;
+      previous: string;
+      next: string;
+      last: string;
+      replay: string;
+      pause: string;
+      scrub: string;
+      position: string;
+      unpriced: string;
+      of: string;
+      byHere: string;
+      speed: string;
+      keys: string;
+      frameTitle: string;
+      stage: string;
+      digest: string;
+      body: string;
+      cost: string;
+      unpricedFrame: string;
+      previousFrame: string;
+      nextFrame: string;
+      frameOf: string;
+      empty: string;
     };
   };
   runOutcomes: {

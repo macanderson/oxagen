@@ -21,7 +21,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
-import { mandateList, mandateRow } from "@/test/mandate-views";
+import { nth } from "@/test/nth";
+import { agentPage, agentRow } from "../agents/agents.builders";
 import {
   NOW,
   runChain,
@@ -137,6 +138,7 @@ async function renderRun(
     reads?: string;
     spine?: string;
     viewer?: typeof ctx;
+    viewerName?: string | null;
   } = {},
 ) {
   const { source, calls } = runSource(reads);
@@ -151,6 +153,7 @@ async function renderRun(
     body: view.body ?? null,
     reads: view.reads ?? null,
     spine: view.spine ?? null,
+    viewerName: view.viewerName ?? null,
     now: NOW,
   });
   const { container } = render(<IntlProvider>{element}</IntlProvider>);
@@ -234,30 +237,38 @@ describe("header", () => {
   });
 
   it("leaves out the generated name when automatic names are disabled", async () => {
-    await renderRun({
-      detail: ok(
-        runDetail({
-          run: runRow({
-            enrichmentEnabled: false,
-            name: "Old generated name",
-            taskRef: "A derived project label",
-            summary: null,
+    await renderRun(
+      {
+        detail: ok(
+          runDetail({
+            run: runRow({
+              enrichmentEnabled: false,
+              name: "Old generated name",
+              taskRef: "A derived project label",
+              summary: null,
+            }),
           }),
-        }),
-      ),
-      transcript: ok(runTranscript()),
-    });
+        ),
+        transcript: ok(runTranscript()),
+      },
+      { tab: "issues" },
+    );
     expect(screen.queryByText("Old generated name")).toBeNull();
     expect(
       within(screen.getByTestId("run-when")).getByText(
         "A derived project label",
       ),
     ).toBeTruthy();
+    // The workspace's switch sits on the Issues tab beside the organization's
+    // follow-through setting, not in the Summary panel.
     expect(
       screen.getByRole("checkbox", {
         name: "Automatic run names and summaries",
       }),
     ).not.toBeChecked();
+    expect(
+      within(screen.getByTestId("run-summary")).queryByRole("checkbox"),
+    ).toBeNull();
   });
 
   it("draws the agent, status and tier chips, and the rig the run ran on", async () => {
@@ -424,14 +435,30 @@ describe("header", () => {
     expect(operator).toHaveTextContent("not recordedoperator");
   });
 
-  it("draws the pause banner only while ingress is paused", async () => {
+  it("draws the pause banner only while ingress is paused, with Resume run and Open the pause frame", async () => {
     await renderRun({
-      detail: ok(runDetail({ run: runRow({ ingressPaused: true }) })),
+      detail: ok(
+        runDetail({
+          run: runRow({
+            status: "live",
+            sealedAt: null,
+            source: "ledger",
+            ingressPaused: true,
+          }),
+        }),
+      ),
       transcript: ok(runTranscript()),
     });
-    expect(screen.getByTestId("run-paused")).toHaveTextContent(
-      "Ingress is paused",
+    const banner = screen.getByTestId("run-paused");
+    expect(banner).toHaveTextContent("Ingress is paused");
+    expect(within(banner).getByTestId("banner-resume")).toBeEnabled();
+    expect(within(banner).getByTestId("banner-resume")).toHaveTextContent(
+      "Resume run",
     );
+    // No read names the frame a pause landed on (#3972), so the control is
+    // off and says why rather than opening a guessed frame.
+    expect(within(banner).getByTestId("banner-pause-frame")).toBeDisabled();
+    expect(banner).toHaveTextContent("#3972");
     cleanup();
     await renderRun({
       detail: ok(runDetail()),
@@ -480,15 +507,146 @@ describe("header", () => {
   });
 });
 
+describe("header figures and denied viewer", () => {
+  it("prints the agent's runs and spend over 30 days from its list_agents row, walking the pages to find it", async () => {
+    const row = agentRow({
+      id: "agt_1",
+      slug: "release-bot",
+      name: "Release bot",
+      agentKey: "acme.core.release-bot",
+      operatorId: null,
+      runs30d: 212,
+      spend30d: {
+        micros: "612480000",
+        currency: "USD",
+        basis: "client_attested",
+      },
+      incidents: 0,
+    });
+    const { source, calls } = runSource({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+    });
+    let page = 0;
+    source.agents.list = (...args: unknown[]) => {
+      calls.agents.push(args);
+      page += 1;
+      return Promise.resolve(
+        page === 1
+          ? agentPage([{ ...row, id: "agt_0", slug: "other-bot" }], "c2")
+          : agentPage([row]),
+      );
+    };
+    const element = await Run({
+      ctx,
+      source,
+      runId: "tse_7k2m9q",
+      tab: null,
+      zoom: null,
+      kinds: null,
+      frames: null,
+      body: null,
+      reads: null,
+      spine: null,
+      now: NOW,
+    });
+    render(<IntlProvider>{element}</IntlProvider>);
+    expect(calls.agents.map((call) => call[1])).toEqual([
+      { cursor: null },
+      { cursor: "c2" },
+    ]);
+    const sub = within(screen.getByTestId("run-header")).getByTestId(
+      "run-agent-sub",
+    );
+    expect(sub).toHaveTextContent("212 runs 30d");
+    expect(sub).toHaveTextContent("$612.48");
+  });
+
+  it("prints the harness alone when list_agents is refused (negative)", async () => {
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+    });
+    expect(
+      within(screen.getByTestId("run-header")).getByTestId("run-agent-sub"),
+    ).not.toHaveTextContent("runs 30d");
+  });
+
+  it("reads paused or parked in the status word of a live run that is not moving", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            status: "live",
+            source: "ledger",
+            ingressPaused: true,
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-status-word")).toHaveTextContent("paused");
+    cleanup();
+    await renderRun({
+      detail: ok(runDetail({ run: runRow({ status: "live" }) })),
+      transcript: ok(runTranscript()),
+      approvals: ok({
+        items: [
+          {
+            id: "apr_1",
+            runId: "tse_7k2m9q",
+            tool: "create_release",
+            agentKey: "acme.core.release-bot",
+            requester: "usr_marcusbell",
+            mandateId: null,
+            rule: null,
+            autoEligibility: null,
+            createdAt: new Date(NOW - 60_000).toISOString(),
+            expiresAt: new Date(NOW + 3_600_000).toISOString(),
+          },
+        ],
+        more: false,
+      }),
+    });
+    expect(screen.getByTestId("run-status-word")).toHaveTextContent("parked");
+  });
+
+  it("names the signed-in person on the denied state's Signed in as line", async () => {
+    await renderRun({ detail: DENIED }, { viewerName: "Marcus Bell" });
+    expect(screen.getByTestId("run-denied-viewer")).toHaveTextContent(
+      "Marcus Bell · organization Owner · workspace Member · core-platform",
+    );
+  });
+});
+
 describe("controls", () => {
-  it("draws pause, resume, steer and cancel on a live wrapped run", async () => {
+  it("draws pause, steer and cancel on a live wrapped run, and no resume beside pause", async () => {
     await renderRun({
       detail: ok(runDetail({ run: runRow({ status: "live" }) })),
       transcript: ok(runTranscript()),
     });
-    for (const command of ["pause", "resume", "steer", "cancel"]) {
+    for (const command of ["pause", "steer", "cancel"]) {
       expect(screen.getByTestId(`run-${command}`)).not.toBeDisabled();
     }
+    expect(screen.queryByTestId("run-resume")).toBeNull();
+  });
+
+  it("offers Resume run in place of Pause run on a paused run", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            status: "live",
+            source: "ledger",
+            ingressPaused: true,
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    const actions = within(screen.getByTestId("run-actions"));
+    expect(actions.getByTestId("run-resume")).toBeEnabled();
+    expect(actions.queryByTestId("run-pause")).toBeNull();
   });
 
   it("allows ledger ingress control and explains the remaining control limit", async () => {
@@ -531,13 +689,14 @@ describe("controls", () => {
       .getAllByRole("button")
       .map((button) => button.textContent);
     expect(labels).toEqual(["Fork replay", "Bisect", "Export"]);
-    // Summarize again lives in the Summary panel, not in the header.
-    expect(
-      within(screen.getByTestId("run-summary")).getByTestId("run-resummarize"),
-    ).toBeTruthy();
+    // A run with a summary offers no Summarize in the Summary panel: the
+    // panel holds the summary, its badge and Check it against the frames.
+    const summary = within(screen.getByTestId("run-summary"));
+    expect(summary.queryByTestId("run-resummarize")).toBeNull();
+    expect(summary.queryByTestId("run-summarize")).toBeNull();
   });
 
-  it("orders a live run's actions as Pause, Resume, Steer, Cancel and then Export, disabled until the seal", async () => {
+  it("orders a live run's actions as Pause, Steer, Cancel and then Export, disabled until the seal", async () => {
     await renderRun({
       detail: ok(
         runDetail({ run: runRow({ status: "live", sealedAt: null }) }),
@@ -547,7 +706,7 @@ describe("controls", () => {
     const actions = within(screen.getByTestId("run-actions"));
     expect(
       actions.getAllByRole("button").map((button) => button.textContent),
-    ).toEqual(["❙❙Pause run", "▶Resume run", "Steer", "Cancel", "Export"]);
+    ).toEqual(["❙❙Pause run", "Steer", "Cancel", "Export"]);
     const exported = actions.getByTestId("run-export");
     expect(exported).toBeDisabled();
     expect(exported).toHaveAttribute(
@@ -573,16 +732,18 @@ describe("controls", () => {
     expect(screen.getByTestId("run-export").getAttribute("title")).toContain(
       "Owner or Admin role",
     );
-    expect(screen.getByTestId("run-resummarize")).not.toBeDisabled();
     await expectNoAxe(container);
   });
 
   it("draws both record writes disabled for an organization Viewer (negative)", async () => {
     await renderRun(
-      { detail: ok(runDetail()), transcript: ok(runTranscript()) },
+      {
+        detail: ok(runDetail({ run: runRow({ summary: null }) })),
+        transcript: ok(runTranscript()),
+      },
       { viewer: viewerCtx },
     );
-    expect(screen.getByTestId("run-resummarize")).toBeDisabled();
+    expect(screen.getByTestId("run-summarize")).toBeDisabled();
     expect(screen.getByTestId("summarize-no-role")).toBeTruthy();
     expect(screen.getByTestId("run-export")).toBeDisabled();
   });
@@ -732,7 +893,12 @@ describe("tabs", () => {
       String(runTranscript().entries.length),
     );
     expect(screen.getByTestId("run-tab-count-issues")).toHaveTextContent("1");
-    expect(screen.getByTestId("run-tab-count-actions")).toHaveTextContent("0");
+    // A run with no policy decision names the tab by its player and counts
+    // the frames it plays.
+    expect(tabs.getByRole("tab", { name: /^Player/ })).toBeTruthy();
+    expect(screen.getByTestId("run-tab-count-actions")).toHaveTextContent(
+      String(runRow().frames),
+    );
     // Nothing is parked on this run, so no tab carries the dot.
     expect(screen.queryByTestId("run-tab-parked-actions")).toBeNull();
     expect(screen.getByTestId("run-tab-count-chain")).toHaveTextContent(
@@ -755,9 +921,12 @@ describe("tabs", () => {
         { detail: ok(runDetail()), transcript: ok(runTranscript()) },
         { tab },
       );
-      expect(
-        screen.getByRole("tab", { name: /Governed actions/ }),
-      ).toHaveAttribute("aria-selected", "true");
+      // No policy decision is recorded, so the tab reads Player.
+      expect(screen.getByRole("tab", { name: /Player/ })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      expect(screen.getByTestId("frame-player")).toBeTruthy();
     }
   });
 });
@@ -846,13 +1015,13 @@ describe("transcript", () => {
       { tab: "transcript", zoom: "everything" },
     );
     // Nine frames across the steps that have something to read; the frames
-    // of the steps with nothing to read are the Frames tab's.
+    // of the steps with nothing to read are the Governed actions tab's.
     expect(screen.getAllByTestId("transcript-frame")).toHaveLength(9);
     expect(screen.getByText('{"open":34}')).toBeTruthy();
     // The digest-only model call has no row, so nothing says it has no body.
     expect(screen.queryByText(/kept a digest and no body/)).toBeNull();
     expect(
-      screen.getByRole("link", { name: "Frame 7 on the Frames tab" }),
+      screen.getByRole("link", { name: "Frame 7 on the Governed actions tab" }),
     ).toHaveAttribute(
       "href",
       "/acme/core-platform/runs/tse_7k2m9q?tab=actions&body=7",
@@ -1049,12 +1218,107 @@ describe("frames", () => {
       { detail: ok(runDetail()), transcript: ok(runTranscript()) },
       { tab: "frames" },
     );
-    const [row] = screen.getAllByTestId("frame-row");
-    expect(row).toHaveTextContent("model.call_completed");
-    expect(row).toHaveTextContent("stage act");
-    expect(row).toHaveTextContent("sha256:5f2d1c8a");
-    expect(row).toHaveTextContent("bytes retained");
+    const frame = screen.getByTestId("player-frame");
+    expect(frame).toHaveTextContent("Frame 11 · model.call_completed");
+    expect(frame).toHaveTextContent("act");
+    expect(frame).toHaveTextContent("sha256:5f2d1c8a");
+    expect(frame).toHaveTextContent("bytes retained");
+    expect(frame).toHaveTextContent("gateway_observed");
+    expect(screen.getByTestId("player-timeline")).toHaveTextContent(
+      "1 frames shown · 431 in the run",
+    );
+    // Governed actions draws no approvals panel: the drawer owns approvals.
+    expect(screen.queryByTestId("approval")).toBeNull();
     await expectNoAxe(container);
+  });
+
+  it("steps the player through the frames with Previous, Next, the list and the keys", async () => {
+    await renderRun(
+      {
+        detail: ok(
+          runDetail({
+            frames: {
+              frames: [
+                runFrame({
+                  cursor: "a",
+                  seq: "1",
+                  type: "agent_start",
+                  stage: "admission",
+                }),
+                runFrame({
+                  cursor: "b",
+                  seq: "2",
+                  type: "model.request",
+                  stage: "model",
+                }),
+                runFrame({
+                  cursor: "c",
+                  seq: "3",
+                  type: "policy_decision",
+                  stage: "tool",
+                  cost: null,
+                }),
+                runFrame({
+                  cursor: "d",
+                  seq: "4",
+                  type: "control.steer",
+                  stage: "admission",
+                  cost: null,
+                }),
+                runFrame({
+                  cursor: "e",
+                  seq: "5",
+                  type: "tool_call",
+                  stage: "tool",
+                }),
+              ],
+              cursor: null,
+              more: false,
+            },
+          }),
+        ),
+        transcript: ok(runTranscript()),
+      },
+      { tab: "actions" },
+    );
+    const title = () => screen.getByTestId("player-frame");
+    // The player opens on the last frame.
+    expect(title()).toHaveTextContent("Frame 5 · tool_call");
+    fireEvent.click(screen.getByTestId("player-previous"));
+    expect(title()).toHaveTextContent("Frame 4 · control.steer");
+    fireEvent.click(
+      nth(screen.getAllByTestId("player-row"), 0, "a player row"),
+    );
+    expect(title()).toHaveTextContent("Frame 1 · agent_start");
+    expect(screen.getByTestId("player-previous")).toBeDisabled();
+    fireEvent.click(screen.getByTestId("player-next"));
+    expect(title()).toHaveTextContent("Frame 2 · model.request");
+    fireEvent.keyDown(screen.getByTestId("frame-player"), { key: "End" });
+    expect(title()).toHaveTextContent("Frame 5 · tool_call");
+    fireEvent.keyDown(screen.getByTestId("frame-player"), { key: "ArrowLeft" });
+    expect(title()).toHaveTextContent("Frame 4 · control.steer");
+    // One tick per frame, each in its family, and a turn band opens at the steer.
+    const ticks = screen.getAllByTestId("player-tick");
+    expect(ticks.map((tick) => tick.getAttribute("data-family"))).toEqual([
+      "lifecycle",
+      "model",
+      "governance",
+      "operator",
+      "tool",
+    ]);
+    expect(screen.getAllByTestId("player-band")).toHaveLength(2);
+    expect(screen.getByTestId("player-timeline")).toHaveTextContent(
+      "Turn 2 · after steer",
+    );
+    expect(screen.getByTestId("player-legend")).toHaveTextContent(
+      "model calls1",
+    );
+    fireEvent.click(nth(ticks, 2, "a third tick"));
+    expect(title()).toHaveTextContent("Frame 3 · policy_decision");
+    // The cost by here sums the priced frames up to the open one, on their basis.
+    expect(screen.getByTestId("player-cost")).toHaveTextContent(
+      "gateway_observed",
+    );
   });
 
   it("names every redaction by its reason", async () => {
@@ -1188,9 +1452,10 @@ describe("frames", () => {
       },
       { tab: "frames", frames: "ZjoxMA" },
     );
-    const links = screen.getAllByTestId("frame-open-body");
-    expect(links).toHaveLength(1);
-    expect(links[0]).toHaveAttribute(
+    // The player opens on the last frame, which kept only its digest.
+    expect(screen.queryByTestId("frame-open-body")).toBeNull();
+    fireEvent.click(screen.getByTestId("player-previous"));
+    expect(screen.getByTestId("frame-open-body")).toHaveAttribute(
       "href",
       "/acme/core-platform/runs/tse_7k2m9q?tab=actions&frames=ZjoxMA&body=11",
     );
@@ -1283,7 +1548,7 @@ describe("frames", () => {
     expect(
       screen.getByRole("region", { name: "Frame 999 body" }),
     ).toHaveTextContent("not_found");
-    expect(screen.getAllByTestId("frame-row")).toHaveLength(1);
+    expect(screen.getAllByTestId("player-row")).toHaveLength(1);
   });
 });
 
@@ -1322,7 +1587,24 @@ describe("cost", () => {
     const instruments = screen.getAllByTestId("run-instrument");
     expect(instruments).toHaveLength(6);
     expect(instruments[0]).toHaveTextContent("gateway_observed");
-    expect(instruments[2]).toHaveTextContent("113,328 in, 15,015 out");
+    // The Tokens instrument prints the total the class table sums to, with
+    // in and out beneath it.
+    expect(instruments[2]).toHaveTextContent("128,343");
+    expect(instruments[2]).toHaveTextContent("113,328 in · 15,015 out");
+    // A field the rollup does not hold is a line naming its issue, never a
+    // dropped field or a zero.
+    expect(instruments[0]).toHaveTextContent(
+      "delta against the agent’s median run not recorded (#3984)",
+    );
+    expect(instruments[2]).toHaveTextContent(
+      "effective input price not recorded (#3892)",
+    );
+    expect(instruments[5]).toHaveTextContent(
+      "delta against the last 30 days not recorded (#3984)",
+    );
+    expect(screen.getByTestId("cost-class-basis")).toHaveTextContent(
+      "gateway_observed",
+    );
     expect(instruments[3]).toHaveTextContent(
       "12 turns · 96 steps · 431 frames",
     );
@@ -1421,6 +1703,10 @@ describe("failures", () => {
     expect(
       state.getByText("organization Owner · workspace Member · core-platform"),
     ).toBeTruthy();
+    // A viewer with no recorded name is signed in as their roles alone.
+    expect(state.getByTestId("run-denied-viewer")).toHaveTextContent(
+      /^organization Owner/,
+    );
     expect(state.getByText("Needed")).toBeTruthy();
     expect(state.getByText("Decided by")).toBeTruthy();
     const request = state.getByRole("button", { name: "Request access" });
@@ -1581,6 +1867,30 @@ describe("chain and seal", () => {
     await expectNoAxe(container);
   });
 
+  it("ends the tab with Fork replay from frame N, Bisect against another run and Export the bundle", async () => {
+    await renderRun(
+      {
+        detail: ok(runDetail()),
+        transcript: ok(runTranscript()),
+        chain: ok(runChain()),
+      },
+      { tab: "chain" },
+    );
+    const actions = within(screen.getByTestId("chain-actions"));
+    const labels = actions
+      .getAllByRole("button")
+      .map((button) => button.textContent);
+    expect(labels).toEqual([
+      `Fork replay from frame ${runChain().lastSeq ?? ""}`,
+      "Bisect against another run",
+      "Export the bundle",
+    ]);
+    // The header keeps its own short names for the same actions.
+    expect(
+      within(screen.getByTestId("run-actions")).getByTestId("run-export"),
+    ).toHaveTextContent(/^Export$/);
+  });
+
   it("names its own failure when the chain read is refused (negative)", async () => {
     await renderRun(
       {
@@ -1596,7 +1906,7 @@ describe("chain and seal", () => {
 });
 
 describe("approvals on the run", () => {
-  it("reads list_approvals narrowed to this run on every tab, and the resolved half only on Governed actions", async () => {
+  it("reads list_approvals narrowed to this run on every tab, and the resolved half only on Policy", async () => {
     const { calls } = await renderRun(
       {
         detail: ok(runDetail()),
@@ -1616,7 +1926,7 @@ describe("approvals on the run", () => {
         approvals: ok({ items: [], more: false }),
         resolvedApprovals: ok([]),
       },
-      { tab: "actions" },
+      { tab: "policy" },
     );
     expect(opened.calls.resolvedApprovals).toEqual([
       [ctx, { runId: "tse_7k2m9q" }],
@@ -1664,85 +1974,9 @@ describe("approvals on the run", () => {
     expect(screen.queryByTestId("resolved-approval")).toBeNull();
   });
 
-  it("draws one card per approval recorded on the run", async () => {
-    await renderRun(
-      {
-        detail: ok(runDetail()),
-        approvals: ok({
-          items: [
-            {
-              id: "apr_1",
-              runId: "tse_7k2m9q",
-              tool: "create_release",
-              agentKey: "acme.core.release-bot",
-              requester: "usr_marcusbell",
-              mandateId: null,
-              rule: null,
-              autoEligibility: null,
-              createdAt: new Date(NOW - 60_000).toISOString(),
-              expiresAt: new Date(NOW + 3_600_000).toISOString(),
-            },
-          ],
-          more: false,
-        }),
-        resolvedApprovals: ok([]),
-      },
-      { tab: "approvals" },
-    );
-    const card = screen.getAllByTestId("approval")[0];
-    if (!card) throw new Error("Approval card missing");
-    expect(card).toHaveTextContent("create_release");
-  });
-
-  // The Approvals tab is the second surface of `resolve_approval` and
-  // `get_auto_eligibility` (capability-ui-map.json, binding.also). One
-  // approval reads and decides the same on both pages, so the card here
-  // carries the four-hop chain and the Decide control Fleet's panel carries.
-  it("carries the chain and the decision on the run's own card, as Fleet does", async () => {
-    await renderRun(
-      {
-        detail: ok(runDetail()),
-        approvals: ok({
-          items: [
-            {
-              id: "apr_1",
-              runId: "tse_7k2m9q",
-              tool: "create_release",
-              agentKey: "acme.core.release-bot",
-              requester: "usr_marcusbell",
-              mandateId: null,
-              rule: null,
-              autoEligibility: {
-                ruleRef: "small-vendor-payments",
-                ok: false,
-                reasons: ["measure_above_ceiling:amount"],
-                floor: false,
-              },
-              createdAt: new Date(NOW - 60_000).toISOString(),
-              expiresAt: new Date(NOW + 3_600_000).toISOString(),
-            },
-          ],
-          more: false,
-        }),
-        resolvedApprovals: ok([]),
-      },
-      { tab: "approvals" },
-    );
-    const card = screen.getAllByTestId("approval")[0];
-    if (!card) throw new Error("Approval card missing");
-    const chain = within(card).getByTestId("chain");
-    expect(chain).toHaveTextContent("usr_marcusbell");
-    expect(chain).toHaveTextContent("acme.core.release-bot");
-    expect(within(card).getByTestId("eligibility")).toHaveTextContent(
-      "small-vendor-payments",
-    );
-    expect(within(card).getByTestId("decide")).toHaveTextContent("Decide");
-  });
-
-  // The Run page used to hand the panel an empty map, so every card here said
-  // the mandate could not be read on the one page the call's run is in front
-  // of you. It reads `list_mandates` under Fleet's rule now.
-  it("reads the mandate ledger only when a parked call names a mandate, and draws its bar", async () => {
+  // The spec drops the approvals panel from Governed actions: a parked call is
+  // decided from Fleet and the approvals drawer, which read the same record.
+  it("draws no approval card on Governed actions while a call is parked, and reads no mandate for one", async () => {
     const { calls } = await renderRun(
       {
         detail: ok(runDetail()),
@@ -1764,45 +1998,13 @@ describe("approvals on the run", () => {
           more: false,
         }),
         resolvedApprovals: ok([]),
-        mandates: mandateList([mandateRow()]),
       },
-      { tab: "approvals" },
+      { tab: "actions" },
     );
-    expect(calls.mandates).toEqual([[ctx, { agentId: null }]]);
-    const card = screen.getAllByTestId("approval")[0];
-    if (!card) throw new Error("Approval card missing");
-    expect(within(card).getByTestId("mandate-bar")).toHaveAttribute(
-      "data-measure",
-      "amount",
-    );
-  });
-
-  it("makes no mandate read for a run whose parked calls name none (negative)", async () => {
-    const { calls } = await renderRun(
-      {
-        detail: ok(runDetail()),
-        approvals: ok({
-          items: [
-            {
-              id: "apr_1",
-              runId: "tse_7k2m9q",
-              tool: "create_release",
-              agentKey: null,
-              requester: "usr_marcusbell",
-              mandateId: null,
-              rule: null,
-              autoEligibility: null,
-              createdAt: new Date(NOW - 60_000).toISOString(),
-              expiresAt: new Date(NOW + 3_600_000).toISOString(),
-            },
-          ],
-          more: false,
-        }),
-        resolvedApprovals: ok([]),
-      },
-      { tab: "approvals" },
-    );
+    expect(screen.queryByTestId("approval")).toBeNull();
+    expect(screen.queryByTestId("decide")).toBeNull();
     expect(calls.mandates).toEqual([]);
+    expect(screen.getByTestId("run-tab-parked-actions")).toBeTruthy();
   });
 
   // #3153: the receipt a decision rule leaves when it releases a call with
@@ -1832,7 +2034,7 @@ describe("approvals on the run", () => {
           },
         ]),
       },
-      { tab: "approvals" },
+      { tab: "policy" },
     );
     expect(screen.getByTestId("approval-execution")).toHaveTextContent(
       "succeeded",
@@ -1865,7 +2067,7 @@ describe("approvals on the run", () => {
           },
         ]),
       },
-      { tab: "approvals" },
+      { tab: "policy" },
     );
     expect(screen.getByTestId("resolved-approver")).toHaveTextContent(
       /^system$/,
@@ -1882,7 +2084,7 @@ describe("approvals on the run", () => {
         approvals: ok({ items: [], more: false }),
         resolvedApprovals: DOWN,
       },
-      { tab: "approvals" },
+      { tab: "policy" },
     );
     expect(screen.getByText(/frame_store_unreachable/)).toBeTruthy();
   });
@@ -1956,7 +2158,7 @@ describe("figures", () => {
     await expectNoAxe(container);
   });
 
-  it("counts every prompt after the first as corrective, in Prompts and in Wasted", async () => {
+  it("counts every prompt after the first as corrective, and captions Wasted by what it measures", async () => {
     await renderRun({
       detail: ok(runDetail()),
       transcript: ok(
@@ -1972,7 +2174,10 @@ describe("figures", () => {
     const stats = within(screen.getByTestId("run-stats"));
     expect(stats.getByText("3")).toHaveClass("text-info");
     expect(stats.getByText("2 corrective")).toBeTruthy();
-    expect(stats.getByText("2 corrective prompts")).toBeTruthy();
+    // Wasted is the rollup's unproductive share, not a count of prompts, so
+    // its caption names what it measures and never the Prompts count.
+    expect(stats.queryByText("2 corrective prompts")).toBeNull();
+    expect(stats.getByText("unproductive steps")).toBeTruthy();
   });
 
   it("marks a prompt count from a transcript that stopped short as a floor (negative)", async () => {
@@ -2232,10 +2437,14 @@ describe("policy and context", () => {
     expect(context.queryByText("Bash")).toBeNull();
     // The window itself needs USED_CONTEXT edges (G10), and says so.
     expect(screen.getByText("No window on record")).toBeTruthy();
+    // Walk the window waits on the same edges, and says so.
     expect(
-      within(
-        screen.getByRole("region", { name: "Steering manifest" }),
-      ).getByText(/This run sealed no steering.manifest frame/),
+      screen.getByRole("region", { name: "Walk the window" }),
+    ).toHaveTextContent("G10");
+    expect(
+      within(screen.getByRole("region", { name: "Manifest frame" })).getByText(
+        /This run sealed no steering.manifest frame/,
+      ),
     ).toBeTruthy();
     cleanup();
     await renderRun(
@@ -2337,7 +2546,7 @@ describe("policy and context", () => {
     );
     expect(calls.frameBody).toEqual([[ctx, "tse_7k2m9q", "2"]]);
     const panel = within(
-      screen.getByRole("region", { name: "Steering manifest" }),
+      screen.getByRole("region", { name: "Manifest frame" }),
     );
     expect(panel.getByTestId("run-manifest-tally")).toHaveTextContent(
       "1 rendered · 1 cut · 1,340 tok",
@@ -2347,6 +2556,8 @@ describe("policy and context", () => {
     expect(cut).toHaveTextContent("ctx.release.old-format");
     expect(cut).toHaveTextContent("it did not fit the token budget");
     expect(panel.getByText(/bundle v7 · frame 2/)).toBeTruthy();
+    // Steering has no Preview to open yet (#3879), so the control says so.
+    expect(panel.getByTestId("run-manifest-preview")).toBeDisabled();
     await expectNoAxe(container);
   });
 

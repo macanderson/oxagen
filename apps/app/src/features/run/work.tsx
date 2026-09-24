@@ -283,7 +283,11 @@ export function ChangesPanel({
   );
 }
 
-/** The tools the rollup counted, dearest first by calls; the rollup keeps no per-tool money. */
+/**
+ * The tools the rollup counted, most called first. The spec ranks the dearest
+ * tools by money, and the rollup keeps no per-tool money (#3892), so the panel
+ * names its order by calls rather than claiming a cost order.
+ */
 export function DearestTools({
   byTool,
   limit,

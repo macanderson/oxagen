@@ -18,6 +18,7 @@ import {
   runRow,
   runSource,
   runTranscript,
+  runWork,
   transcriptBody,
   transcriptEntry,
 } from "./run.builders";
@@ -90,6 +91,7 @@ const interject = runFrame({
 async function renderRun(
   frames: ReturnType<typeof runFrame>[],
   transcript = runTranscript(),
+  work?: Parameters<typeof runSource>[0]["work"],
 ) {
   const { source } = runSource({
     detail: readOk(
@@ -99,6 +101,7 @@ async function renderRun(
       }),
     ),
     transcript: readOk(transcript),
+    ...(work === undefined ? {} : { work }),
   });
   const page = await Run({
     ctx,
@@ -129,11 +132,11 @@ describe("a run held on an interjection", () => {
         name: "Cut the first release notes for edge-proxy",
       }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "acme.core.release-bot · Claude Code · Marcus Bell · harness tier",
-      ),
-    ).toBeInTheDocument();
+    // The checkout was not captured, so the meta line says so in place of
+    // the remote and commit.
+    expect(screen.getByLabelText("Run facts")).toHaveTextContent(
+      "acme.core.release-bot · Claude Code · Marcus Bell · harness tier · remote not captured",
+    );
     expect(
       screen.getByText("paused · waiting on a person"),
     ).toBeInTheDocument();
@@ -157,11 +160,14 @@ describe("a run held on an interjection", () => {
     expect(send).toBeDisabled();
     expect(screen.getByText("pick one")).toBeInTheDocument();
     const link = screen.getByRole("button", {
-      name: "Link it to core-platform",
+      name: /^Link it to core-platform/,
     });
     const create = screen.getByRole("button", {
-      name: "Create a new workspace",
+      name: /^Create a new workspace/,
     });
+    // Each card says what is not worked out rather than printing an
+    // inheritance list nothing computed.
+    expect(link).toHaveTextContent("not worked out yet (#3941)");
     expect(link).toHaveAttribute("aria-pressed", "false");
     fireEvent.click(link);
     expect(link).toHaveAttribute("aria-pressed", "true");
@@ -199,6 +205,28 @@ describe("a run held on an interjection", () => {
     ).not.toBeNull();
   });
 
+  it("prints the remote and commit the checkout recorded on the meta line", async () => {
+    await renderRun(
+      [started, unknown, interject],
+      runTranscript(),
+      readOk(runWork()),
+    );
+    expect(screen.getByTestId("interjection-remote")).toHaveTextContent(
+      "github.com/acme/platform@a4c91e2",
+    );
+  });
+
+  it("names the mid-run default and the Create path's name as not worked out", async () => {
+    await renderRun([started, unknown, interject]);
+    const oxagen = screen.getByTestId("interjection-oxagen");
+    expect(within(oxagen).getByTestId("interjection-midrun")).toHaveTextContent(
+      "#3941",
+    );
+    expect(oxagen).toHaveTextContent(
+      "a workspace whose name is not proposed yet",
+    );
+  });
+
   it("lists the recorded frames and greys the ones that have not happened", async () => {
     await renderRun([started, unknown, interject]);
     const pane = screen.getByTestId("interjection-frames");
@@ -208,7 +236,7 @@ describe("a run held on an interjection", () => {
       "control.answer pending",
       "skills.resolved waits on the answer",
       "context.assembled waits on the answer",
-      "model.request waits on the answer",
+      "model.request the first model call of the run has not happened",
     ]);
     expect(
       within(pane).getByText(
