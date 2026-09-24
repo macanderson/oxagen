@@ -43,6 +43,7 @@ vi.mock("./actions", () => ({
   dismissFindingAction: vi.fn(),
   setPriceEntryAction: vi.fn(),
   removePriceEntryAction: vi.fn(),
+  setGatewayPolicyAction: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
@@ -193,10 +194,14 @@ const source: DataSource = {
 };
 
 /** The route's own parse, so a test names a path the way a person does. */
-async function renderSpend(segments: readonly string[] = [], finding?: string) {
+async function renderSpend(
+  segments: readonly string[] = [],
+  finding?: string,
+  as: typeof ctx = ctx,
+) {
   const view = parseSpendView(segments, finding);
   if (view === null) throw new Error(`no view for ${segments.join("/")}`);
-  const element = await Spend({ ctx, source, view, today: TODAY });
+  const element = await Spend({ ctx: as, source, view, today: TODAY });
   return render(
     <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
       {element}
@@ -1207,5 +1212,119 @@ describe("Spend › this build's own tabs", () => {
     await renderSpend(["task"]);
     const task = rowOf("Cut the 4.11 release notes");
     expect(within(task).queryByRole("link")).toBeNull();
+  });
+});
+
+describe("Spend › a tab's own read failing", () => {
+  it.each([
+    [
+      "findings",
+      () => findings.mockResolvedValue(readError("findings_down", 503)),
+    ],
+    ["waste", () => waste.mockResolvedValue(readError("waste_down", 503))],
+    [
+      "budgets",
+      () => budgets.mockResolvedValue(readError("budgets_down", 503)),
+    ],
+  ] as const)(
+    "replaces only the %s tab's body with its refusal (negative)",
+    async (tab, fail) => {
+      loaded();
+      fail();
+      await renderSpend([tab]);
+      expect(screen.getByTestId("spend-summary")).toBeInTheDocument();
+      expect(screen.getByTestId("spend-error")).toHaveTextContent(
+        `503 ${tab}_down`,
+      );
+      expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    },
+  );
+
+  it("replaces only the cost_center tab's body when its rollup fails (negative)", async () => {
+    loaded({ cost_center: readError("rollup_down", 503) });
+    await renderSpend(["cost_center"]);
+    expect(screen.getByTestId("spend-summary")).toBeInTheDocument();
+    expect(screen.getByTestId("spend-error")).toHaveTextContent(
+      "503 rollup_down",
+    );
+  });
+
+  it("prints the operator table with savings not recorded when the findings read failed", async () => {
+    loaded({
+      operator: report([row("prn_marcusbell", { operator: MARCUS })]),
+    });
+    findings.mockResolvedValue(readError("findings_down", 503));
+    await renderSpend(["operator"]);
+    const marcus = rowOf("prn_marcusbell");
+    if (!(marcus instanceof HTMLTableRowElement)) throw new Error("not a row");
+    // Potential savings is the eighth column: unread findings are not "none".
+    const savings = marcus.cells[7];
+    expect(savings).toHaveTextContent("not recorded");
+    expect(savings).not.toHaveTextContent("none");
+  });
+
+  it("replaces the whole drill with its refusal when the drill read fails (negative)", async () => {
+    drill.mockResolvedValue(readError("drill_down", 503));
+    findings.mockResolvedValue(readOk(listing()));
+    await renderSpend(["agent", "a-intel.core.stella-ci"]);
+    expect(screen.getByTestId("spend-error")).toHaveTextContent(
+      "503 drill_down",
+    );
+  });
+
+  it("names an operator's drill by the key when the operator rollup does not hold them", async () => {
+    drill.mockResolvedValue(
+      readOk({
+        kind: "operator",
+        key: "prn_nobody",
+        period: PERIOD,
+        total: figure(),
+        series: [],
+        perCall: null,
+        perRun: null,
+        share: null,
+        tools: [],
+      }),
+    );
+    findings.mockResolvedValue(readOk(listing()));
+    byGroup.mockResolvedValue(
+      report([row("prn_marcusbell", { operator: MARCUS })]),
+    );
+    await renderSpend(["operator", "prn_nobody"]);
+    expect(document.querySelector('[aria-current="page"]')?.textContent).toBe(
+      "prn_nobody",
+    );
+  });
+
+  it("still lists findings, naming nobody, when the operator rollup read fails", async () => {
+    loaded();
+    byGroup.mockImplementation((_ctx, groupBy) =>
+      Promise.resolve(
+        groupBy === "model" ? monthByModel() : readError("rollup_down", 503),
+      ),
+    );
+    await renderSpend(["findings"]);
+    expect(
+      document.querySelector('li[data-finding="fnd_01k5rtop"]')?.textContent,
+    ).toContain("prn_marcusbell");
+  });
+
+  it("offers a workspace owner the gateway policy form under the budgets", async () => {
+    loaded();
+    gatewayPolicy.mockResolvedValue(
+      readOk({
+        mode: "observed",
+        sessionLimit: null,
+        sessionLimitUsd: null,
+        modelAllow: null,
+        modelDeny: [],
+      }),
+    );
+    await renderSpend(
+      ["budgets"],
+      undefined,
+      unsafeMint(WsCtx, { ...ctx, wsRole: "owner" }),
+    );
+    expect(document.querySelector("#gateway-mode")).not.toBeNull();
   });
 });

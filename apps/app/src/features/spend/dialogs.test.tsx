@@ -4,7 +4,13 @@
 // Budgets tab and shows what the server refused; Export report saves the
 // month's CSV and shows a refusal. Axe checks the state each test ends in,
 // the open dialog's portal included (INV-26).
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
 import type { ReactNode } from "react";
@@ -223,6 +229,64 @@ describe("Export report", () => {
       ),
     ).toBeInTheDocument();
   });
+});
+
+describe("Export report refusals", () => {
+  async function submit() {
+    renderWithIntl(<ExportDialog at={at} month="2026-09" />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Export report" }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Download the CSV" }),
+    );
+  }
+
+  it("marks the month when the server refuses it as invalid (negative)", async () => {
+    exportStatementAction.mockResolvedValue({
+      ok: false,
+      reason: "invalid",
+      code: "monthInvalid",
+      field: "month",
+    });
+    await submit();
+    expect(
+      await screen.findByText("Enter a month as YYYY-MM."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "The report could not be built. Nothing was changed; try again.",
+      ),
+    ).toBeNull();
+  });
+
+  it.each([
+    [
+      "an unavailable store",
+      () =>
+        exportStatementAction.mockResolvedValue({
+          ok: false,
+          reason: "unavailable",
+          code: "clickhouse_down",
+        }),
+    ],
+    [
+      "a call that threw",
+      () => exportStatementAction.mockRejectedValue(new Error("offline")),
+    ],
+  ] as const)(
+    "says the report could not be built after %s (negative)",
+    async (_case, arrange) => {
+      arrange();
+      await submit();
+      expect(
+        await screen.findByText(
+          "The report could not be built. Nothing was changed; try again.",
+        ),
+      ).toBeInTheDocument();
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+    },
+  );
 });
 
 describe("Export the chargeback statement", () => {
@@ -463,6 +527,67 @@ describe("Fix a finding", () => {
       ),
     ).toBeInTheDocument();
     expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      { reason: "denied", code: "no_principal" },
+      "The request carried no signed-in user. Sign in and try again.",
+    ],
+    [
+      { reason: "not_found", code: "finding_not_found" },
+      "This finding no longer exists. Nothing was changed.",
+    ],
+    [
+      { reason: "conflict", code: "finding_superseded" },
+      "The decision was refused: finding_superseded. Nothing was changed.",
+    ],
+    [
+      { reason: "invalid", code: "invalid_input" },
+      "The decision was refused as invalid. Nothing was changed.",
+    ],
+    [
+      { reason: "exhausted", code: "budget_exceeded" },
+      "The decision could not be recorded: budget_exceeded. Nothing was changed.",
+    ],
+  ] as const)(
+    "names the refusal %o in its own words (negative)",
+    async (failure, sentence) => {
+      dismissFindingAction.mockResolvedValue({ ok: false, ...failure });
+      await openDialog();
+      await userEvent.click(
+        screen.getByRole("button", { name: "Dismiss this finding" }),
+      );
+      expect(await screen.findByText(sentence)).toBeInTheDocument();
+      expect(router.replace).not.toHaveBeenCalled();
+    },
+  );
+
+  it("forgets a refusal once the dialog is closed and opened again", async () => {
+    dismissFindingAction.mockResolvedValue({
+      ok: false,
+      reason: "not_found",
+      code: "finding_not_found",
+    });
+    const dialog = await openDialog();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Dismiss this finding" }),
+    );
+    expect(
+      await screen.findByText(
+        "This finding no longer exists. Nothing was changed.",
+      ),
+    ).toBeInTheDocument();
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Close" }),
+    );
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Fix" }));
+    expect(
+      screen.queryByText("This finding no longer exists. Nothing was changed."),
+    ).toBeNull();
   });
 
   it("names a write that threw before it answered (negative)", async () => {
