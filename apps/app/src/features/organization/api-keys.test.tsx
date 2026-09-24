@@ -63,7 +63,10 @@ const ORG_FIELDS = {
 } as const;
 
 /** `list_workspaces` answers the organization's whole set, in one object. */
-const list = (...workspaces: Workspace[]): WorkspaceList => ({ workspaces });
+const list = (...workspaces: Workspace[]): WorkspaceList => ({
+  orgId: "org_7k2m9q4x8r1t5v3w6y0z2a",
+  workspaces,
+});
 
 const core = workspaceRow({ slug: "core-platform", name: "Core platform" });
 const growth = workspaceRow({

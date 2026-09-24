@@ -1,6 +1,6 @@
 /**
  * `seal_run`: a person ends a wrapped run the control plane still reads as
- * live (#4073, ADR-168).
+ * live (#4073, ADR-169).
  *
  * A wrapped session seals when its host sends `agent_stop`, or when the
  * control plane closes it after twelve silent hours. A run whose agent

@@ -1,4 +1,4 @@
--- An operator's seal of a wrapped session (#4073, ADR-168).
+-- An operator's seal of a wrapped session (#4073, ADR-169).
 --
 -- A session seals when its host sends an `agent_stop`, or when the control
 -- plane closes it after twelve silent hours (`idle_timeout`). A run whose

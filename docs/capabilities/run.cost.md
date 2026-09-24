@@ -39,11 +39,23 @@ The rollup:
 | `steps`, `modelCalls`, `toolCalls` | integer | counts from the frames |
 | `retries` | integer or null | the harness's API retry count; null for a ledger run |
 | `productiveRatio` | number or null | null until the grading lane writes it |
-| `byModel` | object[] | `{ model, provider, calls, cost, tokens }`, one per model the frames used; each `cost` carries its own basis, or is null when none of the model's frames was priced |
+| `byModel` | object[] | `{ model, provider, calls, cost, tokens, costByClass, cacheSaving, hasUnpriced }`, one per model the frames used; each `cost` carries its own basis, or is null when none of the model's frames was priced. The per-model fields are described below |
 | `byTool` | object[] | `{ name, calls }` |
 | `priceEntryIds` | string[] | the `cost.price_entries` rows the frames were priced with (spec §12.2) |
 | `rolledUpAt` | string | RFC 3339; when the row was last rebuilt |
 | `isEstimate` | boolean | true when the row was rebuilt while the run was open: every figure covers the frames recorded so far, and the run may add more. False once the rollup has rebuilt the sealed run |
+
+Each `byModel` entry:
+
+| Field | Type | Description |
+|---|---|---|
+| `cost` | object or null | the model's recorded cost, `{ micros, currency, basis }`; null when none of its frames was priced |
+| `tokens` | object | the model's counts by class |
+| `costByClass` | object or null | `cost` split by the six classes in `tokens`, each `{ micros, currency, basis }`. Every class is priced from the price book at its frame's instant and rounded once. A class no entry priced is a zero figure. An estimated frame's own reported figure has no split, so it sits under `output`. Null exactly when `cost` is |
+| `cacheSaving` | object or null | what the model's cache reads saved: each frame's `cache_read` tokens priced at the `input_uncached` rate less the `cache_read` rate, both at the frame's instant. A zero figure when no frame read the cache. Null when a frame that read the cache had no price for either class, when none of the model's frames was priced, and on a row rolled up before the saving was recorded, until the run's next rollup |
+| `hasUnpriced` | boolean | true when any call to the model went unpriced, including a model where another call did price and `cost` is therefore not null |
+
+These are the recorded figures. A reader shows them as they are and does not reprice the token counts with today's price book, because a later rate change would then disagree with the run's recorded cost (#4069).
 
 The provisional figures come from `tacho.session_models` and the root session's tool-call counter. Ingest adds each counted `llm_call` frame to them as it lands, so they cover the run up to its last recorded event. The rollup replaces them once it rebuilds the run.
 

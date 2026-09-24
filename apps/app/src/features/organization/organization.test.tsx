@@ -123,6 +123,7 @@ const coreCtx = unsafeMint(WsCtx, {
 
 /** core-platform the viewer belongs to, finops they do not, legacy archived. */
 const WORKSPACES = {
+  orgId: "org_7k2m9q4x8r1t5v3w6y0z2a",
   workspaces: [
     workspaceRow(),
     workspaceRow({

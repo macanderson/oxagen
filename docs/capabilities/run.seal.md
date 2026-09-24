@@ -2,7 +2,7 @@
 
 **Surfaces:** api, mcp
 
-Seal a wrapped run that the control plane still reads as live, and queue a kill for its agent ([ADR-168](../adr/ADR-168-an-operator-seals-a-run-and-its-agent-is-killed.md), issue #4073).
+Seal a wrapped run that the control plane still reads as live, and queue a kill for its agent ([ADR-169](../adr/ADR-169-an-operator-seals-a-run-and-its-agent-is-killed.md), issue #4073).
 
 A wrapped session seals when its host sends `agent_stop`, or when the control plane closes it after twelve hours with no event (`idle_timeout`, ADR-159). A run whose agent finished without either reads as live on Fleet and the Run page until then. Its cost stays an estimate and its wall clock keeps counting. A `dispatch_command` cancel stops the agent, but the run stays open until the host's sweep sees the process gone. `seal_run` closes the run now.
 

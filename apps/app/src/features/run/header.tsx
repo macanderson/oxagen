@@ -525,7 +525,7 @@ function When({ run }: { run: RunRow }) {
           {t("closedIdleWhy")})
         </span>
       ) : run.sealSource === "operator" && run.sealedAt != null ? (
-        // A person sealed it (ADR-168); the host never said it ended.
+        // A person sealed it (ADR-169); the host never said it ended.
         <span data-testid="run-sealed-operator">
           {" · "}
           {t("sealedByOperator")}{" "}
@@ -716,7 +716,7 @@ export function RunHeader({
             />
           )}
           {/* A wrapped run the control plane still reads as live, or closed
-              only for silence, can be sealed by a person (ADR-168). A
+              only for silence, can be sealed by a person (ADR-169). A
               ledger run seals when its producer does. */}
           {run.source === "tacho" &&
           (run.status === "live" || run.sealSource === "idle_timeout") ? (

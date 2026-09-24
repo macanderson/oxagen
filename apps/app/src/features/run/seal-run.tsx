@@ -1,5 +1,5 @@
 "use client";
-// Seal run (ADR-168): end a wrapped run the control plane still reads as
+// Seal run (ADR-169): end a wrapped run the control plane still reads as
 // live, and stop its agent.
 //
 // A run whose agent finished without sending `agent_stop` reads as live until

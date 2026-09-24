@@ -5,7 +5,7 @@ import { invoke } from "@oxagen/oxagen/kernel";
 import { capabilityContext } from "../../lib/context";
 import type { AppEnv } from "../../app";
 
-/** Seal a live or idle-closed wrapped run and queue a kill for its agent (ADR-168); org Owner or Admin, or workspace Owner. Mounted on the org-scoped router behind session auth. */
+/** Seal a live or idle-closed wrapped run and queue a kill for its agent (ADR-169); org Owner or Admin, or workspace Owner. Mounted on the org-scoped router behind session auth. */
 export const runSealRoute = new Hono<AppEnv>();
 
 runSealRoute.post("/", async (c) => {

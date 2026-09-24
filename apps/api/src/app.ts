@@ -761,7 +761,7 @@ orgScoped.route("/runs/fork", runForkRoute);
 orgScoped.route("/runs/export", runExportRoute);
 orgScoped.route("/runs/export-status", runExportGetRoute);
 // An operator's seal of a wrapped run, with a kill queued for its agent
-// (seal_run, ADR-168).
+// (seal_run, ADR-169).
 orgScoped.route("/runs/seal", runSealRoute);
 orgScoped.route("/runs/summarize", runSummarizeRoute);
 // Spend (ADR-060): the rollup by level, the drill, waste, the statement, one

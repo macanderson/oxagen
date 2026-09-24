@@ -301,7 +301,7 @@ export const runItemSchema = z
      * What sealed a wrapped session: `agent_stop`, its host's own end;
      * `idle_timeout`, the control plane closing a run that sent nothing for
      * twelve hours, which the run's next event reopens; or `operator`, a
-     * person sealing it through `seal_run` (ADR-168), which is final. Null
+     * person sealing it through `seal_run` (ADR-169), which is final. Null
      * while the run is open, and for a ledger run.
      */
     sealSource: z

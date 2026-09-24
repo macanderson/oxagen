@@ -155,7 +155,7 @@ export type SealedRun = ContractOutput<typeof runSeal>;
 /**
  * Seal a wrapped run the control plane still reads as live, and queue a kill
  * for its agent on its host when the host can collect one (`seal_run`,
- * ADR-168). The seal is final. The answer says whether the kill was queued,
+ * ADR-169). The seal is final. The answer says whether the kill was queued,
  * so the dialog never claims the agent stopped when no host could be told.
  *
  * The reason is held to the contract's ceiling here, as a halt's is, so a

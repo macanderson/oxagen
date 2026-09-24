@@ -1,4 +1,4 @@
-# ADR-168: An operator seals a run, and its agent is killed
+# ADR-169: An operator seals a run, and its agent is killed
 
 - **Status:** Accepted
 - **Date:** 2026-09-24

@@ -225,6 +225,9 @@ function CostTile({
   const locale = useLocale();
   const { cost, cacheHit } = metrics;
   const saved = metrics.priced?.cacheSaved ?? null;
+  // A run that read nothing from the cache saved nothing, so it has no saving
+  // to report; one that did and has none recorded says so.
+  const readCache = (metrics.tokens?.byClass.cache_read ?? 0) > 0;
   // The mean of the bars below it, so "per turn" is read off the same ledger.
   const each = perTurn(ledger.cost, ledger.rows.length);
   const max = ledger.max;
@@ -308,7 +311,7 @@ function CostTile({
         cacheHit === null
           ? t("cacheNotRecorded")
           : saved === null
-            ? t.rich("cacheHitOnly", {
+            ? t.rich(readCache ? "savingNotRecorded" : "cacheHitOnly", {
                 hit: () => <b>{formatRatio(cacheHit, locale)}</b>,
               })
             : t.rich("cacheSaved", {

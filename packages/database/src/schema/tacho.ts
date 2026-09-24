@@ -77,7 +77,7 @@ export const TACHO_SESSION_OUTCOMES = [
  * final. `idle_timeout` is the control plane closing a session that sent no
  * event for `TACHO_IDLE_CLOSE_AFTER_MS`: a later event reopens it and a later
  * `agent_stop` replaces it. `operator` is a person sealing the run through
- * `seal_run` (ADR-168), final like the host's own. Null on an open session,
+ * `seal_run` (ADR-169), final like the host's own. Null on an open session,
  * and on a session sealed before the column existed, which reads as
  * `agent_stop`.
  */

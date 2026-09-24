@@ -1,7 +1,7 @@
 // The rules the run controls gate on, each held to its contract's own
 // `defaultRoles`: `dispatch_command` admits an org Owner or Admin, or a
 // workspace Owner or Member; `seal_run` admits the org's and the workspace
-// Owner only (ADR-168).
+// Owner only (ADR-169).
 import { describe, expect, it } from "vitest";
 import { canCommandRun, canSealRun } from "./run-command-roles";
 

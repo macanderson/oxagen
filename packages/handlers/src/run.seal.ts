@@ -1,5 +1,5 @@
 // `seal_run`: an operator seals a wrapped run the control plane still reads
-// as live, and queues a kill for its agent (#4073, ADR-168).
+// as live, and queues a kill for its agent (#4073, ADR-169).
 //
 // A wrapped session seals when its host sends `agent_stop`, or when the idle
 // close (`tacho.session-idle-close`) seals it after twelve silent hours. A run

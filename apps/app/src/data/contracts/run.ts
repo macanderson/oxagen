@@ -119,12 +119,41 @@ const TokenCounts = z.object({
   output: Count,
   reasoning: Count,
 });
-const RunCostByModel = z.object({
+/**
+ * A model's recorded cost split by token class. The rollup priced each frame
+ * from the price book at the frame's instant (ADR-060), so these are the
+ * run's own figures: a later rate change does not move them. An estimated
+ * frame's reported cost has no split and sits under `output`.
+ */
+const CostByClass = z.object({
+  inputUncached: Cost,
+  cacheRead: Cost,
+  cacheWrite5m: Cost,
+  cacheWrite1h: Cost,
+  output: Cost,
+  reasoning: Cost,
+});
+export type CostByClass = z.infer<typeof CostByClass>;
+
+const RunCostModel = z.object({
   model: z.string().min(1),
   provider: z.string().nullable(),
   calls: Count,
   cost: Cost.nullable(),
+});
+
+const RunCostByModel = RunCostModel.extend({
   tokens: TokenCounts,
+  /** `cost` by token class; null exactly when `cost` is. */
+  costByClass: CostByClass.nullable(),
+  /**
+   * What the model's cache reads saved against uncached input, as the rollup
+   * recorded it. Null when it was not recorded, including a row rolled up
+   * before the rollup recorded savings: never a zero standing in for that.
+   */
+  cacheSaving: Cost.nullable(),
+  /** Some call to the model went unpriced, so its figures are incomplete. */
+  hasUnpriced: z.boolean(),
 });
 
 const RunCostByTool = z.object({ name: z.string().min(1), calls: Count });
@@ -157,7 +186,7 @@ export type RunCostRollup = z.infer<typeof RunCostRollup>;
  * provisional.
  */
 const RunCostProvisional = z.object({
-  byModel: z.array(RunCostByModel.omit({ tokens: true })),
+  byModel: z.array(RunCostModel),
   toolCalls: Count,
   /** The run's last recorded event, which these figures include. */
   asOf: z.iso.datetime({ offset: true }),

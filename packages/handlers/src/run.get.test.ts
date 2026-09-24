@@ -475,6 +475,8 @@ describe("get_run", () => {
     expect(tachoFrames).toHaveBeenCalledWith({
       sessionUuid: SESSION_UUID,
       afterSeq: -1,
+      // Bounded above, so ClickHouse stops at the window, not the chain's end.
+      throughSeq: 200,
       // One past the page, so a full page can be told from the end.
       limit: 201,
     });

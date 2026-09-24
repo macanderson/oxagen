@@ -17,6 +17,23 @@ import { registerCapability } from "../registry";
 import { runPublicIdSchema } from "./run.list";
 import { costSchema, ratioSchema, tokenCountsSchema } from "./spend.shared";
 
+/**
+ * A model's recorded cost split by the six token classes the rollup prices,
+ * each priced from the price book at its frame's instant and rounded once.
+ * A class no entry priced is a zero figure; an estimated frame's reported
+ * figure, which has no split, sits under `output`.
+ */
+export const runCostByClassSchema = z
+  .object({
+    input_uncached: costSchema,
+    cache_read: costSchema,
+    cache_write_5m: costSchema,
+    cache_write_1h: costSchema,
+    output: costSchema,
+    reasoning: costSchema,
+  })
+  .strict();
+
 export const runCostRollupSchema = z
   .object({
     /** Null when no model frame was priced. */
@@ -39,6 +56,22 @@ export const runCostRollupSchema = z
           /** Null when no frame of the model was priced. */
           cost: costSchema.nullable(),
           tokens: tokenCountsSchema,
+          /** `cost` by token class; null exactly when `cost` is. */
+          costByClass: runCostByClassSchema.nullable(),
+          /**
+           * What the model's cache reads saved: cache_read tokens priced at
+           * input_uncached less their cache_read price, at each frame's
+           * instant. Null when a frame that read the cache had no price for
+           * either class, when no frame of the model was priced, and on a
+           * row rolled up before the saving was recorded (until its next
+           * rollup). Never a zero standing in for "not recorded".
+           */
+          cacheSaving: costSchema.nullable(),
+          /**
+           * True when any call to the model went unpriced, including a model
+           * where another call did price and `cost` is therefore non-null.
+           */
+          hasUnpriced: z.boolean(),
         })
         .strict(),
     ),
@@ -91,7 +124,7 @@ export const runCostGet = registerCapability({
   name: "get_run_cost",
   domain: "run",
   description:
-    "Read one run's cost rollup: total cost with its basis, tokens by class, cache hit rate, turns, steps, model and tool calls, and the per-model and per-tool breakdown, marked as an estimate while the run is still open; null until the rollup has rebuilt the run from its frames, with provisional per-model figures for a wrapped run in the meantime.",
+    "Read one run's cost rollup: total cost with its basis, tokens by class, cache hit rate, turns, steps, model and tool calls, and the per-model breakdown (cost by token class, cache saving, whether any call went unpriced) and per-tool breakdown, marked as an estimate while the run is still open; null until the rollup has rebuilt the run from its frames, with provisional per-model figures for a wrapped run in the meantime.",
   mode: "sync",
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
@@ -119,3 +152,4 @@ export type RunCostGetInput = z.output<typeof runCostGet.input>;
 export type RunCostGetOutput = z.output<typeof runCostGet.output>;
 export type RunCostRollup = z.output<typeof runCostRollupSchema>;
 export type RunCostProvisional = z.output<typeof runCostProvisionalSchema>;
+export type RunCostByClass = z.output<typeof runCostByClassSchema>;

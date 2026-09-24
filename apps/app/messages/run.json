@@ -304,7 +304,8 @@
         "turnAxis": "turn {turn}",
         "turnAxisLive": "turn {turn} · live",
         "cacheNotRecorded": "cache hit not recorded",
-        "cacheHitOnly": "cache hit <hit></hit> · saving not priced",
+        "cacheHitOnly": "cache hit <hit></hit>",
+        "savingNotRecorded": "cache hit <hit></hit> · saving not recorded",
         "cacheSaved": "cache hit <hit></hit> · saved about <saved></saved> against an uncached prompt",
         "wall": "Wall clock",
         "soFar": "so far",
@@ -342,7 +343,7 @@
         "cacheOfInput": "Cache hit <hit></hit> of input",
         "perCall": "<count></count> tokens per model call",
         "rate": "effective input price <rate></rate> per million",
-        "rateNotPriced": "effective input price not priced",
+        "rateNotPriced": "effective input price not recorded",
         "nothingWritten": "nothing written to cache",
         "shape": "Shape of the run",
         "framesInRun": "{count, plural, one {# frame} other {# frames}} in the run",
@@ -405,7 +406,7 @@
         "byCalls": "What each tool cost is not recorded, so the tools are listed by calls.",
         "noTools": "This run called no tool.",
         "toolsNotRead": "The transcript was not read, so the tools are not listed.",
-        "note": "Model output is priced from the price book at the output and reasoning rates. The six input areas share the run's {input} input tokens, which cost <cost></cost>, and how a request splits between them is not recorded yet. A follow-up prompt re-sends the window, which is why it costs more than its own words.",
+        "note": "Model output is the run's recorded cost for its output and reasoning tokens. The six input areas share the run's {input} input tokens, which cost <cost></cost>, and how a request splits between them is not recorded yet. A follow-up prompt re-sends the window, which is why it costs more than its own words.",
         "noteNotRolledUp": "The rollup has not counted this run's tokens yet, so no area is priced."
       },
       "calls": {
@@ -453,9 +454,10 @@
           "share": "Share"
         },
         "total": "total",
-        "priced": "Each class is priced from the price book at the rate of the model that spent it, so the total row is the book's price for these tokens.",
-        "noBook": "The price book was not read, so no class is priced.",
-        "unpriced": "The price book has no rate for a model this run used, so the classes that model spent in are not priced.",
+        "priced": "These are the run's recorded costs. Each call was priced at the rate in force when it was made, so a later price change does not move them.",
+        "noModels": "The rollup recorded no model for this run, so no class has a cost.",
+        "unpriced": "The rollup recorded no cost for a model this run used, so the classes that model spent in have no cost here.",
+        "incomplete": "The rollup could not price some of this run's calls, so each cost covers only the calls it priced.",
         "recorded": "The run recorded <cost></cost> {basis}.",
         "entries": "It was priced with <entries></entries>."
       },
@@ -973,7 +975,8 @@
         "waiting": "mostly waiting on a person",
         "harness": "mostly in harness calls"
       },
-      "saved": "saved about"
+      "saved": "saved about",
+      "savingNotRecorded": "saving not recorded"
     },
     "issues": {
       "title": "Issues",

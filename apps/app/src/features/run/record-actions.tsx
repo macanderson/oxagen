@@ -511,7 +511,7 @@ export function ExportAction({
   /**
    * Oxagen closed the run for silence (ADR-159). `export_run` refuses it,
    * because the run's next event reopens it, so the bundle waits for a final
-   * seal: the host's own, or a person's (ADR-168).
+   * seal: the host's own, or a person's (ADR-169).
    */
   closedIdle?: boolean;
   orgRole: OrgRole;

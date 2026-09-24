@@ -1,6 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { runCostGet } from "./run.cost";
 
+const usd = (micros: string) => ({
+  micros,
+  currency: "USD",
+  basis: "client_attested",
+});
+const costByClass = {
+  input_uncached: usd("5502"),
+  cache_read: usd("3600"),
+  cache_write_5m: usd("0"),
+  cache_write_1h: usd("0"),
+  output: usd("32163"),
+  reasoning: usd("0"),
+};
+
 const tokens = {
   input_uncached: 1834,
   cache_read: 12000,
@@ -41,6 +55,9 @@ describe("get_run_cost contract", () => {
           calls: 4,
           cost: { micros: "41265", currency: "USD", basis: "client_attested" },
           tokens,
+          costByClass,
+          cacheSaving: usd("32400"),
+          hasUnpriced: false,
         },
       ],
       byTool: [{ name: "Bash", calls: 5 }],
@@ -86,5 +103,56 @@ describe("get_run_cost contract", () => {
         },
       }).success,
     ).toBe(false);
+  });
+
+  it("carries each model's recorded class split, cache saving and unpriced flag (#4069)", () => {
+    const model = {
+      model: "claude-sonnet-5",
+      provider: "anthropic",
+      calls: 4,
+      cost: usd("41265"),
+      tokens,
+      costByClass,
+      cacheSaving: usd("32400"),
+      hasUnpriced: false,
+    };
+    const rollup = (m: Record<string, unknown>) => ({
+      runId: "tse_abc123",
+      rollup: {
+        cost: usd("41265"),
+        tokens,
+        cacheHitRate: null,
+        turns: null,
+        steps: 4,
+        modelCalls: 4,
+        toolCalls: 0,
+        retries: null,
+        productiveRatio: null,
+        byModel: [m],
+        byTool: [],
+        priceEntryIds: [],
+        rolledUpAt: "2026-09-14T10:06:31.000Z",
+        isEstimate: false,
+      },
+    });
+    const ok = (m: Record<string, unknown>) =>
+      runCostGet.output.safeParse(rollup(m)).success;
+    expect(ok(model)).toBe(true);
+    // A saving not recorded, and a model none of whose frames priced.
+    expect(ok({ ...model, cacheSaving: null })).toBe(true);
+    expect(
+      ok({ ...model, cost: null, costByClass: null, hasUnpriced: true }),
+    ).toBe(true);
+    // Every class carries money and a basis, and all six are required.
+    const { reasoning: _dropped, ...fiveClasses } = costByClass;
+    expect(ok({ ...model, costByClass: fiveClasses })).toBe(false);
+    expect(
+      ok({
+        ...model,
+        costByClass: { ...costByClass, output: { micros: "1" } },
+      }),
+    ).toBe(false);
+    const { hasUnpriced: _flag, ...unflagged } = model;
+    expect(ok(unflagged)).toBe(false);
   });
 });

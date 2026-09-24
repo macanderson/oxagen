@@ -14,7 +14,7 @@ import {
   decodeTranscriptCursor,
   elapsedMs,
   encodeTranscriptCursor,
-  foldPageStart,
+  planTranscriptPage,
   type RunTranscriptGetDeps,
 } from "./run.transcript.get";
 import {
@@ -481,7 +481,19 @@ describe("get_run_transcript", () => {
       transcript(input({ zoom: "everything", after: "not-ours" }), ctx()),
     ).rejects.toThrow();
     expect(decodeTranscriptCursor("not-a-cursor")).toBeNull();
-    expect(decodeTranscriptCursor(encodeTranscriptCursor("42"))).toBe("42");
+    expect(
+      decodeTranscriptCursor(
+        encodeTranscriptCursor({ through: "42", high: "44" }),
+      ),
+    ).toEqual({ through: "42", high: "44" });
+    // A cursor issued before `high` existed names one frame, read as both.
+    const legacy = Buffer.from("t:42", "utf8").toString("base64url");
+    expect(decodeTranscriptCursor(legacy)).toEqual({
+      through: "42",
+      high: "42",
+    });
+    const three = Buffer.from("t:1,2,3", "utf8").toString("base64url");
+    expect(decodeTranscriptCursor(three)).toBeNull();
   });
 
   it("a digest_only recording answers every half with text null and says so", async () => {
@@ -569,9 +581,10 @@ describe("get_run_transcript", () => {
     const out = await transcript(input({ zoom: "everything" }), ctx());
     expect(out.entries).toHaveLength(rows.length);
     expect(out.cursor).not.toBeNull();
-    expect(decodeTranscriptCursor(out.cursor as string)).toBe(
-      out.entries.at(-1)?.endSeq,
-    );
+    expect(decodeTranscriptCursor(out.cursor as string)).toEqual({
+      through: out.entries.at(-1)?.seq,
+      high: out.entries.at(-1)?.endSeq,
+    });
   });
 
   it("keeps a resume cursor on a live run with zero entries", async () => {
@@ -583,7 +596,10 @@ describe("get_run_transcript", () => {
     expect(out.entries).toEqual([]);
     expect(out.cursor).not.toBeNull();
     // A wrapped session numbers frames from 0, so the start cursor is -1.
-    expect(decodeTranscriptCursor(out.cursor as string)).toBe("-1");
+    expect(decodeTranscriptCursor(out.cursor as string)).toEqual({
+      through: "-1",
+      high: "-1",
+    });
   });
 
   it("keeps a resume cursor on a live run caught up past every fold", async () => {
@@ -599,7 +615,7 @@ describe("get_run_transcript", () => {
     );
     expect(caughtUp.entries).toEqual([]);
     expect(caughtUp.cursor).not.toBeNull();
-    expect(decodeTranscriptCursor(caughtUp.cursor as string)).toBe(
+    expect(decodeTranscriptCursor(caughtUp.cursor as string)).toEqual(
       decodeTranscriptCursor(after),
     );
   });
@@ -697,47 +713,83 @@ describe("get_run_transcript", () => {
   });
 });
 
-describe("foldPageStart", () => {
-  const fold = (opening: string, endSeq: string) => ({
-    opening: { seq: opening } as { seq: string },
-    endSeq,
+describe("planTranscriptPage", () => {
+  const span = (open: number, end: number) => ({ open, end });
+
+  it("sends the first page from the start and stands on its last fold", () => {
+    const folds = [span(0, 0), span(1, 2), span(3, 3)];
+    expect(planTranscriptPage(folds, null, 2)).toEqual({
+      indexes: [0, 1],
+      through: 1,
+      high: 2,
+    });
+    expect(planTranscriptPage([], null, 2)).toEqual({
+      indexes: [],
+      through: -1,
+      high: -1,
+    });
   });
 
-  it("resumes at the next fold after an endSeq cursor, even when openings overlap", () => {
-    const folds = [fold("1", "3"), fold("2", "4")];
-    expect(foldPageStart(folds, null)).toBe(0);
-    expect(foldPageStart(folds, "3")).toBe(1);
-    expect(foldPageStart(folds, "4")).toBe(-1);
+  it("resumes at the next fold when openings overlap", () => {
+    // start A, start B, done A, done B: A spans 1..3 and B spans 2..4. A
+    // cursor that kept only A's end looked for an opening past 3 and never
+    // sent B (Codex P1 on #3352).
+    const folds = [span(1, 3), span(2, 4)];
+    expect(planTranscriptPage(folds, { through: 0, high: 3 }, 5)).toEqual({
+      indexes: [1],
+      through: 1,
+      high: 4,
+    });
   });
 
-  it("re-emits a fold that grew past the cursor (a live request that gained its response)", () => {
-    const folds = [fold("1", "3"), fold("4", "4")];
-    expect(foldPageStart(folds, "1")).toBe(0);
+  it("sends a grown fold once per growth, then nothing", () => {
+    // Live: A and B both started and were sent. A completes before B.
+    const sent = { through: 1, high: 2 };
+    const aDone = [span(1, 3), span(2, 2)];
+    const resent = planTranscriptPage(aDone, sent, 5);
+    expect(resent).toEqual({ indexes: [0], through: 1, high: 3 });
+    // The single-frame cursor sent B again here, though B had not changed.
+    const bDone = [span(1, 3), span(2, 4)];
+    const next = planTranscriptPage(bDone, resent, 5);
+    expect(next).toEqual({ indexes: [1], through: 1, high: 4 });
+    expect(planTranscriptPage(bDone, next, 5).indexes).toEqual([]);
   });
 
-  it("re-emits an earlier fold that grew past an exact cursor owner (Codex P1 on #3352)", () => {
-    // Live: start A(1), start B(2). Client pages A then B, leaving cursor 2.
-    // complete A(3) arrives: A expands to 1..3 while B still ends at 2. The
-    // exact-match branch used to advance past B and return -1, so A's response
-    // never emitted. Re-emit A first; once the client holds A's new endSeq,
-    // the next page advances to B as usual.
-    const before = [fold("1", "1"), fold("2", "2")];
-    expect(foldPageStart(before, "1")).toBe(1);
-    expect(foldPageStart(before, "2")).toBe(-1);
-    const afterACompletes = [fold("1", "3"), fold("2", "2")];
-    expect(foldPageStart(afterACompletes, "2")).toBe(0);
-    expect(foldPageStart(afterACompletes, "3")).toBe(1);
-    // After the client pages A's new endSeq, B's completion is the next fold.
-    // A stale cursor of 2 with both complete has no exact owner, so the grown
-    // path re-emits B (last containing range), which is the remaining delta.
-    const bothComplete = [fold("1", "3"), fold("2", "4")];
-    expect(foldPageStart(bothComplete, "3")).toBe(1);
-    expect(foldPageStart(bothComplete, "2")).toBe(1);
+  it("does not resend the folds inside a grown fold's span (negative)", () => {
+    // A Task call opens at 0 and its subagent's steps land inside its span.
+    // When the Task call completes, only the Task entry has changed. The
+    // single-frame cursor sent the Task entry and every step after it, and
+    // stood where it stood before, so each read sent the same page again.
+    const beforeDone = [span(0, 0), span(1, 1), span(2, 2), span(3, 3)];
+    const first = planTranscriptPage(beforeDone, null, 2);
+    const second = planTranscriptPage(beforeDone, first, 2);
+    expect(second).toEqual({ indexes: [2, 3], through: 3, high: 3 });
+    const taskDone = [span(0, 5), span(1, 1), span(2, 2), span(3, 3)];
+    const third = planTranscriptPage(taskDone, second, 2);
+    expect(third).toEqual({ indexes: [0], through: 3, high: 5 });
+    for (let poll = 0; poll < 3; poll += 1) {
+      expect(planTranscriptPage(taskDone, third, 2).indexes).toEqual([]);
+    }
   });
 
-  it("falls through to opening.seq when the cursor sits between folds", () => {
-    const folds = [fold("1", "1"), fold("5", "5")];
-    expect(foldPageStart(folds, "3")).toBe(1);
+  it("sends grown folds first, oldest growth first, and fills the rest with new folds", () => {
+    const folds = [span(0, 6), span(1, 5), span(2, 2), span(7, 7), span(8, 8)];
+    expect(planTranscriptPage(folds, { through: 2, high: 2 }, 3)).toEqual({
+      indexes: [1, 0, 3],
+      through: 3,
+      high: 7,
+    });
+  });
+
+  it("leaves grown folds past the limit for the next page, never dropping one", () => {
+    const folds = [span(0, 9), span(1, 7), span(2, 8)];
+    const first = planTranscriptPage(folds, { through: 2, high: 2 }, 2);
+    expect(first).toEqual({ indexes: [1, 2], through: 2, high: 8 });
+    expect(planTranscriptPage(folds, first, 2)).toEqual({
+      indexes: [0],
+      through: 2,
+      high: 9,
+    });
   });
 });
 
@@ -1152,13 +1204,55 @@ describe("get_run_transcript and subagent chains", () => {
     expect(seen).toEqual(["0", "1", "2", "c0", "c1", "c2", "c3", "3", "4"]);
   });
 
+  it("steps: a live subagent's steps are sent once when its Task call completes", async () => {
+    // The repeat the Run page showed 20 to 40 times over: a Task call's step
+    // spans its subagent's steps. When the Task result landed, every read of
+    // the live run sent the Task step and each subagent step after it again.
+    const live = { outcome: "running", sealedAt: null };
+    const running = harness(root.slice(0, 3), live, children);
+    const first = await running.transcript(input({ zoom: "steps" }), ctx());
+    expect(first.entries.map((e) => e.label.split(" ")[0])).toHaveLength(4);
+    const done = harness(root, live, children);
+    const reads: string[][] = [];
+    let after = first.cursor as string;
+    for (let poll = 0; poll < 4; poll += 1) {
+      const page = await done.transcript(
+        input({ zoom: "steps", after }),
+        ctx(),
+      );
+      reads.push(page.entries.map((e) => `${e.seq}-${e.endSeq}`));
+      after = page.cursor as string;
+    }
+    // The Task step once, with its result and the turn's end, then nothing.
+    expect(reads).toEqual([["1-4"], [], [], []]);
+  });
+
   it("reads a cursor of either form, and refuses a malformed chain cursor (negative)", () => {
-    const composite = encodeTranscriptCursor(`${CHILD}:2`);
-    expect(decodeTranscriptCursor(composite)).toBe(`${CHILD}:2`);
-    expect(decodeTranscriptCursor(encodeTranscriptCursor("7"))).toBe("7");
+    const composite = encodeTranscriptCursor({
+      through: `${CHILD}:2`,
+      high: `${CHILD.toUpperCase()}:3`,
+    });
+    expect(decodeTranscriptCursor(composite)).toEqual({
+      through: `${CHILD}:2`,
+      high: `${CHILD}:3`,
+    });
     expect(
-      decodeTranscriptCursor(encodeTranscriptCursor("not-a-uuid:2")),
+      decodeTranscriptCursor(
+        encodeTranscriptCursor({ through: "7", high: "7" }),
+      ),
+    ).toEqual({ through: "7", high: "7" });
+    expect(
+      decodeTranscriptCursor(
+        encodeTranscriptCursor({ through: "not-a-uuid:2", high: "2" }),
+      ),
     ).toBeNull();
+    // The longest cursor, two subagent keys at the largest seq, fits the
+    // contract's 256-character bound.
+    const longest = encodeTranscriptCursor({
+      through: `${CHILD}:${"9".repeat(19)}`,
+      high: `${CHILD}:${"9".repeat(19)}`,
+    });
+    expect(longest.length).toBeLessThanOrEqual(256);
   });
 
   it("resumes a cursor whose frame is no longer shown before the next frame of its chain", () => {

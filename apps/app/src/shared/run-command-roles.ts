@@ -20,7 +20,7 @@ export function canCommandRun(orgRole: string, wsRole: string): boolean {
 }
 
 /**
- * Whether this viewer may seal a run (`seal_run`, ADR-168): an organization
+ * Whether this viewer may seal a run (`seal_run`, ADR-169): an organization
  * Owner or Admin, or the workspace's Owner. A workspace Member can stop an
  * agent with Cancel, but sealing also closes the record, so it is not theirs.
  */

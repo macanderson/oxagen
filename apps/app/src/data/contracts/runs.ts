@@ -276,7 +276,7 @@ export const RunRow = z.object({
   /**
    * What sealed the run: `agent_stop`, its host's own end; `idle_timeout`,
    * Oxagen closing a run that sent nothing for 12 hours; or `operator`, a
-   * person sealing it with Seal run (ADR-168). Null while open and for a
+   * person sealing it with Seal run (ADR-169). Null while open and for a
    * ledger run.
    */
   sealSource: z

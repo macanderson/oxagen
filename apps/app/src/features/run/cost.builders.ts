@@ -8,14 +8,13 @@
 // `callKey`, the way a harness records calls it runs together.
 import type { Cost } from "@/data/contracts/money";
 import type {
+  CostByClass,
   RunCost,
   RunCostRollup,
   RunTranscript,
   TranscriptEntry,
   TranscriptKind,
 } from "@/data/contracts/run";
-import type { PriceBook } from "@/data/contracts/spend";
-import { TOKEN_CLASSES, type TokenClass } from "./metrics";
 import { NOW, runCost, transcriptBody, transcriptEntry } from "./run.builders";
 
 type ToolCallSpec = {
@@ -237,13 +236,16 @@ export function costTranscript(
 }
 
 /**
- * A rollup whose one per-model row carries the run's whole token count, so
- * the classes priced per model from the book cover exactly the tokens the
- * total row counts.
+ * A rollup whose one per-model row carries the run's whole token count and
+ * cost, with the class split and cache saving the rollup recorded for it.
+ * `byClass` is in USD micros and sums to `micros`, as a rollup's split does.
  */
 export function costRollup({
   micros,
   tokens,
+  byClass,
+  cacheSaving,
+  hasUnpriced = false,
   cacheHitRate,
   productiveRatio = 0.71,
   retries = 2,
@@ -251,6 +253,10 @@ export function costRollup({
 }: {
   micros: string;
   tokens: RunCostRollup["tokens"];
+  byClass: Record<keyof CostByClass, string>;
+  /** Null for a row rolled up before the saving was recorded. */
+  cacheSaving: string | null;
+  hasUnpriced?: boolean;
   cacheHitRate: number | null;
   productiveRatio?: number | null;
   retries?: number | null;
@@ -274,40 +280,19 @@ export function costRollup({
           calls: modelCalls,
           cost: usd(micros),
           tokens,
+          costByClass: {
+            inputUncached: usd(byClass.inputUncached),
+            cacheRead: usd(byClass.cacheRead),
+            cacheWrite5m: usd(byClass.cacheWrite5m),
+            cacheWrite1h: usd(byClass.cacheWrite1h),
+            output: usd(byClass.output),
+            reasoning: usd(byClass.reasoning),
+          },
+          cacheSaving: cacheSaving === null ? null : usd(cacheSaving),
+          hasUnpriced,
         },
       ],
     },
-  };
-}
-
-/** The organization's book with one row per class for `claude-opus-5`, rates in USD micros per million. */
-export function opusBook(
-  rates: Partial<Record<TokenClass, string>> = {},
-): PriceBook {
-  const all: Record<TokenClass, string> = {
-    input_uncached: "5000000",
-    cache_read: "500000",
-    cache_write_5m: "6250000",
-    cache_write_1h: "10000000",
-    output: "25000000",
-    reasoning: "25000000",
-    ...rates,
-  };
-  return {
-    at: "2026-09-15T00:00:00.000Z",
-    entries: TOKEN_CLASSES.map((tokenClass) => ({
-      provider: "anthropic",
-      model: "claude-opus-5",
-      modelAliases: [],
-      region: null,
-      tokenClass,
-      unit: "token" as const,
-      ratePerMillion: { micros: all[tokenClass], currency: "USD" },
-      effectiveFrom: "2026-01-01T00:00:00.000Z",
-      effectiveTo: null,
-      source: "list" as const,
-      negotiated: false,
-    })),
   };
 }
 
@@ -406,7 +391,21 @@ export function releaseRunCost(): RunCost {
       output: 24_229,
       reasoning: 12_482,
     },
+    // The split the rollup recorded, summing to the $4.13 above.
+    byClass: RELEASE_RUN_CLASSES,
+    // 607,784 cache reads at $10.00 less $1.00 a million, at the calls' instant.
+    cacheSaving: "5470056",
     cacheHitRate: 0.83,
     modelCalls: 10,
   });
 }
+
+/** The release run's recorded cost by class, in USD micros: $4.13 in all. */
+export const RELEASE_RUN_CLASSES: Record<keyof CostByClass, string> = {
+  inputUncached: "1244860",
+  cacheRead: "607784",
+  cacheWrite5m: "0",
+  cacheWrite1h: "0",
+  output: "1514138",
+  reasoning: "763218",
+};

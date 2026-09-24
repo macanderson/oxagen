@@ -478,15 +478,25 @@ export function tachoRow(
 }
 
 /**
- * An in-memory `selectTachoEvents`: strictly after the cursor, ascending, at
- * most `limit`, fenced to the session it was built for.
+ * An in-memory `selectTachoEvents`: strictly after the cursor, at or below
+ * `throughSeq` when one is given, ascending, at most `limit`, fenced to the
+ * session it was built for.
  */
 export function memoryTachoFrames(sessionUuid: string, rows: TachoFrameRow[]) {
-  return (args: { sessionUuid: string; afterSeq: number; limit: number }) =>
+  return (args: {
+    sessionUuid: string;
+    afterSeq: number;
+    throughSeq?: number;
+    limit: number;
+  }) =>
     Promise.resolve(
       args.sessionUuid === sessionUuid
         ? rows
-            .filter((r) => r.seq > args.afterSeq)
+            .filter(
+              (r) =>
+                r.seq > args.afterSeq &&
+                (args.throughSeq === undefined || r.seq <= args.throughSeq),
+            )
             .sort((a, b) => a.seq - b.seq)
             .slice(0, args.limit)
         : [],

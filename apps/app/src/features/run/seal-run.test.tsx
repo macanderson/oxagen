@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Seal run (ADR-168) as a person drives it: open the dialog, read what it will
+// Seal run (ADR-169) as a person drives it: open the dialog, read what it will
 // do, submit, and read what the control plane did.
 //
 // The rule these hold is that the dialog never claims more than `seal_run`

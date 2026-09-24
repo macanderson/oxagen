@@ -1,6 +1,6 @@
 // run.handlers.test.ts — handler invocation tests for the run recorder tools
 // (#2952, ADR-058): get_run_frame_body, get_run_transcript, get_run_chain,
-// bisect_runs, get_run_export, and seal_run (#4073, ADR-168).
+// bisect_runs, get_run_export, and seal_run (#4073, ADR-169).
 // fork_run, export_run and summarize_run check an org role in the handler and
 // an MCP context carries no user, so they have no MCP tool. get_run_export and
 // seal_run check a role too but their contracts declare the mcp surface; the
