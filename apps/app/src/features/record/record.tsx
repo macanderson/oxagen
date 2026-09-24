@@ -1,5 +1,5 @@
-// One published context record (#3395; ADR-061; MC spec §10.2), presented by
-// its kind.
+// One published context record (#3395; ADR-061; MC spec §10.2;
+// mockups/pages/record.md), presented by its kind.
 //
 // The statement is the record, so the statement is the headline, and the
 // lineage, the commit and the counters read as the metadata they are. The
@@ -8,25 +8,25 @@
 //
 // The record is read through the repository binding, out of
 // `.oxagen/rules/<lineage>.toml` on the production branch, with the registry
-// mirror as a fallback. Deleting the mirror row still renders this page.
-// Provenance is the publishing commit from git, never a column.
-import { type ReactNode, Suspense } from "react";
+// mirror as a fallback. Provenance is the publishing commit from git, never a
+// column.
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { useTranslations } from "next-intl";
-import type { RecordDetail, RecordKind } from "@/data/contracts/steering";
+import type { RecordKind } from "@/data/contracts/steering";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import { PageRecord } from "@/features/shell";
+import { getSession } from "@/server/session";
 import type { WsCtx } from "@/server/viewer";
-import { panel } from "@/ui/control-styles";
+import { panel, panelBody, panelHeader } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
-import { Header } from "./header";
 import { KindPanel } from "./kind-panel";
 import { LineagePanel } from "./lineage-panel";
 import { PageFailure } from "./page-failure";
 import { Related } from "./related";
-import { StatementEditor } from "./statement-editor";
 import { LINEAGE, recordLink, type RecordAt } from "./view";
+import { RecordWorkbench } from "./workbench";
 
 /** The proposal states that mean a change is open on this lineage right now. */
 const OPEN_STATUSES = new Set([
@@ -39,9 +39,9 @@ const OPEN_STATUSES = new Set([
 
 /**
  * Whether this viewer's role may revise at all. It mirrors the gate
- * `revise_context_record` enforces (INV-29), so the gold action is disabled
- * rather than offered and then refused. The handler remains the authority:
- * this only decides what the page shows.
+ * `revise_context_record` enforces (INV-29), so the proposal dialog says so
+ * rather than offering a submit that is refused. The handler remains the
+ * authority: this only decides what the page shows.
  */
 function canRevise(ctx: WsCtx): boolean {
   const orgAdmin = ctx.orgRole === "owner" || ctx.orgRole === "admin";
@@ -49,6 +49,13 @@ function canRevise(ctx: WsCtx): boolean {
   return orgAdmin || wsWriter;
 }
 
+const bar = "animate-pulse rounded-md bg-hl motion-reduce:animate-none";
+
+/**
+ * The loading state (mockup `skeleton()`): four tiles and a panel of rows,
+ * textless, under the shell. The page must never flash a statement, a count
+ * or a commit that the read has not answered with yet.
+ */
 export function RecordLoading() {
   const t = useTranslations("record");
   return (
@@ -59,74 +66,19 @@ export function RecordLoading() {
       aria-label={t("loading")}
       className="flex flex-col gap-4"
     >
-      {/* Textless on purpose: the page must never flash a statement, a count
-          or a commit that the read has not answered with yet. */}
-      <div className="flex flex-col gap-3">
-        <div className="h-3 w-40 animate-pulse rounded bg-muted motion-reduce:animate-none" />
-        <div className="h-8 w-3/4 animate-pulse rounded bg-muted motion-reduce:animate-none" />
-        <div className="h-4 w-1/2 animate-pulse rounded bg-muted motion-reduce:animate-none" />
+      <div className="grid gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(175px,1fr))]">
+        {[0, 1, 2, 3].map((tile) => (
+          <div key={tile} className={`${bar} h-16 rounded-xl`} />
+        ))}
       </div>
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <div className={`${panel} flex flex-col gap-3 p-5`}>
-          {[0, 1, 2, 3, 4, 5].map((row) => (
-            <div
-              key={row}
-              className="h-5 animate-pulse rounded bg-muted motion-reduce:animate-none"
-            />
+      <div className={panel}>
+        <div className={panelHeader}>
+          <div className={`${bar} h-4 w-44`} />
+        </div>
+        <div className={`${panelBody} flex flex-col gap-2`}>
+          {[0, 1, 2, 3, 4, 5, 6].map((row) => (
+            <div key={row} className={`${bar} h-9`} />
           ))}
-        </div>
-        <div className="flex flex-col gap-4">
-          {[0, 1].map((block) => (
-            <div key={block} className={`${panel} flex flex-col gap-3 p-5`}>
-              {[0, 1, 2, 3].map((row) => (
-                <div
-                  key={row}
-                  className="h-4 animate-pulse rounded bg-muted motion-reduce:animate-none"
-                />
-              ))}
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Loaded({
-  at,
-  detail,
-  canWrite,
-  pendingBranch,
-  related,
-}: {
-  at: RecordAt;
-  detail: RecordDetail;
-  canWrite: boolean;
-  pendingBranch: string | null;
-  related: ReactNode;
-}) {
-  const path = `statement in ${detail.record.path ?? `.oxagen/rules/${at.lineage}.toml`}`;
-  return (
-    <div className="flex flex-col gap-6">
-      <PageRecord route="steering" id={at.lineage} />
-      <Header at={at} detail={detail} pendingBranch={pendingBranch} />
-      {/* Two columns on a wide screen, one on a narrow one, with the editor
-          first in source order so a phone puts the statement above the kind
-          panel exactly as the mockup asks. */}
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <div className="flex min-w-0 flex-col gap-4">
-          <StatementEditor
-            at={at}
-            path={path}
-            statement={detail.record.statement}
-            canWrite={canWrite}
-            pendingBranch={pendingBranch}
-          />
-          <LineagePanel detail={detail} />
-        </div>
-        <div className="flex min-w-0 flex-col gap-4">
-          <KindPanel detail={detail} />
-          {related}
         </div>
       </div>
     </div>
@@ -149,9 +101,31 @@ async function RelatedPanel({
   at: RecordAt;
   kind: RecordKind | null;
 }) {
-  if (kind === null) return <Related at={at} kind={null} read={null} />;
+  if (kind === null)
+    return <Related at={at} workspace={ctx.wsName} kind={null} read={null} />;
   const read = await source.steering.records(ctx, { kind, offset: 0 });
-  return <Related at={at} kind={kind} read={read} />;
+  return <Related at={at} workspace={ctx.wsName} kind={kind} read={read} />;
+}
+
+function RelatedFallback() {
+  const t = useTranslations("record");
+  return (
+    <div
+      role="status"
+      aria-busy="true"
+      aria-label={t("loading")}
+      className={`${panel} flex flex-col gap-3 p-4`}
+    >
+      {[0, 1, 2].map((row) => (
+        <div key={row} className={`${bar} h-16`} />
+      ))}
+    </div>
+  );
+}
+
+/** A read's value, or null when it did not answer. */
+function valueOf<T>(read: Read<T>): T | null {
+  return read.ok ? read.value : null;
 }
 
 export async function Record({
@@ -168,56 +142,71 @@ export async function Record({
   if (!LINEAGE.test(lineage)) notFound();
   const at: RecordAt = { org: ctx.orgSlug, ws: ctx.wsSlug, lineage };
   const readAt = instantOfRead();
-  const [read, proposals] = await Promise.all([
+  const [read, proposals, freshness] = await Promise.all([
     source.steering.record(ctx, lineage),
     source.steering.proposals(ctx, { offset: 0, lineage }),
+    source.steering.freshness(ctx),
   ]);
   // A lineage neither the repository nor the registry holds is a 404, not a
   // page error: the route named a record that does not exist.
   if (!read.ok && read.reason === "error" && read.status === 404) notFound();
-  if (!read.ok) return <Failure read={read} at={at} readAt={readAt} />;
+  if (!read.ok) {
+    const session = await getSession();
+    return (
+      <Failure
+        read={read}
+        at={at}
+        orgName={ctx.orgName}
+        viewer={{
+          name: session?.user.name ?? session?.user.email ?? ctx.userId,
+          role: `workspace.${ctx.wsRole}`,
+        }}
+        readAt={readAt}
+      />
+    );
+  }
+  const detail = read.value;
+  const kind = detail.record.kind;
+  // The conflict note counts every published record, which is the list's
+  // total with no kind filter; only a constraint prints it.
+  const published =
+    kind === "constraint"
+      ? valueOf(await source.steering.records(ctx, { kind: null, offset: 0 }))
+      : null;
   const open = proposals.ok
     ? (proposals.value.proposals.find(
         (proposal) =>
           proposal.lineage === lineage && OPEN_STATUSES.has(proposal.status),
       ) ?? null)
     : null;
+  const fresh = valueOf(freshness);
+  const repository = fresh?.repository ?? null;
   return (
-    <Loaded
-      at={at}
-      detail={read.value}
-      canWrite={canRevise(ctx)}
-      pendingBranch={open?.pr?.branch ?? null}
-      related={
-        <Suspense fallback={<RelatedFallback />}>
-          <RelatedPanel
-            ctx={ctx}
-            source={source}
-            at={at}
-            kind={read.value.record.kind}
+    <>
+      <PageRecord route="steering" id={lineage} />
+      <RecordWorkbench
+        at={at}
+        detail={detail}
+        repository={repository}
+        canWrite={canRevise(ctx)}
+        pendingBranch={
+          open === null ? null : (open.pr?.branch ?? `context/${lineage}`)
+        }
+        lineagePanel={<LineagePanel detail={detail} repository={repository} />}
+        kindPanel={
+          <KindPanel
+            detail={detail}
+            bundleVersion={fresh?.version ?? null}
+            publishedTotal={published?.total ?? null}
           />
-        </Suspense>
-      }
-    />
-  );
-}
-
-function RelatedFallback() {
-  const t = useTranslations("record");
-  return (
-    <div
-      role="status"
-      aria-busy="true"
-      aria-label={t("loading")}
-      className={`${panel} flex flex-col gap-3 p-5`}
-    >
-      {[0, 1, 2].map((row) => (
-        <div
-          key={row}
-          className="h-12 animate-pulse rounded bg-muted motion-reduce:animate-none"
-        />
-      ))}
-    </div>
+        }
+        related={
+          <Suspense fallback={<RelatedFallback />}>
+            <RelatedPanel ctx={ctx} source={source} at={at} kind={kind} />
+          </Suspense>
+        }
+      />
+    </>
   );
 }
 
@@ -225,10 +214,14 @@ function RelatedFallback() {
 function Failure({
   read,
   at,
+  orgName,
+  viewer,
   readAt,
 }: {
   read: Exclude<Read<unknown>, { ok: true }>;
   at: RecordAt;
+  orgName: string;
+  viewer: { name: string; role: string };
   readAt: string;
 }) {
   const format = useFormatter();
@@ -236,7 +229,9 @@ function Failure({
     <PageFailure
       read={read}
       org={at.org}
+      orgName={orgName}
       ws={at.ws}
+      viewer={viewer}
       retry={recordLink(at)}
       readAt={format.dateTime(new Date(readAt), {
         dateStyle: "medium",

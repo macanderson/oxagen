@@ -72,6 +72,8 @@ export function useSsoFailure(): (failure: SsoFailure) => string {
             return t("domainTaken");
           case "sso_provider_not_found":
             return t("notFound");
+          case "scim_token_exists":
+            return t("scimTokenExists");
           default:
             return t("refused", { code: failure.code });
         }

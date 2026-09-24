@@ -70,6 +70,7 @@ import { describe, expect, it } from "vitest";
 import { ENV_REGISTRY, type ServiceName } from "@oxagen/config";
 import type { CapabilityDeclaration } from "@oxagen/oxagen";
 import { repositoryMainGet } from "@oxagen/oxagen/contracts/repository.main.get";
+import { runIssueProvidersGet } from "@oxagen/oxagen/contracts/run.issue.providers.get";
 import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
 import { repositoryInstallationAttach } from "@oxagen/oxagen/contracts/repository.installation.attach";
 import { repositoryInstallationCandidates } from "@oxagen/oxagen/contracts/repository.installation.candidates";
@@ -177,6 +178,14 @@ const FLOW: readonly FlowEntry[] = [
     handlerFile: "workspace.create.ts",
     reads: GITHUB_TOKEN_DECRYPT_ENV,
     via: "resolveWorkspaceGithubUserToken, via githubUserInstallationsDeps",
+  },
+  // `get_run_issue_providers` says whether the Run page can link an issue on
+  // GitHub, and builds the connect URL from the same GitHub App settings.
+  {
+    capability: runIssueProvidersGet,
+    handlerFile: "run.issue.providers.get.ts",
+    reads: REQUIRED_GITHUB_APP_ENV,
+    via: "envGithubUrls",
   },
 ];
 

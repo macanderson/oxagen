@@ -20,11 +20,15 @@ import { routes, type SafePath, sanitizeNext } from "@/shared/safe-path";
  * CLI's loopback listener 302s there may hold no app cookie at all — the token
  * is already in the terminal — so a gate would end a successful sign-in on
  * /login (#3091). Organization creation (/new-organization) is not public.
+ * /api/scim/v2 is public because an identity provider calls it with the
+ * organization's SCIM bearer token and never a cookie; the Hono API the app
+ * proxies it to refuses a request without a valid token (#3734).
  */
 export const PUBLIC_PATHS: readonly RegExp[] = [
   /^\/(login|signup|verify|two-factor|forgot-password|reset-password)(\/|$)/,
   /^\/invite\//,
   /^\/api\/auth\//,
+  /^\/api\/scim\/v2(\/|$)/,
   /^\/cli\/(authorize|complete)(\/|$)/,
   /^\/github\/setup(\/|$)/,
 ];

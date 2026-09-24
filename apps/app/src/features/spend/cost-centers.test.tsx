@@ -95,7 +95,7 @@ describe("CostCenterTable", () => {
   it("prints every spend beside its basis and explains the share", async () => {
     await renderTable();
     const eng = rowOf(screen.getByText("ENG-1001"));
-    expect(within(eng).getByText("gateway observed")).toBeDefined();
+    expect(within(eng).getByText("gateway_observed")).toBeDefined();
     expect(within(eng).getByText("60%")).toBeDefined();
     expect(
       screen.getByText(
@@ -111,5 +111,13 @@ describe("CostCenterTable", () => {
     });
     const eng = rowOf(screen.getByText("ENG-1001"));
     expect(within(eng).getAllByText("not recorded")).toHaveLength(2);
+  });
+
+  it("says nothing was rolled up when the month holds no row (negative)", async () => {
+    await renderTable({ ...report, rows: [] });
+    expect(
+      screen.getByText("No run in this period has been rolled up."),
+    ).toBeDefined();
+    expect(screen.queryByRole("table")).toBeNull();
   });
 });
