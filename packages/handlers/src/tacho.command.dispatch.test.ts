@@ -29,6 +29,7 @@ vi.mock("./logger", () => ({
 
 import {
   addressOf,
+  BUNDLE_FEATURE_STEER_NEXT_STEP,
   type CommandRowInput,
   type CommandStore,
   createDispatchCommandHandler,
@@ -121,9 +122,21 @@ function session(over: Partial<RecipientSession> = {}): RecipientSession {
     agentKey: "acme.core.cc-laptop",
     outcome: "running",
     enforcementTier: "harness",
+    host: {
+      status: "active",
+      lastSeenAt: new Date(NOW.getTime() - 30_000),
+      bundleFeatures: [],
+    },
     ...over,
   };
 }
+
+/** A host that polled within the window and can carry a step steer. */
+const STEP_HOST = {
+  status: "active",
+  lastSeenAt: new Date(NOW.getTime() - 30_000),
+  bundleFeatures: [BUNDLE_FEATURE_STEER_NEXT_STEP],
+};
 
 class MemoryStore implements CommandStore {
   rows: Row[] = [];
@@ -234,38 +247,48 @@ beforeEach(() => {
   tenant("Admin");
 });
 
-describe("resolveDeliveryMode on the gateway tier", () => {
-  it("delivers interrupt as interrupt where the model proxy can cut the call", () => {
-    expect(resolveDeliveryMode("interrupt", "contained")).toEqual({
-      deliveryMode: "interrupt",
+// #4023: the host delivers steering text only at the next
+// prompt, so a mode it cannot carry is recorded as the one it will.
+describe("resolveDeliveryMode", () => {
+  const carrier = [BUNDLE_FEATURE_STEER_NEXT_STEP];
+
+  it("records next_step and interrupt as turn_boundary on a host with no step carrier", () => {
+    for (const tier of ["harness", "gateway", "contained", "observe"]) {
+      expect(resolveDeliveryMode("next_step", tier, [])).toEqual({
+        deliveryMode: "turn_boundary",
+        degradedReason: "no_step_carrier",
+      });
+      expect(resolveDeliveryMode("interrupt", tier, [])).toEqual({
+        deliveryMode: "turn_boundary",
+        degradedReason: "no_step_carrier",
+      });
+    }
+  });
+
+  it("carries turn_boundary on every host", () => {
+    expect(resolveDeliveryMode("turn_boundary", "observe", [])).toEqual({
+      deliveryMode: "turn_boundary",
       degradedReason: null,
     });
-    expect(resolveDeliveryMode("interrupt", "gateway")).toEqual({
-      deliveryMode: "interrupt",
-      degradedReason: null,
-    });
-    expect(resolveDeliveryMode("interrupt", "harness")).toEqual({
-      deliveryMode: "next_step",
-      degradedReason: "harness_tier",
-    });
-    expect(resolveDeliveryMode("next_step", "gateway")).toEqual({
+  });
+
+  it("carries next_step where the host advertises a step carrier", () => {
+    expect(resolveDeliveryMode("next_step", "harness", carrier)).toEqual({
       deliveryMode: "next_step",
       degradedReason: null,
     });
   });
-});
 
-describe("resolveDeliveryMode", () => {
-  it("carries next_step and turn_boundary and degrades interrupt to next_step with the reason", () => {
-    expect(resolveDeliveryMode("next_step")).toEqual({
-      deliveryMode: "next_step",
+  it("delivers interrupt only where the model proxy can cut the call", () => {
+    expect(resolveDeliveryMode("interrupt", "contained", carrier)).toEqual({
+      deliveryMode: "interrupt",
       degradedReason: null,
     });
-    expect(resolveDeliveryMode("turn_boundary")).toEqual({
-      deliveryMode: "turn_boundary",
+    expect(resolveDeliveryMode("interrupt", "gateway", carrier)).toEqual({
+      deliveryMode: "interrupt",
       degradedReason: null,
     });
-    expect(resolveDeliveryMode("interrupt")).toEqual({
+    expect(resolveDeliveryMode("interrupt", "harness", carrier)).toEqual({
       deliveryMode: "next_step",
       degradedReason: "harness_tier",
     });
@@ -405,7 +428,8 @@ describe("dispatch_command — every command on every target kind", () => {
           if ("payload" in spec) {
             expect(row.payload["text"]).toBe(spec.payload.text);
             expect(row.requestedMode).toBe("next_step");
-            expect(row.deliveryMode).toBe("next_step");
+            // No host here advertises a step carrier.
+            expect(row.deliveryMode).toBe("turn_boundary");
           } else {
             expect(row.payload["text"]).toBeUndefined();
             expect(row.requestedMode).toBeNull();
@@ -418,8 +442,27 @@ describe("dispatch_command — every command on every target kind", () => {
 });
 
 describe("dispatch_command — the degradation rule", () => {
-  it("records interrupt as requested and next_step as achieved, with harness_tier", async () => {
+  // #4023: production steers asked for next_step, were recorded as next_step,
+  // and expired an hour later waiting for a prompt the host never reached.
+  it("records next_step as turn_boundary on a host with no step carrier", async () => {
     const store = new MemoryStore([session()]);
+    await handlerOver(store)(
+      parse({
+        target: { kind: "run", id: RUN },
+        command: "steer",
+        payload: { text: "use staging", requestedMode: "next_step" },
+      }),
+      OPERATOR,
+    );
+    expect(store.rows[0]).toMatchObject({
+      requestedMode: "next_step",
+      deliveryMode: "turn_boundary",
+      degradedReason: "no_step_carrier",
+    });
+  });
+
+  it("records interrupt as requested and next_step as achieved, with harness_tier", async () => {
+    const store = new MemoryStore([session({ host: STEP_HOST })]);
     await handlerOver(store)(
       parse({
         target: { kind: "run", id: RUN },
@@ -465,8 +508,23 @@ describe("dispatch_command — a direct target that cannot receive is refused, n
     expect(store.rows).toEqual([]);
   });
 
-  it("an observe-tier run", async () => {
-    const store = new MemoryStore([session({ enforcementTier: "observe" })]);
+  it.each([
+    ["no_host", null],
+    [
+      "host_revoked",
+      { status: "revoked", lastSeenAt: NOW, bundleFeatures: [] },
+    ],
+    [
+      "host_offline",
+      {
+        status: "active",
+        lastSeenAt: new Date(NOW.getTime() - 5 * 60_000 - 1),
+        bundleFeatures: [],
+      },
+    ],
+    ["host_offline", { status: "active", lastSeenAt: null, bundleFeatures: [] }],
+  ] as const)("a run whose host cannot carry it: %s", async (reason, host) => {
+    const store = new MemoryStore([session({ host })]);
     await expect(
       handlerOver(store)(
         parse({
@@ -476,7 +534,7 @@ describe("dispatch_command — a direct target that cannot receive is refused, n
         }),
         OPERATOR,
       ),
-    ).rejects.toSatisfy(conflict("observe_tier"));
+    ).rejects.toSatisfy(conflict(reason));
     expect(store.rows).toEqual([]);
   });
 
@@ -560,20 +618,57 @@ describe("dispatch_command — a direct target that cannot receive is refused, n
   });
 });
 
+// ADR-163, #4023: the observe tier governs policy verdicts. It never takes
+// away the operator's ability to stop their own agent.
+describe("dispatch_command — an observe-tier run with a live host", () => {
+  it.each(["pause", "resume", "cancel"] as const)(
+    "queues %s",
+    async (command) => {
+      const store = new MemoryStore([session({ enforcementTier: "observe" })]);
+      const { commandIds } = await handlerOver(store)(
+        parse({ target: { kind: "run", id: RUN }, command }),
+        OPERATOR,
+      );
+      expect(commandIds).toHaveLength(1);
+      expect(store.rows[0]).toMatchObject({ outcome: "queued", command });
+    },
+  );
+
+  it("queues a steer at the boundary the host can carry", async () => {
+    const store = new MemoryStore([session({ enforcementTier: "observe" })]);
+    await handlerOver(store)(
+      parse({
+        target: { kind: "run", id: RUN },
+        command: "steer",
+        payload: { text: "stop touching prod", requestedMode: "interrupt" },
+      }),
+      OPERATOR,
+    );
+    expect(store.rows[0]).toMatchObject({
+      outcome: "queued",
+      requestedMode: "interrupt",
+      deliveryMode: "turn_boundary",
+      degradedReason: "no_step_carrier",
+    });
+  });
+});
+
 describe("dispatch_command — broadcast", () => {
   const fleet = [
-    session(),
+    session({ host: STEP_HOST }),
     session({
       id: "s2",
       publicId: "tse_2222222222222222222222",
       sessionUuid: "4f2b7a5e-8c1d-4e6f-9a0b-1c2d3e4f5a6c",
       enforcementTier: "gateway",
+      host: STEP_HOST,
     }),
     session({
       id: "s3",
       publicId: "tse_3333333333333333333333",
       sessionUuid: "5f2b7a5e-8c1d-4e6f-9a0b-1c2d3e4f5a6d",
       enforcementTier: "observe",
+      host: { ...STEP_HOST, lastSeenAt: new Date(NOW.getTime() - 3_600_000) },
     }),
     session({
       id: "s4",
@@ -583,7 +678,7 @@ describe("dispatch_command — broadcast", () => {
     }),
   ];
 
-  it("reaches every live run, records the observe-tier run as failed with the reason, and never enumerates a sealed one", async () => {
+  it("reaches every live run, records the run whose host went quiet as failed with the reason, and never enumerates a sealed one", async () => {
     const store = new MemoryStore(fleet);
     const output = await handlerOver(store)(
       parse({
@@ -599,9 +694,9 @@ describe("dispatch_command — broadcast", () => {
       [fleet[1]?.publicId, "queued"],
       [fleet[2]?.publicId, "failed"],
     ]);
-    const observe = store.rows[2];
-    expect(observe).toMatchObject({
-      outcomeDetail: "observe_tier",
+    const offline = store.rows[2];
+    expect(offline).toMatchObject({
+      outcomeDetail: "host_offline",
       requestedMode: "interrupt",
       deliveryMode: null,
       degradedReason: null,
