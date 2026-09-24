@@ -283,6 +283,50 @@ describe("the approvals button", () => {
     expect(screen.queryByTestId("approvals-count")).toBeNull();
   });
 
+  it('says "+" when the organization has more workspaces than the chrome read, though every read one answered', () => {
+    renderShell(
+      shellData({
+        approvals: {
+          workspaces: [
+            shellWorkspace({
+              pending: readOk({ items: [approvalItem()], more: false }),
+            }),
+          ],
+          truncated: true,
+          readAt: Date.now(),
+        },
+      }),
+    );
+    expect(button()).toHaveAccessibleName("Approvals, 1+ waiting");
+    expect(screen.getByTestId("approvals-count")).toHaveTextContent("1+");
+  });
+
+  it('caps the badge at "99+" past two digits, and adds no second "+" for a partial read', () => {
+    renderShell(
+      shellData({
+        approvals: {
+          workspaces: [
+            shellWorkspace({
+              pending: readOk({
+                items: Array.from({ length: 100 }, (_, i) =>
+                  approvalItem({
+                    id: `apr_${String(i).padStart(10, "0")}`,
+                    expiresAt: soon(9),
+                  }),
+                ),
+                more: true,
+              }),
+            }),
+          ],
+          truncated: false,
+          readAt: Date.now(),
+        },
+      }),
+    );
+    expect(screen.getByTestId("approvals-count").textContent).toBe("99+");
+    expect(button()).toHaveAccessibleName("Approvals, 99+ waiting");
+  });
+
   it("draws no count when nothing is parked", () => {
     renderShell(shellData());
     expect(button()).toHaveAccessibleName("Approvals, 0 waiting");

@@ -468,4 +468,49 @@ describe("the sidebar's counts and foot", () => {
       "connected",
     );
   });
+
+  it("says offline the moment the browser drops, and connected again when it returns", () => {
+    const onLine = vi.spyOn(window.navigator, "onLine", "get");
+    try {
+      onLine.mockReturnValue(true);
+      renderShell(shellData());
+      const sidebar = screen.getByRole("complementary", { name: "Sidebar" });
+      const badge = () => within(sidebar).getByTestId("connection");
+      expect(badge()).toHaveAttribute("title");
+      act(() => {
+        onLine.mockReturnValue(false);
+        window.dispatchEvent(new Event("offline"));
+      });
+      expect(badge()).toHaveTextContent("offline");
+      // The reachable line claims the control plane answered; offline, it does not.
+      expect(badge()).not.toHaveAttribute("title");
+      act(() => {
+        onLine.mockReturnValue(true);
+        window.dispatchEvent(new Event("online"));
+      });
+      expect(badge()).toHaveTextContent("connected");
+    } finally {
+      onLine.mockRestore();
+    }
+  });
+
+  it("draws Steering in the plain ink and Audit in the approval ink, and says Audit's incidents are open", () => {
+    nav.pathname = "/acme/audit";
+    renderShell(
+      shellData({
+        counts: {
+          slug: "core-platform",
+          read: readOk({ approvals: 0, proposals: 2, incidents: 1 }),
+        },
+      }),
+    );
+    const main = screen.getByRole("navigation", { name: "Main" });
+    expect(main.querySelector('[data-count="steering"]')).not.toHaveClass(
+      "text-info",
+    );
+    expect(main.querySelector('[data-count="audit"]')).toHaveClass("text-info");
+    expect(
+      within(main).getByRole("link", { name: /^Audit/ }),
+    ).toHaveAccessibleName("Audit, 1 open");
+  });
 });
