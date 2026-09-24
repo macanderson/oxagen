@@ -1627,6 +1627,8 @@ type Messages = {
         orgRoleRequired: string;
         noRepository: string;
         githubRefused: string;
+        gitlabRefused: string;
+        gitlabCredentialRejected: string;
         unanswered: string;
         refused: string;
         invalid: string;
@@ -1805,6 +1807,8 @@ type Messages = {
       orgRoleRequired: string;
       noRepository: string;
       githubRefused: string;
+      gitlabRefused: string;
+      gitlabCredentialRejected: string;
       unanswered: string;
       refused: string;
       invalid: string;
@@ -2017,6 +2021,8 @@ type Messages = {
       governanceUnreadable: string;
       repositoryMissing: string;
       githubRefused: string;
+      gitlabRefused: string;
+      gitlabCredentialRejected: string;
       baseMoved: string;
       proposalMoved: string;
       unanswered: string;
@@ -3504,6 +3510,8 @@ type Messages = {
       repositoryMissing: string;
       governanceUnreadable: string;
       githubRefused: string;
+      gitlabRefused: string;
+      gitlabCredentialRejected: string;
       refused: string;
       invalid: string;
       pendingApproval: string;
@@ -3589,6 +3597,20 @@ type Messages = {
         attaching: string;
         none: string;
       };
+      gitlab: {
+        heading: string;
+        body: string;
+        reconnectHeading: string;
+        reconnectBody: string;
+        pathLabel: string;
+        pathHint: string;
+        tokenLabel: string;
+        selfManaged: string;
+        submit: string;
+        submitting: string;
+        webhookRefused: string;
+        open: string;
+      };
     };
     failure: {
       denied: string;
@@ -3617,6 +3639,10 @@ type Messages = {
       secretFound: string;
       authorityDeclared: string;
       githubRefused: string;
+      gitlabRefused: string;
+      gitlabCredentialRejected: string;
+      gitlabNotConnected: string;
+      repositoryHostUnsupported: string;
     };
     page: {
       title: string;
@@ -5983,6 +6009,9 @@ type Messages = {
         headMoved: string;
         baseMoved: string;
         githubRefused: string;
+        gitlabRefused: string;
+        gitlabCredentialRejected: string;
+        repositoryHostChanged: string;
         mergeTimeUnknown: string;
         refused: string;
         invalid: string;

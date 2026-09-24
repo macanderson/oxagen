@@ -159,7 +159,13 @@ describe("isCalendarDay", () => {
   });
 
   it("refuses anything that is not a padded day (negative)", () => {
-    for (const day of ["", "not a day", "2027-1-1", "2027-01", "2027-01-01T00:00:00Z"])
+    for (const day of [
+      "",
+      "not a day",
+      "2027-1-1",
+      "2027-01",
+      "2027-01-01T00:00:00Z",
+    ])
       expect(isCalendarDay(day)).toBe(false);
   });
 });

@@ -246,6 +246,11 @@ interface PlatformFreshness {
   headCommits?: string[];
   /** `owner/repo` of the workspace's main repository, or null if none is bound. */
   repository: string | null;
+  /**
+   * The host it is on. Absent from an older platform, which bound GitHub
+   * repositories only.
+   */
+  provider?: "github" | "gitlab" | null;
   defaultBranch: string | null;
   policy: SteeringPolicyFile | null;
 }
@@ -431,6 +436,7 @@ function checkoutLink(projectRoot: string): CheckoutLink | undefined {
 async function remoteFor(
   projectRoot: string,
   repository: string,
+  host: string,
   budget: Budget,
 ): Promise<string | null> {
   const stage = budget.stage(REMOTE_LOOKUP_TIMEOUT_MS);
@@ -449,7 +455,7 @@ async function remoteFor(
   } catch {
     return null;
   }
-  const wanted = `${BOUND_REPOSITORY_HOST}/${repository}`.toLowerCase();
+  const wanted = `${host}/${repository}`.toLowerCase();
   for (const name of names) {
     // A remote name git could read as an option is never passed to it.
     if (name.startsWith("-")) continue;
@@ -480,9 +486,11 @@ async function remoteFor(
  * `git://`: the identity check is what lets the gate fetch and auto-sync
  * `.oxagen/` from the remote it matched, and over an unauthenticated
  * transport anyone on the path can serve a different ref under the same
- * host and path. Only HTTPS and SSH say who the server is. The path must be
- * exactly `owner/repo`. Case is folded, because GitHub treats `Acme/App` and
- * `acme/app` as one repository.
+ * host and path. Only HTTPS and SSH say who the server is. On github.com the
+ * path must be exactly `owner/repo`. Elsewhere it may be longer, because a
+ * gitlab.com project can sit in nested groups, `group/sub/project` (#3762).
+ * Case is folded, because both hosts treat `Acme/App` and `acme/app` as one
+ * repository.
  */
 export function parseRemoteUrl(url: string): string | null {
   const trimmed = url.trim();
@@ -507,19 +515,21 @@ export function parseRemoteUrl(url: string): string | null {
     .replace(/\.git$/, "")
     .split("/")
     .filter((part) => part.length > 0);
-  if (host.length === 0 || parts.length !== 2) return null;
-  return `${host}/${parts[0]}/${parts[1]}`.toLowerCase();
+  if (host.length === 0 || parts.length < 2) return null;
+  if (host.toLowerCase() === "github.com" && parts.length !== 2) return null;
+  return `${host}/${parts.join("/")}`.toLowerCase();
 }
 
 /**
- * The host a workspace's main repository lives on.
- *
- * `bind_main_repository` binds GitHub repositories only, through the GitHub
- * App, so the platform's `owner/repo` always means one on github.com. When a
- * second provider can be bound, the answer has to carry its host and this
- * constant goes.
+ * The host a workspace's main repository lives on, from the provider the
+ * platform names. A platform that names none predates GitLab support, when
+ * every bound repository was on github.com.
  */
-const BOUND_REPOSITORY_HOST = "github.com";
+export function boundRepositoryHost(
+  provider: PlatformFreshness["provider"],
+): string {
+  return provider === "gitlab" ? "gitlab.com" : "github.com";
+}
 
 /** `host/owner/repo` for one of this checkout's remotes, or null. */
 async function checkoutRepository(
@@ -682,7 +692,12 @@ export async function resolveContext(
     );
   }
   if (fromPlatform?.repository) {
-    boundRemote = await remoteFor(projectRoot, fromPlatform.repository, budget);
+    boundRemote = await remoteFor(
+      projectRoot,
+      fromPlatform.repository,
+      boundRepositoryHost(fromPlatform.provider),
+      budget,
+    );
     if (boundRemote === null) {
       belongsHere = false;
       // A search that ran out of budget found nothing, which is not the same

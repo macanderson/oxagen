@@ -72,6 +72,8 @@ export const repositoryMainGet = registerCapability({
       repository: z
         .object({
           bindingId: z.string().regex(/^rpb_[0-9a-f]+$/),
+          /** The host: a GitHub repository or a gitlab.com project (#3762). */
+          provider: z.enum(["github", "gitlab"]),
           owner: z.string().min(1),
           name: z.string().min(1),
           /** `owner/name` as GitHub reports it. */

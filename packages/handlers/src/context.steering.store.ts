@@ -69,6 +69,7 @@ type ProposalPatch = Partial<
     ProposalRow,
     | "status"
     | "governanceMode"
+    | "provider"
     | "repository"
     | "baseRef"
     | "branch"

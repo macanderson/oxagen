@@ -32,6 +32,7 @@ const NOW = new Date("2026-09-19T10:00:00.000Z");
 const BOUND: BoundRepository = {
   headId: "head-1",
   role: "main",
+  provider: "github",
   connectionId: "conn-1",
   providerRepositoryId: "42",
   bindingRowId: "binding-row-1",
