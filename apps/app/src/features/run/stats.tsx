@@ -13,6 +13,7 @@ import type { Read } from "@/data/read";
 import type { OrgRole } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
 import { AgentCard } from "@/ui/agent-card";
+import { Avatar } from "@/ui/avatar";
 import { Badge } from "@/ui/badge";
 import {
   buttonSecondary,
@@ -34,6 +35,17 @@ import type { RunMetrics } from "./metrics";
 import { NoValue } from "./parts";
 import { SummarizeAction } from "./record-actions";
 import type { Place } from "./tab-props";
+
+/** Two letters from a name, first letters of its first two words; "?" for none. */
+function initialsOf(name: string | null): string {
+  const letters = (name ?? "")
+    .trim()
+    .split(/\s+/)
+    .filter((word) => word.length > 0)
+    .slice(0, 2)
+    .map((word) => word[0] ?? "");
+  return letters.join("").toUpperCase() || "?";
+}
 
 /** `.inv`: the agent that acted, carrying the operator's authority. */
 function Involved({
@@ -68,6 +80,13 @@ function Involved({
         data-testid="run-operator"
         className="inline-flex min-w-0 max-w-full items-center gap-[9px] rounded-full border border-border bg-background py-[5px] pl-1.5 pr-3 text-[12.5px] text-foreground"
       >
+        {hasOperator ? (
+          <Avatar
+            value={null}
+            initials={initialsOf(run.operatorName)}
+            size={30}
+          />
+        ) : null}
         {hasOperator ? (
           <OperatorName
             testId="run-operator-name"
@@ -176,17 +195,18 @@ export function SummaryPanel({
         />
         <SafeLink
           to={routes.run(place.org, place.ws, run.id, { tab: "actions" })}
-          className={`${buttonSecondary} min-h-7 px-2.5 font-sans text-xs`}
+          className={`${buttonSecondary} min-h-7 px-2.5 font-mono text-xs`}
         >
           {t("summary.check")}
         </SafeLink>
       </div>
-      <div className="mt-2.5">
+      <div className="mt-2">
         <EnrichmentSwitch
           org={place.org}
           ws={place.ws}
           enabled={run.enrichmentEnabled !== false}
           canEdit={canEditEnrichment}
+          compact
         />
       </div>
     </section>
