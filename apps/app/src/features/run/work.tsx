@@ -286,7 +286,7 @@ export function ChangesPanel({
 /**
  * The tools the rollup counted, most called first. The spec ranks the dearest
  * tools by money, and the rollup keeps no per-tool money (#3892), so the panel
- * names its order by calls rather than claiming a cost order.
+ * keeps the spec's heading and says under it that the order is by calls.
  */
 export function DearestTools({
   byTool,
@@ -368,6 +368,15 @@ export function SpendByArea({
       <div className="mt-3 flex flex-col gap-2 border-t border-border pt-3">
         <p className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-dim">
           {t("dearestTools")}
+        </p>
+        {/* The spec's heading, with the order it can honestly carry: by
+            calls, until the rollup prices each tool (#3892). */}
+        <p
+          data-testid="run-dearest-order"
+          data-gap="G3"
+          className="text-[11px] text-muted-foreground"
+        >
+          {t("rankedByCalls")}
         </p>
         <DearestTools byTool={rollup.byTool} limit={full ? 8 : 3} />
         {full ? null : (

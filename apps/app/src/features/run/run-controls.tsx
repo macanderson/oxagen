@@ -110,10 +110,20 @@ function CommandDialog({
   write,
   ledgerControl = false,
   testIdPrefix = "run",
+  busy = false,
+  onQueued,
 }: {
   command: Command;
   runId: string;
   ledgerControl?: boolean;
+  /**
+   * True once this pause or resume is queued and the run record has not
+   * flipped yet: the trigger reads "❙❙ Pausing…" or "▶ Resuming…", disabled
+   * (spec pages/run.md, Actions depend on status).
+   */
+  busy?: boolean;
+  /** Told when the control plane accepted the command. */
+  onQueued?: () => void;
   /** Set where a second copy of a control sits on the page (the pause banner). */
   testIdPrefix?: string;
   /**
@@ -161,8 +171,10 @@ function CommandDialog({
     setFailure(null);
     try {
       const result = await write(text, mode);
-      if (result.ok) setQueued(result.value.commandIds);
-      else setFailure(failureText(result));
+      if (result.ok) {
+        setQueued(result.value.commandIds);
+        onQueued?.();
+      } else setFailure(failureText(result));
     } catch {
       setFailure(failureText(UNANSWERED));
     } finally {
@@ -175,12 +187,14 @@ function CommandDialog({
       <button
         type="button"
         data-testid={`${testIdPrefix}-${command}`}
+        data-busy={busy && !open ? "true" : undefined}
+        disabled={busy && !open}
         className={command === "cancel" ? buttonDanger : buttonSecondary}
         onClick={() => {
           setOpen(true);
         }}
       >
-        <CommandLabel command={command} />
+        <CommandLabel command={command} busy={busy && !open} />
       </button>
       <SheetDialog
         open={open}
@@ -278,13 +292,20 @@ const buttonDanger = `${buttonSecondary} border-error/50 text-error`;
 /** The spec's glyphs for pause and resume, hidden from assistive technology. */
 const GLYPH: Partial<Record<Command, string>> = { pause: "❙❙", resume: "▶" };
 
-function CommandLabel({ command }: { command: Command }) {
+function CommandLabel({
+  command,
+  busy = false,
+}: {
+  command: Command;
+  busy?: boolean;
+}) {
   const t = useTranslations("run.commands");
   // The run page names what it pauses ("Pause run"); a Fleet row keeps the
-  // bare verb, because its row already names the run.
+  // bare verb, because its row already names the run. A queued pause or
+  // resume reads as the transition until the record says it landed.
   const label =
     command === "pause" || command === "resume"
-      ? t(`${command}.header`)
+      ? t(busy ? `${command}.transition` : `${command}.header`)
       : t(`${command}.open`);
   const glyph = GLYPH[command];
   return (
@@ -345,6 +366,24 @@ function DisabledControls({
   );
 }
 
+/**
+ * The pause state a queued pause or resume is waiting to see. It holds the
+ * `ingressPaused` value the command was sent from; while the record still
+ * reads that value the control shows the transition, and the next read that
+ * flips it clears it. A wrapped session records no paused flag yet (#3972),
+ * so its pause reads "Pausing…" until the page is left.
+ */
+function usePauseTransition(paused: boolean) {
+  const [from, setFrom] = useState<boolean | null>(null);
+  const busy = from !== null && from === paused;
+  return {
+    busy,
+    queued: () => {
+      setFrom(paused);
+    },
+  };
+}
+
 export function RunControls({
   org,
   ws,
@@ -377,6 +416,7 @@ export function RunControls({
   // paused flag on get_run yet (#3972), so it reads as taking steps and offers
   // Pause run; its Fleet row still offers Resume.
   const paused = ingressPaused;
+  const transition = usePauseTransition(paused);
   if (status !== "live") return null;
   if (source !== "ledger" && !acceptsCommands(enforcementTier)) {
     return (
@@ -415,6 +455,8 @@ export function RunControls({
             command={ingressPaused ? "resume" : "pause"}
             runId={runId}
             ledgerControl
+            busy={transition.busy}
+            onQueued={transition.queued}
             write={(text) =>
               haltRun(org, ws, runId, ingressPaused ? "resume" : "pause", text)
             }
@@ -451,6 +493,9 @@ export function RunControls({
           key={command}
           command={command}
           runId={runId}
+          {...(command === "pause" || command === "resume"
+            ? { busy: transition.busy, onQueued: transition.queued }
+            : {})}
           write={(text, mode) =>
             command === "steer"
               ? steerRun(org, ws, runId, text, mode)

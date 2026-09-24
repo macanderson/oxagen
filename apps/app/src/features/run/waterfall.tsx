@@ -150,8 +150,10 @@ function cacheHitOf(entry: TranscriptEntry): number | null {
 /**
  * The waterfall's ledger (spec: Turn · Steps · Frames · Cache hit · Cost ·
  * Running total · Pinned), one row per bar and a total row that is the last
- * running total, so the table and the bars read one derivation. Nothing pins a
- * finding to a turn yet, so the Pinned cells say so.
+ * running total, so the table and the bars read one derivation. No store keys
+ * a finding to a run's turn yet (#4001), so each Pinned cell says "not
+ * recorded" rather than "none", which would claim nothing was found. Every
+ * money cell carries its basis as its title, and the total row prints it.
  */
 function WaterfallTable({
   bars,
@@ -193,17 +195,29 @@ function WaterfallTable({
               {bar.turn.cost === null ? (
                 <NoValue />
               ) : (
-                <Money value={bar.turn.cost} precision="exact" />
+                <span title={bar.turn.cost.basis ?? t("basisNotRecorded")}>
+                  <Money value={bar.turn.cost} precision="exact" />
+                </span>
               )}
             </td>
             <td className={numericCell}>
               {bar.turn.cumulativeCost === null ? (
                 <NoValue />
               ) : (
-                <Money value={bar.turn.cumulativeCost} precision="exact" />
+                <span
+                  title={bar.turn.cumulativeCost.basis ?? t("basisNotRecorded")}
+                >
+                  <Money value={bar.turn.cumulativeCost} precision="exact" />
+                </span>
               )}
             </td>
-            <td className={`${cell} text-muted-foreground`}>{t("noPin")}</td>
+            <td
+              data-gap="finding-pins"
+              title={t("pinWhy")}
+              className={`${cell} text-muted-foreground`}
+            >
+              {t("noPin")}
+            </td>
           </tr>
         );
       })}
@@ -215,9 +229,17 @@ function WaterfallTable({
           {total === null ? (
             <NoValue />
           ) : (
-            t.rich("recorded", {
-              cost: () => <Money value={total} precision="exact" />,
-            })
+            <>
+              {t.rich("recorded", {
+                cost: () => <Money value={total} precision="exact" />,
+              })}{" "}
+              <span
+                data-testid="waterfall-total-basis"
+                className={`${mono} text-[11px] font-normal text-muted-foreground`}
+              >
+                {total.basis ?? t("basisNotRecorded")}
+              </span>
+            </>
           )}
         </td>
         <td className={cell} />
@@ -306,7 +328,9 @@ export function Waterfall({
               {bar.turn.cost === null ? (
                 <NoValue />
               ) : (
-                <Money value={bar.turn.cost} precision="exact" />
+                <span title={bar.turn.cost.basis ?? t("basisNotRecorded")}>
+                  <Money value={bar.turn.cost} precision="exact" />
+                </span>
               )}
               <RunningTotal cost={bar.turn.cumulativeCost} />
             </span>

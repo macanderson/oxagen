@@ -379,6 +379,41 @@ function AgentSub({
   );
 }
 
+/**
+ * An ended run's word on this page: its lifecycle, `sealed` or `halted`, as
+ * `get_run` recorded it (spec pages/run.md, the status words). The outcome the
+ * ledger or the collector recorded (`completed`, `failed`, and so on) rides
+ * along as the tooltip and the accessible description, because it says how the
+ * run ended and the lifecycle word does not. A sealed run is quiet and a halted
+ * one reads in the warning ink, so nothing here looks like a done badge.
+ * `compacted` needs a compaction record no store keeps yet (#4000).
+ */
+function EndedStatus({
+  status,
+  outcome,
+}: {
+  status: Exclude<RunRow["status"], "live">;
+  outcome: RunRow["outcome"];
+}) {
+  const t = useTranslations("run.header");
+  const tu = useTranslations("ui.runStatus");
+  const why = t("outcomeTip", { outcome: tu(outcome) });
+  return (
+    <span
+      title={why}
+      data-testid="run-status-word"
+      data-status={status}
+      data-outcome={outcome}
+      className="inline-flex"
+    >
+      <Badge tone={status === "halted" ? "denied" : "quiet"}>
+        {t(status === "halted" ? "statusHalted" : "statusSealed")}
+      </Badge>
+      <span className="sr-only">{why}</span>
+    </span>
+  );
+}
+
 export function RunHeader({
   run,
   agent,
@@ -432,7 +467,7 @@ export function RunHeader({
   );
   return (
     <header data-testid="run-header" className="flex flex-col gap-3">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <div className="flex flex-col gap-4">
         <div className="flex min-w-0 flex-col gap-2">
           <p className={eyebrow}>{tp("run")}</p>
           <h1 className="break-all font-mono text-[19px] font-bold leading-tight text-foreground">
@@ -452,7 +487,9 @@ export function RunHeader({
             />
             {/* A live run that is paused or has a call parked says which, in
                 the word and the dot, because "live" alone hides that nothing
-                is moving. An ended run reads its recorded outcome. */}
+                is moving. An ended run reads its lifecycle word (sealed or
+                halted, spec pages/run.md) with its recorded outcome beside it
+                as the tooltip, and never a done badge. */}
             {run.status === "live" && run.ingressPaused === true ? (
               <Badge tone="approval" data-testid="run-status-word">
                 {t("header.statusPaused")}
@@ -461,8 +498,10 @@ export function RunHeader({
               <Badge tone="approval" data-testid="run-status-word">
                 {t("header.statusParked")}
               </Badge>
-            ) : (
+            ) : run.status === "live" ? (
               <StatusBadge status={run.status} outcome={run.outcome} />
+            ) : (
+              <EndedStatus status={run.status} outcome={run.outcome} />
             )}
             <EnforcementTierBadge
               tier={run.enforcementTier}
@@ -493,6 +532,8 @@ export function RunHeader({
           )}
           <When run={run} />
         </div>
+        {/* The action row sits under the strips and the started line, right
+            aligned from lg (spec pages/run.md, the mock's header). */}
         <div
           data-testid="run-actions"
           className="flex flex-col gap-3 lg:items-end"

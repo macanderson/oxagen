@@ -533,6 +533,8 @@ export async function Run({
           read={read}
           frames={frames}
           run={run}
+          waiting={pending.approvals.ok ? pending.approvals.value.items : null}
+          at={pending.at}
           body={
             seq === null
               ? null

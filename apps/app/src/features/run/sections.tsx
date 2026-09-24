@@ -17,6 +17,7 @@ import {
   parseSteeringManifest,
   type RunFrameBody,
   type RunTranscript,
+  type SteeringManifestEntry,
   type TranscriptEntry,
 } from "@/data/contracts/run";
 import type { RunRow } from "@/data/contracts/runs";
@@ -185,15 +186,23 @@ function Unrecorded({
   );
 }
 
+/** The forces the session-start prefix delivers (`PREFIX_FORCES`, ADR-093). */
+const PREFIX = new Set(["must", "should"]);
+/** Cut items drawn before the rest fold into "N more cut". */
+const CUTS_SHOWN = 3;
+
 function Manifest({
   run,
   seq,
   body,
+  assembledSeq,
 }: {
   run: RunRow;
   /** The manifest frame's seq; null when the run sealed none. */
   seq: string | null;
   body: Read<RunFrameBody> | null;
+  /** The run's `context.assembled` frame; null when it recorded none. */
+  assembledSeq: string | null;
 }) {
   const t = useTranslations("run.context.manifest");
   const locale = useLocale();
@@ -222,8 +231,46 @@ function Manifest({
       </Panel>
     );
   }
+  // The spine (spec pages/run.md, Context): gate notices first, then the
+  // stable prefix, then the volatile selection with its ranks, then the cuts.
+  // A gate notice is a policy item, and the prefix is what the assembler
+  // delivers at session start (`PREFIX_FORCES` in @oxagen/steering-assembler:
+  // must and should). Everything else it ranked into the prompt.
   const included = manifest.items.filter((item) => item.outcome === "included");
+  const gates = included.filter((item) => item.kind === "policy");
+  const rest = included.filter((item) => item.kind !== "policy");
+  const prefix = rest.filter((item) => PREFIX.has(item.force));
+  const volatile = rest.filter((item) => !PREFIX.has(item.force));
   const cut = manifest.items.filter((item) => item.outcome === "cut");
+  const shownCuts = cut.slice(0, CUTS_SHOWN);
+  const moreCut = manifest.cut - shownCuts.length;
+  const row = (
+    item: SteeringManifestEntry,
+    place: string,
+    testId: string,
+    key: string,
+  ) => (
+    <li
+      key={key}
+      data-testid={testId}
+      className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-sm"
+    >
+      <span className="flex min-w-0 items-center gap-2">
+        <span className={`${mono} truncate`}>{item.ref ?? item.kind}</span>
+        <span className={`${mono} text-[11px] text-muted-foreground`}>
+          {t("kindForce", { kind: item.kind, force: item.force })}
+        </span>
+      </span>
+      <span className="flex items-center gap-2">
+        <span className={`${mono} text-xs text-muted-foreground`}>
+          {t("tokens", { tokens: count(item.tokens) })}
+        </span>
+        <Badge tone="quiet" dot={false}>
+          {place}
+        </Badge>
+      </span>
+    </li>
+  );
   return (
     <Panel
       title={t("title")}
@@ -262,28 +309,31 @@ function Manifest({
         </p>
       ) : null}
       <ol className="flex flex-col gap-1.5" data-testid="run-manifest">
-        {included.map((item, index) => (
-          <li
-            key={`${item.ref ?? item.kind}-${String(index)}`}
-            className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-sm"
-          >
-            <span className="flex min-w-0 items-center gap-2">
-              <span className={`${mono} text-xs text-dim`}>
-                {t("rank", { rank: index + 1 })}
-              </span>
-              <span className={`${mono} truncate`}>
-                {item.ref ?? item.kind}
-              </span>
-              <Badge tone="quiet" dot={false}>
-                {item.force}
-              </Badge>
-            </span>
-            <span className={`${mono} text-xs text-muted-foreground`}>
-              {t("tokens", { tokens: count(item.tokens) })}
-            </span>
-          </li>
-        ))}
-        {cut.map((item, index) => (
+        {gates.map((item, index) =>
+          row(
+            item,
+            t("gateNotice"),
+            "run-manifest-gate",
+            `gate-${item.ref ?? item.kind}-${String(index)}`,
+          ),
+        )}
+        {prefix.map((item, index) =>
+          row(
+            item,
+            t("stablePrefix"),
+            "run-manifest-prefix",
+            `prefix-${item.ref ?? item.kind}-${String(index)}`,
+          ),
+        )}
+        {volatile.map((item, index) =>
+          row(
+            item,
+            t("volatile", { rank: index + 1 }),
+            "run-manifest-volatile",
+            `volatile-${item.ref ?? item.kind}-${String(index)}`,
+          ),
+        )}
+        {shownCuts.map((item, index) => (
           <li
             key={`cut-${item.ref ?? item.kind}-${String(index)}`}
             data-testid="run-manifest-cut"
@@ -304,13 +354,31 @@ function Manifest({
             </span>
           </li>
         ))}
+        {moreCut > 0 ? (
+          <li
+            data-testid="run-manifest-more-cut"
+            className="px-3 text-xs text-muted-foreground"
+          >
+            {t("moreCut", { count: count(moreCut) })}
+          </li>
+        ) : null}
       </ol>
-      <p className={`${mono} pt-3 text-[11px] text-muted-foreground`}>
-        {t("footer", {
-          version: manifest.bundle_version,
-          seq,
-          budget: count(manifest.budget_tokens),
-        })}
+      <p
+        data-testid="run-manifest-footer"
+        className={`${mono} pt-3 text-[11px] text-muted-foreground`}
+      >
+        {assembledSeq === null
+          ? t("footerNoAssembled", {
+              version: manifest.bundle_version,
+              seq,
+              budget: count(manifest.budget_tokens),
+            })
+          : t("footer", {
+              version: manifest.bundle_version,
+              seq,
+              assembled: assembledSeq,
+              budget: count(manifest.budget_tokens),
+            })}
       </p>
     </Panel>
   );
@@ -340,6 +408,13 @@ export function ContextSection({
         run={run}
         seq={manifest?.seq ?? null}
         body={manifest?.read ?? null}
+        assembledSeq={
+          read.ok
+            ? (read.value.entries.find(
+                (entry) => entry.type === "context.assembled",
+              )?.seq ?? null)
+            : null
+        }
       />
       <Unrecorded title={t("window.title")} gap="G10">
         {t("window.none")}
@@ -382,6 +457,15 @@ export function ContextSection({
             ))}
           </Table>
         )}
+        {entries !== null && entries.length > 0 ? (
+          <p
+            data-gap="G10"
+            data-testid="run-context-frames-gap"
+            className="pt-3 text-xs text-muted-foreground"
+          >
+            {t("frames.gap")}
+          </p>
+        ) : null}
         {read.ok && !read.value.complete ? (
           <p className="pt-3 text-xs text-muted-foreground">{t("cut")}</p>
         ) : null}
