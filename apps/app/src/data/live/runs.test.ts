@@ -849,6 +849,9 @@ describe("runs.work", () => {
         diff: null,
       },
     ],
+    // `get_run_work` always sends this array, empty for a ledger run
+    // (`run.work.get.ts`, `subagents`). The adapter maps it unguarded, so a
+    // fixture that omits it tests a shape the wire never sends.
     subagents: [
       {
         id: "a0182b6cd3a21d284",
