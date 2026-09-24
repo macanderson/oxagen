@@ -289,6 +289,10 @@ async function buildAuth(opts: {
   });
   const auth = betterAuth({
     baseURL: BASE_URL,
+    // The mock IdP listens on 127.0.0.1. @better-auth/sso 1.6.33 refuses an
+    // IdP endpoint on a private host unless its origin is trusted
+    // (discovery_private_host), as an internal IdP must be.
+    trustedOrigins: [idp.issuer],
     secret: "test-secret-that-is-at-least-thirty-two-characters",
     database: withSsoSecrets(memoryAdapter(db), () => kms),
     plugins: [
