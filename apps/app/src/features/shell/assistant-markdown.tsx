@@ -78,20 +78,7 @@ export function AssistantMarkdown({
       parseIncompleteMarkdown={streaming}
       shikiTheme={["github-light", "github-dark"]}
       components={interactive ? COMPONENTS : READ_ONLY_COMPONENTS}
-      plugins={
-        // @streamdown/code resolves shiki@3.x while streamdown's own type
-        // expects shiki@1.29.2, so `getSupportedLanguages()` returns two
-        // structurally different `BundledLanguage` unions and the plugin
-        // object fails a structural check even though it is the plugin
-        // Streamdown's own docs say to pass (proven at runtime by
-        // `app_deprecated`'s identical config). Assert the whole object
-        // rather than a narrower per-field cast, so this stays correct
-        // however the shiki peer resolves.
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- shiki version skew between streamdown and @streamdown/code's types; see comment above
-        { code: codePlugin } as React.ComponentProps<
-          typeof Streamdown
-        >["plugins"]
-      }
+      plugins={{ code: codePlugin }}
       controls={interactive ? { code: { copy: true, download: false } } : false}
       className={PROSE_CLASS}
     >
