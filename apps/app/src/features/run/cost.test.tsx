@@ -21,6 +21,7 @@ import { type Read, readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import {
+  costRollup,
   costTranscript,
   opusBook,
   releaseRunCost,
@@ -526,6 +527,88 @@ describe("CostTab", () => {
     expect(screen.getByTestId("inst-cost")).toHaveTextContent("$4.13");
     expect(screen.getByTestId("inst-cost")).toHaveTextContent(
       "gateway_observed",
+    );
+  });
+
+  it("keeps the run row's cost when the cost read fails, names no basis it lacks, and claims no retry count (negative)", () => {
+    renderTab(
+      props({
+        run: runRow({
+          ...RELEASE_RUN,
+          cost: { micros: "4130000", currency: "USD", basis: null },
+        }),
+        cost: readError("clickhouse_unreachable", 502),
+      }),
+    );
+    const tile = screen.getByTestId("inst-cost");
+    expect(tile).toHaveTextContent("$4.13");
+    expect(tile).toHaveTextContent("basis not recorded");
+    const ratio = screen.getByTestId("inst-ratio");
+    expect(ratio).not.toHaveTextContent("The rollup recorded");
+    expect(screen.getByTestId("inst-ratio-value")).toHaveTextContent(
+      "not recorded",
+    );
+  });
+
+  it("draws the cost tile as not recorded, with no per-turn figure and every column unpriced, when nothing carried a cost (negative)", () => {
+    const unpriced = releaseRunTurns().map((turn) => ({
+      ...turn,
+      steps: turn.steps.map((step) =>
+        step.kind === "model" ? { ...step, micros: null } : step,
+      ),
+    }));
+    renderTab(
+      props({
+        run: runRow({ ...RELEASE_RUN, cost: null }),
+        cost: readOk({ rollup: null }),
+        transcript: readOk(costTranscript(unpriced)),
+      }),
+    );
+    const tile = screen.getByTestId("inst-cost");
+    expect(tile).toHaveTextContent("not recorded");
+    expect(tile).not.toHaveTextContent("per turn");
+    expect(tile).not.toHaveTextContent("was the dearest");
+    expect(tile.textContent).not.toMatch(/\$/);
+    const columns = screen.getAllByTestId("inst-cost-col");
+    expect(columns).toHaveLength(7);
+    for (const [index, column] of columns.entries()) {
+      expect(column).toHaveAttribute(
+        "title",
+        `Turn ${String(index + 1)}: cost not recorded`,
+      );
+      // No bar is drawn for a turn with no cost to scale.
+      expect(column.querySelector("i")).toBeNull();
+    }
+  });
+
+  it("says the cache hit was not recorded, and leaves out the reasoning and per-call parts the rollup did not carry (negative)", () => {
+    renderTab(
+      props({
+        cost: readOk(
+          costRollup({
+            micros: "4130000",
+            tokens: {
+              inputUncached: 124_486,
+              cacheRead: 607_784,
+              cacheWrite5m: 5_000,
+              cacheWrite1h: 0,
+              output: 24_229,
+              reasoning: 0,
+            },
+            cacheHitRate: null,
+            modelCalls: 0,
+          }),
+        ),
+      }),
+    );
+    const tokens = screen.getByTestId("inst-tokens");
+    expect(tokens).toHaveTextContent("cache hit not recorded");
+    expect(tokens).not.toHaveTextContent("of the output was reasoning");
+    expect(tokens).not.toHaveTextContent("tokens per model call");
+    // The run wrote to the cache, so the tile does not say it wrote nothing.
+    expect(tokens).not.toHaveTextContent("nothing written to cache");
+    expect(screen.getByTestId("inst-cost")).toHaveTextContent(
+      "cache hit not recorded",
     );
   });
 

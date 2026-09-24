@@ -21,6 +21,7 @@ import type {
   ResolvedApprovalItem,
 } from "@/data/contracts/approvals";
 import type { MandateList } from "@/data/contracts/mandates";
+import type { PriceBook } from "@/data/contracts/spend";
 import type { RunWork } from "@/data/contracts/run-work";
 import type { RunRow } from "@/data/contracts/runs";
 import type { DataSource } from "@/data/ports";
@@ -586,6 +587,12 @@ type RunReads = {
    * drew on none must not reach.
    */
   mandates?: Read<MandateList>;
+  /**
+   * The organization's price book, read with the page to price the token
+   * classes and the cache's saving. A test that says nothing about it gets a
+   * read that throws, which the page folds to no book.
+   */
+  priceBook?: Read<PriceBook>;
 };
 
 /** The agent read a test left out: refused, so nothing about the agent is invented. */
@@ -711,7 +718,10 @@ export function runSource(reads: RunReads) {
       budgets: refuse,
       findings: refuse,
       findingEvidence: refuse,
-      priceBook: refuse,
+      priceBook: () =>
+        reads.priceBook === undefined
+          ? refuse()
+          : Promise.resolve(reads.priceBook),
       unpricedModels: refuse,
     },
     onboarding: { state: refuse, firstFrame: refuse },

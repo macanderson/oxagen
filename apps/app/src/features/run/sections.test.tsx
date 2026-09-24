@@ -144,6 +144,78 @@ describe("PolicyDecisions", () => {
     expect(screen.queryByRole("table")).toBeNull();
   });
 
+  it("lists a policy entry with no decision folded in by its own frame and type, and says the call and outcome were not recorded (negative)", () => {
+    const bare = (seq: string, chainRef?: string) =>
+      transcriptEntry({
+        seq,
+        endSeq: seq,
+        type: "policy_decision",
+        kind: "frame",
+        kinds: ["policy"],
+        // `policy deny` names a decision and no call.
+        label: "policy deny",
+        decision: null,
+        ...(chainRef === undefined
+          ? {}
+          : { subagent: { chainRef, type: "Explore" } }),
+      });
+    renderPolicy(
+      readOk(runTranscript({ entries: [bare("9"), bare("9", CHAIN)] })),
+    );
+    const [own, subagent] = screen.getAllByTestId("run-policy-decision");
+    if (own === undefined || subagent === undefined)
+      throw new Error("two rows");
+    expect(within(own).getByRole("link", { name: "9" })).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=actions&body=9",
+    );
+    // The entry's own chain decides the link when no decision names one.
+    expect(within(subagent).queryByRole("link")).toBeNull();
+    for (const row of [own, subagent]) {
+      const cells = within(row).getAllByRole("cell");
+      expect(cells[1]).toHaveTextContent("not recordedpolicy_decision");
+      expect(cells[2]).toHaveTextContent(/^not recorded$/);
+    }
+  });
+
+  it.each<[string, string]>([
+    ["approval", "text-info"],
+    ["approve", "text-info"],
+    ["ask", "text-info"],
+    ["allow", "text-success"],
+    ["deny", "text-warning"],
+    ["route", "text-muted-foreground"],
+  ])(
+    "draws a %s decision in its state's hue, and a word it does not know as a quiet fact",
+    (word, hue) => {
+      renderPolicy(
+        readOk(
+          runTranscript({
+            entries: [
+              transcriptEntry({
+                seq: "4",
+                endSeq: "4",
+                type: "policy_decision",
+                kind: "frame",
+                kinds: ["policy"],
+                label: `${word} Bash`,
+                decision: {
+                  seq: "4",
+                  decision: word,
+                  type: "policy_decision",
+                  at: AT,
+                },
+              }),
+            ],
+          }),
+        ),
+      );
+      const [row] = screen.getAllByTestId("run-policy-decision");
+      if (row === undefined) throw new Error("a row");
+      expect(within(row).getByText(word).className).toContain(hue);
+    },
+  );
+
   it("shows the read failure instead of a list (negative)", () => {
     renderPolicy(readError("frame_store_unreachable", 502));
     expect(

@@ -165,6 +165,114 @@ describe("ChainSection", () => {
     expect(hash.getByText("the seal recorded a telemetry gap")).toBeTruthy();
   });
 
+  it("names only the gaps the record carries: bodies lost with no frame lost, and frames lost with every body kept", () => {
+    const clean = runChain().gaps;
+    renderChain(readOk(runChain({ gaps: { ...clean, missingBodies: 2 } })));
+    const bodies = within(screen.getByTestId("chain-gaps"));
+    expect(bodies.getByText("2 frames with no retained body")).toBeTruthy();
+    expect(bodies.queryByText(/missing frames/)).toBeNull();
+    cleanup();
+    renderChain(
+      readOk(
+        runChain({
+          gaps: {
+            ...clean,
+            missingSequences: [{ from: "7", to: "7" }],
+            missingFrameCount: 1,
+          },
+        }),
+      ),
+    );
+    const frames = within(screen.getByTestId("chain-gaps"));
+    expect(frames.getByText("1 missing frames:")).toBeTruthy();
+    expect(frames.getByText("7")).toBeTruthy();
+    expect(frames.queryByText(/no retained body/)).toBeNull();
+  });
+
+  it("counts the frames without a range when the read names no first or last frame (negative)", () => {
+    renderChain(readOk(runChain({ firstSeq: null, lastSeq: null })));
+    const frames = panel("Hash chain").getByText("Frames").nextElementSibling;
+    expect(frames).toHaveTextContent(/^431 read$/);
+  });
+
+  it("says a seal field the ledger did not carry is not recorded, and takes the chain's root when the seal names none (negative)", () => {
+    const [seal] = runChain().seals;
+    if (seal === undefined) throw new Error("fixture has a seal");
+    const bare = {
+      ...seal,
+      finalRunSeq: null,
+      finalEventDigest: null,
+      eventStreamDigest: null,
+      merkleRoot: null,
+    };
+    renderChain(readOk(runChain({ seals: [bare] })));
+    const facts = panel("Seal and attestation");
+    for (const label of [
+      "Final sequence",
+      "Final frame digest",
+      "Event stream digest",
+    ])
+      expect(facts.getByText(label).nextElementSibling).toHaveTextContent(
+        "not recorded",
+      );
+    expect(facts.getByText("Merkle root").nextElementSibling).toHaveTextContent(
+      `sha256:${"c".repeat(64)}`,
+    );
+    cleanup();
+    renderChain(readOk(runChain({ seals: [bare], merkleRoot: null })));
+    expect(
+      panel("Seal and attestation").getByText("Merkle root").nextElementSibling,
+    ).toHaveTextContent("not recorded");
+  });
+
+  it("says an attempt's root is not recorded when that seal carries none (negative)", () => {
+    const [seal] = runChain().seals;
+    if (seal === undefined) throw new Error("fixture has a seal");
+    renderChain(
+      readOk(
+        runChain({
+          seals: [
+            seal,
+            {
+              ...seal,
+              sealedAt: "2026-09-15T08:58:00.000Z",
+              merkleRoot: null,
+            },
+          ],
+        }),
+      ),
+    );
+    const [, second] = screen.getAllByTestId("chain-attempt");
+    if (second === undefined) throw new Error("two attempts");
+    expect(
+      within(second).getByText("Merkle root").nextElementSibling,
+    ).toHaveTextContent("not recorded");
+  });
+
+  it("draws a countersignature with no platform key named, and the root a checkpoint was anchored in", () => {
+    renderChain(
+      readOk(
+        runChain({
+          checkpoints: [
+            {
+              ...CHECKPOINT,
+              platformKey: null,
+              anchorRoot: `sha256:${"9".repeat(64)}`,
+              anchoredAt: "2026-09-15T08:40:00.000Z",
+            },
+          ],
+        }),
+      ),
+    );
+    const [row] = screen.getAllByTestId("chain-checkpoint");
+    if (row === undefined) throw new Error("a row");
+    expect(within(row).getByText("countersigned")).toBeTruthy();
+    expect(within(row).queryByText("pk_01k4qj9e")).toBeNull();
+    expect(
+      within(row).getByText(`anchored in sha256:${"9".repeat(64)}`),
+    ).toBeTruthy();
+  });
+
   it("says the gaps are a prefix's when the walk stopped short (negative)", () => {
     renderChain(readOk(runChain({ complete: false })));
     expect(screen.getByTestId("chain-prefix")).toBeTruthy();
