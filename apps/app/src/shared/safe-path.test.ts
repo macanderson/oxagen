@@ -148,7 +148,33 @@ describe("routes", () => {
         offset: "50",
         proposal: "prp_1&x",
       }),
-    ).toBe("/acme/core/steering?tab=prs&offset=50&proposal=prp_1%26x");
+    ).toBe("/acme/core/steering/proposals/prs?offset=50&proposal=prp_1%26x");
+    // Every tab and shelf is a path segment, and an id written before the
+    // rename lands where it lives now (roadmap pages/steering.md).
+    expect(routes.steering("acme", "core", { tab: "library" })).toBe(
+      "/acme/core/steering/library",
+    );
+    expect(
+      routes.steering("acme", "core", { tab: "records", kind: "rule" }),
+    ).toBe("/acme/core/steering/records?kind=rule");
+    expect(routes.steering("acme", "core", { tab: "policy" })).toBe(
+      "/acme/core/steering/gates",
+    );
+    expect(routes.steering("acme", "core", { tab: "settings" })).toBe(
+      "/acme/core/steering/gates",
+    );
+    expect(routes.steering("acme", "core", { tab: "deliveries" })).toBe(
+      "/acme/core/steering/assignments",
+    );
+    expect(
+      routes.steering("acme", "core", {
+        tab: "preview",
+        agent: "release manager",
+      }),
+    ).toBe("/acme/core/steering/compiler/release%20manager");
+    expect(routes.steering("acme", "core", { tab: "constructor" })).toBe(
+      "/acme/core/steering",
+    );
     expect(routes.repositories("acme", "core")).toBe("/acme/core/repositories");
     expect(routes.repositories("acme", "core", "changes")).toBe(
       "/acme/core/repositories/changes",
@@ -219,10 +245,10 @@ describe("routes", () => {
       "/acme/core-platform/spend/waste",
     );
     expect(routes.skills("acme", "core-platform")).toBe(
-      "/acme/core-platform/steering?tab=skills",
+      "/acme/core-platform/steering/skills",
     );
     expect(routes.skills("acme", "core-platform", { cursor: "c 2&x" })).toBe(
-      "/acme/core-platform/steering?tab=skills&cursor=c+2%26x",
+      "/acme/core-platform/steering/skills?cursor=c+2%26x",
     );
     expect(
       routes.spend("acme", "core-platform", {

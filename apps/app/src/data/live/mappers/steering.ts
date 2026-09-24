@@ -3,14 +3,18 @@
 // `_output`. A proposal's pull request drops its URL (the list links to the
 // Context PR panel, which carries it), and the Context PR's review sentence is
 // not carried: the page words each governance mode from its own catalog.
+import type { agentMemoryList } from "@oxagen/oxagen/contracts/agent.memory.list";
 import type { contextPrGet } from "@oxagen/oxagen/contracts/context.pr.get";
 import type { contextProposalList } from "@oxagen/oxagen/contracts/context.proposal.list";
 import type { contextRecordsGet } from "@oxagen/oxagen/contracts/context.records.get";
 import type { contextRecordsList } from "@oxagen/oxagen/contracts/context.records.list";
 import type { contextSteeringFreshness } from "@oxagen/oxagen/contracts/context.steering.freshness";
+import type { repositoryTreeGet } from "@oxagen/oxagen/contracts/repository.tree.get";
 import type { z } from "zod";
 import type {
   ContextPr,
+  MemoryPage,
+  OxagenTree,
   ProposalPage,
   RecordDetail,
   RecordPage,
@@ -195,5 +199,56 @@ export function toSteeringFreshness(
       autoSync: out.policy.autoSync,
       blockStaleRuns: out.policy.blockStaleRuns,
     },
+  };
+}
+
+const WRITTEN_BY = {
+  USER: "person",
+  AGENT: "agent",
+  SYSTEM: "system",
+} as const;
+
+/**
+ * `list_memories` to the Memory shelf's rows. Only the fields the node
+ * records are carried: the class as recorded, the provenance label and who
+ * wrote it. Confidence, enforcement and citation counts stay behind, because
+ * the shelf's columns are recalls and force, which the node does not hold,
+ * and a citation count printed as a recall count would be a different fact
+ * under the design's label.
+ */
+export function toMemoryPage(
+  out: ContractOutput<typeof agentMemoryList>,
+): z.input<typeof MemoryPage> {
+  return {
+    memories: out.memories.map((memory) => ({
+      ref: memory.id,
+      publicRef: memory.publicId,
+      body: memory.lesson,
+      memoryClass: memory.memoryClass,
+      source: memory.source,
+      writtenBy: WRITTEN_BY[memory.createdByKind],
+      createdAt: memory.createdAt,
+    })),
+    total: out.total,
+  };
+}
+
+const OXAGEN_DIR = ".oxagen/";
+
+/** `get_repository_tree` to the On disk panel: paths relative to `.oxagen/`. */
+export function toOxagenTree(
+  out: ContractOutput<typeof repositoryTreeGet>,
+): z.input<typeof OxagenTree> {
+  return {
+    state: "read",
+    repository: out.fullName,
+    branch: out.productionBranch,
+    head: out.head,
+    files: out.oxagen.files
+      .map((path) =>
+        path.startsWith(OXAGEN_DIR) ? path.slice(OXAGEN_DIR.length) : path,
+      )
+      .filter((path) => path !== ""),
+    mode: out.governanceMode,
   };
 }

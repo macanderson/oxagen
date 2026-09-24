@@ -1462,6 +1462,22 @@
       "verifiedAt": "2026-09-22",
       "verifiedBy": "steering-rescue-ci"
     },
+    "list_memories": {
+      "route": "/[org]/[ws]/steering/memory",
+      "page": "apps/app/src/app/[org]/[ws]/steering/[...view]/page.tsx",
+      "entry": "The Steering Library's Memory shelf reads list_memories through the steering port (data/live/steering.ts, features/steering/tabs/memory.tsx)",
+      "proof": "apps/app/src/features/steering/steering.test.tsx",
+      "verifiedAt": "2026-09-24",
+      "verifiedBy": "session_01GofFReg5qtDbMZjKu569CR"
+    },
+    "update_memory": {
+      "route": "/[org]/[ws]/steering/memory",
+      "page": "apps/app/src/app/[org]/[ws]/steering/[...view]/page.tsx",
+      "entry": "Forget on a Memory shelf row retracts the memory through update_memory (features/steering/actions.ts forgetMemory, server/kernel.ts)",
+      "proof": "apps/app/src/features/steering/actions.test.ts",
+      "verifiedAt": "2026-09-24",
+      "verifiedBy": "session_01GofFReg5qtDbMZjKu569CR"
+    },
     "delete_mcp_server": {
       "route": "/[org]/[ws]/tools/providers",
       "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",

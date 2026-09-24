@@ -101,7 +101,11 @@ describe("get_run_cost", () => {
           model: "claude-sonnet-5",
           provider: "anthropic",
           calls: 3,
-          cost: { micros: "900", currency: "USD", basis: "client_attested" as const },
+          cost: {
+            micros: "900",
+            currency: "USD",
+            basis: "client_attested" as const,
+          },
         },
       ],
       toolCalls: 4,
