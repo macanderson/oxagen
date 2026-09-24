@@ -57,10 +57,7 @@ vi.mock("node:fs", async (importOriginal) => {
       fs.closeSync(fd);
     }) as typeof fs.closeSync,
     readSync: ((fd, ...rest) => {
-      const size = (fs.readSync as (...args: unknown[]) => number)(
-        fd,
-        ...rest,
-      );
+      const size = (fs.readSync as (...args: unknown[]) => number)(fd, ...rest);
       if (bodyReads.fds.has(fd)) bodyReads.bytes += size;
       return size;
     }) as typeof fs.readSync,

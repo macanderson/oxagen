@@ -123,7 +123,10 @@ function stubSource() {
       proposals: vi.fn(),
       contextPr: vi.fn(),
       freshness: vi.fn(),
+      hub: vi.fn(),
       deliveries: vi.fn(),
+      memories: vi.fn(),
+      tree: vi.fn(),
     },
     tools: {
       versions: vi.fn(),
