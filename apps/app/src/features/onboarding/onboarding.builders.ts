@@ -152,6 +152,8 @@ export function onboardingSource(reads: Reads): {
     shell: {
       context: refuse("shell.context"),
       preferences: refuse("shell.preferences"),
+      counts: refuse("shell.counts"),
+      notifications: refuse("shell.notifications"),
     },
     runs: {
       list: (...args: Parameters<DataSource["runs"]["list"]>) => {
@@ -170,6 +172,7 @@ export function onboardingSource(reads: Reads): {
     approvals: {
       pending: refuse("approvals.pending"),
       resolved: refuse("approvals.resolved"),
+      resolvedSince: refuse("approvals.resolvedSince"),
     },
     billing: {
       plan: refuse("billing.plan"),

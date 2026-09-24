@@ -10,3 +10,6 @@
 export { Fleet } from "./fleet";
 export { FleetLoading } from "./loading";
 export { ApprovalsPanel } from "./approvals-panel";
+// The approvals drawer draws one card alone, with no panel heading around it,
+// so the drawer keeps one "Approvals" heading and the card its full width.
+export { ApprovalCardAlone } from "./approvals-panel";

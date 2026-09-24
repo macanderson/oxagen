@@ -14,6 +14,17 @@
     min-width: 44px;
   }
 
+  /* A tab row that scrolls sideways snaps each tab to its start
+     (engine.css `#viewport.phone .tabs`, `.tab`). */
+  [data-tab-row],
+  [role="tablist"] {
+    scroll-snap-type: x proximity;
+  }
+  [data-tab-row] [data-tab],
+  [role="tablist"] > [role="tab"] {
+    scroll-snap-align: start;
+  }
+
   /* Inputs are 16px, so iOS never zooms the page on focus. */
   input,
   select,

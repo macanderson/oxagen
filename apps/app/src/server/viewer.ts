@@ -20,6 +20,10 @@
 //   not the org's SSO       → redirect to /login?sso=required, carrying the page
 //   MFA enrollment overdue  → redirect to MFA_ENROLL_PATH
 //
+// resolveWorkspaceViewer is the workspace layout's form of the same check: the
+// organization behaves as above, and an unknown or non-member workspace
+// answers `refused`, so the layout draws the denied state inside the shell.
+//
 // A member who lacks a permission is not an exception here: the kernel refuses
 // the read or write and the page renders `denied`.
 //
@@ -247,9 +251,19 @@ function mintResolved(
     : WsCtx.mint(MINT, { ...result.org, ...result.ws });
 }
 
+/**
+ * One resolution per request and slug pair, shared by requireViewer and
+ * resolveWorkspaceViewer, so the workspace layout's check and every page's
+ * requireViewer under it read the session and the tenancy lookups once.
+ */
+const resolveOnce = cache(
+  (orgSlug: string, wsSlug?: string): Promise<ViewerResolution> =>
+    resolveSession(orgSlug, wsSlug),
+);
+
 const requireCtx = cache(
   async (orgSlug: string, wsSlug?: string): Promise<OrgCtx> => {
-    const result = await resolveSession(orgSlug, wsSlug);
+    const result = await resolveOnce(orgSlug, wsSlug);
     switch (result.kind) {
       case "ok":
         return mintResolved(result);
@@ -303,6 +317,30 @@ export async function resolveViewer(org: string): Promise<RouteViewer> {
   return result.kind === "ok"
     ? { kind: "ok", ctx: mintResolved(result) }
     : result;
+}
+
+/**
+ * The workspace viewer for the workspace layout: a minted ctx, or `refused`
+ * with the organization ctx the viewer does hold.
+ *
+ * The organization is resolved first with requireViewer, so an unknown
+ * organization, a non-member of it, a signed-out request, an SSO or MFA gate
+ * and a historical org slug all behave exactly as they do everywhere else.
+ * Only then is the workspace resolved, and a workspace the resolution will not
+ * admit (an unknown slug, or one the member does not belong to) answers
+ * `refused` instead of a not-found interrupt. The two stay indistinguishable,
+ * and the layout draws the denied state inside the shell rather than a 404
+ * that replaces it (mockups/pages/audit-prompt.md check 22). Every other
+ * resolution (a historical workspace slug, a gate) goes through requireViewer.
+ */
+export async function resolveWorkspaceViewer(
+  org: string,
+  ws: string,
+): Promise<{ kind: "ok"; ctx: WsCtx } | { kind: "refused"; ctx: OrgCtx }> {
+  const orgCtx = await requireViewer(org);
+  const result = await resolveOnce(org, ws);
+  if (result.kind === "not_found") return { kind: "refused", ctx: orgCtx };
+  return { kind: "ok", ctx: await requireViewer(org, ws) };
 }
 
 /** Signed in, no organization yet; a signed-out request goes to /login, and on to `next` once signed in. */

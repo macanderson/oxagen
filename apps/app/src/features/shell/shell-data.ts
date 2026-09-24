@@ -2,8 +2,42 @@
 // organization layout's viewer resolved (ARCHITECTURE.md §3.1), the
 // `shell.context` read the org and workspace switchers list, and the count the
 // thumb bar's Fleet slot shows.
-import type { ShellContext } from "@/data/contracts/shell";
+import type {
+  ApprovalQueue,
+  ResolvedApprovalItem,
+} from "@/data/contracts/approvals";
+import type {
+  NavCounts,
+  NotificationFeed,
+  ShellContext,
+} from "@/data/contracts/shell";
 import type { Read } from "@/data/read";
+
+/**
+ * One workspace's share of the approvals drawer (mockup `apdBody()`): the calls
+ * parked there, and what was resolved there since the start of the viewer's
+ * day. `list_approvals` and `list_resolved_approvals` are workspace-scoped, so
+ * the drawer is the sum of these.
+ */
+export type WorkspaceApprovals = {
+  slug: string;
+  name: string;
+  pending: Read<ApprovalQueue>;
+  resolved: Read<{ items: ResolvedApprovalItem[]; more: boolean }>;
+};
+
+/**
+ * Everything waiting on the viewer across the organization, as the topbar's
+ * approvals button counts it and the drawer lists it. `truncated` is true
+ * when the organization has more workspaces than the chrome reads, so the
+ * count says "+" rather than a total it cannot stand behind.
+ */
+export type ShellApprovals = {
+  workspaces: WorkspaceApprovals[];
+  truncated: boolean;
+  /** The instant the reads were made: every countdown in the drawer ticks from it. */
+  readAt: number;
+};
 
 export type ShellData = {
   org: { key: string; slug: string; name: string };
@@ -21,10 +55,21 @@ export type ShellData = {
     timeZone: string;
   };
   context: Read<ShellContext>;
+  /** The approvals drawer and the counts read off it. */
+  approvals: ShellApprovals;
   /**
-   * Approvals waiting on a person, shown on the Fleet slot. Null until the
-   * #2968 lane binds nav counts to a live read (ARCHITECTURE.md §1.2): no rev1
-   * port counts approvals across an organization's workspaces.
+   * The bell's feed for the organization's first workspace, the one the
+   * sidebar points at on an organization page. A workspace page replaces it
+   * with its own (`<ShellWorkspace>`): `list_notifications` is workspace-scoped
+   * and answers the organization's rows plus that workspace's. Null when the
+   * organization has no workspace to read it in.
    */
-  fleetWaiting: number | null;
+  feed: Read<NotificationFeed> | null;
+  /**
+   * The sidebar's Steering and Audit counts (`get_nav_counts`) for the same
+   * first workspace, so an organization page (Organization, Billing, Audit)
+   * draws them the way a workspace page does. A workspace page replaces them
+   * with its own. Null when the organization has no workspace to read.
+   */
+  counts: { slug: string; read: Read<NavCounts> } | null;
 };

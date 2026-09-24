@@ -605,7 +605,12 @@ export function runSource(reads: RunReads) {
   const source: DataSource = {
     runtimes: { list: refuse, agents: refuse },
     pretenant: { orgs: refuse, workspaces: refuse },
-    shell: { context: refuse, preferences: refuse },
+    shell: {
+      context: refuse,
+      preferences: refuse,
+      counts: refuse,
+      notifications: refuse,
+    },
     runs: {
       list: refuse,
       outcomesSettings: () =>
@@ -655,6 +660,7 @@ export function runSource(reads: RunReads) {
         "resolvedApprovals",
         reads.resolvedApprovals ?? readOk([]),
       ),
+      resolvedSince: refuse,
     },
     agents: {
       list: refuse,
