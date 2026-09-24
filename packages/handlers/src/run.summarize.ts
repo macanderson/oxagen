@@ -5,13 +5,15 @@
 // (`assertOrgRole`, ARCHITECTURE.md §3.2), for the signed-in user or the
 // creator of the API key (`resolveActingUserId`), who is recorded as the
 // requester; the run is in the caller's
-// workspace (`not_found`); the run is sealed (`conflict`, `run_not_sealed`);
-// the recording kept bodies (`conflict`, `digest_only`): a summary written
-// from receipts alone would be the placeholder the interface forbids. The
-// model call itself runs in the durable function `run.summarize`
-// (@oxagen/inngest-functions), which fails without a model call when none of
-// the steps it reads kept a body, and writes the three summary columns
-// together.
+// workspace (`not_found`); the workspace has run enrichment on (`conflict`,
+// `enrichment_disabled`), since the job writes no summary for a workspace
+// that turned it off and a `queued` answer would promise one that never
+// comes; the run is sealed (`conflict`, `run_not_sealed`); the recording kept
+// bodies (`conflict`, `digest_only`): a summary written from receipts alone
+// would be the placeholder the interface forbids. The model call itself runs
+// in the durable function `run.enrich` (@oxagen/inngest-functions), which
+// the `run/enrich` event starts. It makes no model call when none of the
+// run's bodies was retained, and writes the name and the summary together.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
 import {
@@ -79,6 +81,14 @@ export function createRunSummarizeHandler(
     );
     const scope = runScope(ctx);
     const run = await resolveRun(deps, ctx, input.runId);
+    // `resolveRun` read the workspace setting. The job checks it again and
+    // writes no summary when it is off, so the request is refused here.
+    if (run.item.enrichmentEnabled === false) {
+      throw new HandlerError({
+        code: "conflict",
+        reason: "enrichment_disabled",
+      });
+    }
     const refusal = summarizeRefusal(run);
     if (refusal !== null) {
       throw new HandlerError({ code: "conflict", reason: refusal });

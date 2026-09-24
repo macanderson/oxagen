@@ -3,6 +3,7 @@
  * its scoped API key, the endpoints from the signed claims, the cached
  * bundle, and the local listener settings. Mode 0600; written atomically.
  */
+import { dirname, join } from "node:path";
 import { z } from "zod";
 import {
   denyGenerationSchema,
@@ -13,8 +14,32 @@ import {
 } from "../wire";
 import { verifyBundle } from "./bundle";
 import { readJsonFileIfExists, writeSensitiveFileAtomic } from "./fs";
+import type { TachoPaths } from "./paths";
 
 export const HOST_FILE_SCHEMA = "tacho.host.v1" as const;
+
+/**
+ * The harness files enroll wrote, as its own environment resolved them.
+ * `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `CURSOR_CONFIG_DIR` and `STELLA_HOME`
+ * move them, and the process that unenrolls (the desktop app) need not see
+ * the variables the one that enrolled (a terminal) saw. Unenroll strips
+ * these paths, not the ones its own environment resolves. Each member is
+ * optional and unknown ones are carried, so an older or newer binary reads
+ * the record without refusing it.
+ */
+export const harnessFilesRecordSchema = z
+  .object({
+    claude_settings: z.string().min(1),
+    codex_hooks: z.string().min(1),
+    cursor_hooks: z.array(z.string().min(1)),
+    stella_toml: z.string().min(1),
+    stella_settings_json: z.string().min(1),
+    claude_desktop_config: z.string().min(1).nullable(),
+  })
+  .partial()
+  .passthrough();
+
+export type HarnessFilesRecord = z.output<typeof harnessFilesRecordSchema>;
 
 export const hostFileSchema = z
   .object({
@@ -156,6 +181,12 @@ export const hostFileSchema = z
     displaced_mcp_servers: z
       .record(z.string(), z.record(z.string(), z.unknown()))
       .default({}),
+    /**
+     * Where the harness files were when this host enrolled
+     * (`harnessFilesRecord`). Optional: a host enrolled before this field
+     * existed has none, and unenroll falls back to the paths it resolves.
+     */
+    harness_files: harnessFilesRecordSchema.optional(),
     enrolled_at: z.string(),
     expires_at: z.string(),
     revoked_at: z.string().nullable().default(null),
@@ -169,6 +200,48 @@ export const hostFileSchema = z
   .passthrough();
 
 export type HostFile = z.output<typeof hostFileSchema>;
+
+/** What `harness_files` records for the paths enroll is writing. */
+export function harnessFilesRecord(paths: TachoPaths): HarnessFilesRecord {
+  return {
+    claude_settings: paths.claudeSettings,
+    codex_hooks: paths.codexHooks,
+    cursor_hooks: [...paths.cursorHooks],
+    stella_toml: paths.stellaToml,
+    stella_settings_json: paths.stellaSettingsJson,
+    claude_desktop_config: paths.claudeDesktopConfig ?? null,
+  };
+}
+
+/**
+ * `paths` with the harness files host.json recorded at enroll laid over the
+ * ones this process resolved. Claude Code's transcript root moves with its
+ * settings file. A host with no record gets `paths` back unchanged.
+ */
+export function withRecordedHarnessFiles(
+  paths: TachoPaths,
+  host: Partial<Pick<HostFile, "harness_files">> | undefined,
+): TachoPaths {
+  const record = host?.harness_files;
+  if (record === undefined) return paths;
+  const claudeSettings = record.claude_settings ?? paths.claudeSettings;
+  return {
+    ...paths,
+    claudeSettings,
+    claudeProjects:
+      record.claude_settings !== undefined
+        ? join(dirname(claudeSettings), "projects")
+        : paths.claudeProjects,
+    codexHooks: record.codex_hooks ?? paths.codexHooks,
+    cursorHooks: record.cursor_hooks ?? paths.cursorHooks,
+    stellaToml: record.stella_toml ?? paths.stellaToml,
+    stellaSettingsJson: record.stella_settings_json ?? paths.stellaSettingsJson,
+    claudeDesktopConfig:
+      record.claude_desktop_config !== undefined
+        ? (record.claude_desktop_config ?? undefined)
+        : paths.claudeDesktopConfig,
+  };
+}
 
 /** What `TACHO_MCP_ENDPOINT` asked for, and whether it can be honoured. */
 export interface McpEndpointOverrideRequest {
@@ -288,6 +361,7 @@ export interface LenientHostRead {
     | "displaced_env"
     | "displaced_mcp_servers"
     | "github_repositories"
+    | "harness_files"
   >;
   /** Malformed custody receipts must be repaired before stopping the proxy. */
   githubRecoveryError?: string;
@@ -340,11 +414,13 @@ export function readHostFileLenient(path: string): LenientHostRead {
   const servers = z
     .record(z.string(), z.record(z.string(), z.unknown()))
     .safeParse(record["displaced_mcp_servers"]);
+  const files = harnessFilesRecordSchema.safeParse(record["harness_files"]);
   return {
     error,
     githubRecoveryError,
     salvaged: {
       ...(github.success ? { github_repositories: github.data } : {}),
+      ...(files.success ? { harness_files: files.data } : {}),
       host_enrollment_id: id,
       displaced_env: env.success ? env.data : {},
       displaced_mcp_servers: servers.success ? servers.data : {},
@@ -422,6 +498,32 @@ export function writeHostFile(path: string, host: HostFile): void {
   writeSensitiveFileAtomic(path, `${JSON.stringify(host, null, 2)}\n`);
 }
 
+const HOST_STATUS_RANK: Record<HostFile["host_status"], number> = {
+  active: 0,
+  paused: 1,
+  suspended: 2,
+  revoked: 3,
+};
+
+/**
+ * The host status hooks and the model proxy act on. `host_status` is the
+ * control plane's latest word and is not signed; the bundle's `host_status`
+ * is signed but can be older. An edit of the first to `active` must not lift
+ * a signed suspension, so while the bundle verifies the more restrictive of
+ * the two applies. The daemon and `tacho-hook`'s offline path both read it
+ * here.
+ */
+export function hostStatusInForce(
+  host: Pick<HostFile, "host_status" | "bundle">,
+  bundleVerified: boolean,
+): HostFile["host_status"] {
+  const unsigned = host.host_status;
+  const signed = host.bundle.host_status;
+  return bundleVerified && HOST_STATUS_RANK[signed] > HOST_STATUS_RANK[unsigned]
+    ? signed
+    : unsigned;
+}
+
 /** Whether a signed window starting at `next` starts after one at `held`. */
 function startsLater(next: string, held: string): boolean {
   const nextAt = Date.parse(next);
@@ -491,11 +593,16 @@ export function applyControlFacts(
   // host.json keeps the etag and the window it was signed with, so neither
   // comparison can tell it from the genuine copy, and the caller's verified
   // copy replaces it whatever its window. The caller verifies what it brings.
+  // A held copy signed for another host counts as one that does not verify.
   if (
     facts.bundle !== undefined &&
     (facts.bundle.etag !== host.bundle.etag ||
       startsLater(facts.bundle.issued_at, host.bundle.issued_at) ||
-      !verifyBundle(host.bundle, host.bundle_public_key_pem).ok)
+      !verifyBundle(
+        host.bundle,
+        host.bundle_public_key_pem,
+        host.host_enrollment_id,
+      ).ok)
   ) {
     next.bundle = facts.bundle;
     next.bundle_fetched_at =

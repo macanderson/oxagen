@@ -166,17 +166,10 @@ function firstLine(value: string | undefined): string | undefined {
 }
 
 /**
- * Head, branch, dirtiness and the digested remote for one working directory.
- *
- * Undefined means this directory is not a repository Oxagen can read, which
- * is a fact in itself: the caller records no git context rather than
- * recording a guess. A repository that answers `HEAD` but has no branch
- * (detached) or no remote simply omits those members.
- */
-/**
  * The top of the worktree that holds `dir`, or undefined when `dir` is in no
  * repository. A linked worktree answers its own root, not the primary
- * checkout's.
+ * checkout's. The daemon reads every other git fact at this root, and keys a
+ * session's baseline by it.
  */
 export async function readGitRoot(
   exec: ExecAsync,
@@ -185,6 +178,14 @@ export async function readGitRoot(
   return firstLine(await git(exec, dir, ["rev-parse", "--show-toplevel"]));
 }
 
+/**
+ * Head, branch, dirtiness and the digested remote for one working directory.
+ *
+ * Undefined means this directory is not a repository Oxagen can read, which
+ * is a fact in itself: the caller records no git context rather than
+ * recording a guess. A repository that answers `HEAD` but has no branch
+ * (detached) or no remote simply omits those members.
+ */
 export async function readGitFacts(
   exec: ExecAsync,
   cwd: string,

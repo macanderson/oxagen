@@ -4,11 +4,13 @@
  * time-to-first-token, stop reasons, and the trace identity; metrics carry
  * session-level counters that the recorder folds into totals.
  *
- * Every attribute is either promoted to a typed member or kept verbatim in
- * `attrs`, so a new upstream attribute is captured the day it appears.
+ * Every attribute is either promoted to a typed member or kept in `attrs`, so
+ * a new upstream attribute is captured the day it appears. A kept value is
+ * verbatim except for redacted credentials and the envelope's length bound.
  */
 import { digestJcs, type JsonValue } from "../digest";
 import type { TachoKind } from "../envelope";
+import { redactText } from "../evidence/redaction";
 import { fromUnixNano } from "../timestamp";
 import { digestText } from "./context";
 
@@ -191,9 +193,42 @@ function stringify(attrs: Attrs): Record<string, string> {
     const name = key.startsWith(RESERVED_ATTR_PREFIX)
       ? `${CLAIMED_ATTR_PREFIX}${key}`
       : key;
-    out[name] = typeof value === "string" ? value : JSON.stringify(value);
+    out[name] = attrValue(value);
   }
   return out;
+}
+
+/**
+ * The most an attribute value may run to: the envelope's own bound
+ * (`attrs: z.record(str.max(4096))`, counted in UTF-16 code units). The
+ * envelope refuses the whole record over one oversized attribute, so an
+ * unpromoted value past it dropped the record it rode on.
+ */
+const ATTR_MAX = 4096;
+const ATTR_CUT = "…";
+
+/**
+ * One attribute as it is sealed: credentials replaced by their redaction
+ * markers, then cut to the envelope's bound.
+ *
+ * Passthrough ships an unknown attribute raw, so nothing upstream has
+ * decided it is safe; the same detectors that clean a frame body run over
+ * it. They run before the cut, because a cut through a secret can leave a
+ * prefix too short for any detector to recognise. A number or a boolean
+ * cannot carry a credential and is kept as it is.
+ */
+function attrValue(value: Attrs[string]): string {
+  if (typeof value === "number" || typeof value === "boolean")
+    return JSON.stringify(value);
+  const text = redactText(
+    typeof value === "string" ? value : JSON.stringify(value),
+  );
+  if (text.length <= ATTR_MAX) return text;
+  let end = ATTR_MAX - ATTR_CUT.length;
+  // Cut on a code point: never keep the high half of a surrogate pair.
+  const last = text.charCodeAt(end - 1);
+  if (last >= 0xd800 && last <= 0xdbff) end -= 1;
+  return `${text.slice(0, end)}${ATTR_CUT}`;
 }
 
 /**

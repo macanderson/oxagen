@@ -6,19 +6,31 @@
  * enforcement never depends on the daemon being up.
  */
 import { request } from "node:http";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import {
   evaluatePreToolUse,
   type Evaluation,
+  type MatchContext,
   verifyBundle,
 } from "../host/bundle";
-import { ensureDir, writeSensitiveFileAtomic } from "../host/fs";
-import { type HostFile, readHostFile } from "../host/host-file";
+import {
+  ensureDir,
+  readJsonFileIfExists,
+  writeSensitiveFileAtomic,
+} from "../host/fs";
+import {
+  type HostFile,
+  hostFileSchema,
+  hostStatusInForce,
+  readHostFile,
+} from "../host/host-file";
 import type { TachoPaths } from "../host/paths";
 import { ulid } from "../ids";
 import { toProtocolTimestamp } from "../timestamp";
 import {
   customAgentNameProblem,
+  hostEnrollmentIdSchema,
   type TachoHarness,
   tachoHarnessSchema,
 } from "../wire";
@@ -83,6 +95,30 @@ function cursorRefusal(raw: unknown, message: string): string {
 const CURSOR_UNREADABLE_PAYLOAD =
   "Oxagen could not read this hook payload, so it cannot say what this agent is permitted to do. Run `tacho status` and check that the wrapper matches this version of Cursor.";
 
+const UNREADABLE_ENROLLMENT =
+  "Oxagen cannot read this machine's enrollment, so it cannot say what this agent is permitted to do. Run `tacho status` to repair it.";
+
+/**
+ * The fields that route a hook to the daemon. A `host.json` the full schema
+ * rejects usually still has them: the likeliest cause is version skew, a
+ * newer daemon caching a bundle with a field this binary's strict bundle
+ * schema does not know, and that daemon reads its own file fine.
+ */
+const hostRoutingSchema = hostFileSchema
+  .pick({ host_enrollment_id: true, local_token: true, port: true })
+  .partial({ port: true });
+
+function readHostRouting(
+  path: string,
+): ReturnType<typeof hostRoutingSchema.parse> | undefined {
+  try {
+    const parsed = hostRoutingSchema.safeParse(readJsonFileIfExists(path));
+    return parsed.success ? parsed.data : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function harnessFromArgv(argv: readonly string[]): TachoHarness {
   const index = argv.indexOf("--harness");
   const value = index >= 0 ? argv[index + 1] : undefined;
@@ -98,6 +134,19 @@ export function agentFromArgv(argv: readonly string[]): string | undefined {
   const index = argv.indexOf("--agent");
   if (index < 0) return undefined;
   return argv[index + 1] ?? "";
+}
+
+/**
+ * The `--enrollment <id>` flag the settings writers put on every hook entry,
+ * or undefined when it is absent or not an enrollment id.
+ */
+export function enrollmentFromArgv(
+  argv: readonly string[],
+): string | undefined {
+  const index = argv.indexOf("--enrollment");
+  if (index < 0) return undefined;
+  const parsed = hostEnrollmentIdSchema.safeParse(argv[index + 1]);
+  return parsed.success ? parsed.data : undefined;
 }
 
 export interface UnixPostOptions {
@@ -186,6 +235,11 @@ export interface HookRunDeps {
   /** Milliseconds allowed to reach the daemon before deciding locally. */
   connectTimeoutMs?: number;
   readHost?: () => HostFile | undefined;
+  /**
+   * The enrollment this hook entry was written for (`--enrollment`).
+   * Defaults to the flag on this process's own command line.
+   */
+  enrollment?: string;
   /** Which harness ran this hook (`--harness`); the daemon labels the session. */
   harness?: TachoHarness;
   /**
@@ -250,13 +304,35 @@ const RESPONSE_BUDGET_MS: Record<string, number> = {
   Stop: 5_000,
 };
 
-function operatorBlockLocal(host: HostFile): string | undefined {
-  if (host.host_status === "suspended" || host.host_status === "revoked") {
-    return `This host is ${host.host_status} by its Oxagen operator.`;
+type HostStatus = HostFile["host_status"];
+
+function operatorBlockLocal(status: HostStatus): string | undefined {
+  if (status === "suspended" || status === "revoked") {
+    return `This host is ${status} by its Oxagen operator.`;
   }
-  if (host.host_status === "paused")
-    return "This host is paused by its Oxagen operator.";
+  if (status === "paused") return "This host is paused by its Oxagen operator.";
   return undefined;
+}
+
+/** What the offline path knows about the host before it decides. */
+interface LocalFacts {
+  bundleVerified: boolean;
+  hostStatus: HostStatus;
+  match: MatchContext;
+}
+
+/** Home and platform for rule matching; the cwd comes from each payload. */
+function localMatchContext(): MatchContext {
+  let home: string | undefined;
+  try {
+    home = homedir();
+  } catch {
+    home = undefined;
+  }
+  return {
+    ...(home !== undefined && home.length > 0 ? { home } : {}),
+    platform: process.platform,
+  };
 }
 
 /**
@@ -333,30 +409,32 @@ function permissionRequestResponse(
  */
 function evaluateToolPermission(
   host: HostFile,
+  local: LocalFacts,
   now: number,
   eventName: "PreToolUse" | "PermissionRequest" | "SubagentStart",
   toolName: string,
   toolInput: Record<string, unknown> | undefined,
   cwd: string | undefined,
+  harnessReadOnly?: boolean,
 ): { response: Record<string, unknown>; evaluation: Evaluation; note: string } {
-  const verified = verifyBundle(host.bundle, host.bundle_public_key_pem).ok;
   const evaluation = evaluatePreToolUse({
     bundle: host.bundle,
-    bundleVerified: verified,
+    bundleVerified: local.bundleVerified,
     toolName,
     ...(toolInput !== undefined ? { toolInput } : {}),
-    hostStatus: host.host_status,
+    hostStatus: local.hostStatus,
     latestDenyGeneration: host.deny_generation,
     // No daemon means no re-evaluation: a stale bundle fails closed.
     controlReachable: false,
+    ...(harnessReadOnly === true ? { harnessReadOnly } : {}),
     now,
-    ...(cwd !== undefined ? { context: { cwd } } : {}),
+    context: { ...local.match, ...(cwd !== undefined ? { cwd } : {}) },
   });
   // The mode is read only from a verified bundle: an edited host.json must
   // not be able to claim observe mode and turn a deny into an allow.
   const decision =
     evaluation.decision === "defer"
-      ? verified && host.bundle.mode === "observe"
+      ? local.bundleVerified && host.bundle.mode === "observe"
         ? "allow"
         : "deny"
       : evaluation.decision;
@@ -405,12 +483,26 @@ export function decideLocally(
   host: HostFile,
   input: ReturnType<typeof hookInputSchema.parse>,
   now: number,
+  match: MatchContext = localMatchContext(),
 ): {
   response: Record<string, unknown>;
   evaluation?: Evaluation;
   note: string;
 } {
-  const block = operatorBlockLocal(host);
+  const bundleVerified = verifyBundle(
+    host.bundle,
+    host.bundle_public_key_pem,
+    host.host_enrollment_id,
+  ).ok;
+  const local: LocalFacts = {
+    bundleVerified,
+    hostStatus: hostStatusInForce(host, bundleVerified),
+    match,
+  };
+  const block = operatorBlockLocal(local.hostStatus);
+  // Stella's own read-only claim for the tool, when it made one.
+  const harnessReadOnly =
+    (input as Record<string, unknown>)["tool_read_only"] === true;
   switch (input.hook_event_name) {
     case "SessionStart":
       if (block !== undefined)
@@ -455,21 +547,25 @@ export function decideLocally(
       }
       return evaluateToolPermission(
         host,
+        local,
         now,
         "PermissionRequest",
         input.tool_name,
         input.tool_input,
         input.cwd,
+        harnessReadOnly,
       );
     }
     case "PreToolUse":
       return evaluateToolPermission(
         host,
+        local,
         now,
         "PreToolUse",
         input.tool_name ?? "unknown",
         input.tool_input,
         input.cwd,
+        harnessReadOnly,
       );
     case "SubagentStart": {
       // Cursor treats subagentStart as a permission event. An empty answer
@@ -501,6 +597,7 @@ export function decideLocally(
           : undefined;
       return evaluateToolPermission(
         host,
+        local,
         now,
         "SubagentStart",
         "Task",
@@ -740,18 +837,102 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
     ? answer({
         hookSpecificOutput: {
           permissionDecision: "deny",
-          permissionDecisionReason:
-            "Oxagen cannot read this machine's enrollment, so it cannot say what this agent is permitted to do. Run `tacho status` to repair it.",
+          permissionDecisionReason: UNREADABLE_ENROLLMENT,
         },
       })
     : emptyAnswer;
+  const env: Record<string, string> = {
+    ...snapshotEnv(deps.env, DEFAULT_SECRET_ENV_PATTERN),
+    ...(harnessPid !== undefined
+      ? { TACHO_HARNESS_PID: String(harnessPid) }
+      : {}),
+  };
+  const post = deps.post ?? postUnix;
+  const useTcp = platform === "win32";
+  const label = agent !== undefined ? { agent } : { harness };
+  const enrollment = deps.enrollment ?? enrollmentFromArgv(process.argv);
+  /**
+   * A hook entry written for another enrollment than this machine's is
+   * stale: re-enrolling rewrites the entries it knows about, and one left in
+   * a file it did not rewrite would post every event a second time under
+   * the current id. It answers with no opinion and posts nothing.
+   */
+  const staleEntry = (current: string): HookRunResult | undefined =>
+    enrollment !== undefined && enrollment !== current
+      ? {
+          stdout: emptyAnswer,
+          stderr: `tacho-hook: this hook entry is for enrollment ${enrollment}, not this machine's ${current}; ignored it. Run \`tacho enroll\` to rewrite the hooks.\n`,
+          exitCode: 0,
+          path: "invalid",
+        }
+      : undefined;
   let host: HostFile | undefined;
   try {
     host = (deps.readHost ?? (() => readHostFile(deps.paths.hostFile)))();
   } catch (error) {
+    const problem = error instanceof Error ? error.message : String(error);
+    // Forward on the routing fields alone when they read: the daemon that
+    // wrote the file can decide, and only the offline fallback needs the
+    // full parse.
+    const routing = readHostRouting(deps.paths.hostFile);
+    if (routing !== undefined) {
+      const stale = staleEntry(routing.host_enrollment_id);
+      if (stale !== undefined) return stale;
+      const port = routing.port;
+      if (!useTcp || port !== undefined) {
+        try {
+          const result = await post({
+            ...(useTcp
+              ? { loopbackPort: port }
+              : { socketPath: deps.paths.socket }),
+            path: `/hook/${routing.host_enrollment_id}`,
+            headers: {
+              Authorization: `Bearer ${routing.local_token}`,
+              "x-tacho-envelope": "1",
+            },
+            body: JSON.stringify({ payload: raw, env, ...label }),
+            connectTimeoutMs: deps.connectTimeoutMs ?? 50,
+            responseTimeoutMs:
+              RESPONSE_BUDGET_MS[input.hook_event_name] ?? 5_000,
+          });
+          const document =
+            result.status === 200 ? tryParseAnswerBody(result.body) : undefined;
+          if (document !== undefined)
+            return {
+              stdout: translated
+                ? answer(document)
+                : `${result.body.trim() || "{}"}\n`,
+              stderr: `tacho-hook: cannot read enrollment (${problem}); forwarded on its routing fields\n`,
+              exitCode: 0,
+              path: "daemon",
+            };
+        } catch {
+          // The daemon did not answer either; refuse below.
+        }
+      }
+    }
+    // No daemon and no readable mandate, so the mode is unknown too. A tool
+    // call is refused on every harness, not only Cursor: `{}` would let it
+    // run with no policy evaluated at all.
+    const refusal =
+      input.hook_event_name === "PreToolUse"
+        ? {
+            hookSpecificOutput: {
+              hookEventName: "PreToolUse",
+              permissionDecision: "deny",
+              permissionDecisionReason: UNREADABLE_ENROLLMENT,
+            },
+          }
+        : input.hook_event_name === "PermissionRequest"
+          ? permissionRequestResponse("deny", false, UNREADABLE_ENROLLMENT)
+          : undefined;
     return {
-      stdout: unreadableAnswer,
-      stderr: `tacho-hook: cannot read enrollment: ${error instanceof Error ? error.message : String(error)}\n`,
+      stdout: cursor
+        ? unreadableAnswer
+        : refusal !== undefined
+          ? answer(refusal)
+          : emptyAnswer,
+      stderr: `tacho-hook: cannot read enrollment: ${problem}\n`,
       exitCode: 0,
       path: "unenrolled",
     };
@@ -764,15 +945,8 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
       path: "unenrolled",
     };
   }
-  const env: Record<string, string> = {
-    ...snapshotEnv(deps.env, DEFAULT_SECRET_ENV_PATTERN),
-    ...(harnessPid !== undefined
-      ? { TACHO_HARNESS_PID: String(harnessPid) }
-      : {}),
-  };
-  const post = deps.post ?? postUnix;
-  const useTcp = platform === "win32";
-  const label = agent !== undefined ? { agent } : { harness };
+  const stale = staleEntry(host.host_enrollment_id);
+  if (stale !== undefined) return stale;
   try {
     const result = await post({
       ...(useTcp

@@ -131,7 +131,7 @@ describe("git effect classification", () => {
       "git log --oneline -5",
       "echo git push",
       'echo "git push origin main"',
-      "git add . && git push",
+      "git push | tee push.log",
       "git push --dry-run",
       "git push -n origin main",
       "git commit --dry-run",

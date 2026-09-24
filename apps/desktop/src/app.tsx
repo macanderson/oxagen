@@ -22,6 +22,10 @@ import {
   describeRemoval,
   isEnrolled,
   isRetired,
+  statusBanner,
+  TOAST_MS,
+  uninstallFinished,
+  uninstallToast,
 } from "./machine-state";
 import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import type { Update } from "@tauri-apps/plugin-updater";
@@ -33,15 +37,18 @@ import {
   useRef,
   useState,
 } from "react";
-import { serviceStatusText } from "./tacho-status";
+import { gatewayText, serviceStatusText } from "./tacho-status";
 import { computeAgentRows, HEALTH_LABEL, summarizeAgents } from "./agents";
 import {
+  checkLiveSession,
+  sidecarEnv,
   type ConnectResult,
   connectRun,
   type DesktopState,
   type DetectReport,
   detectHarnesses,
   installCli,
+  isUnauthorized,
   listOrganizations,
   listWorkspaces,
   logTail,
@@ -56,8 +63,10 @@ import {
 } from "./bridge";
 import {
   ago,
+  collectorText,
   defaultRegistration,
   deregisterArgs,
+  deregisterNeedsSession,
   describeCliInstall,
   enrollArgs,
   HARNESS_LABEL,
@@ -106,10 +115,16 @@ interface RunOutcome {
   stderr: string;
 }
 
-/** `api_post` rejects with "401: ..." when the session token is dead. */
-function isUnauthorized(e: unknown): boolean {
-  const text = e instanceof Error ? e.message : String(e);
-  return /^401\b/.test(text);
+/**
+ * One state read. `status` is what `tacho status` said, and is absent when it
+ * was not asked this time (a plain tick, or an action running): the panel
+ * keeps what it shows.
+ */
+interface MachineRead {
+  next: DesktopState;
+  status?:
+    | { ok: true; value: TachoStatus | null }
+    | { ok: false; error: string };
 }
 
 const labelOf = (h: string) => HARNESS_LABEL[h as Harness] ?? h;
@@ -128,6 +143,10 @@ export function App() {
   const [log, setLog] = useState<LogLine[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Set once an uninstall has left nothing behind: the Uninstall panel has
+  // nothing more to offer and goes away until the machine is set up again.
+  const [uninstalled, setUninstalled] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
   // Bumped after every sign-in so the org listing runs again: config.json's
   // `logged_in` is presence-only and stays true across an expired session
@@ -135,6 +154,14 @@ export function App() {
   const [sessionEpoch, setSessionEpoch] = useState(0);
   const [orgs, setOrgs] = useState<OrgItem[] | null>(null);
   const [workspaces, setWorkspaces] = useState<WorkspaceItem[] | null>(null);
+  // Which listing failed for a reason other than a dead session (no network,
+  // a 5xx). Retry bumps `listingEpoch`, which runs both listings again: an
+  // empty list with no way to ask again left the first run stuck on step 2.
+  const [listingFailed, setListingFailed] = useState({
+    orgs: false,
+    workspaces: false,
+  });
+  const [listingEpoch, setListingEpoch] = useState(0);
   const [pickedOrg, setPickedOrg] = useState<string | null>(null);
   const [pickedWorkspace, setPickedWorkspace] = useState<string | null>(null);
   const [tail, setTail] = useState<string>("");
@@ -142,6 +169,10 @@ export function App() {
     caption: string | null;
     offered: Update | null;
   }>({ caption: null, offered: null });
+  // An update check reads the release feed and changes nothing on the
+  // machine, so it has its own flag rather than `busy`: holding `busy` froze
+  // every control for as long as the feed took to answer.
+  const [checking, setChecking] = useState(false);
   const pollRef = useRef<number | null>(null);
   // The last `tacho status` failure shown, so a failure that repeats on
   // every poll is reported once rather than re-raised every 20 s.
@@ -153,6 +184,9 @@ export function App() {
   const [targetChosen, setTargetChosen] = useState(false);
   const [detected, setDetected] = useState<DetectReport | null>(null);
   const [detecting, setDetecting] = useState(false);
+  // Why the last scan failed. Kept apart from `detected`: a failed scan read
+  // as an empty report said none of the agents was installed.
+  const [scanError, setScanError] = useState<string | null>(null);
   const [registration, setRegistration] = useState<Harness[] | null>(null);
   const [outcome, setOutcome] = useState<{
     ok: boolean;
@@ -169,51 +203,65 @@ export function App() {
   // status` then: it would read the same files `enroll` or `unenroll` is
   // rewriting, and its transient failure replaced the action's own error.
   const busyRef = useRef(false);
-  const readMachine = useCallback(async (withHooks: boolean) => {
-    {
-      const next = await readState();
-      setState(next);
-      setFirstRun((prev) => (prev === null ? !isEnrolled(next.host) : prev));
-      if (!isEnrolled(next.host)) setTacho(null);
-      else if (withHooks && !busyRef.current) {
-        try {
-          setTacho(await tachoStatus());
-          statusErrorRef.current = null;
-        } catch (e) {
-          // Hook presence, service state and WAL figures are now unknown;
-          // say so once, and keep the rest of the panel reading the files.
-          setTacho(null);
-          const text = `tacho status failed: ${e instanceof Error ? e.message : String(e)}`;
-          if (statusErrorRef.current !== text) {
-            statusErrorRef.current = text;
-            setError(text);
+  // Set by a tick that wants `tacho status`, cleared by the read that asks
+  // it. A tick that joins a plain read already out leaves it set, so the
+  // next read asks instead of the hooks going unread for another 20 s.
+  const hooksDueRef = useRef(false);
+  // One poller for both kinds of read, and every result applied in `apply`,
+  // so a slow old answer never replaces a newer one: see `createPoller`. Two
+  // pollers that each set state inside their read let a 20 s `tacho status`
+  // started before an action land after it.
+  const poller = useMemo(
+    () =>
+      createPoller<MachineRead>(
+        async () => {
+          const withHooks = hooksDueRef.current;
+          hooksDueRef.current = false;
+          const next = await readState();
+          if (!isEnrolled(next.host))
+            return { next, status: { ok: true, value: null } };
+          if (!withHooks || busyRef.current) return { next };
+          try {
+            return { next, status: { ok: true, value: await tachoStatus() } };
+          } catch (e) {
+            // Hook presence, service state and WAL figures are now unknown;
+            // `apply` says so once and the rest of the panel reads the files.
+            return {
+              next,
+              status: {
+                ok: false,
+                error: `tacho status failed: ${e instanceof Error ? e.message : String(e)}`,
+              },
+            };
           }
-        }
-      }
-    }
-  }, []);
-  // One read at a time, and a slow old answer never replaces a newer one:
-  // see `createPoller`.
-  const pollers = useMemo(() => {
-    const onError = (e: unknown) =>
-      setError(e instanceof Error ? e.message : String(e));
-    return {
-      plain: createPoller(
-        () => readMachine(false),
-        () => undefined,
-        onError,
+        },
+        ({ next, status }) => {
+          setState(next);
+          setFirstRun((prev) =>
+            prev === null ? !isEnrolled(next.host) : prev,
+          );
+          if (status === undefined) return;
+          setTacho(status.ok ? status.value : null);
+          // Not enrolled: there was no status to ask for, so nothing about
+          // the banner changed.
+          if (status.ok && !isEnrolled(next.host)) return;
+          const last = statusErrorRef.current;
+          const outcome = status.ok
+            ? { ok: true as const }
+            : { ok: false as const, error: status.error };
+          statusErrorRef.current = status.ok ? null : status.error;
+          setError((banner) => statusBanner(banner, last, outcome));
+        },
+        (e: unknown) => setError(e instanceof Error ? e.message : String(e)),
       ),
-      withHooks: createPoller(
-        () => readMachine(true),
-        () => undefined,
-        onError,
-      ),
-    };
-  }, [readMachine]);
+    [],
+  );
   const refresh = useCallback(
-    (withHooks = false, force = true) =>
-      (withHooks ? pollers.withHooks : pollers.plain).poll({ force }),
-    [pollers],
+    (withHooks = false, force = true) => {
+      if (withHooks) hooksDueRef.current = true;
+      return poller.poll({ force });
+    },
+    [poller],
   );
 
   useEffect(() => {
@@ -234,6 +282,16 @@ export function App() {
   // and not a reason to refuse an uninstall. See `isEnrolled`.
   const rawHost = state?.host ?? null;
   const host = isEnrolled(rawHost) ? rawHost : null;
+  // A machine enrolled again, from here or from a terminal, has something to
+  // uninstall again.
+  useEffect(() => {
+    if (host !== null) setUninstalled(false);
+  }, [host]);
+  useEffect(() => {
+    if (toast === null) return;
+    const timer = setTimeout(() => setToast(null), TOAST_MS);
+    return () => clearTimeout(timer);
+  }, [toast]);
   const retiredHost = isRetired(rawHost) ? rawHost : null;
   const hostHarnesses = (host?.harnesses ?? []) as Harness[];
   const configToken = state?.config.logged_in ?? false;
@@ -263,6 +321,7 @@ export function App() {
       setOrgs(null);
       setWorkspaces(null);
       setSessionExpired(false);
+      setListingFailed((prev) => ({ ...prev, orgs: false }));
       return;
     }
     let cancelled = false;
@@ -271,12 +330,16 @@ export function App() {
         if (!cancelled) {
           setOrgs(list);
           setSessionExpired(false);
+          setListingFailed((prev) => ({ ...prev, orgs: false }));
         }
       })
       .catch((e: unknown) => {
         if (cancelled) return;
         setOrgs([]);
-        if (isUnauthorized(e)) setSessionExpired(true);
+        // A dead session is fixed by signing in, not by asking again.
+        const expired = isUnauthorized(e);
+        setListingFailed((prev) => ({ ...prev, orgs: !expired }));
+        if (expired) setSessionExpired(true);
         else
           setError(
             `Could not list organizations: ${e instanceof Error ? e.message : String(e)}`,
@@ -285,21 +348,27 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [configToken, sessionEpoch]);
+  }, [configToken, sessionEpoch, listingEpoch]);
   useEffect(() => {
     if (!loggedIn || !orgForPicker) {
       setWorkspaces(null);
+      setListingFailed((prev) => ({ ...prev, workspaces: false }));
       return;
     }
     let cancelled = false;
     listWorkspaces(orgForPicker)
       .then((list) => {
-        if (!cancelled) setWorkspaces(list);
+        if (!cancelled) {
+          setWorkspaces(list);
+          setListingFailed((prev) => ({ ...prev, workspaces: false }));
+        }
       })
       .catch((e: unknown) => {
         if (cancelled) return;
         setWorkspaces([]);
-        if (isUnauthorized(e)) setSessionExpired(true);
+        const expired = isUnauthorized(e);
+        setListingFailed((prev) => ({ ...prev, workspaces: !expired }));
+        if (expired) setSessionExpired(true);
         else
           setError(
             `Could not list workspaces of ${orgForPicker}: ${e instanceof Error ? e.message : String(e)}`,
@@ -308,7 +377,12 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [loggedIn, orgForPicker]);
+  }, [loggedIn, orgForPicker, listingEpoch]);
+  const listingRetry = listingFailed.orgs || listingFailed.workspaces;
+  const retryListing = () => {
+    setError((prev) => (prev?.startsWith("Could not list ") ? null : prev));
+    setListingEpoch((n) => n + 1);
+  };
 
   const step = wizardStep({
     loggedIn,
@@ -325,25 +399,33 @@ export function App() {
   const scanRef = useRef(false);
   useEffect(() => {
     if (firstRun !== true || step !== 3 || detected !== null) return;
-    if (scanRef.current) return;
+    // A failed scan waits for Rescan rather than retrying on its own.
+    if (scanError !== null || scanRef.current) return;
     scanRef.current = true;
     setDetecting(true);
     detectHarnesses()
       .then((report) => {
-        setDetected(report ?? { enrolled: false, harnesses: [] });
-        if (report) setRegistration(defaultRegistration(report.harnesses));
+        setDetected(report);
+        setRegistration(defaultRegistration(report.harnesses));
       })
       .catch((e: unknown) => {
-        setDetected({ enrolled: false, harnesses: [] });
-        setError(
-          `Could not scan for agents: ${e instanceof Error ? e.message : String(e)}`,
-        );
+        const text = e instanceof Error ? e.message : String(e);
+        setScanError(text);
+        setRegistration(null);
+        setError(`Could not scan for agents: ${text}`);
       })
       .finally(() => {
         scanRef.current = false;
         setDetecting(false);
       });
-  }, [firstRun, step, detected]);
+  }, [firstRun, step, detected, scanError]);
+  const rescan = () => {
+    setError((prev) =>
+      prev?.startsWith("Could not scan for agents") ? null : prev,
+    );
+    setDetected(null);
+    setScanError(null);
+  };
 
   /**
    * Poll `landed` until it answers true. Used to stop waiting on a sidecar
@@ -385,14 +467,22 @@ export function App() {
     // not start a second `unenroll` or `reassign` beside the first.
     if (busyRef.current) return;
     busyRef.current = true;
+    // A read already out describes the machine before this action; it must
+    // not land after it.
+    poller.invalidate();
     setBusy(name);
     setError(null);
     setNotice(null);
     setConfirming(null);
     setLog([{ text: `$ ${sidecar} ${args.join(" ")}`, err: false }]);
     try {
-      const run = runSidecar(sidecar, args, (line, stream) =>
-        setLog((prev) => [...prev, { text: line, err: stream === "stderr" }]),
+      const env = await sidecarEnv();
+      const run = runSidecar(
+        sidecar,
+        args,
+        (line, stream) =>
+          setLog((prev) => [...prev, { text: line, err: stream === "stderr" }]),
+        { env },
       );
       let result: RunOutcome;
       if (landed) {
@@ -563,7 +653,32 @@ export function App() {
     );
   };
 
-  const applyWorkspace = () => {
+  /**
+   * Ask the control plane whether the session still works, right before an
+   * action that runs `tacho reassign`: with a dead token, reassign revokes
+   * the enrollment, strips the hooks, fails to enroll again and removes the
+   * service. `sessionExpired` is learned from the picker's first call only,
+   * so a session that died since still reads as signed in. The check holds
+   * the action's busy state, so a second click cannot start another beside
+   * it; on true the caller hands straight to `act`.
+   */
+  async function requireLiveSession(name: string): Promise<boolean> {
+    if (busyRef.current) return false;
+    busyRef.current = true;
+    setBusy(name);
+    setError(null);
+    setNotice(null);
+    setConfirming(null);
+    const check = await checkLiveSession();
+    busyRef.current = false;
+    if (check.live) return true;
+    if (check.expired) setSessionExpired(true);
+    setError(check.message);
+    setBusy(null);
+    return false;
+  }
+
+  const applyWorkspace = async () => {
     if (!host) return;
     let call: ReturnType<typeof reassignArgs>;
     try {
@@ -576,6 +691,7 @@ export function App() {
       setError(e instanceof Error ? e.message : String(e));
       return;
     }
+    if (!(await requireLiveSession("apply"))) return;
     return act("apply", call.sidecar, call.args, () => {
       setPickedOrg(null);
       setPickedWorkspace(null);
@@ -583,9 +699,14 @@ export function App() {
     });
   };
 
-  const deregister = (h: Harness) => {
+  const deregister = async (h: Harness) => {
     if (!host) return;
     const call = deregisterArgs(host.harnesses, h);
+    if (
+      deregisterNeedsSession(host.harnesses, h) &&
+      !(await requireLiveSession("deregister"))
+    )
+      return;
     return act("deregister", call.sidecar, call.args, () =>
       setNotice(
         call.args[0] === "unenroll"
@@ -595,18 +716,22 @@ export function App() {
     );
   };
 
-  const addHarness = (h: Harness) =>
-    host &&
-    act(
+  const addHarness = async (h: Harness) => {
+    if (!host) return;
+    const harnesses = [...host.harnesses, h];
+    if (!(await requireLiveSession("add"))) return;
+    return act(
       "add",
       "tacho",
-      ["reassign", "--harness", [...host.harnesses, h].join(",")],
+      ["reassign", "--harness", harnesses.join(",")],
       () => setNotice(`${labelOf(h)} is now wrapped.`),
     );
+  };
 
   async function uninstallEverything() {
     if (busyRef.current) return;
     busyRef.current = true;
+    poller.invalidate();
     setConfirming(null);
     setBusy("uninstall");
     setError(null);
@@ -633,6 +758,10 @@ export function App() {
         ...report.left.map((note) => ({ text: `left: ${note}`, err: true })),
       ]);
       setNotice(describeRemoval(report, uninstallHint));
+      if (uninstallFinished(report)) {
+        setUninstalled(true);
+        setToast(uninstallToast(uninstallHint));
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -701,9 +830,8 @@ export function App() {
   }
 
   async function doCheckUpdate() {
-    if (!state) return;
-    setBusy("update");
-    setError(null);
+    if (!state || checking) return;
+    setChecking(true);
     setUpdate({ caption: "checking…", offered: null });
     try {
       const r = await checkForUpdate(state.app_version);
@@ -714,7 +842,7 @@ export function App() {
         `Update check failed: ${e instanceof Error ? e.message : String(e)}`,
       );
     } finally {
-      setBusy(null);
+      setChecking(false);
     }
   }
   async function doInstallUpdate() {
@@ -756,9 +884,11 @@ export function App() {
   }
 
   const restartWizard = () => {
+    setUninstalled(false);
     setFirstRun(true);
     setTargetChosen(false);
     setDetected(null);
+    setScanError(null);
     setRegistration(null);
     setOutcome(null);
     setOutcomeSeen(false);
@@ -966,6 +1096,16 @@ export function App() {
                 <div className="row">
                   {orgPicker}
                   {workspacePicker}
+                  {listingRetry && (
+                    <button
+                      type="button"
+                      className="quiet"
+                      onClick={retryListing}
+                      disabled={pickersLocked}
+                    >
+                      Retry
+                    </button>
+                  )}
                 </div>
                 <div className="row">
                   <button
@@ -1028,7 +1168,12 @@ export function App() {
                   go-ahead, writes its hooks into their settings. Untick any you
                   do not want recorded.
                 </p>
-                {detecting || detected === null ? (
+                {scanError !== null && !detecting ? (
+                  <p className="sub">
+                    The scan did not finish, so it is not known which agents are
+                    installed. Rescan to try again.
+                  </p>
+                ) : detecting || detected === null ? (
                   <p className="sub">Scanning this machine…</p>
                 ) : (
                   <div className="agents">
@@ -1109,7 +1254,7 @@ export function App() {
                   <button
                     type="button"
                     className="quiet"
-                    onClick={() => setDetected(null)}
+                    onClick={rescan}
                     disabled={busy !== null || detecting}
                   >
                     Rescan
@@ -1167,11 +1312,8 @@ export function App() {
                       <code>
                         {host.org_slug}/{host.workspace_slug}
                       </code>
-                      ; collector{" "}
-                      {daemonUp
-                        ? `running on 127.0.0.1:${host.port}`
-                        : "starting…"}
-                      ; enforcement is client-attested (the hooks the agents
+                      ; collector {collectorText(daemonUp, host.port)};
+                      enforcement is client-attested (the hooks the agents
                       honour).
                     </p>
                   </div>
@@ -1392,19 +1534,7 @@ export function App() {
             {tacho?.service ? ` · ${serviceStatusText(tacho.service)}` : ""}
           </dd>
           <dt>Gateway</dt>
-          <dd>
-            {tacho?.gateway
-              ? `model proxy ${tacho.gateway.listening ? `listening on 127.0.0.1:${tacho.gateway.port}` : "not listening"}`
-              : "not available on this build"}
-            {host.harnesses.length > 0 ? (
-              <>
-                {" · "}
-                {host.harnesses
-                  .map((h) => `${h}: ${tacho?.tiers?.[h] ?? "no run yet"}`)
-                  .join(", ")}
-              </>
-            ) : null}
-          </dd>
+          <dd>{gatewayText(tacho, daemonUp, host.harnesses)}</dd>
           <dt>Agents</dt>
           <dd>{summarizeAgents(agentRows)}</dd>
           <dt>Signed in</dt>
@@ -1458,6 +1588,12 @@ export function App() {
         <div className="agents">
           {agentRows.map((row) => {
             const confirmKey = `dereg-${row.key}`;
+            // With other agents left, de-registering is a `tacho reassign`,
+            // which needs a working sign-in. Without one it would unenroll
+            // the machine; the last agent's `unenroll` finishes offline.
+            const signInFirst =
+              !loggedIn &&
+              deregisterNeedsSession(host.harnesses, row.key as Harness);
             const meta = [row.summary, ...row.details]
               .filter(Boolean)
               .join(" · ");
@@ -1500,7 +1636,7 @@ export function App() {
                         onClick={confirmed(() =>
                           deregister(row.key as Harness),
                         )}
-                        disabled={busy !== null}
+                        disabled={busy !== null || signInFirst}
                       >
                         Confirm disconnect
                       </button>
@@ -1517,8 +1653,12 @@ export function App() {
                       type="button"
                       className="danger"
                       onClick={() => askConfirm(confirmKey)}
-                      disabled={busy !== null}
-                      title="Remove Oxagen's entry from this app's settings"
+                      disabled={busy !== null || signInFirst}
+                      title={
+                        signInFirst
+                          ? "Sign in first"
+                          : "Remove Oxagen's entry from this app's settings"
+                      }
                     >
                       Disconnect…
                     </button>
@@ -1532,7 +1672,7 @@ export function App() {
                         onClick={confirmed(() =>
                           deregister(row.key as Harness),
                         )}
-                        disabled={busy !== null}
+                        disabled={busy !== null || signInFirst}
                       >
                         Confirm de-register
                       </button>
@@ -1559,7 +1699,8 @@ export function App() {
                         type="button"
                         className="danger"
                         onClick={() => askConfirm(confirmKey)}
-                        disabled={busy !== null}
+                        disabled={busy !== null || signInFirst}
+                        title={signInFirst ? "Sign in first" : undefined}
                       >
                         De-register…
                       </button>
@@ -1599,6 +1740,16 @@ export function App() {
         <div className="row">
           {orgPicker}
           {workspacePicker}
+          {listingRetry && (
+            <button
+              type="button"
+              className="quiet"
+              onClick={retryListing}
+              disabled={pickersLocked}
+            >
+              Retry
+            </button>
+          )}
           {!loggedIn && <span className="pill">sign in to change</span>}
           {loggedIn && workspacePending && (
             <span className="pill">pick a workspace in {orgForPicker}</span>
@@ -1707,12 +1858,16 @@ export function App() {
 
       {activity}
 
-      {uninstallPanel}
+      {!uninstalled && uninstallPanel}
     </>
   ) : (
     <>
       <section className="panel">
-        <p className="headline">Oxagen is no longer set up on this machine</p>
+        <p className="headline">
+          {uninstalled
+            ? "Oxagen was removed from this machine"
+            : "Oxagen is no longer set up on this machine"}
+        </p>
         <p className="sub">
           {notice ?? "Run the setup again to register your agents."}
         </p>
@@ -1730,7 +1885,7 @@ export function App() {
         </div>
       </section>
       {activity}
-      {uninstallPanel}
+      {!uninstalled && uninstallPanel}
     </>
   );
 
@@ -1767,7 +1922,7 @@ export function App() {
             <button
               type="button"
               onClick={doInstallUpdate}
-              disabled={busy !== null || !state}
+              disabled={busy !== null || checking || !state}
             >
               Install
             </button>
@@ -1776,7 +1931,9 @@ export function App() {
               type="button"
               className="quiet"
               onClick={doCheckUpdate}
-              disabled={busy !== null || !state}
+              // Only an install in progress stops a check; nothing else
+              // running on the machine does.
+              disabled={checking || busy === "update" || !state}
             >
               Check for updates
             </button>
@@ -1797,12 +1954,40 @@ export function App() {
         )}
         {state === null ? (
           <p className="sub">Reading this machine…</p>
+        ) : state.host_error ? (
+          <section className="panel" aria-label="Enrollment file unreadable">
+            <p className="headline">
+              This machine's enrollment could not be read
+            </p>
+            <p className="sub">
+              {state.host_path}: {state.host_error}. The machine may still be
+              enrolled, so setup is not offered here, because it would write
+              over that file. Run <code>tacho status</code> in a terminal to see
+              what is in place, or <code>tacho unenroll</code> to remove it,
+              then reopen Oxagen.
+            </p>
+          </section>
         ) : firstRun ? (
           wizard
         ) : (
           manage
         )}
       </main>
+      {toast && (
+        <div className="toast" role="status" aria-live="polite">
+          <span className="toast-glyph" aria-hidden="true">
+            ✓
+          </span>
+          <span>{toast}</span>
+          <button
+            type="button"
+            className="quiet"
+            onClick={() => setToast(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
     </>
   );
 }

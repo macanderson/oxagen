@@ -82,6 +82,7 @@ import {
   type RowWords,
   type RunChip,
   type SortKey,
+  shownCost,
   spendShown,
   windowParts,
 } from "./view";
@@ -635,6 +636,7 @@ function RunRowView({
   const { run, state } = listed;
   const to = routes.run(org, ws, run.id);
   const title = runTitle(run);
+  const cost = shownCost(run);
   const operatorLabel =
     run.operatorName ??
     (run.operatorKind === null
@@ -739,16 +741,24 @@ function RunRowView({
         </span>
       </td>
       <td className={numericCell}>
-        {run.cost === null ? (
+        {cost === null ? (
           notRecorded
         ) : (
           <>
-            <Money value={run.cost} />
+            <Money value={cost.value} />
             <span className="block text-[10px] text-muted-foreground">
-              {run.costIsEstimate === true ? (
-                <span data-testid="row-cost-estimate">{t("estimate")}</span>
+              {cost.estimate ? (
+                // A running rollup, or before any rollup the agent's own
+                // figure, which Spend shown counts as an estimate too.
+                <span
+                  data-testid={
+                    cost.reported ? "row-cost-reported" : "row-cost-estimate"
+                  }
+                >
+                  {t("estimate")}
+                </span>
               ) : (
-                (run.cost.basis ?? t("basisNotRecorded"))
+                (cost.value.basis ?? t("basisNotRecorded"))
               )}
             </span>
           </>

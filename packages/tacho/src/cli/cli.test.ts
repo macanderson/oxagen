@@ -137,8 +137,12 @@ function enrollmentResponse(
   signer: ReturnType<typeof bundleSigner>,
   workspace = "core",
 ): EnrollmentResponse {
-  const bundle = signer.sign(unsignedBundle({ mode: "observe" }));
   const id = workspace === "core" ? TEST_ENROLLMENT : OTHER_ENROLLMENT;
+  // Signed for the enrollment it comes with: enroll refuses a bundle bound
+  // to another host.
+  const bundle = signer.sign(
+    unsignedBundle({ mode: "observe", host_enrollment_id: id }),
+  );
   return {
     hostEnrollmentId: id,
     agentKey: `acme.${workspace}.cc-laptop`,
@@ -1395,7 +1399,7 @@ describe("enroll → status → unenroll", () => {
     expect(rogue.errors[0]).toContain("does not verify");
   });
 
-  it("warns instead of failing when the service or claude are missing, and prints managed settings", async () => {
+  it("warns when claude is missing, fails when tachod never answers, and prints managed settings", async () => {
     const d = deps({
       claude: () => ({}),
       daemonGet: async () => undefined,
@@ -1413,7 +1417,13 @@ describe("enroll → status → unenroll", () => {
       },
       d,
     );
+    // Enrolled, but the hooks post to a daemon that is not there: exit 0
+    // told the desktop app the machine was covered. The enrollment stands
+    // and `tacho enroll` exits 1 on the shipping verdict (`main.ts`).
     expect(result.ok).toBe(true);
+    expect(result.host).toBeDefined();
+    expect(result.shipping).toMatchObject({ healthy: false });
+    expect(d.errors.at(-1)).toContain("it is not reporting");
     expect(result.warnings.join("\n")).toContain("service install failed");
     expect(result.warnings.join("\n")).toContain("not on PATH");
     expect(result.warnings.join("\n")).toContain("did not answer");
@@ -3171,8 +3181,34 @@ describe("brokered credentials (ADR-143)", () => {
 
   /** Deps whose daemon reports a listening proxy and mints tokens from the key on disk. */
   function brokeredDeps(seed: { claude?: object; codex?: object } = {}) {
-    const d = deps();
-    const home = d.home;
+    const scratch = deps();
+    const home = scratch.home;
+    // A real host's layout: the hooks, the base URL and the credential all
+    // live in ~/.claude and ~/.codex, which is where the credential and base
+    // URL lookups look, off the hooks' own paths.
+    const claudeSettings = join(home, ".claude", "settings.json");
+    const codexHooks = join(home, ".codex", "hooks.json");
+    const codexServer = fakeCodexAppServer(codexHooks);
+    const d = {
+      ...scratch,
+      paths: {
+        ...scratch.paths,
+        claudeSettings,
+        claudeProjects: join(home, ".claude", "projects"),
+        codexHooks,
+      },
+      readSettings: () => readJsonFileIfExists(claudeSettings),
+      writeSettings: (document: unknown) =>
+        writeSensitiveFileAtomic(
+          claudeSettings,
+          JSON.stringify(document, null, 2),
+        ),
+      readCodexHooks: () => readJsonFileIfExists(codexHooks),
+      writeCodexHooks: (document: unknown) =>
+        writeSensitiveFileAtomic(codexHooks, JSON.stringify(document, null, 2)),
+      codexAppServer: codexServer.server,
+      codexServer,
+    };
     if (seed.claude !== undefined)
       writeSensitiveFileAtomic(
         join(home, ".claude", "settings.json"),
@@ -3271,11 +3307,12 @@ describe("brokered credentials (ADR-143)", () => {
     expect(settings.apiKeyHelper).toBe(
       "node /opt/tacho/tacho.mjs credential issue --harness claude-code",
     );
-    expect(settings.env).toEqual({
+    expect(settings.env).toMatchObject({
       ANTHROPIC_BASE_URL: "http://127.0.0.1:47124/anthropic",
       ENABLE_TOOL_SEARCH: "true",
       KEEP: "1",
     });
+    expect(settings.env).not.toHaveProperty("ANTHROPIC_API_KEY");
     expect(settings.theme).toBe("dark");
     const auth = authOf(d.home);
     expect(auth.OPENAI_API_KEY.startsWith("oxrt_")).toBe(true);
@@ -3723,7 +3760,7 @@ describe("brokered credentials (ADR-143)", () => {
     // The gateway is gone, so a helper or a token would only ever be
     // refused: both come out, and so does the store.
     expect(settingsOf(d.home).apiKeyHelper).toBeUndefined();
-    expect(settingsOf(d.home).env.ANTHROPIC_API_KEY).toBeUndefined();
+    expect(settingsOf(d.home).env?.ANTHROPIC_API_KEY).toBeUndefined();
     expect(authOf(d.home).OPENAI_API_KEY).toBeUndefined();
     // The sealed files stay for a person to attempt a recovery; shredding
     // them would end that chance. The signing key still goes.

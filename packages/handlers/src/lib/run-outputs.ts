@@ -5,7 +5,7 @@
 // per-store node shapes and a run that produced nothing are pinned by unit
 // tests with no database.
 import { schema, withTenantDb } from "@oxagen/database";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, or } from "drizzle-orm";
 import type {
   RunOutputNode,
   RunOutputState,
@@ -32,6 +32,11 @@ export type SessionFileRow = {
   lastSeq: number;
   digestBefore: string | null;
   digestAfter: string | null;
+  /**
+   * Whether the row is the run's own chain's. False for a subagent's chain,
+   * whose frame numbers count that chain and not the run's.
+   */
+  ownChain: boolean;
 };
 
 /** One `agent.approval_requests` row on this run, as the spine reads it. */
@@ -57,9 +62,13 @@ export type RunOutputQueries = {
 };
 
 const files = schema.tachoSessionFiles;
+const sessions = schema.tachoSessions;
 const approvals = schema.approvalRequests;
 
 export const postgresRunOutputQueries: RunOutputQueries = {
+  // `session_files.session_id` holds the `tacho.sessions` row id, not the
+  // session uuid a run resolves to, so the chains are found through
+  // `tacho.sessions`: the run's own and every subagent chain under it.
   sessionFiles: (scope, sessionUuid, limit) =>
     withTenantDb((tx) =>
       tx
@@ -78,20 +87,45 @@ export const postgresRunOutputQueries: RunOutputQueries = {
           lastSeq: files.lastSeq,
           digestBefore: files.digestBefore,
           digestAfter: files.digestAfter,
+          chain: sessions.sessionUuid,
         })
         .from(files)
+        .innerJoin(
+          sessions,
+          and(
+            eq(sessions.id, files.sessionId),
+            eq(sessions.orgId, scope.orgId),
+            eq(sessions.workspaceId, scope.workspaceId),
+          ),
+        )
         .where(
           and(
-            eq(files.sessionId, sessionUuid),
+            or(
+              eq(sessions.sessionUuid, sessionUuid),
+              eq(sessions.rootSessionUuid, sessionUuid),
+            ),
             eq(files.orgId, scope.orgId),
             eq(files.workspaceId, scope.workspaceId),
           ),
         )
         // The producing frame is the node's place on the spine, so the read
         // is ordered by it and the cap cuts the tail rather than a slice
-        // from the middle.
-        .orderBy(asc(files.lastSeq), asc(files.path))
+        // from the middle. Frame numbers count one chain, so the run's own
+        // chain comes first and each subagent chain follows whole, in the
+        // order it started.
+        .orderBy(
+          desc(eq(sessions.sessionUuid, sessionUuid)),
+          asc(sessions.startedAt),
+          asc(sessions.id),
+          asc(files.lastSeq),
+          asc(files.path),
+        )
         .limit(limit),
+    ).then((rows) =>
+      rows.map(({ chain, ...row }) => ({
+        ...row,
+        ownChain: chain === sessionUuid,
+      })),
     ),
   runApprovals: (scope, runPublicId, limit) =>
     withTenantDb((tx) =>
@@ -177,8 +211,10 @@ export function sessionFileNode(row: SessionFileRow): RunOutputNode {
       : { added: row.linesAdded, removed: row.linesRemoved };
   return {
     // The frame that produced it is the last one that touched it; a read's
-    // tick points at the last look.
-    seq: String(row.lastSeq),
+    // tick points at the last look. A subagent's frame is numbered on its
+    // own chain, which the run's frame reads do not open, so its node
+    // carries none rather than a number that opens a different frame.
+    seq: row.ownChain ? String(row.lastSeq) : null,
     kind: wrote ? (MEDIA.test(name) ? "media" : "file") : "read",
     name,
     nameIsLocator: false,

@@ -30,7 +30,10 @@
  *     not drained → "pending" ("recorded, waiting to send"), or
  *     "degraded" once that has lasted more than ten minutes.
  *  8. seen, with an empty spool and either a ship at or after the last run
- *     or no error → "healthy".
+ *     or no error → "healthy", or "unknown" when `tacho status` has not
+ *     said whether the hooks are in place (it failed, has not answered yet,
+ *     or left the harness out). Step 3 cannot run without that answer, so
+ *     the row does not claim it passed.
  *  9. wrapped but never seen → "idle" ("wrapped · no runs recorded yet").
  *
  * Everything the spool reports (`last_ingest_at`, `spool_depth`,
@@ -64,6 +67,7 @@ import type {
 
 export type AgentHealth =
   | "healthy"
+  | "unknown"
   | "idle"
   | "pending"
   | "degraded"
@@ -112,6 +116,7 @@ const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 /** Human-readable text for a health value; the accessible label, not a color. */
 export const HEALTH_LABEL: Record<AgentHealth, string> = {
   healthy: "Healthy",
+  unknown: "Unknown",
   idle: "Idle",
   pending: "Sending",
   degraded: "Needs attention",
@@ -161,6 +166,8 @@ function versionFor(host: HostView | null, harness: Harness): string | null {
 interface HealthInput {
   daemonUp: boolean;
   hookPresence: TachoHookPresence | undefined;
+  /** The row has hooks, and `tacho status` did not say whether they are there. */
+  hooksUnknown: boolean;
   lastSeenAt: string | null;
   lastIngestAt: string | null;
   spoolDepth: number;
@@ -221,6 +228,11 @@ function healthFor(input: HealthInput): {
       Date.parse(input.lastIngestAt) >= seenMs;
     const drained = input.spoolDepth === 0 && input.lastError === null;
     if (shippedAfterSeen || drained) {
+      if (input.hooksUnknown)
+        return {
+          health: "unknown",
+          summary: `hooks unknown; last run ${ago(input.lastSeenAt, input.now)}`,
+        };
       return {
         health: "healthy",
         summary: `last run ${ago(input.lastSeenAt, input.now)} · delivered to Oxagen`,
@@ -322,6 +334,7 @@ function harnessRow(
   const { health, summary } = healthFor({
     daemonUp: state.daemon != null,
     hookPresence: presence,
+    hooksUnknown: presence === undefined,
     lastSeenAt: agent?.last_seen_at ?? null,
     lastIngestAt: state.daemon?.last_ingest_at ?? null,
     spoolDepth: state.daemon?.spool_depth ?? 0,
@@ -358,6 +371,8 @@ function customRow(
   const { health, summary } = healthFor({
     daemonUp: true,
     hookPresence: undefined,
+    // A custom agent has no hook family in `tacho status` to be unknown.
+    hooksUnknown: false,
     lastSeenAt: agent.last_seen_at,
     lastIngestAt: daemon.last_ingest_at ?? null,
     spoolDepth: daemon.spool_depth ?? 0,
@@ -383,6 +398,16 @@ function customRow(
 }
 
 /**
+ * The name Claude Desktop gives in the MCP `initialize` handshake
+ * (`clientInfo.name`), matched whole. A substring match on "claude" also
+ * took Claude Code ("claude-code") and any other client with the word in
+ * its name, and credited their calls to this row.
+ */
+export const CLAUDE_DESKTOP_CLIENTS: ReadonlySet<string> = new Set([
+  "claude-ai",
+]);
+
+/**
  * One row per connected app (ADR-078). Its health is not the wrapped cascade
  * and deliberately shares none of it:
  *
@@ -397,7 +422,8 @@ function customRow(
  *   4. calls have been refused → "degraded" is wrong here, and it is not
  *      used: a refusal is the gateway working. Refusals are reported as a
  *      count in the details, never as ill health;
- *   5. calls seen → "healthy"; never seen → "idle".
+ *   5. calls seen → "healthy", or "unknown" while `tacho status` has not
+ *      said whether the entry is there; never seen → "idle".
  *
  * There is no "recorded, waiting to send" state: a gateway call is recorded
  * synchronously on the daemon's chain, so there is no per-app spool to be
@@ -413,7 +439,7 @@ function connectedRow(
   const enrolled = host !== null && host.harnesses.includes(h);
   const presence = tacho?.claudeDesktop;
   const seen = (state.daemon?.connected ?? []).find((entry) =>
-    entry.client.toLowerCase().includes("claude"),
+    CLAUDE_DESKTOP_CLIENTS.has(entry.client),
   );
   const unseen = presence?.otherServerNames ?? [];
   const details: string[] = [];
@@ -479,6 +505,14 @@ function connectedRow(
         "connected · no tool calls yet. Restart the app if you just connected it.",
     };
   }
+  if (presence === undefined) {
+    return {
+      ...base,
+      wrapped: true,
+      health: "unknown",
+      summary: `entry unknown; last tool call ${ago(seen.last_seen_at, now)}`,
+    };
+  }
   return {
     ...base,
     wrapped: true,
@@ -523,6 +557,7 @@ export function summarizeAgents(rows: AgentRow[]): string {
     counts.set(r.health, (counts.get(r.health) ?? 0) + 1);
   const order: AgentHealth[] = [
     "healthy",
+    "unknown",
     "idle",
     "pending",
     "degraded",

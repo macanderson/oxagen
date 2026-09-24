@@ -24,6 +24,7 @@
  * run token and no gateway to spend it at.
  */
 import { existsSync } from "node:fs";
+import { dirname } from "node:path";
 import type {
   CredentialSource,
   HeldCredential,
@@ -51,6 +52,22 @@ import {
   TACHO_HARNESS_LABELS,
 } from "../wire";
 import type { CliDeps } from "./deps";
+
+/**
+ * Claude Code's and Codex's directories as this process's paths resolved
+ * them, which is where the hooks went. The credential and base URL files
+ * sit beside them, so a lookup that resolved its own directories could
+ * read a different file than the one enroll wrote.
+ */
+export function harnessDirsOf(deps: Pick<CliDeps, "paths">): {
+  claudeConfigDir: string;
+  codexHome: string;
+} {
+  return {
+    claudeConfigDir: dirname(deps.paths.claudeSettings),
+    codexHome: dirname(deps.paths.codexHooks),
+  };
+}
 
 /** The harnesses whose model credential the gateway can broker, off the route table. */
 export const MODEL_CREDENTIAL_HARNESSES: ModelCredentialHarness[] = [
@@ -331,7 +348,7 @@ export async function brokerCredentials(
       await contract.read({ home: deps.home, harnesses: ["codex"] })
     ).harnesses[0];
     if (before?.reason !== "subscription_login") {
-      const current = readCodexApiKeyMember(deps.home);
+      const current = readCodexApiKeyMember(deps.home, harnessDirsOf(deps));
       if (
         !staticTokenStillGood(current, host, deps.paths.runTokenKey, deps.now())
       ) {
@@ -476,10 +493,14 @@ export async function restoreCredentials(
   for (const harness of MODEL_CREDENTIAL_HARNESSES) {
     try {
       if (host !== undefined && !host.harnesses.includes(harness)) {
+        const dirs = harnessDirsOf(deps);
         const hasReceipt = existsSync(
-          modelCredentialBackupPath(harness, deps.home),
+          modelCredentialBackupPath(harness, deps.home, dirs),
         );
-        if (!hasReceipt && !hasOrphanedModelCredential(harness, deps.home))
+        if (
+          !hasReceipt &&
+          !hasOrphanedModelCredential(harness, deps.home, dirs)
+        )
           continue;
       }
       const provider = HARNESS_PROVIDER[harness];

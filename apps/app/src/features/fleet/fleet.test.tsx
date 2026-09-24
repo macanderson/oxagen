@@ -361,6 +361,55 @@ describe("summary tiles", () => {
     );
   });
 
+  // With no rollup yet, the Run page shows what the agent reported, and so
+  // does the row, as an estimate. The tile adds the figure the row shows.
+  it("shows the agent's reported cost where no rollup is recorded yet, in its cell and in Spend shown", async () => {
+    await renderFleet({
+      runs: runPage([
+        runRow({
+          id: "tse_reported",
+          source: "tacho",
+          status: "sealed",
+          cost: null,
+          reportedCost: usd("1250000", "client_attested"),
+        }),
+        runRow({ id: "arun_done", cost: usd("2870000") }),
+      ]),
+      approvals: NO_APPROVALS,
+    });
+    expect(row("tse_reported")).toHaveTextContent("$1.25estimate");
+    expect(
+      within(row("tse_reported")).getByTestId("row-cost-reported"),
+    ).toHaveTextContent("estimate");
+    expect(tile("Spend shown")).toHaveTextContent("$4.12");
+    expect(screen.getByTestId("spend-basis")).toHaveTextContent(
+      "client_attested + gateway_observed · USD · includes 1 estimate",
+    );
+    expect(screen.getByTestId("spend-basis")).not.toHaveTextContent(
+      "no cost recorded",
+    );
+  });
+
+  it("shows the rolled-up cost over the reported one (negative)", async () => {
+    await renderFleet({
+      runs: runPage([
+        runRow({
+          id: "tse_rolled",
+          source: "tacho",
+          status: "sealed",
+          cost: usd("4130000"),
+          reportedCost: usd("1250000", "client_attested"),
+        }),
+      ]),
+      approvals: NO_APPROVALS,
+    });
+    expect(row("tse_rolled")).toHaveTextContent("$4.13gateway_observed");
+    expect(
+      within(row("tse_rolled")).queryByTestId("row-cost-reported"),
+    ).toBeNull();
+    expect(tile("Spend shown")).toHaveTextContent("$4.13");
+  });
+
   it("opens the approvals drawer from the waiting tile, with the oldest wait off the live clock", async () => {
     const opened = vi.fn();
     window.addEventListener("oxagen:open-approvals", opened);

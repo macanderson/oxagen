@@ -14,13 +14,20 @@ import {
   type CredentialOptions,
   resolveCredentials,
 } from "./deps";
-import { enrollLocked, harnessFileProblems } from "./enroll";
-import { revokeAndMark, stripEnrollmentHooks } from "./unenroll";
+import {
+  enrollLocked,
+  harnessFileProblems,
+  rootRefusal,
+  type RunsAs,
+} from "./enroll";
+import { revokeAndMark, stopGateway, stripEnrollmentHooks } from "./unenroll";
 
 export interface ReassignOptions extends CredentialOptions {
   /** Keep the current harness list (default) or replace it. */
   harnesses?: TachoHarness[];
   reason?: string;
+  /** Reassign even when running as root (`--allow-root`). */
+  allowRoot?: boolean;
 }
 
 export interface ReassignResult {
@@ -36,8 +43,13 @@ export interface ReassignResult {
  */
 export async function reassign(
   options: ReassignOptions,
-  deps: CliDeps,
+  deps: CliDeps & RunsAs,
 ): Promise<ReassignResult> {
+  const asRoot = rootRefusal("reassign", deps, options.allowRoot);
+  if (asRoot !== undefined) {
+    deps.err(asRoot);
+    return { ok: false, warnings: [] };
+  }
   const lock = acquireInstallLock(deps.paths.root, deps.now);
   if ("heldBy" in lock) {
     deps.err(
@@ -139,6 +151,8 @@ async function reassignLocked(
     refusals.push(
       `tacho is running from ${deps.runtime.transient} (${deps.runtime.binDir}), which is gone once it is closed`,
     );
+  if (deps.runtime.executableProblem !== undefined)
+    refusals.push(deps.runtime.executableProblem);
   refusals.push(...harnessFileProblems(harnesses, deps));
   if (refusals.length > 0) {
     deps.err(
@@ -191,9 +205,13 @@ async function reassignLocked(
     deps,
   );
   warnings.push(...result.warnings);
-  if (result.host !== undefined && !result.ok) {
-    // Enrolled in the new workspace, but a harness could not be hooked;
-    // `enroll` has already said which and why.
+  if (
+    result.host !== undefined &&
+    (!result.ok || result.shipping?.healthy === false)
+  ) {
+    // Enrolled in the new workspace, but a harness could not be hooked or
+    // the new daemon is not reporting; `enroll` has already said which and
+    // why. `tacho enroll` exits 1 on both (`main.ts`), and so does this.
     return {
       ok: false,
       from,
@@ -202,15 +220,14 @@ async function reassignLocked(
     };
   }
   if (result.host === undefined) {
-    // No enrollment means nothing for the daemon to run as: left loaded it
-    // keeps shipping on a revoked key and restarting under KeepAlive.
-    try {
-      deps.serviceManager.uninstall();
-    } catch (error) {
-      warnings.push(
-        `service removal failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
+    // No enrollment means nothing for the daemon to run as. Every routed
+    // harness still names its proxy and holds its run token, so the gateway
+    // comes out of the files first, while the daemon still serves it:
+    // stopping it first left Claude Code on a refused connection.
+    const own: string[] = [];
+    await stopGateway(host, deps, own);
+    for (const warning of own) deps.err(`warning: ${warning}`);
+    warnings.push(...own);
     // host.json now carries the old enrollment marked retired: `tacho
     // status` says so, and `enroll` takes the fresh path rather than
     // re-applying the revoked enrollment's hooks. `--force` is named so the

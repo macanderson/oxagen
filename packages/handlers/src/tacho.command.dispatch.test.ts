@@ -633,6 +633,66 @@ describe("dispatch_command — a direct target that cannot receive is refused, n
     });
   });
 
+  // A message carries text the way a steer does, and the commands that carry
+  // none still reach the Stella run.
+  it("refuses a message to a live Stella run, and queues its resume and cancel", async () => {
+    const store = new MemoryStore([session({ runtime: "stella" })]);
+    await expect(
+      handlerOver(store)(
+        parse({
+          target: { kind: "run", id: RUN },
+          command: "message",
+          payload: { text: "Wrap up." },
+        }),
+        OPERATOR,
+      ),
+    ).rejects.toSatisfy(conflict("no_prompt_carrier"));
+    expect(store.rows).toEqual([]);
+    for (const command of ["resume", "cancel"] as const) {
+      await handlerOver(store)(
+        parse({ target: { kind: "run", id: RUN }, command }),
+        OPERATOR,
+      );
+    }
+    expect(store.rows.map((r) => [r.command, r.outcome])).toEqual([
+      ["resume", "queued"],
+      ["cancel", "queued"],
+    ]);
+  });
+
+  it("fails a broadcast's Stella recipient and queues the rest", async () => {
+    const store = new MemoryStore([
+      session({ host: STEP_HOST }),
+      session({
+        id: "s2",
+        publicId: "tse_1123456789abcdefghjkmn",
+        sessionUuid: "4f2b7a5e-8c1d-4e6f-9a0b-1c2d3e4f5a6b",
+        runtime: "stella",
+        host: STEP_HOST,
+      }),
+    ]);
+    const { commandIds } = await handlerOver(store)(
+      parse({
+        target: { kind: "workspace", id: WORKSPACE },
+        command: "steer",
+        payload: { text: "Wrap up." },
+      }),
+      OPERATOR,
+    );
+    expect(commandIds).toHaveLength(2);
+    expect(
+      store.rows.map((r) => [
+        r.session.runtime,
+        r.outcome,
+        r.outcomeDetail,
+        r.deliveryMode,
+      ]),
+    ).toEqual([
+      ["claude-code", "queued", null, "next_step"],
+      ["stella", "failed", "no_prompt_carrier", null],
+    ]);
+  });
+
   it("cancels a ledger run through its transactional cancellation seam", async () => {
     const ledger = "arun_cancel1";
     const store = new MemoryStore([], [ledger]);
@@ -865,5 +925,26 @@ describe("dispatch_command — supersession", () => {
         detail: `superseded_by:${output.commandIds[0]}`,
       },
     ]);
+  });
+});
+
+// A steer reaches the agent as hook `additionalContext`, which Claude Code
+// keeps whole only up to 10,000 characters (`STEER_TEXT_MAX`).
+describe("dispatch_command — steer text", () => {
+  it("is refused past 8,000 characters", () => {
+    expect(() =>
+      parse({
+        target: { kind: "run", id: RUN },
+        command: "steer",
+        payload: { text: "x".repeat(8_001) },
+      }),
+    ).toThrow();
+    expect(
+      parse({
+        target: { kind: "run", id: RUN },
+        command: "steer",
+        payload: { text: "x".repeat(8_000) },
+      }).payload?.text,
+    ).toHaveLength(8_000);
   });
 });

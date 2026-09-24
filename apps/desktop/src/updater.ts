@@ -110,14 +110,20 @@ export function applyDownloadEvent(
 }
 
 /**
+ * How long a check may wait on the feed. The plugin sets no bound of its
+ * own, so a feed that never answered left the check spinning for good.
+ */
+export const CHECK_TIMEOUT_MS = 30_000;
+
+/**
  * Ask the feed. `null` handle means the installed build is current (or the
  * release carries no updater artifacts yet, which the feed reports the same
- * way). Network and signature errors reject; the caller shows them.
+ * way). Network, timeout and signature errors reject; the caller shows them.
  */
 export async function checkForUpdate(
   currentVersion: string,
 ): Promise<{ result: UpdateCheck; update: Update | null }> {
-  const update = await check();
+  const update = await check({ timeout: CHECK_TIMEOUT_MS });
   if (!update) {
     return { result: { available: false, currentVersion }, update: null };
   }
