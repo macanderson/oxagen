@@ -97,6 +97,7 @@ describe("context.record.revise capability", () => {
       pr: {
         number: 412,
         url: "https://github.com/acme/core/pull/412",
+        provider: "github",
         repository: "acme/core",
         baseRef: "main",
         branch: "context/ctx.release.no-reread-changelog",
@@ -129,6 +130,7 @@ describe("context.record.revise capability", () => {
         pr: {
           number: 0,
           url: "https://github.com/acme/core/pull/0",
+          provider: "github",
           repository: "acme/core",
           baseRef: "main",
           branch: "context/ctx.release.no-reread-changelog",

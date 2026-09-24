@@ -191,6 +191,7 @@ const CHANGES: RepositoryChanges = {
 const BOUND_SETUP: WorkspaceRepository = {
   repository: {
     bindingId: "rpb_main01",
+    provider: "github",
     owner: "acme",
     name: "platform",
     fullName: "acme/platform",

@@ -513,6 +513,13 @@ export const repositoryBindings = ingestionSchema.table(
       "repository_bindings_default_ref_check",
       sql`length(${t.configuredDefaultRef}) > 0`,
     ),
+    // The hosts a binding can name. `provider_repository_id` is unique only
+    // within one host, so an unknown or misspelt provider would let two
+    // unrelated repositories share an identity.
+    providerCheck: check(
+      "repository_bindings_provider_check",
+      sql`${t.provider} IN ('github', 'gitlab')`,
+    ),
   }),
 );
 
@@ -578,6 +585,10 @@ export const repositoryBindingHeads = ingestionSchema.table(
     roleCheck: check(
       "repository_binding_heads_role_check",
       sql`${t.role} IN ('main', 'linked')`,
+    ),
+    providerCheck: check(
+      "repository_binding_heads_provider_check",
+      sql`${t.provider} IN ('github', 'gitlab')`,
     ),
   }),
 );

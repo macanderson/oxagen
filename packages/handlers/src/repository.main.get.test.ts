@@ -32,6 +32,7 @@ const BOUND_AT = new Date("2026-09-15T12:06:00.000Z");
 
 const BINDING_ROW = {
   bindingId: "rpb_0123456789abcdef",
+  provider: "github",
   owner: "acme",
   name: "widgets",
   fullName: "acme/widgets",
@@ -141,6 +142,7 @@ describe("get_main_repository", () => {
     expect(out).toEqual({
       repository: {
         bindingId: "rpb_0123456789abcdef",
+        provider: "github",
         owner: "acme",
         name: "widgets",
         fullName: "acme/widgets",
@@ -151,6 +153,29 @@ describe("get_main_repository", () => {
         connectionLive: true,
       },
       github: { connected: true, ...URLS },
+    });
+    expect(() => repositoryMainGet.output.parse(out)).not.toThrow();
+  });
+
+  it("answers a GitLab main project with its host and a gitlab.com link (#3762)", async () => {
+    wire({
+      binding: {
+        ...BINDING_ROW,
+        provider: "gitlab",
+        owner: "acme/platform",
+        name: "rules",
+        fullName: "acme/platform/rules",
+      },
+      connections: [],
+    });
+
+    const out = await handler()({}, makeCTX());
+
+    expect(out.repository).toMatchObject({
+      provider: "gitlab",
+      owner: "acme/platform",
+      fullName: "acme/platform/rules",
+      htmlUrl: "https://gitlab.com/acme/platform/rules",
     });
     expect(() => repositoryMainGet.output.parse(out)).not.toThrow();
   });

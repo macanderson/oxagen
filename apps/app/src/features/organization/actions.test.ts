@@ -217,6 +217,7 @@ describe("createWorkspace", () => {
     orgSlug: "acme",
     createdAt: "2026-09-15T00:00:00.000Z",
     mainRepo: {
+      provider: "github",
       bindingId: "rpb_0a1b2c",
       connectionId: "con_01hq",
       fullName: "acme/research",
