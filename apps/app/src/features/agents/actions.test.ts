@@ -1104,6 +1104,8 @@ describe("requestMandate", () => {
   });
 });
 
+const noDescription: string | null = null;
+
 /** One row of `list_iam_roles`, with the fields the offer reads. */
 const roleRow = (
   name: string,
@@ -1116,7 +1118,7 @@ const roleRow = (
 ) => ({
   id: `rol_${name.toLowerCase().replaceAll(" ", "_")}`,
   name,
-  description: null as string | null,
+  description: noDescription,
   scopeKind: "org" as const,
   kind: "agent" as const,
   isSystemDefault: false,
