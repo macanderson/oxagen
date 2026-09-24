@@ -107,6 +107,10 @@ describe("toRunPage", () => {
           model: null,
           harness: null,
           machine: null,
+          effort: null,
+          thinking: null,
+          permissionMode: null,
+          reportedTokens: null,
           taskRef: "ENG-4121",
           name: "Cut the 3.2 release branch",
           summary: {

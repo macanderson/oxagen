@@ -121,6 +121,10 @@ describe("runs.list", () => {
             model: viewModel,
             harness: null,
             machine,
+            effort: null,
+            thinking: null,
+            permissionMode: null,
+            reportedTokens: null,
             taskRef: null,
             name: null,
             summary: null,
@@ -843,6 +847,15 @@ describe("runs.work", () => {
         diff: null,
       },
     ],
+    subagents: [
+      {
+        id: "a0182b6cd3a21d284",
+        type: "Explore",
+        firstSeq: "12",
+        lastSeq: "30",
+        stopped: true,
+      },
+    ],
     complete: true,
     warnings: [],
   };
@@ -863,6 +876,12 @@ describe("runs.work", () => {
       checkoutRefs: ["chk_1"],
     });
     expect(read.value.pullRequests[0]).not.toHaveProperty("checkoutIds");
+    // A subagent's id is the harness's, not Oxagen's, so it reads as a ref.
+    expect(read.value.subagents?.[0]).toMatchObject({
+      ref: "a0182b6cd3a21d284",
+      type: "Explore",
+    });
+    expect(read.value.subagents?.[0]).not.toHaveProperty("id");
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: runWorkGet,
       input: { runId: "tse_4f0a" },
