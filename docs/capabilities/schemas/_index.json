@@ -1,5 +1,5 @@
 {
-  "generatedCount": 387,
+  "generatedCount": 390,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -163,6 +163,17 @@
       "domain": "run",
       "surfaces": [
         "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "authorize_mcp_server",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -3519,6 +3530,17 @@
       "consumes": []
     },
     {
+      "name": "search_mcp_registry",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "search_nodes",
       "domain": "graph",
       "surfaces": [
@@ -3923,6 +3945,17 @@
       "domain": "run",
       "surfaces": [
         "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "start_mcp_authorization",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],

@@ -57,6 +57,9 @@ import { agentMcpListRoute } from "./routes/v1/agent.mcp.list";
 import { agentMcpResolveRoute } from "./routes/v1/agent.mcp.resolve";
 import { agentMcpSetEnabledRoute } from "./routes/v1/agent.mcp.set_enabled";
 import { agentMcpDeleteRoute } from "./routes/v1/agent.mcp.delete";
+import { agentMcpRegistrySearchRoute } from "./routes/v1/agent.mcp.registry.search";
+import { agentMcpAuthorizeStartRoute } from "./routes/v1/agent.mcp.authorize.start";
+import { agentMcpAuthorizeCompleteRoute } from "./routes/v1/agent.mcp.authorize.complete";
 import { agentMcpConsentResolveRoute } from "./routes/v1/agent.mcp_consent.resolve";
 import { agentMcpConsentListRoute } from "./routes/v1/agent.mcp_consent.list";
 import { agentMemoryRecallRoute } from "./routes/v1/agent.memory.recall";
@@ -877,6 +880,15 @@ orgScoped.route("/agent/mcp-servers", agentMcpListRoute);
 orgScoped.route("/agent/mcp-servers/resolve", agentMcpResolveRoute);
 orgScoped.route("/agent/mcp-servers/set-enabled", agentMcpSetEnabledRoute);
 orgScoped.route("/agent/mcp-servers/delete", agentMcpDeleteRoute);
+orgScoped.route("/agent/mcp-registry", agentMcpRegistrySearchRoute);
+orgScoped.route(
+  "/agent/mcp-servers/authorize/start",
+  agentMcpAuthorizeStartRoute,
+);
+orgScoped.route(
+  "/agent/mcp-servers/authorize/complete",
+  agentMcpAuthorizeCompleteRoute,
+);
 orgScoped.route("/agent/mcp-consents/resolve", agentMcpConsentResolveRoute);
 orgScoped.route("/agent/mcp-consents", agentMcpConsentListRoute);
 orgScoped.route("/agent/memory/recall", agentMemoryRecallRoute);

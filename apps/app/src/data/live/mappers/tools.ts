@@ -195,6 +195,9 @@ export function toMcpServerList(
       healthStatus: item.healthStatus,
       lastHealthcheckAt: item.lastHealthcheckAt,
       toolCount: item.toolCount,
+      authKind: item.authKind,
+      iconUrl: item.iconUrl,
+      authorization: item.authorization,
     })),
   };
 }

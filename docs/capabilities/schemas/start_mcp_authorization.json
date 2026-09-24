@@ -1,0 +1,168 @@
+{
+  "name": "start_mcp_authorization",
+  "domain": "agent",
+  "description": "Start OAuth authorization for an MCP server: a new provider from the registry or a custom endpoint, or a reconnect of one already added. Returns the URL the person signs in at",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "mcpServerId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 120
+      },
+      "endpointUrl": {
+        "type": "string",
+        "format": "uri"
+      },
+      "description": {
+        "type": "string",
+        "maxLength": 500
+      },
+      "iconUrl": {
+        "type": "string",
+        "format": "uri"
+      },
+      "registryId": {
+        "type": "string",
+        "maxLength": 300
+      },
+      "client": {
+        "type": "object",
+        "properties": {
+          "clientId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 400
+          },
+          "clientSecret": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "scopes": {
+            "type": "string",
+            "maxLength": 4000
+          }
+        },
+        "required": [
+          "clientId"
+        ],
+        "additionalProperties": false
+      },
+      "redirectUrl": {
+        "type": "string",
+        "format": "uri"
+      }
+    },
+    "required": [
+      "redirectUrl"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "anyOf": [
+      {
+        "type": "object",
+        "properties": {
+          "status": {
+            "const": "redirect"
+          },
+          "authorizationUrl": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "authorizationUrl",
+          "state"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "status": {
+            "const": "authorized"
+          },
+          "mcpServerId": {
+            "type": "string"
+          },
+          "healthStatus": {
+            "type": "string",
+            "enum": [
+              "healthy",
+              "degraded",
+              "unreachable"
+            ]
+          },
+          "discoveredTools": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "status",
+          "mcpServerId",
+          "healthStatus",
+          "discoveredTools"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "status": {
+            "const": "client_required"
+          },
+          "scopesSupported": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "status",
+          "scopesSupported"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "status": {
+            "const": "not_oauth"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "additionalProperties": false
+      }
+    ]
+  }
+}

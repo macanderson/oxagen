@@ -1070,6 +1070,33 @@
       "verifiedAt": "2026-09-23",
       "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
+    "search_mcp_registry": {
+      "route": "/[org]/[ws]/tools/providers",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Providers: “Add a provider” opens the wizard on Browse the registry, whose search invokes search_mcp_registry (features/tools/registry-browser.tsx, features/tools/provider-auth-actions.ts)",
+      "testid": "registry-browser",
+      "proof": "apps/app/src/features/tools/provider-oauth.test.tsx",
+      "verifiedAt": "2026-09-24",
+      "verifiedBy": "session_013LENK7WiiY5jb2DzroLwiY"
+    },
+    "start_mcp_authorization": {
+      "route": "/[org]/[ws]/tools/providers",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Providers: “Add a provider” → Authorize with {name} (a registry or custom OAuth server), and Reconnect on an OAuth provider's row, invoke start_mcp_authorization and open the sign-in popup (features/tools/use-provider-oauth.ts, features/tools/provider-auth-actions.ts)",
+      "testid": "tools-import-connect",
+      "proof": "apps/app/src/features/tools/provider-oauth.test.tsx",
+      "verifiedAt": "2026-09-24",
+      "verifiedBy": "session_013LENK7WiiY5jb2DzroLwiY"
+    },
+    "authorize_mcp_server": {
+      "route": "/api/v1/mcp/oauth/callback",
+      "page": "apps/app/src/app/api/v1/mcp/oauth/callback/route.ts",
+      "entry": "The OAuth popup returns to /api/v1/mcp/oauth/callback, which invokes authorize_mcp_server as the viewer and posts the provider back to the Add a provider wizard (features/tools/oauth-callback.ts)",
+      "testid": "tools-import-oauth-waiting",
+      "proof": "apps/app/src/features/tools/oauth-callback.test.ts",
+      "verifiedAt": "2026-09-24",
+      "verifiedBy": "session_013LENK7WiiY5jb2DzroLwiY"
+    },
     "remove_org_member": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/page.tsx",

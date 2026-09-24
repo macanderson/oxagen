@@ -12,6 +12,7 @@
 import type {
   KillSwitch,
   KillSwitchKind,
+  McpServer,
   ToolVersion,
 } from "@/data/contracts/tools";
 import { firstParam, routes, type SafePath } from "@/shared/safe-path";
@@ -335,5 +336,88 @@ export function connectionSchemeOf(raw: string): ConnectionScheme {
   return (
     CONNECTION_SCHEME_NAMES.find((scheme) => scheme === raw) ??
     DEFAULT_CONNECTION_SCHEME
+  );
+}
+
+/**
+ * A provider's status light (#4132). Green: it answered its last check and,
+ * for OAuth, holds a live token. Yellow: connected, with something wrong
+ * that does not stop it yet. Red: it cannot be reached or cannot be
+ * authenticated to until someone acts.
+ */
+export type ProviderLight = "green" | "yellow" | "red";
+
+/** Why the light is the colour it is. One reason, the most urgent. */
+export type ProviderLightReason =
+  | "unreachable"
+  | "needsReauth"
+  | "revoked"
+  | "notConnected"
+  | "tokenExpired"
+  | "degraded"
+  | "tokenLapsed"
+  | "unchecked"
+  | "ok";
+
+const LIGHT_OF: Record<ProviderLightReason, ProviderLight> = {
+  unreachable: "red",
+  needsReauth: "red",
+  revoked: "red",
+  notConnected: "red",
+  tokenExpired: "red",
+  degraded: "yellow",
+  tokenLapsed: "yellow",
+  unchecked: "yellow",
+  ok: "green",
+};
+
+/**
+ * The light and its reason, most urgent first: the authorization a person
+ * must renew, then reachability, then what renews on its own.
+ *
+ * An expired access token with a refresh token is yellow, not red: the next
+ * call renews it without a person, but the refresh watcher should already
+ * have, so it is worth a look. Without a refresh token it is red.
+ */
+export function providerLight(
+  server: Pick<McpServer, "healthStatus" | "authorization">,
+  now: number,
+): { light: ProviderLight; reason: ProviderLightReason } {
+  const auth = server.authorization;
+  // A lapsed access token either renews on the next call or waits on a person.
+  const lapsed =
+    auth === null || auth.expiresAt === null || Date.parse(auth.expiresAt) > now
+      ? null
+      : auth.refreshable
+        ? "renews"
+        : "stuck";
+  const reason: ProviderLightReason =
+    auth?.state === "needs_reauth"
+      ? "needsReauth"
+      : auth?.state === "revoked"
+        ? "revoked"
+        : auth?.state === "not_connected"
+          ? "notConnected"
+          : lapsed === "stuck"
+            ? "tokenExpired"
+            : server.healthStatus === "unreachable"
+              ? "unreachable"
+              : server.healthStatus === "degraded"
+                ? "degraded"
+                : lapsed === "renews"
+                  ? "tokenLapsed"
+                  : server.healthStatus === "unknown"
+                    ? "unchecked"
+                    : "ok";
+  return { light: LIGHT_OF[reason], reason };
+}
+
+/** True when the fix is a person signing in again: every red OAuth reason. */
+export function needsReconnect(reason: ProviderLightReason): boolean {
+  return (
+    reason === "needsReauth" ||
+    reason === "revoked" ||
+    reason === "notConnected" ||
+    reason === "tokenExpired"
   );
 }

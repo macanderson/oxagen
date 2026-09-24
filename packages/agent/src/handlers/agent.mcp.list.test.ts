@@ -7,10 +7,17 @@ const mocks = vi.hoisted(() => ({
   selectMock: vi.fn(),
 }));
 
-mocks.whereMock.mockImplementation(
-  async (): Promise<unknown> => mocks.selectResult() as unknown,
-);
-mocks.fromMock.mockReturnValue({ where: mocks.whereMock });
+// Rows written before #4132's joins carry no listing or credential columns;
+// the join leaves them null and the static strategy stands.
+mocks.whereMock.mockImplementation(async (): Promise<unknown> => {
+  const rows = mocks.selectResult() as Record<string, unknown>[] | undefined;
+  return rows?.map((row) => ({ authStrategy: "none", ...row }));
+});
+const joined = {
+  leftJoin: (): unknown => joined,
+  where: mocks.whereMock,
+};
+mocks.fromMock.mockReturnValue(joined);
 mocks.selectMock.mockReturnValue({ from: mocks.fromMock });
 
 const fakeMcpListDb = { select: mocks.selectMock };
@@ -30,6 +37,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 
 import {
   agentMcpListHandler,
+  authorizationOf,
   McpServerRowInvalidError,
 } from "./agent.mcp.list";
 import { agentMcpList } from "@oxagen/oxagen/contracts/agent.mcp.list";
@@ -156,5 +164,89 @@ describe("agent.mcp.list handler", () => {
     const beforeWhere = mocks.whereMock.mock.calls.length;
     await agentMcpListHandler({}, CTX);
     expect(mocks.whereMock.mock.calls.length - beforeWhere).toBe(1);
+  });
+
+  describe("authorization (#4132)", () => {
+    const base = {
+      publicId: "mcs_1",
+      authStrategy: "bearer",
+      listingAuthKind: "oauth",
+      iconUrl: "https://linear.app/favicon.ico",
+      credentialStatus: "active",
+      hasAccessToken: true,
+      hasRefreshToken: true,
+      expiresAt: new Date("2026-09-25T00:00:00Z"),
+      lastRefreshedAt: new Date("2026-09-24T00:00:00Z"),
+    };
+
+    it("reports a held token as connected, with its expiry and refresh", () => {
+      expect(authorizationOf(base)).toEqual({
+        authKind: "oauth",
+        iconUrl: "https://linear.app/favicon.ico",
+        authorization: {
+          state: "connected",
+          expiresAt: "2026-09-25T00:00:00.000Z",
+          refreshable: true,
+          lastRefreshedAt: "2026-09-24T00:00:00.000Z",
+        },
+      });
+    });
+
+    it("reports needs_reauth and revoked as stored, whatever token is held", () => {
+      expect(
+        authorizationOf({ ...base, credentialStatus: "needs_reauth" })
+          .authorization?.state,
+      ).toBe("needs_reauth");
+      expect(
+        authorizationOf({ ...base, credentialStatus: "revoked" }).authorization
+          ?.state,
+      ).toBe("revoked");
+    });
+
+    it("reports an OAuth listing with no token as not connected", () => {
+      const out = authorizationOf({
+        ...base,
+        credentialStatus: null,
+        hasAccessToken: null,
+        hasRefreshToken: null,
+        expiresAt: null,
+        lastRefreshedAt: null,
+      });
+      expect(out.authorization).toEqual({
+        state: "not_connected",
+        expiresAt: null,
+        refreshable: false,
+        lastRefreshedAt: null,
+      });
+    });
+
+    it("reports a static strategy with no authorization, and drops a non-https icon", () => {
+      expect(
+        authorizationOf({
+          ...base,
+          listingAuthKind: null,
+          authStrategy: "header",
+          iconUrl: "http://example.com/i.png",
+        }),
+      ).toEqual({ authKind: "header", iconUrl: null, authorization: null });
+    });
+
+    it("maps a joined OAuth row through the handler", async () => {
+      mocks.selectResult.mockReturnValueOnce([
+        {
+          ...base,
+          name: "Linear",
+          transportType: "streamable-http",
+          endpointUrl: "https://mcp.linear.app/mcp",
+          healthStatus: "healthy",
+          lastHealthcheckAt: null,
+          discoveredTools: ["list_issues"],
+        },
+      ]);
+      const result = await agentMcpListHandler({}, CTX);
+      expect(
+        agentMcpList.output.parse(result).servers[0]?.authorization?.state,
+      ).toBe("connected");
+    });
   });
 });
