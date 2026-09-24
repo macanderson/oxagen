@@ -45,6 +45,7 @@ const {
   haltRun,
   readRunExport,
   readTranscriptPage,
+  sealRun,
   setRunEnrichment,
   steerRun,
   summarizeRun,
@@ -95,6 +96,59 @@ beforeEach(() => {
   requireViewer.mockReset();
   requireViewer.mockResolvedValue(ctx);
   captureError.mockReset();
+});
+
+describe("sealRun", () => {
+  const answer = {
+    runId: RUN,
+    sealedAt: "2026-09-24T12:00:00.000Z",
+    sessionsSealed: 2,
+    kill: { status: "queued" as const, commandId: "tcm_kill1" },
+  };
+
+  it("seals this run with the trimmed reason and answers what seal_run did", async () => {
+    invoke.mockResolvedValue(answer);
+    expect(
+      await sealRun("acme", "core-platform", RUN, "  finished at noon  "),
+    ).toEqual({ ok: true, value: answer });
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    expect(invoke).toHaveBeenCalledWith(
+      "seal_run",
+      { runId: RUN, reason: "finished at noon" },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("sends no reason when the field was left blank, rather than an empty one", async () => {
+    invoke.mockResolvedValue(answer);
+    await sealRun("acme", "core-platform", RUN, "   ");
+    expect(invoke.mock.calls[0]?.[1]).toEqual({ runId: RUN });
+  });
+
+  it("refuses a reason past the contract's ceiling before the kernel runs (negative)", async () => {
+    expect(
+      await sealRun(
+        "acme",
+        "core-platform",
+        RUN,
+        "x".repeat(COMMAND_REASON_MAX + 1),
+      ),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "command_reason",
+      field: "reason",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("returns a denial as denied (negative)", async () => {
+    invoke.mockRejectedValue(denied("seal_run"));
+    expect(await sealRun("acme", "core-platform", RUN, "done")).toMatchObject({
+      ok: false,
+      reason: "denied",
+    });
+  });
 });
 
 describe("haltRun", () => {

@@ -71,6 +71,7 @@ vi.mock("./actions", () => ({
   summarizeRun: vi.fn(),
   exportRun: vi.fn(),
   readRunExport: vi.fn(),
+  sealRun: vi.fn(),
 }));
 vi.mock("next-intl/server", async () => {
   const { translator } = await import("@/test/intl");
@@ -2226,6 +2227,96 @@ describe("the work", () => {
       within(changes.getByTestId("run-changed-files")).getAllByRole("listitem"),
     ).toHaveLength(9);
     expect(changes.getByText("2 more in the outputs")).toBeTruthy();
+  });
+});
+
+describe("sealing a run (ADR-168)", () => {
+  const actions = () =>
+    [...screen.getByTestId("run-actions").querySelectorAll("[data-testid]")]
+      .map((el) => el.getAttribute("data-testid"))
+      .filter((id) => id === "run-seal" || id === "run-export");
+
+  it("offers Seal run on a live wrapped run, before Export, which stays last", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({ status: "live", sealedAt: null, endedAt: null }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(actions()).toEqual(["run-seal", "run-export"]);
+  });
+
+  it("offers Seal run on a run Oxagen closed for silence, which is not final, and holds Export until a final seal", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({ outcome: "unknown", sealSource: "idle_timeout" }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-seal")).toBeEnabled();
+    // export_run refuses an idle-closed run, so the page does not offer it.
+    const exportButton = screen.getByTestId("run-export");
+    expect(exportButton).toBeDisabled();
+    expect(exportButton).toHaveAttribute("data-reason", "export-idle");
+    expect(exportButton).toHaveAccessibleDescription(
+      "Oxagen closed this run for silence, and its next event would reopen it. A signed bundle waits for a final seal: the host's own, or Seal run.",
+    );
+  });
+
+  it("offers Export on a run a person sealed, which is final (negative)", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({ outcome: "unknown", sealSource: "operator" }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-export")).toBeEnabled();
+  });
+
+  it("offers no seal on a run its host sealed, or on a ledger run (negative)", async () => {
+    await renderRun({
+      detail: ok(runDetail({ run: runRow({ sealSource: "agent_stop" }) })),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.queryByTestId("run-seal")).toBeNull();
+    cleanup();
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            id: "arun_7k2m9q",
+            source: "ledger",
+            status: "live",
+            sealedAt: null,
+            endedAt: null,
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.queryByTestId("run-seal")).toBeNull();
+  });
+
+  it("says a person sealed the run, and offers no second seal", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({ outcome: "unknown", sealSource: "operator" }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-sealed-operator")).toHaveTextContent(
+      "sealed by an operator",
+    );
+    expect(screen.queryByTestId("run-ended")).toBeNull();
+    expect(screen.queryByTestId("run-seal")).toBeNull();
   });
 });
 

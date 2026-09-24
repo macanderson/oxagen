@@ -18,3 +18,12 @@ const COMMANDING_WS_ROLES: ReadonlySet<string> = new Set(["owner", "member"]);
 export function canCommandRun(orgRole: string, wsRole: string): boolean {
   return COMMANDING_ORG_ROLES.has(orgRole) || COMMANDING_WS_ROLES.has(wsRole);
 }
+
+/**
+ * Whether this viewer may seal a run (`seal_run`, ADR-168): an organization
+ * Owner or Admin, or the workspace's Owner. A workspace Member can stop an
+ * agent with Cancel, but sealing also closes the record, so it is not theirs.
+ */
+export function canSealRun(orgRole: string, wsRole: string): boolean {
+  return COMMANDING_ORG_ROLES.has(orgRole) || wsRole === "owner";
+}

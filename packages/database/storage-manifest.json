@@ -3130,6 +3130,16 @@
       "writes": []
     },
     {
+      "domain": "run",
+      "name": "seal_run",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "command",
       "name": "search_command_menu",
       "reads": [],
@@ -4008,7 +4018,7 @@
       "writes": []
     }
   ],
-  "contentHash": "32ae84c83e3d70fee340c4615840693faba1ab10f0dfbf78bab2a86818fa1144",
+  "contentHash": "736d8792fd0bfa62e5772956f8a9ce6ea61e432992fa4f0141f5fd7e88f197e7",
   "domains": [
     {
       "name": "agent",

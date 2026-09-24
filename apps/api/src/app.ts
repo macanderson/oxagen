@@ -304,6 +304,7 @@ import { runForkRoute } from "./routes/v1/run.fork";
 import { runExportRoute } from "./routes/v1/run.export";
 import { runExportGetRoute } from "./routes/v1/run.export.get";
 import { runExportDownloadRoute } from "./routes/v1/run.export.download";
+import { runSealRoute } from "./routes/v1/run.seal";
 import { runSummarizeRoute } from "./routes/v1/run.summarize";
 import { agentListRoute } from "./routes/v1/agent.list";
 import { agentGetRoute } from "./routes/v1/agent.get";
@@ -759,6 +760,9 @@ orgScoped.route("/runs/bisect", runBisectRoute);
 orgScoped.route("/runs/fork", runForkRoute);
 orgScoped.route("/runs/export", runExportRoute);
 orgScoped.route("/runs/export-status", runExportGetRoute);
+// An operator's seal of a wrapped run, with a kill queued for its agent
+// (seal_run, ADR-168).
+orgScoped.route("/runs/seal", runSealRoute);
 orgScoped.route("/runs/summarize", runSummarizeRoute);
 // Spend (ADR-060): the rollup by level, the drill, waste, the statement, one
 // run's cost and the price book. All noBillingGate reads of Postgres rollups.

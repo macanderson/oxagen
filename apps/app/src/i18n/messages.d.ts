@@ -6265,6 +6265,7 @@ type Messages = {
         noPrincipal: string;
         runNotFound: string;
         noConnectionPoint: string;
+        ledgerRun: string;
         runSealed: string;
         runNotSealed: string;
         digestOnly: string;
@@ -6331,6 +6332,32 @@ type Messages = {
         noPromptCarrier: string;
       };
     };
+    seal: {
+      open: string;
+      title: string;
+      body: string;
+      killBody: string;
+      killBlocked: {
+        runSealed: string;
+        noHost: string;
+        hostRevoked: string;
+        hostOffline: string;
+      };
+      reasonLabel: string;
+      reasonHelp: string;
+      confirm: string;
+      pending: string;
+      sealed: string;
+      killQueued: string;
+      killNotSent: {
+        runSealed: string;
+        noHost: string;
+        hostRevoked: string;
+        hostOffline: string;
+      };
+      reread: string;
+      roleReason: string;
+    };
     record: {
       reread: string;
       summarize: {
@@ -6380,6 +6407,7 @@ type Messages = {
           other: string;
         };
         needsSeal: string;
+        needsFinalSeal: string;
       };
     };
     gaps: string;
@@ -6609,6 +6637,7 @@ type Messages = {
       sealed: string;
       closedIdle: string;
       closedIdleWhy: string;
+      sealedByOperator: string;
       ended: string;
       sealNotRecorded: string;
       enrolledBy: string;

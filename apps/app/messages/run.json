@@ -531,6 +531,7 @@
         "noPrincipal": "This call carries no principal Oxagen can act as.",
         "runNotFound": "This run is not in this workspace.",
         "noConnectionPoint": "A ledger run has no connection point to carry a command.",
+        "ledgerRun": "A ledger run seals when its producer seals it. Cancel it to stop its evidence ingress.",
         "runSealed": "This run has ended, so nothing can receive the command.",
         "runNotSealed": "This run is still live. Both of these need a complete record, so they run after the seal.",
         "digestOnly": "This recording kept digests and no bodies, so there is nothing for a model to read.",
@@ -597,6 +598,32 @@
         "noPromptCarrier": "This agent reads steering text only when a session starts, so a steer cannot reach this run. Pause, resume and cancel still can."
       }
     },
+    "seal": {
+      "open": "Seal run",
+      "title": "Seal {run}",
+      "body": "Oxagen seals the run now and records that a person sealed it. The seal is final: frames that arrive later are kept as evidence, and they do not reopen the run.",
+      "killBody": "Oxagen also queues a kill for the agent on its host. The host stops the agent's process and refuses its next tool call when it collects the command.",
+      "killBlocked": {
+        "runSealed": "The run has already ended, so no kill can be sent. The run is sealed anyway.",
+        "noHost": "The run names no enrolled host, so no kill can be sent. The run is sealed anyway.",
+        "hostRevoked": "The run's host was revoked and takes no commands, so no kill can be sent. The run is sealed anyway.",
+        "hostOffline": "The run's host has not checked in for five minutes, so a kill would go unread. The run is sealed anyway."
+      },
+      "reasonLabel": "Reason",
+      "reasonHelp": "Recorded with the kill command when one is sent.",
+      "confirm": "Seal the run",
+      "pending": "Sealing",
+      "sealed": "The run is sealed.",
+      "killQueued": "The kill is queued. The host carries it out when it next checks for commands.",
+      "killNotSent": {
+        "runSealed": "No kill was sent, because the run had already ended.",
+        "noHost": "No kill was sent, because the run names no enrolled host.",
+        "hostRevoked": "No kill was sent, because the run's host was revoked.",
+        "hostOffline": "No kill was sent, because the run's host has not checked in for five minutes."
+      },
+      "reread": "Re-read the run",
+      "roleReason": "Sealing a run needs an organization Owner or Admin role, or the workspace Owner role."
+    },
     "record": {
       "reread": "Re-read the run",
       "summarize": {
@@ -645,7 +672,8 @@
           "denied": "Reading an export needs an organization Owner or Admin role.",
           "other": "Oxagen answered {code} when asked for this export."
         },
-        "needsSeal": "A signed bundle is built from the sealed record. Export this run once it seals."
+        "needsSeal": "A signed bundle is built from the sealed record. Export this run once it seals.",
+        "needsFinalSeal": "Oxagen closed this run for silence, and its next event would reopen it. A signed bundle waits for a final seal: the host's own, or Seal run."
       }
     },
     "gaps": "The seal recorded these gaps in the record:",
@@ -875,6 +903,7 @@
       "sealed": "sealed",
       "closedIdle": "closed",
       "closedIdleWhy": "no event for 12 hours",
+      "sealedByOperator": "sealed by an operator",
       "ended": "ended",
       "sealNotRecorded": "ended with no seal recorded",
       "enrolledBy": "enrolled the host",

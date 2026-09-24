@@ -36,6 +36,7 @@ import type { RunMetrics } from "./metrics";
 import { ExportAction } from "./record-actions";
 import { ReplayActions } from "./replay-actions";
 import { RunControls } from "./run-controls";
+import { SealRunAction } from "./seal-run";
 import type { Place } from "./tab-props";
 
 /** `.b.b-q`: the quiet pill every strip chip is. */
@@ -523,6 +524,13 @@ function When({ run }: { run: RunRow }) {
           <time dateTime={run.sealedAt}>{when(run.sealedAt)}</time> (
           {t("closedIdleWhy")})
         </span>
+      ) : run.sealSource === "operator" && run.sealedAt != null ? (
+        // A person sealed it (ADR-168); the host never said it ended.
+        <span data-testid="run-sealed-operator">
+          {" · "}
+          {t("sealedByOperator")}{" "}
+          <time dateTime={run.sealedAt}>{when(run.sealedAt)}</time>
+        </span>
       ) : run.endedAt != null ? (
         <span data-testid="run-ended">
           {" · "}
@@ -707,11 +715,26 @@ export function RunHeader({
               wsRole={wsRole}
             />
           )}
+          {/* A wrapped run the control plane still reads as live, or closed
+              only for silence, can be sealed by a person (ADR-168). A
+              ledger run seals when its producer does. */}
+          {run.source === "tacho" &&
+          (run.status === "live" || run.sealSource === "idle_timeout") ? (
+            <SealRunAction
+              org={place.org}
+              ws={place.ws}
+              runId={run.id}
+              commandBlock={run.commandBlock ?? null}
+              orgRole={orgRole}
+              wsRole={wsRole}
+            />
+          ) : null}
           <ExportAction
             org={place.org}
             ws={place.ws}
             runId={run.id}
             sealed={sealed}
+            closedIdle={run.sealSource === "idle_timeout"}
             orgRole={orgRole}
           />
         </div>

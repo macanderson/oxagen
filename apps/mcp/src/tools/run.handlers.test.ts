@@ -1,10 +1,11 @@
 // run.handlers.test.ts — handler invocation tests for the run recorder tools
 // (#2952, ADR-058): get_run_frame_body, get_run_transcript, get_run_chain,
-// bisect_runs, get_run_export.
+// bisect_runs, get_run_export, and seal_run (#4073, ADR-168).
 // fork_run, export_run and summarize_run check an org role in the handler and
-// an MCP context carries no user, so they have no MCP tool. get_run_export
-// checks the same role but its contract declares the mcp surface; the handler
-// resolves the acting user from the API key, and refuses when it cannot.
+// an MCP context carries no user, so they have no MCP tool. get_run_export and
+// seal_run check a role too but their contracts declare the mcp surface; the
+// handler resolves the acting user from the API key, and refuses when it
+// cannot.
 //
 // Pattern: vi.mock the kernel `invoke` and the context seam `buildContext` so
 // each default-export handler runs without a live runtime. Each tool asserts:
@@ -46,6 +47,10 @@ import runExportGetTool, {
   schema as exportGetSchema,
   metadata as exportGetMetadata,
 } from "./run.export.get";
+import runSealTool, {
+  schema as sealSchema,
+  metadata as sealMetadata,
+} from "./run.seal";
 
 const fakeCtx = {
   orgId: "org_test",
@@ -77,6 +82,8 @@ interface ToolCase {
   metadata: { name: string; annotations?: Record<string, unknown> };
   fields: string[];
   readOnly: boolean;
+  /** True for a tool whose effect cannot be undone; false when absent. */
+  destructive?: boolean;
   args: Record<string, unknown>;
   validOutput: Record<string, unknown>;
   /** An output the contract's schema refuses. */
@@ -233,6 +240,30 @@ const CASES: ToolCase[] = [
       download: null,
     },
   },
+  {
+    name: "seal_run",
+    handler: runSealTool,
+    schema: sealSchema,
+    metadata: sealMetadata,
+    fields: ["runId", "reason"],
+    readOnly: false,
+    // The seal is final and the kill ends the agent's process.
+    destructive: true,
+    args: { runId: TACHO_ID, reason: "the agent answered an hour ago" },
+    validOutput: {
+      runId: TACHO_ID,
+      sealedAt: "2026-09-24T16:00:00.000Z",
+      sessionsSealed: 1,
+      kill: { status: "queued", commandId: "tcm_0a1b2c3d" },
+    },
+    // A seal that sealed no chain: the contract counts at least the root.
+    invalidOutput: {
+      runId: TACHO_ID,
+      sealedAt: "2026-09-24T16:00:00.000Z",
+      sessionsSealed: 0,
+      kill: { status: "not_sent", reason: "host_offline" },
+    },
+  },
 ];
 
 for (const tool of CASES) {
@@ -241,7 +272,9 @@ for (const tool of CASES) {
       expect(Object.keys(tool.schema).sort()).toEqual([...tool.fields].sort());
       expect(tool.metadata.name).toBe(tool.name);
       expect(tool.metadata.annotations?.readOnlyHint).toBe(tool.readOnly);
-      expect(tool.metadata.annotations?.destructiveHint).toBe(false);
+      expect(tool.metadata.annotations?.destructiveHint).toBe(
+        tool.destructive ?? false,
+      );
     });
 
     it(`calls buildContext then invoke with '${tool.name}', the args and surface 'mcp'`, async () => {

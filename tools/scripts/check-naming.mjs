@@ -99,6 +99,9 @@ const ACTIONS = new Set([
   "resume",
   "suspend", // pairs with "resume": suspend_agent (MC spec App. E, ADR-057)
   "retire", // retire_agent: an identity is retired, never deleted (ADR-057)
+  // seal_run: an operator closes a wrapped run's record for good (ADR-168).
+  // Not "stop" or "cancel": those end the agent, and this ends the record.
+  "seal",
   "pause",
   "trigger",
   "dispatch",
