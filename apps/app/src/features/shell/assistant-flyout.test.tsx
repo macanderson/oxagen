@@ -174,6 +174,21 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("AssistantFlyout", () => {
+  it("is headed by the Stella wordmark, which names the dialog", async () => {
+    const { flyout } = await openFlyout();
+
+    const wordmark = screen.getByTestId("assistant-wordmark");
+    expect(wordmark.tagName.toLowerCase()).toBe("svg");
+    // The letters take the panel's colour and the asterisk stays gold, so the
+    // app's theme switch, not the operating system's, decides how it reads.
+    const [letters, asterisk] = Array.from(wordmark.querySelectorAll("path"));
+    expect(letters?.getAttribute("fill")).toBe("currentColor");
+    expect(asterisk?.getAttribute("fill")).toBe("#D4AF37");
+    expect(screen.getByRole("dialog", { name: "Stella" })).toBe(flyout);
+    expect(flyout).not.toHaveTextContent("Assistant");
+    await expectNoAxe(flyout);
+  });
+
   it("asks ask_assistant for the workspace the person is standing in, and shows the reply", async () => {
     const { user } = await openFlyout();
     await ask(user, "what is live?");
@@ -798,13 +813,13 @@ describe("AssistantFlyout", () => {
       await user.click(launcher);
       const flyout = screen.getByTestId("assistant-flyout");
       expect(document.activeElement).toBe(
-        screen.getByRole("button", { name: "Close the assistant" }),
+        screen.getByRole("button", { name: "Close Stella" }),
       );
 
       if (close === "escape") await user.keyboard("{Escape}");
       else
         await user.click(
-          screen.getByRole("button", { name: "Close the assistant" }),
+          screen.getByRole("button", { name: "Close Stella" }),
         );
 
       expect(flyout).toHaveAttribute("inert");
@@ -828,7 +843,7 @@ describe("AssistantFlyout", () => {
       screen.getByRole("button", { name: "open assistant" }).click();
     });
     expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: "Close the assistant" }),
+      screen.getByRole("button", { name: "Close Stella" }),
     );
     opener.remove();
 
@@ -920,7 +935,7 @@ describe("AssistantFlyout", () => {
 
     expect(launcher).toHaveAttribute("inert");
     expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: "Close the assistant" }),
+      screen.getByRole("button", { name: "Close Stella" }),
     );
     // And Escape is heard again, because focus is inside the panel.
     await user.keyboard("{Escape}");
@@ -963,7 +978,7 @@ describe("AssistantFlyout", () => {
     });
     await user.click(launcher);
     expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: "Close the assistant" }),
+      screen.getByRole("button", { name: "Close Stella" }),
     );
 
     launcher.disabled = true;

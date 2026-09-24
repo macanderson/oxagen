@@ -91,7 +91,7 @@
 // container renders on every pass and only its contents are conditional: a
 // polite region inserted in the same commit as its own text is announced
 // unreliably.
-import { CircleAlert, Send, Sparkles } from "lucide-react";
+import { CircleAlert, Send } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
@@ -116,6 +116,7 @@ import { useShellState } from "./shell-state";
 import { routes } from "@/shared/safe-path";
 import { linkText } from "@/ui/control-styles";
 import { SafeLink, useNavigate } from "@/ui/navigation";
+import { StellaIcon, StellaWordmark } from "@/ui/stella-mark";
 
 type Entry =
   | { kind: "asked"; id: string; text: string }
@@ -591,11 +592,21 @@ export function AssistantFlyout() {
       }`}
     >
       <div className="flex flex-none items-center gap-2.5 border-b border-border px-4 py-3">
+        {/*
+          The heading is the Stella wordmark. Its name comes from the mark's
+          title, so the dialog is still labelled "Stella" to a screen reader,
+          and the letters take the panel's text colour, so the app's own theme
+          switch reaches them (`@/ui/stella-mark`).
+        */}
         <h2
           id={`${ASSISTANT_PANEL_ID}-title`}
-          className="text-sm font-semibold"
+          className="flex items-center text-app-panel-fg"
         >
-          {t("label")}
+          <StellaWordmark
+            title={t("label")}
+            className="h-[18px] w-auto"
+            data-testid="assistant-wordmark"
+          />
         </h2>
         <button
           ref={closeRef}
@@ -748,7 +759,7 @@ export function AssistantFlyout() {
             data-testid="assistant-needs-workspace"
             className="flex items-start gap-2 text-[13px] text-muted-foreground"
           >
-            <Sparkles aria-hidden="true" className="mt-0.5 size-4 flex-none" />
+            <StellaIcon className="mt-0.5 size-4 flex-none" />
             <span>{t("needsWorkspace")}</span>
           </p>
         )}
