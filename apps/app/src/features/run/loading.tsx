@@ -8,12 +8,14 @@
 // of the page would move every element once the reads land, and a person who
 // has already started reading the header would lose their place.
 //
-// Next replaces page.tsx's whole return value with this default export while
-// the route segment suspends, `<main id="main">` and the page header
-// included, so this reproduces both: the skip-to-content link keeps a
-// target, and the frame does not jump once the read finishes and the real
-// page takes over the same container. The run's id is not known here, so the
-// h1 says "Run" until the page lands.
+// Next renders this default export as the route segment's Suspense fallback,
+// so it reproduces the page's container and header: the frame does not jump
+// once the read finishes and the real page takes over. The container is not
+// the page's main landmark: while the page streams in, this fallback and the page
+// are in the document together, and two main#main elements gave the skip
+// link two targets and failed page-load's strict locator (Billing's fallback,
+// 2026-09-24; arch/loading-landmarks.test.ts). The run's id is not known
+// here, so the h1 says "Run" until the page lands.
 import { useTranslations } from "next-intl";
 import { panel } from "@/ui/control-styles";
 import { PageHeader } from "@/ui/page-header";
@@ -32,8 +34,8 @@ const bar = "block animate-pulse rounded bg-muted motion-reduce:animate-none";
 export function RunLoading() {
   const t = useTranslations();
   return (
-    <main
-      id="main"
+    <div
+      data-testid="run-loading-frame"
       className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-10"
     >
       <PageHeader eyebrow={t("pages.run")} title={t("pages.run")} />
@@ -98,6 +100,6 @@ export function RunLoading() {
           </div>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

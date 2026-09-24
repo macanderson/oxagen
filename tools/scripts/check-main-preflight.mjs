@@ -7,10 +7,10 @@
  * can never be evicted (#2730) — a queued run is protected, but nothing
  * protects a run that has already STARTED from doing 60+ minutes of `checks`
  * and `test` work for a commit that stopped mattering the moment a later
- * commit merged behind it. `deploy-web` / `deploy-node` already refuse to
- * ship a stale commit (check-deploy-tip.mjs, #2874), so that work's only
- * output was ever a green checkmark nobody needed — but it still holds a
- * runner for the full run, and under sustained merge pressure the queue of
+ * commit merged behind it. The later commit's run checks and ships
+ * everything this one would (check-deploy-tip.mjs ships any commit newer
+ * than what is live), so that work buys nothing, yet it holds a runner for
+ * the full run, and under sustained merge pressure the queue of
  * full runs grows without bound: on 2026-09-21 `gh run list` showed 15
  * queued `pipeline.yml` runs on main behind 2 in progress, each costing the
  * full ~75-minute gate.

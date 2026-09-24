@@ -2506,21 +2506,23 @@ describe("loading", () => {
     await expectNoAxe(container);
   });
 
-  it("keeps the page's own main container and header, rather than exporting the skeleton alone", () => {
+  it("keeps the page's frame and header, and leaves main#main to the streamed page", () => {
     render(
       <IntlProvider>
         <RunLoading />
       </IntlProvider>,
     );
-    // Next swaps page.tsx's whole return value for this default export while
-    // the route suspends, so the skip-to-content target and the page frame
-    // have to come from here too, or a stranger's tab-order loses its anchor
-    // and the layout jumps once the real page takes the same container.
-    const main = document.getElementById("main");
-    expect(main).not.toBeNull();
-    expect(main?.tagName).toBe("MAIN");
-    expect(main).toContainElement(screen.getByRole("heading", { name: "Run" }));
-    expect(main).toContainElement(screen.getByRole("status"));
+    // The frame comes from here, so the layout does not jump once the real
+    // page lands. main#main does not: while the page streams in, this
+    // fallback and the page are in the document together, and only the page
+    // may own the landmark (arch/loading-landmarks.test.ts).
+    const frame = screen.getByTestId("run-loading-frame");
+    expect(frame).toContainElement(
+      screen.getByRole("heading", { name: "Run" }),
+    );
+    expect(frame).toContainElement(screen.getByRole("status"));
+    expect(document.getElementById("main")).toBeNull();
+    expect(screen.queryByRole("main")).toBeNull();
   });
 });
 
