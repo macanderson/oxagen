@@ -12,6 +12,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { ConnectDirectoryDialog, WorkingCopies } from "./working-copies";
 
@@ -54,7 +55,13 @@ function Harness() {
   );
 }
 
-afterEach(cleanup);
+afterEach(async () => {
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
+});
 
 describe("Working copies", () => {
   it("draws Connect a directory as the small secondary when the tab does not hold the gold", () => {
