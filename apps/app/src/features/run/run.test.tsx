@@ -691,8 +691,8 @@ describe("header", () => {
     });
     expect(screen.getByTestId("run-status")).toHaveTextContent(/^paused$/);
     expect(screen.getByTestId("run-paused")).toHaveTextContent("Paused.");
-    // Resume sits with Pause and Cancel in the header; the banner only says
-    // why the run is waiting.
+    // Resume takes Pause's place in the header, beside Cancel; the banner only
+    // says why the run is waiting.
     expect(screen.getByTestId("run-resume")).toHaveTextContent("Resume run");
     expect(screen.getAllByRole("button", { name: /resume/i })).toHaveLength(1);
     expect(screen.getByTestId("run-paused").querySelector("button")).toBeNull();
@@ -991,14 +991,81 @@ describe("header", () => {
 });
 
 describe("controls", () => {
-  it("draws pause, resume, steer and cancel on a live wrapped run", async () => {
+  it("draws pause, steer and cancel on a live wrapped run, and no Resume beside Pause", async () => {
     await renderRun({
       detail: ok(runDetail({ run: runRow({ status: "live" }) })),
       transcript: ok(runTranscript()),
     });
-    for (const command of ["pause", "resume", "steer", "cancel"]) {
+    for (const command of ["pause", "steer", "cancel"]) {
       expect(screen.getByTestId(`run-${command}`)).not.toBeDisabled();
     }
+    expect(screen.queryByTestId("run-resume")).toBeNull();
+  });
+
+  // #4112: the host applied a pause, so the row reads paused and the header
+  // says so, offers Resume in Pause's place, and names what a session pause
+  // holds.
+  it("reads a paused wrapped run as paused and offers Resume alone", async () => {
+    const { container } = await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            status: "live",
+            sealedAt: null,
+            source: "tacho",
+            ingressPaused: true,
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-status")).toHaveTextContent(/^paused$/);
+    expect(screen.getByTestId("run-resume")).not.toBeDisabled();
+    expect(screen.getByTestId("run-resume")).toHaveTextContent("▶ Resume run");
+    expect(screen.queryByTestId("run-pause")).toBeNull();
+    for (const command of ["steer", "cancel"]) {
+      expect(screen.getByTestId(`run-${command}`)).not.toBeDisabled();
+    }
+    const banner = screen.getByTestId("run-paused");
+    expect(banner).toHaveTextContent("refuses this agent's tool calls");
+    expect(banner).not.toHaveTextContent("Evidence ingress");
+    await expectNoAxe(container);
+  });
+
+  it("names evidence ingress in a paused ledger run's banner", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            status: "live",
+            sealedAt: null,
+            source: "ledger",
+            ingressPaused: true,
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    const banner = screen.getByTestId("run-paused");
+    expect(banner).toHaveTextContent("Evidence ingress is paused");
+    expect(banner).not.toHaveTextContent("tool calls");
+  });
+
+  it("draws Resume alone, disabled, on a paused wrapped run a viewer cannot command (negative)", async () => {
+    await renderRun(
+      {
+        detail: ok(
+          runDetail({
+            run: runRow({ status: "live", ingressPaused: true }),
+          }),
+        ),
+        transcript: ok(runTranscript()),
+      },
+      { viewer: viewerCtx },
+    );
+    expect(screen.getByTestId("run-resume")).toBeDisabled();
+    expect(screen.queryByTestId("run-pause")).toBeNull();
+    expect(screen.getByTestId("role-no-control")).toBeTruthy();
   });
 
   it("disables only Steer on a live run whose harness carries no mid-session prompt", async () => {
@@ -1011,7 +1078,7 @@ describe("controls", () => {
       transcript: ok(runTranscript()),
     });
     expect(screen.getByTestId("run-steer")).toBeDisabled();
-    for (const command of ["pause", "resume", "cancel"]) {
+    for (const command of ["pause", "cancel"]) {
       expect(screen.getByTestId(`run-${command}`)).not.toBeDisabled();
     }
   });
@@ -1050,7 +1117,6 @@ describe("controls", () => {
       transcript: ok(runTranscript()),
     });
     expect(screen.getByTestId("run-pause")).toHaveTextContent("❙❙ Pause run");
-    expect(screen.getByTestId("run-resume")).toHaveTextContent("▶ Resume run");
     expect(screen.getByTestId("run-cancel").className).toContain(
       "text-error-ink",
     );

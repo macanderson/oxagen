@@ -7,7 +7,14 @@
 // queued and prints the command ids; it never says the run stopped. A refusal
 // names the handler's own reason and leaves the dialog open with nothing
 // changed.
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
@@ -41,12 +48,14 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace, refresh }),
 }));
 
-const { RunControls } = await import("./run-controls");
+const { HALT_FOLLOW_EVERY_MS, HALT_FOLLOW_READS, RunControls } = await import(
+  "./run-controls"
+);
 const { ExportAction, SummarizeAction } = await import("./record-actions");
 
 const RUN = "tse_7k2m9q";
 
-function renderControls() {
+function renderControls({ paused = false }: { paused?: boolean } = {}) {
   return render(
     <IntlProvider>
       <RunControls
@@ -56,6 +65,7 @@ function renderControls() {
         status="live"
         source="tacho"
         enforcementTier="harness"
+        ingressPaused={paused}
         orgRole="member"
         wsRole="member"
       />
@@ -77,7 +87,10 @@ beforeEach(() => {
   }
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 describe("run controls", () => {
   it("queues a pause with the reason typed and prints the command ids, never that the run stopped", async () => {
@@ -237,9 +250,11 @@ describe("run controls", () => {
     expect(screen.getByTestId("steer-no-control")).toHaveTextContent(
       "Pause, resume and cancel still can.",
     );
-    for (const command of ["pause", "resume", "cancel"]) {
+    for (const command of ["pause", "cancel"]) {
       expect(screen.getByTestId(`run-${command}`)).toBeEnabled();
     }
+    // A running run offers Pause, not Resume beside it (#4112).
+    expect(screen.queryByTestId("run-resume")).toBeNull();
     await user.click(screen.getByTestId("run-steer"));
     expect(screen.queryByLabelText("What to tell the agent")).toBeNull();
     await user.click(screen.getByTestId("run-pause"));
@@ -284,7 +299,7 @@ describe("run controls", () => {
   it("names a write that threw before it answered rather than falling silent (negative)", async () => {
     haltRun.mockRejectedValue(new Error("socket hang up"));
     const user = userEvent.setup();
-    renderControls();
+    renderControls({ paused: true });
     await user.click(screen.getByTestId("run-resume"));
     await user.click(screen.getByRole("button", { name: "Queue the resume" }));
     await waitFor(() => {
@@ -453,9 +468,10 @@ describe("run controls", () => {
         />
       </IntlProvider>,
     );
-    for (const command of ["pause", "resume", "steer", "cancel"]) {
+    for (const command of ["pause", "steer", "cancel"]) {
       expect(screen.getByTestId(`run-${command}`)).toBeDisabled();
     }
+    expect(screen.queryByTestId("run-resume")).toBeNull();
     expect(screen.getByTestId("role-no-control")).toHaveTextContent(
       "workspace Owner or Member role",
     );
@@ -483,7 +499,7 @@ describe("run controls", () => {
         />
       </IntlProvider>,
     );
-    for (const command of ["pause", "resume", "steer", "cancel"]) {
+    for (const command of ["pause", "steer", "cancel"]) {
       expect(screen.getByTestId(`run-${command}`)).not.toBeDisabled();
     }
     expect(screen.queryByTestId("host-no-control")).toBeNull();
@@ -518,7 +534,7 @@ describe("run controls", () => {
           />
         </IntlProvider>,
       );
-      for (const command of ["pause", "resume", "steer", "cancel"]) {
+      for (const command of ["pause", "steer", "cancel"]) {
         expect(screen.getByTestId(`run-${command}`)).toBeDisabled();
       }
       expect(screen.getByTestId("host-no-control")).toHaveTextContent(reason);
@@ -547,6 +563,187 @@ describe("run controls", () => {
     );
     expect(screen.getByTestId("run-pause")).not.toBeDisabled();
     expect(screen.queryByTestId("role-no-control")).toBeNull();
+  });
+});
+
+// #4112: only one of Pause and Resume can apply to a run, so they share one
+// slot. A wrapped run reads paused from the last pause or resume its host
+// applied, so a paused wrapped run offers Resume.
+describe("pause or resume, never both", () => {
+  it.each([
+    ["tacho", false, "pause", "resume"],
+    ["tacho", true, "resume", "pause"],
+    ["ledger", false, "pause", "resume"],
+    ["ledger", true, "resume", "pause"],
+  ] as const)(
+    "a live %s run with paused=%s offers %s and not %s",
+    (source, paused, offered, withheld) => {
+      render(
+        <IntlProvider>
+          <RunControls
+            org="acme"
+            ws="core-platform"
+            runId={source === "ledger" ? "arun_record1" : RUN}
+            status="live"
+            source={source}
+            enforcementTier="harness"
+            ingressPaused={paused}
+            orgRole="owner"
+            wsRole="owner"
+          />
+        </IntlProvider>,
+      );
+      expect(screen.getByTestId(`run-${offered}`)).toBeEnabled();
+      expect(screen.queryByTestId(`run-${withheld}`)).toBeNull();
+      expect(
+        screen.getAllByRole("button", { name: /resume|pause/i }),
+      ).toHaveLength(1);
+      expect(screen.getByTestId("run-cancel")).toBeEnabled();
+    },
+  );
+
+  it("queues a resume on a paused wrapped run", async () => {
+    haltRun.mockResolvedValue({ ok: true, value: { commandIds: ["tcm_r"] } });
+    const user = userEvent.setup();
+    renderControls({ paused: true });
+    expect(screen.getByTestId("run-steer")).toBeEnabled();
+    await user.click(screen.getByTestId("run-resume"));
+    await user.type(screen.getByLabelText("Reason"), "released");
+    await user.click(screen.getByRole("button", { name: "Queue the resume" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("queued-command")).toHaveTextContent("tcm_r");
+    });
+    expect(haltRun).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      RUN,
+      "resume",
+      "released",
+    );
+  });
+
+  it.each([
+    ["a viewer no role admits", { orgRole: "viewer", wsRole: "viewer" }],
+    ["a host that stopped polling", { commandBlock: "host_offline" }],
+  ] as const)(
+    "draws Resume alone in the disabled set of a paused wrapped run, for %s (negative)",
+    (_why, over) => {
+      render(
+        <IntlProvider>
+          <RunControls
+            org="acme"
+            ws="core-platform"
+            runId={RUN}
+            status="live"
+            source="tacho"
+            enforcementTier="harness"
+            ingressPaused
+            orgRole="owner"
+            wsRole="owner"
+            {...over}
+          />
+        </IntlProvider>,
+      );
+      expect(screen.getByTestId("run-resume")).toBeDisabled();
+      expect(screen.queryByTestId("run-pause")).toBeNull();
+      expect(screen.getByTestId("run-steer")).toBeDisabled();
+      expect(screen.getByTestId("run-cancel")).toBeDisabled();
+    },
+  );
+
+  it("draws Resume alone when a paused ledger run's ingress is revoked (negative)", () => {
+    render(
+      <IntlProvider>
+        <RunControls
+          org="acme"
+          ws="core-platform"
+          runId="arun_record1"
+          status="live"
+          source="ledger"
+          enforcementTier="observe"
+          ingressRevoked
+          ingressPaused
+          orgRole="owner"
+          wsRole="owner"
+        />
+      </IntlProvider>,
+    );
+    expect(screen.getByTestId("run-resume")).toBeDisabled();
+    expect(screen.queryByTestId("run-pause")).toBeNull();
+  });
+});
+
+// The pause dialog says the run's status tells when the pause took effect, so
+// the page re-reads the run until it does, rather than waiting on a reload.
+describe("following a queued pause", () => {
+  function wrapped(paused: boolean) {
+    return (
+      <IntlProvider>
+        <RunControls
+          org="acme"
+          ws="core-platform"
+          runId={RUN}
+          status="live"
+          source="tacho"
+          enforcementTier="harness"
+          ingressPaused={paused}
+          orgRole="owner"
+          wsRole="owner"
+        />
+      </IntlProvider>
+    );
+  }
+
+  /** Queue a pause, then close its receipt with Re-read under a fake interval clock. */
+  async function queuePauseAndClose() {
+    haltRun.mockResolvedValue({ ok: true, value: { commandIds: ["tcm_1"] } });
+    const user = userEvent.setup();
+    const view = render(wrapped(false));
+    await user.click(screen.getByTestId("run-pause"));
+    await user.click(screen.getByRole("button", { name: "Queue the pause" }));
+    await screen.findByTestId("queued-command");
+    // Only the interval is faked, so the dialog's own timers still run.
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    fireEvent.click(screen.getByRole("button", { name: "Re-read the run" }));
+    expect(refresh).toHaveBeenCalledTimes(1);
+    return view;
+  }
+
+  function advance(ms: number) {
+    act(() => {
+      vi.advanceTimersByTime(ms);
+    });
+  }
+
+  it("re-reads the run until its status says paused, then stops", async () => {
+    const view = await queuePauseAndClose();
+    advance(HALT_FOLLOW_EVERY_MS);
+    expect(refresh).toHaveBeenCalledTimes(2);
+    // The host applied the pause, and the re-read row says so.
+    view.rerender(wrapped(true));
+    expect(screen.getByTestId("run-resume")).toBeEnabled();
+    expect(screen.queryByTestId("run-pause")).toBeNull();
+    advance(HALT_FOLLOW_EVERY_MS * 5);
+    expect(refresh).toHaveBeenCalledTimes(2);
+  });
+
+  it("stops re-reading after a bounded number of reads when the status never changes (negative)", async () => {
+    await queuePauseAndClose();
+    advance(HALT_FOLLOW_EVERY_MS * (HALT_FOLLOW_READS + 5));
+    expect(refresh).toHaveBeenCalledTimes(1 + HALT_FOLLOW_READS);
+  });
+
+  it("does not follow a cancel, which changes no paused state (negative)", async () => {
+    haltRun.mockResolvedValue({ ok: true, value: { commandIds: ["tcm_c"] } });
+    const user = userEvent.setup();
+    render(wrapped(false));
+    await user.click(screen.getByTestId("run-cancel"));
+    await user.click(screen.getByRole("button", { name: "Cancel the run" }));
+    await screen.findByTestId("queued-command");
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    fireEvent.click(screen.getByRole("button", { name: "Re-read the run" }));
+    advance(HALT_FOLLOW_EVERY_MS * 3);
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 });
 
