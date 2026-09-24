@@ -2425,17 +2425,20 @@ describe("the work", () => {
         "src/release/cut.ts",
       ),
     ).toBeTruthy();
-    // No read carries the base branch or a release, so each row the design
-    // draws says so rather than naming one.
+    // The base is the branch the pull request merges into (#3890). No read
+    // carries a release, so that row says so rather than naming one.
     const rows = changes
       .getAllByRole("term")
       .map((term) => [term.textContent, term.nextElementSibling?.textContent]);
     expect(rows).toEqual(
       expect.arrayContaining([
-        ["Base", "not recorded"],
+        ["Base", "main"],
         ["Release", "not recorded"],
       ]),
     );
+    expect(
+      changes.getByRole("link", { name: "main" }).getAttribute("href"),
+    ).toBe("https://github.com/acme/platform/tree/main");
     await expectNoAxe(container);
   });
 
