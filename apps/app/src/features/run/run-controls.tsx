@@ -27,7 +27,7 @@
 // Re-reading the run refreshes the route the person is on, so the tab, zoom
 // and frames page they were using stay put.
 import { useTranslations } from "next-intl";
-import { type SyntheticEvent, useId, useState } from "react";
+import { type ReactNode, type SyntheticEvent, useId, useState } from "react";
 import {
   acceptsCommands,
   DeliveryMode,
@@ -172,12 +172,12 @@ function CommandDialog({
       <button
         type="button"
         data-testid={`run-${command}`}
-        className={buttonSecondary}
+        className={command === "cancel" ? buttonDanger : buttonSecondary}
         onClick={() => {
           setOpen(true);
         }}
       >
-        {t(`${command}.open`)}
+        <CommandLabel command={command} />
       </button>
       <SheetDialog
         open={open}
@@ -269,12 +269,41 @@ function CommandDialog({
   );
 }
 
+/** Cancel is the one destructive control, drawn in the critical ink. */
+const buttonDanger = `${buttonSecondary} border-error/50 text-error`;
+
+/** The spec's glyphs for pause and resume, hidden from assistive technology. */
+const GLYPH: Partial<Record<Command, string>> = { pause: "❙❙", resume: "▶" };
+
+function CommandLabel({ command }: { command: Command }) {
+  const t = useTranslations("run.commands");
+  // The run page names what it pauses ("Pause run"); a Fleet row keeps the
+  // bare verb, because its row already names the run.
+  const label =
+    command === "pause" || command === "resume"
+      ? t(`${command}.header`)
+      : t(`${command}.open`);
+  const glyph = GLYPH[command];
+  return (
+    <>
+      {glyph === undefined ? null : (
+        <span aria-hidden="true" className="text-[10px]">
+          {glyph}
+        </span>
+      )}
+      {label}
+    </>
+  );
+}
+
 function DisabledControls({
   reason,
   testId,
+  after,
 }: {
   reason: string;
   testId: string;
+  after?: ReactNode;
 }) {
   const t = useTranslations("run.commands");
   return (
@@ -286,11 +315,12 @@ function DisabledControls({
             type="button"
             disabled
             data-testid={`run-${command}`}
-            className={buttonSecondary}
+            className={command === "cancel" ? buttonDanger : buttonSecondary}
           >
-            {t(`${command}.open`)}
+            <CommandLabel command={command} />
           </button>
         ))}
+        {after}
       </div>
       <p
         data-testid={testId}
@@ -313,6 +343,7 @@ export function RunControls({
   ingressPaused = false,
   orgRole,
   wsRole,
+  after,
 }: {
   org: string;
   ws: string;
@@ -325,6 +356,8 @@ export function RunControls({
   ingressPaused?: boolean;
   orgRole: OrgRole;
   wsRole: WsRole;
+  /** The header's last action (Export), drawn in the same row as the controls. */
+  after?: ReactNode;
 }) {
   const t = useTranslations("run.commands");
   if (status !== "live") return null;
@@ -333,12 +366,17 @@ export function RunControls({
       <DisabledControls
         reason={t("observeReason")}
         testId="observe-no-control"
+        after={after}
       />
     );
   }
   if (!canCommandRun(orgRole, wsRole)) {
     return (
-      <DisabledControls reason={t("roleReason")} testId="role-no-control" />
+      <DisabledControls
+        reason={t("roleReason")}
+        testId="role-no-control"
+        after={after}
+      />
     );
   }
   if (source === "ledger" && ingressRevoked)
@@ -346,6 +384,7 @@ export function RunControls({
       <DisabledControls
         reason={t("ledgerRevoked")}
         testId="ledger-ingress-revoked"
+        after={after}
       />
     );
   if (source === "ledger") {
@@ -374,6 +413,7 @@ export function RunControls({
             ledgerControl
             write={(text) => haltRun(org, ws, runId, "cancel", text)}
           />
+          {after}
         </div>
         <p
           data-testid="ledger-control-limit"
@@ -398,6 +438,7 @@ export function RunControls({
           }
         />
       ))}
+      {after}
     </div>
   );
 }

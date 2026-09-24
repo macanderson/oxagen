@@ -312,21 +312,66 @@ describe("a decision on a subagent's chain", () => {
 });
 
 describe("the filter chips", () => {
-  it("draws one chip per kind the contract publishes, and none the mockup drew that it does not (negative)", () => {
+  it("draws the spec's chip row in order, with thinking and seal as counts that filter nothing", () => {
     renderSection();
-    for (const kind of [
-      "prompt",
-      "responses",
-      "tools",
-      "policy",
-      "recall",
-      "usage",
-      "errors",
-    ]) {
-      expect(screen.getByTestId(`chip-${kind}`)).toBeInTheDocument();
+    const row = screen.getByTestId("transcript-chips");
+    const names = Array.from(row.querySelectorAll('[data-testid^="chip-"]'))
+      .map((node) => node.getAttribute("data-testid"))
+      .filter((id) => id !== null && !id.startsWith("chip-count-"));
+    expect(names).toEqual([
+      "chip-prompt",
+      "chip-responses",
+      "chip-thinking",
+      "chip-tools",
+      "chip-usage",
+      "chip-recall",
+      "chip-seal",
+      "chip-policy",
+      "chip-errors",
+    ]);
+    for (const gap of ["thinking", "seal"]) {
+      const chip = screen.getByTestId(`chip-${gap}`);
+      expect(chip.tagName).toBe("SPAN");
+      expect(chip).toHaveAttribute("aria-disabled", "true");
+      expect(chip).toHaveAttribute("data-gap", `transcript-kind-${gap}`);
+      expect(chip).not.toHaveAttribute("href");
     }
-    expect(screen.queryByTestId("chip-thinking")).toBeNull();
+    expect(screen.getByTestId("chip-errors")).toHaveTextContent("✗ errors");
     expect(screen.queryByTestId("chip-proof")).toBeNull();
+  });
+
+  it("counts each chip over the whole run, thinking from the reasoning blocks, and gives seal no count", () => {
+    const thought = transcriptEntry({
+      seq: "3",
+      endSeq: "3",
+      kinds: ["responses"],
+      response: transcriptBody({
+        blocks: [
+          { kind: "thinking", text: "Group by label first." },
+          { kind: "text", text: "Grouping." },
+        ],
+      }),
+    });
+    const tool = transcriptEntry({
+      seq: "4",
+      endSeq: "4",
+      kind: "tool_call",
+      kinds: ["tools", "errors"],
+    });
+    renderSection({
+      read: readOk(runTranscript({ entries: [thought, tool] })),
+    });
+    expect(screen.getByTestId("chip-count-responses")).toHaveTextContent("1");
+    expect(screen.getByTestId("chip-count-thinking")).toHaveTextContent("1");
+    expect(screen.getByTestId("chip-count-tools")).toHaveTextContent("1");
+    expect(screen.getByTestId("chip-count-errors")).toHaveTextContent("1");
+    expect(screen.getByTestId("chip-count-prompt")).toHaveTextContent("0");
+    expect(screen.queryByTestId("chip-count-seal")).toBeNull();
+  });
+
+  it("gives no chip a count when the whole-run read failed (negative)", () => {
+    renderSection({ read: readError("frame_store_unreachable", 502) });
+    expect(screen.queryByTestId("chip-count-prompt")).toBeNull();
   });
 
   it("marks a pressed chip with aria-current, which is the attribute a link may carry", () => {
@@ -359,6 +404,11 @@ describe("the filter chips", () => {
   it("offers no clear link when nothing is filtered (negative)", () => {
     renderSection();
     expect(screen.queryByTestId("chip-clear")).toBeNull();
+  });
+
+  it("labels the toggle back to every entry all", () => {
+    renderSection({ kinds: ["tools"] });
+    expect(screen.getByTestId("chip-clear")).toHaveTextContent("all");
   });
 
   it("keeps the chips on screen when the read was refused, so the filter can be cleared from the failure", () => {
@@ -1070,5 +1120,83 @@ describe("run-relative time", () => {
     expect(heads[1]).toContain("+12:34");
     // The hour the run happened to start in is not a reading of the run.
     for (const head of heads) expect(head).not.toContain("08:");
+  });
+});
+
+describe("the feed head, the search and the transport ends", () => {
+  it("prints the task, the agent, the model, the turns, the steps, the entries, the status and the burn", () => {
+    render(
+      <IntlProvider>
+        <TranscriptSection
+          read={readOk(runTranscript())}
+          zoom="steps"
+          kinds={[]}
+          run={{
+            status: "live",
+            replayGrade: RUN.replayGrade,
+            taskRef: "acme/platform#482",
+            agentKey: "acme.core.release-bot",
+            model: RUN.model,
+            turns: 7,
+            steps: 41,
+            cost: {
+              micros: "4131265",
+              currency: "USD",
+              basis: "gateway_observed",
+            },
+          }}
+          {...PLACE}
+        />
+      </IntlProvider>,
+    );
+    const head = screen.getByTestId("transcript-head");
+    expect(head).toHaveTextContent(
+      `acme/platform#482 · acme.core.release-bot · ${RUN.model?.slug ?? ""} · 7 turns · 41 steps · 1 entry`,
+    );
+    expect(head).toHaveTextContent("live");
+    expect(screen.getByTestId("transcript-burn")).toHaveTextContent(
+      /burn .* of /,
+    );
+  });
+
+  it("leaves out what the run row does not carry rather than printing a zero (negative)", () => {
+    renderSection();
+    const head = screen.getByTestId("transcript-head");
+    expect(head).not.toHaveTextContent("turns");
+    expect(head).toHaveTextContent("13 entries");
+  });
+
+  it("narrows the turns drawn to those that match the search, and says when none does", () => {
+    renderSection();
+    const search = screen.getByRole("searchbox", {
+      name: "Search the transcript",
+    });
+    expect(search).toHaveAttribute("placeholder", "search the transcript");
+    fireEvent.change(search, { target: { value: "nothing like this" } });
+    expect(screen.getByTestId("transcript-no-match")).toHaveTextContent(
+      "No entry on this page matches that search.",
+    );
+    fireEvent.change(search, { target: { value: "" } });
+    expect(screen.queryByTestId("transcript-no-match")).toBeNull();
+  });
+
+  it("jumps to the first and the last frame and shows the position as n / N", () => {
+    const entries = [
+      transcriptEntry({ seq: "1", endSeq: "1" }),
+      transcriptEntry({ seq: "2", endSeq: "2" }),
+      transcriptEntry({ seq: "3", endSeq: "3" }),
+    ];
+    renderSection({
+      read: readOk(runTranscript({ entries })),
+      status: "sealed",
+    });
+    const readout = screen.getByTestId("transport-readout");
+    expect(readout).toHaveTextContent("3 / 3");
+    expect(screen.getByTestId("transport-last")).toBeDisabled();
+    fireEvent.click(screen.getByTestId("transport-first"));
+    expect(readout).toHaveTextContent("1 / 3");
+    expect(screen.getByTestId("transport-first")).toBeDisabled();
+    fireEvent.click(screen.getByTestId("transport-last"));
+    expect(readout).toHaveTextContent("3 / 3");
   });
 });

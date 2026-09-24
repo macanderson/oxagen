@@ -29,7 +29,7 @@ import type {
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
 import { Badge, type BadgeTone } from "@/ui/badge";
-import { eyebrow, mono } from "@/ui/control-styles";
+import { eyebrow, mono, panel } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
 
@@ -428,11 +428,15 @@ export function OutputsSpine({
   ].filter((part) => part !== null);
 
   return (
-    <section aria-label={t("label")} data-testid="run-outputs">
+    <section
+      aria-label={t("label")}
+      data-testid="run-outputs"
+      className={`${panel} p-4`}
+    >
       <div className="flex flex-wrap items-center justify-between gap-3 pb-1">
         <p className={`${eyebrow} m-0`}>{t("title")}</p>
         <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-          <span data-testid="run-outputs-tally">{counts.join(", ")}</span>
+          <span data-testid="run-outputs-tally">{counts.join(" · ")}</span>
           {tally.reads > 0 ? (
             <SafeLink
               to={href(place, { reads: !view.reads, open: view.open })}

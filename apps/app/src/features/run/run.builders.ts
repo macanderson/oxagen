@@ -20,6 +20,7 @@ import type {
   ResolvedApprovalItem,
 } from "@/data/contracts/approvals";
 import type { MandateList } from "@/data/contracts/mandates";
+import type { RunWork } from "@/data/contracts/run-work";
 import type { RunRow } from "@/data/contracts/runs";
 import type { DataSource } from "@/data/ports";
 import type { AgentDetail } from "@/data/contracts/agents";
@@ -508,8 +509,114 @@ export function runOutputs(
   };
 }
 
+/**
+ * `get_run_work` for a run that worked in one checkout of `acme/platform` on
+ * `release/4.11.0-notes` and opened pull request 482 from it, whose checks
+ * failed once. Overrides replace whole fields.
+ */
+export function runWork(overrides: Partial<RunWork> = {}): RunWork {
+  const repository = {
+    host: "github.com",
+    owner: "acme",
+    name: "platform",
+    url: "https://github.com/acme/platform",
+    connected: true,
+  };
+  return {
+    runId: "tse_7k2m9q",
+    machine: { name: "mbell-mbp-16" },
+    checkouts: [
+      {
+        ref: "chk_1",
+        path: "~/src/platform",
+        branch: "release/4.11.0-notes",
+        headSha: "a4c91e2",
+        remoteDigest: null,
+        repository,
+        firstSeq: "1",
+        lastSeq: "118",
+      },
+    ],
+    diffs: [],
+    pullRequests: [
+      {
+        repository,
+        number: 482,
+        url: `${repository.url}/pull/482`,
+        title: "Cut 4.11.0 release notes",
+        state: "open",
+        headSha: "a4c91e2",
+        headRef: "release/4.11.0-notes",
+        association: "recorded",
+        checkoutRefs: ["chk_1"],
+        observedAt: at(-60),
+        current: true,
+        diff: {
+          digest: "sha256:diff",
+          headSha: "a4c91e2",
+          files: [
+            {
+              path: "release/4.11.0-notes.md",
+              previousPath: null,
+              status: "added",
+              additions: 20,
+              deletions: 0,
+              patch: null,
+            },
+          ],
+          complete: true,
+          limitations: [],
+        },
+        ci: {
+          overall: "failing",
+          complete: true,
+          counts: {
+            total: 2,
+            passed: 1,
+            failed: 1,
+            pending: 0,
+            skipped: 0,
+            neutral: 0,
+          },
+          runs: [
+            {
+              name: "lint",
+              status: "completed",
+              conclusion: "success",
+              url: `${repository.url}/actions/runs/1`,
+              startedAt: null,
+              completedAt: null,
+              durationMs: null,
+              app: "Actions",
+            },
+            {
+              name: "unit",
+              status: "completed",
+              conclusion: "failure",
+              url: `${repository.url}/actions/runs/2`,
+              startedAt: null,
+              completedAt: null,
+              durationMs: null,
+              app: "Actions",
+            },
+          ],
+        },
+      },
+    ],
+    complete: true,
+    warnings: [],
+    ...overrides,
+  };
+}
+
 type RunReads = {
   detail: Read<RunDetail>;
+  /**
+   * `get_run_work`. A test that says nothing about it gets a run whose
+   * checkout context was not recorded, so the strip and the Changes panel
+   * draw the run record alone.
+   */
+  work?: Read<RunWork>;
   /**
    * The spine above the tabs, read with the page and not with a tab. A test
    * that says nothing about it gets a run that produced nothing, so a test
@@ -619,15 +726,16 @@ export function runSource(reads: RunReads) {
         ),
       work: (_ctx, runId) =>
         Promise.resolve(
-          readOk({
-            runId,
-            machine: null,
-            checkouts: [],
-            diffs: [],
-            pullRequests: [],
-            complete: false,
-            warnings: ["checkout_context_not_recorded"],
-          }),
+          reads.work ??
+            readOk({
+              runId,
+              machine: null,
+              checkouts: [],
+              diffs: [],
+              pullRequests: [],
+              complete: false,
+              warnings: ["checkout_context_not_recorded"],
+            }),
         ),
       get: answer("get", reads.detail),
       frameBody: answer("frameBody", reads.frameBody),

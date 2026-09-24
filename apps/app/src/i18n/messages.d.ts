@@ -3978,10 +3978,6 @@ type Messages = {
       description: string;
     };
     noSummary: string;
-    source: {
-      ledger: string;
-      tacho: string;
-    };
     facts: {
       operatorKind: {
         human: string;
@@ -4014,6 +4010,7 @@ type Messages = {
         sealed: string;
         halted: string;
       };
+      parked: string;
     };
     transcript: {
       title: string;
@@ -4071,10 +4068,12 @@ type Messages = {
       chip: {
         prompt: string;
         responses: string;
+        thinking: string;
         tools: string;
-        policy: string;
-        recall: string;
         usage: string;
+        recall: string;
+        seal: string;
+        policy: string;
         errors: string;
       };
       chipsClear: string;
@@ -4107,6 +4106,30 @@ type Messages = {
         input: string;
         reply: string;
       };
+      note: string;
+      chipGap: {
+        thinking: string;
+        seal: string;
+      };
+      head: {
+        turns: string;
+        steps: string;
+        entries: string;
+        entriesAtLeast: string;
+        status: {
+          live: string;
+          sealed: string;
+          halted: string;
+        };
+        burn: string;
+        of: string;
+      };
+      search: string;
+      searchPlaceholder: string;
+      noMatch: string;
+      first: string;
+      last: string;
+      index: string;
     };
     frames: {
       title: string;
@@ -4146,36 +4169,75 @@ type Messages = {
     cost: {
       title: string;
       notRolledUp: string;
-      total: string;
       basisNotRecorded: string;
-      cacheHitRate: string;
-      turns: string;
-      steps: string;
-      modelCalls: string;
-      toolCalls: string;
-      retries: string;
-      productiveRatio: string;
-      rolledUpAt: string;
-      priceEntries: string;
-      tokensTitle: string;
-      tokens: {
-        inputUncached: string;
-        cacheRead: string;
-        cacheWrite5m: string;
-        cacheWrite1h: string;
-        output: string;
-        reasoning: string;
-      };
-      byModel: string;
-      byTool: string;
-      noModelCalls: string;
-      noToolCalls: string;
-      columns: {
+      rolledUp: string;
+      pricesNotRecorded: string;
+      fit: {
+        title: string;
+        generated: string;
         model: string;
-        tool: string;
-        calls: string;
+        modelNotRecorded: string;
+        modelNone: string;
+        effort: string;
+        effortNone: string;
+        footer: string;
+      };
+      instruments: {
         cost: string;
+        perTurn: string;
+        dearestTurn: string;
+        cacheHit: string;
+        wallClock: string;
+        soFar: string;
+        startToSeal: string;
+        splitNotRecorded: string;
         tokens: string;
+        inAndOut: string;
+        inOut: string;
+        tokenSplit: string;
+        perCall: string;
+        noModelCall: string;
+        shape: string;
+        shapeValue: string;
+        stepsPerTurn: string;
+        batchesNotRecorded: string;
+        toolCalls: string;
+        families: string;
+        failedNotRecorded: string;
+        productive: string;
+        productiveNote: string;
+      };
+      tools: {
+        title: string;
+        byFamily: string;
+        none: string;
+        columns: {
+          family: string;
+          calls: string;
+          share: string;
+          wallClock: string;
+          failed: string;
+        };
+        batches: string;
+        batchesNone: string;
+        prefetch: string;
+        prefetchNone: string;
+      };
+      classes: {
+        title: string;
+        columns: {
+          class: string;
+          tokens: string;
+          cost: string;
+          share: string;
+        };
+        total: string;
+        note: string;
+      };
+      composition: {
+        title: string;
+        notRecorded: string;
+        none: string;
       };
     };
     commands: {
@@ -4194,6 +4256,7 @@ type Messages = {
         confirm: string;
         pending: string;
         queued: string;
+        header: string;
       };
       resume: {
         open: string;
@@ -4202,6 +4265,7 @@ type Messages = {
         confirm: string;
         pending: string;
         queued: string;
+        header: string;
       };
       steer: {
         open: string;
@@ -4327,27 +4391,15 @@ type Messages = {
           denied: string;
           other: string;
         };
+        needsSeal: string;
       };
-    };
-    gaps: string;
-    gap: {
-      digest_only: string;
-      body_missing: string;
-      tool_bodies: string;
-      model_calls: string;
-      hooks_partial: string;
-      unobserved_tail: string;
-      chain_break: string;
-      telemetry_gap: string;
     };
     chain: {
       title: string;
       hashRule: string;
       frameCount: string;
-      range: string;
       merkleRoot: string;
       tierLabel: string;
-      gradeLabel: string;
       gapsTitle: string;
       prefix: string;
       noGaps: string;
@@ -4367,19 +4419,10 @@ type Messages = {
       unsealed: string;
       checkpointsTitle: string;
       noCheckpoints: string;
-      ladderTitle: string;
       ladderWhy: string;
       ladderNoGrade: string;
       rungMet: string;
       rungUnmet: string;
-      columns: {
-        seq: string;
-        head: string;
-        frames: string;
-        signed: string;
-        countersigned: string;
-        anchor: string;
-      };
       grade: {
         inspect: string;
         view: string;
@@ -4396,6 +4439,37 @@ type Messages = {
         chain_break: string;
         telemetry_gap: string;
       };
+      hashTitle: string;
+      rangeValue: string;
+      telemetryGap: string;
+      telemetryGapRecorded: string;
+      telemetryGapNone: string;
+      sealRecord: string;
+      signature: string;
+      verify: string;
+      verifyHow: string;
+      gradeTitle: string;
+      columns: {
+        frame: string;
+        head: string;
+        covers: string;
+        signature: string;
+        grade: string;
+        recorded: string;
+        allows: string;
+      };
+      covers: string;
+      signedBy: string;
+      countersignedBy: string;
+      notCountersigned: string;
+      keyNotRecorded: string;
+      anchor: string;
+      allows: {
+        inspect: string;
+        view: string;
+        fork: string;
+        retry: string;
+      };
     };
     waterfall: {
       title: string;
@@ -4408,6 +4482,19 @@ type Messages = {
       empty: string;
       unpriced: string;
       cut: string;
+      table: string;
+      columns: {
+        turn: string;
+        steps: string;
+        frames: string;
+        cacheHit: string;
+        cost: string;
+        running: string;
+        pinned: string;
+      };
+      noPin: string;
+      totalRow: string;
+      recorded: string;
     };
     replay: {
       forkNeedsLedger: string;
@@ -4483,7 +4570,6 @@ type Messages = {
       };
     };
     costReportedProvisional: string;
-    costFinalized: string;
     tokenUsage: {
       title: string;
       missing: string;
@@ -4498,20 +4584,14 @@ type Messages = {
     header: {
       chips: string;
       harnessNotRecorded: string;
-      rig: string;
       versionNotCaptured: string;
-      harnessVersion: string;
-      effortNotCaptured: string;
       checkout: string;
       repoNotCaptured: string;
       noPullRequest: string;
       pathNotCaptured: string;
-      derived: string;
       noMachine: string;
       started: string;
       sealed: string;
-      running: string;
-      by: string;
       paused: string;
       copy: string;
       copyLabel: string;
@@ -4522,10 +4602,23 @@ type Messages = {
       machineNotRecorded: string;
       machineRecorded: string;
       machineEnrollment: string;
+      rig: string;
+      task: string;
+      effort: string;
+      notCaptured: string;
+      effortWhy: string;
+      branchNotCaptured: string;
+      pathWhy: string;
+      pausedTitle: string;
+      pathRecorded: string;
     };
     summary: {
       title: string;
       check: string;
+      generated: string;
+      onBehalfOf: string;
+      operator: string;
+      generatedBy: string;
     };
     stats: {
       label: string;
@@ -4537,75 +4630,155 @@ type Messages = {
       cacheHit: string;
       tokensNote: string;
       promptsCut: string;
-      wastedNote: string;
-      running: string;
       noRollup: string;
+      noPrompt: string;
+      oneShot: string;
+      corrective: string;
+      correctivePrompts: string;
+      nothingWasted: string;
+      unproductive: string;
+      soFar: string;
+      splitNotRecorded: string;
+      savingNotRecorded: string;
     };
     issues: {
       title: string;
-      reference: string;
-      relation: string;
-      task: string;
+      count: string;
+      columns: {
+        issue: string;
+        status: string;
+        relation: string;
+        edge: string;
+        view: string;
+      };
       empty: string;
+      statusNotRead: string;
+      relation: {
+        task: string;
+      };
+      edge: {
+        observed: string;
+        stated: string;
+        inferred: string;
+      };
+      frame: string;
+      noLink: string;
+      viewLink: string;
       note: string;
+      linked: {
+        title: string;
+        observed: string;
+        stated: string;
+        inferred: string;
+        cut: string;
+        repositories: string;
+        repositoryNotCaptured: string;
+        artifacts: string;
+        noArtifacts: string;
+        files: string;
+        noFiles: string;
+        kind: {
+          pr: string;
+          commit: string;
+        };
+      };
     };
     policy: {
       title: string;
       frame: string;
       call: string;
       outcome: string;
-      type: string;
+      rules: string;
+      taint: string;
+      latency: string;
       empty: string;
+      note: string;
       cut: string;
-      at: string;
     };
     context: {
-      title: string;
-      frame: string;
-      what: string;
-      at: string;
       empty: string;
       cut: string;
+      prompt: {
+        title: string;
+        none: string;
+      };
+      manifest: {
+        title: string;
+        none: string;
+        unreadable: string;
+        tally: string;
+        notDelivered: string;
+        rank: string;
+        tokens: string;
+        reason: {
+          tier: string;
+          budget: string;
+          superseded: string;
+          unrecorded: string;
+        };
+        why: {
+          tier: string;
+          budget: string;
+          superseded: string;
+          unrecorded: string;
+        };
+        supersededBy: string;
+        footer: string;
+      };
+      window: {
+        title: string;
+        none: string;
+      };
+      frames: {
+        title: string;
+        kind: string;
+        frame: string;
+        tokens: string;
+        score: string;
+        cited: string;
+      };
+      stats: {
+        title: string;
+        none: string;
+      };
     };
     work: {
       label: string;
       changes: string;
       pullRequest: string;
       noPullRequest: string;
-      commits: string;
       diff: string;
-      diffStat: string;
       noDiff: string;
       openDiff: string;
       more: string;
       spend: string;
-      toolCalls: string;
       noSpend: string;
       callCount: string;
-    };
-    workCi: {
-      title: string;
-      basis: string;
-      failedChecks: string;
-      stale: string;
-      checkouts: string;
-      onMachine: string;
-      machineMissing: string;
-      locationMissing: string;
-      repoMissing: string;
-      branchMissing: string;
-      copyLocation: string;
-      copied: string;
-      copyFailed: string;
-      pullRequests: string;
-      prMissing: string;
-      ciMissing: string;
-      association: {
-        recorded: string;
-        head_commit: string;
-        branch: string;
+      base: string;
+      baseNotCaptured: string;
+      checks: string;
+      noChecks: string;
+      inFiles: string;
+      basisNotRecorded: string;
+      areasNotRecorded: string;
+      dearestTools: string;
+      noTools: string;
+      toolCostNotRecorded: string;
+      allTools: string;
+      splitNote: string;
+      state: {
+        created: string;
+        written: string;
+        deleted: string;
+        renamed: string;
+        pushed: string;
+        open: string;
+        read: string;
+        awaiting: string;
+        blocked: string;
+        withheld: string;
       };
-      ci: {
+      checkState: {
         passing: string;
         failing: string;
         pending: string;
@@ -4614,21 +4787,97 @@ type Messages = {
       };
       checkCounts: string;
       checksPartial: string;
-      diffFiles: string;
-      diffComplete: string;
-      diffPartial: string;
-      evidence: string;
-      diffBasis: string;
-      diffMissing: string;
-      frame: string;
-      capture: {
-        complete: string;
-        partial: string;
-        not_retained: string;
-        not_captured: string;
+    };
+    state: {
+      back: string;
+      role: {
+        owner: string;
+        admin: string;
+        member: string;
+        billing: string;
+        compliance: string;
+        viewer: string;
       };
-      incomplete: string;
-      loading: string;
+      empty: {
+        title: string;
+        body: string;
+      };
+      error: {
+        title: string;
+        body: string;
+        retry: string;
+        readAt: string;
+        incident: string;
+        incidentGap: string;
+      };
+      denied: {
+        title: string;
+        body: string;
+        needed: string;
+        signedIn: string;
+        roles: string;
+        neededLabel: string;
+        decidedByLabel: string;
+        decidedBy: string;
+        request: string;
+        requestGap: string;
+      };
+      pending: {
+        title: string;
+        body: string;
+      };
+    };
+    workCi: {
+      pullState: {
+        open: string;
+        closed: string;
+        merged: string;
+      };
+      association: {
+        recorded: string;
+        head_commit: string;
+        branch: string;
+      };
+    };
+    interjection: {
+      eyebrow: string;
+      meta: string;
+      tier: string;
+      waiting: string;
+      live: string;
+      noteWaiting: string;
+      noteAnswered: string;
+      agentPane: string;
+      agentSource: string;
+      oxagenPane: string;
+      oxagenSource: string;
+      framesPane: string;
+      framesSource: string;
+      label: string;
+      questionNotRecorded: string;
+      pickLabel: string;
+      link: string;
+      create: string;
+      send: string;
+      pickOne: string;
+      answersAs: string;
+      cannotSend: string;
+      reachNote: string;
+      held: string;
+      linkPath: string;
+      createPath: string;
+      consequencesNotRecorded: string;
+      timeoutTitle: string;
+      timeoutNotRecorded: string;
+      pending: string;
+      waitsOn: string;
+      notHappened: string;
+      skillLoaded: string;
+      workspaceCreated: string;
+      operatorNotRecorded: string;
+      cut: string;
+      linkTo: string;
+      promptNotRecorded: string;
     };
   };
   runOutcomes: {

@@ -24,7 +24,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh }),
 }));
 
-const { RecordActions } = await import("./record-actions");
+const { ExportAction, SummarizeAction } = await import("./record-actions");
 
 // The dialog's poll timing, mirrored from record-actions.tsx: the first read
 // at 2s, each wait 1.5 times the last, and reading stops after 120s.
@@ -81,13 +81,11 @@ async function queueExport() {
   const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
   const view = render(
     <IntlProvider>
-      <RecordActions
+      <ExportAction
         org="acme"
         ws="core-platform"
         runId={RUN}
         sealed
-        hasSummary
-        summarizable
         orgRole="owner"
       />
     </IntlProvider>,
@@ -253,5 +251,103 @@ describe("export status", () => {
     view.unmount();
     await advance(EXPORT_POLL_BUDGET_MS);
     expect(readRunExport).not.toHaveBeenCalled();
+  });
+});
+
+describe("the two record writes, split", () => {
+  it("draws Export disabled on a live run, with the reason as its title (negative)", () => {
+    render(
+      <IntlProvider>
+        <ExportAction
+          org="acme"
+          ws="core-platform"
+          runId={RUN}
+          sealed={false}
+          orgRole="owner"
+        />
+      </IntlProvider>,
+    );
+    const button = screen.getByTestId("run-export");
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute(
+      "title",
+      "Export signs a finished record. It opens once the run seals.",
+    );
+  });
+
+  it("draws Export disabled for a Member, naming the role it needs (negative)", () => {
+    render(
+      <IntlProvider>
+        <ExportAction
+          org="acme"
+          ws="core-platform"
+          runId={RUN}
+          sealed
+          orgRole="member"
+        />
+      </IntlProvider>,
+    );
+    expect(screen.getByTestId("run-export").getAttribute("title")).toContain(
+      "Owner or Admin role",
+    );
+  });
+
+  it("queues a summary and shows its receipt", async () => {
+    summarizeRun.mockResolvedValue({ ok: true, value: { runId: RUN } });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(
+      <IntlProvider>
+        <SummarizeAction
+          org="acme"
+          ws="core-platform"
+          runId={RUN}
+          sealed
+          hasSummary={false}
+          summarizable
+          orgRole="member"
+        />
+      </IntlProvider>,
+    );
+    await user.click(screen.getByTestId("run-summarize"));
+    await user.click(screen.getByRole("button", { name: "Queue the summary" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("queued-receipt")).toHaveTextContent(RUN);
+    });
+    expect(summarizeRun).toHaveBeenCalledWith("acme", "core-platform", RUN);
+  });
+
+  it("draws Summarize disabled, with the reason, for a recording that kept no bodies (negative)", () => {
+    render(
+      <IntlProvider>
+        <SummarizeAction
+          org="acme"
+          ws="core-platform"
+          runId={RUN}
+          sealed
+          hasSummary
+          summarizable={false}
+          orgRole="owner"
+        />
+      </IntlProvider>,
+    );
+    expect(screen.getByTestId("run-resummarize")).toBeDisabled();
+    expect(screen.getByTestId("summarize-no-bodies")).toBeTruthy();
+  });
+
+  it("offers no summary write on a live run", () => {
+    const { container } = render(
+      <IntlProvider>
+        <SummarizeAction
+          org="acme"
+          ws="core-platform"
+          runId={RUN}
+          sealed={false}
+          hasSummary={false}
+          summarizable
+          orgRole="owner"
+        />
+      </IntlProvider>,
+    );
+    expect(container).toBeEmptyDOMElement();
   });
 });

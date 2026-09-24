@@ -42,7 +42,31 @@ vi.mock("next/navigation", () => ({
 }));
 
 const { RunControls } = await import("./run-controls");
-const { RecordActions } = await import("./record-actions");
+const { ExportAction, SummarizeAction } = await import("./record-actions");
+
+/** The two record writes as the page places them: Summarize in the Summary panel, Export in the header. */
+function RecordActions(props: {
+  org: string;
+  ws: string;
+  runId: string;
+  sealed: boolean;
+  hasSummary: boolean;
+  summarizable: boolean;
+  orgRole: "owner" | "admin" | "member" | "billing" | "compliance" | "viewer";
+}) {
+  return (
+    <>
+      <SummarizeAction {...props} />
+      <ExportAction
+        org={props.org}
+        ws={props.ws}
+        runId={props.runId}
+        sealed={props.sealed}
+        orgRole={props.orgRole}
+      />
+    </>
+  );
+}
 
 const RUN = "tse_7k2m9q";
 
@@ -533,7 +557,7 @@ describe("record writes", () => {
     renderRecord(true, "member");
     const button = screen.getByTestId("run-export");
     expect(button).toBeDisabled();
-    expect(screen.getByTestId("export-no-role")).toHaveTextContent(
+    expect(button.getAttribute("title")).toContain(
       "needs an organization Owner or Admin role",
     );
     await user.click(button);
@@ -551,7 +575,7 @@ describe("record writes", () => {
     expect(screen.getByTestId("run-export")).toBeDisabled();
   });
 
-  it("offers neither write while the run is live (negative)", () => {
+  it("offers no summary while the run is live, and draws Export disabled until the seal (negative)", () => {
     render(
       <IntlProvider>
         <RecordActions
@@ -565,7 +589,7 @@ describe("record writes", () => {
         />
       </IntlProvider>,
     );
-    expect(screen.queryByTestId("run-export")).toBeNull();
+    expect(screen.getByTestId("run-export")).toBeDisabled();
     expect(screen.queryByTestId("run-summarize")).toBeNull();
   });
 });

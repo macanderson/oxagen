@@ -91,7 +91,8 @@ type Place = { org: string; ws: string; runId: string };
 /** Why a later page did not arrive, in the shape the action answers with. */
 type PageFailure = Exclude<ActionResult<unknown>, { ok: true }>;
 
-const SPEEDS = [1, 1.5, 2, 4] as const;
+/** The spec's playback rates: 1×, 2×, 3× and 6×. */
+const SPEEDS = [1, 2, 3, 6] as const;
 /** How close to the end the playhead gets before the next page is read ahead of it. */
 const PREFETCH_WITHIN = 5;
 
@@ -744,8 +745,10 @@ function Readout({ entries, pos }: { entries: Frames; pos: number }) {
       className="whitespace-nowrap font-mono text-[11.5px] tabular-nums text-muted-foreground"
     >
       <b className="font-medium text-foreground">
-        {t("position", { seq: here.seq })}
-      </b>{" "}
+        {t("index", { n: pos + 1, total: head + 1 })}
+      </b>
+      {" · "}
+      {t("position", { seq: here.seq })}{" "}
       {t("of", { seq: frameAt(entries, head).seq })}
       {" · "}
       {formatClock(here.elapsedMs / 1000, locale)} /{" "}
@@ -759,6 +762,23 @@ function Readout({ entries, pos }: { entries: Frames; pos: number }) {
         </>
       )}
     </span>
+  );
+}
+
+/** True when a turn's prompt, reply, or any frame's label, type or body holds the needle. */
+function turnMatches(turn: TranscriptTurn, needle: string): boolean {
+  const hay = [
+    turn.prompt,
+    turn.reply,
+    ...turn.frames.flatMap((frame) => [
+      frame.label,
+      frame.type,
+      frame.request?.text ?? null,
+      frame.response?.text ?? null,
+    ]),
+  ];
+  return hay.some(
+    (text) => text !== null && text.toLowerCase().includes(needle),
   );
 }
 
@@ -821,6 +841,9 @@ export function TranscriptView({
   const [pinned, setPinned] = useState<number | null>(null);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<(typeof SPEEDS)[number]>(1);
+  // The search narrows the turns drawn, never the frames the transport walks,
+  // so the playhead and a live follow keep their place while a person looks.
+  const [query, setQuery] = useState("");
   const bodyRef = useRef<HTMLDivElement>(null);
 
   const following = pinned === null;
@@ -1023,6 +1046,9 @@ export function TranscriptView({
   };
 
   const lastTurnId = turns[turns.length - 1]?.id;
+  const needle = query.trim().toLowerCase();
+  const drawn =
+    needle === "" ? turns : turns.filter((turn) => turnMatches(turn, needle));
 
   return (
     <section
@@ -1030,6 +1056,19 @@ export function TranscriptView({
       data-testid="transcript"
       className="overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm"
     >
+      <div className="border-b border-border px-3 py-2.5">
+        <input
+          type="search"
+          value={query}
+          aria-label={t("search")}
+          placeholder={t("searchPlaceholder")}
+          data-testid="transcript-search"
+          onChange={(e) => {
+            setQuery(e.currentTarget.value);
+          }}
+          className="h-11 w-full max-w-sm rounded-md border border-border bg-background px-3 font-mono text-base sm:h-9 sm:text-[13px]"
+        />
+      </div>
       <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted px-3 py-2.5">
         {stream === "denied" ? null : status !== "live" ? (
           <span className="inline-flex shrink-0 items-center rounded-full border border-border px-2 py-0.5 font-mono text-[10.5px] font-semibold tracking-[0.1em] text-muted-foreground uppercase">
@@ -1054,6 +1093,20 @@ export function TranscriptView({
             {t("goLive")}
           </button>
         )}
+        <button
+          type="button"
+          className={tpButton}
+          disabled={pos <= 0}
+          aria-label={t("first")}
+          data-testid="transport-first"
+          onClick={() => {
+            moveTo(0);
+          }}
+        >
+          <span aria-hidden="true" className="text-[11px]">
+            ⏮
+          </span>
+        </button>
         <button
           type="button"
           className={tpButton}
@@ -1130,6 +1183,20 @@ export function TranscriptView({
             />
           </svg>
         </button>
+        <button
+          type="button"
+          className={tpButton}
+          disabled={pos >= head}
+          aria-label={t("last")}
+          data-testid="transport-last"
+          onClick={() => {
+            moveTo(head);
+          }}
+        >
+          <span aria-hidden="true" className="text-[11px]">
+            ⏭
+          </span>
+        </button>
         <span className="flex min-w-[130px] flex-[1_1_190px] items-center">
           <input
             type="range"
@@ -1191,7 +1258,15 @@ export function TranscriptView({
         ref={bodyRef}
         className="max-h-[min(66vh,760px)] overflow-y-auto motion-safe:scroll-smooth"
       >
-        {turns.map((turn) => (
+        {drawn.length === 0 ? (
+          <p
+            data-testid="transcript-no-match"
+            className="px-4 py-6 text-sm text-muted-foreground"
+          >
+            {t("noMatch")}
+          </p>
+        ) : null}
+        {drawn.map((turn) => (
           <TurnBlock
             key={turn.id}
             turn={turn}

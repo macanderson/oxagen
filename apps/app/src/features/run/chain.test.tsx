@@ -41,11 +41,9 @@ describe("ChainSection", () => {
     const { container } = renderChain(
       readOk(runChain({ recordedGrade: "view" })),
     );
-    // The panel's own grade fact says View, never Fork.
-    const gradeFact = screen.getByText("Replay grade").nextElementSibling;
-    expect(gradeFact).toHaveTextContent("View");
-    // The aside badge (computed once at seal) carries the same recorded word.
-    const badge = container.querySelector("[data-grade]");
+    // The Replay grade panel's badge is the recorded word, View, never Fork.
+    const grade = screen.getByRole("region", { name: "Replay grade" });
+    const badge = grade.querySelector("[data-grade]");
     expect(badge).toHaveAttribute("data-grade", "view");
     // Nothing on the page claims the run's grade is Fork, even though the
     // ladder's fork rung is met.
@@ -66,9 +64,8 @@ describe("ChainSection", () => {
         "This run's seal recorded no grade, so nothing here states one. The ladder says what the recording holds.",
       ),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText("Replay grade").nextElementSibling,
-    ).toHaveTextContent("not recorded");
+    // Each rung still says what it allows, and none is stated as the run's.
+    expect(screen.getAllByTestId("chain-rung").length).toBeGreaterThan(0);
   });
 
   it("renders sequence gaps as ranges, a single-sequence gap as one number, and the missing-frame and missing-body counts", () => {
@@ -132,6 +129,10 @@ describe("ChainSection", () => {
     );
     expect(screen.queryByText("Seal")).toBeNull();
     expect(screen.queryByText("Terminal status")).toBeNull();
+    // The panel still stands, so a reader sees where the seal will be.
+    expect(
+      screen.getByRole("region", { name: "Seal and attestation" }),
+    ).toBeTruthy();
   });
 
   it("renders the seal's terminal status, event stream digest and Merkle root, with a null seal Merkle root reading 'not recorded' rather than blank", () => {
@@ -149,9 +150,9 @@ describe("ChainSection", () => {
     expect(
       scoped.getByText("Terminal status").nextElementSibling,
     ).toHaveTextContent("completed");
-    expect(
-      scoped.getByText("Event stream digest").nextElementSibling,
-    ).toHaveTextContent(firstSeal.eventStreamDigest ?? "");
+    expect(scoped.getByText("Signs over").nextElementSibling).toHaveTextContent(
+      firstSeal.eventStreamDigest ?? "",
+    );
     expect(
       scoped.getByText("Merkle root").nextElementSibling,
     ).toHaveTextContent("not recorded");
@@ -168,10 +169,10 @@ describe("ChainSection", () => {
       ],
     });
     renderChain(readOk(chain));
-    expect(screen.getByText("Seal: Attempt 1")).toBeInTheDocument();
-    expect(screen.getByText("Seal: Attempt 2")).toBeInTheDocument();
-    // A single-seal run keeps the plain heading, with no attempt suffix.
-    expect(screen.queryByText("Seal: Attempt")).not.toBeInTheDocument();
+    expect(screen.getByText("Seal of attempt 1")).toBeInTheDocument();
+    expect(screen.getByText("Seal of attempt 2")).toBeInTheDocument();
+    // No heading carries a colon-joined suffix.
+    expect(screen.queryByText(/Seal: /)).not.toBeInTheDocument();
   });
 
   it("renders the chain-no-checkpoints explanation rather than an empty table when checkpoints is empty", () => {
@@ -193,7 +194,7 @@ describe("ChainSection", () => {
     );
     const row = screen.getByTestId("chain-checkpoint");
     const cells = within(row).getAllByRole("cell");
-    expect(cells[4]).toHaveTextContent("not recorded");
+    expect(cells[3]).toHaveTextContent("not countersigned");
   });
 
   it("renders the recorded gap kinds as prose from run.chain.gap.*", () => {

@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
-import { runTranscript, transcriptEntry } from "./run.builders";
+import { runRow, runTranscript, transcriptEntry } from "./run.builders";
 
 vi.mock("next/link", () => ({
   default: ({ children, ...rest }: { children: ReactNode; href: string }) => (
@@ -83,7 +83,7 @@ describe("PolicySection", () => {
     expect(within(own).queryByRole("link")).not.toBeNull();
     expect(within(subagent).queryByRole("link")).toBeNull();
     expect(rows[1]?.textContent).toContain("4");
-    expect(screen.queryByText(/prefix|first|cut/i)).toBeNull();
+    expect(screen.queryByText(/later decisions are missing/)).toBeNull();
     await expectNoAxe(container);
   });
 
@@ -102,7 +102,11 @@ describe("PolicySection", () => {
         />
       </IntlProvider>,
     );
-    expect(container.querySelector("p.pt-3")).not.toBeNull();
+    expect(
+      within(container).getByText(
+        "The transcript read stopped short, so later decisions are missing here.",
+      ),
+    ).toBeTruthy();
   });
 
   it("shows the read failure instead of a list", () => {
@@ -123,6 +127,8 @@ describe("ContextSection", () => {
     const { container } = render(
       <IntlProvider>
         <ContextSection
+          run={runRow()}
+          manifest={null}
           read={readOk(
             runTranscript({
               entries: [recallEntry("7"), recallEntry("2", CHAIN)],
@@ -141,7 +147,11 @@ describe("ContextSection", () => {
       throw new Error("expected two rows");
     expect(within(own).queryByRole("link")).not.toBeNull();
     expect(within(subagent).queryByRole("link")).toBeNull();
-    expect(container.querySelector("p.pt-3")).not.toBeNull();
+    expect(
+      within(container).getByText(
+        "The transcript read stopped short, so later recalls are missing here.",
+      ),
+    ).toBeTruthy();
     await expectNoAxe(container);
   });
 
@@ -149,16 +159,23 @@ describe("ContextSection", () => {
     const empty = render(
       <IntlProvider>
         <ContextSection
+          run={runRow()}
+          manifest={null}
           read={readOk(runTranscript({ entries: [], cursor: null }))}
           place={PLACE}
         />
       </IntlProvider>,
     );
     expect(empty.container.querySelector("table")).toBeNull();
+    expect(
+      within(empty.container).getByText("This run recorded no recall."),
+    ).toBeTruthy();
     cleanup();
     const failed = render(
       <IntlProvider>
         <ContextSection
+          run={runRow()}
+          manifest={null}
           read={readError("frame_store_unreachable", 502)}
           place={PLACE}
         />

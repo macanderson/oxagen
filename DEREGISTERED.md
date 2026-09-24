@@ -438,18 +438,6 @@ packages/oxagen/src/contracts/agent.memory_policy.read.ts
 packages/oxagen/src/contracts/router.policy.get.ts
 ```
 
-
-## 15. Completion and replay UI deferred (2026-09-20)
-
-[ADR-130](docs/adr/ADR-130-spend-and-operator-feedback-ui.md) removes completion, witness, proof, and scores from the app's current presentation. The replay write components remain in place with their tests and backend contracts:
-
-- `apps/app/src/features/run/replay-actions.tsx`
-- `forkRun` and `bisectRuns` in `apps/app/src/features/run/actions.ts`
-
-The app's Knip configuration excludes only this retained file from unused-file reporting. The two retained exports carry `@deregistered`. They still compile and their tests remain. No production route imports the component. The shrink-only baseline stays empty.
-
-On 2026-09-23 the Run page spec (`mockups/pages/run.md` in the roadmap repository) restored the Chain and seal tab and the replay grade badge, which it marks as built. `chain.tsx`, `replay-grade.tsx` and `ChainCheckpoint` left this register then. Fork and Bisect stay here because the same spec marks them as later work.
-
-### Run summary implementation (ADR-153)
+## 15. Run summary implementation (ADR-153)
 
 `packages/inngest-functions/src/functions/run.summarize.ts` is preserved but no longer registered. Nothing sends its `run/summarize` event any more: `summarize_run` sends `run/enrich`, which uses Stella and the workspace enrichment setting. A `run/summarize` event still queued when this shipped is not replayed. The five-minute sweep enriches that run instead. The manual `summarize_run` capability remains available.

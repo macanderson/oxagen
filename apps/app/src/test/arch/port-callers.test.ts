@@ -16,8 +16,8 @@ import {
 
 const RULE = "port-callers";
 const PORTS_FILE = "src/data/ports.ts";
-// ADR-130 / DEREGISTERED.md §15 retained ports without a caller. The Run
-// page's Chain and seal tab calls `runs.chain` again, so none is retained now.
+// Ports ADR-130 retained without a caller. The Run page's Chain and seal tab
+// calls `runs.chain` again, so none is retained now.
 // Keep this set exact: a port added here is a port nothing reads.
 const RETAINED_PORTS = new Set<string>();
 const PROBES = "src/test/arch/probes/port-callers";
