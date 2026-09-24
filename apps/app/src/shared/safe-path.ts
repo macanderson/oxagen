@@ -296,17 +296,25 @@ export const routes = {
       reads: q?.reads,
       spine: q?.spine,
     }),
-  /** Spend on one tab, with one key's drill or one finding's evidence open; a tab is a query, not a route (§1.2). */
+  /**
+   * Spend on one tab, with one key's drill or one finding's evidence open. The
+   * tab and the drill are path segments (`/spend/agent/<key>`), as the mockup's
+   * route names them, and the first tab is the bare path; a finding's evidence
+   * is a dialog over the Findings tab, so it is a query value.
+   */
   spend: (
     org: string,
     ws: string,
     view: { tab: string; drill?: string; finding?: string },
   ): SafePath =>
-    withQuery(pathOf(org, ws, "spend"), {
-      tab: view.tab,
-      drill: view.drill,
-      finding: view.finding,
-    }),
+    withQuery(
+      view.drill !== undefined
+        ? pathOf(org, ws, "spend", view.tab, view.drill)
+        : view.tab === "findings"
+          ? pathOf(org, ws, "spend")
+          : pathOf(org, ws, "spend", view.tab),
+      { finding: view.finding },
+    ),
   /**
    * Skills, the Skills tab of Steering (MC spec §10.7); `cursor` opens a later
    * page of the inventory. `/{org}/{ws}/skills` redirects here.
@@ -344,10 +352,14 @@ export const routes = {
     org: string,
     ws: string,
     tab?: "working-copies" | "changes" | "configuration",
+    /** One change on the Changes tab, by its proposal id: the Context PR page. */
+    change?: string,
   ): SafePath =>
     tab === undefined
       ? pathOf(org, ws, "repositories")
-      : pathOf(org, ws, "repositories", tab),
+      : tab === "changes" && change !== undefined
+        ? pathOf(org, ws, "repositories", tab, change)
+        : pathOf(org, ws, "repositories", tab),
   /** Runtimes: the hosts agents run on (roadmap mockups/pages/runtimes.md). */
   runtimes: (org: string, ws: string): SafePath => pathOf(org, ws, "runtimes"),
   /** One runtime, addressed by its enrollment's public id (`tch_…`). */

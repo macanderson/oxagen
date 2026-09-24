@@ -17,6 +17,9 @@
  *   0. The organisation's plan must include SSO (Enterprise). A sign-in into
  *      one that does not is refused and recorded with `outcome: "deny"`, so a
  *      downgrade turns SSO off rather than leaving it half on.
+ *   4. A person a SCIM deprovision suspended is not re-admitted by a mapped
+ *      group. The sign-in is recorded with `outcome: "deny"` and reason
+ *      `scim_deprovisioned`, and only a SCIM reactivation admits them.
  *   3. Deny by default. A group with no mapping grants nothing; a person none
  *      of whose groups is mapped is left with no role in the organisation, and
  *      the event is recorded with `outcome: "deny"`.
@@ -56,14 +59,17 @@ export interface SsoProvisioningStore {
   currentRole(orgId: string, userId: string): Promise<string | null>;
   /**
    * Make `role` the person's org role, creating the membership when absent;
-   * `null` removes their org role and membership. Atomic.
+   * `null` removes their org role and membership. Atomic. Answers
+   * `scim_suspended`, having written nothing, when a SCIM deprovision
+   * suspended the person: only the identity provider reactivating them over
+   * SCIM admits them again.
    */
   applyRole(args: {
     orgId: string;
     userId: string;
     role: SsoMappableRole | null;
     providerId: string;
-  }): Promise<void>;
+  }): Promise<"applied" | "scim_suspended">;
 }
 
 export interface SsoProvisionerDeps {
@@ -81,7 +87,11 @@ export interface SsoProvisionInput {
 export type SsoProvisionOutcome = {
   grantedRole: SsoMappableRole | "owner" | null;
   previousRole: string | null;
-  reason: "mapped" | "no_mapped_group" | "owner_unmanaged";
+  reason:
+    | "mapped"
+    | "no_mapped_group"
+    | "owner_unmanaged"
+    | "scim_deprovisioned";
 };
 
 /**
@@ -145,12 +155,28 @@ export function createSsoProvisioner(deps: SsoProvisionerDeps) {
         granted !== previousRole &&
         (granted !== null || previousRole !== null)
       ) {
-        await deps.store.applyRole({
+        const applied = await deps.store.applyRole({
           orgId,
           userId: user.id,
           role: granted,
           providerId: provider.providerId,
         });
+        if (applied === "scim_suspended") {
+          deps.emit(
+            signInEvent(orgId, user.id, "deny", {
+              providerId: provider.providerId,
+              groups: auditedGroups,
+              grantedRole: null,
+              previousRole,
+              reason: "scim_deprovisioned",
+            }),
+          );
+          return {
+            grantedRole: null,
+            previousRole,
+            reason: "scim_deprovisioned",
+          };
+        }
       }
 
       const reason = granted ? "mapped" : "no_mapped_group";
@@ -194,7 +220,8 @@ function signInEvent(
       | "no_mapped_group"
       | "owner_unmanaged"
       | "not_entitled"
-      | "provision_failed";
+      | "provision_failed"
+      | "scim_deprovisioned";
   },
 ): SecurityEventInput {
   return {

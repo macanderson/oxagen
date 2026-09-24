@@ -3,12 +3,16 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createLocalKmsAdapter } from "@oxagen/crypto/kms";
 import {
   SSO_SECRET_KEY_ID,
+  SsoSecretKeyMissingError,
+  SsoSecretKeyringConfigError,
   isSealedSsoSecret,
   openSsoConfig,
   plaintextSsoSecretPaths,
   redactSsoConfig,
+  resealSsoConfig,
   resolveSsoKms,
   sealSsoConfig,
+  stripSsoSecrets,
   type ResolvedSsoKms,
 } from "./sso-secrets";
 
@@ -237,5 +241,201 @@ describe("redactSsoConfig edge cases", () => {
     const config = { clientSecret: "enc:v1:sso_v1:x" };
     redactSsoConfig("oidc", config);
     expect(config.clientSecret).toBe("enc:v1:sso_v1:x");
+  });
+});
+
+// ── Rotation (#3740) ─────────────────────────────────────────────────────────
+// Before the keyring, resolveSsoKms loaded one key, so rotating
+// AUTH_TOKEN_ENCRYPTION_KEY made every stored token unreadable and every SSO
+// sign-in failed. These pin the keyring and the re-seal that retires a key.
+
+const b64 = () => randomBytes(32).toString("base64");
+
+/** Every sealed token's key id in a stored config. */
+function tokenKeyIds(stored: string): string[] {
+  return [...stored.matchAll(/"enc:v1:([^:"]+):/g)].map((m) => m[1]!);
+}
+
+describe("keyring rotation", () => {
+  const keyA = b64();
+  const keyB = b64();
+  const samlSecrets = {
+    privateKey: "sp-private",
+    spMetadata: { privateKeyPass: "sp-pass" },
+    idpMetadata: { encPrivateKey: "idp-enc" },
+    cert: "PUBLIC-CERT",
+  };
+
+  async function sealedUnderA(): Promise<string> {
+    const kmsA = resolveSsoKms({ AUTH_TOKEN_ENCRYPTION_KEY: keyA })!;
+    expect(kmsA.keyId).toBe("sso_v1");
+    return sealSsoConfig("saml", samlSecrets, kmsA);
+  }
+
+  it("opens a token under a retired key listed in SSO_SECRET_PREVIOUS_KEYS", async () => {
+    const stored = await sealedUnderA();
+    const rotated = resolveSsoKms({
+      AUTH_TOKEN_ENCRYPTION_KEY: keyB,
+      SSO_SECRET_KEY_ID: "sso_v2",
+      SSO_SECRET_PREVIOUS_KEYS: `sso_v1=${keyA}`,
+    })!;
+    const opened = JSON.parse(await openSsoConfig("saml", stored, rotated));
+    expect(opened.privateKey).toBe("sp-private");
+    expect(opened.spMetadata.privateKeyPass).toBe("sp-pass");
+    expect(opened.idpMetadata.encPrivateKey).toBe("idp-enc");
+  });
+
+  it("fails with a named error when the retired key is not in the keyring", async () => {
+    const stored = await sealedUnderA();
+    const rotated = resolveSsoKms({
+      AUTH_TOKEN_ENCRYPTION_KEY: keyB,
+      SSO_SECRET_KEY_ID: "sso_v2",
+    })!;
+    const err = await openSsoConfig("saml", stored, rotated).catch(
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(SsoSecretKeyMissingError);
+    expect((err as SsoSecretKeyMissingError).keyId).toBe("sso_v1");
+    expect((err as Error).message).toMatch(/"sso_v1"/);
+    expect((err as Error).message).toMatch(/SSO_SECRET_PREVIOUS_KEYS/);
+    expect((err as Error).message).not.toContain(keyA);
+    expect((err as Error).message).not.toContain(keyB);
+  });
+
+  it("re-seals every token under the current key, and the result opens with that key alone", async () => {
+    const stored = await sealedUnderA();
+    expect(tokenKeyIds(stored)).toEqual(["sso_v1", "sso_v1", "sso_v1"]);
+    const rotated = resolveSsoKms({
+      AUTH_TOKEN_ENCRYPTION_KEY: keyB,
+      SSO_SECRET_KEY_ID: "sso_v2",
+      SSO_SECRET_PREVIOUS_KEYS: `sso_v1=${keyA}`,
+    })!;
+    const resealed = await resealSsoConfig("saml", stored, rotated);
+    expect(resealed).not.toBeNull();
+    expect(tokenKeyIds(resealed!)).toEqual(["sso_v2", "sso_v2", "sso_v2"]);
+    expect(JSON.parse(resealed!).cert).toBe("PUBLIC-CERT");
+
+    const onlyB = resolveSsoKms({
+      AUTH_TOKEN_ENCRYPTION_KEY: keyB,
+      SSO_SECRET_KEY_ID: "sso_v2",
+    })!;
+    const opened = JSON.parse(await openSsoConfig("saml", resealed!, onlyB));
+    expect(opened.privateKey).toBe("sp-private");
+    expect(opened.spMetadata.privateKeyPass).toBe("sp-pass");
+    expect(opened.idpMetadata.encPrivateKey).toBe("idp-enc");
+  });
+
+  it("has nothing to re-seal when every token is already under the current key", async () => {
+    const kmsA = resolveSsoKms({ AUTH_TOKEN_ENCRYPTION_KEY: keyA })!;
+    const stored = await sealedUnderA();
+    await expect(resealSsoConfig("saml", stored, kmsA)).resolves.toBeNull();
+    await expect(resealSsoConfig("oidc", "not json", kmsA)).resolves.toBeNull();
+  });
+
+  it("refuses to re-seal a token whose key is missing", async () => {
+    const stored = await sealedUnderA();
+    const rotated = resolveSsoKms({
+      AUTH_TOKEN_ENCRYPTION_KEY: keyB,
+      SSO_SECRET_KEY_ID: "sso_v2",
+    })!;
+    await expect(
+      resealSsoConfig("saml", stored, rotated),
+    ).rejects.toBeInstanceOf(SsoSecretKeyMissingError);
+  });
+});
+
+describe("resolveSsoKms keyring validation", () => {
+  const key = b64();
+
+  it("rejects a previous key under the current key id", () => {
+    expect(() =>
+      resolveSsoKms({
+        AUTH_TOKEN_ENCRYPTION_KEY: key,
+        SSO_SECRET_PREVIOUS_KEYS: `sso_v1=${b64()}`,
+      }),
+    ).toThrow(SsoSecretKeyringConfigError);
+  });
+
+  it("rejects an entry without a key id", () => {
+    expect(() =>
+      resolveSsoKms({
+        AUTH_TOKEN_ENCRYPTION_KEY: key,
+        SSO_SECRET_KEY_ID: "sso_v2",
+        SSO_SECRET_PREVIOUS_KEYS: b64(),
+      }),
+    ).toThrow(/not <keyId>=<base64 key>/);
+  });
+
+  it("rejects a repeated key id", () => {
+    expect(() =>
+      resolveSsoKms({
+        AUTH_TOKEN_ENCRYPTION_KEY: key,
+        SSO_SECRET_KEY_ID: "sso_v3",
+        SSO_SECRET_PREVIOUS_KEYS: `sso_v1=${b64()},sso_v1=${b64()}`,
+      }),
+    ).toThrow(/more than once/);
+  });
+
+  it("rejects a key id with a separator in it", () => {
+    expect(() =>
+      resolveSsoKms({
+        AUTH_TOKEN_ENCRYPTION_KEY: key,
+        SSO_SECRET_KEY_ID: "a:b",
+      }),
+    ).toThrow(SsoSecretKeyringConfigError);
+  });
+
+  it("names the key id, not the key, when a previous key is the wrong length", () => {
+    const short = randomBytes(16).toString("base64");
+    let message = "";
+    try {
+      resolveSsoKms({
+        AUTH_TOKEN_ENCRYPTION_KEY: key,
+        SSO_SECRET_KEY_ID: "sso_v2",
+        SSO_SECRET_PREVIOUS_KEYS: `sso_v1=${short}`,
+      });
+    } catch (e) {
+      message = (e as Error).message;
+    }
+    expect(message).toMatch(/"sso_v1"/);
+    expect(message).not.toContain(short);
+  });
+
+  it("accepts several previous keys and blank entries, and keys the ring by id", () => {
+    const resolved = resolveSsoKms({
+      AUTH_TOKEN_ENCRYPTION_KEY: key,
+      SSO_SECRET_KEY_ID: "sso_v3",
+      SSO_SECRET_PREVIOUS_KEYS: ` sso_v1=${b64()} ,, sso_v2=${b64()} `,
+    })!;
+    expect([...resolved.keyring!.keys()].sort()).toEqual([
+      "sso_v1",
+      "sso_v2",
+      "sso_v3",
+    ]);
+    expect(resolved.keyring!.get("sso_v3")).toBe(resolved.adapter);
+  });
+});
+
+describe("stripSsoSecrets", () => {
+  it("removes every secret path and keeps the rest", async () => {
+    const stored = await sealSsoConfig(
+      "saml",
+      {
+        privateKey: "k",
+        spMetadata: { privateKeyPass: "p", metadata: "<xml/>" },
+        cert: "PUBLIC-CERT",
+      },
+      kms,
+    );
+    expect(JSON.parse(stripSsoSecrets("saml", stored)!)).toEqual({
+      spMetadata: { metadata: "<xml/>" },
+      cert: "PUBLIC-CERT",
+    });
+  });
+
+  it("drops a config that is not a JSON object instead of throwing", () => {
+    expect(stripSsoSecrets("oidc", "not json")).toBeNull();
+    expect(stripSsoSecrets("oidc", "null")).toBeNull();
+    expect(stripSsoSecrets("oidc", "[1]")).toBeNull();
   });
 });

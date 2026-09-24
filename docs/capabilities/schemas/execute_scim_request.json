@@ -1,0 +1,82 @@
+{
+  "name": "execute_scim_request",
+  "domain": "org",
+  "description": "Answer one SCIM 2.0 provisioning request from the organization's identity provider: create, update, deactivate or delete users and groups, and recompute organization roles from group membership through the SSO group mapping.",
+  "mode": "sync",
+  "surfaces": [],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "tokenId": {
+        "type": "string",
+        "format": "uuid",
+        "description": "The org.scim_tokens row the route authenticated"
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "GET",
+          "POST",
+          "PUT",
+          "PATCH",
+          "DELETE"
+        ]
+      },
+      "path": {
+        "type": "string",
+        "maxLength": 512,
+        "description": "The path after /api/scim/v2, starting with a slash"
+      },
+      "query": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string"
+        },
+        "default": {}
+      },
+      "body": {}
+    },
+    "required": [
+      "tokenId",
+      "method",
+      "path"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "integer",
+        "minimum": 200,
+        "maximum": 599
+      },
+      "body": {
+        "anyOf": [
+          {},
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "location": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "status",
+      "body"
+    ],
+    "additionalProperties": false
+  }
+}

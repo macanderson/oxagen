@@ -70,13 +70,32 @@ export type McpAuthFailure =
   | "invalid_token"
   | "expired_token"
   /** The key is valid but its workspace is archived (ADR-105). */
-  | "workspace_archived";
+  | "workspace_archived"
+  /**
+   * The key is valid but its organization requires SSO and the key's creator
+   * has not signed in through one of its providers (ADR-145).
+   */
+  | "sso_required";
+
+/**
+ * What a person reads for a refusal whose reason code alone does not say what
+ * to do. The API answers the same refusal with the same sentence.
+ */
+const MCP_AUTH_FAILURE_DETAIL: Partial<Record<McpAuthFailure, string>> = {
+  sso_required:
+    "This organization requires single sign-on. The person who created this key must sign in through SSO.",
+};
 
 /** Thrown when an MCP request carries no valid principal. Fails closed. */
 export class McpUnauthorizedError extends Error {
   readonly reason: McpAuthFailure;
   constructor(reason: McpAuthFailure) {
-    super(`MCP request unauthorized: ${reason}`);
+    const detail = MCP_AUTH_FAILURE_DETAIL[reason];
+    super(
+      detail
+        ? `MCP request unauthorized: ${reason}. ${detail}`
+        : `MCP request unauthorized: ${reason}`,
+    );
     this.name = "McpUnauthorizedError";
     this.reason = reason;
   }
@@ -242,7 +261,9 @@ export async function resolveMcpContext(
           ? "expired_token"
           : resolution.kind === "workspace_archived"
             ? "workspace_archived"
-            : "invalid_token";
+            : resolution.kind === "sso_required"
+              ? "sso_required"
+              : "invalid_token";
       return { ok: false, reason };
     }
 

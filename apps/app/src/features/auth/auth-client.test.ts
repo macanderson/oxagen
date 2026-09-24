@@ -81,6 +81,16 @@ describe("liveSignUp", () => {
       outcome: "alreadyRegistered",
     });
   });
+
+  it("a success that carries no data holds no session, so it needs verification", async () => {
+    client.signUp.email.mockResolvedValue({ data: null, error: null });
+    await expect(
+      auth.liveSignUp({ name: "M", email: "a@b.co", password: "longenough" }),
+    ).resolves.toEqual({
+      ok: true,
+      needsVerification: true,
+    });
+  });
 });
 
 describe("liveVerifyTwoFactor", () => {
@@ -212,6 +222,77 @@ describe("pending next", () => {
     }).not.toThrow();
     expect(auth.takePendingNext()).toBeNull();
     spy.mockRestore();
+    get.mockRestore();
+  });
+});
+
+describe("pending email and notice", () => {
+  it("each is taken once", () => {
+    auth.rememberPendingEmail("marcus@a-intel.example");
+    expect(auth.takePendingEmail()).toBe("marcus@a-intel.example");
+    expect(auth.takePendingEmail()).toBeNull();
+    auth.rememberNotice("passwordSet");
+    expect(auth.takeNotice()).toBe("passwordSet");
+    expect(auth.takeNotice()).toBeNull();
+  });
+
+  it("a stored notice this screen does not know reads as none (negative)", () => {
+    sessionStorage.setItem("oxagen.auth.notice", "<script>");
+    expect(auth.takeNotice()).toBeNull();
+  });
+
+  it("survives unavailable storage", () => {
+    const set = vi
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(() => {
+        throw new Error("denied");
+      });
+    const get = vi
+      .spyOn(Storage.prototype, "getItem")
+      .mockImplementation(() => {
+        throw new Error("denied");
+      });
+    expect(() => {
+      auth.rememberPendingEmail("a@b.co");
+      auth.rememberNotice("passwordSet");
+    }).not.toThrow();
+    expect(auth.takePendingEmail()).toBeNull();
+    expect(auth.takeNotice()).toBeNull();
+    set.mockRestore();
+    get.mockRestore();
+  });
+});
+
+describe("signed-in mark", () => {
+  it("is taken once", () => {
+    auth.rememberSignedIn();
+    expect(auth.takeSignedIn()).toBe(true);
+    expect(auth.takeSignedIn()).toBe(false);
+  });
+
+  it("anything but the mark this module writes reads as no sign-in (negative)", () => {
+    sessionStorage.setItem("oxagen.auth.signedIn", "true");
+    expect(auth.takeSignedIn()).toBe(false);
+    // Read once all the same: a stray value does not linger for the next page.
+    expect(sessionStorage.getItem("oxagen.auth.signedIn")).toBeNull();
+  });
+
+  it("survives unavailable storage", () => {
+    const set = vi
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(() => {
+        throw new Error("denied");
+      });
+    const get = vi
+      .spyOn(Storage.prototype, "getItem")
+      .mockImplementation(() => {
+        throw new Error("denied");
+      });
+    expect(() => {
+      auth.rememberSignedIn();
+    }).not.toThrow();
+    expect(auth.takeSignedIn()).toBe(false);
+    set.mockRestore();
     get.mockRestore();
   });
 });

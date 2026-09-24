@@ -33,6 +33,7 @@ export const SIGNED_IN_ROUTES: readonly RouteRow[] = [
   { path: `/${org}/${ws}/runtimes`, titleKey: "runtimes" },
   { path: `/${org}/${ws}/repositories`, titleKey: "repositories" },
   { path: `/${org}/${ws}/spend`, titleKey: "spend" },
+  { path: `/${org}/${ws}/spend/tokens`, titleKey: "spend" },
   { path: `/${org}`, titleKey: "people" },
   { path: `/${org}/roles`, titleKey: "roles" },
   { path: `/${org}/api-keys`, titleKey: "apiKeys" },
