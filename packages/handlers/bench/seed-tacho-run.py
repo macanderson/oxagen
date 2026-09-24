@@ -10,9 +10,12 @@
 #     -e CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1 clickhouse/clickhouse-server:24.8-alpine
 #   docker exec -i bench-ch clickhouse-client -u bench --password bench -d bench \
 #     --multiquery < packages/telemetry/src/migrations/0027_tacho_events.sql
-#   python3 packages/handlers/bench/seed-tacho-run.py
-import os, urllib.request, base64, sys, time
-URL = os.environ.get("BENCH_CLICKHOUSE_URL", "http://127.0.0.1:18123") + "/?database=bench&max_threads=1&max_insert_threads=1"
+#   python3 packages/handlers/bench/seed-tacho-run.py [clickhouse-url]
+#
+# The URL defaults to the container above, http://127.0.0.1:18123.
+import urllib.request, base64, sys, time
+BASE = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:18123"
+URL = BASE + "/?database=bench&max_threads=1&max_insert_threads=1"
 AUTH = "Basic " + base64.b64encode(b"bench:bench").decode()
 ORG = "0b0e0000-0000-4000-8000-000000000001"
 WS = "0b0e0000-0000-4000-8000-000000000002"
