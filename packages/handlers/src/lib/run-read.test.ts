@@ -34,6 +34,7 @@ import { archiveFrameOf, type SealedFrameRow } from "@oxagen/run-ledger";
 import { buildArchiveSegment } from "@oxagen/tacho";
 import {
   defaultRunReadDeps,
+  readFrameAt,
   readFrames,
   readRunFrames,
   type ResolvedRun,
@@ -129,10 +130,88 @@ describe("defaultRunReadDeps: a compacted attempt", () => {
   });
 });
 
+const ROOT = "0192d4a8-7c1e-7a00-8000-00000000c0de";
+const CHILD = "0192d4a8-7c1e-7a00-8000-00000000c1d0";
+
+/** A wrapped run whose session row says it holds `seqCount` seqs. */
+const tachoRun = (seqCount: number) =>
+  ({
+    source: "tacho",
+    sessionUuid: ROOT,
+    row: { session: { seqCount } },
+  }) as unknown as ResolvedRun;
+
+type FrameArgs = { afterSeq: number; throughSeq?: number; limit: number };
+
+/** A `tacho_events` read over the root chain's `seqs`, honouring the bound. */
+function rootFrames(seqs: number[]) {
+  return vi.fn((args: FrameArgs) =>
+    Promise.resolve(
+      seqs
+        .filter(
+          (seq) =>
+            seq > args.afterSeq &&
+            (args.throughSeq === undefined || seq <= args.throughSeq),
+        )
+        .slice(0, args.limit)
+        .map((seq) => tachoRow(seq)),
+    ),
+  );
+}
+
+describe("readFrames: a wrapped run's own chain", () => {
+  it("reads a window bounded at `afterSeq + limit`, in one query", async () => {
+    const tachoFrames = rootFrames([0, 1, 2, 3, 4, 5]);
+    const deps = { tachoFrames } as unknown as RunReadDeps;
+    const frames = await readFrames(deps, tachoRun(6), "1", 3);
+    expect(frames.map((f) => f.seq)).toEqual(["2", "3", "4"]);
+    expect(tachoFrames.mock.calls).toEqual([
+      [{ sessionUuid: ROOT, afterSeq: 1, throughSeq: 4, limit: 3 }],
+    ]);
+  });
+
+  it("reads past the window when a chain break left a hole in it", async () => {
+    // Seqs 3 and 4 were never recorded; the chain goes on to 7.
+    const tachoFrames = rootFrames([0, 1, 2, 5, 6, 7]);
+    const deps = { tachoFrames } as unknown as RunReadDeps;
+    const frames = await readFrames(deps, tachoRun(8), "-1", 5);
+    expect(frames.map((f) => f.seq)).toEqual(["0", "1", "2", "5", "6"]);
+    expect(tachoFrames.mock.calls).toEqual([
+      [{ sessionUuid: ROOT, afterSeq: -1, throughSeq: 4, limit: 5 }],
+      [{ sessionUuid: ROOT, afterSeq: 4, limit: 2 }],
+    ]);
+  });
+
+  it("makes no second read at the end of the chain (negative)", async () => {
+    const tachoFrames = rootFrames([0, 1, 2]);
+    const deps = { tachoFrames } as unknown as RunReadDeps;
+    const frames = await readFrames(deps, tachoRun(3), "0", 10);
+    expect(frames.map((f) => f.seq)).toEqual(["1", "2"]);
+    expect(tachoFrames).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("readFrameAt: a wrapped run", () => {
+  it("bounds the read at the frame it wants", async () => {
+    const tachoFrames = rootFrames([0, 1, 2]);
+    const deps = { tachoFrames } as unknown as RunReadDeps;
+    const frame = await readFrameAt(deps, tachoRun(3), "1");
+    expect(frame?.seq).toBe("1");
+    expect(tachoFrames.mock.calls).toEqual([
+      [{ sessionUuid: ROOT, afterSeq: 0, throughSeq: 1, limit: 1 }],
+    ]);
+  });
+
+  it("answers null for a seq a chain break skipped, without reading past it (negative)", async () => {
+    const tachoFrames = rootFrames([0, 1, 5]);
+    const deps = { tachoFrames } as unknown as RunReadDeps;
+    expect(await readFrameAt(deps, tachoRun(6), "3")).toBeNull();
+    expect(tachoFrames).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("readRunFrames: a wrapped run's subagent chains", () => {
-  const ROOT = "0192d4a8-7c1e-7a00-8000-00000000c0de";
-  const CHILD = "0192d4a8-7c1e-7a00-8000-00000000c1d0";
-  const run = { source: "tacho", sessionUuid: ROOT } as unknown as ResolvedRun;
+  const run = tachoRun(3);
   const child = (seq: number) =>
     tachoRow(seq, {
       sessionUuid: CHILD,
@@ -149,16 +228,12 @@ describe("readRunFrames: a wrapped run's subagent chains", () => {
             .slice(0, args.limit),
         ),
     );
+    const tachoFrames = rootFrames([0, 1, 2]);
     return {
       subagents,
+      tachoFrames,
       deps: {
-        tachoFrames: (args: { afterSeq: number; limit: number }) =>
-          Promise.resolve(
-            [0, 1, 2]
-              .filter((seq) => seq > args.afterSeq)
-              .slice(0, args.limit)
-              .map((seq) => tachoRow(seq)),
-          ),
+        tachoFrames,
         tachoSubagentFrames: subagents,
       } as unknown as RunReadDeps,
     };
@@ -180,6 +255,51 @@ describe("readRunFrames: a wrapped run's subagent chains", () => {
     const capped = await readRunFrames(cut.deps, run, 4);
     expect(capped.frames).toHaveLength(4);
     expect(capped.complete).toBe(false);
+  });
+
+  it("reads each store once: the root chain bounded, the subagents in one read", async () => {
+    const wired = deps([child(0), child(1)]);
+    await readRunFrames(wired.deps, run, 10);
+    expect(wired.tachoFrames.mock.calls).toEqual([
+      [{ sessionUuid: ROOT, afterSeq: -1, throughSeq: 10, limit: 11 }],
+    ]);
+    expect(wired.subagents.mock.calls).toEqual([
+      [{ rootSessionUuid: ROOT, after: null, limit: 11 }],
+    ]);
+  });
+
+  it("names the listed chains to ClickHouse, so it reads only their ranges", async () => {
+    const wired = deps([child(0), child(1)]);
+    const listed = vi.fn(() => Promise.resolve([CHILD]));
+    const read = await readRunFrames(
+      { ...wired.deps, tachoChildSessions: listed },
+      run,
+      10,
+    );
+    expect(read.frames).toHaveLength(5);
+    expect(listed).toHaveBeenCalledWith(ROOT);
+    expect(wired.subagents.mock.calls).toEqual([
+      [
+        {
+          rootSessionUuid: ROOT,
+          after: null,
+          limit: 11,
+          sessionUuids: [CHILD],
+        },
+      ],
+    ]);
+  });
+
+  it("makes no subagent read when Postgres lists no chains (negative)", async () => {
+    const wired = deps([child(0)]);
+    const read = await readRunFrames(
+      { ...wired.deps, tachoChildSessions: () => Promise.resolve([]) },
+      run,
+      10,
+    );
+    expect(read).toMatchObject({ complete: true });
+    expect(read.frames).toHaveLength(3);
+    expect(wired.subagents).not.toHaveBeenCalled();
   });
 
   it("reads only the run's own chain when no subagent reader is wired (negative)", async () => {
