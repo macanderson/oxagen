@@ -25,6 +25,9 @@ function toInvitationView(
     status: record.status,
     invitedAt: record.invitedAt.toISOString(),
     expiresAt: record.expiresAt ? record.expiresAt.toISOString() : null,
+    inviterName: record.inviterName,
+    inviterRole:
+      record.inviterRole === null ? null : toOrgRole(record.inviterRole),
   });
   return parsed.success
     ? readOk(parsed.data)

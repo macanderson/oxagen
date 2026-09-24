@@ -93,6 +93,8 @@ const invitation: InvitationRecord = {
   status: "pending",
   invitedAt: new Date("2026-09-11T09:00:00Z"),
   expiresAt: null,
+  inviterName: "Priya Natarajan",
+  inviterRole: "Owner",
 };
 
 beforeEach(() => {

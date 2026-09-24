@@ -80,10 +80,27 @@ function lookup(path: string[]): string {
   return node;
 }
 
+type RichValue = string | number | ((chunks: ReactNode) => ReactNode);
+
 /** A synchronous translator over the real catalogs, for mocking `next-intl/server`. */
 export function translator(namespace?: string) {
-  return (key: string, values: Record<string, string | number> = {}) =>
+  const format = (key: string, values: Record<string, RichValue> = {}) =>
     lookup([...(namespace ? namespace.split(".") : []), ...key.split(".")])
       .replace(/'\{\}'/g, "{}")
       .replace(/\{(\w+)\}/g, (_m, name: string) => String(values[name]));
+  const t = (key: string, values: Record<string, string | number> = {}) =>
+    format(key, values);
+  /** `t.rich`: each `<tag>…</tag>` becomes what the tag's function returns for its text. */
+  t.rich = (key: string, values: Record<string, RichValue> = {}): ReactNode[] =>
+    format(key, values)
+      .split(/(<\w+>[^<]*<\/\w+>)/)
+      .filter((part) => part !== "")
+      .map((part) => {
+        const tagged = /^<(\w+)>([^<]*)<\/\1>$/.exec(part);
+        const render = tagged ? values[tagged[1] ?? ""] : undefined;
+        return tagged && typeof render === "function"
+          ? render(tagged[2] ?? "")
+          : part;
+      });
+  return t;
 }
