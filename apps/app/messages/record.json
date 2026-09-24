@@ -245,6 +245,8 @@
       "repositoryMissing": "This workspace has no repository bound, so Oxagen has nowhere to open a pull request.",
       "governanceUnreadable": "Oxagen could not read governance.toml on the production branch.",
       "githubRefused": "GitHub refused the write. Check that the Oxagen app still has write access to the repository.",
+      "gitlabRefused": "GitLab refused the write. Nothing was published. Check that the project access token still has the api scope and the Developer role, then try again.",
+      "gitlabCredentialRejected": "GitLab no longer accepts the project access token stored for this project. Nothing was changed. Connect the project again with a new token.",
       "refused": "Oxagen refused the change: {code}.",
       "invalid": "Oxagen refused the statement. Check that it is not empty and retry.",
       "pendingApproval": "Your change is waiting for approval. The request is {accessRequestId}.",

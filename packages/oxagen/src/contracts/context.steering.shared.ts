@@ -64,6 +64,13 @@ export const proposalStatusSchema = z.enum([
 ]);
 export type ProposalStatus = z.infer<typeof proposalStatusSchema>;
 
+/**
+ * The repository hosts steering publishes through (#3762). A Context PR on
+ * GitLab is a merge request; its number is the merge request's IID.
+ */
+export const repositoryProviderSchema = z.enum(["github", "gitlab"]);
+export type RepositoryProvider = z.infer<typeof repositoryProviderSchema>;
+
 export const governanceModeSchema = z.enum(["solo", "team", "regulated"]);
 export type GovernanceMode = z.infer<typeof governanceModeSchema>;
 
@@ -212,6 +219,8 @@ export const proposalViewSchema = z
       .object({
         number: z.number().int().positive(),
         url: z.string(),
+        /** Which host issued `number`: a pull request or a merge request IID. */
+        provider: repositoryProviderSchema,
         repository: z.string(),
         branch: z.string(),
       })

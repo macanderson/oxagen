@@ -26,6 +26,10 @@ export const repositoryRole = z.enum(["main", "linked"]);
  * `installed` means the App is installed and the connection is live, which is
  * the precondition for delivery and not a claim that an event arrived.
  * `unknown` is an installation the registry has no row for.
+ *
+ * A GitLab project (#3762) has no App installation. It reads `installed` when
+ * its connection is live and Oxagen registered the project webhook, `paused`
+ * or `retired` from the connection as on GitHub, and `unknown` otherwise.
  */
 export const repositoryEventDelivery = z.enum([
   "installed",
@@ -61,6 +65,8 @@ export const repositoryList = registerCapability({
           .object({
             bindingId: repositoryMainBind.output.shape.bindingId,
             role: repositoryRole,
+            /** The host: a GitHub repository or a gitlab.com project. */
+            provider: z.enum(["github", "gitlab"]),
             owner: z.string().min(1),
             name: z.string().min(1),
             /** `owner/name` as GitHub reported it when the binding was written. */

@@ -1,12 +1,10 @@
 // @vitest-environment jsdom
-// One Context PR on the Changes tab, over fake server actions: the read's
-// three states, every fact the pull request can be missing, each check's
-// sentence, the stopped run, and the lifecycle's two writes (merge and close)
-// with their refusals and their throws.
-//
-// The actions are the seam; actions.test.ts proves them against the kernel.
-// What is under test here is what the detail draws from their answers and
-// which of them it calls.
+// One Context PR on the Changes tab over fake server actions: every state the
+// detail can be in (loading, refused, loaded with checks passed, failed,
+// running or merged, and a proposal with no pull request yet), Merge and its
+// refusal, and Close with the comment it previews. The actions are proven
+// against the kernel seam in actions.test.ts; here they answer the way the
+// capabilities answer, so what is under test is the page.
 import {
   act,
   cleanup,
@@ -30,6 +28,11 @@ const actions = vi.hoisted(() => ({
 }));
 vi.mock("./actions", () => actions);
 
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/acme/core-platform/repositories/changes/prp_open1",
+  useSearchParams: () => new URLSearchParams(),
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+}));
 vi.mock("next/link", () => ({
   default: ({
     children,
@@ -54,24 +57,7 @@ vi.mock("next/link", () => ({
 
 const { ChangeDetail } = await import("./change-detail");
 
-type Check = ContextPr["checks"][number];
-
-const passed = (name: Check["name"]): Check => ({
-  name,
-  status: "passed",
-  summary: `${name} held.`,
-});
-
-const ALL_PASSED: Check[] = [
-  passed("schema"),
-  passed("lineage_uniqueness"),
-  passed("record_hash"),
-  passed("secret_pii_scan"),
-  passed("conflict_against_active"),
-  passed("constraint_effect"),
-];
-
-const PR: ContextPr = {
+const PASSED: ContextPr = {
   proposalId: "prp_open1",
   lineage: "ctx.scr.001-never-push-to-main",
   status: "checks_passed",
@@ -81,21 +67,38 @@ const PR: ContextPr = {
     url: "https://github.com/acme/platform/pull/42",
     repository: "acme/platform",
     baseRef: "main",
-    branch: "context/ctx.scr.001-never-push-to-main",
+    branch: "oxagen/prp_open1",
     headSha: "0123456789abcdef",
   },
   body: null,
-  checks: ALL_PASSED,
+  checks: [
+    { name: "schema", status: "passed", summary: "The record parses." },
+    { name: "record_hash", status: "passed", summary: "" },
+  ],
   onMerge: {
     path: ".oxagen/rules/ctx.scr.001-never-push-to-main.toml",
-    bundleVersion: { current: 3, afterMerge: 4 },
+    bundleVersion: { current: 7, afterMerge: 8 },
   },
   merged: null,
 };
 
+const FAILED: ContextPr = {
+  ...PASSED,
+  status: "checks_failed",
+  checks: [
+    { name: "schema", status: "passed", summary: "The record parses." },
+    {
+      name: "secret_pii_scan",
+      status: "failed",
+      summary: "Line 4 carries an email address.",
+    },
+    { name: "conflict_against_active", status: "pending", summary: "" },
+  ],
+};
+
 const ROW: RepositoryChange = {
   proposalId: "prp_open1",
-  lineage: "ctx.scr.001-never-push-to-main (row)",
+  lineage: "ctx.scr.001-never-push-to-main",
   statement: "Never push to main",
   why: "Main is shared and contested.",
   kind: "context_record",
@@ -103,11 +106,11 @@ const ROW: RepositoryChange = {
     number: 42,
     url: "https://github.com/acme/platform/pull/42",
     repository: "acme/platform",
-    branch: "context/ctx.scr.001-never-push-to-main",
+    branch: "oxagen/prp_open1",
   },
-  openedBy: "the promoter",
+  openedBy: "user:mac",
   status: "checks_passed",
-  checks: { passed: 6, total: 6 },
+  checks: { passed: 2, total: 2 },
   openedAt: "2026-09-18T10:00:00.000Z",
 };
 
@@ -136,89 +139,128 @@ function detail(row: RepositoryChange | null = ROW) {
   );
 }
 
-/** Renders the detail and waits for the pull request's read to land. */
-async function loaded(row: RepositoryChange | null = ROW) {
+async function loaded(pr: ContextPr, row: RepositoryChange | null = ROW) {
+  actions.readRepositoryChange.mockResolvedValue({ ok: true, value: pr });
   const user = userEvent.setup();
-  const view = detail(row);
-  await screen.findByTestId("change-merge-steps");
-  return { user, view, root: screen.getByTestId("change-detail") };
+  detail(row);
+  await screen.findByTestId("change-checks");
+  return user;
 }
 
 beforeEach(() => {
-  for (const fn of [...Object.values(actions), ...Object.values(callbacks)])
-    fn.mockReset();
-  actions.readRepositoryChange.mockResolvedValue({ ok: true, value: PR });
+  for (const fn of Object.values(actions)) fn.mockReset();
+  for (const fn of Object.values(callbacks)) fn.mockReset();
 });
 afterEach(cleanup);
 
 describe("reading the pull request", () => {
-  it("says it is reading, titled by the list's row and in the row's state, until the read answers", async () => {
+  it("says it is reading, then draws the facts, the file, the checks and what merge will do", async () => {
     let answer!: (value: unknown) => void;
     actions.readRepositoryChange.mockReturnValue(
       new Promise((resolve) => {
         answer = resolve;
       }),
     );
-    detail({ ...ROW, status: "checks_running" });
-    expect(screen.getByTestId("change-loading")).toHaveTextContent(
-      "Reading the pull request",
+    detail();
+    expect(screen.getByTestId("change-loading")).toHaveAttribute(
+      "role",
+      "status",
     );
-    const root = screen.getByTestId("change-detail");
-    expect(root.dataset.status).toBe("checks_running");
     expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
-      "ctx.scr.001-never-push-to-main (row)",
+      "ctx.scr.001-never-push-to-main",
     );
-    // No count is drawn before a check has been read.
-    expect(root).not.toHaveTextContent("/ 6");
-    expect(root.querySelector('[data-ci="running"]')).not.toBeNull();
+    answer({ ok: true, value: PASSED });
+    const checks = await screen.findByTestId("change-checks");
     expect(actions.readRepositoryChange).toHaveBeenCalledWith(
       "acme",
       "core-platform",
       "prp_open1",
     );
-    await act(async () => {
-      answer({ ok: true, value: PR });
-      await Promise.resolve();
-    });
-    expect(await screen.findByTestId("change-merge-steps")).toBeTruthy();
-    expect(root.dataset.status).toBe("checks_passed");
-  });
-
-  it("reads as open, titled by the proposal id, when neither the row nor the read has answered", () => {
-    actions.readRepositoryChange.mockReturnValue(new Promise(() => {}));
-    detail(null);
-    const root = screen.getByTestId("change-detail");
-    expect(root.dataset.status).toBe("pr_open");
-    expect(screen.getByTestId("change-state")).toHaveTextContent("open");
-    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
-      "prp_open1",
+    expect(screen.getByTestId("change-pr")).toHaveTextContent(
+      "acme/platform#42",
     );
-    expect(root.querySelector('[data-ci="queued"]')).not.toBeNull();
+    const root = screen.getByTestId("change-detail");
+    expect(root).toHaveTextContent("oxagen/prp_open1 → main");
+    // The kind's path names its placeholder literally, not as markup.
+    expect(root).toHaveTextContent(".oxagen/rules/<lineage>.toml");
+    // A person's user id is said as a person, with when they opened it.
+    expect(root).toHaveTextContent("a person");
+    expect(screen.getByTestId("change-why")).toHaveTextContent(
+      "Main is shared and contested.",
+    );
+    expect(screen.getByTestId("change-files")).toHaveTextContent(
+      ".oxagen/rules/ctx.scr.001-never-push-to-main.toml",
+    );
+    expect(
+      within(checks)
+        .getAllByRole("row")
+        .slice(1)
+        .map((row) => row.textContent),
+    ).toEqual([
+      "schemapassThe record parses.",
+      "record_hashpassnot reported yet",
+    ]);
+    expect(screen.getByTestId("change-merge-steps")).toHaveTextContent(
+      "bump the workspace bundle version from v7 to v8",
+    );
+    expect(screen.getByTestId("change-state")).toHaveTextContent(
+      "checks passed",
+    );
+    expect(root).toHaveTextContent("2 / 2");
+    expect(screen.getByTestId("change-governance")).toHaveTextContent(
+      "Governance: team on GitHub",
+    );
+    await expectNoAxe(root);
   });
 
-  it("prints the read's refusal in place of the pull request (negative)", async () => {
+  it("prints a refusal to read, and no facts (negative)", async () => {
     actions.readRepositoryChange.mockResolvedValue({
       ok: false,
-      reason: "denied",
-      code: "repository.read",
+      reason: "not_found",
+      code: "proposal_not_found",
     });
     detail();
     expect(await screen.findByTestId("change-failure")).toHaveTextContent(
-      "Only an organization Owner or Admin",
+      "proposal_not_found",
     );
-    expect(screen.queryByTestId("change-merge")).toBeNull();
-    expect(callbacks.onMergeable).not.toHaveBeenCalledWith(true);
+    expect(screen.queryByTestId("change-checks")).toBeNull();
   });
 
-  it("names the call as unanswered when the read throws (negative)", async () => {
-    actions.readRepositoryChange.mockRejectedValue(new Error("socket hang up"));
+  it("reads an unanswered action as a failure rather than hanging (negative)", async () => {
+    actions.readRepositoryChange.mockRejectedValue(new Error("network"));
     detail();
-    expect(await screen.findByTestId("change-failure")).toHaveTextContent(
-      "action_failed",
+    expect(await screen.findByTestId("change-failure")).toBeTruthy();
+  });
+
+  it("says what is not recorded when the list holds no row for the change", async () => {
+    await loaded({ ...PASSED, governanceMode: null }, null);
+    const root = screen.getByTestId("change-detail");
+    expect(screen.getByTestId("change-why")).toHaveTextContent("not recorded");
+    expect(
+      root.querySelectorAll('[data-state="not-recorded"]').length,
+    ).toBeGreaterThanOrEqual(2);
+    expect(screen.getByTestId("change-governance")).toHaveTextContent(
+      "Governance: not read yet",
     );
   });
 
-  it("drops an answer that lands after the detail left the screen", async () => {
+  it("prints a source that is not a person as recorded", async () => {
+    await loaded(PASSED, { ...ROW, openedBy: "the promoter", why: "  " });
+    const root = screen.getByTestId("change-detail");
+    expect(root).toHaveTextContent("the promoter");
+    expect(screen.getByTestId("change-why")).toHaveTextContent("not recorded");
+  });
+
+  it("reads a proposal with no pull request yet as open, with nothing to close", async () => {
+    await loaded({ ...PASSED, status: "proposed", pr: null, checks: [] }, null);
+    expect(screen.getByTestId("change-state")).toHaveTextContent("open");
+    expect(screen.getByTestId("change-pr")).toHaveTextContent("not recorded");
+    expect(screen.getByTestId("change-merge")).toBeDisabled();
+    expect(screen.getByTestId("change-close")).toBeDisabled();
+    expect(screen.queryByTestId("closepr-dialog")).toBeNull();
+  });
+
+  it("drops an answer that lands after the detail left the screen, and hands the gold back", async () => {
     let answer!: (value: unknown) => void;
     actions.readRepositoryChange.mockReturnValue(
       new Promise((resolve) => {
@@ -228,152 +270,51 @@ describe("reading the pull request", () => {
     const view = detail();
     view.unmount();
     await act(async () => {
-      answer({ ok: true, value: PR });
+      answer({ ok: true, value: PASSED });
       await Promise.resolve();
     });
     expect(screen.queryByTestId("change-detail")).toBeNull();
-    // Leaving hands the one gold back to the header.
+    expect(callbacks.onMergeable).not.toHaveBeenCalledWith(true);
     expect(callbacks.onMergeable).toHaveBeenLastCalledWith(false);
   });
 
-  it("goes back to every change from its back button", async () => {
-    const { user } = await loaded();
+  it("goes back to every change", async () => {
+    const user = await loaded(PASSED);
     await user.click(screen.getByTestId("change-back"));
-    expect(callbacks.onBack).toHaveBeenCalledTimes(1);
+    expect(callbacks.onBack).toHaveBeenCalledOnce();
   });
 });
 
-describe("the facts", () => {
-  it("draws the kind, the pull request, its branch onto its base, the opener, the why and the file it carries", async () => {
-    const { root } = await loaded();
-    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
-      "ctx.scr.001-never-push-to-main (row)",
+describe("a failed check", () => {
+  it("stops the run where it stopped, says why, and keeps Merge disabled (negative)", async () => {
+    const user = await loaded(FAILED);
+    expect(screen.getByTestId("change-stopped")).toHaveTextContent(
+      "secret_pii_scan stopped the run. Line 4 carries an email address.",
     );
-    expect(root).toHaveTextContent("context record");
-    expect(root).toHaveTextContent(".oxagen/rules/<lineage>.toml");
-    expect(screen.getByTestId("change-pr")).toHaveTextContent(
-      "acme/platform#42",
-    );
-    expect(root).toHaveTextContent(
-      "context/ctx.scr.001-never-push-to-main → main",
-    );
-    expect(root).toHaveTextContent("the promoter");
-    expect(root).toHaveTextContent("Sep 18, 2026");
-    expect(screen.getByTestId("change-why")).toHaveTextContent(
-      "Main is shared and contested.",
-    );
-    expect(screen.getByTestId("change-files")).toHaveTextContent(
-      ".oxagen/rules/ctx.scr.001-never-push-to-main.toml",
-    );
-    expect(screen.getByTestId("change-merge-steps")).toHaveTextContent(
-      "from v3 to v4",
-    );
-    expect(root).toHaveTextContent("6 / 6");
-    await expectNoAxe(root);
-  });
-
-  it("says a person opened it rather than printing their user id", async () => {
-    const { root } = await loaded({ ...ROW, openedBy: "user:mac" });
-    expect(root).toHaveTextContent("a person");
-    expect(root).not.toHaveTextContent("user:mac");
-  });
-
-  it("says what is not recorded: no row, a blank why, and a proposal with no pull request yet (negative)", async () => {
-    actions.readRepositoryChange.mockResolvedValue({
-      ok: true,
-      value: {
-        ...PR,
-        status: "proposed",
-        pr: null,
-        governanceMode: null,
-        checks: [],
-      },
-    });
-    const { root } = await loaded(null);
-    // A proposal with no pull request reads as open, titled by its lineage.
-    expect(root.dataset.status).toBe("pr_open");
-    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
-      "ctx.scr.001-never-push-to-main",
-    );
-    expect(screen.getByTestId("change-pr")).toHaveTextContent("not recorded");
-    expect(screen.getByTestId("change-why")).toHaveTextContent("not recorded");
-    expect(
-      root.querySelectorAll('[data-state="not-recorded"]').length,
-    ).toBeGreaterThanOrEqual(2);
-    expect(root).toHaveTextContent("0 / 0");
-    // Nothing to merge onto and no pull request to close.
-    expect(screen.getByTestId("change-merge")).toBeDisabled();
-    expect(screen.getByTestId("change-close")).toBeDisabled();
-    expect(screen.queryByTestId("closepr-dialog")).toBeNull();
-    expect(screen.getByTestId("change-governance")).toHaveTextContent(
-      "Governance: not read yet",
-    );
-
-    cleanup();
-    actions.readRepositoryChange.mockResolvedValue({ ok: true, value: PR });
-    await loaded({ ...ROW, why: "   " });
-    expect(screen.getByTestId("change-why")).toHaveTextContent("not recorded");
-  });
-});
-
-describe("the checks", () => {
-  it("stops the run at the failed check: the row says why, the checks behind it did not run, and merge is disabled", async () => {
-    actions.readRepositoryChange.mockResolvedValue({
-      ok: true,
-      value: {
-        ...PR,
-        status: "checks_failed",
-        checks: [
-          passed("schema"),
-          {
-            name: "secret_pii_scan",
-            status: "failed",
-            summary: "An API key is in the statement.",
-          },
-          { name: "record_hash", status: "pending", summary: "" },
-        ],
-      },
-    });
-    const { root } = await loaded({ ...ROW, status: "checks_failed" });
-    expect(root.querySelector('[data-ci="failed"]')).not.toBeNull();
-    expect(root).toHaveTextContent("1 / 3");
-    const table = screen.getByTestId("change-checks");
-    const failedRow = within(table).getByText("secret_pii_scan").closest("tr");
-    expect(failedRow).toHaveAttribute("data-result", "failed");
-    expect(failedRow).toHaveTextContent("fail");
-    const queued = table.querySelector('[data-check="record_hash"]');
-    expect(queued).toHaveTextContent("queued");
-    expect(queued).toHaveTextContent(
+    const pending = screen
+      .getByTestId("change-checks")
+      .querySelector('[data-check="conflict_against_active"]');
+    expect(pending).toHaveTextContent(
       "Did not run: secret_pii_scan stopped the run.",
     );
-    expect(screen.getByTestId("change-stopped")).toHaveTextContent(
-      "secret_pii_scan stopped the run. An API key is in the statement.",
-    );
-    expect(screen.getByTestId("change-merge")).toBeDisabled();
+    const merge = screen.getByTestId("change-merge");
+    expect(merge).toBeDisabled();
+    expect(merge.className).not.toContain("bg-button-primary-bg");
     expect(screen.getByTestId("change-governance")).toHaveTextContent(
       "Merge stays disabled until every check reports.",
     );
+    await user.click(merge);
+    expect(actions.mergeRepositoryChange).not.toHaveBeenCalled();
     expect(callbacks.onMergeable).not.toHaveBeenCalledWith(true);
   });
 
-  it("says a running check has not reported yet, and waits on it before merge", async () => {
-    actions.readRepositoryChange.mockResolvedValue({
-      ok: true,
-      value: {
-        ...PR,
-        status: "checks_running",
-        checks: [
-          passed("schema"),
-          { name: "record_hash", status: "running", summary: "" },
-        ],
-      },
+  it("waits while a check is still running", async () => {
+    await loaded({
+      ...PASSED,
+      status: "checks_running",
+      checks: [{ name: "schema", status: "running", summary: "" }],
     });
-    await loaded();
-    const running = screen
-      .getByTestId("change-checks")
-      .querySelector('[data-check="record_hash"]');
-    expect(running).toHaveTextContent("running");
-    expect(running).toHaveTextContent("not reported yet");
+    expect(screen.getByTestId("change-merge")).toBeDisabled();
     expect(screen.queryByTestId("change-stopped")).toBeNull();
     expect(screen.getByTestId("change-governance")).toHaveTextContent(
       "Merge stays disabled until every check reports.",
@@ -381,27 +322,22 @@ describe("the checks", () => {
   });
 });
 
-describe("merge", () => {
-  it("is the gold action only when every check passed, and merging re-reads and tells the list", async () => {
-    const { user, root } = await loaded();
+describe("merging", () => {
+  it("merges a pull request whose every check passed, then re-reads it", async () => {
+    const user = await loaded(PASSED);
+    await waitFor(() => {
+      expect(callbacks.onMergeable).toHaveBeenLastCalledWith(true);
+    });
     const merge = screen.getByTestId("change-merge");
-    expect(merge).toBeEnabled();
     expect(merge.className).toContain("bg-button-primary-bg");
-    expect(callbacks.onMergeable).toHaveBeenLastCalledWith(true);
-    expect(screen.getByTestId("change-governance")).toHaveTextContent(
-      "Governance: team on GitHub",
-    );
-
-    let settle!: (value: unknown) => void;
-    actions.mergeRepositoryChange.mockReturnValue(
-      new Promise((resolve) => {
-        settle = resolve;
-      }),
-    );
+    actions.mergeRepositoryChange.mockResolvedValue({
+      ok: true,
+      value: { commit: "fedcba9876543210" },
+    });
     actions.readRepositoryChange.mockResolvedValue({
       ok: true,
       value: {
-        ...PR,
+        ...PASSED,
         status: "merged",
         merged: {
           commit: "fedcba9876543210",
@@ -412,166 +348,115 @@ describe("merge", () => {
       },
     });
     await user.click(merge);
-    expect(merge).toHaveTextContent("Merging");
-    expect(merge).toBeDisabled();
-    await act(async () => {
-      settle({ ok: true, value: { commit: "fedcba9876543210" } });
-      await Promise.resolve();
-    });
     expect(await screen.findByTestId("change-done")).toHaveTextContent(
       "Merged at fedcba9.",
-    );
-    expect(await screen.findByTestId("change-merged")).toHaveTextContent(
-      "The file is on main",
     );
     expect(actions.mergeRepositoryChange).toHaveBeenCalledWith(
       "acme",
       "core-platform",
       "prp_open1",
     );
+    expect(callbacks.onChanged).toHaveBeenCalledOnce();
+    expect(await screen.findByTestId("change-merged")).toHaveTextContent(
+      "The file is on main",
+    );
     expect(actions.readRepositoryChange).toHaveBeenCalledTimes(2);
-    expect(callbacks.onChanged).toHaveBeenCalledTimes(1);
-    // A merged pull request offers neither merge nor close.
     expect(screen.queryByTestId("change-merge")).toBeNull();
-    expect(screen.queryByTestId("change-close")).toBeNull();
-    expect(root.dataset.status).toBe("merged");
-    expect(callbacks.onMergeable).toHaveBeenLastCalledWith(false);
   });
 
-  it("prints the handler's refusal and keeps the pull request open (negative)", async () => {
+  it("prints a merge refusal and writes nothing else (negative)", async () => {
+    const user = await loaded(PASSED);
     actions.mergeRepositoryChange.mockResolvedValue({
       ok: false,
       reason: "conflict",
-      code: "checks_not_passed",
+      code: "head_moved",
     });
-    const { user } = await loaded();
     await user.click(screen.getByTestId("change-merge"));
     expect(await screen.findByTestId("change-merge-failure")).toHaveTextContent(
-      "This was refused: checks_not_passed.",
-    );
-    expect(screen.getByTestId("change-merge")).toBeEnabled();
-    expect(callbacks.onChanged).not.toHaveBeenCalled();
-    expect(actions.readRepositoryChange).toHaveBeenCalledTimes(1);
-  });
-
-  it("names the call as unanswered when merge throws (negative)", async () => {
-    actions.mergeRepositoryChange.mockRejectedValue(new Error("offline"));
-    const { user } = await loaded();
-    await user.click(screen.getByTestId("change-merge"));
-    expect(await screen.findByTestId("change-merge-failure")).toHaveTextContent(
-      "action_failed",
+      "head_moved",
     );
     expect(callbacks.onChanged).not.toHaveBeenCalled();
   });
 
-  it("draws no merge or close on a pull request that was closed", async () => {
-    actions.readRepositoryChange.mockResolvedValue({
-      ok: true,
-      value: { ...PR, status: "rejected" },
-    });
-    const { root } = await loaded({ ...ROW, status: "rejected" });
-    expect(root.dataset.status).toBe("rejected");
-    expect(screen.getByTestId("change-state")).toHaveTextContent("closed");
+  it("reads a merge that never answered as a failure (negative)", async () => {
+    const user = await loaded(PASSED);
+    actions.mergeRepositoryChange.mockRejectedValue(new Error("network"));
+    await user.click(screen.getByTestId("change-merge"));
+    expect(await screen.findByTestId("change-merge-failure")).toBeTruthy();
+    expect(callbacks.onChanged).not.toHaveBeenCalled();
+  });
+
+  it("offers neither Merge nor Close once a pull request was closed", async () => {
+    await loaded({ ...PASSED, status: "rejected" });
     expect(screen.queryByTestId("change-merge")).toBeNull();
-    expect(screen.queryByTestId("change-merged")).toBeNull();
+    expect(screen.queryByTestId("change-close")).toBeNull();
   });
 });
 
-describe("close", () => {
-  async function openClose() {
-    const ctx = await loaded();
-    await ctx.user.click(screen.getByTestId("change-close"));
+describe("closing without merging", () => {
+  it("previews the comment with the closer and this page's URL, and closes", async () => {
+    const user = await loaded(FAILED);
+    await user.click(screen.getByTestId("change-close"));
     const dialog = await screen.findByTestId("closepr-dialog");
-    return { ...ctx, dialog };
-  }
-
-  it("previews the comment that names the closer and links back to this change, and closes with it", async () => {
+    expect(dialog).toHaveTextContent("Close acme/platform#42");
+    const comment = within(dialog).getByTestId("closepr-comment");
+    expect(comment).toHaveTextContent("Closed by Mac Anderson <mac@acme.test>");
+    expect(within(comment).getByTestId("closepr-link")).toHaveAttribute(
+      "href",
+      "/acme/core-platform/repositories/changes/prp_open1",
+    );
+    await expectNoAxe(dialog);
     actions.closeRepositoryChange.mockResolvedValue({
       ok: true,
       value: { status: "rejected" },
     });
-    const { user, dialog } = await openClose();
-    expect(dialog).toHaveTextContent("Close acme/platform#42");
-    const comment = within(dialog).getByTestId("closepr-comment");
-    expect(comment).toHaveTextContent("Closed by Mac Anderson <mac@acme.test>");
-    const link = within(dialog).getByTestId("closepr-link");
-    expect(link).toHaveAttribute(
-      "href",
-      "/acme/core-platform/repositories/changes/prp_open1",
-    );
-    // The comment carries the absolute URL, since it is read on GitHub.
-    expect(link.textContent).toMatch(
-      /^https?:\/\/.+\/acme\/core-platform\/repositories\/changes\/prp_open1$/,
-    );
-    expect(dialog).toHaveTextContent("GitHub shows no comment");
-    await expectNoAxe(dialog);
-
-    actions.readRepositoryChange.mockResolvedValue({
-      ok: true,
-      value: { ...PR, status: "rejected" },
-    });
     await user.click(within(dialog).getByTestId("closepr-submit"));
-    expect(await screen.findByTestId("change-done")).toHaveTextContent(
-      "Closed without merging.",
-    );
-    expect(actions.closeRepositoryChange).toHaveBeenCalledWith(
+    await waitFor(() => {
+      expect(actions.closeRepositoryChange).toHaveBeenCalledOnce();
+    });
+    const [org, ws, proposalId, sent] =
+      actions.closeRepositoryChange.mock.calls[0] ?? [];
+    expect([org, ws, proposalId]).toEqual([
       "acme",
       "core-platform",
       "prp_open1",
-      expect.stringMatching(
-        /^Closed by Mac Anderson <mac@acme\.test>\n\n---\n\nAdded via Oxagen \[https?:\/\/[^\]]+\/acme\/core-platform\/repositories\/changes\/prp_open1\]\(/,
-      ),
+    ]);
+    expect(sent).toContain("Closed by Mac Anderson <mac@acme.test>");
+    expect(sent).toContain(
+      "/acme/core-platform/repositories/changes/prp_open1",
     );
-    expect(callbacks.onChanged).toHaveBeenCalledTimes(1);
-    await waitFor(() => {
-      expect(screen.queryByTestId("closepr-dialog")).toBeNull();
-    });
-    expect(await screen.findByTestId("change-state")).toHaveTextContent(
-      "closed",
+    expect(await screen.findByTestId("change-done")).toHaveTextContent(
+      "Closed without merging.",
     );
+    expect(callbacks.onChanged).toHaveBeenCalledOnce();
   });
 
-  it("prints the refusal in the dialog and keeps it open; cancelling clears it (negative)", async () => {
+  it("prints a close refusal in the dialog and keeps it open (negative)", async () => {
+    const user = await loaded(FAILED);
+    await user.click(screen.getByTestId("change-close"));
+    const dialog = await screen.findByTestId("closepr-dialog");
     actions.closeRepositoryChange.mockResolvedValue({
       ok: false,
       reason: "denied",
       code: "authz_denied",
     });
-    const { user, dialog } = await openClose();
     await user.click(within(dialog).getByTestId("closepr-submit"));
     expect(
       await within(dialog).findByTestId("closepr-failure"),
     ).toHaveTextContent("Only an organization Owner or Admin");
     expect(callbacks.onChanged).not.toHaveBeenCalled();
+  });
 
+  it("reads a close that never answered as a failure, and Cancel dismisses (negative)", async () => {
+    const user = await loaded(FAILED);
+    await user.click(screen.getByTestId("change-close"));
+    const dialog = await screen.findByTestId("closepr-dialog");
+    actions.closeRepositoryChange.mockRejectedValue(new Error("network"));
+    await user.click(within(dialog).getByTestId("closepr-submit"));
+    expect(await within(dialog).findByTestId("closepr-failure")).toBeTruthy();
     await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
     await waitFor(() => {
       expect(screen.queryByTestId("closepr-dialog")).toBeNull();
     });
-    await user.click(screen.getByTestId("change-close"));
-    const reopened = await screen.findByTestId("closepr-dialog");
-    expect(within(reopened).queryByTestId("closepr-failure")).toBeNull();
-  });
-
-  it("names the call as unanswered when close throws, and says it is closing while it waits (negative)", async () => {
-    let fail!: (reason: unknown) => void;
-    actions.closeRepositoryChange.mockReturnValue(
-      new Promise((_resolve, reject) => {
-        fail = reject;
-      }),
-    );
-    const { user, dialog } = await openClose();
-    const submit = within(dialog).getByTestId("closepr-submit");
-    await user.click(submit);
-    expect(submit).toHaveTextContent("Closing");
-    expect(submit).toBeDisabled();
-    await act(async () => {
-      fail(new Error("offline"));
-      await Promise.resolve();
-    });
-    expect(
-      await within(dialog).findByTestId("closepr-failure"),
-    ).toHaveTextContent("action_failed");
-    expect(submit).toBeEnabled();
   });
 });

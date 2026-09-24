@@ -46,6 +46,7 @@ const CONTEXT_PR = {
   pr: {
     number: 43,
     url: "https://github.com/acme/platform/pull/43",
+    provider: "github",
     repository: "acme/platform",
     baseRef: "main",
     branch: "context/ctx.scr.001-never-push-to-main",

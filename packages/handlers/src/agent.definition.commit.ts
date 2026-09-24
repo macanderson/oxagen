@@ -52,6 +52,7 @@ import { resolve as resolveIam } from "@oxagen/oxagen/iam";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { assertNotRetired } from "./lib/agent-identity";
 import { resolveGitHubToken } from "./lib/github-token";
+import { repositoryHostUnsupported } from "./repository.bound";
 import { logger } from "./logger";
 import { sha256Hex } from "./registry-digest";
 
@@ -141,6 +142,8 @@ async function resolveRepository(
   const bindings = await tx
     .select({
       publicId: schema.repositoryBindings.publicId,
+      provider: schema.repositoryBindings.provider,
+      fullName: schema.repositoryBindings.providerFullName,
       owner: schema.repositoryBindings.providerOwner,
       name: schema.repositoryBindings.providerName,
       configuredDefaultRef: schema.repositoryBindings.configuredDefaultRef,
@@ -171,6 +174,11 @@ async function resolveRepository(
           : `No repository binding "${repositoryId}" in this workspace`,
     });
   }
+  // The commit goes through a GitHub token (ADR-020). A GitLab main project
+  // is refused by name until the definition commit uses the steering host
+  // seam (#3762).
+  if (chosen.provider !== "github")
+    throw repositoryHostUnsupported(chosen.fullName);
   return {
     bindingPublicId: chosen.publicId,
     owner: chosen.owner,

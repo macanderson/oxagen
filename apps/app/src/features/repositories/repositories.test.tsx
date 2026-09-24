@@ -205,6 +205,7 @@ const VIEWER = {
 const BOUND_SETUP: WorkspaceRepository = {
   repository: {
     bindingId: "rpb_main01",
+    provider: "github",
     owner: "acme",
     name: "platform",
     fullName: "acme/platform",
@@ -674,6 +675,48 @@ describe("the Repositories tab", () => {
   });
 });
 
+describe("the Repositories tab's edges", () => {
+  it("says no rows match a search that finds nothing, and names a retired connection", async () => {
+    actions.readWorkspaceRepositories.mockResolvedValue({
+      ok: true,
+      value: { repositories: [{ ...MAIN, connectionLive: false }, LINKED] },
+    });
+    const { user } = await loaded();
+    expect(
+      screen.getByTestId("repository-retired-acme/platform"),
+    ).toHaveTextContent("Connection retired");
+    await user.type(
+      screen.getByRole("searchbox", { name: "Search this list" }),
+      "no-such-repository",
+    );
+    expect(screen.getByTestId("repositories-table")).toHaveTextContent(
+      "No rows match.",
+    );
+  });
+
+  it("says when the installation reaches more than the list holds", async () => {
+    actions.listInstallationRepositories.mockResolvedValue({
+      ok: true,
+      value: { repositories: [], truncated: true },
+    });
+    await loaded();
+    expect(
+      await screen.findByTestId("repositories-reachable-note"),
+    ).toHaveTextContent("reaches more repositories than this list holds");
+  });
+
+  it("opens the wizard on a row's own Add Oxagen without opening its dialog", async () => {
+    const { user } = await loaded();
+    await within(repoRow("acme/docs-site")).findByText("no .oxagen/");
+    await user.click(screen.getByTestId("repository-add-acme/docs-site"));
+    const wizard = await screen.findByTestId("init-wizard");
+    expect(
+      within(wizard).getByTestId<HTMLSelectElement>("init-wizard-select").value,
+    ).toBe("acme/docs-site");
+    expect(screen.queryByTestId("repository-dialog")).toBeNull();
+  });
+});
+
 describe("the repository dialog", () => {
   it("shows the production branch at its head, what .oxagen/ holds, and the unrecorded facts", async () => {
     const { user } = await loaded();
@@ -777,6 +820,80 @@ describe("the repository dialog", () => {
       await within(dialog).findByTestId("repository-dialog-branch-failure"),
     ).toHaveTextContent("GitHub has no branch by that name");
     expect(actions.readWorkspaceRepositories).toHaveBeenCalledTimes(1);
+  });
+  it("says a tree that could not be read, and that a branch set to itself wrote nothing", async () => {
+    actions.readRepositoryTree.mockImplementation(
+      (_org: string, _ws: string, bindingId: string) =>
+        Promise.resolve(
+          bindingId === MAIN.bindingId
+            ? {
+                ok: true,
+                value: {
+                  ...MAIN_TREE,
+                  initPullRequest: {
+                    number: 9,
+                    htmlUrl: "https://github.com/acme/platform/pull/9",
+                  },
+                },
+              }
+            : { ok: false, reason: "unavailable", code: "github_down" },
+        ),
+    );
+    const { user } = await loaded();
+    const linked = await openRepository(user, "acme/docs-site");
+    expect(
+      within(linked).getByTestId("repository-dialog-tree-failure"),
+    ).toHaveTextContent("github_down");
+    await user.keyboard("{Escape}");
+    await waitFor(() => {
+      expect(screen.queryByTestId("repository-dialog")).toBeNull();
+    });
+    const main = await openRepository(user, "acme/platform");
+    expect(
+      within(main).getByTestId("repository-dialog-init-pr"),
+    ).toHaveTextContent("Pull request #9 adds .oxagen/");
+    actions.setProductionBranch.mockResolvedValue({
+      ok: true,
+      value: {
+        bindingId: "rpb_main01",
+        fullName: "acme/platform",
+        productionBranch: "main",
+        previousBranch: "main",
+        changed: false,
+      },
+    });
+    await user.type(
+      within(main).getByTestId("repository-dialog-branch-input"),
+      "main",
+    );
+    await user.click(
+      within(main).getByRole("button", { name: "Set production branch" }),
+    );
+    expect(
+      await within(main).findByTestId("repository-dialog-branch-done"),
+    ).toHaveTextContent(
+      "main is already the production branch. Nothing was written.",
+    );
+    expect(actions.readWorkspaceRepositories).toHaveBeenCalledTimes(1);
+  });
+
+  it("goes to the Changes tab from a governed repository's See its changes", async () => {
+    const { user } = await loaded();
+    const dialog = await openRepository(user, "acme/platform");
+    await user.click(within(dialog).getByTestId("repository-dialog-changes"));
+    expect(nav.push).toHaveBeenCalledWith(
+      "/acme/core-platform/repositories/changes",
+    );
+  });
+
+  it("carries the repair on a main repository whose connection was retired", async () => {
+    actions.readWorkspaceRepositories.mockResolvedValue({
+      ok: true,
+      value: { repositories: [{ ...MAIN, connectionLive: false }] },
+    });
+    const { user } = await loaded();
+    const dialog = await openRepository(user, "acme/platform");
+    expect(await within(dialog).findByTestId("repository-setup")).toBeTruthy();
   });
 });
 
@@ -976,6 +1093,192 @@ describe("the init wizard", () => {
     expect(within(wizard).queryByTestId("init-wizard-opened")).toBeNull();
   });
 
+  it("refuses an empty production branch, and Back returns to the repository step (negative)", async () => {
+    const { user } = await loaded();
+    await within(repoRow("acme/docs-site")).findByText("no .oxagen/");
+    await user.click(screen.getByTestId("repositories-add-oxagen"));
+    const wizard = await screen.findByTestId("init-wizard");
+    await user.click(within(wizard).getByTestId("init-wizard-next"));
+    await user.clear(within(wizard).getByTestId("init-wizard-branch-input"));
+    await user.click(within(wizard).getByTestId("init-wizard-next"));
+    expect(within(wizard).getByTestId("init-wizard-failure")).toHaveTextContent(
+      "Name the production branch first.",
+    );
+    expect(within(wizard).getByTestId("init-wizard-branch")).toBeTruthy();
+    await user.click(within(wizard).getByTestId("init-wizard-back"));
+    expect(within(wizard).getByTestId("init-wizard-repository")).toBeTruthy();
+    expect(within(wizard).queryByTestId("init-wizard-failure")).toBeNull();
+  });
+
+  it("moves the production branch first when the person changed it, and stops on that refusal (negative)", async () => {
+    const { user } = await loaded();
+    await within(repoRow("acme/docs-site")).findByText("no .oxagen/");
+    await user.click(screen.getByTestId("repositories-add-oxagen"));
+    const wizard = await screen.findByTestId("init-wizard");
+    await user.click(within(wizard).getByTestId("init-wizard-next"));
+    const input = within(wizard).getByTestId("init-wizard-branch-input");
+    await user.clear(input);
+    await user.type(input, "release");
+    for (let i = 0; i < 3; i += 1)
+      await user.click(within(wizard).getByTestId("init-wizard-next"));
+    expect(within(wizard).getByTestId("init-wizard-checks")).toHaveTextContent(
+      "No .oxagen/ exists on release.",
+    );
+    actions.setProductionBranch.mockResolvedValue({
+      ok: false,
+      reason: "not_found",
+      code: "branch_not_found",
+    });
+    await user.click(within(wizard).getByTestId("init-wizard-open"));
+    expect(
+      await within(wizard).findByTestId("init-wizard-failure"),
+    ).toHaveTextContent("GitHub has no branch by that name");
+    expect(actions.setProductionBranch).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "rpb_link01",
+      "release",
+    );
+    expect(actions.openInitPullRequest).not.toHaveBeenCalled();
+  });
+
+  it("binds the main repository first when the workspace has none, and says when the pull request already existed", async () => {
+    actions.readWorkspaceRepositories.mockResolvedValue({
+      ok: true,
+      value: { repositories: [] },
+    });
+    const user = userEvent.setup();
+    page();
+    const empty = await screen.findByTestId("repositories-empty");
+    await user.click(within(empty).getByTestId("repositories-empty-add"));
+    const wizard = await screen.findByTestId("init-wizard");
+    await waitFor(() => {
+      expect(
+        Array.from(
+          within(wizard).getByTestId<HTMLSelectElement>("init-wizard-select")
+            .options,
+        ).map((o) => o.value),
+      ).toEqual(["acme/platform", "acme/infra"]);
+    });
+    await user.selectOptions(
+      within(wizard).getByTestId("init-wizard-select"),
+      "acme/infra",
+    );
+    expect(
+      within(wizard).getByTestId("init-wizard-role-note"),
+    ).toHaveTextContent("acme/infra is this workspace’s main repo.");
+    for (let i = 0; i < 4; i += 1)
+      await user.click(within(wizard).getByTestId("init-wizard-next"));
+    actions.bindWorkspaceRepository.mockResolvedValue({
+      ok: true,
+      value: BOUND_SETUP,
+    });
+    actions.readWorkspaceRepositories.mockResolvedValue({
+      ok: true,
+      value: {
+        repositories: [
+          {
+            ...MAIN,
+            bindingId: "rpb_infra1",
+            name: "infra",
+            fullName: "acme/infra",
+            htmlUrl: "https://github.com/acme/infra",
+          },
+        ],
+      },
+    });
+    actions.openInitPullRequest.mockResolvedValue({
+      ok: true,
+      value: {
+        fullName: "acme/infra",
+        branch: "oxagen/init",
+        base: "main",
+        pullRequest: {
+          number: 3,
+          htmlUrl: "https://github.com/acme/infra/pull/3",
+        },
+        files: [".oxagen/workspace.toml", ".oxagen/rules/governance.toml"],
+        reused: true,
+      },
+    });
+    await user.click(within(wizard).getByTestId("init-wizard-open"));
+    expect(
+      await within(wizard).findByTestId("init-wizard-opened"),
+    ).toHaveTextContent(
+      "acme/infra#3 already adds .oxagen/. Nothing new was pushed.",
+    );
+    expect(actions.bindWorkspaceRepository).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      { owner: "acme", name: "infra" },
+    );
+    expect(actions.openInitPullRequest.mock.calls[0]?.[2]).toMatchObject({
+      bindingId: "rpb_infra1",
+    });
+    const sent: unknown = actions.openInitPullRequest.mock.calls[0]?.[2];
+    expect(JSON.stringify(sent)).toContain('role = \\"main\\"');
+  });
+
+  it("stops when binding the main repository is refused, and says so (negative)", async () => {
+    actions.readWorkspaceRepositories.mockResolvedValue({
+      ok: true,
+      value: { repositories: [] },
+    });
+    const user = userEvent.setup();
+    page();
+    const empty = await screen.findByTestId("repositories-empty");
+    await user.click(within(empty).getByTestId("repositories-empty-add"));
+    const wizard = await screen.findByTestId("init-wizard");
+    await waitFor(() => {
+      expect(within(wizard).getByTestId("init-wizard-next")).toBeEnabled();
+    });
+    for (let i = 0; i < 4; i += 1)
+      await user.click(within(wizard).getByTestId("init-wizard-next"));
+    actions.bindWorkspaceRepository.mockResolvedValue({
+      ok: false,
+      reason: "conflict",
+      code: "repository_linked_elsewhere",
+    });
+    await user.click(within(wizard).getByTestId("init-wizard-open"));
+    expect(
+      await within(wizard).findByTestId("init-wizard-failure"),
+    ).toHaveTextContent("Another workspace has linked");
+    expect(actions.openInitPullRequest).not.toHaveBeenCalled();
+  });
+
+  it("carries the GitHub connection on its first step when GitHub is not connected and nothing is offered", async () => {
+    actions.readWorkspaceRepositories.mockResolvedValue({
+      ok: true,
+      value: { repositories: [MAIN] },
+    });
+    actions.listInstallationRepositories.mockResolvedValue({
+      ok: false,
+      reason: "conflict",
+      code: "github_not_connected",
+    });
+    const { user } = await loaded();
+    await within(repoRow("acme/platform")).findByText("governed");
+    await user.click(screen.getByTestId("repositories-add-oxagen"));
+    const wizard = await screen.findByTestId("init-wizard");
+    expect(within(wizard).getByTestId("init-wizard-connect")).toBeTruthy();
+    expect(await within(wizard).findByTestId("repository-setup")).toBeTruthy();
+    expect(within(wizard).getByTestId("init-wizard-next")).toBeDisabled();
+  });
+
+  it("reads a wizard write that never answered as a failure (negative)", async () => {
+    const { user } = await loaded();
+    await within(repoRow("acme/docs-site")).findByText("no .oxagen/");
+    await user.click(screen.getByTestId("repositories-add-oxagen"));
+    const wizard = await screen.findByTestId("init-wizard");
+    for (let i = 0; i < 4; i += 1)
+      await user.click(within(wizard).getByTestId("init-wizard-next"));
+    actions.openInitPullRequest.mockRejectedValue(new Error("network"));
+    await user.click(within(wizard).getByTestId("init-wizard-open"));
+    expect(
+      await within(wizard).findByTestId("init-wizard-failure"),
+    ).toBeTruthy();
+  });
+
   it("says so when no repository is left to initialise (negative)", async () => {
     actions.readWorkspaceRepositories.mockResolvedValue({
       ok: true,
@@ -1071,6 +1374,72 @@ describe("the other tabs", () => {
       "Drift is reported, never repaired in place.",
     );
     await expectNoAxe(screen.getByTestId("changes"));
+  });
+
+  it("Changes: opens a change by keyboard, and says when a search matches none", async () => {
+    actions.readRepositoryChanges.mockResolvedValue({
+      ok: true,
+      value: {
+        open: 2,
+        changes: [
+          ...CHANGES.changes,
+          {
+            ...(CHANGES.changes[0] as RepositoryChanges["changes"][number]),
+            proposalId: "prp_run1",
+            lineage: "ctx.scr.003-running",
+            status: "checks_running",
+            checks: null,
+          },
+        ],
+      },
+    });
+    const { user } = await loaded("changes");
+    const running = await screen.findByTestId("change-row-prp_run1");
+    expect(running.querySelector('[data-ci="running"]')).not.toBeNull();
+    expect(running).toHaveTextContent("queued");
+    expect(
+      screen
+        .getByTestId("change-row-prp_done1")
+        .querySelector('[data-ci="passed"]'),
+    ).not.toBeNull();
+    screen.getByTestId("change-row-prp_open1").focus();
+    await user.keyboard("{Enter}");
+    expect(nav.push).toHaveBeenCalledWith(
+      "/acme/core-platform/repositories/changes/prp_open1",
+    );
+    await user.type(
+      within(screen.getByTestId("changes")).getByRole("searchbox"),
+      "no-such-change",
+    );
+    expect(screen.getByTestId("changes-empty")).toHaveTextContent(
+      "No rows match.",
+    );
+  });
+
+  it("Changes: shows one change on its own path, and Back returns to the list", async () => {
+    actions.readRepositoryChange.mockResolvedValue({
+      ok: false,
+      reason: "not_found",
+      code: "proposal_not_found",
+    });
+    const user = userEvent.setup();
+    render(
+      <IntlProvider>
+        <Repositories
+          org="acme"
+          ws="core-platform"
+          orgName="Acme"
+          wsName="Core platform"
+          view={{ tab: "changes", change: "prp_open1" }}
+          viewer={VIEWER}
+        />
+      </IntlProvider>,
+    );
+    const detail = await screen.findByTestId("change-detail");
+    await user.click(within(detail).getByTestId("change-back"));
+    expect(nav.push).toHaveBeenCalledWith(
+      "/acme/core-platform/repositories/changes",
+    );
   });
 
   it("Changes: says when there is nothing, and prints a refusal (negative)", async () => {

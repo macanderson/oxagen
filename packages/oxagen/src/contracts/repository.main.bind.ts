@@ -36,6 +36,14 @@
  * `repository_binding_heads_exclusive_main` holds both under a
  * repository-keyed lock, so a lost race is refused with the same reasons.
  *
+ * GitLab (#3762): `{ provider: "gitlab", projectPath }` binds a gitlab.com
+ * project the workspace connected with `attach_gitlab_project`. The project is
+ * read by id through that connection's project access token, and the binding
+ * and head carry `provider = 'gitlab'`, so a GitLab project id never collides
+ * with a GitHub repository id. With no such connection the call is
+ * `conflict: gitlab_not_connected`. The same idempotency, re-approval and
+ * cross-workspace refusals apply.
+ *
  * Roles: org Owner or Admin, checked by the handler (INV-29), so the caller
  * is a signed-in user: the API surface only. The MCP context carries an API
  * key and no user, and `assertOrgRole` refuses it before any read. A
@@ -43,12 +51,27 @@
  */
 import { z } from "zod";
 import { registerCapability } from "../registry";
+import { gitlabProjectPathSchema } from "./repository.gitlab.attach";
+
+/** A GitHub account login, as GitHub constrains it. */
+export const githubOwnerSchema = z
+  .string()
+  .min(1)
+  .max(39)
+  .regex(/^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/);
+
+/** A GitHub repository name, as GitHub constrains it. */
+export const githubRepositoryNameSchema = z
+  .string()
+  .min(1)
+  .max(100)
+  .regex(/^[A-Za-z0-9_.-]+$/);
 
 export const repositoryMainBind = registerCapability({
   name: "bind_main_repository",
   domain: "repository",
   description:
-    "Bind a GitHub repository the workspace's GitHub App installation reaches as its main repo, and close the onboarding gate's provisional window.",
+    "Bind the workspace's main repository and close the onboarding gate's provisional window: a GitHub repository the workspace's GitHub App installation reaches, or a gitlab.com project connected with attach_gitlab_project.",
   mode: "sync",
   surfaces: ["api"],
   layers: ["schema", "api", "unit", "docs", "app"],
@@ -61,25 +84,34 @@ export const repositoryMainBind = registerCapability({
     org: { Owner: "allow", Admin: "allow" },
     workspace: {},
   },
-  input: z
-    .object({
-      owner: z
-        .string()
-        .min(1)
-        .max(39)
-        .regex(/^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/),
-      name: z
-        .string()
-        .min(1)
-        .max(100)
-        .regex(/^[A-Za-z0-9_.-]+$/),
-    })
-    .strict(),
+  input: z.union([
+    z
+      .object({
+        /** Omitted by every caller that predates GitLab: GitHub is the default. */
+        provider: z.literal("github").optional(),
+        owner: githubOwnerSchema,
+        name: githubRepositoryNameSchema,
+      })
+      .strict(),
+    z
+      .object({
+        provider: z.literal("gitlab"),
+        /**
+         * `group/sub/project` on gitlab.com, connected first with
+         * `attach_gitlab_project`. The binding pins the project's numeric id,
+         * so a later move to another group keeps the binding.
+         */
+        projectPath: gitlabProjectPathSchema,
+      })
+      .strict(),
+  ]),
   output: z
     .object({
       bindingId: z.string().regex(/^rpb_[0-9a-f]+$/),
       connectionId: z.string().regex(/^con_[0-9a-z]+$/),
-      /** `owner/name` as GitHub reports it. */
+      /** Which host the main repository is on. */
+      provider: z.enum(["github", "gitlab"]),
+      /** `owner/name` (GitHub) or `group/sub/project` (GitLab) as the host reports it. */
       fullName: z.string().min(1),
       defaultRef: z.string().min(1),
       boundAt: z.string().datetime({ offset: true }),
