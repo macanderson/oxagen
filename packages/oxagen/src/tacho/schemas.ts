@@ -53,6 +53,13 @@ export const hostSummarySchema = z
     agentKey: z.string(),
     hostname: z.string(),
     platform: tachoPlatformSchema,
+    /**
+     * The OS version and CPU architecture the host reported at enrollment
+     * (`15.6`, `arm64`). Null for a host that reported neither, which is an
+     * installer older than the field.
+     */
+    osVersion: z.string().nullable(),
+    arch: z.string().nullable(),
     osUser: z.string(),
     status: tachoHostStatusSchema,
     mode: tachoBundleModeSchema,

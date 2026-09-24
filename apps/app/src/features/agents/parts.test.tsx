@@ -76,7 +76,7 @@ describe("NotRecordedValue", () => {
     expect(value).toHaveAttribute("data-gap", "tier");
     expect(value).toHaveAttribute(
       "title",
-      "No wrapped session has recorded an enforcement tier for this agent yet.",
+      "No wrapped session has recorded an enforcement tier for this agent yet, and no per-agent tier rollup exists (#3817).",
     );
   });
 

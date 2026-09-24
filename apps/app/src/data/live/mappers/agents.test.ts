@@ -93,7 +93,9 @@ describe("toAgentPage", () => {
       totals: {
         identities: 7,
         enrolled: 5,
+        unenrolled: 1,
         holdingMandate: 1,
+        mandateHolders: ["acme.core.release-bot"],
         tamperIncidents: 2,
         tamper,
       },
@@ -155,7 +157,9 @@ describe("toAgentPage", () => {
       totals: {
         identities: 7,
         enrolled: 5,
+        unenrolled: 1,
         holdingMandate: 1,
+        mandateHolders: ["acme.core.release-bot"],
         tamperIncidents: 2,
         tamper,
       },
