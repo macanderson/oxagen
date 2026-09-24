@@ -7194,8 +7194,6 @@ type Messages = {
       titleRequest: string;
       bodyRequest: string;
       notCarried: string;
-      agentOption: string;
-      agentsPartial: string;
       agentsUnavailable: string;
       agentsEmpty: string;
       consequenceOther: string;
@@ -7557,6 +7555,18 @@ type Messages = {
       previous: string;
       next: string;
       pages: string;
+    };
+    picker: {
+      search: string;
+      loading: string;
+      failed: string;
+      none: string;
+      noMatch: string;
+      more: string;
+      partial: string;
+      useTyped: string;
+      remove: string;
+      failedFreeform: string;
     };
   };
 };

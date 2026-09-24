@@ -494,6 +494,24 @@ export const CONSEQUENCE_OTHER_MAX =
 export const MANDATE_APPROVER =
   /^(role:(Owner|Admin|Compliance|Billing)|user:usr_[0-9a-z]+)$/i;
 
+/** The four org roles `MANDATE_APPROVER` admits as `role:<name>`. */
+export const APPROVER_ROLES = [
+  "Owner",
+  "Admin",
+  "Compliance",
+  "Billing",
+] as const;
+
+/** The starter set of consequence tags (MC spec §6.9 part 1); a workspace adds its own. */
+export const STARTER_CONSEQUENCE_TAGS = [
+  "moves_money",
+  "destroys_data",
+  "alters_production",
+  "communicates_externally",
+  "changes_access",
+  "changes_entitlement",
+] as const;
+
 /** `mandateTargetSchema`: each allowed or denied target is 1 to 256 characters. */
 export const TARGET_MAX = 256;
 

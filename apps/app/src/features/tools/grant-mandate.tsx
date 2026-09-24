@@ -25,15 +25,22 @@ import {
   CONSEQUENCE_OTHER_MAX,
   MEASURE_NAME_MAX,
   PURPOSE_MAX,
+  STARTER_CONSEQUENCE_TAGS,
   UNIT_MAX,
   listOf,
   type MandateRow,
   type MeasureValue,
 } from "@/data/contracts/mandates";
+import {
+  chooseAgents,
+  chooseApprovers,
+  chooseToolPatterns,
+} from "@/features/shell/client";
 import { routes } from "@/shared/safe-path";
 import { buttonSecondary, inputBase, mono } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
+import { RecordMultiPicker, RecordPicker } from "@/ui/record-picker";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { type GrantDraft, grantMandate } from "./grant-actions";
 import { UNANSWERED, useGrantFailure } from "./grant-failure";
@@ -43,15 +50,10 @@ const TESTID = "grant-mandate";
 
 const PERIODS = ["daily", "weekly", "monthly"] as const;
 
-/** The starter set of consequence tags (MC spec §6.9 part 1); a workspace adds its own. */
-const CONSEQUENCE_TAGS = [
-  "moves_money",
-  "destroys_data",
-  "alters_production",
-  "communicates_externally",
-  "changes_access",
-  "changes_entitlement",
-] as const;
+const CONSEQUENCE_TAGS = STARTER_CONSEQUENCE_TAGS;
+
+/** The tags `alwaysHumanFor` offers; a tag the workspace added can be typed. */
+const TAG_OPTIONS = CONSEQUENCE_TAGS.map((tag) => ({ value: tag, label: tag }));
 
 /** An agent the picker offers: a retired identity is never one (see `grantableAgents` in tools.tsx). */
 type GrantableAgent = { id: string; slug: string; name: string };
@@ -377,23 +379,23 @@ export function GrantMandate({
               {t("agentsEmpty")}
             </p>
           ) : (
-            <Field
-              id={id("agentId")}
-              label={label("agentId")}
-              hint={agents.partial ? t("agentsPartial") : undefined}
-            >
-              <select
+            <Field id={id("agentId")} label={label("agentId")}>
+              {/* The page holds the first page of agents. When there are
+                  more, the picker reads every page the first time it opens. */}
+              <RecordPicker
                 id={id("agentId")}
                 name="agentId"
                 required
-                className={inputBase}
-              >
-                {agents.agents.map((agent) => (
-                  <option key={agent.id} value={agent.id}>
-                    {t("agentOption", { name: agent.name, slug: agent.slug })}
-                  </option>
-                ))}
-              </select>
+                {...(agents.partial
+                  ? { load: () => chooseAgents(at.org, at.ws) }
+                  : {
+                      options: agents.agents.map((agent) => ({
+                        value: agent.id,
+                        label: agent.name,
+                        detail: agent.slug,
+                      })),
+                    })}
+              />
             </Field>
           )}
           <fieldset className="flex flex-col gap-1 text-sm text-foreground">
@@ -434,12 +436,13 @@ export function GrantMandate({
             </p>
           </fieldset>
           <Field id={id("tools")} label={label("tools")} hint={t("toolsHint")}>
-            <input
+            <RecordMultiPicker
               id={id("tools")}
               name="tools"
               required
-              defaultValue={prefill.tools}
-              className={inputBase}
+              freeform
+              load={() => chooseToolPatterns(at.org, at.ws)}
+              defaultValue={listOf(prefill.tools)}
             />
           </Field>
           <fieldset className="flex flex-col gap-3">
@@ -556,11 +559,12 @@ export function GrantMandate({
               label={label("alwaysHumanFor")}
               hint={t("alwaysHumanForHint")}
             >
-              <input
+              <RecordMultiPicker
                 id={id("alwaysHumanFor")}
                 name="alwaysHumanFor"
-                defaultValue={prefill.alwaysHumanFor}
-                className={inputBase}
+                freeform
+                options={TAG_OPTIONS}
+                defaultValue={listOf(prefill.alwaysHumanFor)}
               />
             </Field>
             <Field
@@ -593,11 +597,12 @@ export function GrantMandate({
               label={label("approvers")}
               hint={t("approversHint")}
             >
-              <input
+              <RecordMultiPicker
                 id={id("approvers")}
                 name="approvers"
-                defaultValue={prefill.approvers}
-                className={inputBase}
+                freeform
+                load={() => chooseApprovers(at.org)}
+                defaultValue={listOf(prefill.approvers)}
               />
             </Field>
           </fieldset>

@@ -25,12 +25,18 @@ import {
 } from "@/test/mandate-views";
 import type { AgentChoices } from "./grant-mandate";
 
-const { router, grantMandate } = vi.hoisted(() => ({
+const { router, grantMandate, choices } = vi.hoisted(() => ({
   router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
   grantMandate: vi.fn(),
+  choices: {
+    chooseAgents: vi.fn(),
+    chooseApprovers: vi.fn(),
+    chooseToolPatterns: vi.fn(),
+  },
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("./grant-actions", () => ({ grantMandate }));
+vi.mock("@/features/shell/client", () => choices);
 
 const { GrantMandate } = await import("./grant-mandate");
 const { useGrantFailure } = await import("./grant-failure");
@@ -74,13 +80,18 @@ async function open(name: string | RegExp = "Grant a mandate") {
 
 const dialog = () => screen.getByTestId("grant-mandate");
 
+/** What a picker's hidden input will submit under `name`. */
+function submitted(form: HTMLElement, name: string): string | undefined {
+  return form.querySelector<HTMLInputElement>(
+    `input[type="hidden"][name="${name}"]`,
+  )?.value;
+}
+
 /** Fills the fields a grant needs and submits. */
 async function grant(user: ReturnType<typeof userEvent.setup>) {
   const form = dialog();
-  await user.selectOptions(
-    within(form).getByLabelText("Agent"),
-    "agt_releasebot",
-  );
+  await user.type(within(form).getByLabelText("Agent"), "release");
+  await user.keyboard("{Enter}");
   await user.click(within(form).getByLabelText("moves_money"));
   await user.type(
     within(form).getByLabelText("Tools"),
@@ -109,23 +120,45 @@ async function grant(user: ReturnType<typeof userEvent.setup>) {
   );
 }
 
+const loaded = (options: { value: string; label: string }[]) => ({
+  ok: true,
+  value: { options, partial: false },
+});
+
 beforeEach(() => {
   router.replace.mockReset();
   grantMandate.mockReset();
+  choices.chooseAgents.mockReset();
+  choices.chooseApprovers
+    .mockReset()
+    .mockResolvedValue(
+      loaded([{ value: "role:Billing", label: "role:Billing" }]),
+    );
+  choices.chooseToolPatterns.mockReset().mockResolvedValue(
+    loaded([
+      {
+        value: "stripe__create_payment@*",
+        label: "stripe__create_payment@*",
+      },
+    ]),
+  );
 });
 afterEach(cleanup);
 
 describe("GrantMandate", () => {
   it("opens blank, offers the workspace's agents and every section", async () => {
     draw();
-    await open();
+    const user = await open();
     const form = dialog();
-    const agent = within(form).getByLabelText("Agent");
+    const agent = within(form).getByRole("combobox", { name: "Agent" });
+    await user.click(agent);
     expect(
-      within(agent)
+      within(within(form).getByRole("listbox"))
         .getAllByRole("option")
         .map((option) => option.textContent),
-    ).toEqual(["Invoice bot (invoice-bot)", "Release bot (release-bot)"]);
+    ).toEqual(["Invoice botinvoice-bot", "Release botrelease-bot"]);
+    // The page already holds every agent, so nothing is read.
+    expect(choices.chooseAgents).not.toHaveBeenCalled();
     for (const box of within(form).getAllByRole("checkbox"))
       expect(box).not.toBeChecked();
     expect(within(form).getByLabelText("Measure")).toHaveValue("");
@@ -234,12 +267,48 @@ describe("GrantMandate", () => {
     ).toBeNull();
   });
 
-  it("says when the picker holds only the first page of agents", async () => {
-    draw({ agents: { ...AGENTS, partial: true } });
-    await open();
-    expect(dialog()).toHaveTextContent(
-      "The first page of this workspace's agents.",
+  it("reads every agent when the page holds only the first page", async () => {
+    choices.chooseAgents.mockResolvedValue(
+      loaded([{ value: "agt_docsbot", label: "Docs bot" }]),
     );
+    draw({ agents: { ...AGENTS, partial: true } });
+    const user = await open();
+    await user.type(within(dialog()).getByLabelText("Agent"), "docs");
+    await user.keyboard("{Enter}");
+    expect(choices.chooseAgents).toHaveBeenCalledWith("acme", "core-platform");
+    expect(submitted(dialog(), "agentId")).toBe("agt_docsbot");
+  });
+
+  it("finds tools and approvers by typing, and keeps a typed pattern", async () => {
+    choices.chooseToolPatterns.mockResolvedValue(
+      loaded([
+        { value: "github__*", label: "github__*" },
+        { value: "stripe__refund@2", label: "stripe__refund@2" },
+      ]),
+    );
+    choices.chooseApprovers.mockResolvedValue(
+      loaded([
+        { value: "role:Owner", label: "role:Owner" },
+        { value: "user:usr_priya", label: "Priya Natarajan" },
+      ]),
+    );
+    draw();
+    const user = await open();
+    const form = dialog();
+    await user.type(within(form).getByLabelText("Tools"), "refund");
+    await user.keyboard("{Enter}");
+    await user.type(within(form).getByLabelText("Tools"), "linear__*,");
+    await user.type(within(form).getByLabelText("Who may answer"), "priya");
+    await user.keyboard("{Enter}");
+    await user.type(
+      within(form).getByLabelText("Always ask a person for"),
+      "moves",
+    );
+    await user.keyboard("{Enter}");
+    expect(submitted(form, "tools")).toBe("stripe__refund@2, linear__*");
+    expect(submitted(form, "approvers")).toBe("user:usr_priya");
+    expect(submitted(form, "alwaysHumanFor")).toBe("moves_money");
+    await expectNoAxe(document.body);
   });
 });
 
@@ -280,7 +349,7 @@ describe("GrantMandate on a requested draft", () => {
     expect(within(form).getByLabelText(/Others the tools declare/)).toHaveValue(
       "ships_code",
     );
-    expect(within(form).getByLabelText("Tools")).toHaveValue(
+    expect(submitted(form, "tools")).toBe(
       "stripe__create_payment@*, deploy__ship@3",
     );
     expect(within(form).getByLabelText("Measure")).toHaveValue("rows");
@@ -295,13 +364,9 @@ describe("GrantMandate on a requested draft", () => {
     expect(
       within(form).getByLabelText("Allowed targets, separated by commas"),
     ).toHaveValue("vendor:aws, vendor:github");
-    expect(within(form).getByLabelText("Always ask a person for")).toHaveValue(
-      "ships_code",
-    );
+    expect(submitted(form, "alwaysHumanFor")).toBe("ships_code");
     expect(within(form).getByLabelText("Threshold")).toHaveValue("500");
-    expect(within(form).getByLabelText("Who may answer")).toHaveValue(
-      "role:Billing",
-    );
+    expect(submitted(form, "approvers")).toBe("role:Billing");
     expect(within(form).getByLabelText("Valid from")).toHaveValue("2026-09-01");
     expect(within(form).getByLabelText("Valid to")).toHaveValue("2026-12-31");
     expect(form).not.toHaveTextContent("more than this form can carry");
