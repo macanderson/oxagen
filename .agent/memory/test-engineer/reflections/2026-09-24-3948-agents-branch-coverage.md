@@ -14,7 +14,12 @@ earlier Tools-lane work, aiming for about 2.5 points.
   overview 73→106/109, activity 46→75/77, definition-form 76→104/105,
   identity 29→56/57, runtime 27→46/46, permissions 59→77/77, agent 30→40/41,
   source-keys 14→25/26, source-editor 86→96/98, definition 0→8/8.
-- About 238 previously uncovered branches now covered in PR-changed files.
+- Measured union of all 27 agents test files, each run alone and merged:
+  the lane went from 1,235/1,539 (CI, 80.24%) to 1,471/1,539 (95.58%),
+  +236 branches, plus 3 on the [tab] route page. That is about +1.82 points
+  app-wide, so with Tools' estimated +0.3 to +0.5 the gate lands near 90.0
+  to 90.2, short of the 2.5-point headroom asked for. The remaining lane
+  gap (about 49 branches) sits in files this PR did not change.
 - Found one product wart (find in the source editor: a second Enter replaces
   the match) and pinned it with a characterization test instead of changing
   a focus model nobody has decided.
