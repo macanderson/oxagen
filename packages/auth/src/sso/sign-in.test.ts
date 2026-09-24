@@ -289,6 +289,10 @@ async function buildAuth(opts: {
   });
   const auth = betterAuth({
     baseURL: BASE_URL,
+    // Better Auth 1.6.33 refuses an OIDC endpoint on a private address unless
+    // its origin is trusted (discovery_private_host). The mock IdP listens on
+    // 127.0.0.1, so the test trusts that one origin; a real IdP is public.
+    trustedOrigins: [BASE_URL, idp.issuer],
     secret: "test-secret-that-is-at-least-thirty-two-characters",
     database: withSsoSecrets(memoryAdapter(db), () => kms),
     plugins: [
