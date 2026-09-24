@@ -6,7 +6,10 @@ import { runCostGet } from "@oxagen/oxagen/contracts/run.cost";
 import { runFrameBodyGet } from "@oxagen/oxagen/contracts/run.frame_body.get";
 import { runGet } from "@oxagen/oxagen/contracts/run.get";
 import { runList } from "@oxagen/oxagen/contracts/run.list";
+import { runOutcomesSettingsGet } from "@oxagen/oxagen/contracts/run.outcomes.settings.get";
+import { runOutputsGet } from "@oxagen/oxagen/contracts/run.outputs.get";
 import { runTranscriptGet } from "@oxagen/oxagen/contracts/run.transcript.get";
+import { runWorkGet } from "@oxagen/oxagen/contracts/run.work.get";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { kernelRead, captureError } = vi.hoisted(() => ({
@@ -693,4 +696,208 @@ describe("runs.chain", () => {
     });
     expect(captureError).toHaveBeenCalledTimes(1);
   });
+});
+
+describe("runs.outcomesSettings", () => {
+  const policy = {
+    customerEnabled: true,
+    platformDisabled: false,
+    platformDisabledReason: null,
+    effectiveEnabled: true,
+  };
+
+  it("reads the outcomes policy with no input and passes it on as the view", async () => {
+    kernelRead.mockResolvedValue(readOk(policy));
+    expect(await runs.outcomesSettings(ctx)).toEqual(readOk(policy));
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: runOutcomesSettingsGet,
+      input: {},
+      page: "run",
+    });
+  });
+
+  it("passes a refused read through (negative)", async () => {
+    kernelRead.mockResolvedValue(readError("forbidden", 403));
+    expect(await runs.outcomesSettings(ctx)).toEqual(
+      readError("forbidden", 403),
+    );
+    expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("answers record_unmappable for a policy the view refuses (negative)", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({ ...policy, effectiveEnabled: "yes" }),
+    );
+    expect(await runs.outcomesSettings(ctx)).toEqual(
+      readError("record_unmappable", 502),
+    );
+    expect(captureError).toHaveBeenCalledOnce();
+  });
+});
+
+describe("runs.work", () => {
+  const repository = {
+    host: "github.com",
+    owner: "acme",
+    name: "robots",
+    url: "https://github.com/acme/robots",
+    connected: true,
+  };
+  const wireWork = {
+    runId: "tse_4f0a",
+    machine: { name: "tycho" },
+    checkouts: [
+      {
+        id: "chk_1",
+        path: "/src/robots",
+        branch: "main",
+        headSha: "abc123",
+        remoteDigest: null,
+        repository,
+        firstSeq: "1",
+        lastSeq: "9",
+      },
+    ],
+    diffs: [
+      {
+        checkoutId: "chk_1",
+        seq: "4",
+        baseSha: "abc123",
+        headSha: "def456",
+        digest: "sha256:77",
+        bodyAvailable: true,
+        completeness: "complete",
+        limitations: [],
+        observedAt: "2026-09-15T09:00:00.000Z",
+      },
+    ],
+    pullRequests: [
+      {
+        repository,
+        number: 482,
+        url: "https://github.com/acme/robots/pull/482",
+        title: "Tighten the gripper",
+        state: "open",
+        headSha: "def456",
+        headRef: "gripper",
+        association: "recorded",
+        checkoutIds: ["chk_1"],
+        observedAt: "2026-09-15T09:01:00.000Z",
+        current: true,
+        ci: null,
+        diff: null,
+      },
+    ],
+    complete: true,
+    warnings: [],
+  };
+
+  it("reads the run's work and renames the checkout ids into the view's refs", async () => {
+    kernelRead.mockResolvedValue(readOk(wireWork));
+    const read = await runs.work(ctx, "tse_4f0a");
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: runWorkGet,
+      input: { runId: "tse_4f0a" },
+      page: "run",
+    });
+    if (!read.ok) throw new Error("expected the work read to succeed");
+    expect(read.value.checkouts[0]).toEqual({
+      ref: "chk_1",
+      path: "/src/robots",
+      branch: "main",
+      headSha: "abc123",
+      remoteDigest: null,
+      repository,
+      firstSeq: "1",
+      lastSeq: "9",
+    });
+    expect(read.value.diffs[0]?.checkoutRef).toBe("chk_1");
+    expect(read.value.diffs[0]).not.toHaveProperty("checkoutId");
+    expect(read.value.pullRequests[0]?.checkoutRefs).toEqual(["chk_1"]);
+    expect(read.value.pullRequests[0]).not.toHaveProperty("checkoutIds");
+  });
+
+  it("passes a refused read through (negative)", async () => {
+    kernelRead.mockResolvedValue(readError("not_found", 404));
+    expect(await runs.work(ctx, "tse_4f0a")).toEqual(
+      readError("not_found", 404),
+    );
+  });
+
+  it("answers record_unmappable for work the view refuses (negative)", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({ ...wireWork, runId: "not-a-public-id" }),
+    );
+    expect(await runs.work(ctx, "tse_4f0a")).toEqual(
+      readError("record_unmappable", 502),
+    );
+    expect(captureError).toHaveBeenCalledOnce();
+  });
+});
+
+describe("runs.outputs", () => {
+  const node = {
+    seq: "7",
+    kind: "file",
+    name: "src/gripper.ts",
+    nameIsLocator: false,
+    where: "robots",
+    state: "written",
+    note: null,
+    stat: { added: 12, removed: 3 },
+    observedAt: "2026-09-15T09:02:00.000Z",
+    digestBefore: "sha256:01",
+    digestAfter: "sha256:02",
+  };
+  const wireOutputs = {
+    source: "wrapped",
+    nodes: [node],
+    tally: { artifacts: 1, reads: 0, gates: 0 },
+    complete: false,
+  };
+
+  it("reads the run's outputs and maps the spine and its tally", async () => {
+    kernelRead.mockResolvedValue(readOk(wireOutputs));
+    expect(await runs.outputs(ctx, "tse_4f0a")).toEqual(readOk(wireOutputs));
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: runOutputsGet,
+      input: { runId: "tse_4f0a" },
+      page: "run",
+    });
+  });
+
+  it("passes a refused read through (negative)", async () => {
+    kernelRead.mockResolvedValue(readError("not_found", 404));
+    expect(await runs.outputs(ctx, "tse_4f0a")).toEqual(
+      readError("not_found", 404),
+    );
+  });
+
+  it("answers record_unmappable for an output node the view refuses (negative)", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({ ...wireOutputs, nodes: [{ ...node, name: "" }] }),
+    );
+    expect(await runs.outputs(ctx, "tse_4f0a")).toEqual(
+      readError("record_unmappable", 502),
+    );
+    expect(captureError).toHaveBeenCalledOnce();
+  });
+});
+
+describe("the Run page's reads", () => {
+  const reads = [
+    ["runs.get", () => runs.get(ctx, "tse_4f0a", { framesAfter: null })],
+    ["runs.cost", () => runs.cost(ctx, "tse_4f0a")],
+    ["runs.transcript", () => runs.transcript(ctx, "tse_4f0a", "turns")],
+    ["runs.chain", () => runs.chain(ctx, "tse_4f0a")],
+  ] as const;
+
+  it.each(reads)(
+    "%s passes a refused read through without mapping it (negative)",
+    async (_name, read) => {
+      kernelRead.mockResolvedValue(readError("not_found", 404));
+      expect(await read()).toEqual(readError("not_found", 404));
+      expect(captureError).not.toHaveBeenCalled();
+    },
+  );
 });
