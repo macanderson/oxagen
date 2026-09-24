@@ -169,6 +169,7 @@ describe("org.roles", () => {
             permissions: ["run.read"],
             heldBy: 0,
             createdBy: null,
+            createdAt: "2026-09-15T00:00:00.000Z",
           },
         ],
         catalog: [
@@ -291,6 +292,7 @@ describe("org.workspaces", () => {
           {
             id: "wrk_0a1b2c3d4e5f6g7h8j9k0m",
             slug: "core-platform",
+            namespace: "core",
             name: "Core platform",
             role: "Owner",
             archivedAt: null,
