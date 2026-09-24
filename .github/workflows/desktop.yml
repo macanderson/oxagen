@@ -324,7 +324,45 @@ jobs:
             echo "::notice::TAURI_SIGNING_PRIVATE_KEY is not set; building without updater artifacts."
           fi
 
+      # hdiutil on GitHub's macOS runners sometimes fails inside tauri's
+      # bundle_dmg.sh ("Resource busy" on the scratch image) with nothing wrong
+      # in the commit: bf14d15 built on one dispatch and failed on the next
+      # (run 36065191903). On macOS a failed first attempt is not final: the
+      # next step detaches any image it left mounted, the one after builds once
+      # more, and that attempt's failure fails the job. Other runners get no
+      # retry.
       - name: Build the app
+        id: build
+        continue-on-error: ${{ runner.os == 'macOS' }}
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Updater: present → .sig per bundle + latest.json; absent → see above.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: apps/desktop
+          args: --target ${{ matrix.triple }} --bundles ${{ matrix.bundles }} ${{ steps.updater.outputs.args }}
+          tagName: ${{ startsWith(github.ref, 'refs/tags/desktop-v') && github.ref_name || '' }}
+          releaseName: ${{ startsWith(github.ref, 'refs/tags/desktop-v') && format('Oxagen {0}', github.ref_name) || '' }}
+          releaseBody: See docs/specs/oxagen-desktop/spec.html for what the app does and how to verify an install.
+          releaseDraft: true
+          prerelease: false
+          includeUpdaterJson: ${{ steps.updater.outputs.signed == 'true' }}
+
+      - name: Clear the failed macOS bundle
+        if: runner.os == 'macOS' && steps.build.outcome == 'failure'
+        shell: bash
+        run: |
+          echo "::warning::The first macOS build failed; detaching stale disk images and building once more."
+          hdiutil info | awk '/^\/dev\/disk/ && /\/Volumes\// {print $1}' | while read -r dev; do
+            hdiutil detach "$dev" -force || true
+          done
+          rm -rf "apps/desktop/src-tauri/target/${{ matrix.triple }}/release/bundle/dmg"
+          sleep 10
+
+      - name: Build the app again on macOS
+        if: runner.os == 'macOS' && steps.build.outcome == 'failure'
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
