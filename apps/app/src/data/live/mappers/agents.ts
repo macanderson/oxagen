@@ -61,7 +61,9 @@ export function toAgentPage(out: AgentListOutput): z.input<typeof AgentPage> {
     totals: {
       identities: out.totals.identities,
       enrolled: out.totals.enrolled,
+      unenrolled: out.totals.unenrolled,
       holdingMandate: out.totals.holdingMandate,
+      mandateHolders: out.totals.mandateHolders,
       tamperIncidents: out.totals.tamperIncidents,
       tamper: out.totals.tamper,
     },

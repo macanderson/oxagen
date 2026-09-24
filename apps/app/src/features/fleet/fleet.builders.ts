@@ -127,7 +127,9 @@ export function agentPage(
     totals: {
       identities,
       enrolled: identities,
+      unenrolled: 0,
       holdingMandate: null,
+      mandateHolders: [],
       tamperIncidents: 0,
       tamper: { recorded: 0, open: 0, newest: null },
     },
