@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// The launcher reads "Ask stella*" over "oxagen’s in-app AI agent", opens and
-// closes the panel it controls, and shines for a reply the person has not seen.
+// The launcher reads "Ask stella*" after the stella mark, opens and closes the
+// panel it controls, and shines for a reply the person has not seen.
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -53,20 +53,27 @@ function renderLauncher() {
 }
 
 describe("AssistantLauncher", () => {
-  it("reads Ask stella* over oxagen’s in-app AI agent, in the wordmark face", async () => {
+  it("reads Ask stella* on one line after the stella mark, in the wordmark face", async () => {
     const { container } = renderLauncher();
     const launcher = screen.getByRole("button", { name: /^Ask stella/ });
     expect(launcher).toHaveAttribute("aria-controls", ASSISTANT_PANEL_ID);
-    expect(launcher).toHaveTextContent("Ask stella*oxagen’s in-app AI agent");
+    // One line: the second line that named a category is gone (#4139).
+    expect(launcher.textContent).toBe("Ask stella*");
+    // Neither the mark nor the asterisk is read aloud.
+    expect(launcher).toHaveAccessibleName("Ask stella");
     // No capital S anywhere in the control.
     expect(launcher.textContent).not.toMatch(/Stella/);
-    // The icon is gone: the asterisk is text now.
-    expect(launcher.querySelector("svg[data-mark]")).toBeNull();
+    // The mark leads the button, before the name.
+    const mark = launcher.querySelector('svg[data-mark="stella-icon"]');
+    expect(mark).not.toBeNull();
+    expect(mark).toHaveAttribute("aria-hidden", "true");
+    expect(mark).toHaveClass("size-7");
+    expect(launcher.firstElementChild).toBe(mark);
 
     const names = Array.from(launcher.querySelectorAll(".ox-wordmark")).map(
       (el) => el.textContent,
     );
-    expect(names).toEqual(["stella*", "oxagen’s"]);
+    expect(names).toEqual(["stella*"]);
     // The asterisk takes the theme-following gold and is not read aloud.
     const accent = launcher.querySelector(".ox-wordmark-accent");
     expect(accent?.textContent).toBe("*");

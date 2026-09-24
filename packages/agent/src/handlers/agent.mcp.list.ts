@@ -1,8 +1,9 @@
 import { withTenantDb, schema } from "@oxagen/database";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import type { z } from "zod";
 import type { CapabilityContext } from "../types";
 import {
+  mcpServerAuthKind,
   mcpServerHealthStatus,
   mcpServerTransportType,
   type AgentMcpListInput,
@@ -39,6 +40,58 @@ function narrow<T extends [string, ...string[]]>(
   return parsed.data;
 }
 
+type AuthRow = {
+  publicId: string;
+  authStrategy: string;
+  listingAuthKind: string | null;
+  iconUrl: string | null;
+  credentialStatus: string | null;
+  hasAccessToken: boolean | null;
+  hasRefreshToken: boolean | null;
+  expiresAt: Date | null;
+  lastRefreshedAt: Date | null;
+};
+
+/** The auth kind, icon and OAuth state one row reports. Exported for tests. */
+export function authorizationOf(
+  r: AuthRow,
+): Pick<
+  AgentMcpListOutput["servers"][number],
+  "authKind" | "iconUrl" | "authorization"
+> {
+  const iconUrl = r.iconUrl?.startsWith("https://") ? r.iconUrl : null;
+  if (r.listingAuthKind !== "oauth") {
+    return {
+      authKind: narrow(
+        mcpServerAuthKind,
+        r.publicId,
+        "auth_strategy",
+        r.authStrategy,
+      ),
+      iconUrl,
+      authorization: null,
+    };
+  }
+  const state =
+    r.credentialStatus === "needs_reauth" || r.credentialStatus === "revoked"
+      ? r.credentialStatus
+      : r.hasAccessToken === true
+        ? "connected"
+        : "not_connected";
+  return {
+    authKind: "oauth",
+    iconUrl,
+    authorization: {
+      state,
+      expiresAt: r.expiresAt ? r.expiresAt.toISOString() : null,
+      refreshable: r.hasRefreshToken === true,
+      lastRefreshedAt: r.lastRefreshedAt
+        ? r.lastRefreshedAt.toISOString()
+        : null,
+    },
+  };
+}
+
 export async function agentMcpListHandler(
   _input: AgentMcpListInput,
   ctx: CapabilityContext,
@@ -53,8 +106,32 @@ export async function agentMcpListHandler(
         healthStatus: schema.mcpServers.healthStatus,
         lastHealthcheckAt: schema.mcpServers.lastHealthcheckAt,
         discoveredTools: schema.mcpServers.discoveredTools,
+        authStrategy: schema.mcpServers.authStrategy,
+        listingAuthKind: schema.pluginInstalledPlugins.authKind,
+        iconUrl: schema.pluginInstalledPlugins.iconUrl,
+        // Only whether a token is held and its lifetime; no secret column is
+        // selected, so the list needs no KMS key and returns no material.
+        credentialStatus: schema.mcpCredentials.status,
+        hasAccessToken: sql<boolean>`${schema.mcpCredentials.accessTokenEnc} IS NOT NULL`,
+        hasRefreshToken: sql<boolean>`${schema.mcpCredentials.refreshTokenEnc} IS NOT NULL`,
+        expiresAt: schema.mcpCredentials.expiresAt,
+        lastRefreshedAt: schema.mcpCredentials.lastRefreshedAt,
       })
       .from(schema.mcpServers)
+      .leftJoin(
+        schema.pluginInstalledPlugins,
+        eq(schema.mcpServers.orgListingId, schema.pluginInstalledPlugins.id),
+      )
+      .leftJoin(
+        schema.mcpCredentials,
+        and(
+          eq(
+            schema.mcpCredentials.orgListingId,
+            schema.mcpServers.orgListingId,
+          ),
+          eq(schema.mcpCredentials.workspaceId, schema.mcpServers.workspaceId),
+        ),
+      )
       .where(
         and(
           eq(schema.mcpServers.orgId, ctx.orgId),
@@ -93,6 +170,7 @@ export async function agentMcpListHandler(
           ? r.lastHealthcheckAt.toISOString()
           : null,
         toolCount: r.discoveredTools.length,
+        ...authorizationOf(r),
       };
     }),
   };

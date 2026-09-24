@@ -3,7 +3,8 @@
 // importer and the only file with a computed href or form action. Links take a
 // SafePath, so a target that did not come from sanitizeNext or a route builder
 // does not compile; the external links take a HostedInvoiceUrl, a
-// PullRequestUrl, a GitHubUrl, a GitLabUrl and a DesktopDownloadUrl.
+// PullRequestUrl, a GitHubUrl, a GitLabUrl, a DesktopDownloadUrl and a
+// ProviderUrl.
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type ComponentProps, useMemo } from "react";
@@ -12,6 +13,7 @@ import type { GitHubUrl } from "@/shared/github-url";
 import type { GitLabUrl } from "@/shared/gitlab-url";
 import type { HostedInvoiceUrl } from "@/shared/invoice-url";
 import type { RunExportDownloadUrl } from "@/shared/run-export-download-url";
+import type { ProviderUrl } from "@/shared/provider-url";
 import type { PullRequestUrl } from "@/shared/pull-request-url";
 import type { SafePath } from "@/shared/safe-path";
 
@@ -166,4 +168,23 @@ export function GitLabLink({
   to: GitLabUrl;
 }) {
   return <a href={to} target="_blank" rel="noopener noreferrer" {...props} />;
+}
+
+/** An MCP provider's website, docs or sign-in page, opened in a new tab without handing it this window (#4132). */
+export function ProviderLink({
+  to,
+  ...props
+}: Omit<ComponentProps<"a">, "href" | "target" | "rel"> & {
+  to: ProviderUrl;
+}) {
+  return <a href={to} target="_blank" rel="noopener noreferrer" {...props} />;
+}
+
+/**
+ * Points the OAuth popup the wizard opened at the provider's sign-in page.
+ * The popup is opened blank on the click, so a browser does not block it, and
+ * is sent on once the sign-in URL arrives.
+ */
+export function navigatePopup(popup: Window, to: ProviderUrl): void {
+  popup.location.href = to;
 }

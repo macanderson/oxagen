@@ -21,16 +21,31 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider, translator } from "@/test/intl";
 
-const { router, importTools, registerServer, chooseServerTools } = vi.hoisted(
-  () => ({
-    router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
-    importTools: vi.fn(),
-    registerServer: vi.fn(),
-    chooseServerTools: vi.fn(),
-  }),
-);
+const {
+  router,
+  importTools,
+  registerServer,
+  chooseServerTools,
+  searchRegistry,
+  startProviderAuthorization,
+} = vi.hoisted(() => ({
+  router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
+  importTools: vi.fn(),
+  registerServer: vi.fn(),
+  chooseServerTools: vi.fn(),
+  searchRegistry: vi.fn(),
+  startProviderAuthorization: vi.fn(),
+}));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("./actions", () => ({ importTools, registerServer }));
+vi.mock("./provider-auth-actions", () => ({
+  searchRegistry,
+  startProviderAuthorization,
+  providerRedirectUrl: vi.fn().mockResolvedValue({
+    ok: true,
+    value: { redirectUrl: "https://app.oxagen.sh/api/v1/mcp/oauth/callback" },
+  }),
+}));
 vi.mock("@/features/shell/client", () => ({ chooseServerTools }));
 
 const { ImportProvider } = await import("./import-provider");
@@ -47,7 +62,6 @@ function element(node: Element | null | undefined, what: string): HTMLElement {
   if (!(node instanceof HTMLElement)) throw new Error(`no ${what}`);
   return node;
 }
-const formOf = (node: HTMLElement) => element(node.closest("form"), "form");
 
 function fill(label: string | RegExp, value: string) {
   fireEvent.change(screen.getByLabelText(label), { target: { value } });
@@ -55,6 +69,10 @@ function fill(label: string | RegExp, value: string) {
 
 type Props = Partial<Parameters<typeof ImportProvider>[0]>;
 
+/**
+ * Opens the dialog on the custom-server source: these paths are the ones a
+ * typed endpoint takes. registry-browser.test.tsx walks Browse.
+ */
 function open(props: Props = {}) {
   const view = render(
     <IntlProvider>
@@ -62,16 +80,25 @@ function open(props: Props = {}) {
     </IntlProvider>,
   );
   fireEvent.click(screen.getByTestId("tools-import-open"));
+  fireEvent.click(screen.getByTestId("tools-import-source-custom"));
   return view;
 }
 
-/** Name and endpoint for a new provider, the two fields every connect needs. */
+/** Name, endpoint and no auth for a new provider: what a static connect needs. */
 function describeNew() {
   fill("Name", "Notion");
   fill("Endpoint URL", "https://mcp.notion.example/v1");
+  fill("Auth", "none");
 }
 
-const connectForm = () => formOf(screen.getByLabelText("Provider"));
+/** A provider already on the roster, from the Already added source. */
+function pickExisting(id: string) {
+  fireEvent.click(screen.getByTestId("tools-import-source-existing"));
+  fill("Provider", id);
+}
+
+const connectForm = () =>
+  element(document.getElementById("tools-import-connect"), "connect form");
 
 function registered(discoveredTools: readonly string[]) {
   return {
@@ -104,6 +131,11 @@ beforeEach(() => {
   ]) {
     fn.mockReset();
   }
+  searchRegistry.mockReset().mockResolvedValue({
+    ok: true,
+    value: { servers: [], nextCursor: null, registryReachable: true },
+  });
+  startProviderAuthorization.mockReset();
   chooseServerTools
     .mockReset()
     .mockResolvedValue({ ok: true, value: { options: [], partial: false } });
@@ -129,18 +161,19 @@ describe("ImportProvider › trigger", () => {
     );
   });
 
-  it("offers only a new provider when the roster read failed", () => {
+  it("offers no roster source when the roster read failed", () => {
     open({ servers: null });
-    const picker = screen.getByLabelText("Provider");
+    expect(screen.getByTestId("tools-import-source-browse")).toBeVisible();
     expect(
-      [...picker.querySelectorAll("option")].map((o) => o.textContent),
-    ).toEqual([t("newProvider")]);
+      screen.queryByTestId("tools-import-source-existing"),
+    ).not.toBeInTheDocument();
   });
 });
 
 describe("ImportProvider › auth", () => {
   it("asks for no auth config until a strategy needs one", () => {
     open();
+    expect(screen.getByLabelText("Auth")).toHaveValue("oauth");
     expect(screen.queryByLabelText("Auth config")).not.toBeInTheDocument();
     fill("Auth", "bearer");
     expect(screen.getByLabelText("Auth config")).toBeRequired();
@@ -228,7 +261,7 @@ describe("ImportProvider › connect", () => {
 
   it("moves nowhere when the provider picked has left the roster", () => {
     const view = open();
-    fill("Provider", "mcs_01k5s2");
+    pickExisting("mcs_01k5s2");
     // The page re-read its roster behind the dialog and GitHub is gone.
     view.rerender(
       <IntlProvider>
@@ -330,7 +363,7 @@ describe("ImportProvider › review and classify", () => {
       value: { importDigest: "d1", published: 1, unchanged: 0 },
     });
     open();
-    fill("Provider", "mcs_01k5s1");
+    pickExisting("mcs_01k5s1");
     fireEvent.submit(connectForm());
     fireEvent.focus(screen.getByLabelText("Tools"));
     expect(
@@ -349,7 +382,7 @@ describe("ImportProvider › review and classify", () => {
 
   it("goes back a step from Classify and from Review, keeping what was chosen", () => {
     open();
-    fill("Provider", "mcs_01k5s1");
+    pickExisting("mcs_01k5s1");
     fireEvent.submit(connectForm());
     fill("Tools", "list_refunds,");
     fireEvent.click(screen.getByTestId("tools-import-classify"));
@@ -370,7 +403,7 @@ describe("ImportProvider › review and classify", () => {
       value: { importDigest: "d1", published: 1, unchanged: 0 },
     });
     open();
-    fill("Provider", "mcs_01k5s1");
+    pickExisting("mcs_01k5s1");
     fireEvent.submit(connectForm());
     fireEvent.click(screen.getByTestId("tools-import-classify"));
     const confirm = screen.getByTestId("tools-import-confirm");
@@ -387,7 +420,7 @@ describe("ImportProvider › review and classify", () => {
       }),
     );
     open();
-    fill("Provider", "mcs_01k5s1");
+    pickExisting("mcs_01k5s1");
     fireEvent.submit(connectForm());
     fireEvent.click(screen.getByTestId("tools-import-classify"));
     const confirm = screen.getByTestId("tools-import-confirm");
@@ -430,7 +463,12 @@ describe("ImportProvider › closing", () => {
     expect(
       screen.queryByTestId("tools-import-failure"),
     ).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Auth")).toHaveValue("none");
+    expect(screen.getByTestId("tools-import-source-browse")).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    fireEvent.click(screen.getByTestId("tools-import-source-custom"));
+    expect(screen.getByLabelText("Auth")).toHaveValue("oauth");
     expect(screen.queryByLabelText("Auth config")).not.toBeInTheDocument();
   });
 });

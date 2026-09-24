@@ -159,6 +159,9 @@ import { agentMcpResolve } from "./agent.mcp.resolve";
 import { agentMcpRegister } from "./agent.mcp.register";
 import { agentMcpSetEnabled } from "./agent.mcp.set_enabled";
 import { agentMcpDelete } from "./agent.mcp.delete";
+import { agentMcpRegistrySearch } from "./agent.mcp.registry.search";
+import { agentMcpAuthorizeStart } from "./agent.mcp.authorize.start";
+import { agentMcpAuthorizeComplete } from "./agent.mcp.authorize.complete";
 import { agentMcpConsentResolve } from "./agent.mcp_consent.resolve";
 import { agentMcpConsentList } from "./agent.mcp_consent.list";
 import { agentMemoryRecall } from "./agent.memory.recall";
@@ -684,6 +687,9 @@ export {
   agentMcpRegister,
   agentMcpSetEnabled,
   agentMcpDelete,
+  agentMcpRegistrySearch,
+  agentMcpAuthorizeStart,
+  agentMcpAuthorizeComplete,
   agentMcpConsentResolve,
   agentMcpConsentList,
   agentMemoryRecall,
@@ -1084,6 +1090,9 @@ export const contracts: readonly CapabilityDeclaration[] = [
   agentMcpRegister,
   agentMcpSetEnabled,
   agentMcpDelete,
+  agentMcpRegistrySearch,
+  agentMcpAuthorizeStart,
+  agentMcpAuthorizeComplete,
   agentMcpConsentResolve,
   agentMcpConsentList,
   agentMemoryRecall,

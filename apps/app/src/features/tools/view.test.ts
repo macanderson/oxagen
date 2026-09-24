@@ -7,9 +7,11 @@
 import { describe, expect, it } from "vitest";
 import {
   carriedBy,
+  needsReconnect,
   parseMeasureLines,
   parseToolsTab,
   parseToolsView,
+  providerLight,
   splitCommas,
   splitLines,
   textValue,
@@ -247,5 +249,124 @@ describe("weekdayKey", () => {
   // upstream, and a thrown error names it rather than printing a raw key.
   it.each([0, 8, 1.5])("refuses %s", (day) => {
     expect(() => weekdayKey(day)).toThrow(RangeError);
+  });
+});
+
+describe("providerLight (#4132)", () => {
+  const NOW = Date.parse("2026-09-24T12:00:00Z");
+  const oauth = (
+    over: Partial<
+      NonNullable<Parameters<typeof providerLight>[0]["authorization"]>
+    >,
+  ) => ({
+    state: "connected" as const,
+    expiresAt: "2026-09-24T13:00:00.000Z",
+    refreshable: true,
+    lastRefreshedAt: null,
+    ...over,
+  });
+
+  it.each<[string, Parameters<typeof providerLight>[0], string, string]>([
+    [
+      "a healthy static provider",
+      { healthStatus: "healthy", authorization: null },
+      "green",
+      "ok",
+    ],
+    [
+      "an unchecked static provider",
+      { healthStatus: "unknown", authorization: null },
+      "yellow",
+      "unchecked",
+    ],
+    [
+      "a degraded provider",
+      { healthStatus: "degraded", authorization: null },
+      "yellow",
+      "degraded",
+    ],
+    [
+      "an unreachable provider",
+      { healthStatus: "unreachable", authorization: null },
+      "red",
+      "unreachable",
+    ],
+    [
+      "a signed-in OAuth provider",
+      { healthStatus: "healthy", authorization: oauth({}) },
+      "green",
+      "ok",
+    ],
+    [
+      "a lapsed token that renews",
+      {
+        healthStatus: "healthy",
+        authorization: oauth({ expiresAt: "2026-09-24T11:00:00.000Z" }),
+      },
+      "yellow",
+      "tokenLapsed",
+    ],
+    [
+      "a lapsed token that does not renew",
+      {
+        healthStatus: "healthy",
+        authorization: oauth({
+          expiresAt: "2026-09-24T11:00:00.000Z",
+          refreshable: false,
+        }),
+      },
+      "red",
+      "tokenExpired",
+    ],
+    [
+      "a refused refresh",
+      {
+        healthStatus: "healthy",
+        authorization: oauth({ state: "needs_reauth" }),
+      },
+      "red",
+      "needsReauth",
+    ],
+    [
+      "a revoked token",
+      { healthStatus: "healthy", authorization: oauth({ state: "revoked" }) },
+      "red",
+      "revoked",
+    ],
+    [
+      "no sign-in yet",
+      {
+        healthStatus: "unknown",
+        authorization: oauth({ state: "not_connected" }),
+      },
+      "red",
+      "notConnected",
+    ],
+    [
+      "a sign-in needed on an unreachable server, which names the sign-in",
+      {
+        healthStatus: "unreachable",
+        authorization: oauth({ state: "needs_reauth" }),
+      },
+      "red",
+      "needsReauth",
+    ],
+    [
+      "a token with no lifetime",
+      { healthStatus: "healthy", authorization: oauth({ expiresAt: null }) },
+      "green",
+      "ok",
+    ],
+  ])("reads %s", (_case, server, light, reason) => {
+    expect(providerLight(server, NOW)).toEqual({ light, reason });
+  });
+
+  it("asks for a reconnect only for a reason a sign-in fixes", () => {
+    expect(needsReconnect("needsReauth")).toBe(true);
+    expect(needsReconnect("tokenExpired")).toBe(true);
+    expect(needsReconnect("notConnected")).toBe(true);
+    expect(needsReconnect("revoked")).toBe(true);
+    expect(needsReconnect("unreachable")).toBe(false);
+    expect(needsReconnect("tokenLapsed")).toBe(false);
   });
 });
