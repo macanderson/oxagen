@@ -96,8 +96,8 @@ const {
       <p data-testid="skills-body" />
     )),
     SkillsLoading: vi.fn(() => null),
-    Tools: vi.fn((props: { searchParams: Record<string, string> }) => (
-      <p data-testid="tools-body" data-tab={props.searchParams.tab} />
+    Tools: vi.fn((props: { tab: string }) => (
+      <p data-testid="tools-body" data-tab={props.tab} />
     )),
     ToolsLoading: vi.fn(() => null),
     workspaces,
@@ -163,7 +163,11 @@ vi.mock("@/features/organization", async (importOriginal) => ({
 }));
 vi.mock("@/features/onboarding", () => ({ OnboardingGate }));
 vi.mock("@/features/skills", () => ({ Skills, SkillsLoading }));
-vi.mock("@/features/tools", () => ({ Tools, ToolsLoading }));
+vi.mock("@/features/tools", async (load) => ({
+  ...(await load<typeof import("@/features/tools")>()),
+  Tools,
+  ToolsLoading,
+}));
 vi.mock("@/data/source", () => ({ dataSource: () => source }));
 vi.mock("next-intl/server", () => ({
   getTranslations: (namespace: string) =>
@@ -226,13 +230,15 @@ const title = translator("pages");
 
 /** A redirect with no title of its own, so not a `Load`. */
 const SKILLS = () => import("./[ws]/skills/page");
-const TOOLS: Load = () => import("./[ws]/tools/page");
+const TOOLS: Load = () => import("./[ws]/tools/[[...tab]]/page");
 const STEERING: Load = () => import("./[ws]/steering/page");
 
 const FLEET: Load = () => import("./[ws]/(fleet)/page");
 const AGENTS: Load = () => import("./[ws]/agents/page");
 const AGENT: Load = () => import("./[ws]/agents/[agent]/page");
 const AGENT_SOURCE: Load = () => import("./[ws]/agents/[agent]/source/page");
+/** The agent page with its tab as a path segment; its params carry `tab`. */
+const AGENT_TAB = () => import("./[ws]/agents/[agent]/[tab]/page");
 const SPEND: Load = () => import("./[ws]/spend/[[...tab]]/page");
 
 const RUN: Load = () => import("./[ws]/runs/[run]/page");
@@ -243,21 +249,23 @@ const AUDIT: Load = () => import("./audit/page");
 const AUDIT_TAB = () => import("./audit/[tab]/page");
 
 describe("the Tools page", () => {
-  it("resolves the workspace viewer, names the page once under the workspace eyebrow and hands the viewer, the data source and the query to Tools", async () => {
+  it("resolves the workspace viewer and hands the viewer, the data source, the tab the path names and the query to Tools", async () => {
     const viewer = { wsSlug: "core-platform", wsName: "Core platform" };
     requireViewer.mockResolvedValue(viewer);
-    const page = await expectPageTitle(
-      await TOOLS(),
-      routeProps(SEGMENTS, { tab: "switches", names: "api" }),
-      title("tools"),
+    const page = await TOOLS();
+    await renderPage(
+      await page.default({
+        params: Promise.resolve({ ...SEGMENTS, tab: ["switches"] }),
+        searchParams: Promise.resolve({ names: "api" }),
+      }),
     );
     expect(requireViewer).toHaveBeenCalledWith(...WS);
-    expect(page).toHaveTextContent("Workspace Core platform");
     expect(Tools).toHaveBeenCalledOnce();
     expect(Tools.mock.calls[0]?.[0]).toEqual({
       ctx: viewer,
       source,
-      searchParams: { tab: "switches", names: "api" },
+      tab: "switches",
+      searchParams: { names: "api" },
     });
     expect(screen.getByTestId("tools-body")).toHaveAttribute(
       "data-tab",
@@ -267,9 +275,42 @@ describe("the Tools page", () => {
     expect(screen.queryByTestId("not-recorded")).toBeNull();
   });
 
-  it("hands Tools the registry with no query when the URL carries none", async () => {
-    await expectPageTitle(await TOOLS(), routeProps(SEGMENTS), title("tools"));
-    expect(Tools.mock.calls.at(-1)?.[0]).toMatchObject({ searchParams: {} });
+  it("names itself pages.tools in the document title", async () => {
+    const page = await TOOLS();
+    expect(await page.generateMetadata(routeProps(SEGMENTS))).toEqual({
+      title: title("tools"),
+    });
+  });
+
+  it("lands the old servers tab and a pre-rev1 ?tab= on the tab that absorbed each", async () => {
+    const page = await TOOLS();
+    await renderPage(
+      await page.default({
+        params: Promise.resolve({ ...SEGMENTS, tab: ["servers"] }),
+        searchParams: Promise.resolve({}),
+      }),
+    );
+    expect(Tools.mock.calls.at(-1)?.[0]).toMatchObject({ tab: "providers" });
+    await renderPage(
+      await page.default({
+        params: Promise.resolve(SEGMENTS),
+        searchParams: Promise.resolve({ tab: "autoapprovals" }),
+      }),
+    );
+    expect(Tools.mock.calls.at(-1)?.[0]).toMatchObject({ tab: "policy" });
+  });
+
+  it("answers a path deeper than one tab with a 404 before resolving anyone (negative)", async () => {
+    const page = await TOOLS();
+    await expect(
+      Promise.resolve(
+        page.default({
+          params: Promise.resolve({ ...SEGMENTS, tab: ["providers", "x"] }),
+          searchParams: Promise.resolve({}),
+        }),
+      ),
+    ).rejects.toThrow();
+    expect(requireViewer).not.toHaveBeenCalled();
   });
 });
 
@@ -505,6 +546,21 @@ describe("the Fleet page", () => {
   });
 });
 
+/**
+ * The agent and source routes draw no h1 of their own: the feature draws it
+ * (the agent card, the file path) once the identity is read. So the route
+ * owns only the document title.
+ */
+async function expectBodyTitled<P extends object>(
+  page: PageModule<P>,
+  props: RouteProps<P>,
+  documentTitle: string,
+): Promise<void> {
+  expect((await page.generateMetadata(props)).title).toBe(documentTitle);
+  const container = await renderPage(await page.default(props));
+  expect(container.querySelectorAll("h1")).toHaveLength(0);
+}
+
 describe("the Agents pages", () => {
   const ctx = { wsSlug: "core-platform" };
   beforeEach(() => {
@@ -544,7 +600,7 @@ describe("the Agents pages", () => {
   });
 
   it("the agent page hands the agent, the tab and the cursor the URL names to Agent", async () => {
-    await expectPageTitle(
+    await expectBodyTitled(
       await AGENT(),
       routeProps(SEGMENTS, { tab: "incidents", cursor: "c3" }),
       title("agent"),
@@ -557,7 +613,7 @@ describe("the Agents pages", () => {
       tab: "incidents",
       cursor: "c3",
     });
-    await expectPageTitle(await AGENT(), routeProps(SEGMENTS), title("agent"));
+    await expectBodyTitled(await AGENT(), routeProps(SEGMENTS), title("agent"));
     expect(Agent.mock.calls.at(-1)?.[0]).toMatchObject({
       tab: null,
       cursor: null,
@@ -570,8 +626,34 @@ describe("the Agents pages", () => {
     expect(Agents.mock.calls.at(-1)?.[0]).toMatchObject({ cursor: null });
   });
 
+  it("the agent tab page hands the tab its path names, and the cursor, to Agent", async () => {
+    const page = await AGENT_TAB();
+    await expectBodyTitled(
+      page,
+      routeProps({ ...SEGMENTS, tab: "activity" }, { cursor: "c3" }),
+      title("agent"),
+    );
+    expect(requireViewer).toHaveBeenCalledWith(...WS);
+    expect(Agent.mock.calls.at(-1)?.[0]).toEqual({
+      ctx,
+      source,
+      agent: "release-bot",
+      tab: "activity",
+      cursor: "c3",
+    });
+    await expectBodyTitled(
+      page,
+      routeProps({ ...SEGMENTS, tab: "identity" }),
+      title("agent"),
+    );
+    expect(Agent.mock.calls.at(-1)?.[0]).toMatchObject({
+      tab: "identity",
+      cursor: null,
+    });
+  });
+
   it("the source page hands the agent to AgentSource", async () => {
-    await expectPageTitle(
+    await expectBodyTitled(
       await AGENT_SOURCE(),
       routeProps(SEGMENTS),
       title("agentSource"),

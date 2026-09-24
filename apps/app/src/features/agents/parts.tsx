@@ -6,6 +6,7 @@ import { Fragment, type ReactNode } from "react";
 import type { AgentStatus } from "@/data/contracts/agents";
 import type { SafePath } from "@/shared/safe-path";
 import {
+  buttonSecondary,
   linkText,
   panel,
   panelHeader,
@@ -17,35 +18,109 @@ import {
 import { SafeLink } from "@/ui/navigation";
 import { useFormatter } from "@/ui/formatter";
 
+/**
+ * `.btn.danger`: the hairline and the ink in the error hue, for a write that
+ * ends something (Suspend, Deregister, Revoke credential, Unenroll). It is
+ * never the gold: gold is identity.
+ */
+export const buttonDanger = `${buttonSecondary} border-error/40 text-error-ink hover:border-error/60 hover:bg-error/10`;
+
 export function Panel({
   id,
   title,
   lead,
+  aside,
+  tone,
+  testId,
   children,
 }: {
   /** The heading's id, unique on the page. */
   id: string;
   title: string;
-  lead?: string;
+  /** The one sentence under the heading. */
+  lead?: ReactNode;
+  /** What sits at the right of the header: a badge, a count, a button. */
+  aside?: ReactNode;
+  /** A panel whose edge carries a state hue (the mockup's tinted border). */
+  tone?: "proven" | "critical" | "approval";
+  testId?: string;
   children: ReactNode;
 }) {
+  const edge =
+    tone === "proven"
+      ? "border-proven/35"
+      : tone === "critical"
+        ? "border-critical/35"
+        : tone === "approval"
+          ? "border-info/35"
+          : "";
   return (
     <section
       aria-labelledby={id}
-      className={`${panel} flex min-w-0 flex-col gap-3 p-4`}
+      data-testid={testId}
+      className={`${panel} ${edge} flex min-w-0 flex-col gap-3 p-4`}
     >
       <div
-        className={`${panelHeader} -mx-4 -mt-4 flex-col items-start gap-0.5`}
+        className={`${panelHeader} -mx-4 -mt-4 flex-nowrap items-start bg-hl`}
       >
-        <h2 id={id} className="text-sm font-semibold">
-          {title}
-        </h2>
-        {lead === undefined ? null : (
-          <p className="text-xs text-muted-foreground">{lead}</p>
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <h2 id={id} className="text-[13.5px] font-semibold">
+            {title}
+          </h2>
+          {lead === undefined ? null : (
+            <p className="text-xs text-muted-foreground">{lead}</p>
+          )}
+        </div>
+        {aside === undefined ? null : (
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+            {aside}
+          </div>
         )}
       </div>
       {children}
     </section>
+  );
+}
+
+/**
+ * A slice the design draws whose store Oxagen does not have yet. It says what
+ * is missing in words, and carries the backend gap as data, so it can never be
+ * read as a zero or as a finding that nothing happened.
+ */
+export function NotBacked({
+  gap,
+  children,
+}: {
+  /** The backend gap, as the spec's data-source table names it. */
+  gap: string;
+  children: ReactNode;
+}) {
+  return (
+    <p
+      data-testid="not-backed"
+      data-gap={gap}
+      className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground"
+    >
+      {children}
+    </p>
+  );
+}
+
+/** A fact with the one quiet line under it (the mockup's `dd .sub`). */
+export function Sub({ children }: { children: ReactNode }) {
+  return (
+    <span className="mt-0.5 block text-xs text-muted-foreground">
+      {children}
+    </span>
+  );
+}
+
+/** The mockup's `.note`: a gold rule at the left and one or two sentences. */
+export function Note({ children }: { children: ReactNode }) {
+  return (
+    <p className="border-l-2 border-gold py-1 pl-3 text-[12.5px] text-muted-foreground">
+      {children}
+    </p>
   );
 }
 

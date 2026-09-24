@@ -495,11 +495,16 @@ function RowActions({
   );
 }
 
-function compare(a: string | number | null, b: string | number | null): number {
-  // A value the store did not record sorts last in either direction.
+function compare(
+  a: string | number | null,
+  b: string | number | null,
+  sign: 1 | -1,
+): number {
+  // A value the store did not record sorts last in either direction, so the
+  // direction's sign applies only once both values are recorded.
   if (a === null || b === null) return a === b ? 0 : a === null ? 1 : -1;
-  if (typeof a === "number" && typeof b === "number") return a - b;
-  return String(a).localeCompare(String(b));
+  if (typeof a === "number" && typeof b === "number") return sign * (a - b);
+  return sign * String(a).localeCompare(String(b));
 }
 
 function searchText(row: AgentRow, harness: string): string {
@@ -592,7 +597,7 @@ export function AgentsTable({
     const by = columns.find((column) => column.key === sort?.key)?.sort;
     if (sort === null || by === undefined) return filtered;
     const sign = sort.dir === "ascending" ? 1 : -1;
-    return [...filtered].sort((a, b) => sign * compare(by(a), by(b)));
+    return [...filtered].sort((a, b) => compare(by(a), by(b), sign));
   }, [rows, query, offered, facets, columns, sort, t]);
 
   const pages = size === 0 ? 1 : Math.max(1, Math.ceil(visible.length / size));
