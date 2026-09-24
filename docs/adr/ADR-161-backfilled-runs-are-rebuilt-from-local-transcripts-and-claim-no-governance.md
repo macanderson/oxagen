@@ -4,6 +4,7 @@ Status: Accepted
 Date: 2026-09-23
 Related: ADR-043, ADR-058, ADR-060, ADR-064, ADR-084, ADR-099, ADR-113, ADR-162
 Refs: #4013
+Depends on: PR #4009
 
 ## Context
 
@@ -56,6 +57,8 @@ If the session resumes later with the collector installed, the hook finds the re
 
 A session the daemon has already registered (it has a tailer cursor or a registry entry) is skipped by the backfill, because the live path owns it. A transcript written to in the last 15 minutes is skipped as possibly active. A later pass picks it up.
 
+The local check is not enough on its own. A host that lost `TACHO_HOME`, or re-enrolled with the same enrollment id, has no cursor for a session the server already holds, and ingest refuses a second chain that starts at seq 0 for that session. So before it starts a chain, the backfill asks the control plane which of the candidate `session_uuid` values it already holds, in one batched read scoped to the host. A session the server holds is skipped and reported as "already recorded". A session the server cannot answer for, because the host is offline, waits for a later pass rather than starting a chain.
+
 The chain starts fresh at seq 0 for each backfilled session. It proves the record has not changed since the backfill sealed it. It does not prove anything about the run itself, and the Run page says so.
 
 ### Deterministic frames
@@ -65,6 +68,8 @@ Every field of a backfilled envelope is a function of three inputs: the transcri
 - `event_id` for a backfilled frame keeps the live shape, `evt_` plus a ULID. The time part comes from the frame's `ts`, and the random part comes from `sha256(session_uuid, seq, raw_source_digest)`. The recorder gains a way to take a supplied `event_id`. The live path keeps `newEventId`.
 - `ts` is the line's `timestamp`. A record with none (`ai-title`, `mode`, and the other settings records) takes the timestamp of the last timed line before it, which is what `fallbackTs` already does.
 - `seq` is the dense order in which drafts leave the normalizer, reading the file from byte 0.
+
+The normalizer turns an `ai-title` record into an `oxagen:session_title` frame and a `pr-link` record into an `oxagen:pr_link` frame. Neither frame kind is on `main` yet. Both arrive with PR #4009, and the backfill depends on it: an implementation that lands first would have to drop those records, and a later pass could not add them to a sealed chain.
 
 A second pass over an unchanged file, with the same normalizer, produces identical events. Each gets the same `event_id_idem` and the same hash, and ingest writes no second row. The checkpoint (below) records the normalizer version. A pass under a newer normalizer does not re-seal a session sealed under an older one. It reports the session as sealed under version N and leaves it.
 
@@ -89,7 +94,7 @@ The only git facts a backfilled session carries are the `gitBranch` and `cwd` it
 
 ### Cost
 
-The host ships usage, not cost. The control plane prices each backfilled `llm_call` from `packages/billing/src/rate-card.ts` at the price in effect on the call's `ts`, and writes `cost_basis = "estimated"` (already in `COST_BASES`, and already handled by `packages/billing/src/cost-rollup-store.ts`). A model the rate card cannot price sets `has_unknown_model_cost`. Backfilled cost does not add to the spend-budget counter (ADR-060 §5), does not reach a Stripe meter, and does not count toward a current budget. The Run page and Spend show it with the label "Estimated".
+The host ships usage, not cost. The control plane prices each backfilled `llm_call` from the dated rows in `cost.price_entries`, through `resolvePriceEntry` in `packages/billing/src/price-book.ts` with `at` set to the frame's `ts`, so a session from March is priced at March's prices. It does not use `packages/billing/src/rate-card.ts`, the undated copy the CLI vendors. It writes `cost_basis = "estimated"` (already in `COST_BASES`, and already handled by `packages/billing/src/cost-rollup-store.ts`). A model the price book cannot price at that date sets `has_unknown_model_cost`. Backfilled cost does not add to the spend-budget counter (ADR-060 §5), does not reach a Stripe meter, and does not count toward a current budget. The Run page and Spend show it with the label "Estimated".
 
 ### Workspace and repository
 
@@ -131,10 +136,12 @@ Transcripts from harnesses other than Claude Code are out of scope, because `tra
 - [ ] `SessionRecorder` accepts a supplied `event_id`. Backfilled frames derive it from `session_uuid`, seq, and `raw_source_digest`. A test seals one transcript twice and asserts identical events.
 - [ ] The daemon registry adopts a backfilled chain head and the tailer cursor. A test backfills a transcript, resumes the session live, and asserts one chain with no repeated line.
 - [ ] Sessions with a tailer cursor or registry entry, and transcripts written to in the last 15 minutes, are skipped.
+- [ ] A batched server check skips every session the control plane already holds, and a test covers a host that lost `TACHO_HOME`.
+- [ ] PR #4009 has merged, and a test backfills a transcript with `ai-title` and `pr-link` records into `oxagen:session_title` and `oxagen:pr_link` frames.
 - [ ] Subagents link to their parent through `agentId`, the parent's `toolUseResult` or `sourceToolUseID`, and `meta.json`. Forks carry `oxagen.forked_from` and count copied usage once per `requestId`.
 - [ ] `tacho.sessions.record_basis` with its Atlas migration and constraint. The seal writes `backfill` into `completeness_gaps`, and `enforcement_tier` is `observe`.
 - [ ] Git facts come from recorded `gitBranch` and `cwd` only, with `oxagen.git_basis = recorded`. A test asserts no git process is spawned.
-- [ ] The control plane prices backfilled usage from the rate card with `cost_basis = "estimated"`, and backfilled cost is excluded from the spend-budget counter and Stripe metering.
+- [ ] The control plane prices backfilled usage through `resolvePriceEntry` at each frame's `ts`, with `cost_basis = "estimated"`, and a test prices one model on both sides of a price change, and backfilled cost is excluded from the spend-budget counter and Stripe metering.
 - [ ] Repository attribution uses only a recorded live `cwd` to `git_remote_digest` pair on the same host.
 - [ ] WAL backlog cap, live-first shipping, and the checkpoint file with resume after interruption, each covered by a test.
 - [ ] The Run page badge, the "Not recorded" governance panels, the "Estimated" cost label, and the chain status wording, covered by a component test.
