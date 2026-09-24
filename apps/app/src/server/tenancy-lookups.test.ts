@@ -225,10 +225,16 @@ describe("systemLookups", () => {
       status: "pending",
       createdAt: new Date("2026-09-11T09:00:00Z"),
       expiresAt: new Date("2099-01-01T00:00:00Z"),
+      invitedByUserId: "44444444-4444-4444-8444-444444444444",
     };
 
     it("reads the invitation by public token and names its organization, with the stored role and status", async () => {
-      queue.push([invitationRow], [orgRow]);
+      queue.push(
+        [invitationRow],
+        [orgRow],
+        [{ displayName: "Priya Natarajan" }],
+        [{ role: "Owner" }],
+      );
       await expect(l.invitationByToken("invi_live")).resolves.toEqual({
         invitationId: invitationRow.id,
         orgId: orgRow.id,
@@ -239,8 +245,15 @@ describe("systemLookups", () => {
         status: "pending",
         invitedAt: invitationRow.createdAt,
         expiresAt: invitationRow.expiresAt,
+        inviterName: "Priya Natarajan",
+        inviterRole: "Owner",
       });
-      expect(tables).toEqual([schema.invitations, schema.organizations]);
+      expect(tables).toEqual([
+        schema.invitations,
+        schema.organizations,
+        schema.users,
+        schema.orgUsers,
+      ]);
       // The public token is the capability: the read keys on publicId alone.
       expect(where).toHaveBeenNthCalledWith(
         1,
@@ -257,6 +270,51 @@ describe("systemLookups", () => {
     it("returns null when the invitation's organization is gone", async () => {
       queue.push([invitationRow], []);
       await expect(l.invitationByToken("invi_live")).resolves.toBeNull();
+    });
+
+    it("names the inviter by display name and their role in the invitation's organization", async () => {
+      queue.push(
+        [invitationRow],
+        [orgRow],
+        [{ displayName: "  Priya Natarajan " }],
+        [{ role: "Admin" }],
+      );
+      await expect(l.invitationByToken("invi_live")).resolves.toMatchObject({
+        inviterName: "Priya Natarajan",
+        inviterRole: "Admin",
+      });
+      expect(where).toHaveBeenNthCalledWith(
+        3,
+        eq(schema.users.id, invitationRow.invitedByUserId),
+      );
+      expect(where).toHaveBeenNthCalledWith(
+        4,
+        and(
+          eq(schema.orgUsers.orgId, orgRow.id),
+          eq(schema.orgUsers.userId, invitationRow.invitedByUserId),
+        ),
+      );
+    });
+
+    it("an inviter with no name is not read further and reads as unknown", async () => {
+      queue.push([invitationRow], [orgRow], [{ displayName: null }]);
+      await expect(l.invitationByToken("invi_live")).resolves.toMatchObject({
+        inviterName: null,
+        inviterRole: null,
+      });
+      expect(tables).toEqual([
+        schema.invitations,
+        schema.organizations,
+        schema.users,
+      ]);
+    });
+
+    it("an inviter who left the organization keeps a name and no role", async () => {
+      queue.push([invitationRow], [orgRow], [{ displayName: "Priya" }], []);
+      await expect(l.invitationByToken("invi_live")).resolves.toMatchObject({
+        inviterName: "Priya",
+        inviterRole: null,
+      });
     });
 
     it("carries a null expiry as null", async () => {

@@ -70,8 +70,10 @@ export function gateRail(
 }
 
 /**
- * The register stepper. A later step opens only once the identity exists, so
- * the agent the name step minted is what carries the operator forward.
+ * The register stepper (register-name spec, Shell): a done step links back to
+ * itself, the current step is where the operator stands, and a later step
+ * opens only by finishing this one, so it carries no link. The identity the
+ * name step minted rides along on every link back.
  */
 export function registerRail(
   current: RegisterStep,
@@ -81,16 +83,15 @@ export function registerRail(
   const at = REGISTER_STEPS.indexOf(current);
   return REGISTER_STEPS.map((step, index) => {
     const state = stateOf(index, at);
-    const reachable = step === "name" || agent !== null;
     const to =
-      state === "current" || !reachable
-        ? null
-        : routes.register(
+      state === "done"
+        ? routes.register(
             place.org,
             place.ws,
             step,
             agent === null ? undefined : { agent },
-          );
+          )
+        : null;
     return { step, state, to };
   });
 }

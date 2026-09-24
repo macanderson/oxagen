@@ -13,7 +13,6 @@ import {
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type { Cost, Money as MoneyValue } from "@/data/contracts/money";
-import type { DayRange, SpendFigure } from "@/data/contracts/spend";
 import { useFormatter } from "@/ui/formatter";
 import { Money } from "@/ui/money";
 import type { MoneyPrecision } from "@/ui/money-format";
@@ -38,18 +37,28 @@ export function NotRecordedValue() {
   );
 }
 
-export function CostFigure({ cost }: { cost: Cost | null }) {
+/**
+ * The basis a cost carries, in the record's own words (`gateway_observed`,
+ * `client_attested`), never a stronger one: `mixed` reads as both.
+ */
+export function BasisLabel({ basis }: { basis: Cost["basis"] }) {
   const t = useTranslations("spend");
+  return (
+    <span
+      data-basis={basis ?? "not_recorded"}
+      className="font-mono text-[11px] font-normal text-muted-foreground"
+    >
+      {basis === null ? t("basisNotRecorded") : t(`basis.${basis}`)}
+    </span>
+  );
+}
+
+export function CostFigure({ cost }: { cost: Cost | null }) {
   if (cost === null) return <NotRecordedValue />;
   return (
     <span className="inline-flex flex-wrap items-baseline gap-x-2">
       <Money value={cost} />
-      <span
-        data-basis={cost.basis ?? "not_recorded"}
-        className="font-mono text-xs font-normal text-muted-foreground"
-      >
-        {cost.basis === null ? t("basisNotRecorded") : t(`basis.${cost.basis}`)}
-      </span>
+      <BasisLabel basis={cost.basis} />
     </span>
   );
 }
@@ -128,45 +137,4 @@ export function TileStrip({
   embedded?: boolean;
 }) {
   return <dl className={embedded ? "contents" : statStrip}>{children}</dl>;
-}
-
-/** Recorded spend and workload, without outcome or operator scores. */
-export function SpendStrip({
-  total,
-  period,
-  estimatedRuns = 0,
-}: {
-  total: SpendFigure;
-  period: DayRange;
-  /** Open runs whose cost is in `total` as a running estimate. */
-  estimatedRuns?: number;
-}) {
-  const t = useTranslations("spend");
-  return (
-    <TileStrip>
-      <Tile term={t("strip.spend")} note={t("period", period)}>
-        <CostFigure cost={total.cost} />
-      </Tile>
-      <Tile term={t("strip.runs")} note={t("strip.runsNote")}>
-        <CountFigure count={total.runs} />
-      </Tile>
-      <Tile term={t("strip.calls")} note={t("strip.callsNote")}>
-        <CountFigure count={total.calls} />
-      </Tile>
-      <Tile
-        term={t("strip.coverage")}
-        note={
-          estimatedRuns > 0
-            ? t("strip.estimatedNote", { count: estimatedRuns })
-            : t("strip.coverageNote")
-        }
-      >
-        {total.cost === null
-          ? t("strip.missing")
-          : estimatedRuns > 0
-            ? t("strip.estimated")
-            : t("strip.available")}
-      </Tile>
-    </TileStrip>
-  );
 }

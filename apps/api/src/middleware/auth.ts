@@ -8,6 +8,10 @@ import {
 import type { ApiKeyResolutionError } from "@oxagen/auth";
 import type { AppEnv } from "../app";
 
+/** The 403 body for a key its organization's Require SSO policy refuses. */
+export const API_KEY_SSO_REQUIRED_MESSAGE =
+  "This organization requires single sign-on. The person who created this key must sign in through SSO.";
+
 /**
  * Thin HTTP adapter — §7.3. Extracts the bearer token or session cookie
  * from the request and delegates all identity logic to the transport-agnostic
@@ -32,6 +36,12 @@ export const authMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
           "This API key's workspace is archived; restore the workspace or use a key in an active one",
       };
       const { kind } = result as ApiKeyResolutionError;
+      // Require SSO (ADR-145) refuses a genuine key on policy grounds, so it
+      // answers 403 rather than 401: the credential is recognized, and the
+      // organization will not accept it until its creator signs in through SSO.
+      if (kind === "sso_required") {
+        throw new HTTPException(403, { message: API_KEY_SSO_REQUIRED_MESSAGE });
+      }
       throw new HTTPException(401, {
         message: messages[kind] ?? "Unauthorized",
       });

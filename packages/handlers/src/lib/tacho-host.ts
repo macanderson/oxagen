@@ -20,7 +20,9 @@ import { collectResourceScope } from "@oxagen/oxagen/iam";
 import { loadRuleSetIn } from "@oxagen/rules";
 import { PROVIDER_RATE_CARD, usdPerMillionToMicros } from "@oxagen/billing";
 import {
+  type AgentDaySpend,
   BUNDLE_FEATURE_CONTAINMENT,
+  BUNDLE_FEATURE_DAILY_BUDGET,
   BUNDLE_FEATURE_GATEWAY_TOOLS,
   BUNDLE_FEATURE_INDEPENDENT_MODELS,
   BUNDLE_FEATURE_HOOK_FAIL_OPEN,
@@ -33,7 +35,18 @@ import {
 import { FAIL_OPEN_HOOK_PATHS } from "@oxagen/tacho/claude-code";
 import { readLatestRetentionPolicy, schema, type Tx } from "@oxagen/database";
 import { RETENTION_CONTENT_CLASSES } from "@oxagen/run-ledger";
-import { and, asc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { selectAgentDaySpend } from "@oxagen/telemetry";
+import {
+  and,
+  asc,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 import type { z } from "zod";
 import { type BundleSigner, bundleSignerFromEnv } from "./tacho-bundle-signing";
 import { tachoHostApiKeyScopeSchema } from "./tacho-enrollment";
@@ -66,7 +79,12 @@ export type ControlEnvelope = z.output<typeof controlEnvelopeSchema>;
 interface TachoTx {
   query: {
     apiKeys: { findFirst: (args: unknown) => Promise<unknown> };
-    tachoHosts: { findFirst: (args: unknown) => Promise<unknown> };
+    // `findMany` lists the hosts enrolled under the same agent, for the
+    // agent's day spend (`agentDaySpend`, ADR-160).
+    tachoHosts: {
+      findFirst: (args: unknown) => Promise<unknown>;
+      findMany: (args: unknown) => Promise<unknown>;
+    };
     authorizationDenyGenerations: {
       findMany: (args: unknown) => Promise<unknown>;
     };
@@ -462,7 +480,10 @@ export async function resolveHostMandate(
   const models = await workspaceModels(tx, ctx, host);
   try {
     const definition = await readAgentDefinition(tx, host.agentId);
-    const budget = deriveBundleBudget(definition?.budget);
+    const budget = deriveBundleBudget(definition?.budget, {
+      enforcesDaily:
+        host.bundleFeatures?.includes(BUNDLE_FEATURE_DAILY_BUDGET) === true,
+    });
     return {
       permissions,
       budget,
@@ -726,12 +747,65 @@ export async function controlEnvelope(
     now,
   );
   const commands = await drainCommands(tx, host, now);
+  const daySpend =
+    bundle.budget.daily_limit_usd !== undefined
+      ? await agentDaySpend(tx, host, now)
+      : undefined;
   return controlEnvelopeSchema.parse({
     host_status: bundle.host_status,
     deny_generation: denyGeneration,
     bundle_etag: bundle.etag,
     commands,
+    ...(daySpend !== undefined ? { agent_day_spend: daySpend } : {}),
   });
+}
+
+/**
+ * What the record holds of the host's agent's observed spend on the UTC day
+ * `now` falls in (ADR-160): this host's shipped calls, and every other host
+ * enrolled under the same agent, whatever its status now. Read from
+ * ClickHouse by each frame's own timestamp (`selectAgentDaySpend`).
+ *
+ * Sent only to a host whose bundle carries `daily_limit_usd`, so a host with
+ * no daily ceiling costs no read. Fails open: an unreadable store omits the
+ * figure, and the host keeps counting its own WAL, which is the ADR's
+ * fail-open half. A poll is never refused over a spend read.
+ */
+export async function agentDaySpend(
+  tx: TachoTx,
+  host: TachoHostRow,
+  now: Date,
+): Promise<AgentDaySpend | undefined> {
+  if (host.agentId === null) return undefined;
+  const day = now.toISOString().slice(0, 10);
+  try {
+    const hosts = (await tx.query.tachoHosts.findMany({
+      where: eq(schema.tachoHosts.agentId, host.agentId),
+      columns: { publicId: true },
+    })) as Array<{ publicId: string }>;
+    const spend = await selectAgentDaySpend({
+      day,
+      hostEnrollmentIds: hosts.map((row) => row.publicId),
+    });
+    let others = 0;
+    for (const [enrollment, micros] of spend)
+      if (enrollment !== host.publicId) others += micros;
+    return {
+      day,
+      this_host_usd_micros: spend.get(host.publicId) ?? 0,
+      other_hosts_usd_micros: others,
+    };
+  } catch (error) {
+    logger.warn(
+      {
+        host: host.publicId,
+        agentId: host.agentId,
+        err: error instanceof Error ? error.message : String(error),
+      },
+      "Agent day spend unreadable; the host counts its own WAL until the next poll",
+    );
+    return undefined;
+  }
 }
 
 /**

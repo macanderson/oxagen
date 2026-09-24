@@ -1,40 +1,41 @@
-// Spend › Findings (#2963, ADR-062): the workspace's open findings ranked by
-// the money at stake, each with what it cites, why it costs money and the fix,
-// and one finding's evidence — the cited runs, the calls the counterfactual
-// covers and what each side cost. Every figure is the findings job's. The one
+// Spend › Findings (#2963, ADR-062; spec "Findings"): the workspace's open
+// findings ranked by the money at stake. The hero sums them (Savings
+// identified, its share of the window's spend, a year at this run rate, the
+// share strip with its legend and the four facts); the list filters, sorts and
+// pages them; Evidence opens one finding's arithmetic in a dialog and Fix opens
+// the change that removes it. Every figure is the findings job's. The one
 // thing computed here is a finding's share of the listed total, divided
 // through the micros seam and printed as a ratio (INV-09, INV-10).
 import { useLocale, useTranslations } from "next-intl";
+import type { ReactNode } from "react";
 import { ratioOfMicros } from "@/data/contracts/money";
 import type {
   SpendFinding,
   SpendFindingEvidence,
   SpendFindings,
+  SpendReport,
 } from "@/data/contracts/spend";
+import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
-import {
-  eyebrow,
-  linkText,
-  mono,
-  panel,
-  panelHeader,
-  panelFooter,
-} from "@/ui/control-styles";
-import { formatCount, formatMoney, formatRatio } from "@/ui/money-format";
+import { eyebrow, linkText, mono, panel } from "@/ui/control-styles";
+import { Money } from "@/ui/money";
+import { formatCount, formatRatio } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
+import { ReadFailure } from "@/ui/read-failure";
+import { cell, numericCell, Table } from "@/ui/table";
+import { EvidenceDialog } from "./evidence-dialog";
 import {
-  CostFigure,
+  BasisLabel,
   EstimateBasis,
-  CountFigure,
   Instant,
   MoneyFigure,
   NotRecordedValue,
-  RatioFigure,
   Tile,
   TileStrip,
 } from "./figures";
-import { FixDialog } from "./fix-dialog";
-import { Empty, HeaderCell, Panel } from "./tables";
+import { FindingsList } from "./findings-list";
+import { NotBacked } from "./not-backed";
+import { Empty, Panel } from "./tables";
 import type { SpendAt } from "./view";
 
 /** Findings named in the legend; the rest roll into one entry, since at forty a name per slice is unreadable. */
@@ -42,8 +43,6 @@ const LEGEND_MAX = 8;
 
 /** The strip's shading, darkest for the largest saving. */
 const RAMP = [1, 0.8, 0.64, 0.5, 0.38, 0.28];
-
-const cell = "px-4 py-2 text-left align-top";
 
 const opacityOf = (index: number): number =>
   RAMP[index % RAMP.length] ?? RAMP[0] ?? 1;
@@ -83,7 +82,7 @@ function CompositionStrip({
           <span
             key={finding.id}
             data-finding={finding.id}
-            className="block h-full bg-foreground"
+            className="block h-full bg-link"
             style={{
               width: `${String(Math.round(share * 1000) / 10)}%`,
               opacity: opacityOf(index),
@@ -119,7 +118,7 @@ function Legend({
           <li key={finding.id} className="flex items-center gap-1.5">
             <span
               aria-hidden="true"
-              className="size-2 rounded-sm bg-foreground"
+              className="size-2 rounded-sm bg-link"
               style={{ opacity: opacityOf(index) }}
             />
             <span>{t(`findings.kind.${finding.kind}`)}</span>
@@ -137,7 +136,7 @@ function Legend({
         <li className="flex items-center gap-1.5">
           <span
             aria-hidden="true"
-            className="size-2 rounded-sm bg-foreground opacity-20"
+            className="size-2 rounded-sm bg-link opacity-20"
           />
           <span>
             {t("findings.strip.tail", {
@@ -157,328 +156,230 @@ function Legend({
   );
 }
 
-function FindingCard({
-  finding,
-  rank,
-  share,
-  at,
-}: {
-  finding: SpendFinding;
-  rank: number;
-  share: number | null;
-  at: SpendAt;
-}) {
-  const t = useTranslations("spend");
-  const locale = useLocale();
-  return (
-    <li
-      data-finding={finding.id}
-      data-confidence={finding.confidence}
-      className={`${panel} grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_240px]`}
-    >
-      <div className="flex min-w-0 flex-col gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className={`${mono} text-xs text-muted-foreground`}>
-            {t("findings.rank", { rank: formatCount(rank, locale) })}
-          </span>
-          <h3 className="text-base font-semibold">
-            {t(`findings.kind.${finding.kind}`)}
-          </h3>
-          <span
-            data-level={finding.level}
-            className="rounded-md border border-border px-1.5 py-0.5 text-xs text-muted-foreground"
-          >
-            {t(`findings.level.${finding.level}`)}
-          </span>
-          <span className="rounded-md border border-border px-1.5 py-0.5 text-xs text-muted-foreground">
-            {t(`findings.confidence.${finding.confidence}`)}
-          </span>
-        </div>
-        <p className={`${mono} break-words text-sm`}>{finding.subject}</p>
-        <p className="max-w-prose text-sm text-muted-foreground">
-          <span className="font-medium text-foreground">
-            {t("findings.why")}
-          </span>{" "}
-          {finding.why}
-        </p>
-        <p className="max-w-prose text-sm text-muted-foreground">
-          <span className="font-medium text-foreground">
-            {t("findings.fixLabel")}
-          </span>{" "}
-          {finding.fix}
-        </p>
-        <p className="text-xs text-muted-foreground">
-          {t("findings.cites", {
-            runs: formatCount(finding.runs, locale),
-            calls: formatCount(finding.calls, locale),
-          })}
-          {" · "}
-          <Instant iso={finding.window.from} />
-          {" · "}
-          <Instant iso={finding.window.to} />
-        </p>
-      </div>
-      <div className="flex flex-none flex-col items-start gap-2 rounded-lg bg-hl p-3 sm:items-end">
-        <span className="text-xs text-muted-foreground">
-          {t("findings.saving")}
-        </span>
-        <span className="font-mono text-2xl font-semibold tabular-nums">
-          <MoneyFigure money={finding.saving} />
-          <EstimateBasis cost={finding.saving} />
-        </span>
-        <span className="text-xs text-muted-foreground">
-          {share === null
-            ? t("findings.shareUnknown")
-            : t("findings.shareOfIdentified", {
-                share: formatRatio(share, locale),
-              })}
-        </span>
-        <div className="flex flex-wrap gap-2">
-          <SafeLink
-            to={routes.spend(at.org, at.ws, {
-              tab: "findings",
-              finding: finding.id,
-            })}
-            className={linkText}
-          >
-            {t("findings.evidence.open")}
-          </SafeLink>
-          <FixDialog
-            at={at}
-            findingId={finding.id}
-            fix={finding.fix}
-            contextDescription={t("findings.fix.draft", {
-              id: finding.id,
-              subject: finding.subject,
-              from: finding.window.from,
-              to: finding.window.to,
-              amount: formatMoney(finding.saving, {
-                locale,
-                precision: "exact",
-              }),
-              currency: finding.saving.currency,
-              basis:
-                finding.saving.basis === null
-                  ? t("basisNotRecorded")
-                  : t(`basis.${finding.saving.basis}`),
-              runs: formatCount(finding.runs, locale),
-              calls: formatCount(finding.calls, locale),
-              fix: finding.fix,
-              why: finding.why,
-            })}
-          />
-        </div>
-      </div>
-    </li>
-  );
-}
-
 export function FindingsSection({
   findings,
+  operators,
   at,
+  evidence,
 }: {
   findings: SpendFindings;
+  /** The operator rollup, to name the person an operator finding is about. */
+  operators: SpendReport["rows"];
   at: SpendAt;
+  /** One finding's evidence, open as a dialog over the list; null when none is. */
+  evidence: ReactNode;
 }) {
-  const t = useTranslations("spend");
+  const t = useTranslations("spend.findings");
   const locale = useLocale();
   const shares = sharesOf(findings.findings, findings.saving);
+  const names = Object.fromEntries(
+    operators.flatMap((row) =>
+      row.operator?.name ? [[row.key, row.operator.name] as const] : [],
+    ),
+  );
   return (
     <>
       <section
         aria-labelledby="spend-findings-hero"
-        className={`${panel} flex flex-col overflow-hidden`}
+        data-testid="spend-findings-hero"
+        className={`${panel} grid gap-6 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]`}
       >
-        <div className={panelHeader}>
-          <p className={eyebrow}>{t("findings.eyebrow")}</p>
-          <h2 id="spend-findings-hero" className="sr-only">
-            {t("findings.heroTitle")}
+        <div className="flex flex-col gap-1.5">
+          <h2 id="spend-findings-hero" className={eyebrow}>
+            {t("hero")}
           </h2>
+          <span className="text-4xl font-bold tracking-tight tabular-nums">
+            <MoneyFigure money={findings.saving} />
+          </span>
+          <EstimateBasis cost={findings.saving} />
+          <p className="text-[12.5px] text-muted-foreground">
+            {findings.share === null || findings.spend === null ? (
+              <NotRecordedValue />
+            ) : (
+              <>
+                {t("heroShare", {
+                  share: formatRatio(findings.share, locale),
+                })}{" "}
+                <Money value={findings.spend} /> {t("heroWindow")}
+              </>
+            )}{" "}
+            {findings.annualised === null ? null : (
+              <>
+                {t("heroYearStart")} <Money value={findings.annualised} />{" "}
+                {t("heroYearEnd")}
+              </>
+            )}
+          </p>
         </div>
-        <div className="flex flex-col gap-4 p-4">
-          <dl className="grid gap-6 rounded-lg bg-hl p-4 lg:grid-cols-[minmax(240px,1.3fr)_repeat(3,minmax(0,1fr))]">
-            <div className="flex flex-col gap-2">
-              <dt className="text-sm text-muted-foreground">
-                {t("findings.saving")}
-              </dt>
-              <dd className="font-mono text-4xl font-semibold tracking-tight tabular-nums">
-                <MoneyFigure money={findings.saving} />
-                <EstimateBasis cost={findings.saving} />
-              </dd>
-              <dd className="text-xs text-muted-foreground">
-                {t("findings.savingNote")}
-              </dd>
-            </div>
-            <div className="flex flex-col gap-2">
-              <dt className="text-xs text-muted-foreground">
-                {t("findings.share")}
-              </dt>
-              <dd className="font-mono text-xl tabular-nums">
-                <RatioFigure ratio={findings.share} />
-              </dd>
-              <dd className="text-xs text-muted-foreground">
-                {t("findings.shareNote")}
-              </dd>
-            </div>
-            <div className="flex flex-col gap-2">
-              <dt className="text-xs text-muted-foreground">
-                {t("findings.annualised")}
-              </dt>
-              <dd className="font-mono text-xl tabular-nums">
-                <MoneyFigure money={findings.annualised} />
-                <EstimateBasis cost={findings.annualised} />
-              </dd>
-              <dd className="text-xs text-muted-foreground">
-                {t("findings.annualisedNote")}
-              </dd>
-            </div>
-            <div className="flex flex-col gap-2">
-              <dt className="text-xs text-muted-foreground">
-                {t("findings.spend")}
-              </dt>
-              <dd className="font-mono text-xl tabular-nums">
-                <CostFigure cost={findings.spend} />
-              </dd>
-              <dd className="text-xs text-muted-foreground">
-                {t("findings.spendNote")}
-              </dd>
-            </div>
-          </dl>
+        <div className="flex min-w-0 flex-col gap-3">
           {findings.findings.length === 0 ? null : (
             <>
               <CompositionStrip findings={findings.findings} shares={shares} />
               <Legend findings={findings.findings} shares={shares} />
             </>
           )}
-          <p className="text-sm text-muted-foreground">
-            {t("findings.facts", {
-              findings: formatCount(findings.counts.findings, locale),
-              operators: formatCount(findings.counts.operators, locale),
-              high: formatCount(findings.counts.high, locale),
-              medium: formatCount(findings.counts.medium, locale),
-            })}
-          </p>
+          <ul className="flex flex-wrap gap-x-5 gap-y-1 border-t border-border pt-3 text-[12.5px] text-muted-foreground">
+            <li>
+              <b className="text-foreground">
+                {formatCount(findings.counts.findings, locale)}
+              </b>{" "}
+              {t("facts.findings")}
+            </li>
+            <li>
+              <b className="text-foreground">
+                {formatCount(findings.counts.operators, locale)}
+              </b>{" "}
+              {t("facts.operators")}
+            </li>
+            <li>
+              <b className="text-foreground">
+                {formatCount(findings.counts.high, locale)}
+              </b>{" "}
+              {t("facts.high")}{" "}
+              <b className="text-foreground">
+                {formatCount(findings.counts.medium, locale)}
+              </b>{" "}
+              {t("facts.medium")}
+            </li>
+            <li>{t("facts.evidence")}</li>
+          </ul>
         </div>
-        <p className={panelFooter}>{t("findings.note")}</p>
       </section>
       {findings.findings.length === 0 ? (
         <section
           data-state="empty"
           className={`${panel} flex flex-col gap-2 p-6`}
         >
-          <h2 className="text-base font-semibold">
-            {t("findings.emptyTitle")}
-          </h2>
-          <p className="text-sm text-muted-foreground">{t("findings.empty")}</p>
+          <h2 className="text-base font-semibold">{t("emptyTitle")}</h2>
+          <p className="text-sm text-muted-foreground">{t("empty")}</p>
         </section>
       ) : (
-        <ol aria-label={t("findings.list")} className="flex flex-col gap-3">
-          {findings.findings.map((finding, index) => (
-            <FindingCard
-              key={finding.id}
-              finding={finding}
-              rank={index + 1}
-              share={shares[index] ?? null}
-              at={at}
-            />
-          ))}
-        </ol>
+        <FindingsList
+          findings={findings.findings}
+          shares={shares}
+          names={names}
+          at={at}
+        />
       )}
+      <div className="flex flex-col gap-2 border-l-2 border-gold py-1 pl-3 text-[12.5px] text-muted-foreground">
+        <p>{t("note")}</p>
+        <NotBacked gap="findings">{t("attributionMissing")}</NotBacked>
+      </div>
+      {evidence}
     </>
   );
 }
 
-export function FindingEvidenceSection({
+/**
+ * One finding's evidence as a dialog over the list: the arithmetic the job
+ * wrote, the calls the counterfactual covers, and the cited runs. Closing it
+ * returns to the list. A read that did not answer says so inside the dialog.
+ */
+export function FindingEvidence({
   evidence,
   at,
 }: {
-  evidence: SpendFindingEvidence;
+  evidence: Read<SpendFindingEvidence>;
   at: SpendAt;
 }) {
   const t = useTranslations("spend");
   const locale = useLocale();
-  const { finding } = evidence;
+  const close = routes.spend(at.org, at.ws, { tab: "findings" });
+  if (!evidence.ok) {
+    return (
+      <EvidenceDialog title={t("findings.evidence.title")} close={close}>
+        <ReadFailure read={evidence} section={t("findings.evidence.title")} />
+      </EvidenceDialog>
+    );
+  }
+  const value = evidence.value;
+  const { finding } = value;
   return (
-    <>
-      <div className="flex flex-col gap-1">
-        <p className={eyebrow}>{t("findings.evidence.eyebrow")}</p>
-        <h2 className="text-lg font-semibold">
-          {t(`findings.kind.${finding.kind}`)}{" "}
-          <span className={mono}>{finding.subject}</span>
-        </h2>
-        <SafeLink
-          to={routes.spend(at.org, at.ws, { tab: "findings" })}
-          className={`${linkText} text-sm`}
+    <EvidenceDialog
+      title={t("findings.evidence.title")}
+      subtitle={`${t(`findings.kind.${finding.kind}`)} ${finding.subject}`}
+      close={close}
+    >
+      <div className="flex flex-col gap-3.5">
+        <TileStrip>
+          <Tile
+            term={t("findings.evidence.atStake")}
+            note={t("findings.evidence.atStakeNote")}
+          >
+            <MoneyFigure money={finding.saving} />
+            <EstimateBasis cost={finding.saving} />
+          </Tile>
+          <Tile
+            term={t("findings.evidence.covered")}
+            note={t("findings.evidence.coveredNote")}
+          >
+            {t("findings.evidence.coveredValue", {
+              covered: formatCount(value.coveredCalls, locale),
+              calls: formatCount(value.calls, locale),
+            })}
+          </Tile>
+        </TileStrip>
+        <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 text-[12.5px]">
+          <dt className="text-muted-foreground">
+            {t("findings.evidence.confidence")}
+          </dt>
+          <dd>{t(`findings.confidence.${finding.confidence}`)}</dd>
+          <dt className="text-muted-foreground">
+            {t("findings.evidence.tokens")}
+          </dt>
+          <dd>
+            {t("findings.evidence.tokensValue", {
+              measured: formatCount(value.measuredTokens, locale),
+              counterfactual: formatCount(value.counterfactualTokens, locale),
+            })}
+          </dd>
+          <dt className="text-muted-foreground">
+            {t("findings.evidence.measured")}
+          </dt>
+          <dd>
+            <Money value={value.measured} precision="exact" />
+          </dd>
+          <dt className="text-muted-foreground">
+            {t("findings.evidence.counterfactual")}
+          </dt>
+          <dd>
+            <Money value={value.counterfactual} precision="exact" />
+          </dd>
+          <dt className="text-muted-foreground">
+            {t("findings.evidence.window")}
+          </dt>
+          <dd>
+            <Instant iso={finding.window.from} /> {t("findings.evidence.to")}{" "}
+            <Instant iso={finding.window.to} />
+          </dd>
+        </dl>
+        <Panel
+          id="spend-finding-runs"
+          title={t("findings.evidence.runs")}
+          footer={t("findings.evidence.note")}
         >
-          {t("findings.evidence.back")}
-        </SafeLink>
-      </div>
-      <TileStrip>
-        <Tile
-          term={t("findings.evidence.atStake")}
-          note={t("findings.evidence.atStakeNote")}
-        >
-          <MoneyFigure money={finding.saving} />
-          <EstimateBasis cost={finding.saving} />
-        </Tile>
-        <Tile term={t("findings.evidence.confidence")}>
-          {t(`findings.confidence.${finding.confidence}`)}
-        </Tile>
-        <Tile
-          term={t("findings.evidence.covered")}
-          note={t("findings.evidence.coveredNote")}
-        >
-          {t("findings.evidence.coveredValue", {
-            covered: formatCount(evidence.coveredCalls, locale),
-            calls: formatCount(evidence.calls, locale),
-          })}
-        </Tile>
-        <Tile
-          term={t("findings.evidence.tokens")}
-          note={t("findings.evidence.tokensNote")}
-        >
-          {t("findings.evidence.tokensValue", {
-            measured: formatCount(evidence.measuredTokens, locale),
-            counterfactual: formatCount(evidence.counterfactualTokens, locale),
-          })}
-        </Tile>
-      </TileStrip>
-      <TileStrip>
-        <Tile term={t("findings.evidence.measured")}>
-          <MoneyFigure money={evidence.measured} />
-        </Tile>
-        <Tile term={t("findings.evidence.counterfactual")}>
-          <MoneyFigure money={evidence.counterfactual} />
-        </Tile>
-      </TileStrip>
-      <Panel
-        id="spend-finding-runs"
-        title={t("findings.evidence.runs")}
-        footer={t("findings.evidence.note")}
-      >
-        {evidence.runs.length === 0 ? (
-          <Empty>{t("findings.evidence.runsEmpty")}</Empty>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr>
-                <HeaderCell>{t("findings.evidence.columns.run")}</HeaderCell>
-                <HeaderCell>
-                  {t("findings.evidence.columns.startedAt")}
-                </HeaderCell>
-                <HeaderCell>{t("columns.calls")}</HeaderCell>
-                <HeaderCell>
-                  {t("findings.evidence.columns.measured")}
-                </HeaderCell>
-                <HeaderCell>
-                  {t("findings.evidence.columns.counterfactual")}
-                </HeaderCell>
-              </tr>
-            </thead>
-            <tbody>
-              {evidence.runs.map((run) => (
+          {value.runs.length === 0 ? (
+            <Empty>{t("findings.evidence.runsEmpty")}</Empty>
+          ) : (
+            <Table
+              label={t("findings.evidence.runs")}
+              columns={[
+                { label: t("findings.evidence.columns.run") },
+                { label: t("findings.evidence.columns.startedAt") },
+                { label: t("columns.calls"), numeric: true },
+                {
+                  label: t("findings.evidence.columns.measured"),
+                  numeric: true,
+                },
+                {
+                  label: t("findings.evidence.columns.counterfactual"),
+                  numeric: true,
+                },
+              ]}
+            >
+              {value.runs.map((run) => (
                 <tr key={run.runId} data-key={run.runId}>
-                  <th scope="row" className={`${cell} font-normal`}>
+                  <th scope="row" className={`${cell} text-left font-normal`}>
                     <SafeLink
                       to={routes.run(at.org, at.ws, run.runId)}
                       className={`${linkText} ${mono}`}
@@ -489,21 +390,22 @@ export function FindingEvidenceSection({
                   <td className={cell}>
                     <Instant iso={run.startedAt} />
                   </td>
-                  <td className={cell}>
-                    <CountFigure count={run.calls} />
+                  <td className={numericCell}>
+                    {formatCount(run.calls, locale)}
                   </td>
-                  <td className={cell}>
-                    <MoneyFigure money={run.measured} />
+                  <td className={numericCell}>
+                    <Money value={run.measured} precision="exact" />
                   </td>
-                  <td className={cell}>
-                    <MoneyFigure money={run.counterfactual} />
+                  <td className={numericCell}>
+                    <Money value={run.counterfactual} precision="exact" />
                   </td>
                 </tr>
               ))}
-            </tbody>
-          </table>
-        )}
-      </Panel>
-    </>
+            </Table>
+          )}
+        </Panel>
+        <BasisLabel basis={finding.saving.basis} />
+      </div>
+    </EvidenceDialog>
   );
 }
