@@ -88,6 +88,26 @@ export function priceTokens(ratePerMillion: Money, tokens: number): Money {
 }
 
 /**
+ * The rate per million tokens that `cost` for `tokens` works out to: the
+ * inverse of `priceTokens`, exact at any magnitude and truncated toward zero.
+ * The Run page's Prompt composition prints the effective input price this
+ * way, the input classes' cost over the input tokens. Null for no tokens: a
+ * price per token of nothing is not a rate anyone paid.
+ */
+export function perMillionTokens(cost: Money, tokens: number): Money | null {
+  if (!Number.isSafeInteger(tokens) || tokens < 0)
+    throw new InvalidQuantityError(tokens);
+  if (tokens === 0) return null;
+  return {
+    micros: (
+      (toBigInt(cost.micros) * TOKENS_PER_MILLION) /
+      BigInt(tokens)
+    ).toString(),
+    currency: cost.currency,
+  };
+}
+
+/**
  * `a − b`, exact, or null when the two carry different currencies: a
  * difference across currencies is not an amount anyone saved or spent.
  */
