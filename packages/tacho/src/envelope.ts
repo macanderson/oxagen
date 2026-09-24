@@ -686,6 +686,13 @@ export const KIND_BODIES = {
     ...pick(...modelKeys),
   }),
   "oxagen:permission_mode_change": body({ ...pick(...lifecycleKeys) }),
+  /** The name Claude Code gives the session, sealed each time it changes. */
+  "oxagen:session_title": body({ ...pick("session_title") }),
+  /**
+   * A pull request the session opened, as the harness recorded it. The PR
+   * travels in `attrs` (`pr_number`, `pr_url`, `pr_repository`).
+   */
+  "oxagen:pr_link": body({}),
   "oxagen:queue": body({ ...pick(...lifecycleKeys), ...pick(...promptKeys) }),
   "oxagen:auth": body({ ...pick(...healthKeys) }),
   "oxagen:plugin_install": body({ ...pick(...healthKeys) }),
