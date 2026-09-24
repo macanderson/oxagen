@@ -174,6 +174,21 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("AssistantFlyout", () => {
+  it("is headed by the Stella wordmark, which names the dialog", async () => {
+    const { flyout } = await openFlyout();
+
+    const wordmark = screen.getByTestId("assistant-wordmark");
+    expect(wordmark.tagName.toLowerCase()).toBe("svg");
+    // The letters take the panel's colour and the asterisk stays gold, so the
+    // app's theme switch, not the operating system's, decides how it reads.
+    const [letters, asterisk] = Array.from(wordmark.querySelectorAll("path"));
+    expect(letters?.getAttribute("fill")).toBe("currentColor");
+    expect(asterisk?.getAttribute("fill")).toBe("#D4AF37");
+    expect(screen.getByRole("dialog", { name: "Stella" })).toBe(flyout);
+    expect(flyout).not.toHaveTextContent("Assistant");
+    await expectNoAxe(flyout);
+  });
+
   it("asks ask_assistant for the workspace the person is standing in, and shows the reply", async () => {
     const { user } = await openFlyout();
     await ask(user, "what is live?");
@@ -491,6 +506,104 @@ describe("AssistantFlyout", () => {
     expect(await screen.findByTestId("assistant-exhausted")).toBeTruthy();
   });
 
+  // #3227: each of these used to read "could not be reached", whatever the
+  // cause. The sentence names the cause and the code rides beneath it.
+  // The phrase is what the person reads. The test id alone comes from the
+  // refusal's key, so a sentence mapped back to the generic one would still
+  // find it; the phrase is what fails then.
+  it.each([
+    [
+      "unavailable",
+      "engine_unavailable",
+      "assistant-engine",
+      "engine could not be reached",
+      true,
+    ],
+    [
+      "unavailable",
+      "assistant_run_not_recorded",
+      "assistant-unrecorded",
+      "could not be recorded as a run",
+      true,
+    ],
+    [
+      "conflict",
+      "engine_aborted",
+      "assistant-aborted",
+      "stopped this turn before it answered",
+      true,
+    ],
+    [
+      "exhausted",
+      "insufficient_credits",
+      "assistant-noCredit",
+      "no credit left for Stella",
+      false,
+    ],
+    [
+      "exhausted",
+      "assistant_spend_cap",
+      "assistant-spendCap",
+      "reached its monthly cap",
+      false,
+    ],
+    [
+      "exhausted",
+      "assistant_model_key_limit",
+      "assistant-keyLimit",
+      "daily spend ceiling",
+      false,
+    ],
+    [
+      "unavailable",
+      "model_call_failed",
+      "assistant-model",
+      "model provider refused or failed",
+      true,
+    ],
+    [
+      "unavailable",
+      "kernel_failure",
+      "assistant-unavailable",
+      "Stella could not be reached",
+      true,
+    ],
+  ] as const)(
+    "tells a %s refusal coded %s apart (negative)",
+    async (reason, code, testId, phrase, retryable) => {
+      askAssistant.mockResolvedValue({ ok: false, reason, code });
+      const { user, flyout } = await openFlyout();
+      await ask(user, "what is live?");
+      expect(await screen.findByTestId(testId)).toHaveTextContent(phrase);
+      expect(screen.getByTestId("assistant-refusal-code")).toHaveTextContent(
+        code,
+      );
+      expect(screen.queryByTestId("assistant-retry") !== null).toBe(retryable);
+      await expectNoAxe(flyout);
+    },
+  );
+
+  it("asks a refused question again as it was, leaving the draft alone", async () => {
+    askAssistant.mockResolvedValueOnce({
+      ok: false,
+      reason: "unavailable",
+      code: "engine_unavailable",
+    });
+    const { user } = await openFlyout();
+    await ask(user, "what is live?");
+    await screen.findByTestId("assistant-engine");
+    await user.type(screen.getByTestId("assistant-composer"), "half typed");
+
+    await user.click(screen.getByTestId("assistant-retry"));
+
+    await findAnswerText("Three runs are live.");
+    expect(askAssistant).toHaveBeenCalledTimes(2);
+    expect(askAssistant.mock.calls[1]?.[2]).toMatchObject({
+      content: "what is live?",
+    });
+    expect(screen.getByTestId("assistant-composer")).toHaveValue("half typed");
+  });
+
   it("survives a thrown action without claiming an answer (negative)", async () => {
     askAssistant.mockRejectedValue(new Error("network"));
     const { user } = await openFlyout();
@@ -798,14 +911,12 @@ describe("AssistantFlyout", () => {
       await user.click(launcher);
       const flyout = screen.getByTestId("assistant-flyout");
       expect(document.activeElement).toBe(
-        screen.getByRole("button", { name: "Close the assistant" }),
+        screen.getByRole("button", { name: "Close Stella" }),
       );
 
       if (close === "escape") await user.keyboard("{Escape}");
       else
-        await user.click(
-          screen.getByRole("button", { name: "Close the assistant" }),
-        );
+        await user.click(screen.getByRole("button", { name: "Close Stella" }));
 
       expect(flyout).toHaveAttribute("inert");
       // Not left on a control inside an inert panel, and not dropped to <body>.
@@ -828,7 +939,7 @@ describe("AssistantFlyout", () => {
       screen.getByRole("button", { name: "open assistant" }).click();
     });
     expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: "Close the assistant" }),
+      screen.getByRole("button", { name: "Close Stella" }),
     );
     opener.remove();
 
@@ -920,7 +1031,7 @@ describe("AssistantFlyout", () => {
 
     expect(launcher).toHaveAttribute("inert");
     expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: "Close the assistant" }),
+      screen.getByRole("button", { name: "Close Stella" }),
     );
     // And Escape is heard again, because focus is inside the panel.
     await user.keyboard("{Escape}");
@@ -963,7 +1074,7 @@ describe("AssistantFlyout", () => {
     });
     await user.click(launcher);
     expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: "Close the assistant" }),
+      screen.getByRole("button", { name: "Close Stella" }),
     );
 
     launcher.disabled = true;

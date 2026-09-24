@@ -153,19 +153,6 @@ const RunMachine = z.object({
 });
 
 /**
- * Can a direct command reach this run? An `observe`-tier session only records
- * what an agent did and gives Oxagen no connection point, so a queued pause,
- * resume, steer or cancel would have nothing to travel down (#3285).
- *
- * Every surface that offers a run control answers from here: the Run page's
- * controls and the Fleet row controls. One rule, so a row cannot offer what
- * its run page refuses.
- */
-export function acceptsCommands(tier: EnforcementTier): boolean {
-  return tier !== "observe";
-}
-
-/**
  * Why a pause, resume, steer or cancel cannot reach a wrapped run, mirrored
  * from `list_runs`' `commandBlock` (ADR-163). The enforcement tier is not
  * among them: an `observe`-tier run whose host is polling takes commands.
@@ -176,6 +163,39 @@ const CommandBlock = z.enum([
   "host_revoked",
   "host_offline",
 ]);
+
+/**
+ * Why a run refuses commands. The schema stays module-local, since `RunRow`
+ * composes it in this file; the type is exported because the Run controls, a
+ * Fleet row's pause and the shared block copy each name one of its members.
+ */
+export type CommandBlock = z.infer<typeof CommandBlock>;
+
+/**
+ * Why a steer cannot reach a run that takes the other commands, mirrored from
+ * `list_runs`' `steerBlock` (ADR-163): the harness reads steering text only
+ * when a session starts.
+ */
+export const SteerBlock = z.enum(["no_prompt_carrier"]);
+export type SteerBlock = z.infer<typeof SteerBlock>;
+
+/**
+ * Why a direct command cannot reach this run, or null when it can.
+ *
+ * The control plane answers it on the row from the same rule
+ * `dispatch_command` refuses on, so a page never offers a control the handler
+ * refuses (#3285, ADR-163). A row that carries no answer is read as
+ * reachable, and the handler's refusal names the reason if it is not.
+ *
+ * Every surface that offers a run control answers from here: the Run page's
+ * controls and the Fleet row controls. One rule, so a row cannot offer what
+ * its run page refuses.
+ */
+export function commandBlockOf(run: {
+  commandBlock?: CommandBlock | null;
+}): CommandBlock | null {
+  return run.commandBlock ?? null;
+}
 
 /** Token totals by kind, as the recorder counted them. */
 const RunTokens = z.object({
@@ -239,6 +259,8 @@ export const RunRow = z.object({
   enforcementTier: EnforcementTier,
   /** Why a command cannot reach this run; null or absent when it can. */
   commandBlock: CommandBlock.nullable().optional(),
+  /** Why a steer cannot reach this run; null or absent when it can. */
+  steerBlock: SteerBlock.nullable().optional(),
   ingressRevoked: z.boolean().optional(),
   ingressPaused: z.boolean().optional(),
   /** Empty while the run is live, or where the seal recorded none. */

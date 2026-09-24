@@ -22,9 +22,9 @@ import { type ToolDetail, toolDetail } from "./tool-detail";
  * its result in `response`; a positional `response ?? request` would silently
  * render a tool's input where its result belongs, and nothing about the page
  * would look wrong. A caller that needs both halves reads them by name, which
- * is what the frame renderer does. Module-private: its one caller is
- * `textOf` below, in this file; a turn's prompt and reply are the only
- * place the app still reads a body positionally instead of by name.
+ * is what the frame renderer does. Module-private: its callers are `textOf`
+ * and `echoesTurn` below, in this file; a turn's prompt and reply are the
+ * only place the app still reads a body positionally instead of by name.
  */
 function soleBody(entry: TranscriptEntry): TranscriptBody | null {
   if (entry.request !== null && entry.response !== null) return null;
@@ -678,18 +678,42 @@ export function stepModel(step: TranscriptStep): ToolDetail | null {
 /**
  * The steps of a turn worth a row. A step with nothing to read on any frame
  * and no decision is bookkeeping (a hook registering, a queue tick) or a
- * digest-only duplicate of a call another source sealed with its body; the
- * Frames tab still has every one of them.
+ * digest-only duplicate of a call another source sealed with its body. A step
+ * whose text the turn already draws as its prompt or its reply is left out
+ * too. The Frames tab still has every one of them.
  */
 export function visibleSteps(turn: TranscriptTurn): TranscriptStep[] {
-  return turn.steps.filter((step) =>
-    step.frames.some(
-      (frame) =>
-        hasContent(frame) ||
-        frame.decision !== null ||
-        TOOL_GATE.has(frame.type),
-    ),
+  return turn.steps.filter(
+    (step) =>
+      !echoesTurn(turn, step) &&
+      step.frames.some(
+        (frame) =>
+          hasContent(frame) ||
+          frame.decision !== null ||
+          TOOL_GATE.has(frame.type),
+      ),
   );
+}
+
+/** The frame types that can carry a turn's prompt or its reply. */
+const TURN_TEXT: ReadonlySet<string> = new Set([
+  "turn_start",
+  "turn_end",
+  "oxagen:message",
+]);
+
+/**
+ * Whether every frame of the step repeats the turn's prompt or its reply. The
+ * view draws both beside the turn, so a row for the `turn_start` that holds
+ * the prompt, or for the transcript's copy of it, drew the same text twice.
+ */
+function echoesTurn(turn: TranscriptTurn, step: TranscriptStep): boolean {
+  return step.frames.every((frame) => {
+    if (frame.subagent !== undefined || !TURN_TEXT.has(frame.type))
+      return false;
+    const text = soleBody(frame)?.text ?? null;
+    return text !== null && (text === turn.prompt || text === turn.reply);
+  });
 }
 
 /** Whether either half of the entry carries text to read. */

@@ -2397,6 +2397,7 @@ type Messages = {
       name: string;
       slug: string;
       slugHint: string;
+      slugInvalid: string;
     };
     kind: {
       title: string;
@@ -5396,7 +5397,10 @@ type Messages = {
         runNotFound: string;
         noConnectionPoint: string;
         runSealed: string;
-        observeTier: string;
+        noHost: string;
+        hostRevoked: string;
+        hostOffline: string;
+        noPromptCarrier: string;
         runNotSealed: string;
         digestOnly: string;
         steerText: string;
@@ -5414,7 +5418,15 @@ type Messages = {
         commandReason: string;
         rowCommand: string;
       };
-      observeReason: string;
+      blocked: {
+        runSealed: string;
+        noHost: string;
+        hostRevoked: string;
+        hostOffline: string;
+      };
+      steerBlocked: {
+        noPromptCarrier: string;
+      };
       delivery: {
         legend: string;
         nextStep: {
@@ -5763,7 +5775,18 @@ type Messages = {
       call: string;
       outcome: string;
       type: string;
+      decidedBy: string;
+      by: {
+        oxagen: string;
+        operator: string;
+        harness: string;
+        managedSettings: string;
+        unrecorded: string;
+      };
       empty: string;
+      onlyChecks: string;
+      checks: string;
+      checksTitle: string;
       cut: string;
       at: string;
     };
@@ -6370,9 +6393,17 @@ type Messages = {
         denied: string;
         invalid: string;
         exhausted: string;
+        noCredit: string;
+        spendCap: string;
+        keyLimit: string;
         parked: string;
+        engine: string;
+        unrecorded: string;
+        aborted: string;
+        model: string;
         unavailable: string;
       };
+      retry: string;
     };
     avatar: {
       title: string;

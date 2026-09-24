@@ -256,7 +256,10 @@
         "runNotFound": "This run is not in this workspace.",
         "noConnectionPoint": "A ledger run has no connection point to carry a command.",
         "runSealed": "This run has ended, so nothing can receive the command.",
-        "observeTier": "An observe-tier run has no connection point, so the command was refused.",
+        "noHost": "This run names no enrolled host, so nothing can receive the command. Nothing was queued.",
+        "hostRevoked": "This run's host was revoked and no longer collects commands. Nothing was queued.",
+        "hostOffline": "This run's host has not checked for commands in the last five minutes, so nothing would read this one. Nothing was queued.",
+        "noPromptCarrier": "This agent reads steering text only when a session starts, so this run would never see it. Pause, resume and cancel still reach it. Nothing was queued.",
         "runNotSealed": "This run is still live. Both of these need a complete record, so they run after the seal.",
         "digestOnly": "This recording kept digests and no bodies, so there is nothing for a model to read.",
         "steerText": "Steering text is required, and it has a length limit.",
@@ -274,7 +277,15 @@
         "commandReason": "Keep the reason to {max} characters or fewer. Nothing was queued.",
         "rowCommand": "A run's row sends a pause, a resume or a cancel. Nothing was queued."
       },
-      "observeReason": "This run was observed from the side. Oxagen was never in the path of its calls, so there is no connection point to pause, steer or cancel.",
+      "blocked": {
+        "runSealed": "This run has ended, so there is nothing to pause, steer or cancel.",
+        "noHost": "This run names no enrolled host. Commands reach a run through its host, so there is nothing to pause, steer or cancel.",
+        "hostRevoked": "This run's host was revoked. A revoked host no longer collects commands, so there is nothing to pause, steer or cancel.",
+        "hostOffline": "This run's host has not checked for commands in the last five minutes. It may have stopped or lost its connection, so a command would go unread. The controls come back when the host checks in."
+      },
+      "steerBlocked": {
+        "noPromptCarrier": "This agent reads steering text only when a session starts, so a steer cannot reach this run. Pause, resume and cancel still can."
+      },
       "delivery": {
         "legend": "When the agent sees it",
         "nextStep": {
@@ -283,7 +294,7 @@
         },
         "interrupt": {
           "label": "Interrupt the step in flight",
-          "help": "The step running now is cut short so your text lands sooner. A connection point that cannot interrupt carries it at the next model call and records that it did."
+          "help": "The step running now is cut short so your text lands sooner. A connection point that cannot interrupt carries it at the next model call, or at the end of the turn when it cannot reach a model call, and records which."
         },
         "turnBoundary": {
           "label": "At the end of the turn",
@@ -623,7 +634,18 @@
       "call": "Call",
       "outcome": "Outcome",
       "type": "Decision type",
+      "decidedBy": "Decided by",
+      "by": {
+        "oxagen": "Oxagen policy",
+        "operator": "Operator",
+        "harness": "Agent harness",
+        "managedSettings": "Managed settings",
+        "unrecorded": "Not recorded"
+      },
       "empty": "No policy decision was recorded on this run.",
+      "onlyChecks": "Neither Oxagen policy nor an operator made a decision on this run. The agent harness's own checks are listed below.",
+      "checks": "{count, plural, one {# harness check} other {# harness checks}}",
+      "checksTitle": "Harness checks",
       "cut": "The transcript read stopped short, so later decisions are missing here.",
       "at": "Into the run"
     },
