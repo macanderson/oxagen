@@ -39,7 +39,6 @@ import {
   runRoster,
   runTranscript,
   runWork,
-  transcriptBody,
   transcriptEntry,
 } from "./run.builders";
 
@@ -160,6 +159,7 @@ async function renderRun(
   let container!: HTMLElement;
   await act(async () => {
     ({ container } = render(<IntlProvider>{element}</IntlProvider>));
+    await Promise.resolve();
   });
   return { container, calls };
 }
@@ -713,6 +713,7 @@ describe("header", () => {
       const path = strip.getByTestId("run-checkout-path");
       await act(async () => {
         fireEvent.click(path);
+        await Promise.resolve();
       });
       const text = "mac-studio.local:~/src/platform/.worktrees/release-3.2";
       expect(writeText).toHaveBeenCalledWith(text);
@@ -722,6 +723,7 @@ describe("header", () => {
       );
       await act(async () => {
         fireEvent.click(path);
+        await Promise.resolve();
       });
       expect(strip.getByRole("status")).toHaveTextContent(
         "Copy failed. Select the text and copy it.",
@@ -1001,7 +1003,7 @@ describe("tabs", () => {
     // Transcript counts the rows its feed opens with, the entries its header
     // line names, not the run's steps.
     const entries = /(\d+) entries/.exec(
-      screen.getByTestId("transcript").textContent ?? "",
+      screen.getByTestId("transcript").textContent,
     )?.[1];
     expect(entries).toBeDefined();
     expect(screen.getByTestId("run-tab-count-transcript")).toHaveTextContent(

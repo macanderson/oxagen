@@ -111,6 +111,9 @@ type WallParts = {
 };
 export type WallLead = keyof WallParts;
 
+/** The wall clock's parts, in the order a tie is broken. */
+const WALL_LEADS: readonly WallLead[] = ["model", "tool", "waiting", "harness"];
+
 type WallClock = {
   /** Start to seal, or start to the last recorded frame on a live run; null when neither is recorded. */
   ms: number | null;
@@ -231,8 +234,7 @@ function priceClasses(
   book: PriceBook | null,
 ): PricedClasses | null {
   if (book === null || rollup.byModel.length === 0) return null;
-  const byClass = {} as Record<TokenClass, Money | null>;
-  for (const tokenClass of TOKEN_CLASSES) {
+  const classPrice = (tokenClass: TokenClass): Money | null => {
     const parts: Money[] = [];
     let unpriced = false;
     for (const row of rollup.byModel) {
@@ -245,14 +247,22 @@ function priceClasses(
       }
       parts.push(priceTokens(rate, count));
     }
-    byClass[tokenClass] = unpriced
+    return unpriced
       ? null
       : (sumMoney(parts) ??
-        // A class nobody spent in costs nothing, in the rollup's currency.
-        (rollup.cost === null
-          ? null
-          : { micros: "0", currency: rollup.cost.currency }));
-  }
+          // A class nobody spent in costs nothing, in the rollup's currency.
+          (rollup.cost === null
+            ? null
+            : { micros: "0", currency: rollup.cost.currency }));
+  };
+  const byClass: Record<TokenClass, Money | null> = {
+    input_uncached: classPrice("input_uncached"),
+    cache_read: classPrice("cache_read"),
+    cache_write_5m: classPrice("cache_write_5m"),
+    cache_write_1h: classPrice("cache_write_1h"),
+    output: classPrice("output"),
+    reasoning: classPrice("reasoning"),
+  };
   const saved: Money[] = [];
   let savedKnown = true;
   for (const row of rollup.byModel) {
@@ -511,7 +521,7 @@ function wallClock(
     waiting,
     harness: Math.max(0, ms - model - tool - waiting),
   };
-  const lead = (Object.keys(parts) as WallLead[]).reduce((best, key) =>
+  const lead = WALL_LEADS.reduce((best, key) =>
     parts[key] > parts[best] ? key : best,
   );
   return { ms, sealed, parts, lead: parts[lead] > 0 ? lead : null };

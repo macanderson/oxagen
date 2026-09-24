@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { readError, readOk } from "@/data/read";
 import type { TranscriptEntry } from "@/data/contracts/run";
 import type { PriceBook } from "@/data/contracts/spend";
-import { runMetrics } from "./metrics";
+import { runMetrics, TOKEN_CLASSES, type TokenClass } from "./metrics";
 import {
   mockupTranscript,
   runCost,
@@ -14,21 +14,29 @@ import {
   transcriptEntry,
 } from "./run.builders";
 
-const book = (rates: Record<string, string>): PriceBook => ({
+/** A book with one list-price row per class `rates` names, for the one model. */
+const book = (rates: Partial<Record<TokenClass, string>>): PriceBook => ({
   at: "2026-09-15T00:00:00.000Z",
-  entries: Object.entries(rates).map(([tokenClass, micros]) => ({
-    provider: "anthropic",
-    model: "claude-opus-5",
-    modelAliases: [],
-    region: null,
-    tokenClass: tokenClass as PriceBook["entries"][number]["tokenClass"],
-    unit: "token" as const,
-    ratePerMillion: { micros, currency: "USD" },
-    effectiveFrom: "2026-01-01T00:00:00.000Z",
-    effectiveTo: null,
-    source: "list" as const,
-    negotiated: false,
-  })),
+  entries: TOKEN_CLASSES.flatMap((tokenClass) => {
+    const micros = rates[tokenClass];
+    return micros === undefined
+      ? []
+      : [
+          {
+            provider: "anthropic",
+            model: "claude-opus-5",
+            modelAliases: [],
+            region: null,
+            tokenClass,
+            unit: "token" as const,
+            ratePerMillion: { micros, currency: "USD" },
+            effectiveFrom: "2026-01-01T00:00:00.000Z",
+            effectiveTo: null,
+            source: "list" as const,
+            negotiated: false,
+          },
+        ];
+  }),
 });
 
 const RATES = {

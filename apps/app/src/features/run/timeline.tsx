@@ -209,7 +209,11 @@ export function RunTimeline({
                 data-kind={kind}
                 aria-current={on ? "true" : undefined}
                 aria-label={t("tick", { seq: frame.seq, type: frame.type })}
-                title={`${t("tick", { seq: frame.seq, type: frame.type })}\n${clock(frame.observedAt)}\n${frame.summary}`}
+                title={t("tickTitle", {
+                  tick: t("tick", { seq: frame.seq, type: frame.type }),
+                  clock: clock(frame.observedAt),
+                  summary: frame.summary,
+                })}
                 className={`${tick} ${height} ${KIND_HUE[kind]} ${on ? tickOn : ""}`}
                 style={{ left: ratioWidth((xs[i] ?? 0) / 100) }}
               />

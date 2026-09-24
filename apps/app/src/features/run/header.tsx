@@ -213,7 +213,10 @@ function MachineChip({
     <Chip
       code
       testId="run-machine"
-      title={`${t("pathNotEnrolled", { machine })} ${facts}`}
+      title={t("withFacts", {
+        reading: t("pathNotEnrolled", { machine }),
+        facts,
+      })}
     >
       <Folder aria-hidden="true" className="size-3 flex-none" />
       {machine}
@@ -373,7 +376,10 @@ function WhereFromWork({
       ) : (
         <CopyPath
           text={`${machine}:${checkout.path}`}
-          title={`${t("pathRecorded", { machine })} ${facts}`}
+          title={t("withFacts", {
+            reading: t("pathRecorded", { machine }),
+            facts,
+          })}
         />
       )}
     </WhereRow>

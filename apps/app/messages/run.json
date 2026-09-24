@@ -228,6 +228,7 @@
         "turnShort": "t{turn}",
         "turnAfterSteer": "turn {turn} after steer",
         "tick": "Frame {seq} {type}",
+        "tickTitle": "{tick}\n{clock}\n{summary}",
         "end": "+{elapsed} · {end}",
         "endLive": "+{elapsed} · {end} · live",
         "steer": "steer",
@@ -869,6 +870,7 @@
       },
       "pathNotEnrolled": "{machine} has no checkout of this repository enrolled, so Oxagen holds no path for it.",
       "pathRecorded": "Oxagen recorded this checkout on {machine}. Click to copy the path.",
+      "withFacts": "{reading} {facts}",
       "pausedTitle": "Paused.",
       "fit": {
         "fit": "Model fit",

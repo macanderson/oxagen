@@ -269,6 +269,7 @@ describe("export status", () => {
     // A queued answer would schedule the next read if the dialog still followed it.
     await act(async () => {
       answer(exportAt("queued"));
+      await Promise.resolve();
     });
     await advance(EXPORT_POLL_BUDGET_MS);
     expect(readRunExport).toHaveBeenCalledTimes(1);
@@ -426,7 +427,7 @@ describe("the record dialog", () => {
 });
 
 describe("SummarizeAction", () => {
-  it("draws Summarize disabled for a recording that kept no bodies, and says why (negative)", async () => {
+  it("draws Summarize disabled for a recording that kept no bodies, and says why (negative)", () => {
     render(
       <IntlProvider>
         <SummarizeAction

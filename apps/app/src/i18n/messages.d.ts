@@ -4820,6 +4820,7 @@ type Messages = {
         turnShort: string;
         turnAfterSteer: string;
         tick: string;
+        tickTitle: string;
         end: string;
         endLive: string;
         steer: string;
@@ -5461,6 +5462,7 @@ type Messages = {
       };
       pathNotEnrolled: string;
       pathRecorded: string;
+      withFacts: string;
       pausedTitle: string;
       fit: {
         fit: string;

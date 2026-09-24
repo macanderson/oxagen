@@ -490,7 +490,7 @@ describe("Linked work", () => {
     const rows = await screen.findAllByTestId("run-linked-artifact");
     const byName = (name: string) => {
       const row = rows.find((candidate) =>
-        candidate.textContent?.includes(name),
+        candidate.textContent.includes(name),
       );
       if (row === undefined) throw new Error(`no row for ${name}`);
       return within(row);

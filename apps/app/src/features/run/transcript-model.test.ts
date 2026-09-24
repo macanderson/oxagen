@@ -16,7 +16,6 @@ import {
   type FeedRow,
   frameCost,
   type Frames,
-  isNonEmpty,
   isOperatorPrompt,
   stepDigest,
   stepTool,
