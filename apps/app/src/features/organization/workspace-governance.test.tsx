@@ -150,6 +150,62 @@ describe("EditWorkspace governance", () => {
     });
   });
 
+  it("links no pull request whose URL is not a GitHub pull request, and still names its number (negative)", async () => {
+    const user = await openDialog({
+      ok: true,
+      value: {
+        slug: "platform",
+        governance: {
+          ok: true,
+          outcome: "proposed",
+          mode: "solo",
+          repo: "acme/platform",
+          branch: "main",
+          pullRequest: {
+            number: 413,
+            htmlUrl: "javascript:alert(1)//github.com/acme/platform/pull/413",
+            reused: true,
+          },
+          overrodeReview: false,
+        },
+      },
+    });
+    await user.selectOptions(screen.getByLabelText("Governance mode"), "solo");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(
+      await screen.findByText("Open pull request #413"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Open pull request #413" }),
+    ).toBeNull();
+    expect(screen.queryByTestId("edit-workspace-governance-pr")).toBeNull();
+    // A pull request already open on oxagen/governance now carries this change.
+    expect(
+      screen.getByText(
+        "It updated the pull request already open on oxagen/governance.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("names the refusal's reason when it carries no code (negative)", async () => {
+    const user = await openDialog({
+      ok: true,
+      value: {
+        slug: "platform",
+        governance: { ok: false, reason: "unavailable", code: null },
+      },
+    });
+    await user.selectOptions(screen.getByLabelText("Governance mode"), "team");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(
+      await screen.findByText(
+        "The name was saved. The governance mode was not changed: unavailable",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("says the review was skipped when it was", async () => {
     const user = await openDialog({
       ok: true,

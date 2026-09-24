@@ -141,6 +141,62 @@ describe("the mode's facts", () => {
     ).toHaveAttribute("aria-pressed", "true");
   });
 
+  it.each<[DataPlane["status"], string]>([
+    ["degraded", "degraded"],
+    ["disabled", "disabled"],
+  ])(
+    "badges a %s plane with the status recorded, never active (negative)",
+    async (status, word) => {
+      await renderPlane(readOk(dataPlane({ status })));
+      const shown = document.querySelector<HTMLElement>("[data-plane-shown]");
+      const badge = shown?.querySelector("[data-plane-status]");
+      expect(badge).toHaveAttribute("data-plane-status", status);
+      expect(badge).toHaveTextContent(word);
+      expect(shown).not.toHaveTextContent(/\bactive\b/);
+    },
+  );
+
+  it("prints when the binding was verified and rotated, and says verification is not recorded when it never was", async () => {
+    await renderPlane(
+      readOk(
+        dataPlane({
+          lastVerifiedAt: "2026-09-20T08:00:00.000Z",
+          rotatedAt: "2026-09-01T08:00:00.000Z",
+        }),
+      ),
+    );
+    let shown = document.querySelector<HTMLElement>("[data-plane-shown]");
+    expect(shown).toHaveTextContent("verified");
+    expect(shown).toHaveTextContent("credentials rotated");
+    expect(shown?.querySelectorAll("time")).toHaveLength(2);
+    cleanup();
+
+    await renderPlane();
+    shown = document.querySelector<HTMLElement>("[data-plane-shown]");
+    expect(shown).toHaveTextContent("verification not recorded");
+    expect(shown).not.toHaveTextContent("credentials rotated");
+  });
+
+  it("prints only the parts of a dedicated binding that are recorded (negative)", async () => {
+    await renderPlane(
+      readOk(dataPlane({ mode: "dedicated", host: "db.acme.internal" })),
+    );
+    let shown = document.querySelector<HTMLElement>("[data-plane-shown]");
+    expect(shown).toHaveTextContent("db.acme.internal");
+    expect(shown).not.toHaveTextContent("db.acme.internal /");
+    expect(shown).not.toHaveTextContent("schema");
+    cleanup();
+
+    // A dedicated plane with neither host nor database says not recorded
+    // rather than printing an empty endpoint.
+    await renderPlane(readOk(dataPlane({ mode: "dedicated" })));
+    shown = document.querySelector<HTMLElement>("[data-plane-shown]");
+    const tenant = [...(shown?.querySelectorAll("dt") ?? [])].find(
+      (dt) => dt.textContent === "Tenant data in Postgres",
+    );
+    expect(tenant?.nextElementSibling).toHaveTextContent(/^not recorded/);
+  });
+
   it("says why the binding is missing when the read failed, and keeps Retention and Tenant isolation (negative)", async () => {
     await renderPlane(readError("control_plane_unavailable", 503));
     expect(screen.getByText(/control_plane_unavailable/)).toHaveAttribute(

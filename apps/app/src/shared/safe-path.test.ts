@@ -167,6 +167,34 @@ describe("routes", () => {
     expect(routes.sso("a/b")).toBe("/a%2Fb/sso");
   });
 
+  it("puts an Organization tab on /{org} as ?tab=, and leaves People bare", () => {
+    expect(routes.organization("acme", "people")).toBe("/acme");
+    expect(routes.organization("acme", "dataPlane")).toBe(
+      "/acme?tab=dataPlane",
+    );
+    expect(routes.organization("a/b", "costCenters")).toBe(
+      "/a%2Fb?tab=costCenters",
+    );
+  });
+
+  it("builds Audit's tabs, its export and a data export's download with every segment encoded", () => {
+    expect(routes.audit("acme")).toBe("/acme/audit");
+    expect(routes.audit("acme", { outcome: "deny", range: undefined })).toBe(
+      "/acme/audit?outcome=deny",
+    );
+    expect(routes.auditTab("acme", "retention")).toBe("/acme/audit/retention");
+    expect(routes.auditTab("a/b", "exports", { export: "x&y=z" })).toBe(
+      "/a%2Fb/audit/exports?export=x%26y%3Dz",
+    );
+    expect(routes.auditExport("acme", { format: "csv" })).toBe(
+      "/acme/audit/export?format=csv",
+    );
+    // An export id cannot climb out of the account's export route.
+    expect(routes.accountExport("acme", "../../billing")).toBe(
+      "/acme/account/export/..%2F..%2Fbilling",
+    );
+  });
+
   it("carries Fleet's runs cursor as a query and builds a run's path", () => {
     expect(routes.fleet("acme", "core-platform")).toBe("/acme/core-platform");
     expect(routes.fleet("acme", "core-platform", { cursor: "eyJ+/=" })).toBe(
