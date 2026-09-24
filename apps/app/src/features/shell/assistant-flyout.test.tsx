@@ -186,6 +186,10 @@ describe("AssistantFlyout", () => {
     expect(asterisk?.getAttribute("fill")).toBe("#D4AF37");
     expect(screen.getByRole("dialog", { name: "Stella" })).toBe(flyout);
     expect(flyout).not.toHaveTextContent("Assistant");
+    // `.asst { background: var(--panel) }`: the flyout stays on the panel
+    // while the page body behind it is on the ink.
+    expect(flyout).toHaveClass("bg-card", "text-card-foreground");
+    expect(flyout).not.toHaveClass("bg-app-panel-bg");
     await expectNoAxe(flyout);
   });
 

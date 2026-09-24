@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 // The server half: the chrome renders what the source read for the context the
 // layout resolved; the frame streams a skeleton and the pre-paint theme script.
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { cleanup, render, screen } from "@testing-library/react";
 import { isValidElement, type ReactElement, type ReactNode, use } from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -252,6 +254,22 @@ describe("ShellFrame", () => {
     const shell = screen.getByTestId("shell");
     expect(shell.className).toContain("bg-app-panel-bg");
     expect(shell.className).not.toContain("bg-app-canvas");
+  });
+
+  it("puts the page body on the ink in the dark theme, as the design's body and viewport are", () => {
+    // engine.css: `body` and `#viewport` sit on `--ink` and `.main` draws no
+    // fill, so the token the frame paints with is the ink in both dark
+    // blocks (the `.dark` class and the system preference before the theme
+    // script runs). Panels and drawers stay on the panel.
+    // Vitest runs from apps/app, as messages/ is read in src/i18n/request.ts.
+    const css = readFileSync(
+      path.join(process.cwd(), "src/app/globals.css"),
+      "utf8",
+    );
+    const declarations = [...css.matchAll(/--app-panel-bg:\s*([^;]+);/g)].map(
+      (match) => match[1],
+    );
+    expect(declarations).toEqual(["var(--ink)", "var(--ink)"]);
   });
 
   it("streams a labelled skeleton while the chrome loads", async () => {

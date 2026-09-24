@@ -208,6 +208,8 @@ describe("thumb bar", () => {
       "data-count",
       "3",
     );
+    // `.mn .ct { background: var(--panel) }`, whatever the page body is on.
+    expect(fleet?.querySelector("[data-count]")).toHaveClass("bg-card");
     // More carries Audit's critical incidents, which no store records yet.
     for (const slot of rest)
       expect(slot.querySelector("[data-count]")).toBeNull();

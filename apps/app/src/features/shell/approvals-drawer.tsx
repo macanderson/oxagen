@@ -352,7 +352,7 @@ export function ApprovalsDrawer({
         aria-hidden={approvalsOpen ? undefined : true}
         inert={!approvalsOpen}
         data-open={approvalsOpen ? "" : undefined}
-        className={`fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-border bg-app-panel-bg text-app-panel-fg shadow-2xl transition-transform motion-reduce:transition-none md:w-[min(680px,90vw)] ${
+        className={`fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-border bg-card text-card-foreground shadow-2xl transition-transform motion-reduce:transition-none md:w-[min(680px,90vw)] ${
           approvalsOpen ? "translate-x-0" : "translate-x-full"
         }`}
       >
