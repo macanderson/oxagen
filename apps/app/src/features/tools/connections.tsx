@@ -1,8 +1,12 @@
-// Connections (#2957, #2958): the workspace's stored connections, and beneath
-// them the credential grants log — every credential the broker put to use for
-// a tool server on behalf of a run, with the connection it drew on, how far it
-// was narrowed, its TTL and whether it is still live. No secret material is on
-// the wire, and no agent ever held any of these.
+// Connections and the credential grants log, on the Providers tab (mockup
+// `tools.md`): the workspace's stored connections, and every credential the
+// broker minted for a call, with the connection it drew on, how far it was
+// narrowed, its TTL and whether it is still live. No secret material is on the
+// wire, and no agent ever held any of these.
+//
+// The log's Tool version and Agent columns have no field on the grant record,
+// which carries the provider the credential was presented to and the run
+// (#3923). Each says so, with the provider it does carry beneath.
 //
 // The mockup's Connections table above the log is here now, over
 // `list_connections`. Three of its columns are not: Owner, Reviewed and Next
@@ -32,6 +36,7 @@ import {
   type Tone,
   useDate,
 } from "./parts";
+import { NotBackedValue } from "./not-backed";
 import { ToolsReadFailure } from "./read-failure";
 import { type ToolsAt, toolsLink } from "./view";
 
@@ -81,20 +86,23 @@ function Row({ grant }: { grant: CredentialGrant }) {
       </td>
       <td className={cell}>
         <span className="flex flex-col gap-0.5">
-          <span className="text-sm text-foreground">{grant.serverName}</span>
-          <span className={`${mono} text-xs text-muted-foreground`}>
-            {grant.serverId}
+          <NotBackedValue gap="grants" />
+          <span className="text-xs text-muted-foreground">
+            {t("fromProvider", { provider: grant.serverName })}
           </span>
         </span>
       </td>
       <td className={cell}>
-        {grant.runId === null ? (
-          <span className="text-xs text-muted-foreground">{t("noRun")}</span>
-        ) : (
-          <span className={`${mono} text-xs text-foreground`}>
-            {grant.runId}
-          </span>
-        )}
+        <span className="flex flex-col gap-0.5">
+          <NotBackedValue gap="grants" />
+          {grant.runId === null ? (
+            <span className="text-xs text-muted-foreground">{t("noRun")}</span>
+          ) : (
+            <span className={`${mono} text-xs text-foreground`}>
+              {grant.runId}
+            </span>
+          )}
+        </span>
       </td>
       <td className={cell}>
         <span className={`${mono} text-xs text-foreground`}>
@@ -128,7 +136,7 @@ function Row({ grant }: { grant: CredentialGrant }) {
   );
 }
 
-function GrantsLog({
+export function GrantsLog({
   at,
   orgRole,
   cursor,
@@ -146,7 +154,7 @@ function GrantsLog({
         at={at}
         orgRole={orgRole}
         read={read}
-        retry={toolsLink(at, { tab: "connections" })}
+        retry={toolsLink(at, { tab: "providers" })}
       />
     );
   }
@@ -167,8 +175,8 @@ function GrantsLog({
         label={t("title")}
         columns={[
           { label: t("columns.grant") },
-          { label: t("columns.server") },
-          { label: t("columns.run") },
+          { label: t("columns.toolVersion") },
+          { label: t("columns.agentRun") },
           { label: t("columns.connection") },
           { label: t("columns.scope") },
           { label: t("columns.ttl") },
@@ -181,7 +189,7 @@ function GrantsLog({
       </Table>
       <CursorPager
         nextCursor={nextCursor}
-        link={(next) => toolsLink(at, { tab: "connections", cursor: next })}
+        link={(next) => toolsLink(at, { tab: "providers", cursor: next })}
       />
       <p className="max-w-prose text-xs text-muted-foreground">
         {t("brokerNote")}
@@ -248,13 +256,13 @@ function ConnectionRow({ at, item }: { at: ToolsAt; item: Connection }) {
           `list_connections` carries no field for. The cell says so rather
           than standing in a name or a date nothing recorded (INV-10). */}
       <td className={cell}>
-        <NotCarried />
+        <NotBackedValue gap="oauth" />
       </td>
       <td className={cell}>
-        <NotCarried />
+        <NotBackedValue gap="oauth" />
       </td>
       <td className={cell}>
-        <NotCarried />
+        <NotBackedValue gap="oauth" />
       </td>
       <td className={cell}>
         <StateDot
@@ -267,7 +275,7 @@ function ConnectionRow({ at, item }: { at: ToolsAt; item: Connection }) {
   );
 }
 
-function ConnectionsTable({
+export function ConnectionsTable({
   at,
   orgRole,
   read,
@@ -283,7 +291,7 @@ function ConnectionsTable({
         at={at}
         orgRole={orgRole}
         read={read}
-        retry={toolsLink(at, { tab: "connections" })}
+        retry={toolsLink(at, { tab: "providers" })}
       />
     );
   }
@@ -337,33 +345,5 @@ function ConnectionsTable({
         {t("notCarriedNote")}
       </p>
     </Section>
-  );
-}
-
-/**
- * The Connections tab: the workspace's connections, then the grants log of
- * every use one of them was put to. Two reads, each answered on its own, so a
- * refusal of one leaves the other readable.
- */
-export function Connections({
-  at,
-  orgRole,
-  cursor,
-  connections,
-  read,
-}: {
-  at: ToolsAt;
-  orgRole: OrgRole;
-  cursor: string | null;
-  /** list_connections: every connection in the workspace. */
-  connections: Read<ConnectionList>;
-  /** list_credential_grants: one cursor page of the broker's grants. */
-  read: Read<CredentialGrantPage>;
-}) {
-  return (
-    <div className="flex flex-col gap-6">
-      <ConnectionsTable at={at} orgRole={orgRole} read={connections} />
-      <GrantsLog at={at} orgRole={orgRole} cursor={cursor} read={read} />
-    </div>
   );
 }

@@ -170,22 +170,20 @@ export function acceptsCommands(tier: EnforcementTier): boolean {
  * from `list_runs`' `commandBlock` (ADR-163). The enforcement tier is not
  * among them: an `observe`-tier run whose host is polling takes commands.
  */
-export const CommandBlock = z.enum([
+const CommandBlock = z.enum([
   "run_sealed",
   "no_host",
   "host_revoked",
   "host_offline",
 ]);
-export type CommandBlock = z.infer<typeof CommandBlock>;
 
 /** Token totals by kind, as the recorder counted them. */
-export const RunTokens = z.object({
+const RunTokens = z.object({
   input: z.number().int().nonnegative(),
   output: z.number().int().nonnegative(),
   cacheRead: z.number().int().nonnegative(),
   cacheWrite: z.number().int().nonnegative(),
 });
-export type RunTokens = z.infer<typeof RunTokens>;
 
 export const RunRow = z.object({
   id: PublicId,
@@ -255,7 +253,10 @@ export const RunRow = z.object({
    * `host_enroller` when the operator is the person who enrolled the machine
    * a wrapped session ran on, which a page labels "enrolled by".
    */
-  operatorAttribution: z.enum(["initiator", "host_enroller"]).nullable().optional(),
+  operatorAttribution: z
+    .enum(["initiator", "host_enroller"])
+    .nullable()
+    .optional(),
 });
 export type RunRow = z.infer<typeof RunRow>;
 
