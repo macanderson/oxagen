@@ -3958,13 +3958,23 @@ type Messages = {
     };
     resolvedApprovals: {
       title: string;
-      resolution: string;
+      resolution: {
+        approved: string;
+        denied: string;
+        expired: string;
+      };
       resolvedBy: string;
       resolvedAt: string;
-      empty: string;
       execution: string;
       reason: string;
       resumedRun: string;
+      noMatch: string;
+      others: string;
+      by: {
+        system: string;
+        notRecorded: string;
+        rule: string;
+      };
     };
     tabs: {
       label: string;
@@ -4079,37 +4089,105 @@ type Messages = {
     };
     frames: {
       title: string;
-      onThisPage: string;
-      columns: {
-        seq: string;
-        type: string;
-        observed: string;
-        body: string;
-        cost: string;
-      };
+      recorded: string;
       stage: string;
+      turn: string;
+      turnValue: string;
+      beforeTurns: string;
+      decision: string;
+      cost: string;
+      basisNotRecorded: string;
+      digest: string;
+      body: string;
       fidelity: {
         full: string;
         digest_only: string;
       };
       noContent: string;
+      bodyDigest: string;
+      retainedAt: string;
       redacted: string;
-      openBody: string;
+      offPage: string;
+      previous: string;
+      next: string;
+      position: string;
+      positionOff: string;
       pager: string;
       first: string;
-      next: string;
+      later: string;
+      emptyTitle: string;
       empty: string;
       emptyPage: string;
-      body: {
+      read: {
         title: string;
-        close: string;
-        digest: string;
-        contentType: string;
-        size: string;
-        bytes: string;
+        heading: string;
+        open: string;
+        noType: string;
         noBytes: string;
+        bytes: string;
         digestOnly: string;
         notText: string;
+      };
+      list: {
+        title: string;
+        label: string;
+        state: {
+          live: string;
+          paused: string;
+          sealed: string;
+          halted: string;
+        };
+        basisNotRecorded: string;
+      };
+    };
+    player: {
+      timeline: {
+        title: string;
+        shown: string;
+        legendLabel: string;
+        legend: {
+          model: string;
+          tool: string;
+          gov: string;
+          ctx: string;
+          op: string;
+          life: string;
+        };
+        turn: string;
+        turnShort: string;
+        turnAfterSteer: string;
+        tick: string;
+        end: string;
+        endLive: string;
+        steer: string;
+        parked: string;
+        foot: string;
+        turnsInView: string;
+      };
+      bar: {
+        label: string;
+        first: string;
+        previous: string;
+        next: string;
+        last: string;
+        scrub: string;
+        scrubValue: string;
+        position: string;
+        positionUntimed: string;
+        positionOff: string;
+        spent: string;
+        spentOnly: string;
+        spentNotRecorded: string;
+        basisNotRecorded: string;
+        keys: string;
+      };
+      approvals: {
+        parked: string;
+        parkedBadge: string;
+        more: string;
+        openDrawer: string;
+        elsewhere: string;
+        openFrame: string;
       };
     };
     cost: {
