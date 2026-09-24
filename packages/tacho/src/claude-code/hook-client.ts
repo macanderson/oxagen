@@ -350,9 +350,11 @@ function evaluateToolPermission(
     now,
     ...(cwd !== undefined ? { context: { cwd } } : {}),
   });
+  // The mode is read only from a verified bundle: an edited host.json must
+  // not be able to claim observe mode and turn a deny into an allow.
   const decision =
     evaluation.decision === "defer"
-      ? host.bundle.mode === "observe"
+      ? verified && host.bundle.mode === "observe"
         ? "allow"
         : "deny"
       : evaluation.decision;

@@ -34,7 +34,7 @@ import type {
 } from "../claude-code/recorder";
 import { tachoEventSchema, type TachoEvent } from "../envelope";
 import { type FrameBody, retentionAllows } from "../evidence/frame-body";
-import { verifyBundle } from "../host/bundle";
+import { pollEtag, verifyBundle } from "../host/bundle";
 import {
   ControlError,
   createControlClient,
@@ -1072,7 +1072,10 @@ async function initializeDaemon(
 
   async function refreshBundle(): Promise<boolean> {
     try {
-      const response = await client.bundle(host.bundle.etag);
+      // Past half its signed window the poll sends no etag, so an unchanged
+      // mandate comes back freshly signed and the copy on disk stays fresh
+      // across a restart and for the hook when this daemon is down.
+      const response = await client.bundle(pollEtag(host.bundle, now()));
       lastControlAt = now();
       // `not_modified` is the confirmation freshness is measured from: it
       // says the etag in force is still the current one, which is the only
