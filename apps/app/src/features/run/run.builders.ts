@@ -13,6 +13,7 @@ import type {
   RunTranscript,
   TranscriptBody,
   TranscriptEntry,
+  TranscriptKind,
   TranscriptZoom,
 } from "@/data/contracts/run";
 import type {
@@ -20,10 +21,11 @@ import type {
   ResolvedApprovalItem,
 } from "@/data/contracts/approvals";
 import type { MandateList } from "@/data/contracts/mandates";
-import type { RunWork as RunWorkView } from "@/data/contracts/run-work";
+import type { RunWork } from "@/data/contracts/run-work";
 import type { RunRow } from "@/data/contracts/runs";
+import type { PriceBook } from "@/data/contracts/spend";
 import type { DataSource } from "@/data/ports";
-import type { AgentDetail } from "@/data/contracts/agents";
+import type { AgentDetail, AgentPage } from "@/data/contracts/agents";
 import { type Read, readOk } from "@/data/read";
 
 /** The instant every Run test renders at. */
@@ -31,6 +33,13 @@ export const NOW = Date.parse("2026-09-15T09:00:00.000Z");
 
 const at = (secondsFromNow: number): string =>
   new Date(NOW + secondsFromNow * 1000).toISOString();
+
+/** A figure the gateway observed, in USD micros. */
+const gatewayUsd = (micros: string) => ({
+  micros,
+  currency: "USD",
+  basis: "gateway_observed" as const,
+});
 
 export function runRow(overrides: Partial<RunRow> = {}): RunRow {
   return {
@@ -343,6 +352,22 @@ export function mockupTranscript(
       decision: "deny",
     },
   ];
+  /**
+   * The chips a frame answers to, as `frameKinds` in `@oxagen/run-ledger`
+   * assigns them: `prompt` is the request half of a model call, not the
+   * operator's words, and a decision adds `policy` to the entry it rides.
+   */
+  const kindsOf = (spec: Spec, request: boolean): TranscriptKind[] => {
+    const kinds: TranscriptKind[] = [];
+    if (spec.kind === "model_call")
+      kinds.push(request ? "prompt" : "responses");
+    if (spec.kind === "tool_call") kinds.push("tools");
+    if (spec.type === "policy_decision" || spec.decision !== undefined)
+      kinds.push("policy");
+    if (spec.type === "context.assembled") kinds.push("recall");
+    if (spec.costMicros !== undefined) kinds.push("usage");
+    return kinds;
+  };
   // The run's own prefix sum, exactly as `get_run_transcript` computes it:
   // an entry's cumulative cost is what the run had spent by then.
   let running: bigint | null = null;
@@ -360,6 +385,7 @@ export function mockupTranscript(
     });
     const request = REQUEST_TYPES.has(spec.type);
     return transcriptEntry({
+      kinds: kindsOf(spec, request),
       seq: String(spec.seq),
       endSeq: String(spec.seq),
       at: at(-3600 + spec.seq * 2),
@@ -458,6 +484,17 @@ export function runCost(overrides: Partial<RunCost> = {}): RunCost {
             output: 12_004,
             reasoning: 3011,
           },
+          // What the rollup recorded for each class; the six sum to `cost`.
+          costByClass: {
+            inputUncached: gatewayUsd("1092240"),
+            cacheRead: gatewayUsd("136533"),
+            cacheWrite5m: gatewayUsd("307650"),
+            cacheWrite1h: gatewayUsd("0"),
+            output: gatewayUsd("2034842"),
+            reasoning: gatewayUsd("560000"),
+          },
+          cacheSaving: gatewayUsd("1228797"),
+          hasUnpriced: false,
         },
       ],
       byTool: [{ name: "create_release", calls: 3 }],
@@ -512,6 +549,18 @@ export function runOutputs(
 type RunReads = {
   detail: Read<RunDetail>;
   /**
+   * `list_agents`' first page, which the header's agent card reads for the
+   * agent's 30-day runs and spend. A test that says nothing about it gets a
+   * refusal, so the card names the harness alone.
+   */
+  roster?: Read<AgentPage>;
+  /**
+   * `get_run_work`, started with the page and awaited by the header's
+   * checkout strip and the Changes panel. A test that says nothing about it
+   * gets a run whose host enrolled no checkout and opened no pull request.
+   */
+  work?: Read<RunWork>;
+  /**
    * The spine above the tabs, read with the page and not with a tab. A test
    * that says nothing about it gets a run that produced nothing, so a test
    * about the header or a tab is not also a test about the spine. A function
@@ -526,12 +575,11 @@ type RunReads = {
   /** Only read when the Governed actions tab has a frame body open; refused when absent. */
   frameBody?: Read<RunFrameBody>;
   /**
-   * The whole-run transcript is read with the page (the Prompts figure, the
-   * Policy and Context tabs and their counts); the Transcript tab reads it
-   * again only through pressed chips, and the Cost tab reads it per zoom
-   * level for the waterfall. A function answers per zoom level, which is how
-   * a Cost-tab test hands one transcript for `turns` and another for
-   * `steps`. A test that says nothing about it gets one step.
+   * The whole-run transcript at `everything`, read with the page: the
+   * figures, the Cost tab's waterfall, the Policy and Context tabs and the tab
+   * counts all derive from it. The Transcript tab reads it again only through
+   * pressed chips. A function answers per zoom level, for a test that needs
+   * to tell the reads apart. A test that says nothing about it gets one step.
    */
   transcript?:
     | Read<RunTranscript>
@@ -558,11 +606,10 @@ type RunReads = {
    */
   mandates?: Read<MandateList>;
   /**
-   * get_run_work, read with the page for the header's checkout and subagent
-   * strips and the Changes panel. A test that says nothing about it gets a
-   * run that recorded no checkout and no subagent.
+   * The organization's price book. The page must not read it (#4069); a test
+   * passes one to prove the figures stay the recorded ones whatever it says.
    */
-  work?: Read<RunWorkView>;
+  priceBook?: Read<PriceBook>;
 };
 
 /** The agent read a test left out: refused, so nothing about the agent is invented. */
@@ -585,6 +632,8 @@ export function runSource(reads: RunReads) {
     mandates: unknown[][];
     outputs: unknown[][];
     agent: unknown[][];
+    /** The page prices nothing, so any read of the price book is a defect (#4069). */
+    priceBook: unknown[][];
   } = {
     get: [],
     frameBody: [],
@@ -596,6 +645,7 @@ export function runSource(reads: RunReads) {
     mandates: [],
     outputs: [],
     agent: [],
+    priceBook: [],
   };
   const refuse = () => Promise.reject(new Error("not a Run read"));
   const answer = <T>(
@@ -671,7 +721,8 @@ export function runSource(reads: RunReads) {
       resolvedSince: refuse,
     },
     agents: {
-      list: refuse,
+      list: () =>
+        reads.roster === undefined ? refuse() : Promise.resolve(reads.roster),
       get: answer("agent", reads.agent ?? AGENT_UNREAD),
       toolbelt: refuse,
       incidents: refuse,
@@ -693,7 +744,12 @@ export function runSource(reads: RunReads) {
       budgets: refuse,
       findings: refuse,
       findingEvidence: refuse,
-      priceBook: refuse,
+      priceBook: (...args: unknown[]) => {
+        calls.priceBook.push(args);
+        return reads.priceBook === undefined
+          ? refuse()
+          : Promise.resolve(reads.priceBook);
+      },
       unpricedModels: refuse,
     },
     onboarding: { state: refuse, firstFrame: refuse },
@@ -740,3 +796,123 @@ export function runSource(reads: RunReads) {
 }
 
 export const ok = readOk;
+
+/** A checkout the host enrolled, on a pull request the run pushed to. */
+export function runWork(overrides: Partial<RunWork> = {}): RunWork {
+  const repository = {
+    host: "github.com",
+    owner: "acme",
+    name: "platform",
+    url: "https://github.com/acme/platform",
+    connected: true,
+  };
+  return {
+    runId: "tse_7k2m9q",
+    machine: { name: "mac-studio.local" },
+    checkouts: [
+      {
+        ref: "co_1",
+        path: "~/src/platform/.worktrees/release-3.2",
+        branch: "release/3.2",
+        headSha: null,
+        remoteDigest: null,
+        repository,
+        firstSeq: "1",
+        lastSeq: "431",
+      },
+    ],
+    diffs: [],
+    pullRequests: [
+      {
+        repository,
+        number: 482,
+        url: "https://github.com/acme/platform/pull/482",
+        title: "Release 3.2",
+        state: "open",
+        headSha: null,
+        headRef: "release/3.2",
+        association: "recorded",
+        closingIssues: null,
+        checkoutRefs: ["co_1"],
+        observedAt: at(-300),
+        current: true,
+        ci: {
+          overall: "passing",
+          counts: {
+            total: 2,
+            passed: 2,
+            failed: 0,
+            pending: 0,
+            skipped: 0,
+            neutral: 0,
+          },
+          runs: [
+            {
+              name: "test",
+              status: "completed",
+              conclusion: "success",
+              url: null,
+              startedAt: null,
+              completedAt: null,
+              durationMs: null,
+              app: null,
+            },
+          ],
+          complete: true,
+        },
+        diff: null,
+      },
+    ],
+    complete: true,
+    warnings: [],
+    ...overrides,
+  };
+}
+
+/** `list_agents`' first page holding the run's agent, with its 30-day figures. */
+export function runRoster(
+  overrides: Partial<AgentPage["agents"][number]> = {},
+): AgentPage {
+  return {
+    agents: [
+      {
+        id: "agt_releasebot",
+        slug: "release-bot",
+        name: "Release bot",
+        description: null,
+        agentKey: "acme.core.release-bot",
+        harness: "claude-code",
+        operatorId: "usr_marcusbell",
+        operatorName: "Marcus Bell",
+        principalId: "prn_91",
+        credentials: 1,
+        hosts: 1,
+        host: "mac-studio.local",
+        status: "enrolled",
+        enforcementTier: "harness",
+        runs30d: 212,
+        spend30d: {
+          micros: "612480000",
+          currency: "USD",
+          basis: "gateway_observed",
+        },
+        tokens30d: null,
+        mandates: 0,
+        incidents: 0,
+        tamperIncidents: 0,
+        tamperIncidentsRecorded: 0,
+        ...overrides,
+      },
+    ],
+    nextCursor: null,
+    totals: {
+      identities: 1,
+      enrolled: 1,
+      unenrolled: 0,
+      holdingMandate: 0,
+      mandateHolders: [],
+      tamperIncidents: 0,
+      tamper: { recorded: 0, open: 0, newest: null },
+    },
+  };
+}

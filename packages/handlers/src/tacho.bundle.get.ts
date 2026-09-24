@@ -49,7 +49,8 @@ export const tachoBundleGetHandler: CapabilityHandler<
     );
     // `version` counts mandate changes, not fetches: the same etag keeps the
     // version it was served with, so a version sealed into a frame names one
-    // mandate.
+    // mandate. That holds for the copy signed again when a host renews a quiet
+    // mandate by polling without its etag (`pollEtag` in `@oxagen/tacho`).
     const unsigned = {
       ...built,
       version:
@@ -57,26 +58,10 @@ export const tachoBundleGetHandler: CapabilityHandler<
           ? host.bundleVersionServed
           : null) ?? built.version,
     };
-    // A host measures a mandate's freshness from its signed `issued_at`
-    // whenever its daemon has not confirmed it in the running process: after
-    // a restart, and in the hook when the daemon does not answer. Answering
-    // `not_modified` for ever let an unchanged mandate outlive its signed
-    // window, and in enforce mode the next hiccup denied every mutating tool.
-    // So a host whose bundle was issued more than half a window ago is sent
-    // the same mandate signed again. `lastBundleFetchAt` is when this host was
-    // last sent a signed bundle; a host with none holds its enrollment bundle,
-    // issued when the row was created.
-    const issuedAt = host.lastBundleFetchAt ?? host.createdAt;
-    const window =
-      Date.parse(unsigned.expires_at) - Date.parse(unsigned.issued_at);
-    const notModified =
-      input.etag !== undefined &&
-      input.etag === unsigned.etag &&
-      now.getTime() - issuedAt.getTime() < window / 2;
     await tx
       .update(schema.tachoHosts)
       .set({
-        ...(notModified ? {} : { lastBundleFetchAt: now }),
+        lastBundleFetchAt: now,
         lastSeenAt: now,
         bundleEtagServed: unsigned.etag,
         bundleVersionServed: unsigned.version,
@@ -85,7 +70,7 @@ export const tachoBundleGetHandler: CapabilityHandler<
         updatedAt: now,
       })
       .where(eq(schema.tachoHosts.id, host.id));
-    if (notModified) {
+    if (input.etag !== undefined && input.etag === unsigned.etag) {
       return { not_modified: true, etag: unsigned.etag, bundle: null };
     }
     return {

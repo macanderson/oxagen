@@ -17,12 +17,17 @@
 // handler checks and refuses with `conflict`; the button is drawn disabled,
 // with the reason, wherever the row already says the recording is weaker, so a
 // person is not sent to a refusal they could have read here.
+//
+// Bisect's other run is picked by name from the workspace's runs. The picker
+// is freeform, so a run id pasted from elsewhere is still sent as typed.
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useId, useState } from "react";
 import type { RunRow } from "@/data/contracts/runs";
+import { chooseRuns } from "@/features/shell/client";
 import { UNANSWERED, useActionFailure } from "@/ui/command-failure";
 import { buttonSecondary, inputBase, mono } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
+import { RecordPicker } from "@/ui/record-picker";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { bisectRuns, forkRun } from "./actions";
 
@@ -33,21 +38,29 @@ type Divergence = {
   aligned: number;
 };
 
+/** Where a replay button sits: its words and its test hook, which the header and the Chain tab each name. */
+type ActionFace = { label?: string; testId?: string };
+
 function ForkDialog({
   org,
   ws,
   runId,
+  label,
+  testId = "run-fork",
+  fromSeq = "",
 }: {
   org: string;
   ws: string;
   runId: string;
-}) {
+  /** The frame the dialog opens on, when the page has one open. */
+  fromSeq?: string;
+} & ActionFace) {
   const t = useTranslations("run.replay.fork");
   const failureText = useActionFailure();
   const fieldId = useId();
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
-  const [seq, setSeq] = useState("");
+  const [seq, setSeq] = useState(fromSeq);
   const [failure, setFailure] = useState<string | null>(null);
   const [attempt, setAttempt] = useState<string | null>(null);
 
@@ -56,7 +69,7 @@ function ForkDialog({
     if (!next) {
       setFailure(null);
       setAttempt(null);
-      setSeq("");
+      setSeq(fromSeq);
     }
   }
 
@@ -80,19 +93,19 @@ function ForkDialog({
     <>
       <button
         type="button"
-        data-testid="run-fork"
+        data-testid={testId}
         className={buttonSecondary}
         onClick={() => {
           setOpen(true);
         }}
       >
-        {t("open")}
+        {label ?? t("open")}
       </button>
       <SheetDialog
         open={open}
         onOpenChange={openChange}
         title={t("title", { run: runId })}
-        testId="run-fork-dialog"
+        testId={`${testId}-dialog`}
       >
         {attempt === null ? (
           <form
@@ -140,15 +153,18 @@ function ForkDialog({
   );
 }
 
-function BisectDialog({
+/** Bisect reads receipts alone, so it is offered at every grade. */
+export function BisectDialog({
   org,
   ws,
   runId,
+  label,
+  testId = "run-bisect",
 }: {
   org: string;
   ws: string;
   runId: string;
-}) {
+} & ActionFace) {
   const t = useTranslations("run.replay.bisect");
   const failureText = useActionFailure();
   const fieldId = useId();
@@ -187,19 +203,19 @@ function BisectDialog({
     <>
       <button
         type="button"
-        data-testid="run-bisect"
+        data-testid={testId}
         className={buttonSecondary}
         onClick={() => {
           setOpen(true);
         }}
       >
-        {t("open")}
+        {label ?? t("open")}
       </button>
       <SheetDialog
         open={open}
         onOpenChange={openChange}
         title={t("title", { run: runId })}
-        testId="run-bisect-dialog"
+        testId={`${testId}-dialog`}
       >
         {result === null ? (
           <form
@@ -210,17 +226,19 @@ function BisectDialog({
             <label htmlFor={fieldId} className="text-sm font-medium">
               {t("otherLabel")}
             </label>
-            <input
+            <RecordPicker
               id={fieldId}
               name="runB"
               required
+              freeform
+              load={() => chooseRuns(org, ws)}
               value={other}
-              onChange={(event) => {
-                setOther(event.target.value);
-              }}
-              className={inputBase}
+              onChange={setOther}
+              aria-describedby={`${fieldId}-help`}
             />
-            <p className="text-xs text-muted-foreground">{t("otherHelp")}</p>
+            <p id={`${fieldId}-help`} className="text-xs text-muted-foreground">
+              {t("otherHelp")}
+            </p>
             {failure === null ? null : (
               <FormAlert testId="run-bisect-failure">{failure}</FormAlert>
             )}
@@ -263,6 +281,75 @@ function BisectDialog({
   );
 }
 
+/**
+ * Fork replay, or the disabled button that says why not. `fork_run` refuses a
+ * wrapped session by name and a recording graded below `fork`; both are on
+ * the row, so the reason is said here rather than in a refusal.
+ */
+export function ForkAction({
+  org,
+  ws,
+  run,
+  label,
+  testId = "run-fork",
+  fromSeq,
+}: {
+  org: string;
+  ws: string;
+  run: RunRow;
+  fromSeq?: string;
+} & ActionFace) {
+  const t = useTranslations("run.replay");
+  const reasonId = useId();
+  const forkable =
+    run.source === "ledger" &&
+    (run.replayGrade === "fork" || run.replayGrade === "retry");
+  if (forkable)
+    return (
+      <ForkDialog
+        org={org}
+        ws={ws}
+        runId={run.id}
+        label={label}
+        testId={testId}
+        fromSeq={fromSeq}
+      />
+    );
+  const reason =
+    run.source !== "ledger"
+      ? t("forkNeedsLedger")
+      : run.replayGrade === null
+        ? t("forkNoGrade")
+        : t("forkNeedsGrade", { grade: run.replayGrade });
+  // The button sits in a row of actions, so a refusal is said on the
+  // disabled button itself (on hover, and to assistive tech as its
+  // description) rather than as a line under the row.
+  const text = label ?? t("fork.open");
+  return (
+    <>
+      <button
+        type="button"
+        disabled
+        title={reason}
+        aria-describedby={reasonId}
+        data-testid={testId}
+        className={buttonSecondary}
+      >
+        {text}
+      </button>
+      <span
+        id={reasonId}
+        data-testid={
+          testId === "run-fork" ? "fork-refused" : `${testId}-refused`
+        }
+        className="sr-only"
+      >
+        {reason}
+      </span>
+    </>
+  );
+}
+
 export function ReplayActions({
   org,
   ws,
@@ -272,44 +359,11 @@ export function ReplayActions({
   ws: string;
   run: RunRow;
 }) {
-  const t = useTranslations("run.replay");
-  // `fork_run` refuses a wrapped session by name and a recording graded below
-  // `fork`; both are on the row, so the reason is said here rather than in a
-  // refusal. Bisect reads receipts alone, so it works at every grade.
-  const forkable =
-    run.source === "ledger" &&
-    (run.replayGrade === "fork" || run.replayGrade === "retry");
-  const reason =
-    run.source !== "ledger"
-      ? t("forkNeedsLedger")
-      : run.replayGrade === null
-        ? t("forkNoGrade")
-        : t("forkNeedsGrade", { grade: run.replayGrade });
+  // The two buttons sit in the header's action row beside Export.
   return (
-    <div className="flex flex-col items-start gap-2 lg:items-end">
-      <div className="flex flex-wrap gap-2">
-        {forkable ? (
-          <ForkDialog org={org} ws={ws} runId={run.id} />
-        ) : (
-          <button
-            type="button"
-            disabled
-            data-testid="run-fork"
-            className={buttonSecondary}
-          >
-            {t("fork.open")}
-          </button>
-        )}
-        <BisectDialog org={org} ws={ws} runId={run.id} />
-      </div>
-      {forkable ? null : (
-        <p
-          data-testid="fork-refused"
-          className="max-w-prose text-xs text-muted-foreground lg:text-right"
-        >
-          {reason}
-        </p>
-      )}
-    </div>
+    <>
+      <ForkAction org={org} ws={ws} run={run} />
+      <BisectDialog org={org} ws={ws} runId={run.id} />
+    </>
   );
 }

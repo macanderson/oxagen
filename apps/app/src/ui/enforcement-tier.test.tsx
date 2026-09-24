@@ -18,15 +18,19 @@ describe("EnforcementTierBadge", () => {
     ["gateway", "observed at the gateway"],
     ["harness", "observed at the harness"],
     ["observe", "observed from the side"],
-  ] as const)("draws the recorded %s tier as its own word", (tier, word) => {
-    render(
-      <IntlProvider>
-        <EnforcementTierBadge tier={tier} />
-      </IntlProvider>,
-    );
-    const badge = screen.getByText(word);
-    expect(badge).toHaveAttribute("data-tier", tier);
-  });
+  ] as const)(
+    "draws the recorded %s tier as its own word, with the reading on hover",
+    (tier, word) => {
+      render(
+        <IntlProvider>
+          <EnforcementTierBadge tier={tier} />
+        </IntlProvider>,
+      );
+      const badge = screen.getByText(tier);
+      expect(badge).toHaveAttribute("data-tier", tier);
+      expect(badge).toHaveAttribute("title", word);
+    },
+  );
 
   it("carries the caller's test id, and none when the caller names none (negative)", () => {
     const { rerender } = render(
@@ -34,9 +38,7 @@ describe("EnforcementTierBadge", () => {
         <EnforcementTierBadge tier="observe" testId="run-tier" />
       </IntlProvider>,
     );
-    expect(screen.getByTestId("run-tier")).toHaveTextContent(
-      "observed from the side",
-    );
+    expect(screen.getByTestId("run-tier")).toHaveTextContent("observe");
     rerender(
       <IntlProvider>
         <EnforcementTierBadge tier="observe" />

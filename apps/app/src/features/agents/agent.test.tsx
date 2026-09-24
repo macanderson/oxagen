@@ -58,6 +58,13 @@ vi.mock("./actions", () => ({
 }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
+// The Configuration tab's tool pickers read the registry's patterns on mount
+// when the file already names tools. An empty list draws each chip by its value.
+vi.mock("@/features/shell/client", () => ({
+  chooseToolPatterns: vi.fn(() =>
+    Promise.resolve({ ok: true, value: { options: [], partial: false } }),
+  ),
+}));
 
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
@@ -139,7 +146,13 @@ describe("Agent header", () => {
     );
     const badges = screen.getByTestId("agent-badges");
     expect(badges).toHaveTextContent("enrolled");
-    expect(badges).toHaveTextContent("observed at the harness");
+    // The tier badge prints the tier's own word, with the longer reading on
+    // hover, as the mockup's `tierBadge` draws it on every page.
+    expect(badges).toHaveTextContent("harness");
+    expect(within(badges).getByText("harness")).toHaveAttribute(
+      "title",
+      "observed at the harness",
+    );
     expect(badges).toHaveTextContent("replay fork");
     expect(badges).toHaveTextContent("operator Marcus Bell");
     expect(header).toHaveTextContent(

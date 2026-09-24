@@ -228,11 +228,14 @@ describe("Fleet reads", () => {
       "Agents · 3 of 3 selected",
     );
     expect(screen.queryByTestId("steer-unlisted")).toBeNull();
-    // arun_parked is the docs agent's run, and its call is parked.
+    // arun_parked is the docs agent's run, and its call is parked. The picker
+    // draws each agent's state on its option row, so the list has to be open.
+    const picker = screen.getByTestId("steer-agents");
+    fireEvent.focus(within(picker).getByRole("combobox"));
     expect(
       screen
-        .getByRole("checkbox", { name: "Steer acme.core.docs" })
-        .closest("label"),
+        .getAllByRole("option")
+        .find((row) => row.getAttribute("data-value") === "acme.core.docs"),
     ).toHaveTextContent("parked for approval");
   });
 
@@ -359,7 +362,7 @@ describe("summary tiles", () => {
   });
 
   // With no rollup yet, the Run page shows what the agent reported, and so
-  // does the row. The tile adds the figure the row shows.
+  // does the row, as an estimate. The tile adds the figure the row shows.
   it("shows the agent's reported cost where no rollup is recorded yet, in its cell and in Spend shown", async () => {
     await renderFleet({
       runs: runPage([
@@ -374,10 +377,10 @@ describe("summary tiles", () => {
       ]),
       approvals: NO_APPROVALS,
     });
-    expect(row("tse_reported")).toHaveTextContent("$1.25agent reported");
+    expect(row("tse_reported")).toHaveTextContent("$1.25estimate");
     expect(
       within(row("tse_reported")).getByTestId("row-cost-reported"),
-    ).toHaveTextContent("agent reported");
+    ).toHaveTextContent("estimate");
     expect(tile("Spend shown")).toHaveTextContent("$4.12");
     expect(screen.getByTestId("spend-basis")).toHaveTextContent(
       "client_attested + gateway_observed · USD · includes 1 estimate",

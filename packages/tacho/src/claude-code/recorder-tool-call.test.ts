@@ -179,15 +179,18 @@ describe("a tool call reported by every source", () => {
       {},
       at,
     );
+    chain.ingestHook(postToolUse(TOOL_USE_ID), {}, at);
+    // The child's call has an id of its own. One id seen on both chains is
+    // one call, which the session family counts once (ADR-168).
     chain.ingestHook(
-      { ...postToolUse(TOOL_USE_ID), agent_id: "child" },
+      { ...postToolUse("toolu_01child"), agent_id: "child" },
       {},
       at,
     );
-    // Claude Code's OTel record of the same call carries no `agent_id`, so it
-    // reaches the session's own recorder: one ledger for the family knows it.
-    chain.ingestOtlp(otelToolResult(TOOL_USE_ID));
-    expect(toolCalls(chain)).toHaveLength(0);
+    // Claude Code's OTel record of the child's call carries no `agent_id`,
+    // and the one ledger of the session family already knows the call.
+    chain.ingestOtlp(otelToolResult("toolu_01child"));
+    expect(toolCalls(chain)).toHaveLength(1);
     const child = [...chain.openChildren.values()][0];
     expect(child).toBeDefined();
     expect(child === undefined ? [] : toolCalls(child)).toHaveLength(1);

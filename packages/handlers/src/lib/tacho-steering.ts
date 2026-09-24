@@ -60,6 +60,7 @@ import {
 import { and, count, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import {
   assembleSteering,
+  PREFIX_BUDGET_TOKENS,
   type SteeringCandidate,
   type SteeringForce,
   type SteeringManifest,
@@ -74,24 +75,21 @@ import {
 export const CONTEXT_SYSTEM_MAX_CHARS = 16_384;
 
 /**
- * How long `context.system` may be and still reach the agent whole. The
- * collector hands the text over as SessionStart `additionalContext`, and
- * Claude Code keeps 10,000 characters of that: past it the text is saved to
- * a file and the model reads a preview, while the manifest still says every
- * record was included. The collector's total for one hook answer is 9,500
- * characters, and a steer that does not fit beside this text waits for the
- * next prompt.
- */
-export const CONTEXT_SYSTEM_DELIVERED_MAX_CHARS = 8_000;
-
-/**
  * The assembler's budget for `context.system`, in Context Graph Protocol
- * budget tokens (`ceil(utf8_bytes / 4)`). A string never has more characters
- * than bytes, so a text under this many tokens is under the delivered limit,
- * and so under the host's.
+ * budget tokens (`ceil(utf8_bytes / 4)`). The host would take 16,384
+ * characters, but the harness it hands the text to reads less: Claude Code
+ * replaces anything past 10,000 characters with a file path and a preview,
+ * so a record the manifest called included never reached the agent. The
+ * assembler's `PREFIX_BUDGET_TOKENS` fits the smallest harness limit, and a
+ * string never has more characters than bytes, so it also fits the host's.
+ * That is at most 8,000 characters, which leaves room under the collector's
+ * 9,500-character total for one hook answer; a steer that does not fit
+ * beside this text waits for the next prompt.
  */
-export const CONTEXT_SYSTEM_BUDGET_TOKENS =
-  CONTEXT_SYSTEM_DELIVERED_MAX_CHARS / 4;
+export const CONTEXT_SYSTEM_BUDGET_TOKENS = Math.min(
+  PREFIX_BUDGET_TOKENS,
+  CONTEXT_SYSTEM_MAX_CHARS / 4,
+);
 
 /**
  * The most items the signed manifest lists. The host parses

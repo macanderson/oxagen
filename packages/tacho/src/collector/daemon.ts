@@ -34,7 +34,7 @@ import type {
 } from "../claude-code/recorder";
 import { tachoEventSchema, type TachoEvent } from "../envelope";
 import { type FrameBody, retentionAllows } from "../evidence/frame-body";
-import { verifyBundle } from "../host/bundle";
+import { pollEtag, verifyBundle } from "../host/bundle";
 import {
   ControlError,
   createControlClient,
@@ -56,6 +56,7 @@ import {
   applyControlFacts,
   currentEnrollment,
   type HostFile,
+  hostStatusInForce,
   readHostFile,
   mcpEndpointFor,
   modelProxyPortFor,
@@ -574,9 +575,10 @@ async function initializeDaemon(
    *
    * A poll that answers `not_modified` is a confirmation: it says the etag in
    * force is still this one. Freshness has to be measured from here, because
-   * the etag covers policy content only, so an unchanged mandate is never
-   * re-sent and its signed `expires_at` cannot be renewed on the host. See
-   * `isStale` in host/bundle.ts.
+   * the etag covers policy content only, so an unchanged mandate is re-signed
+   * only once the cached copy is past half its window (`pollEtag`). Between
+   * re-signings its signed `expires_at` does not move. See `isStale` in
+   * host/bundle.ts.
    *
    * Undefined until the control plane confirms something in this process,
    * and deliberately not seeded from `bundle_fetched_at`. That field is
@@ -879,26 +881,6 @@ async function initializeDaemon(
   // Bound once the contained runner exists below. Until then no session is
   // one the launcher started, which is the fail-closed answer.
   let launchedContained: (harnessSessionId: string) => boolean = () => false;
-  /**
-   * The host status hooks and the model proxy act on. `host.host_status` is
-   * the control plane's latest word and is not signed; the bundle's
-   * `host_status` is signed but can be older. An edit of the first to
-   * `active` must not lift a signed suspension, so while the bundle verifies
-   * the more restrictive of the two applies, as `tacho-hook` does offline.
-   */
-  function hostStatusInForce(): HostFile["host_status"] {
-    const order: readonly HostFile["host_status"][] = [
-      "active",
-      "paused",
-      "suspended",
-      "revoked",
-    ];
-    const unsigned = host.host_status;
-    const signed = host.bundle.host_status;
-    return bundleVerified && order.indexOf(signed) > order.indexOf(unsigned)
-      ? signed
-      : unsigned;
-  }
   function policy(): PolicyView {
     const current = host as HostFile;
     return {
@@ -906,7 +888,7 @@ async function initializeDaemon(
       bundle: current.bundle,
       verified: bundleVerified,
       mandateConfirmedAt,
-      hostStatus: hostStatusInForce(),
+      hostStatus: hostStatusInForce(current, bundleVerified),
       denyGeneration: current.deny_generation,
       controlReachable:
         lastControlAt !== undefined &&
@@ -1123,7 +1105,15 @@ async function initializeDaemon(
 
   async function refreshBundle(): Promise<boolean> {
     try {
-      const response = await client.bundle(host.bundle.etag);
+      // Past half its signed window the poll sends no etag, so an unchanged
+      // mandate comes back freshly signed and the copy on disk stays fresh
+      // across a restart and for the hook when this daemon is down. A cached
+      // copy that did not verify sends none either: its etag would earn a
+      // `not_modified`, and the edited file would stand until the mandate
+      // next changed.
+      const response = await client.bundle(
+        bundleVerified ? pollEtag(host.bundle, now()) : undefined,
+      );
       lastControlAt = now();
       // `not_modified` is the confirmation freshness is measured from: it
       // says the etag in force is still the current one, which is the only
@@ -1205,8 +1195,12 @@ async function initializeDaemon(
       host_status: control.host_status,
       deny_generation: control.deny_generation,
     });
-    if (control.bundle_etag === host.bundle.etag) mandateConfirmedAt = now();
-    else await refreshBundle();
+    // A cached bundle that did not verify is never confirmed by its etag: an
+    // edited host.json keeps the etag it was signed with, so a match says
+    // nothing about the rest of the file. It is fetched again instead.
+    if (bundleVerified && control.bundle_etag === host.bundle.etag) {
+      mandateConfirmedAt = now();
+    } else await refreshBundle();
     if (control.commands.length > 0) {
       const result = await recordSealedAsync(
         () =>
@@ -2549,7 +2543,10 @@ async function initializeDaemon(
     registry,
     hostRecorder: () => hostRecorder,
     record,
-    policy: () => ({ bundle: host.bundle, hostStatus: hostStatusInForce() }),
+    policy: () => ({
+      bundle: host.bundle,
+      hostStatus: hostStatusInForce(host, bundleVerified),
+    }),
     upstreams: () => ({
       ...DEFAULT_MODEL_UPSTREAMS,
       ...displacedUpstreams,

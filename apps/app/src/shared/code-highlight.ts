@@ -231,19 +231,3 @@ export function tokenizeCode(
 ): CodeToken[] {
   return SCANNERS[language](source);
 }
-
-/**
- * The language a file's contents are painted in, from its path.
- *
- * Deliberately coarse: the transcript paints shell and JSON, and everything
- * else is honest plain text rather than a half-right guess with a
- * TypeScript scanner that does not exist here.
- */
-export function languageForPath(path: string): CodeLanguage {
-  const name = path.split("/").pop() ?? path;
-  if (/\.(json|jsonc|json5)$/i.test(name)) return "json";
-  if (/\.(sh|bash|zsh|fish|command)$/i.test(name)) return "shell";
-  if (/^(Dockerfile|Makefile|\.env(\..+)?|\.zshrc|\.bashrc)$/i.test(name))
-    return "shell";
-  return "text";
-}

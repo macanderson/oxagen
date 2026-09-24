@@ -28,6 +28,8 @@ export * from "./price-sources";
 export * from "./price-overrides";
 export * from "./price-book-sync";
 export * from "./unpriced-models";
+export * from "./class-cost";
+export * from "./cache-savings";
 export * from "./cost-rollup";
 export * from "./cost-rollup-store";
 export type { FindingEvidence } from "./findings";

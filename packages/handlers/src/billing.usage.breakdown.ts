@@ -10,6 +10,8 @@
  * — a caller cannot request another org's usage. `input.workspaceId` only
  * narrows within the already-scoped org.
  *
+ * `cacheSavingsMicros` is priced from the price book; see `bookCacheSavings`.
+ *
  * ClickHouse errors propagate: a usage read that silently returns zeros on an
  * outage would misreport spend. Callers that need resilience (the dashboard
  * page) wrap the invoke and degrade explicitly.
@@ -17,31 +19,61 @@
 
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { billingUsageBreakdown } from "@oxagen/oxagen/contracts/billing.usage.breakdown";
-import { readUsageBreakdown, type UsageBreakdownRow } from "@oxagen/telemetry";
-import { resolveRate } from "@oxagen/billing";
+import { readObservedModels, readUsageBreakdown } from "@oxagen/telemetry";
+import {
+  CACHE_SAVING_TOKEN_CLASSES,
+  loadPriceBookInTenantScope,
+  netCacheSavingsFromBook,
+  priceBookBoundaries,
+  type NetCacheSavings,
+} from "@oxagen/billing";
 import { logger } from "./logger";
 
 /**
- * Estimate cache savings (micro-USD) NET of the write premium, using the
- * per-model provider rate card. For each model row:
- *   reads saved  = cachedTokens × (inputPer1M − cachedInputPer1M)
- *   writes cost  = cacheWriteTokens × (cacheWritePer1M − inputPer1M)
- * savings = Σ (reads saved − writes cost). Rate keys are per 1M tokens, so
- * divide by 1M and scale to micro-USD (×1M) — the two cancel, leaving the rate
- * delta × token count as micro-USD directly. Reads dominate for cache-friendly
- * workloads; the figure can go slightly negative when writes outweigh reads.
+ * The window's cache saving NET of the write premium, priced from the price
+ * book (#4069, ADR-060): cache reads at input_uncached less their cache_read
+ * price, less each cache write's premium over input_uncached, every bucket
+ * priced at the entries in force when its calls ran. The arithmetic is
+ * `netCacheSavingsFromBook` in @oxagen/billing, the helper the run rollup
+ * prices each frame with. The in-code rate card no longer prices this figure;
+ * it still prices credit charges, which ADR-060 §1 keeps on it.
+ *
+ * Population. The class-bucket read here is `readObservedModels` with
+ * `frameStores: "gateway"`: it reads `metered_token_usage`, the view
+ * `readUsageBreakdown` aggregates, over the same org, workspace and window,
+ * so the saving covers the calls the breakdown's `cachedTokens` and
+ * `cacheWriteTokens` count and no wrapped-agent call they leave out. Two
+ * differences remain. The bucket read skips rows with an empty model id,
+ * which no price entry could price anyway. Its upper bound is inclusive, so
+ * the window's exclusive `end` is passed as the millisecond before it.
+ *
+ * A bucket the book cannot price adds nothing and is logged as a count; the
+ * contract's figure is a plain integer, so a gap is never priced from a
+ * guessed rate.
  */
-function estimateCacheSavingsMicros(byModel: UsageBreakdownRow[]): number {
-  let micros = 0;
-  for (const row of byModel) {
-    const rate = resolveRate(row.key);
-    const readsSaved =
-      row.cachedTokens * (rate.inputPer1M - rate.cachedInputPer1M);
-    const writesCost =
-      row.cacheWriteTokens * (rate.cacheWritePer1M - rate.inputPer1M);
-    micros += readsSaved - writesCost;
-  }
-  return Math.round(micros);
+async function bookCacheSavings(args: {
+  orgId: string;
+  workspaceId?: string;
+  start: Date;
+  end: Date;
+}): Promise<NetCacheSavings> {
+  const book = await loadPriceBookInTenantScope({ orgId: args.orgId });
+  const until = new Date(args.end.getTime() - 1);
+  const observed = await readObservedModels({
+    orgId: args.orgId,
+    workspaceId: args.workspaceId,
+    since: args.start,
+    until,
+    frameStores: "gateway",
+    boundariesFor: (models) =>
+      priceBookBoundaries(book, {
+        models,
+        tokenClasses: CACHE_SAVING_TOKEN_CLASSES,
+        since: args.start,
+        until,
+      }).map((t) => new Date(t)),
+  });
+  return netCacheSavingsFromBook({ observed, book, orgId: args.orgId });
 }
 
 export const billingUsageBreakdownHandler: CapabilityHandler<
@@ -50,12 +82,20 @@ export const billingUsageBreakdownHandler: CapabilityHandler<
   const start = new Date(input.start);
   const end = new Date(input.end);
 
-  const breakdown = await readUsageBreakdown({
-    orgId: ctx.orgId,
-    workspaceId: input.workspaceId,
-    start,
-    end,
-  });
+  const [breakdown, savings] = await Promise.all([
+    readUsageBreakdown({
+      orgId: ctx.orgId,
+      workspaceId: input.workspaceId,
+      start,
+      end,
+    }),
+    bookCacheSavings({
+      orgId: ctx.orgId,
+      workspaceId: input.workspaceId,
+      start,
+      end,
+    }),
+  ]);
 
   logger.info(
     {
@@ -72,6 +112,7 @@ export const billingUsageBreakdownHandler: CapabilityHandler<
       users: breakdown.byUser.length,
       executions: breakdown.totals.executions,
       messages: breakdown.totals.messages,
+      cacheSavingsUnpricedBuckets: savings.unpricedBuckets,
     },
     "billing.usage.breakdown: returned usage breakdown",
   );
@@ -79,7 +120,7 @@ export const billingUsageBreakdownHandler: CapabilityHandler<
   return {
     range: { start: input.start, end: input.end },
     totals: breakdown.totals,
-    cacheSavingsMicros: estimateCacheSavingsMicros(breakdown.byModel),
+    cacheSavingsMicros: Number(savings.micros),
     series: breakdown.series,
     byModel: breakdown.byModel,
     bySurface: breakdown.bySurface,

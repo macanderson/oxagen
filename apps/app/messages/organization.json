@@ -448,6 +448,9 @@
     "workspaces": {
       "title": "Workspaces",
       "tableLabel": "Workspaces",
+      "orgId": "Organization ID",
+      "copyOrgId": "Copy organization ID",
+      "copyWorkspaceId": "Copy workspace ID for {name}",
       "columns": {
         "workspace": "Workspace",
         "mainRepo": "Main repo",
@@ -890,6 +893,10 @@
     "page": {
       "eyebrow": "Organization",
       "description": "People, roles, workspaces, model routes, the data plane, and API keys."
+    },
+    "copyId": {
+      "copied": "Copied",
+      "copyFailed": "Copy failed. Select the ID instead."
     },
     "list": {
       "all": "All · {filter}"

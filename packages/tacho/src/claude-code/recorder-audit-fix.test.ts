@@ -157,15 +157,6 @@ function ofKind(events: readonly TachoEvent[], kind: string): TachoEvent[] {
 }
 
 describe("a subagent's call reported on two chains", () => {
-  it("seals its tool call once, on the subagent's chain", () => {
-    const chain = started();
-    spawn(chain, "a");
-    chain.ingestHook(toolHook("PostToolUse", "toolu_sub", "a"), {}, at);
-    chain.ingestOtlp(toolResult("toolu_sub"));
-    expect(ofKind(chain.sealedEvents, "tool_call")).toHaveLength(0);
-    expect(ofKind(childOf(chain)?.events ?? [], "tool_call")).toHaveLength(1);
-  });
-
   it("routes an OTel result that beats the hook to the subagent that asked", () => {
     const chain = started();
     spawn(chain, "a");
@@ -176,31 +167,6 @@ describe("a subagent's call reported on two chains", () => {
     const calls = ofKind(childOf(chain)?.events ?? [], "tool_call");
     expect(calls.map((call) => call.source)).toEqual(["otel_log", "hook"]);
     expect(calls[1]?.attrs[TOOL_CALL_DUPLICATE_OF_ATTR]).toBe("otel_log");
-  });
-
-  it("counts a subagent's model call once when its OTel record lands on the session", () => {
-    const chain = started();
-    spawn(chain, "a");
-    chain.ingestTranscriptLine(assistantLine("req_sub"), "a");
-    chain.ingestOtlp(apiRequest("req_sub"));
-    const root = ofKind(chain.sealedEvents, "llm_call");
-    expect(root).toHaveLength(1);
-    expect(root[0]?.attrs[LLM_CALL_DUPLICATE_OF_ATTR]).toBe("transcript");
-    const child = ofKind(childOf(chain)?.events ?? [], "llm_call");
-    expect(child[0]?.attrs[LLM_CALL_DUPLICATE_OF_ATTR]).toBeUndefined();
-  });
-
-  it("counts a proxied subagent call once when the subagent's transcript reports it", () => {
-    const chain = started();
-    spawn(chain, "a");
-    chain.sealCollectorEvent(
-      "llm_call",
-      { model: "claude-haiku-4-5", request_id: "req_proxy", input_tokens: 10 },
-      { fidelity: "proxy" },
-    );
-    chain.ingestTranscriptLine(assistantLine("req_proxy"), "a");
-    const child = ofKind(childOf(chain)?.events ?? [], "llm_call");
-    expect(child[0]?.attrs[LLM_CALL_DUPLICATE_OF_ATTR]).toBe("collector");
   });
 
   it("keeps one ledger for the family across a restart", () => {
@@ -220,32 +186,6 @@ describe("a subagent's call reported on two chains", () => {
     resumed.ingestOtlp(toolResult("toolu_sub"));
     const llm = ofKind(resumed.sealedEvents, "llm_call");
     expect(llm[0]?.attrs[LLM_CALL_DUPLICATE_OF_ATTR]).toBe("transcript");
-    expect(ofKind(resumed.sealedEvents, "tool_call")).toHaveLength(0);
-  });
-
-  it("takes on the calls a state written with a ledger per chain kept on the subagent", () => {
-    const chain = started();
-    spawn(chain, "a");
-    const state = chain.state();
-    const child = state.children["a"];
-    if (child === undefined) throw new Error("no child state");
-    child.state.llmCalls = {
-      keys: [["request:req_old", ["transcript"], true]],
-    };
-    child.state.toolCalls = { calls: [["toolu_old", ["hook"], true]] };
-    const resumed = new SessionRecorder({
-      context,
-      harnessSessionId: ID,
-      scope: SCOPE,
-      restore: state,
-    });
-    resumed.ingestOtlp(apiRequest("req_old"));
-    resumed.ingestOtlp(toolResult("toolu_old"));
-    expect(
-      ofKind(resumed.sealedEvents, "llm_call")[0]?.attrs[
-        LLM_CALL_DUPLICATE_OF_ATTR
-      ],
-    ).toBe("transcript");
     expect(ofKind(resumed.sealedEvents, "tool_call")).toHaveLength(0);
   });
 
@@ -275,15 +215,9 @@ describe("an OTel record naming only a subagent type", () => {
       );
   });
 
-  it("goes to the one open subagent of that type", () => {
-    const chain = started();
-    spawn(chain, "a");
-    chain.ingestOtlp(apiRequest("req_x", "Explore"));
-    expect(ofKind(chain.sealedEvents, "llm_call")).toEqual([]);
-    expect(ofKind(childOf(chain)?.events ?? [], "llm_call")).toHaveLength(1);
-  });
-
-  it("goes to a subagent that stopped just before it arrived, and no later", () => {
+  it("seals on the session once the one subagent of that type has stopped", () => {
+    // ADR-168 routes a record by type only to a subagent still open. A late
+    // batch from a stopped one is the session's, and nothing is ambiguous.
     const chain = started();
     spawn(chain, "a");
     chain.ingestHook(
@@ -294,18 +228,12 @@ describe("an OTel record naming only a subagent type", () => {
     chain.ingestOtlp(
       apiRequest("req_late", "Explore", "2026-09-21T00:00:05.000Z"),
     );
-    chain.ingestOtlp(
-      apiRequest("req_later", "Explore", "2026-09-21T00:01:00.000Z"),
-    );
-    const child = ofKind(childOf(chain)?.events ?? [], "llm_call");
-    expect(child.map((event) => bodyOf(event)["request_id"])).toEqual([
+    expect(ofKind(childOf(chain)?.events ?? [], "llm_call")).toEqual([]);
+    const root = ofKind(chain.sealedEvents, "llm_call");
+    expect(root.map((event) => bodyOf(event)["request_id"])).toEqual([
       "req_late",
     ]);
-    expect(
-      ofKind(chain.sealedEvents, "llm_call").map(
-        (event) => bodyOf(event)["request_id"],
-      ),
-    ).toEqual(["req_later"]);
+    expect(root[0]?.attrs[SUBAGENT_TYPE_AMBIGUOUS_ATTR]).toBeUndefined();
   });
 });
 

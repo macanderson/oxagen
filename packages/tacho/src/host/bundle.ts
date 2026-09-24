@@ -537,7 +537,11 @@ export interface SessionControlState {
 
 export interface EvaluationInput {
   bundle: PolicyBundle;
-  /** Verified before evaluation; an unverified bundle is treated as absent. */
+  /**
+   * Verified before evaluation. An unverified bundle is treated as absent:
+   * read-only tools are allowed and every other tool is denied, whatever mode
+   * the bundle claims.
+   */
   bundleVerified: boolean;
   toolName: string;
   toolInput?: Record<string, unknown>;
@@ -627,6 +631,38 @@ function isStale(
   );
 }
 
+/**
+ * The etag a bundle poll should send, or `undefined` to ask for a freshly
+ * signed copy.
+ *
+ * An unchanged mandate answers `not_modified` for as long as the etag
+ * matches, so the signed copy on disk keeps its first `issued_at` and
+ * `expires_at` for ever. The daemon counts each `not_modified` as a
+ * confirmation, but only in memory: after a restart, or on the hook's path
+ * when the daemon is down, freshness is judged from the signed window alone,
+ * and a quiet mandate reads as stale a day after its last edit. So once the
+ * cached copy is past half of its signed window, the poll drops the etag and
+ * the control plane signs the same mandate again with a new window.
+ *
+ * Nothing here is a trust decision. A host that lies about its bundle's age
+ * only earns a freshly signed copy of the mandate already in force.
+ */
+export function pollEtag(
+  bundle: PolicyBundle,
+  now: number,
+): string | undefined {
+  const issued = Date.parse(bundle.issued_at);
+  const expires = Date.parse(bundle.expires_at);
+  if (
+    !Number.isFinite(issued) ||
+    !Number.isFinite(expires) ||
+    expires <= issued
+  ) {
+    return undefined;
+  }
+  return now - issued < (expires - issued) / 2 ? bundle.etag : undefined;
+}
+
 function firstMatch(
   rules: readonly string[],
   toolName: string,
@@ -692,9 +728,8 @@ const WRITE_EFFECTS = new Set([
  */
 export function evaluatePreToolUse(input: EvaluationInput): Evaluation {
   const { bundle, toolName, toolInput } = input;
-  // An unverified bundle's tool declarations are as untrusted as the rest
-  // of it: one that marked `Bash` read-only would let every command through
-  // the read-only allowance below.
+  // A tool declaration is read only from a verified bundle. An unverified one
+  // could declare Bash read-only and walk it past every check below.
   const declared = !input.bundleVerified
     ? undefined
     : (bundle.tools[toolName] ??
@@ -762,27 +797,26 @@ export function evaluatePreToolUse(input: EvaluationInput): Evaluation {
     );
   }
 
-  // Nothing an unverified bundle says is trusted, its mode included: an
-  // edit to host.json that turns `enforce` into `observe` is exactly what
-  // breaks the signature. So a tool that is not read-only is refused
-  // whatever mode the bundle claims. An observe bundle still lets reads
-  // through, as it did; an enforce bundle still refuses everything.
+  // An unverified bundle is treated as absent, so nothing in it is believed:
+  // not its `mode`, and not its `tools` declarations (dropped above). Either
+  // would let whoever edited host.json decide the answer. Whether the tool
+  // changes anything is read from the tool itself, and a tool that does is
+  // denied whatever mode the file claims.
   if (!input.bundleVerified) {
-    if (bundle.mode === "observe" && readOnly) {
+    if (readOnly) {
       return {
         decision: "allow",
         evaluated: "defer",
         source: "bundle",
         reason_code: "bundle_unverified",
-        reason: "The cached bundle did not verify; observe mode allows reads.",
+        reason:
+          "The cached policy bundle did not verify; read-only tools are allowed until it refreshes.",
         ...base,
       };
     }
     return deny(
       "bundle_unverified",
-      bundle.mode === "observe"
-        ? "The cached policy bundle did not verify, so its observe mode is not trusted and only read-only tools are allowed."
-        : "The cached policy bundle did not verify and enforce mode fails closed.",
+      "The cached policy bundle did not verify, so tools that change anything are denied until it refreshes.",
     );
   }
 
@@ -844,11 +878,11 @@ export function evaluatePreToolUse(input: EvaluationInput): Evaluation {
     };
   }
 
-  // 4. Ask rules, before allow rules, which is Claude Code's own order. A
-  // mandate compiles a `github:*` allow and a `github:merge_pull_request`
-  // ask into `mcp__github__*` and `mcp__github__merge_pull_request` in
-  // different buckets, and allow first let the broad grant answer for the
-  // call the approval was written for.
+  // 4. Ask rules come before allow rules, which is Claude Code's own
+  // precedence (deny, then ask, then allow). A narrow ask such as
+  // `Bash(git push*)` must still ask when a broad allow such as `Bash(*)`
+  // also matches; checked the other way round, the allow wins and the ask
+  // rule is dead.
   const ask = firstMatch(
     bundle.permissions.ask,
     toolName,

@@ -117,13 +117,16 @@ async function syncApp(url: string): Promise<void> {
 }
 
 /** Step 3a — send the canary with the event key. */
-async function sendCanary(eventKey: string): Promise<string> {
+async function sendCanary(
+  eventKey: string,
+): Promise<{ id: string; sentAt: Date }> {
+  const sentAt = new Date();
   const response = await fetch(`${EVENT_API}/e/${eventKey}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       name: CANARY_EVENT_NAME,
-      data: { sentAt: new Date().toISOString() },
+      data: { sentAt: sentAt.toISOString() },
     }),
   });
   const body = (await response.json()) as { ids?: string[] };
@@ -134,18 +137,73 @@ async function sendCanary(eventKey: string): Promise<string> {
     );
   }
   console.log(`inngest-verify: canary sent (${id})`);
-  return id;
+  return { id, sentAt };
+}
+
+/**
+ * How far before the send time the event query starts. The send time is this
+ * runner's clock and `received_after` is compared against Inngest's, so the
+ * window opens early enough that clock skew cannot put the canary before it.
+ */
+const CLOCK_SKEW_MARGIN_MS = 5 * 60_000;
+
+/**
+ * The event query for the canary: its name, received since shortly before it
+ * was sent. Unfiltered, the endpoint returns only the newest events of every
+ * name, so production traffic can push the canary out of that window between
+ * two polls. Main's deploy of 08ed1170e (#3911) failed here as a key mismatch
+ * 23 minutes after the same keys had passed.
+ */
+export function canaryQueryUrl(sentAt: Date): string {
+  const query = new URLSearchParams({
+    name: CANARY_EVENT_NAME,
+    received_after: new Date(
+      sentAt.getTime() - CLOCK_SKEW_MARGIN_MS,
+    ).toISOString(),
+    limit: "100",
+  });
+  return `${INNGEST_API}/v1/events?${query.toString()}`;
+}
+
+/**
+ * Why the canary was never seen. A mismatch is the diagnosis only when the
+ * Inngest API answered: when every query failed, nothing was learned about the
+ * keys, and saying they disagree would send someone to rotate a working pair.
+ */
+export function unseenCanaryComplaint(
+  canaryId: string,
+  lastFailedStatus: number | null,
+  answered: boolean,
+): string {
+  const waited = `${Math.round(VISIBILITY_TIMEOUT_MS / 1000)}s`;
+  if (!answered) {
+    return (
+      `the Inngest API never answered the event query in ${waited} ` +
+      `(last status ${lastFailedStatus ?? "none"}), so whether the keys agree is unknown. ` +
+      "Re-run the deploy job."
+    );
+  }
+  return (
+    `the canary (${canaryId}) was accepted by the event API but never appeared within ` +
+    `${waited} in the environment ` +
+    "INNGEST_SIGNING_KEY authenticates to. The two keys belong to different Inngest environments, " +
+    "so events land where no function is registered and nothing will ever run. Set both keys from " +
+    "the same Inngest environment and redeploy."
+  );
 }
 
 /** Step 3b — look for it in the environment the signing key authenticates to. */
 async function awaitCanaryVisible(
   signingKey: string,
-  canaryId: string,
+  canary: { id: string; sentAt: Date },
 ): Promise<void> {
   const deadline = Date.now() + VISIBILITY_TIMEOUT_MS;
+  const url = canaryQueryUrl(canary.sentAt);
+  let answered = false;
+  let lastFailedStatus: number | null = null;
 
   while (Date.now() < deadline) {
-    const response = await fetch(`${INNGEST_API}/v1/events?limit=50`, {
+    const response = await fetch(url, {
       headers: { Authorization: `Bearer ${signingKey}` },
     });
     if (response.status === 401 || response.status === 403) {
@@ -154,24 +212,21 @@ async function awaitCanaryVisible(
       );
     }
     if (response.ok) {
+      answered = true;
       const body = (await response.json()) as { data?: InngestEvent[] };
-      if (canaryIsVisible(body.data ?? [], canaryId)) {
+      if (canaryIsVisible(body.data ?? [], canary.id)) {
         console.log(
           "inngest-verify: canary is visible in the signing key's environment — keys agree",
         );
         return;
       }
+    } else {
+      lastFailedStatus = response.status;
     }
     await sleep(POLL_INTERVAL_MS);
   }
 
-  fail(
-    `the canary (${canaryId}) was accepted by the event API but never appeared within ` +
-      `${Math.round(VISIBILITY_TIMEOUT_MS / 1000)}s in the environment ` +
-      "INNGEST_SIGNING_KEY authenticates to. The two keys belong to different Inngest environments, " +
-      "so events land where no function is registered and nothing will ever run. Set both keys from " +
-      "the same Inngest environment and redeploy.",
-  );
+  fail(unseenCanaryComplaint(canary.id, lastFailedStatus, answered));
 }
 
 async function main(): Promise<void> {
@@ -181,8 +236,8 @@ async function main(): Promise<void> {
 
   checkKeyPosture(signingKey);
   await syncApp(url);
-  const canaryId = await sendCanary(eventKey);
-  await awaitCanaryVisible(signingKey, canaryId);
+  const canary = await sendCanary(eventKey);
+  await awaitCanaryVisible(signingKey, canary);
 
   console.log(
     "inngest-verify: OK — events reach the environment the functions live in",

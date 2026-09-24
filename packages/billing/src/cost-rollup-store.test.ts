@@ -7,7 +7,12 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import type { RunMeta, RunTotalsRecord } from "./cost-rollup";
-import { rebuildRunTotals, type RunRollupDeps } from "./cost-rollup-store";
+import {
+  rebuildRunTotals,
+  reviveBreakdown,
+  serializeBreakdown,
+  type RunRollupDeps,
+} from "./cost-rollup-store";
 
 const SCOPE = {
   orgId: "0192d4a8-7c1e-7a00-8000-00000000ac3e",
@@ -122,5 +127,85 @@ describe("rebuildRunTotals", () => {
     expect((await rebuildRunTotals(WITNESS, d))?.operatorKey).toBe(
       "prn_runner_host",
     );
+  });
+});
+
+describe("the breakdown jsonb (#4069)", () => {
+  const byClass = {
+    input_uncached: 3_000n,
+    cache_read: 300n,
+    cache_write_5m: 0n,
+    cache_write_1h: 0n,
+    output: 1_500n,
+    reasoning: 0n,
+  };
+  const breakdown: RunTotalsRecord["breakdown"] = {
+    models: [
+      {
+        model: "claude-sonnet-5",
+        provider: "anthropic",
+        calls: 2,
+        tokens: {
+          input_uncached: 1_000,
+          cache_read: 1_000,
+          cache_write_5m: 0,
+          cache_write_1h: 0,
+          output: 100,
+          reasoning: 0,
+        },
+        costMicros: 4_800n,
+        costByClass: byClass,
+        cacheSavingMicros: 2_700n,
+        basis: "gateway_observed",
+        hasUnpriced: false,
+      },
+      {
+        model: "mystery-9",
+        provider: null,
+        calls: 1,
+        tokens: {
+          input_uncached: 0,
+          cache_read: 10,
+          cache_write_5m: 0,
+          cache_write_1h: 0,
+          output: 0,
+          reasoning: 0,
+        },
+        costMicros: null,
+        costByClass: {
+          ...byClass,
+          input_uncached: 0n,
+          cache_read: 0n,
+          output: 0n,
+        },
+        cacheSavingMicros: null,
+        basis: null,
+        hasUnpriced: true,
+      },
+    ],
+    tools: [{ name: "Read", calls: 1 }],
+  };
+
+  /** What jsonb hands back: the serialised value through JSON text. */
+  const throughJsonb = (value: unknown) => JSON.parse(JSON.stringify(value));
+
+  it("writes the saving as a decimal string and reads it back as the same bigint or null", () => {
+    const stored = throughJsonb(serializeBreakdown(breakdown));
+    expect(stored.models[0].cacheSavingMicros).toBe("2700");
+    expect(stored.models[1].cacheSavingMicros).toBeNull();
+    expect(reviveBreakdown(stored)).toEqual(breakdown);
+  });
+
+  it("reads a row rolled up before the saving existed as not recorded, never as 0", () => {
+    const stored = throughJsonb(serializeBreakdown(breakdown));
+    for (const m of stored.models) delete m.cacheSavingMicros;
+    const revived = reviveBreakdown(stored);
+    expect(revived.models.map((m) => m.cacheSavingMicros)).toEqual([
+      null,
+      null,
+    ]);
+    // Everything else the legacy row carried reads as before.
+    expect(revived.models[0]!.costByClass).toEqual(byClass);
+    expect(revived.models[0]!.costMicros).toBe(4_800n);
   });
 });

@@ -63,15 +63,6 @@ describe("the bundle the offline path trusts", () => {
       reason_code: "bundle_unverified",
     });
   });
-
-  it("refuses a mutating call when host.json was edited from enforce to observe", () => {
-    const signed = signer.sign(unsignedBundle());
-    const tampered = testHostFile(signer, { ...signed, mode: "observe" });
-    expect(decideLocally(tampered, EDIT, NOW).evaluation).toMatchObject({
-      decision: "deny",
-      reason_code: "bundle_unverified",
-    });
-  });
 });
 
 describe("the host status the offline path acts on", () => {

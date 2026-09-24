@@ -46,6 +46,13 @@ vi.mock("./actions", () => ({
 }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
+// The request dialog's tools picker reads the registry's patterns on first
+// focus. An empty list keeps a typed pattern as it is.
+vi.mock("@/features/shell/client", () => ({
+  chooseToolPatterns: vi.fn(() =>
+    Promise.resolve({ ok: true, value: { options: [], partial: false } }),
+  ),
+}));
 
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");

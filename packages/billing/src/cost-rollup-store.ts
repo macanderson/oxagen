@@ -398,13 +398,23 @@ export function runTotalsRowToRecord(row: Row): RunTotalsRecord {
 }
 
 type ModelBreakdown = RunTotalsRecord["breakdown"]["models"][number];
-type ModelBreakdownJson = Omit<ModelBreakdown, "costMicros" | "costByClass"> & {
+type ModelBreakdownJson = Omit<
+  ModelBreakdown,
+  "costMicros" | "costByClass" | "cacheSavingMicros" | "hasUnpriced"
+> & {
   costMicros: string | null;
   costByClass: Record<keyof ModelBreakdown["costByClass"], string>;
+  /** Absent on a row rolled up before #4069. */
+  cacheSavingMicros?: string | null;
+  /** Absent on a row rolled up before #3271 residue G2. */
+  hasUnpriced?: boolean;
 };
 
-/** jsonb carries the per-model costs as decimal strings; bring them back to bigint. */
-function reviveBreakdown(value: unknown): RunTotalsRecord["breakdown"] {
+/**
+ * jsonb carries the per-model costs as decimal strings; bring them back to
+ * bigint. Exported for the round-trip test.
+ */
+export function reviveBreakdown(value: unknown): RunTotalsRecord["breakdown"] {
   const raw = value as {
     models: ModelBreakdownJson[];
     tools: RunTotalsRecord["breakdown"]["tools"];
@@ -416,6 +426,13 @@ function reviveBreakdown(value: unknown): RunTotalsRecord["breakdown"] {
       costByClass: Object.fromEntries(
         Object.entries(m.costByClass).map(([k, v]) => [k, BigInt(v)]),
       ) as ModelBreakdown["costByClass"],
+      // A row rolled up before the saving was recorded carries no key. Its
+      // saving was never priced, so it reads as not recorded, never as 0,
+      // until the run's next rollup writes one.
+      cacheSavingMicros:
+        m.cacheSavingMicros === undefined || m.cacheSavingMicros === null
+          ? null
+          : BigInt(m.cacheSavingMicros),
       // A row written before `hasUnpriced` existed carries no such key; the
       // only information that row has about it is whether the whole group
       // priced, so that is the fallback (never a mixed group, since a mixed
@@ -426,7 +443,8 @@ function reviveBreakdown(value: unknown): RunTotalsRecord["breakdown"] {
   };
 }
 
-function serializeBreakdown(breakdown: RunTotalsRecord["breakdown"]) {
+/** The breakdown as jsonb stores it: every bigint as a decimal string. */
+export function serializeBreakdown(breakdown: RunTotalsRecord["breakdown"]) {
   return {
     models: breakdown.models.map((m) => ({
       ...m,
@@ -434,6 +452,8 @@ function serializeBreakdown(breakdown: RunTotalsRecord["breakdown"]) {
       costByClass: Object.fromEntries(
         Object.entries(m.costByClass).map(([k, v]) => [k, v.toString()]),
       ),
+      cacheSavingMicros:
+        m.cacheSavingMicros === null ? null : m.cacheSavingMicros.toString(),
     })),
     tools: breakdown.tools,
   };

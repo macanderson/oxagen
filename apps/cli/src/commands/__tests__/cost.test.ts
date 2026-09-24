@@ -40,6 +40,25 @@ describe("cost --rates", () => {
     const parsed = JSON.parse(out) as Array<{ family: string }>;
     expect(parsed.some((e) => e.family === "claude-opus")).toBe(true);
   });
+
+  // The card carries a dotted row beside the hyphenated one for several
+  // models (`claude-opus-4.8` and `claude-opus-4-8`). Both price slugs, but the
+  // dump shows each model once.
+  it("lists each model once in the table", () => {
+    handleCost({ rates: true });
+    const rows = out
+      .split("\n")
+      .filter((l) => /^ {2}Claude Opus 4\.8 /.test(l));
+    expect(rows).toHaveLength(1);
+  });
+
+  it("lists each model once in --json and leaves out the dotted spellings", () => {
+    handleCost({ rates: true, json: true });
+    const parsed = JSON.parse(out) as Array<{ family: string; label: string }>;
+    expect(new Set(parsed.map((e) => e.label)).size).toBe(parsed.length);
+    expect(parsed.some((e) => e.family === "claude-opus-4.8")).toBe(false);
+    expect(parsed.some((e) => e.family === "claude-opus-4-8")).toBe(true);
+  });
 });
 
 describe("cost projection", () => {
@@ -48,6 +67,13 @@ describe("cost projection", () => {
     expect(out).toContain("cheapest:");
     expect(out).toContain("GPT-4o mini");
     expect(out).toContain("× cheaper");
+  });
+
+  it("compares each model once", () => {
+    handleCost({ in: 1_000_000, out: 1_000_000, json: true });
+    const rows = JSON.parse(out) as Array<{ label: string }>;
+    expect(new Set(rows.map((r) => r.label)).size).toBe(rows.length);
+    expect(rows.filter((r) => r.label === "Claude Opus 4.8")).toHaveLength(1);
   });
 
   it("projects a single model with --model and --json", () => {

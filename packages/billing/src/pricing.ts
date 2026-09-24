@@ -551,10 +551,7 @@ export const PROVIDER_RATE_CARD: RateCard = {
  * `metering.ts` as a `billing_rate_card_miss` alert rather than recorded as a
  * measured cost. Use {@link isRateCardMiss} to ask before charging.
  */
-// Sonnet 4.6 keeps the $3/$15 floor the fallback has always priced an unknown
-// model at. Sonnet 5 lists at $2/$10 since #3944, so pointing the fallback at
-// it would cut that floor by a third.
-export const FALLBACK_RATE_MODEL = "claude-sonnet-4-6";
+export const FALLBACK_RATE_MODEL = "claude-sonnet-5";
 
 /** How a model id was priced — which card key matched, or none. */
 export interface RateResolution {

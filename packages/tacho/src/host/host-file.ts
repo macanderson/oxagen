@@ -12,6 +12,7 @@ import {
   tachoHostStatusSchema,
   tachoPlatformSchema,
 } from "../wire";
+import { verifyBundle } from "./bundle";
 import { readJsonFileIfExists, writeSensitiveFileAtomic } from "./fs";
 import type { TachoPaths } from "./paths";
 
@@ -497,6 +498,40 @@ export function writeHostFile(path: string, host: HostFile): void {
   writeSensitiveFileAtomic(path, `${JSON.stringify(host, null, 2)}\n`);
 }
 
+const HOST_STATUS_RANK: Record<HostFile["host_status"], number> = {
+  active: 0,
+  paused: 1,
+  suspended: 2,
+  revoked: 3,
+};
+
+/**
+ * The host status hooks and the model proxy act on. `host_status` is the
+ * control plane's latest word and is not signed; the bundle's `host_status`
+ * is signed but can be older. An edit of the first to `active` must not lift
+ * a signed suspension, so while the bundle verifies the more restrictive of
+ * the two applies. The daemon and `tacho-hook`'s offline path both read it
+ * here.
+ */
+export function hostStatusInForce(
+  host: Pick<HostFile, "host_status" | "bundle">,
+  bundleVerified: boolean,
+): HostFile["host_status"] {
+  const unsigned = host.host_status;
+  const signed = host.bundle.host_status;
+  return bundleVerified && HOST_STATUS_RANK[signed] > HOST_STATUS_RANK[unsigned]
+    ? signed
+    : unsigned;
+}
+
+/** Whether a signed window starting at `next` starts after one at `held`. */
+function startsLater(next: string, held: string): boolean {
+  const nextAt = Date.parse(next);
+  if (!Number.isFinite(nextAt)) return false;
+  const heldAt = Date.parse(held);
+  return !Number.isFinite(heldAt) || nextAt > heldAt;
+}
+
 /**
  * Apply a control response's facts and persist only when something moved.
  *
@@ -546,7 +581,29 @@ export function applyControlFacts(
       changed = true;
     }
   }
-  if (facts.bundle !== undefined && facts.bundle.etag !== host.bundle.etag) {
+  // The etag covers the mandate's content and never its signed window, so an
+  // unchanged mandate signed again arrives with the etag it already has. That
+  // copy is a renewal: it replaces the cached one when its window starts
+  // later. Comparing etags alone dropped it, so the first window stayed on
+  // disk for ever and the hook, which has no in-memory confirmation, read a
+  // quiet mandate as stale a day after its last edit (#3944). A same-etag copy
+  // whose window starts no later is not taken, so a window never moves back.
+  //
+  // The one exception is a held copy that does not verify. An edit to
+  // host.json keeps the etag and the window it was signed with, so neither
+  // comparison can tell it from the genuine copy, and the caller's verified
+  // copy replaces it whatever its window. The caller verifies what it brings.
+  // A held copy signed for another host counts as one that does not verify.
+  if (
+    facts.bundle !== undefined &&
+    (facts.bundle.etag !== host.bundle.etag ||
+      startsLater(facts.bundle.issued_at, host.bundle.issued_at) ||
+      !verifyBundle(
+        host.bundle,
+        host.bundle_public_key_pem,
+        host.host_enrollment_id,
+      ).ok)
+  ) {
     next.bundle = facts.bundle;
     next.bundle_fetched_at =
       facts.bundle_fetched_at ?? new Date().toISOString();

@@ -111,13 +111,6 @@ export const AFTER_STOP_ATTR = "oxagen.after_stop";
  */
 export const SUBAGENT_TYPE_AMBIGUOUS_ATTR = "oxagen.subagent_type_ambiguous";
 
-/**
- * How long after a subagent stops an OTel record naming only its type is
- * still taken for it. Claude Code exports logs in batches, so a subagent's
- * last `api_request` often arrives after its `SubagentStop`.
- */
-const RECENTLY_CLOSED_MS = 30_000;
-
 export interface RecorderOptions {
   context: ClaudeCodeContext;
   /** The harness's own session id (Claude Code's UUID). */
@@ -148,8 +141,6 @@ interface SubagentLink {
   recorder: SessionRecorder;
   type?: string;
   open: boolean;
-  /** When the subagent stopped, in epoch ms, for routing its late records. */
-  closedAt?: number;
 }
 
 /**
@@ -235,12 +226,7 @@ export interface ChainMark {
   /** One mark per subagent chain open at the time, by subagent id. */
   children: Map<
     string,
-    {
-      mark: ChainMark;
-      type: string | undefined;
-      open: boolean;
-      closedAt: number | undefined;
-    }
+    { mark: ChainMark; type: string | undefined; open: boolean }
   >;
 }
 
@@ -422,13 +408,16 @@ export class SessionRecorder {
   private llmCalls = new LlmCallLedger();
   private toolCalls = new ToolCallLedger();
   /**
-   * The session's own recorder, on a subagent's. A call is reported on both
-   * chains (the hook on the subagent's, OTel with no `agent_id` and the model
-   * proxy on the session's), so the two ledgers above are the root's for the
-   * whole family, and a subagent's own stay empty. The root marks, rolls back
-   * and persists them.
+   * The recorder whose ledgers judge this chain's model and tool calls, when
+   * it is not this one. A subagent's call reaches more than one chain: the
+   * proxy seals a model call on the root, the subagent's transcript and hooks
+   * seal on the child, and OTel seals wherever `agent_id`, `agent.name` or
+   * the owner of its `tool_use_id` routes it. With ledgers per chain each
+   * chain saw the call first and counted it (#3944), so every child judges
+   * against its parent's ledgers. They are looked up on each sighting, never
+   * held: the root replaces its ledgers on a rollback.
    */
-  private familyRoot: SessionRecorder | undefined;
+  private ledgerHost: SessionRecorder | undefined;
   /**
    * Where this chain stood when the recorder was built. A caller whose
    * failed call created the session has no mark of its own to roll back to,
@@ -533,33 +522,14 @@ export class SessionRecorder {
         },
         restore: link.state,
       });
-      // A state written while each chain kept its own ledgers holds the
-      // subagent's calls on the subagent: they join the family's.
-      this.llmCalls = new LlmCallLedger({
-        keys: [
-          ...this.llmCalls.state().keys,
-          ...recorder.llmCalls.state().keys,
-        ],
-      });
-      this.toolCalls = new ToolCallLedger({
-        calls: [
-          ...this.toolCalls.state().calls,
-          ...recorder.toolCalls
-            .state()
-            .calls.map(
-              ([id, sources, body]) =>
-                [id, sources, body, subagentId] as [
-                  string,
-                  string[],
-                  boolean,
-                  string,
-                ],
-            ),
-        ],
-      });
+      // A state file an older build wrote gave each child ledgers of its
+      // own. Their calls move to the family's ledgers, so a later sighting of
+      // one of them is judged against them.
+      this.modelCallLedger.absorb(recorder.llmCalls.state());
+      this.toolCallLedger.absorb(recorder.toolCalls.state());
       recorder.llmCalls = new LlmCallLedger();
       recorder.toolCalls = new ToolCallLedger();
-      recorder.familyRoot = this.familyRoot ?? this;
+      recorder.ledgerHost = this;
       this.children.set(subagentId, {
         recorder,
         ...(link.type !== undefined ? { type: link.type } : {}),
@@ -629,7 +599,6 @@ export class SessionRecorder {
         mark: link.recorder.markChain(),
         type: link.type,
         open: link.open,
-        closedAt: link.closedAt,
       });
     }
     return {
@@ -687,7 +656,6 @@ export class SessionRecorder {
         recorder: link.recorder,
         ...(saved.type !== undefined ? { type: saved.type } : {}),
         open: saved.open,
-        ...(saved.closedAt !== undefined ? { closedAt: saved.closedAt } : {}),
       });
     }
     this.cursor = { ...mark.cursor };
@@ -955,7 +923,7 @@ export class SessionRecorder {
     recorder.anthropic = { ...this.anthropic };
     recorder.host = { ...this.host };
     recorder.envSnapshot = this.envSnapshot;
-    recorder.familyRoot = this.familyRoot ?? this;
+    recorder.ledgerHost = this;
     this.children.set(subagentId, {
       recorder,
       ...(subagentType !== undefined ? { type: subagentType } : {}),
@@ -985,33 +953,30 @@ export class SessionRecorder {
   }
 
   /**
-   * The subagent an OTel record naming only its type belongs to, or
-   * "ambiguous" when more than one could have sent it. Two parallel `Explore`
-   * agents are both open, and taking the last one opened sealed the first
-   * one's calls on the second's chain. With none open, the record is one a
-   * subagent sent before it stopped and the batch delivered after, so a
-   * subagent of that type that stopped within `RECENTLY_CLOSED_MS` of it is
-   * taken, if it is the only one.
+   * The one open subagent of a type, "ambiguous" when more than one is open,
+   * or undefined when none is. Two parallel subagents of one type used to
+   * both resolve to the one opened last, so the first one's OTel records were
+   * sealed on its sibling's chain. A record that names neither belongs on the
+   * parent's, stamped {@link SUBAGENT_TYPE_AMBIGUOUS_ATTR}.
    */
-  private childByType(
-    type: string,
-    at: string,
-  ): SessionRecorder | "ambiguous" | undefined {
-    const links = [...this.children.values()].filter(
-      (link) => link.type === type,
-    );
-    const open = links.filter((link) => link.open);
-    const when = Date.parse(at);
-    const candidates =
-      open.length > 0
-        ? open
-        : links.filter(
-            (link) =>
-              link.closedAt !== undefined &&
-              when - link.closedAt <= RECENTLY_CLOSED_MS,
-          );
-    if (candidates.length > 1) return "ambiguous";
-    return candidates[0]?.recorder;
+  private childByType(type: string): SessionRecorder | "ambiguous" | undefined {
+    let candidate: SubagentLink | undefined;
+    for (const link of this.children.values()) {
+      if (link.type !== type || !link.open) continue;
+      if (candidate !== undefined) return "ambiguous";
+      candidate = link;
+    }
+    return candidate?.recorder;
+  }
+
+  /** The ledger this chain's model calls are judged against. */
+  private get modelCallLedger(): LlmCallLedger {
+    return this.ledgerHost?.modelCallLedger ?? this.llmCalls;
+  }
+
+  /** The ledger this chain's tool calls are judged against. */
+  private get toolCallLedger(): ToolCallLedger {
+    return this.ledgerHost?.toolCallLedger ?? this.toolCalls;
   }
 
   private seal(
@@ -1167,10 +1132,7 @@ export class SessionRecorder {
     body: Record<string, unknown>,
     source: string,
   ): SightingAttrs {
-    const { verdict, commit } = (this.familyRoot ?? this).llmCalls.judge(
-      body,
-      source,
-    );
+    const { verdict, commit } = this.modelCallLedger.judge(body, source);
     if (verdict.kind === "repeat") return { attrs: undefined, commit };
     if (verdict.kind === "duplicate")
       return { attrs: { [LLM_CALL_DUPLICATE_OF_ATTR]: verdict.of }, commit };
@@ -1195,7 +1157,7 @@ export class SessionRecorder {
   ): SightingAttrs {
     const toolUseId =
       typeof body["tool_use_id"] === "string" ? body["tool_use_id"] : undefined;
-    const { verdict, commit } = (this.familyRoot ?? this).toolCalls.judge(
+    const { verdict, commit } = this.toolCallLedger.judge(
       toolUseId,
       source,
       hasBody,
@@ -1248,7 +1210,7 @@ export class SessionRecorder {
           draft.kind !== "subagent_start" &&
           draft.kind !== "subagent_stop"
         )
-          this.toolCalls.claim(toolUseId, subagentId);
+          this.toolCallLedger.claim(toolUseId, subagentId);
       }
       if (isStart) {
         // The parent records the spawn; the child opened its own chain above.
@@ -1282,10 +1244,7 @@ export class SessionRecorder {
       if (first.hook_event_name === "SubagentStop") {
         out.push(...child.finalize("completed", ts));
         const link = this.children.get(subagentId);
-        if (link) {
-          link.open = false;
-          link.closedAt = Date.parse(ts);
-        }
+        if (link) link.open = false;
         out.push(
           this.seal(
             "subagent_stop",
@@ -1571,12 +1530,12 @@ export class SessionRecorder {
     // hook already named.
     const toolUseId = draft.body["tool_use_id"];
     if (typeof toolUseId === "string") {
-      const owner = this.toolCalls.ownerOf(toolUseId);
+      const owner = this.toolCallLedger.ownerOf(toolUseId);
       const link = owner !== undefined ? this.children.get(owner) : undefined;
       if (link !== undefined) return { target: link.recorder, draft };
     }
     if (draft.standard.agent_name !== undefined) {
-      const byType = this.childByType(draft.standard.agent_name, draft.ts);
+      const byType = this.childByType(draft.standard.agent_name);
       if (byType === "ambiguous")
         return {
           target: this,
@@ -1984,7 +1943,6 @@ export class SessionRecorder {
       if (!link.open) continue;
       out.push(...link.recorder.finalize(outcome, at));
       link.open = false;
-      link.closedAt = Date.parse(at);
     }
     return out;
   }

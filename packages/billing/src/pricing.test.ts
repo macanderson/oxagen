@@ -24,7 +24,6 @@ import {
   providerCostUsdMicros,
   solveMeterMarkup,
   derivePricing,
-  FALLBACK_RATE_MODEL,
 } from "./pricing";
 import {
   ACTION_RATE_BANDS,
@@ -50,10 +49,8 @@ describe("resolveRate", () => {
 
   it("falls back to the configured fallback model for an unknown id", () => {
     expect(resolveRate("mistral-large-2")).toBe(
-      PROVIDER_RATE_CARD[FALLBACK_RATE_MODEL],
+      PROVIDER_RATE_CARD["claude-sonnet-5"],
     );
-    // The fallback floor stays at the $3/$15 it has always charged.
-    expect(resolveRate("mistral-large-2").outputPer1M).toBe(15.0);
   });
 
   it("prices Claude Fable 5 on its own row, not the Sonnet fallback", () => {

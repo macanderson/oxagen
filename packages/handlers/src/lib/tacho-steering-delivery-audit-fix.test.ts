@@ -8,10 +8,12 @@
  */
 import { describe, expect, it } from "vitest";
 import { steeringManifestSchema } from "@oxagen/tacho";
-import { assembleSteering } from "@oxagen/steering-assembler";
+import {
+  assembleSteering,
+  PREFIX_BUDGET_TOKENS,
+} from "@oxagen/steering-assembler";
 import {
   CONTEXT_SYSTEM_BUDGET_TOKENS,
-  CONTEXT_SYSTEM_DELIVERED_MAX_CHARS,
   STEERING_MANIFEST_MAX_ITEMS,
   assembleWorkspaceSteering,
   capManifestItems,
@@ -37,7 +39,8 @@ const at = (i: number) =>
 
 describe("the delivered steering prefix", () => {
   it("stays under 8,000 characters however many records compete", () => {
-    expect(CONTEXT_SYSTEM_DELIVERED_MAX_CHARS).toBe(8_000);
+    // The bundle's steering spends the assembler's prefix budget.
+    expect(CONTEXT_SYSTEM_BUDGET_TOKENS).toBe(PREFIX_BUDGET_TOKENS);
     expect(CONTEXT_SYSTEM_BUDGET_TOKENS).toBe(2_000);
     const rows = Array.from({ length: 500 }, (_, i) =>
       rec({ slug: `r-${i}`, statement: "s".repeat(200) }),

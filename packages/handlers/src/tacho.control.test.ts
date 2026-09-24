@@ -327,9 +327,7 @@ afterEach(() => {
 describe("get_tacho_bundle", () => {
   it("signs a bundle, answers not_modified on a matching etag, and refuses other hosts' keys", async () => {
     const db: Fake = {
-      // A bundle sent moments ago: a matching etag is answered not_modified
-      // until the bundle is half way through its signed window.
-      hosts: [host({ lastBundleFetchAt: new Date() })],
+      hosts: [host()],
       sessions: [],
       commands: [],
       updates: [],

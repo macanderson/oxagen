@@ -427,8 +427,10 @@ all (`SessionStart`, `UserPromptSubmit`, and the non-blocking record-only
 events). The exact list is `FAIL_OPEN_HOOK_PATHS`
 (`src/claude-code/hook-client.ts`), signed onto a bundle whose host advertises
 it can parse one (`hook_fail_open`), so an operator reads the fail-open set
-from the record rather than from this file. In enforce mode a stale or
-unverified bundle denies non-read-only tools regardless. Five events run as
+from the record rather than from this file. In enforce mode a stale bundle
+denies non-read-only tools regardless. An unverified bundle denies them in
+either mode, because the mode it claims is not signed. A bundle signed for
+another host counts as unverified. Five events run as
 command hooks (`COMMAND_HOOK_EVENTS`), and four of them can refuse. `Stop` is
 the fifth.
 

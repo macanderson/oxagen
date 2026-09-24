@@ -26,7 +26,7 @@ import {
 } from "./cost-frames";
 
 const ORG = "00000000-0000-4000-8000-000000000001";
-const WS = "00000000-0000-4000-8000-0000000000aa";
+const WS = "00000000-0000-4000-8000-000000000002";
 const RUN = "00000000-0000-4000-8000-0000000000aa";
 
 /**
@@ -520,6 +520,38 @@ describe("readObservedModels", () => {
       last_seen: "2026-09-02T09:00:00.000Z",
     }));
   }
+
+  // #4069: the usage breakdown prices its cache saving from this read, and
+  // its token totals come from token_usage alone. A wrapped agent's calls
+  // must not enter a figure printed beside totals that leave them out.
+  it("reads token_usage alone when asked for the gateway store", async () => {
+    answerBoth(summaryOf(1));
+    await readObservedModels({
+      orgId: ORG,
+      since: SINCE,
+      frameStores: "gateway",
+    });
+    const [summary, classes] = queryMock.mock.calls.map((c) => c[0].query);
+    for (const sql of [summary!, classes!]) {
+      expect(sql).toContain("FROM metered_token_usage");
+      expect(sql).not.toContain("tacho_events");
+      expect(sql).not.toContain("UNION ALL");
+    }
+    expect(classes).toContain("FROM gw");
+    expect(classes).not.toMatch(/\btc\b/);
+  });
+
+  it("folds both frame stores by default", async () => {
+    answerBoth(summaryOf(1));
+    await readObservedModels({ orgId: ORG, since: SINCE });
+    const [summary, classes] = queryMock.mock.calls.map((c) => c[0].query);
+    for (const sql of [summary!, classes!]) {
+      expect(sql).toContain("FROM metered_token_usage");
+      expect(sql).toContain("FROM tacho_events FINAL");
+      expect(sql).toContain("UNION ALL");
+    }
+    expect(classes).toContain("FROM tc");
+  });
 
   it("keeps low-volume models beyond 5000 for the price comparison", async () => {
     // #3629: a bound at 5000 let a low-volume unpriced model be outranked by

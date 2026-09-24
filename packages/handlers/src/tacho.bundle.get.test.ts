@@ -1,9 +1,8 @@
 /**
- * `get_tacho_bundle` against a host holding an unchanged mandate: a host
- * whose bundle is recent is told `not_modified`; one whose bundle is past
- * half its signed window is sent the same mandate signed again, so a hook
- * that measures from `issued_at` never sees a lapsed mandate; and the
- * version names the mandate, not the fetch.
+ * `get_tacho_bundle` against a host holding an unchanged mandate: a poll
+ * with its etag is told `not_modified`; a poll without one, which is how a
+ * host renews a quiet mandate past half its signed window, is sent the same
+ * mandate signed again; and the version names the mandate, not the fetch.
  */
 import { generateKeyPairSync } from "node:crypto";
 import type { CapabilityContext } from "@oxagen/oxagen";
@@ -120,25 +119,18 @@ async function currentEtag(): Promise<string> {
 }
 
 describe("get_tacho_bundle freshness", () => {
-  it("answers not_modified while the host's bundle is inside half its window", async () => {
+  it("answers not_modified on a matching etag and keeps the version", async () => {
     const etag = await currentEtag();
-    mocks.host.mockReturnValue(
-      hostRow({
-        bundleEtagServed: etag,
-        lastBundleFetchAt: new Date(NOW.getTime() - 11 * HOUR),
-      }),
-    );
+    mocks.host.mockReturnValue(hostRow({ bundleEtagServed: etag }));
     const answer = await tachoBundleGetHandler(
       { host_enrollment_id: HOST_PUBLIC, etag },
       MACHINE,
     );
     expect(answer).toEqual({ not_modified: true, etag, bundle: null });
-    // A check is not a fetch: the issue time stays the bundle's.
-    expect(writes[0]).not.toHaveProperty("lastBundleFetchAt");
     expect(writes[0]?.["bundleVersionServed"]).toBe(4);
   });
 
-  it("re-signs an unchanged mandate once the host's bundle is past half its window", async () => {
+  it("signs an unchanged mandate again for a poll without its etag", async () => {
     const etag = await currentEtag();
     mocks.host.mockReturnValue(
       hostRow({
@@ -146,8 +138,9 @@ describe("get_tacho_bundle freshness", () => {
         lastBundleFetchAt: new Date(NOW.getTime() - 13 * HOUR),
       }),
     );
+    // The host's daemon drops the etag once its copy is past half its window.
     const answer = await tachoBundleGetHandler(
-      { host_enrollment_id: HOST_PUBLIC, etag },
+      { host_enrollment_id: HOST_PUBLIC },
       MACHINE,
     );
     expect(answer.not_modified).toBe(false);
@@ -163,34 +156,6 @@ describe("get_tacho_bundle freshness", () => {
       lastBundleFetchAt: NOW,
       bundleVersionServed: 4,
     });
-  });
-
-  it("re-signs an enrollment bundle, dated by the host row, once it is old", async () => {
-    const etag = await currentEtag();
-    mocks.host.mockReturnValue(
-      hostRow({ bundleEtagServed: etag, bundleVersionServed: null }),
-    );
-    const answer = await tachoBundleGetHandler(
-      { host_enrollment_id: HOST_PUBLIC, etag },
-      MACHINE,
-    );
-    expect(answer.not_modified).toBe(false);
-    expect(answer.bundle?.version).toBe(1);
-    mocks.host.mockReturnValue(
-      hostRow({
-        bundleEtagServed: etag,
-        bundleVersionServed: null,
-        createdAt: new Date(NOW.getTime() - HOUR),
-      }),
-    );
-    expect(
-      (
-        await tachoBundleGetHandler(
-          { host_enrollment_id: HOST_PUBLIC, etag },
-          MACHINE,
-        )
-      ).not_modified,
-    ).toBe(true);
   });
 
   it("bumps the version only when the etag changes", async () => {

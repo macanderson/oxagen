@@ -15,6 +15,9 @@
 //      and the panel gives the second one.
 //   4. A blank allowlist box is no allowlist, not an empty one.
 //   5. A reader who cannot write sees the policy and no form.
+//
+// Each model list is a picker: a model is picked by name, a pattern is kept
+// as typed, and either way the form still sends one pattern per line.
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
@@ -26,8 +29,12 @@ import { expectNoAxe } from "@/test/expect-no-axe";
 import spend from "../../../messages/spend.json";
 import ui from "../../../messages/ui.json";
 
-const setGatewayPolicyAction = vi.fn();
+const { setGatewayPolicyAction, choices } = vi.hoisted(() => ({
+  setGatewayPolicyAction: vi.fn(),
+  choices: { chooseModels: vi.fn() },
+}));
 vi.mock("./actions", () => ({ setGatewayPolicyAction }));
+vi.mock("@/features/shell/client", () => choices);
 
 const { GatewayPolicySection } = await import("./gateway-policy");
 
@@ -59,8 +66,29 @@ function renderSection(policy: GatewayPolicy = OBSERVED, canEdit = true) {
   );
 }
 
+/** What a model picker's hidden input holds, one pattern per line. */
+function submitted(id: string): string | undefined {
+  return document.querySelector<HTMLInputElement>(
+    `input[type="hidden"][name="${id}"]`,
+  )?.value;
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
+  choices.chooseModels.mockResolvedValue({
+    ok: true,
+    value: {
+      options: [
+        {
+          value: "claude-opus-4-1",
+          label: "claude-opus-4-1",
+          detail: "anthropic",
+        },
+        { value: "gpt-4o", label: "gpt-4o", detail: "openai" },
+      ],
+      partial: false,
+    },
+  });
   setGatewayPolicyAction.mockResolvedValue({
     ok: true,
     value: { hosts: 2, hostsEnforcingModels: 2 },
@@ -113,6 +141,9 @@ describe("the gateway policy section", () => {
       screen.getByLabelText(spend.spend.gateway.modelAllow),
       "gpt-5",
     );
+    // The typed pattern becomes a chip on Enter, and only then clears
+    // Permit no models.
+    await user.keyboard("{Enter}");
     expect(
       screen.getByLabelText(spend.spend.gateway.permitNoModels),
     ).not.toBeChecked();
@@ -125,9 +156,7 @@ describe("the gateway policy section", () => {
         .modelAllow,
     ).toEqual(["gpt-5"]);
     await user.click(screen.getByLabelText(spend.spend.gateway.permitNoModels));
-    expect(screen.getByLabelText(spend.spend.gateway.modelAllow)).toHaveValue(
-      "",
-    );
+    expect(submitted("gateway-model-allow")).toBe("");
     await user.click(screen.getByRole("button", { name: /save the policy/i }));
     await waitFor(() => {
       expect(setGatewayPolicyAction).toHaveBeenCalledTimes(2);
@@ -136,6 +165,37 @@ describe("the gateway policy section", () => {
       GatewayPolicyForm.parse(setGatewayPolicyAction.mock.calls[1]?.[1])
         .modelAllow,
     ).toEqual([]);
+  });
+
+  it("picks models by name and sends each list one per line", async () => {
+    const user = userEvent.setup();
+    renderSection();
+    const allow = screen.getByLabelText(spend.spend.gateway.modelAllow);
+    await user.type(allow, "opus");
+    await user.keyboard("{Enter}");
+    // A pattern the price book does not list is kept as typed.
+    await user.type(allow, "gpt-5-*");
+    await user.keyboard("{Enter}");
+    expect(submitted("gateway-model-allow")).toBe("claude-opus-4-1\ngpt-5-*");
+    expect(choices.chooseModels).toHaveBeenCalledWith("acme", "core-platform");
+    await user.type(screen.getByLabelText(spend.spend.gateway.modelDeny), "4o");
+    await user.keyboard("{Enter}");
+    await user.click(screen.getByRole("button", { name: /save the policy/i }));
+    await waitFor(() => {
+      expect(setGatewayPolicyAction).toHaveBeenCalledWith(at, {
+        mode: "observed",
+        sessionLimit: "",
+        permitNoModels: false,
+        modelAllow: "claude-opus-4-1\ngpt-5-*",
+        modelDeny: "gpt-4o",
+      });
+    });
+  });
+
+  it("shows a saved list as one chip per pattern", () => {
+    renderSection({ ...OBSERVED, modelAllow: ["claude-opus-*", "gpt-5"] });
+    expect(submitted("gateway-model-allow")).toBe("claude-opus-*\ngpt-5");
+    expect(screen.getByRole("button", { name: /claude-opus-\*/ })).toBeTruthy();
   });
 
   it("qualifies saved enforcement until host support is known", () => {

@@ -289,6 +289,7 @@ describe("org.workspaces", () => {
     kernelRead.mockResolvedValue(readOk(workspacesOut));
     expect(await org.workspaces(ctx)).toEqual(
       readOk({
+        orgId: "org_1",
         workspaces: [
           {
             id: "wrk_0a1b2c3d4e5f6g7h8j9k0m",

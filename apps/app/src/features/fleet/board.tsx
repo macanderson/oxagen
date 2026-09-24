@@ -631,7 +631,6 @@ function RunRowView({
   onExport: (run: RunRow) => void;
 } & Place) {
   const t = useTranslations("fleet.runs");
-  const usage = useTranslations("run.header");
   const locale = useLocale();
   const navigate = useNavigate();
   const { run, state } = listed;
@@ -748,14 +747,16 @@ function RunRowView({
           <>
             <Money value={cost.value} />
             <span className="block text-[10px] text-muted-foreground">
-              {cost.reported ? (
-                // No rollup yet: the agent's own figure, worded as the Run
-                // header words it.
-                <span data-testid="row-cost-reported">
-                  {usage("costReported")}
+              {cost.estimate ? (
+                // A running rollup, or before any rollup the agent's own
+                // figure, which Spend shown counts as an estimate too.
+                <span
+                  data-testid={
+                    cost.reported ? "row-cost-reported" : "row-cost-estimate"
+                  }
+                >
+                  {t("estimate")}
                 </span>
-              ) : cost.estimate ? (
-                <span data-testid="row-cost-estimate">{t("estimate")}</span>
               ) : (
                 (cost.value.basis ?? t("basisNotRecorded"))
               )}

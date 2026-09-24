@@ -19,7 +19,12 @@ import {
   readJsonFileIfExists,
   writeSensitiveFileAtomic,
 } from "../host/fs";
-import { type HostFile, hostFileSchema, readHostFile } from "../host/host-file";
+import {
+  type HostFile,
+  hostFileSchema,
+  hostStatusInForce,
+  readHostFile,
+} from "../host/host-file";
 import type { TachoPaths } from "../host/paths";
 import { ulid } from "../ids";
 import { toProtocolTimestamp } from "../timestamp";
@@ -301,28 +306,6 @@ const RESPONSE_BUDGET_MS: Record<string, number> = {
 
 type HostStatus = HostFile["host_status"];
 
-const HOST_STATUS_RANK: Record<HostStatus, number> = {
-  active: 0,
-  paused: 1,
-  suspended: 2,
-  revoked: 3,
-};
-
-/**
- * The host status the offline path acts on. `host.host_status` is the
- * daemon's latest word from the control plane and is not signed; the
- * bundle's `host_status` is signed but can be older. Reading only the
- * unsigned one let an edit to `active` lift a signed suspension, so when the
- * bundle verified the more restrictive of the two applies.
- */
-function localHostStatus(host: HostFile, bundleVerified: boolean): HostStatus {
-  if (!bundleVerified) return host.host_status;
-  return HOST_STATUS_RANK[host.bundle.host_status] >
-    HOST_STATUS_RANK[host.host_status]
-    ? host.bundle.host_status
-    : host.host_status;
-}
-
 function operatorBlockLocal(status: HostStatus): string | undefined {
   if (status === "suspended" || status === "revoked") {
     return `This host is ${status} by its Oxagen operator.`;
@@ -447,8 +430,8 @@ function evaluateToolPermission(
     now,
     context: { ...local.match, ...(cwd !== undefined ? { cwd } : {}) },
   });
-  // An unverified bundle's mode is not trusted to turn a deferral into an
-  // allow.
+  // The mode is read only from a verified bundle: an edited host.json must
+  // not be able to claim observe mode and turn a deny into an allow.
   const decision =
     evaluation.decision === "defer"
       ? local.bundleVerified && host.bundle.mode === "observe"
@@ -513,7 +496,7 @@ export function decideLocally(
   ).ok;
   const local: LocalFacts = {
     bundleVerified,
-    hostStatus: localHostStatus(host, bundleVerified),
+    hostStatus: hostStatusInForce(host, bundleVerified),
     match,
   };
   const block = operatorBlockLocal(local.hostStatus);

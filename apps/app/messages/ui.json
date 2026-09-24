@@ -51,26 +51,26 @@
       "crashed": "crashed",
       "unknown": "outcome not recorded"
     },
-    "generated": {
-      "label": "generated",
-      "provenance": "Written by {model} on {when}. The frames are the record."
-    },
     "replayGrade": {
       "inspect": {
         "label": "inspect",
-        "help": "You can read what was recorded. No bodies were kept, so nothing can be replayed."
+        "help": "You can read what was recorded. No bodies were kept, so nothing can be replayed.",
+        "badge": "inspect only"
       },
       "view": {
         "label": "view",
-        "help": "You can read what the agent asked, what the model returned, and what each tool was called with and returned."
+        "help": "You can read what the agent asked, what the model returned, and what each tool was called with and returned.",
+        "badge": "view replay"
       },
       "fork": {
         "label": "fork",
-        "help": "You can branch from any frame and run on, with tool results served from the recording."
+        "help": "You can branch from any frame and run on, with tool results served from the recording.",
+        "badge": "fork replay"
       },
       "retry": {
         "label": "retry",
-        "help": "You can run the recording again and get the same frames."
+        "help": "You can run the recording again and get the same frames.",
+        "badge": "retry replay"
       }
     },
     "enforcementTier": {
@@ -189,6 +189,18 @@
         "linuxAppImage": "AppImage"
       },
       "all": "Every version, with SHA-256 checksums"
+    },
+    "picker": {
+      "search": "Type to search",
+      "loading": "Loading…",
+      "failed": "The list could not be loaded.",
+      "none": "Nothing to choose from yet.",
+      "noMatch": "Nothing matches “{query}”.",
+      "more": "{count, plural, one {# more match} other {# more matches}}. Keep typing to narrow the list.",
+      "partial": "This list shows the first page only. Type to narrow it.",
+      "useTyped": "Use “{value}”",
+      "remove": "Remove {label}",
+      "failedFreeform": "The list could not be loaded. You can still type a value."
     }
   }
 }
