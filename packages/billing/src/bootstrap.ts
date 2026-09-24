@@ -22,6 +22,7 @@ import {
 import { assertGauAvailable } from "./gau-bucket";
 import { assertWithinSpendBudget } from "./spend-budget-gate";
 import { recordGovernedAction } from "./action-metering";
+import { entryFromKernelRecord } from "./gau-ledger";
 import { logger } from "./logger";
 
 let booted = false;
@@ -44,11 +45,18 @@ export function bootstrapBillingRuntime(): void {
   setUsageRecorder(async (record) => {
     // The recorder resolves the org's terms, mode and period itself: a caller
     // cannot talk itself onto cheaper terms by claiming them.
+    //
+    // The whole record goes on the ledger (ADR-165): the workspace, the agent,
+    // the operator, the tool call and the dedup key are what let an invoice
+    // line be cited down to the action, and what makes a retried tool call
+    // bill once. Before the ledger this handed on four fields and logged the
+    // rest.
     await recordGovernedAction({
       orgId: record.orgId,
       actions: record.actions,
       capability: record.capability,
       runId: record.runId,
+      entry: entryFromKernelRecord(record),
       now: record.occurredAt,
     });
   });

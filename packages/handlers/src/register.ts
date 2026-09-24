@@ -152,6 +152,20 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./billing.invoice.list"))
         .billingInvoiceListHandler as CapabilityHandlerFn,
   );
+  // ADR-165 — the billing statement for a week, month, quarter, year or
+  // custom period, as data and as a CSV or HTML file.
+  registerHandler(
+    "get_billing_statement",
+    async () =>
+      (await import("./billing.statement.get"))
+        .billingStatementGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "export_billing_statement",
+    async () =>
+      (await import("./billing.statement.export"))
+        .billingStatementExportHandler as CapabilityHandlerFn,
+  );
   // ADR-055 §5 — the two billing-terms writes: the customer's auto top-up, and
   // the platform operator's commercial terms. set_org_billing_terms is on no
   // surface; the kernel's platformOnly check is what lets it be registered here
@@ -167,6 +181,27 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./billing.org_terms.set"))
         .billingOrgTermsSetHandler as CapabilityHandlerFn,
+  );
+  // ADR-165: enterprise invoicing. set_contract_terms and create_prepaid_invoice
+  // are platformOnly and on no surface, like set_org_billing_terms (INV-31);
+  // list_prepaid_orders is the customer's read of what it prepaid.
+  registerHandler(
+    "set_contract_terms",
+    async () =>
+      (await import("./billing.contract_terms.set"))
+        .billingContractTermsSetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "create_prepaid_invoice",
+    async () =>
+      (await import("./billing.prepaid_invoice.create"))
+        .billingPrepaidInvoiceCreateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_prepaid_orders",
+    async () =>
+      (await import("./billing.prepaid_order.list"))
+        .billingPrepaidOrderListHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "get_subscription",

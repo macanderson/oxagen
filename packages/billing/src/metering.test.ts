@@ -14,11 +14,18 @@ import type { SQL } from "drizzle-orm";
 import { CREDIT_REASONS } from "./constants";
 
 // consumeCredits + effectiveBalance are both in ../credits.js
-const consumeState: { chargedCents: bigint; shortfallCents: bigint } = {
+const consumeState: {
+  chargedCents: bigint;
+  shortfallCents: bigint;
+  priorOwedCents: bigint;
+  owedCents: bigint;
+} = {
   chargedCents: 0n,
   shortfallCents: 0n,
+  priorOwedCents: 0n,
+  owedCents: 0n,
 };
-const consumeCredits = vi.fn(async () => ({
+const consumeCredits = vi.fn(async (_args: unknown) => ({
   ...consumeState,
   balanceCents: 0n,
   carryMicroCents: 0n,
@@ -28,8 +35,11 @@ const effectiveBalanceState: { value: bigint } = { value: 0n };
 const effectiveBalance = vi.fn(
   async (_orgId: string) => effectiveBalanceState.value,
 );
+/** What the org owes from a turn that outran its balance. */
+const owedState: { value: bigint } = { value: 0n };
+const owedCredits = vi.fn(async (_orgId: string) => owedState.value);
 
-vi.mock("./credits", () => ({ consumeCredits, effectiveBalance }));
+vi.mock("./credits", () => ({ consumeCredits, effectiveBalance, owedCredits }));
 
 // ── ADR-053 §3 seams: the assistant spend cap ────────────────────────────────
 // assertCanStartTurn's first three steps (dunning, auto-reload, balance) are
@@ -223,6 +233,8 @@ describe("chargeUsageCredits", () => {
     vi.clearAllMocks();
     consumeState.chargedCents = 0n;
     consumeState.shortfallCents = 0n;
+    consumeState.priorOwedCents = 0n;
+    consumeState.owedCents = 0n;
   });
 
   it("meters the call and delegates the full debit to consumeCredits", async () => {
@@ -248,7 +260,79 @@ describe("chargeUsageCredits", () => {
       reason: "consume_assistant_tokens",
       referenceType: "token_usage",
       referenceId: "msg-1",
+      carryShortfall: true,
     });
+  });
+
+  // The last turn before the balance empties can cost more than was left.
+  // consumeCredits clamped that debit and the remainder was dropped, so the
+  // platform key paid for tokens nobody was billed for. Assistant tokens now
+  // keep it as a debt; every other reason still drops it.
+  it("keeps an assistant turn's shortfall as a debt, and only an assistant turn's", async () => {
+    await chargeUsageCredits({
+      reason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+      orgId: "org-1",
+      markup: MARKUP,
+      ...sonnetCall,
+    });
+    expect(consumeCredits).toHaveBeenLastCalledWith(
+      expect.objectContaining({ carryShortfall: true }),
+    );
+
+    await chargeUsageCredits({
+      reason: CREDIT_REASONS.CONSUME_EMBEDDING,
+      orgId: "org-1",
+      markup: MARKUP,
+      ...sonnetCall,
+    });
+    expect(consumeCredits).toHaveBeenLastCalledWith(
+      expect.objectContaining({ carryShortfall: false }),
+    );
+  });
+
+  it("reports the debt the charge leaves, and meters only this call's cost", async () => {
+    // 3 credits owed from before, this call worth 20: the lots held 10, so the
+    // debt is paid, 7 of this call is charged and 13 stays owed.
+    consumeState.priorOwedCents = 3n;
+    consumeState.chargedCents = 10n;
+    consumeState.shortfallCents = 13n;
+    consumeState.owedCents = 13n;
+    const result = await chargeUsageCredits({
+      reason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+      orgId: "org-1",
+      markup: MARKUP,
+      ...sonnetCall,
+    });
+    expect(result.creditsMetered).toBe(20n);
+    expect(result.creditsCharged).toBe(10n);
+    expect(result.owedCredits).toBe(13n);
+  });
+
+  it("attributes the debit to the person who drove the call", async () => {
+    consumeState.chargedCents = 20n;
+    await chargeUsageCredits({
+      reason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+      orgId: "org-1",
+      markup: MARKUP,
+      createdById: "0199a7e2-6f00-7000-8000-000000000001",
+      ...sonnetCall,
+    });
+    expect(consumeCredits).toHaveBeenCalledWith(
+      expect.objectContaining({
+        createdById: "0199a7e2-6f00-7000-8000-000000000001",
+      }),
+    );
+  });
+
+  it("names nobody when no person drove the call", async () => {
+    consumeState.chargedCents = 20n;
+    await chargeUsageCredits({
+      reason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+      orgId: "org-1",
+      markup: MARKUP,
+      ...sonnetCall,
+    });
+    expect(consumeCredits.mock.calls[0]?.[0]).not.toHaveProperty("createdById");
   });
 
   it("surfaces the clamp/shortfall reported by consumeCredits", async () => {
@@ -374,6 +458,20 @@ describe("snapshotUsageCharge", () => {
     });
     expect(snapshot.costUsd).toBe(0.5);
     expect(snapshot.markup).toBe(3);
+  });
+
+  // The outbox settles a delayed charge from this snapshot alone, so a field
+  // it drops is a field the ledger row never gets.
+  it("keeps the person the charge is attributed to", async () => {
+    const { snapshotUsageCharge } = await import("./metering");
+    const snapshot = snapshotUsageCharge({
+      reason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+      orgId: "org-1",
+      createdById: "0199a7e2-6f00-7000-8000-000000000001",
+      ...sonnetCall,
+    });
+    expect(snapshot.createdById).toBe("0199a7e2-6f00-7000-8000-000000000001");
+    expect(JSON.parse(JSON.stringify(snapshot))).toEqual(snapshot);
   });
 });
 
@@ -611,6 +709,7 @@ describe("assertCanStartTurn — who pays decides whether the cap applies", () =
   beforeEach(() => {
     vi.clearAllMocks();
     effectiveBalanceState.value = 100n;
+    owedState.value = 0n;
     settingsState.assistantSpendCapCents = 2_000;
     ledgerState.spent = "2000"; // at the cap: the step refuses if it runs
   });
@@ -621,10 +720,47 @@ describe("assertCanStartTurn — who pays decides whether the cap applies", () =
     ).resolves.toBeUndefined();
     expect(getOrgBillingSettings).not.toHaveBeenCalled();
     expect(withTenantDb).not.toHaveBeenCalled();
-    // The credit gate itself still ran: governed tool calls consume credits
-    // under ADR-052 whoever pays for tokens.
     expect(assertOrgCanConsume).toHaveBeenCalledWith("org-1");
-    expect(effectiveBalance).toHaveBeenCalledWith("org-1");
+  });
+
+  // A BYOK turn debits no credits, so an empty balance refused a turn that
+  // would have cost the organisation nothing. Governed tool calls inside it
+  // are admitted by the GAU bucket gate, not by the credit balance.
+  it("admits a turn on the organisation's own key at a zero balance", async () => {
+    effectiveBalanceState.value = 0n;
+    owedState.value = 50n;
+    await expect(
+      assertCanStartTurn("org-1", { fundedBy: "org" }),
+    ).resolves.toBeUndefined();
+    expect(effectiveBalance).not.toHaveBeenCalled();
+    expect(maybeAutoReload).not.toHaveBeenCalled();
+  });
+
+  it("still refuses a suspended organisation on its own key", async () => {
+    assertOrgCanConsume.mockRejectedValueOnce(
+      Object.assign(new Error("suspended"), { code: "billing_suspended" }),
+    );
+    await expect(
+      assertCanStartTurn("org-1", { fundedBy: "org" }),
+    ).rejects.toMatchObject({ code: "billing_suspended" });
+  });
+
+  // The balance the gate admits on is what is left after the debt an earlier
+  // turn ran up. 100 credits against 100 owed is nothing to spend.
+  it("refuses a platform-funded turn whose balance does not cover what the org owes", async () => {
+    effectiveBalanceState.value = 100n;
+    owedState.value = 100n;
+    await expect(assertCanStartTurn("org-1")).rejects.toMatchObject({
+      code: "insufficient_credits",
+    });
+    expect(owedCredits).toHaveBeenCalledWith("org-1");
+  });
+
+  it("admits a platform-funded turn whose balance is more than it owes", async () => {
+    ledgerState.spent = "0";
+    effectiveBalanceState.value = 100n;
+    owedState.value = 99n;
+    await expect(assertCanStartTurn("org-1")).resolves.toBeUndefined();
   });
 
   it("holds a platform-funded turn to the cap", async () => {
@@ -658,6 +794,13 @@ describe("hasCreditBalance", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     effectiveBalanceState.value = 0n;
+    owedState.value = 0n;
+  });
+
+  it("is false when what the org owes uses up the balance", async () => {
+    effectiveBalanceState.value = 10n;
+    owedState.value = 10n;
+    expect(await hasCreditBalance("org-1")).toBe(false);
   });
 
   it("is true when the effective balance is positive", async () => {

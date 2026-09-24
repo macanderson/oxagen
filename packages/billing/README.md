@@ -56,6 +56,7 @@
 - Accrual fires after a successful handler, never before. The kernel calls the usage recorder only for a top-level, non-`noBillingGate` invocation that completed (ADR-052).
 - The recorder resolves the organisation's terms, mode, and period itself. A caller cannot claim cheaper terms.
 - The spend-budget gate fails open on a database error and denies with `BudgetExceededError` on a real breach. Surfaces map that to HTTP 402.
+- A `consume_assistant_tokens` shortfall is a debt, not a write-off. `consumeCredits` with `carryShortfall` banks the unpaid whole credits in `org_billing_settings.meter_carry_micro_credits_by_reason`. `assertCanStartTurn` admits a platform-funded turn only while the balance minus `owedCredits(orgId)` is above zero, the next charge collects the debt first in its own `credit_debt` ledger row, and every grant runs `settleOwedCredits` before it writes the balance mirror. A turn on the organisation's own key debits no credits.
 - Every AI provider call gets one usage admission before the provider is contacted, and settlement is idempotent on that id (ADR-134).
 - Domain code calls `billingProvider()`, never the Stripe SDK. `stripeClient` is exported for `tools/scripts` Stripe sync only.
 - `src/pricing.ts` is the source for Stripe products and prices. Edit it, then run `pnpm billing:stripe-sync --apply`.

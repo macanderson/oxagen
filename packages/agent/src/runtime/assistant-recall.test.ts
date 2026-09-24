@@ -134,3 +134,41 @@ describe("recallWorkspaceMemoryMessage", () => {
     expect(msg).toBeNull();
   });
 });
+
+describe("recallWorkspaceMemoryMessage through the real kernel", () => {
+  it("runs recall as part of the turn: no governed action is recorded and the GAU gate is not consulted", async () => {
+    const kernel = await import("@oxagen/oxagen/kernel");
+    const recorder = vi.fn();
+    const gate = vi.fn(async () => {
+      throw new Error("gau_exhausted");
+    });
+    kernel.setUsageRecorder(recorder);
+    kernel.setBillingAdmissionGate(gate);
+    kernel.registerHandler("recall_memory", async () => async () => ({
+      memories: [memory()],
+    }));
+    const ctx: CapabilityContext = {
+      ...CTX,
+      orgId: "00000000-0000-0000-0000-00000000000a",
+      workspaceId: "00000000-0000-0000-0000-00000000000b",
+    };
+    try {
+      // The turn runs outside any frame, so a plain invoke here would be
+      // top-level and billed (ADR-053 says the turn is not a governed action).
+      const msg = await kernel.runOutsideGovernedAction(() =>
+        recallWorkspaceMemoryMessage({
+          query: "how do I query the db",
+          executionRef: "req_1",
+          ctx,
+        }),
+      );
+      expect(msg).not.toBeNull();
+      expect(gate).not.toHaveBeenCalled();
+      expect(recorder).not.toHaveBeenCalled();
+    } finally {
+      kernel.clearUsageRecorder();
+      kernel.clearBillingAdmissionGate();
+      kernel.clearHandlersForTests();
+    }
+  });
+});

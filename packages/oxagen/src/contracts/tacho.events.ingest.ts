@@ -38,6 +38,13 @@ export const tachoEventsIngest = registerCapability({
   surfaces: ["api"],
   layers: ["schema", "api", "unit", "docs"],
   scoped: true,
+  // The recording itself is never refused and never billed as an action. An
+  // organisation whose governed action units have run out still has its runs
+  // recorded: the admission gate refuses its next server-side action, not the
+  // evidence of the last one. What the batch carries is billed instead. The
+  // handler records one governed action per tool call a wrapped harness made
+  // and Tacho allowed, on the per-action ledger (ADR-165), and the ledger's
+  // idempotency key makes a re-sent batch bill nothing twice.
   noBillingGate: true,
   agent: {
     requiresApproval: false,

@@ -1,0 +1,82 @@
+---
+title: Billing statements
+description: "Download a statement for a week, month, quarter, year or custom period, and reconcile it against your invoices."
+---
+
+Your finance team has an invoice and needs to know what it paid for. A billing statement answers that for one period. It lists every governed action Oxagen billed, with the agent, the operator and the tool call behind it. It also carries the month buckets, invoices and usage credits those actions reconcile against.
+
+## Choose a period
+
+A statement covers one of these, in UTC:
+
+- A week, Monday to Sunday.
+- A calendar month.
+- A calendar quarter.
+- A calendar year.
+- A custom range longer than 48 hours and at most 366 days.
+
+For a week, month, quarter or year, name any day inside it. For a custom range, name the first instant and the first instant after the period. A statement for a period that has not ended is marked provisional, and its figures run to the moment it was generated.
+
+## Download a statement
+
+Open **Organization → Billing**, pick the period under **Statements**, then choose **Download CSV** or **Download HTML**. You need the Owner, Admin or Billing role on the organization.
+
+From the CLI, print the totals and the reconciliation checks:
+
+```bash
+oxagen billing statement --period month --anchor 2026-09-01
+```
+
+Write the printable document to a file:
+
+```bash
+oxagen billing statement --period quarter --anchor 2026-07-01 --format html --out q3.html
+```
+
+Write every billed governed action of a custom range to a CSV:
+
+```bash
+oxagen billing statement --period custom --from 2026-09-01T00:00:00Z --to 2026-09-10T00:00:00Z --format csv --out sept.csv
+```
+
+The API and MCP carry the same statement as `get_billing_statement` (structured data) and `export_billing_statement` (a file).
+
+## What the statement carries
+
+- **Reference.** `ST-<organization>-<first day>-<last day>`. The same organization and period always give the same reference, so a statement you regenerate is recognisably the same document.
+- **Terms in force.** The contracted rate per governed action unit, the included units per month, and every negotiated agreement in force during the period.
+- **Governed actions.** Units and actions by source (capability calls, wrapped harness tool calls, external MCP tool calls), by workspace, agent, operator, and capability or tool, and by day. Each group shows its name and its ID. The top 25 groups are listed, and the rest are counted in one line.
+- **Month buckets.** Included, purchased, carried, used and overage units for each month that overlaps the period.
+- **Settlements and prepaid orders.** Each block purchase, auto top-up, interim charge, period-close charge and prepaid order created or paid in the period, with the rate it recorded and the invoice behind it.
+- **Invoices.** Each invoice issued or paid in the period, with what it charged for, and totals by currency. Drafts are not listed. A void invoice is listed and left out of the totals.
+- **Usage credits.** The opening balance, every addition and deduction by reason, the closing balance, and the in-app assistant's model tokens by operator.
+- **Model usage.** Model calls and tokens with the model vendor's list cost, reported for your records. Oxagen bills model tokens at $0.00.
+
+## The CSV
+
+The CSV starts with a header block: the reference, organization, period, terms and totals. After a blank line comes one row per billed governed action:
+
+`ledger_entry_id`, `billed_at`, `occurred_at`, `source`, `capability`, `tool_name`, `mcp_server`, `surface`, `harness`, `workspace_id`, `workspace`, `agent_id`, `agent`, `operator_user_id`, `operator`, `principal_id`, `principal_kind`, `run_id`, `session_id`, `tool_call_id`, `request_id`, `units`.
+
+The header's **Ledger rows in the period** is the number of rows the complete file holds. A year can hold millions of rows, so the API answers the CSV in pages of up to 50,000 rows. Pass each page's `nextCursor` back with the same period to read the next one. Pages after the first carry rows only, so they join in order into one file. The CLI and the Billing page follow the cursor for you. The Billing page stops at 200,000 rows and says so. Use the CLI for a larger file.
+
+A text cell that begins with `=`, `+`, `-` or `@` is written with a leading apostrophe, so no tool or agent name runs as a spreadsheet formula.
+
+## Reconcile a statement
+
+Each statement lists the checks its figures satisfy, and whether each held:
+
+| Check | What it compares |
+|---|---|
+| `units_by_day` | The daily series adds up to the total units. |
+| `units_by_dimension` | Each breakdown, counting its remainder line, adds up to the total. |
+| `units_by_bucket` | The units each month bucket received in the period add up to the total. |
+| `bucket_ledger` | No month bucket holds more ledger units than used units. |
+| `credits_roll_forward` | The opening credit balance plus additions minus deductions equals the closing balance. |
+
+Two rules make a statement agree with your invoices:
+
+1. Governed actions are counted on the instant their units were billed to a month bucket. The invoices count the same instant, so a statement and the invoices for one period count the same units. An action that happened at 23:59 on the 31st and was billed on the 1st is on the next month's statement.
+2. A month bucket's used units move only when a ledger row is written, in the same transaction. A bucket from before the ledger existed shows the difference as units counted before the ledger.
+
+Usage credit figures come from the credit ledger. Credits that expire unused leave no ledger entry, so the balance on the Billing page can be lower than the statement's closing balance by the expired amount.

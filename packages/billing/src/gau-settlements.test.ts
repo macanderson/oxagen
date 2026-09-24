@@ -1124,14 +1124,19 @@ describe("settleGauInvoice", () => {
       quantityGau: 5_000,
       ratePerGauMicros: 5_000n,
       currency: "usd",
-      description: "Oxagen governed action units: auto top-up",
+      // The line names the bucket month it bills; FREE_ENTITLEMENT carries no
+      // negotiated agreement, so no reference follows it.
+      description: "Governed action units, auto top-up: 1 Sep to 30 Sep 2026",
+      period: { start: SEPTEMBER.start, end: SEPTEMBER.end },
       collection: {
         method: "charge_automatically",
         defaultPaymentMethodId: "pm_checkout_001",
       },
     });
-    // The id is committed before finalizing, and the grant after the answer.
+    // The line's month and agreement are read first, the id is committed
+    // before finalizing, and the grant after the answer.
     expect(events).toEqual([
+      "commit",
       `create:${row.id}`,
       "commit",
       `finalize:in_${row.id}`,
@@ -1186,6 +1191,59 @@ describe("settleGauInvoice", () => {
     );
     expect(settlement(row!.id).status).toBe("paid");
     expect(pastDue).toBe(false);
+  });
+
+  it("names the bucket's month and the negotiated agreement on a month-end line, read on the scope's executor", async () => {
+    const august = {
+      start: new Date("2026-08-01T00:00:00.000Z"),
+      end: new Date("2026-09-01T00:00:00.000Z"),
+    };
+    const bucket = seedBucket({
+      periodStart: august.start,
+      periodEnd: august.end,
+    });
+    const row = seedSettlement({
+      bucketId: bucket.id,
+      kind: "period_close",
+      seq: 0,
+    });
+    mocks.readGauEntitlement.mockResolvedValue({
+      terms: {
+        ...FREE_ENTITLEMENT.terms,
+        source: "negotiated" as const,
+        tier: "enterprise" as const,
+        agreementRef: "MSA-2026-014",
+      },
+      subscription: null,
+    });
+
+    await settleGauInvoice(row, scopeWith(null));
+
+    expect(mocks.provider.createGauInvoice).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "gau_period_close",
+        description:
+          "Governed action units, month-end overage: 1 Aug to 31 Aug 2026 (agreement MSA-2026-014)",
+        period: august,
+      }),
+    );
+    // The terms are read on the scope's executor, not a fresh tenant scope.
+    expect(mocks.readGauEntitlement).toHaveBeenCalledWith(
+      expect.anything(),
+      ORG,
+    );
+  });
+
+  it("refuses to invoice a settlement whose bucket is missing, and leaves it pending", async () => {
+    const row = seedSettlement({ bucketId: crypto.randomUUID() });
+
+    expect(await settleGauInvoice(row, scopeWith("pm_1"))).toBe("pending");
+
+    expect(mocks.provider.createGauInvoice).not.toHaveBeenCalled();
+    expect(settlement(row.id)).toMatchObject({
+      status: "pending",
+      stripeInvoiceId: null,
+    });
   });
 
   it("leaves the row pending with no invoice id when the provider rejects the create, and does not throw", async () => {

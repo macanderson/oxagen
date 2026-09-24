@@ -185,7 +185,12 @@ import { billingEvidenceRetention } from "./billing.evidence_retention";
 import { billingGauBucketGet } from "./billing.gau_bucket.get";
 import { billingGauBucketPurchase } from "./billing.gau_bucket.purchase";
 import { billingInvoiceList } from "./billing.invoice.list";
+import { billingStatementGet } from "./billing.statement.get";
+import { billingStatementExport } from "./billing.statement.export";
 import { billingOrgTermsSet } from "./billing.org_terms.set";
+import { billingContractTermsSet } from "./billing.contract_terms.set";
+import { billingPrepaidInvoiceCreate } from "./billing.prepaid_invoice.create";
+import { billingPrepaidOrderList } from "./billing.prepaid_order.list";
 import { billingSubscriptionRead } from "./billing.subscription.read";
 import { billingSubscriptionUpgradeStart } from "./billing.subscription_upgrade.start";
 import { billingUsageBreakdown } from "./billing.usage.breakdown";
@@ -781,7 +786,12 @@ export {
   billingGauBucketGet,
   billingGauBucketPurchase,
   billingInvoiceList,
+  billingStatementGet,
+  billingStatementExport,
   billingOrgTermsSet,
+  billingContractTermsSet,
+  billingPrepaidInvoiceCreate,
+  billingPrepaidOrderList,
   billingSubscriptionRead,
   billingSubscriptionUpgradeStart,
   billingUsageBreakdown,
@@ -1171,7 +1181,12 @@ export const contracts: readonly CapabilityDeclaration[] = [
   billingGauBucketGet,
   billingGauBucketPurchase,
   billingInvoiceList,
+  billingStatementGet,
+  billingStatementExport,
   billingOrgTermsSet,
+  billingContractTermsSet,
+  billingPrepaidInvoiceCreate,
+  billingPrepaidOrderList,
   billingSubscriptionRead,
   billingSubscriptionUpgradeStart,
   billingUsageBreakdown,

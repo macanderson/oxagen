@@ -23,6 +23,12 @@
 // on a root session emits `cost/run.sealed` so the rollup job rebuilds the
 // run's `cost.run_totals` row from its frames (ADR-060 §3).
 //
+// Billing (ADR-165): each tool call a wrapped harness made and Tacho allowed
+// is one governed action unit on the per-action ledger, keyed by the call's
+// `tool_use_id` so a re-sent batch bills nothing twice (`isBillableToolCall`
+// has the rule). Denials are free. The control envelope is built after
+// billing, so a batch refused at any step leaves its commands queued.
+//
 // Proof (ADR-064): each fresh `proof.observed` frame writes its verdict row
 // (lib/proof.ts) under the run it is part of, the root session named by its
 // `root_session_uuid`, whichever session's chain carried it. A verdict reaching
@@ -67,7 +73,14 @@ import {
   storeOverloadedFrom,
   type TachoEventInsert,
 } from "@oxagen/telemetry";
-import { recordSpend } from "@oxagen/billing";
+import {
+  attributableWorkspaceId,
+  governedActionEntry,
+  type GovernedActionEntry,
+  ledgerKey,
+  recordGovernedActions,
+  recordSpend,
+} from "@oxagen/billing";
 import { and, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
 import { writeAssembly } from "@oxagen/run-ledger";
@@ -399,6 +412,135 @@ export function foldDelta(delta: SessionDelta, event: TachoEvent): void {
     default:
       break;
   }
+}
+
+/**
+ * The key Tacho writes for Oxagen's own MCP server in a harness's
+ * `mcpServers` map (`OXAGEN_MCP_SERVER_KEY`,
+ * packages/tacho/src/host/mcp-config-writer.ts). Not exported from the
+ * package root, so it is repeated here. Change both together.
+ */
+const OXAGEN_MCP_SERVER = "oxagen";
+
+/**
+ * Whether a frame is a tool call that bills one governed action unit: a call
+ * a wrapped harness made, Tacho allowed, and the tool completed.
+ *
+ * A tool call normally has one frame that answers yes. The reasoning, one
+ * condition at a time:
+ *
+ *   1. `kind === "tool_call"`. PreToolUse seals `tool_requested`, and a
+ *      PermissionRequest seals `approval_request`, so the frames before the
+ *      call runs never bill. PostToolUse and PostToolUseFailure seal the
+ *      `tool_call`. The effect frame the same hook adds (`command`,
+ *      `file_io`, `network`) is a different kind and never bills.
+ *   2. `source === "hook"`. The hook is where Tacho rules on a harness tool
+ *      call (every harness reaches it: Claude Code and Codex directly, Cursor
+ *      and Stella through their adapters). The OTel exporter and the
+ *      transcript tailer report the same call again, and the recorder seals
+ *      at most one of those repeats (ADR-140). They observed the call, they
+ *      did not govern it. `collector` frames are the daemon's own: a call to
+ *      Oxagen's MCP gateway, which the kernel bills when it serves it, or a
+ *      brokered git push, which the hook already reported as the harness's
+ *      shell call.
+ *   3. `tool_status === "ok"`. A denial never reaches PostToolUse. It seals a
+ *      `policy_decision` (PermissionDenied, a Tacho deny) or `token_denied`,
+ *      so denials stay free by construction. A frame reporting `rejected` or
+ *      `cancelled` is a person or the harness stopping the call, and `error`
+ *      is a call that failed. None of them bill, which is the rule the kernel
+ *      applies to a handler that throws and the agent runtime applies to an
+ *      external MCP call that fails: an action bills when it completes.
+ *   4. Not a call to Oxagen's own MCP server. That call runs `invoke()`,
+ *      and the kernel already bills it as a governed action. Billing its hook
+ *      frame too would charge one action twice.
+ *
+ * What guarantees one unit per call, rather than one per frame, is the
+ * ledger key ({@link tachoToolCallEntries}), not this predicate. A second
+ * hook frame for a call (a repeat the recorder stamps because it brings a
+ * body) carries the same `tool_use_id`, and the ledger bills a key once.
+ */
+export function isBillableToolCall(event: TachoEvent): boolean {
+  if (event.kind !== "tool_call" || event.source !== "hook") return false;
+  const body = event.body as Body;
+  if (body["tool_status"] !== "ok") return false;
+  return body["mcp_server_name"] !== OXAGEN_MCP_SERVER;
+}
+
+/** Who a session's tool calls are attributed to on the ledger. */
+export interface ToolCallAttribution {
+  /** claude-code, codex, cursor or stella, as the session row recorded it. */
+  harness: string | null;
+  /** The registered agent's public id (`agt_…`), or the host's agent key. */
+  agentId: string | null;
+  /** The agent principal the host enrolled as, when it enrolled as one. */
+  principalId: string | null;
+  principalKind: string | null;
+  /** The session's initiating human principal. */
+  operatorUserId: string | null;
+  /** The run the Run page shows: the root session's public id (`tse_…`). */
+  runId: string | null;
+}
+
+/**
+ * The ledger entries for a batch's billable tool calls (ADR-165): one per
+ * call, keyed `tacho:<session_uuid>:<tool_use_id>`.
+ *
+ * `tool_use_id` is unique within a session for every harness Tacho wraps
+ * (Stella's is numbered per invocation by the daemon), so the key names the
+ * call and not the frame that reported it. A re-sent batch builds the same
+ * keys, and the ledger bills a key once.
+ *
+ * A frame without a `tool_use_id` falls back to its `event_id_idem`, which
+ * the host assigns once and re-sends unchanged. Never a random value: a key
+ * that changed on a re-send would bill the same call again.
+ *
+ * `toolName` is never null because the ledger requires a subject on every
+ * row (`gau_ledger_subject_check`). A hook frame always carries one. The
+ * fallback names the MCP tool, then says the harness sent no name.
+ */
+export function tachoToolCallEntries(
+  events: readonly TachoEvent[],
+  attributionFor: (sessionUuid: string) => ToolCallAttribution | undefined,
+  args: { workspaceId: string; requestId: string | null; now: Date },
+): GovernedActionEntry[] {
+  const workspaceId = attributableWorkspaceId(args.workspaceId);
+  const entries: GovernedActionEntry[] = [];
+  for (const event of events) {
+    if (!isBillableToolCall(event)) continue;
+    const body = event.body as Body;
+    const toolUseId = str(body["tool_use_id"]);
+    const attribution = attributionFor(event.session_uuid);
+    const at = new Date(event.ts);
+    entries.push(
+      governedActionEntry({
+        idempotencyKey: ledgerKey(
+          "tacho",
+          event.session_uuid,
+          toolUseId ?? `event:${event.event_id_idem}`,
+        ),
+        source: "tacho",
+        units: 1,
+        occurredAt: isNaN(at.getTime()) ? args.now : at,
+        toolName:
+          str(body["tool_name"]) ??
+          str(body["mcp_tool_name"]) ??
+          "unnamed tool",
+        mcpServer: str(body["mcp_server_name"]),
+        surface: "tacho",
+        harness: attribution?.harness ?? str(event.agent.harness),
+        workspaceId,
+        agentId: attribution?.agentId ?? null,
+        principalId: attribution?.principalId ?? null,
+        principalKind: attribution?.principalKind ?? null,
+        operatorUserId: attribution?.operatorUserId ?? null,
+        runId: attribution?.runId ?? null,
+        sessionId: event.session_uuid,
+        toolCallId: toolUseId,
+        requestId: args.requestId,
+      }),
+    );
+  }
+  return entries;
 }
 
 /**
@@ -1086,6 +1228,13 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     const sealedRoots = new Map<string, string>();
     // The batch's fresh `proof.observed` frames, by the root session they belong to.
     const proofsByRoot = new Map<string, TachoEvent[]>();
+    // Who each session's tool calls are billed to, read off the rows this
+    // transaction wrote. The ledger entries are built after the commit, from
+    // every event in the batch (see the billing step below).
+    const attribution = new Map<string, ToolCallAttribution>();
+    // The rows name the root session by uuid; the run a person opens is the
+    // root's public id. Collected here, resolved once after the loop.
+    const rootUuids = new Map<string, string>();
     let newSessions = 0;
     // The first root session this batch opened: the run the onboarding gate
     // records when this is the organization's first frame (#2967).
@@ -1609,9 +1758,31 @@ export const tachoEventsIngestHandler: CapabilityHandler<
 
       const sessionRow = await tx.query.tachoSessions.findFirst({
         where: eq(schema.tachoSessions.sessionUuid, sessionUuid),
-        columns: { id: true, publicId: true, parentSessionUuid: true },
+        columns: {
+          id: true,
+          publicId: true,
+          parentSessionUuid: true,
+          rootSessionUuid: true,
+          harness: true,
+          initiatingPrincipalId: true,
+        },
       });
       const sessionId = sessionRow?.id;
+      if (sessionRow) {
+        attribution.set(sessionUuid, {
+          harness: sessionRow.harness ?? null,
+          agentId: null,
+          principalId: host.agentPrincipalId ?? null,
+          principalKind: host.agentPrincipalId ? "agent" : null,
+          operatorUserId: sessionRow.initiatingPrincipalId ?? null,
+          runId:
+            sessionRow.parentSessionUuid == null
+              ? (sessionRow.publicId ?? null)
+              : null,
+        });
+        if (sessionRow.parentSessionUuid != null && sessionRow.rootSessionUuid)
+          rootUuids.set(sessionUuid, sessionRow.rootSessionUuid);
+      }
       // `inserted`, not `accepted && !existing`: a conflict that took the update
       // path is accepted and still did not open the session, and `!existing` is
       // the read that preceded the statement.
@@ -1733,6 +1904,40 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         );
       }
     }
+    // The ledger attribution the loop could not finish from one row: the run a
+    // subagent session belongs to is its root's, and the agent is named by its
+    // registry public id when the host enrolled as a registered agent, so a
+    // tool call Tacho recorded and an action the kernel recorded for the same
+    // agent group together. Read only when the batch has something to bill.
+    if (input.events.some(isBillableToolCall)) {
+      const rootRuns = new Map<string, string | null>();
+      for (const root of new Set(rootUuids.values())) {
+        const row = await tx.query.tachoSessions.findFirst({
+          where: and(
+            eq(schema.tachoSessions.sessionUuid, root),
+            isNull(schema.tachoSessions.parentSessionUuid),
+          ),
+          columns: { publicId: true },
+        });
+        rootRuns.set(root, row?.publicId ?? null);
+      }
+      const agent = host.agentId
+        ? await tx.query.agents.findFirst({
+            where: eq(schema.agents.id, host.agentId),
+            columns: { publicId: true },
+          })
+        : undefined;
+      const agentId = agent?.publicId ?? host.agentKey;
+      for (const [sessionUuid, entry] of attribution) {
+        const root = rootUuids.get(sessionUuid);
+        attribution.set(sessionUuid, {
+          ...entry,
+          agentId,
+          runId:
+            root === undefined ? entry.runId : (rootRuns.get(root) ?? null),
+        });
+      }
+    }
     const seen = await touchHost(tx as never, host, input.daemon, now, true);
     // The control envelope is NOT built here. Building it drains the host's
     // queued commands and marks them `sent`, and this transaction commits
@@ -1746,6 +1951,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
       seen,
       spendDeltas,
       rollupRoots,
+      attribution,
       sealedRoots,
     };
   });
@@ -1856,11 +2062,66 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     }
   }
 
-  // Built only now that the frames are in ClickHouse: draining the queue
-  // marks the host's commands `sent`, and a response that does not reach the
-  // host must not have done that (see above). A failure here fails the
-  // request, the host re-sends the batch, which then lands as already
-  // recorded, and the commands are still queued for that response.
+  // Billing: one governed action unit per allowed tool call (ADR-165). Run
+  // after every write above, so a charge never lands for a frame the record
+  // does not hold, and before the control envelope, for the reason given
+  // there.
+  //
+  // Built from EVERY event in the batch, not only the fresh ones. `fresh` is
+  // what this batch added past the recorded head, and after a failure here
+  // the host re-sends a batch whose events are all below it. Billing only
+  // fresh events would bill that re-send nothing, and the calls would never
+  // be charged. The ledger key makes the whole batch safe to offer again: a
+  // key already on the ledger inserts nothing and debits nothing.
+  //
+  // A failure here fails the request, and that is the durable choice. The
+  // host's WAL cursor moves only on a 2xx, so it keeps the batch and ships it
+  // again after its backoff. Everything this handler wrote is safe to write
+  // twice: the session counters fold only frames past the recorded head, the
+  // ClickHouse append keeps the newest row per seq, a body is stored by its
+  // digest, the spend counter and the seal event were handled on the first
+  // attempt, and the ledger dedups the charge. The one write that was not
+  // safe, the control commands marked `sent`, now happens after this step.
+  // Accepting the batch and logging instead would lose the charge for good
+  // whenever the billing store blinked.
+  //
+  // The recording is never refused for a lack of units. `recordGovernedActions`
+  // debits whatever the bucket holds, and an exhausted prepaid organisation is
+  // refused at its next server-side action by the admission gate, not here.
+  const billable = tachoToolCallEntries(
+    input.events,
+    (sessionUuid) => result.attribution.get(sessionUuid),
+    { workspaceId: ctx.workspaceId, requestId: ctx.requestId ?? null, now },
+  );
+  if (billable.length > 0) {
+    try {
+      await recordGovernedActions({
+        orgId: ctx.orgId,
+        entries: billable,
+        label: "tacho:tool_calls",
+      });
+    } catch (err) {
+      logger.error(
+        {
+          err,
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId,
+          toolCalls: billable.length,
+          alert: "tacho_tool_call_billing_failed",
+        },
+        "tacho.events.ingest: tool-call billing failed; the batch is refused so the host re-sends it, and the ledger bills each call once",
+      );
+      throw err;
+    }
+  }
+
+  // The control envelope last, in its own transaction. Draining marks the
+  // host's queued commands `sent`, and a command marked `sent` is never
+  // selected again. Drained inside the ingest transaction, a failure after
+  // the commit (the ClickHouse append, the billing step) left commands marked
+  // `sent` in a response the host never received: a pause or a steer lost
+  // with no error anywhere. Drained here, any earlier failure leaves them
+  // queued, and the re-sent batch delivers them.
   const control = await withTenantDb((tx) =>
     controlEnvelope(tx as never, ctx, result.seen, new Date()),
   );

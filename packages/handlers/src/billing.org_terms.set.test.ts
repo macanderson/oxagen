@@ -48,8 +48,13 @@ type StoredTerms = {
   invoiceGauMax: number;
 };
 
-function makeStore(seed: Record<string, StoredTerms> = {}) {
+function makeStore(
+  seed: Record<string, StoredTerms> = {},
+  capSeed: Record<string, number | null> = {},
+) {
   const rows = new Map(Object.entries(seed));
+  // assistant_spend_cap_cents, by org; the column default for an org with no row.
+  const caps = new Map(Object.entries(capSeed));
   const log: string[] = [];
   const write: OrgBillingTermsWriter = async (terms) => {
     log.push("write");
@@ -64,14 +69,25 @@ function makeStore(seed: Record<string, StoredTerms> = {}) {
     current: async (orgId) => ({
       approvedForInvoiceBilling:
         rows.get(orgId)?.approvedForInvoiceBilling ?? false,
+      invoiceGauMax: rows.get(orgId)?.invoiceGauMax ?? 100_000,
     }),
     write: vi.fn(write),
     closeAccrual: vi.fn(async () => {
       log.push("closeAccrual");
       return null;
     }),
+    readAssistantSpendCap: vi.fn(async (orgId: string) =>
+      caps.has(orgId) ? caps.get(orgId)! : 2_000,
+    ),
+    writeAssistantSpendCap: vi.fn(
+      async (orgId: string, capCents: number | null) => {
+        log.push("writeCap");
+        caps.set(orgId, capCents);
+        return capCents;
+      },
+    ),
   };
-  return { rows, log, deps, write: deps.write };
+  return { rows, caps, log, deps, write: deps.write };
 }
 
 describe("set_org_billing_terms handler", () => {
@@ -97,7 +113,10 @@ describe("set_org_billing_terms handler", () => {
       orgId: ORG,
       approvedForInvoiceBilling: true,
       invoiceGauMax: 250_000,
+      // Untouched: the column default, read back.
+      assistantSpendCapCents: 2_000,
     });
+    expect(store.deps.writeAssistantSpendCap).not.toHaveBeenCalled();
     expect(store.rows.get(ORG)).toEqual({
       approvedForInvoiceBilling: true,
       invoiceGauMax: 250_000,
@@ -160,6 +179,66 @@ describe("set_org_billing_terms handler", () => {
     expect(store.rows.has(OTHER_ORG)).toBe(false);
   });
 
+  it("sets the assistant spend cap on its own, leaving the billing mode and the accrual alone", async () => {
+    const store = makeStore({
+      [ORG]: { approvedForInvoiceBilling: true, invoiceGauMax: 250_000 },
+    });
+    const handler = createBillingOrgTermsSetHandler(store.deps);
+
+    const out = await handler(
+      { orgId: ORG, assistantSpendCapCents: 600_000 },
+      operatorCtx(),
+    );
+
+    expect(out).toEqual({
+      orgId: ORG,
+      approvedForInvoiceBilling: true,
+      invoiceGauMax: 250_000,
+      assistantSpendCapCents: 600_000,
+    });
+    expect(store.log).toEqual(["writeCap"]);
+    expect(store.write).not.toHaveBeenCalled();
+    expect(store.deps.closeAccrual).not.toHaveBeenCalled();
+    expect(store.deps.writeAssistantSpendCap).toHaveBeenCalledWith(
+      ORG,
+      600_000,
+    );
+  });
+
+  it("removes the cap with null, and sets it beside the billing mode in one call", async () => {
+    const store = makeStore({}, { [ORG]: 2_000 });
+    const handler = createBillingOrgTermsSetHandler(store.deps);
+
+    const out = await handler(
+      {
+        orgId: ORG,
+        approvedForInvoiceBilling: true,
+        invoiceGauMax: 250_000,
+        assistantSpendCapCents: null,
+      },
+      operatorCtx(),
+    );
+
+    expect(out.assistantSpendCapCents).toBeNull();
+    expect(store.caps.get(ORG)).toBeNull();
+    expect(store.log).toEqual(["write", "writeCap"]);
+  });
+
+  it("audits a cap-only change against the target org", async () => {
+    const store = makeStore();
+    const handler = createBillingOrgTermsSetHandler(store.deps);
+
+    await handler({ orgId: ORG, assistantSpendCapCents: 0 }, operatorCtx());
+
+    expect(mocks.emitSecurityEventAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "billing.plan_changed",
+        capability: "set_org_billing_terms",
+        orgId: ORG,
+      }),
+    );
+  });
+
   it("audits the mutation against the target org with no acting user", async () => {
     const store = makeStore();
     const handler = createBillingOrgTermsSetHandler(store.deps);
@@ -201,11 +280,13 @@ describe("set_org_billing_terms handler", () => {
     ).then(() => {
       resolved = true;
     });
-    await Promise.resolve();
-    await Promise.resolve();
+    // Wait for the audit call rather than a fixed number of microtask ticks:
+    // the handler awaits the writes and the cap read before it.
+    await vi.waitFor(() =>
+      expect(mocks.emitSecurityEventAsync).toHaveBeenCalledOnce(),
+    );
 
     expect(store.write).toHaveBeenCalledOnce();
-    expect(mocks.emitSecurityEventAsync).toHaveBeenCalledOnce();
     expect(resolved).toBe(false);
 
     releaseAudit();
