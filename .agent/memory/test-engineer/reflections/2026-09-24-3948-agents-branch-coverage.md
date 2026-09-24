@@ -63,3 +63,17 @@ Every new and extended file passes when run alone. The global figure is an
 estimate: the lane union is measured, the app total is from one local run,
 and the Tools lane's contribution is the previous agent's estimate. CI's
 coverage job is the confirmation.
+
+### Addendum: widened scope (coordinator request)
+- Agents files this PR did not change, measured union: agents-table
+  137→156/159, role-controls 80→84/89, register-agent 36→39/42,
+  mandate-request 9→11/14, cost-center-controls 32→34/36, kill-switch
+  19→20/22. Lane 1,471→1,502/1,539 (97.60%), +31.
+- Tools: switch-controls +5, tool-dialog +2, add-connection +1 at most.
+  My first count for switch-controls said +8; three of those arms were
+  already covered by switches.test.tsx. A delta measured against one test
+  file overstates a file that several test files render.
+- Second defect, pinned not fixed: the Agents table's compare() says an
+  unrecorded value sorts last in either direction, but the caller multiplies
+  by the direction's sign, so descending puts unrecorded rows first.
+- Running total about +278 branches, about +2.1 points app-wide.
