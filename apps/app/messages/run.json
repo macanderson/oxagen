@@ -731,7 +731,7 @@
         "title": "Linked work",
         "observed": "written by Oxagen from a frame it recorded",
         "stated": "carried by the task",
-        "inferred": "matched on the branch the run worked on, not recorded. {inferred} of {total}",
+        "inferred": "matched on the branch the run worked on. {inferred} of {total}",
         "cut": "The outputs read stopped at its cap, so this list is a prefix.",
         "repositories": "Repositories",
         "repositoryNotCaptured": "The run record does not name the repository it worked in.",
