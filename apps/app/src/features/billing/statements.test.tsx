@@ -303,7 +303,7 @@ describe("Statements", () => {
     ).toBeEnabled();
   });
 
-  it(`saves what it has after ${MAX_PAGES} pages and says how to get the rest (partial)`, async () => {
+  it(`saves what it has after ${String(MAX_PAGES)} pages and says how to get the rest (partial)`, async () => {
     const saves = captureSaves();
     exportBillingStatementAction.mockResolvedValue(
       page("row\r\n", "more", 10_000),
@@ -367,6 +367,20 @@ describe("Statements", () => {
       await screen.findByText("Pick today or an earlier day."),
     ).toBeInTheDocument();
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("shows a field refusal whose code the form has no message for as a general failure", async () => {
+    exportBillingStatementAction.mockResolvedValue({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "anchor",
+    });
+    renderWithIntl(<Statements org="acme" today={TODAY} allowed />);
+    await userEvent.click(screen.getByRole("button", { name: "Download CSV" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Oxagen could not state that period. Check the dates and try again.",
+    );
   });
 
   it("treats a thrown action as unavailable", async () => {

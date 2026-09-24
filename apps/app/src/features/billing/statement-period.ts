@@ -34,10 +34,28 @@ export type StatementPeriodInput =
   | { period: Exclude<StatementKind, "custom">; anchor: string }
   | { period: "custom"; from: string; to: string };
 
+const STATEMENT_FIELD_CODES = [
+  "dayInvalid",
+  "future",
+  "rangeTooShort",
+  "rangeTooLong",
+] as const;
+
 export type StatementFieldError = {
   field: "anchor" | "firstDay" | "lastDay";
-  code: "dayInvalid" | "future" | "rangeTooShort" | "rangeTooLong";
+  code: (typeof STATEMENT_FIELD_CODES)[number];
 };
+
+/**
+ * Whether an invalid result's code is one the form has a message for. The
+ * handler can refuse a field with a code of its own; that one is shown as a
+ * general failure rather than looked up as a missing message key.
+ */
+export function isStatementFieldCode(
+  code: string,
+): code is StatementFieldError["code"] {
+  return STATEMENT_FIELD_CODES.some((known) => known === code);
+}
 
 const DAY_MS = 86_400_000;
 /** More than 48 hours of whole days is three days. */

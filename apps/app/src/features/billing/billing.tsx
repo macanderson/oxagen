@@ -93,6 +93,11 @@ function instantAfterRead(): Date {
   return new Date();
 }
 
+/** The UTC day the page renders on, which bounds the statement form's dates. */
+function todayUtc(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 /**
  * The trace line's time as the design prints it: `2026-09-11 09:16:04Z`.
  *
@@ -295,7 +300,7 @@ export async function Billing({
           />
           <Statements
             org={ctx.orgSlug}
-            today={new Date().toISOString().slice(0, 10)}
+            today={todayUtc()}
             allowed={readsStatements(ctx)}
           />
         </div>

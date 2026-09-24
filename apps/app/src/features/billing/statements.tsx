@@ -21,6 +21,7 @@ import {
   type StatementFieldError,
   type StatementForm,
   type StatementKind,
+  isStatementFieldCode,
   statementPeriodInput,
 } from "./statement-period";
 import { Section } from "./section";
@@ -120,12 +121,10 @@ export function Statements({
             result.reason === "invalid" &&
             (result.field === "anchor" ||
               result.field === "firstDay" ||
-              result.field === "lastDay")
+              result.field === "lastDay") &&
+            isStatementFieldCode(result.code)
           ) {
-            setFieldError({
-              field: result.field,
-              code: result.code as StatementFieldError["code"],
-            });
+            setFieldError({ field: result.field, code: result.code });
             setOutcome({ kind: "idle" });
             return;
           }
