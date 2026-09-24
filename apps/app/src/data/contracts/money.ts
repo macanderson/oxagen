@@ -127,6 +127,20 @@ export function ratioOfMicros(part: Money, whole: Money): number | null {
 }
 
 /**
+ * Orders two amounts by their micros, for a column a person sorts by cost.
+ * Negative when `a` is smaller, positive when larger, zero when equal. The
+ * comparison is exact on the digit strings through BigInt, so two costs a
+ * float would round together still sort apart (INV-09). Amounts in different
+ * currencies have no order between them, so they sort by currency code.
+ */
+export function compareMicros(a: Money, b: Money): number {
+  if (a.currency !== b.currency) return a.currency.localeCompare(b.currency);
+  const x = toBigInt(a.micros);
+  const y = toBigInt(b.micros);
+  return x === y ? 0 : x < y ? -1 : 1;
+}
+
+/**
  * The part of `value` a `share` between 0 and 1 names: the Run page's wasted
  * spend is its cost times the share the rollup did not count as productive.
  * The share is rounded to a millionth and the micros are divided by BigInt, so

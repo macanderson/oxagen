@@ -70,7 +70,7 @@ import {
   parkedRunIds,
   RUN_CHIPS,
   ROWS_PER_PAGE,
-  type RowsPerPage,
+  rowsPerPageOf,
   type RowWords,
   type RunChip,
   type SortKey,
@@ -470,7 +470,7 @@ function ListBar({
           onChange={(event) => {
             setQuery({
               ...query,
-              perPage: Number(event.target.value) as RowsPerPage,
+              perPage: rowsPerPageOf(event.target.value),
               page: 1,
             });
           }}
