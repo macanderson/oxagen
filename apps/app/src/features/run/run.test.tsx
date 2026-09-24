@@ -140,11 +140,6 @@ async function renderRun(
     spine?: string;
     viewer?: typeof ctx;
     viewerName?: string | null;
-    /**
-     * Render inside act and let the settled `get_run_work` read through, for
-     * a test about what the checkout and subagent strips draw from it.
-     */
-    settle?: boolean;
   } = {},
 ) {
   const { source, calls } = runSource(reads);
@@ -162,16 +157,15 @@ async function renderRun(
     viewerName: view.viewerName ?? null,
     now: NOW,
   });
-  if (view.settle === true) {
-    let rendered: HTMLElement | undefined;
-    await act(async () => {
-      rendered = render(<IntlProvider>{element}</IntlProvider>).container;
-      await Promise.resolve();
-    });
-    if (rendered === undefined) throw new Error("the page did not render");
-    return { container: rendered, calls };
-  }
-  const { container } = render(<IntlProvider>{element}</IntlProvider>);
+  // The header's checkout strips suspend on the work read. A render inside a
+  // synchronous act never flushes that retry, so the strips stayed on their
+  // fallback; awaiting act lets the resolved read land. Every render awaits
+  // it, so no test has to opt in.
+  let container!: HTMLElement;
+  await act(async () => {
+    ({ container } = render(<IntlProvider>{element}</IntlProvider>));
+    await Promise.resolve();
+  });
   return { container, calls };
 }
 
@@ -503,48 +497,44 @@ describe("header", () => {
       firstSeq: "1",
       lastSeq,
     });
-    await renderRun(
-      {
-        detail: ok(runDetail()),
-        transcript: ok(runTranscript()),
-        work: ok({
-          runId: "tse_7k2m9q",
-          machine: null,
-          checkouts: [
-            checkout("co_1", "/Users/mac/Projects/oxagen", "main", "9"),
-            checkout(
-              "co_2",
-              "/Users/mac/Projects/.worktrees/oxagen/run-header-facts",
-              "fix/run-header-facts",
-              "40",
-            ),
-          ],
-          diffs: [],
-          pullRequests: [],
-          subagents: [
-            {
-              ref: "a0182b6cd3a21d284",
-              type: "Explore",
-              firstSeq: "12",
-              lastSeq: "30",
-              stopped: true,
-            },
-            {
-              ref: "b77c01e9f2d4a8c10",
-              type: null,
-              firstSeq: "31",
-              lastSeq: "31",
-              stopped: false,
-            },
-          ],
-          complete: true,
-          warnings: [],
-        }),
-      },
-      { settle: true },
-    );
-    await screen.findByTestId("run-checkout-repo");
-    const strip = within(screen.getByTestId("run-checkout"));
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      work: ok({
+        runId: "tse_7k2m9q",
+        machine: null,
+        checkouts: [
+          checkout("co_1", "/Users/mac/Projects/oxagen", "main", "9"),
+          checkout(
+            "co_2",
+            "/Users/mac/Projects/.worktrees/oxagen/run-header-facts",
+            "fix/run-header-facts",
+            "40",
+          ),
+        ],
+        diffs: [],
+        pullRequests: [],
+        subagents: [
+          {
+            agentRef: "a0182b6cd3a21d284",
+            type: "Explore",
+            firstSeq: "12",
+            lastSeq: "30",
+            stopped: true,
+          },
+          {
+            agentRef: "b77c01e9f2d4a8c10",
+            type: null,
+            firstSeq: "31",
+            lastSeq: "31",
+            stopped: false,
+          },
+        ],
+        complete: true,
+        warnings: [],
+      }),
+    });
+    const strip = within(await screen.findByTestId("run-checkout"));
     // The checkout touched last (seq 40 beats seq 9) is the one shown.
     expect(
       strip.getByRole("link", { name: "macanderson/oxagen" }),
@@ -579,61 +569,58 @@ describe("header", () => {
       url: "https://github.com/Acme/core",
       connected: true,
     };
-    await renderRun(
-      {
-        detail: ok(runDetail()),
-        transcript: ok(runTranscript()),
-        outputs: ok(
-          runOutputs([
-            runOutputNode({
-              seq: "20",
-              kind: "pr",
-              name: "#41",
-              where: "acme/core",
-              state: "open",
-              note: "https://github.com/acme/core/pull/41",
-              stat: null,
-            }),
-            runOutputNode({
-              seq: "30",
-              kind: "pr",
-              name: "#7",
-              where: "acme/tools",
-              state: "open",
-              note: "https://github.com/acme/tools/pull/7",
-              stat: null,
-            }),
-          ]),
-        ),
-        work: ok({
-          runId: "tse_7k2m9q",
-          machine: null,
-          checkouts: [],
-          diffs: [],
-          pullRequests: [
-            {
-              repository: repo,
-              number: 41,
-              url: `${repo.url}/pull/41`,
-              title: "Cut the branch",
-              state: "merged",
-              headSha: null,
-              headRef: "release/3.2",
-              association: "recorded",
-              checkoutRefs: [],
-              observedAt: "2026-09-23T10:00:00.000Z",
-              current: true,
-              ci: null,
-              diff: null,
-            },
-          ],
-          subagents: [],
-          complete: true,
-          warnings: [],
-        }),
-      },
-      { settle: true },
-    );
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      outputs: ok(
+        runOutputs([
+          runOutputNode({
+            seq: "20",
+            kind: "pr",
+            name: "#41",
+            where: "acme/core",
+            state: "open",
+            note: "https://github.com/acme/core/pull/41",
+            stat: null,
+          }),
+          runOutputNode({
+            seq: "30",
+            kind: "pr",
+            name: "#7",
+            where: "acme/tools",
+            state: "open",
+            note: "https://github.com/acme/tools/pull/7",
+            stat: null,
+          }),
+        ]),
+      ),
+      work: ok({
+        runId: "tse_7k2m9q",
+        machine: null,
+        checkouts: [],
+        diffs: [],
+        pullRequests: [
+          {
+            repository: repo,
+            number: 41,
+            url: `${repo.url}/pull/41`,
+            title: "Cut the branch",
+            state: "merged",
+            headSha: null,
+            headRef: "release/3.2",
+            association: "recorded",
+            checkoutRefs: [],
+            observedAt: "2026-09-23T10:00:00.000Z",
+            current: true,
+            ci: null,
+            diff: null,
+          },
+        ],
+        subagents: [],
+        complete: true,
+        warnings: [],
+      }),
+    });
     await screen.findByTestId("run-checkout-repo");
     const strip = within(screen.getByTestId("run-checkout"));
     const pulls = strip.getAllByTestId("run-checkout-pr");

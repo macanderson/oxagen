@@ -118,13 +118,13 @@ describe("runs.list", () => {
             frames: 9,
             cost: null,
             reportedCost: null,
-            model: viewModel,
-            harness: null,
-            machine,
+            reportedTokens: null,
             effort: null,
             thinking: null,
             permissionMode: null,
-            reportedTokens: null,
+            model: viewModel,
+            harness: null,
+            machine,
             taskRef: null,
             name: null,
             summary: null,
@@ -847,6 +847,9 @@ describe("runs.work", () => {
         diff: null,
       },
     ],
+    // `get_run_work` always sends this array, empty for a ledger run
+    // (`run.work.get.ts`, `subagents`). The adapter maps it unguarded, so a
+    // fixture that omits it tests a shape the wire never sends.
     subagents: [
       {
         id: "a0182b6cd3a21d284",
@@ -876,9 +879,10 @@ describe("runs.work", () => {
       checkoutRefs: ["chk_1"],
     });
     expect(read.value.pullRequests[0]).not.toHaveProperty("checkoutIds");
-    // A subagent's id is the harness's, not Oxagen's, so it reads as a ref.
+    // The harness mints a subagent's id, so the view carries it as `agentRef`
+    // rather than an `id` a reader would take for a public id (INV-11).
     expect(read.value.subagents?.[0]).toMatchObject({
-      ref: "a0182b6cd3a21d284",
+      agentRef: "a0182b6cd3a21d284",
       type: "Explore",
     });
     expect(read.value.subagents?.[0]).not.toHaveProperty("id");

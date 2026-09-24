@@ -119,13 +119,13 @@ const runWorkPrSchema = z
   .strict();
 
 /**
- * One subagent the session started, as its hook frames recorded it. `ref` is
- * the harness's own agent id, which Oxagen neither mints nor validates, so it
- * is a ref rather than an id (INV-11).
+ * One subagent the session started, as its hook frames recorded it.
+ * `agentRef` is the harness's own agent id (`hook.agent_id`). Oxagen neither
+ * mints nor validates it, so it is a `…Ref`, not a `PublicId` (INV-11).
  */
 export const RunSubagent = z
   .object({
-    ref: z.string(),
+    agentRef: z.string(),
     type: z.string().nullable(),
     firstSeq: z.string(),
     lastSeq: z.string(),
