@@ -11,7 +11,7 @@ import { z } from "zod";
  * call still meets only that floor until the server enforces the same policy
  * (#3888).
  */
-export const PASSWORD_MIN = 12;
+const PASSWORD_MIN = 12;
 const PASSWORD_MAX = 128;
 const HAS_SYMBOL = /[^A-Za-z0-9]/;
 const HAS_DIGIT = /[0-9]/;

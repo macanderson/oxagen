@@ -42,7 +42,10 @@ export async function InvitationNotFound() {
   );
 }
 
-/** Two letters for the inviter's tile: the first letters of the first and last words. */
+/**
+ * Two letters for the inviter's tile: the first letters of the first and last words.
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export function initialsOf(name: string): string {
   const words = name.trim().split(/\s+/).filter(Boolean);
   const first = words[0]?.charAt(0) ?? "";

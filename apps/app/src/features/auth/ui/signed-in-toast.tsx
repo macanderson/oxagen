@@ -8,11 +8,8 @@
 // one toast stack (@/ui/toast), which removes it after TOAST_MS.
 import { useTranslations } from "next-intl";
 import { useEffect, useRef } from "react";
-import { TOAST_MS, ToastStack, useToasts } from "@/ui/toast";
+import { ToastStack, useToasts } from "@/ui/toast";
 import { takeSignedIn } from "../auth-client";
-
-/** How long the toast stays, as in the design. */
-export const SIGNED_IN_TOAST_MS = TOAST_MS;
 
 export function SignedInToast({ name }: { name: string }) {
   const t = useTranslations("auth");

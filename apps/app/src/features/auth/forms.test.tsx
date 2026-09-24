@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { routes } from "@/shared/safe-path";
 import { IntlProvider } from "@/test/intl";
+import { TOAST_MS } from "@/ui/toast";
 
 const router = { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() };
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
@@ -54,9 +55,7 @@ const { VerifyPanel } = await import("./verify-panel");
 const { InviteDecision } = await import("./invite-decision");
 const { OAuthButtons } = await import("./ui/oauth-buttons");
 const { InviteHint } = await import("./ui/invite-hint");
-const { SignedInToast, SIGNED_IN_TOAST_MS } = await import(
-  "./ui/signed-in-toast"
-);
+const { SignedInToast } = await import("./ui/signed-in-toast");
 
 function renderWithIntl(ui: React.ReactNode) {
   return render(<IntlProvider>{ui}</IntlProvider>);
@@ -1244,7 +1243,7 @@ describe("SignedInToast", () => {
       // Taken once, even when React runs effects twice.
       expect(live.takeSignedIn).toHaveBeenCalledTimes(1);
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(SIGNED_IN_TOAST_MS);
+        await vi.advanceTimersByTimeAsync(TOAST_MS);
       });
       expect(screen.getByTestId("signed-in-toast")).toBeEmptyDOMElement();
     } finally {

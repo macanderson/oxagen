@@ -26,5 +26,4 @@ export { SignupForm } from "./signup-form";
 export { TwoFactorForm } from "./two-factor-form";
 export { AuthTags } from "./ui/auth-card";
 export { InviteHint } from "./ui/invite-hint";
-export { OAuthButtons } from "./ui/oauth-buttons";
 export { VerifyPanel } from "./verify-panel";

@@ -5,7 +5,7 @@ import { TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 
 /** `.ob-panel { border-radius:14px; padding:20px 22px; gap:16px }` on the house panel tokens. */
-export const authPanel =
+const authPanel =
   "flex min-w-0 flex-col gap-4 rounded-[14px] border border-border bg-card px-[22px] py-5 text-card-foreground";
 
 export function AuthPanel({
@@ -26,7 +26,7 @@ export function AuthPanel({
  * Split a catalog message at its first sentence: the design sets what happened
  * in bold and what to do after it (`obErr('<b>…</b> …')`).
  */
-export function splitLead(message: string): [string, string] {
+function splitLead(message: string): [string, string] {
   const at = message.search(/[.?]\s/);
   if (at === -1) return [message, ""];
   return [message.slice(0, at + 1), message.slice(at + 2)];
