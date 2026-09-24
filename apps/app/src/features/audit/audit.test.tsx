@@ -546,7 +546,7 @@ describe("Events", () => {
 
   it("draws the design's numbered pager when the window read holds every row", async () => {
     const rows = Array.from({ length: 30 }, (_, i) =>
-      event({ request: `req_${i}` }),
+      event({ request: `req_${String(i)}` }),
     );
     answer({
       window: recordOf(rows),
@@ -581,7 +581,7 @@ describe("Events", () => {
 
   it("folds a long record into 1 2 … 45, as the design draws it", async () => {
     const rows = Array.from({ length: 200 }, (_, i) =>
-      event({ request: `req_${i}` }),
+      event({ request: `req_${String(i)}` }),
     );
     answer({
       window: recordOf(rows),
@@ -1084,7 +1084,7 @@ describe("tabs", () => {
       const labels = [
         ...screen.getAllByRole("heading"),
         ...document.querySelectorAll("dt, option, th"),
-      ].map((each) => each.textContent ?? "");
+      ].map((each) => each.textContent);
       expect(labels.length).toBeGreaterThan(0);
       for (const text of labels) {
         expect(text).not.toMatch(/·|,|\b(not|never)\b/);
@@ -1391,8 +1391,10 @@ describe("the header's gold action", () => {
       expect(within(dialog).getByLabelText(field)).toBeDisabled();
     }
     // From and To stack full width on a phone and pair up on a desktop.
-    const dates = within(dialog).getByLabelText("From").closest("label")
-      ?.parentElement as HTMLElement;
+    const dates = within(dialog)
+      .getByLabelText("From")
+      .closest("label")?.parentElement;
+    if (dates == null) throw new Error("no From and To row");
     expect(dates.className).toContain("grid-cols-1");
     expect(dates.className).toContain("md:grid-cols-2");
     expect(

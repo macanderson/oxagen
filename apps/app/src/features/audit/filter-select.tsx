@@ -22,35 +22,35 @@ export function FilterSelect(
   >,
 ) {
   // The last key pressed on the select, or null after a pointer press.
-  const lastKey = useRef<string | null>(null);
+  const lastKeyRef = useRef<string | null>(null);
   // A value stepped to by keyboard that has not been applied yet.
-  const stepped = useRef(false);
+  const steppedRef = useRef(false);
   const apply = (select: HTMLSelectElement) => {
-    stepped.current = false;
+    steppedRef.current = false;
     select.form?.requestSubmit();
   };
   return (
     <select
       {...props}
       onPointerDown={() => {
-        lastKey.current = null;
+        lastKeyRef.current = null;
       }}
       onKeyDown={(event) => {
-        lastKey.current = event.key;
-        if (event.key === "Enter" && stepped.current) {
+        lastKeyRef.current = event.key;
+        if (event.key === "Enter" && steppedRef.current) {
           event.preventDefault();
           apply(event.currentTarget);
         }
       }}
       onChange={(event) => {
-        if (lastKey.current === null || COMMIT.has(lastKey.current)) {
+        if (lastKeyRef.current === null || COMMIT.has(lastKeyRef.current)) {
           apply(event.currentTarget);
           return;
         }
-        stepped.current = true;
+        steppedRef.current = true;
       }}
       onBlur={(event) => {
-        if (stepped.current) apply(event.currentTarget);
+        if (steppedRef.current) apply(event.currentTarget);
       }}
     />
   );

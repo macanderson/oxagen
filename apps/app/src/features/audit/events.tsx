@@ -571,7 +571,7 @@ export function EventsPanel({
 }) {
   const t = useTranslations("audit.events");
   const tiles = useTranslations("audit.tiles");
-  const format = useFormatter();
+  const locale = useLocale();
   const count = selected(query, rows);
   return (
     <section
@@ -599,8 +599,8 @@ export function EventsPanel({
             )}
             count={
               rows.complete
-                ? format.number(count)
-                : tiles("atLeast", { count: format.number(count) })
+                ? formatCount(count, locale)
+                : tiles("atLeast", { count: formatCount(count, locale) })
             }
             n={count}
             range={
