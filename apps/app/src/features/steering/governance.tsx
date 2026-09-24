@@ -49,7 +49,11 @@ function modeInForce(
   return governance.mode === "invalid" ? null : governance.mode;
 }
 
-/** The TOML the pick would write (`oxGovernanceToml`). */
+/**
+ * The TOML the pick would write (`oxGovernanceToml`).
+ *
+ * @internal Exported for governance.test.tsx.
+ */
 export function governanceToml(header: string, mode: Mode): string {
   return `${header}\nmode = "${mode}"\nseparation_of_duties = ${mode === "regulated" ? "true" : "false"}\n`;
 }

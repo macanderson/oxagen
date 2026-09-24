@@ -285,14 +285,14 @@ export type SteeringDeliveries = z.infer<typeof SteeringDeliveries>;
  * which the Context PR gate reads as `team`; `invalid` is a file naming no
  * mode the gate knows, which refuses every open and merge.
  */
-export const DeclaredGovernanceMode = z.enum([
+const DeclaredGovernanceMode = z.enum([
   "solo",
   "team",
   "regulated",
   "absent",
   "invalid",
 ]);
-export type DeclaredGovernanceMode = z.infer<typeof DeclaredGovernanceMode>;
+type DeclaredGovernanceMode = z.infer<typeof DeclaredGovernanceMode>;
 
 /**
  * What the Steering hub header reads beside the library (roadmap

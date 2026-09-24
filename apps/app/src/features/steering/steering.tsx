@@ -155,6 +155,8 @@ function instantOfRead(): string {
  * The failed read's trace instant in UTC, as the design prints it:
  * `2026-09-11 09:16:04Z`. A trace line is quoted into an incident, so it
  * carries one zone for every reader rather than the viewer's own.
+ *
+ * @internal Exported for steering.test.tsx.
  */
 export function traceInstant(readAt: string): string {
   const at = new Date(readAt);

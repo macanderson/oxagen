@@ -53,7 +53,7 @@ const note =
 type Row = RecordPage["records"][number];
 
 /** Within a kind, by force, then by lineage: the assembler's order (`STG_KIND_ORDER`, `STG_FORCE_ORDER`, id). */
-export function assemblerOrder(rows: readonly Row[]): Row[] {
+function assemblerOrder(rows: readonly Row[]): Row[] {
   const rank = (row: Row) => (row.force === null ? 4 : FORCE_ORDER[row.force]);
   return [...rows].sort(
     (a, b) =>

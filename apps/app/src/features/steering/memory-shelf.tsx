@@ -54,12 +54,12 @@ const note =
 const buttonDanger = `${buttonSecondary} border-error/40 text-error-ink hover:border-error`;
 
 /** The assembler's budget unit over the line a memory would be delivered as. */
-export function memoryTokens(memory: MemoryItem): number {
+function memoryTokens(memory: MemoryItem): number {
   return budgetTokens(`- ${memory.body}`);
 }
 
 /** The strip's figures, each derived from the rows beneath it. */
-export function memoryStrip(memories: readonly MemoryItem[]) {
+function memoryStrip(memories: readonly MemoryItem[]) {
   const byClass = CLASSES.map(
     (cls) =>
       [cls, memories.filter((m) => m.memoryClass === cls).length] as const,

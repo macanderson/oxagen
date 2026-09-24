@@ -13,7 +13,7 @@ import type { ReactNode } from "react";
 import { panel, panelHeader, panelTitle } from "@/ui/control-styles";
 
 /** `.note { border-left:2px solid var(--gold); font-size:12.5px; color:var(--muted) }` */
-export const note =
+const note =
   "border-l-2 border-gold py-0.5 pl-3 text-[12.5px] text-muted-foreground";
 
 export function Note({

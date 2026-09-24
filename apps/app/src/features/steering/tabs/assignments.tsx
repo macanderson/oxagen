@@ -40,11 +40,11 @@ import { code, Note, TabPanel, Unrecorded } from "../tab-parts";
 import { type SteeringAt, steeringLink } from "../view";
 
 /** The scopes an item can carry, in the design's order. */
-export const SCOPES = ["org", "workspace", "repository", "agent"] as const;
-export type Scope = (typeof SCOPES)[number];
+const SCOPES = ["org", "workspace", "repository", "agent"] as const;
+type Scope = (typeof SCOPES)[number];
 
 /** Items per scope over the records read, in the design's order; a scope with none is left out. */
-export function scopeCounts(
+function scopeCounts(
   records: RecordPage["records"],
 ): { scope: Scope; items: number }[] {
   const counts = new Map<Scope, number>();

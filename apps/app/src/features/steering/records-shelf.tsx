@@ -109,7 +109,7 @@ const SORTS: readonly Sort[] = ["shown", "asc", "desc"];
  * and `assembleSteering` counts it. Null for a record with no force or no
  * statement, which the assembler drops before counting.
  */
-export function recordTokens(record: PublishedRecord): number | null {
+function recordTokens(record: PublishedRecord): number | null {
   const statement = record.statement?.trim() ?? "";
   if (record.force === null || statement === "") return null;
   const kind =
@@ -122,7 +122,7 @@ export function recordTokens(record: PublishedRecord): number | null {
 }
 
 /** Whether the record's commit is the head the last merge published at. */
-export function publishedByLastMerge(
+function publishedByLastMerge(
   record: PublishedRecord,
   bundle: BundleHead | null,
 ): boolean {
@@ -133,7 +133,7 @@ export function publishedByLastMerge(
 }
 
 /** Newest first, then the reader's sort by statement; the order is stable. */
-export function sortRecords(
+function sortRecords(
   records: readonly PublishedRecord[],
   sort: Sort,
 ): PublishedRecord[] {

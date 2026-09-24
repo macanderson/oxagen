@@ -10,9 +10,9 @@ import { type Read, readOk } from "@/data/read";
 import type { WsCtx } from "@/server/viewer";
 
 /** The most `list_agents` pages one Steering view reads. */
-export const AGENT_READ_PAGES = 10;
+const AGENT_READ_PAGES = 10;
 
-export type SteeringAgent = AgentPage["agents"][number];
+type SteeringAgent = AgentPage["agents"][number];
 
 export type SteeringAgents = {
   /** The enrolled agents read, in the registry's order. */

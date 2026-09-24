@@ -45,7 +45,7 @@ function canEditGates(ctx: WsCtx): boolean {
 }
 
 /** The switches that refuse right now: a cleared switch reaches no agent. */
-export function gatesOf(board: KillSwitchBoard): KillSwitch[] {
+function gatesOf(board: KillSwitchBoard): KillSwitch[] {
   return board.switches.filter((s) => s.on);
 }
 
@@ -199,7 +199,9 @@ function Notices({
           rows={rows}
         />
       )}
-      <div className={`${panelBody} flex flex-col gap-2.5 border-t border-border`}>
+      <div
+        className={`${panelBody} flex flex-col gap-2.5 border-t border-border`}
+      >
         {read.value.truncated ? (
           <Note testId="gates-truncated">{t("truncated")}</Note>
         ) : null}
@@ -233,10 +235,7 @@ function GatesBody({
       {freshness.ok ? (
         <Freshness at={at} read={freshness.value} canEdit={canEditGates(ctx)} />
       ) : (
-        <SteeringReadFailure
-          read={freshness}
-          section={t("freshness.title")}
-        />
+        <SteeringReadFailure read={freshness} section={t("freshness.title")} />
       )}
     </div>
   );

@@ -13,12 +13,7 @@ import type { OxagenTree } from "@/data/contracts/steering";
 import type { Read } from "@/data/read";
 import { SteeringReadFailure } from "./read-failure";
 import { Badge } from "@/ui/badge";
-import {
-  panel,
-  panelBody,
-  panelHeader,
-  panelTitle,
-} from "@/ui/control-styles";
+import { panel, panelBody, panelHeader, panelTitle } from "@/ui/control-styles";
 
 const note =
   "border-l-2 border-gold py-0.5 pl-3 text-[12.5px] text-muted-foreground";
@@ -51,7 +46,7 @@ type Line = { depth: number; name: string; comment: Comment | null };
  * The tree's lines, a directory before what it holds: `rules/` then its
  * files, each indented two spaces a level. The paths arrive sorted.
  */
-export function treeLines(files: readonly string[]): Line[] {
+function treeLines(files: readonly string[]): Line[] {
   const lines: Line[] = [];
   const opened = new Set<string>();
   for (const path of [...files].sort()) {
@@ -112,7 +107,9 @@ function TreeState({ tree }: { tree: Read<OxagenTree> }) {
     ...lines.map((line) => line.depth * 2 + 2 + line.name.length),
   );
   const commentOf = (comment: Comment) =>
-    comment === "governance" ? t("comments.governance", { mode: value.mode }) : t(`comments.${comment}`);
+    comment === "governance"
+      ? t("comments.governance", { mode: value.mode })
+      : t(`comments.${comment}`);
   return (
     <>
       <p className="mb-2 font-mono text-[11.5px] text-dim" data-tree="at">

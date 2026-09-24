@@ -6928,20 +6928,10 @@ type Messages = {
     };
     records: {
       title: string;
-      lead: string;
       filter: string;
       all: string;
-      emptyTitle: string;
-      empty: string;
       emptyKind: string;
       open: string;
-      authority: string;
-      facts: {
-        version: string;
-        commit: string;
-        path: string;
-        published: string;
-      };
       sort: string;
       sorts: {
         shown: string;

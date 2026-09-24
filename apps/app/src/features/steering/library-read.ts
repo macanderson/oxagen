@@ -15,7 +15,7 @@ import { type Read, readOk } from "@/data/read";
 import type { WsCtx } from "@/server/viewer";
 
 /** The most rows the All shelf reads: five calls at the contract's bound. */
-export const LIBRARY_READ_CAP = 1000;
+const LIBRARY_READ_CAP = 1000;
 
 export async function readLibrary(
   ctx: WsCtx,
