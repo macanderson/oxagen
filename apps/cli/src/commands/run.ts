@@ -1,8 +1,9 @@
 /**
  * `oxagen run export <run-id>`, `oxagen run export-status <export-id>`,
- * `oxagen run download <export-id>` and `oxagen run chain <run-id>`: the CLI
- * parity surfaces for `export_run`, `get_run_export` and `get_run_chain`
- * (Mission Control spec §13.4, §14.1; ADR-058).
+ * `oxagen run download <export-id>`, `oxagen run chain <run-id>` and
+ * `oxagen run turns <run-id>`: the CLI parity surfaces for `export_run`,
+ * `get_run_export`, `get_run_chain` and `get_run_turns` (Mission Control spec
+ * §12.9, §13.4, §14.1; ADR-058).
  *
  * `export` queues the signed, offline-verifiable evidence bundle for one
  * sealed run and prints the export id. The bundle is built off the request
@@ -17,6 +18,7 @@
 import { createHash } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { formatUsd } from "@oxagen/billing/rate-card";
 import { apiPostOrThrow } from "../lib/api.js";
 import { getApiUrl } from "../lib/config.js";
 import { createOutput } from "../lib/output.js";
@@ -335,6 +337,103 @@ export async function runChain(
   if (!result.complete) {
     writer.write(
       "The walk was cut short: these are the gaps of a prefix, not of the whole run.",
+    );
+  }
+}
+
+/** Mirrors the `get_run_turns` contract output. */
+interface RunTurnsResult {
+  runId: string;
+  turns: {
+    turn: number;
+    seq: string;
+    at: string;
+    frames: number;
+    modelSteps: number;
+    toolSteps: number;
+    cost: { micros: string; currency: string } | null;
+    cumulativeCost: { micros: string; currency: string } | null;
+    tokens: { inputUncached: number | null; cacheRead: number | null };
+  }[];
+  complete: boolean;
+}
+
+const NOT_RECORDED = "not recorded";
+
+function usdOf(cost: { micros: string } | null): string {
+  return cost === null ? NOT_RECORDED : formatUsd(Number(cost.micros) / 1e6);
+}
+
+/** cache_read ÷ (input_uncached + cache_read), as the Cost tab reads it. */
+function cacheHitOf(tokens: RunTurnsResult["turns"][number]["tokens"]): string {
+  if (tokens.inputUncached === null && tokens.cacheRead === null)
+    return NOT_RECORDED;
+  const read = tokens.cacheRead ?? 0;
+  const total = read + (tokens.inputUncached ?? 0);
+  return total === 0 ? NOT_RECORDED : `${Math.round((read / total) * 100)}%`;
+}
+
+/**
+ * `oxagen run turns <run-id>`: every turn of one run, with its model and tool
+ * steps, frames, cache hit, cost, and the cost so far. A figure the
+ * record does not carry prints as not recorded, never as a zero.
+ */
+export async function runTurns(
+  runId: string,
+  opts: { json?: boolean } = {},
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const out = createOutput({ json: opts.json }, writer);
+  let result: RunTurnsResult;
+  try {
+    result = await apiPostOrThrow<RunTurnsResult>("runs/turns", { runId });
+  } catch (err) {
+    out.error(err, "api");
+    return;
+  }
+  if (out.isJson) {
+    out.data(result);
+    return;
+  }
+  const last = result.turns.at(-1)?.cumulativeCost ?? null;
+  writer.write(
+    `${result.runId}: ${result.turns.length} turn(s), ${usdOf(last)} so far`,
+  );
+  if (result.turns.length === 0) {
+    writer.write("The run has recorded no turn yet.");
+    return;
+  }
+  const rows = [
+    ["Turn", "Model", "Tool", "Frames", "Cache hit", "Cost", "So far"],
+    ...result.turns.map((t) => [
+      String(t.turn),
+      String(t.modelSteps),
+      String(t.toolSteps),
+      String(t.frames),
+      cacheHitOf(t.tokens),
+      usdOf(t.cost),
+      usdOf(t.cumulativeCost),
+    ]),
+  ];
+  const widths = (rows[0] ?? []).map((_, col) =>
+    Math.max(...rows.map((r) => (r[col] ?? "").length)),
+  );
+  writer.write("");
+  for (const r of rows) {
+    writer.write(
+      r
+        .map((cell, col) =>
+          col === 0
+            ? cell.padEnd(widths[col] ?? 0)
+            : cell.padStart(widths[col] ?? 0),
+        )
+        .join("  "),
+    );
+  }
+  if (!result.complete) {
+    writer.write("");
+    writer.write(
+      `The run is longer than one read carries. These are its first ${result.turns.length} turns.`,
     );
   }
 }

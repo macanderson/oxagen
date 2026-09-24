@@ -390,7 +390,8 @@ export async function Agents({
 /** Four tile blocks and a panel of seven rows (agents.md, loading). */
 const TILES = [0, 1, 2, 3];
 const ROWS = [0, 1, 2, 3, 4, 5, 6];
-const bone = "animate-pulse rounded bg-muted motion-reduce:animate-none";
+/** The design's `.sk` shimmer (globals.css), the one every skeleton draws. */
+const bone = "skeleton rounded-md";
 
 export function AgentsLoading() {
   const t = useTranslations("agents.list.states");

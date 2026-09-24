@@ -39,6 +39,7 @@ import {
   readRunFrames,
   type ResolvedRun,
   type RunReadDeps,
+  withoutLateReports,
 } from "./run-read";
 import { tachoRow } from "../run.test-support";
 
@@ -310,5 +311,52 @@ describe("readRunFrames: a wrapped run's subagent chains", () => {
       10,
     );
     expect(own.frames).toHaveLength(3);
+  });
+});
+
+describe("withoutLateReports", () => {
+  type Late = {
+    seq: string;
+    type: string;
+    usageObserved?: boolean;
+    chain?: { sessionUuid: string };
+    usage: { input: number } | null;
+    costMicros: string | null;
+  };
+  const call = (seq: number, over: Partial<Late> = {}): Late => ({
+    seq: String(seq),
+    type: "llm_call",
+    usage: { input: 10 },
+    costMicros: "5",
+    ...over,
+  });
+  const strip = (frames: Late[]) =>
+    withoutLateReports(
+      frames as unknown as Parameters<typeof withoutLateReports>[0],
+    ) as unknown as Late[];
+
+  it("strips a harness report that follows the chain's first observed call, and none before it", () => {
+    const frames = strip([
+      call(1),
+      call(2, { usageObserved: true }),
+      call(3),
+      call(4, { type: "tool_call" }),
+    ]);
+    expect(frames.map((f) => [f.seq, f.costMicros, f.usage])).toEqual([
+      ["1", "5", { input: 10 }],
+      ["2", "5", { input: 10 }],
+      ["3", null, null],
+      // Only a model call is a second account of a metered call.
+      ["4", "5", { input: 10 }],
+    ]);
+  });
+
+  it("holds the rule per chain, so an observed subagent leaves the root's reports standing", () => {
+    const frames = strip([
+      call(1, { chain: { sessionUuid: CHILD }, usageObserved: true }),
+      call(2),
+      call(3, { chain: { sessionUuid: CHILD } }),
+    ]);
+    expect(frames.map((f) => f.costMicros)).toEqual(["5", "5", null]);
   });
 });

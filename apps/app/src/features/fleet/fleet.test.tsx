@@ -858,7 +858,7 @@ describe("not-loaded states", () => {
       }),
     ).toBeInTheDocument();
     expect(empty).toHaveTextContent(
-      "Nothing has reached Oxagen from this workspace. A run appears the moment a registered agent makes its first model call — you do not create runs here, agents do.",
+      "Nothing has reached Oxagen from this workspace. A run appears the moment a registered agent makes its first model call. You do not create runs here. Agents do.",
     );
     expect(
       within(empty).getByRole("link", { name: "Register Agent" }),
@@ -893,8 +893,13 @@ describe("not-loaded states", () => {
       /^trace and region not recorded · \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}Z$/,
     );
     expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
-    // The design's errorState glyph: a circle with an exclamation mark.
-    expect(error.querySelector("svg.lucide-circle-alert")).not.toBeNull();
+    // The design's errorState glyph: a circle with an exclamation mark, in
+    // the failed tone alone.
+    const glyph = error.querySelector("[data-state-icon]");
+    expect(glyph).toHaveAttribute("data-state-icon", "failed");
+    expect(glyph?.querySelector("circle")).not.toBeNull();
+    expect(glyph).toHaveClass("border-error/40");
+    expect(glyph).not.toHaveClass("border-border");
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Try again" }));
     expect(refresh).toHaveBeenCalledOnce();

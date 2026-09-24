@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
 import { dataSource } from "@/data/source";
-import { WelcomeInstaller } from "@/features/onboarding";
+import { WelcomeInstaller, WelcomeLoading } from "@/features/onboarding";
 import { requireViewer } from "@/server/viewer";
 import { firstParam } from "@/shared/safe-path";
 
@@ -16,10 +16,11 @@ type WelcomeInstallerPageProps = PageProps<"/welcome/[org]/[ws]/installer">;
 // The installer package's own screens, opened from Start a run. They sit in
 // the auth shell with no rail: the package, not Oxagen, renders them. The
 // route params, the viewer and the query are request data, so they are read
-// inside <Suspense> (Cache Components).
+// inside <Suspense> (Cache Components), and while they resolve the auth shell
+// holds the skeleton rather than a blank page.
 export default function WelcomeInstallerPage(props: WelcomeInstallerPageProps) {
   return (
-    <Suspense>
+    <Suspense fallback={<WelcomeLoading step="installer" />}>
       <WelcomeInstallerStep {...props} />
     </Suspense>
   );

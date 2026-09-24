@@ -5,8 +5,9 @@
 // composition, every figure read from the page's one derivation.
 //
 // The tab is rendered over `runMetrics` of a scripted run shaped like the
-// mockup's release run (`cost.builders.ts`), so the tests read figures the way
-// the page derives them: the reconciliation tests hold the Tokens instrument,
+// mockup's release run (`cost.builders.ts`), and over the `get_run_turns` read
+// of the same script (`costTurns`), so the tests read figures the way the page
+// derives them: the reconciliation tests hold the Tokens instrument,
 // the total row of Spend by token class and the stat row to one number, and
 // the waterfall's total row to the Shape of the run instrument. The negative
 // tests hold every panel to "not recorded" where the record carries nothing.
@@ -14,7 +15,7 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgentDetail } from "@/data/contracts/agents";
-import type { RunCost, RunTranscript } from "@/data/contracts/run";
+import type { RunCost, RunTranscript, RunTurns } from "@/data/contracts/run";
 import type { RunRow } from "@/data/contracts/runs";
 import { type Read, readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
@@ -22,6 +23,7 @@ import { IntlProvider } from "@/test/intl";
 import {
   costRollup,
   costTranscript,
+  costTurns,
   RELEASE_RUN_CLASSES,
   releaseRunCost,
   releaseRunTurns,
@@ -112,15 +114,18 @@ function props({
   run = RELEASE_RUN,
   cost = readOk(releaseRunCost()),
   transcript = readOk(costTranscript(releaseRunTurns())),
+  turns = readOk(costTurns(releaseRunTurns())),
   agentRead = null,
 }: {
   run?: RunRow;
   cost?: Read<RunCost>;
   transcript?: Read<RunTranscript>;
+  /** The tab's own `get_run_turns` read. */
+  turns?: Read<RunTurns>;
   agentRead?: Read<AgentDetail> | null;
 } = {}): RunTabProps {
   const detail = runDetail({ run });
-  const { source } = runSource({ detail: readOk(detail) });
+  const { source } = runSource({ detail: readOk(detail), turns });
   return {
     ctx,
     source,
@@ -138,11 +143,12 @@ function props({
   };
 }
 
-function renderTab(tab: RunTabProps, { withStats = false } = {}) {
+async function renderTab(tab: RunTabProps, { withStats = false } = {}) {
+  const body = await CostTab(tab);
   return render(
     <IntlProvider>
       {withStats ? <StatRow run={tab.run} metrics={tab.metrics} /> : null}
-      {CostTab(tab)}
+      {body}
     </IntlProvider>,
   );
 }
@@ -156,7 +162,7 @@ function digits(text: string | null | undefined): number {
 
 describe("CostTab", () => {
   it("draws Model fit, the instruments, Spend by area, Tool calls, the waterfall and the two tables, in that order", async () => {
-    const { container } = renderTab(props());
+    const { container } = await renderTab(props());
     const order = [
       "model-fit",
       "run-instruments",
@@ -203,8 +209,8 @@ describe("CostTab", () => {
     await expectNoAxe(container);
   });
 
-  it("holds the Tokens instrument, the token class total and the stat row to one total", () => {
-    renderTab(props(), { withStats: true });
+  it("holds the Tokens instrument, the token class total and the stat row to one total", async () => {
+    await renderTab(props(), { withStats: true });
     const instrument = digits(
       screen.getByTestId("inst-tokens-value").textContent,
     );
@@ -242,8 +248,8 @@ describe("CostTab", () => {
     );
   });
 
-  it("totals the waterfall from its rows and agrees with the Shape of the run instrument", () => {
-    renderTab(props());
+  it("totals the waterfall from its rows and agrees with the Shape of the run instrument", async () => {
+    await renderTab(props());
     const rows = screen.getAllByTestId("waterfall-row");
     expect(rows).toHaveLength(7);
     expect(screen.getAllByTestId("waterfall-bar")).toHaveLength(7);
@@ -273,8 +279,8 @@ describe("CostTab", () => {
     expect(screen.getByTestId("inst-cost")).toHaveTextContent("$0.59 per turn");
   });
 
-  it("counts the tool calls by family and by batch from the transcript", () => {
-    renderTab(props());
+  it("counts the tool calls by family and by batch from the transcript", async () => {
+    await renderTab(props());
     const panel = screen.getByTestId("tool-calls");
     expect(panel).toHaveTextContent("14 calls · 9 batches · 5 families");
     const families = screen.getAllByTestId("family-row");
@@ -294,8 +300,8 @@ describe("CostTab", () => {
     expect(screen.getByTestId("inst-calls")).toHaveTextContent("1 failed");
   });
 
-  it("reads the model fit, names the effort's reason, and offers no action on a run that fits", () => {
-    renderTab(props({ agentRead: agent() }));
+  it("reads the model fit, names the effort's reason, and offers no action on a run that fits", async () => {
+    await renderTab(props({ agentRead: agent() }));
     const fit = screen.getByTestId("model-fit");
     expect(fit).toHaveTextContent("generated · not the record");
     expect(screen.getByTestId("fit-model-card")).toHaveTextContent(
@@ -312,7 +318,7 @@ describe("CostTab", () => {
     expect(read).toHaveTextContent(".oxagen/agents/release-manager.toml");
   });
 
-  it("argues one rung down for a small first-try run, and draws the move as a stub that says what it would do", () => {
+  it("argues one rung down for a small first-try run, and draws the move as a stub that says what it would do", async () => {
     const run = runRow({
       ...RELEASE_RUN,
       turns: 2,
@@ -347,7 +353,7 @@ describe("CostTab", () => {
         ],
       },
     ];
-    renderTab(
+    await renderTab(
       props({
         run,
         transcript: readOk(costTranscript(turns)),
@@ -383,12 +389,12 @@ describe("CostTab", () => {
     );
   });
 
-  it("argues one rung up for a run that took more than one prompt on a small class", () => {
+  it("argues one rung up for a run that took more than one prompt on a small class", async () => {
     const run = runRow({
       ...RELEASE_RUN,
       model: { slug: "claude-haiku-4-5", provider: "anthropic", tier: "haiku" },
     });
-    renderTab(props({ run }));
+    await renderTab(props({ run }));
     const card = screen.getByTestId("fit-model-card");
     expect(card.dataset.verdict).toBe("under");
     expect(card).toHaveTextContent(
@@ -402,14 +408,14 @@ describe("CostTab", () => {
     );
   });
 
-  it("claims no rung for a model the ladder does not know, and no reading for a sealed run read short (negative)", () => {
-    renderTab(props({ run: runRow({ ...RELEASE_RUN, model: null }) }));
+  it("claims no rung for a model the ladder does not know, and no reading for a sealed run read short (negative)", async () => {
+    await renderTab(props({ run: runRow({ ...RELEASE_RUN, model: null }) }));
     expect(screen.getByTestId("fit-model-card")).toHaveTextContent(
       "The run records no model class",
     );
     cleanup();
     const cut = costTranscript(releaseRunTurns());
-    renderTab(
+    await renderTab(
       props({
         run: runRow({ ...RELEASE_RUN, sealedAt: new Date(NOW).toISOString() }),
         transcript: readOk({ ...cut, cursor: "next", complete: false }),
@@ -424,8 +430,8 @@ describe("CostTab", () => {
     expect(screen.queryByTestId("fit-move")).toBeNull();
   });
 
-  it("says not recorded wherever the record carries nothing, and never prints a figure for it (negative)", () => {
-    renderTab(props());
+  it("says not recorded wherever the record carries nothing, and never prints a figure for it (negative)", async () => {
+    await renderTab(props());
     const areas = screen.getAllByTestId("area-row");
     expect(areas.map((row) => row.dataset.area)).toEqual([
       "initial",
@@ -462,8 +468,8 @@ describe("CostTab", () => {
     );
   });
 
-  it("shows each class's recorded cost, which sum to the run's recorded cost, and says they are recorded", () => {
-    renderTab(props());
+  it("shows each class's recorded cost, which sum to the run's recorded cost, and says they are recorded", async () => {
+    await renderTab(props());
     const composition = screen.getByTestId("prompt-composition");
     // Input: $1.244860 recorded for uncached input plus $0.607784 for cache
     // reads is $1.852644 over 732,270 tokens, $2.530001 a million.
@@ -501,10 +507,12 @@ describe("CostTab", () => {
     expect(note).not.toHaveTextContent("price book");
   });
 
-  it("shows no class cost when the rollup names no model, and says why (negative)", () => {
+  it("shows no class cost when the rollup names no model, and says why (negative)", async () => {
     const rollup = releaseRunCost().rollup;
     if (rollup === null) throw new Error("the builder's rollup is present");
-    renderTab(props({ cost: readOk({ rollup: { ...rollup, byModel: [] } }) }));
+    await renderTab(
+      props({ cost: readOk({ rollup: { ...rollup, byModel: [] } }) }),
+    );
     for (const row of screen.getAllByTestId("token-class-row"))
       expect(row.children[2]).toHaveTextContent("not recorded");
     expect(screen.getByTestId("token-class-total")).toHaveTextContent(
@@ -522,8 +530,8 @@ describe("CostTab", () => {
     );
   });
 
-  it("says the cache's saving is not recorded on a row rolled up before savings were, never a zero (negative)", () => {
-    renderTab(
+  it("says the cache's saving is not recorded on a row rolled up before savings were, never a zero (negative)", async () => {
+    await renderTab(
       props({
         cost: readOk(
           costRollup({
@@ -555,11 +563,11 @@ describe("CostTab", () => {
     expect(screen.getByTestId("token-class-total")).toHaveTextContent("$4.13");
   });
 
-  it("claims neither a saving nor a missing one for a run that read nothing from the cache (negative)", () => {
+  it("claims neither a saving nor a missing one for a run that read nothing from the cache (negative)", async () => {
     // The rollup records a zero saving for a model that read nothing, and
     // `runMetrics` claims no saving over it, so `cacheSaved` is null here
     // exactly as on a legacy row. Only the cache-read count tells them apart.
-    renderTab(
+    await renderTab(
       props({
         cost: readOk(
           costRollup({
@@ -591,8 +599,8 @@ describe("CostTab", () => {
     expect(stat).not.toHaveTextContent("saved about");
   });
 
-  it("shows the recorded saving on the instrument and the stat row", () => {
-    renderTab(props(), { withStats: true });
+  it("shows the recorded saving on the instrument and the stat row", async () => {
+    await renderTab(props(), { withStats: true });
     // 607,784 cache reads, recorded as saving $5.470056.
     expect(screen.getByTestId("inst-cost")).toHaveTextContent(
       "cache hit 83% · saved about $5.47 against an uncached prompt",
@@ -602,10 +610,10 @@ describe("CostTab", () => {
     );
   });
 
-  it("says the costs cover only the priced calls when the rollup could not price some", () => {
+  it("says the costs cover only the priced calls when the rollup could not price some", async () => {
     const rollup = releaseRunCost().rollup;
     if (rollup === null) throw new Error("the builder's rollup is present");
-    renderTab(
+    await renderTab(
       props({
         cost: readOk({
           rollup: {
@@ -627,8 +635,8 @@ describe("CostTab", () => {
     expect(screen.getByTestId("token-class-total")).toHaveTextContent("$4.13");
   });
 
-  it("says the rollup has not run rather than printing zeros (negative)", () => {
-    renderTab(props({ cost: readOk({ rollup: null }) }));
+  it("says the rollup has not run rather than printing zeros (negative)", async () => {
+    await renderTab(props({ cost: readOk({ rollup: null }) }));
     expect(screen.getByTestId("cost-not-rolled-up")).toHaveTextContent(
       "A zero here would be a measurement",
     );
@@ -649,8 +657,8 @@ describe("CostTab", () => {
     );
   });
 
-  it("keeps the run row's cost when the cost read fails, names no basis it lacks, and claims no retry count (negative)", () => {
-    renderTab(
+  it("keeps the run row's cost when the cost read fails, names no basis it lacks, and claims no retry count (negative)", async () => {
+    await renderTab(
       props({
         run: runRow({
           ...RELEASE_RUN,
@@ -669,18 +677,19 @@ describe("CostTab", () => {
     );
   });
 
-  it("draws the cost tile as not recorded, with no per-turn figure and every column unpriced, when nothing carried a cost (negative)", () => {
+  it("draws the cost tile as not recorded, with no per-turn figure and every column unpriced, when nothing carried a cost (negative)", async () => {
     const unpriced = releaseRunTurns().map((turn) => ({
       ...turn,
       steps: turn.steps.map((step) =>
         step.kind === "model" ? { ...step, micros: null } : step,
       ),
     }));
-    renderTab(
+    await renderTab(
       props({
         run: runRow({ ...RELEASE_RUN, cost: null }),
         cost: readOk({ rollup: null }),
         transcript: readOk(costTranscript(unpriced)),
+        turns: readOk(costTurns(unpriced)),
       }),
     );
     const tile = screen.getByTestId("inst-cost");
@@ -700,8 +709,8 @@ describe("CostTab", () => {
     }
   });
 
-  it("says the cache hit was not recorded, and leaves out the reasoning and per-call parts the rollup did not carry (negative)", () => {
-    renderTab(
+  it("says the cache hit was not recorded, and leaves out the reasoning and per-call parts the rollup did not carry (negative)", async () => {
+    await renderTab(
       props({
         cost: readOk(
           costRollup({
@@ -738,10 +747,10 @@ describe("CostTab", () => {
     );
   });
 
-  it("leaves the total without a cost when a model the run used has no recorded split, and names no recorded cost or price entry the record lacks (negative)", () => {
+  it("leaves the total without a cost when a model the run used has no recorded split, and names no recorded cost or price entry the record lacks (negative)", async () => {
     const rollup = releaseRunCost().rollup;
     if (rollup === null) throw new Error("the builder's rollup is present");
-    renderTab(
+    await renderTab(
       props({
         run: runRow({ ...RELEASE_RUN, cost: null }),
         cost: readOk({
@@ -780,10 +789,10 @@ describe("CostTab", () => {
     ).toHaveTextContent("not recorded");
   });
 
-  it("names a recorded cost whose basis nobody recorded as such in the classes' note (negative)", () => {
+  it("names a recorded cost whose basis nobody recorded as such in the classes' note (negative)", async () => {
     const rollup = releaseRunCost().rollup;
     if (rollup === null) throw new Error("the builder's rollup is present");
-    renderTab(
+    await renderTab(
       props({
         cost: readOk({
           rollup: {
@@ -798,17 +807,69 @@ describe("CostTab", () => {
     );
   });
 
-  it("names the transcript read's failure where the ledger would be (negative)", () => {
-    renderTab(props({ transcript: readError("frame_store_unreachable", 502) }));
+  it("draws the ledger from get_run_turns when the transcript read fails (negative)", async () => {
+    await renderTab(
+      props({ transcript: readError("frame_store_unreachable", 502) }),
+    );
+    expect(screen.getAllByTestId("waterfall-row")).toHaveLength(7);
+    expect(screen.getByTestId("inst-shape-value")).toHaveTextContent("7turns");
+    expect(screen.getByTestId("tool-calls")).toHaveTextContent(
+      "The transcript was not read, so the calls are not counted.",
+    );
+  });
+
+  it("reads get_run_turns once, for this run", async () => {
+    const tab = props();
+    const { source, calls } = runSource({
+      detail: readOk(tab.detail),
+      turns: readOk(costTurns(releaseRunTurns())),
+    });
+    await renderTab({ ...tab, source });
+    expect(calls.turns).toEqual([[ctx, RELEASE_RUN.id]]);
+  });
+
+  it("names the per-turn read's failure where the ledger would be (negative)", async () => {
+    await renderTab(
+      props({ turns: readError("frame_store_unreachable", 502) }),
+    );
     expect(screen.getByTestId("waterfall-panel")).toHaveTextContent(
       "frame_store_unreachable",
     );
     expect(screen.queryAllByTestId("waterfall-row")).toHaveLength(0);
+    expect(screen.queryByTestId("waterfall-cut")).toBeNull();
     expect(screen.getByTestId("inst-shape-value")).toHaveTextContent(
       "not recorded",
     );
-    expect(screen.getByTestId("tool-calls")).toHaveTextContent(
-      "The transcript was not read, so the calls are not counted.",
+    const tile = screen.getByTestId("inst-cost");
+    expect(tile).not.toHaveTextContent("per turn");
+    expect(tile).not.toHaveTextContent("was the dearest");
+    expect(screen.queryAllByTestId("inst-cost-col")).toHaveLength(0);
+    // The run's cost is the rollup's, which the failed read does not touch.
+    expect(tile).toHaveTextContent("$4.13");
+  });
+
+  it("says the ledger shows the run's first turns when the run has more than one read carries (negative)", async () => {
+    const turns = costTurns(releaseRunTurns());
+    await renderTab(props({ turns: readOk({ ...turns, complete: false }) }));
+    expect(screen.getAllByTestId("waterfall-row")).toHaveLength(7);
+    expect(screen.getByTestId("waterfall-cut")).toHaveTextContent(
+      "The run is longer than one read carries, so this shows its first 7 turns.",
     );
+  });
+
+  it("draws every turn of a run whose transcript stopped short, with no cut note (negative)", async () => {
+    const cut = costTranscript(releaseRunTurns());
+    await renderTab(
+      props({
+        transcript: readOk({
+          ...cut,
+          entries: cut.entries.slice(0, 20),
+          cursor: "next",
+          complete: false,
+        }),
+      }),
+    );
+    expect(screen.getAllByTestId("waterfall-row")).toHaveLength(7);
+    expect(screen.queryByTestId("waterfall-cut")).toBeNull();
   });
 });

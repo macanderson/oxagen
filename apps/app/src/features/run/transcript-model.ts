@@ -67,6 +67,42 @@ export function isNonEmpty(
   return entries.length > 0;
 }
 
+/**
+ * `page` merged into `held` by each entry's opening frame (`entryKey`): an
+ * entry the reader already holds is replaced where it stands, and a new one
+ * is appended in the order the page sent it.
+ *
+ * `get_run_transcript` sends an entry again when it has grown since it was
+ * sent: a step that gained its result, a turn that gained a step, a Task call
+ * whose subagent recorded more (#4048). The grown copy is the one to show,
+ * and appending it drew the same step twice. Replacing in place keeps the
+ * row where the reader saw it, and keeps the last entry the run's latest.
+ */
+export function mergeEntries(
+  held: Frames,
+  page: readonly TranscriptEntry[],
+): Frames;
+export function mergeEntries(
+  held: readonly TranscriptEntry[],
+  page: readonly TranscriptEntry[],
+): TranscriptEntry[];
+export function mergeEntries(
+  held: readonly TranscriptEntry[],
+  page: readonly TranscriptEntry[],
+): readonly TranscriptEntry[] {
+  const out = [...held];
+  const at = new Map(out.map((entry, index) => [entryKey(entry), index]));
+  for (const entry of page) {
+    const key = entryKey(entry);
+    const index = at.get(key);
+    if (index === undefined) {
+      at.set(key, out.length);
+      out.push(entry);
+    } else out[index] = entry;
+  }
+  return out;
+}
+
 /** The spine's dot: what kind of thing a step was. */
 type StepNode = "model" | "tool" | "policy" | "control" | "deny";
 
@@ -785,7 +821,12 @@ function isExchange(value: unknown): value is Record<string, unknown> {
   );
 }
 
-/** The frames' cost records summed; null when none carried one. */
+/**
+ * The frames' cost records summed; null when none carried one.
+ *
+ * @internal Exported for its unit test. `stepDigest` is its production
+ * caller; the Cost tab's per-turn cost comes from `get_run_turns` since #4067.
+ */
 export function frameCost(frames: readonly TranscriptEntry[]): Money | null {
   return sumMoney(
     frames.flatMap((frame) => (frame.cost === null ? [] : [frame.cost])),

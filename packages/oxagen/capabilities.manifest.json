@@ -5242,6 +5242,26 @@
       }
     },
     {
+      "name": "get_run_turns",
+      "file": "run.turns.get.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "cli": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "get_run_work",
       "file": "run.work.get.ts",
       "domain": "run",

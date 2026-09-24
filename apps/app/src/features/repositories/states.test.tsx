@@ -8,7 +8,7 @@ import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
-import { DeniedBody, ErrorBody } from "./states";
+import { DeniedBody, ErrorBody, LoadingBody } from "./states";
 
 vi.mock("next/link", () => ({
   default: ({ children, ...rest }: { href: string; children: ReactNode }) => (
@@ -22,6 +22,22 @@ afterEach(async () => {
   } finally {
     cleanup();
   }
+});
+
+describe("the loading state", () => {
+  it("draws four tiles and seven rows, each bone the design's shimmer", () => {
+    render(
+      <IntlProvider>
+        <LoadingBody />
+      </IntlProvider>,
+    );
+    const loading = screen.getByTestId("repositories-loading");
+    expect(loading).toHaveAttribute("aria-busy", "true");
+    expect(loading.querySelectorAll(".skeleton.h-16")).toHaveLength(4);
+    expect(loading.querySelectorAll(".skeleton.h-9")).toHaveLength(7);
+    expect(loading.querySelector(".animate-pulse")).toBeNull();
+    expect(loading.textContent).toBe("");
+  });
 });
 
 describe("the error state", () => {

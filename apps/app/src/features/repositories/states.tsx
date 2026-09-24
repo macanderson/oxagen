@@ -85,7 +85,8 @@ function StateWrap({
   );
 }
 
-const bar = "animate-pulse rounded-md bg-hl motion-reduce:animate-none";
+/** The design's `.sk` shimmer (globals.css), the one every skeleton draws. */
+const bar = "skeleton rounded-md";
 
 /** The skeleton (mockup `skeleton()`): four tiles and a panel of rows, textless. */
 export function LoadingBody() {
@@ -100,7 +101,7 @@ export function LoadingBody() {
     >
       <div className="grid gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(175px,1fr))]">
         {[0, 1, 2, 3].map((tile) => (
-          <div key={tile} className={`${bar} h-16 rounded-xl`} />
+          <div key={tile} className="skeleton h-16 rounded-[11px]" />
         ))}
       </div>
       <div className={panel}>

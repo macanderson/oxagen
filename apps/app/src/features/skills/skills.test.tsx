@@ -98,6 +98,7 @@ const source: DataSource = {
     get: vi.fn(),
     frameBody: vi.fn(),
     cost: vi.fn(),
+    turns: vi.fn(),
     transcript: vi.fn(),
     chain: vi.fn(),
     outputs: vi.fn(),
@@ -363,6 +364,10 @@ describe("Skills › refusals", () => {
     read.mockResolvedValue(readError("session_store_unavailable", 503));
     await renderSkills("c1");
     expect(state()).toBe("error");
+    // The design's error state: the state wrap in the failed tone.
+    expect(
+      screen.getByTestId("skills-error").querySelector("[data-state-icon]"),
+    ).toHaveAttribute("data-state-icon", "failed");
     expect(
       screen.getByRole("heading", { name: "Skills could not be loaded" }),
     ).toBeInTheDocument();
@@ -381,6 +386,9 @@ describe("Skills › loading", () => {
     expect(skeleton).toHaveAttribute("aria-busy", "true");
     expect(skeleton).toHaveAttribute("data-state", "loading");
     expect(skeleton.textContent).toBe("");
+    // Every bone is the design's shimmer, as on every other page, and none pulses.
+    expect(skeleton.querySelectorAll(".skeleton")).toHaveLength(3);
+    expect(skeleton.querySelector(".animate-pulse")).toBeNull();
   });
 });
 

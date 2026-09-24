@@ -1,6 +1,9 @@
-import { TRANSCRIPT_ENTRY_DEFAULT as CONTRACT_TRANSCRIPT_ENTRY_DEFAULT } from "@oxagen/oxagen/contracts/run.transcript.get";
+import {
+  TRANSCRIPT_ENTRY_DEFAULT as CONTRACT_TRANSCRIPT_ENTRY_DEFAULT,
+  TRANSCRIPT_ENTRY_MAX as CONTRACT_TRANSCRIPT_ENTRY_MAX,
+} from "@oxagen/oxagen/contracts/run.transcript.get";
 import { describe, expect, it } from "vitest";
-import { TRANSCRIPT_ENTRY_DEFAULT } from "./run";
+import { TRANSCRIPT_ENTRY_DEFAULT, TRANSCRIPT_ENTRY_MAX } from "./run";
 
 // The Run page's transcript is a client component, and the kernel's contract
 // module reaches `@oxagen/run-evidence` and the Context Graph SDK, which
@@ -11,5 +14,9 @@ import { TRANSCRIPT_ENTRY_DEFAULT } from "./run";
 describe("run contract mirrors", () => {
   it("mirrors the transcript page size the contract defaults to", () => {
     expect(TRANSCRIPT_ENTRY_DEFAULT).toBe(CONTRACT_TRANSCRIPT_ENTRY_DEFAULT);
+  });
+
+  it("mirrors the largest transcript page the contract allows", () => {
+    expect(TRANSCRIPT_ENTRY_MAX).toBe(CONTRACT_TRANSCRIPT_ENTRY_MAX);
   });
 });

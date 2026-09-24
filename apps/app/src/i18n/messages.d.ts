@@ -10133,6 +10133,13 @@ type Messages = {
         decidedByValue: string;
         policyNotRecorded: string;
       };
+      notFound: {
+        title: string;
+        bodyWorkspace: string;
+        bodyOrganization: string;
+        backFleet: string;
+        backOrganization: string;
+      };
     };
     list: {
       search: string;

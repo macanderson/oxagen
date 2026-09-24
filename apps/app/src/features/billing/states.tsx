@@ -14,7 +14,6 @@
 //     decided it. A refusal carries no policy version yet (#3846), so the
 //     Decided by line says the version is not recorded.
 //   - pending: an access request the kernel parked for approval.
-import { CircleAlert, Lock, PanelsTopLeft } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type { OrgRole } from "@/data/contracts/common";
@@ -22,16 +21,23 @@ import { routes, type SafePath } from "@/shared/safe-path";
 import {
   buttonPrimary,
   buttonSecondary,
+  kvTerm,
+  kvValue,
   mono,
   panel,
+  panelBody,
+  panelHeader,
   statStrip,
 } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
+import {
+  StateWrap,
+  type StateTone,
+  stateCode,
+  stateFacts,
+  stateTrace,
+} from "@/ui/state-wrap";
 import { OpenIncident, RequestAccess } from "./state-dialogs";
-
-const codeChip = `${mono} rounded bg-muted px-1`;
-
-const bar = "animate-pulse rounded bg-muted motion-reduce:animate-none";
 
 export function BillingSkeleton() {
   const t = useTranslations("billing.state");
@@ -45,16 +51,24 @@ export function BillingSkeleton() {
     >
       <div className={statStrip}>
         {[0, 1, 2, 3].map((tile) => (
-          <span key={tile} className={`${bar} h-16 rounded-xl`} />
+          <span
+            key={tile}
+            data-skeleton-tile=""
+            className="skeleton h-16 rounded-[11px]"
+          />
         ))}
       </div>
       <div className={`${panel} flex flex-col`}>
-        <div className="border-b border-border px-4 py-3">
-          <span className={`${bar} block h-4 w-44`} />
+        <div className={panelHeader}>
+          <span className="skeleton h-[22px] w-[180px] max-w-full rounded-[7px]" />
         </div>
-        <div className="flex flex-col gap-2 px-4 py-3.5">
+        <div className={`${panelBody} flex flex-col gap-2`}>
           {[0, 1, 2, 3, 4, 5, 6].map((row) => (
-            <span key={row} className={`${bar} block h-7 w-full`} />
+            <span
+              key={row}
+              data-skeleton-row=""
+              className="skeleton h-[38px] rounded-[9px]"
+            />
           ))}
         </div>
       </div>
@@ -62,67 +76,46 @@ export function BillingSkeleton() {
   );
 }
 
-function StateWrap({
+/** The shared `.state-wrap`, marked with the page's `data-state`. */
+function BillingState({
   state,
-  icon,
   tone,
+  lock = false,
   title,
   body,
   actions,
   after,
 }: {
   state: string;
-  icon: ReactNode;
-  tone: "neutral" | "error" | "denied";
+  tone: StateTone;
+  /** Draw the lock in a neutral tone: an access request still waiting. */
+  lock?: boolean;
   title: string;
   body: ReactNode;
   actions?: ReactNode;
   after?: ReactNode;
 }) {
-  const toneClass =
-    tone === "error"
-      ? "border-error/40 text-error-ink"
-      : tone === "denied"
-        ? "border-warning/40 text-warning"
-        : "border-border text-muted-foreground";
   return (
-    <section
-      aria-labelledby={`billing-${state}-title`}
+    <StateWrap
       data-state={state}
-      className="mx-auto flex max-w-[460px] flex-col items-center gap-3 px-4 py-16 text-center"
+      titleId={`billing-${state}-title`}
+      tone={tone}
+      glyph={lock ? "lock" : undefined}
+      title={title}
+      actions={actions}
+      after={after}
     >
-      <div
-        aria-hidden="true"
-        className={`grid size-11 place-items-center rounded-lg border ${toneClass}`}
-      >
-        {icon}
-      </div>
-      <h2
-        id={`billing-${state}-title`}
-        className="text-lg font-semibold text-foreground"
-      >
-        {title}
-      </h2>
-      <p className="text-[13px] leading-relaxed text-muted-foreground">
-        {body}
-      </p>
-      {actions ? (
-        <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
-          {actions}
-        </div>
-      ) : null}
-      {after}
-    </section>
+      {body}
+    </StateWrap>
   );
 }
 
 export function BillingEmpty() {
   const t = useTranslations("billing.state.empty");
   return (
-    <StateWrap
+    <BillingState
       state="empty"
       tone="neutral"
-      icon={<PanelsTopLeft className="size-5" />}
       title={t("title")}
       body={t("body")}
       actions={
@@ -153,15 +146,14 @@ export function BillingError({
 }) {
   const t = useTranslations("billing.state.error");
   return (
-    <StateWrap
+    <BillingState
       state="error"
-      tone="error"
-      icon={<CircleAlert className="size-5" />}
+      tone="failed"
       title={t("title")}
       body={t.rich("body", {
         status: String(status),
         errorCode: code,
-        code: (chunks) => <code className={codeChip}>{chunks}</code>,
+        code: (chunks) => <code className={stateCode}>{chunks}</code>,
       })}
       actions={
         <>
@@ -171,11 +163,7 @@ export function BillingError({
           <OpenIncident code={`${String(status)} ${code}`} at={at} />
         </>
       }
-      after={
-        <p className={`${mono} mt-3 text-[11.5px] text-dim`}>
-          {t("trace", { at })}
-        </p>
-      }
+      after={<p className={stateTrace}>{t("trace", { at })}</p>}
     />
   );
 }
@@ -197,18 +185,16 @@ export function BillingDenied({
 }) {
   const t = useTranslations("billing.state.denied");
   const roles = useTranslations("billing.roles");
-  const term = "text-muted-foreground";
   return (
-    <StateWrap
+    <BillingState
       state="denied"
       tone="denied"
-      icon={<Lock className="size-5" />}
       title={t("title")}
       body={t.rich("body", {
         org,
         permission,
         b: (chunks) => <b className="text-foreground">{chunks}</b>,
-        code: (chunks) => <code className={codeChip}>{chunks}</code>,
+        code: (chunks) => <code className={stateCode}>{chunks}</code>,
       })}
       actions={
         <>
@@ -223,22 +209,22 @@ export function BillingDenied({
         </>
       }
       after={
-        <dl className="mt-4 grid w-full max-w-[420px] grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-left text-[12.5px]">
-          <dt className={term}>{t("signedIn")}</dt>
-          <dd data-fact="signed-in" className={mono}>
+        <dl className={stateFacts}>
+          <dt className={kvTerm}>{t("signedIn")}</dt>
+          <dd data-fact="signed-in" className={`${kvValue} ${mono}`}>
             {name === null
               ? roles(role)
               : t("signedInValue", { name, role: roles(role) })}
           </dd>
-          <dt className={term}>{t("needed")}</dt>
-          <dd data-fact="needed">
+          <dt className={kvTerm}>{t("needed")}</dt>
+          <dd data-fact="needed" className={kvValue}>
             {t.rich("neededValue", {
               permission,
               code: (chunks) => <span className={mono}>{chunks}</span>,
             })}
           </dd>
-          <dt className={term}>{t("decidedBy")}</dt>
-          <dd data-fact="decided-by">
+          <dt className={kvTerm}>{t("decidedBy")}</dt>
+          <dd data-fact="decided-by" className={kvValue}>
             {t.rich("decidedByValue", {
               policy: (chunks) => (
                 <span data-recorded="false" className="text-muted-foreground">
@@ -256,10 +242,10 @@ export function BillingDenied({
 export function BillingPending({ request }: { request: string }) {
   const t = useTranslations("billing.state.pending");
   return (
-    <StateWrap
+    <BillingState
       state="pending"
       tone="neutral"
-      icon={<Lock className="size-5" />}
+      lock
       title={t("title")}
       body={t("body", { request })}
     />
