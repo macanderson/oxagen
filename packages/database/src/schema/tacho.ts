@@ -550,6 +550,9 @@ export const tachoSessions = tachoSchema.table(
       withTimezone: true,
       mode: "date",
     }),
+    // Why the last automatic account failed, as a short reason code; null
+    // once an account is written or the run is no longer due.
+    summaryError: text("summary_error"),
   },
   (t) => ({
     sessionUuidUniq: uniqueIndex("tacho_sessions_session_uuid_uniq").on(
