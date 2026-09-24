@@ -11,9 +11,9 @@
 //   denied:  who is signed in, the permission they lack and what decided it,
 //            with Request access and Back to Fleet.
 //
-// Open an incident and Request access have no capability behind them yet
-// (macanderson/oxagen, the issue this lane filed for both): each opens a
-// dialog that says what it would do and that nothing was sent.
+// Open an incident (#3847) and Request access (#3820) have no capability
+// behind them yet: each opens a dialog that says what it would do and that
+// nothing was sent.
 import { CircleAlert, LayoutPanelTop, Lock } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";

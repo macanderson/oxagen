@@ -48,6 +48,7 @@ export function DetailsDialog({
         onOpenChange={setOpen}
         title={title}
         subtitle={subtitle}
+        headerClose
         testId={testId}
       >
         {children}

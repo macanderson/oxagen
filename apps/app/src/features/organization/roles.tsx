@@ -7,7 +7,8 @@
 // Held by reads the role's active assignments (`memberCount`): people for a
 // human role, agents for an agent role, "nobody" at zero. `list_iam_roles`
 // does not split a count between people, agents and keys, so a role is counted
-// in the one unit its kind names.
+// in the one unit its kind names, and the filters offer only the kinds and
+// scopes a role can hold today (#3937).
 //
 // The read reports whether Oxagen resolves these grants for this
 // organization's tier (ARCHITECTURE.md §1.5), and the tab says so under the
@@ -16,7 +17,9 @@
 // Below the roles sit the IdP group mappings (ADR-145), which the design does
 // not draw and which have no other home: for each single sign-on provider,
 // which organization role each group grants. They come from the SSO read, so a
-// refused or failed SSO read says so in that section alone.
+// refused or failed SSO read says so in that section alone. The section links
+// to the Single sign-on page, which left the tab row when the tabs went back
+// to the design's seven.
 import { useTranslations } from "next-intl";
 import type { Role, RoleCatalog, SsoSettings } from "@/data/contracts/org";
 import type { Read } from "@/data/read";
@@ -79,26 +82,34 @@ function HeldBy({ role }: { role: Role }) {
   );
 }
 
-function Origin({ role }: { role: Role }) {
+/**
+ * Where a role came from, as the Origin column prints it and the Origin filter
+ * offers it: "built-in", or who created it and when ("Dana Okafor · 14 Jul
+ * 2026"), or the date alone when no author was recorded.
+ */
+function useOriginOf(): (role: Role) => string {
   const t = useTranslations("organization.roleCatalog.origin");
   const format = useFormatter();
+  return (role) => {
+    if (role.builtIn) return t("builtIn");
+    const date = format.dateTime(new Date(role.createdAt), {
+      dateStyle: "medium",
+    });
+    return role.createdBy === null
+      ? t("createdAt", { date })
+      : t("createdBy", { name: role.createdBy, date });
+  };
+}
+
+function Origin({ role, origin }: { role: Role; origin: string }) {
   if (role.builtIn) {
     return (
       <Badge tone="quiet" dot={false}>
-        {t("builtIn")}
+        {origin}
       </Badge>
     );
   }
-  const date = format.dateTime(new Date(role.createdAt), {
-    dateStyle: "medium",
-  });
-  return (
-    <span className="text-[11.5px] text-dim">
-      {role.createdBy === null
-        ? t("createdAt", { date })
-        : t("createdBy", { name: role.createdBy, date })}
-    </span>
-  );
+  return <span className="text-[11.5px] text-dim">{origin}</span>;
 }
 
 export function RolesTab({
@@ -111,6 +122,20 @@ export function RolesTab({
   sso: Read<SsoSettings>;
 }) {
   const t = useTranslations("organization.roleCatalog");
+  const originOf = useOriginOf();
+  const builtIn = t("origin.builtIn");
+  // The Origin filter lists each creator and date once, then built-in, the
+  // order the design draws them in.
+  const creators = [
+    ...new Set(
+      catalog.roles
+        .filter((role) => !role.builtIn)
+        .map((role) => originOf(role)),
+    ),
+  ].sort((a, b) => a.localeCompare(b));
+  const origins = catalog.roles.some((role) => role.builtIn)
+    ? [...creators, builtIn]
+    : creators;
   const columns = [
     { label: t("columns.role") },
     { label: t("columns.kind") },
@@ -118,16 +143,15 @@ export function RolesTab({
     { label: t("columns.permissions") },
     { label: t("columns.heldBy") },
     { label: t("columns.origin") },
-    { label: t("columns.actions") },
+    { label: t("columns.actions"), hidden: true },
   ];
   const rows: ListRow[] = catalog.roles.map((role) => ({
     key: role.id,
     rowId: role.id,
-    search: `${role.name} ${role.description ?? ""} ${role.permissions.join(" ")}`,
     values: {
       kind: role.kind,
       scope: role.scope,
-      origin: role.builtIn ? "builtIn" : "custom",
+      origin: originOf(role),
     },
     cells: [
       <span key="role">
@@ -152,7 +176,7 @@ export function RolesTab({
       </span>,
       <Permissions key="permissions" role={role} />,
       <HeldBy key="held" role={role} />,
-      <Origin key="origin" role={role} />,
+      <Origin key="origin" role={role} origin={originOf(role)} />,
       <div key="actions" className="flex flex-wrap gap-2">
         <RoleEditor
           org={org}
@@ -216,10 +240,10 @@ export function RolesTab({
             {
               key: "origin",
               label: t("filters.origin"),
-              options: [
-                { value: "builtIn", label: t("originFilter.builtIn") },
-                { value: "custom", label: t("originFilter.custom") },
-              ],
+              options: origins.map((origin) => ({
+                value: origin,
+                label: origin,
+              })),
             },
           ]}
           empty={catalog.roles.length === 0 ? t("empty") : t("noMatch")}
@@ -278,6 +302,15 @@ function GroupMappings({
           {t("title")}
         </h2>
         <p className={lead}>{t("lead")}</p>
+        {/* Single sign-on has no tab of its own in the design's seven, so
+            its settings are reached from here, where its group mappings live. */}
+        <SafeLink
+          to={routes.sso(org)}
+          className={`${linkText} text-sm`}
+          data-testid="sso-settings-link"
+        >
+          {t("ssoSettings")}
+        </SafeLink>
       </div>
       {!read.ok ? (
         <ReadFailure read={read} section={t("title")} />
@@ -316,6 +349,10 @@ function GroupMappings({
           ))}
         </>
       )}
+      {/* The heading takes one sentence; how the rows combine is a note. */}
+      <p className={note} data-testid="sso-group-mappings-rules">
+        {t("rules")}
+      </p>
     </section>
   );
 }

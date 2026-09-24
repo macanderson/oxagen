@@ -100,6 +100,40 @@ export const WorkspaceList = z.object({ workspaces: z.array(Workspace) });
 export type WorkspaceList = z.infer<typeof WorkspaceList>;
 export type Workspace = z.infer<typeof Workspace>;
 
+/** One repository a workspace binds, as the Workspaces row and Edit workspace print it. */
+const BoundRepository = z.object({
+  role: z.enum(["main", "linked"]),
+  fullName: z.string().min(1),
+  /** The approved production ref the binding records, never live GitHub's. */
+  defaultRef: z.string().min(1),
+});
+export type BoundRepository = z.infer<typeof BoundRepository>;
+
+/**
+ * What one workspace binds and registers, read inside it (`list_repositories`
+ * and `list_agents`): the Workspaces row's Main repo, Production branch,
+ * Linked repos and Agents cells.
+ */
+export const WorkspaceFacts = z.object({
+  /** Main first, then the linked ones by full name, as `list_repositories` orders them. */
+  repositories: z.array(BoundRepository),
+  /** `list_agents` totals.identities: over the whole workspace, never a page. */
+  agents: z.number().int().nonnegative(),
+  /**
+   * The agents `archive_workspace` refuses over (`workspace_has_agents`):
+   * live rows that are not retired and not the built-in interactive agent
+   * every workspace is seeded with, counted on the first `list_agents` page.
+   * `more` is true when that page did not reach the end, so the count is a
+   * floor. The Archive dialog warns and disables its confirm when it is above
+   * zero, which is what the handler would answer.
+   */
+  archiveBlockers: z.object({
+    count: z.number().int().nonnegative(),
+    more: z.boolean(),
+  }),
+});
+export type WorkspaceFacts = z.infer<typeof WorkspaceFacts>;
+
 /**
  * One label on the organization's cost-center list (`list_cost_centers`,
  * ADR-142), with how many live agents and workspaces name it.

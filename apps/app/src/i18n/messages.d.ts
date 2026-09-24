@@ -3218,10 +3218,8 @@ type Messages = {
       title: string;
       person: string;
       role: string;
-      joined: string;
       actions: string;
       empty: string;
-      twoFactorPolicy: string;
       tableLabel: string;
       workspaces: string;
       twoFactor: string;
@@ -3237,15 +3235,19 @@ type Messages = {
         twoFactor: string;
       };
       member: {
-        title: string;
         email: string;
         role: string;
         joined: string;
-        workspaces: string;
         twoFactor: string;
         lastSeen: string;
-        status: string;
         id: string;
+        perWorkspace: string;
+        workspace: string;
+        workspaceRole: string;
+        agents: string;
+        mandates: string;
+        granted: string;
+        heldByAgents: string;
       };
       inUse: {
         title: string;
@@ -3264,20 +3266,17 @@ type Messages = {
         passkeyTotp: string;
       };
       twoFactorUnrecorded: string;
+      twoFactorRequired: string;
+      twoFactorOptional: string;
     };
     actions: {
+      cancel: string;
       readOnly: string;
       denied: string;
       fields: {
         name: string;
-        description: string;
-        scope: string;
-        slug: string;
-        slugHint: string;
         mainRepo: string;
         mainRepoHint: string;
-        permissions: string;
-        roleNameHint: string;
         productionBranch: string;
         productionBranchHint: string;
         productionBranchCreateHint: string;
@@ -3286,25 +3285,11 @@ type Messages = {
         mainRepoFixed: string;
         namespace: string;
         namespaceHint: string;
-      };
-      createRole: {
-        open: string;
-        title: string;
-        confirm: string;
-        pending: string;
-      };
-      editRole: {
-        open: string;
-        title: string;
-        confirm: string;
-        pending: string;
-      };
-      deleteRole: {
-        open: string;
-        title: string;
-        body: string;
-        confirm: string;
-        pending: string;
+        namespaceCreateHint: string;
+        mainRepoSelectHint: string;
+        mainRepoChoose: string;
+        branchDefault: string;
+        branchPick: string;
       };
       createWorkspace: {
         open: string;
@@ -3321,13 +3306,13 @@ type Messages = {
           toolbelt: string;
           budget: string;
           agents: string;
+          agentsCount: string;
         };
       };
       governance: {
         heading: string;
         about: string;
         unchanged: string;
-        unchangedHint: string;
         solo: string;
         team: string;
         regulated: string;
@@ -3348,13 +3333,17 @@ type Messages = {
         open: string;
         title: string;
         body: string;
+        agents: string;
+        noAgents: string;
+        agentsUnread: string;
         confirm: string;
         pending: string;
       };
       role: {
         open: string;
         title: string;
-        body: string;
+        person: string;
+        note: string;
         label: string;
         confirm: string;
         pending: string;
@@ -3363,6 +3352,7 @@ type Messages = {
         open: string;
         title: string;
         body: string;
+        note: string;
         confirm: string;
         pending: string;
       };
@@ -3415,24 +3405,25 @@ type Messages = {
       deliveryFailed: string;
       confirmTitle: string;
       confirmBody: string;
+      confirmNote: string;
       confirmRevoke: string;
-      keepInvitation: string;
       invitedBy: string;
       tableLabel: string;
       noMatch: string;
+      filters: {
+        sent: string;
+        expires: string;
+      };
     };
     invite: {
+      cancel: string;
       open: string;
       title: string;
       confirm: string;
       pending: string;
       body: string;
       email: string;
-      emailHint: string;
       role: string;
-      roleHint: string;
-      message: string;
-      messageHint: string;
       denied: string;
       close: string;
       sent: {
@@ -3447,17 +3438,14 @@ type Messages = {
         emailInvalid: string;
         roleNotInvitable: string;
       };
+      bodyTwoFactor: string;
     };
     apiKeys: {
-      lead: string;
       tableLabel: string;
       columns: {
         name: string;
-        prefix: string;
-        created: string;
         lastUsed: string;
         expires: string;
-        status: string;
         actions: string;
         principal: string;
         grants: string;
@@ -3471,10 +3459,14 @@ type Messages = {
           body: string;
           name: string;
           expires: string;
-          expiresUtc: string;
           expiresAt: string;
           confirm: string;
           pending: string;
+          expiresOptions: {
+            d90: string;
+            d180: string;
+            y1: string;
+          };
         };
         rotate: {
           open: string;
@@ -3509,11 +3501,6 @@ type Messages = {
           workspaceArchived: string;
         };
       };
-      status: {
-        live: string;
-        expired: string;
-        revoked: string;
-      };
       workspace: {
         label: string;
         archived: string;
@@ -3544,12 +3531,6 @@ type Messages = {
         all: string;
         allWithCount: string;
       };
-      pager: {
-        label: string;
-        range: string;
-        previous: string;
-        next: string;
-      };
       emptyFiltered: string;
       title: string;
       caption: string;
@@ -3568,6 +3549,7 @@ type Messages = {
         badge: string;
         body: string;
       };
+      noMatch: string;
     };
     roleCatalog: {
       title: string;
@@ -3600,12 +3582,6 @@ type Messages = {
       };
       noPermissions: string;
       empty: string;
-      catalog: {
-        title: string;
-        open: string;
-        lead: string;
-        covers: string;
-      };
       badge: string;
       heldBy: {
         people: string;
@@ -3624,10 +3600,6 @@ type Messages = {
         kind: string;
         scope: string;
         origin: string;
-      };
-      originFilter: {
-        builtIn: string;
-        custom: string;
       };
       noMatch: string;
       editor: {
@@ -3680,11 +3652,6 @@ type Messages = {
         governance: string;
         actions: string;
       };
-      status: {
-        live: string;
-        archived: string;
-      };
-      noRole: string;
       empty: string;
       governanceNotRecorded: string;
       retentionNotRecorded: string;
@@ -3693,28 +3660,15 @@ type Messages = {
       archived: string;
       note: string;
       noMatch: string;
+      factsUnread: string;
+      factsNoMembership: string;
+      factsArchived: string;
+      noLinked: string;
+      filters: {
+        branch: string;
+      };
     };
     modelFunding: {
-      title: string;
-      intro: string;
-      explain: {
-        platform: string;
-        byok: string;
-      };
-      current: {
-        title: string;
-        none: string;
-        provider: string;
-        key: string;
-        keyEnding: string;
-        endpoint: string;
-        status: string;
-        active: string;
-        disabled: string;
-        tested: string;
-        at: string;
-        never: string;
-      };
       tiers: {
         balanced: string;
         fast: string;
@@ -3744,20 +3698,18 @@ type Messages = {
         };
       };
       form: {
-        title: string;
-        replaceTitle: string;
-        provider: string;
         key: string;
+        keyHint: string;
         show: string;
         hide: string;
+        vendor: string;
+        provider: string;
         baseUrl: string;
         baseUrlHint: string;
         baseUrlPlaceholder: string;
         models: string;
         balancedHint: string;
         unmappedNote: string;
-        test: string;
-        testing: string;
         save: string;
         saving: string;
         saved: string;
@@ -3776,10 +3728,6 @@ type Messages = {
         pending: string;
         cancel: string;
       };
-      denied: {
-        title: string;
-        body: string;
-      };
       failure: {
         denied: string;
         keyRequired: string;
@@ -3789,6 +3737,119 @@ type Messages = {
         refused: string;
         pendingApproval: string;
         unavailable: string;
+      };
+      funding: {
+        title: string;
+        source: string;
+        sourceUnrecorded: string;
+        unknown: string;
+        preview: string;
+        note: string;
+        sources: {
+          platform_minted: {
+            option: string;
+            summary: string;
+            about: string;
+          };
+          platform: {
+            option: string;
+            summary: string;
+            about: string;
+          };
+          customer_key: {
+            option: string;
+            summary: string;
+            about: string;
+          };
+        };
+        facts: {
+          key: string;
+          billing: string;
+          storage: string;
+          engine: string;
+          secret: string;
+          provisionedId: string;
+          accountName: string;
+          minted: string;
+          cap: string;
+          reads: string;
+        };
+        customer: {
+          keyHint: string;
+          keyNone: string;
+          billing: string;
+          storage: string;
+        };
+        shared: {
+          key: string;
+          billing: string;
+        };
+        minted: {
+          unrecorded: string;
+          mint: {
+            open: string;
+            title: string;
+            body: string;
+          };
+          rotate: {
+            open: string;
+            title: string;
+            body: string;
+          };
+          revoke: {
+            open: string;
+            title: string;
+            body: string;
+          };
+          noKey: string;
+          heldTitle: string;
+          noKeyTitle: string;
+        };
+        change: {
+          open: string;
+          title: string;
+          current: string;
+          reconciles: string;
+          note: string;
+        };
+        choose: string;
+        reconciliation: {
+          title: string;
+          provider: string;
+          ledger: string;
+          difference: string;
+          note: string;
+        };
+        unknownPreview: string;
+      };
+      routes: {
+        title: string;
+        caption: string;
+        harnesses: string;
+        columns: {
+          tier: string;
+          provider: string;
+          route: string;
+          fallback: string;
+          use: string;
+          cost: string;
+          edit: string;
+        };
+        tiers: {
+          complex: string;
+          light: string;
+          embed: string;
+          rerank: string;
+        };
+        total: string;
+        basis: string;
+        currency: string;
+        unrecorded: string;
+        edit: {
+          open: string;
+          title: string;
+          body: string;
+        };
       };
     };
     sso: {
@@ -3945,6 +4006,7 @@ type Messages = {
     ssoGroups: {
       title: string;
       lead: string;
+      rules: string;
       noProviders: string;
       openSso: string;
       provider: string;
@@ -3973,6 +4035,7 @@ type Messages = {
         groupRequired: string;
         groupDuplicate: string;
       };
+      ssoSettings: string;
     };
     costCenters: {
       title: string;
@@ -4020,16 +4083,9 @@ type Messages = {
     page: {
       eyebrow: string;
       description: string;
-      title: string;
     };
     list: {
-      search: string;
       all: string;
-      rows: string;
-      range: string;
-      pager: string;
-      previous: string;
-      next: string;
     };
     notRecorded: string;
     states: {
@@ -4074,6 +4130,10 @@ type Messages = {
     dataPlane: {
       title: string;
       on: string;
+      modeWords: {
+        shared: string;
+        dedicated: string;
+      };
       modesLabel: string;
       modes: {
         shared: string;
@@ -4095,8 +4155,6 @@ type Messages = {
         attester: string;
         gateway: string;
         resolver: string;
-        postgresHost: string;
-        postgresDatabase: string;
         deployment: string;
         bundleVersion: string;
         bundleSignature: string;
@@ -4104,7 +4162,8 @@ type Messages = {
         airGapped: string;
         licence: string;
         nextBundle: string;
-        outbound: string;
+        tenantPostgres: string;
+        identityPostgres: string;
       };
       status: {
         active: string;
@@ -4151,6 +4210,32 @@ type Messages = {
           body: string;
         };
       };
+      identityShared: string;
+      outbound: {
+        title: string;
+        destination: string;
+        why: string;
+        state: string;
+      };
+    };
+    receipts: {
+      saved: string;
+      roleChanged: string;
+      memberRemoved: string;
+      invited: string;
+      invitationResent: string;
+      invitationRevoked: string;
+      roleCreated: string;
+      roleSaved: string;
+      roleDeleted: string;
+      keyCreated: string;
+      keyRotated: string;
+      keyRevoked: string;
+      workspaceCreated: string;
+      workspaceSaved: string;
+      workspaceArchived: string;
+      modelKeySaved: string;
+      modelKeyRemoved: string;
     };
   };
   record: {

@@ -305,6 +305,26 @@ export async function resolveViewer(org: string): Promise<RouteViewer> {
     : result;
 }
 
+/** The organization's two-factor policy, as the MFA gate reads it. */
+export type OrgTwoFactorPolicy = {
+  /** security.org_security_policy.mfa_required; false when the org has no policy row. */
+  required: boolean;
+};
+
+/**
+ * The two-factor policy of the organization in `ctx`, read from the record
+ * the MFA gate enforces on every request (security.org_security_policy). An
+ * organization with no policy row requires nothing, exactly as the gate reads
+ * it (mfa-gate.ts).
+ */
+export async function orgTwoFactorPolicy(
+  ctx: OrgCtx,
+): Promise<OrgTwoFactorPolicy> {
+  if (!OrgCtx.is(ctx)) throw new TypeError("orgTwoFactorPolicy: forged ctx");
+  const policy = await systemLookups.mfaPolicy(ctx.orgId);
+  return { required: policy?.mfaRequired === true };
+}
+
 /** Signed in, no organization yet; a signed-out request goes to /login, and on to `next` once signed in. */
 export const requireUser = cache(
   async (next?: SafePath): Promise<PretenantCtx> => {

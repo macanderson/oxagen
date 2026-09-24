@@ -251,6 +251,49 @@ describe("ListTable past the first screen", () => {
   });
 });
 
+describe("ListTable: a caller's filters and empty line", () => {
+  it("draws the caller's filters between the search box and Rows", () => {
+    render(
+      <IntlProvider>
+        <ListTable
+          label="Invoices"
+          columns={COLUMNS}
+          rows={rowsOf(2)}
+          filters={
+            <select aria-label="Status">
+              <option>All · Status</option>
+            </select>
+          }
+        />
+      </IntlProvider>,
+    );
+    const search = screen.getByRole("searchbox", { name: "Search this list" });
+    const status = screen.getByRole("combobox", { name: "Status" });
+    const rows = screen.getByRole("combobox", { name: "Rows" });
+    expect(
+      search.compareDocumentPosition(status) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      status.compareDocumentPosition(rows) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("prints the caller's line when no row shows (negative)", () => {
+    render(
+      <IntlProvider>
+        <ListTable
+          label="Invoices"
+          columns={COLUMNS}
+          rows={[]}
+          empty="No invoice has been issued."
+        />
+      </IntlProvider>,
+    );
+    expect(screen.getByText("No invoice has been issued.")).toBeVisible();
+    expect(screen.queryByText("No rows match.")).toBeNull();
+  });
+});
+
 describe("leadingNumber", () => {
   it.each([
     ["$4,770.00", 4770],

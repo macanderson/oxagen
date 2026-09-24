@@ -8,7 +8,8 @@
 // never only a hidden button. Each handler behind these reads checks the role
 // again (INV-29).
 //
-// The members, the roles and the workspaces are read once here and handed to
+// The members, the roles, the workspaces and the organization's two-factor
+// policy (the record the MFA gate enforces) are read once here and handed to
 // the tab, so a tab that draws one of them does not read it twice. A failure
 // of any of the three replaces the body with the error or denied state; a
 // tab's own further read (API keys, Data plane, Cost centers) reports its
@@ -22,9 +23,15 @@ import type {
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import { getSession } from "@/server/session";
-import type { OrgCtx, OrgRole } from "@/server/viewer";
+import {
+  type OrgCtx,
+  type OrgRole,
+  type OrgTwoFactorPolicy,
+  orgTwoFactorPolicy,
+} from "@/server/viewer";
 import { routes, type SafePath } from "@/shared/safe-path";
 import { OrganizationHeader } from "./header";
+import { Receipts } from "./receipt";
 import {
   OrganizationDenied,
   OrganizationEmpty,
@@ -39,6 +46,10 @@ type FrameReads = {
   members: MemberList;
   roles: RoleCatalog;
   workspaces: WorkspaceList;
+  /** security.org_security_policy, which the People badge and Invite state. */
+  twoFactor: OrgTwoFactorPolicy;
+  /** The live workspaces the viewer holds a membership of, by slug. */
+  enterable: readonly string[];
 };
 
 type Failed = Exclude<Read<unknown>, { ok: true }>;
@@ -104,10 +115,11 @@ export async function OrganizationFrame({
   children: (reads: FrameReads) => ReactNode | Promise<ReactNode>;
 }) {
   if (!ORG_ADMIN_ROLES.includes(ctx.orgRole)) return denied(ctx, source);
-  const [members, roles, workspaces] = await Promise.all([
+  const [members, roles, workspaces, twoFactor] = await Promise.all([
     source.org.members(ctx),
     source.org.roles(ctx),
     source.org.workspaces(ctx),
+    orgTwoFactorPolicy(ctx),
   ]);
   const failed = firstFailure([members, roles, workspaces]);
   if (failed !== null) {
@@ -125,11 +137,14 @@ export async function OrganizationFrame({
     (ws) => ws.archivedAt === null,
   );
   if (live.length === 0) return <OrganizationEmpty org={ctx.orgSlug} />;
+  const enterable = live.filter((ws) => ws.role !== null).map((ws) => ws.slug);
   return (
     <div className="flex flex-col gap-4">
       <OrganizationHeader
         ctx={ctx}
         pendingIds={members.value.invitations.map((i) => i.id)}
+        twoFactorRequired={twoFactor.required}
+        enterable={enterable}
       />
       <OrganizationTabs
         org={ctx.orgSlug}
@@ -146,8 +161,11 @@ export async function OrganizationFrame({
           members: members.value,
           roles: roles.value,
           workspaces: workspaces.value,
+          twoFactor,
+          enterable,
         })
       }
+      <Receipts />
     </div>
   );
 }

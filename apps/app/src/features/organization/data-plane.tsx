@@ -9,7 +9,7 @@
 // key, the gateway placement, a firewall bundle or the retention windows, so
 // those rows say "not recorded". Request a change of plane and Rotate keys have
 // no capability behind them yet and open dialogs that say what they would do
-// (macanderson/oxagen, the Data plane issue this lane filed). Tenant isolation
+// (#3935). Tenant isolation
 // states the platform's own guarantees, which hold for every organization on
 // the shared plane: row-level security on every tenant table, the kernel as
 // the only writer of a workspace id, and the startup guard in
@@ -27,6 +27,7 @@ import {
   panelTitle,
 } from "@/ui/control-styles";
 import { ReadFailure } from "@/ui/read-failure";
+import { cell, Table } from "@/ui/table";
 import { DataPlaneModes, type PlaneMode } from "./data-plane-modes";
 import { DateCell, NotRecorded, note } from "./parts";
 import { StubDialog } from "./stub-dialog";
@@ -40,16 +41,15 @@ type FactKey =
   | "attester"
   | "gateway"
   | "resolver"
-  | "postgresHost"
-  | "postgresDatabase"
+  | "tenantPostgres"
+  | "identityPostgres"
   | "deployment"
   | "bundleVersion"
   | "bundleSignature"
   | "containers"
   | "airGapped"
   | "licence"
-  | "nextBundle"
-  | "outbound";
+  | "nextBundle";
 
 const term = "text-[12.5px] text-muted-foreground";
 const value = "text-[13px] text-foreground";
@@ -138,30 +138,33 @@ function useDetails(plane: DataPlane): Record<PlaneMode, ReactNode> {
         {about("dedicated")}
         <Facts
           rows={[
-            [f("binding"), onShared ? nr : binding],
             [
-              f("postgresHost"),
-              plane.host === null ? (
+              f("tenantPostgres"),
+              onShared ? (
                 nr
               ) : (
-                <span key="postgresHost" className={mono}>
-                  {plane.host}
+                <span key="tenantPostgres" className="flex flex-col gap-1">
+                  {plane.host === null && plane.database === null ? (
+                    nr
+                  ) : (
+                    <span className={mono}>
+                      {[plane.host, plane.database]
+                        .filter((part) => part !== null)
+                        .join(" / ")}
+                      {plane.schemaVersion === null
+                        ? null
+                        : ` · ${t("schema", { version: plane.schemaVersion })}`}
+                    </span>
+                  )}
+                  {binding}
                 </span>
               ),
             ],
-            [
-              f("postgresDatabase"),
-              plane.database === null ? (
-                nr
-              ) : (
-                <span key="postgresDatabase" className={mono}>
-                  {plane.database}
-                  {plane.schemaVersion === null
-                    ? null
-                    : ` · ${t("schema", { version: plane.schemaVersion })}`}
-                </span>
-              ),
-            ],
+            // Identity, IAM, billing and the price book are platform tables,
+            // read through withSystemDb on the shared plane whatever the
+            // organization's binding (ADR-042), so this row is a fact of the
+            // architecture rather than of the record.
+            [f("identityPostgres"), t("identityShared")],
             [f("objectStorage"), nr],
             [f("kek"), nr],
             [f("gateway"), nr],
@@ -182,9 +185,25 @@ function useDetails(plane: DataPlane): Record<PlaneMode, ReactNode> {
             [f("airGapped"), nr],
             [f("licence"), nr],
             [f("nextBundle"), nr],
-            [f("outbound"), nr],
           ]}
         />
+        <p className="mb-2 mt-4 text-[10.5px] font-semibold uppercase tracking-[0.09em] text-dim">
+          {t("outbound.title")}
+        </p>
+        <Table
+          label={t("outbound.title")}
+          columns={[
+            { label: t("outbound.destination") },
+            { label: t("outbound.why") },
+            { label: t("outbound.state") },
+          ]}
+        >
+          <tr data-outbound="not-recorded">
+            <td className={cell}>{nr}</td>
+            <td className={cell}>{nr}</td>
+            <td className={cell}>{nr}</td>
+          </tr>
+        </Table>
       </>
     ),
   };
@@ -200,7 +219,7 @@ function Binding({ org, plane }: { org: string; plane: DataPlane }) {
           {t("title")}
         </h2>
         <Badge tone="allowed" data-plane-mode={plane.mode}>
-          {t("on", { org, mode: t(`modes.${plane.mode}`) })}
+          {t("on", { org, mode: t(`modeWords.${plane.mode}`) })}
         </Badge>
       </div>
       <div className={`${panelBody} flex flex-col gap-3.5`}>

@@ -1,29 +1,40 @@
 // @vitest-environment jsdom
 // The Workspaces section's writes: create a workspace from the form this lane
-// adds, rename and re-slug one, and archive one. Each reloads the page it
-// changed; a refusal is named and nothing navigates.
+// adds, rename one, and archive one. Each reloads the page it changed; a
+// refusal is named and nothing navigates. Create offers the repositories the
+// organization's installations reach when it can read them, and a typed
+// owner/name when it cannot.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 
-const { router, archiveWorkspace, createWorkspace, editWorkspace } = vi.hoisted(
-  () => ({
-    router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
-    archiveWorkspace: vi.fn(),
-    createWorkspace: vi.fn(),
-    editWorkspace: vi.fn(),
-  }),
-);
+const {
+  router,
+  archiveWorkspace,
+  createWorkspace,
+  editWorkspace,
+  readRepositoryChoices,
+} = vi.hoisted(() => ({
+  router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
+  archiveWorkspace: vi.fn(),
+  createWorkspace: vi.fn(),
+  editWorkspace: vi.fn(),
+  readRepositoryChoices: vi.fn(),
+}));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("./actions", () => ({
   archiveWorkspace,
   createWorkspace,
   editWorkspace,
 }));
+vi.mock("./workspace-reads", () => ({
+  readRepositoryChoices,
+}));
 
 const { workspaceRow } = await import("./organization.builders");
+const { Receipts } = await import("./receipt");
 const { ArchiveWorkspace, CreateWorkspace, EditWorkspace } = await import(
   "./workspace-actions"
 );
@@ -36,6 +47,7 @@ beforeEach(() => {
   archiveWorkspace.mockReset();
   createWorkspace.mockReset();
   editWorkspace.mockReset();
+  readRepositoryChoices.mockReset();
 });
 
 afterEach(async () => {
@@ -53,7 +65,7 @@ describe("CreateWorkspace", () => {
   // is its only reader — creating a workspace lands the operator in it.
   // M0 (spec §17): the draft carries the main repository, as typed, so the
   // action is the one place that splits it.
-  it("sends the name, the slug and the main repository, then navigates to the new workspace's Fleet", async () => {
+  it("sends the name and the main repository, asks for no slug, then navigates to the new workspace's Fleet", async () => {
     createWorkspace.mockResolvedValue({
       ok: true,
       value: { slug: "research" },
@@ -64,8 +76,9 @@ describe("CreateWorkspace", () => {
       </IntlProvider>,
     );
     const dialog = await open("Create a workspace", "create-workspace");
+    // The design's form has no slug: the action makes it from the name.
+    expect(within(dialog).queryByLabelText("Slug")).toBeNull();
     await userEvent.type(within(dialog).getByLabelText("Name"), "Research");
-    await userEvent.type(within(dialog).getByLabelText("Slug"), "research");
     await userEvent.type(
       within(dialog).getByLabelText("Main repository"),
       "acme/research",
@@ -75,10 +88,20 @@ describe("CreateWorkspace", () => {
     );
     expect(createWorkspace).toHaveBeenCalledWith("acme", {
       name: "Research",
-      slug: "research",
       mainRepo: "acme/research",
     });
+    // With no workspace to read through, nothing asks GitHub.
+    expect(readRepositoryChoices).not.toHaveBeenCalled();
     expect(router.replace).toHaveBeenCalledWith("/acme/research");
+    // The write leaves its receipt in the Organization frame's live region.
+    render(
+      <IntlProvider>
+        <Receipts />
+      </IntlProvider>,
+    );
+    expect(screen.getByTestId("organization-receipts")).toHaveTextContent(
+      "The workspace was created. Recorded in the audit record.",
+    );
   });
 
   // The person names a repository and nothing else: the hint says the
@@ -120,14 +143,85 @@ describe("CreateWorkspace", () => {
         .getAllByRole("option")
         .map((option) => option.textContent),
     ).toEqual([
-      "Leave unchanged (the mode in force is not read here)",
-      "solo: Any workspace member merges, the author included.",
-      "team: An org Owner or Admin, or a workspace Owner, other than the author merges.",
-      "regulated: An org Owner or Admin other than the author merges, recorded as the accountable approver.",
+      "Leave unchanged",
+      "solo · The author may merge their own.",
+      "team · A code-owner review is required.",
+      "regulated · A named approver from a role must approve, and the promotion ledger is hash-chained.",
     ]);
     expect(within(dialog).getByLabelText("Retention mode")).toHaveValue(
       "not recorded",
     );
+    // The design asks for a namespace; create_workspace derives it, so the
+    // field is read-only and says so.
+    const namespace = within(dialog).getByLabelText("Namespace");
+    expect(namespace).toBeDisabled();
+    expect(namespace).toHaveAccessibleDescription(
+      /derives it from the name when it creates the workspace/,
+    );
+  });
+
+  it("offers the repositories the installations reach, and the branch create_workspace records for the one chosen", async () => {
+    readRepositoryChoices.mockResolvedValue({
+      ok: true,
+      value: [
+        { fullName: "acme/data-platform", defaultBranch: "main" },
+        { fullName: "acme/warehouse", defaultBranch: "release" },
+      ],
+    });
+    createWorkspace.mockResolvedValue({ ok: true, value: { slug: "data" } });
+    render(
+      <IntlProvider>
+        <CreateWorkspace org="acme" enterable={["core-platform", "growth"]} />
+      </IntlProvider>,
+    );
+    const dialog = await open("Create a workspace", "create-workspace");
+    expect(readRepositoryChoices).toHaveBeenCalledWith("acme", [
+      "core-platform",
+      "growth",
+    ]);
+    const repo = await within(dialog).findByRole("combobox", {
+      name: "Main repository",
+    });
+    await within(repo).findByRole("option", { name: "acme/warehouse" });
+    expect(
+      within(repo)
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual(["Choose a repository", "acme/data-platform", "acme/warehouse"]);
+    expect(repo).toHaveAccessibleDescription(
+      "Required at creation. A workspace without a main repo cannot exist.",
+    );
+    const branch = within(dialog).getByLabelText("Production branch");
+    expect(branch).toBeDisabled();
+    await userEvent.selectOptions(repo, "acme/warehouse");
+    expect(branch).toBeEnabled();
+    expect(branch).toHaveTextContent("release — GitHub’s default, suggested");
+    await userEvent.type(within(dialog).getByLabelText("Name"), "Data");
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Create" }),
+    );
+    expect(createWorkspace).toHaveBeenCalledWith("acme", {
+      name: "Data",
+      mainRepo: "acme/warehouse",
+    });
+  });
+
+  it("falls back to a typed owner/name when no installation can be read (negative)", async () => {
+    readRepositoryChoices.mockResolvedValue({
+      ok: false,
+      reason: "unavailable",
+      code: "installation_unreachable",
+    });
+    render(
+      <IntlProvider>
+        <CreateWorkspace org="acme" enterable={["core-platform"]} />
+      </IntlProvider>,
+    );
+    const dialog = await open("Create a workspace", "create-workspace");
+    const field = await within(dialog).findByRole("textbox", {
+      name: "Main repository",
+    });
+    expect(field).toHaveAccessibleDescription(/owner\/name on GitHub/);
   });
 
   it.each([
@@ -187,7 +281,6 @@ describe("CreateWorkspace", () => {
       );
       const dialog = await open("Create a workspace", "create-workspace");
       await userEvent.type(within(dialog).getByLabelText("Name"), "Research");
-      await userEvent.type(within(dialog).getByLabelText("Slug"), "research");
       await userEvent.type(
         within(dialog).getByLabelText("Main repository"),
         "acme/research",
@@ -202,7 +295,7 @@ describe("CreateWorkspace", () => {
     },
   );
 
-  // A blank name or slug is still "refused as invalid": the repository
+  // A name that makes no valid slug is still "refused as invalid": the repository
   // sentence names one field and must not be shown for another.
   it("keeps the generic invalid sentence for a field other than the repository (negative)", async () => {
     createWorkspace.mockResolvedValue({
@@ -218,7 +311,6 @@ describe("CreateWorkspace", () => {
     );
     const dialog = await open("Create a workspace", "create-workspace");
     await userEvent.type(within(dialog).getByLabelText("Name"), "Research");
-    await userEvent.type(within(dialog).getByLabelText("Slug"), "research");
     await userEvent.type(
       within(dialog).getByLabelText("Main repository"),
       "acme/research",
@@ -231,7 +323,7 @@ describe("CreateWorkspace", () => {
     ).toHaveTextContent("The request was refused as invalid.");
   });
 
-  it("names a slug already taken and creates nothing (negative)", async () => {
+  it("names an address already taken, as the name's, and creates nothing (negative)", async () => {
     createWorkspace.mockResolvedValue({
       ok: false,
       reason: "conflict",
@@ -243,10 +335,9 @@ describe("CreateWorkspace", () => {
       </IntlProvider>,
     );
     const dialog = await open("Create a workspace", "create-workspace");
-    await userEvent.type(within(dialog).getByLabelText("Name"), "Research");
     await userEvent.type(
-      within(dialog).getByLabelText("Slug"),
-      "core-platform",
+      within(dialog).getByLabelText("Name"),
+      "Core platform",
     );
     await userEvent.type(
       within(dialog).getByLabelText("Main repository"),
@@ -257,7 +348,9 @@ describe("CreateWorkspace", () => {
     );
     expect(
       await screen.findByTestId("create-workspace-failure"),
-    ).toHaveTextContent("That slug is taken in this organization.");
+    ).toHaveTextContent(
+      "A workspace in this organization already has that address. Pick another name.",
+    );
     expect(router.replace).not.toHaveBeenCalled();
   });
 });
@@ -270,19 +363,54 @@ describe("EditWorkspace", () => {
     });
     render(
       <IntlProvider>
-        <EditWorkspace org="acme" workspace={workspace} />
+        <EditWorkspace
+          org="acme"
+          workspace={workspace}
+          facts={{
+            repositories: [
+              { role: "main", fullName: "acme/platform", defaultRef: "main" },
+            ],
+            agents: 64,
+            archiveBlockers: { count: 63, more: false },
+          }}
+        />
       </IntlProvider>,
     );
     const dialog = await open(
       "Edit",
       "edit-workspace-wrk_0a1b2c3d4e5f6g7h8j9k0m",
     );
+    expect(
+      within(dialog).getByRole("heading", { name: "Edit workspace" }),
+    ).toBeInTheDocument();
+    expect(dialog).toHaveTextContent("core-platform");
     // The design's Edit form has no slug field, and which repository is main
-    // does not change from here (spec §10.1): the field is read-only.
+    // does not change from here (spec §10.1): the field is read-only, and
+    // carries what list_repositories reports.
     expect(within(dialog).queryByLabelText("Slug")).toBeNull();
-    expect(within(dialog).getByLabelText("Main repository")).toHaveAttribute(
-      "readonly",
+    const main = within(dialog).getByLabelText("Main repository");
+    expect(main).toHaveAttribute("readonly");
+    expect(main).toHaveValue("acme/platform");
+    expect(main).toHaveAccessibleDescription(
+      "Changing main is an org-owner action with approval.",
     );
+    // The design's `wsBranch` select, holding the one branch recorded:
+    // edit_workspace takes no branch, so it cannot be changed from here.
+    const branch = within(dialog).getByLabelText("Production branch");
+    expect(branch.tagName).toBe("SELECT");
+    expect(branch).toHaveValue("main");
+    expect(branch).toBeDisabled();
+    // Cancel then Save in the footer, and the header's close.
+    expect(
+      within(dialog)
+        .getAllByRole("button")
+        .map((button) => button.textContent)
+        .slice(-2),
+    ).toEqual(["Cancel", "Save"]);
+    expect(dialog.querySelector("[data-header-close]")).not.toBeNull();
+    expect(
+      within(dialog).getByTestId("edit-workspace-agents"),
+    ).toHaveTextContent("64 registered");
     expect(within(dialog).getByLabelText("Namespace")).toHaveValue(
       workspace.namespace,
     );
@@ -311,6 +439,27 @@ describe("EditWorkspace", () => {
   });
 });
 
+describe("EditWorkspace without facts", () => {
+  it("says not recorded for the main repository, the branch and the agents when the tab could not read them (negative)", async () => {
+    render(
+      <IntlProvider>
+        <EditWorkspace org="acme" workspace={workspace} />
+      </IntlProvider>,
+    );
+    const dialog = await open(
+      "Edit",
+      "edit-workspace-wrk_0a1b2c3d4e5f6g7h8j9k0m",
+    );
+    expect(within(dialog).getByLabelText("Main repository")).toHaveValue(
+      "not recorded",
+    );
+    expect(within(dialog).getByLabelText("Production branch")).toHaveValue(
+      "not recorded",
+    );
+    expect(within(dialog).queryByTestId("edit-workspace-agents")).toBeNull();
+  });
+});
+
 describe("ArchiveWorkspace", () => {
   it("archives the workspace and reloads the organization page", async () => {
     archiveWorkspace.mockResolvedValue({
@@ -326,15 +475,121 @@ describe("ArchiveWorkspace", () => {
       "Archive",
       "archive-workspace-wrk_0a1b2c3d4e5f6g7h8j9k0m",
     );
-    expect(dialog).toHaveTextContent("Archive Core platform");
-    await userEvent.click(
-      within(dialog).getByRole("button", { name: "Archive" }),
+    expect(
+      within(dialog).getByRole("heading", { name: "Archive workspace" }),
+    ).toBeInTheDocument();
+    expect(dialog).toHaveTextContent(
+      "Archiving freezes Core platform: runs, frames, records and spend stay readable forever.",
     );
+    // No facts: the count is not readable, so the handler has the last word.
+    expect(
+      within(dialog).getByTestId("archive-workspace-agents"),
+    ).toHaveTextContent("not readable without membership");
+    const confirm = within(dialog).getByRole("button", { name: "Archive" });
+    // The design's `btn danger`: red ink, never gold.
+    expect(confirm.className).toContain("text-error-ink");
+    expect(confirm.className).not.toContain("bg-button-primary-bg");
+    expect(
+      within(dialog)
+        .getAllByRole("button")
+        .map((button) => button.textContent)
+        .slice(-2),
+    ).toEqual(["Cancel", "Archive"]);
+    await userEvent.click(confirm);
     expect(archiveWorkspace).toHaveBeenCalledWith(
       "acme",
       "wrk_0a1b2c3d4e5f6g7h8j9k0m",
     );
     expect(router.replace).toHaveBeenCalledWith("/acme?tab=workspaces");
+  });
+
+  it("draws the row's Archive as the design's danger button", () => {
+    render(
+      <IntlProvider>
+        <ArchiveWorkspace org="acme" workspace={workspace} />
+      </IntlProvider>,
+    );
+    expect(screen.getByRole("button", { name: "Archive" }).className).toContain(
+      "text-error-ink",
+    );
+  });
+
+  it("warns about registered agents and disables Archive while any is registered (negative)", async () => {
+    render(
+      <IntlProvider>
+        <ArchiveWorkspace
+          org="acme"
+          workspace={workspace}
+          facts={{
+            repositories: [],
+            agents: 65,
+            archiveBlockers: { count: 64, more: false },
+          }}
+        />
+      </IntlProvider>,
+    );
+    const dialog = await open(
+      "Archive",
+      "archive-workspace-wrk_0a1b2c3d4e5f6g7h8j9k0m",
+    );
+    expect(
+      within(dialog).getByTestId("archive-workspace-agents"),
+    ).toHaveTextContent(
+      "64 agents are registered here. Deregister or move them first.",
+    );
+    const confirm = within(dialog).getByRole("button", { name: "Archive" });
+    expect(confirm).toBeDisabled();
+    await userEvent.click(confirm);
+    expect(archiveWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("says the count is a floor when the page of agents did not reach the end", async () => {
+    render(
+      <IntlProvider>
+        <ArchiveWorkspace
+          org="acme"
+          workspace={workspace}
+          facts={{
+            repositories: [],
+            agents: 140,
+            archiveBlockers: { count: 99, more: true },
+          }}
+        />
+      </IntlProvider>,
+    );
+    const dialog = await open(
+      "Archive",
+      "archive-workspace-wrk_0a1b2c3d4e5f6g7h8j9k0m",
+    );
+    expect(
+      within(dialog).getByTestId("archive-workspace-agents"),
+    ).toHaveTextContent("At least 99 agents are registered here.");
+  });
+
+  it("says no agents are here and leaves Archive enabled when none is registered", async () => {
+    render(
+      <IntlProvider>
+        <ArchiveWorkspace
+          org="acme"
+          workspace={workspace}
+          facts={{
+            repositories: [],
+            agents: 1,
+            archiveBlockers: { count: 0, more: false },
+          }}
+        />
+      </IntlProvider>,
+    );
+    const dialog = await open(
+      "Archive",
+      "archive-workspace-wrk_0a1b2c3d4e5f6g7h8j9k0m",
+    );
+    expect(
+      within(dialog).getByTestId("archive-workspace-agents"),
+    ).toHaveTextContent("No agents here.");
+    expect(
+      within(dialog).getByRole("button", { name: "Archive" }),
+    ).toBeEnabled();
   });
 
   it("names a workspace that still has agents and archives nothing (negative)", async () => {

@@ -23,7 +23,7 @@
       "audit": "Audit",
       "roles": "Roles",
       "apiKeys": "API keys",
-      "modelFunding": "Model funding",
+      "modelFunding": "Model funding and routes",
       "sso": "Single sign-on"
     },
     "switcher": {

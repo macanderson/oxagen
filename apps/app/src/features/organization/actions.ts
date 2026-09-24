@@ -41,6 +41,7 @@ import { GrantableOrgRole } from "@/data/contracts/org";
 import type { ActionResult } from "@/server/kernel";
 import { kernelWrite } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
+import { slugFromName } from "./workspace-slug";
 
 export type RoleDraft = {
   name: string;
@@ -113,12 +114,18 @@ export async function deleteRole(
 export type WorkspaceDraft = { name: string; slug: string };
 
 /**
- * A new workspace's draft: its name and slug, and its main repository as the
- * one `owner/name` text the form collects. `create_workspace` requires the main
- * repository (MC spec §10.1, §17 M0: a workspace cannot exist without one), so
- * the rename draft above stays two fields and this one is three.
+ * A new workspace's draft: its name, and its main repository as the one
+ * `owner/name` text the form sends. `create_workspace` requires the main
+ * repository (MC spec §10.1, §17 M0: a workspace cannot exist without one).
+ *
+ * The design's form has no slug field, so the slug is made from the name
+ * (`slugFromName`) unless a caller names one.
  */
-export type NewWorkspaceDraft = WorkspaceDraft & { mainRepo: string };
+export type NewWorkspaceDraft = {
+  name: string;
+  mainRepo: string;
+  slug?: string;
+};
 
 /**
  * `owner/name`, as a person types it or pastes it from GitHub: surrounding
@@ -159,12 +166,17 @@ export async function createWorkspace(
       field: "mainRepo",
     };
   }
+  const named = draft.slug?.trim() ?? "";
   const result = await kernelWrite(ctx, workspaceCreate, {
     name: draft.name.trim(),
-    slug: draft.slug.trim(),
+    slug: named === "" ? slugFromName(draft.name) : named,
     mainRepo: { provider: "github", ...mainRepo },
   });
-  return result.ok ? { ok: true, value: { slug: result.value.slug } } : result;
+  if (result.ok) return { ok: true, value: { slug: result.value.slug } };
+  // The form has no slug field: a slug the name made is the name's to fix.
+  if (named === "" && "field" in result && result.field === "slug")
+    return { ...result, field: "name" };
+  return result;
 }
 
 /**

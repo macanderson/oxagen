@@ -78,6 +78,7 @@ const source: DataSource = {
     costCenters: refuse,
     modelCredential: refuse,
     dataPlane: refuse,
+    workspaceFacts: refuse,
     sso: refuse,
   },
   audit: { events: refuse, exportEvents, retention: refuse, bundle: refuse },

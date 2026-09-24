@@ -111,10 +111,18 @@ function headers(table: HTMLElement): string[] {
 }
 
 describe("People", () => {
-  async function renderPeople(members: MemberList = roster) {
+  async function renderPeople(
+    members: MemberList = roster,
+    twoFactorRequired = true,
+  ) {
     const view = render(
       <IntlProvider>
-        <PeopleTab org="acme" members={members} roles={catalog} />
+        <PeopleTab
+          org="acme"
+          members={members}
+          roles={catalog}
+          twoFactorRequired={twoFactorRequired}
+        />
       </IntlProvider>,
     );
     await expectNoAxe(view.container);
@@ -124,9 +132,10 @@ describe("People", () => {
   it("draws the People panel with its badge, Invite, and the design's columns in order", async () => {
     await renderPeople();
     const panel = screen.getByRole("region", { name: "People" });
-    expect(
-      within(panel).getByText("two-factor policy not recorded"),
-    ).toBeInTheDocument();
+    expect(within(panel).getByText("two-factor required")).toHaveAttribute(
+      "data-policy",
+      "required",
+    );
     expect(within(panel).getByRole("button", { name: "Invite" })).toBeTruthy();
     expect(
       headers(within(panel).getByRole("table", { name: "People" })),
@@ -137,8 +146,15 @@ describe("People", () => {
       "Two-factor",
       "Last seen",
       "Status",
-      "Actions",
+      // The row actions column has an empty header, as the design draws it,
+      // and names itself to assistive tech.
+      "",
     ]);
+    expect(
+      within(within(panel).getByRole("table", { name: "People" }))
+        .getAllByRole("columnheader")
+        .at(-1),
+    ).toHaveAccessibleName("Actions");
     expect(within(panel).getByLabelText("Status")).toBeInTheDocument();
     // The design's Two-factor filter is drawn, and disabled with the reason,
     // because no contract records a member's method to filter on.
@@ -164,6 +180,16 @@ describe("People", () => {
     );
   });
 
+  it("says two-factor is optional when the organization's policy does not require it", async () => {
+    await renderPeople(roster, false);
+    const panel = screen.getByRole("region", { name: "People" });
+    expect(within(panel).getByText("two-factor optional")).toHaveAttribute(
+      "data-policy",
+      "optional",
+    );
+    expect(within(panel).queryByText("two-factor required")).toBeNull();
+  });
+
   it("prints a member's name and email, the recorded role, active status, and not recorded where the roster has nothing", async () => {
     await renderPeople();
     const cells = within(rowOf("usr_7k2m9q4x8r1t5v3w6y0z2a")).getAllByRole(
@@ -171,7 +197,7 @@ describe("People", () => {
     );
     expect(cells[0]).toHaveTextContent("Marcus Bell");
     expect(cells[0]).toHaveTextContent("marcus.bell@acme.example");
-    expect(cells[1]).toHaveTextContent("Owner");
+    expect(cells[1]).toHaveTextContent("org.owner");
     for (const index of [2, 3, 4]) {
       expect(cells[index]).toHaveTextContent("not recorded");
     }
@@ -188,9 +214,34 @@ describe("People", () => {
     const row = rowOf("usr_7k2m9q4x8r1t5v3w6y0z2a");
     await userEvent.click(within(row).getByRole("button", { name: "Open" }));
     const dialog = screen.getByTestId("member-usr_7k2m9q4x8r1t5v3w6y0z2a");
+    // Titled with the person, the email beneath, as the design's `member` is.
+    expect(
+      within(dialog).getByRole("heading", { name: "Marcus Bell" }),
+    ).toBeInTheDocument();
     expect(dialog).toHaveTextContent("marcus.bell@acme.example");
     expect(dialog).toHaveTextContent("usr_7k2m9q4x8r1t5v3w6y0z2a");
     expect(dialog).toHaveTextContent("not recorded");
+  });
+
+  it("draws the member dialog's Role per workspace, Agents they operate and Mandates, not recorded (#3932)", async () => {
+    await renderPeople();
+    const row = rowOf("usr_7k2m9q4x8r1t5v3w6y0z2a");
+    await userEvent.click(within(row).getByRole("button", { name: "Open" }));
+    const dialog = screen.getByTestId("member-usr_7k2m9q4x8r1t5v3w6y0z2a");
+    expect(
+      within(dialog)
+        .getAllByRole("heading", { level: 3 })
+        .map((h) => h.textContent),
+    ).toEqual(["Role per workspace", "Agents they operate", "Mandates"]);
+    expect(
+      within(dialog).getByRole("table", { name: "Role per workspace" }),
+    ).toHaveTextContent("not recorded");
+    expect(dialog.querySelector("[data-member-agents]")).toHaveTextContent(
+      "not recorded",
+    );
+    expect(dialog).toHaveTextContent("Granted");
+    expect(dialog).toHaveTextContent("Held by their agents");
+    await expectNoAxe(dialog);
   });
 
   it("counts Roles in use from the People table, with each role's description", async () => {
@@ -202,9 +253,9 @@ describe("People", () => {
     const owner = panel.querySelector('[data-role-in-use="owner"]');
     const admin = panel.querySelector('[data-role-in-use="admin"]');
     expect(owner).toHaveTextContent(
-      "Owner1everything, including the data plane and funding",
+      "org.owner1everything, including the data plane and funding",
     );
-    expect(admin).toHaveTextContent("Admin2no description recorded");
+    expect(admin).toHaveTextContent("org.admin2no description recorded");
     expect(panel).toHaveTextContent("2 agent roles are on the Roles tab.");
   });
 
@@ -213,7 +264,7 @@ describe("People", () => {
     expect(
       screen.getByText("This organization has no members."),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("table", { name: "People" })).toBeNull();
+    expect(document.querySelectorAll("[data-row]")).toHaveLength(0);
   });
 });
 
@@ -221,7 +272,11 @@ describe("Invitations", () => {
   async function renderInvitations(members: MemberList = roster) {
     const view = render(
       <IntlProvider>
-        <InvitationsTab org="acme" members={members} />
+        <InvitationsTab
+          org="acme"
+          members={members}
+          twoFactorRequired={false}
+        />
       </IntlProvider>,
     );
     await expectNoAxe(view.container);
@@ -236,14 +291,7 @@ describe("Invitations", () => {
       headers(
         within(panel).getByRole("table", { name: "Pending invitations" }),
       ),
-    ).toEqual([
-      "Email",
-      "Role offered",
-      "Invited by",
-      "Sent",
-      "Expires",
-      "Actions",
-    ]);
+    ).toEqual(["Email", "Role offered", "Invited by", "Sent", "Expires", ""]);
   });
 
   it("prints each invitation with Invited by not recorded, and Resend and Revoke", async () => {
@@ -251,11 +299,41 @@ describe("Invitations", () => {
     const row = rowOf("invi_9z8y7x6w5v4t3s2r1q0p9n");
     const cells = within(row).getAllByRole("cell");
     expect(cells[0]).toHaveTextContent("audit@acme.example");
-    expect(cells[1]).toHaveTextContent("Compliance");
+    expect(cells[1]).toHaveTextContent("org.compliance");
     expect(cells[2]).toHaveTextContent("not recorded");
     expect(cells[4]).toHaveTextContent("Never");
     expect(within(row).getByRole("button", { name: "Resend" })).toBeTruthy();
     expect(within(row).getByRole("button", { name: "Revoke" })).toBeTruthy();
+  });
+
+  it("filters by the day an invitation was sent and the day it expires", async () => {
+    await renderInvitations();
+    const panel = screen.getByRole("region", { name: "Pending invitations" });
+    const sent = within(panel).getByLabelText("Sent");
+    const expires = within(panel).getByLabelText("Expires");
+    expect(
+      within(sent)
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual(["All · Sent", "Sep 1, 2026", "Sep 10, 2026"]);
+    expect(
+      within(expires)
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual(["All · Expires", "Sep 17, 2026"]);
+    await userEvent.selectOptions(sent, "Sep 10, 2026");
+    expect(
+      document.querySelector('[data-row="invi_4n5p6q7r8s9t0v1w2x3y4z"]'),
+    ).not.toBeNull();
+    expect(
+      document.querySelector('[data-row="invi_9z8y7x6w5v4t3s2r1q0p9n"]'),
+    ).toBeNull();
+    await userEvent.selectOptions(sent, "");
+    await userEvent.selectOptions(expires, "Sep 17, 2026");
+    // An invitation that never expires falls outside any expiry day.
+    expect(
+      document.querySelector('[data-row="invi_9z8y7x6w5v4t3s2r1q0p9n"]'),
+    ).toBeNull();
   });
 
   it("says no invitation is waiting when there are none", async () => {

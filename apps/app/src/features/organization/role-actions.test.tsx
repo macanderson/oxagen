@@ -24,6 +24,7 @@ vi.mock("./actions", () => ({ createRole, deleteRole, setRolePermissions }));
 
 const { permissionEntry, roleRow } = await import("./organization.builders");
 const { DeleteRole, RoleEditor } = await import("./role-actions");
+const { Receipts } = await import("./receipt");
 
 const catalog = [
   permissionEntry(),
@@ -80,6 +81,10 @@ describe("RoleEditor: create", () => {
     editor("create");
     const dialog = await open("Create role", "role-editor-create");
     expect(dialog).toHaveTextContent("Create a role");
+    // The design's header close sits beside the title.
+    expect(dialog.querySelector("[data-header-close]")).toHaveAccessibleName(
+      "Close",
+    );
     expect(within(dialog).getByTestId("role-selected-count")).toHaveTextContent(
       "0 selected",
     );
@@ -166,6 +171,14 @@ describe("RoleEditor: edit", () => {
       "budget.set",
     ]);
     expect(router.replace).toHaveBeenCalledWith("/acme/roles");
+    render(
+      <IntlProvider>
+        <Receipts />
+      </IntlProvider>,
+    );
+    expect(screen.getByTestId("organization-receipts")).toHaveTextContent(
+      "was saved. Each holder's permission changes at their next call. Recorded in the audit record.",
+    );
   });
 
   it("names a ceiling refusal and changes nothing (negative)", async () => {
@@ -255,12 +268,21 @@ describe("DeleteRole", () => {
     );
     const dialog = await open("Delete", `delete-role-${free.id}`);
     expect(dialog).toHaveTextContent("Delete role");
+    expect(dialog.querySelector("[data-header-close]")).not.toBeNull();
     expect(dialog).toHaveTextContent("This removes agent.release from IAM.");
     await userEvent.click(
       within(dialog).getByRole("button", { name: "Delete role" }),
     );
     expect(deleteRole).toHaveBeenCalledWith("acme", free.id);
     expect(router.replace).toHaveBeenCalledWith("/acme/roles");
+    render(
+      <IntlProvider>
+        <Receipts />
+      </IntlProvider>,
+    );
+    expect(screen.getByTestId("organization-receipts")).toHaveTextContent(
+      "agent.release was deleted. Its definition and grants stay in the audit record.",
+    );
   });
 
   it("names a refusal and deletes nothing (negative)", async () => {

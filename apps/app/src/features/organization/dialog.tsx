@@ -1,21 +1,31 @@
 "use client";
 // The frame every Organization write shares: a button that opens a dialog, the
 // fields the caller supplies, and one submit that runs the write. A refusal is
-// named in the dialog and changes nothing; a write that answered reloads the
-// section it changed, so the table redraws from the kernel rather than from
-// state this component kept.
+// named in the dialog and changes nothing; a write that answered leaves its
+// receipt (`receipt.tsx`) and reloads the section it changed, so the table
+// redraws from the kernel rather than from state this component kept.
+import { useTranslations } from "next-intl";
 import { type ReactNode, type SyntheticEvent, useState } from "react";
 import type { ActionResult } from "@/server/kernel";
-import { buttonPrimary, buttonSecondary } from "@/ui/control-styles";
+import {
+  buttonDanger,
+  buttonPrimary,
+  buttonSecondary,
+} from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { UNANSWERED, useActionFailure } from "./action-failure";
+import { recordReceipt } from "./receipt";
 
 export type DialogCopy = {
   open: string;
   title: string;
+  /** A line under the title: the record the write acts on. */
+  subtitle?: string;
   confirm: string;
   pending: string;
+  /** The receipt line once the write answered; "Saved. Recorded in the audit record." when absent. */
+  receipt?: string;
 };
 
 export function WriteDialog<O>({
@@ -25,12 +35,24 @@ export function WriteDialog<O>({
   onDone,
   done,
   primary = false,
+  danger = false,
+  blocked = false,
   wide = false,
   children,
 }: {
   copy: DialogCopy;
   /** Draw the opening button gold: the screen's one primary action. */
   primary?: boolean;
+  /**
+   * A write that ends something (archive): the row's button and the confirm
+   * are the design's `btn danger`, red ink and never gold.
+   */
+  danger?: boolean;
+  /**
+   * The confirm is disabled: the body already says why the handler would
+   * refuse (an Archive over registered agents), so the button cannot be sent.
+   */
+  blocked?: boolean;
   /** The mockup's 600px dialog, for an editor that needs two columns. */
   wide?: boolean;
   testId: string;
@@ -64,6 +86,9 @@ export function WriteDialog<O>({
   children?: ReactNode;
 }) {
   const failureText = useActionFailure();
+  const tReceipt = useTranslations("organization.receipts");
+  const tActions = useTranslations("organization.actions");
+  const formId = `${testId}-form`;
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
@@ -90,13 +115,14 @@ export function WriteDialog<O>({
 
   async function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (pending) return;
+    if (pending || blocked) return;
     const form = new FormData(event.currentTarget);
     setPending(true);
     setFailure(null);
     try {
       const answer = await submit(form);
       if (answer.ok) {
+        recordReceipt(copy.receipt ?? tReceipt("saved"));
         const panel = done?.render(answer.value) ?? null;
         if (panel === null) finish(answer.value);
         else setResult({ value: answer.value });
@@ -114,22 +140,44 @@ export function WriteDialog<O>({
     <>
       <button
         type="button"
-        className={primary ? buttonPrimary : buttonSecondary}
+        className={
+          primary ? buttonPrimary : danger ? buttonDanger : buttonSecondary
+        }
         onClick={() => {
           setOpen(true);
         }}
       >
         {copy.open}
       </button>
+      {/* The design's footer reads Cancel then the confirm, with the header's
+          x beside the title. Once a write left something to read, the form
+          gives way to it and the one footer button is its close. */}
       <SheetDialog
         open={open}
         onOpenChange={openChange}
         title={copy.title}
+        subtitle={copy.subtitle}
         testId={testId}
         wide={wide}
+        headerClose
+        closeLabel={result === null ? tActions("cancel") : done?.close}
+        footer={
+          result === null ? (
+            <SubmitButton
+              form={formId}
+              pending={pending}
+              label={copy.confirm}
+              pendingLabel={copy.pending}
+              fullWidth={false}
+              danger={danger}
+              disabled={blocked}
+            />
+          ) : undefined
+        }
       >
         {result === null ? (
           <form
+            id={formId}
             onSubmit={(e) => void onSubmit(e)}
             className="flex flex-col gap-3"
           >
@@ -137,24 +185,10 @@ export function WriteDialog<O>({
             {failure === null ? null : (
               <FormAlert testId={`${testId}-failure`}>{failure}</FormAlert>
             )}
-            <SubmitButton
-              pending={pending}
-              label={copy.confirm}
-              pendingLabel={copy.pending}
-            />
           </form>
         ) : (
           <div className="flex flex-col gap-3" data-testid={`${testId}-done`}>
             {done?.render(result.value)}
-            <button
-              type="button"
-              className={buttonSecondary}
-              onClick={() => {
-                finish(result.value);
-              }}
-            >
-              {done?.close}
-            </button>
           </div>
         )}
       </SheetDialog>

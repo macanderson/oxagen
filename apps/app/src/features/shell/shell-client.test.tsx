@@ -357,7 +357,7 @@ describe("command menu", () => {
       "Organization",
       "Roles",
       "API keys",
-      "Model funding",
+      "Model funding and routes",
       "Single sign-on",
       "Billing",
       "Audit",

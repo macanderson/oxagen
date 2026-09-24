@@ -235,6 +235,7 @@ export function toolsSource(reads: ToolsReads) {
       costCenters: refuse,
       modelCredential: refuse,
       dataPlane: refuse,
+      workspaceFacts: refuse,
       sso: refuse,
     },
     skills: { inventory: refuse, configuration: refuse },

@@ -160,6 +160,9 @@ describe("routes", () => {
     expect(routes.fleet("a/b", "..")).toBe("/a%2Fb/..");
     expect(routes.people("\\evil")).toBe("/%5Cevil");
     expect(routes.apiKeys("a/b")).toBe("/a%2Fb/api-keys");
+    expect(
+      routes.apiKeys("acme", { workspace: "core", rows: "25", offset: "25" }),
+    ).toBe("/acme/api-keys?workspace=core&rows=25&offset=25");
     expect(routes.modelFunding("a/b")).toBe("/a%2Fb/model-funding");
     expect(routes.sso("a/b")).toBe("/a%2Fb/sso");
   });

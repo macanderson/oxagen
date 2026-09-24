@@ -2,10 +2,10 @@
 // else reaches into the folder.
 export { chooseWorkspace } from "./api-keys";
 export { parseApiKeysView } from "./api-keys-view";
-export { ModelFunding } from "./model-funding";
 export {
   Organization,
   OrganizationApiKeys,
+  OrganizationModelFunding,
   OrganizationRoles,
   parseOrganizationTab,
 } from "./organization";

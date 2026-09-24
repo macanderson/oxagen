@@ -56,7 +56,7 @@ describe("the segmented control", () => {
     expect(
       within(modes()).getByRole("button", { name: "Behind the firewall" }),
     ).toBeInTheDocument();
-    expect(plane()).toHaveTextContent("Acme Robotics is on Shared");
+    expect(plane()).toHaveTextContent("Acme Robotics is on shared");
   });
 
   it("previews another mode under a note and draws that mode's facts", async () => {
@@ -75,10 +75,19 @@ describe("the segmented control", () => {
       "Air-gapped mode",
       "Licence",
       "Next bundle",
-      "Outbound connections",
     ]) {
       expect(plane()).toHaveTextContent(fact);
     }
+    // Outbound connections is a table of its own, as the design draws it.
+    const outbound = within(plane()).getByRole("table", {
+      name: "Outbound connections in use",
+    });
+    expect(
+      within(outbound)
+        .getAllByRole("columnheader")
+        .map((th) => th.textContent),
+    ).toEqual(["Destination", "Why", "State"]);
+    expect(outbound).toHaveTextContent("not recorded");
   });
 });
 
@@ -97,9 +106,10 @@ describe("the mode's facts", () => {
     ]) {
       expect(shown).toHaveTextContent(fact);
     }
-    expect(shown).toHaveTextContent(
-      "partitioned by org_id, row-level policies enforced",
-    );
+    // Row-level security on org_id is what the store has; no tenant table
+    // is partitioned by org_id, so the fact never says partitioned.
+    expect(shown).toHaveTextContent("row-level security on org_id, enforced");
+    expect(shown).not.toHaveTextContent("partitioned");
     expect(
       shown.querySelector("[data-plane-status='active']"),
     ).toHaveTextContent("active");
@@ -118,8 +128,14 @@ describe("the mode's facts", () => {
       ),
     );
     const shown = document.querySelector<HTMLElement>("[data-plane-shown]");
-    expect(shown).toHaveTextContent("db.acme.internal");
-    expect(shown).toHaveTextContent("acme_tenant · schema 20260920");
+    expect(shown).toHaveTextContent("Tenant data in Postgres");
+    expect(shown).toHaveTextContent(
+      "db.acme.internal / acme_tenant · schema 20260920",
+    );
+    expect(shown).toHaveTextContent(
+      "Identity and billing in Postgresstay on the shared plane by design",
+    );
+    expect(shown).not.toHaveTextContent("Postgres host");
     expect(
       within(modes()).getByRole("button", { name: "Dedicated · current" }),
     ).toHaveAttribute("aria-pressed", "true");
@@ -154,8 +170,21 @@ describe("the two writes", () => {
       );
       const dialog = await screen.findByTestId(testId);
       expect(dialog).toHaveTextContent(says);
+      // The design's header close sits beside the title.
+      expect(dialog.querySelector("[data-header-close]")).not.toBeNull();
       expect(dialog).toHaveTextContent("nothing is sent");
     },
+  );
+});
+
+it("titles the plane request as the design does", async () => {
+  await renderPlane();
+  await userEvent.click(
+    within(plane()).getByRole("button", { name: "Request a change of plane" }),
+  );
+  const dialog = await screen.findByTestId("data-plane-request");
+  expect(within(dialog).getByRole("heading")).toHaveTextContent(
+    /^Request a change of data plane$/,
   );
 });
 

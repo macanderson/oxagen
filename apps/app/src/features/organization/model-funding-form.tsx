@@ -1,24 +1,28 @@
 "use client";
-// The write surface of Organization › Model funding: choose a vendor, paste a
-// key, test it, save it, or remove the one stored (ADR-053 §2).
+// The write surface of Organization › Model funding and routes, drawn inside
+// the Funding source panel when the source is customer_key (mockup
+// `orgKeyPanel`, ADR-053 §2): one password field for the key, Test and save,
+// and Remove the key once one is held.
 //
-// The fields follow the vendor. OpenRouter and the Vercel AI Gateway take a
-// key and nothing else — one key reaches every model and understands Oxagen's
-// model names. OpenAI and Anthropic take a key and the model to use for the
-// balanced tier. Any other OpenAI-compatible server also takes its URL. The
-// rules are `model-funding-rules.ts`, which mirrors the contract.
+// Test and save asks the vendor first and stores the key only when the vendor
+// accepted it (and, for an OpenAI-compatible server, its model can call
+// tools), so a key that does not work is never saved. The key reaches
+// OpenRouter by default. "Another vendor" opens the rest of ADR-053's choices
+// (the Vercel AI Gateway, OpenAI, Anthropic, or any OpenAI-compatible server)
+// with the URL and models those need; the rules are `model-funding-rules.ts`,
+// which mirrors the contract.
 //
 // The key lives in this component's state until a save succeeds, and is
 // cleared then. Nothing sends it back: the save answers with the redacted
 // view, and the page never renders the key once submitted.
 //
-// Remove asks once, in the page, not in a browser `confirm()` — a native
+// Remove asks once, in the page, not in a browser `confirm()`: a native
 // dialog blocks the tab and cannot be styled or tested.
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
 import type { ModelCredential, ModelProvider } from "@/data/contracts/org";
 import type { ActionResult } from "@/server/kernel";
-import { buttonSecondary, inputBase, mono, panel } from "@/ui/control-styles";
+import { buttonSecondary, inputBase } from "@/ui/control-styles";
 import { Field, PasswordField } from "@/ui/field";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
@@ -35,6 +39,7 @@ import {
   needsBaseUrl,
   needsModelMap,
 } from "./model-funding-rules";
+import { recordReceipt } from "./receipt";
 
 type Failure = Exclude<ActionResult<unknown>, { ok: true }>;
 
@@ -45,12 +50,7 @@ const UNANSWERED: Failure = {
   code: "action_failed",
 };
 
-type Busy = "idle" | "testing" | "saving" | "removing";
-
-type ModelTier = keyof ModelCredential["modelMap"];
-
-/** Display order of the per-tier models; balanced first because it is the one that is required. */
-const MODEL_TIERS: readonly ModelTier[] = ["balanced", "fast", "precise"];
+type Busy = "idle" | "saving" | "removing";
 
 /** The sentence a refused write shows, keyed on the kernel's classification. */
 function useFailureText(): (failure: Failure) => string {
@@ -82,65 +82,6 @@ function useFailureText(): (failure: Failure) => string {
         return t("unavailable", { code: failure.code });
     }
   };
-}
-
-/** What the stored key is, in words. Never the key itself. */
-function Current({ credential }: { credential: ModelCredential }) {
-  const t = useTranslations("organization.modelFunding");
-  if (!credential.configured || credential.provider === null) {
-    return (
-      <p className="text-sm text-muted-foreground" data-testid="funding-none">
-        {t("current.none")}
-      </p>
-    );
-  }
-  const models = MODEL_TIERS.flatMap((tier) => {
-    const id = credential.modelMap[tier];
-    return id ? [{ tier, id }] : [];
-  });
-  return (
-    <dl
-      className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 text-sm"
-      data-testid="funding-current"
-    >
-      <dt className="text-muted-foreground">{t("current.provider")}</dt>
-      <dd>{t(`providers.${credential.provider}.name`)}</dd>
-      <dt className="text-muted-foreground">{t("current.key")}</dt>
-      <dd className={mono}>
-        {t("current.keyEnding", { hint: credential.keyHint ?? "" })}
-      </dd>
-      {credential.baseUrl ? (
-        <>
-          <dt className="text-muted-foreground">{t("current.endpoint")}</dt>
-          <dd className={`${mono} break-all`}>{credential.baseUrl}</dd>
-        </>
-      ) : null}
-      {models.map(({ tier, id }) => (
-        <FragmentRow key={tier} label={t(`tiers.${tier}`)} value={id} />
-      ))}
-      <dt className="text-muted-foreground">{t("current.status")}</dt>
-      <dd>
-        {credential.status === "active"
-          ? t("current.active")
-          : t("current.disabled")}
-      </dd>
-      <dt className="text-muted-foreground">{t("current.tested")}</dt>
-      <dd>
-        {credential.lastVerifiedAt
-          ? t("current.at", { when: new Date(credential.lastVerifiedAt) })
-          : t("current.never")}
-      </dd>
-    </dl>
-  );
-}
-
-function FragmentRow({ label, value }: { label: string; value: string }) {
-  return (
-    <>
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className={mono}>{value}</dd>
-    </>
-  );
 }
 
 /** The vendor's answer to a test, in words a person can act on. */
@@ -187,6 +128,7 @@ export function ModelFundingForm({
   credential: ModelCredential;
 }) {
   const t = useTranslations("organization.modelFunding");
+  const tReceipt = useTranslations("organization.receipts");
   const failureText = useFailureText();
   const navigate = useNavigate();
 
@@ -238,20 +180,31 @@ export function ModelFundingForm({
     }
   }
 
-  const onTest = () => {
-    void run("testing", () => testModelKey(org, input()), setVerdict);
-  };
-
   const onSave = (event: SyntheticEvent) => {
     event.preventDefault();
+    const draft = input();
     void run(
       "saving",
-      () => saveModelKey(org, input()),
-      () => {
+      async (): Promise<ActionResult<ModelKeyVerdict | null>> => {
+        const tested = await testModelKey(org, draft);
+        if (!tested.ok) return tested;
+        // The vendor refused, or the model cannot call tools: show why, and
+        // store nothing.
+        if (!tested.value.ok || tested.value.toolCalling === false)
+          return { ok: true, value: tested.value };
+        const saved = await saveModelKey(org, draft);
+        return saved.ok ? { ok: true, value: null } : saved;
+      },
+      (refusedVerdict) => {
+        if (refusedVerdict !== null) {
+          setVerdict(refusedVerdict);
+          return;
+        }
         // The key has done its job; it does not stay in memory.
         setApiKey("");
         setVerdict(null);
         setSaved(true);
+        recordReceipt(tReceipt("modelKeySaved"));
         navigate.refresh();
       },
     );
@@ -264,6 +217,7 @@ export function ModelFundingForm({
       () => {
         setConfirmingRemove(false);
         setVerdict(null);
+        recordReceipt(tReceipt("modelKeyRemoved"));
         navigate.refresh();
       },
     );
@@ -275,13 +229,158 @@ export function ModelFundingForm({
       : null;
 
   return (
-    <div className="flex flex-col gap-6">
-      <section className={`${panel} flex flex-col gap-3 p-5`}>
-        <h2 className="text-base font-semibold">{t("current.title")}</h2>
-        <Current credential={credential} />
-        <p className="text-sm text-muted-foreground">
-          {credential.configured ? t("explain.byok") : t("explain.platform")}
+    <form
+      className="flex flex-col gap-4"
+      onSubmit={onSave}
+      noValidate
+      data-testid="funding-form"
+    >
+      <PasswordField
+        id="funding-key"
+        name="apiKey"
+        label={t("form.key")}
+        hint={t("form.keyHint")}
+        placeholder="sk-or-v1-…"
+        autoComplete="off"
+        spellCheck={false}
+        value={apiKey}
+        onChange={(e) => {
+          setApiKey(e.target.value);
+        }}
+        error={fieldError("apiKey")}
+        showLabel={t("form.show")}
+        hideLabel={t("form.hide")}
+      />
+
+      <details
+        className="rounded-lg border border-border px-3 py-2"
+        open={provider !== "openrouter" || undefined}
+        data-testid="funding-vendor"
+      >
+        <summary className="cursor-pointer text-sm font-medium max-md:min-h-11">
+          {t("form.vendor")}
+        </summary>
+        <div className="mt-3 flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <label
+              htmlFor="funding-provider"
+              className="text-sm font-medium text-foreground"
+            >
+              {t("form.provider")}
+            </label>
+            <select
+              id="funding-provider"
+              name="provider"
+              className={inputBase}
+              value={provider}
+              onChange={(e) => {
+                if (!isModelProvider(e.target.value)) return;
+                setProvider(e.target.value);
+                setVerdict(null);
+                setFailure(null);
+              }}
+            >
+              {MODEL_PROVIDERS.map((p) => (
+                <option key={p} value={p}>
+                  {t(`providers.${p}.name`)}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              {t(`providers.${provider}.hint`)}
+            </p>
+          </div>
+
+          {needsBaseUrl(provider) ? (
+            <Field
+              id="funding-base-url"
+              name="baseUrl"
+              type="url"
+              inputMode="url"
+              label={t("form.baseUrl")}
+              hint={t("form.baseUrlHint")}
+              placeholder={t("form.baseUrlPlaceholder")}
+              value={baseUrl}
+              onChange={(e) => {
+                setBaseUrl(e.target.value);
+              }}
+              error={fieldError("baseUrl")}
+            />
+          ) : null}
+
+          {needsModelMap(provider) ? (
+            <fieldset
+              className="flex flex-col gap-3"
+              data-testid="funding-models"
+            >
+              <legend className="text-sm font-medium">
+                {t("form.models")}
+              </legend>
+              <Field
+                id="funding-balanced"
+                name="balanced"
+                label={t("tiers.balanced")}
+                hint={t("form.balancedHint")}
+                value={balanced}
+                onChange={(e) => {
+                  setBalanced(e.target.value);
+                }}
+                error={fieldError("balanced")}
+              />
+              <Field
+                id="funding-fast"
+                name="fast"
+                label={t("tiers.fast")}
+                value={fast}
+                onChange={(e) => {
+                  setFast(e.target.value);
+                }}
+              />
+              <Field
+                id="funding-precise"
+                name="precise"
+                label={t("tiers.precise")}
+                value={precise}
+                onChange={(e) => {
+                  setPrecise(e.target.value);
+                }}
+              />
+              <p className="text-xs text-muted-foreground">
+                {t("form.unmappedNote")}
+              </p>
+            </fieldset>
+          ) : null}
+
+          {provider === "anthropic" ? (
+            <p
+              className="text-xs text-muted-foreground"
+              data-testid="funding-anthropic-note"
+            >
+              {t("providers.anthropic.caching")}
+            </p>
+          ) : null}
+        </div>
+      </details>
+
+      {verdict ? <Verdict verdict={verdict} provider={provider} /> : null}
+      {wholeFormFailure ? (
+        <FormAlert testId="funding-failure">{wholeFormFailure}</FormAlert>
+      ) : null}
+      {saved ? (
+        <p role="status" className="text-sm" data-testid="funding-saved">
+          {t("form.saved")}
         </p>
+      ) : null}
+
+      <div className="flex flex-wrap items-center gap-3">
+        <SubmitButton
+          pending={busy === "saving"}
+          label={t("form.save")}
+          pendingLabel={t("form.saving")}
+          fullWidth={false}
+          // The header's Create a workspace is the screen's one gold action.
+          secondary
+        />
         {credential.configured ? (
           confirmingRemove ? (
             <div
@@ -308,172 +407,19 @@ export function ModelFundingForm({
               </button>
             </div>
           ) : (
-            <div>
-              <button
-                type="button"
-                className={buttonSecondary}
-                onClick={() => {
-                  setConfirmingRemove(true);
-                }}
-                data-testid="funding-remove"
-              >
-                {t("remove.label")}
-              </button>
-            </div>
+            <button
+              type="button"
+              className={buttonSecondary}
+              onClick={() => {
+                setConfirmingRemove(true);
+              }}
+              data-testid="funding-remove"
+            >
+              {t("remove.label")}
+            </button>
           )
         ) : null}
-      </section>
-
-      <form
-        className={`${panel} flex flex-col gap-4 p-5`}
-        onSubmit={onSave}
-        noValidate
-        data-testid="funding-form"
-      >
-        <h2 className="text-base font-semibold">
-          {credential.configured ? t("form.replaceTitle") : t("form.title")}
-        </h2>
-
-        <div className="flex flex-col gap-1.5">
-          <label
-            htmlFor="funding-provider"
-            className="text-sm font-medium text-foreground"
-          >
-            {t("form.provider")}
-          </label>
-          <select
-            id="funding-provider"
-            name="provider"
-            className={inputBase}
-            value={provider}
-            onChange={(e) => {
-              if (!isModelProvider(e.target.value)) return;
-              setProvider(e.target.value);
-              setVerdict(null);
-              setFailure(null);
-            }}
-          >
-            {MODEL_PROVIDERS.map((p) => (
-              <option key={p} value={p}>
-                {t(`providers.${p}.name`)}
-              </option>
-            ))}
-          </select>
-          <p className="text-xs text-muted-foreground">
-            {t(`providers.${provider}.hint`)}
-          </p>
-        </div>
-
-        <PasswordField
-          id="funding-key"
-          name="apiKey"
-          label={t("form.key")}
-          autoComplete="off"
-          spellCheck={false}
-          value={apiKey}
-          onChange={(e) => {
-            setApiKey(e.target.value);
-          }}
-          error={fieldError("apiKey")}
-          showLabel={t("form.show")}
-          hideLabel={t("form.hide")}
-        />
-
-        {needsBaseUrl(provider) ? (
-          <Field
-            id="funding-base-url"
-            name="baseUrl"
-            type="url"
-            inputMode="url"
-            label={t("form.baseUrl")}
-            hint={t("form.baseUrlHint")}
-            placeholder={t("form.baseUrlPlaceholder")}
-            value={baseUrl}
-            onChange={(e) => {
-              setBaseUrl(e.target.value);
-            }}
-            error={fieldError("baseUrl")}
-          />
-        ) : null}
-
-        {needsModelMap(provider) ? (
-          <fieldset
-            className="flex flex-col gap-3"
-            data-testid="funding-models"
-          >
-            <legend className="text-sm font-medium">{t("form.models")}</legend>
-            <Field
-              id="funding-balanced"
-              name="balanced"
-              label={t("tiers.balanced")}
-              hint={t("form.balancedHint")}
-              value={balanced}
-              onChange={(e) => {
-                setBalanced(e.target.value);
-              }}
-              error={fieldError("balanced")}
-            />
-            <Field
-              id="funding-fast"
-              name="fast"
-              label={t("tiers.fast")}
-              value={fast}
-              onChange={(e) => {
-                setFast(e.target.value);
-              }}
-            />
-            <Field
-              id="funding-precise"
-              name="precise"
-              label={t("tiers.precise")}
-              value={precise}
-              onChange={(e) => {
-                setPrecise(e.target.value);
-              }}
-            />
-            <p className="text-xs text-muted-foreground">
-              {t("form.unmappedNote")}
-            </p>
-          </fieldset>
-        ) : null}
-
-        {provider === "anthropic" ? (
-          <p
-            className="text-xs text-muted-foreground"
-            data-testid="funding-anthropic-note"
-          >
-            {t("providers.anthropic.caching")}
-          </p>
-        ) : null}
-
-        {verdict ? <Verdict verdict={verdict} provider={provider} /> : null}
-        {wholeFormFailure ? (
-          <FormAlert testId="funding-failure">{wholeFormFailure}</FormAlert>
-        ) : null}
-        {saved ? (
-          <p role="status" className="text-sm" data-testid="funding-saved">
-            {t("form.saved")}
-          </p>
-        ) : null}
-
-        <div className="flex flex-wrap gap-3">
-          <button
-            type="button"
-            className={buttonSecondary}
-            onClick={onTest}
-            aria-disabled={busy !== "idle" || undefined}
-            data-testid="funding-test"
-          >
-            {busy === "testing" ? t("form.testing") : t("form.test")}
-          </button>
-          <SubmitButton
-            pending={busy === "saving"}
-            label={t("form.save")}
-            pendingLabel={t("form.saving")}
-            fullWidth={false}
-          />
-        </div>
-      </form>
-    </div>
+      </div>
+    </form>
   );
 }

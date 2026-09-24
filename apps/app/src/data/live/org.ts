@@ -12,12 +12,14 @@
 // the list matches no key that exists and a mint writes one into a workspace
 // that does not. The page picks a workspace and resolves into it first.
 import "server-only";
+import { agentList } from "@oxagen/oxagen/contracts/agent.list";
 import { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
 import { costCenterList } from "@oxagen/oxagen/contracts/cost_center.list";
 import { iamRoleList } from "@oxagen/oxagen/contracts/iam.role.list";
 import { orgDataPlaneGet } from "@oxagen/oxagen/contracts/org.data_plane.get";
 import { orgModelCredentialGet } from "@oxagen/oxagen/contracts/org.model_credential.get";
 import { orgSsoList } from "@oxagen/oxagen/contracts/org.sso.list";
+import { repositoryList } from "@oxagen/oxagen/contracts/repository.list";
 import { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
 import { listMembers } from "@oxagen/oxagen/contracts/workspace.member.list";
 import { captureError } from "@oxagen/telemetry";
@@ -30,6 +32,7 @@ import {
   ModelCredential,
   RoleCatalog,
   SsoSettings,
+  WorkspaceFacts,
   WorkspaceList,
 } from "@/data/contracts/org";
 import type { DataSource } from "@/data/ports";
@@ -43,6 +46,7 @@ import {
   toModelCredential,
   toRoleCatalog,
   toSsoSettings,
+  toWorkspaceFacts,
   toWorkspaceList,
 } from "./mappers/org";
 
@@ -149,6 +153,38 @@ export const org: DataSource["org"] = {
       WorkspaceList,
       toWorkspaceList(read.value),
       "org.workspaces",
+    );
+  },
+
+  // What one workspace binds and registers. Both reads are workspace-scoped,
+  // so the caller resolves the workspace viewer first (`requireViewer(org,
+  // ws)`, where membership is checked, INV-15). Either read refusing refuses
+  // the whole: a row that printed the repositories beside an agent count it
+  // could not read would mix a fact with a gap in one set of cells.
+  async workspaceFacts(ctx) {
+    const [repositories, agents] = await Promise.all([
+      kernelRead(ctx, {
+        contract: repositoryList,
+        input: {},
+        page: "organization",
+      }),
+      kernelRead(ctx, {
+        contract: agentList,
+        // The Agents count is the totals block, over the workspace. The page
+        // is the largest the contract allows, because the Archive dialog
+        // counts the rows `archive_workspace` would refuse over, and the
+        // totals cannot tell those from the built-in and retired ones.
+        input: { limit: 100 },
+        page: "organization",
+      }),
+    ]);
+    if (!repositories.ok) return repositories;
+    if (!agents.ok) return agents;
+    return view(
+      ctx.orgId,
+      WorkspaceFacts,
+      toWorkspaceFacts(repositories.value, agents.value),
+      "org.workspaceFacts",
     );
   },
 

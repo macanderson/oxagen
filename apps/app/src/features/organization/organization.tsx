@@ -1,12 +1,13 @@
 // The Organization pages' bodies (pages/organization.md,
-// organization-roles.md, organization-api-keys.md): each renders inside the
+// organization-roles.md, organization-api-keys.md), Model funding and routes
+// among them: each renders inside the
 // frame, which checks the permission, reads what the header and the tab
 // counts need, and draws the not-loaded states. The route passes the tab; the
 // frame hands the tab the reads it already made.
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import type { WorkspaceList } from "@/data/contracts/org";
-import type { OrgCtx } from "@/server/viewer";
+import { type OrgCtx, requireViewer } from "@/server/viewer";
 import {
   firstParam,
   type OrganizationQueryTab,
@@ -16,6 +17,7 @@ import { ApiKeys } from "./api-keys";
 import type { ApiKeysView } from "./api-keys-view";
 import { CostCenters } from "./cost-centers";
 import { DataPlaneTab } from "./data-plane";
+import { ModelFundingTab } from "./model-funding";
 import { OrganizationFrame } from "./frame";
 import { InvitationsTab, PeopleTab } from "./people";
 import { RolesTab } from "./roles";
@@ -54,23 +56,64 @@ export function Organization({
       current={tab}
       retry={routes.organization(ctx.orgSlug, tab)}
     >
-      {({ members, roles, workspaces }) => {
+      {({ members, roles, workspaces, twoFactor, enterable }) => {
         switch (tab) {
           case "invitations":
-            return <InvitationsTab org={ctx.orgSlug} members={members} />;
+            return (
+              <InvitationsTab
+                org={ctx.orgSlug}
+                members={members}
+                twoFactorRequired={twoFactor.required}
+              />
+            );
           case "workspaces":
-            return <WorkspacesTab org={ctx.orgSlug} workspaces={workspaces} />;
+            return workspacesTab(ctx, source, workspaces, enterable);
           case "dataPlane":
             return dataPlane(ctx, source, workspaces);
           case "costCenters":
             return <CostCenters ctx={ctx} source={source} />;
           default:
             return (
-              <PeopleTab org={ctx.orgSlug} members={members} roles={roles} />
+              <PeopleTab
+                org={ctx.orgSlug}
+                members={members}
+                roles={roles}
+                twoFactorRequired={twoFactor.required}
+              />
             );
         }
       }}
     </OrganizationFrame>
+  );
+}
+
+/**
+ * The Workspaces tab, with what each workspace the viewer may enter binds and
+ * registers: `org.workspaceFacts` inside each, made together, each after
+ * `requireViewer(org, ws)` has checked the membership (INV-15). A workspace
+ * the viewer is not a member of is not read, and its row says so.
+ */
+async function workspacesTab(
+  ctx: OrgCtx,
+  source: DataSource,
+  workspaces: WorkspaceList,
+  enterable: readonly string[],
+) {
+  const facts = new Map(
+    await Promise.all(
+      enterable.map(async (slug) => {
+        const wsCtx = await requireViewer(ctx.orgSlug, slug);
+        return [slug, await source.org.workspaceFacts(wsCtx)] as const;
+      }),
+    ),
+  );
+  return (
+    <WorkspacesTab
+      org={ctx.orgSlug}
+      workspaces={workspaces}
+      facts={facts}
+      enterable={enterable}
+    />
   );
 }
 
@@ -114,6 +157,35 @@ export function OrganizationRoles({
           org={ctx.orgSlug}
           catalog={roles}
           sso={await source.org.sso(ctx)}
+        />
+      )}
+    </OrganizationFrame>
+  );
+}
+
+/**
+ * `/{org}/model-funding`: Model funding and routes. Its one read of its own is
+ * made inside the frame, so a viewer the frame refused never reaches it.
+ */
+export function OrganizationModelFunding({
+  ctx,
+  source,
+}: {
+  ctx: OrgCtx;
+  source: DataSource;
+}) {
+  return (
+    <OrganizationFrame
+      ctx={ctx}
+      source={source}
+      current="modelFunding"
+      retry={routes.modelFunding(ctx.orgSlug)}
+    >
+      {async () => (
+        <ModelFundingTab
+          org={ctx.orgSlug}
+          orgName={ctx.orgName}
+          read={await source.org.modelCredential(ctx)}
         />
       )}
     </OrganizationFrame>

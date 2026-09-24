@@ -33,6 +33,7 @@ import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { UNANSWERED, useActionFailure } from "./action-failure";
+import { recordReceipt } from "./receipt";
 import {
   createRole,
   deleteRole,
@@ -89,6 +90,7 @@ export function RoleEditor({
   primary?: boolean;
 }) {
   const t = useTranslations("organization.roleCatalog.editor");
+  const tReceipt = useTranslations("organization.receipts");
   const tKind = useTranslations("organization.roleCatalog.kind");
   const tScope = useTranslations("organization.roleCatalog.scope");
   const failureText = useActionFailure();
@@ -144,6 +146,11 @@ export function RoleEditor({
         ? await createRole(org, created)
         : await setRolePermissions(org, role?.id ?? "", permissions);
       if (answer.ok) {
+        recordReceipt(
+          isNew
+            ? tReceipt("roleCreated", { name: draft.name })
+            : tReceipt("roleSaved", { name: role?.name ?? draft.name }),
+        );
         setOpen(false);
         navigate.replace(routes.roles(org));
       } else {
@@ -175,6 +182,7 @@ export function RoleEditor({
         subtitle={isNew ? undefined : role?.name}
         testId={`role-editor-${mode}${role === undefined ? "" : `-${role.id}`}`}
         wide
+        headerClose
         closeLabel={readOnly ? t("close") : t("cancel")}
         footer={
           readOnly ? (
@@ -372,6 +380,7 @@ export function RoleEditor({
 export function DeleteRole({ org, role }: { org: string; role: Role }) {
   const t = useTranslations("organization.roleCatalog");
   const tDel = useTranslations("organization.roleCatalog.del");
+  const tReceipt = useTranslations("organization.receipts");
   const failureText = useActionFailure();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -390,6 +399,7 @@ export function DeleteRole({ org, role }: { org: string; role: Role }) {
     try {
       const answer = await deleteRole(org, role.id);
       if (answer.ok) {
+        recordReceipt(tReceipt("roleDeleted", { name: role.name }));
         setOpen(false);
         navigate.replace(routes.roles(org));
       } else {
@@ -423,6 +433,7 @@ export function DeleteRole({ org, role }: { org: string; role: Role }) {
         title={tDel("title")}
         subtitle={role.name}
         testId={`delete-role-${role.id}`}
+        headerClose
         closeLabel={tDel("cancel")}
         footer={
           <button

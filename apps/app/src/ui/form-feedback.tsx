@@ -3,7 +3,12 @@
 // glyph and the border, so every tone passes AA on the panel.
 import { CircleCheck, LoaderCircle, Lock, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
-import { buttonPrimary, buttonSecondary, panel } from "./control-styles";
+import {
+  buttonDanger,
+  buttonPrimary,
+  buttonSecondary,
+  panel,
+} from "./control-styles";
 
 export function FormAlert({
   children,
@@ -36,6 +41,8 @@ export function SubmitButton({
   form,
   testId,
   secondary = false,
+  danger = false,
+  disabled = false,
 }: {
   pending: boolean;
   label: string;
@@ -50,6 +57,13 @@ export function SubmitButton({
    * that sits beside the screen's primary action gives up the gold.
    */
   secondary?: boolean;
+  /**
+   * Draw it as the design's `btn danger`: the confirm of a write that ends
+   * something (remove, archive, revoke). Red ink, never gold, never a fill.
+   */
+  danger?: boolean;
+  /** Refuse to submit: the dialog already says why the write would be refused. */
+  disabled?: boolean;
 }) {
   return (
     <button
@@ -59,8 +73,9 @@ export function SubmitButton({
       // Every submit is a control, so at phone width it is a 44px target
       // whether it sits in its form or in a dialog footer (phone.css).
       data-touch-target=""
+      disabled={disabled || undefined}
       aria-disabled={pending || undefined}
-      className={`${secondary ? buttonSecondary : buttonPrimary} ${fullWidth ? "w-full" : ""} ${className ?? ""}`}
+      className={`${danger ? buttonDanger : secondary ? buttonSecondary : buttonPrimary} ${fullWidth ? "w-full" : ""} ${className ?? ""}`}
     >
       {pending ? (
         <>

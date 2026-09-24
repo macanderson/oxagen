@@ -80,18 +80,29 @@ function compare(a: string, b: string, numeric: boolean): number {
   });
 }
 
-const controlSelect =
+/** The mockup's `.lt select`: the Rows select, and any filter a caller draws beside it. */
+export const listSelect =
   "rounded-lg border border-input-border bg-input-bg px-2 py-[5px] text-[12px] text-input-fg focus-visible:border-input-border-focus focus-visible:outline-none";
 
 export function ListTable({
   label,
   columns,
   rows,
+  filters,
+  empty,
 }: {
   /** The table's accessible name, already translated. */
   label: string;
   columns: readonly ListColumn[];
   rows: readonly ListRow[];
+  /**
+   * The list's own select filters (the mockup's "All · Status"), drawn between
+   * the search box and Rows. The caller owns their state and hands in only the
+   * rows they keep.
+   */
+  filters?: ReactNode;
+  /** What the table says when no row shows; "No rows match" by default. */
+  empty?: string;
 }) {
   const t = useTranslations("ui.listTable");
   const [query, setQuery] = useState("");
@@ -210,6 +221,7 @@ export function ListTable({
           data-touch-target=""
           className="min-w-[140px] flex-[1_1_200px] rounded-lg border border-input-border bg-input-bg px-2.5 py-1.5 text-[12.5px] text-input-fg placeholder:text-dim focus-visible:border-input-border-focus focus-visible:outline-none max-md:basis-full"
         />
+        {filters}
         <label className="ml-auto inline-flex items-center gap-1.5 whitespace-nowrap text-[11.5px] text-muted-foreground max-md:ml-0">
           {t("rows")}
           <select
@@ -219,7 +231,7 @@ export function ListTable({
               setPage(1);
             }}
             data-touch-target=""
-            className={controlSelect}
+            className={listSelect}
           >
             {LIST_PAGE_SIZES.map((n) => (
               <option key={n} value={n}>
@@ -286,7 +298,7 @@ export function ListTable({
                   colSpan={columns.length}
                   className="px-3 py-[18px] text-center text-dim"
                 >
-                  {t("noMatch")}
+                  {empty ?? t("noMatch")}
                 </td>
               </tr>
             ) : null}
