@@ -1775,7 +1775,7 @@ describe("the work", () => {
     expect(screen.queryByTestId("run-spend")).toBeNull();
     expect(
       screen.getByText(
-        "No cost rollup yet. It is built within two minutes of the run's first recorded call.",
+        "No cost rollup yet. It is built as the run records calls, or once it seals.",
       ),
     ).toBeTruthy();
   });

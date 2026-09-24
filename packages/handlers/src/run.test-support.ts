@@ -104,6 +104,11 @@ export type LedgerFixture = LedgerRunRow & {
   seal?: LedgerSeal | null;
   /** The run's `cost.run_totals` row; absent when the rollup has not covered it. */
   cost?: RunCost | null;
+  /**
+   * The run's seal as that row recorded it; null for a row rebuilt while the
+   * run was open. Defaults to the run's own seal: a row rolled up after it.
+   */
+  rollupSealedAt?: Date | null;
   /** The verdict on that row; absent when no witness reported on the run. */
   verdict?: RunItem["verdict"];
   /** The worker run this run witnessed; absent for any other run. */
@@ -139,6 +144,8 @@ export type TachoFixture = TachoSessionRow & {
   child?: boolean;
   /** The run's `cost.run_totals` row; absent when the rollup has not covered it. */
   cost?: RunCost | null;
+  /** As on a ledger fixture: the seal the row recorded, the run's own by default. */
+  rollupSealedAt?: Date | null;
   /** The verdict on that row; absent when no witness reported on the run. */
   verdict?: RunItem["verdict"];
   /** The worker run this run witnessed; absent for any other run. */
@@ -352,17 +359,28 @@ export function memoryStores(
     readRunRollups: (scope, runIds) => {
       rollupCalls.push(runIds);
       const rows = [
-        ...inScope(scope).ledger.map((r) => [r.run.publicId, r] as const),
-        ...inScope(scope).tacho.map((r) => [r.session.publicId, r] as const),
+        ...inScope(scope).ledger.map(
+          (r) => [r.run.publicId, r, r.seal?.sealedAt ?? null] as const,
+        ),
+        ...inScope(scope).tacho.map(
+          (r) => [r.session.publicId, r, r.session.sealedAt] as const,
+        ),
       ];
       return Promise.resolve(
         new Map(
-          rows.flatMap(([id, r]) =>
+          rows.flatMap(([id, r, sealedAt]) =>
             runIds.includes(id) && (r.cost || r.verdict)
               ? [
                   [
                     id,
-                    { cost: r.cost ?? null, verdict: r.verdict ?? null },
+                    {
+                      cost: r.cost ?? null,
+                      verdict: r.verdict ?? null,
+                      sealedAt:
+                        r.rollupSealedAt === undefined
+                          ? sealedAt
+                          : r.rollupSealedAt,
+                    },
                   ] as const,
                 ]
               : [],

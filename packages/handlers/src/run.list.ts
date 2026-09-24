@@ -706,7 +706,7 @@ export type RunCost = {
 type RunRollup = {
   cost: RunCost | null;
   verdict: RunItem["verdict"];
-  sealedAt?: Date | null;
+  sealedAt: Date | null;
 };
 
 export type TachoSessionColumns = GeneratedSummaryColumns & {

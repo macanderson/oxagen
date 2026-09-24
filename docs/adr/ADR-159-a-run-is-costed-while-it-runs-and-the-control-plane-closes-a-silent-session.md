@@ -45,7 +45,10 @@ or tool frame, unless that batch also sealed the run, in which case the seal
 sends `cost/run.sealed`. The event goes out after the ClickHouse append, for
 the reason the seal event does. A root sealed earlier still gets the event,
 because a subagent's chain or a harness that carried on after a sweep can land
-frames after the seal's rollup, and nothing else counted them.
+frames after the seal's rollup, and nothing else counted them. A re-send that
+writes model or tool frames ClickHouse lost gets it too: the attempt whose
+append failed sent nothing, and the re-send's fold sees the frames as already
+recorded.
 
 `cost.run-progress` consumes it. It is debounced per run (`period` 30 s,
 `timeout` 2 min), so it runs 30 seconds after the latest batch and at least
@@ -74,17 +77,26 @@ estimates. Fleet marks the row's cost cell and counts the estimates in Spend
 shown. Spend reads "Includes estimates" on its Cost data tile. With no rollup
 yet, the agent's own report stays on the Run page as an estimate of its own.
 
-Two guards keep the running rollup from corrupting the record:
+Three guards keep the running rollup from corrupting the record:
 
 - `upsertRunTotals` refuses a write that would replace a sealed row with an
-  open one built from no more frames than the row counts. The progress and
+  open one while the run is sealed as the statement runs. The progress and
   seal rollups are separate functions with separate concurrency keys, and a
   progress rebuild that read the run just before its `agent_stop` could
-  otherwise land last and put a finished run back to an estimate.
-- `replaceDailyTotals` takes a transaction-scoped advisory lock on the
-  workspace-day. Two concurrent rebuilds of one day each deleted rows the
-  other had not committed, and the second insert failed on
-  `daily_totals_group_idx`. Running rollups make that pair common.
+  otherwise land last and put a finished run back to an estimate. The run's
+  live seal decides, not a frame count: a run reopened by a frame with no
+  model call counts the same frames as its sealed row, and its rebuild must
+  land. A ledger run never reopens, so its sealed row is never replaced by
+  an open one.
+- The seal's own rebuild always lands over a row built while the run was
+  open, even when it prices less. Refused, the nightly sweep would list the
+  run every night. A stale price is the repricer's to repair.
+- `rebuildDailyTotals` holds a transaction-scoped advisory lock on the
+  workspace-day from its read to its write. Two concurrent rebuilds of one day
+  each deleted rows the other had not committed, and the second insert failed
+  on `daily_totals_group_idx`. A rebuild that read before waiting on the lock
+  would write an older snapshot over a newer one. Running rollups make that
+  pair common.
 
 The nightly sweep also rolls up a sealed run whose row was built while it was
 open, so a lost seal event cannot leave a finished run as an estimate.
@@ -97,7 +109,9 @@ the label its agent carried when it ran.
 
 `tacho.session-idle-close` runs every 15 minutes. It closes an open session
 once every chain of its run, root and subagents, sealed or not, has sent
-nothing for `TACHO_IDLE_CLOSE_AFTER_MS`: twelve hours. That is twice the
+nothing for `TACHO_IDLE_CLOSE_AFTER_MS`: twelve hours. The run-wide silence is
+asked again by the close's own UPDATE, not only by the scan, and scoped to the
+session's organization. That is twice the
 daemon's own six-hour sweep, so a running daemon decides first with better
 facts. The close writes, in the session's tenant scope:
 
@@ -128,10 +142,29 @@ close is not. It is the control plane reasoning from silence, and it gives way
 to evidence:
 
 - A batch with new frames and no `agent_stop` reopens the session. Ingest
-  clears exactly the columns the close wrote, the session reads as running
-  again, its commands are accepted again, and its cost is an estimate again.
+  clears exactly the columns the close wrote (`IDLE_CLOSE_UNDONE`, checked
+  against `idleCloseColumns` by a test), the session reads as running again,
+  and its cost is an estimate again: the reopen asks for a rollup whatever
+  the batch carried.
+- A subagent's fresh frames reopen its idle-closed root, conditional on the
+  close still standing. A run is one piece of work across its chains.
 - A batch with an `agent_stop` replaces the close with the host's own seal and
   sends `cost/run.sealed`.
+- Ingest's update of an open session is conditional on `sealed_at` still being
+  null. A close that committed between the batch's read and its write makes
+  the batch a conflict, and the daemon's re-send reopens the session.
+
+Three gates treat the close as the provisional thing it is:
+
+- `export_run` refuses an idle-closed run as it refuses a live one. A signed
+  bundle over the close would attest a head, gaps and grade that a reopen or
+  the host's seal replaces.
+- `dispatch_command` queues a command for an idle-closed run instead of
+  recording it failed. The harness may be alive, and the host delivers the
+  command on its next poll.
+- `list_runs`, `get_run` and the Run page read a run that is open as an
+  estimate whatever its row says. `get_run_cost` reads the row, which the
+  reopen's rollup rebuilds open.
 
 The enforcement tier may still rise under an idle close. Nothing was signed on
 the strength of the close that a later seal could contradict.
@@ -150,13 +183,26 @@ close, not the end.
   says so.
 - A resumed Claude Code session that sat idle for twelve hours reads as closed
   until its next frame lands.
-- Ledger runs (`arun_…`) have no reaper. The in-app assistant seals its run
-  when the turn settles, and a run whose API process died mid-turn stays open.
-  That needs a `sealAttempt` with status `abandoned` on the ledger and is left
-  for its own change.
+- Ledger runs (`arun_…`) get no running rollup and no reaper. The in-app
+  assistant seals its run when the turn settles, and a run whose API process
+  died mid-turn stays open. That needs a `sealAttempt` with status
+  `abandoned` on the ledger (#3988).
 - The daemon's gaps stay. A root `SessionEnd` still does not finalize open
-  subagent chains, and Codex and Cursor still carry no pid. The idle close
-  bounds both at twelve hours rather than fixing them on the host.
+  subagent chains, Codex and Cursor still carry no pid, and Claude Code's
+  `SessionEnd` still has no spool. The idle close bounds each at twelve hours
+  rather than fixing them on the host (#3989).
+- The close and the running rollup read the shared data plane
+  (`withSystemDb`), as the rest of the rollup store does. An organization on a
+  dedicated plane (ADR-042) gets neither until that store learns planes.
+
+## Rollout
+
+- The first passes close the backlog of sessions that never sealed, 500 each
+  quarter hour, oldest first. Each closed root sends `cost/run.sealed`, and
+  each of those requests a findings pass over its workspace.
+- A root with steady activity costs one rollup every two minutes at most, and
+  each rebuild re-reads the run's frames from ClickHouse and rewrites its
+  workspace-day. Progress rollups run one at a time per workspace.
 
 ## Alternatives rejected
 

@@ -1,6 +1,6 @@
 # get_run_cost
 
-The Run page's cost strip and Cost tab (Mission Control spec §12.6, §12.7; ADR-060): one run's `cost.run_totals` row, rebuilt from the run's model-call and tool-call frames. `cost.run-progress` rebuilds it while the run records frames, at most two minutes behind the latest batch, and `cost.run-rollup` rebuilds it again at the seal (ADR-159). A row built while the run was open answers `isEstimate: true`.
+The Run page's cost strip and Cost tab (Mission Control spec §12.6, §12.7; ADR-060): one run's `cost.run_totals` row, rebuilt from the run's model-call and tool-call frames. For a wrapped session, `cost.run-progress` rebuilds it while the run records frames, at most two minutes behind the latest batch, and `cost.run-rollup` rebuilds it again at the seal (ADR-159). A ledger run's row is built after its seal. A row built while the run was open answers `isEstimate: true`.
 
 ## Mode
 

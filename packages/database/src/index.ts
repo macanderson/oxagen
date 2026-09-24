@@ -53,6 +53,11 @@ export {
 export { recordIfUnscoped, __unscopedCountForTests } from "./unscoped-meter";
 export { isUniqueViolation } from "./errors";
 export {
+  readLatestRetentionPolicy,
+  type RetentionPolicy,
+  type RetentionPolicyTx,
+} from "./retention";
+export {
   readRunVerdict,
   readWitnessedRunId,
   hidesWitnessRuns,

@@ -13,6 +13,7 @@ import {
   readWitnessedRunId,
   schema,
   withSystemDb,
+  type Tx,
 } from "@oxagen/database";
 import {
   readModelCallFrames,
@@ -449,9 +450,11 @@ function serializeBreakdown(breakdown: RunTotalsRecord["breakdown"]) {
  * already corrected the same run, silently reverting it to blank or
  * `estimated` with nothing left to notice or re-trigger a fix.
  *
- * A sealed run's frames do not change after sealing, so two rebuilds of one
- * run always see the same `modelCalls`/`toolCalls`. That makes "more
- * complete for the same frame count" a safe, one-directional ratchet: prices
+ * Two rebuilds that see the same `modelCalls`/`toolCalls` read the same
+ * frames. A run's frames can now grow after its seal (a subagent or a
+ * resumed harness, rolled up by `cost.run-progress`, #3980), but then the
+ * count moves and this guard stands aside. That makes "more complete for the
+ * same frame count" a safe, one-directional ratchet: prices
  * for a past instant only ever get filled in or corrected, never revoked
  * out from under a run that already priced under them (the branch's own
  * earlier P1 fixes — a backdated removal over a shipped window is refused,
@@ -461,7 +464,10 @@ function serializeBreakdown(breakdown: RunTotalsRecord["breakdown"]) {
  * frame count changing, can only be a stale read racing a fresher one, and
  * is refused rather than applied. Any other write — including one making an
  * incomplete row MORE complete, which is what the repricer and a recovered
- * catalog are for — is unaffected.
+ * catalog are for — is unaffected. So is the seal's own rebuild over a row
+ * built while the run was open: it must land, or the nightly sweep would
+ * list that run as awaiting its seal's rollup every night for ever. A price
+ * it read stale is the repricer's to repair, as for any other run.
  *
  * Built lazily inside {@link upsertRunTotals} rather than at module scope:
  * a module-scope `sql` fragment referencing `totals.costBasis` evaluates
@@ -476,6 +482,7 @@ function regressesToIncomplete() {
     AND NOT (${totals.breakdown} -> 'models' @> '[{"hasUnpriced": true}]'::jsonb)
     AND ${totals.modelCalls} = excluded.model_calls
     AND ${totals.toolCalls} = excluded.tool_calls
+    AND NOT (${totals.sealedAt} IS NULL AND excluded.sealed_at IS NOT NULL)
     AND (
       excluded.cost_basis IS NULL
       OR excluded.cost_basis = 'estimated'
@@ -486,26 +493,34 @@ function regressesToIncomplete() {
 
 /**
  * Refuses an upsert that would replace a sealed run's row with one built
- * while the run was still open and from no more frames than the row counts.
+ * while the run was open, unless the run is open again now.
  *
  * A run is rolled up as it goes (`cost.run-progress`, on
  * `cost/run.progressed`) and again at its seal (`cost.run-rollup`). The two
  * are separate functions with separate concurrency keys, so a progress
- * rebuild that read the run and its frames just before the `agent_stop`
- * landed can write after the seal's rebuild already did. Its record says
- * `sealed_at` null and counts fewer frames, and applied it would put the
- * finished run back to an estimate with nothing left to correct it.
+ * rebuild that read the run just before its `agent_stop` landed can write
+ * after the seal's rebuild already did. Applied, it would put the finished
+ * run back to an estimate with nothing left to correct it.
  *
- * The frame count is what tells that stale read from a run that really is
- * open again. The control plane's idle close is withdrawn by the next frame
- * the session sends (#3980), and the rebuild that follows reads the run open
- * with more frames than its sealed row: that one is applied.
+ * What tells that stale read from a run that really is open again is the
+ * run's seal as it stands when this statement runs, not anything in the
+ * record. The control plane's idle close is withdrawn by the session's next
+ * frame (#3980), and the rebuild that follows reads it open: the session row
+ * says so, and the write is applied whatever it counted. A ledger run is
+ * never reopened, so its sealed row is never replaced by an open one.
  */
 function reopensSealed() {
   return sql`(
     ${totals.sealedAt} IS NOT NULL
     AND excluded.sealed_at IS NULL
-    AND excluded.model_calls + excluded.tool_calls <= ${totals.modelCalls} + ${totals.toolCalls}
+    AND (
+      excluded.run_source <> 'tacho'
+      OR EXISTS (
+        SELECT 1 FROM ${sessions} AS live_seal
+        WHERE live_seal.public_id = excluded.run_id
+          AND live_seal.sealed_at IS NOT NULL
+      )
+    )
   )`;
 }
 
@@ -684,104 +699,97 @@ export function dayBounds(day: string): { start: Date; next: Date } {
   return { start, next: new Date(start.getTime() + 24 * 60 * 60 * 1000) };
 }
 
+type DayArgs = { orgId: string; workspaceId: string; day: string };
+
 /** Every run row of one workspace that started on `day`. */
-async function readRunTotalsForDay(args: {
-  orgId: string;
-  workspaceId: string;
-  day: string;
-}): Promise<RunTotalsRecord[]> {
+async function readRunTotalsForDay(
+  tx: Tx,
+  args: DayArgs,
+): Promise<RunTotalsRecord[]> {
   const { start, next } = dayBounds(args.day);
-  const rows = await withSystemDb((tx) =>
-    tx
-      .select()
-      .from(totals)
-      .where(
-        and(
-          eq(totals.orgId, args.orgId),
-          eq(totals.workspaceId, args.workspaceId),
-          gte(totals.startedAt, start),
-          lt(totals.startedAt, next),
-        ),
-      )
-      .orderBy(asc(totals.startedAt)),
-  );
+  const rows = await tx
+    .select()
+    .from(totals)
+    .where(
+      and(
+        eq(totals.orgId, args.orgId),
+        eq(totals.workspaceId, args.workspaceId),
+        gte(totals.startedAt, start),
+        lt(totals.startedAt, next),
+      ),
+    )
+    .orderBy(asc(totals.startedAt));
   return rows.map(runTotalsRowToRecord);
 }
 
-/** Replace the workspace-day's group rows in one transaction. */
+/** Replace the workspace-day's group rows inside the caller's transaction. */
 async function replaceDailyTotals(
-  args: { orgId: string; workspaceId: string; day: string },
+  tx: Tx,
+  args: DayArgs,
   rows: readonly DailyTotalsRecord[],
   rolledUpAt: Date,
 ): Promise<void> {
+  await tx
+    .delete(daily)
+    .where(
+      and(
+        eq(daily.orgId, args.orgId),
+        eq(daily.workspaceId, args.workspaceId),
+        eq(daily.day, args.day),
+      ),
+    );
+  if (rows.length === 0) return;
+  await tx.insert(daily).values(
+    rows.map((r) => ({
+      orgId: r.orgId,
+      workspaceId: r.workspaceId,
+      day: r.day,
+      groupKind: r.groupKind,
+      groupKey: r.groupKey,
+      provider: r.provider,
+      runs: r.runs,
+      calls: r.calls,
+      costMicros: r.costMicros,
+      currency: r.currency,
+      costBasis: r.costBasis,
+      provenMicros: r.provenMicros,
+      acceptedMicros: r.acceptedMicros,
+      productiveRatio:
+        r.productiveRatio === null ? null : r.productiveRatio.toFixed(8),
+      tokens: r.tokens,
+      rolledUpAt,
+    })),
+  );
+}
+
+/**
+ * Rebuild one workspace-day's `cost.daily_totals` rows from its run rows, in
+ * one transaction that holds the day's lock from the read to the write.
+ *
+ * One rebuild of a workspace-day at a time. Two concurrent rebuilds each
+ * delete the rows the other has not committed yet and then both insert, and
+ * the second insert fails on `daily_totals_group_idx`. A seal and an open
+ * run's progress rollup in the same workspace-day are that pair, and
+ * progress rollups (#3980) make it the common case. The lock is taken before
+ * the read, not just the write: a rebuild that read, then waited on the lock
+ * behind a later one, would write its older snapshot over the newer. It is
+ * released at commit.
+ */
+export async function rebuildDailyTotals(
+  args: DayArgs,
+  now: () => Date = () => new Date(),
+): Promise<DailyTotalsRecord[]> {
   // tenancy: the scheduled rollup jobs rebuild outside a tenant scope; every
   // statement here is filtered by the orgId and workspaceId of the one
   // workspace-day being rebuilt, and the rows written carry that same pair.
-  await withSystemDb(async (tx) => {
-    // One rebuild of a workspace-day at a time. Two concurrent rebuilds each
-    // delete the rows the other has not committed yet and then both insert,
-    // and the second insert fails on `daily_totals_group_idx`. A seal and an
-    // open run's progress rollup in the same workspace-day are that pair, and
-    // progress rollups make it the common case rather than a rare one. The
-    // lock is released at commit.
+  return withSystemDb(async (tx) => {
     await tx.execute(
       sql`select pg_advisory_xact_lock(hashtextextended(${`cost.daily_totals:${args.workspaceId}:${args.day}`}, 0))`,
     );
-    await tx
-      .delete(daily)
-      .where(
-        and(
-          eq(daily.orgId, args.orgId),
-          eq(daily.workspaceId, args.workspaceId),
-          eq(daily.day, args.day),
-        ),
-      );
-    if (rows.length === 0) return;
-    await tx.insert(daily).values(
-      rows.map((r) => ({
-        orgId: r.orgId,
-        workspaceId: r.workspaceId,
-        day: r.day,
-        groupKind: r.groupKind,
-        groupKey: r.groupKey,
-        provider: r.provider,
-        runs: r.runs,
-        calls: r.calls,
-        costMicros: r.costMicros,
-        currency: r.currency,
-        costBasis: r.costBasis,
-        provenMicros: r.provenMicros,
-        acceptedMicros: r.acceptedMicros,
-        productiveRatio:
-          r.productiveRatio === null ? null : r.productiveRatio.toFixed(8),
-        tokens: r.tokens,
-        rolledUpAt,
-      })),
-    );
+    const rows = dailyTotalsFromRuns(await readRunTotalsForDay(tx, args));
+    await replaceDailyTotals(tx, args, rows, now());
+    return rows;
   });
-}
-
-interface DailyRollupDeps {
-  readRuns: typeof readRunTotalsForDay;
-  write: typeof replaceDailyTotals;
-  now: () => Date;
-}
-
-const productionDailyRollupDeps: DailyRollupDeps = {
-  readRuns: readRunTotalsForDay,
-  write: replaceDailyTotals,
-  now: () => new Date(),
-};
-
-/** Rebuild one workspace-day's `cost.daily_totals` rows from its run rows. */
-export async function rebuildDailyTotals(
-  args: { orgId: string; workspaceId: string; day: string },
-  deps: DailyRollupDeps = productionDailyRollupDeps,
-): Promise<DailyTotalsRecord[]> {
-  const runRows = await deps.readRuns(args);
-  const rows = dailyTotalsFromRuns(runRows);
-  await deps.write(args, rows, deps.now());
-  return rows;
 }
 
 // ── Sweeps ────────────────────────────────────────────────────────────────────

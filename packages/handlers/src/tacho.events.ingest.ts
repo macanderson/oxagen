@@ -783,6 +783,22 @@ function genesisRow(
   };
 }
 
+/**
+ * What reopening an idle-closed session writes: exactly the columns the
+ * control plane's idle close set (`idleCloseColumns` in
+ * `@oxagen/inngest-functions`), back to an open session's values.
+ */
+export const IDLE_CLOSE_UNDONE = {
+  sealedAt: null,
+  sealSource: null,
+  outcome: "running",
+  endedAt: null,
+  finalHash: null,
+  unobservedTail: false,
+  completenessGaps: [],
+  replayGrade: null,
+} as const;
+
 /** Terminal facts from an `agent_stop`, when the batch carries one. */
 function terminalPatch(
   events: TachoEvent[],
@@ -1061,6 +1077,11 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     // on, by root session uuid. A subagent's frames are its root's cost, so
     // the root is what is rolled up. Resolved to open roots after the loop.
     const progressedRootUuids = new Set<string>();
+    // Every root the batch's chains belong to, and the ones a subagent's
+    // fresh frames reported for: those are open again if the control plane
+    // closed them for silence.
+    const batchRootUuids = new Set<string>();
+    const subagentReportedRootUuids = new Set<string>();
     // The batch's fresh `proof.observed` frames, by the root session they belong to.
     const proofsByRoot = new Map<string, TachoEvent[]>();
     let newSessions = 0;
@@ -1103,6 +1124,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     for (const [sessionUuid, events] of bySession) {
       events.sort((a, b) => a.seq - b.seq);
       const first = events[0] as TachoEvent;
+      batchRootUuids.add(first.root_session_uuid);
       const last = events[events.length - 1] as TachoEvent;
       const existing = await tx.query.tachoSessions.findFirst({
         where: eq(schema.tachoSessions.sessionUuid, sessionUuid),
@@ -1311,16 +1333,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
       // (`idleCloseColumns` in @oxagen/inngest-functions).
       const reopen =
         idleClosed && fresh.length > 0 && terminal["sealedAt"] === undefined
-          ? {
-              sealedAt: null,
-              sealSource: null,
-              outcome: "running",
-              endedAt: null,
-              finalHash: null,
-              unobservedTail: false,
-              completenessGaps: [],
-              replayGrade: null,
-            }
+          ? IDLE_CLOSE_UNDONE
           : {};
       const tail = fresh.at(-1);
       const increments = {
@@ -1644,12 +1657,17 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         }
         if (delta.totalCostMicros > 0)
           spendDeltas.push({ micros: delta.totalCostMicros, at: now });
+        // A reopen asks too, whatever the batch carried: the run's row was
+        // rebuilt at the close and reads final until it is rebuilt open.
         if (
           delta.numModelCalls > 0 ||
           delta.numToolCalls > 0 ||
-          delta.totalCostMicros > 0
+          delta.totalCostMicros > 0 ||
+          "sealedAt" in reopen
         )
           progressedRootUuids.add(first.root_session_uuid);
+        if (fresh.length > 0 && first.root_session_uuid !== sessionUuid)
+          subagentReportedRootUuids.add(first.root_session_uuid);
       }
       if (
         accepted &&
@@ -1701,15 +1719,38 @@ export const tachoEventsIngestHandler: CapabilityHandler<
       rollupRoots.push(...proofs.witnessRunIds);
     }
 
-    // Their public ids. An open root's row is its running estimate. A root
-    // this batch sealed is left to `cost/run.sealed`. A root sealed earlier is
-    // rolled up again too: a subagent's chain, or a harness that carried on
-    // after the daemon's sweep sealed it, can land frames after the seal's
-    // rollup, and nothing else would ever count them.
-    const sealedThisBatch = new Set(rollupRoots);
-    const progressRoots: string[] = [];
-    // One read per root, like the proof loop above: a batch names one or two.
-    for (const rootSessionUuid of progressedRootUuids) {
+    // A run is one piece of work across its chains. When a subagent reports,
+    // a root the control plane closed for silence was not done, so it is
+    // reopened too, conditional on the close still standing.
+    for (const rootSessionUuid of subagentReportedRootUuids) {
+      const reopened = await tx
+        .update(schema.tachoSessions)
+        .set({ ...IDLE_CLOSE_UNDONE, updatedAt: now })
+        .where(
+          and(
+            eq(schema.tachoSessions.orgId, ctx.orgId),
+            eq(schema.tachoSessions.workspaceId, ctx.workspaceId),
+            eq(schema.tachoSessions.sessionUuid, rootSessionUuid),
+            isNull(schema.tachoSessions.parentSessionUuid),
+            eq(
+              schema.tachoSessions.sealSource,
+              "idle_timeout" satisfies TachoSealSource,
+            ),
+          ),
+        )
+        .returning({ id: schema.tachoSessions.id });
+      if (reopened.length > 0) progressedRootUuids.add(rootSessionUuid);
+    }
+
+    // The public id of every root the batch touched. An open root's row is
+    // its running estimate. A root this batch sealed is left to
+    // `cost/run.sealed`. A root sealed earlier is rolled up again too: a
+    // subagent's chain, or a harness that carried on after the daemon's sweep
+    // sealed it, can land frames after the seal's rollup, and nothing else
+    // would ever count them. One read per root, like the proof loop above: a
+    // batch names one or two.
+    const rootIds = new Map<string, string>();
+    for (const rootSessionUuid of batchRootUuids) {
       const root = await tx.query.tachoSessions.findFirst({
         where: and(
           eq(schema.tachoSessions.orgId, ctx.orgId),
@@ -1719,9 +1760,13 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         ),
         columns: { publicId: true },
       });
-      if (root && !sealedThisBatch.has(root.publicId))
-        progressRoots.push(root.publicId);
+      if (root) rootIds.set(rootSessionUuid, root.publicId);
     }
+    const sealedThisBatch = new Set(rollupRoots);
+    const progressRoots = [...progressedRootUuids].flatMap((uuid) => {
+      const runId = rootIds.get(uuid);
+      return runId === undefined || sealedThisBatch.has(runId) ? [] : [runId];
+    });
 
     if (newSessions > 0) {
       await tx
@@ -1768,6 +1813,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
       rollupRoots,
       sealedRoots,
       progressRoots,
+      rootIds,
     };
   });
 
@@ -1882,17 +1928,29 @@ export const tachoEventsIngestHandler: CapabilityHandler<
   // and debounced per run by `cost.run-progress`, so one event per batch is
   // what the sender owes. Best-effort like the seal: a run whose event is lost
   // is rolled up by its next batch, or at its seal.
-  if (result.progressRoots.length > 0) {
+  //
+  // A re-send that wrote model or tool frames ClickHouse was missing is the
+  // retry of an append that failed, and that attempt sent no progress event.
+  // Its fold saw the frames as already recorded, so the delta was empty.
+  const progressRoots = new Set(result.progressRoots);
+  for (const event of input.events) {
+    if (event.kind !== "llm_call" && event.kind !== "tool_call") continue;
+    if (!resent.missing.has(event.event_id_idem)) continue;
+    const runId = result.rootIds.get(event.root_session_uuid);
+    if (runId !== undefined && !rollupRoots.has(runId))
+      progressRoots.add(runId);
+  }
+  if (progressRoots.size > 0) {
     try {
       await eventClient.send(
-        result.progressRoots.map((runId) => ({
+        [...progressRoots].map((runId) => ({
           name: RUN_PROGRESSED_EVENT,
           data: { runId, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
         })),
       );
     } catch (err) {
       logger.warn(
-        { err, runIds: result.progressRoots },
+        { err, runIds: [...progressRoots] },
         "tacho.events.ingest: cost/run.progressed dispatch failed; the next batch or the seal rolls the run up",
       );
     }

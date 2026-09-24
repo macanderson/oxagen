@@ -100,8 +100,11 @@ export function createSpendGetHandler(
       groupBy: input.groupBy,
       total: sumFigures(runs.map(runFigure)),
       // An open run's row is its running estimate; the page says how many
-      // of the period's runs that is.
-      estimatedRuns: runs.filter((run) => run.sealedAt === null).length,
+      // of the period's runs that is. An open run nothing priced adds no
+      // figure, so it is no estimate of one.
+      estimatedRuns: runs.filter(
+        (run) => run.sealedAt === null && run.costMicros !== null,
+      ).length,
       rows: grouped.map((row) => ({
         ...row,
         operator: facts.get(row.key) ?? null,

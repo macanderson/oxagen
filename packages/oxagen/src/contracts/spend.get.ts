@@ -61,8 +61,8 @@ export const spendGet = registerCapability({
       /** The period over every group: the strip at the top of the page. */
       total: spendFigureSchema,
       /**
-       * Runs in the period that were still open when their rollup was last
-       * built (#3980). Their cost is in every figure here as a running
+       * Priced runs in the period that were still open when their rollup was
+       * last built (#3980). Their cost is in every figure here as a running
        * estimate over the calls recorded so far, and grows until they seal.
        */
       estimatedRuns: z.number().int().nonnegative().optional(),

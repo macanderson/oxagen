@@ -33,6 +33,11 @@ describe.skipIf(!enabled)("the idle close against Postgres", () => {
     busyChild: crypto.randomUUID(),
     liveRoot: crypto.randomUUID(),
     racedRoot: crypto.randomUUID(),
+    headRoot: crypto.randomUUID(),
+    silenceRoot: crypto.randomUUID(),
+    hostRoot: crypto.randomUUID(),
+    siblingRoot: crypto.randomUUID(),
+    siblingChild: crypto.randomUUID(),
   };
   const publicId = (name: keyof typeof uuids) =>
     `tse_${tag}${name.toLowerCase().padEnd(14, "0").slice(0, 14)}`;
@@ -87,6 +92,11 @@ describe.skipIf(!enabled)("the idle close against Postgres", () => {
         // A run that reported an hour ago.
         row("liveRoot", { lastEventAt: recently }),
         row("racedRoot", { lastEventAt: longAgo }),
+        row("headRoot", { lastEventAt: longAgo }),
+        row("silenceRoot", { lastEventAt: longAgo }),
+        row("hostRoot", { lastEventAt: longAgo }),
+        row("siblingRoot", { lastEventAt: longAgo }),
+        row("siblingChild", { root: "siblingRoot", lastEventAt: longAgo }),
       ]),
     );
   });
@@ -112,6 +122,11 @@ describe.skipIf(!enabled)("the idle close against Postgres", () => {
         publicId("quietChild"),
         publicId("quietRoot"),
         publicId("racedRoot"),
+        publicId("headRoot"),
+        publicId("silenceRoot"),
+        publicId("hostRoot"),
+        publicId("siblingRoot"),
+        publicId("siblingChild"),
       ].sort(),
     );
   });
@@ -159,5 +174,64 @@ describe.skipIf(!enabled)("the idle close against Postgres", () => {
     const after = await read("racedRoot");
     expect(after?.sealedAt).toBeNull();
     expect(after?.outcome).toBe("running");
+  });
+
+  const scanned = async (name: keyof typeof uuids) =>
+    (await ours()).find((session) => session.publicId === publicId(name))!;
+
+  it("gives way to a head that moved, even with the silence intact (negative)", async () => {
+    const found = await scanned("headRoot");
+    await withSystemDb((tx) =>
+      tx
+        .update(sessions)
+        .set({ seqCount: 8 })
+        .where(eq(sessions.sessionUuid, uuids.headRoot)),
+    );
+    expect(await closeIdleSession(found, cutoff, now)).toBeNull();
+    expect((await read("headRoot"))?.sealedAt).toBeNull();
+  });
+
+  it("gives way to a new event, even with the head unmoved (negative)", async () => {
+    const found = await scanned("silenceRoot");
+    await withSystemDb((tx) =>
+      tx
+        .update(sessions)
+        .set({ lastEventAt: new Date() })
+        .where(eq(sessions.sessionUuid, uuids.silenceRoot)),
+    );
+    expect(await closeIdleSession(found, cutoff, now)).toBeNull();
+    expect((await read("silenceRoot"))?.sealedAt).toBeNull();
+  });
+
+  it("never overwrites a seal the host sent after the scan (negative)", async () => {
+    const found = await scanned("hostRoot");
+    const hostSeal = new Date(now.getTime() - 60_000);
+    await withSystemDb((tx) =>
+      tx
+        .update(sessions)
+        .set({
+          sealedAt: hostSeal,
+          sealSource: "agent_stop",
+          outcome: "completed",
+        })
+        .where(eq(sessions.sessionUuid, uuids.hostRoot)),
+    );
+    expect(await closeIdleSession(found, cutoff, now)).toBeNull();
+    expect(await read("hostRoot")).toMatchObject({
+      sealSource: "agent_stop",
+      outcome: "completed",
+    });
+  });
+
+  it("keeps a root open when its subagent reported between the scan and the close (negative)", async () => {
+    const found = await scanned("siblingRoot");
+    await withSystemDb((tx) =>
+      tx
+        .update(sessions)
+        .set({ lastEventAt: new Date(), seqCount: 8 })
+        .where(eq(sessions.sessionUuid, uuids.siblingChild)),
+    );
+    expect(await closeIdleSession(found, cutoff, now)).toBeNull();
+    expect((await read("siblingRoot"))?.sealedAt).toBeNull();
   });
 });

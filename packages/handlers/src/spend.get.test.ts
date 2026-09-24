@@ -191,7 +191,8 @@ describe("get_spend open runs (#3980)", () => {
       ],
     });
     const out = await h.handler({ period: PERIOD, groupBy: "agent" }, ctx());
-    expect(out.estimatedRuns).toBe(2);
+    // The open run nothing priced adds no figure, so it is not one of them.
+    expect(out.estimatedRuns).toBe(1);
     // The open run's cost is in the total, as the estimate it is.
     expect(out.total.cost).toEqual({
       micros: "1400",

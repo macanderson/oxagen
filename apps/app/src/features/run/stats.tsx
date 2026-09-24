@@ -119,8 +119,13 @@ export function StatRow({
   // sealed one. With no rollup yet, the agent's report stands in as an
   // estimate of its own.
   const displayedCost = runCost ?? run.reportedCost ?? null;
+  // An open run's figure is an estimate whatever its row says: a row the
+  // control plane's idle close sealed reads final until it is rebuilt open.
   const costIsEstimate =
-    rollup === null ? run.costIsEstimate === true : rollup.isEstimate === true;
+    run.sealedAt === null ||
+    (rollup === null
+      ? run.costIsEstimate === true
+      : rollup.isEstimate === true);
   // A run Oxagen closed for silence has no recorded end: the seal is when the
   // close ran, 12 hours after the last event.
   const endUnrecorded = run.sealSource === "idle_timeout";

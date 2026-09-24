@@ -28,7 +28,7 @@ The Spend page's rollup at one level (Mission Control spec §12.7, §12.9; ADR-0
 | `period` | object | the range as asked |
 | `groupBy` | enum | the level as asked |
 | `total` | figure | the period over every run in the workspace (below) |
-| `estimatedRuns` | integer, optional | the period's runs that were still open when their row was last rebuilt; their cost is in the figures as a running estimate |
+| `estimatedRuns` | integer, optional | the period's priced runs that were still open when their row was last rebuilt; their cost is in the figures as a running estimate |
 | `rows` | row[] | one per group; largest spend first, groups with no cost after those with one, then by key |
 
 A figure:

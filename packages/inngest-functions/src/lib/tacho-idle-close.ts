@@ -17,14 +17,19 @@
 // stays open to correction: tacho ingest reopens the session on its next
 // frame and replaces the close with the host's own seal when an `agent_stop`
 // arrives.
-import { schema, withSystemDb, withTenantDb, type Tx } from "@oxagen/database";
+import {
+  readLatestRetentionPolicy,
+  schema,
+  withSystemDb,
+  withTenantDb,
+} from "@oxagen/database";
 import {
   TACHO_IDLE_CLOSE_AFTER_MS,
   type TachoSealSource,
 } from "@oxagen/database/schema";
 import { sealTachoSession } from "@oxagen/tacho";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { and, asc, desc, eq, isNull, lt, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, lt, sql } from "drizzle-orm";
 
 const sessions = schema.tachoSessions;
 
@@ -102,6 +107,20 @@ export function idleCloseColumns(
 }
 
 /**
+ * No chain of this row's run, sealed or not, has reported since `cutoff`. The
+ * scan asks it to find candidates, and the close asks it again as it writes,
+ * so a subagent that reported between the two keeps its root open.
+ */
+function runSilentSince(cutoff: Date) {
+  return sql`NOT EXISTS (
+    SELECT 1 FROM ${sessions} AS run_chain
+    WHERE run_chain.org_id = ${sessions.orgId}
+      AND run_chain.root_session_uuid = ${sessions.rootSessionUuid}
+      AND run_chain.last_event_at >= ${cutoff.toISOString()}::timestamptz
+  )`;
+}
+
+/**
  * Open sessions whose run has been silent since `cutoff`: the session itself
  * and every other chain of its run, sealed or not, last reported before it.
  * A subagent still working keeps its root open, and a root still working
@@ -139,11 +158,7 @@ export async function listIdleSessions(args: {
         and(
           isNull(sessions.sealedAt),
           lt(sessions.lastEventAt, args.cutoff),
-          sql`NOT EXISTS (
-            SELECT 1 FROM ${sessions} AS run_chain
-            WHERE run_chain.root_session_uuid = ${sessions.rootSessionUuid}
-              AND run_chain.last_event_at >= ${args.cutoff.toISOString()}::timestamptz
-          )`,
+          runSilentSince(args.cutoff),
         ),
       )
       .orderBy(asc(sessions.lastEventAt))
@@ -155,30 +170,15 @@ export async function listIdleSessions(args: {
   }));
 }
 
-/** The workspace's retention mode, the one fact the grade needs from outside the row. */
-async function retentionModeOf(
-  tx: Tx,
-  orgId: string,
-  workspaceId: string,
-): Promise<string> {
-  const row = await tx.query.retentionPolicyVersions.findFirst({
-    where: and(
-      eq(schema.retentionPolicyVersions.orgId, orgId),
-      eq(schema.retentionPolicyVersions.workspaceId, workspaceId),
-    ),
-    orderBy: [desc(schema.retentionPolicyVersions.version)],
-    columns: { mode: true },
-  });
-  return row?.mode ?? "content_exact";
-}
-
 /**
  * Close one idle session, in its tenant's scope. Null when the session moved
- * since the scan: a batch landed (its head or last event advanced) or its
- * host sealed it. The close never races a batch into a wrong state: this
- * statement is conditional on the head and the silence it read, and ingest's
- * own write is conditional on the seal it read, so whichever commits second
- * finds the row changed and gives way.
+ * since the scan: a batch landed on it (its head or last event advanced), a
+ * batch landed on another chain of its run, or its host sealed it. On this
+ * row the close and a batch cannot both win: this statement is conditional
+ * on the head and the silence it read, and ingest's own write is conditional
+ * on the seal it read, so whichever commits second finds the row changed and
+ * gives way. A subagent batch that commits while this statement runs can
+ * still miss it; ingest then reopens the root when that subagent reports.
  */
 export async function closeIdleSession(
   session: IdleSession,
@@ -189,11 +189,14 @@ export async function closeIdleSession(
     { orgId: session.orgId, workspaceId: session.workspaceId },
     () =>
       withTenantDb(async (tx) => {
-        const mode = await retentionModeOf(
+        // The retention mode is the one fact the grade needs from outside
+        // the row, read the way ingest reads it at an `agent_stop`.
+        const policy = await readLatestRetentionPolicy(
           tx,
           session.orgId,
           session.workspaceId,
         );
+        const mode = policy?.mode ?? "content_exact";
         const written = await tx
           .update(sessions)
           .set(idleCloseColumns(session, mode, now))
@@ -204,7 +207,9 @@ export async function closeIdleSession(
               eq(sessions.workspaceId, session.workspaceId),
               isNull(sessions.sealedAt),
               eq(sessions.seqCount, session.seqCount),
-              lt(sessions.lastEventAt, cutoff),
+              // Covers this row's own last event too: every chain, this one
+              // included, belongs to its run.
+              runSilentSince(cutoff),
             ),
           )
           .returning({ publicId: sessions.publicId });

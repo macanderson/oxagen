@@ -17,9 +17,14 @@
 ALTER TABLE "tacho"."sessions"
   ADD COLUMN "seal_source" text;
 
+-- NOT VALID: every row that exists when this runs holds NULL in a column this
+-- statement's own migration just added, so the check holds for all of them,
+-- and validating would scan the whole table under the ACCESS EXCLUSIVE lock
+-- ingest waits on. New and updated rows are checked either way.
 ALTER TABLE "tacho"."sessions"
   ADD CONSTRAINT "tacho_sessions_seal_source_check"
-  CHECK ("seal_source" IS NULL OR "seal_source" IN ('agent_stop', 'idle_timeout'));
+  CHECK ("seal_source" IS NULL OR "seal_source" IN ('agent_stop', 'idle_timeout'))
+  NOT VALID;
 
 -- The close job's scan: open sessions by last event. Partial, so it holds only
 -- the sessions still open, a small share of the table. Not CONCURRENTLY:

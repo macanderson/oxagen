@@ -465,6 +465,18 @@ describe("dispatch_command — a direct target that cannot receive is refused, n
     expect(store.rows).toEqual([]);
   });
 
+  it("queues a command for a run Oxagen closed for silence: its harness may be alive (#3980)", async () => {
+    const store = new MemoryStore([
+      session({ outcome: "unknown", sealSource: "idle_timeout" }),
+    ]);
+    await handlerOver(store)(
+      parse({ target: { kind: "run", id: RUN }, command: "pause" }),
+      OPERATOR,
+    );
+    expect(store.rows).toHaveLength(1);
+    expect(store.rows[0]).toMatchObject({ outcome: "queued" });
+  });
+
   it("an observe-tier run", async () => {
     const store = new MemoryStore([session({ enforcementTier: "observe" })]);
     await expect(

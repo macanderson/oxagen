@@ -99,6 +99,12 @@ export type RecipientSession = {
   agentKey: string;
   /** `tacho.sessions.outcome`: `running` is live. */
   outcome: string;
+  /**
+   * `idle_timeout` when the control plane closed the session for silence
+   * (ADR-159). That close is not the host's word: a harness that is alive can
+   * still take a command, and its next frame reopens the session.
+   */
+  sealSource?: string | null;
   /** `tacho.sessions.enforcement_tier`: gateway, harness or observe. */
   enforcementTier: string;
 };
@@ -107,7 +113,8 @@ export type RecipientSession = {
 type UndeliverableReason = "run_sealed" | "observe_tier";
 
 function undeliverable(session: RecipientSession): UndeliverableReason | null {
-  if (session.outcome !== "running") return "run_sealed";
+  if (session.outcome !== "running" && session.sealSource !== "idle_timeout")
+    return "run_sealed";
   if (session.enforcementTier === "observe") return "observe_tier";
   return null;
 }
@@ -358,6 +365,7 @@ const recipientColumns = {
   hostId: sessions.hostId,
   agentKey: sessions.agentKey,
   outcome: sessions.outcome,
+  sealSource: sessions.sealSource,
   enforcementTier: sessions.enforcementTier,
 };
 
