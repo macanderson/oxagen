@@ -342,7 +342,7 @@ export async function Run({
       );
       break;
     case "issues":
-      section = <IssuesSection run={run} />;
+      section = <IssuesSection run={run} work={work} />;
       break;
     case "actions": {
       const seq = body !== null && FRAME_SEQ.test(body) ? body : null;
