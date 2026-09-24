@@ -14,11 +14,29 @@
  * (ADR-043) — Stella owns that file format now.
  *
  * `init` is idempotent: re-running against an already-linked project reuses the
- * existing link instead of re-prompting.
+ * existing link instead of re-prompting. `--org` and `--workspace` name the
+ * pair outright, which is what makes init work without a terminal to prompt
+ * in, and when they name a different pair than the existing link, init
+ * relinks to them.
+ *
+ * The link is written at the project root: the git top level inside a
+ * repository, else the directory init ran in. `oxagen steering` and `oxagen
+ * pull` look for it there. Inside a repository init also makes sure git
+ * ignores the link, because it binds one machine, not every clone.
+ *
+ * Last, init reports the directory to Oxagen (`record_working_copy`), so the
+ * Working copies tab on the Repositories page lists it. The report is
+ * best-effort: a failure prints one warning and init still succeeds.
  */
 import { spawn } from "node:child_process";
 import { getToken } from "../lib/config.js";
 import { resolveLinkedAccount } from "../lib/linker.js";
+import {
+  ensureWorkspaceLinkIgnored,
+  projectRootFor,
+  reportWorkingCopy,
+  type WorkingCopyOutcome,
+} from "../lib/working-copy.js";
 import {
   readWorkspaceLink,
   writeWorkspaceLink,
@@ -32,8 +50,15 @@ import { apiPostOrThrow, apiGetOrThrow } from "../lib/api.js";
 // ---------------------------------------------------------------------------
 
 export interface InitOptions {
-  /** Workspace root. Defaults to process.cwd(). */
+  /**
+   * Where init runs. Defaults to process.cwd(). The link is written at the
+   * git top level containing it, or here when it is not in a repository.
+   */
   cwd?: string;
+  /** `--org`: the organization slug to link, instead of the picker. */
+  org?: string;
+  /** `--workspace`: the workspace slug to link, instead of the picker. */
+  workspace?: string;
   /** Emit JSON instead of human-readable text. */
   json?: boolean;
   /** Skip the workspace linker step entirely. */
@@ -55,15 +80,26 @@ export interface InitWorkspaceLinkResult {
   workspaceSlug?: string;
   workspaceName?: string;
   repos?: Array<{ provider: "github"; fullName: string }>;
+  /** Set when `--org` / `--workspace` replaced a link to another pair. */
+  relinkedFrom?: { orgSlug: string; workspaceSlug: string };
   /** Reason linking was skipped (no token, --no-link, or error). */
   skippedReason?: string;
 }
 
 export interface InitResult {
+  /** The directory the link belongs to: the git top level, or the cwd. */
+  projectRoot: string;
   /** Absolute path to the workspace-link file this project uses. */
   workspaceLinkPath: string;
   workspaceLink: InitWorkspaceLinkResult | null;
+  /** The `.gitignore` init appended the link to, or null when it did not. */
+  gitignoreUpdated: string | null;
+  /** The working-copy report: the recorded id, or why it failed. Null when not linked. */
+  workingCopy: WorkingCopyOutcome | null;
 }
+
+/** The org and workspace a request addresses, as slugs. */
+type Scope = { org: string; ws: string };
 
 // ---------------------------------------------------------------------------
 // GitHub connection helpers
@@ -119,10 +155,12 @@ interface GitHubRepository {
  * Check whether the workspace already has a connected GitHub source connection.
  * Returns the connection if found, null otherwise.
  */
-async function findGitHubConnection(): Promise<ConnectionListItem | null> {
+async function findGitHubConnection(
+  scope: Scope,
+): Promise<ConnectionListItem | null> {
   const { connections } = await apiGetOrThrow<{
     connections: ConnectionListItem[];
-  }>("connections", { connectorId: "github" });
+  }>("connections", { connectorId: "github" }, scope);
   const connected = connections.find(
     (c) => c.connectorId === "github" && c.status === "connected",
   );
@@ -136,6 +174,7 @@ async function findGitHubConnection(): Promise<ConnectionListItem | null> {
 async function pollConnectionStatus(
   publicId: string,
   { intervalMs, timeoutMs }: { intervalMs: number; timeoutMs: number },
+  scope: Scope,
 ): Promise<"connected" | "timeout" | "error"> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -143,6 +182,8 @@ async function pollConnectionStatus(
     try {
       const conn = await apiGetOrThrow<ConnectionGetResult>(
         `connections/${publicId}`,
+        undefined,
+        scope,
       );
       if (conn.status === "connected") return "connected";
       if (conn.status === "error") return "error";
@@ -164,18 +205,22 @@ async function pollConnectionStatus(
  * Returns the repos recorded in the workspace link on success, or null when the
  * flow did not complete. Never throws.
  */
-async function connectGitHub(): Promise<Array<{
+async function connectGitHub(scope: Scope): Promise<Array<{
   provider: "github";
   fullName: string;
 }> | null> {
   process.stdout.write(`\nCreating GitHub connection...\n`);
   let connection: ConnectionCreateResult;
   try {
-    connection = await apiPostOrThrow<ConnectionCreateResult>("connections", {
-      connectorId: "github",
-      displayName: "GitHub",
-      authCredential: {},
-    });
+    connection = await apiPostOrThrow<ConnectionCreateResult>(
+      "connections",
+      {
+        connectorId: "github",
+        displayName: "GitHub",
+        authCredential: {},
+      },
+      scope,
+    );
   } catch (err) {
     process.stdout.write(
       `  Could not create GitHub connection: ${err instanceof Error ? err.message : String(err)}\n`,
@@ -188,6 +233,7 @@ async function connectGitHub(): Promise<Array<{
     const result = await apiGetOrThrow<{ authUrl: string }>(
       `connections/github/auth-url`,
       { connectionId: connection.publicId },
+      scope,
     );
     authUrl = result.authUrl;
   } catch (err) {
@@ -207,10 +253,11 @@ async function connectGitHub(): Promise<Array<{
   process.stdout.write(
     `\nWaiting for GitHub authorization (timeout: 3 min)...\n`,
   );
-  const pollResult = await pollConnectionStatus(connection.publicId, {
-    intervalMs: 5_000,
-    timeoutMs: 3 * 60 * 1_000,
-  });
+  const pollResult = await pollConnectionStatus(
+    connection.publicId,
+    { intervalMs: 5_000, timeoutMs: 3 * 60 * 1_000 },
+    scope,
+  );
 
   if (pollResult === "timeout") {
     process.stdout.write(
@@ -231,17 +278,21 @@ async function connectGitHub(): Promise<Array<{
   try {
     const { installations } = await apiGetOrThrow<{
       installations: GitHubInstallation[];
-    }>(`connections/github/installations`, {
-      connectionId: connection.publicId,
-    });
+    }>(
+      `connections/github/installations`,
+      { connectionId: connection.publicId },
+      scope,
+    );
 
     for (const inst of installations) {
       try {
         const { repositories } = await apiGetOrThrow<{
           repositories: GitHubRepository[];
-        }>(`connections/github/installations/${inst.id}/repositories`, {
-          connectionId: connection.publicId,
-        });
+        }>(
+          `connections/github/installations/${inst.id}/repositories`,
+          { connectionId: connection.publicId },
+          scope,
+        );
         for (const r of repositories) {
           repos.push({ provider: "github", fullName: r.fullName });
         }
@@ -280,7 +331,8 @@ async function connectGitHub(): Promise<Array<{
  * the result, never thrown.
  */
 async function runWorkspaceLinker(
-  cwd: string,
+  root: string,
+  flags: { org?: string; workspace?: string },
 ): Promise<InitWorkspaceLinkResult> {
   const token = getToken();
   if (!token) {
@@ -303,9 +355,16 @@ async function runWorkspaceLinker(
     workspaceName: string;
   };
 
-  // Re-use an existing link when already linked (skip the picker; idempotent).
-  const existing = readWorkspaceLink(cwd);
-  if (existing) {
+  // Re-use an existing link when already linked (skip the picker; idempotent),
+  // unless --org / --workspace name a different pair.
+  const existing = readWorkspaceLink(root);
+  const namesOtherPair =
+    existing !== null &&
+    ((flags.org !== undefined && flags.org !== existing.orgSlug) ||
+      (flags.workspace !== undefined &&
+        flags.workspace !== existing.workspaceSlug));
+  let relinkedFrom: InitWorkspaceLinkResult["relinkedFrom"];
+  if (existing && !namesOtherPair) {
     process.stdout.write(
       `  Already linked: ${existing.orgName} / ${existing.workspaceName}\n`,
     );
@@ -318,8 +377,16 @@ async function runWorkspaceLinker(
       workspaceName: existing.workspaceName,
     };
   } else {
+    // A --workspace alone keeps the linked org. A new --org alone leaves the
+    // workspace to the picker, because the old slug belongs to the old org.
+    const orgSlug = flags.org ?? existing?.orgSlug;
+    const workspaceSlug =
+      flags.workspace ??
+      (existing && orgSlug === existing.orgSlug
+        ? existing.workspaceSlug
+        : undefined);
     try {
-      account = await resolveLinkedAccount({ isTTY });
+      account = await resolveLinkedAccount({ orgSlug, workspaceSlug, isTTY });
     } catch (err) {
       return {
         linked: false,
@@ -327,6 +394,8 @@ async function runWorkspaceLinker(
       };
     }
 
+    // A relink starts clean: the repos and the pull base belong to the pair
+    // the old link named, not to this one.
     const link: WorkspaceLink = {
       orgSlug: account.orgSlug,
       orgId: account.orgId,
@@ -336,16 +405,28 @@ async function runWorkspaceLinker(
       workspaceName: account.workspaceName,
       linkedAt: new Date().toISOString(),
     };
-    writeWorkspaceLink(cwd, link);
-    process.stdout.write(
-      `  Linked: ${account.orgName} / ${account.workspaceName}\n`,
-    );
+    writeWorkspaceLink(root, link);
+    if (existing) {
+      relinkedFrom = {
+        orgSlug: existing.orgSlug,
+        workspaceSlug: existing.workspaceSlug,
+      };
+      process.stdout.write(
+        `  Relinked: ${account.orgName} / ${account.workspaceName} ` +
+          `(was ${existing.orgSlug} / ${existing.workspaceSlug})\n`,
+      );
+    } else {
+      process.stdout.write(
+        `  Linked: ${account.orgName} / ${account.workspaceName}\n`,
+      );
+    }
   }
+  const scope: Scope = { org: account.orgSlug, ws: account.workspaceSlug };
 
   // ── GitHub connection ──────────────────────────────────────────────────────
   let repos: Array<{ provider: "github"; fullName: string }> | undefined;
   try {
-    const githubConn = await findGitHubConnection();
+    const githubConn = await findGitHubConnection(scope);
     if (githubConn) {
       process.stdout.write(
         `\nGitHub connection: ${githubConn.displayName} (${githubConn.status})\n`,
@@ -369,7 +450,7 @@ async function runWorkspaceLinker(
         rl.close();
       }
       if (answer === "y" || answer === "yes") {
-        const connected = await connectGitHub();
+        const connected = await connectGitHub(scope);
         if (connected) repos = connected;
       } else {
         process.stdout.write(
@@ -388,9 +469,9 @@ async function runWorkspaceLinker(
     );
   }
 
-  const currentLink = readWorkspaceLink(cwd);
+  const currentLink = readWorkspaceLink(root);
   if (currentLink && repos) {
-    writeWorkspaceLink(cwd, { ...currentLink, repos });
+    writeWorkspaceLink(root, { ...currentLink, repos });
   }
 
   return {
@@ -400,6 +481,7 @@ async function runWorkspaceLinker(
     workspaceSlug: account.workspaceSlug,
     workspaceName: account.workspaceName,
     repos: repos ?? currentLink?.repos,
+    ...(relinkedFrom ? { relinkedFrom } : {}),
   };
 }
 
@@ -422,6 +504,11 @@ export function formatInitSummary(result: InitResult): string {
     lines.push(
       `  Linked: ${wl.orgName ?? wl.orgSlug} / ${wl.workspaceName ?? wl.workspaceSlug}`,
     );
+    if (wl.relinkedFrom) {
+      lines.push(
+        `  Replaced the link to ${wl.relinkedFrom.orgSlug} / ${wl.relinkedFrom.workspaceSlug}.`,
+      );
+    }
     if (wl.repos && wl.repos.length > 0) {
       lines.push(
         `  Repos:  ${wl.repos
@@ -435,6 +522,15 @@ export function formatInitSummary(result: InitResult): string {
     lines.push(`  ${result.workspaceLink.skippedReason}`);
   }
 
+  if (result.gitignoreUpdated) {
+    lines.push(`  Added .oxagen/workspace.json to ${result.gitignoreUpdated}.`);
+  }
+  if (result.workingCopy && "workingCopyId" in result.workingCopy) {
+    lines.push(
+      `  Reported this directory to Oxagen (${result.workingCopy.workingCopyId}).`,
+    );
+  }
+
   return lines.join("\n");
 }
 
@@ -444,21 +540,55 @@ export function formatInitSummary(result: InitResult): string {
 
 /** Run the init workflow and return a structured result. */
 export async function runInit(opts: InitOptions): Promise<InitResult> {
-  const cwd = opts.cwd ?? process.cwd();
+  const root = await projectRootFor(opts.cwd ?? process.cwd());
   const emit = async (event: InitProgressEvent): Promise<void> => {
     await opts.onProgress?.(event);
   };
 
   let workspaceLink: InitWorkspaceLinkResult | null = null;
+  let gitignoreUpdated: string | null = null;
+  let workingCopy: WorkingCopyOutcome | null = null;
   if (!opts.noLink) {
     await emit({ phase: "link", status: "start" });
-    workspaceLink = await runWorkspaceLinker(cwd);
+    workspaceLink = await runWorkspaceLinker(root, {
+      org: opts.org,
+      workspace: opts.workspace,
+    });
     await emit({ phase: "link", status: "done" });
   }
 
+  if (workspaceLink?.linked) {
+    try {
+      // Reported in the summary (and in --json as `gitignoreUpdated`).
+      gitignoreUpdated = await ensureWorkspaceLinkIgnored(root);
+    } catch (err) {
+      process.stderr.write(
+        `Warning: could not add .oxagen/workspace.json to .gitignore: ${err instanceof Error ? err.message : String(err)}\n`,
+      );
+    }
+
+    const link = readWorkspaceLink(root);
+    if (link) {
+      workingCopy = await reportWorkingCopy({
+        root,
+        scope: { org: link.orgSlug, ws: link.workspaceSlug },
+        event: "init",
+        pulledCommit: link.pull?.commit ?? null,
+      });
+      if ("error" in workingCopy) {
+        process.stderr.write(
+          `Warning: could not report this directory to Oxagen: ${workingCopy.error}\n`,
+        );
+      }
+    }
+  }
+
   return {
-    workspaceLinkPath: workspaceLinkPath(cwd),
+    projectRoot: root,
+    workspaceLinkPath: workspaceLinkPath(root),
     workspaceLink,
+    gitignoreUpdated,
+    workingCopy,
   };
 }
 
@@ -466,10 +596,54 @@ export async function runInit(opts: InitOptions): Promise<InitResult> {
 // CLI handler (writes to stdout)
 // ---------------------------------------------------------------------------
 
+/** Send `process.stdout.write` to stderr until the returned function runs. */
+function divertStdoutToStderr(): () => void {
+  const original = process.stdout.write;
+  process.stdout.write = ((...args: Parameters<typeof process.stderr.write>) =>
+    process.stderr.write(...args)) as typeof process.stdout.write;
+  return () => {
+    process.stdout.write = original;
+  };
+}
+
 export async function handleInit(opts: InitOptions): Promise<void> {
+  if (opts.noLink && (opts.org !== undefined || opts.workspace !== undefined)) {
+    process.stderr.write(
+      "--org and --workspace choose what to link, so they cannot be combined with --no-link.\n",
+    );
+    process.exitCode = 2;
+    return;
+  }
+  for (const [flag, value] of [
+    ["--org", opts.org],
+    ["--workspace", opts.workspace],
+  ] as const) {
+    if (value !== undefined && value.trim().length === 0) {
+      process.stderr.write(`${flag} needs a slug.\n`);
+      process.exitCode = 2;
+      return;
+    }
+  }
+
   process.stderr.write("Initializing…\n");
 
-  const result = await runInit(opts);
+  // With --json, stdout carries the result and nothing else (ADR-023 §4). The
+  // linker, the picker in lib/linker.ts and the GitHub step narrate on
+  // stdout, so their lines go to stderr for the length of the run.
+  const restoreStdout = opts.json ? divertStdoutToStderr() : () => {};
+  let result: InitResult;
+  try {
+    result = await runInit(opts);
+  } finally {
+    restoreStdout();
+  }
+
+  // Named flags are a request to link that pair. When it could not be
+  // linked, a script has to be able to tell, so the command fails.
+  const named = opts.org !== undefined || opts.workspace !== undefined;
+  if (named && result.workspaceLink && !result.workspaceLink.linked) {
+    process.exitCode = 1;
+  }
 
   if (opts.json) {
     process.stdout.write(JSON.stringify(result, null, 2) + "\n");

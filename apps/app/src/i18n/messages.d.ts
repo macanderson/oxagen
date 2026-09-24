@@ -5434,7 +5434,28 @@ type Messages = {
       title: string;
       subtitle: string;
       connect: string;
-      notRecorded: string;
+      loading: string;
+      empty: string;
+      denied: string;
+      unavailable: string;
+      retry: string;
+      truncated: string;
+      noRemote: string;
+      detached: string;
+      neverPulled: string;
+      head: string;
+      reportedBy: string;
+      reportedByKey: string;
+      reportedByUnnamed: string;
+      oxagenState: {
+        present: string;
+        absent: string;
+      };
+      symlinkState: {
+        linked: string;
+        missing: string;
+        none: string;
+      };
       filesTitle: string;
       filesToml: string;
       filesJson: string;
@@ -5443,8 +5464,8 @@ type Messages = {
       sync: {
         init: string;
         pull: string;
-        status: string;
-        propose: string;
+        steeringStatus: string;
+        contextPropose: string;
       };
       syncNote: string;
       stale: string;
@@ -5455,7 +5476,7 @@ type Messages = {
         branch: string;
         oxagen: string;
         symlinks: string;
-        bundle: string;
+        pulled: string;
         lastSeen: string;
       };
     };
@@ -5464,19 +5485,19 @@ type Messages = {
       subtitle: string;
       lead: string;
       commandLabel: string;
-      pairing: string;
-      pairingHint: string;
+      loginComment: string;
+      hint: string;
       whatLabel: string;
       writes: {
         writes: {
           name: string;
           what: string;
         };
-        links: {
+        reports: {
           name: string;
           what: string;
         };
-        noWrite: {
+        pull: {
           name: string;
           what: string;
         };

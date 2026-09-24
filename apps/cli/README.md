@@ -175,7 +175,8 @@ oxagen remember "<lesson>" --class RULE --enforcement 90
 **Govern** — workspace, agents, credentials
 
 ```bash
-oxagen init                                       # link this project to an org + workspace
+oxagen init --org <org> --workspace <ws>          # link this project to an org + workspace
+oxagen pull                                       # write the workspace's published steering into .oxagen/
 oxagen agent env bind|unbind|list                 # bind an agent to an environment
 oxagen env list|get|create|update|rm|set-default  # workspace environments
 oxagen secret list|set|rm|reveal|import|export    # encrypted credential vault

@@ -5,7 +5,7 @@
 // (#2967), the list, link and unlink of every bound repository (§17 M0: "a
 // second repo can be linked and unlinked"), what each one holds under
 // `.oxagen/`, its production branch, the pull request that adds Oxagen to
-// it, and the Context PRs Oxagen has open.
+// it, the Context PRs Oxagen has open, and the directories the CLI reported.
 //
 // These are reads made on demand rather than through a DataSource port. Most
 // of them are live calls to GitHub through the workspace's installation
@@ -31,6 +31,7 @@ import { repositoryMainBind } from "@oxagen/oxagen/contracts/repository.main.bin
 import { repositoryMainGet } from "@oxagen/oxagen/contracts/repository.main.get";
 import { repositoryUnlink } from "@oxagen/oxagen/contracts/repository.unlink";
 import { repositoryTreeGet } from "@oxagen/oxagen/contracts/repository.tree.get";
+import { workingCopyList } from "@oxagen/oxagen/contracts/repository.working_copy.list";
 import { repositoryProductionBranchSet } from "@oxagen/oxagen/contracts/repository.production_branch.set";
 import { repositoryInitPrOpen } from "@oxagen/oxagen/contracts/repository.init_pr.open";
 import { contextProposalList } from "@oxagen/oxagen/contracts/context.proposal.list";
@@ -49,12 +50,14 @@ import type {
   RepositoryChanges,
   RepositoryTree,
   UnlinkedRepository,
+  WorkingCopies,
   WorkspaceRepositories,
   WorkspaceRepository,
 } from "@/data/contracts/repository";
 import type { ActionResult } from "@/server/kernel";
 import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
+import { WORKING_COPY_LIMIT } from "./view";
 
 export type BoundRepository = {
   fullName: string;
@@ -326,6 +329,26 @@ export async function readRepositoryTree(
   const read = await kernelRead(ctx, {
     contract: repositoryTreeGet,
     input: { bindingId },
+    page: "repositories",
+  });
+  return readToActionResult(read);
+}
+
+/**
+ * Every directory the CLI reported for this workspace, most recently seen
+ * first (`list_working_copies`). A local read: the rows are what `oxagen init`
+ * and `oxagen pull` sent, and nothing here reaches the machine or GitHub. A
+ * list exactly `WORKING_COPY_LIMIT` long may have more behind it, and the tab
+ * says so.
+ */
+export async function readWorkingCopies(
+  org: string,
+  ws: string,
+): Promise<ActionResult<WorkingCopies>> {
+  const ctx = await requireViewer(org, ws);
+  const read = await kernelRead(ctx, {
+    contract: workingCopyList,
+    input: { limit: WORKING_COPY_LIMIT },
     page: "repositories",
   });
   return readToActionResult(read);
