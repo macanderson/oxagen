@@ -11,8 +11,15 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  advancesLatest,
   classifyInstaller,
+  compareVersions,
   countPublishedObjects,
+  isBuildVersion,
+  LATEST_CACHE_CONTROL,
+  latestCopyArgs,
+  latestManifest,
+  readLatestVersion,
   decidePublication,
   FONT_FILES,
   formatSize,
@@ -68,6 +75,172 @@ describe("classifyInstaller", () => {
     // A stale bundle from an older build must not ship under a new path.
     expect(classifyInstaller("Oxagen_2.1.0_aarch64.dmg", V)).toBeNull();
     expect(classifyInstaller("Oxagen-2.1.0-1.x86_64.rpm", V)).toBeNull();
+  });
+});
+
+describe("builds of main", () => {
+  const B = "2.1.2-37";
+  const BUILD_FILES = [
+    `Oxagen_${B}_aarch64.dmg`,
+    `Oxagen_${B}_x64.dmg`,
+    `Oxagen_${B}_x64-setup.exe`,
+    `Oxagen_${B}_x64_en-US.msi`,
+    `Oxagen_${B}_amd64.deb`,
+    `Oxagen-${B}-1.x86_64.rpm`,
+    `Oxagen_${B}_amd64.AppImage`,
+  ];
+
+  it("classifies a build's installers like a release's", () => {
+    expect(BUILD_FILES.map((f) => classifyInstaller(f, B)?.latest)).toEqual([
+      "Oxagen_aarch64.dmg",
+      "Oxagen_x64.dmg",
+      "Oxagen_x64-setup.exe",
+      "Oxagen_x64_en-US.msi",
+      "Oxagen_amd64.deb",
+      "Oxagen.x86_64.rpm",
+      "Oxagen_amd64.AppImage",
+    ]);
+    // The release a build precedes is a different version.
+    expect(classifyInstaller("Oxagen_2.1.2_aarch64.dmg", B)).toBeNull();
+  });
+
+  it("tells a build from a release", () => {
+    expect(isBuildVersion(B)).toBe(true);
+    expect(isBuildVersion("2.1.2")).toBe(false);
+    expect(isBuildVersion("2.1.2-rc.1")).toBe(false);
+  });
+
+  it("orders builds before the release they lead to", () => {
+    const ordered = [
+      "2.1.1",
+      "2.1.2-4",
+      "2.1.2-9",
+      "2.1.2-10",
+      "2.1.2",
+      "2.2.0-1",
+    ];
+    const shuffled = [...ordered].reverse();
+    expect(shuffled.sort(compareVersions)).toEqual(ordered);
+    expect(compareVersions("2.1.2-4", "2.1.2-4")).toBe(0);
+    expect(() => compareVersions("2.1.2-rc.1", "2.1.2")).toThrow(
+      /not a version/,
+    );
+  });
+
+  it("only moves latest forward", () => {
+    expect(advancesLatest(null, "2.1.1")).toBe(true);
+    expect(advancesLatest("2.1.1", "2.1.2-1")).toBe(true);
+    expect(advancesLatest("2.1.2-5", "2.1.2")).toBe(true);
+    expect(advancesLatest("2.1.2-5", "2.1.2-5")).toBe(true);
+    expect(advancesLatest("2.1.2-5", "2.1.2-4")).toBe(false);
+    expect(advancesLatest("2.1.3-1", "2.1.2")).toBe(false);
+  });
+
+  it("reads latest.json defensively", () => {
+    expect(readLatestVersion(null)).toBeNull();
+    expect(readLatestVersion("")).toBeNull();
+    expect(readLatestVersion("not json")).toBeNull();
+    expect(readLatestVersion('{"version":7}')).toBeNull();
+    expect(readLatestVersion('{"version":"2.1.2-3"}')).toBe("2.1.2-3");
+  });
+
+  it("describes a build in latest.json and copies it under its stable name", () => {
+    const entries: PageEntry[] = BUILD_FILES.map((f) => ({
+      ...classifyInstaller(f, B)!,
+      bytes: 10,
+      sha256: "0".repeat(64),
+    }));
+    const manifest = latestManifest({
+      version: B,
+      publishedAt: "2026-09-24",
+      entries,
+      host: "downloads.oxagen.sh",
+    });
+    expect(manifest.channel).toBe("build");
+    expect(manifest.checksums).toBe(
+      `https://downloads.oxagen.sh/desktop/${B}/SHA256SUMS.txt`,
+    );
+    expect(manifest.installers.map((i) => i.latestUrl)).toContain(
+      "https://downloads.oxagen.sh/latest/Oxagen_x64-setup.exe",
+    );
+    expect(manifest.installers[0]?.url).toBe(
+      `https://downloads.oxagen.sh/desktop/${B}/Oxagen_${B}_aarch64.dmg`,
+    );
+    const args = latestCopyArgs({
+      bucket: "b",
+      version: B,
+      entry: entries[0]!,
+    });
+    expect(args.slice(0, 4)).toEqual([
+      "s3",
+      "cp",
+      `s3://b/desktop/${B}/Oxagen_${B}_aarch64.dmg`,
+      "s3://b/latest/Oxagen_aarch64.dmg",
+    ]);
+    expect(args).toContain("REPLACE");
+    expect(args).toContain(`attachment; filename="Oxagen_${B}_aarch64.dmg"`);
+    expect(args).toContain(LATEST_CACHE_CONTROL);
+    expect(LATEST_CACHE_CONTROL).not.toContain("immutable");
+  });
+
+  it("renders a build's page without a notes page or GitHub release it does not have", () => {
+    const html = renderIndexHtml({
+      version: B,
+      entries: [
+        { ...classifyInstaller(BUILD_FILES[0]!, B)!, bytes: 1, sha256: "a" },
+      ],
+      publishedAt: "2026-09-24",
+    });
+    expect(html).toContain(`Build <code>${B}</code>`);
+    expect(html).not.toContain(`releases/v${B}`);
+    expect(html).not.toContain(`desktop-v${B}`);
+    expect(releaseLinks(B).notes).toBe("https://docs.oxagen.sh/docs/releases");
+  });
+});
+
+describe("the version-free names", () => {
+  // The web app and the docs link these names without importing this file,
+  // so a rename here must reach both. This reads their tables as text.
+  it("are the ones the web app and the docs link", () => {
+    const names = FILES.map((f) => classifyInstaller(f, V)!.latest);
+    for (const consumer of [
+      "../../app/src/shared/desktop-downloads.ts",
+      "../../docs/src/components/mdx/latest-downloads.tsx",
+    ]) {
+      const text = readFileSync(new URL(consumer, import.meta.url), "utf8");
+      for (const name of names) expect(text, consumer).toContain(`"${name}"`);
+    }
+  });
+});
+
+describe("check-latest.mjs", () => {
+  const check = (latest: string, version: string) => {
+    const dir = mkdtempSync(join(tmpdir(), "downloads-latest-test-"));
+    try {
+      writeFileSync(join(dir, "latest.json"), latest);
+      return spawnSync(
+        process.execPath,
+        [
+          fileURLToPath(
+            new URL("../scripts/check-latest.mjs", import.meta.url),
+          ),
+          join(dir, "latest.json"),
+          version,
+        ],
+        { encoding: "utf8" },
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  };
+
+  it("passes on this version or a newer one and fails on an older one", () => {
+    expect(check('{"version":"2.1.2-5"}', "2.1.2-5").status).toBe(0);
+    expect(check('{"version":"2.1.2-5"}', "2.1.2-4").status).toBe(0);
+    const older = check('{"version":"2.1.2-5"}', "2.1.2");
+    expect(older.status).toBe(1);
+    expect(older.stderr).toContain("older than 2.1.2");
+    expect(check("<html>not found</html>", "2.1.2").status).toBe(1);
   });
 });
 
@@ -438,7 +611,19 @@ if (args[0] === "s3api" && args[1] === "list-objects-v2") {
   save();
 } else if (args[0] === "s3" && args[1] === "cp") {
   if (args[3] === "-") {
-    process.stdout.write(state.objects[args[2].replace(/^s3:\\/\\/[^/]+\\//, "")]);
+    const found = state.objects[args[2].replace(/^s3:\\/\\/[^/]+\\//, "")];
+    if (found === undefined) {
+      console.error('fatal error: An error occurred (404) when calling the HeadObject operation: Key "' + args[2] + '" does not exist');
+      process.exit(1);
+    }
+    process.stdout.write(found);
+  } else if (args[2].startsWith("s3://")) {
+    const from = args[2].replace(/^s3:\\/\\/[^/]+\\//, "");
+    const key = args[3].replace(/^s3:\\/\\/[^/]+\\//, "");
+    state.objects[key] = state.objects[from];
+    state.disposition = { ...(state.disposition ?? {}), [key]: arg("--content-disposition") };
+    state.writes.push(key);
+    save();
   } else {
     const key = args[3].replace(/^s3:\\/\\/[^/]+\\//, "");
     if (key.endsWith(".dmg") && !state.interrupted) {
@@ -545,6 +730,71 @@ if (args[0] === "s3api" && args[1] === "list-objects-v2") {
       expect(complete.writes.indexOf(`desktop/${V}/${file}`)).toBeLessThan(
         complete.writes.indexOf("index.html"),
       );
+      // The version-free links move with the page, after the installers and
+      // before the page, and download under the versioned name.
+      const stable = "latest/Oxagen_aarch64.dmg";
+      expect(complete.objects[stable]).toBe("installer bytes");
+      expect(
+        (complete as unknown as { disposition: Record<string, string> })
+          .disposition[stable],
+      ).toBe(`attachment; filename="${file}"`);
+      const manifest = JSON.parse(complete.objects["latest.json"]!) as {
+        version: string;
+        channel: string;
+        installers: Array<{ latestUrl: string; url: string }>;
+      };
+      expect(manifest.version).toBe(V);
+      expect(manifest.channel).toBe("release");
+      expect(manifest.installers[0]?.latestUrl).toBe(
+        "https://downloads.oxagen.sh/latest/Oxagen_aarch64.dmg",
+      );
+      expect(complete.writes.indexOf(`desktop/${V}/${file}`)).toBeLessThan(
+        complete.writes.indexOf(stable),
+      );
+      expect(complete.writes.indexOf(stable)).toBeLessThan(
+        complete.writes.indexOf("latest.json"),
+      );
+      expect(complete.writes.indexOf("latest.json")).toBeLessThan(
+        complete.writes.indexOf("index.html"),
+      );
+
+      // A newer build already published: redrawing this older version moves
+      // neither the links nor the page.
+      const newer = JSON.parse(readFileSync(statePath, "utf8")) as {
+        objects: Record<string, string>;
+        writes: string[];
+      };
+      newer.objects["latest.json"] = JSON.stringify({ version: "2.1.2-4" });
+      newer.objects["index.html"] = "the 2.1.2-4 page";
+      newer.writes = [];
+      writeFileSync(statePath, JSON.stringify(newer));
+      const stale = spawnSync(
+        process.execPath,
+        [
+          fileURLToPath(
+            new URL("../scripts/publish-downloads.mjs", import.meta.url),
+          ),
+          "--page-only",
+          "--version",
+          V,
+        ],
+        {
+          encoding: "utf8",
+          env: {
+            ...process.env,
+            PATH: `${bin}:${process.env.PATH ?? ""}`,
+            TEST_BUCKET_STATE: statePath,
+          },
+        },
+      );
+      expect(stale.status, stale.stderr).toBe(0);
+      expect(stale.stderr).toContain("latest is 2.1.2-4, newer than 2.1.1");
+      const untouched = JSON.parse(readFileSync(statePath, "utf8")) as {
+        objects: Record<string, string>;
+        writes: string[];
+      };
+      expect(untouched.writes).toEqual([]);
+      expect(untouched.objects["index.html"]).toBe("the 2.1.2-4 page");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
