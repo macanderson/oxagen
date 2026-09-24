@@ -261,7 +261,10 @@ describe("one read names one pull request", () => {
 
     // A browser that refuses the clipboard says so and does not throw.
     const writeText = vi.fn(() => Promise.reject(new Error("denied")));
-    Object.assign(navigator, { clipboard: { writeText } });
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
     fireEvent.click(within(machine).getByRole("button"));
     expect(await within(machine).findByRole("status")).toHaveTextContent(
       "Copy failed",

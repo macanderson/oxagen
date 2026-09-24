@@ -27,7 +27,9 @@ export function InterjectionAnswer({
       type="button"
       aria-pressed={picked === path}
       data-testid={`interjection-pick-${path}`}
-      onClick={() => setPicked(path)}
+      onClick={() => {
+        setPicked(path);
+      }}
       className="flex min-h-11 w-full items-center gap-3 rounded-lg border border-border bg-app-panel-bg px-3 py-2.5 text-left text-sm font-semibold text-foreground hover:border-foreground aria-pressed:border-gold aria-pressed:bg-gold/10"
     >
       <span

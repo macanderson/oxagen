@@ -94,7 +94,6 @@ function useTabCounts({
   run,
   everything,
   cost,
-  pending,
 }: Counted): Partial<Record<Tab, ReactNode>> {
   const t = useTranslations("run.tabs");
   // The page's whole-run read is one page of entries. Past that page, or past

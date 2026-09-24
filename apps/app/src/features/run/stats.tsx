@@ -9,7 +9,11 @@
 // the Prompts box and the Wasted caption read that one count. A prompt count
 // read from a transcript that stopped short is a floor, and says so.
 import { useLocale, useTranslations } from "next-intl";
-import { type Cost, shareOfMicros } from "@/data/contracts/money";
+import {
+  compareIntegers,
+  type Cost,
+  shareOfMicros,
+} from "@/data/contracts/money";
 import type { RunCost, RunTranscript, TokenCounts } from "@/data/contracts/run";
 import type { AgentDetail } from "@/data/contracts/agents";
 import type { RunRow } from "@/data/contracts/runs";
@@ -283,7 +287,7 @@ export function StatRow({
   const wall =
     (run.sealedAt === null ? at : new Date(run.sealedAt).getTime()) -
     new Date(run.startedAt).getTime();
-  const wasteMicros = waste === null ? null : BigInt(waste.micros);
+  const wasteSign = waste === null ? null : compareIntegers(waste.micros, "0");
   return (
     <section
       aria-label={t("label")}
@@ -346,13 +350,13 @@ export function StatRow({
       </Stat>
       <Stat
         label={t("wasted")}
-        tone={wasteMicros !== null && wasteMicros > 0n ? "critical" : undefined}
+        tone={wasteSign !== null && wasteSign > 0 ? "critical" : undefined}
         note={
           waste === null
             ? missingRollup
             : corrective !== null && corrective > 0 && !cut
               ? t("correctivePrompts", { count: corrective })
-              : wasteMicros === 0n
+              : wasteSign === 0
                 ? t("nothingWasted")
                 : t("unproductive")
         }

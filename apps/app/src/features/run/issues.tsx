@@ -19,11 +19,12 @@ import type { ReactNode } from "react";
 import type { RunWork } from "@/data/contracts/run-work";
 import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
+import { type GitHubUrl, parseGitHubUrl } from "@/shared/github-url";
 import { routes } from "@/shared/safe-path";
 import { Badge } from "@/ui/badge";
 import { eyebrow, linkText, mono } from "@/ui/control-styles";
 import { formatCount } from "@/ui/money-format";
-import { SafeLink } from "@/ui/navigation";
+import { GitHubLink, SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
 import { cell, Table } from "@/ui/table";
 import { Panel } from "./parts";
@@ -41,11 +42,13 @@ type Place = { org: string; ws: string; runId: string };
 const GITHUB_ISSUE = /^([\w.-]+)\/([\w.-]+)#(\d+)$/;
 
 /** The tracker page for a reference, when its shape names one. */
-export function issueUrl(ref: string): string | null {
+export function issueUrl(ref: string): GitHubUrl | null {
   const match = GITHUB_ISSUE.exec(ref.trim());
   if (match === null) return null;
   const [, owner, repo, number] = match;
-  return `https://github.com/${owner}/${repo}/issues/${number}`;
+  if (owner === undefined || repo === undefined || number === undefined)
+    return null;
+  return parseGitHubUrl(`https://github.com/${owner}/${repo}/issues/${number}`);
 }
 
 /** `observed · fr N` for a node a frame recorded; `stated` otherwise. */
@@ -117,14 +120,9 @@ function IssuesTable({ run }: { run: RunRow }) {
               {url === null ? (
                 <span className="text-muted-foreground">{t("noLink")}</span>
               ) : (
-                <a
-                  href={url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={linkText}
-                >
+                <GitHubLink to={url} className={linkText}>
                   {t("viewLink")}
-                </a>
+                </GitHubLink>
               )}
             </td>
           </tr>

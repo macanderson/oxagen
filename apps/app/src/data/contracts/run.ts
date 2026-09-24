@@ -544,7 +544,7 @@ export type SteeringManifest = Omit<SteeringManifestShape, "items"> & {
 
 function refOf(raw: unknown): string | null {
   if (typeof raw !== "object" || raw === null || !("id" in raw)) return null;
-  const value = (raw as Record<string, unknown>).id;
+  const value: unknown = Reflect.get(raw, "id");
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
@@ -561,12 +561,16 @@ export function parseSteeringManifest(
   }
   const parsed = SteeringManifest.safeParse(value);
   if (!parsed.success) return null;
-  const rawItems = (value as { items: unknown[] }).items;
+  // The schema strips each item's `id`, so the ref is read off the raw item.
+  const rawItems: unknown =
+    typeof value === "object" && value !== null
+      ? Reflect.get(value, "items")
+      : undefined;
   return {
     ...parsed.data,
     items: parsed.data.items.map((item, index) => ({
       ...item,
-      ref: refOf(rawItems[index]),
+      ref: refOf(Array.isArray(rawItems) ? rawItems[index] : undefined),
     })),
   };
 }

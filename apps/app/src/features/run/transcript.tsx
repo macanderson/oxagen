@@ -71,7 +71,12 @@ const CHIP_ROW = [
   "errors",
 ] as const;
 type ChipName = (typeof CHIP_ROW)[number];
-const UNFILTERED = new Set<ChipName>(["thinking", "seal"]);
+type GapChip = Exclude<ChipName, TranscriptKind>;
+
+/** Thinking and seal have no transcript kind to filter on, so their chips filter nothing. */
+function isGapChip(name: ChipName): name is GapChip {
+  return name === "thinking" || name === "seal";
+}
 
 /** True when an entry carries a reasoning block the recorder kept. */
 function hasThinking(entry: TranscriptEntry): boolean {
@@ -136,24 +141,22 @@ function KindChips({
       className="flex flex-wrap items-center gap-1 pb-3"
     >
       {CHIP_ROW.map((name) => {
-        if (UNFILTERED.has(name))
+        if (isGapChip(name))
           return (
             <span
               key={name}
               data-testid={`chip-${name}`}
               data-gap={`transcript-kind-${name}`}
               aria-disabled="true"
-              title={t(`chipGap.${name as "thinking" | "seal"}`)}
+              title={t(`chipGap.${name}`)}
               className="inline-flex min-h-8 cursor-not-allowed items-center gap-1.5 rounded-full border border-dashed border-border px-3 text-xs text-muted-foreground"
             >
-              {t(`chip.${name as "thinking" | "seal"}`)}
+              {t(`chip.${name}`)}
               {count(name)}
-              <span className="sr-only">
-                {t(`chipGap.${name as "thinking" | "seal"}`)}
-              </span>
+              <span className="sr-only">{t(`chipGap.${name}`)}</span>
             </span>
           );
-        const kind = name as TranscriptKind;
+        const kind: TranscriptKind = name;
         const on = kinds.includes(kind);
         const next = on
           ? kinds.filter((held) => held !== kind)

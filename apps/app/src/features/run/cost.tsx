@@ -15,7 +15,7 @@
 // rather than drawing a figure the record does not hold.
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
-import { shareOfMicros } from "@/data/contracts/money";
+import { compareIntegers, shareOfMicros } from "@/data/contracts/money";
 import type {
   RunCost,
   RunCostRollup,
@@ -31,6 +31,7 @@ import { Money } from "@/ui/money";
 import {
   formatCount,
   formatDuration,
+  formatOneDecimal,
   formatRatio,
   ratioWidth,
 } from "@/ui/money-format";
@@ -142,7 +143,7 @@ function dearestTurn(turns: Read<RunTranscript>) {
     if (entry.cost === null) continue;
     if (
       best?.cost == null ||
-      BigInt(entry.cost.micros) > BigInt(best.cost.micros)
+      compareIntegers(entry.cost.micros, best.cost.micros) > 0
     )
       best = entry;
   }
@@ -248,7 +249,7 @@ function Instruments({
             <NoValue />
           ) : (
             t("stepsPerTurn", {
-              value: (rollup.steps / rollup.turns).toFixed(1),
+              value: formatOneDecimal(rollup.steps / rollup.turns, locale),
             })
           )}
         </span>

@@ -305,7 +305,6 @@ function DisabledControls({
   testId: string;
   after?: ReactNode;
 }) {
-  const t = useTranslations("run.commands");
   return (
     <div className="flex flex-col items-start gap-2 lg:items-end">
       <div className="flex flex-wrap gap-2">

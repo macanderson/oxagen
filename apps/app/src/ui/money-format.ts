@@ -61,6 +61,14 @@ export function formatCount(count: number, locale: string): string {
   );
 }
 
+/** A plain figure (steps per turn) with exactly one decimal place, in the viewer's locale. */
+export function formatOneDecimal(value: number, locale: string): string {
+  return new Intl.NumberFormat(locale, {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
 /**
  * A whole count the source recorded as digits, formatted from the string so a
  * figure past what a double holds exactly is printed as recorded. The same
