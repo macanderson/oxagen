@@ -96,7 +96,9 @@
         "tamperWhy": "{count, plural, one {# open incident} other {# open incidents}}",
         "notEnrolledWhy": "no hook is installed, so its runs are recorded only",
         "observeWhy": "enrolled, and nothing is delivered or refused yet",
-        "healthyWhy": "enrolled, and its latest wrapped session recorded the {tier} tier"
+        "healthyWhy": "enrolled, and its latest wrapped session recorded the {tier} tier",
+        "retiredWhy": "retired, so its credential and hosts are revoked and no hook is installed",
+        "suspendedWhy": "suspended, so every call is refused and there is no health verdict"
       },
       "controls": {
         "search": "Search this list",
@@ -183,10 +185,10 @@
         "tokens": "No wrapped session of this agent reported its token usage in the last 30 days. Ledger runs' tokens are not rolled up per agent.",
         "commit": "The commit of .oxagen/agents/ is not recorded on this read.",
         "organization": "No organization-wide rollup of agents is recorded yet.",
-        "tier": "No wrapped session has recorded an enforcement tier for this agent yet.",
+        "tier": "No wrapped session has recorded an enforcement tier for this agent yet, and no per-agent tier rollup exists (#3817).",
         "runtimeKind": "No store records a runtime's kind yet. A host row is one enrollment, not a machine.",
         "belt": "list_agents does not compute each agent's belt yet (#3852). The agent's own page shows the belt its grants give it.",
-        "policy": "The read's refusal does not name the policy that decided it.",
+        "policy": "The read's refusal does not name the policy that decided it yet (#3846).",
         "trace": "A failed read does not carry its trace id or region yet."
       },
       "stubs": {
@@ -635,6 +637,8 @@
         "ends": "Ends",
         "endsValue": "{roles, plural, one {# role} other {# roles}}, {mandates, plural, one {# mandate} other {# mandates}}, {hosts, plural, =0 {no host enrollment} one {the host enrollment} other {# host enrollments}}",
         "endsUnknown": "its roles, mandates and host enrollment",
+        "inFlight": "In flight",
+        "inFlightUnrecorded": "live runs not counted yet, and deregistering does not cancel them",
         "understand": "I understand this cannot be undone",
         "understandHint": "Re-registering creates a new principal.",
         "confirm": "Deregister",

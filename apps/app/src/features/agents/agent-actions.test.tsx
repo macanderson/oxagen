@@ -359,7 +359,17 @@ describe("RetireAgent", () => {
     ).toEqual([
       "every run, frame and receipt. The record is never deleted.",
       "2 roles, 0 mandates, the host enrollment",
+      "live runs not counted yet, and deregistering does not cancel them",
     ]);
+    // In flight has no count and retirement cancels no run (#3975), so the
+    // row names the gap rather than a number or a promise.
+    const inFlight = dialog.querySelector('[data-gap="#3975"]');
+    expect(inFlight).toHaveAttribute("data-not-backed");
+    expect(
+      within(dialog)
+        .getAllByRole("term")
+        .map((dt) => dt.textContent),
+    ).toEqual(["Kept", "Ends", "In flight"]);
     // Deregister sits in the footer beside Cancel.
     const footer = dialog.querySelector("[data-sheet-footer]");
     if (!(footer instanceof HTMLElement)) throw new Error("no footer");
@@ -368,8 +378,8 @@ describe("RetireAgent", () => {
         .getAllByRole("button")
         .map((button) => button.textContent),
     ).toEqual(["Cancel", "Deregister"]);
-    const pr = dialog.querySelector("[data-not-backed]");
-    expect(pr).toHaveAttribute("data-gap", "#3855");
+    const pr = dialog.querySelector('[data-not-backed][data-gap="#3855"]');
+    expect(pr).not.toBeNull();
     expect(pr).toHaveTextContent(".oxagen/agents/other.toml");
   });
 

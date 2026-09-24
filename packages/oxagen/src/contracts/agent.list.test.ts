@@ -144,7 +144,9 @@ describe("list_agents contract", () => {
       totals: {
         identities: 3,
         enrolled: 1,
+        unenrolled: 2,
         holdingMandate: null,
+        mandateHolders: [],
         tamperIncidents: 0,
         tamper: { recorded: 0, open: 0, newest: null },
       },
@@ -162,7 +164,9 @@ describe("list_agents contract", () => {
         totals: {
           identities: 3,
           enrolled: 1,
+          unenrolled: 2,
           holdingMandate: 1,
+          mandateHolders: ["acme.core.release-bot"],
           tamperIncidents: 1,
           tamper: { recorded: 2, open: 1, newest },
         },

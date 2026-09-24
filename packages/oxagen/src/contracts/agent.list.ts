@@ -176,8 +176,21 @@ export const agentList = registerCapability({
         .object({
           identities: z.number().int().nonnegative(),
           enrolled: z.number().int().nonnegative(),
+          /**
+           * Live agents whose status is `unenrolled`: neither retired nor
+           * suspended, and holding no credential and no host. Not
+           * `identities - enrolled`, which would count retired and
+           * suspended agents as waiting to enroll.
+           */
+          unenrolled: z.number().int().nonnegative(),
           /** Agents in the workspace whose principal holds at least one active mandate. */
           holdingMandate: z.number().int().nonnegative().nullable(),
+          /**
+           * The agent keys of the agents `holdingMandate` counts, in slug
+           * order, at most 100. The same set as the count, so the names a
+           * tile prints never disagree with its number.
+           */
+          mandateHolders: z.array(z.string().min(1)).max(100),
           /**
            * Open incidents of a tamper kind, summed over the workspace's
            * agents (through the hosts enrolled under each agent key).
