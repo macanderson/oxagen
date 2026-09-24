@@ -61,7 +61,13 @@ beforeEach(() => {
   revise.mockReset();
   onOpened.mockReset();
 });
-afterEach(cleanup);
+afterEach(async () => {
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
+});
 
 describe("Propose a change", () => {
   it("keeps unchanged lines as context in the diff, with no repository badge when none was read", async () => {

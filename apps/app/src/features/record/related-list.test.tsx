@@ -34,7 +34,13 @@ const item = (overrides: Partial<RelatedItem>): RelatedItem => ({
   ...overrides,
 });
 
-afterEach(cleanup);
+afterEach(async () => {
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
+});
 
 describe("RelatedList", () => {
   it("draws only the facts a record carries: no force, no effect, no commit and no date when it has none", () => {

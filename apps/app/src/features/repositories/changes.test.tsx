@@ -5,11 +5,11 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import type {
   RepositoryChange,
   RepositoryChanges,
 } from "@/data/contracts/repository";
-import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { Changes, CiLight } from "./changes";
 
@@ -43,7 +43,13 @@ const VALUE: RepositoryChanges = {
   open: 3,
 };
 
-afterEach(cleanup);
+afterEach(async () => {
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
+});
 
 function table(onOpen = vi.fn()) {
   const { container } = render(

@@ -13,8 +13,8 @@ import {
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { RepositoryTree } from "@/data/contracts/repository";
 import { expectNoAxe } from "@/test/expect-no-axe";
+import type { RepositoryTree } from "@/data/contracts/repository";
 import { IntlProvider } from "@/test/intl";
 import type { RepositoryRow } from "./view";
 
@@ -88,7 +88,13 @@ beforeEach(() => {
   onUnlinked.mockReset();
   onClose.mockReset();
 });
-afterEach(cleanup);
+afterEach(async () => {
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
+});
 
 describe("the unlink dialog", () => {
   it("warns that a governed repository's records stop steering runs here at once", async () => {

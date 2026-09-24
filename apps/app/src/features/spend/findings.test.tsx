@@ -15,13 +15,13 @@ import {
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import type {
   SpendFinding,
   SpendFindings,
   SpendReport,
 } from "@/data/contracts/spend";
 import { readOk } from "@/data/read";
-import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 
 const nav = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
@@ -115,7 +115,13 @@ beforeEach(() => {
   nav.push.mockReset();
   nav.replace.mockReset();
 });
-afterEach(cleanup);
+afterEach(async () => {
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
+});
 
 function section(saving: SpendFindings["saving"]) {
   return render(
