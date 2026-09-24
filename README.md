@@ -171,7 +171,7 @@ ClickHouse migrations require `DATABASE_URL` for a shared Postgres advisory lock
 ### Prerequisites
 
 - **Node.js** 24+ LTS (`node -v`)
-- **pnpm** 11+ (`npm i -g pnpm`) — the repo pins `pnpm@11.7.0` via `packageManager`
+- **pnpm** 12+ (`corepack enable`) — the repo pins `pnpm@12.6.0` via `packageManager`
 - **Docker** (local Postgres :5433, Neo4j :7687, ClickHouse :8123)
 
 ### Setup

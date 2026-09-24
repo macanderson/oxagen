@@ -6,25 +6,33 @@
 import {
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   utimesSync,
   writeFileSync,
 } from "node:fs";
+import { createServer, request } from "node:http";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
-import { verifyChain } from "../chain";
+import { describe, expect, it, vi } from "vitest";
+import {
+  GENESIS_CURSOR,
+  sealEvent,
+  verifyChain,
+  type ChainCursor,
+} from "../chain";
 import type { ClaudeCodeContext } from "../claude-code/context";
 import {
   ControlError,
   ControlUnreachable,
   type ControlClient,
 } from "../host/control-client";
+import { sessionUuid } from "../ids";
 import { mergeTachoSettings } from "../host/settings-writer";
 import { scratchPaths, TEST_ENROLLMENT } from "../host/test-support";
 import { Wal } from "../host/wal";
-import type { TachoEvent } from "../envelope";
+import type { TachoEvent, UnsealedTachoEvent } from "../envelope";
 import type { FrameBody } from "../evidence/frame-body";
-import { minimalSession, sealAll, unsealed } from "../test-helpers";
+import { minimalSession, sealAll, TEST_HOST, unsealed } from "../test-helpers";
 import {
   TACHO_MAX_BATCH,
   base64Size,
@@ -43,10 +51,11 @@ import {
 } from "./exporters";
 import { applyCommands } from "./inbox";
 import { SessionRegistry } from "./registry";
-import { createRequestHandler } from "./server";
+import { createRequestHandler, type CollectorApi } from "./server";
 import {
   Shipper,
   MAX_BODY_AUTHORITY_WAIT_MS,
+  MAX_CONSECUTIVE_QUARANTINES,
   RETENTION_HOLD_LOG_INTERVAL_MS,
 } from "./spool";
 
@@ -599,6 +608,34 @@ describe("exporters", () => {
   });
 });
 
+/**
+ * `minimalSession()`, reseeded onto a distinct session uuid.
+ *
+ * `Wal.append` now refuses to reseal an already-written seq (Tacho collector
+ * P0-1), so a volume test that wants many events can no longer fake bulk by
+ * appending the same fixture, same session, same seqs, over and over. This
+ * keeps every kind and body `minimalSession` already covers and reseals the
+ * chain fresh for a session id the caller supplies, so each call is a
+ * distinct, independently valid chain.
+ */
+function distinctSession(id: string): TachoEvent[] {
+  const uuid = sessionUuid(TEST_HOST, id);
+  let cursor: ChainCursor = GENESIS_CURSOR;
+  return minimalSession().map((event) => {
+    const sealed = sealEvent(
+      {
+        ...event,
+        session_id: id,
+        session_uuid: uuid,
+        root_session_uuid: uuid,
+      } as unknown as UnsealedTachoEvent,
+      cursor,
+    );
+    cursor = sealed.next;
+    return sealed.event;
+  });
+}
+
 describe("shipper", () => {
   function shipper(
     wal: Wal,
@@ -671,6 +708,158 @@ describe("shipper", () => {
     expect(wal.stats().unshipped).toBe(0);
     expect(controls.length).toBeGreaterThan(0);
     expect(logs.some((l) => l.includes("quarantined"))).toBe(true);
+  });
+
+  it("keeps a quarantined event's body beside it, after trying the event without it", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    const bad = events[1] as (typeof events)[number];
+    wal.append(events, [
+      {
+        event_id_idem: bad.event_id_idem,
+        session_uuid: bad.session_uuid,
+        seq: bad.seq,
+        content_type: "text/plain; charset=utf-8",
+        bytes: new TextEncoder().encode("the prompt the route refused"),
+        content_class: "model_call",
+      },
+    ]);
+    const tries: number[] = [];
+    const { s } = shipper(
+      wal,
+      {
+        ingest: async (batch, _daemon, bodies = []) => {
+          if (batch.some((e) => e.seq === bad.seq)) {
+            if (batch.length === 1) tries.push(bodies.length);
+            throw new ControlError(422, "refused");
+          }
+          return okResponse(batch);
+        },
+      },
+      paths.quarantine,
+      () => 0,
+    );
+    const result = await s.drain();
+    expect(result.quarantined).toBe(1);
+    // Offered alone with its body, then once more without it.
+    expect(tries).toEqual([1, 0]);
+    const [file] = readdirSync(paths.quarantine).filter((f) =>
+      f.endsWith(".json"),
+    );
+    const record = JSON.parse(
+      readFileSync(join(paths.quarantine, file as string), "utf8"),
+    ) as { event: { seq: number }; body?: { event_id_idem: string } };
+    expect(record.event.seq).toBe(bad.seq);
+    expect(record.body?.event_id_idem).toBe(bad.event_id_idem);
+  });
+
+  it("stops quarantining and backs off when the control plane refuses everything", async () => {
+    // A server regression that answers 400 to every batch must not bisect the
+    // whole backlog into quarantine and mark it shipped.
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const sessions = Array.from({ length: 8 }, (_, i) =>
+      distinctSession(`refuse-all-${String(i)}`),
+    );
+    for (const events of sessions) wal.append(events);
+    const total = sessions.reduce((sum, events) => sum + events.length, 0);
+    expect(total).toBeGreaterThan(MAX_CONSECUTIVE_QUARANTINES);
+    const { s, logs } = shipper(
+      wal,
+      {
+        ingest: async () => {
+          throw new ControlError(400, "every batch is malformed today");
+        },
+      },
+      paths.quarantine,
+      () => 0,
+    );
+    const result = await s.drain();
+    expect(result.quarantined).toBe(MAX_CONSECUTIVE_QUARANTINES);
+    expect(wal.stats().unshipped).toBe(total - MAX_CONSECUTIVE_QUARANTINES);
+    expect(s.lastError).toContain("every batch is malformed today");
+    expect(logs.some((l) => l.includes("holding the rest"))).toBe(true);
+  });
+
+  it("spreads a blind backoff by up to a fifth when given jitter", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    wal.append(minimalSession());
+    let clock = 0;
+    const s = new Shipper({
+      wal,
+      client: {
+        ingest: async () => {
+          throw new ControlError(500, "down");
+        },
+      } as unknown as ControlClient,
+      quarantineDir: paths.quarantine,
+      health: () => ({ version: "1" }),
+      onControl: () => undefined,
+      retentionInForce: () => ({
+        mandate: { mode: "digest_only", classes: [] },
+        proven: true,
+      }),
+      log: () => undefined,
+      now: () => clock,
+      minBackoffMs: 1_000,
+      jitter: () => 0.5,
+    });
+    await s.drain();
+    // 1s of backoff plus half of the 20% spread.
+    clock = 1_099;
+    expect(s.ready()).toBe(false);
+    clock = 1_100;
+    expect(s.ready()).toBe(true);
+  });
+
+  it("sets aside a session whose root has not landed and ships the others", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const early = distinctSession("early-child");
+    const ready = distinctSession("ready-root");
+    wal.append(early);
+    wal.append(ready);
+    const earlyUuid = (early[0] as TachoEvent).session_uuid;
+    let clock = 0;
+    const { s, logs } = shipper(
+      wal,
+      {
+        ingest: async (batch) => {
+          if (batch.some((e) => e.session_uuid === earlyUuid))
+            throw new ControlError(409, '{"code":"root_session_unrecorded"}');
+          return okResponse(batch);
+        },
+      },
+      paths.quarantine,
+      () => clock,
+    );
+    await s.drain();
+    await s.drain();
+    // The other session shipped; the early one waits, unquarantined.
+    expect(wal.stats().unshipped).toBe(early.length);
+    expect(
+      readdirSync(paths.quarantine).filter((f) => f.endsWith(".json")),
+    ).toHaveLength(0);
+    expect(logs.some((l) => l.includes("waits"))).toBe(true);
+    // Once its wait is over it is offered again.
+    clock = 60_000;
+    let offered = false;
+    const retry = shipper(
+      wal,
+      {
+        ingest: async (batch) => {
+          offered ||= batch.some((e) => e.session_uuid === earlyUuid);
+          return okResponse(batch);
+        },
+      },
+      paths.quarantine,
+      () => clock,
+    );
+    await retry.s.drain();
+    expect(offered).toBe(true);
+    expect(wal.stats().unshipped).toBe(0);
   });
 
   it("drains past a request the route refuses as too large, rather than wedging", async () => {
@@ -1086,7 +1275,11 @@ describe("shipper", () => {
     // Enough events to need more than one batch: TACHO_MAX_BATCH is 200, so an
     // unpaced drain would issue several requests back to back. That burst is
     // precisely what a real backlog does and what the pacing has to stop.
-    for (let i = 0; i < 60; i += 1) wal.append(minimalSession());
+    // Each iteration is its own session (`Wal.append` now refuses to reseal
+    // an already-written seq, Tacho collector P0-1, so 60 sessions rather
+    // than the same fixture appended 60 times).
+    for (let i = 0; i < 60; i += 1)
+      wal.append(distinctSession(`vol-window-${i}`));
     const before = wal.stats().unshipped;
     expect(before).toBeGreaterThan(TACHO_MAX_BATCH);
 
@@ -1120,7 +1313,8 @@ describe("shipper", () => {
   it("drains without pacing when the server sends no rate-limit headers", async () => {
     const paths = scratchPaths();
     const wal = new Wal(paths.wal);
-    for (let i = 0; i < 3; i += 1) wal.append(minimalSession());
+    for (let i = 0; i < 3; i += 1)
+      wal.append(distinctSession(`vol-nopace-${i}`));
     let calls = 0;
     const { s } = shipper(
       wal,
@@ -1176,8 +1370,13 @@ describe("shipper", () => {
     // tachod starts a drain from its interval tick, from a tick a caller
     // drives, and from stop(), and nothing stopped two of them reading the
     // same unshipped tail while the first one's ingest was still awaited.
-    // Both sent it, and the control plane saw `144, 145, 144, 145`: seq 144
-    // following seq 145 on a chain that was dense in the WAL.
+    // Both sent it, so the control plane saw seq 144 arrive after seq 145 on
+    // a chain that was dense in the WAL (#3782).
+    //
+    // Each drain stops after one batch here, because the stub reports the
+    // rate window as spent. Without that, the first drain's own loop would
+    // ship the late events and the second drain would find nothing to do,
+    // so a drain() that merely shared the one in flight would still pass.
     const paths = scratchPaths();
     const wal = new Wal(paths.wal);
     const events = minimalSession();
@@ -1194,6 +1393,9 @@ describe("shipper", () => {
         ingest: async (batch) => {
           await held;
           ingested.push(...batch);
+          // A spent window ends each drain after this batch. resetAtMs 0
+          // keeps ready() true, because the clock below reads 0.
+          s.noteRateLimit({ remaining: 0, resetAtMs: 0 });
           return okResponse(batch);
         },
       },
@@ -1202,15 +1404,18 @@ describe("shipper", () => {
     );
 
     const a = s.drain();
-    // Let the first drain read the WAL and park on its ingest request.
+    // Let the first drain reach its ingest request.
     await new Promise((resolve) => setTimeout(resolve, 20));
     // Written after the first drain read the WAL, so only a later read ships
-    // it. The second drain has to wait for the first and still find it.
+    // it. The second drain has to wait for the first, then ship it itself.
     wal.append(events.slice(split));
     const b = s.drain();
     await new Promise((resolve) => setTimeout(resolve, 20));
     release?.();
-    await Promise.all([a, b]);
+    const [first, second] = await Promise.all([a, b]);
+
+    expect(first.shipped).toBe(split);
+    expect(second.shipped).toBe(events.length - split);
 
     const ids = ingested.map((event) => event.event_id_idem);
     expect(new Set(ids).size).toBe(ids.length);
@@ -1979,5 +2184,200 @@ describe("request handler", () => {
       error: "no custody",
       code: "credential_unavailable",
     });
+  });
+});
+
+/**
+ * `/contained/run` (ADR-152) streams NDJSON: one line per chunk of the
+ * agent's output, then one line with the result or the launcher's error.
+ * Served over a real loopback listener, because the route writes, ends and
+ * listens for `close` on the response in ways a hand-built double would only
+ * imitate.
+ */
+describe("the contained-run route", () => {
+  function api(runContained?: CollectorApi["runContained"]): CollectorApi {
+    return {
+      localToken: "tok",
+      enrollmentId: TEST_ENROLLMENT,
+      handleHook: async () => ({}),
+      handleOtlp: async () => undefined,
+      health: () => ({}),
+      status: () => ({}),
+      sessions: () => [],
+      exportSession: () => undefined,
+      ...(runContained !== undefined ? { runContained } : {}),
+    };
+  }
+
+  async function serve(collector: CollectorApi, log = vi.fn()) {
+    const server = createServer(createRequestHandler(collector, log));
+    await new Promise<void>((resolve) =>
+      server.listen(0, "127.0.0.1", resolve),
+    );
+    const address = server.address();
+    if (address === null || typeof address === "string")
+      throw new Error("no test listener");
+    const close = () =>
+      new Promise<void>((resolve) => {
+        server.closeAllConnections();
+        server.close(() => resolve());
+      });
+    return { url: `http://127.0.0.1:${address.port}`, close, log };
+  }
+
+  const REQUEST = {
+    workspace: "/work/repo",
+    harness: "claude-code",
+    args: [],
+    image: "img",
+  };
+
+  async function post(url: string, body: unknown, token = "tok") {
+    const response = await fetch(`${url}/contained/run`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+    });
+    const text = await response.text();
+    return {
+      status: response.status,
+      type: response.headers.get("content-type"),
+      lines: text
+        .split("\n")
+        .filter((line) => line.length > 0)
+        .map((line) => JSON.parse(line) as unknown),
+    };
+  }
+
+  it("answers 404 on a daemon built without a contained runner", async () => {
+    const { url, close } = await serve(api());
+    try {
+      const response = await fetch(`${url}/contained/run`, {
+        method: "POST",
+        headers: { authorization: "Bearer tok" },
+        body: JSON.stringify(REQUEST),
+      });
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({
+        error: "Contained execution is unavailable",
+      });
+    } finally {
+      await close();
+    }
+  });
+
+  it("streams the agent's output and then the result", async () => {
+    const run = vi.fn<NonNullable<CollectorApi["runContained"]>>(
+      async (_input, output) => {
+        output("stdout", "working\n");
+        output("stderr", "warn\n");
+        return {
+          sessionId: "contained-x",
+          exitCode: 3,
+          measurement: {} as never,
+        };
+      },
+    );
+    const { url, close } = await serve(api(run));
+    try {
+      const answer = await post(url, REQUEST);
+      expect(answer.status).toBe(200);
+      expect(answer.type).toBe("application/x-ndjson");
+      expect(answer.lines).toEqual([
+        { stream: "stdout", text: "working\n" },
+        { stream: "stderr", text: "warn\n" },
+        { result: { sessionId: "contained-x", exitCode: 3, measurement: {} } },
+      ]);
+      expect(run.mock.calls[0]?.[0]).toEqual(REQUEST);
+      expect(run.mock.calls[0]?.[2]).toBeInstanceOf(AbortSignal);
+    } finally {
+      await close();
+    }
+  });
+
+  it("ends with the launcher's own error, cut to 1000 characters, and logs it whole", async () => {
+    const long = `Contained execution requires an unprivileged Linux runner with Docker ${"x".repeat(1500)}`;
+    const { url, close, log } = await serve(
+      api(async (_input, output) => {
+        output("stdout", "partial\n");
+        throw new Error(long);
+      }),
+    );
+    try {
+      const answer = await post(url, REQUEST);
+      // The stream has already started, so the status stays 200 and the
+      // failure is the last line.
+      expect(answer.status).toBe(200);
+      expect(answer.lines).toEqual([
+        { stream: "stdout", text: "partial\n" },
+        { error: long.slice(0, 1000) },
+      ]);
+      expect(log).toHaveBeenCalledWith(`Contained execution failed: ${long}`);
+    } finally {
+      await close();
+    }
+  });
+
+  it("reports a thrown non-Error as text", async () => {
+    const { url, close } = await serve(
+      api(async () => {
+        throw "docker exited 125";
+      }),
+    );
+    try {
+      expect((await post(url, REQUEST)).lines).toEqual([
+        { error: "docker exited 125" },
+      ]);
+    } finally {
+      await close();
+    }
+  });
+
+  it("refuses a caller without the local token before any run", async () => {
+    const run = vi.fn<NonNullable<CollectorApi["runContained"]>>();
+    const { url, close } = await serve(api(run));
+    try {
+      expect((await post(url, REQUEST, "nope")).status).toBe(401);
+      expect(run).not.toHaveBeenCalled();
+    } finally {
+      await close();
+    }
+  });
+
+  it("aborts the run when the caller disconnects", async () => {
+    let signal: AbortSignal | undefined;
+    const { url, close } = await serve(
+      api(
+        (_input, output, given) =>
+          new Promise((_resolve, reject) => {
+            signal = given;
+            output("stdout", "started\n");
+            given?.addEventListener("abort", () =>
+              reject(new Error("Contained run cancelled")),
+            );
+          }),
+      ),
+    );
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const call = request(`${url}/contained/run`, {
+          method: "POST",
+          headers: { authorization: "Bearer tok" },
+        });
+        call.on("response", (response) => {
+          response.once("data", () => {
+            call.destroy();
+            resolve();
+          });
+        });
+        call.on("error", () => undefined);
+        call.on("close", () => resolve());
+        call.end(JSON.stringify(REQUEST));
+        setTimeout(() => reject(new Error("no first line")), 5000).unref();
+      });
+      await vi.waitFor(() => expect(signal?.aborted).toBe(true));
+    } finally {
+      await close();
+    }
   });
 });

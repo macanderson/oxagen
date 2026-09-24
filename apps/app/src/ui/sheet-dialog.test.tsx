@@ -47,8 +47,8 @@ describe("SheetDialog dismissal", () => {
   });
 });
 
-describe("SheetDialog header close", () => {
-  it("is a modal dialog to assistive technology", () => {
+describe("SheetDialog as a modal", () => {
+  it("tells assistive technology it is modal", () => {
     render(
       <IntlProvider>
         <SheetDialog open onOpenChange={vi.fn()} title="Modal" testId="modal">
@@ -59,7 +59,29 @@ describe("SheetDialog header close", () => {
     expect(screen.getByRole("dialog")).toHaveAttribute("aria-modal", "true");
   });
 
-  it("draws no header close unless asked, so one control reads Close", () => {
+  it("puts the footer note in the footer, before Close and the primary action", () => {
+    render(
+      <IntlProvider>
+        <SheetDialog
+          open
+          onOpenChange={vi.fn()}
+          title="Noted"
+          testId="noted"
+          footerNote="2 agents at the boundary"
+          footer={<button type="button">Steer</button>}
+        >
+          <p>Body</p>
+        </SheetDialog>
+      </IntlProvider>,
+    );
+    const footer = document.querySelector<HTMLElement>("[data-sheet-footer]");
+    if (!footer) throw new Error("Missing dialog footer");
+    const note = footer.querySelector("[data-footer-note]");
+    expect(note).toHaveTextContent("2 agents at the boundary");
+    expect(footer.firstElementChild).toBe(note);
+  });
+
+  it("draws no note element when none is given", () => {
     render(
       <IntlProvider>
         <SheetDialog open onOpenChange={vi.fn()} title="Plain" testId="plain">
@@ -67,10 +89,12 @@ describe("SheetDialog header close", () => {
         </SheetDialog>
       </IntlProvider>,
     );
-    expect(screen.getAllByRole("button", { name: "Close" })).toHaveLength(1);
+    expect(document.querySelector("[data-footer-note]")).toBeNull();
   });
+});
 
-  it("closes from the labelled header close beside a Cancel footer", async () => {
+describe("SheetDialog header close", () => {
+  it("draws the mockup's x labelled Close beside the title and dismisses with it", async () => {
     const change = vi.fn();
     const user = userEvent.setup();
     render(
@@ -80,15 +104,48 @@ describe("SheetDialog header close", () => {
           headerClose
           closeLabel="Cancel"
           onOpenChange={change}
-          title="Edit"
-          testId="edit"
+          title="Pause this run"
+          testId="pause"
         >
           <p>Body</p>
         </SheetDialog>
       </IntlProvider>,
     );
-    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Close" }));
+    const header = document.querySelector<HTMLElement>("[data-sheet-header]");
+    if (!header) throw new Error("Missing dialog header");
+    const close = screen.getByRole("button", { name: "Close" });
+    expect(header).toContainElement(close);
+    await user.click(close);
     expect(change).toHaveBeenCalledWith(false);
+  });
+
+  it("holds the header close with the footer when the dialog is held (negative)", () => {
+    render(
+      <IntlProvider>
+        <SheetDialog
+          open
+          headerClose
+          dismissible={false}
+          closeLabel="Cancel"
+          onOpenChange={vi.fn()}
+          title="Held"
+          testId="held-x"
+        >
+          <p>Body</p>
+        </SheetDialog>
+      </IntlProvider>,
+    );
+    expect(screen.getByRole("button", { name: "Close" })).toBeDisabled();
+  });
+
+  it("draws no header close unless asked", () => {
+    render(
+      <IntlProvider>
+        <SheetDialog open onOpenChange={vi.fn()} title="Plain" testId="plain-x">
+          <p>Body</p>
+        </SheetDialog>
+      </IntlProvider>,
+    );
+    expect(document.querySelector("[data-header-close]")).toBeNull();
   });
 });

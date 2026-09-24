@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { useTranslations } from "next-intl";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { TranscriptZoom } from "@/data/contracts/run";
 import type { TranscriptKind } from "@/data/contracts/run";
 import { TRANSCRIPT_KINDS } from "@/data/contracts/run";
@@ -14,6 +14,10 @@ import type { RunRow } from "@/data/contracts/runs";
 import type { DataSource } from "@/data/ports";
 import { PAGE_FAILURES, type Read, readError } from "@/data/read";
 import { ApprovalsPanel } from "@/features/fleet";
+import {
+  RunOutcomesConsent,
+  RunIssueConnections,
+} from "@/features/run-outcomes";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
 import { panel } from "@/ui/control-styles";
@@ -35,6 +39,8 @@ import {
 import { StatRow, SummaryPanel } from "./stats";
 import { kindsParam, TranscriptSection } from "./transcript";
 import { ChangesPanel, SpendByArea } from "./work";
+import { isWhole, readWholeTranscript } from "./whole-transcript";
+import { RunWork, RunWorkLoading, readRunWork } from "./work-ci";
 
 /** The seven tabs, in the spec's order (pages/run.md). */
 const TABS = [
@@ -90,8 +96,10 @@ function useTabCounts({
   resolved,
 }: Counted): Partial<Record<Tab, ReactNode>> {
   const t = useTranslations("run.tabs");
+  // The page's whole-run read is one page of entries. Past that page, or past
+  // the read's frame cap, a count is a floor.
   const floor = (count: number) =>
-    everything.ok && !everything.value.complete
+    everything.ok && !isWhole(everything.value)
       ? t("atLeast", { count })
       : String(count);
   const policy = entriesOf(everything, "policy");
@@ -302,6 +310,18 @@ export async function Run({
       source.approvals.resolved(ctx, { runId: run.id }),
       agentSlug === null ? null : source.agents.get(ctx, agentSlug),
     ]);
+  // The consent read is started here and awaited in the render, so it
+  // overlaps the section read below rather than queueing behind it.
+  const outcomesPolicy = source.runs
+    .outcomesSettings(ctx)
+    .catch(() =>
+      readError(PAGE_FAILURES.run.error.code, PAGE_FAILURES.run.error.status),
+    );
+  // Started, never awaited here: provider latency (GitHub PRs, CI, diffs)
+  // streams inside the work section's Suspense boundary and cannot hold the
+  // rest of the page.
+  const work = readRunWork(ctx, source, run.id);
+  const canManageOutcomes = ctx.orgRole === "owner" || ctx.orgRole === "admin";
   let section: ReactNode;
   switch (selected) {
     case "transcript":
@@ -356,23 +376,47 @@ export async function Run({
       // bars and their running totals, the steps carry what sits inside each
       // one. Both are the transcript, so the figures on this tab and the
       // figures on the Transcript tab come from one derivation.
+      // Both read to the end: a run with more steps than one page used to
+      // draw its later turns with no steps inside them.
       const [turns, steps] = await Promise.all([
-        source.runs.transcript(ctx, run.id, "turns"),
-        source.runs.transcript(ctx, run.id, "steps"),
+        readWholeTranscript(source, ctx, run.id, "turns"),
+        readWholeTranscript(source, ctx, run.id, "steps"),
       ]);
       section = <CostSection read={cost} turns={turns} steps={steps} />;
       break;
     }
+    // Each reads only its own entries, to the end of the run. The page's
+    // whole-run read is its first page, which listed a long run's first
+    // decisions as if they were all of them.
     case "policy":
-      section = <PolicySection read={everything} place={place} />;
+      section = (
+        <PolicySection
+          read={
+            await readWholeTranscript(source, ctx, run.id, "everything", [
+              "policy",
+            ])
+          }
+          place={place}
+        />
+      );
       break;
     case "context":
-      section = <ContextSection read={everything} place={place} />;
+      section = (
+        <ContextSection
+          read={
+            await readWholeTranscript(source, ctx, run.id, "everything", [
+              "recall",
+            ])
+          }
+          place={place}
+        />
+      );
       break;
     case "chain":
       section = <ChainSection read={await source.runs.chain(ctx, run.id)} />;
       break;
   }
+  const outcomes = await outcomesPolicy;
   return (
     <div className="flex flex-col gap-6">
       <RunHeader
@@ -387,6 +431,20 @@ export async function Run({
         wsRole={ctx.wsRole}
         org={place.org}
         ws={place.ws}
+      />
+      <Suspense fallback={<RunWorkLoading />}>
+        <RunWork read={work} {...place} />
+      </Suspense>
+      <RunOutcomesConsent
+        at={place}
+        policy={outcomes}
+        canManage={canManageOutcomes}
+      />
+      <RunIssueConnections
+        at={place}
+        runId={run.id}
+        enabled={outcomes.ok && outcomes.value.effectiveEnabled}
+        canManage={canManageOutcomes}
       />
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">

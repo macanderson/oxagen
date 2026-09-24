@@ -40,9 +40,11 @@ export function SheetDialog({
   subtitle,
   tabs,
   footer,
+  footerNote,
   closeLabel,
-  wide = false,
   headerClose = false,
+  wide = false,
+  side = false,
   dismissible = true,
   testId,
   children,
@@ -57,12 +59,26 @@ export function SheetDialog({
   tabs?: ReactNode;
   /** Actions drawn before the Close button; the primary action goes here. */
   footer?: ReactNode;
+  /**
+   * A line at the start of the footer, before Close and the primary action:
+   * what the action will record or whom it reaches (the mockup's footer
+   * `<span class="grow">`). On a phone it takes a line of its own above the
+   * buttons (src/ui/phone.css).
+   */
+  footerNote?: ReactNode;
   /** What the dismiss button says when "Close" is not the word, such as "Cancel" beside a Save. */
   closeLabel?: string;
+  /**
+   * The mockup's header close (`.dlg-h .iconbtn.x`, aria-label "Close"): an x
+   * beside the title that dismisses like the footer button. Opt-in while the
+   * pages that pair it with a footer button already named "Close" move their
+   * footer to "Cancel", so no dialog carries two controls with one name.
+   */
+  headerClose?: boolean;
   /** The mockup's dialog width (600px) for editors that need two columns. */
   wide?: boolean;
-  /** Draw the mockup's labelled × in the header beside the footer's dismiss button. */
-  headerClose?: boolean;
+  /** Organization activity opens beside the page on desktop. */
+  side?: boolean;
   testId: string;
   children: ReactNode;
 }) {
@@ -80,19 +96,21 @@ export function SheetDialog({
           data-scrim=""
           className="fixed inset-0 z-50 bg-overlay-scrim"
         />
+        {/* Base UI marks the popup role=dialog but never aria-modal. The
+            backdrop makes everything behind it inert, so the dialog is
+            modal and says so to assistive technology. */}
         <Dialog.Popup
-          // Base UI sets the role and traps focus but writes no aria-modal, so
-          // a screen reader is told here that the page behind is inert.
           aria-modal="true"
           data-sheet=""
           data-testid={testId}
-          className={`fixed left-1/2 top-[12vh] z-50 flex max-h-[76dvh] w-[calc(100%-1.5rem)] -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-dialog-border bg-dialog-bg text-dialog-fg shadow-2xl ${wide ? "max-w-[600px]" : "max-w-md"}`}
+          className={`fixed z-50 flex flex-col overflow-hidden border border-dialog-border bg-dialog-bg text-dialog-fg shadow-2xl ${side ? "inset-y-0 right-0 w-full max-w-lg" : `left-1/2 top-[12vh] max-h-[76dvh] w-[calc(100%-1.5rem)] -translate-x-1/2 rounded-xl ${wide ? "max-w-[600px]" : "max-w-md"}`}`}
         >
           <SheetHandle />
           <div
+            data-sheet-header=""
             className={`flex items-start gap-3 border-b border-border px-4 pt-4 ${tabs ? "pb-0" : "pb-3"}`}
           >
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 grow">
               <Dialog.Title className="text-base font-semibold">
                 {title}
               </Dialog.Title>
@@ -102,18 +120,15 @@ export function SheetDialog({
                 </Dialog.Description>
               ) : null}
             </div>
-            {/* The mockup's header close: a labelled ×, beside the footer's
-                Cancel, so the dialog can be left from where it is read. Opt-in,
-                so a dialog whose footer already reads "Close" keeps one control
-                by that name. */}
             {headerClose ? (
               <Dialog.Close
-                disabled={!dismissible}
                 aria-label={t("close")}
+                disabled={!dismissible}
                 data-touch-target=""
-                className="grid size-8 shrink-0 place-items-center rounded-md border border-border text-muted-foreground hover:bg-hl hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-45"
+                data-header-close=""
+                className="-me-1.5 -mt-1 grid size-8 flex-none place-items-center rounded-md text-muted-foreground hover:bg-hl hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-45"
               >
-                <X aria-hidden="true" className="size-3.5" />
+                <X aria-hidden="true" className="size-4" />
               </Dialog.Close>
             ) : null}
           </div>
@@ -126,8 +141,16 @@ export function SheetDialog({
               sits under the thumb (src/ui/phone.css). */}
           <div
             data-sheet-footer=""
-            className="flex flex-wrap justify-end gap-2 border-t border-border px-4 py-3"
+            className="flex flex-wrap items-center justify-end gap-2 border-t border-border px-4 py-3"
           >
+            {footerNote === undefined ? null : (
+              <span
+                data-footer-note=""
+                className="min-w-0 grow text-[12.5px] text-muted-foreground"
+              >
+                {footerNote}
+              </span>
+            )}
             <Dialog.Close
               disabled={!dismissible}
               data-touch-target=""

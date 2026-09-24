@@ -66,6 +66,10 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   // Turborepo remote-cache credentials (set via GitHub Actions Secrets, not app env)
   "TURBO_TOKEN",
   "TURBO_TEAM",
+  // Set inside the contained tier's container by packages/tacho/container/
+  // entry.mjs, pointing the harness at the loopback bridge (ADR-152). No
+  // operator or deployed service sets it.
+  "ANTHROPIC_BASE_URL",
   // Test / E2E harness only — never present in deployed environments
   "E2E_TEST",
   "PLAYWRIGHT_BASE_URL",

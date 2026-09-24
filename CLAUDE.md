@@ -19,6 +19,19 @@ Use the code to establish what ships. Specs record intent, ADRs record decisions
 - Match an available model to the task. Do not require model names or tool APIs that the active harness does not provide.
 - Do not rewrite shared history for cosmetic cleanup. Before merging, check for overlapping changes on `main` as described in AGENTS.md and ADR-110.
 
+## Pull request monitoring
+
+Every PR you open gets a watcher from the first push until it merges or closes. Start it right after `gh pr create`. In Claude Code, run it as a background agent or a Monitor loop. In another harness, run it as a loop in the session.
+
+- **Poll every 60 seconds.** Each poll reads `gh pr view <n> --json state,headRefOid,mergeable,mergeStateStatus,statusCheckRollup`. Judge only the runs for the current head commit. A run cancelled because you pushed again is not a failure.
+- **Read each job as it finishes, not the whole run.** A job that fails is a signal the moment it fails, while the rest of the run is still going. Read its failing step with `gh run view --job <job-id> --log-failed`, fix the cause on the branch, and push. Do not wait for the workflow to finish before you start the fix.
+- **Resolve conflicts as soon as they appear.** When `mergeable` reads `CONFLICTING`, merge current `origin/main` into the branch, resolve each conflict, check the behavior both sides changed (ADR-110), and push. A conflicting PR gets no CI run at all, so `gh pr checks` can read green while nothing ran.
+- **A schema change needs only its label.** If the diff changes a schema, confirm `migration-required` is on the PR, and add it if `migration-label.yml` has not. `migration-gate` applies the migration on merge (SCR-006).
+- **Report checks as they are.** Pending is pending. A cancelled or skipped required job is not a pass. Name the job and its state.
+- **Answer review findings** under the severity and round rules in `AGENTS.md` under Git Workflow.
+
+Stop the watcher when the PR merges or closes, and say which in your report.
+
 ## Verification policy
 
 CI is the build, lint, typecheck, coverage, and full test gate. Do not run those suites on this shared machine. The local test exception is one test file for code this task changed or created, run in isolation. Never run a package-wide suite. Restate this restriction when delegating work.
@@ -36,7 +49,7 @@ Lightweight file, link, contract, and prose integrity checks remain part of revi
 - For code changes, ask the test-engineer agent to audit coverage before the finished commit. Documentation-only changes need source and link verification, not new behavior tests.
 - Save local verification artifacts under the gitignored `verifications/<session-id>/`. State what ran and what remains unverified.
 - For UI changes, capture a working page or run the relevant component test. For a deployment or database mutation, verify the resulting state with a health check, API response, or query.
-- Inspect the PR's CI results after the final push. Do not report pending or failed checks as passed.
+- Watch every PR you open until it merges or closes, as set out in Pull request monitoring below. Do not report pending or failed checks as passed.
 
 ## Database and dependency changes
 
@@ -45,7 +58,7 @@ Lightweight file, link, contract, and prose integrity checks remain part of revi
 - From `packages/database`, regenerate the checksum with `atlas migrate hash --dir "file://atlas/migrations"`. Do not hand-edit `atlas.sum`.
 - Confirm the database host and database name before mutation. Do not print credentials. A shell-exported `DATABASE_URL` overrides `tsx --env-file=.env.local`; unset it when the env file should choose the target.
 - CI applies production migrations. On every push to `main`, `migration-gate` in `pipeline.yml` applies pending Postgres migrations with `infra/tools/apply-postgres-migrations.sh` and pending ClickHouse and Neo4j migrations with `tools/scripts/db-migrate.ts`, then re-checks all three stores. Mac decided this on 2026-09-23 (#3653). The gate refuses an unreadable store and a Postgres revision table that lists every migration as pending. For those cases, apply by hand: `infra/tools/run-db-migrations.sh packages/database --apply` from a laptop with AWS credentials on a checkout of `origin/main`, the `db-migrate.yml` dispatch with target production, or the `store-migrate.yml` dispatch. See README.md Deployment.
-- Label a schema-changing PR `migration-required` (SCR-006). `.github/workflows/migration-label.yml` reads the diff and applies it, and re-applies it if it is removed while the diff still changes a schema. Say in the PR description which store changed and what must be applied.
+- Label a schema-changing PR `migration-required` (SCR-006). `.github/workflows/migration-label.yml` reads the diff and applies it, and re-applies it if it is removed while the diff still changes a schema. The label is the only thing a schema change adds to a PR. Do not write apply steps in the PR or apply anything by hand. `migration-gate` applies the migration when the PR merges.
 - The migration reaches production before or with the deploy of the code that assumes it, never after. `migration-gate` blocks `deploy-node` until every store reads current after its apply. An unreadable store blocks too, so a failed SSM tunnel stops a deploy that has no missing migration. Re-run the job before reaching for a manual apply.
 - Stamp a new Postgres migration later than every migration on `main`. The gate does not pass `--exec-order non-linear`, so a migration stamped before one production already carries makes the apply fail and blocks the deploy until the branch renumbers it.
 
@@ -131,14 +144,17 @@ replaces `Queued` with the assigned priority and aligns the area with its label.
 
 Track work in GitHub issues on `macanderson/oxagen`. Follow SCR-003, SCR-004, and SCR-005 in `.oxagen/rules/`.
 
+**Assigned work carries an issue.** When you are asked to change functional code, tests, or documentation and no issue covers it, open one before the PR, apply only `triage`, and cite it in the PR body with `Closes #N` or `Refs #N`. A chore needs none: an edit to rules or agent instructions, a dependency or lockfile bump, formatting, or release bookkeeping. Mac set this on 2026-09-23. SCR-004 below covers a different case, a defect you notice along the way: fix it in the PR, and file it only when it cannot ride.
+
 Fix defects in the task's PR when the fix can responsibly ride it. File an issue only when the work needs a maintainer decision, a rig, credentials, real spend, or more work than the session can carry. State that constraint and the maintainability, stability, reliability, innovation, efficiency, or performance benefit.
 
 One issue carries one full change. Include context, paths, reproduction steps where relevant, a proposed approach, and a `- [ ]` definition of done. Do not create sub-issues, parents, or epics. Use the templates in `.github/ISSUE_TEMPLATE/`.
 
 - A PR uses `Closes #N` only when it finishes every item in that issue's definition of done. Otherwise use `Refs #N`.
-- A PR that closes no issue uses `no-issue` for a trivial change or `closes-nothing` for a substantial change. These are PR labels, not substitute text in the body.
-- A PR that changes a schema carries `migration-required` (SCR-006). It is applied from the diff by `migration-label.yml`, so it is not one you add by hand — and removing it while the diff still changes a schema puts it back. This is the one label an agent is expected to leave alone rather than curate.
+- A PR that closes no issue, such as a chore, uses `no-issue` for a trivial change or `closes-nothing` for a substantial change. These are PR labels, not substitute text in the body.
+- A PR that changes a schema carries `migration-required` (SCR-006). `migration-label.yml` applies it from the diff. Add it yourself only if the workflow has not, and never remove it while the diff still changes a schema, because the workflow puts it back. Nothing else about the PR changes: `migration-gate` applies the migration on merge.
 - Apply only `triage` to an issue you create. The triage identity applies priority, size, and descriptive labels. Never apply workflow-owned labels manually.
+- CI files a `P0` issue labelled `deployment-failure` when `main` goes red or a production deploy fails, and closes it when a later run recovers (`.github/workflows/deployment-failure.yml`). This is the one priority label a workflow applies; `triage-guard.yml` exempts it. Record the root cause and fixing PR in a comment, and leave the open and close to CI, because the time between them is the recovery-time statistic.
 - Close an issue as completed only with verification. Use not planned with an explanation for duplicates, superseded work, or a decision not to proceed.
 - Follow the review severity and three-round residue rules in `AGENTS.md` under Git Workflow. That file owns the rule, including the fourth-round P1 exception and the P0 block.
 

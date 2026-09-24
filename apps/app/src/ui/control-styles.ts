@@ -33,10 +33,9 @@ export const buttonPrimary = `${buttonBase} border border-button-primary-border 
 export const buttonSecondary = `${buttonBase} border border-button-default-border bg-button-default-bg text-button-default-fg hover:border-rule hover:bg-button-default-hover-bg active:bg-button-default-active-bg`;
 
 /**
- * `.btn.danger { color:var(--st-failed); border-color:color-mix(in srgb,
- * var(--st-failed) 40%,transparent) }` and its hover wash at 12%: an action
- * that ends something (Revoke). Red ink and a red hairline, never a fill, so
- * it never outranks the one gold action on the screen.
+ * `.btn.danger { color:var(--st-failed); border-color:<st-failed 40%> }` and
+ * `.btn.danger:hover { background:<st-failed 12%> }`: an action that ends
+ * something, such as Deregister. It carries the failed hue as ink, never a fill.
  */
 export const buttonDanger = `${buttonBase} border border-error/40 bg-button-default-bg text-error-ink hover:bg-error/10 active:bg-error/15`;
 
@@ -80,15 +79,21 @@ export const panelBody = "px-4 py-3.5";
  * `.stat { background:var(--panel); border:1px solid var(--border);
  * border-radius:12px; padding:13px 15px }`, `.stat .k` (10.5px caps, dim),
  * `.stat .v` (23px, 700, tabular) and `.stat .s` (11.5px, muted). One tile of
- * a figure strip; every strip on every page draws these four.
+ * a figure strip; every strip on every page draws these four. On a phone the
+ * tile tightens to `#viewport.phone .stat { padding:11px 12px }` and its
+ * figure to `.stat .v { font-size:17px }`, so two tiles fit a row.
  */
 export const statTile =
-  "flex min-w-0 flex-col rounded-xl border border-border bg-card px-[15px] py-[13px] text-card-foreground";
+  "flex min-w-0 flex-col rounded-xl border border-border bg-card px-[15px] py-[13px] text-card-foreground max-md:px-3 max-md:py-[11px]";
 export const statTerm =
   "mb-[5px] text-[10.5px] font-semibold uppercase tracking-[0.1em] text-dim";
 export const statValue =
-  "text-[23px] font-bold leading-[1.15] tracking-[-0.02em] tabular-nums";
+  "text-[23px] font-bold leading-[1.15] tracking-[-0.02em] tabular-nums max-md:text-[17px]";
 export const statNote = "mt-[3px] text-[11.5px] text-muted-foreground";
-/** `.grid.g4 { grid-template-columns:repeat(auto-fit,minmax(175px,1fr)); gap:14px }` */
+/**
+ * `.grid.g4 { grid-template-columns:repeat(auto-fit,minmax(175px,1fr)); gap:14px }`,
+ * and `#viewport.phone .g4 { grid-template-columns:1fr 1fr }`: a phone draws
+ * the strip two by two rather than one tile to a row.
+ */
 export const statStrip =
-  "grid gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(175px,1fr))]";
+  "grid grid-cols-2 gap-3.5 md:[grid-template-columns:repeat(auto-fit,minmax(175px,1fr))]";

@@ -16,55 +16,192 @@
       "retired": "retired"
     },
     "list": {
+      "description": "Every actor in this workspace and what it is made of.",
       "tiles": {
-        "label": "Identities summary",
-        "identities": {
-          "title": "Identities here",
-          "basis": "registered in this workspace"
+        "label": "Agents summary",
+        "agentsHere": {
+          "title": "Agents here",
+          "basis": "organization count not recorded · {listed} listed below"
         },
         "enrolled": {
           "title": "Enrolled",
-          "basis": "of {count} registered"
+          "notYet": "{count} not yet enrolled",
+          "observe": "{count} listed here on the observe tier, the rest on harness",
+          "mixed": "{observe} listed here on the observe tier, {harness} on harness, {other} on another tier or none recorded"
+        },
+        "mandate": {
+          "title": "Holding a mandate",
+          "holder": "{key} · in {workspace}",
+          "none": "no agent in {workspace} holds one",
+          "scope": "Counted over the agents in {workspace}. No organization-wide rollup is recorded yet.",
+          "holders": "{holders} · counted in {workspace} only"
         },
         "tamper": {
           "title": "Tamper incidents",
-          "basis": "open, on this workspace's hosts"
+          "open": "{key} · {kind}, {date} · {count} open · counted in {workspace} only",
+          "resolved": "{key} · {kind}, {date} · all resolved · counted in {workspace} only",
+          "none": "none in the retention window in {workspace}",
+          "scope": "Summed over the agents in {workspace}. No organization-wide rollup is recorded yet."
         }
       },
       "title": "Registered in {workspace}",
-      "tableLabel": "Agent identities",
+      "lead": {
+        "composition": "Each row names the reusable objects this agent holds a reference to.",
+        "operations": "Each row is what this agent did and what it cost over the last 30 days."
+      },
+      "source": ".oxagen/agents/ @",
+      "views": {
+        "label": "Columns",
+        "composition": "Composition",
+        "operations": "Operations"
+      },
+      "tableLabel": "Agents registered in {workspace}",
       "columns": {
-        "identity": "Identity",
+        "agent": "Agent",
+        "purpose": "Purpose",
+        "owner": "Owner",
+        "steering": "Steering",
+        "toolbelt": "Toolbelt",
+        "runtime": "Runtime",
+        "principal": "Principal",
+        "health": "Health",
+        "activity": "Activity",
         "harness": "Harness",
         "operator": "Operator",
         "status": "Status",
+        "tier": "Tier",
+        "belt": "Belt",
         "runs": "Runs 30d",
         "spend": "Spend 30d",
+        "tokens": "Tokens 30d",
+        "mandates": "Mandates",
         "incidents": "Incidents",
-        "actions": "Actions",
-        "principal": "Principal",
-        "hosts": "Active or paused hosts",
-        "credentials": "Active credentials"
+        "actions": "Row actions"
+      },
+      "cells": {
+        "runs30d": "runs 30d",
+        "principalPending": "prn_pending",
+        "none": "—",
+        "cached": "{rate} cached",
+        "cacheNotRecorded": "cache rate not recorded",
+        "tokensBasis": "{count, plural, one {# wrapped session} other {# wrapped sessions}}, as the harness reported them. Ledger runs' tokens are not in this total.",
+        "wrappedOnly": "wrapped sessions",
+        "spendBasis": "Priced wrapped sessions in the last 30 days. Ledger runs and unpriced sessions are not in this figure."
+      },
+      "health": {
+        "tamper": "tamper",
+        "notEnrolled": "not enrolled",
+        "observe": "observe",
+        "healthy": "healthy",
+        "tamperWhy": "{count, plural, one {# open incident} other {# open incidents}}",
+        "notEnrolledWhy": "no hook is installed, so its runs are recorded only",
+        "observeWhy": "enrolled, and nothing is delivered or refused yet",
+        "healthyWhy": "enrolled, and its latest wrapped session recorded the {tier} tier"
+      },
+      "controls": {
+        "search": "Search this list",
+        "facetAll": "All · {column}",
+        "facetLabel": "Filter by {column}",
+        "rows": "Rows",
+        "all": "All",
+        "range": "{from}–{to} of {total}",
+        "pager": "Pages",
+        "previous": "Previous page",
+        "next": "Next page",
+        "page": "Page {page}",
+        "sortBy": "Sort by {column}",
+        "noMatch": "No rows match.",
+        "cursor": "Agents beyond this page"
       },
       "basisNotRecorded": "basis not recorded",
       "edit": "Edit",
-      "pager": "Identities pages",
-      "first": "First identities",
-      "next": "More identities",
+      "roles": "Roles",
+      "more": "More agents",
+      "first": "First agents",
+      "footer": "An agent has one principal and runs on one runtime. Its steering, its toolbelts and its tools are workspace objects it refers to, so changing one changes every agent that refers to it.",
       "empty": {
-        "title": "No identities registered in {workspace}",
-        "body": "An agent's identity lives in Postgres; its definition is a file in .oxagen/agents/ in the workspace repository.",
-        "register": "Register one from the repository it works in:",
-        "command": "oxagen agent register"
+        "title": "No agent registered in {workspace}",
+        "body": "An agent's identity lives in Postgres; its definition is a file in <mono>.oxagen/agents/</mono> in the main repo. Registering one opens a Context PR — nothing is written to Postgres first."
       },
       "create": {
         "newAgent": "New agent",
-        "wrap": "Wrap an agent"
+        "register": "Register an agent",
+        "wrap": "Wrap Claude Code"
       },
-      "views": {
-        "label": "Agent views",
-        "composition": "Composition",
-        "operations": "Operations"
+      "register": {
+        "title": "Register an agent",
+        "slug": "Slug",
+        "slugHint": "The agent key becomes <mono>{key}</mono> and is immutable.",
+        "avatar": "Avatar",
+        "avatarHint": "The definition carries no avatar yet, so the agent shows these initials.",
+        "harness": "Harness",
+        "tier": "Model tier",
+        "note": "This does not write Postgres. It opens a Context PR that adds <mono>{path}</mono> and the generated harness file beside it. The agent gets its principal when it registers from where it runs, after the merge.",
+        "cancel": "Cancel",
+        "confirm": "Open the Context PR",
+        "pending": "Opening the Context PR",
+        "done": "Pull request #{number} opened. The agent exists when it merges.",
+        "open": "Open the pull request",
+        "close": "Close",
+        "invalidSlug": "Use lowercase letters, digits and single hyphens, at most 18 characters.",
+        "design": "Design",
+        "designNote": "Designing an avatar needs an avatar field on the definition, and the definition carries none yet. The agent shows these initials until it does.",
+        "slugHintEnding": "The agent key ends in <mono>.{slug}</mono> and is immutable."
+      },
+      "states": {
+        "loading": "Loading agents",
+        "error": {
+          "title": "Agents could not be loaded",
+          "body": "The control plane answered <mono>{status} {code}</mono>. Nothing was changed. Runs kept recording while this page was down. Frames are written by the collector on each host, not by Oxagen.",
+          "retry": "Try again",
+          "incident": "Open an incident",
+          "trace": "trace <trace></trace> · <region></region> · {at}",
+          "traceUnrecorded": "not recorded",
+          "regionUnrecorded": "region not recorded"
+        },
+        "denied": {
+          "title": "You cannot see the agents in this workspace",
+          "body": "Your roles on <strong>{org}</strong> do not include <mono>{permission} on {ws}</mono>. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+          "back": "Back to Fleet",
+          "signedIn": "Signed in as",
+          "signedInValue": "{name} · workspace.{role} · {ws}",
+          "needed": "Needed",
+          "neededValue": "{permission} on {ws}",
+          "decidedBy": "Decided by",
+          "decidedByValue": "<policy></policy> · deny wins over every allow",
+          "request": "Request access",
+          "policyUnrecorded": "policy not recorded"
+        },
+        "pending": {
+          "title": "Access to the agents in this workspace is waiting for approval",
+          "body": "Access request {request}"
+        }
+      },
+      "gaps": {
+        "steering": "No store records the steering assembled for each agent yet.",
+        "toolbelt": "No store records toolbelts or their assignments to agents yet.",
+        "tokens": "No wrapped session of this agent reported its token usage in the last 30 days. Ledger runs' tokens are not rolled up per agent.",
+        "commit": "The commit of .oxagen/agents/ is not recorded on this read.",
+        "organization": "No organization-wide rollup of agents is recorded yet.",
+        "tier": "No wrapped session has recorded an enforcement tier for this agent yet.",
+        "runtimeKind": "No store records a runtime's kind yet. A host row is one enrollment, not a machine.",
+        "belt": "list_agents does not compute each agent's belt yet (#3852). The agent's own page shows the belt its grants give it.",
+        "policy": "The read's refusal does not name the policy that decided it.",
+        "trace": "A failed read does not carry its trace id or region yet."
+      },
+      "stubs": {
+        "requestTitle": "Request access",
+        "requestRole": "Role requested",
+        "requestBody": "A request would ask an organization owner for this role and land in the audit record with the granter's name, your name, and your reason. No capability records a request yet, so ask an owner directly. Owners grant roles on the Roles page.",
+        "requestLink": "Open Roles",
+        "incidentTitle": "Open an incident",
+        "incidentBody": "An incident would record this failure, the code {code}, and when it happened, for the people who run this workspace. No capability opens an incident from the console yet. Send the code to your organization owner."
+      },
+      "costBasis": {
+        "gateway_observed": "gateway observed",
+        "client_attested": "client attested",
+        "mixed": "mixed basis",
+        "estimated": "estimated"
       }
     },
     "detail": {
@@ -113,15 +250,28 @@
         "assign": {
           "open": "Assign a role",
           "title": "Assign a role",
-          "body": "The role attaches to this agent's own principal. You cannot assign a role that grants more than you hold yourself.",
           "field": "Role",
-          "builtIn": "{name} (seeded)",
+          "hint": "Only agent-kind roles are listed. <link>Manage roles</link>",
           "loading": "Reading the role catalogue.",
           "empty": "This organization has no role an agent may hold. Write one on the Roles page, then assign it here.",
           "notEnforced": "On the {tier} tier the kernel allows every capability, so this role records intent and governs nothing until the organization moves to a tier that enforces it.",
           "partial": "This organization has more roles than the 200 listed here. Assign one of the rest over the API.",
           "confirm": "Assign",
-          "pending": "Assigning"
+          "pending": "Assigning",
+          "why": "Why",
+          "whyPlaceholder": "Read by the approver and kept in the audit record",
+          "note": "Effective permission stays <mono>roles ∩ {operator}'s grants</mono>. A role cannot lift an agent above its operator.",
+          "noteNoOperator": "Effective permission stays <mono>roles ∩ the operator's grants</mono>. A role cannot lift an agent above its operator.",
+          "cancel": "Cancel",
+          "option": "{name} — {description}",
+          "held": "{name} · held",
+          "repository": "Repository",
+          "repositoryGap": "No role can be bound to one repository yet (#3865). A role applies at its own scope: the organization or this workspace.",
+          "done": "{role} assigned to {key}{why}. Recorded with your name; effective at its next call.",
+          "doneNotEnforced": "{role} assigned to {key}{why}. Recorded with your name. It governs nothing until the organization's tier enforces roles.",
+          "doneWhy": " · “{reason}”",
+          "already": "{key} already holds {role}.",
+          "close": "Close"
         },
         "revoke": {
           "open": "Revoke {role}",
@@ -477,10 +627,22 @@
       },
       "retire": {
         "open": "Deregister",
-        "title": "Deregister {name}",
-        "body": "The principal is retired, never deleted, so its runs keep their identity. Every credential and host enrollment is revoked. Removing the definition file is a pull request.",
+        "title": "Deregister agent",
+        "body": "This ends the agent's identity. Its credentials and host enrollments are revoked, and its active mandates end.",
+        "pullRequest": "This dialog does not open the pull request that archives <mono>.oxagen/agents/{slug}.toml</mono> yet. Remove the file in a pull request of your own.",
+        "kept": "Kept",
+        "keptValue": "every run, frame and receipt. The record is never deleted.",
+        "ends": "Ends",
+        "endsValue": "{roles, plural, one {# role} other {# roles}}, {mandates, plural, one {# mandate} other {# mandates}}, {hosts, plural, =0 {no host enrollment} one {the host enrollment} other {# host enrollments}}",
+        "endsUnknown": "its roles, mandates and host enrollment",
+        "understand": "I understand this cannot be undone",
+        "understandHint": "Re-registering creates a new principal.",
         "confirm": "Deregister",
-        "pending": "Deregistering"
+        "pending": "Deregistering",
+        "endsValueNoRoles": "the roles it holds, {mandates, plural, one {# mandate} other {# mandates}}, {hosts, plural, =0 {no host enrollment} one {the host enrollment} other {# host enrollments}}",
+        "done": "{name} deregistered. Credential revoked, every run and frame kept.",
+        "cancel": "Cancel",
+        "close": "Close"
       },
       "killSwitch": {
         "open": "Kill switch",
@@ -636,6 +798,12 @@
       "retired": "This agent is retired, so it cannot be given a mandate: its principal is suspended and authority granted now could never be drawn. The mandates recorded for it stay listed.",
       "noneEffectiveUpcoming": "No mandate recorded for this agent is in effect yet, so it cannot carry a consequence. A mandate granted below has not reached the date it starts on; any others are a request awaiting a decision, or history.",
       "startsOn": "starts {date}"
+    },
+    "tier": {
+      "contained": "contained",
+      "gateway": "gateway",
+      "harness": "harness",
+      "observe": "observe"
     }
   }
 }

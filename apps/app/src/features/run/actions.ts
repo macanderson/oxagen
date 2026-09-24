@@ -10,6 +10,7 @@
 //
 // Steering text is evidence. Oxagen records it, quotes it and hands it to the
 // model as content; it is never executed here.
+import { workspaceSettingsWrite } from "@oxagen/oxagen/contracts/workspace.settings.write";
 import {
   COMMAND_REASON_MAX,
   STEER_TEXT_MAX,
@@ -208,6 +209,18 @@ export async function readRunExport(
  * chips come from the page. That is what lets the view say "this resume point
  * is not one the read wrote" instead of "something went wrong".
  */
+/**
+ * A half or a decision with its subagent chain named as the view model names
+ * it (`chainRef`), and nothing named when it was recorded on the run's own.
+ */
+function chained<T extends { sessionUuid?: string }>(
+  value: T | null,
+): (Omit<T, "sessionUuid"> & { chainRef?: string }) | null {
+  if (value === null) return null;
+  const { sessionUuid, ...rest } = value;
+  return sessionUuid === undefined ? rest : { ...rest, chainRef: sessionUuid };
+}
+
 function toTranscriptPage(
   out: RunTranscriptGetOutput,
 ): z.input<typeof RunTranscript> {
@@ -224,6 +237,14 @@ function toTranscriptPage(
     entries: out.entries.map((entry) => ({
       seq: entry.seq,
       endSeq: entry.endSeq,
+      ...(entry.subagent === undefined
+        ? {}
+        : {
+            subagent: {
+              chainRef: entry.subagent.sessionUuid,
+              type: entry.subagent.type,
+            },
+          }),
       at: entry.at,
       elapsedMs: entry.elapsedMs,
       kind: entry.kind,
@@ -233,9 +254,9 @@ function toTranscriptPage(
       usage: entry.usage ?? null,
       kinds: entry.kinds,
       turn: entry.turn,
-      request: entry.request,
-      response: entry.response,
-      decision: entry.decision,
+      request: chained(entry.request),
+      response: chained(entry.response),
+      decision: chained(entry.decision),
       frames: entry.frames,
       cost: cost(entry.cost),
       cumulativeCost: cost(entry.cumulativeCost),
@@ -382,4 +403,21 @@ export async function bisectRuns(
         },
       }
     : result;
+}
+
+export async function setRunEnrichment(
+  org: string,
+  ws: string,
+  enabled: boolean,
+): Promise<ActionResult<ContractOutput<typeof workspaceSettingsWrite>>> {
+  const ctx = await requireViewer(org, ws);
+  if (typeof enabled !== "boolean")
+    return {
+      ok: false as const,
+      reason: "invalid" as const,
+      code: "invalid_enrichment_setting",
+    };
+  return kernelWrite(ctx, workspaceSettingsWrite, {
+    runEnrichmentEnabled: enabled,
+  });
 }

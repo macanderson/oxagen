@@ -80,9 +80,9 @@ Run a focused application security audit against the monorepo. Fix safe issues i
 
 ## Output
 
-`mkdir -p docs/audits/security-audits`
+`mkdir -p verifications/audits/security-audits`
 
-Write: `docs/audits/security-audits/<SHORT_SHA>_<TIMESTAMP>_security-audit.html`
+Write: `verifications/audits/security-audits/<SHORT_SHA>_<TIMESTAMP>_security-audit.html`
 
 Self-contained HTML (all CSS + JS inline). Must contain:
 

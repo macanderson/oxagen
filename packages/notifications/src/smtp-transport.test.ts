@@ -156,6 +156,23 @@ describe("createSmtpTransport", () => {
     expect(result.rejected).toEqual(["b@x.com"]);
   });
 
+  it("drops an Address-object entry that carries no address", async () => {
+    sendMailMock.mockResolvedValue({
+      messageId: "<id>",
+      accepted: ["a@x.com", { name: "group" }],
+      rejected: [{ name: "" }],
+    });
+
+    const result = await createSmtpTransport(cfg()).send({
+      to: ["a@x.com"],
+      subject: "s",
+      text: "t",
+    });
+
+    expect(result.accepted).toEqual(["a@x.com"]);
+    expect(result.rejected).toEqual([]);
+  });
+
   it("propagates a transport failure to the caller", async () => {
     sendMailMock.mockRejectedValue(new Error("SMTP 535 authentication failed"));
     await expect(

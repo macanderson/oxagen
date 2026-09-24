@@ -168,7 +168,76 @@ export type LedgerView = {
   size: number;
   /** The zero-based page. */
   page: number;
+  /** The column the header sorts on and its direction; null keeps the server's order, newest first. */
+  sort?: LedgerSort | null;
 };
+
+/** The columns a ledger header can sort on: the ones whose cells carry a recorded value. */
+export const SORTABLE_COLUMNS = [
+  "when",
+  "amount",
+  "state",
+  "external",
+] as const;
+export type SortableColumn = (typeof SORTABLE_COLUMNS)[number];
+export type LedgerSort = { column: SortableColumn; dir: 1 | -1 };
+
+/**
+ * The next sort a header click gives (the design's `th.sortable`): ascending,
+ * then descending, then back to the server's order.
+ */
+export function nextSort(
+  was: LedgerSort | null | undefined,
+  column: SortableColumn,
+): LedgerSort | null {
+  if (was === null || was === undefined || was.column !== column)
+    return { column, dir: 1 };
+  return was.dir === 1 ? { column, dir: -1 } : null;
+}
+
+/** A draw's amount as an integer in its smallest unit: micros for money, the count itself otherwise. */
+function amountOf(row: MandateDraw): bigint {
+  return BigInt(
+    row.value.kind === "money" ? row.value.money.micros : row.value.count,
+  );
+}
+
+const STATE_ORDER: Record<MandateMovement, number> = {
+  reserve: 0,
+  settle: 1,
+  release: 2,
+};
+
+/**
+ * Orders two draws on one column. Amounts on different measures never compare
+ * as numbers (dollars and recipients are not one scale), so they group by
+ * measure first. A draw with no external reference sorts after one with a
+ * reference.
+ */
+function compareOn(
+  a: MandateDraw,
+  b: MandateDraw,
+  column: SortableColumn,
+): number {
+  switch (column) {
+    case "when":
+      return Date.parse(a.at) - Date.parse(b.at);
+    case "amount": {
+      if (a.measure !== b.measure) return a.measure.localeCompare(b.measure);
+      const x = amountOf(a);
+      const y = amountOf(b);
+      return x === y ? 0 : x < y ? -1 : 1;
+    }
+    case "state":
+      return STATE_ORDER[a.state] - STATE_ORDER[b.state];
+    case "external": {
+      if (a.externalEffectRef === b.externalEffectRef) return 0;
+      if (a.externalEffectRef === null) return 1;
+      if (b.externalEffectRef === null) return -1;
+      return a.externalEffectRef.localeCompare(b.externalEffectRef);
+    }
+  }
+}
 
 /**
  * Whether a draw answers the search. It matches the measure and the external
@@ -202,11 +271,24 @@ export function ledgerPage(
   draws: readonly MandateDraw[],
   view: LedgerView,
 ): LedgerPage {
-  const selected = draws.filter(
+  const filtered = draws.filter(
     (row) =>
       (view.state === null || row.state === view.state) &&
       matches(row, view.search),
   );
+  const sort = view.sort ?? null;
+  // Ties keep the server's order, so a sort never shuffles equal rows.
+  const selected =
+    sort === null
+      ? filtered
+      : filtered
+          .map((row, index) => ({ row, index }))
+          .sort(
+            (p, q) =>
+              compareOn(p.row, q.row, sort.column) * sort.dir ||
+              p.index - q.index,
+          )
+          .map(({ row }) => row);
   const total = selected.length;
   const size = view.size === 0 ? Math.max(total, 1) : view.size;
   const pages = Math.max(1, Math.ceil(total / size));

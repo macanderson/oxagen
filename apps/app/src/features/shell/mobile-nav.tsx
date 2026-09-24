@@ -6,6 +6,8 @@
 // opens over a scrim. The Agents, Tools and Spend slots point at NotRecorded
 // pages for the whole of rev1 and are kept deliberately: the bar is the phone's
 // only navigation, and a four-slot bar would change again at every lane.
+import { OrgSwitcher, WorkspaceSwitcher } from "./switchers";
+import { useShellActivity } from "./activity";
 import { Dialog } from "@base-ui/react/dialog";
 import { Ellipsis, X } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -31,7 +33,10 @@ const slotClass =
 /** The thumb bar and its More sheet, over the sidebar's items for the current URL. */
 export function ShellMobileNav({ data }: { data: ShellData }) {
   const t = useTranslations("shell");
-  const { sections, pathname } = useSidebarSections(data);
+  const { sections, pathname, ws } = useSidebarSections(data);
+  const { setCommandOpen, setNotificationsOpen, openAccount } = useShellState();
+  const activity = useShellActivity();
+  const currentCounts = activity?.counts;
   const [moreOpen, setMoreOpen] = useState(false);
   const items = new Map<string, NavItem>(
     sections.flatMap((s) => s.items).map((item) => [item.key, item]),
@@ -59,7 +64,12 @@ export function ShellMobileNav({ data }: { data: ShellData }) {
         {slots.map(({ key, href }) => {
           const Icon = NAV_ICONS[key];
           const current = isNavItemCurrent(key, pathname);
-          const waiting = key === "fleet" ? data.fleetWaiting : null;
+          const waiting =
+            key === "fleet"
+              ? currentCounts?.ok
+                ? currentCounts.value.approvals
+                : data.fleetWaiting
+              : null;
           return (
             <SafeLink
               key={key}
@@ -131,6 +141,40 @@ export function ShellMobileNav({ data }: { data: ShellData }) {
             );
           })}
         </ul>
+        <div className="mt-4 flex flex-col gap-2">
+          <button
+            type="button"
+            className="min-h-11 rounded-lg border border-border p-3 text-left"
+            onClick={() => {
+              close();
+              setCommandOpen(true);
+            }}
+          >
+            {t("topbar.search")}
+          </button>
+          <button
+            type="button"
+            className="min-h-11 rounded-lg border border-border p-3 text-left"
+            onClick={() => {
+              close();
+              setNotificationsOpen(true);
+            }}
+          >
+            {t("activity.notifications")}
+          </button>
+          <button
+            type="button"
+            className="min-h-11 rounded-lg border border-border p-3 text-left"
+            onClick={() => {
+              close();
+              openAccount("profile");
+            }}
+          >
+            {t("account.title")}
+          </button>
+          <OrgSwitcher data={data} />
+          <WorkspaceSwitcher data={data} ws={ws} />
+        </div>
       </SheetDialog>
     </>
   );

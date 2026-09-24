@@ -4,6 +4,7 @@
 // shifting.
 import { describe, expect, it } from "vitest";
 import {
+  compareMicros,
   Cost,
   isCurrencyCode,
   Money,
@@ -13,6 +14,7 @@ import {
   mulMicros,
   ratioOfIntegers,
   ratioOfMicros,
+  roundToCentsHalfEven,
   shareOfMicros,
   sumMoney,
 } from "./money";
@@ -75,6 +77,29 @@ describe("ratioOfMicros", () => {
     expect(() => ratioOfMicros(usd("1.5"), usd("3000000"))).toThrow(
       "micros must be an integer string",
     );
+  });
+});
+
+describe("compareMicros", () => {
+  const usd = (micros: string) => ({ micros, currency: "USD" });
+
+  it("orders amounts by their micros", () => {
+    expect(compareMicros(usd("5"), usd("12"))).toBe(-1);
+    expect(compareMicros(usd("12"), usd("5"))).toBe(1);
+    expect(compareMicros(usd("7"), usd("7"))).toBe(0);
+  });
+
+  it("stays exact past the range a float holds", () => {
+    // 2^53 + 1 and 2^53 are the same float; as BigInt they differ.
+    expect(
+      compareMicros(usd("9007199254740993"), usd("9007199254740992")),
+    ).toBe(1);
+  });
+
+  it("orders different currencies by code, not by amount", () => {
+    expect(
+      compareMicros({ micros: "1", currency: "EUR" }, usd("999")),
+    ).toBeLessThan(0);
   });
 });
 
@@ -280,5 +305,32 @@ describe("sumExceeds", () => {
 
   it("refuses a figure that is not an integer string (negative)", () => {
     expect(() => sumExceeds("1.5", "0", "5")).toThrow();
+  });
+});
+
+describe("roundToCentsHalfEven", () => {
+  it("rounds a half cent to the even cent, up and down", () => {
+    expect(roundToCentsHalfEven(usd("1005000"))).toEqual(usd("1000000"));
+    expect(roundToCentsHalfEven(usd("1015000"))).toEqual(usd("1020000"));
+  });
+
+  it("rounds past the half up and short of it down", () => {
+    expect(roundToCentsHalfEven(usd("1005001"))).toEqual(usd("1010000"));
+    expect(roundToCentsHalfEven(usd("1004999"))).toEqual(usd("1000000"));
+  });
+
+  it("rounds a negative amount by its magnitude and never prints -0", () => {
+    expect(roundToCentsHalfEven(usd("-1015000"))).toEqual(usd("-1020000"));
+    expect(roundToCentsHalfEven(usd("-4000"))).toEqual(usd("0"));
+  });
+
+  it("stays exact past what a float holds", () => {
+    expect(roundToCentsHalfEven(usd("90071992547409915000"))).toEqual(
+      usd("90071992547409920000"),
+    );
+  });
+
+  it("refuses micros that are not an integer string (negative)", () => {
+    expect(() => roundToCentsHalfEven(usd("1.5"))).toThrow(/micros/);
   });
 });

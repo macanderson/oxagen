@@ -18,6 +18,7 @@ import {
   MANDATE_ID,
   mandateLink,
   measuresOf,
+  nextSort,
   openCalls,
   thresholdOf,
   unitOf,
@@ -264,5 +265,77 @@ describe("whenOf", () => {
       kind: "day",
       text: "2026-09-04",
     });
+  });
+});
+
+describe("ledger sort", () => {
+  const usd = (micros: string) =>
+    ({ kind: "money", money: { micros, currency: "USD" } }) as const;
+  const ledger = [
+    mandateDraw({
+      value: usd("900000000"),
+      externalEffectRef: "pi_c",
+      at: "2026-09-02T00:00:00.000Z",
+    }),
+    mandateDraw({
+      state: "reserve",
+      value: usd("100000000"),
+      externalEffectRef: null,
+      at: "2026-09-03T00:00:00.000Z",
+    }),
+    mandateDraw({
+      state: "release",
+      value: usd("50000000"),
+      externalEffectRef: "pi_a",
+      at: "2026-09-01T00:00:00.000Z",
+    }),
+    mandateDraw({
+      measure: "calls",
+      value: { kind: "count", count: "1", unit: "calls" },
+      externalEffectRef: "pi_b",
+      at: "2026-09-04T00:00:00.000Z",
+    }),
+  ];
+  const view = { search: "", state: null, size: 10, page: 0 } as const;
+  const refs = (sort: Parameters<typeof nextSort>[0]) =>
+    ledgerPage(ledger, { ...view, sort }).rows.map((r) => r.externalEffectRef);
+
+  it("keeps the server's order when nothing sorts", () => {
+    expect(refs(null)).toEqual(["pi_c", null, "pi_a", "pi_b"]);
+  });
+
+  it("sorts amounts as integers within a measure, never across measures", () => {
+    // "amount" before "calls"; 50 < 100 < 900 dollars, by micros, not by text.
+    expect(refs({ column: "amount", dir: 1 })).toEqual([
+      "pi_a",
+      null,
+      "pi_c",
+      "pi_b",
+    ]);
+  });
+
+  it("sorts by time, by state in the order a draw moves, and by external id with the blank last", () => {
+    expect(refs({ column: "when", dir: -1 })).toEqual([
+      "pi_b",
+      null,
+      "pi_c",
+      "pi_a",
+    ]);
+    expect(refs({ column: "state", dir: 1 })[0]).toBeNull();
+    expect(refs({ column: "external", dir: 1 })).toEqual([
+      "pi_a",
+      "pi_b",
+      "pi_c",
+      null,
+    ]);
+  });
+
+  it("cycles a header ascending, descending, then off, and starts a new column ascending", () => {
+    const up = nextSort(null, "amount");
+    expect(up).toEqual({ column: "amount", dir: 1 });
+    const down = nextSort(up, "amount");
+    expect(down).toEqual({ column: "amount", dir: -1 });
+    expect(nextSort(down, "amount")).toBeNull();
+    expect(nextSort(down, "when")).toEqual({ column: "when", dir: 1 });
   });
 });

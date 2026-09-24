@@ -17,22 +17,22 @@
 pillars:
   - slug: ontologies
     name: Ontologies
-    tagline: The map an agent reasons over.
+    tagline: The structured facts an agent reasons over.
     description: >-
-      Typed entities, relationships, and time-aware facts that turn a pile of
-      documents into a map an agent can cite: description logics, knowledge
-      graphs, graph-grounded retrieval, and the research on grounding an
-      answer in structure instead of similarity.
+      Typed entities, relationships, and dated facts, stored so an agent can
+      cite them. Posts cover description logics, knowledge graphs, retrieval
+      over a graph, and research on basing an answer on structure instead of
+      on text similarity.
     order: 1
     treatment: ontology
 
   - slug: ai-agents
     name: AI agents
-    tagline: Models that act, and what makes them reliable.
+    tagline: Models that take actions, and what makes them reliable.
     description: >-
-      The science of agents: planning, tool use, memory, and evaluation. From
-      ReAct and Reflexion to the benchmarks that measure whether an agent
-      finishes the job, and what each run costs.
+      The science of agents: planning, tool use, memory, and evaluation. Posts
+      run from ReAct and Reflexion to the benchmarks that measure whether an
+      agent finishes a task, and what each run costs.
     order: 2
     treatment: loop
 
@@ -40,9 +40,9 @@ pillars:
     name: Coding agents
     tagline: Agents that read, write, and fix code.
     description: >-
-      What SWE-bench and its peers measure, how these agents plan and repair
-      a change across a whole repository, and what a team needs to trust the
-      result before it reaches a production tree.
+      What SWE-bench and similar benchmarks measure. How coding agents plan
+      and repair a change across a whole repository. What a team needs before
+      it can trust the result in production code.
     order: 3
     treatment: terminal
 
@@ -50,29 +50,31 @@ pillars:
     name: Self-improving models
     tagline: Models that train on their own output.
     description: >-
-      Bootstrapped reasoning, self-rewarding training, and the hard limits the
-      research keeps finding: model collapse and the myth of unaided
-      self-correction.
+      Research on models that learn from their own reasoning and score their
+      own answers. Posts also cover the limits the research keeps finding,
+      such as model collapse, where training on its own output makes a model
+      worse, and self-correction that fails without outside feedback.
     order: 4
     treatment: meter
 
   - slug: self-evolving-agents
     name: Self-evolving agents
-    tagline: Agents that rewrite their own playbook.
+    tagline: Agents that change their own skills and code.
     description: >-
       Skill libraries, workflow memory, automated agent design, and code that
-      modifies itself. What the evidence shows, and where it breaks.
+      modifies itself. Posts cover what the evidence shows and where these
+      methods fail.
     order: 5
     treatment: gate
 
   - slug: autonomous-agents
     name: Autonomous agents
-    tagline: Work that runs for days without you watching.
+    tagline: Agents that work for days without a person watching.
     description: >-
-      The horizon an agent can hold is getting longer, and the practices that
-      work at ten minutes do not survive a week. What the measurements show
-      about long runs, and what an operator has to set before starting one:
-      the context an agent is handed, the steering it runs under, and the
-      record it leaves.
+      Agents can now keep working on one task for longer. Practices that work
+      for a ten-minute run fail over a week. Posts cover what the measurements
+      show about long runs. They also cover what an operator has to set
+      before a long run starts: the context the agent gets, the steering it
+      runs under, and the record it leaves.
     order: 6
     treatment: ledger

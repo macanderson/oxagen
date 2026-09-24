@@ -6,7 +6,7 @@
 export const SITE = "https://oxagen.sh";
 export const BLOG_TITLE = "Oxagen Research";
 export const BLOG_DESCRIPTION =
-  "Research notes on ontologies, AI agents, coding agents, self-improving models, and self-evolving agents. What the papers show, where it breaks, and what it takes to govern it.";
+  "Research notes on ontologies, AI agents, coding agents, self-improving models, self-evolving agents, and autonomous agents. Each note covers what the papers show, where the methods fail, and what it takes to govern the agents built on them.";
 
 /** @param {unknown} value */
 export function esc(value) {
@@ -305,13 +305,13 @@ export function indexPage({ pillars, posts, wordmark, image }) {
   <section class="blog-hero tex tex-hex">
     <div class="wrap">
       <p class="eyebrow">Research</p>
-      <h1>What the papers show.<br><span class="gold">What it takes to govern it.</span></h1>
+      <h1>What the research says about agents,<br><span class="gold">and how to govern them</span></h1>
       <p class="blog-hero-sub">${esc(BLOG_DESCRIPTION)}</p>
     </div>
   </section>
   <section class="sec-tight">
     <div class="wrap">
-      <div class="sec-head"><p class="eyebrow">Pillars</p><h2>Five threads, one map</h2><p>Every post links to at least one pillar. Follow a pillar for the full line of argument.</p></div>
+      <div class="sec-head"><p class="eyebrow">Pillars</p><h2>Research topics</h2><p>Every post belongs to at least one pillar. Open a pillar to see all of its posts.</p></div>
       <div class="pillar-grid">
 ${pillars
   .map(

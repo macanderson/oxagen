@@ -631,10 +631,37 @@ export function buildProgram(): Command {
 
   // ── run: the recorded run (export_run, get_run_export) ────────────────────
 
+  // `oxagen run -- <agent>` is the contained launcher (ADR-096, ADR-152);
+  // `oxagen run export <id>` and its siblings stay subcommands. Commander
+  // dispatches a subcommand name first, and everything after `--` is the
+  // agent's own command line.
   const runCmd = program
     .command("run")
     .description(
-      "The recorded run: its chain and seal, and its signed evidence bundle",
+      "Start an agent under the contained launcher (`oxagen run -- claude -p <task>`), or read a recorded run: its chain and seal, and its signed evidence bundle",
+    )
+    .option("--image <ref>", "The contained image (or OXAGEN_CONTAINED_IMAGE)")
+    .option(
+      "--workspace <dir>",
+      "The repository root to mount at /workspace (default: the current directory)",
+    )
+    .option(
+      "--github-repository <owner/name>",
+      "The one repository the run may reach, with a token in OXAGEN_CONTAINED_GITHUB_TOKEN",
+    )
+    .argument("[command...]", "After --: claude or codex, then its arguments")
+    .action(
+      async (
+        command: string[],
+        opts: { image?: string; workspace?: string; githubRepository?: string },
+      ) => {
+        if (command.length === 0) {
+          runCmd.help();
+          return;
+        }
+        const { handleContainedRun } = await import("./commands/tacho.js");
+        process.exitCode = await handleContainedRun(command, opts);
+      },
     );
   runCmd
     .command("chain")

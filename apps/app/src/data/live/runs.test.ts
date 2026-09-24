@@ -124,6 +124,7 @@ describe("runs.list", () => {
             replayGrade: null,
             verdict: null,
             enforcementTier: "observe",
+            enrichmentEnabled: true,
             ingressPaused: false,
             ingressRevoked: false,
             completenessGaps: ["digest_only"],
@@ -137,7 +138,7 @@ describe("runs.list", () => {
     );
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: runList,
-      input: {},
+      input: { limit: 100 },
       page: "fleet",
     });
     expect(captureError).not.toHaveBeenCalled();
@@ -148,7 +149,7 @@ describe("runs.list", () => {
     await runs.list(ctx, { cursor: "c2" });
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: runList,
-      input: { cursor: "c2" },
+      input: { limit: 100, cursor: "c2" },
       page: "fleet",
     });
   });

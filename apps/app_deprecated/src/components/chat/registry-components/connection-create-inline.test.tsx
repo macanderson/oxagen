@@ -86,10 +86,13 @@ vi.mock("lucide-react", async (importOriginal) => {
   const real = await importOriginal<typeof import("lucide-react")>();
   return {
     ...real,
-    GithubIcon: vi.fn(() => <span data-testid="icon-github" />),
     Link: vi.fn(() => <span data-testid="icon-link" />),
   };
 });
+
+vi.mock("@/components/brand/github-icon", () => ({
+  GithubIcon: vi.fn(() => <span data-testid="icon-github" />),
+}));
 
 describe("ConnectionCreateInline — github variant", () => {
   it("renders the GitHub card title", async () => {

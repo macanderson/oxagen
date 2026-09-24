@@ -37,7 +37,7 @@ Use `withTenantDb` inside tenant scope for scoped Postgres access. Use `withSyst
 ## Find the design behind the code
 
 - [App architecture](../apps/app/ARCHITECTURE.md) defines the rebuilt app's layers and testing boundaries.
-- [Mission Control spec](specs/mission-control/spec.md) describes product behavior and planned work.
+- [Product spec](https://github.com/macanderson/oxagen-roadmap/blob/main/docs/mission-control-spec.md) in the roadmap repository describes product behavior and planned work.
 - [ADR index](adr/README.md) records decisions, including the runtime excision and later gateway design.
 - [DEREGISTERED.md](../DEREGISTERED.md) identifies features whose code must remain even though their surfaces are unreachable.
 - [Source map](CODEMAPS/architecture.md) links the runtime entry points.
