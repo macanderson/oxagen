@@ -621,7 +621,11 @@ export class SessionRegistry {
       }
       const outcome =
         gone && record.lastHookEvent === "Stop" ? "completed" : "crashed";
-      out.push(...record.recorder.finalize(outcome, this.ts()));
+      // The session ended when it was last seen, not when the sweep noticed:
+      // an idle session swept six hours late would otherwise read as having
+      // run six hours longer (#4024). `lastSeenAt` is the receipt time of its
+      // last activity, so it is at or after every event its hooks sealed.
+      out.push(...record.recorder.finalize(outcome, record.lastSeenAt));
       record.sealed = true;
     }
     return out;

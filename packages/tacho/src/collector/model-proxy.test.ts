@@ -3104,6 +3104,7 @@ describe("the wire and the host file", () => {
       "steering_manifest",
       "containment",
       "daily_budget",
+      "steer_next_step",
     ]);
   });
 

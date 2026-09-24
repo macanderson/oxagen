@@ -385,3 +385,20 @@ describe("a subagent's tool decision", () => {
     expect(decision?.parent_session_uuid).toBe(record.recorder.sessionUuid);
   });
 });
+
+// #4024: a swept session's agent_stop carried the sweep's clock, so an idle
+// session read as having run until the sweep noticed it.
+describe("an idle session the sweep closes", () => {
+  it("ends at the time it was last seen", async () => {
+    const h = harness();
+    const record = await started(h);
+    const lastSeen = record.lastSeenAt;
+    const sealed = h.registry.sweep(() => true, 60_000, () => false);
+    expect(sealed).toEqual([]);
+    for (let i = 0; i < 120; i += 1) h.now();
+    const swept = h.registry.sweep(() => true, 60_000);
+    const stop = swept.find((e) => e.kind === "agent_stop");
+    expect(stop?.ts).toBe(lastSeen);
+    expect(record.sealed).toBe(true);
+  });
+});
