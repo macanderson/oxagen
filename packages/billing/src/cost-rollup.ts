@@ -135,12 +135,12 @@ export interface ModelBreakdown {
   hasUnpriced: boolean;
 }
 
-interface ToolBreakdown {
+export interface ToolBreakdown {
   name: string;
   calls: number;
 }
 
-interface RunBreakdown {
+export interface RunBreakdown {
   models: ModelBreakdown[];
   tools: ToolBreakdown[];
 }

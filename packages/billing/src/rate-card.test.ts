@@ -108,7 +108,7 @@ describe("rateFor", () => {
     });
   });
 
-  it("falls back to the Sonnet-equivalent rate for an unknown family", () => {
+  it("falls back to the Sonnet 5 rate for an unknown family", () => {
     expect(rateFor("mistral/mistral-large-2")).toEqual(FALLBACK_RATE);
   });
 
@@ -326,7 +326,7 @@ describe("projectCost", () => {
     expect(p.vendor).toBe("unknown");
     expect(p.family).toBe("mistral-large");
     expect(p.label).toBe("mistral-large");
-    expect(p.inputCostUsd).toBeCloseTo(3, 5);
+    expect(p.inputCostUsd).toBeCloseTo(2, 5);
     expect(p.outputTokens).toBe(0);
   });
 
@@ -370,7 +370,7 @@ describe("compareModels", () => {
       inputTokens: 1_000_000,
       outputTokens: 1_000_000,
     });
-    expect(rows).toHaveLength(RATE_CARD.length);
+    expect(rows).toHaveLength(listRateCard().length);
     // Sorted ascending by total cost.
     for (let i = 1; i < rows.length; i++) {
       expect(rows[i]!.totalUsd).toBeGreaterThanOrEqual(rows[i - 1]!.totalUsd);
@@ -383,8 +383,31 @@ describe("compareModels", () => {
 });
 
 describe("listRateCard", () => {
-  it("returns the full card", () => {
-    expect(listRateCard()).toBe(RATE_CARD);
-    expect(listRateCard().length).toBeGreaterThan(0);
+  it("returns every row but the alias spellings", () => {
+    const listed = listRateCard();
+    expect(listed.length).toBeGreaterThan(0);
+    expect(listed).toEqual(RATE_CARD.filter((e) => !e.alias));
+  });
+
+  it("lists each model once, so `oxagen cost` shows no label twice", () => {
+    // The dotted gateway rows (claude-opus-4.8 beside claude-opus-4-8) carry
+    // the same label, and before they were marked alias every one of them
+    // printed twice in `oxagen cost` and `--rates` (#3944).
+    const labels = listRateCard().map((e) => e.label);
+    expect(new Set(labels).size).toBe(labels.length);
+    const compared = compareModels({ inputTokens: 1, outputTokens: 1 });
+    expect(new Set(compared.map((r) => r.label)).size).toBe(compared.length);
+  });
+
+  it("hides only rows that spell a listed model at the same price", () => {
+    const aliases = RATE_CARD.filter((e) => e.alias);
+    expect(aliases.length).toBeGreaterThan(0);
+    for (const alias of aliases) {
+      const listed = listRateCard().find((e) => e.label === alias.label);
+      expect(listed, alias.family).toBeDefined();
+      expect(listed!.family).not.toBe(alias.family);
+      expect(listed!.vendor).toBe(alias.vendor);
+      expect(listed!.rate).toEqual(alias.rate);
+    }
   });
 });
