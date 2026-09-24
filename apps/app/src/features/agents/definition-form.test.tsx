@@ -79,6 +79,8 @@ function renderForm(
 const dirtyBar = () => screen.queryByTestId("definition-dirty");
 const budgetField = () =>
   screen.getByRole("spinbutton", { name: "Per-run budget (USD)" });
+const dayBudgetField = () =>
+  screen.getByRole("spinbutton", { name: "Per-day budget (USD)" });
 
 /** Saves the draft through the commit sheet and returns the source it sent. */
 async function committedSource(): Promise<string> {
@@ -359,6 +361,49 @@ describe("DefinitionForm", () => {
       "[budget]\nper_run_micros = 5000000\nper_day_micros = 20000000\n",
     );
     expect(source).not.toContain("budget = {");
+  });
+
+  it("sets a per-day budget beside the per-run one, says the day is UTC, and keeps the per-run key in each spelling of the table", async () => {
+    renderForm();
+    expect(dayBudgetField()).toHaveValue(null);
+    expect(
+      screen.getByText(/A day is a UTC calendar day\./),
+    ).toBeInTheDocument();
+    fireEvent.change(dayBudgetField(), { target: { value: "20" } });
+    fireEvent.blur(dayBudgetField());
+    expect(await committedSource()).toContain(
+      "budget = { per_run_micros = 2500000, per_day_micros = 20000000 }\n",
+    );
+    cleanup();
+    vi.clearAllMocks();
+
+    const sectioned = `${DEFINITION_SOURCE.replace(
+      "budget = { per_run_micros = 2500000 }\n",
+      "",
+    )}\n[budget]\nper_run_micros = 2500000\nper_day_micros = 20000000\n`;
+    renderForm(sectioned);
+    expect(dayBudgetField()).toHaveValue(20);
+    fireEvent.change(dayBudgetField(), { target: { value: "7.5" } });
+    fireEvent.blur(dayBudgetField());
+    const source = await committedSource();
+    expect(source).toContain(
+      "[budget]\nper_run_micros = 2500000\nper_day_micros = 7500000\n",
+    );
+    expect(source).not.toContain("budget = {");
+  });
+
+  it("leaves the per-day key alone when its field is left as drawn or holds no number (negative)", () => {
+    renderForm(
+      DEFINITION_SOURCE.replace(
+        "budget = { per_run_micros = 2500000 }",
+        "budget = { per_run_micros = 2500000, per_day_micros = 20000000 }",
+      ),
+    );
+    fireEvent.blur(dayBudgetField());
+    expect(dirtyBar()).toBeNull();
+    fireEvent.change(dayBudgetField(), { target: { value: "-1" } });
+    fireEvent.blur(dayBudgetField());
+    expect(dirtyBar()).toBeNull();
   });
 
   it("shows every stored micro, leaves the file alone when the field is left as drawn, and keeps a sub-cent amount", async () => {
