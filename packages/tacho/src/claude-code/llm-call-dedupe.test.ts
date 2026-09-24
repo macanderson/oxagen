@@ -89,28 +89,27 @@ describe("LlmCallLedger", () => {
     ).toEqual({ kind: "first" });
   });
 
-  it("joins an id-less sighting by its tuple, but never two identified calls", () => {
+  it("joins two id-less sightings by a shared tuple, but never an id-less sighting to an identified call or back", () => {
     const ledger = new LlmCallLedger();
     expect(ledger.note(call(), "transcript")).toEqual({ kind: "first" });
-    // OTel from a harness that reports no request id.
+    // OTel from a harness that reports no request id, sharing its token
+    // tuple with the already-identified call above. Two distinct calls can
+    // share a tuple trivially (two 0-token calls, a title prompt asked
+    // twice), so this must be its own call, not a duplicate whose usage
+    // then goes uncounted.
     const idless = call({ request_id: undefined, message_id: undefined });
-    expect(ledger.note(idless, "otel_log")).toEqual({
-      kind: "duplicate",
-      of: "transcript",
-    });
-    // A second identified call with the same tuple is its own call.
+    expect(ledger.note(idless, "otel_log")).toEqual({ kind: "first" });
+    // Symmetrically, an identified sighting that only matches an id-less
+    // entry's tuple is its own call too, not a join across the id boundary.
     expect(
-      ledger.note(
-        call({ request_id: "req_2", message_id: "msg_2" }),
-        "transcript",
-      ),
+      ledger.note(call({ request_id: "req_2", message_id: "msg_2" }), "hook"),
     ).toEqual({ kind: "first" });
-    // Two id-less sightings from one source cannot be told apart: both count.
+    // Two id-less sightings from different sources, sharing a tuple, are
+    // the one case the tuple join exists for: neither can be told apart any
+    // other way.
     const fresh = new LlmCallLedger();
     expect(fresh.note(idless, "otel_log")).toEqual({ kind: "first" });
-    expect(fresh.note(idless, "otel_log")).toEqual({ kind: "first" });
-    // But an identified sighting after an id-less one joins it.
-    expect(fresh.note(call(), "transcript")).toEqual({
+    expect(fresh.note(idless, "collector")).toEqual({
       kind: "duplicate",
       of: "otel_log",
     });

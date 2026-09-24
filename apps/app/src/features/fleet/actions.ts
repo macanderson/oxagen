@@ -31,14 +31,26 @@
 // A steer stays on the run page: the contract requires `payload` on it, and
 // the text and its delivery mode need the room that dialog gives them.
 //
+// Steer the fleet sends one `steer` per selected agent, addressed to the
+// agent (`target.kind: "agent"`), so the control plane fans it out to every
+// live run of that agent and answers one command id per run it reached. The
+// delivery mode is the turn boundary: the design's Interrupt is not offered
+// yet, so nothing here asks for one.
+//
+// Export on a sealed row queues the same `export_run` the Run page's Export
+// queues. The handler admits an org Owner or Admin (`assertOrgRole`), so a
+// refusal comes back `denied` and the row says so.
+//
 // The command is queued, not applied. A pause takes effect at the next
 // boundary the harness reaches and a cancel revokes the run token on a
 // best-effort basis, so this answers the command ids the control plane wrote
 // and the row says Oxagen took the command rather than that the agent stopped.
 import { agentApprovalResolve } from "@oxagen/oxagen/contracts/agent.approval.resolve";
 import { approvalAutoEligibilityGet } from "@oxagen/oxagen/contracts/approval.auto_eligibility.get";
+import { runExport } from "@oxagen/oxagen/contracts/run.export";
 import {
   COMMAND_REASON_MAX,
+  STEER_TEXT_MAX,
   tachoCommandDispatch,
 } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
 import { captureError } from "@oxagen/telemetry";
@@ -212,5 +224,94 @@ export async function dispatchRunCommand(
   });
   return result.ok
     ? { ok: true, value: { commandIds: result.value.commandIds } }
+    : result;
+}
+
+/** The most agents one steer addresses; `list_agents` answers at most this many a page. */
+const STEER_AGENTS_MAX = 100;
+
+/** What a steer across the fleet reached: one command id per run in flight. */
+export type FleetSteer = {
+  commandIds: string[];
+  /** The agents the control plane refused a steer for, with its code. */
+  refused: { agentKey: string; code: string }[];
+};
+
+/**
+ * Steer every selected agent's live runs at their next turn boundary.
+ *
+ * The text is checked here as well as in the dialog: it is required and has
+ * the contract's length limit, and an agent list that is empty or longer than
+ * a workspace could hold is refused before the kernel runs.
+ *
+ * Each agent is its own `dispatch_command`, so one refusal does not cost the
+ * others their steer. When every agent was refused the first refusal is the
+ * answer, so a viewer without the role reads the role reason rather than an
+ * empty receipt.
+ */
+export async function steerFleet(
+  org: string,
+  ws: string,
+  input: { agentKeys: string[]; text: string },
+): Promise<ActionResult<FleetSteer>> {
+  const text = input.text.trim();
+  if (text === "" || text.length > STEER_TEXT_MAX) {
+    return { ok: false, reason: "invalid", code: "steer_text", field: "text" };
+  }
+  const keys = [...new Set(input.agentKeys)];
+  if (keys.length === 0 || keys.length > STEER_AGENTS_MAX) {
+    return {
+      ok: false,
+      reason: "invalid",
+      code: "steer_agents",
+      field: "agents",
+    };
+  }
+  const ctx = await requireViewer(org, ws);
+  const results = await Promise.all(
+    keys.map(async (agentKey) => ({
+      agentKey,
+      result: await kernelWrite(ctx, tachoCommandDispatch, {
+        target: { kind: "agent", id: agentKey },
+        command: "steer",
+        payload: { text, requestedMode: "turn_boundary" },
+      }),
+    })),
+  );
+  const commandIds: string[] = [];
+  const refused: FleetSteer["refused"] = [];
+  for (const { agentKey, result } of results) {
+    if (result.ok) commandIds.push(...result.value.commandIds);
+    else
+      refused.push({
+        agentKey,
+        code: "code" in result ? result.code : result.reason,
+      });
+  }
+  const first = results[0];
+  if (
+    refused.length === results.length &&
+    first !== undefined &&
+    !first.result.ok
+  ) {
+    return first.result;
+  }
+  return { ok: true, value: { commandIds, refused } };
+}
+
+/**
+ * Queue a signed evidence bundle for one sealed run from its Fleet row
+ * (`export_run`). A live run is refused by the handler, because the seal is
+ * what the attestation signs.
+ */
+export async function exportFleetRun(
+  org: string,
+  ws: string,
+  runId: string,
+): Promise<ActionResult<{ exportId: string }>> {
+  const ctx = await requireViewer(org, ws);
+  const result = await kernelWrite(ctx, runExport, { runId });
+  return result.ok
+    ? { ok: true, value: { exportId: result.value.exportId } }
     : result;
 }

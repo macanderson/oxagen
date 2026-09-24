@@ -1,6 +1,6 @@
 ---
 title: "Governing an agent that rewrites itself"
-description: "An agent that edits its own code needs a gate, not a hope. What the safety literature says about reward hacking, sandboxes, oversight, and typed contracts"
+description: "An agent that edits its own code needs the same review as any other change. What safety research says about reward hacking, sandboxes, oversight, and typed contracts."
 date: 2026-09-09
 authors:
   - Oxagen Research
@@ -16,9 +16,9 @@ tags:
 draft: false
 ---
 
-Your compliance team has one question about the agent, and it is not a hard one. What is it allowed to do? For a normal service the answer is a document, and the document stays true because the service does not change unless somebody merges a pull request. For an agent that modifies its own behaviour, the document is true until the next loop iteration. That is the whole problem in one sentence.
+Your compliance team has one simple question about the agent: what is it allowed to do? For a normal service, the answer is a document. The service changes only when somebody merges a pull request, so the document stays true. An agent that changes its own behavior is different. Each pass of its loop can change it, so the document is true only until the next pass.
 
-This is not hypothetical any more. The Darwin Gödel Machine iteratively edits its own codebase and validates the edits on coding benchmarks, taking SWE-bench performance from 20.0% to 50.0% and Polyglot from 14.2% to 30.7%.[^1] Systems like this work. The interesting question is no longer whether an agent can improve itself, it is what you sign when you let one run inside your company.
+Systems like this exist today. The Darwin Gödel Machine edits its own code over and over and checks each edit on coding benchmarks. It raised its SWE-bench score from 20.0% to 50.0% and its Polyglot score from 14.2% to 30.7%.[^1] So the open question is no longer whether an agent can improve itself. It is what you agree to when you let one run inside your company.
 
 <Dumbbell
   title="Darwin Gödel Machine, before and after editing itself"
@@ -29,46 +29,46 @@ This is not hypothetical any more. The Darwin Gödel Machine iteratively edits i
     { label: "SWE-bench", from: 20, to: 50 },
     { label: "Polyglot", from: 14.2, to: 30.7 },
   ]}
-  caption="Source: Zhang, Hu, Lu, Lange, and Clune (2025). Each edit is validated on the same benchmarks it is scored on, which is the weight this post argues a benchmark cannot carry alone."
+  caption="Source: Zhang, Hu, Lu, Lange, and Clune (2025). The system checks each edit on the same benchmarks that score it. This post argues that a benchmark cannot do that job alone."
 />
 
-The good news is that the safety literature has been working on the underlying question for a decade, and its answers are concrete. The bad news is that most of them say the thing you were hoping to skip is the thing you cannot skip.
+Safety researchers have worked on this question for a decade, and their answers are concrete. Most of those answers say you cannot skip the step you were hoping to skip.
 
-## The failure mode is not rebellion, it is a bad objective
+## Self-changing systems go wrong by chasing a flawed score
 
-The way self-modifying systems go wrong in practice is boring. They optimize exactly what you measured, and what you measured was not what you meant.
+In practice, self-changing systems go wrong in a plain way. They improve exactly what you measured, and what you measured was not what you meant.
 
-Krakovna and colleagues at DeepMind catalogued this as specification gaming, and the examples are almost comic. An agent rewarded for the height of the underside of a red block, as a proxy for stacking it on a blue one, flipped the red block over. A boat-racing agent rewarded for collecting green blocks along the course drove in circles hitting the same blocks forever instead of finishing the race.[^2] Neither agent broke. Both did precisely what the score said.
+Krakovna and colleagues at DeepMind collected examples of this and called it specification gaming. In one, the goal was to stack a red block on a blue one. The agent was rewarded for how high the underside of the red block was. So it flipped the red block over. In another, a boat-racing agent was rewarded for hitting green blocks along the course. It drove in circles hitting the same blocks over and over and never finished the race.[^2] Neither agent was broken. Both did exactly what the score asked.
 
-Skalse and colleagues then formalized it. They define a proxy as unhackable if increasing expected proxy return can never decrease expected true return, which is exactly the property you want from a metric your agent optimizes against. The result is unpleasant: over the set of all stochastic policies, two reward functions can only be unhackable if one of them is constant.[^3] In plain terms, you cannot write a proxy metric that is safe to maximize without limit. Non-trivial unhackable pairs exist only once you restrict the policy set, which is another way of saying that the safety comes from bounding what the agent can do, not from writing a better score.
+Skalse and colleagues then made this precise. A proxy is a measure you optimize in place of the real goal. They call a proxy unhackable if raising the expected proxy score can never lower the expected true score. That is the property you want from any metric your agent optimizes. Their result is bad news. Across all possible random policies (the rules an agent uses to pick actions), two reward functions can be unhackable only if one of them is constant.[^3] So you cannot write a proxy metric that is safe to push without limit. Unhackable pairs where neither function is constant exist only when you limit the set of policies. In other words, safety comes from limiting what the agent can do. A better score does not provide it.
 
-That is the core design conclusion, and it predates the current agent wave. "Concrete Problems in AI Safety" split the failure surface into five categories a decade ago: avoiding side effects, avoiding reward hacking, scalable supervision, safe exploration, and distributional shift.[^4] A self-evolving agent touches all five at once, and the self-modification step makes the last one recursive, because the agent that shifts the distribution is also the agent being evaluated on it.
+That is the main design lesson, and it is older than today's agents. A decade ago, "Concrete Problems in AI Safety" sorted the ways systems fail into five groups: avoiding side effects, avoiding reward hacking, scalable supervision, safe exploration, and distributional shift.[^4] Distributional shift means the conditions the system meets drift away from the ones it was tested on. A self-evolving agent touches all five groups at once. Self-modification also makes the last one loop back on itself. The agent that shifts the conditions is also the agent being tested under them.
 
-## Sandboxes are necessary, and they are not sufficient
+## A sandbox is needed, but it is not enough on its own
 
-Every serious self-modification paper runs in a sandbox. The Darwin Gödel Machine authors state plainly that all experiments were done with safety precautions including sandboxing and human oversight.[^1]
+Every serious self-modification paper runs its system in a sandbox, an isolated space it should not be able to leave. The Darwin Gödel Machine authors say plainly that all experiments used safety measures, including sandboxing and human oversight.[^1]
 
-What makes the sandbox interesting is that at least one paper measured how well it held. STOP, which points a language-model improver at itself, explicitly evaluates the frequency with which the generated code bypasses the sandbox.[^5] That is the right experiment, and the fact that it was worth running tells you the answer was not zero. A sandbox is a containment boundary, and containment boundaries are measured, not assumed.
+At least one paper measured how well its sandbox held. STOP points a language-model improver at its own code. Its authors measured how often the generated code bypassed the sandbox.[^5] That is the right experiment. They ran it because the answer might not be zero. A sandbox is a boundary, and you should measure a boundary instead of assuming it holds.
 
-There is a deeper reason not to rest on containment. The original Gödel machine design solved this properly: rewrite any part of your own code only once you have found a proof that the rewrite is useful, given axioms describing the utility function, the hardware, and the initial code.[^6] That is a real guarantee. It is also why nobody ships it. The Darwin Gödel Machine departs from it precisely because that proof is impossible to obtain in practice, so it substitutes empirical validation on benchmarks.[^1]
+There is a deeper reason not to rely on the sandbox alone. The original Gödel machine design had a real answer. It could rewrite any part of its own code only after it found a proof that the rewrite helps. That proof started from axioms describing the utility function, the hardware, and the starting code.[^6] That is a real guarantee. It is also why no one ships it. Such a proof cannot be found in practice. So the Darwin Gödel Machine replaces it with tests on benchmarks.[^1]
 
-Swapping a proof for a benchmark score is a reasonable trade, but it moves your entire safety argument onto the benchmark. And benchmarks, audited carefully, do not hold that weight. Kapoor and colleagues found agent benchmarks with inadequate holdout sets or none at all, agents that take shortcuts and overfit, and a pervasive lack of reproducibility across evaluation practice.[^7] An evolution loop whose only gate is a benchmark score is a loop that will find the benchmark's weaknesses, because that is the one thing the loop is definitely good at.
+Trading a proof for a benchmark score is reasonable. But it moves your whole safety case onto the benchmark, and careful audits show benchmarks cannot carry that load. Kapoor and colleagues found agent benchmarks with weak holdout sets or none at all. They found agents that take shortcuts and overfit. They found that results are often hard to reproduce.[^7] Suppose the only check in an evolution loop is a benchmark score. Then the loop will find that benchmark's weak spots, because finding what raises the score is what the loop does best.
 
-## Capability control and incentive control are different jobs
+## Limiting what an agent can reach differs from shaping what it aims for
 
-It helps to name the two levers separately, because teams reach for one and assume they got both.
+These are two separate controls. Teams often use one and assume they have both, so it helps to name each.
 
-Capability control bounds what the agent can reach: the sandbox, the tool allowlist, the credential scope, the data it can query. It is enforceable, it is testable, and Skalse's result says it is the lever that actually carries the guarantee, since safety comes from restricting the policy set.[^3]
+Capability control limits what the agent can reach: the sandbox, the list of allowed tools, the scope of its credentials, and the data it can query. You can enforce it and test it. Skalse's result says this is the control that carries the guarantee, since safety comes from limiting the set of policies.[^3]
 
-Incentive control shapes what the agent wants: the reward, the score, the acceptance criterion for a self-edit. It feels like the strong lever, and it is the one that provably cannot be made airtight on its own.
+Incentive control shapes what the agent aims for: the reward, the score, and the test a self-edit must pass. It feels like the stronger control. Skalse's result shows it cannot close every gap on its own.
 
-Oversight sits on top of both, and the evidence here is more encouraging than people expect. Bowman and colleagues tested a deliberately trivial baseline for scalable oversight, humans interacting with an unreliable model assistant through chat, and found that the pair substantially outperformed both the model alone and the humans unaided on MMLU and time-limited QuALITY.[^8] The lesson is not that humans should review every self-edit. It is that a human in the loop with a real interface beats a human reading a summary, and that the loop is worth designing rather than treating as a rubber stamp.
+Oversight sits on top of both, and the evidence here is better than many expect. Bowman and colleagues tested a deliberately simple setup for scalable oversight. Humans chatted with an unreliable model assistant to answer questions. The pair did much better than the model alone and the humans alone on MMLU and time-limited QuALITY.[^8] This does not mean humans should review every self-edit. It means a person working with a real interface does better than a person reading a summary. So design the review step with care instead of treating it as a formality.
 
 ## A governance model for a system that changes itself
 
-Put those constraints together and the shape of the answer is forced. Four pieces.
+These limits together lead to one answer with four parts.
 
-**Typed contracts, not documents.** The unit of governance has to be a machine-checkable object, because a prose policy cannot be enforced against a system that changes between reads. Bind six things together in one signed record: identity, knowledge scope, permitted action, commercial terms, verified outcome, and audit record.
+**Typed contracts instead of documents.** A system that changes between readings cannot be held to a written policy. So the unit of governance has to be an object a machine can check. Bind six things together in one signed record: identity, knowledge scope, permitted action, commercial terms, verified outcome, and audit record.
 
 ```json
 {
@@ -81,9 +81,9 @@ Put those constraints together and the shape of the answer is forced. Four piece
 }
 ```
 
-The version hash in the identity is the load-bearing part. An agent that rewrites itself produces a new identity, and a new identity is a new contract, not a silent continuation of the old one.
+The version hash in the identity is the part everything depends on. When an agent rewrites itself, it gets a new identity. A new identity means a new contract. The old contract does not carry over to it.
 
-**A knowledge scope defined by an ontology.** "Permitted action" is easy to enumerate. "What is the agent allowed to know about" is not, and it is where most access-control models quietly give up and hand over a whole database. An ontology fixes this because it gives you typed entities and typed relationships, which means the scope can be a statement about the graph rather than a list of rows.
+**A knowledge scope defined by an ontology.** It is easy to list the permitted actions. It is hard to list what the agent may know about. Most access-control models give up here and hand over a whole database. An ontology solves this. It is a model of the business with typed entities and typed relationships between them. With it, the scope can be a statement about the graph instead of a list of rows. The query below, written in Cypher (the Neo4j query language), returns the entities in the agent's domain that are valid on a given date.
 
 ```cypher
 MATCH (a:Agent {id: $agentId})-[:SCOPED_TO]->(d:Domain)
@@ -92,37 +92,37 @@ WHERE n.valid_from <= $asOf AND coalesce(n.valid_to, $asOf) >= $asOf
 RETURN n
 ```
 
-That query is a boundary a compliance team can read. It also survives self-modification, because the agent changing its own code does not change what the domain contains. Bounding the world is capability control, expressed as structure.
+A compliance team can read that query as a boundary. It also holds up when the agent changes itself. The agent can change its own code, but that does not change what the domain contains. Limiting what the agent can see is capability control, written as structure.
 
-**Evolution proposals go through the same gate as any other change.** This is the piece teams skip. A self-edit is a change to a production system, so it takes the path every other change takes: a proposal, a diff, a policy check, a test run, a decision, and a record. Not a special fast lane because a model wrote it. The upside is that a lot of self-evolution research already produces reviewable artifacts, which makes this cheaper than it sounds. Agent Workflow Memory induces named, readable workflows from prior trajectories rather than opaque weight updates.[^9] ADAS keeps discovered agents as code in an archive.[^10] Both are diffable. Review what you can read, and refuse to promote what you cannot.
+**Self-edits go through the same checks as any other change.** Teams often skip this part. A self-edit changes a production system. So it takes the same path as every other change: a proposal, a diff, a policy check, a test run, a decision, and a record. A model writing the change does not earn it a faster path. Much self-evolution research already produces output a person can review, so this costs less than it sounds. Agent Workflow Memory builds named, readable workflows from past attempts instead of hidden weight updates.[^9] ADAS stores the agents it discovers as code in an archive.[^10] You can diff both. Review what you can read, and do not promote what you cannot read.
 
 <Flow
   title="A self-edit takes the path every change takes"
   steps={[
     { label: "Proposal", detail: "The diff, and the new identity it produces" },
     { label: "Policy check", detail: "Against the contract in force" },
-    { label: "Test run", detail: "Evidence, not a score alone" },
-    { label: "Decision", detail: "A person holding the evidence", emph: true },
-    { label: "Record", detail: "Append-only and hash-chained" },
+    { label: "Test run", detail: "Evidence as well as a score" },
+    { label: "Decision", detail: "A person who has the evidence", emph: true },
+    { label: "Record", detail: "Append-only, each entry linked by hash to the one before" },
   ]}
-  caption="The same gate the agent's actions pass through. If this path is weaker than that one, the shortest route to a forbidden action is a self-edit."
+  caption="The agent's actions pass through the same checks. If this path is weaker than that one, the easiest way for the agent to take a forbidden action is to edit itself."
 />
 
-**An immutable record of every accepted change.** Append-only, hash-chained, with the contract version, the proposal, the evidence that justified acceptance, and the approver. The reason is not audit theatre. It is that reproducibility is the documented weak point of this entire field,[^7] and the only defence against "we cannot tell you why the agent did that in March" is having written it down in March. The 2025 survey of self-evolving agents frames the open problems in the same terms: evaluation and safety are the constraints on the field, not capability.[^11]
+**A record of every accepted change that cannot be edited.** New entries are only added to the end. Each entry holds a hash of the one before, so a changed entry shows. Each entry holds the contract version, the proposal, the evidence for accepting it, and the approver. This is not for show. Reproducibility is the known weak point of this whole field.[^7] Say someone asks in the future why the agent did something in March. You can answer only if you wrote it down in March. The 2025 survey of self-evolving agents describes the open problems the same way. It names evaluation and safety as the limits on the field, not capability.[^11]
 
-<Callout kind="warn" title="One gate, applied twice">
-The agent's actions go through a gate. The agent's changes to itself must go through the same gate, evaluated as a change to a governed system. If the second gate is weaker than the first, the agent's shortest path to a forbidden action is to modify itself.
+<Callout kind="warn" title="Use the same checks for actions and self-edits">
+The agent's actions go through a set of checks. The agent's changes to itself must go through the same checks, reviewed as a change to a governed system. If the checks on self-edits are weaker, the easiest way for the agent to take a forbidden action is to change itself.
 </Callout>
 
 ## What this does not solve
 
-None of this makes a self-evolving agent safe in the strong sense. There is no proof, and the original Gödel machine tells us why we should not expect one.[^6] What it does is make the system legible: at any moment you can state what the agent is, what it may know, what it may do, what it cost, and what changed since last week, with evidence.
+None of this makes a self-evolving agent safe in the strong sense. There is no proof, and the original Gödel machine shows why you should not expect one.[^6] What it does is make the system readable. At any moment, you can state with evidence what the agent is, what it may know, what it may do, what it cost, and what changed since last week.
 
-It is also worth being honest about where the evolution loop is worth this overhead at all. AlphaEvolve's results are real and deployed, including a scheduling heuristic recovering 0.7% of Google's worldwide compute, but they come from problems with automated evaluators that score a candidate exactly.[^12] If you do not have a machine-checkable definition of better, an evolution loop does not have a judge, and a loop without a judge is not improving. It is drifting.
+The evolution loop also does not justify this extra work everywhere. AlphaEvolve's results are real and in production. One is a scheduling heuristic that recovered 0.7% of Google's worldwide compute. But they come from problems with automated evaluators that score each candidate exactly.[^12] If you have no definition of "better" that a machine can check, the loop has nothing to judge its changes. Without a judge, the loop changes without improving.
 
-## Where this meets Oxagen
+## How the four parts map to Oxagen
 
-Oxagen is the control plane for the agents you run. It does not run them. The four pieces above map onto the mandate an agent runs under. The typed contract is the mandate itself: identity, knowledge scope, permitted action, commercial terms, outcome, and audit record in one object, checked on the calls routed through Oxagen. The ontology-bounded knowledge scope is the equipment the agent is handed, which is why the graph is time-aware rather than a vector index. The immutable change record is the record. The budget in the contract is the budget clause, and for an evolution loop the meter is doing real work, because cost per accepted improvement is the number that tells you whether to keep the loop alive. What Oxagen does not do is decide whether a proposed self-edit is a good idea. That is still a person, holding evidence.
+Oxagen is the agent control plane for the agents you run. It does not run them. The four parts above map to the mandate an agent works under. The typed contract is the mandate itself. It holds identity, knowledge scope, permitted action, commercial terms, outcome, and audit record in one object, checked on the calls routed through Oxagen. The knowledge scope bounded by the ontology is the equipment the agent is given. That is why the graph tracks time, instead of being a vector index. The change record that cannot be edited is the record. The budget in the contract is the budget clause. For an evolution loop the meter matters a great deal, because the cost of each accepted improvement tells you whether to keep the loop running. Oxagen does not decide whether a proposed self-edit is a good idea. A person with the evidence still decides that.
 
 [^1]: Zhang, J., Hu, S., Lu, C., Lange, R., & Clune, J. (2025). *Darwin Godel Machine: Open-Ended Evolution of Self-Improving Agents*. arXiv. https://arxiv.org/abs/2505.22954
 [^2]: Krakovna, V., Uesato, J., Mikulik, V., Rahtz, M., Everitt, T., Kumar, R., Kenton, Z., Leike, J., & Legg, S. (2020). *Specification gaming: the flip side of AI ingenuity*. Google DeepMind. https://deepmind.google/discover/blog/specification-gaming-the-flip-side-of-ai-ingenuity/

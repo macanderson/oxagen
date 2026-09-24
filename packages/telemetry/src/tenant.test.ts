@@ -24,6 +24,7 @@ vi.mock("./clickhouse", () => ({
 
 import { runInTenantScope } from "@oxagen/tenancy";
 import { chInsert, chSelect } from "./tenant";
+import { selectTachoEventRecords, selectTachoEvents } from "./tacho-events";
 
 const ORG = "00000000-0000-0000-0000-00000000a111";
 const WS = "00000000-0000-0000-0000-00000000b222";
@@ -132,6 +133,34 @@ describe("clickhouse tenant seam", () => {
         ),
       ).rejects.toThrow(/org_id/);
       expect(query).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ["selectTachoEvents", selectTachoEvents],
+    ["selectTachoEventRecords", selectTachoEventRecords],
+  ] as const)(
+    "passes %s through the source fence with FINAL kept",
+    async (_name, select) => {
+      await runInTenantScope({ orgId: ORG, workspaceId: WS }, () =>
+        select({
+          sessionUuid: "00000000-0000-0000-0000-00000000c333",
+          afterSeq: -1,
+          limit: 500,
+        }),
+      );
+      expect(query).toHaveBeenCalledOnce();
+      expect(query).toHaveBeenCalledWith(
+        expect.objectContaining({
+          query: expect.stringContaining(
+            "FROM (SELECT * FROM tacho_events FINAL WHERE org_id = {orgId:UUID} AND workspace_id = {workspaceId:UUID}) AS tacho_events",
+          ),
+          query_params: expect.objectContaining({
+            orgId: ORG,
+            workspaceId: WS,
+          }),
+        }),
+      );
     },
   );
 

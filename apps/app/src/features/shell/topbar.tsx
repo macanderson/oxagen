@@ -1,29 +1,36 @@
 "use client";
 // The top bar (mockup `topbar()`): phone menu, breadcrumbs, the ⌘K search
 // button and the user menu.
+import { ActivityButtons } from "./activity";
 import { Menu, Search } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Fragment } from "react";
 import { breadcrumbs, parseShellPath } from "./nav";
+import { usePageRecord } from "./page-record";
 import type { ShellData } from "./shell-data";
 import { useShellState } from "./shell-state";
 import { UserMenu } from "./user-menu";
 import { SafeLink } from "@/ui/navigation";
 
 const iconButton =
-  "relative grid size-8 place-items-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:border-rule hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring";
+  "relative grid min-h-11 min-w-11 place-items-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:border-rule hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring";
 
 function Breadcrumbs({ data }: { data: ShellData }) {
   const t = useTranslations("shell");
   const pathname = usePathname();
-  const { ws } = parseShellPath(pathname);
+  const { ws, rest } = parseShellPath(pathname);
+  const record = usePageRecord(rest[0] ?? null);
   const { context } = data;
   // A workspace `shell.context` does not list keeps its slug as the crumb.
   const wsName = context.ok
     ? (context.value.workspaces.find((w) => w.slug === ws)?.name ?? null)
     : null;
-  const crumbs = breadcrumbs(pathname, { org: data.org.name, ws: wsName });
+  const crumbs = breadcrumbs(pathname, {
+    org: data.org.name,
+    ws: wsName,
+    record,
+  });
   return (
     <nav aria-label={t("topbar.breadcrumbs")} className="min-w-0 flex-1">
       <ol className="flex min-w-0 items-center gap-1.5 text-sm">
@@ -72,7 +79,7 @@ export function Topbar({ data }: { data: ShellData }) {
   return (
     <header
       aria-label={t("label")}
-      className="sticky top-0 z-30 flex items-center gap-3 border-b border-app-topbar-border bg-app-topbar-bg/90 px-4 py-2.5 text-app-topbar-fg backdrop-blur md:col-start-2 md:row-start-1 md:px-5"
+      className="sticky top-0 z-30 flex items-center gap-1.5 border-b border-app-topbar-border bg-app-topbar-bg/90 px-4 py-2.5 text-app-topbar-fg backdrop-blur md:col-start-2 md:row-start-1 md:px-5"
     >
       <a
         href="#main"
@@ -109,6 +116,7 @@ export function Topbar({ data }: { data: ShellData }) {
           {t("searchShortcut")}
         </kbd>
       </button>
+      <ActivityButtons />
       <UserMenu data={data} />
     </header>
   );

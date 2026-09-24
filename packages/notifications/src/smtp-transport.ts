@@ -1,5 +1,5 @@
 import nodemailer from "nodemailer";
-import type { Address } from "nodemailer/lib/mailer";
+import type { Address } from "nodemailer";
 import { logger } from "./logger";
 import type {
   EmailTransport,
@@ -11,15 +11,18 @@ import type {
 /**
  * Normalize nodemailer's `accepted` / `rejected` arrays (each entry is either a
  * bare string or an `{ address, name }` object) down to plain address strings,
- * so {@link SendEmailResult} never leaks a provider-specific shape.
+ * so {@link SendEmailResult} never leaks a provider-specific shape. nodemailer
+ * types `address` as optional; an entry without one names no recipient and is
+ * dropped rather than reported as `undefined`.
  */
 function toAddressStrings(
   list: ReadonlyArray<string | Address> | undefined,
 ): string[] {
   if (!list) return [];
-  return list.map((entry) =>
-    typeof entry === "string" ? entry : entry.address,
-  );
+  return list.flatMap((entry) => {
+    if (typeof entry === "string") return [entry];
+    return entry.address ? [entry.address] : [];
+  });
 }
 
 /**

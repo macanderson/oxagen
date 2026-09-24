@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-09-15
 - **Owners:** platform
-- **Related:** `docs/specs/tacho/spec.md` §10 (Stella), `docs/specs/tacho/oxagen-trace-drain.md`
+- **Related:** `docs/specs/tacho/spec.md` §10 (Stella), `oxagen-roadmap:docs/oxagen/specs/tacho/oxagen-trace-drain.md`
   §9 (the v0/v1/v2 transport ranking), `docs/specs/oxagen-desktop/spec.md` §6 (the wrapper
   table), ADR-033 (the Rust engine as agent core), ADR-043 (runtime excision — Oxagen
   governs agents, it does not run them), ADR-053 (the in-app agent on `stella-serve`)

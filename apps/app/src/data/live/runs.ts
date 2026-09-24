@@ -19,6 +19,9 @@ import { runCostGet } from "@oxagen/oxagen/contracts/run.cost";
 import { runFrameBodyGet } from "@oxagen/oxagen/contracts/run.frame_body.get";
 import { FRAME_LIMIT_DEFAULT, runGet } from "@oxagen/oxagen/contracts/run.get";
 import { runList } from "@oxagen/oxagen/contracts/run.list";
+import { runWorkGet } from "@oxagen/oxagen/contracts/run.work.get";
+import { runOutcomesSettingsGet } from "@oxagen/oxagen/contracts/run.outcomes.settings.get";
+import { RunWork, RunOutcomesPolicy } from "@/data/contracts/run-work";
 import { runOutputsGet } from "@oxagen/oxagen/contracts/run.outputs.get";
 import {
   runTranscriptGet,
@@ -48,6 +51,13 @@ import {
 } from "./mappers/run";
 import { toRunPage } from "./mappers/runs";
 
+/**
+ * Runs per Fleet read: the contract's ceiling. Fleet's search, facets, sort
+ * and rows-per-page run over the rows one read returns, so the read takes as
+ * many as the contract answers and the pager says when more are older.
+ */
+const RUN_PAGE = 100;
+
 /** Frames per page of the Frames tab: the contract's own default, named so the mapper can see it. */
 const FRAME_PAGE = FRAME_LIMIT_DEFAULT;
 
@@ -70,10 +80,55 @@ function view<S extends z.ZodType>(
 }
 
 export const runs: DataSource["runs"] = {
+  async outcomesSettings(ctx) {
+    const read = await kernelRead(ctx, {
+      contract: runOutcomesSettingsGet,
+      input: {},
+      page: "run",
+    });
+    if (!read.ok) return read;
+    return view(
+      ctx.orgId,
+      RunOutcomesPolicy,
+      read.value,
+      "runs.outcomesSettings",
+    );
+  },
+  async work(ctx, runId) {
+    const read = await kernelRead(ctx, {
+      contract: runWorkGet,
+      input: { runId },
+      page: "run",
+    });
+    if (!read.ok) return read;
+    return view(
+      ctx.orgId,
+      RunWork,
+      {
+        ...read.value,
+        checkouts: read.value.checkouts.map(({ id, ...checkout }) => ({
+          ...checkout,
+          ref: id,
+        })),
+        diffs: read.value.diffs.map(({ checkoutId, ...diff }) => ({
+          ...diff,
+          checkoutRef: checkoutId,
+        })),
+        pullRequests: read.value.pullRequests.map(({ checkoutIds, ...pr }) => ({
+          ...pr,
+          checkoutRefs: checkoutIds,
+        })),
+      },
+      "runs.work",
+    );
+  },
   async list(ctx, q) {
     const read = await kernelRead(ctx, {
       contract: runList,
-      input: q.cursor === null ? {} : { cursor: q.cursor },
+      input:
+        q.cursor === null
+          ? { limit: RUN_PAGE }
+          : { limit: RUN_PAGE, cursor: q.cursor },
       page: "fleet",
     });
     if (!read.ok) return read;

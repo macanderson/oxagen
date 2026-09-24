@@ -2,7 +2,7 @@
 
 /**
  * actions.ts — server actions for the "Connect a source" wizard
- * (Knowledge → Sources → Connect, docs/web-app-2.0/workspace/knowledge/sources/connect/spec.md).
+ * (Knowledge → Sources → Connect, docs/web-app-2.0/workspace/knowledge/sources/connect/spec.md, removed 2026-09-23; git history keeps it).
  *
  * Every action follows the same shape: session guard → resolveOrg/resolveWorkspace
  * (IDOR-safe slug resolution, same as marketplace/integrations/[connectorId]/actions.ts

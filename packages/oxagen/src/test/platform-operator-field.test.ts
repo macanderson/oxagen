@@ -35,7 +35,10 @@ const GOVERNED = ["platformOperator", "createPlatformOperatorContext"] as const;
  * The only file outside packages/oxagen allowed to name either: the operator
  * script that mints a binding and invokes `set_org_billing_terms` with it.
  */
-const ALLOWED = new Set(["tools/scripts/billing-terms.ts"]);
+const ALLOWED = new Set([
+  "tools/scripts/billing-terms.ts",
+  "tools/scripts/run-outcomes-access.ts",
+]);
 
 /** The package that owns the binding; everything under it is exempt. */
 const OWNING_PACKAGE = "packages/oxagen";
@@ -136,7 +139,7 @@ describe("INV-31 — the platform-operator binding has one producer and one cons
         (path) => !path.startsWith(`${OWNING_PACKAGE}/`),
       );
       expect(outside.every((path) => ALLOWED.has(path))).toBe(true);
-      expect(outside).toEqual([...ALLOWED]);
+      expect(outside).toEqual([...ALLOWED].sort());
     },
   );
 

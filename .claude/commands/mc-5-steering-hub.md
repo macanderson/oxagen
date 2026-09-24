@@ -6,7 +6,9 @@ description: Rev1 app session 5: Steering tabs as path segments, the Memory and 
 
 Run only after PR #3479 has merged (Skills as a tab of Steering, the creation wizards, `propose_skill`) and after session 2 (the auto-approvals editor). ADR-091 §6 freezes new governance ceremony: this session adds tabs and reads, never a new proposal state, check, or review step.
 
-Read `docs/mission-control/BUILD-CHUNKS.md` first. Its section for this session lists the lanes, what is already built on main, and the "Done when" boxes. The workflow sandbox has no filesystem access, so you scout inline, then hand the facts to the workflow.
+Read `oxagen-roadmap:docs/oxagen/mission-control/BUILD-CHUNKS.md` first. Its section for this session lists the lanes, what is already built on main, and the "Done when" boxes. The workflow sandbox has no filesystem access, so you scout inline, then hand the facts to the workflow.
+
+`oxagen-roadmap:<path>` means `<path>` in https://github.com/macanderson/oxagen-roadmap. Check it out beside this repository (`~/Projects/oxagen-roadmap`, or `../oxagen-roadmap` in a cloud session). The build plan, the gap inventory, and the product spec moved there on 2026-09-23 (#3895).
 
 ## Before you run it
 

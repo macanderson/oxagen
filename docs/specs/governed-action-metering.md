@@ -480,7 +480,7 @@ grandfathering has no contract to apply to in the zero-customer window.
 
 ## 7. Open questions — answered
 
-Answered 2026-09-10 under [SCR-002](../scr/SCR-002-durability-first-architecture.md)
+Answered 2026-09-10 under [SCR-002](../../.oxagen/rules/ctx.scr.002-durability-first.toml)
 (choose the durable option and record it, rather than hold the work). Each answer
 names what would have to change to revisit it.
 

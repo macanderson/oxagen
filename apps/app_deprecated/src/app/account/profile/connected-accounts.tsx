@@ -7,7 +7,7 @@
  * remaining method's Disconnect button is disabled.
  */
 import * as React from "react";
-import { Github } from "lucide-react";
+import { GithubIcon } from "@/components/brand/github-icon";
 import { useRouter } from "next/navigation";
 import { authClient } from "@oxagen/auth/client";
 import { Button } from "@/components/ui/button";
@@ -30,7 +30,7 @@ const PROVIDERS: { key: ProviderKey; label: string; icon: React.ReactNode }[] =
     {
       key: "github",
       label: "GitHub",
-      icon: <Github className="h-4 w-4" aria-hidden />,
+      icon: <GithubIcon className="h-4 w-4" aria-hidden />,
     },
   ];
 

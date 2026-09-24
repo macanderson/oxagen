@@ -1,12 +1,14 @@
 import {
   appendFileSync,
   existsSync,
+  fdatasyncSync,
   fsyncSync,
   renameSync,
   readFileSync,
   readSync,
   readdirSync,
   statSync,
+  truncateSync,
   writeFileSync,
   writeSync,
   unlinkSync,
@@ -22,10 +24,12 @@ vi.mock("node:fs", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs")>();
   return {
     ...actual,
+    appendFileSync: vi.fn(actual.appendFileSync),
     readFileSync: vi.fn(actual.readFileSync),
     readSync: vi.fn(actual.readSync),
     writeSync: vi.fn(actual.writeSync),
     fsyncSync: vi.fn(actual.fsyncSync),
+    fdatasyncSync: vi.fn(actual.fdatasyncSync),
     renameSync: vi.fn(actual.renameSync),
     unlinkSync: vi.fn(actual.unlinkSync),
   };
@@ -368,6 +372,25 @@ describe("Wal", () => {
     expect(read).not.toHaveBeenCalled();
   });
 
+  it("computes the unshipped count arithmetically, not by parsing every unshipped event", () => {
+    // Tacho collector P1-9: `stats()` used to parse every unshipped event of
+    // every session to count them, and the Shipper's `sendBatch` calls it on
+    // every batch of a drain — quadratic in the size of a backlog. The count
+    // is now `lastSeqOf - shippedThrough`, and only the single oldest
+    // unshipped event is ever actually read (for `oldestUnshippedAt`).
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const session = minimalSession();
+    wal.append(session);
+    const parse = vi.spyOn(JSON, "parse");
+    parse.mockClear();
+    const stats = wal.stats();
+    expect(stats.unshipped).toBe(session.length);
+    expect(stats.oldestUnshippedAt).toBe(session[0]?.ts);
+    expect(parse.mock.calls.length).toBeLessThanOrEqual(1);
+    parse.mockRestore();
+  });
+
   it("keeps the index current as events arrive after it was filled", () => {
     const paths = scratchPaths();
     const wal = new Wal(paths.wal);
@@ -702,4 +725,165 @@ it("skips held sessions without changing their cursor or body access", () => {
   expect(wal.unshipped(100, new Set([events[0]!.session_uuid]))).toEqual([]);
   expect(wal.shippedThrough(events[0]!.session_uuid)).toBe(-1);
   expect(wal.unshipped(100)).toEqual(events);
+});
+
+describe("restart safety", () => {
+  // Tacho collector P0-1: a restart that resealed an already-written seq let
+  // ClickHouse's `ReplacingMergeTree` (keyed on seq) silently keep the newer,
+  // wrong frame over the original and erase it from the record.
+  it("refuses to append an event at or behind a seq this process already wrote", () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    wal.append(events);
+    const stale = events[0]!;
+    expect(() => wal.append([stale])).toThrow(
+      /seq 0 is not after the last written seq/,
+    );
+    // The file on disk is untouched by the refused write.
+    expect(wal.read(stale.session_uuid)).toEqual(events);
+  });
+
+  it("refuses a stale seq even from a fresh process that has not read the session yet", () => {
+    const paths = scratchPaths();
+    const events = minimalSession();
+    new Wal(paths.wal).append(events);
+    // A new `Wal` — the shape of a daemon restart — has an empty in-memory
+    // `lastSeq` map and must fall back to a read of the file rather than
+    // silently accepting because it has no cached opinion.
+    const restarted = new Wal(paths.wal);
+    expect(() => restarted.append([events[1]!])).toThrow(
+      /not after the last written seq/,
+    );
+  });
+
+  it("truncates a session's file back to its pre-write size when an append throws", () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    wal.append(events.slice(0, 1));
+    const path = join(paths.wal, `${events[0]!.session_uuid}.ndjson`);
+    const sizeBefore = statSync(path).size;
+    vi.mocked(appendFileSync).mockImplementationOnce(() => {
+      throw Object.assign(new Error("ENOSPC"), { code: "ENOSPC" });
+    });
+    expect(() => wal.append([events[1]!])).toThrow(/ENOSPC/);
+    expect(statSync(path).size).toBe(sizeBefore);
+    // A retry of the same seq succeeds once the transient failure clears.
+    wal.append([events[1]!]);
+    expect(wal.read(events[0]!.session_uuid)).toEqual(events.slice(0, 2));
+  });
+
+  it("repairs a session file whose last line is complete JSON but missing its newline", () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    wal.append(events);
+    const path = join(paths.wal, `${events[0]!.session_uuid}.ndjson`);
+    const original = readFileSync(path, "utf8");
+    // A crash right after the content bytes landed but before the trailing
+    // newline that closes the line.
+    writeFileSync(path, original.replace(/\n$/, ""));
+    expect(wal.repairTail(events[0]!.session_uuid)).toBe("terminated");
+    expect(wal.read(events[0]!.session_uuid)).toEqual(events);
+  });
+
+  it("truncates a session file whose last line never finished writing", () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    wal.append(events.slice(0, -1));
+    const path = join(paths.wal, `${events[0]!.session_uuid}.ndjson`);
+    const sizeBeforeTear = statSync(path).size;
+    appendFileSync(
+      path,
+      JSON.stringify(events[events.length - 1]).slice(0, 40),
+    );
+    expect(wal.repairTail(events[0]!.session_uuid)).toBe("truncated");
+    expect(statSync(path).size).toBe(sizeBeforeTear);
+    expect(wal.read(events[0]!.session_uuid)).toEqual(events.slice(0, -1));
+    // The repaired chain accepts a fresh seal of the event the tear lost.
+    wal.append([events[events.length - 1]!]);
+    expect(wal.read(events[0]!.session_uuid)).toEqual(events);
+  });
+
+  it("reads the last event from the tail without a torn line to repair first", () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    wal.append(events);
+    const last = events[events.length - 1]!;
+    expect(wal.lastEvent(last.session_uuid)).toEqual(last);
+  });
+
+  it("answers no last event for a session whose tail is still torn", () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    wal.append(events);
+    const path = join(paths.wal, `${events[0]!.session_uuid}.ndjson`);
+    appendFileSync(path, JSON.stringify(events[0]).slice(0, 10));
+    expect(wal.lastEvent(events[0]!.session_uuid)).toBeUndefined();
+  });
+});
+
+describe("group commit", () => {
+  // Tacho collector P1-6/P1-7: a body write failure was swallowed, so a
+  // sealed event persisted with content the store never received, and WAL
+  // files were never fsynced, so a cursor written durably (state.json,
+  // cursor.json) could outrun bytes that a crash then lost from the page
+  // cache.
+  it("throws when a body write fails, instead of persisting the event over lost content", () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    const body: FrameBody = {
+      event_id_idem: events[0]!.event_id_idem,
+      session_uuid: events[0]!.session_uuid,
+      seq: 0,
+      content_type: "text/plain; charset=utf-8",
+      bytes: new TextEncoder().encode("prompt bytes"),
+      content_class: "model_call",
+    };
+    vi.mocked(appendFileSync).mockImplementationOnce(() => {
+      throw Object.assign(new Error("ENOSPC"), { code: "ENOSPC" });
+    });
+    expect(() => wal.append(events, [body])).toThrow(/ENOSPC/);
+    // Neither the body nor the event it belongs to landed.
+    expect(wal.read(events[0]!.session_uuid)).toEqual([]);
+  });
+
+  it("does not fsync until flush is called, then fsyncs every file touched since the last flush", () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    const before = vi.mocked(fdatasyncSync).mock.calls.length;
+    wal.append(events.slice(0, -1));
+    expect(vi.mocked(fdatasyncSync).mock.calls.length).toBe(before);
+    wal.flush();
+    expect(vi.mocked(fdatasyncSync).mock.calls.length).toBeGreaterThan(before);
+    const afterFirstFlush = vi.mocked(fdatasyncSync).mock.calls.length;
+    // A second flush with nothing new appended has nothing to sync.
+    wal.flush();
+    expect(vi.mocked(fdatasyncSync).mock.calls.length).toBe(afterFirstFlush);
+  });
+
+  it("flushes the WAL before persisting the shipped/sealed cursor", () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    vi.mocked(fdatasyncSync).mockClear();
+    vi.mocked(writeSync).mockClear();
+    wal.append(events); // includes agent_stop, so this call persists the cursor
+    const fdatasyncOrders = vi.mocked(fdatasyncSync).mock.invocationCallOrder;
+    // `writeSensitiveFileAtomic` is the only caller of `writeSync` on this
+    // path (cursor.json's atomic write); the event and body files go through
+    // `appendFileSync`, which does not call the exported `writeSync`.
+    const cursorWriteOrders = vi.mocked(writeSync).mock.invocationCallOrder;
+    expect(fdatasyncOrders.length).toBeGreaterThan(0);
+    expect(cursorWriteOrders.length).toBeGreaterThan(0);
+    expect(Math.max(...fdatasyncOrders)).toBeLessThan(
+      Math.min(...cursorWriteOrders),
+    );
+  });
 });

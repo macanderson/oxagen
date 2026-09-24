@@ -10,6 +10,7 @@ import { onboarding } from "./onboarding";
 import { org } from "./org";
 import { pretenant } from "./pretenant";
 import { runs } from "./runs";
+import { runtimes } from "./runtimes";
 import { shell } from "./shell";
 import { skills } from "./skills";
 import { spend } from "./spend";
@@ -31,4 +32,5 @@ export const liveSource: DataSource = {
   skills,
   steering,
   tools,
+  runtimes,
 };
