@@ -98,6 +98,13 @@ async function renderDetail(
   return calls;
 }
 
+/** One host's row on the list, by its enrollment id. */
+const hostRow = (id: string): HTMLElement => {
+  const found = document.querySelector<HTMLElement>(`[data-runtime="${id}"]`);
+  if (found === null) throw new Error(`no row for ${id}`);
+  return found;
+};
+
 const goldButtons = () =>
   [...document.querySelectorAll("a, button")].filter((el) =>
     el.className.includes("bg-button-primary-bg"),
@@ -309,13 +316,7 @@ describe("Runtimes, loaded", () => {
       ]),
     });
     const hooks = (id: string) =>
-      nth(
-        within(
-          document.querySelector(`[data-runtime="${id}"]`) as HTMLElement,
-        ).getAllByRole("cell"),
-        7,
-        "cell",
-      );
+      nth(within(hostRow(id)).getAllByRole("cell"), 7, "cell");
     expect(hooks("tch_readbackaaaaaaaaaaaaaaa")).toHaveTextContent(/^5 of 5$/);
     expect(
       hooks("tch_readbackaaaaaaaaaaaaaaa").querySelector("[data-not-backed]"),
@@ -373,7 +374,7 @@ describe("Runtimes, loaded", () => {
       enrollment({
         id: `tch_host${String(index).padStart(2, "0")}aaaaaaaaaaaaaaaa`,
         hostname: `host-${String(index).padStart(2, "0")}`,
-        agentKey: `acme.core.agent-${index}`,
+        agentKey: `acme.core.agent-${String(index)}`,
         ...(index === 3
           ? { status: "revoked", revokedAt: "2026-09-20T10:00:00.000Z" }
           : {}),
@@ -486,10 +487,7 @@ describe("Runtimes, loaded", () => {
         }),
       ]),
     });
-    const cellsOf = (id: string) =>
-      within(
-        document.querySelector(`[data-runtime="${id}"]`) as HTMLElement,
-      ).getAllByRole("cell");
+    const cellsOf = (id: string) => within(hostRow(id)).getAllByRole("cell");
     const versionOnly = cellsOf("tch_versiononlyaaaaaaaaaaa");
     // No architecture: the line stops at the version, with no dangling dot.
     expect(nth(versionOnly, 0, "cell")).toHaveTextContent(/macOS 15\.6$/);

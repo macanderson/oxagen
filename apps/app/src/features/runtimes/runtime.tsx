@@ -262,6 +262,7 @@ function agentRow({
         card
       ) : (
         <SafeLink
+          key="agent"
           to={routes.agent(org, ws, agent.slug)}
           data-touch-target=""
           className="inline-flex items-center rounded-sm after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-ring"
@@ -273,6 +274,7 @@ function agentRow({
         notRecorded
       ) : (
         <OperatorName
+          key="operator"
           operator={operatorOf(agent.operatorId, members)}
           testId="runtime-operator"
         />
@@ -281,7 +283,9 @@ function agentRow({
       agent === null || agent.principalId === null ? (
         notRecorded
       ) : (
-        <span className={`${mono} text-xs`}>{agent.principalId}</span>
+        <span key="principal" className={`${mono} text-xs`}>
+          {agent.principalId}
+        </span>
       ),
       words.runs ?? notRecorded,
     ],
