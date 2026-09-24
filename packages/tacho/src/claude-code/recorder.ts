@@ -977,7 +977,11 @@ export class SessionRecorder {
     const anthropic = standard?.anthropic ?? this.anthropic;
     const context = standard?.context ?? this.context;
     const host = standard?.host ?? this.host;
-    const harnessVersion = standard?.harnessVersion ?? this.harnessVersion;
+    // OTel's `service.version` or the exec path when either has spoken, else
+    // the `version` every transcript line carries, so a session that exports
+    // no OTel still records which harness build it ran on.
+    const harnessVersion =
+      standard?.harnessVersion ?? this.harnessVersion ?? context.app_version;
     const parent = this.options.parent;
     // Redacted and digested here, before the seal, so the digest the chain
     // hash covers is the digest of the bytes that ship. A frame with bytes
