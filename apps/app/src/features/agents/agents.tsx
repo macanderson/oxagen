@@ -8,7 +8,9 @@
 // workspace's own count on `list_agents`; Holding a mandate counts the agents
 // whose principal holds an active mandate in `tools.mandates`; Tamper
 // incidents sums the tamper incidents recorded on each agent's hosts, the set
-// the Incidents column reads, and names the newest. The design scopes the
+// the Incidents column reads, and names the newest. Enrolled's "not yet
+// enrolled" counts agents whose status is `unenrolled`, so a retired or
+// suspended agent is in neither figure. The design scopes the
 // last two to the organization; `list_agents` answers for the workspace, so
 // each basis line says "counted in <workspace> only" where a touch device can
 // read it, and the organization count on Agents here prints as not recorded
@@ -53,7 +55,9 @@ function Tiles({ page, workspace }: { page: AgentPage; workspace: string }) {
   const locale = useLocale();
   const count = (n: number) => formatCount(n, locale);
   const { totals, agents } = page;
-  const notEnrolled = totals.identities - totals.enrolled;
+  // Counted by status on the read: a retired or suspended agent is not
+  // waiting to enroll, so `identities - enrolled` would overcount.
+  const notEnrolled = totals.unenrolled;
   const observe = agents.filter((a) => a.enforcementTier === "observe").length;
   const harness = agents.filter((a) => a.enforcementTier === "harness").length;
   const otherTier = agents.length - observe - harness;
@@ -67,7 +71,6 @@ function Tiles({ page, workspace }: { page: AgentPage; workspace: string }) {
           // The day as the record stamps it (UTC), as the design prints it.
           date: tamper.newest.detectedAt.slice(0, 10),
         };
-  const holders = agents.filter((a) => (a.mandates ?? 0) > 0);
   return (
     <section aria-label={t("label")} className={statStrip}>
       <Tile
@@ -114,13 +117,10 @@ function Tiles({ page, workspace }: { page: AgentPage; workspace: string }) {
               {totals.holdingMandate === 0
                 ? t("mandate.none", { workspace })
                 : t("mandate.holders", {
-                    holders: holders
-                      .map((a) =>
-                        t("mandate.holder", {
-                          key: a.agentKey ?? a.slug,
-                          workspace,
-                        }),
-                      )
+                    // The holders the count counted, from the same read,
+                    // not the rows on this page.
+                    holders: totals.mandateHolders
+                      .map((key) => t("mandate.holder", { key, workspace }))
                       .join(", "),
                     workspace,
                   })}

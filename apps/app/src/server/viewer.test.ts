@@ -25,13 +25,19 @@ const nav = vi.hoisted(() => {
     notFound: interrupt("NEXT_NOT_FOUND"),
   };
 });
-const { requestHeaders, getSessionMock, resolveMock, invitationByToken } =
-  vi.hoisted(() => ({
-    requestHeaders: new Headers(),
-    getSessionMock: vi.fn(),
-    resolveMock: vi.fn<() => Promise<ViewerResolution>>(),
-    invitationByToken: vi.fn<() => Promise<InvitationRecord | null>>(),
-  }));
+const {
+  requestHeaders,
+  getSessionMock,
+  resolveMock,
+  invitationByToken,
+  freePlanIncludedGau,
+} = vi.hoisted(() => ({
+  requestHeaders: new Headers(),
+  getSessionMock: vi.fn(),
+  resolveMock: vi.fn<() => Promise<ViewerResolution>>(),
+  invitationByToken: vi.fn<() => Promise<InvitationRecord | null>>(),
+  freePlanIncludedGau: vi.fn<() => Promise<number | null>>(),
+}));
 
 vi.mock("next/navigation", () => nav);
 // requireViewer defers its clock read behind connection(), which needs a request scope.
@@ -44,7 +50,7 @@ vi.mock("next/headers", () => ({
 }));
 vi.mock("./session", () => ({ getSession: getSessionMock }));
 vi.mock("./tenancy-lookups", () => ({
-  systemLookups: { name: "live", invitationByToken },
+  systemLookups: { name: "live", invitationByToken, freePlanIncludedGau },
 }));
 vi.mock("./viewer-resolution", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./viewer-resolution")>()),
@@ -59,6 +65,7 @@ import {
   OrgCtx,
   type OrgFields,
   PretenantCtx,
+  readFreePlanAllowance,
   readInvitation,
   requireInvitee,
   requireUser,
@@ -101,6 +108,7 @@ beforeEach(() => {
   for (const key of [...requestHeaders.keys()]) requestHeaders.delete(key);
   resolveMock.mockReset();
   invitationByToken.mockReset();
+  freePlanIncludedGau.mockReset();
   getSessionMock.mockResolvedValue(null);
 });
 
@@ -347,6 +355,19 @@ describe("readInvitation", () => {
     await expect(readInvitation("")).resolves.toBeNull();
     await expect(readInvitation("a".repeat(65))).resolves.toBeNull();
     expect(invitationByToken).not.toHaveBeenCalled();
+  });
+});
+
+describe("readFreePlanAllowance", () => {
+  it("reads the Free plan's allowance with no session", async () => {
+    freePlanIncludedGau.mockResolvedValue(5000);
+    await expect(readFreePlanAllowance()).resolves.toBe(5000);
+    expect(getSessionMock).not.toHaveBeenCalled();
+  });
+
+  it("passes a missing plan row through as null (negative)", async () => {
+    freePlanIncludedGau.mockResolvedValue(null);
+    await expect(readFreePlanAllowance()).resolves.toBeNull();
   });
 });
 
