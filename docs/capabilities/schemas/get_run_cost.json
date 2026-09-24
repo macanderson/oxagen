@@ -1,7 +1,7 @@
 {
   "name": "get_run_cost",
   "domain": "run",
-  "description": "Read one run's cost rollup: total cost with its basis, tokens by class, cache hit rate, turns, steps, model and tool calls, and the per-model and per-tool breakdown; null until the rollup has rebuilt the run from its frames.",
+  "description": "Read one run's cost rollup: total cost with its basis, tokens by class, cache hit rate, turns, steps, model and tool calls, and the per-model and per-tool breakdown, marked as an estimate while the run is still open; null until the rollup has built the run from its frames.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -301,6 +301,9 @@
               },
               "rolledUpAt": {
                 "type": "string"
+              },
+              "isEstimate": {
+                "type": "boolean"
               }
             },
             "required": [
@@ -316,7 +319,8 @@
               "byModel",
               "byTool",
               "priceEntryIds",
-              "rolledUpAt"
+              "rolledUpAt",
+              "isEstimate"
             ],
             "additionalProperties": false
           },

@@ -3927,7 +3927,7 @@
       "writes": []
     }
   ],
-  "contentHash": "59cbcb30c7887d3307fbf641b0ab611e7e82fda91c7130d88923af9216010386",
+  "contentHash": "78bde7df548a2b8bd4afb9500db2bc9a6599c7877963dc7932fad293408dd7e5",
   "domains": [
     {
       "name": "agent",
@@ -21270,6 +21270,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "timestamp with time zone"
+        },
+        {
+          "name": "seal_source",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
         },
         {
           "name": "cwd",
