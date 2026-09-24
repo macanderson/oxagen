@@ -325,9 +325,7 @@ function Checkout({
       {primary?.branch == null ? (
         <span className={missing}>{t("branchNotRecorded")}</span>
       ) : (
-        <span data-testid="run-branch" className={chip}>
-          {primary.branch}
-        </span>
+        <span data-testid="run-branch" className={chip}>{primary.branch}</span>
       )}
       {recordedPulls.length === 0 ? (
         <PullChips pulls={pulls} />
@@ -374,9 +372,7 @@ function SubagentChip({
           {t("subagentTypeNotRecorded")}
         </span>
       )}
-      <span className="text-muted-foreground">
-        {subagent.agentRef.slice(0, 7)}
-      </span>
+      <span className="text-muted-foreground">{subagent.agentRef.slice(0, 7)}</span>
       {subagent.stopped ? null : (
         <span className="text-muted-foreground">
           {live ? t("subagentRunning") : t("subagentNoStop")}
@@ -575,7 +571,8 @@ function When({ run }: { run: RunRow }) {
         <span>{t("running")}</span>
       ) : run.endedAt != null ? (
         <span data-testid="run-ended">
-          {t("ended")} <time dateTime={run.endedAt}>{when(run.endedAt)}</time>
+          {t("ended")}{" "}
+          <time dateTime={run.endedAt}>{when(run.endedAt)}</time>
         </span>
       ) : run.sealedAt === null ? (
         <span>{t("sealNotRecorded")}</span>
