@@ -177,6 +177,13 @@ export type RunMetrics = {
   /** The transcript was read to its end, so counts are totals rather than floors. */
   whole: boolean;
   tokens: TokenFigures | null;
+  /**
+   * The session's own sums over its `llm_call` frames, which stand in for the
+   * Tokens figure until the rollup rebuilds the run, labelled provisional.
+   * Null when the session reported none. They come in four kinds, not the
+   * rollup's six classes, so they never price a class.
+   */
+  reportedTokens: { total: number; input: number; output: number } | null;
   priced: PricedClasses | null;
   /** The rollup's cost, else the run row's; the basis travels with it. */
   cost: Cost | null;
@@ -495,11 +502,14 @@ function wallClock(
   turns: readonly TranscriptTurn[] | null,
   waits: readonly Wait[],
 ): WallClock {
-  const sealedAt = run.sealedAt;
-  const sealed = sealedAt !== null;
+  // The clock ends when the status says the run did: at the recorder's end
+  // time, else the seal, which is the server's receipt time and can trail the
+  // run by the upload. A live run runs to its last recorded frame.
+  const endedAt = run.status === "live" ? null : (run.endedAt ?? run.sealedAt);
+  const sealed = endedAt !== null;
   const last = entries?.at(-1);
   const ms = sealed
-    ? Math.max(0, Date.parse(sealedAt) - Date.parse(run.startedAt))
+    ? Math.max(0, Date.parse(endedAt) - Date.parse(run.startedAt))
     : last === undefined
       ? null
       : last.elapsedMs;
@@ -547,11 +557,25 @@ export function runMetrics({
   const calls = turns === null ? null : toolCallsOf(turns, waits);
   const runCost = rollup?.cost ?? run.cost;
   const tokens = rollup === null ? null : tokenFigures(rollup);
+  const reported = run.reportedTokens ?? null;
+  const reportedTokens =
+    reported === null
+      ? null
+      : {
+          total:
+            reported.input +
+            reported.output +
+            reported.cacheRead +
+            reported.cacheWrite,
+          input: reported.input + reported.cacheRead + reported.cacheWrite,
+          output: reported.output,
+        };
   const promptCount =
     entries === null ? null : entries.filter(isOperatorPrompt).length;
   return {
     whole: transcript.ok && isWhole(transcript.value),
     tokens,
+    reportedTokens,
     priced: rollup === null ? null : priceClasses(rollup, book),
     cost: runCost,
     wasted: wasted(runCost, rollup?.productiveRatio ?? null),

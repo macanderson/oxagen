@@ -5441,8 +5441,16 @@ type Messages = {
       noPullRequest: string;
       pathNotCaptured: string;
       noMachine: string;
+      subagents: string;
+      subagentTypeNotRecorded: string;
+      subagentNoStop: string;
+      subagentRunning: string;
+      moreSubagents: string;
       started: string;
       sealed: string;
+      ended: string;
+      sealNotRecorded: string;
+      enrolledBy: string;
       paused: string;
       copyLabel: string;
       copied: string;
@@ -5456,6 +5464,10 @@ type Messages = {
       task: string;
       effort: string;
       notCaptured: string;
+      effortValue: string;
+      thinkingOn: string;
+      thinkingOff: string;
+      permissionMode: string;
       effortWhy: {
         not_proxied: string;
         not_sent: string;
@@ -5479,6 +5491,7 @@ type Messages = {
       generatedBy: string;
       notGenerated: string;
     };
+    summaryFailed: string;
     stats: {
       label: string;
       tokens: string;
@@ -5488,6 +5501,7 @@ type Messages = {
       wallClock: string;
       cacheHit: string;
       tokensNote: string;
+      tokensProvisional: string;
       wastedNote: string;
       noRollup: string;
       oneShot: string;

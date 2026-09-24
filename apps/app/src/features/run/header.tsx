@@ -4,15 +4,18 @@
 // allows, always ending on Export.
 //
 // Every chip shows what the record holds. A fact the record does not capture
-// (a harness version the session did not report, the effort setting, a
-// checkout the host did not enroll) is said to be missing in words rather
-// than left blank or guessed.
+// (a harness version the session did not report, an effort setting no frame
+// carried, a checkout the host did not enroll) is said to be missing in words
+// rather than left blank or guessed. The rig adds the thinking and permission
+// mode a session recorded, and a subagents row appears under the checkout
+// when the session started any; the design draws neither, and both show only
+// what the record holds.
 import { Folder, GitBranch, GitPullRequest } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { Suspense, use } from "react";
 import type { AgentDetail, AgentPage } from "@/data/contracts/agents";
 import type { RunOutputNode } from "@/data/contracts/run";
-import type { RunWork } from "@/data/contracts/run-work";
+import type { RunSubagent, RunWork } from "@/data/contracts/run-work";
 import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import { parseGitHubUrl } from "@/shared/github-url";
@@ -149,10 +152,26 @@ function Rig({
       >
         {model === null ? t("modelNotRecorded") : model.slug}
       </Chip>
-      <Chip testId="run-effort" title={t(`effortWhy.${fit.effort.why}`)}>
-        {t("effort")}{" "}
-        <span className="font-normal text-dim">{t("notCaptured")}</span>
-      </Chip>
+      {run.effort == null ? (
+        <Chip testId="run-effort" title={t(`effortWhy.${fit.effort.why}`)}>
+          {t("effort")}{" "}
+          <span className="font-normal text-dim">{t("notCaptured")}</span>
+        </Chip>
+      ) : (
+        <Chip testId="run-effort">
+          {t("effort")} {t("effortValue", { value: run.effort })}
+        </Chip>
+      )}
+      {run.thinking == null ? null : (
+        <Chip testId="run-thinking">
+          {run.thinking ? t("thinkingOn") : t("thinkingOff")}
+        </Chip>
+      )}
+      {run.permissionMode == null ? null : (
+        <Chip testId="run-permission-mode" code>
+          {t("permissionMode", { value: run.permissionMode })}
+        </Chip>
+      )}
       <FitBadges fit={fit} />
     </div>
   );
@@ -317,7 +336,7 @@ function WhereFromWork({
   const facts = useHostFacts(run);
   const work = use(read);
   if (!work.ok) return <WhereFromOutputs run={run} pulls={pulls} />;
-  const checkout = work.value.checkouts[0] ?? null;
+  const checkout = latestCheckout(work.value);
   const repo = checkout?.repository ?? work.value.pullRequests[0]?.repository;
   const prs = work.value.pullRequests;
   // A branch that is a pull request's head links to the pull request, never
@@ -386,7 +405,97 @@ function WhereFromWork({
   );
 }
 
-/** "<task title> · started <t>", with "· sealed <t>" once sealed. */
+/** Seqs are decimal strings: the longer one is later, then the larger. */
+function laterSeq(a: string, b: string): boolean {
+  return a.length === b.length ? a > b : a.length > b.length;
+}
+
+/** The checkout the session touched last; null when the host recorded none. */
+function latestCheckout(work: RunWork): RunWork["checkouts"][number] | null {
+  return work.checkouts.reduce<RunWork["checkouts"][number] | null>(
+    (latest, checkout) =>
+      latest === null || laterSeq(checkout.lastSeq, latest.lastSeq)
+        ? checkout
+        : latest,
+    null,
+  );
+}
+
+/** Subagent chips drawn before the rest are counted as "N more". */
+const SUBAGENT_CHIPS = 12;
+
+function SubagentChip({
+  subagent,
+  live,
+}: {
+  subagent: RunSubagent;
+  live: boolean;
+}) {
+  const t = useTranslations("run.header");
+  return (
+    <Chip code title={subagent.id}>
+      {subagent.type ?? (
+        <span className="font-normal text-dim">
+          {t("subagentTypeNotRecorded")}
+        </span>
+      )}
+      <span className="font-normal text-dim">{subagent.id.slice(0, 7)}</span>
+      {subagent.stopped ? null : (
+        <span className="font-normal text-dim">
+          {live ? t("subagentRunning") : t("subagentNoStop")}
+        </span>
+      )}
+    </Chip>
+  );
+}
+
+/**
+ * The subagents the session started, one chip per recorded agent id, from
+ * the same work read as the checkout. The design draws no such row, so it
+ * appears only when the session started at least one.
+ */
+function SubagentsFromWork({
+  read,
+  run,
+}: {
+  read: Promise<Read<RunWork>>;
+  run: RunRow;
+}) {
+  const t = useTranslations("run.header");
+  const work = use(read);
+  const subagents = work.ok ? (work.value.subagents ?? []) : [];
+  if (subagents.length === 0) return null;
+  return (
+    <div
+      data-testid="run-subagents"
+      className="mt-2 flex flex-wrap items-center gap-[9px]"
+    >
+      <span className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-dim">
+        {t("subagents")}
+      </span>
+      {subagents.slice(0, SUBAGENT_CHIPS).map((subagent) => (
+        <SubagentChip
+          key={subagent.id}
+          subagent={subagent}
+          live={run.status === "live"}
+        />
+      ))}
+      {subagents.length > SUBAGENT_CHIPS ? (
+        <span className="text-[11px] text-dim">
+          {t("moreSubagents", { count: subagents.length - SUBAGENT_CHIPS })}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * "<task title> · started <t>", then how it ended once the status says it
+ * has: the recorder's end time, else the seal, which is the server's receipt
+ * time and can trail the run by the upload. Keyed on the status, the one
+ * definition of sealed the actions and summarize_run also gate on, so a run
+ * that ended with no seal instant says so rather than looking live.
+ */
 function When({ run }: { run: RunRow }) {
   const t = useTranslations("run.header");
   const format = useFormatter();
@@ -401,7 +510,17 @@ function When({ run }: { run: RunRow }) {
     >
       {title === null ? null : <>{title} · </>}
       {t("started")} <time dateTime={run.startedAt}>{when(run.startedAt)}</time>
-      {run.sealedAt === null ? null : (
+      {run.status === "live" ? null : run.endedAt != null ? (
+        <span data-testid="run-ended">
+          {" · "}
+          {t("ended")} <time dateTime={run.endedAt}>{when(run.endedAt)}</time>
+        </span>
+      ) : run.sealedAt === null ? (
+        <>
+          {" · "}
+          {t("sealNotRecorded")}
+        </>
+      ) : (
         <>
           {" · "}
           {t("sealed")}{" "}
@@ -539,6 +658,9 @@ export function RunHeader({
           <Suspense fallback={<WhereFromOutputs run={run} pulls={pulls} />}>
             <WhereFromWork read={work} run={run} pulls={pulls} />
           </Suspense>
+          <Suspense fallback={null}>
+            <SubagentsFromWork read={work} run={run} />
+          </Suspense>
           <When run={run} />
           {run.completenessGaps.length === 0 ? null : (
             <p
@@ -564,6 +686,7 @@ export function RunHeader({
               status={run.status}
               source={run.source}
               enforcementTier={run.enforcementTier}
+              commandBlock={run.commandBlock}
               ingressRevoked={run.ingressRevoked}
               ingressPaused={run.ingressPaused}
               orgRole={orgRole}

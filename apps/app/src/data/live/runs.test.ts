@@ -118,6 +118,12 @@ describe("runs.list", () => {
             frames: 9,
             cost: null,
             reportedCost: null,
+            // #4018's session facts: a row that recorded none maps each to
+            // null, never to a guess.
+            effort: null,
+            thinking: null,
+            permissionMode: null,
+            reportedTokens: null,
             model: viewModel,
             harness: null,
             machine,
@@ -433,7 +439,42 @@ describe("runs.cost", () => {
 
   it("keeps a rollup that has not run as null, never as a zero (negative)", async () => {
     kernelRead.mockResolvedValue(readOk({ runId: "tse_4f0a", rollup: null }));
-    expect(await runs.cost(ctx, "tse_4f0a")).toEqual(readOk({ rollup: null }));
+    expect(await runs.cost(ctx, "tse_4f0a")).toEqual(
+      readOk({ rollup: null, provisional: null }),
+    );
+  });
+
+  it("maps a wrapped run's provisional figures, with each model's cost in the view's money", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        runId: "tse_4f0a",
+        rollup: null,
+        provisional: {
+          byModel: [
+            {
+              model: "claude-sonnet-5",
+              provider: "anthropic",
+              calls: 3,
+              cost: {
+                micros: "2500000",
+                currency: "USD",
+                basis: "client_attested",
+              },
+            },
+            { model: "gpt-5", provider: null, calls: 1, cost: null },
+          ],
+          toolCalls: 6,
+          asOf: "2026-09-23T10:00:00.000Z",
+        },
+      }),
+    );
+    const read = await runs.cost(ctx, "tse_4f0a");
+    expect(read.ok && read.value.rollup).toBeNull();
+    expect(read.ok && read.value.provisional?.toolCalls).toBe(6);
+    expect(read.ok && read.value.provisional?.byModel[0]?.cost).toMatchObject({
+      basis: "client_attested",
+    });
+    expect(read.ok && read.value.provisional?.byModel[1]?.cost).toBeNull();
   });
 });
 

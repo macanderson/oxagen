@@ -108,7 +108,12 @@ function Involved({
                   ))}
               </b>
               <span className="truncate font-mono text-[10.5px] text-dim">
-                {t("summary.operator")}
+                {/* A wrapped session's operator can be the person who
+                    enrolled the host rather than one who started the run,
+                    and the record says which. */}
+                {run.operatorAttribution === "host_enroller"
+                  ? t("header.enrolledBy")
+                  : t("summary.operator")}
               </span>
             </span>
           </OperatorName>
@@ -162,6 +167,14 @@ export function SummaryPanel({
           className="mb-2.5 mt-3 max-w-[78ch] text-[15px] leading-[1.55] text-foreground"
         >
           {summary.text}
+        </p>
+      )}
+      {run.enrichmentError === undefined ? null : (
+        <p
+          data-testid="run-summary-failed"
+          className="mb-2.5 text-xs text-muted-foreground"
+        >
+          {t("summaryFailed", { reason: run.enrichmentError })}
         </p>
       )}
       <div className="mt-[13px] flex flex-wrap items-center gap-2.5 border-t border-border pt-[11px] font-mono text-[11px] text-dim">
@@ -267,15 +280,25 @@ export function StatRow({
         testId="run-stat-tokens"
         label={t("tokens")}
         note={
-          tokens === null
-            ? t("noRollup")
-            : t("tokensNote", {
+          tokens !== null
+            ? t("tokensNote", {
                 input: count(tokens.input),
                 output: count(tokens.output),
               })
+            : // Before the rollup rebuilds the run, the session's own sums
+              // stand in, labelled provisional.
+              metrics.reportedTokens !== null
+              ? t("tokensProvisional")
+              : t("noRollup")
         }
       >
-        {tokens === null ? <NoValue /> : count(tokens.total)}
+        {tokens !== null ? (
+          count(tokens.total)
+        ) : metrics.reportedTokens !== null ? (
+          count(metrics.reportedTokens.total)
+        ) : (
+          <NoValue />
+        )}
       </Stat>
       <Stat
         testId="run-stat-prompts"

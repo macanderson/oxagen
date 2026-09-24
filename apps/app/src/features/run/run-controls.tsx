@@ -328,6 +328,11 @@ export function RunControls({
   source: RunRow["source"];
   /** Where the run was observed from; an `observe` tier has no connection point. */
   enforcementTier: RunRow["enforcementTier"];
+  /**
+   * Why a command cannot reach the run, from the row; null or absent when it
+   * can. Accepted ahead of #4034, which draws the controls from it.
+   */
+  commandBlock?: RunRow["commandBlock"];
   ingressRevoked?: boolean;
   ingressPaused?: boolean;
   orgRole: OrgRole;

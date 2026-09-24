@@ -2252,6 +2252,185 @@ describe("policy and context", () => {
   });
 });
 
+describe("what the session recorded", () => {
+  it("reads effort, thinking and permission mode from the session row into the rig", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            effort: "medium",
+            thinking: true,
+            permissionMode: "acceptEdits",
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-effort")).toHaveTextContent("effort medium");
+    // A recorded value carries no "why it is missing" reading.
+    expect(screen.getByTestId("run-effort")).not.toHaveAttribute("title");
+    expect(screen.getByTestId("run-thinking")).toHaveTextContent("thinking on");
+    expect(screen.getByTestId("run-permission-mode")).toHaveTextContent(
+      "mode acceptEdits",
+    );
+  });
+
+  it("says effort was not captured, and draws no thinking or mode chip, when the session recorded none (negative)", async () => {
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-effort")).toHaveTextContent(
+      "effort not captured",
+    );
+    expect(screen.queryByTestId("run-thinking")).toBeNull();
+    expect(screen.queryByTestId("run-permission-mode")).toBeNull();
+  });
+
+  it("ends the when line and the wall clock at the recorder's end time, not the seal's receipt", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            status: "sealed",
+            startedAt: "2026-09-15T08:00:00.000Z",
+            endedAt: "2026-09-15T08:01:30.000Z",
+            sealedAt: "2026-09-15T08:10:00.000Z",
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-ended")).toHaveTextContent("ended");
+    expect(screen.getByTestId("run-when")).not.toHaveTextContent("sealed");
+    expect(screen.getByTestId("run-stat-wall")).toHaveTextContent("1:30");
+  });
+
+  it("reads a halted run with no seal instant as ended with no seal recorded, never as live (negative)", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({ status: "halted", sealedAt: null, endedAt: null }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-when")).toHaveTextContent(
+      "ended with no seal recorded",
+    );
+  });
+
+  it("notes why the last automatic summary failed beside the summary", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({ run: runRow({ enrichmentError: "model_timeout" }) }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-summary-failed")).toHaveTextContent(
+      "The last automatic summary failed (model_timeout).",
+    );
+  });
+
+  it("labels the operator as the host's enroller when the record says the name came from there", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({ run: runRow({ operatorAttribution: "host_enroller" }) }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    const operator = within(screen.getByTestId("run-operator"));
+    expect(operator.getByText("enrolled the host")).toBeTruthy();
+    expect(operator.queryByText("operator")).toBeNull();
+  });
+
+  it("lists the subagents the session started under the checkout, and draws no row when it started none", async () => {
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      work: ok(
+        runWork({
+          subagents: [
+            {
+              id: "a1b2c3d4e5f6",
+              type: "Explore",
+              firstSeq: "3",
+              lastSeq: "9",
+              stopped: true,
+            },
+            {
+              id: "f6e5d4c3b2a1",
+              type: null,
+              firstSeq: "10",
+              lastSeq: "12",
+              stopped: false,
+            },
+          ],
+        }),
+      ),
+    });
+    const row = within(await screen.findByTestId("run-subagents"));
+    expect(row.getByText("Explore")).toBeTruthy();
+    expect(row.getByText("a1b2c3d")).toBeTruthy();
+    expect(row.getByText("type not recorded")).toBeTruthy();
+    // A sealed run's subagent with no stop frame is not "running".
+    expect(row.getByText("no stop recorded")).toBeTruthy();
+    cleanup();
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      work: ok(runWork({ subagents: [] })),
+    });
+    await screen.findByTestId("run-checkout");
+    expect(screen.queryByTestId("run-subagents")).toBeNull();
+  });
+
+  it("prints the checkout the session touched last, not the first one recorded", async () => {
+    const base = runWork();
+    const [checkout] = base.checkouts;
+    if (checkout === undefined) throw new Error("the builder holds a checkout");
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      work: ok(
+        runWork({
+          checkouts: [
+            { ...checkout, ref: "co_old", path: "~/src/old", lastSeq: "999" },
+            { ...checkout, ref: "co_new", path: "~/src/new", lastSeq: "1000" },
+          ],
+        }),
+      ),
+    });
+    expect(await screen.findByTestId("run-checkout-path")).toHaveTextContent(
+      "mac-studio.local:~/src/new",
+    );
+  });
+
+  it("counts the session's reported tokens, labelled provisional, before the rollup rebuilds the run", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            reportedTokens: {
+              input: 100,
+              output: 50,
+              cacheRead: 1000,
+              cacheWrite: 10,
+            },
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+      cost: ok({ rollup: null }),
+    });
+    const tokens = screen.getByTestId("run-stat-tokens");
+    expect(tokens).toHaveTextContent("1,160");
+    expect(tokens).toHaveTextContent(
+      "reported by the session, provisional until the rollup",
+    );
+  });
+});
+
 describe("loading", () => {
   it("replaces the page body with a skeleton shaped like the answer, and never the shell", async () => {
     const { container } = render(

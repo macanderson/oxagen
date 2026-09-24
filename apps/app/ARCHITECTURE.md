@@ -61,7 +61,7 @@ Why the rule is this strict:
 
 ### 1.2 Pages, sections, titles
 
-Every route that renders a page has a catalog title key. The root layout sets `metadata.title = { default: t("app.name"), template: "%s · Oxagen" }` (today `layout.tsx:8-11` sets one constant title for every route). Each `page.tsx` exports `generateMetadata` returning `{ title: t(<key>) }` and renders `<PageHeader title={t(<key>)}>` from the same key, so the document title and the `h1` cannot drift. The page-load smoke asserts both (§6.3) from the oracle in `e2e/routes.ts`.
+Every route that renders a page has a catalog title key. The root layout sets `metadata.title = { default: t("app.name"), template: "%s · Oxagen" }` (today `layout.tsx:8-11` sets one constant title for every route). Each `page.tsx` exports `generateMetadata` returning `{ title: t(<key>) }` and renders `<PageHeader title={t(<key>)}>` from the same key, so the document title and the `h1` cannot drift. The page-load smoke asserts both (§6.3) from the oracle in `e2e/routes.ts`. The Run page is the one exception: its `page.tsx` sets the document title from `pages.run` and draws no header, because only the run read knows the run's human title. `features/run/run.tsx` draws the `h1` as that title, or the run id when the run has none or its read failed.
 
 | Route | Page | Smoke oracle (`e2e/routes.ts`) | Real UI in rev1 (contract) | Renders `NotRecorded` |
 |---|---|---|---|---|
