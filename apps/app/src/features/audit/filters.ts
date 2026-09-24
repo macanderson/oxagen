@@ -33,7 +33,10 @@ import {
 } from "@/shared/calendar-day";
 import { firstParam } from "@/shared/safe-path";
 
-/** The event types the filter offers, in the order the platform declares them. */
+/**
+ * The event types the filter offers, in the order the platform declares them.
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export const AUDIT_EVENT_TYPES: readonly string[] =
   EMITTED_SECURITY_EVENT_TYPES;
 

@@ -133,12 +133,7 @@ export const AuditRetention = z.object({
 export type AuditRetention = z.infer<typeof AuditRetention>;
 
 /** Where a queued export has got to (`get_export_status`). */
-export const AuditBundleStatus = z.enum([
-  "queued",
-  "processing",
-  "ready",
-  "failed",
-]);
+const AuditBundleStatus = z.enum(["queued", "processing", "ready", "failed"]);
 
 /**
  * One organization export Build bundle queued (export_data, scope org), read
