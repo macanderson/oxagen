@@ -258,7 +258,8 @@ export function createGithubProxy(deps: GithubProxyDeps) {
       await deps.refreshBundle();
       verdict = evaluate();
     }
-    // Observe mode allows an unverified bundle; a token mint must not.
+    // The Bash call modelled above is already denied on an unverified bundle,
+    // but a token mint must not depend on how a tool happens to classify.
     if (!deps.policy().verified) {
       reply(res, 403, "The signed GitHub mandate did not verify");
       return;
