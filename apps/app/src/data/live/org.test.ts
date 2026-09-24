@@ -9,6 +9,7 @@
 import { agentList } from "@oxagen/oxagen/contracts/agent.list";
 import { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
 import { iamRoleList } from "@oxagen/oxagen/contracts/iam.role.list";
+import { orgDataPlaneGet } from "@oxagen/oxagen/contracts/org.data_plane.get";
 import { orgSsoList } from "@oxagen/oxagen/contracts/org.sso.list";
 import { repositoryList } from "@oxagen/oxagen/contracts/repository.list";
 import { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
@@ -557,6 +558,61 @@ const storedScim = {
     lastUsedAt: null,
   },
 };
+
+describe("org.dataPlane", () => {
+  const shared = {
+    kind: "postgres",
+    mode: "shared",
+    status: "active",
+    host: null,
+    database: null,
+    schemaVersion: null,
+    lastVerifiedAt: null,
+    rotatedAt: null,
+  };
+
+  it("reads get_data_plane for the Postgres binding and returns the redacted view", async () => {
+    kernelRead.mockResolvedValue(readOk(shared));
+    expect(await org.dataPlane(ctx)).toEqual(
+      readOk({
+        mode: "shared",
+        status: "active",
+        host: null,
+        database: null,
+        schemaVersion: null,
+        lastVerifiedAt: null,
+        rotatedAt: null,
+      }),
+    );
+    // The Postgres binding: the one every tenant table sits on.
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: orgDataPlaneGet,
+      input: { kind: "postgres" },
+      page: "organization",
+    });
+  });
+
+  it("passes a refusal through unchanged and reports nothing (negative)", async () => {
+    const denied = {
+      ok: false,
+      reason: "denied",
+      permission: "org.owner or org.admin",
+    } as const;
+    kernelRead.mockResolvedValue(denied);
+    expect(await org.dataPlane(ctx)).toEqual(denied);
+    expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("answers record_unmappable and reports once for a binding the view model refuses (negative)", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({ ...shared, lastVerifiedAt: "last Tuesday" }),
+    );
+    expect(await org.dataPlane(ctx)).toEqual(
+      readError("record_unmappable", 502),
+    );
+    expect(captureError).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe("org.sso", () => {
   it("reads list_sso_providers for the organization and returns the SSO view model", async () => {
