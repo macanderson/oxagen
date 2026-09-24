@@ -4872,6 +4872,9 @@ type Messages = {
         hostRevoked: string;
         hostOffline: string;
       };
+      steerBlocked: {
+        noPromptCarrier: string;
+      };
       delivery: {
         legend: string;
         nextStep: {

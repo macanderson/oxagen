@@ -22,7 +22,10 @@
 // cancelled. When the row says a command cannot reach the run (`commandBlock`:
 // no host, a revoked host, or a host that has stopped polling) the controls
 // draw disabled with that reason. A row that does not say is offered the
-// controls, and the handler's refusal names the reason.
+// controls, and the handler's refusal names the reason. `steerBlock` works the
+// same way for Steer alone: a harness that reads steering text only when a
+// session starts (Stella) keeps pause, resume and cancel, and Steer draws
+// disabled with the reason. The handler refuses the steer either way.
 //
 // A viewer `dispatch_command` would refuse (neither an org Owner or Admin nor
 // a workspace Owner or Member) sees them disabled with that reason, not a
@@ -36,6 +39,7 @@ import {
   type CommandBlock,
   DeliveryMode,
   type RunRow,
+  type SteerBlock,
 } from "@/data/contracts/runs";
 import type { ActionResult } from "@/server/kernel";
 import type { OrgRole, WsRole } from "@/server/viewer";
@@ -68,6 +72,11 @@ const DELIVERY_COPY = {
 const DELIVERY_MODES = DeliveryMode.options;
 
 const DELIVERY_DEFAULT: DeliveryMode = "next_step";
+
+/** The key under `run.commands.steerBlocked` for each reason Steer is disabled. */
+const STEER_BLOCK_COPY = {
+  no_prompt_carrier: "noPromptCarrier",
+} as const satisfies Record<SteerBlock, string>;
 
 /**
  * When the agent sees the steering text. One radio per mode with the line
@@ -318,6 +327,7 @@ export function RunControls({
   status,
   source,
   commandBlock = null,
+  steerBlock = null,
   ingressRevoked = false,
   ingressPaused = false,
   orgRole,
@@ -335,6 +345,8 @@ export function RunControls({
   enforcementTier?: RunRow["enforcementTier"];
   /** Why a command cannot reach the run, from the row; null or absent when it can. */
   commandBlock?: CommandBlock | null;
+  /** Why a steer cannot reach the run when the other commands can; null or absent when it can. */
+  steerBlock?: SteerBlock | null;
   ingressRevoked?: boolean;
   ingressPaused?: boolean;
   orgRole: OrgRole;
@@ -398,20 +410,44 @@ export function RunControls({
       </div>
     );
   }
-  return (
+  const controls = (
     <div className="flex flex-wrap gap-2">
-      {COMMANDS.map((command) => (
-        <CommandDialog
-          key={command}
-          command={command}
-          runId={runId}
-          write={(text, mode) =>
-            command === "steer"
-              ? steerRun(org, ws, runId, text, mode)
-              : haltRun(org, ws, runId, command, text)
-          }
-        />
-      ))}
+      {COMMANDS.map((command) =>
+        command === "steer" && steerBlock !== null ? (
+          <button
+            key={command}
+            type="button"
+            disabled
+            data-testid="run-steer"
+            className={buttonSecondary}
+          >
+            {t("steer.open")}
+          </button>
+        ) : (
+          <CommandDialog
+            key={command}
+            command={command}
+            runId={runId}
+            write={(text, mode) =>
+              command === "steer"
+                ? steerRun(org, ws, runId, text, mode)
+                : haltRun(org, ws, runId, command, text)
+            }
+          />
+        ),
+      )}
+    </div>
+  );
+  if (steerBlock === null) return controls;
+  return (
+    <div className="flex flex-col items-start gap-2 lg:items-end">
+      {controls}
+      <p
+        data-testid="steer-no-control"
+        className="max-w-prose text-xs text-muted-foreground lg:text-right"
+      >
+        {t(`steerBlocked.${STEER_BLOCK_COPY[steerBlock]}`)}
+      </p>
     </div>
   );
 }

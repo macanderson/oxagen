@@ -191,6 +191,36 @@ export const COMMAND_BLOCKS = [
 export type CommandBlock = (typeof COMMAND_BLOCKS)[number];
 
 /**
+ * Why a steer or message cannot reach a wrapped run whose host takes the
+ * other commands (ADR-163).
+ *
+ * - `no_prompt_carrier`: the run's harness reads steering text only when a
+ *   session starts, and a live session has passed that point.
+ */
+export const STEER_BLOCKS = ["no_prompt_carrier"] as const;
+
+export type SteerBlock = (typeof STEER_BLOCKS)[number];
+
+/**
+ * The runtimes whose hook adapter delivers no steering text to a live
+ * session. Stella's adapter hands a hook's `additionalContext` to the agent
+ * only at `SessionStart` and answers `{}` to every other event
+ * (`stellaAnswer` in `packages/tacho/src/claude-code/stella-adapter.ts`).
+ * Pause, resume and cancel still reach these runs through `PreToolUse`.
+ */
+const NO_PROMPT_CARRIER_RUNTIMES: ReadonlySet<string> = new Set(["stella"]);
+
+/**
+ * May a steer or message reach this wrapped run, given its harness? One rule,
+ * read by `dispatch_command` and by every row that offers Steer.
+ */
+export function steerBlockOf(runtime: string | null): SteerBlock | null {
+  return runtime !== null && NO_PROMPT_CARRIER_RUNTIMES.has(runtime)
+    ? "no_prompt_carrier"
+    : null;
+}
+
+/**
  * How long a host may go without a poll before its runs read as unreachable.
  * The daemon polls for commands every 2 s and backs off to at most 60 s, or
  * 15 min on a protocol mismatch, so five minutes is several missed polls of a
@@ -283,6 +313,13 @@ export const runItemSchema = z
      * caller treats as deliverable and lets the handler decide.
      */
     commandBlock: z.enum(COMMAND_BLOCKS).nullable().optional(),
+    /**
+     * Why a steer or message cannot reach this run when the other commands
+     * can, or null when it can. `dispatch_command` refuses on the same rule
+     * (`steerBlockOf`). Null for a ledger run. Optional, read like
+     * `commandBlock`: absent means not known.
+     */
+    steerBlock: z.enum(STEER_BLOCKS).nullable().optional(),
     /**
      * The model the run ended on, falling back to the one it started on; null
      * when the store recorded no model, which is every ledger run.

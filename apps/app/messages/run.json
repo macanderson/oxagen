@@ -280,6 +280,9 @@
         "hostRevoked": "This run's host was revoked. A revoked host no longer collects commands, so there is nothing to pause, steer or cancel.",
         "hostOffline": "This run's host has not checked for commands in the last five minutes. It may have stopped or lost its connection, so a command would go unread. The controls come back when the host checks in."
       },
+      "steerBlocked": {
+        "noPromptCarrier": "This agent reads steering text only when a session starts, so a steer cannot reach this run. Pause, resume and cancel still can."
+      },
       "delivery": {
         "legend": "When the agent sees it",
         "nextStep": {

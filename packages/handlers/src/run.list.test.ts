@@ -999,6 +999,34 @@ describe("a run row says whether a command can reach it", () => {
     expect(byId.get("tse_sealed")?.commandBlock).toBe("run_sealed");
   });
 
+  // #4023: Stella reads steering text only at session start, so its row
+  // offers pause, resume and cancel but not Steer.
+  it("names a Stella run's steer block and leaves its other commands open", async () => {
+    const { list } = handlerOver(
+      [],
+      [
+        tachoSession({
+          publicId: "tse_stella",
+          session: { ...live, runtime: "stella" },
+          host: host("active", 60),
+        }),
+        tachoSession({
+          publicId: "tse_claude",
+          session: { ...live, runtime: "claude-code" },
+          host: host("active", 60),
+        }),
+      ],
+    );
+    const byId = new Map(
+      (await list({ limit: 50 }, ctx())).runs.map((r) => [r.id, r]),
+    );
+    expect(byId.get("tse_stella")).toMatchObject({
+      commandBlock: null,
+      steerBlock: "no_prompt_carrier",
+    });
+    expect(byId.get("tse_claude")?.steerBlock).toBeNull();
+  });
+
   it("answers null on a ledger run, whose controls fence ingress", async () => {
     const { list } = handlerOver(
       [ledgerRun({ publicId: "arun_a", runId: RUN_A })],

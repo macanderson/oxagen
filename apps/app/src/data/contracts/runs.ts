@@ -166,6 +166,14 @@ export const CommandBlock = z.enum([
 export type CommandBlock = z.infer<typeof CommandBlock>;
 
 /**
+ * Why a steer cannot reach a run that takes the other commands, mirrored from
+ * `list_runs`' `steerBlock` (ADR-163): the harness reads steering text only
+ * when a session starts.
+ */
+export const SteerBlock = z.enum(["no_prompt_carrier"]);
+export type SteerBlock = z.infer<typeof SteerBlock>;
+
+/**
  * Why a direct command cannot reach this run, or null when it can.
  *
  * The control plane answers it on the row from the same rule
@@ -222,6 +230,8 @@ export const RunRow = z.object({
   enforcementTier: EnforcementTier,
   /** Why a command cannot reach this run; null or absent when it can. */
   commandBlock: CommandBlock.nullable().optional(),
+  /** Why a steer cannot reach this run; null or absent when it can. */
+  steerBlock: SteerBlock.nullable().optional(),
   ingressRevoked: z.boolean().optional(),
   ingressPaused: z.boolean().optional(),
   /** Empty while the run is live, or where the seal recorded none. */

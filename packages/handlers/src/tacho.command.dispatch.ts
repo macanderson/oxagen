@@ -55,6 +55,8 @@ import {
 import {
   type CommandBlock,
   commandBlockOf,
+  type SteerBlock,
+  steerBlockOf,
 } from "@oxagen/oxagen/contracts/run.list";
 import { and, desc, eq, isNull, ne } from "drizzle-orm";
 import { logger } from "./logger";
@@ -76,7 +78,7 @@ export const BUNDLE_FEATURE_STEER_NEXT_STEP = "steer_next_step";
  * at `Stop` as a block. Cursor's adapter delivers at `Stop` only, which is
  * the end of the turn (ADR-141), so a host carrying the feature still cannot
  * move a Cursor steer earlier. A Stella steer never gets this far
- * (`NO_PROMPT_CARRIER_RUNTIMES`).
+ * (`steerBlockOf`).
  */
 const STEP_CARRIER_RUNTIMES: ReadonlySet<string> = new Set([
   "claude-code",
@@ -176,34 +178,19 @@ function undeliverable(
   });
 }
 
-/**
- * The runtimes whose hook adapter delivers no steering text to a live
- * session. Stella's adapter hands a hook's `additionalContext` to the agent
- * only at `SessionStart`, and answers `{}` to every other event
- * (`stellaAnswer` in `packages/tacho/src/claude-code/stella-adapter.ts`).
- * A live session's `SessionStart` has already fired, so a steer queued for
- * it would expire unread. The handler refuses it (`no_prompt_carrier`)
- * rather than record a delivery mode no event on the run will keep. Pause,
- * resume and cancel still reach these runs through `PreToolUse`.
- */
-const NO_PROMPT_CARRIER_RUNTIMES: ReadonlySet<string> = new Set(["stella"]);
-
 /** Why this command, rather than any command, cannot reach the session. */
 function commandUndeliverable(
   session: RecipientSession,
   command: RunCommand,
   now: Date,
-): CommandBlock | "no_prompt_carrier" | null {
+): CommandBlock | SteerBlock | null {
   const block = undeliverable(session, now);
   if (block !== null) return block;
-  return PROMPT_COMMANDS.has(command) &&
-    NO_PROMPT_CARRIER_RUNTIMES.has(session.runtime)
-    ? "no_prompt_carrier"
-    : null;
+  return PROMPT_COMMANDS.has(command) ? steerBlockOf(session.runtime) : null;
 }
 
 /** What `dispatch_command` says when a run named directly cannot be reached. */
-const BLOCK_MESSAGES: Record<CommandBlock | "no_prompt_carrier", string> = {
+const BLOCK_MESSAGES: Record<CommandBlock | SteerBlock, string> = {
   no_prompt_carrier:
     "The run's harness reads steering text only when a session starts, so this live run would never see it",
   run_sealed: "The run has ended; nothing can receive it",

@@ -214,6 +214,48 @@ describe("run controls", () => {
     expect(screen.queryByTestId("queued-command")).toBeNull();
   });
 
+  // #4023: the row says so up front, so Steer is disabled before anyone types.
+  it("disables Steer on a Stella run and keeps pause and cancel open (negative)", async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <IntlProvider>
+        <RunControls
+          org="acme"
+          ws="core-platform"
+          runId={RUN}
+          status="live"
+          source="tacho"
+          enforcementTier="harness"
+          steerBlock="no_prompt_carrier"
+          orgRole="member"
+          wsRole="member"
+        />
+      </IntlProvider>,
+    );
+    await expectNoAxe(container);
+    expect(screen.getByTestId("run-steer")).toBeDisabled();
+    expect(screen.getByTestId("steer-no-control")).toHaveTextContent(
+      "Pause, resume and cancel still can.",
+    );
+    for (const command of ["pause", "resume", "cancel"]) {
+      expect(screen.getByTestId(`run-${command}`)).toBeEnabled();
+    }
+    await user.click(screen.getByTestId("run-steer"));
+    expect(screen.queryByLabelText("What to tell the agent")).toBeNull();
+    await user.click(screen.getByTestId("run-pause"));
+    await user.type(screen.getByLabelText("Reason"), "hold");
+    await user.click(screen.getByRole("button", { name: "Queue the pause" }));
+    await waitFor(() => {
+      expect(haltRun).toHaveBeenCalledWith(
+        "acme",
+        "core-platform",
+        RUN,
+        "pause",
+        "hold",
+      );
+    });
+  });
+
   it("offers no delivery mode on a halt, which the contract refuses a payload on (negative)", async () => {
     const user = userEvent.setup();
     renderControls();

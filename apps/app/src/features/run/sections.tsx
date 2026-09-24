@@ -113,9 +113,7 @@ const SOURCE_COPY = {
 function sourceCopy(
   source: string,
 ): (typeof SOURCE_COPY)[keyof typeof SOURCE_COPY] | undefined {
-  return Object.hasOwn(SOURCE_COPY, source)
-    ? SOURCE_COPY[source as keyof typeof SOURCE_COPY]
-    : undefined;
+  return Object.entries(SOURCE_COPY).find(([key]) => key === source)?.[1];
 }
 
 function isHarnessCheck(entry: TranscriptEntry): boolean {

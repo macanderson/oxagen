@@ -40,6 +40,7 @@ import { CapabilityError } from "@oxagen/oxagen/kernel";
 import {
   canSummarizeRun,
   commandBlockOf,
+  steerBlockOf,
   IN_APP_AGENT_SURFACES,
   type RunItem,
   runList,
@@ -978,6 +979,7 @@ export function toLedgerRunItem(
     enforcementTier: publishedTier(record.seal?.enforcementTier),
     // A ledger run's controls fence evidence ingress; no host carries them.
     commandBlock: null,
+    steerBlock: null,
     completenessGaps: gaps,
     canSummarize: canSummarizeRun({ status, completenessGaps: gaps }),
     // The ledger records evidence an external engine submits. It names no
@@ -1101,6 +1103,11 @@ export function toTachoRunItem(
     verdict: totals?.verdict ?? null,
     enforcementTier: publishedTier(session.enforcementTier),
     ...tachoCommandBlock(row, now),
+    // Whether a steer can reach it (`steerBlockOf`); omitted when the reader
+    // selected no runtime.
+    ...(session.runtime === undefined
+      ? {}
+      : { steerBlock: steerBlockOf(session.runtime) }),
     completenessGaps: gaps,
     canSummarize: canSummarizeRun({ status, completenessGaps: gaps }),
     // The model the session ended on is the one that did most of its work, so
