@@ -44,7 +44,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   const db = drizzle.mock({ schema: real.schema });
-  return {
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = {
     ...real,
     withTenantDb: (fn: (tx: typeof db) => { toSQL(): unknown }) => {
       const query = fn(db).toSQL() as { sql: string; params: unknown[] };
@@ -52,6 +55,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
       return Promise.resolve(mocks.rows);
     },
   };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
 
 beforeEach(() => {
