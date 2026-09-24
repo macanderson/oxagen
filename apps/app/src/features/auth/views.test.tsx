@@ -27,6 +27,8 @@ vi.mock("./invite-actions", () => ({
   acceptInvitation: vi.fn(),
   declineInvitation: vi.fn(),
 }));
+const session = { getAuthUser: vi.fn() };
+vi.mock("@/server/session", () => session);
 
 /** Synchronous Server Components to expand in place (they may hold async children). */
 const SERVER_SYNC = new Set<unknown>();
@@ -37,6 +39,7 @@ const {
   InvitationWrongAccount,
   initialsOf,
 } = await import("./invite-view");
+const { SignedInNotice } = await import("./signed-in-notice");
 const { AuthColumn, AuthFooter, AuthShell, AuthSkeleton } = await import(
   "@/ui/auth-shell"
 );
@@ -295,6 +298,52 @@ describe("initialsOf", () => {
     expect(initialsOf("Priya Natarajan")).toBe("PN");
     expect(initialsOf(" marcus  j bell ")).toBe("MB");
     expect(initialsOf("Dana")).toBe("D");
+  });
+
+  it("a name of only spaces gives no letters (negative)", () => {
+    expect(initialsOf("   ")).toBe("");
+  });
+});
+
+describe("SignedInNotice", () => {
+  const user = {
+    id: "usr_1",
+    email: "marcus.bell@acme.example",
+    name: "Marcus Bell",
+    avatarUrl: null,
+    emailVerified: true,
+    twoFactorEnabled: false,
+  };
+  const sentence = (name: string) =>
+    `Signed in as ${name}. The session is recorded like any other governed action.`;
+
+  afterEach(() => {
+    session.getAuthUser.mockReset();
+    sessionStorage.clear();
+  });
+
+  it("names the signed-in person on the page a sign-in just landed on", async () => {
+    session.getAuthUser.mockResolvedValue(user);
+    sessionStorage.setItem("oxagen.auth.signedIn", "1");
+    await renderServer(await SignedInNotice());
+    expect(
+      await screen.findByText(sentence("Marcus Bell")),
+    ).toBeInTheDocument();
+  });
+
+  it("an account with a blank name is named by its address", async () => {
+    session.getAuthUser.mockResolvedValue({ ...user, name: "  " });
+    sessionStorage.setItem("oxagen.auth.signedIn", "1");
+    await renderServer(await SignedInNotice());
+    expect(
+      await screen.findByText(sentence("marcus.bell@acme.example")),
+    ).toBeInTheDocument();
+  });
+
+  it("renders nothing without a session (negative)", async () => {
+    session.getAuthUser.mockResolvedValue(null);
+    sessionStorage.setItem("oxagen.auth.signedIn", "1");
+    expect(await SignedInNotice()).toBeNull();
   });
 });
 

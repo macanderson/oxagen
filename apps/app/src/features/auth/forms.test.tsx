@@ -9,6 +9,7 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StrictMode } from "react";
+import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { routes } from "@/shared/safe-path";
@@ -56,9 +57,24 @@ const { InviteDecision } = await import("./invite-decision");
 const { OAuthButtons } = await import("./ui/oauth-buttons");
 const { InviteHint } = await import("./ui/invite-hint");
 const { SignedInToast } = await import("./ui/signed-in-toast");
+const { SsoSignIn } = await import("./ui/sso-sign-in");
+const { AuthAlert, AuthTags } = await import("./ui/auth-card");
 
 function renderWithIntl(ui: React.ReactNode) {
   return render(<IntlProvider>{ui}</IntlProvider>);
+}
+
+/**
+ * StrictMode at the root. React runs every mount effect twice only under a
+ * root StrictMode; one nested inside IntlProvider double-renders but runs each
+ * effect once, so a "taken once" assertion under it proves nothing.
+ */
+function renderStrict(ui: React.ReactNode) {
+  return render(
+    <StrictMode>
+      <IntlProvider>{ui}</IntlProvider>
+    </StrictMode>,
+  );
 }
 
 beforeEach(() => {
@@ -304,10 +320,8 @@ describe("LoginForm", () => {
   });
 
   it("drops a signed-in mark a failed sign-in left behind, once (negative)", () => {
-    renderWithIntl(
-      <StrictMode>
-        <LoginForm next={routes.root()} initialOutcome="oauthFailed" />
-      </StrictMode>,
+    renderStrict(
+      <LoginForm next={routes.root()} initialOutcome="oauthFailed" />,
     );
     expect(live.takeSignedIn).toHaveBeenCalledTimes(1);
     expect(live.rememberSignedIn).not.toHaveBeenCalled();
@@ -320,6 +334,33 @@ describe("LoginForm", () => {
       "Password set. Every other device was logged out.",
     );
     expect(live.takeNotice).toHaveBeenCalledTimes(1);
+  });
+
+  it("a second press while signing in sends nothing more (negative)", async () => {
+    live.liveSignIn.mockReturnValue(hang());
+    renderWithIntl(<LoginForm next={routes.root()} />);
+    await userEvent.type(screen.getByLabelText("Work email"), "a@b.co");
+    await userEvent.type(screen.getByLabelText("Password"), "x");
+    await userEvent.click(screen.getByRole("button", { name: "Log in" }));
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Logging in…" }),
+    );
+    expect(live.liveSignIn).toHaveBeenCalledTimes(1);
+  });
+
+  it("suspended from the page's ?error= is the full card, naming no address", () => {
+    renderWithIntl(
+      <LoginForm
+        next={routes.root()}
+        initialOutcome="suspended"
+        header={<h1>Log in to Oxagen</h1>}
+      />,
+    );
+    expect(screen.getByTestId("login-suspended")).toHaveTextContent(
+      "This account is suspended. Runs already recorded are kept; no new run tokens are minted.",
+    );
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
+    expect(screen.queryByRole("form")).toBeNull();
   });
 });
 
@@ -432,6 +473,53 @@ describe("LoginForm SSO entry", () => {
       "Single sign-on did not finish.",
     );
     expect(screen.queryByTestId("login-outcome")).not.toBeInTheDocument();
+  });
+
+  it("a second press while redirecting sends nothing more (negative)", async () => {
+    live.liveSignInSso.mockReturnValue(hang());
+    renderWithIntl(<SsoSignIn callbackURL={routes.root()} startOpen />);
+    await userEvent.type(screen.getByLabelText("Work email"), "a@acme.example");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Continue with SSO" }),
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Redirecting…" }),
+    );
+    expect(live.liveSignInSso).toHaveBeenCalledTimes(1);
+    expect(live.rememberSignedIn).toHaveBeenCalledTimes(1);
+  });
+
+  it("a start that throws reads as unavailable in the SSO form, drops the mark, and can be retried", async () => {
+    live.liveSignInSso.mockRejectedValue(new Error("network"));
+    renderWithIntl(<SsoSignIn callbackURL={routes.root()} startOpen />);
+    await userEvent.type(screen.getByLabelText("Work email"), "a@acme.example");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Continue with SSO" }),
+    );
+    expect(await within(ssoForm()).findByRole("alert")).toHaveTextContent(
+      "Sign-in is unavailable right now. Try again in a minute.",
+    );
+    expect(live.takeSignedIn).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByRole("button", { name: "Continue with SSO" }),
+    ).not.toHaveAttribute("aria-disabled");
+  });
+
+  it("a start that succeeds stays pending while the browser leaves, and keeps the mark", async () => {
+    live.liveSignInSso.mockResolvedValue({ ok: true });
+    renderWithIntl(<SsoSignIn callbackURL={routes.root()} startOpen />);
+    await userEvent.type(screen.getByLabelText("Work email"), "a@acme.example");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Continue with SSO" }),
+    );
+    await waitFor(() => {
+      expect(live.liveSignInSso).toHaveBeenCalledTimes(1);
+    });
+    expect(
+      screen.getByRole("button", { name: "Redirecting…" }),
+    ).toHaveAttribute("aria-disabled", "true");
+    expect(within(ssoForm()).queryByRole("alert")).toBeNull();
+    expect(live.takeSignedIn).not.toHaveBeenCalled();
   });
 });
 
@@ -601,6 +689,26 @@ describe("SignupForm", () => {
         callbackURL: "/new-organization",
       });
     });
+  });
+
+  it("a second press while creating sends nothing more (negative)", async () => {
+    live.liveSignUp.mockReturnValue(hang());
+    renderWithIntl(<SignupForm />);
+    await fill();
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Creating account…" }),
+    );
+    expect(live.liveSignUp).toHaveBeenCalledTimes(1);
+  });
+
+  it("a thrown client error reads as unavailable and goes nowhere", async () => {
+    live.liveSignUp.mockRejectedValue(new Error("network"));
+    renderWithIntl(<SignupForm />);
+    await fill();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Sign-in is unavailable right now. Try again in a minute.",
+    );
+    expect(router.replace).not.toHaveBeenCalled();
   });
 });
 
@@ -808,6 +916,83 @@ describe("TwoFactorForm", () => {
       screen.getByRole("group", { name: "Authentication code" }),
     ).toBeInTheDocument();
   });
+
+  it("an empty recovery code is refused under its field and sends nothing", async () => {
+    renderForm();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Use a recovery code instead" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Verify" }));
+    expect(screen.getByLabelText("Recovery code")).toHaveAccessibleDescription(
+      "Enter a recovery code exactly as it was issued.",
+    );
+    expect(live.liveVerifyTwoFactor).not.toHaveBeenCalled();
+  });
+
+  it("a second press while verifying sends nothing more (negative)", async () => {
+    live.liveVerifyTwoFactor.mockReturnValue(hang());
+    renderForm();
+    await typeCode("602914");
+    await userEvent.click(screen.getByRole("button", { name: "Verify" }));
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Verifying…" }),
+    );
+    expect(live.liveVerifyTwoFactor).toHaveBeenCalledTimes(1);
+  });
+
+  it("a thrown client error reads as unavailable and signs nobody in", async () => {
+    live.liveVerifyTwoFactor.mockRejectedValue(new Error("network"));
+    renderForm();
+    await typeCode("602914");
+    await userEvent.click(screen.getByRole("button", { name: "Verify" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Sign-in is unavailable right now. Try again in a minute.",
+    );
+    expect(live.rememberSignedIn).not.toHaveBeenCalled();
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it("the server render carries no expiry clock, so the hydrating render matches it", () => {
+    const html = renderToString(
+      <IntlProvider>
+        <TwoFactorForm
+          next={routes.root()}
+          eyebrow="Step 2 of 2"
+          title="Two-factor authentication"
+        />
+      </IntlProvider>,
+    );
+    expect(html).toContain("Two-factor authentication");
+    expect(html).not.toContain("two-factor-expiry");
+  });
+
+  it("a letter typed into a box fills nothing and keeps the focus (negative)", async () => {
+    renderForm();
+    await userEvent.click(box(1));
+    await userEvent.keyboard("a");
+    expect(box(1)).toHaveValue("");
+    expect(box(1)).toHaveFocus();
+  });
+
+  it("deleting the digit in a filled box empties that box and stays on it", async () => {
+    renderForm();
+    await typeCode("12");
+    await userEvent.click(box(2));
+    await userEvent.keyboard("{Backspace}");
+    expect(box(2)).toHaveValue("");
+    expect(box(1)).toHaveValue("1");
+    expect(box(2)).toHaveFocus();
+  });
+
+  it("a digit typed after the one already in a box replaces it and moves on", async () => {
+    renderForm();
+    await typeCode("1");
+    await userEvent.click(box(1));
+    await userEvent.keyboard("{End}5");
+    expect(box(1)).toHaveValue("5");
+    expect(box(2)).toHaveValue("");
+    expect(box(2)).toHaveFocus();
+  });
 });
 
 describe("ForgotPasswordForm", () => {
@@ -878,6 +1063,42 @@ describe("ForgotPasswordForm", () => {
       "We could not send that email.",
     );
     expect(alert).toHaveTextContent("Try again in a minute.");
+  });
+
+  it("a second press while sending sends nothing more (negative)", async () => {
+    actions.requestPasswordReset.mockReturnValue(hang());
+    renderWithIntl(<ForgotPasswordForm {...frame} />);
+    await userEvent.type(screen.getByLabelText("Work email"), "a@b.co");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Send reset link" }),
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Sending…" }),
+    );
+    expect(actions.requestPasswordReset).toHaveBeenCalledTimes(1);
+  });
+
+  it("a refusal shows the server's field error, and one naming no field reads as an invalid address", async () => {
+    actions.requestPasswordReset.mockResolvedValueOnce({
+      ok: false,
+      fields: { email: "emailRequired" },
+    });
+    renderWithIntl(<ForgotPasswordForm {...frame} />);
+    await userEvent.type(screen.getByLabelText("Work email"), "a@b.co");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Send reset link" }),
+    );
+    expect(
+      await screen.findByText("Enter your work email."),
+    ).toBeInTheDocument();
+    actions.requestPasswordReset.mockResolvedValueOnce({ ok: false });
+    await userEvent.click(
+      screen.getByRole("button", { name: "Send reset link" }),
+    );
+    expect(screen.getByLabelText("Work email")).toHaveAccessibleDescription(
+      "Enter an email address like name@company.com.",
+    );
+    expect(screen.queryByTestId("forgot-sent")).toBeNull();
   });
 });
 
@@ -984,6 +1205,36 @@ describe("ResetPasswordForm", () => {
       "Too many attempts",
     );
   });
+
+  it("a second press while saving sends nothing more (negative)", async () => {
+    actions.resetPassword.mockReturnValue(hang());
+    renderWithIntl(<ResetPasswordForm token="rst_1" />);
+    await submit(STRONG, STRONG);
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Saving…" }),
+    );
+    expect(actions.resetPassword).toHaveBeenCalledTimes(1);
+  });
+
+  it("a refusal that names neither a field nor an outcome reads as the generic failure", async () => {
+    actions.resetPassword.mockResolvedValue({ ok: false });
+    renderWithIntl(<ResetPasswordForm token="rst_1" />);
+    await submit(STRONG, STRONG);
+    expect(await screen.findByTestId("reset-outcome")).toHaveTextContent(
+      "That did not work. Try again, and contact support if it keeps happening.",
+    );
+  });
+
+  it("a thrown action reads as unavailable and keeps the form", async () => {
+    actions.resetPassword.mockRejectedValue(new Error("down"));
+    renderWithIntl(<ResetPasswordForm token="rst_1" />);
+    await submit(STRONG, STRONG);
+    expect(await screen.findByTestId("reset-outcome")).toHaveTextContent(
+      "Sign-in is unavailable right now. Try again in a minute.",
+    );
+    expect(screen.getByLabelText("New password")).toBeInTheDocument();
+    expect(router.replace).not.toHaveBeenCalled();
+  });
 });
 
 describe("VerifyPanel", () => {
@@ -1052,6 +1303,55 @@ describe("VerifyPanel", () => {
     expect(
       await screen.findByText("Enter an email address like name@company.com."),
     ).toBeInTheDocument();
+  });
+
+  it("a refusal naming no field reads as an invalid address", async () => {
+    actions.resendVerification.mockResolvedValue({ ok: false });
+    renderWithIntl(<VerifyPanel email={null} expired={false} next="/x" />);
+    await userEvent.type(screen.getByLabelText("Work email"), "a@b.co");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Send a new link" }),
+    );
+    await waitFor(() => {
+      expect(screen.getByLabelText("Work email")).toHaveAccessibleDescription(
+        "Enter an email address like name@company.com.",
+      );
+    });
+    expect(screen.queryByTestId("verify-resent")).toBeNull();
+  });
+
+  it("a resend that throws reads as unavailable and can be retried (negative)", async () => {
+    actions.resendVerification.mockRejectedValueOnce(new Error("offline"));
+    renderWithIntl(
+      <VerifyPanel email="m@acme.example" expired={false} next="/x" />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Send a new link" }),
+    );
+    expect(await screen.findByTestId("verify-outcome")).toHaveTextContent(
+      "Sign-in is unavailable right now. Try again in a minute.",
+    );
+    expect(screen.queryByTestId("verify-resent")).toBeNull();
+    actions.resendVerification.mockResolvedValue({ ok: true, to: "/verify" });
+    await userEvent.click(
+      screen.getByRole("button", { name: "Send a new link" }),
+    );
+    expect(await screen.findByTestId("verify-resent")).toBeInTheDocument();
+    expect(screen.queryByTestId("verify-outcome")).toBeNull();
+  });
+
+  it("a second press while sending sends nothing more (negative)", async () => {
+    actions.resendVerification.mockReturnValue(hang());
+    renderWithIntl(
+      <VerifyPanel email="m@acme.example" expired={false} next="/x" />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Send a new link" }),
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Sending…" }),
+    );
+    expect(actions.resendVerification).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -1135,6 +1435,20 @@ describe("InviteDecision", () => {
       "could not be accepted",
     );
     expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it("while one answer is pending, neither button sends another (negative)", async () => {
+    inviteActions.acceptInvitation.mockReturnValue(hang());
+    renderWithIntl(<InviteDecision token="invi_1" />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Accept invitation" }),
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Accepting…" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Decline" }));
+    expect(inviteActions.acceptInvitation).toHaveBeenCalledTimes(1);
+    expect(inviteActions.declineInvitation).not.toHaveBeenCalled();
   });
 });
 
@@ -1220,28 +1534,59 @@ describe("OAuthButtons", () => {
     });
     expect(live.rememberSignedIn).not.toHaveBeenCalled();
   });
+
+  it("a start that throws reads as unavailable, and drops the mark on Log in only", async () => {
+    live.liveSignInSocial.mockRejectedValue(new Error("network"));
+    const { unmount } = renderWithIntl(
+      <OAuthButtons callbackURL={routes.root()} announceSignIn />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Continue with Google" }),
+    );
+    expect(await screen.findByTestId("oauth-outcome")).toHaveTextContent(
+      "Sign-in is unavailable right now. Try again in a minute.",
+    );
+    expect(live.takeSignedIn).toHaveBeenCalledTimes(1);
+    unmount();
+    renderWithIntl(<OAuthButtons callbackURL={routes.root()} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Continue with GitHub" }),
+    );
+    expect(await screen.findByTestId("oauth-outcome")).toHaveTextContent(
+      "Sign-in is unavailable right now. Try again in a minute.",
+    );
+    expect(live.takeSignedIn).toHaveBeenCalledTimes(1);
+  });
+
+  it("while one provider is starting, pressing either sends nothing more (negative)", async () => {
+    live.liveSignInSocial.mockReturnValue(hang());
+    renderWithIntl(<OAuthButtons callbackURL={routes.root()} />);
+    const google = screen.getByRole("button", { name: "Continue with Google" });
+    await userEvent.click(google);
+    await waitFor(() => {
+      expect(google).toHaveAttribute("aria-disabled", "true");
+    });
+    await userEvent.click(
+      screen.getByRole("button", { name: "Continue with GitHub" }),
+    );
+    await userEvent.click(google);
+    expect(live.liveSignInSocial).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("SignedInToast", () => {
-  it("shows the design's sentence once when a sign-in just landed, in a polite live region, then leaves", async () => {
+  const sentence =
+    "Signed in as Marcus Bell. The session is recorded like any other governed action.";
+
+  it("shows the design's sentence when a sign-in just landed, in a polite live region, then leaves", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
       live.takeSignedIn.mockReturnValue(true);
-      renderWithIntl(
-        <StrictMode>
-          <SignedInToast name="Marcus Bell" />
-        </StrictMode>,
-      );
+      renderWithIntl(<SignedInToast name="Marcus Bell" />);
       const stack = screen.getByTestId("signed-in-toast");
-      expect(
-        await within(stack).findByText(
-          "Signed in as Marcus Bell. The session is recorded like any other governed action.",
-        ),
-      ).toBeInTheDocument();
+      expect(await within(stack).findByText(sentence)).toBeInTheDocument();
       expect(stack.querySelectorAll("[data-toast]")).toHaveLength(1);
       expect(screen.getByRole("status")).toHaveAttribute("aria-live", "polite");
-      // Taken once, even when React runs effects twice.
-      expect(live.takeSignedIn).toHaveBeenCalledTimes(1);
       await act(async () => {
         await vi.advanceTimersByTimeAsync(TOAST_MS);
       });
@@ -1251,9 +1596,50 @@ describe("SignedInToast", () => {
     }
   });
 
+  // Dismissal is asserted above without StrictMode: under a root StrictMode the
+  // simulated unmount in useToasts clears the row's timer, and the guarded
+  // re-run does not re-arm it, so the row stays (a development-only defect in
+  // @/ui/toast, reported with this change).
+  it("takes the mark once and shows one row, even when React runs effects twice", async () => {
+    live.takeSignedIn.mockReturnValue(true);
+    renderStrict(<SignedInToast name="Marcus Bell" />);
+    const stack = screen.getByTestId("signed-in-toast");
+    expect(await within(stack).findByText(sentence)).toBeInTheDocument();
+    expect(stack.querySelectorAll("[data-toast]")).toHaveLength(1);
+    expect(live.takeSignedIn).toHaveBeenCalledTimes(1);
+  });
+
   it("shows nothing on a page no sign-in landed on (negative)", () => {
     renderWithIntl(<SignedInToast name="Marcus Bell" />);
     expect(screen.getByTestId("signed-in-toast")).toBeEmptyDOMElement();
     expect(screen.getByRole("status")).toBeEmptyDOMElement();
+  });
+});
+
+describe("AuthAlert and AuthTags", () => {
+  it("a message of one sentence is bold throughout with nothing after it", () => {
+    renderWithIntl(<AuthAlert message="Invitation declined" />);
+    const alert = screen.getByRole("alert");
+    expect(alert.querySelector("b")).toHaveTextContent(/^Invitation declined$/);
+    expect(alert).toHaveTextContent(/^Invitation declined$/);
+  });
+
+  it("the tags are one labelled list, an item per tag, in order", () => {
+    const tags = [
+      "included monthly allowance",
+      "no token markup",
+      "SOC 2 evidence built in",
+    ];
+    renderWithIntl(
+      <AuthTags label="What every organization gets" tags={tags} />,
+    );
+    const list = screen.getByRole("list", {
+      name: "What every organization gets",
+    });
+    expect(
+      within(list)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual(tags);
   });
 });

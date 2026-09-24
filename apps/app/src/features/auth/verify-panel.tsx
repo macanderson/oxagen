@@ -30,6 +30,7 @@ export function VerifyPanel({
   const [error, setError] = useState<AuthErrorKey | null>(null);
   const [sent, setSent] = useState(false);
   const [pending, setPending] = useState(false);
+  const [unavailable, setUnavailable] = useState(false);
 
   async function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -38,6 +39,7 @@ export function VerifyPanel({
       email: formText(new FormData(event.currentTarget), "email"),
     });
     setSent(false);
+    setUnavailable(false);
     if (!parsed.success) {
       setError(fieldErrors(parsed.error).email ?? "emailInvalid");
       return;
@@ -48,6 +50,10 @@ export function VerifyPanel({
       const result = await resendVerification({ ...parsed.data, next });
       if (result.ok) setSent(true);
       else setError(result.fields?.email ?? "emailInvalid");
+    } catch {
+      // A thrown action (network, server down) reads as unavailable, as on
+      // the other sign-in forms, instead of an unhandled rejection.
+      setUnavailable(true);
     } finally {
       setPending(false);
     }
@@ -57,6 +63,12 @@ export function VerifyPanel({
     <AuthPanel>
       {expired ? (
         <AuthAlert testId="verify-expired" message={t("verify.expired")} />
+      ) : null}
+      {unavailable ? (
+        <AuthAlert
+          testId="verify-outcome"
+          message={t("outcomes.unavailable")}
+        />
       ) : null}
       {sent ? (
         <p
