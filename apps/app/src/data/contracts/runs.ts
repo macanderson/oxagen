@@ -165,6 +165,13 @@ const CommandBlock = z.enum([
 ]);
 
 /**
+ * Why a run refuses commands. The schema stays module-local, since `RunRow`
+ * composes it in this file; the type is exported because the Run controls, a
+ * Fleet row's pause and the shared block copy each name one of its members.
+ */
+export type CommandBlock = z.infer<typeof CommandBlock>;
+
+/**
  * Why a steer cannot reach a run that takes the other commands, mirrored from
  * `list_runs`' `steerBlock` (ADR-163): the harness reads steering text only
  * when a session starts.
