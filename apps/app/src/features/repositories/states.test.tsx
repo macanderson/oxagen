@@ -6,6 +6,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { DeniedBody, ErrorBody } from "./states";
 
@@ -18,8 +19,8 @@ vi.mock("next/link", () => ({
 afterEach(cleanup);
 
 describe("the error state", () => {
-  it("prints the page's own failure with its status", () => {
-    render(
+  it("prints the page's own failure with its status", async () => {
+    const { container } = render(
       <IntlProvider>
         <ErrorBody
           failure={{
@@ -35,6 +36,7 @@ describe("the error state", () => {
     expect(screen.getByTestId("repositories-error")).toHaveTextContent(
       "The control plane answered 503 installation_unreachable.",
     );
+    await expectNoAxe(container);
   });
 
   it("prints another code as recorded, with no status, and a codeless refusal by its reason (negative)", () => {
@@ -72,8 +74,8 @@ describe("the error state", () => {
 describe("the denied state", () => {
   const viewer = { name: "Mac Anderson", role: "workspace.viewer" };
 
-  it("names the permission the refusal carried", () => {
-    render(
+  it("names the permission the refusal carried", async () => {
+    const { container } = render(
       <IntlProvider>
         <DeniedBody
           org="acme"
@@ -87,6 +89,7 @@ describe("the denied state", () => {
     expect(screen.getByTestId("repositories-denied")).toHaveTextContent(
       "repository.write on core-platform",
     );
+    await expectNoAxe(container);
   });
 
   it("falls back to the page's permission when the refusal names none (negative)", () => {

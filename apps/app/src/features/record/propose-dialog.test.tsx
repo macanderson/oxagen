@@ -14,6 +14,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 
 const revise = vi.hoisted(() => vi.fn());
@@ -63,7 +64,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("Propose a change", () => {
-  it("keeps unchanged lines as context in the diff, with no repository badge when none was read", () => {
+  it("keeps unchanged lines as context in the diff, with no repository badge when none was read", async () => {
     render(<Harness repository={null} />);
     const diff = screen.getByTestId("record-diff");
     expect(screen.getByTestId("record-diff-stat")).toHaveTextContent("+1 −0");
@@ -76,6 +77,7 @@ describe("Propose a change", () => {
     expect(screen.getByTestId("record-propose")).toHaveTextContent(
       "constraint_effect",
     );
+    await expectNoAxe(screen.getByTestId("record-propose"));
   });
 
   it("says the proposal is raised when its pull request has not opened yet", async () => {
@@ -95,6 +97,7 @@ describe("Propose a change", () => {
     );
     expect(onOpened).toHaveBeenCalledWith(`context/${LINEAGE}`);
     expect(screen.queryByTestId("record-propose-submit")).toBeNull();
+    await expectNoAxe(screen.getByTestId("record-propose"));
   });
 
   it("numbers the pull request without a repository it could not read", async () => {

@@ -14,6 +14,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import type { RepositoryRow } from "./view";
 
@@ -166,6 +167,7 @@ describe("the init wizard", () => {
     expect(within(root).getByTestId("init-wizard-role-note")).toHaveTextContent(
       "acme/infra is this workspace’s main repo.",
     );
+    await expectNoAxe(root);
     await toLastStep(user, root, "release");
     await user.click(within(root).getByTestId("init-wizard-open"));
     expect(
@@ -189,6 +191,7 @@ describe("the init wizard", () => {
       bindingId: "rpb_new01",
     });
     expect(onOpened).toHaveBeenCalledTimes(1);
+    await expectNoAxe(root);
   });
 
   it("prints the bind's refusal and writes nothing else (negative)", async () => {

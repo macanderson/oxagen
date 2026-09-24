@@ -7,6 +7,7 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RepositoryTree } from "@/data/contracts/repository";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { RepositoriesTab, TreeBadge } from "./repositories-tab";
 import type { RepositoryRow } from "./view";
@@ -60,7 +61,7 @@ afterEach(cleanup);
 
 function tab(truncated = false) {
   const onAddOxagen = vi.fn();
-  render(
+  const { container } = render(
     <IntlProvider>
       <RepositoriesTab
         rows={ROWS}
@@ -71,12 +72,12 @@ function tab(truncated = false) {
       />
     </IntlProvider>,
   );
-  return onAddOxagen;
+  return { onAddOxagen, container };
 }
 
 describe("the Repositories table", () => {
-  it("badges a missing branch, a tree still being read, and one that could not be read, and offers none of them Add Oxagen", () => {
-    tab();
+  it("badges a missing branch, a tree still being read, and one that could not be read, and offers none of them Add Oxagen", async () => {
+    const { container } = tab();
     const badge = (name: string) =>
       screen.getByTestId(`repository-tree-acme/${name}`);
     expect(badge("moved")).toHaveAttribute("data-tree", "branchMissing");
@@ -88,22 +89,24 @@ describe("the Repositories table", () => {
     for (const name of ["moved", "slow", "down"])
       expect(screen.queryByTestId(`repository-add-acme/${name}`)).toBeNull();
     expect(screen.getByTestId("repository-add-acme/docs")).toBeTruthy();
+    await expectNoAxe(container);
   });
 
   it("names every ungoverned linked repository in the banner, whose Add Oxagen opens on the first", async () => {
     const user = userEvent.setup();
-    const onAddOxagen = tab();
+    const { onAddOxagen } = tab();
     const add = screen.getByTestId("repositories-ungoverned-add");
     expect(add.parentElement).toHaveTextContent("acme/docs, acme/site");
     await user.click(add);
     expect(onAddOxagen).toHaveBeenCalledWith("acme/docs");
   });
 
-  it("says the listing was cut short when the installation reaches more than it returned", () => {
-    tab(true);
+  it("says the listing was cut short when the installation reaches more than it returned", async () => {
+    const { container } = tab(true);
     expect(screen.getByTestId("repositories-reachable-note")).toHaveTextContent(
       "The installation reaches more repositories than this list holds.",
     );
+    await expectNoAxe(container);
   });
 
   it("says no rows match when a search hides every repository (negative)", async () => {
