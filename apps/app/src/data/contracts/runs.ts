@@ -44,13 +44,12 @@ export type ReplayGrade = z.infer<typeof ReplayGrade>;
  * changed. Labelled generated wherever it renders. The record is the frames,
  * never this sentence (ADR-058).
  */
-export const RunSummary = z.object({
+const RunSummary = z.object({
   text: z.string().min(1),
   generatedAt: z.iso.datetime({ offset: true }),
   /** The model that wrote it, named beside the text so the reader can weigh it. */
   model: z.string().min(1),
 });
-export type RunSummary = z.infer<typeof RunSummary>;
 
 /**
  * The witness verdict the rollup recorded (spec §8.5, §12.8; ADR-064), from

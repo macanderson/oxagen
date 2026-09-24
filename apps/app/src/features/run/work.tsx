@@ -288,7 +288,7 @@ export function ChangesPanel({
  * tools by money, and the rollup keeps no per-tool money (#3892), so the panel
  * keeps the spec's heading and says under it that the order is by calls.
  */
-export function DearestTools({
+function DearestTools({
   byTool,
   limit,
 }: {

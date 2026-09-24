@@ -72,7 +72,7 @@ export function mandateLink(at: MandateAt): SafePath {
 }
 
 /** The built-in measure every call draws one of (`CALLS_MEASURE`). */
-export const CALLS_MEASURE = "calls";
+const CALLS_MEASURE = "calls";
 
 /**
  * The measures a mandate limits, split the way the design reads them: the one
@@ -99,11 +99,6 @@ export function measuresOf(mandate: MandateRow): MandateMeasures {
   const [first, ...rest] = named;
   if (first === undefined) return { primary: calls, calls: null, others: [] };
   return { primary: first, calls, others: rest };
-}
-
-/** Whether a measure is money, read from the kind the record carries (ADR-108). */
-export function kindOf(authority: MandateAuthority): MeasureValue["kind"] {
-  return authority.settled.kind;
 }
 
 /**

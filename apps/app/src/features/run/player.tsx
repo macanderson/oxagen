@@ -42,7 +42,7 @@ const FRAME_FAMILIES = [
   "operator",
   "lifecycle",
 ] as const;
-export type FrameFamily = (typeof FRAME_FAMILIES)[number];
+type FrameFamily = (typeof FRAME_FAMILIES)[number];
 
 const GOVERNANCE = /polic|approv|decision|token_issued|grant|gate|verdict/i;
 const OPERATOR = /prompt|steer|interject|answer|command|operator|message/i;

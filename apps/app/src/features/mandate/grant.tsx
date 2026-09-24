@@ -65,7 +65,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 }
 
 /** A person by name, or their principal id in mono when no name was read. */
-export function Person({ id, people }: { id: string; people: PeopleNames }) {
+function Person({ id, people }: { id: string; people: PeopleNames }) {
   const name = people[id];
   return name === undefined ? (
     <span className={mono} data-person={id}>

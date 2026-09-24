@@ -13,7 +13,6 @@ import {
   costOf,
   editableOf,
   isDrawn,
-  kindOf,
   lastDayOf,
   ledgerPage,
   MANDATE_ID,
@@ -89,10 +88,8 @@ describe("measuresOf", () => {
 });
 
 describe("units", () => {
-  it("reads the kind and the unit from the record, never from a spelling", () => {
-    expect(kindOf(mandateAuthority())).toBe("money");
+  it("reads the unit from the record, never from a spelling", () => {
     expect(unitOf(mandateAuthority())).toBe("USD");
-    expect(kindOf(callsAuthority())).toBe("count");
     expect(unitOf(callsAuthority())).toBe("calls");
   });
 
