@@ -873,6 +873,60 @@ describe("changeMandateLimits on a money limit (ADR-108)", () => {
     ).toHaveLength(0);
   });
 
+  // The test above names a measure the record does not hold at all, so the
+  // missing entry refuses it. This one holds `fees` as money in EUR, so only
+  // the currency comparison stands between a typed USD figure and a write.
+  // A money edit never sends `currencyOrUnit`, so the merge would keep EUR and
+  // store the USD amount as EUR micros.
+  describe("on a second measure the record holds as money in another currency", () => {
+    const twoCurrencies = () =>
+      mandateGetOutput(
+        [],
+        mandateOutput({
+          authority: [
+            authorityOutput(),
+            authorityOutput({ measure: "fees", currencyOrUnit: "EUR" }),
+          ],
+        }),
+      );
+    const onFees = (unit: string) => ({
+      ...moneyUntouched,
+      measure: "fees",
+      unit,
+      perPeriod: "10",
+    });
+
+    it("refuses a figure typed in a currency the measure is not held in (negative)", async () => {
+      kernelAnswers({ mandate: twoCurrencies() });
+      expect(
+        await changeMandateLimits("a-intel", "core-platform", onFees("USD")),
+      ).toEqual({
+        ok: false,
+        reason: "invalid",
+        code: "invalid_input",
+        field: "unit",
+      });
+      expect(invoke.mock.calls.map(([name]) => name)).toEqual(["get_mandate"]);
+    });
+
+    it("scales the figure in the currency the measure is held in", async () => {
+      kernelAnswers({ mandate: twoCurrencies() });
+      expect(
+        await changeMandateLimits("a-intel", "core-platform", onFees("eur")),
+      ).toMatchObject({ ok: true });
+      expect(written()).toEqual({
+        mandateId: MANDATE_ID,
+        limitChanges: {
+          fees: {
+            perCall: "250000000",
+            perPeriod: "10000000",
+            period: "monthly",
+          },
+        },
+      });
+    });
+  });
+
   it("refuses a change of the limit's currency before the kernel runs (negative)", async () => {
     expect(
       await changeMandateLimits("a-intel", "core-platform", {
