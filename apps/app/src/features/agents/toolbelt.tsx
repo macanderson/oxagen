@@ -1,77 +1,111 @@
-// The Toolbelt section (spec §6.6): the belt as get_agent_toolbelt computed
-// it, never executed — how it was computed, what the model receives, the
-// decision and rule per tool, and what the agent cannot see. The decision is
-// the runtime pipeline's own; this section prints it and nothing stronger.
+// Toolbelt (spec pages/agent.md, Toolbelt; spec §6.6): the only tool list the
+// model is ever shown, as `get_agent_toolbelt` computed it, never executed.
+// Five panels in the design's order: how the belt was computed, the model
+// view, the belt search, the per-tool decision rules, and what is off the
+// belt. The decision is the runtime pipeline's own, and this tab prints it
+// and nothing stronger. It never claims a permission: a belt decides what the
+// model is shown, and Permissions decides whether the call survives.
+//
+// What the computation does not record says so: the active policy bundle has
+// no version on the contract, and a tool's egress and financial class are not
+// on the belt entry. The toolbelt as a stored, assignable object does not
+// exist yet, so the belt here is the computed one.
 import { useLocale, useTranslations } from "next-intl";
-import { Fragment } from "react";
+import type { ReactNode } from "react";
 import type { Toolbelt } from "@/data/contracts/agents";
 import type { Read } from "@/data/read";
+import { Badge } from "@/ui/badge";
 import { mono } from "@/ui/control-styles";
 import { formatCount } from "@/ui/money-format";
 import { ReadFailure } from "@/ui/read-failure";
 import { cell, Table } from "@/ui/table";
-import { Facts, Instant, NotRecordedValue, Panel } from "./parts";
-import { ToolSchema } from "./tool-schema";
+import { Instant, NotRecordedValue, Panel } from "./parts";
+import { BeltSearch, DecisionRules, ModelView } from "./toolbelt-views";
 
-function Computation({ belt }: { belt: Toolbelt }) {
-  const t = useTranslations("agents.detail.toolbelt");
-  const locale = useLocale();
-  const { computation, presentation } = belt;
+function WireNode({
+  label,
+  value,
+  belt = false,
+}: {
+  label: string;
+  value: ReactNode;
+  belt?: boolean;
+}) {
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
-      <Panel id="belt-computation" title={t("computation.title")}>
-        <Facts
-          rows={[
-            {
-              term: t("computation.computedAt"),
-              value: <Instant at={belt.computedAt} />,
-            },
-            {
-              term: t("computation.ceiling"),
-              value: t(`computation.ceilingValue.${computation.humanCeiling}`),
-            },
-            {
-              term: t("computation.roleGrants"),
-              value: formatCount(computation.roleGrants, locale),
-            },
-            {
-              term: t("computation.denyGeneration"),
-              value: t("computation.denyGenerationValue", {
-                org: formatCount(computation.denyGeneration.org, locale),
-                workspace: formatCount(
-                  computation.denyGeneration.workspace,
-                  locale,
-                ),
-              }),
-            },
-            {
-              term: t("computation.killSwitches"),
-              value: formatCount(computation.killSwitches, locale),
-            },
-          ]}
-        />
-      </Panel>
-      <Panel id="belt-presentation" title={t("presentation.title")}>
-        <p className="text-sm font-medium" data-mode={presentation.mode}>
-          {t(`presentation.mode.${presentation.mode}`)}
-        </p>
-        <p className="text-sm text-muted-foreground">
-          {t(`presentation.sent.${presentation.sentToModel}`)}
-        </p>
-        <p className="text-xs text-muted-foreground">
-          {t("presentation.limit", {
-            limit: formatCount(presentation.limit, locale),
-          })}
-        </p>
-      </Panel>
-    </div>
+    <li
+      className={`flex min-w-0 flex-col rounded-lg border px-3 py-2 text-[13px] ${belt ? "border-gold/50 bg-gold/10" : "border-border bg-hl"}`}
+    >
+      <span>{label}</span>
+      <span className="text-xs text-dim">{value}</span>
+    </li>
   );
 }
 
-function Tools({ tools }: { tools: Toolbelt["tools"] }) {
-  const t = useTranslations("agents.detail.toolbelt.tools");
+function Computation({ belt }: { belt: Toolbelt }) {
+  const t = useTranslations("agents.detail.toolbelt.computation");
+  const locale = useLocale();
+  const n = (value: number) => formatCount(value, locale);
+  const { computation } = belt;
   return (
-    <Panel id="belt-tools" title={t("title")}>
+    <Panel
+      id="belt-computation"
+      title={t("title")}
+      lead={t("lead")}
+      aside={
+        <Badge tone="quiet" dot={false} mono>
+          {t("denyGen", {
+            org: n(computation.denyGeneration.org),
+            workspace: n(computation.denyGeneration.workspace),
+          })}
+        </Badge>
+      }
+    >
+      <ol
+        aria-label={t("wire")}
+        className="flex flex-wrap items-center gap-2"
+        data-testid="belt-wire"
+      >
+        <WireNode
+          label={t("grants")}
+          value={t("grantsValue", { count: n(computation.roleGrants) })}
+        />
+        <WireNode
+          label={t("ceiling")}
+          value={t(`ceilingValue.${computation.humanCeiling}`)}
+        />
+        <WireNode label={t("policy")} value={<NotRecordedValue />} />
+        <WireNode
+          label={t("switches")}
+          value={t("switchesValue", { count: n(computation.killSwitches) })}
+        />
+        <WireNode
+          belt
+          label={t("belt")}
+          value={t("beltValue", { count: n(belt.tools.length) })}
+        />
+      </ol>
+      <p className="text-[13px]">
+        {t("body", {
+          count: n(belt.tools.length),
+          off: n(belt.cannotSee.length),
+        })}{" "}
+        <span className="text-muted-foreground">
+          {t("computedAt")} <Instant at={belt.computedAt} />
+        </span>
+      </p>
+    </Panel>
+  );
+}
+
+function OffTheBelt({ tools }: { tools: Toolbelt["cannotSee"] }) {
+  const t = useTranslations("agents.detail.toolbelt.off");
+  return (
+    <Panel
+      id="belt-off"
+      title={t("title")}
+      lead={t("lead")}
+      aside={<Badge tone="denied">{t("badge")}</Badge>}
+    >
       {tools.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t("empty")}</p>
       ) : (
@@ -79,77 +113,22 @@ function Tools({ tools }: { tools: Toolbelt["tools"] }) {
           label={t("title")}
           columns={[
             { label: t("columns.tool") },
-            { label: t("columns.category") },
-            { label: t("columns.risk") },
-            { label: t("columns.decision") },
-            { label: t("columns.rule") },
-            { label: t("columns.access") },
+            { label: t("columns.reason") },
           ]}
         >
           {tools.map((tool) => (
-            <Fragment key={tool.name}>
-              <tr data-testid="belt-tool">
-                <td className={cell}>
-                  <span className={`${mono} break-all`}>{tool.name}</span>
-                  {tool.server === null ? null : (
-                    <span
-                      className={`${mono} block text-xs text-muted-foreground`}
-                    >
-                      {tool.server}
-                    </span>
-                  )}
-                </td>
-                <td className={cell}>
-                  {tool.category ?? <NotRecordedValue />}
-                </td>
-                <td className={cell}>{t(`risk.${tool.riskLevel}`)}</td>
-                <td className={cell} data-decision={tool.decision}>
-                  {t(`decision.${tool.decision}`)}
-                </td>
-                <td className={cell}>
-                  <span className={mono}>{tool.rule}</span>
-                </td>
-                <td className={cell}>
-                  {tool.readOnly ? t("readOnly") : t("writes")}
-                </td>
-              </tr>
-              {/*
-               * The schema in a row of its own: a JSON Schema in one of six
-               * columns is unreadable. On a phone the shell turns each row
-               * into a labelled card (features/shell/card-tables.ts), and a
-               * spanning cell takes no label, so the schema reads as a block
-               * under its tool rather than a field with a wrong name.
-               */}
-              <tr data-testid="belt-tool-schema">
-                <td className={`${cell} pt-0`} colSpan={6}>
-                  <ToolSchema tool={tool} />
-                </td>
-              </tr>
-            </Fragment>
-          ))}
-        </Table>
-      )}
-    </Panel>
-  );
-}
-
-function CannotSee({ tools }: { tools: Toolbelt["cannotSee"] }) {
-  const t = useTranslations("agents.detail.toolbelt.cannotSee");
-  return (
-    <Panel id="belt-cannot-see" title={t("title")}>
-      {tools.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t("empty")}</p>
-      ) : (
-        <Table
-          label={t("title")}
-          columns={[{ label: t("columns.tool") }, { label: t("columns.rule") }]}
-        >
-          {tools.map((tool) => (
-            <tr key={tool.name}>
+            <tr key={tool.name} data-testid="belt-off-row">
               <td className={cell}>
                 <span className={`${mono} break-all`}>{tool.name}</span>
+                {tool.server === null ? null : (
+                  <span
+                    className={`${mono} block text-xs text-muted-foreground`}
+                  >
+                    {tool.server}
+                  </span>
+                )}
               </td>
-              <td className={cell}>
+              <td className={`${cell} text-muted-foreground`}>
                 <span className={mono}>{tool.rule}</span>
               </td>
             </tr>
@@ -169,11 +148,14 @@ export function ToolbeltSection({ read }: { read: Read<Toolbelt> }) {
       </Panel>
     );
   }
+  const belt = read.value;
   return (
-    <div className="flex flex-col gap-4">
-      <Computation belt={read.value} />
-      <Tools tools={read.value.tools} />
-      <CannotSee tools={read.value.cannotSee} />
+    <div className="flex flex-col gap-4" data-testid="agent-toolbelt-tab">
+      <Computation belt={belt} />
+      <ModelView belt={belt} />
+      <BeltSearch belt={belt} />
+      <DecisionRules belt={belt} />
+      <OffTheBelt tools={belt.cannotSee} />
     </div>
   );
 }
