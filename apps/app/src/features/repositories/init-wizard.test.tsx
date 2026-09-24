@@ -14,6 +14,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import type { RepositoryRow } from "./view";
 
@@ -127,7 +128,13 @@ beforeEach(() => {
     fn.mockReset();
   actions.readWorkspaceRepository.mockReturnValue(new Promise(() => {}));
 });
-afterEach(cleanup);
+afterEach(async () => {
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
+});
 
 describe("the init wizard", () => {
   it("binds the repository as main when the workspace has none, finds its binding, moves the branch, then opens the pull request", async () => {
