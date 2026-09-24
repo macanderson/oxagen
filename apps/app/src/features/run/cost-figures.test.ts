@@ -1,6 +1,6 @@
 // The Cost tab's sums over `runMetrics`: the per-turn ledger with its running
-// total, the priced classes added up for the total row, the input areas and
-// Model output, and the effective input price. Every total here is a sum of
+// total, the recorded class costs added up for the total row, the input areas
+// and Model output, and the effective input price. Every total here is a sum of
 // the rows it heads, and a total a row is missing from is null, never a
 // partial sum shown as the whole.
 import { describe, expect, it } from "vitest";
@@ -42,6 +42,7 @@ function priced(
       ...overrides,
     },
     cacheSaved: money("2735028"),
+    hasUnpriced: false,
   };
 }
 
@@ -143,7 +144,7 @@ describe("classPrices", () => {
     );
   });
 
-  it("prices no total and no input when the book left one input class unpriced (negative)", () => {
+  it("has no total and no input cost when one input class has no recorded cost (negative)", () => {
     const prices = classPrices(priced({ cache_read: null }), TOKENS);
     expect(prices.total).toBeNull();
     expect(prices.input).toBeNull();
@@ -155,7 +156,7 @@ describe("classPrices", () => {
     ).toBeNull();
   });
 
-  it("prices nothing without a book (negative)", () => {
+  it("has no cost at all when the rollup recorded no class split (negative)", () => {
     expect(classPrices(null, TOKENS)).toEqual({
       total: null,
       input: null,

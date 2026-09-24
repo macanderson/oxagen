@@ -420,11 +420,15 @@ describe("runs.cost", () => {
               calls: 4,
               cost: null,
               tokens,
+              costByClass: null,
+              cacheSaving: null,
+              hasUnpriced: true,
             },
           ],
           byTool: [{ name: "create_release", calls: 3 }],
           priceEntryIds: ["prc_1"],
           rolledUpAt: "2026-09-15T08:59:00.000Z",
+          isEstimate: false,
         },
       }),
     );
@@ -438,11 +442,129 @@ describe("runs.cost", () => {
       reasoning: 2,
     });
     expect(read.ok && read.value.rollup?.retries).toBeNull();
+    // A model no call of which was priced carries no split and no saving.
+    expect(read.ok && read.value.rollup?.byModel[0]).toMatchObject({
+      costByClass: null,
+      cacheSaving: null,
+      hasUnpriced: true,
+    });
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: runCostGet,
       input: { runId: "tse_4f0a" },
       page: "run",
     });
+  });
+
+  it("maps each model's recorded cost by class and cache saving, with their basis, into the view's spelling", async () => {
+    const cost = (micros: string) => ({
+      micros,
+      currency: "USD",
+      basis: "gateway_observed" as const,
+    });
+    kernelRead.mockResolvedValue(
+      readOk({
+        runId: "tse_4f0a",
+        rollup: {
+          cost: cost("1000"),
+          tokens,
+          cacheHitRate: 0.9,
+          turns: 2,
+          steps: 7,
+          modelCalls: 4,
+          toolCalls: 3,
+          retries: 0,
+          productiveRatio: 1,
+          byModel: [
+            {
+              model: "claude-opus-5",
+              provider: "anthropic",
+              calls: 4,
+              cost: cost("1000"),
+              tokens,
+              costByClass: {
+                input_uncached: cost("100"),
+                cache_read: cost("90"),
+                cache_write_5m: cost("10"),
+                cache_write_1h: cost("0"),
+                output: cost("600"),
+                reasoning: cost("200"),
+              },
+              cacheSaving: cost("810"),
+              hasUnpriced: false,
+            },
+          ],
+          byTool: [],
+          priceEntryIds: ["prc_1"],
+          rolledUpAt: "2026-09-15T08:59:00.000Z",
+          isEstimate: false,
+        },
+      }),
+    );
+    const read = await runs.cost(ctx, "tse_4f0a");
+    expect(read.ok && read.value.rollup?.byModel[0]).toMatchObject({
+      costByClass: {
+        inputUncached: cost("100"),
+        cacheRead: cost("90"),
+        cacheWrite5m: cost("10"),
+        cacheWrite1h: cost("0"),
+        output: cost("600"),
+        reasoning: cost("200"),
+      },
+      cacheSaving: cost("810"),
+      hasUnpriced: false,
+    });
+  });
+
+  it("keeps a row's unrecorded cache saving as null, never a zero, beside its recorded split (negative)", async () => {
+    const cost = (micros: string) => ({
+      micros,
+      currency: "USD",
+      basis: "estimated" as const,
+    });
+    kernelRead.mockResolvedValue(
+      readOk({
+        runId: "tse_4f0a",
+        rollup: {
+          cost: cost("1000"),
+          tokens,
+          cacheHitRate: 0.9,
+          turns: 2,
+          steps: 7,
+          modelCalls: 4,
+          toolCalls: 3,
+          retries: 0,
+          productiveRatio: 1,
+          byModel: [
+            {
+              model: "claude-opus-5",
+              provider: "anthropic",
+              calls: 4,
+              cost: cost("1000"),
+              tokens,
+              costByClass: {
+                input_uncached: cost("100"),
+                cache_read: cost("90"),
+                cache_write_5m: cost("10"),
+                cache_write_1h: cost("0"),
+                output: cost("600"),
+                reasoning: cost("200"),
+              },
+              // Rolled up before the rollup recorded savings (#4069).
+              cacheSaving: null,
+              hasUnpriced: false,
+            },
+          ],
+          byTool: [],
+          priceEntryIds: ["prc_1"],
+          rolledUpAt: "2026-09-15T08:59:00.000Z",
+          isEstimate: false,
+        },
+      }),
+    );
+    const read = await runs.cost(ctx, "tse_4f0a");
+    const row = read.ok ? read.value.rollup?.byModel[0] : undefined;
+    expect(row?.cacheSaving).toBeNull();
+    expect(row?.costByClass?.cacheRead).toEqual(cost("90"));
   });
 
   it("keeps a rollup that has not run as null, never as a zero (negative)", async () => {

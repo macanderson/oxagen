@@ -34,10 +34,12 @@ type RunOutputsOutput = ContractOutput<typeof runOutputsGet>;
 type ContractCost = NonNullable<RunGetOutput["run"]["cost"]>;
 
 /** A metered figure keeps the basis that says who observed it (INV-09, INV-10). */
+function costOf(cost: ContractCost): z.input<typeof Cost> {
+  return { ...moneyFromMicros(cost.micros, cost.currency), basis: cost.basis };
+}
+
 function toCost(cost: ContractCost | null): z.input<typeof Cost> | null {
-  return cost === null
-    ? null
-    : { ...moneyFromMicros(cost.micros, cost.currency), basis: cost.basis };
+  return cost === null ? null : costOf(cost);
 }
 
 type ContractTokens = {
@@ -58,6 +60,21 @@ function toTokens(tokens: ContractTokens) {
     cacheWrite1h: tokens.cache_write_1h,
     output: tokens.output,
     reasoning: tokens.reasoning,
+  };
+}
+
+type ContractCostByClass = Record<keyof ContractTokens, ContractCost>;
+
+/** The rollup's recorded cost per token class, in the app's own spelling. */
+function toCostByClass(byClass: ContractCostByClass | null) {
+  if (byClass === null) return null;
+  return {
+    inputUncached: costOf(byClass.input_uncached),
+    cacheRead: costOf(byClass.cache_read),
+    cacheWrite5m: costOf(byClass.cache_write_5m),
+    cacheWrite1h: costOf(byClass.cache_write_1h),
+    output: costOf(byClass.output),
+    reasoning: costOf(byClass.reasoning),
   };
 }
 
@@ -167,6 +184,11 @@ export function toRunCost(out: RunCostOutput): z.input<typeof RunCost> {
               calls: row.calls,
               cost: toCost(row.cost),
               tokens: toTokens(row.tokens),
+              costByClass: toCostByClass(row.costByClass),
+              // A row rolled up before savings were recorded answers null,
+              // and the page says "not recorded" for it, never a zero.
+              cacheSaving: toCost(row.cacheSaving),
+              hasUnpriced: row.hasUnpriced,
             })),
             byTool: rollup.byTool.map((row) => ({
               name: row.name,

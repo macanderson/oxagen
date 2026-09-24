@@ -366,11 +366,14 @@ export function StatRow({
         testId="run-stat-cache"
         label={t("cacheHit")}
         note={
-          priced?.cacheSaved == null ? undefined : (
+          priced?.cacheSaved != null ? (
             <>
               {t("saved")} <Money value={priced.cacheSaved} />
             </>
-          )
+          ) : metrics.cacheHit !== null &&
+            (tokens?.byClass.cache_read ?? 0) > 0 ? (
+            t("savingNotRecorded")
+          ) : undefined
         }
       >
         {metrics.cacheHit === null ? (
