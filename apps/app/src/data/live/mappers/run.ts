@@ -133,8 +133,21 @@ export function toRunFrameBody(
 }
 
 export function toRunCost(out: RunCostOutput): z.input<typeof RunCost> {
-  const { rollup } = out;
+  const { rollup, provisional } = out;
   return {
+    provisional:
+      provisional === undefined || provisional === null
+        ? null
+        : {
+            byModel: provisional.byModel.map((row) => ({
+              model: row.model,
+              provider: row.provider,
+              calls: row.calls,
+              cost: toCost(row.cost),
+            })),
+            toolCalls: provisional.toolCalls,
+            asOf: provisional.asOf,
+          },
     rollup:
       rollup === null
         ? null

@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
-// Agents › Toolbelt › the input schema each belt entry carries: a tool whose
-// schema is recorded, a tool whose schema is not, one over the inline cap, and
-// the copy of the digest and of the schema. The section's other states (how
-// the belt was computed, what the model receives, the decisions, the denied
-// and error reads) are in agent.test.tsx; this file covers the disclosure,
-// with an axe check in each state and a phone-width pass.
+// Agents › Toolbelt, the tab's interactive panels (spec pages/agent.md,
+// Toolbelt): the presentation toggle in the model view, the belt search with
+// its example queries and its miss, the per-tool decision rules with their
+// layout toggle, category chips and the categories dialog, and the tool
+// dialog a row opens with the input schema the belt entry carries. The static
+// panels and the tab's failure states are in agent.test.tsx. Axe runs in each
+// state.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -47,22 +48,183 @@ function stubClipboard(writeText: () => Promise<void>) {
   };
 }
 
-/** The schema block under the nth tool row. */
-const schemaRow = (index: number) =>
-  screen.getAllByTestId("belt-tool-schema")[index] ?? document.body;
+/** Opens the tool dialog from the tool's row in the decision rules. */
+async function openTool(name: string) {
+  await userEvent.click(screen.getByRole("button", { name }));
+  return screen.findByTestId("belt-tool-dialog");
+}
 
-describe("Toolbelt input schemas", () => {
-  it("shows the schema, its origin and its digest for a tool that records one", async () => {
+describe("Model view", () => {
+  it("starts on the recorded presentation and toggles the preview with aria-pressed", async () => {
     const { container } = draw();
-    const row = within(schemaRow(1));
-    expect(row.getByTestId("belt-schema")).toBeTruthy();
-    // The digest is the identifier: shortened in the summary, whole inside.
-    expect(row.getByTestId("belt-schema")).toHaveTextContent("3f1a2b4c5d6e");
-    expect(row.getByTestId("belt-schema")).toHaveTextContent(DIGEST);
-    expect(row.getByTestId("belt-schema")).toHaveTextContent(
+    const group = screen.getByRole("group", { name: "Belt presentation" });
+    const full = within(group).getByRole("button", { name: "Full belt" });
+    const searchable = within(group).getByRole("button", {
+      name: "Searchable belt",
+    });
+    expect(full).toHaveAttribute("aria-pressed", "true");
+    expect(searchable).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByTestId("belt-block")).toHaveTextContent(
+      '"name": "github__create_pull_request"',
+    );
+    expect(screen.getByTestId("belt-block")).toHaveTextContent(
+      "sha256:3f1a2b4c5d6e",
+    );
+    await userEvent.click(searchable);
+    expect(searchable).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("belt-block")).toHaveAttribute(
+      "data-mode",
+      "searchable",
+    );
+    expect(screen.getByTestId("belt-block")).toHaveTextContent("load_tools");
+    expect(screen.getByTestId("belt-block")).not.toHaveTextContent(
+      "github__create_pull_request",
+    );
+    expect(
+      screen.getByText(/This is a preview and changes nothing/),
+    ).toBeInTheDocument();
+    await expectNoAxe(container);
+  });
+
+  it("states the width against the workspace's full-belt limit", () => {
+    draw(
+      toolbelt({
+        presentation: {
+          mode: "searchable",
+          limit: 1,
+          sentToModel: "definitions",
+        },
+      }),
+    );
+    expect(
+      screen.getByText(
+        "The belt is 2 tools, over this workspace\u2019s full-belt limit of 1, so it is presented as a searchable belt.",
+      ),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("Belt search", () => {
+  it("offers the five example queries and lists the belt members a query matches", async () => {
+    const { container } = draw();
+    for (const example of [
+      "pull request",
+      "context record",
+      "stripe payment",
+      "delete repository",
+      "graph",
+    ]) {
+      expect(screen.getByRole("button", { name: example })).toBeInTheDocument();
+    }
+    await userEvent.click(screen.getByRole("button", { name: "pull request" }));
+    const hits = screen.getByTestId("belt-hits");
+    expect(hits).toHaveTextContent("github__create_pull_request");
+    expect(hits).toHaveTextContent("1 of 2 belt members matched.");
+    expect(
+      screen.getByRole("textbox", { name: "Search this agent\u2019s belt" }),
+    ).toHaveValue("pull request");
+    await expectNoAxe(container);
+  });
+
+  it("never returns a tool outside the belt, and says why it is off (negative)", async () => {
+    draw();
+    await userEvent.click(
+      screen.getByRole("button", { name: "delete repository" }),
+    );
+    expect(screen.queryByTestId("belt-hits")).toBeNull();
+    const miss = screen.getByTestId("belt-miss");
+    expect(miss).toHaveTextContent("Zero results.");
+    expect(miss).toHaveTextContent(
+      "delete_repository exists in the registry, but it is not on this agent\u2019s belt: agent:3:deny",
+    );
+    expect(miss).toHaveTextContent(
+      "A search never returns a tool outside the belt.",
+    );
+  });
+
+  it("says nothing on the belt matches a query that finds nothing anywhere (negative)", async () => {
+    draw();
+    const input = screen.getByRole("textbox", {
+      name: "Search this agent\u2019s belt",
+    });
+    await userEvent.type(input, "graph{Enter}");
+    expect(screen.getByTestId("belt-miss")).toHaveTextContent(
+      "Nothing on this agent\u2019s belt matches that.",
+    );
+  });
+});
+
+describe("Per-tool decision rules", () => {
+  it("groups by category, filters by chip, and flattens with the layout toggle", async () => {
+    const { container } = draw();
+    const table = screen.getByRole("table", {
+      name: "Per-tool decision rules",
+    });
+    expect(
+      within(table)
+        .getAllByRole("columnheader")
+        .map((th) => th.textContent),
+    ).toEqual([
+      "Tool",
+      "Category",
+      "Decision",
+      "Hazard",
+      "Egress",
+      "Financial",
+      "Schema digest",
+    ]);
+    expect(screen.getAllByTestId("belt-group")).toHaveLength(2);
+    expect(screen.getByTestId("belt-approval")).toHaveTextContent(
+      "1 need approval",
+    );
+
+    const chips = screen.getByRole("group", { name: "Categories" });
+    await userEvent.click(
+      within(chips).getByRole("button", { name: /source control/ }),
+    );
+    expect(screen.getAllByTestId("belt-tool")).toHaveLength(1);
+    expect(screen.getByText("1 of 2 shown")).toBeInTheDocument();
+    await userEvent.click(within(chips).getByRole("button", { name: "All 2" }));
+    expect(screen.getAllByTestId("belt-tool")).toHaveLength(2);
+
+    const layout = screen.getByRole("group", { name: "Layout" });
+    const flat = within(layout).getByRole("button", { name: "Flat" });
+    await userEvent.click(flat);
+    expect(flat).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByTestId("belt-group")).toBeNull();
+    await expectNoAxe(container);
+  });
+
+  it("opens What the categories mean as a dialog with each category's count", async () => {
+    draw();
+    await userEvent.click(
+      screen.getByRole("button", { name: "What the categories mean" }),
+    );
+    const dialog = await screen.findByTestId("belt-categories-dialog");
+    expect(dialog).toHaveAttribute("role", "dialog");
+    expect(dialog).toHaveTextContent("Tool categories");
+    expect(dialog).toHaveTextContent("source control1");
+    expect(dialog).toHaveTextContent("no category1");
+  });
+
+  it("names egress and financial class as not recorded rather than drawing a class (negative)", () => {
+    draw();
+    const [row] = screen.getAllByTestId("belt-tool");
+    expect(row).toHaveTextContent("not recorded");
+  });
+});
+
+describe("Tool dialog", () => {
+  it("shows the decision, rule, schema, origin and digest for a tool that records one", async () => {
+    const { container } = draw();
+    const dialog = within(await openTool("search_tools"));
+    expect(dialog.getByTestId("belt-schema")).toHaveTextContent("3f1a2b4c5d6e");
+    expect(dialog.getByTestId("belt-schema")).toHaveTextContent(DIGEST);
+    expect(dialog.getByTestId("belt-schema")).toHaveTextContent(
       "Declared by the capability contract.",
     );
-    expect(row.getByTestId("belt-schema-json").textContent).toBe(
+    expect(dialog.getByText("human:8:default")).toBeInTheDocument();
+    expect(dialog.getByTestId("belt-schema-json").textContent).toBe(
       JSON.stringify(
         {
           type: "object",
@@ -77,19 +239,17 @@ describe("Toolbelt input schemas", () => {
   });
 
   it("says nothing is recorded for a tool with no schema, rather than showing an empty one", async () => {
-    const { container } = draw();
-    const row = within(schemaRow(0));
-    expect(row.getByTestId("belt-schema-none")).toHaveTextContent(
+    draw();
+    const dialog = within(await openTool("github__create_pull_request"));
+    expect(dialog.getByTestId("belt-schema-none")).toHaveTextContent(
       "No input schema is recorded for this tool.",
     );
-    expect(row.queryByTestId("belt-schema")).toBeNull();
-    expect(row.queryByTestId("belt-schema-json")).toBeNull();
-    await expectNoAxe(container);
+    expect(dialog.queryByTestId("belt-schema")).toBeNull();
   });
 
   it("carries a schema over the cap as its digest alone, and says where the full one is", async () => {
     const belt = toolbelt();
-    const { container } = draw({
+    draw({
       ...belt,
       tools: [
         {
@@ -99,15 +259,14 @@ describe("Toolbelt input schemas", () => {
         },
       ],
     });
-    const row = within(schemaRow(0));
-    expect(row.getByTestId("belt-schema")).toHaveTextContent(DIGEST);
-    expect(row.getByTestId("belt-schema-truncated")).toHaveTextContent(
+    const dialog = within(await openTool("search_tools"));
+    expect(dialog.getByTestId("belt-schema")).toHaveTextContent(DIGEST);
+    expect(dialog.getByTestId("belt-schema-truncated")).toHaveTextContent(
       "This schema is larger than the belt carries inline.",
     );
-    expect(row.queryByTestId("belt-schema-json")).toBeNull();
+    expect(dialog.queryByTestId("belt-schema-json")).toBeNull();
     // Only the digest is copyable when the schema itself did not travel.
-    expect(row.getAllByTestId("belt-schema-copy")).toHaveLength(1);
-    await expectNoAxe(container);
+    expect(dialog.getAllByTestId("belt-schema-copy")).toHaveLength(1);
   });
 
   it("copies the digest and the schema", async () => {
@@ -115,8 +274,9 @@ describe("Toolbelt input schemas", () => {
     const user = userEvent.setup();
     const restore = stubClipboard(writeText);
     draw();
-    const row = within(schemaRow(1));
-    const copies = row.getAllByTestId("belt-schema-copy");
+    await user.click(screen.getByRole("button", { name: "search_tools" }));
+    const dialog = within(await screen.findByTestId("belt-tool-dialog"));
+    const copies = dialog.getAllByTestId("belt-schema-copy");
     const digest = nth(copies, 0, "the digest's copy button");
     const schema = nth(copies, 1, "the schema's copy button");
     await user.click(digest);
@@ -134,8 +294,10 @@ describe("Toolbelt input schemas", () => {
     const user = userEvent.setup();
     const restore = stubClipboard(writeText);
     draw();
+    await user.click(screen.getByRole("button", { name: "search_tools" }));
+    const dialog = within(await screen.findByTestId("belt-tool-dialog"));
     const digest = nth(
-      within(schemaRow(1)).getAllByTestId("belt-schema-copy"),
+      dialog.getAllByTestId("belt-schema-copy"),
       0,
       "the digest's copy button",
     );
@@ -143,24 +305,80 @@ describe("Toolbelt input schemas", () => {
     expect(digest).not.toHaveTextContent("Copied");
     // Each copy button carries its own live region; the digest's is first.
     expect(
-      nth(
-        within(schemaRow(1)).getAllByRole("status"),
-        0,
-        "the digest's live region",
-      ),
+      nth(dialog.getAllByRole("status"), 0, "the digest's live region"),
     ).toHaveTextContent("Copy it by hand: this browser refused the clipboard.");
     restore();
   });
 
-  it("keeps the schema block readable at phone width", async () => {
+  it("rises as a dialog at phone width", async () => {
     const { container, restore } = phoneWidth();
     draw(toolbelt(), container);
-    // The schema cell spans the table, so the card-table labeller leaves it
-    // unlabelled and it reads as a block under its tool.
-    const cell = within(schemaRow(1)).getByTestId("belt-schema").closest("td");
-    expect(cell?.colSpan).toBe(6);
-    expect(cell?.getAttribute("data-label")).toBeNull();
-    await expectNoAxe(container);
+    const dialog = await openTool("search_tools");
+    expect(dialog).toHaveAttribute("role", "dialog");
+    expect(within(dialog).getByRole("button", { name: "Close" })).toBeVisible();
     restore();
+  });
+});
+
+describe("Off the belt", () => {
+  const offTheBelt = () => screen.getByRole("region", { name: "Off the belt" });
+
+  it("names the server of an MCP tool the belt leaves out, beside the rule", async () => {
+    const { container } = draw(
+      toolbelt({
+        cannotSee: [
+          {
+            name: "github__delete_repository",
+            kind: "mcp",
+            server: "mcp_github",
+            rule: "org:2:deny",
+          },
+        ],
+      }),
+    );
+    const [row] = within(offTheBelt()).getAllByTestId("belt-off-row");
+    expect(row).toHaveTextContent("github__delete_repositorymcp_github");
+    expect(row).toHaveTextContent("org:2:deny");
+    await expectNoAxe(container);
+  });
+
+  it("says every registry tool is on the belt when none is left out, and draws no table (negative)", async () => {
+    const { container } = draw(toolbelt({ cannotSee: [] }));
+    expect(offTheBelt()).toHaveTextContent(
+      "Every tool in the registry is on the belt.",
+    );
+    expect(within(offTheBelt()).queryByRole("table")).toBeNull();
+    await expectNoAxe(container);
+  });
+});
+
+describe("Toolbelt edges", () => {
+  it("says a matched tool records no category rather than leaving the line blank", async () => {
+    const { container } = draw();
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "Search this agent\u2019s belt" }),
+      "search tools{Enter}",
+    );
+    const hits = screen.getByTestId("belt-hits");
+    expect(hits).toHaveTextContent("search_tools");
+    expect(hits).toHaveTextContent("no category recorded");
+    await expectNoAxe(container);
+  });
+
+  it("says the belt is empty in the decision rules when the model is shown no tool (negative)", async () => {
+    const { container } = draw(toolbelt({ tools: [] }));
+    expect(
+      screen.getByRole("region", { name: "Per-tool decision rules" }),
+    ).toHaveTextContent("The belt is empty: the model is shown no tool.");
+    await expectNoAxe(container);
+  });
+
+  it("closes the tool dialog and returns to the rules", async () => {
+    draw();
+    const dialog = await openTool("search_tools");
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Close" }),
+    );
+    expect(screen.queryByTestId("belt-tool-dialog")).toBeNull();
   });
 });

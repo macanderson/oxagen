@@ -19,7 +19,12 @@
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
 import { routes } from "@/shared/safe-path";
-import { buttonPrimary, inputBase, mono } from "@/ui/control-styles";
+import {
+  buttonPrimary,
+  buttonSecondary,
+  inputBase,
+  mono,
+} from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -40,8 +45,11 @@ const TESTID = "connection-add";
 export function AddConnection({
   at,
   connectors,
+  primary = false,
 }: {
   at: ToolsAt;
+  /** Gold only where it is the screen's one primary action. */
+  primary?: boolean;
   /**
    * The connector slugs already in use in this workspace, offered as
    * suggestions. No capability lists the connectors this deployment has, so
@@ -85,7 +93,7 @@ export function AddConnection({
         // The form is replaced by the outcome, so the typed credential leaves
         // the DOM with it rather than sitting in an input behind a panel.
         setDone({ id: result.value.id, name: result.value.displayName });
-        navigate.replace(routes.tools(at.org, at.ws, { tab: "connections" }));
+        navigate.replace(routes.tools(at.org, at.ws, { tab: "providers" }));
         return;
       }
       setFailure(failureText(result));
@@ -101,7 +109,7 @@ export function AddConnection({
       <button
         type="button"
         data-testid={`${TESTID}-open`}
-        className={buttonPrimary}
+        className={primary ? buttonPrimary : buttonSecondary}
         onClick={() => {
           setOpen(true);
         }}

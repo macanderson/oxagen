@@ -118,6 +118,10 @@ describe("runs.list", () => {
             frames: 9,
             cost: null,
             reportedCost: null,
+            reportedTokens: null,
+            effort: null,
+            thinking: null,
+            permissionMode: null,
             model: viewModel,
             harness: null,
             machine,
@@ -433,7 +437,42 @@ describe("runs.cost", () => {
 
   it("keeps a rollup that has not run as null, never as a zero (negative)", async () => {
     kernelRead.mockResolvedValue(readOk({ runId: "tse_4f0a", rollup: null }));
-    expect(await runs.cost(ctx, "tse_4f0a")).toEqual(readOk({ rollup: null }));
+    expect(await runs.cost(ctx, "tse_4f0a")).toEqual(
+      readOk({ rollup: null, provisional: null }),
+    );
+  });
+
+  it("maps a wrapped run's provisional figures, with each model's cost in the view's money", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        runId: "tse_4f0a",
+        rollup: null,
+        provisional: {
+          byModel: [
+            {
+              model: "claude-sonnet-5",
+              provider: "anthropic",
+              calls: 3,
+              cost: {
+                micros: "2500000",
+                currency: "USD",
+                basis: "client_attested",
+              },
+            },
+            { model: "gpt-5", provider: null, calls: 1, cost: null },
+          ],
+          toolCalls: 6,
+          asOf: "2026-09-23T10:00:00.000Z",
+        },
+      }),
+    );
+    const read = await runs.cost(ctx, "tse_4f0a");
+    expect(read.ok && read.value.rollup).toBeNull();
+    expect(read.ok && read.value.provisional?.toolCalls).toBe(6);
+    expect(read.ok && read.value.provisional?.byModel[0]?.cost).toMatchObject({
+      basis: "client_attested",
+    });
+    expect(read.ok && read.value.provisional?.byModel[1]?.cost).toBeNull();
   });
 });
 
@@ -808,6 +847,18 @@ describe("runs.work", () => {
         diff: null,
       },
     ],
+    // `get_run_work` always sends this array, empty for a ledger run
+    // (`run.work.get.ts`, `subagents`). The adapter maps it unguarded, so a
+    // fixture that omits it tests a shape the wire never sends.
+    subagents: [
+      {
+        id: "a0182b6cd3a21d284",
+        type: "Explore",
+        firstSeq: "12",
+        lastSeq: "30",
+        stopped: true,
+      },
+    ],
     complete: true,
     warnings: [],
   };
@@ -828,6 +879,13 @@ describe("runs.work", () => {
       checkoutRefs: ["chk_1"],
     });
     expect(read.value.pullRequests[0]).not.toHaveProperty("checkoutIds");
+    // The harness mints a subagent's id, so the view carries it as `agentRef`
+    // rather than an `id` a reader would take for a public id (INV-11).
+    expect(read.value.subagents?.[0]).toMatchObject({
+      agentRef: "a0182b6cd3a21d284",
+      type: "Explore",
+    });
+    expect(read.value.subagents?.[0]).not.toHaveProperty("id");
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: runWorkGet,
       input: { runId: "tse_4f0a" },

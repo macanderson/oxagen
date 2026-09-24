@@ -3,7 +3,13 @@
 // and the workspace, shows a rotated secret once, reloads the page a suspend
 // leaves, leaves a receipt after a deregister and reloads the list once it is
 // closed, and names every refusal without navigating.
-import { cleanup, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { routes } from "@/shared/safe-path";
@@ -254,6 +260,52 @@ describe("AgentActions", () => {
     await userEvent.click(screen.getByRole("button", { name: "Deregister" }));
     expect(screen.queryByTestId("retire-agent-failure")).toBeNull();
     expect(router.replace).not.toHaveBeenCalled();
+  });
+});
+
+describe("AgentActions while a write is open", () => {
+  it("forgets a refused rotate when its dialog is closed and opened again", async () => {
+    rotateAgentCredential.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      code: "org_role_required",
+    });
+    renderActions();
+    const dialog = await confirm(
+      "Rotate credential",
+      "rotate-credential",
+      "Rotate",
+    );
+    expect(
+      await screen.findByTestId("rotate-credential-failure"),
+    ).toBeInTheDocument();
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: /^(Close|Cancel)$/ }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Rotate credential" }),
+    );
+    expect(screen.queryByTestId("rotate-credential-failure")).toBeNull();
+  });
+
+  it("sends one suspend however often the form is submitted while it is pending (negative)", async () => {
+    setAgentSuspended.mockReturnValue(new Promise(() => undefined));
+    renderActions();
+    await userEvent.click(screen.getByRole("button", { name: "Suspend" }));
+    const form = screen.getByTestId("suspend-agent").querySelector("form");
+    if (form === null) throw new Error("suspend form not drawn");
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    expect(setAgentSuspended).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends no deregister when the form is submitted before the person says they understand (negative)", async () => {
+    renderActions();
+    await userEvent.click(screen.getByRole("button", { name: "Deregister" }));
+    const form = screen.getByTestId("retire-agent").querySelector("form");
+    if (form === null) throw new Error("deregister form not drawn");
+    fireEvent.submit(form);
+    expect(retireAgent).not.toHaveBeenCalled();
   });
 });
 
