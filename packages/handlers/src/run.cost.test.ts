@@ -59,6 +59,40 @@ describe("get_run_cost", () => {
           calls: 2,
           cost: { micros: "1250", currency: "USD", basis: "gateway_observed" },
           tokens: row.breakdown.models[0]?.tokens,
+          costByClass: {
+            input_uncached: {
+              micros: "1250",
+              currency: "USD",
+              basis: "gateway_observed",
+            },
+            cache_read: {
+              micros: "0",
+              currency: "USD",
+              basis: "gateway_observed",
+            },
+            cache_write_5m: {
+              micros: "0",
+              currency: "USD",
+              basis: "gateway_observed",
+            },
+            cache_write_1h: {
+              micros: "0",
+              currency: "USD",
+              basis: "gateway_observed",
+            },
+            output: { micros: "0", currency: "USD", basis: "gateway_observed" },
+            reasoning: {
+              micros: "0",
+              currency: "USD",
+              basis: "gateway_observed",
+            },
+          },
+          cacheSaving: {
+            micros: "0",
+            currency: "USD",
+            basis: "gateway_observed",
+          },
+          hasUnpriced: false,
         },
       ],
       byTool: [{ name: "Read", calls: 2 }],
@@ -66,6 +100,54 @@ describe("get_run_cost", () => {
       rolledUpAt: ROLLED_UP_AT.toISOString(),
       // The fixture's row was rebuilt after the run sealed.
       isEstimate: false,
+    });
+    expect(() => runCostGet.output.parse(out)).not.toThrow();
+  });
+
+  it("answers each model's recorded class split and cache saving, not a repricing (#4069)", async () => {
+    const row = pricedRun(4_000n, { cacheWriteMicros: 1_000n });
+    const [model] = row.breakdown.models;
+    model!.cacheSavingMicros = 2_700n;
+    const out = await harness([row]).handler({ runId: row.runId }, ctx());
+    const [wire] = out.rollup!.byModel;
+    expect(wire!.costByClass?.input_uncached.micros).toBe("3000");
+    expect(wire!.costByClass?.cache_write_5m.micros).toBe("1000");
+    expect(wire!.cacheSaving).toEqual({
+      micros: "2700",
+      currency: "USD",
+      basis: "client_attested",
+    });
+    expect(wire!.hasUnpriced).toBe(false);
+    expect(() => runCostGet.output.parse(out)).not.toThrow();
+  });
+
+  it("answers cacheSaving: null for a row rolled up before the saving was recorded", async () => {
+    const row = pricedRun(4_000n);
+    row.breakdown.models[0]!.cacheSavingMicros = null;
+    const out = await harness([row]).handler({ runId: row.runId }, ctx());
+    expect(out.rollup!.byModel[0]!.cacheSaving).toBeNull();
+    // The rest of the row still reads: only the saving is not recorded.
+    expect(out.rollup!.byModel[0]!.costByClass).not.toBeNull();
+    expect(() => runCostGet.output.parse(out)).not.toThrow();
+  });
+
+  it("answers no class split and no saving for a model none of whose frames priced, and says it went unpriced", async () => {
+    const row = pricedRun(4_000n);
+    row.breakdown.models.push({
+      ...row.breakdown.models[0]!,
+      model: "mystery-9",
+      costMicros: null,
+      basis: null,
+      cacheSavingMicros: null,
+      hasUnpriced: true,
+    });
+    const out = await harness([row]).handler({ runId: row.runId }, ctx());
+    const mystery = out.rollup!.byModel.find((m) => m.model === "mystery-9");
+    expect(mystery).toMatchObject({
+      cost: null,
+      costByClass: null,
+      cacheSaving: null,
+      hasUnpriced: true,
     });
     expect(() => runCostGet.output.parse(out)).not.toThrow();
   });

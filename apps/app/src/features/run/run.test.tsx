@@ -18,12 +18,13 @@ import {
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { PriceBook } from "@/data/contracts/spend";
 import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { mandateList, mandateRow } from "@/test/mandate-views";
 import { agentDetail } from "../agents/agents.builders";
-import { opusBook } from "./cost.builders";
+import { TOKEN_CLASSES } from "./metrics";
 import {
   NOW,
   runChain,
@@ -165,6 +166,28 @@ async function renderRun(
 }
 
 const ok = readOk;
+
+/**
+ * Today's price book for the run's model: $150 a million for every class,
+ * nowhere near the rates the builders' recorded figures came from, as after a
+ * rate change since the run.
+ */
+const todaysBook = (): PriceBook => ({
+  at: "2026-09-15T00:00:00.000Z",
+  entries: TOKEN_CLASSES.map((tokenClass) => ({
+    provider: "anthropic",
+    model: "claude-opus-5",
+    modelAliases: [],
+    region: null,
+    tokenClass,
+    unit: "token" as const,
+    ratePerMillion: { micros: "150000000", currency: "USD" },
+    effectiveFrom: "2026-09-01T00:00:00.000Z",
+    effectiveTo: null,
+    source: "list" as const,
+    negotiated: false,
+  })),
+});
 
 /** One call parked on this run, as `list_approvals` answers it. */
 const approval = () => ({
@@ -2003,24 +2026,67 @@ describe("figures", () => {
     expect(wasted.innerHTML).not.toContain("text-critical");
   });
 
-  it("prices the cache's saving from the organization's price book, and says none when the book is refused (negative)", async () => {
-    await renderRun({
+  it("shows the cache's recorded saving and never reads the price book, and says not recorded for a row without one (negative)", async () => {
+    const { calls } = await renderRun({
       detail: ok(runDetail()),
       transcript: ok(runTranscript()),
-      priceBook: ok(opusBook()),
+      priceBook: ok(todaysBook()),
     });
-    // 91,022 cache reads at $5.00 less $0.50 a million is $0.409599.
+    // The rollup recorded a $1.228797 saving for the run's 91,022 cache reads.
     expect(screen.getByTestId("run-stat-cache")).toHaveTextContent(
-      "83%saved about $0.41",
+      "83%saved about $1.23",
     );
+    expect(calls.priceBook).toHaveLength(0);
     cleanup();
+    const rollup = runCost().rollup;
+    if (rollup === null) throw new Error("the builder's rollup is present");
     await renderRun({
       detail: ok(runDetail()),
       transcript: ok(runTranscript()),
-      priceBook: DENIED,
+      // A row rolled up before the rollup recorded savings.
+      cost: ok(
+        runCost({
+          rollup: {
+            ...rollup,
+            byModel: rollup.byModel.map((row) => ({
+              ...row,
+              cacheSaving: null,
+            })),
+          },
+        }),
+      ),
     });
-    expect(screen.getByTestId("run-stat-cache")).toHaveTextContent(
-      /^Cache hit83%$/,
+    const stat = screen.getByTestId("run-stat-cache");
+    expect(stat).toHaveTextContent(/^Cache hit83%saving not recorded$/);
+    expect(stat).not.toHaveTextContent("$");
+  });
+
+  it("keeps the token classes at their recorded cost after a rate change, reading no price book", async () => {
+    const { calls } = await renderRun(
+      {
+        detail: ok(runDetail()),
+        transcript: ok(runTranscript()),
+        cost: ok(runCost()),
+        // Today's book prices every class at $150 a million.
+        priceBook: ok(todaysBook()),
+      },
+      { tab: "cost" },
+    );
+    expect(calls.priceBook).toHaveLength(0);
+    const cost = (tokenClass: string) =>
+      screen
+        .getAllByTestId("token-class-row")
+        .find((row) => row.dataset.class === tokenClass)?.children[2]
+        ?.textContent;
+    // The split the rollup recorded when the calls were made. At today's rate
+    // the 12,004 output tokens would be $1.8006, not the recorded $2.034842.
+    expect(cost("input_uncached")).toBe("$1.09224");
+    expect(cost("cache_read")).toBe("$0.136533");
+    expect(cost("cache_write_5m")).toBe("$0.30765");
+    expect(cost("output")).toBe("$2.034842");
+    expect(cost("reasoning")).toBe("$0.56");
+    expect(screen.getByTestId("token-class-total")).toHaveTextContent(
+      "$4.131265",
     );
   });
 });

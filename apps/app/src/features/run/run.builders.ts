@@ -21,9 +21,9 @@ import type {
   ResolvedApprovalItem,
 } from "@/data/contracts/approvals";
 import type { MandateList } from "@/data/contracts/mandates";
-import type { PriceBook } from "@/data/contracts/spend";
 import type { RunWork } from "@/data/contracts/run-work";
 import type { RunRow } from "@/data/contracts/runs";
+import type { PriceBook } from "@/data/contracts/spend";
 import type { DataSource } from "@/data/ports";
 import type { AgentDetail, AgentPage } from "@/data/contracts/agents";
 import { type Read, readOk } from "@/data/read";
@@ -33,6 +33,13 @@ export const NOW = Date.parse("2026-09-15T09:00:00.000Z");
 
 const at = (secondsFromNow: number): string =>
   new Date(NOW + secondsFromNow * 1000).toISOString();
+
+/** A figure the gateway observed, in USD micros. */
+const gatewayUsd = (micros: string) => ({
+  micros,
+  currency: "USD",
+  basis: "gateway_observed" as const,
+});
 
 export function runRow(overrides: Partial<RunRow> = {}): RunRow {
   return {
@@ -477,6 +484,17 @@ export function runCost(overrides: Partial<RunCost> = {}): RunCost {
             output: 12_004,
             reasoning: 3011,
           },
+          // What the rollup recorded for each class; the six sum to `cost`.
+          costByClass: {
+            inputUncached: gatewayUsd("1092240"),
+            cacheRead: gatewayUsd("136533"),
+            cacheWrite5m: gatewayUsd("307650"),
+            cacheWrite1h: gatewayUsd("0"),
+            output: gatewayUsd("2034842"),
+            reasoning: gatewayUsd("560000"),
+          },
+          cacheSaving: gatewayUsd("1228797"),
+          hasUnpriced: false,
         },
       ],
       byTool: [{ name: "create_release", calls: 3 }],
@@ -588,9 +606,8 @@ type RunReads = {
    */
   mandates?: Read<MandateList>;
   /**
-   * The organization's price book, read with the page to price the token
-   * classes and the cache's saving. A test that says nothing about it gets a
-   * read that throws, which the page folds to no book.
+   * The organization's price book. The page must not read it (#4069); a test
+   * passes one to prove the figures stay the recorded ones whatever it says.
    */
   priceBook?: Read<PriceBook>;
 };
@@ -615,6 +632,8 @@ export function runSource(reads: RunReads) {
     mandates: unknown[][];
     outputs: unknown[][];
     agent: unknown[][];
+    /** The page prices nothing, so any read of the price book is a defect (#4069). */
+    priceBook: unknown[][];
   } = {
     get: [],
     frameBody: [],
@@ -626,6 +645,7 @@ export function runSource(reads: RunReads) {
     mandates: [],
     outputs: [],
     agent: [],
+    priceBook: [],
   };
   const refuse = () => Promise.reject(new Error("not a Run read"));
   const answer = <T>(
@@ -724,10 +744,12 @@ export function runSource(reads: RunReads) {
       budgets: refuse,
       findings: refuse,
       findingEvidence: refuse,
-      priceBook: () =>
-        reads.priceBook === undefined
+      priceBook: (...args: unknown[]) => {
+        calls.priceBook.push(args);
+        return reads.priceBook === undefined
           ? refuse()
-          : Promise.resolve(reads.priceBook),
+          : Promise.resolve(reads.priceBook);
+      },
       unpricedModels: refuse,
     },
     onboarding: { state: refuse, firstFrame: refuse },

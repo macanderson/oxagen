@@ -16,14 +16,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgentDetail } from "@/data/contracts/agents";
 import type { RunCost, RunTranscript } from "@/data/contracts/run";
 import type { RunRow } from "@/data/contracts/runs";
-import type { PriceBook } from "@/data/contracts/spend";
 import { type Read, readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import {
   costRollup,
   costTranscript,
-  opusBook,
+  RELEASE_RUN_CLASSES,
   releaseRunCost,
   releaseRunTurns,
   type TurnSpec,
@@ -113,13 +112,11 @@ function props({
   run = RELEASE_RUN,
   cost = readOk(releaseRunCost()),
   transcript = readOk(costTranscript(releaseRunTurns())),
-  book = opusBook(),
   agentRead = null,
 }: {
   run?: RunRow;
   cost?: Read<RunCost>;
   transcript?: Read<RunTranscript>;
-  book?: PriceBook | null;
   agentRead?: Read<AgentDetail> | null;
 } = {}): RunTabProps {
   const detail = runDetail({ run });
@@ -131,13 +128,12 @@ function props({
     detail,
     place: { org: "acme", ws: "core-platform", runId: run.id },
     view: { kinds: [], frames: null, body: null },
-    metrics: runMetrics({ run, cost, transcript, book }),
+    metrics: runMetrics({ run, cost, transcript }),
     everything: transcript,
     cost,
     outputs: readOk(runOutputs()),
     work: Promise.resolve(readError("not_found", 404)),
     agent: agentRead,
-    book,
     now: NOW,
   };
 }
@@ -444,9 +440,10 @@ describe("CostTab", () => {
       expect(row).toHaveTextContent("not recorded");
       expect(row.textContent).not.toMatch(/\$|\d/);
     }
-    // Model output is recorded and priced from the book: 36,711 tokens.
+    // Model output is recorded: 36,711 tokens, for which the rollup recorded
+    // $1.514138 of output and $0.763218 of reasoning.
     expect(areas[6]).toHaveTextContent("36,711 tok");
-    expect(areas[6]).toHaveTextContent("$0.92");
+    expect(areas[6]).toHaveTextContent("$2.28");
     for (const tool of screen.getAllByTestId("dearest-tool"))
       expect(tool).toHaveTextContent("not recorded");
     const prefetch = screen.getByTestId("prefetch-figure");
@@ -465,47 +462,169 @@ describe("CostTab", () => {
     );
   });
 
-  it("prices the classes from the book and sets the total against the recorded cost", () => {
+  it("shows each class's recorded cost, which sum to the run's recorded cost, and says they are recorded", () => {
     renderTab(props());
     const composition = screen.getByTestId("prompt-composition");
-    // Input: 124,486 at $5 plus 607,784 at $0.50 is $0.926322 over 732,270
-    // tokens, $1.265000 a million, which rounds half to even at the cent.
+    // Input: $1.244860 recorded for uncached input plus $0.607784 for cache
+    // reads is $1.852644 over 732,270 tokens, $2.530001 a million.
     expect(composition).toHaveTextContent(
-      "$1.26 per million across all input classes",
+      "$2.53 per million across all input classes",
     );
     expect(screen.getByTestId("inst-tokens")).toHaveTextContent(
-      "effective input price $1.26 per million",
+      "effective input price $2.53 per million",
     );
     expect(composition).toHaveTextContent("0% · nothing written this run");
     expect(composition).toHaveTextContent(
       "gateway_observed · counted by the proxy from the bytes that passed through it",
     );
     expect(composition).toHaveTextContent("71% of steps advanced the task");
+    // Each row is the class the rollup recorded, to the micro.
+    const row = (tokenClass: string) =>
+      screen
+        .getAllByTestId("token-class-row")
+        .find((each) => each.dataset.class === tokenClass);
+    expect(row("input_uncached")?.children[2]).toHaveTextContent("$1.24486");
+    expect(row("cache_read")?.children[2]).toHaveTextContent("$0.607784");
+    expect(row("output")?.children[2]).toHaveTextContent("$1.514138");
+    expect(row("reasoning")?.children[2]).toHaveTextContent("$0.763218");
+    // The rows sum to the rollup's cost: the page adds, it does not price.
     const total = screen.getByTestId("token-class-total");
-    expect(total).toHaveTextContent("$1.844097");
+    expect(total).toHaveTextContent("$4.13");
     expect(total).toHaveTextContent("100%");
-    expect(screen.getByTestId("token-class-note")).toHaveTextContent(
+    const note = screen.getByTestId("token-class-note");
+    expect(note).toHaveTextContent(
+      "These are the run's recorded costs. Each call was priced at the rate in force when it was made, so a later price change does not move them.",
+    );
+    expect(note).toHaveTextContent(
       "The run recorded $4.13 gateway_observed. It was priced with prc_01k4qj9e.",
     );
+    expect(note).not.toHaveTextContent("price book");
   });
 
-  it("prices no class without a price book, and says why (negative)", () => {
-    renderTab(props({ book: null }));
+  it("shows no class cost when the rollup names no model, and says why (negative)", () => {
+    const rollup = releaseRunCost().rollup;
+    if (rollup === null) throw new Error("the builder's rollup is present");
+    renderTab(props({ cost: readOk({ rollup: { ...rollup, byModel: [] } }) }));
     for (const row of screen.getAllByTestId("token-class-row"))
       expect(row.children[2]).toHaveTextContent("not recorded");
     expect(screen.getByTestId("token-class-total")).toHaveTextContent(
       "not recorded",
     );
     expect(screen.getByTestId("token-class-note")).toHaveTextContent(
-      "The price book was not read, so no class is priced.",
+      "The rollup recorded no model for this run, so no class has a cost.",
     );
     expect(screen.getByTestId("inst-tokens")).toHaveTextContent(
-      "effective input price not priced",
+      "effective input price not recorded",
     );
-    // The token counts are the rollup's, so they stand without a book.
+    // The token counts are the rollup's totals, so they stand without a model row.
     expect(screen.getByTestId("token-class-total-tokens")).toHaveTextContent(
       "768,981",
     );
+  });
+
+  it("says the cache's saving is not recorded on a row rolled up before savings were, never a zero (negative)", () => {
+    renderTab(
+      props({
+        cost: readOk(
+          costRollup({
+            micros: "4130000",
+            tokens: {
+              inputUncached: 124_486,
+              cacheRead: 607_784,
+              cacheWrite5m: 0,
+              cacheWrite1h: 0,
+              output: 24_229,
+              reasoning: 12_482,
+            },
+            byClass: RELEASE_RUN_CLASSES,
+            cacheSaving: null,
+            cacheHitRate: 0.83,
+            modelCalls: 10,
+          }),
+        ),
+      }),
+      { withStats: true },
+    );
+    const tile = screen.getByTestId("inst-cost");
+    expect(tile).toHaveTextContent("cache hit 83% · saving not recorded");
+    expect(tile).not.toHaveTextContent("saved about");
+    const stat = screen.getByTestId("run-stat-cache");
+    expect(stat).toHaveTextContent("saving not recorded");
+    expect(stat).not.toHaveTextContent("$0.00");
+    // The class split was recorded, so it stands.
+    expect(screen.getByTestId("token-class-total")).toHaveTextContent("$4.13");
+  });
+
+  it("claims neither a saving nor a missing one for a run that read nothing from the cache (negative)", () => {
+    // The rollup records a zero saving for a model that read nothing, and
+    // `runMetrics` claims no saving over it, so `cacheSaved` is null here
+    // exactly as on a legacy row. Only the cache-read count tells them apart.
+    renderTab(
+      props({
+        cost: readOk(
+          costRollup({
+            micros: "4130000",
+            tokens: {
+              inputUncached: 732_270,
+              cacheRead: 0,
+              cacheWrite5m: 0,
+              cacheWrite1h: 0,
+              output: 24_229,
+              reasoning: 12_482,
+            },
+            byClass: { ...RELEASE_RUN_CLASSES, cacheRead: "0" },
+            cacheSaving: "0",
+            cacheHitRate: 0,
+            modelCalls: 10,
+          }),
+        ),
+      }),
+      { withStats: true },
+    );
+    const tile = screen.getByTestId("inst-cost");
+    expect(tile).toHaveTextContent("cache hit 0%");
+    expect(tile).not.toHaveTextContent("saving not recorded");
+    expect(tile).not.toHaveTextContent("saved about");
+    const stat = screen.getByTestId("run-stat-cache");
+    expect(stat).toHaveTextContent("0%");
+    expect(stat).not.toHaveTextContent("saving not recorded");
+    expect(stat).not.toHaveTextContent("saved about");
+  });
+
+  it("shows the recorded saving on the instrument and the stat row", () => {
+    renderTab(props(), { withStats: true });
+    // 607,784 cache reads, recorded as saving $5.470056.
+    expect(screen.getByTestId("inst-cost")).toHaveTextContent(
+      "cache hit 83% · saved about $5.47 against an uncached prompt",
+    );
+    expect(screen.getByTestId("run-stat-cache")).toHaveTextContent(
+      "saved about $5.47",
+    );
+  });
+
+  it("says the costs cover only the priced calls when the rollup could not price some", () => {
+    const rollup = releaseRunCost().rollup;
+    if (rollup === null) throw new Error("the builder's rollup is present");
+    renderTab(
+      props({
+        cost: readOk({
+          rollup: {
+            ...rollup,
+            byModel: rollup.byModel.map((row) => ({
+              ...row,
+              hasUnpriced: true,
+            })),
+          },
+        }),
+      }),
+    );
+    const note = screen.getByTestId("token-class-note");
+    expect(note).toHaveTextContent(
+      "The rollup could not price some of this run's calls, so each cost covers only the calls it priced.",
+    );
+    expect(note).not.toHaveTextContent("These are the run's recorded costs.");
+    // What was recorded still shows.
+    expect(screen.getByTestId("token-class-total")).toHaveTextContent("$4.13");
   });
 
   it("says the rollup has not run rather than printing zeros (negative)", () => {
@@ -595,6 +714,13 @@ describe("CostTab", () => {
               output: 24_229,
               reasoning: 0,
             },
+            byClass: {
+              ...RELEASE_RUN_CLASSES,
+              cacheWrite5m: "31250",
+              output: "2246106",
+              reasoning: "0",
+            },
+            cacheSaving: "5470056",
             cacheHitRate: null,
             modelCalls: 0,
           }),
@@ -612,20 +738,27 @@ describe("CostTab", () => {
     );
   });
 
-  it("leaves the total unpriced when the book lacks a class the run spent in, and names no recorded cost or price entry the record lacks (negative)", () => {
+  it("leaves the total without a cost when a model the run used has no recorded split, and names no recorded cost or price entry the record lacks (negative)", () => {
     const rollup = releaseRunCost().rollup;
     if (rollup === null) throw new Error("the builder's rollup is present");
-    const book = opusBook();
     renderTab(
       props({
         run: runRow({ ...RELEASE_RUN, cost: null }),
-        cost: readOk({ rollup: { ...rollup, cost: null, priceEntryIds: [] } }),
-        book: {
-          ...book,
-          entries: book.entries.filter(
-            (entry) => entry.tokenClass !== "reasoning",
-          ),
-        },
+        cost: readOk({
+          rollup: {
+            ...rollup,
+            cost: null,
+            priceEntryIds: [],
+            // The rollup priced none of the model's calls.
+            byModel: rollup.byModel.map((row) => ({
+              ...row,
+              cost: null,
+              costByClass: null,
+              cacheSaving: null,
+              hasUnpriced: true,
+            })),
+          },
+        }),
       }),
     );
     const reasoning = screen
@@ -637,7 +770,7 @@ describe("CostTab", () => {
     );
     const note = screen.getByTestId("token-class-note");
     expect(note).toHaveTextContent(
-      "The price book has no rate for a model this run used",
+      "The rollup recorded no cost for a model this run used",
     );
     expect(note).not.toHaveTextContent("The run recorded");
     expect(note).not.toHaveTextContent("It was priced with");

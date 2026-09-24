@@ -6043,6 +6043,7 @@ type Messages = {
         turnAxisLive: string;
         cacheNotRecorded: string;
         cacheHitOnly: string;
+        savingNotRecorded: string;
         cacheSaved: string;
         wall: string;
         soFar: string;
@@ -6192,8 +6193,9 @@ type Messages = {
         };
         total: string;
         priced: string;
-        noBook: string;
+        noModels: string;
         unpriced: string;
+        incomplete: string;
         recorded: string;
         entries: string;
       };
@@ -6683,6 +6685,7 @@ type Messages = {
         harness: string;
       };
       saved: string;
+      savingNotRecorded: string;
     };
     issues: {
       title: string;

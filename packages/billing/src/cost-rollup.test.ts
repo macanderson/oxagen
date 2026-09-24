@@ -404,6 +404,121 @@ describe("rollupRun", () => {
   });
 });
 
+describe("the recorded cache saving (#4069)", () => {
+  /** The input rate rises from $3 to $4 at this instant; cache reads stay $0.30. */
+  const RATE_CHANGE = new Date("2026-09-15T00:00:00.000Z");
+  const REPRICED: PriceEntry[] = [
+    entry({
+      id: "pe_in_old",
+      tokenClass: "input_uncached",
+      effectiveTo: RATE_CHANGE,
+    }),
+    entry({
+      id: "pe_in_new",
+      tokenClass: "input_uncached",
+      microsPerMillion: 4_000_000n,
+      effectiveFrom: RATE_CHANGE,
+    }),
+    ...BOOK.filter((e) => e.tokenClass !== "input_uncached"),
+  ];
+
+  it("prices each frame's saving at that frame's instant", () => {
+    // Fails on main: the rollup recorded no saving, so a reader repriced the
+    // cache reads with today's book and printed 7400 for both frames.
+    const record = rollupRun({
+      meta,
+      book: REPRICED,
+      toolCalls: [],
+      modelCalls: [
+        frame({
+          at: new Date("2026-09-14T10:00:00.000Z"),
+          tokens: tokens({ input_uncached: 10, cache_read: 1000 }),
+        }),
+        frame({
+          at: new Date("2026-09-16T10:00:00.000Z"),
+          tokens: tokens({ input_uncached: 10, cache_read: 1000 }),
+        }),
+      ],
+    });
+    // 1000 × (3.00 − 0.30) + 1000 × (4.00 − 0.30), in micros.
+    expect(record.breakdown.models[0]!.cacheSavingMicros).toBe(2700n + 3700n);
+  });
+
+  it("rounds the model's saving once, like its cost by class", () => {
+    // Each frame saves 2.7 micros; per-frame rounding would record 6.
+    const record = rollupRun({
+      meta,
+      book: BOOK,
+      toolCalls: [],
+      modelCalls: [
+        frame({ tokens: tokens({ cache_read: 1 }) }),
+        frame({ tokens: tokens({ cache_read: 1 }) }),
+      ],
+    });
+    expect(record.breakdown.models[0]!.cacheSavingMicros).toBe(5n);
+  });
+
+  it("records a zero saving for a model that never read the cache", () => {
+    const record = rollupRun({
+      meta,
+      book: BOOK,
+      toolCalls: [],
+      modelCalls: [frame()],
+    });
+    expect(record.breakdown.models[0]!.cacheSavingMicros).toBe(0n);
+  });
+
+  it("records no saving when a frame that read the cache has no cache_read price", () => {
+    const record = rollupRun({
+      meta,
+      book: BOOK.filter((e) => e.tokenClass !== "cache_read"),
+      toolCalls: [],
+      modelCalls: [
+        frame(),
+        frame({ tokens: tokens({ input_uncached: 10, cache_read: 1000 }) }),
+      ],
+    });
+    const [group] = record.breakdown.models;
+    expect(group!.cacheSavingMicros).toBeNull();
+    // The frame's cost is still an estimate from its reported figure.
+    expect(group!.basis).toBe("estimated");
+  });
+
+  it("voids the saving when an unpriced sibling call read the cache, even though another call priced", () => {
+    const record = rollupRun({
+      meta,
+      book: BOOK,
+      toolCalls: [],
+      modelCalls: [
+        frame({ tokens: tokens({ input_uncached: 10, cache_read: 1000 }) }),
+        // Before the book's first entry: nothing prices this call.
+        frame({
+          at: new Date("2025-06-01T00:00:00.000Z"),
+          tokens: tokens({ cache_read: 1000 }),
+          reportedCostMicros: null,
+        }),
+      ],
+    });
+    const [group] = record.breakdown.models;
+    expect(group!.costMicros).not.toBeNull();
+    expect(group!.hasUnpriced).toBe(true);
+    expect(group!.cacheSavingMicros).toBeNull();
+  });
+
+  it("changes no figure the rollup already recorded, and names no entry that priced no tokens", () => {
+    const p = priceFrame(
+      BOOK,
+      ORG,
+      frame({ tokens: tokens({ cache_read: 1000, output: 10 }) }),
+    );
+    // input_uncached is resolved for the saving but priced nothing.
+    expect(p.priceEntryIds.sort()).toEqual(["pe_cr", "pe_out"]);
+    expect(p.scaled).toBe(1000n * 300_000n + 10n * 15_000_000n);
+    expect(p.basis).toBe("gateway_observed");
+    expect(p.cacheSavingScaled).toBe(1000n * 2_700_000n);
+  });
+});
+
 describe("dailyTotalsFromRuns", () => {
   const base = rollupRun({
     meta,

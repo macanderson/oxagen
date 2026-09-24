@@ -3,7 +3,7 @@
 // seven areas, then the dearest tools, then how the split is read.
 //
 // One area is recorded: Model output is the output and reasoning classes the
-// rollup counts, priced from the book. The six input areas (the first prompt,
+// rollup counts, at the cost it recorded for them. The six input areas (the first prompt,
 // the follow-ups, the context Oxagen injected, the tool definitions, the tool
 // results and the system prompt) share the input tokens, and how a request
 // splits into them is not recorded (G3: `cost.run_totals` carries no
