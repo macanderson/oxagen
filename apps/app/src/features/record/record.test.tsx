@@ -974,3 +974,166 @@ describe("Record › the not-loaded states", () => {
     expect(loading.textContent).toBe("");
   });
 });
+
+describe("Record › reads that did not answer and facts a record lacks", () => {
+  it("says the pull request goes to the main repo, and names the file alone, when the freshness read failed", async () => {
+    const user = userEvent.setup();
+    await renderRecord({
+      freshness: readError("steering_unavailable", 503),
+      proposals: readError("proposals_unavailable", 503),
+    });
+    expect(screen.getByTestId("record-editor-note").textContent).toContain(
+      "a pull request against the main repo.",
+    );
+    expect(
+      screen.getByTestId("record-lineage").querySelector('[data-fact="file"]')
+        ?.textContent,
+    ).toBe(`.oxagen/rules/${LINEAGE}.toml`);
+    // A proposals read that failed is no open proposal.
+    expect(
+      screen.getByTestId("record-chips").querySelector('[data-term="pending"]'),
+    ).toBeNull();
+    await user.click(screen.getByTestId("record-archive-open"));
+    expect(
+      screen.getByTestId("record-archive").querySelector("#record-archive-gap")
+        ?.textContent,
+    ).not.toContain("acme/platform");
+  });
+
+  it("names the branch it would open for a proposal whose pull request has not opened", async () => {
+    await renderRecord({
+      proposals: readOk({
+        proposals: [
+          proposal({ lineage: LINEAGE, status: "proposed", pr: null }),
+        ],
+        total: 1,
+      }),
+    });
+    expect(
+      screen.getByTestId("record-chips").querySelector('[data-term="pending"]')
+        ?.textContent,
+    ).toBe(`context/${LINEAGE}`);
+  });
+
+  it("counts no published records for a constraint when that list read failed", async () => {
+    const { calls } = await renderRecord({
+      record: readOk(ofKind("constraint")),
+      records: readError("records_unavailable", 503),
+    });
+    expect(calls.records).toHaveLength(2);
+    const panel = screen.getByTestId("record-kind-panel");
+    expect(panel.textContent).toContain(
+      "Every merge re-runs the conflict check across every published record.",
+    );
+    expect(panel.textContent).not.toMatch(/across all \d+ published records/);
+  });
+
+  it("leads with the title and the file's usual path when the record states no statement, force or path", async () => {
+    await renderRecord({
+      record: readOk(
+        recordDetail({
+          record: {
+            ...publishedRecord({ statement: null, force: null, path: null }),
+            status: "active",
+          },
+        }),
+      ),
+    });
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(
+      "Read CHANGELOG.md once per run",
+    );
+    expect(
+      screen.getByTestId("record-chips").querySelector('[data-term="force"]'),
+    ).toBeNull();
+    expect(
+      screen.getByTestId<HTMLTextAreaElement>("record-statement").value,
+    ).toBe("");
+    expect(
+      screen.getByTestId("record-editor").getAttribute("aria-label"),
+    ).toContain(`.oxagen/rules/${LINEAGE}.toml`);
+  });
+
+  it("prints the commit alone when the record carries no publication date", async () => {
+    await renderRecord({
+      record: readOk(
+        recordDetail({
+          provenance: null,
+          record: {
+            ...publishedRecord({ publishedAt: null }),
+            status: "active",
+          },
+        }),
+      ),
+    });
+    expect(
+      screen
+        .getByTestId("record-lineage")
+        .querySelector('[data-fact="published"]')?.textContent,
+    ).toBe("4d5e6f7");
+  });
+
+  it("names the viewer by email, then by id, when the session has no name (negative)", async () => {
+    session.mockResolvedValue({
+      user: { name: null, email: "marcus@acme.test" },
+    });
+    await renderRecord({
+      record: { ok: false, reason: "denied", permission: "steering.read" },
+    });
+    expect(screen.getByTestId("record-denied").textContent).toContain(
+      "marcus@acme.test · workspace.member",
+    );
+    cleanup();
+    session.mockResolvedValue(null);
+    await renderRecord({
+      record: { ok: false, reason: "denied", permission: "steering.read" },
+    });
+    expect(screen.getByTestId("record-denied").textContent).toContain(
+      "usr_marcusbell · workspace.member",
+    );
+  });
+
+  it("draws a rule's constraint effect in its own tone, forbid apart from require", () => {
+    const rule = (constraintEffect: "forbid" | "require") => (
+      <KindPanel
+        detail={recordDetail({
+          record: {
+            ...publishedRecord({ kind: "rule", constraintEffect }),
+            status: "active",
+          },
+        })}
+        bundleVersion={4}
+        publishedTotal={null}
+      />
+    );
+    const view = render(<IntlProvider>{rule("forbid")}</IntlProvider>);
+    const panel = screen.getByTestId("record-kind-panel");
+    expect(panel.textContent).toContain("forbid");
+    view.rerender(<IntlProvider>{rule("require")}</IntlProvider>);
+    expect(screen.getByTestId("record-kind-panel").textContent).toContain(
+      "require",
+    );
+  });
+
+  it("dates a fact from its publication without a commit it cannot read", () => {
+    render(
+      <IntlProvider>
+        <KindPanel
+          detail={recordDetail({
+            provenance: null,
+            record: {
+              ...publishedRecord({ kind: "fact", commit: null }),
+              status: "active",
+            },
+          })}
+          bundleVersion={null}
+          publishedTotal={null}
+        />
+      </IntlProvider>,
+    );
+    const validFrom = screen
+      .getByTestId("record-kind-panel")
+      .querySelector('[data-fact="valid-from"]');
+    expect(validFrom?.textContent).toContain("Sep 12, 2026");
+    expect(validFrom?.textContent).not.toContain("4d5e6f7");
+  });
+});
