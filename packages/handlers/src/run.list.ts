@@ -535,6 +535,13 @@ const tachoColumns = {
     modelFinal: sessions.modelFinal,
     totalCostMicros: sessions.totalCostMicros,
     costBasis: sessions.costBasis,
+    effort: sessions.effort,
+    permissionModeInitial: sessions.permissionModeInitial,
+    permissionModeFinal: sessions.permissionModeFinal,
+    inputTokens: sessions.inputTokens,
+    outputTokens: sessions.outputTokens,
+    cacheReadTokens: sessions.cacheReadTokens,
+    cacheCreationTokens: sessions.cacheCreationTokens,
   },
   operatorPublicId: schema.principals.publicId,
   operatorKind: schema.principals.kind,
@@ -727,6 +734,15 @@ export type TachoSessionColumns = GeneratedSummaryColumns & {
   modelFinal: string | null;
   totalCostMicros?: number;
   costBasis?: string | null;
+  /** The effort level the harness reported in its context frames. */
+  effort?: string | null;
+  permissionModeInitial?: string | null;
+  permissionModeFinal?: string | null;
+  /** Token counters ingest folds from the session's counted `llm_call` frames. */
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheCreationTokens?: number;
   /** Written by the seal at `agent_stop`; null while the session is open. */
   replayGrade: string | null;
   completenessGaps: unknown;
@@ -986,6 +1002,9 @@ export function toLedgerRunItem(
     // model on the run row and no host at all, so both stay null rather than
     // being reconstructed from a frame that may not be there.
     model: null,
+    effort: null,
+    permissionMode: null,
+    reportedTokens: null,
     machine: null,
     name: run.name,
     summary: generatedSummary(run),
@@ -1065,6 +1084,37 @@ function tachoCommandBlock(
   };
 }
 
+/**
+ * The session's token counters, as ingest folded them from the counted
+ * `llm_call` frames. Null for a session that recorded no model usage, so a
+ * header says "not recorded" rather than "0 tokens".
+ */
+export function reportedTokensOf(
+  session: Pick<
+    TachoSessionColumns,
+    "inputTokens" | "outputTokens" | "cacheReadTokens" | "cacheCreationTokens"
+  >,
+): RunItem["reportedTokens"] {
+  const count = (value: number | undefined) =>
+    value !== undefined && Number.isSafeInteger(value) && value >= 0
+      ? value
+      : null;
+  const input = count(session.inputTokens);
+  const output = count(session.outputTokens);
+  const cacheRead = count(session.cacheReadTokens);
+  const cacheWrite = count(session.cacheCreationTokens);
+  if (
+    input === null ||
+    output === null ||
+    cacheRead === null ||
+    cacheWrite === null ||
+    input + output + cacheRead + cacheWrite === 0
+  ) {
+    return null;
+  }
+  return { input, output, cacheRead, cacheWrite };
+}
+
 export function toTachoRunItem(
   row: TachoSessionRow,
   totals: RunRollup | undefined,
@@ -1114,6 +1164,11 @@ export function toTachoRunItem(
     // it is the one a row reports; a session that never recorded a switch has
     // only the one it started on.
     model: modelFactsOf(session.modelFinal ?? session.modelInitial),
+    effort: blankToNull(session.effort ?? null),
+    permissionMode: blankToNull(
+      session.permissionModeFinal ?? session.permissionModeInitial ?? null,
+    ),
+    reportedTokens: reportedTokensOf(session),
     machine: toRunMachine(row.host, row.session.machineSnapshot),
     harness: session.harness
       ? {

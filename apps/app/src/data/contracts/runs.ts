@@ -191,6 +191,15 @@ export function commandBlockOf(run: {
   return run.commandBlock ?? null;
 }
 
+/** Token totals by kind, as the recorder counted them. */
+export const RunTokens = z.object({
+  input: z.number().int().nonnegative(),
+  output: z.number().int().nonnegative(),
+  cacheRead: z.number().int().nonnegative(),
+  cacheWrite: z.number().int().nonnegative(),
+});
+export type RunTokens = z.infer<typeof RunTokens>;
+
 export const RunRow = z.object({
   id: PublicId,
   /** Which store recorded the run: the evidence ledger or a wrapped agent's session. */
@@ -211,6 +220,14 @@ export const RunRow = z.object({
   cost: Cost.nullable(),
   reportedCost: Cost.nullable().optional(),
   model: RunModel.nullable(),
+  /** The effort level the harness reported; null when it reported none. */
+  effort: z.string().min(1).nullable().optional(),
+  /** Whether always-on thinking was enabled; null when no frame recorded it. */
+  thinking: z.boolean().nullable().optional(),
+  /** The permission mode the session ended in; null when none was recorded. */
+  permissionMode: z.string().min(1).nullable().optional(),
+  /** Token totals from the session's counted model calls; null when none were recorded. */
+  reportedTokens: RunTokens.nullable().optional(),
   machine: RunMachine.nullable(),
   harness: z
     .object({
@@ -223,6 +240,8 @@ export const RunRow = z.object({
   taskRef: z.string().nullable(),
   /** The generated name; null until `summarize_run` wrote one. */
   enrichmentEnabled: z.boolean().optional(),
+  /** Why the last automatic name and summary failed; absent once one exists. */
+  enrichmentError: z.string().optional(),
   name: z.string().min(1).nullable(),
   summary: RunSummary.nullable(),
   replayGrade: ReplayGrade.nullable(),
@@ -244,6 +263,13 @@ export const RunRow = z.object({
   canSummarize: z.boolean(),
   startedAt: z.iso.datetime({ offset: true }),
   sealedAt: z.iso.datetime({ offset: true }).nullable(),
+  /** When the run stopped, by the recorder's clock; the end of a wall clock. */
+  endedAt: z.iso.datetime({ offset: true }).nullable().optional(),
+  /**
+   * `host_enroller` when the operator is the person who enrolled the machine
+   * a wrapped session ran on, which a page labels "enrolled by".
+   */
+  operatorAttribution: z.enum(["initiator", "host_enroller"]).nullable().optional(),
 });
 export type RunRow = z.infer<typeof RunRow>;
 
