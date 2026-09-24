@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PgDialect } from "drizzle-orm/pg-core";
 import type { SQL } from "drizzle-orm";
-import type { RunStoreOptions } from "@oxagen/run-ledger";
+import {
+  AttemptNotWritableError,
+  prepareAttemptEvent,
+  RunStoreStateError,
+  type RunStoreOptions,
+} from "@oxagen/run-ledger";
+import { CapabilityError } from "@oxagen/oxagen/kernel";
 import { runFramesIngest } from "@oxagen/oxagen/contracts/run.frames.ingest";
 import { makeCTX } from "./test-utils/fixtures";
 
@@ -198,5 +204,115 @@ describe("run credential ingress", () => {
       expect(
         runFramesIngest.input.safeParse({ ...input, [field]: runId }).success,
       ).toBe(false);
+  });
+});
+
+describe("a malformed event (#3665)", () => {
+  // The store prepares every event before it opens a transaction. These
+  // witnesses run the ledger's real preparation, so the error the handler
+  // sees is the one production raises.
+  beforeEach(() => {
+    append.mockImplementation(async ({ events }) => {
+      events.map(prepareAttemptEvent);
+      return { events: [], lastAttemptSeq: 1, lastRunSeq: "1" };
+    });
+  });
+
+  const event = {
+    attemptSeq: 1,
+    eventType: "tool.call_completed",
+    observedAt: "2026-09-20T00:00:00Z",
+  };
+
+  it.each([
+    ["an unknown event type", { ...event, eventType: "made.up", payload: {} }],
+    ["neither payload nor encrypted reference", event],
+    [
+      "both payload and encrypted reference",
+      {
+        ...event,
+        payload: {},
+        encryptedPayloadRef: "evb_0123456789abcdef0123",
+        payloadDigest: `sha256:${"1".repeat(64)}`,
+      },
+    ],
+    ["a payload off its schema", { ...event, payload: { nope: true } }],
+  ])("answers %s as invalid input, not a server fault", async (_label, bad) => {
+    const refusal = await runFramesIngestHandler(
+      { events: [bad] } as never,
+      ctx,
+    ).catch((err: unknown) => err);
+    expect(refusal).toBeInstanceOf(CapabilityError);
+    expect(refusal).toMatchObject({
+      code: "invalid_input",
+      capability: runFramesIngest.name,
+    });
+    // The API middleware maps `invalid_input` to 400 (apps/api error.ts).
+    expect(writes).toHaveLength(0);
+  });
+
+  it("still answers a sealed attempt as a conflict", async () => {
+    append.mockRejectedValueOnce(
+      new AttemptNotWritableError(attemptId, "sealed"),
+    );
+    await expect(runFramesIngestHandler(input, ctx)).rejects.toMatchObject({
+      code: "conflict",
+      reason: "run_not_writable",
+    });
+  });
+
+  it("passes a store fault through unchanged", async () => {
+    const fault = new RunStoreStateError("a hole in the durable log");
+    append.mockRejectedValueOnce(fault);
+    await expect(runFramesIngestHandler(input, ctx)).rejects.toBe(fault);
+  });
+});
+
+describe("the ingress receipt (#3665)", () => {
+  it("names each event by sequence and digest, never by its row uuid", async () => {
+    append.mockImplementationOnce(async () => {
+      await options.authorizeAppend?.(
+        tx as never,
+        {
+          attempt_id: attemptId,
+          run_id: runId,
+          org_id: scope.orgId,
+          workspace_id: scope.workspaceId,
+        } as never,
+      );
+      return {
+        events: [
+          {
+            attemptSeq: 1,
+            runSeq: "7",
+            eventId: "00000000-0000-4000-8000-0000000000e1",
+            eventDigest: `sha256:${"2".repeat(64)}`,
+            idempotent: false,
+          },
+        ],
+        lastAttemptSeq: 1,
+        lastRunSeq: "7",
+      };
+    });
+    const result = await runFramesIngestHandler(input, ctx);
+    expect(result.events).toEqual([
+      {
+        attemptSeq: 1,
+        runSeq: "7",
+        eventDigest: `sha256:${"2".repeat(64)}`,
+        idempotent: false,
+      },
+    ]);
+    expect(JSON.stringify(result)).not.toContain(
+      "00000000-0000-4000-8000-0000000000e1",
+    );
+    // The contract's output is strict, so a leaked field would fail the kernel.
+    expect(runFramesIngest.output.safeParse(result).success).toBe(true);
+    expect(
+      runFramesIngest.output.safeParse({
+        ...result,
+        events: [{ ...result.events[0], eventId: "x" }],
+      }).success,
+    ).toBe(false);
   });
 });

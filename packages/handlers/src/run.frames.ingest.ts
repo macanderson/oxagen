@@ -1,9 +1,14 @@
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
+import { CapabilityError } from "@oxagen/oxagen/kernel";
 import { runFramesIngest } from "@oxagen/oxagen/contracts/run.frames.ingest";
 import { withTenantDb } from "@oxagen/database";
-import { createPostgresRunStore } from "@oxagen/run-ledger";
+import {
+  createPostgresRunStore,
+  isAttemptNotWritableError,
+  isRunEventInputError,
+} from "@oxagen/run-ledger";
 import { deferredEvidenceBodies } from "@oxagen/run-ledger/evidence-store";
 import { readRunToken, refreshRunToken, tokenRefused } from "./lib/run-token";
 import { runScope } from "./run.list";
@@ -54,17 +59,33 @@ export const runFramesIngestHandler: CapabilityHandler<
     });
     if (!expiresAt) throw new Error("Run credential refresh was not recorded");
     return {
-      events: result.events,
+      // The receipt names each event by its attempt and run sequence and its
+      // digest. The row's own uuid stays inside: `agent_run_events` has no
+      // public id, and a producer addresses an event by sequence (#3665).
+      events: result.events.map(
+        ({ attemptSeq, runSeq, eventDigest, idempotent }) => ({
+          attemptSeq,
+          runSeq,
+          eventDigest,
+          idempotent,
+        }),
+      ),
       lastAttemptSeq: result.lastAttemptSeq,
       lastRunSeq: result.lastRunSeq,
       expiresAt: expiresAt.toISOString(),
     };
   } catch (error) {
-    if (
-      error instanceof Error &&
-      "code" in error &&
-      error.code === "run_attempt_not_writable"
-    )
+    // An event the producer got wrong (an unknown type, a payload off its
+    // schema, both or neither of `payload` and `encryptedPayloadRef`) is
+    // refused before any SQL runs. It is the caller's fault, so it answers
+    // 400 rather than the 500 an unmapped ledger error becomes (#3665).
+    if (isRunEventInputError(error))
+      throw new CapabilityError(
+        runFramesIngest.name,
+        "invalid_input",
+        (error as Error).message,
+      );
+    if (isAttemptNotWritableError(error))
       throw new HandlerError({
         code: "conflict",
         reason: "run_not_writable",

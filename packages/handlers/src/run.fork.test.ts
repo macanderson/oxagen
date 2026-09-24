@@ -6,7 +6,12 @@
  */
 import { isHandlerError } from "@oxagen/oxagen/handler-error";
 import { runFork } from "@oxagen/oxagen/contracts/run.fork";
-import type { AttemptEventReadRecord, AttemptRecord } from "@oxagen/run-ledger";
+import {
+  RunNotWritableError,
+  RunStoreStateError,
+  type AttemptEventReadRecord,
+  type AttemptRecord,
+} from "@oxagen/run-ledger";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ withTenantDb: vi.fn() }));
@@ -285,5 +290,49 @@ describe("fork_run", () => {
     await expect(
       fork({ runId: "arun_nope", fromSeq: "1" }, ctx()),
     ).rejects.toSatisfy((e) => isHandlerError(e) && e.code === "not_found");
+  });
+
+  describe("a cancel or pause that wins the run lock during the fork (#3665)", () => {
+    // Every check above passes; the store then takes the run lock and finds
+    // the run cancelled or paused. The race is driven by the store's answer,
+    // not by timing.
+    it.each([
+      ["cancelled", "was cancelled"],
+      ["paused", "evidence ingress is paused"],
+    ] as const)(
+      "answers a %s run as run_not_writable, not a server fault",
+      async (reason, detail) => {
+        const { fork, createAttempt } = harness({});
+        createAttempt.mockRejectedValueOnce(
+          new RunNotWritableError(RUN_UUID, reason, detail),
+        );
+        await expect(
+          fork({ runId: LEDGER_ID, fromSeq: "2" }, ctx()),
+        ).rejects.toSatisfy(conflict("run_not_writable"));
+      },
+    );
+
+    it("answers a run at its attempt ceiling as run_attempts_exhausted", async () => {
+      const { fork, createAttempt } = harness({});
+      createAttempt.mockRejectedValueOnce(
+        new RunNotWritableError(
+          RUN_UUID,
+          "attempts_exhausted",
+          "has exhausted its pinned max_attempts (3)",
+        ),
+      );
+      await expect(
+        fork({ runId: LEDGER_ID, fromSeq: "2" }, ctx()),
+      ).rejects.toSatisfy(conflict("run_attempts_exhausted"));
+    });
+
+    it("passes any other store failure through unchanged", async () => {
+      const { fork, createAttempt } = harness({});
+      const fault = new RunStoreStateError("run does not exist");
+      createAttempt.mockRejectedValueOnce(fault);
+      await expect(
+        fork({ runId: LEDGER_ID, fromSeq: "2" }, ctx()),
+      ).rejects.toBe(fault);
+    });
   });
 });

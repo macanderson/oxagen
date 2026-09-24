@@ -189,6 +189,26 @@ export class RunEventPayloadTooLargeError extends Error {
 }
 
 /**
+ * An event's own fields contradict each other: it carries both an inline
+ * payload and an encrypted payload reference, or neither, or an `observedAt`
+ * that is not an instant. The producer sent it that way, so it is the caller's
+ * fault, not a fault in stored state. It was a `RunStoreStateError` until
+ * #3665, which a surface could not tell from a server fault and answered 500.
+ */
+export class RunEventShapeError extends Error {
+  readonly code = "run_event_shape_invalid";
+  readonly eventType: string;
+  readonly attemptSeq: number;
+
+  constructor(eventType: string, attemptSeq: number, detail: string) {
+    super(`event ${eventType} seq ${attemptSeq} ${detail}`);
+    this.name = "RunEventShapeError";
+    this.eventType = eventType;
+    this.attemptSeq = attemptSeq;
+  }
+}
+
+/**
  * The same `(attempt_id, attempt_seq)` was written twice with DIFFERENT event
  * digests. `ON CONFLICT DO NOTHING` would silently hide this: one of the two
  * writers observed a different execution, so the ordered stream is no longer a
@@ -279,6 +299,57 @@ export class AttemptNotWritableError extends Error {
     this.name = "AttemptNotWritableError";
     this.attemptId = attemptId;
     this.reason = reason;
+  }
+}
+
+/** Why a run refused a new attempt. */
+export type RunRejectionReason = "cancelled" | "paused" | "attempts_exhausted";
+
+/**
+ * `createAttempt` found the run unable to take another attempt: an operator
+ * cancelled it or paused its evidence ingress, or it has used its pinned
+ * `max_attempts`. Each is an expected state the caller can race into, such as
+ * a cancel that wins the run lock while `fork_run` prepares its attempt, so a
+ * surface answers it as a conflict rather than a server fault (#3665).
+ */
+export class RunNotWritableError extends Error {
+  readonly code = "run_not_writable";
+  readonly runId: string;
+  readonly reason: RunRejectionReason;
+
+  constructor(runId: string, reason: RunRejectionReason, detail: string) {
+    super(`run ${runId} ${detail}`);
+    this.name = "RunNotWritableError";
+    this.runId = runId;
+    this.reason = reason;
+  }
+}
+
+/**
+ * A conditional seal found the attempt past the head its caller read: the
+ * producer appended after the caller looked. The seal is not written. The
+ * control plane's idle close seals on this condition so a producer that comes
+ * back between the scan and the close keeps its attempt open (#3988).
+ */
+export class AttemptAdvancedError extends Error {
+  readonly code = "run_attempt_advanced";
+  readonly attemptId: string;
+  readonly expectedAttemptSeq: number;
+  readonly actualAttemptSeq: number;
+
+  constructor(
+    attemptId: string,
+    expectedAttemptSeq: number,
+    actualAttemptSeq: number,
+  ) {
+    super(
+      `Attempt ${attemptId} moved past seq ${expectedAttemptSeq} to ` +
+        `${actualAttemptSeq} before the seal`,
+    );
+    this.name = "AttemptAdvancedError";
+    this.attemptId = attemptId;
+    this.expectedAttemptSeq = expectedAttemptSeq;
+    this.actualAttemptSeq = actualAttemptSeq;
   }
 }
 
@@ -410,5 +481,51 @@ export function isAttemptNotWritableError(
 export function isRunStoreStateError(err: unknown): err is RunStoreStateError {
   return (
     err instanceof RunStoreStateError || hasCode(err, "run_store_state_invalid")
+  );
+}
+
+/** Structural type guard — see isRunSpecValidationError for the rationale. */
+export function isRunEventShapeError(err: unknown): err is RunEventShapeError {
+  return (
+    err instanceof RunEventShapeError || hasCode(err, "run_event_shape_invalid")
+  );
+}
+
+/** Structural type guard — see isRunSpecValidationError for the rationale. */
+export function isRunNotWritableError(
+  err: unknown,
+): err is RunNotWritableError {
+  return err instanceof RunNotWritableError || hasCode(err, "run_not_writable");
+}
+
+/** Structural type guard — see isRunSpecValidationError for the rationale. */
+export function isAttemptAdvancedError(
+  err: unknown,
+): err is AttemptAdvancedError {
+  return (
+    err instanceof AttemptAdvancedError || hasCode(err, "run_attempt_advanced")
+  );
+}
+
+/**
+ * The errors `prepareAttemptEvent` raises for an event its producer got
+ * wrong: an unknown type, a raw field that must be encrypted, a payload over
+ * the cap or off its schema, a value that cannot be canonicalized, or fields
+ * that contradict each other. `appendAttemptBatch` prepares every event before
+ * it opens a transaction, so on the append path each of these is the caller's
+ * fault and a surface answers it 400 (#3665).
+ *
+ * Use it on the append path only. `RunSpecValidationError` also refuses a run
+ * spec, and a trusted builder that hits it there is a server bug.
+ */
+export function isRunEventInputError(err: unknown): boolean {
+  return (
+    isUnknownRunEventTypeError(err) ||
+    isForbiddenEventPayloadFieldError(err) ||
+    isRunEventPayloadTooLargeError(err) ||
+    isRunSpecValidationError(err) ||
+    isRunEventShapeError(err) ||
+    err instanceof CanonicalJsonError ||
+    hasCode(err, "canonical_json_invalid")
   );
 }
