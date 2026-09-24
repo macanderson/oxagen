@@ -13,6 +13,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import type { RepositoryTree } from "@/data/contracts/repository";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
@@ -103,7 +104,13 @@ beforeEach(() => {
     fn.mockReset();
   actions.readWorkspaceRepository.mockReturnValue(new Promise(() => {}));
 });
-afterEach(cleanup);
+afterEach(async () => {
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
+});
 
 describe("the repository dialog", () => {
   it("prints why the tree could not be read, and offers neither its changes nor Add Oxagen (negative)", () => {

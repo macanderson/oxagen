@@ -6,6 +6,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import type { SpendBudgets, SpendReport } from "@/data/contracts/spend";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
@@ -61,7 +62,13 @@ const bare = (key: string): SpendReport["rows"][number] => ({
   operator: null,
 });
 
-afterEach(cleanup);
+afterEach(async () => {
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
+});
 
 describe("the level tables", () => {
   it("says each level recorded nothing in its own words", () => {

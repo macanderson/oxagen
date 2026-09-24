@@ -15,6 +15,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import type {
   SpendFinding,
   SpendFindings,
@@ -115,7 +116,13 @@ beforeEach(() => {
   nav.push.mockReset();
   nav.replace.mockReset();
 });
-afterEach(cleanup);
+afterEach(async () => {
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
+});
 
 function section(saving: SpendFindings["saving"]) {
   return render(

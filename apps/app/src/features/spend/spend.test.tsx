@@ -25,6 +25,7 @@ import type {
 } from "@/data/contracts/spend";
 import type { DataSource } from "@/data/ports";
 import { type Read, readError, readOk } from "@/data/read";
+import type { WsRole } from "@/server/viewer";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import enMessages from "../../../messages/en.json";
 import spendMessages from "../../../messages/spend.json";
@@ -55,18 +56,20 @@ const { Spend } = await import("./spend");
 const { SpendLoading } = await import("./states");
 const { parseSpendView } = await import("./view");
 
-const CTX_FIELDS = {
-  userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
-  orgId: "7a000000-0000-4000-8000-0000000000a1",
-  orgSlug: "acme",
-  orgName: "Acme Robotics",
-  orgRole: "member",
-  workspaceId: "7b000000-0000-4000-8000-000000000001",
-  wsSlug: "core-platform",
-  wsName: "Core platform",
-  wsRole: "member",
-} as const;
-const ctx = unsafeMint(WsCtx, CTX_FIELDS);
+/** The viewer in the workspace, holding `wsRole` there. */
+const ctxAs = (wsRole: WsRole) =>
+  unsafeMint(WsCtx, {
+    userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+    orgId: "7a000000-0000-4000-8000-0000000000a1",
+    orgSlug: "acme",
+    orgName: "Acme Robotics",
+    orgRole: "member",
+    workspaceId: "7b000000-0000-4000-8000-000000000001",
+    wsSlug: "core-platform",
+    wsName: "Core platform",
+    wsRole,
+  });
+const ctx = ctxAs("member");
 
 const TODAY = new Date("2026-09-15T12:00:00.000Z");
 const PERIOD = { from: "2026-09-01", to: "2026-09-15" };
@@ -1365,11 +1368,7 @@ describe("Spend › a tab's own read failing", () => {
         modelDeny: [],
       }),
     );
-    await renderSpend(
-      ["budgets"],
-      undefined,
-      unsafeMint(WsCtx, { ...CTX_FIELDS, wsRole: "owner" }),
-    );
+    await renderSpend(["budgets"], undefined, ctxAs("owner"));
     expect(document.querySelector("#gateway-mode")).not.toBeNull();
   });
 });
