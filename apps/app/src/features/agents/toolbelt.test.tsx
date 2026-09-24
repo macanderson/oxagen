@@ -319,3 +319,35 @@ describe("Tool dialog", () => {
     restore();
   });
 });
+
+describe("Off the belt", () => {
+  const offTheBelt = () => screen.getByRole("region", { name: "Off the belt" });
+
+  it("names the server of an MCP tool the belt leaves out, beside the rule", async () => {
+    const { container } = draw(
+      toolbelt({
+        cannotSee: [
+          {
+            name: "github__delete_repository",
+            kind: "mcp",
+            server: "mcp_github",
+            rule: "org:2:deny",
+          },
+        ],
+      }),
+    );
+    const [row] = within(offTheBelt()).getAllByTestId("belt-off-row");
+    expect(row).toHaveTextContent("github__delete_repositorymcp_github");
+    expect(row).toHaveTextContent("org:2:deny");
+    await expectNoAxe(container);
+  });
+
+  it("says every registry tool is on the belt when none is left out, and draws no table (negative)", async () => {
+    const { container } = draw(toolbelt({ cannotSee: [] }));
+    expect(offTheBelt()).toHaveTextContent(
+      "Every tool in the registry is on the belt.",
+    );
+    expect(within(offTheBelt()).queryByRole("table")).toBeNull();
+    await expectNoAxe(container);
+  });
+});

@@ -12,7 +12,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
-import { mandateList } from "@/test/mandate-views";
+import { mandateList, mandateRow } from "@/test/mandate-views";
 import {
   agentDetail,
   agentsSource,
@@ -298,6 +298,30 @@ describe("Agent not-loaded states", () => {
     ).toHaveAttribute("href", "/acme/core-platform");
     expect(screen.getByTestId("agent-header")).toBeInTheDocument();
     expect(screen.getByRole("tablist")).toBeInTheDocument();
+  });
+});
+
+describe("Agent never-run rule", () => {
+  it("shows the never-run state for an unenrolled identity that still has a host and no frame", async () => {
+    await renderAgent({
+      get: readOk(
+        agentDetail({ identity: { firstFrameAt: null, status: "unenrolled" } }),
+      ),
+    });
+    expect(screen.getByTestId("agent-empty")).toBeInTheDocument();
+  });
+
+  it("draws the Overview for a registered identity with no host, no enrollment and no frame (negative)", async () => {
+    await renderAgent({
+      get: readOk(
+        agentDetail({
+          identity: { firstFrameAt: null, status: "unenrolled" },
+          hosts: [],
+        }),
+      ),
+    });
+    expect(screen.queryByTestId("agent-empty")).toBeNull();
+    expect(screen.getByTestId("agent-overview")).toBeInTheDocument();
   });
 });
 
@@ -591,6 +615,16 @@ describe("Permissions", () => {
     );
   });
 
+  it("measures no run against the per-run ceiling when the runs could not be read (negative)", async () => {
+    await renderAgent(
+      { runs: readError("runs_unavailable", 503) },
+      "permissions",
+    );
+    expect(region("Budgets")).toHaveTextContent(
+      "no priced run of this agent on the newest page of runs",
+    );
+  });
+
   it("offers no role writes to an organization Member (negative)", async () => {
     await renderAgent(
       {},
@@ -657,5 +691,157 @@ describe("Activity", () => {
     expect(
       screen.getByText("No finding is open against this agent."),
     ).toBeVisible();
+  });
+});
+
+describe("Agent tab bodies", () => {
+  it("draws the Toolbelt tab from the belt read", async () => {
+    await renderAgent({}, "toolbelt");
+    expect(selected()).toEqual(["toolbelt"]);
+    expect(screen.getByTestId("agent-toolbelt-tab")).toBeInTheDocument();
+  });
+
+  it("names the failed belt read on the Toolbelt tab and draws no count (negative)", async () => {
+    await renderAgent(
+      { toolbelt: readError("toolbelt_unavailable", 503) },
+      "toolbelt",
+    );
+    expect(screen.queryByTestId("agent-toolbelt-tab")).toBeNull();
+    expect(region("Toolbelt")).toHaveTextContent("toolbelt_unavailable");
+    expect(screen.queryByTestId("tab-count-toolbelt")).toBeNull();
+  });
+
+  it("opens the Definition tab on the committed file", async () => {
+    await renderAgent({}, "definition");
+    expect(selected()).toEqual(["definition"]);
+    expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue(
+      "Release bot",
+    );
+    expect(screen.getByRole("textbox", { name: "Description" })).toHaveValue(
+      "",
+    );
+  });
+
+  it("seeds the Definition tab from the identity when no file is committed, description included", async () => {
+    await renderAgent(
+      {
+        get: readOk(agentDetail({ definition: null })),
+        mandates: readError("mandates_unavailable", 503),
+      },
+      "definition",
+    );
+    expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue(
+      "Release bot",
+    );
+    expect(screen.getByRole("textbox", { name: "Description" })).toHaveValue(
+      "Cuts releases and opens their pull requests.",
+    );
+  });
+
+  it("seeds no description line for an identity that records none (negative)", async () => {
+    await renderAgent(
+      {
+        get: readOk(
+          agentDetail({ definition: null, identity: { description: null } }),
+        ),
+      },
+      "definition",
+    );
+    expect(screen.getByRole("textbox", { name: "Description" })).toHaveValue(
+      "",
+    );
+  });
+
+  it.each(["admin", "billing"] as const)(
+    "offers the cost-center write on Identity to an organization %s",
+    async (orgRole) => {
+      await renderAgent(
+        {},
+        "identity",
+        unsafeMint(WsCtx, { ...CTX_FIELDS, orgRole }),
+      );
+      expect(
+        screen.getByRole("button", { name: "Change cost center" }),
+      ).toBeVisible();
+    },
+  );
+
+  it("offers no cost-center write to a Member, or to an Owner on a retired agent (negative)", async () => {
+    await renderAgent(
+      {},
+      "identity",
+      unsafeMint(WsCtx, { ...CTX_FIELDS, orgRole: "member" }),
+    );
+    expect(
+      screen.queryByRole("button", { name: "Change cost center" }),
+    ).toBeNull();
+    cleanup();
+    await renderAgent(
+      { get: readOk(agentDetail({ identity: { status: "retired" } })) },
+      "identity",
+    );
+    expect(
+      screen.queryByRole("button", { name: "Change cost center" }),
+    ).toBeNull();
+  });
+
+  it("asks for no rollup and matches no run for an identity with no agent key (negative)", async () => {
+    const calls = await renderAgent({
+      get: readOk(agentDetail({ identity: { agentKey: null } })),
+    });
+    // The rollup is keyed by agent key, so it is not asked for at all.
+    expect(calls.spend).toEqual([]);
+    const badges = screen.getByTestId("agent-badges");
+    expect(badges).toHaveTextContent("tier not recorded");
+    expect(region("30-day token use")).toHaveTextContent(
+      "The 30-day rollup holds no row for this agent.",
+    );
+  });
+
+  it("says the runs could not be read on Activity and keeps the header standing (negative)", async () => {
+    await renderAgent({ runs: readError("runs_unavailable", 503) }, "activity");
+    expect(region("Runs")).toHaveTextContent("runs_unavailable");
+    expect(screen.getByTestId("agent-badges")).toHaveTextContent(
+      "tier not recorded",
+    );
+  });
+
+  it("reads the incidents at the cursor on Activity only", async () => {
+    const { source, calls } = agentsSource(allReads());
+    const element = await Agent({
+      ctx,
+      source,
+      agent: "release-bot",
+      tab: "activity",
+      cursor: "cur_2",
+    });
+    render(<IntlProvider>{element}</IntlProvider>);
+    expect(calls.incidents[0]?.[2]).toEqual({ cursor: "cur_2" });
+  });
+
+  it("counts the mandates in effect on the Permissions tab", async () => {
+    await renderAgent({ mandates: mandateList([mandateRow()]) });
+    expect(screen.getByTestId("tab-count-permissions")).toHaveTextContent("1");
+  });
+
+  it("draws no Activity count when the incidents could not be read (negative)", async () => {
+    await renderAgent({ incidents: readError("tacho_unavailable", 503) });
+    expect(screen.queryByTestId("tab-count-activity")).toBeNull();
+  });
+
+  it("replaces the body with the pending state while access waits on approval (negative)", async () => {
+    await renderAgent({
+      get: {
+        ok: false,
+        reason: "pending_approval",
+        accessRequestId: "acr_77",
+      },
+    });
+    const pending = screen.getByTestId("agent-pending");
+    expect(pending).toHaveTextContent("acr_77");
+    expect(
+      within(pending).getByRole("link", { name: "Back to Fleet" }),
+    ).toHaveAttribute("href", "/acme/core-platform");
+    expect(screen.queryByRole("tablist")).toBeNull();
   });
 });
