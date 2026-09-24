@@ -121,6 +121,18 @@ describe("chooseServerTools", () => {
     });
   });
 
+  it("stops at ten pages and says the list is partial", async () => {
+    source.tools.versions.mockResolvedValue(
+      ok({
+        items: [{ ...version("notion_get", 1), serverId: "mcs_1" }],
+        nextCursor: "more",
+      }),
+    );
+    const result = await chooseServerTools("acme", "core", "mcs_1");
+    expect(source.tools.versions).toHaveBeenCalledTimes(10);
+    expect(result.ok && result.value.partial).toBe(true);
+  });
+
   it("fails the list with the reason the page gave (negative)", async () => {
     source.tools.versions.mockResolvedValue(
       readError("tool_registry_unavailable", 503),

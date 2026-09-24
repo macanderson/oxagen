@@ -332,4 +332,25 @@ describe("RecordMultiPicker", () => {
     expect(onChange).not.toHaveBeenCalled();
     expect(input).toHaveValue("");
   });
+
+  it("keeps a chosen record when its full name is typed in any case (negative)", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(
+      <IntlProvider>
+        <label htmlFor="agents">Agents</label>
+        <RecordMultiPicker
+          id="agents"
+          options={AGENTS}
+          value={["agt_2"]}
+          onChange={onChange}
+        />
+      </IntlProvider>,
+    );
+    const input = screen.getByRole("combobox");
+    await user.type(input, "release captain");
+    await user.keyboard("{Enter}");
+    expect(onChange).not.toHaveBeenCalled();
+    expect(input).toHaveValue("");
+  });
 });
