@@ -383,13 +383,12 @@ const McpHealth = z.enum(["healthy", "degraded", "unreachable", "unknown"]);
  * An OAuth provider's stored authorization (#4132): whether a token is held,
  * when it lapses and whether it renews without a person. Never the token.
  */
-export const McpAuthorization = z.object({
+const McpAuthorization = z.object({
   state: z.enum(["connected", "needs_reauth", "revoked", "not_connected"]),
   expiresAt: Instant.nullable(),
   refreshable: z.boolean(),
   lastRefreshedAt: Instant.nullable(),
 });
-export type McpAuthorization = z.infer<typeof McpAuthorization>;
 
 export const McpServer = z.object({
   /** `mcs_…`: the id `import_tools` names a server by. */
