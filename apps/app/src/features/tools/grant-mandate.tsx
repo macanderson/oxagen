@@ -309,7 +309,7 @@ export function GrantMandate({
       });
       if (result.ok) {
         setOpen(false);
-        navigate.replace(routes.tools(at.org, at.ws, { tab: "mandates" }));
+        navigate.replace(routes.tools(at.org, at.ws, { tab: "policy" }));
       } else {
         setFailure(failureText(result));
       }

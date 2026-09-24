@@ -14,11 +14,13 @@ import type { MandateList, MandateRow } from "@/data/contracts/mandates";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { mandateRow } from "@/test/mandate-views";
+import type { AgentDetail } from "@/data/contracts/agents";
 import {
   agentDetail,
   committedDefinition,
   DEFINITION_SOURCE,
 } from "./agents.builders";
+import { definitionSeed } from "./definition-seed";
 
 const { router, commitAgentDefinition, choices } = vi.hoisted(() => ({
   router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
@@ -72,6 +74,9 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  // The draft is shared with the source editor through sessionStorage
+  // (draft-store.ts), so one test's edit would otherwise open the next.
+  window.sessionStorage.clear();
 });
 
 function renderForm(
@@ -123,11 +128,18 @@ async function committedSource(): Promise<string> {
       });
     },
   );
+  await userEvent.type(screen.getByLabelText(/Summary/), "Budget");
   await userEvent.click(
     screen.getByRole("button", { name: "Commit and open a pull request" }),
   );
   await screen.findByTestId("commit-failure");
   return source;
+}
+
+/** The option values a select offers, in order. */
+function optionValues(select: HTMLElement): string[] {
+  if (!(select instanceof HTMLSelectElement)) throw new Error("not a select");
+  return Array.from(select.options, (option) => option.value);
 }
 
 describe("DefinitionForm", () => {
@@ -154,9 +166,11 @@ describe("DefinitionForm", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
     const sheet = await screen.findByTestId("commit-definition");
+    // The sheet shows the draft against the file it started from, as a diff.
     expect(sheet).toHaveTextContent(
-      "1 lines added and 1 removed against the file you started from.",
+      "The draft against the file it started from: .oxagen/agents/release-bot.toml, +1 −1",
     );
+    expect(sheet).toHaveTextContent('+name = "Releases"');
     commitAgentDefinition.mockResolvedValue({
       ok: true,
       value: {
@@ -168,6 +182,7 @@ describe("DefinitionForm", () => {
         },
       },
     });
+    await userEvent.type(screen.getByLabelText(/Summary/), "Rename");
     await userEvent.click(
       screen.getByRole("button", { name: "Commit and open a pull request" }),
     );
@@ -178,7 +193,7 @@ describe("DefinitionForm", () => {
       {
         agentId: "agt_releasebot",
         branch: "agents/release-bot",
-        message: "",
+        message: "Rename",
         source: DEFINITION_SOURCE.replace(
           'name = "Release bot"',
           'name = "Releases"',
@@ -260,6 +275,7 @@ describe("DefinitionForm", () => {
         });
       },
     );
+    await userEvent.type(screen.getByLabelText(/Summary/), "Tools");
     await userEvent.click(
       screen.getByRole("button", { name: "Commit and open a pull request" }),
     );
@@ -500,5 +516,192 @@ describe("DefinitionForm", () => {
     expect(await committedSource()).toContain(
       "budget = { per_run_micros = 4000 }\n",
     );
+  });
+});
+
+/** The form over an agent with no committed file: it opens on the seed. */
+function renderSeed(identity: Partial<AgentDetail["identity"]> = {}) {
+  const detail = agentDetail({ identity, definition: null });
+  const view = render(
+    <IntlProvider>
+      <DefinitionForm
+        org="acme"
+        ws="core-platform"
+        identity={detail.identity}
+        definition={null}
+        path=".oxagen/agents/release-bot.toml"
+        base={definitionSeed(detail.identity)}
+        branch="agents/release-bot"
+        mandates={null}
+        editor={routes.agentSource("acme", "core-platform", "release-bot")}
+        after={routes.agent("acme", "core-platform", "release-bot", {
+          tab: "definition",
+        })}
+      />
+    </IntlProvider>,
+  );
+  return view.container;
+}
+
+describe("DefinitionForm over a file that is not committed", () => {
+  it("opens on the seed with every unset control saying so, and no pending bar (negative)", async () => {
+    const container = renderSeed();
+    expect(screen.queryByTestId("definition-pending")).toBeNull();
+    expect(dirtyBar()).toBeNull();
+    expect(screen.getByRole("combobox", { name: "Model tier" })).toHaveValue(
+      "",
+    );
+    expect(screen.getByRole("combobox", { name: "Color" })).toHaveValue("");
+    expect(screen.getAllByRole("option", { name: "not set" })).toHaveLength(2);
+    expect(budgetField()).toHaveValue(null);
+    expect(
+      screen.getByText(/Stored as budget = \{ per_run_micros = … \}/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Instructions" })).toHaveValue(
+      "",
+    );
+    expect(screen.getByRole("region", { name: "Source" })).toHaveTextContent(
+      "No definition is committed yet.",
+    );
+    // With no ledger answer the irreversible effect is locked and says why.
+    expect(
+      screen.getByRole("checkbox", { name: /^irreversible/ }),
+    ).toBeDisabled();
+    expect(
+      screen.getByText(
+        "Needs an active mandate. The mandate ledger did not answer, so none is known to be active.",
+      ),
+    ).toBeInTheDocument();
+    await expectNoAxe(container);
+  });
+
+  it("says a draft of the seed is against an uncommitted file, and writes a budget table the seed lacked", async () => {
+    renderSeed();
+    const description = screen.getByRole("textbox", { name: "Description" });
+    fireEvent.change(description, { target: { value: "Ships releases." } });
+    fireEvent.blur(description);
+    expect(dirtyBar()).toHaveTextContent(
+      "against a file that has not been committed.",
+    );
+    fireEvent.change(budgetField(), { target: { value: "3" } });
+    fireEvent.blur(budgetField());
+    const source = await committedSource();
+    expect(source).toContain('description = "Ships releases."');
+    expect(source).toContain("budget = { per_run_micros = 3000000 }");
+  });
+
+  it("names the slug as the key hint for an identity with no agent key", () => {
+    renderSeed({ agentKey: null });
+    expect(
+      screen.getByText(
+        "Immutable. The agent key release-bot is derived from it.",
+      ),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("DefinitionForm over a file it cannot fully read", () => {
+  it("locks the form and points to the source editor when the file does not parse (negative)", async () => {
+    const container = renderForm('slug = "release-bot"\nname = [\n');
+    const alert = screen.getByTestId("definition-unparsed");
+    expect(alert).toHaveTextContent("The file does not parse at line");
+    expect(
+      screen.getByRole("link", { name: "Open in the source editor" }),
+    ).toBeInTheDocument();
+    // Nothing is drafted yet, so there is nothing to discard.
+    expect(screen.getByRole("button", { name: "Discard" })).toBeDisabled();
+    expect(screen.getByRole("textbox", { name: "Name" })).toBeDisabled();
+    await expectNoAxe(container);
+  });
+
+  it("keeps a tier and a color it does not know as options, rather than dropping them", () => {
+    renderForm(
+      'schema = "agent-definition/v0.1"\nslug = "release-bot"\nmodel_tier = "mega"\n\n[harness.claude-code]\ncolor = "purple"\n',
+    );
+    const tier = screen.getByRole("combobox", { name: "Model tier" });
+    expect(tier).toHaveValue("mega");
+    expect(optionValues(tier)).toEqual(["complex", "light", "mega"]);
+    const color = screen.getByRole("combobox", { name: "Color" });
+    expect(color).toHaveValue("purple");
+    expect(optionValues(color)).toEqual([
+      "blue",
+      "green",
+      "gold",
+      "red",
+      "gray",
+      "purple",
+    ]);
+  });
+
+  it("reads a budget that is not a table, or a harness key that is not a table, as unset (negative)", () => {
+    renderForm(
+      'schema = "agent-definition/v0.1"\nslug = "release-bot"\nbudget = 5\nharness = 3\n',
+    );
+    expect(budgetField()).toHaveValue(null);
+    expect(screen.getByRole("combobox", { name: "Color" })).toHaveValue("");
+  });
+});
+
+describe("DefinitionForm edits that change nothing", () => {
+  it("writes no draft for a blank chip, a repeated chip, an unchanged name or a budget past what the file can hold (negative)", () => {
+    renderForm();
+    const add = screen.getByRole("textbox", { name: "Add to tools" });
+    fireEvent.change(add, { target: { value: "   " } });
+    fireEvent.keyDown(add, { key: "Enter" });
+    fireEvent.change(add, { target: { value: "github__*" } });
+    fireEvent.keyDown(add, { key: "Enter" });
+    fireEvent.change(add, { target: { value: "linear__x" } });
+    fireEvent.keyDown(add, { key: "Tab" });
+    expect(dirtyBar()).toBeNull();
+    const name = screen.getByRole("textbox", { name: "Name" });
+    fireEvent.blur(name);
+    const description = screen.getByRole("textbox", { name: "Description" });
+    fireEvent.blur(description);
+    fireEvent.change(budgetField(), { target: { value: "1e300" } });
+    fireEvent.blur(budgetField());
+    fireEvent.change(budgetField(), { target: { value: "2.5" } });
+    fireEvent.blur(budgetField());
+    expect(dirtyBar()).toBeNull();
+  });
+});
+
+describe("DefinitionForm source panel", () => {
+  it("says the repository is not recorded and links no pull request when the URL is not GitHub's (negative)", () => {
+    const detail = agentDetail({
+      definition: {
+        ...committedDefinition(),
+        pullRequestUrl: "https://git.example.com/acme/core/merge_requests/3",
+      },
+    });
+    const definition = detail.definition;
+    if (definition === null) throw new Error("built with a definition");
+    render(
+      <IntlProvider>
+        <DefinitionForm
+          org="acme"
+          ws="core-platform"
+          identity={detail.identity}
+          definition={definition}
+          path={definition.path}
+          base={definition.source}
+          branch={definition.branch}
+          mandates={ledger([])}
+          editor={routes.agentSource("acme", "core-platform", "release-bot")}
+          after={routes.agent("acme", "core-platform", "release-bot", {
+            tab: "definition",
+          })}
+        />
+      </IntlProvider>,
+    );
+    expect(screen.getByRole("region", { name: "Source" })).toHaveTextContent(
+      "Repositorynot recorded",
+    );
+    expect(screen.getByTestId("definition-pending")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Open the pull request" }),
+    ).toBeNull();
+    expect(
+      screen.getByText("Needs an active mandate. This agent holds none."),
+    ).toBeInTheDocument();
   });
 });

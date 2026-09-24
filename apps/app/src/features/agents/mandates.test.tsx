@@ -18,7 +18,14 @@ import {
   mandateList,
   mandateRow,
 } from "@/test/mandate-views";
-import { agentDetail, agentsSource } from "./agents.builders";
+import {
+  agentDetail,
+  agentsSource,
+  incidentPage,
+  roleCatalog,
+  runPage,
+  toolbelt,
+} from "./agents.builders";
 
 vi.mock("next/link", () => ({
   default: ({ children, ...rest }: { children: ReactNode; href: string }) => (
@@ -79,6 +86,12 @@ async function renderMandates(
     get: readOk(agentDetail({ identity: { status } })),
     mandates,
     budgets: readOk([]),
+    // Every tab reads the belt, the incidents and the newest runs for the
+    // header and the tab counts; Permissions adds the role catalogue.
+    toolbelt: readOk(toolbelt()),
+    incidents: incidentPage([]),
+    runs: runPage([]),
+    roles: roleCatalog(),
   });
   const element = await Agent({
     ctx: as === "owner" ? ctx : viewer(as),
@@ -102,8 +115,6 @@ describe("Agents › Mandates", () => {
   it("reads only this agent's mandates, by its public id", async () => {
     const calls = await renderMandates(mandateList([mandateRow()]));
     expect(calls.mandates).toEqual([[ctx, { agentId: "agt_releasebot" }]]);
-    expect(calls.toolbelt).toEqual([]);
-    expect(calls.incidents).toEqual([]);
   });
 
   it("lists each mandate with its consequence, limits, remaining and expiry", async () => {
@@ -283,7 +294,7 @@ describe("Agents › Mandates", () => {
     );
     const section = held();
     expect(within(section).getByRole("heading")).toHaveTextContent(
-      "Mandates recorded",
+      "Mandates held",
     );
     expect(
       within(section).queryByText(/cannot carry a consequence/),
