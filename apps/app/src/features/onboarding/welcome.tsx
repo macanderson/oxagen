@@ -42,7 +42,7 @@ const FIRST_FRAME_WAIT_MS = 20_000;
  * How long an enrolled host may stay silent before the run step says its
  * collector cannot reach Oxagen. The collector heartbeats well inside this.
  */
-export const SILENT_HOST_SECONDS = 90;
+const SILENT_HOST_SECONDS = 90;
 
 /** The harnesses a host installer wraps; the others enrol through the SDK. */
 const HOST_HARNESSES = new Set(["claude-code", "codex", "cursor", "stella"]);

@@ -54,7 +54,11 @@ type Os = (typeof OSES)[number];
 const LANGS = ["ts", "py", "go"] as const;
 type Lang = (typeof LANGS)[number];
 
-/** The tab a registered harness opens on. Cursor and Stella enrol through the same host installer as Claude Code. */
+/**
+ * The tab a registered harness opens on. Cursor and Stella enrol through the same host installer as Claude Code.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export function tabFor(harness: string): Tab {
   if (harness === "codex") return "codex";
   if (harness === "claude-code" || harness === "cursor" || harness === "stella")
@@ -74,7 +78,11 @@ const INSTALL: Record<Lang, string> = {
   go: "go get github.com/oxagen/oxagen-go",
 };
 
-/** The five lines, with this agent's key; a key the record cannot name stays a placeholder. */
+/**
+ * The five lines, with this agent's key; a key the record cannot name stays a placeholder.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export function fiveLines(lang: Lang, key: string): string {
   switch (lang) {
     case "ts":

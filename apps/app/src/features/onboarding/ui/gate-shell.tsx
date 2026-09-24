@@ -15,7 +15,7 @@ import type { SafePath } from "@/shared/safe-path";
 import { buttonSecondary } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
 
-export const GATE_STEPS = ["organization", "wrap", "run"] as const;
+const GATE_STEPS = ["organization", "wrap", "run"] as const;
 export type GateStepId = (typeof GATE_STEPS)[number];
 
 const railItem =

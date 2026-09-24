@@ -41,7 +41,11 @@ const STEPS = [
 const SCREENS = ["download", "installing", "connected"] as const;
 type Screen = (typeof SCREENS)[number];
 
-/** Milliseconds between two install steps, as the package paces them. */
+/**
+ * Milliseconds between two install steps, as the package paces them.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export const INSTALL_STEP_MS = 380;
 
 function monoChunk(chunks: ReactNode) {

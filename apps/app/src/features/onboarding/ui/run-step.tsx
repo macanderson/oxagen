@@ -35,7 +35,11 @@ import { UNANSWERED, useOnboardingFailure } from "../failure";
 import { GateFooter, GateHeader } from "./gate-shell";
 import type { WrapAgentFacts } from "./wrap-step";
 
-/** Seconds the received card waits before it opens Fleet on its own. */
+/**
+ * Seconds the received card waits before it opens Fleet on its own.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export const COUNTDOWN_SECONDS = 6;
 
 export type ReceivedFrame = {
