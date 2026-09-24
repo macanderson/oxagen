@@ -212,9 +212,9 @@ describe("the API keys panel", () => {
     expect(surfaces).toHaveTextContent(
       "Parity is checked by the manifest gate.",
     );
-    const lines = (
-      within(surfaces).getByTestId("api-keys-cli").textContent ?? ""
-    ).split("\n");
+    const lines = within(surfaces)
+      .getByTestId("api-keys-cli")
+      .textContent.split("\n");
     expect(lines).toHaveLength(4);
     expect(lines[0]).toBe("$ oxagen login --org acme");
   });

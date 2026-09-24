@@ -1,6 +1,6 @@
 ---
 title: "What an Ontology Buys an Agent"
-description: "Agents fail confidently when they answer from the wrong context. Here is what classes, relations, constraints, and time-aware facts actually buy you"
+description: "An agent can answer with confidence from the wrong context. This post covers what classes, relations, constraints, and dated facts add to an agent's answers."
 date: 2026-09-09
 authors:
   - Oxagen Research
@@ -18,42 +18,23 @@ tags:
 draft: false
 ---
 
-Ask an agent which pricing tier a customer is on. It will answer. It will sound
-certain, it will quote a paragraph, and some of the time it will hand you the
-tier that customer was on in March, or a tier from an unsigned template, or a
-tier belonging to a different company with a similar name.
+Ask an agent which pricing tier a customer is on, and it will answer. It will sound certain and quote a paragraph. Some of the time, the tier it gives is wrong. It may be the tier the customer had in March. It may come from an unsigned template. It may belong to a different company with a similar name.
 
-The answer is fluent. The context is wrong. Nothing in the pipeline noticed,
-because nothing in the pipeline was ever asked to check.
+The answer reads well, but it came from the wrong context. Nothing in the pipeline was asked to check the context, so nothing noticed.
 
-## The confident answer from the wrong context
+## Why a faithful answer can still be wrong
 
-The failure has a name. The standard survey of hallucination in natural
-language generation splits it into two kinds: intrinsic, where the output
-contradicts the source it was given, and extrinsic, where the output cannot be
-verified against that source at all.[^1] Both are graded against the source.
-That framing is the whole problem in one sentence. If the retrieved source is
-the wrong one, a model that is perfectly faithful to it still produces a false
-answer, and every faithfulness metric you run will pass.
+Researchers have a name for this failure. The standard survey of hallucination in text generation splits it into two kinds.[^1] An intrinsic hallucination contradicts the source the model was given. An extrinsic hallucination cannot be checked against that source at all. Both kinds are judged against the source, and that is the problem. Suppose retrieval picked the wrong source. A model can follow that source perfectly and still give a false answer. Every faithfulness test you run will pass, because those tests only compare the answer to the source.
 
-Retrieval was supposed to solve grounding. It solves half of it. It puts *a*
-document in the context window. It does not establish that the document
-describes the entity you asked about, that the fact was true on the date you
-care about, or that anyone is accountable for having asserted it.
+Retrieval was meant to ground answers in facts, and it does part of that job. It puts a document in the context window. It does not show that the document is about the entity you asked about. It does not show that the fact was true on the date you care about. It does not show who is accountable for stating the fact.
 
-An ontology is how you turn "the right context" from a similarity score into a
-question a machine can answer.
+An ontology lets a machine check whether the context is the right one. Without it, the system can only judge how similar the text looks.
 
-## What an ontology actually is
+## What an ontology is
 
-An ontology is three things: classes, relations, and constraints.
+An ontology has three parts: classes, relations, and constraints.
 
-Classes are the kinds of thing that exist in your domain. Customer, Contract,
-Subscription, LegalEntity. Relations are the permitted connections between
-them, with a domain and a range. `SIGNED_BY` goes from a Contract to a
-LegalEntity and nowhere else. Constraints are the axioms that hold: a Contract
-has exactly one counterparty, a Subscription tier is drawn from a closed set of
-five values, and a LegalEntity cannot be its own parent.
+Classes are the kinds of things in your domain, such as Customer, Contract, Subscription, and LegalEntity. Relations are the allowed links between classes. Each relation says which class it starts from (its domain) and which class it points to (its range). For example, `SIGNED_BY` goes from a Contract to a LegalEntity and nowhere else. Constraints are rules that must hold. A Contract has exactly one counterparty. A Subscription tier is one of five fixed values. A LegalEntity cannot be its own parent.
 
 <Schema
   title="Classes, relations, and the constraints on them"
@@ -62,136 +43,59 @@ five values, and a LegalEntity cannot be its own parent.
     { from: "Customer", rel: "HAS_SUBSCRIPTION", to: "Subscription", notes: ["tier from a closed set of five"] },
     { from: "LegalEntity", rel: "PARENT_OF", to: "LegalEntity", notes: ["never itself"] },
   ]}
-  caption="The example domain from this section. Each relation has a domain and a range, so a Contract signed by a Person is a violation a machine can detect."
+  caption="The example domain from this section. Each relation has a domain and a range. So if the graph says a Person signed a Contract, a machine can detect the violation."
 />
 
-The formal machinery underneath is description logics, a family of decidable
-fragments of first-order logic built specifically so that reasoning terminates.
-The reference account is the *Description Logic Handbook*, which covers the
-tradeoff at the centre of the field: every bit of expressive power you add to
-the language costs you something in the complexity of deciding entailment.[^2]
-You do not get an unconstrained modelling language and cheap inference. You
-pick.
+Underneath sits a branch of logic called description logics. These are limited forms of first-order logic, designed so that a reasoner always finishes its work. The standard reference is the *Description Logic Handbook*.[^2] It covers the main tradeoff in the field. Each feature you add to the language makes it harder to work out what follows from your facts. You cannot have a fully open modelling language and cheap reasoning at once. You must choose.
 
-The web standard that encodes this is OWL 2, whose primer walks through
-modelling with classes, properties, and individuals.[^3] OWL 2 ships three
-profiles, EL, QL, and RL, each of which deliberately gives up expressivity to
-buy tractable reasoning. That is the description logic tradeoff shipped as a
-product decision.
+The web standard for this is OWL 2. Its primer shows how to model with classes, properties, and individuals.[^3] OWL 2 comes with three profiles, called EL, QL, and RL. Each profile drops some features so that reasoning stays fast. So the description logic tradeoff shows up as a product choice.
 
 Two properties matter more than the syntax.
 
-First, constraints are checkable. If the graph says a Contract is signed by a
-Person rather than a LegalEntity, that is a detectable violation, not a
-plausible sentence. You can catch a class of wrong answers before anyone reads
-them.
+First, you can check constraints. Say the graph records that a Person signed a Contract, when only a LegalEntity may sign one. A machine can detect that violation. So you can catch one kind of wrong answer before anyone reads it.
 
-Second, and this is the one that bites teams: OWL uses the open world
-assumption. The absence of a fact does not make it false. If your graph has no
-`HAS_SUBSCRIPTION` edge for a customer, an OWL reasoner concludes nothing, not
-"that customer has no subscription." Most application code assumes the
-opposite. If you want closed-world answers, say so explicitly with a cardinality
-constraint or a validation shape, rather than assuming your reasoner shares your
-intuition.
+Second, OWL uses the open world assumption, and this often surprises teams. Under this assumption, a missing fact is not a false fact. Say your graph has no `HAS_SUBSCRIPTION` edge for a customer. An OWL reasoner concludes nothing from that. It does not conclude that the customer has no subscription. Most application code assumes the opposite. If you want a missing fact to count as false, say so in the model. Use a cardinality constraint, which is a rule on how many links an entity must have, or a validation shape. Do not assume the reasoner thinks the way you do.
 
-<Callout kind="note" title="Ontology is not the same as taxonomy">
-A taxonomy gives you an is-a tree. An ontology gives you typed relations
-between branches and axioms that constrain them. The tree tells you a Contract
-is a Document. The ontology tells you which entity signed it, when the term
-started, and that both facts are required.
+<Callout kind="note" title="An ontology does more than a taxonomy">
+A taxonomy gives you a tree of is-a links. An ontology adds typed relations between the branches and rules that limit them. The tree says a Contract is a Document. The ontology says which entity signed it and when its term started. It also says that both facts are required.
 </Callout>
 
-## Knowledge graphs are the operational form
+## A knowledge graph holds the data an agent queries
 
-An ontology on its own is a schema. The thing an agent queries is a knowledge
-graph: nodes for entities, edges for relations, populated with actual instances.
+An ontology alone is a schema. What an agent queries is a knowledge graph. It has nodes for entities and edges for relations, filled in with real instances.
 
-The 2021 ACM Computing Surveys treatment by Hogan and eighteen co-authors is
-the closest thing the field has to a shared definition, and it is worth reading
-for its structure alone.[^4] It works through the graph data models, then
-schema, identity, and context, then quality assessment and refinement, and
-then publication. That ordering is a warning. Most of the difficulty in a
-knowledge graph is not the query language. It is identity, meaning deciding
-that two records are the same entity, and context, meaning knowing when and
-under what assumptions a fact holds.
+The 2021 ACM Computing Surveys paper by Hogan and eighteen co-authors is the nearest thing the field has to a shared definition.[^4] Its order of topics is useful on its own. It covers graph data models first. Then it covers schema, identity, and context. Then it covers checking and improving quality, and last, publishing. That order shows where the difficulty lies. Most of the hard work in a knowledge graph is not the query language. It is identity, which means deciding that two records are the same entity. It is also context, which means knowing when a fact holds and under what assumptions.
 
-The operational advantage over a document index is that edges are first-class.
-An edge is not a byproduct of two nodes being near each other. It is an object
-you can address, type, and hang properties on. That is what makes the next two
-sections possible.
+A graph has one practical advantage over a document index. Its edges are records in their own right. An edge does not exist just because two nodes are close together. You can look it up, give it a type, and attach properties to it. The next two sections depend on that.
 
-It also relocates the hard work rather than removing it. A document index is
-cheap to populate and expensive to trust. A knowledge graph is the reverse. You
-pay up front to decide that "Acme Corp", "Acme Corporation", and a row keyed on
-a tax identifier are one node, and you pay again every time a source changes
-its mind. What you buy is that the join is already done and does not have to be
-guessed at query time.
+A graph moves the hard work to a different place. It does not remove it. A document index is cheap to fill and costly to trust. A knowledge graph is the opposite. You pay up front to decide that "Acme Corp", "Acme Corporation", and a row keyed on a tax identifier are one node. You pay again each time a source changes its data. In return, the links between records already exist, so the system does not have to guess them at query time.
 
-## Structure beats similarity when the question has hops
+## Graphs answer questions that take several steps
 
-"Which of our contracts with subsidiaries of Acme expire before the renewal
-date on the parent agreement?" There is no passage that answers this. The
-answer is a join across four entity types, and any single chunk of text
-contains at most a fragment of it.
+Take this question: "Which of our contracts with subsidiaries of Acme expire before the renewal date on the parent agreement?" No single passage answers it. The answer links four types of entity, and any one chunk of text holds only part of it.
 
-This class of question has been measurable since HotpotQA, which built 113,000
-questions that require finding and reasoning over multiple supporting
-documents, and asked systems to produce the supporting facts as well as the
-answer.[^5] Once you can measure multi-hop separately, the gap between
-retrieving text and reasoning over structure stops being a matter of opinion.
+Researchers have measured this kind of question since HotpotQA.[^5] HotpotQA built 113,000 questions that need facts from more than one document. It asked systems to name the supporting facts as well as give the answer. These are called multi-hop questions, because the answer takes several steps from one fact to the next. Once multi-hop questions could be measured on their own, the gap between retrieving text and reasoning over structure could be shown with data.
 
-The survey work maps the response. Pan and colleagues lay out three integration
-patterns in their roadmap: knowledge graphs used to enhance language models,
-language models used to build and complete graphs, and synergised systems where
-both run together.[^6] Their diagnosis is blunt and holds up. Language models
-generalise well and are weak on factual grounding. Graphs are strong on
-grounding and weak at handling anything new.
+Survey work describes how the field responded. In their roadmap, Pan and colleagues describe three ways to combine graphs and language models.[^6] Knowledge graphs can improve language models. Language models can build and fill in graphs. Or both can work together in one system. Their diagnosis is direct, and it still holds. Language models generalise well but are weak at grounding answers in facts. Graphs are strong at grounding but weak at handling anything new.
 
-Two concrete results are worth the read. Think-on-Graph treats the model as an
-agent that runs beam search over the graph, following relation paths step by
-step instead of retrieving once and hoping.[^7] The reasoning path is the
-citation, which means you can inspect why the answer came out the way it did.
-The paper reports that this can let smaller models beat GPT-4 on some of these
-benchmarks, which is a claim about where the difficulty actually lives: in the
-retrieval structure, not the parameter count.
+Two results stand out. Think-on-Graph treats the model as an agent that searches the graph.[^7] It uses beam search, which keeps the few best paths at each step. It follows relation paths one step at a time, instead of retrieving once. The path it follows serves as the citation, so you can see why the answer came out as it did. The paper reports that this can let smaller models beat GPT-4 on some of these benchmarks. That result suggests the difficulty lies in how knowledge is structured for retrieval, not in model size.
 
-GraphRAG comes at the same problem from the corpus side.[^8] It extracts an
-entity graph from source documents, builds summaries for detected communities
-of entities, and answers global questions by combining partial answers across
-those communities. On query-focused summarisation over corpora around a million
-tokens, it improves both comprehensiveness and diversity against conventional
-retrieval. The interesting part is what it fixes: questions about the whole
-corpus, which chunk-and-embed handles worst because no chunk is about the whole
-corpus.
+GraphRAG works on the same problem from the side of the document collection.[^8] It pulls an entity graph out of the source documents. It finds communities of related entities and writes a summary for each one. To answer a question about the whole collection, it combines partial answers from those communities. The test was query-focused summarisation over collections of about a million tokens. There, GraphRAG gave more complete and more varied answers than standard retrieval. It helps most with questions about the whole collection. The usual method splits documents into chunks and searches them by similarity. That method handles these questions worst, because no one chunk covers the whole collection.
 
-## Facts have a clock, and edges carry a source
+## Facts need a date range and a source
 
-A triple like `(Acme, subscribed_to, Enterprise)` is missing two things an
-auditor will ask for immediately: since when, and who says so.
+A triple stores one fact as a subject, a relation, and an object, such as `(Acme, subscribed_to, Enterprise)`. That triple lacks two things an auditor will ask for first: since when, and who says so.
 
 ### Time
 
-Real facts have validity intervals. Employment ends. Prices change. A contract
-term supersedes the one before it. Storing the current value and overwriting
-the old one destroys the only information that answers "what did we bill them
-in March."
+Real facts are true only for a period. A job ends. A price changes. A new contract term replaces the one before it. If you store only the current value and overwrite the old one, you lose the data that answers "what did we bill them in March."
 
-The completion literature took this on directly. Lacroix and colleagues extend
-the ComplEx tensor factorisation to timestamped facts using a decomposition of
-an order-4 tensor, treating time as a dimension of the model rather than
-metadata bolted onto it.[^9] On the question answering side, Saxena and
-colleagues introduced CRONQUESTIONS, a temporal knowledge graph QA dataset
-around 340 times larger than the prior work, and reported roughly a 120 percent
-accuracy improvement over the baselines available at the time.[^10] Both
-numbers say the same thing. Time is not a decoration on a fact. It is part of
-the fact, and systems that model it do measurably better on questions that
-depend on it.
+Research on completing knowledge graphs has worked on this problem. Lacroix and colleagues extended ComplEx, a tensor factorisation method, to facts with timestamps.[^9] They decompose an order-4 tensor, a four-dimensional array of numbers. So time is part of the model itself, not extra data added on. For question answering, Saxena and colleagues built CRONQUESTIONS.[^10] It is a question answering dataset over a temporal knowledge graph, about 340 times larger than earlier work. They reported about a 120 percent gain in accuracy over the baselines of the time. Both results point the same way. A system that treats time as part of each fact does measurably better on questions that depend on time.
 
-In practice this means an edge carries `validFrom` and `validTo`, and "as of"
-is a query parameter rather than an assumption.
+In practice, each edge carries `validFrom` and `validTo`. "As of" becomes a query parameter, not an assumption.
 
 <Timeline
-  title="One customer's tier, with a clock on each fact"
+  title="One customer's tier, with a date range on each fact"
   start={0}
   end={9}
   ticks={[
@@ -204,33 +108,20 @@ is a query parameter rather than an assumption.
     { label: "Acme subscribed_to Growth", when: "January to March", from: 0, to: 3, ended: true },
     { label: "Acme subscribed_to Enterprise", when: "April onward", from: 3, to: 9 },
   ]}
-  caption="Illustrative. Overwriting the tier in April would erase what Acme was billed in March. Two edges with validity windows keep both facts, and the as of parameter picks one."
+  caption="Illustrative. If the tier were overwritten in April, the record of what Acme was billed in March would be lost. Two edges with date ranges keep both facts, and the as of parameter picks one."
 />
 
 ### Provenance
 
-The second missing field is accountability. W3C standardised a vocabulary for
-this in PROV-O, which expresses provenance in OWL around three core types:
-Entity, Activity, and Agent.[^11] Something was derived from something else, by
-some process, attributed to someone.
+The second missing field is provenance, a record of where a fact came from. The W3C standardised terms for this in PROV-O. PROV-O describes provenance in OWL with three core types: Entity, Activity, and Agent.[^11] Each statement says that something was derived from something else, by some process, and credits someone.
 
-Put on an edge, that becomes a source document, an extraction run, a timestamp,
-and a confidence. Now a citation is not a paragraph the model chose to quote
-after the fact. It is a property of the fact itself, attached at write time,
-and it survives whether or not the model mentions it.
+On an edge, provenance becomes a source document, an extraction run, a timestamp, and a confidence score. Then a citation is no longer a paragraph the model chose to quote afterward. The citation is stored with the fact when the fact is written. It stays there whether or not the model mentions it.
 
-This is the difference between an answer you can check and an answer you can
-only believe. The check does not depend on the model cooperating.
+So you can check the answer instead of only trusting it. The check does not depend on what the model chooses to say.
 
 ## Where this meets Oxagen
 
-Oxagen is the control plane for the agents you run. It does not run them. Two
-clauses of an agent's mandate sit exactly here. The knowledge an agent is
-handed comes from a Neo4j graph plus an ontology, so a response is cited and
-time-aware by construction rather than by prompt instruction. The record keeps
-the lineage of an answer, the nodes, the edges, and the sources behind it, so
-you can pull it up later. Neither clause makes a model smarter. Both make a wrong answer visible, which is the part that
-matters when someone asks why the agent said what it said.
+Oxagen is the control plane for the agents you run. It does not run them. Two clauses of an agent's mandate apply here. The knowledge an agent receives comes from a Neo4j graph database and an ontology. So each answer carries citations and dates because of how the data is stored, not because a prompt asked for them. The record keeps the lineage of an answer: the nodes, the edges, and the sources behind it. So you can look it up later. Neither clause makes a model smarter. Both make a wrong answer visible. That matters when someone asks why the agent said what it said.
 
 [^1]: Ji et al. (2023). *Survey of Hallucination in Natural Language Generation*. ACM Computing Surveys 55(12). https://arxiv.org/abs/2202.03629
 [^2]: Baader, Calvanese, McGuinness, Nardi, & Patel-Schneider, eds. (2003). *The Description Logic Handbook: Theory, Implementation, and Applications*. Cambridge University Press. https://www.inf.unibz.it/~calvanese/papers-html/DLHB-2003-ed.html

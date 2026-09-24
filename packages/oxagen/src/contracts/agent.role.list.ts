@@ -42,7 +42,7 @@ export const agentRoleList = registerCapability({
     "List the IAM roles attached to an agent's delegated principal — active, non-expired principal_role_assignments with role identity, scope, and assignment provenance. Read-only governance introspection.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["api", "mcp", "unit", "docs"],
+  layers: ["api", "mcp", "unit", "docs", "app"],
   scoped: true,
   // Governance-posture reads must never be blocked by a zero credit balance.
   noBillingGate: true,

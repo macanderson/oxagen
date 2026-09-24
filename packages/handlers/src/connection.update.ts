@@ -1,7 +1,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { connectionUpdate } from "@oxagen/oxagen/contracts/connection.update";
 import { schema, withTenantDb } from "@oxagen/database";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { logger } from "./logger";
 import { assertGithubInstallationAccessible } from "./lib/github-installation-access";
@@ -16,7 +16,7 @@ export const connectionUpdateHandler: CapabilityHandler<
   };
   if (input.displayName !== undefined) updates.displayName = input.displayName;
   if (input.deliveryConfig !== undefined)
-    updates.deliveryConfig = input.deliveryConfig;
+    updates.deliveryConfig = sql`CASE WHEN ${schema.sourceConnections.deliveryConfig}->>'runOutcomesOnly' = 'true' THEN ${JSON.stringify(input.deliveryConfig ?? {})}::jsonb || '{"runOutcomesOnly":true}'::jsonb ELSE ${input.deliveryConfig === null ? null : JSON.stringify(input.deliveryConfig)}::jsonb END`;
 
   // AUTHORIZATION GATE (github): deliveryConfig is a wholesale overwrite, so a
   // client could set/replace installationId here. If this is a GitHub connection

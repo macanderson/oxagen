@@ -96,10 +96,24 @@ const catalog = roleCatalog({
   ],
 });
 
+/** The table row a test keys on, or a failure naming it. */
+function rowOf(id: string): HTMLElement {
+  const row = document.querySelector<HTMLElement>(`[data-row="${id}"]`);
+  if (row === null) throw new Error(`no row ${id}`);
+  return row;
+}
+
+/** One cell of a row, or a failure naming its position. */
+function cellAt(cells: readonly HTMLElement[], index: number): HTMLElement {
+  const found = cells[index];
+  if (found === undefined) throw new Error(`no cell ${String(index)}`);
+  return found;
+}
+
 function headers(table: HTMLElement): string[] {
   return within(table)
     .getAllByRole("columnheader")
-    .map((th) => th.textContent ?? "");
+    .map((th) => th.textContent);
 }
 
 describe("People", () => {
@@ -158,11 +172,8 @@ describe("People", () => {
 
   it("prints a member's name and email, the recorded role, active status, and not recorded where the roster has nothing", async () => {
     await renderPeople();
-    const row = document.querySelector(
-      '[data-row="usr_7k2m9q4x8r1t5v3w6y0z2a"]',
-    );
-    expect(row).not.toBeNull();
-    const cells = within(row as HTMLElement).getAllByRole("cell");
+    const row = rowOf("usr_7k2m9q4x8r1t5v3w6y0z2a");
+    const cells = within(row).getAllByRole("cell");
     expect(cells[0]).toHaveTextContent("Marcus Bell");
     expect(cells[0]).toHaveTextContent("marcus.bell@acme.example");
     expect(cells[1]).toHaveTextContent("Owner");
@@ -171,7 +182,7 @@ describe("People", () => {
     }
     expect(cells[5]).toHaveTextContent("active");
     expect(
-      within(cells[6] as HTMLElement)
+      within(cellAt(cells, 6))
         .getAllByRole("button")
         .map((b) => b.textContent),
     ).toEqual(["Open", "Change role", "Remove"]);
@@ -179,9 +190,7 @@ describe("People", () => {
 
   it("opens a member's facts from Open", async () => {
     await renderPeople();
-    const row = document.querySelector(
-      '[data-row="usr_7k2m9q4x8r1t5v3w6y0z2a"]',
-    ) as HTMLElement;
+    const row = rowOf("usr_7k2m9q4x8r1t5v3w6y0z2a");
     await userEvent.click(within(row).getByRole("button", { name: "Open" }));
     const dialog = screen.getByTestId("member-usr_7k2m9q4x8r1t5v3w6y0z2a");
     expect(dialog).toHaveTextContent("marcus.bell@acme.example");
@@ -244,9 +253,7 @@ describe("Invitations", () => {
 
   it("prints each invitation with Invited by not recorded, and Resend and Revoke", async () => {
     await renderInvitations();
-    const row = document.querySelector(
-      '[data-row="invi_9z8y7x6w5v4t3s2r1q0p9n"]',
-    ) as HTMLElement;
+    const row = rowOf("invi_9z8y7x6w5v4t3s2r1q0p9n");
     const cells = within(row).getAllByRole("cell");
     expect(cells[0]).toHaveTextContent("audit@acme.example");
     expect(cells[1]).toHaveTextContent("Compliance");

@@ -75,13 +75,24 @@ export function agentPageRow(
     id: `agt_${slug.replace(/[^0-9a-z]/g, "")}`,
     slug,
     name: slug,
+    description: null,
     agentKey: null,
     harness: "custom",
     operatorId: null,
+    operatorName: null,
+    principalId: null,
+    credentials: 0,
+    hosts: 0,
+    host: null,
     status,
+    enforcementTier: null,
     runs30d: 0,
     spend30d: null,
+    tokens30d: null,
+    mandates: null,
     incidents: 0,
+    tamperIncidents: 0,
+    tamperIncidentsRecorded: 0,
   };
 }
 
@@ -96,7 +107,9 @@ export function agentPage(
     totals: {
       identities: agents.length,
       enrolled: agents.filter((agent) => agent.status === "enrolled").length,
+      holdingMandate: 0,
       tamperIncidents: 0,
+      tamper: { recorded: 0, open: 0, newest: null },
     },
   };
 }
@@ -168,11 +181,13 @@ export function toolsSource(reads: ToolsReads) {
         : Promise.resolve(read);
     };
   const source: DataSource = {
+    runtimes: { list: refuse, agents: refuse },
     pretenant: { orgs: refuse, workspaces: refuse },
     shell: { context: refuse, preferences: refuse },
     billing: {
       plan: refuse,
       usageCredits: refuse,
+      retention: refuse,
       bucket: refuse,
       contractRate: refuse,
       invoices: refuse,
@@ -185,6 +200,8 @@ export function toolsSource(reads: ToolsReads) {
       transcript: refuse,
       chain: refuse,
       outputs: refuse,
+      work: refuse,
+      outcomesSettings: refuse,
     },
     approvals: { pending: refuse, resolved: refuse },
     agents: {

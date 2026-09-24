@@ -141,11 +141,13 @@ export async function OrganizationFrame({
           workspaces: workspaces.value.workspaces.length,
         }}
       />
-      {await children({
-        members: members.value,
-        roles: roles.value,
-        workspaces: workspaces.value,
-      })}
+      {
+        await children({
+          members: members.value,
+          roles: roles.value,
+          workspaces: workspaces.value,
+        })
+      }
     </div>
   );
 }

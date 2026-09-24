@@ -9,11 +9,7 @@ import { useTranslations } from "next-intl";
 import { type ReactNode, useState } from "react";
 
 export type PlaneMode = "shared" | "dedicated" | "firewall";
-const PLANE_MODES: readonly PlaneMode[] = [
-  "shared",
-  "dedicated",
-  "firewall",
-];
+const PLANE_MODES: readonly PlaneMode[] = ["shared", "dedicated", "firewall"];
 
 export function DataPlaneModes({
   current,

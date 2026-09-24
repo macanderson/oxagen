@@ -10,7 +10,9 @@ import {
   type RunExportFiles,
   summarizeRunExportRedactions,
   verifyRunExport,
+  wrappedFrameOf,
 } from "./run-export";
+import { minimalSession } from "../test-helpers";
 
 const key = attesterKeyFromPem(
   generateKeyPairSync("ed25519")
@@ -68,8 +70,23 @@ function tachoFrames(): JsonValue[] {
 function bundle(
   source: "ledger" | "tacho",
   frames: JsonValue[],
-  over: { format?: string; redactions?: boolean; stream?: string | null } = {},
+  over: {
+    format?: string;
+    redactions?: boolean;
+    stream?: string | null;
+    attempt?: string;
+  } = {},
 ): RunExportFiles {
+  // A wrapped run's attempt is its session: frames that carry their event
+  // name it, and the verifier holds them to it.
+  const firstEvent = (frames[0] as Record<string, JsonValue> | undefined)?.[
+    "event"
+  ] as Record<string, JsonValue> | undefined;
+  const attempt =
+    over.attempt ??
+    (typeof firstEvent?.["session_uuid"] === "string"
+      ? firstEvent["session_uuid"]
+      : "att");
   const digests = frames.map(
     (f) =>
       ((f as Record<string, unknown>)["event_digest"] ??
@@ -96,7 +113,7 @@ function bundle(
   const attestation = signAttestation(
     {
       run_id: source === "ledger" ? "arun_1" : "tse_1",
-      attempt_id: "att",
+      attempt_id: attempt,
       frame_count: frames.length,
       merkle_root: root,
       archive_segment_digest: digestBytes(frames.map(jcs).join("\n")),
@@ -117,7 +134,7 @@ function bundle(
       attester_key_id: key.keyId,
       attempts: [
         {
-          attempt_id: "att",
+          attempt_id: attempt,
           frame_count: frames.length,
           merkle_root: root,
           archive_segment_digest: null,
@@ -202,7 +219,7 @@ describe("verifyRunExport", () => {
     });
   });
 
-  it("accepts a format-1 bundle without redactions.json, and requires it at format 2 (negative)", () => {
+  it("accepts a format-1 bundle without redactions.json, and requires it from format 2 (negative)", () => {
     expect(
       verifyRunExport(
         bundle("ledger", ledgerFrames(), {
@@ -211,6 +228,13 @@ describe("verifyRunExport", () => {
         }),
       ).ok,
     ).toBe(true);
+    for (const format of ["oxagen.run-export/2", RUN_EXPORT_FORMAT]) {
+      expect(
+        verifyRunExport(
+          bundle("ledger", ledgerFrames(), { format, redactions: false }),
+        ).ok,
+      ).toBe(false);
+    }
     const missing = verifyRunExport(
       bundle("ledger", ledgerFrames(), { redactions: false }),
     );
@@ -373,3 +397,218 @@ it.each([undefined, "bogus", "ledger"])(
     );
   },
 );
+
+describe("wrapped frames that carry their event (#3733)", () => {
+  /** A real sealed session, each frame built the way the export builds it. */
+  function carriedFrames(): JsonValue[] {
+    return minimalSession().map((event, i) =>
+      wrappedFrameOf(
+        event as unknown as Record<string, JsonValue>,
+        i === 1 ? "tacho://body" : null,
+      ),
+    );
+  }
+
+  /** Edit one frame and re-sign, so only the frame's own check can catch it. */
+  function tampered(edit: (frame: Record<string, JsonValue>) => void) {
+    const frames = carriedFrames();
+    edit(frames[3] as Record<string, JsonValue>);
+    return verifyRunExport(bundle("tacho", frames));
+  }
+
+  it("recomputes every frame's hash from its event and holds", () => {
+    const result = verifyRunExport(bundle("tacho", carriedFrames()));
+    expect(result.ok).toBe(true);
+    expect(result.frames.every((f) => f.digest === "held")).toBe(true);
+    expect(result.frames.map((f) => f.seq)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+  });
+
+  it("holds when a bundle mixes carried and not-carried frames", () => {
+    const frames = carriedFrames();
+    const bare = { ...(frames[2] as Record<string, JsonValue>) };
+    delete bare["event"];
+    frames[2] = bare;
+    const result = verifyRunExport(bundle("tacho", frames));
+    expect(result.ok).toBe(true);
+    expect(result.frames.map((f) => f.digest)).toEqual([
+      "held",
+      "held",
+      "not_carried",
+      "held",
+      "held",
+      "held",
+      "held",
+      "held",
+    ]);
+  });
+
+  it("names the frame whose shown kind differs from its event (negative)", () => {
+    const result = tampered((frame) => {
+      frame["kind"] = "tool_call";
+    });
+    expect(result.ok).toBe(false);
+    const broken = result.frames.filter((f) => f.status === "broken");
+    expect(broken).toEqual([
+      expect.objectContaining({
+        line: 4,
+        seq: 3,
+        digest: "broken",
+        link: "held",
+        reasons: ["kind differs from the hashed event"],
+      }),
+    ]);
+  });
+
+  it("names the frame whose event was edited, even when the shown copy was edited to match (negative)", () => {
+    const result = tampered((frame) => {
+      const event = frame["event"] as Record<string, JsonValue>;
+      const body = { ...(event["body"] as Record<string, JsonValue>) };
+      body["tool_name"] = "Write";
+      event["body"] = body;
+      frame["body"] = body;
+      frame["tool_name"] = "Write";
+    });
+    expect(result.frames[3]).toMatchObject({
+      status: "broken",
+      digest: "broken",
+      reasons: ["the event does not hash to hash"],
+    });
+    expect(result.frames.filter((f) => f.status === "broken")).toHaveLength(1);
+  });
+
+  it("breaks a frame whose event is not an object or which gained a member (negative)", () => {
+    expect(
+      tampered((frame) => {
+        frame["event"] = "not an event";
+      }).frames[3],
+    ).toMatchObject({
+      digest: "broken",
+      reasons: ["event is not a JSON object"],
+    });
+    expect(
+      tampered((frame) => {
+        frame["note"] = "added";
+      }).frames[3],
+    ).toMatchObject({
+      digest: "broken",
+      reasons: ["note differs from the hashed event"],
+    });
+  });
+
+  it("reads bytes_ref off the frame, where the control plane kept the body", () => {
+    const [, second] = carriedFrames() as Array<Record<string, JsonValue>>;
+    expect(
+      (second?.["content"] as Record<string, JsonValue>)["bytes_ref"],
+    ).toBe("tacho://body");
+    const result = verifyRunExport(bundle("tacho", carriedFrames()));
+    expect(result.redactions?.withheld).toEqual([
+      { kind: "frame_body", count: 1, frames: 1 },
+    ]);
+  });
+
+  it("reads a null event as not carried, the same as an absent one", () => {
+    const result = tampered((frame) => {
+      frame["event"] = null;
+    });
+    expect(result.ok).toBe(true);
+    expect(result.frames[3]).toMatchObject({
+      status: "held",
+      digest: "not_carried",
+    });
+  });
+
+  it("breaks a frame whose event is an array (negative)", () => {
+    expect(
+      tampered((frame) => {
+        frame["event"] = [];
+      }).frames[3],
+    ).toMatchObject({
+      digest: "broken",
+      reasons: ["event is not a JSON object"],
+    });
+  });
+
+  it("breaks a frame that dropped a member its event determines (negative)", () => {
+    expect(
+      tampered((frame) => {
+        delete frame["tool_name"];
+      }).frames[3],
+    ).toMatchObject({
+      digest: "broken",
+      reasons: ["tool_name differs from the hashed event"],
+    });
+  });
+
+  it("names every differing member, sorted, with the plural verb (negative)", () => {
+    expect(
+      tampered((frame) => {
+        // Frame order is ts, kind, tool_name; the reason sorts them.
+        frame["tool_name"] = "Write";
+        frame["kind"] = "tool_call";
+        frame["ts"] = "2026-09-08T10:06:59.000Z";
+      }).frames[3],
+    ).toMatchObject({
+      digest: "broken",
+      reasons: ["kind, tool_name, ts differ from the hashed event"],
+    });
+  });
+
+  it("breaks a frame whose event names a different hash than the frame (negative)", () => {
+    // hashEvent leaves `hash` out, so the recomputation still matches; the
+    // event's own `hash` member must still be the frame's.
+    const result = tampered((frame) => {
+      const event = frame["event"] as Record<string, JsonValue>;
+      event["hash"] = `sha256:${"e".repeat(64)}`;
+    });
+    expect(result.frames[3]).toMatchObject({
+      digest: "broken",
+      reasons: ["hash differs from the hashed event"],
+    });
+  });
+
+  it("reports both a hash that does not recompute and a member that differs (negative)", () => {
+    const result = tampered((frame) => {
+      const event = frame["event"] as Record<string, JsonValue>;
+      event["kind"] = "tool_call";
+    });
+    expect(result.frames[3]).toMatchObject({
+      digest: "broken",
+      reasons: [
+        "the event does not hash to hash",
+        "kind differs from the hashed event",
+      ],
+    });
+  });
+
+  it("reads a bytes_ref that is not a string as none, so the frame's content differs (negative)", () => {
+    const result = tampered((frame) => {
+      frame["content"] = {
+        ...(frame["content"] as Record<string, JsonValue>),
+        bytes_ref: 7,
+      };
+    });
+    expect(result.frames[3]).toMatchObject({
+      digest: "broken",
+      reasons: ["content differs from the hashed event"],
+    });
+  });
+});
+
+describe("a wrapped frame spliced in from another session (#3733)", () => {
+  it("breaks every frame whose event names a session other than the attempt (negative)", () => {
+    const frames = minimalSession().map((event) =>
+      wrappedFrameOf(event as unknown as Record<string, JsonValue>, null),
+    );
+    const other = "0192d4a8-7c1e-7a00-8000-0000000000ff";
+    const result = verifyRunExport(bundle("tacho", frames, { attempt: other }));
+    expect(result.ok).toBe(false);
+    expect(result.frames.every((f) => f.digest === "broken")).toBe(true);
+    expect(result.frames[0]?.reasons).toEqual([
+      `the event belongs to session ${String(
+        (frames[0] as Record<string, Record<string, JsonValue>>)["event"]?.[
+          "session_uuid"
+        ],
+      )}, not ${other}`,
+    ]);
+  });
+});

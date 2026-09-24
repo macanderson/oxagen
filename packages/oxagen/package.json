@@ -33,8 +33,10 @@
     "./skill-frontmatter": "./src/skill-frontmatter.ts",
     "./skills": "./src/skills.ts",
     "./configuration-clone": "./src/configuration-clone.ts",
+    "./run-outcomes": "./src/run-outcomes.ts",
     "./context-record-label": "./src/context-record-label.ts",
-    "./agent-definition-source": "./src/agent-definition-source.ts"
+    "./agent-definition-source": "./src/agent-definition-source.ts",
+    "./run-enrichment": "./src/run-enrichment.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -49,8 +51,8 @@
     "@oxagen/tacho": "workspace:*",
     "@oxagen/tenancy": "workspace:*",
     "zod": "3.25.76",
-    "yaml": "2.9.0",
-    "smol-toml": "1.8.0"
+    "yaml": "2.9.1",
+    "smol-toml": "1.9.0"
   },
   "devDependencies": {
     "typescript": "6.0.3",

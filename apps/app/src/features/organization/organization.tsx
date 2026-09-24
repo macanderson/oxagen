@@ -38,7 +38,7 @@ export function parseOrganizationTab(
 }
 
 /** `/{org}`: People, Invitations, Workspaces, Data plane or Cost centers. */
-export async function Organization({
+export function Organization({
   ctx,
   source,
   tab,
@@ -95,7 +95,7 @@ async function dataPlane(
 }
 
 /** `/{org}/roles`: the Roles tab, with the SSO group mappings beneath it. */
-export async function OrganizationRoles({
+export function OrganizationRoles({
   ctx,
   source,
 }: {
@@ -121,7 +121,7 @@ export async function OrganizationRoles({
 }
 
 /** `/{org}/api-keys`: the keys of the workspace in scope (ADR-073). */
-export async function OrganizationApiKeys({
+export function OrganizationApiKeys({
   ctx,
   keysCtx,
   source,

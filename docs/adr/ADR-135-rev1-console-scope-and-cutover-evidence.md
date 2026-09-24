@@ -18,7 +18,7 @@ The end-to-end suite contains exactly `login`, `pay`, and `page-load`. Component
 
 The kernel boots IAM in the app, and handlers must enforce their declared role restrictions with `assertOrgRole`, including on tiers whose kernel IAM allows access. Read paths use `kernelRead`; writes use `kernelWrite`; the allowlisted tenancy lookups remain read-only.
 
-The rebuilt app is `apps/app`, and parity tooling points there. `apps/app_deprecated` stays unbuilt and undeployed, but linted and typechecked, as required by `docs/specs/mission-control/plan.md` §5. It contains retained, deregistered features. Deleting it requires an ADR that names those features. The old WL-53 deletion request does not override this retention decision.
+The rebuilt app is `apps/app`, and parity tooling points there. `apps/app_deprecated` stays unbuilt and undeployed, but linted and typechecked, as required by `oxagen-roadmap:docs/oxagen/specs/mission-control/plan.md` §5. It contains retained, deregistered features. Deleting it requires an ADR that names those features. The old WL-53 deletion request does not override this retention decision.
 
 ## Evidence and limits
 

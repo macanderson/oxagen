@@ -46,6 +46,20 @@ function fakeSession(
       takeBodies(): FrameBody[] {
         return [];
       },
+      // A chain mark/rollback pair the tests never exercise a rollback
+      // through: nothing here ever throws, so recording the count is enough
+      // to satisfy the recorder shape `feedLine` needs.
+      markChain() {
+        return { lines: lines.length } as unknown as ReturnType<
+          TailedSession["recorder"]["markChain"]
+        >;
+      },
+      rollbackChain(mark: unknown) {
+        lines.length = (mark as { lines: number }).lines;
+      },
+      sealCollectorEvent(kind: string): TachoEvent {
+        return { kind } as unknown as TachoEvent;
+      },
     },
   };
   return session;
@@ -69,7 +83,12 @@ describe("TranscriptTailer", () => {
 
   function tailer(
     sessions: TailedSession[],
-    options: { statePath?: string; budgetBytes?: number } = {},
+    options: {
+      statePath?: string;
+      budgetBytes?: number;
+      now?: () => number;
+      sealedIdleMs?: number;
+    } = {},
   ) {
     const recorded: TachoEvent[] = [];
     const log: string[] = [];
@@ -177,16 +196,67 @@ describe("TranscriptTailer", () => {
     expect(session.lines).toHaveLength(10);
   });
 
-  it("gets past a line longer than the budget without stalling", async () => {
+  it("gets past a line longer than the budget without stalling, and seals a gap", async () => {
     const dir = scratch();
     const path = join(dir, "s.jsonl");
     const session = fakeSession("s1", path);
     writeFileSync(path, `${"y".repeat(1000)}\nafter\n`);
-    const { instance, log } = tailer([session], { budgetBytes: 100 });
+    const { instance, recorded, log } = tailer([session], { budgetBytes: 100 });
     await instance.tick();
     await instance.tick();
     expect(session.lines.map((l) => l.line)).toEqual(["after"]);
-    expect(log.some((l) => l.includes("skipped a 1001 byte line"))).toBe(true);
+    // The line the budget could not hold is not silent: a gap frame stands
+    // in for it, so a reader sees the loss on the chain, not only in a log.
+    expect(recorded.some((event) => event.kind === "telemetry_gap")).toBe(true);
+    expect(log.some((l) => l.includes("transcript_line_too_long"))).toBe(true);
+  });
+
+  it("rolls back and seals a gap for one refused line, and still feeds the rest", async () => {
+    const dir = scratch();
+    const path = join(dir, "s.jsonl");
+    const session = fakeSession("s1", path);
+    writeFileSync(path, "a\nBAD\nc\n");
+    // A line the envelope refuses (an out-of-bounds field, an unanticipated
+    // shape): the recorder throws instead of sealing it.
+    const originalIngest = session.recorder.ingestTranscriptLine;
+    session.recorder.ingestTranscriptLine = (line, subagentId) => {
+      if (line === "BAD") throw new Error("envelope refused this line");
+      return originalIngest(line, subagentId);
+    };
+    const { instance, recorded, log } = tailer([session]);
+    await instance.tick();
+    // The line before and after the refused one are still fed; the tailer
+    // does not stall or drop them for one bad line in the middle.
+    expect(session.lines.map((l) => l.line)).toEqual(["a", "c"]);
+    expect(recorded.some((event) => event.kind === "telemetry_gap")).toBe(true);
+    expect(log.some((l) => l.includes("transcript_line_refused"))).toBe(true);
+    // A later tick reads nothing new: the offset moved past the refused
+    // line, not just the ones on either side of it.
+    await instance.tick();
+    expect(session.lines).toHaveLength(2);
+  });
+
+  it("keeps tailing one session when another's recorder is broken beyond a gap frame", async () => {
+    const dir = scratch();
+    const pathA = join(dir, "a.jsonl");
+    const pathB = join(dir, "b.jsonl");
+    writeFileSync(pathA, "a1\n");
+    writeFileSync(pathB, "b1\n");
+    const sessionA = fakeSession("a", pathA);
+    const sessionB = fakeSession("b", pathB);
+    // A recorder broken deeply enough that it cannot even seal the gap
+    // frame `feedLine` falls back to: every call to `takeBodies` throws, so
+    // the throw that follows the rollback escapes `feedLine` itself. This
+    // must still not cost session A its tick.
+    sessionB.recorder.takeBodies = () => {
+      throw new Error("wal broken");
+    };
+    const { instance, log } = tailer([sessionA, sessionB]);
+    await expect(instance.tick()).resolves.toBeUndefined();
+    expect(sessionA.lines.map((l) => l.line)).toEqual(["a1"]);
+    expect(
+      log.some((l) => l.includes("transcript tail for b failed this tick")),
+    ).toBe(true);
   });
 
   it("feeds a subagent transcript once, with the subagent id, and never twice", async () => {
@@ -218,33 +288,59 @@ describe("TranscriptTailer", () => {
     ).toBeUndefined();
   });
 
-  it("drains a sealed session once more, then keeps its cursor as a tombstone", async () => {
+  it("keeps tailing a sealed session while it still grows, and drains it only once idle", async () => {
     const dir = scratch();
     const path = join(dir, "s.jsonl");
     const session = fakeSession("s1", path);
     writeFileSync(path, "a\n");
-    const { instance } = tailer([session]);
+    let clock = 1_000_000;
+    const { instance } = tailer([session], {
+      now: () => clock,
+      sealedIdleMs: 1_000,
+    });
     await instance.tick();
     expect(session.lines).toHaveLength(1);
     // SessionEnd: the hook path drains, the harness flushes one last line.
     appendFileSync(path, "b\n");
     await instance.drain("s1");
     expect(session.lines).toHaveLength(2);
+
     session.sealed = true;
+    // A trailing write after `agent_stop` still lands: sealing does not cut
+    // reading off after one pass any more.
     appendFileSync(path, "cost-state\n");
+    clock += 100;
     await instance.tick();
     expect(session.lines).toHaveLength(3);
-    expect(instance.state().cursors[cursorId("s1")]?.drained).toBe(true);
-    // The registry keeps listing the sealed session for its retention. The
-    // tombstone stays, and nothing is read again: no replay after agent_stop.
+    expect(instance.state().cursors[cursorId("s1")]?.drained).toBeUndefined();
+
+    // Growth after sealing resets the quiet clock.
     appendFileSync(path, "late\n");
+    clock += 900;
+    await instance.tick();
+    expect(session.lines).toHaveLength(4);
+    expect(instance.state().cursors[cursorId("s1")]?.drained).toBeUndefined();
+
+    // Now genuinely quiet: one tick starts the idle clock, and a later one
+    // past `sealedIdleMs` with still nothing new drains the cursor.
+    clock += 100;
+    await instance.tick();
+    expect(instance.state().cursors[cursorId("s1")]?.drained).toBeUndefined();
+    clock += 1_500;
+    await instance.tick();
+    expect(instance.state().cursors[cursorId("s1")]?.drained).toBe(true);
+
+    // The tombstone stays; nothing is read again, however long it waits.
+    appendFileSync(path, "too-late\n");
+    clock += 100_000;
     for (let i = 0; i < 4; i += 1) await instance.tick();
     await instance.drain("s1");
-    expect(session.lines).toHaveLength(3);
+    expect(session.lines).toHaveLength(4);
     expect(instance.state().cursors[cursorId("s1")]?.drained).toBe(true);
+
     // Once the registry forgets the session, the tombstone goes too.
     const sessions = [session];
-    const second = tailer(sessions);
+    const second = tailer(sessions, { now: () => clock });
     await second.instance.tick();
     expect(second.instance.state().cursors[cursorId("s1")]).toBeDefined();
     sessions.length = 0;
@@ -262,14 +358,21 @@ describe("TranscriptTailer", () => {
     const agentA = fakeSession(sharedId, pathA);
     const agentB = fakeSession(sharedId, pathB, { customAgent: "reviewer" });
     const sessions = [agentA, agentB];
-    const { instance } = tailer(sessions);
+    let clock = 1_000_000;
+    const { instance } = tailer(sessions, {
+      now: () => clock,
+      sealedIdleMs: 0,
+    });
 
     await instance.tick();
     expect(agentA.lines.map((l) => l.line)).toEqual(["agent-a-1"]);
     expect(agentB.lines.map((l) => l.line)).toEqual(["agent-b-1", "agent-b-2"]);
 
-    // Agent A seals and drains; its tombstone must not key on the raw id.
+    // Agent A seals and drains once its transcript has sat idle; its
+    // tombstone must not key on the raw id.
     agentA.sealed = true;
+    await instance.tick();
+    clock += 1;
     await instance.tick();
     const keyA = sessionMapKey(sharedId, {});
     const keyB = sessionMapKey(sharedId, { customAgent: "reviewer" });
@@ -343,5 +446,44 @@ describe("TranscriptTailer", () => {
     session.transcriptPath = second;
     await instance.tick();
     expect(session.lines.map((l) => l.line)).toEqual(["a1", "b1", "b2"]);
+  });
+
+  it("never tails a transcript for a harness transcript.ts cannot normalize", async () => {
+    const dir = scratch();
+    const path = join(dir, "s.jsonl");
+    // Codex's hook payload can carry a transcript_path, but its shape is not
+    // Claude Code's JSONL, which is the only shape `transcript.ts` reads.
+    writeFileSync(path, "not claude code jsonl\n");
+    const session = fakeSession("s1", path, { harness: "codex" });
+    const { instance, recorded } = tailer([session]);
+    await instance.tick();
+    await instance.tick();
+    expect(session.lines).toEqual([]);
+    expect(recorded).toEqual([]);
+  });
+
+  it("still tails a session with no harness recorded (Claude Code's own default)", async () => {
+    const dir = scratch();
+    const path = join(dir, "s.jsonl");
+    writeFileSync(path, "a\n");
+    const session = fakeSession("s1", path);
+    const { instance } = tailer([session]);
+    await instance.tick();
+    expect(session.lines.map((l) => l.line)).toEqual(["a"]);
+  });
+
+  it("skips drain and subagent ingestion for a harness with no normalizer too", async () => {
+    const dir = scratch();
+    const path = join(dir, "s.jsonl");
+    const subPath = join(dir, "sub.jsonl");
+    writeFileSync(path, "a\n");
+    writeFileSync(subPath, "b\n");
+    const session = fakeSession("s1", path, { harness: "cursor" });
+    const { instance } = tailer([session]);
+    await instance.drain("s1");
+    expect(session.lines).toEqual([]);
+    const fed = await instance.ingestSubagentTranscript("s1", "child", subPath);
+    expect(fed).toBeUndefined();
+    expect(session.lines).toEqual([]);
   });
 });

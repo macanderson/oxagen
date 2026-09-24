@@ -92,7 +92,9 @@ describe("ModelFunding", () => {
     await renderSection(readError("kernel_failure", 503));
     expect(screen.queryByTestId("funding-form")).toBeNull();
     // The tabs survive a failed read.
-    expect(screen.getByRole("link", { name: "Model funding and routes" })).toBeTruthy();
+    expect(
+      screen.getByRole("link", { name: "Model funding and routes" }),
+    ).toBeTruthy();
   });
 
   it("has no axe violations", async () => {

@@ -3,7 +3,67 @@
 The host side of Stella's headless engine. `stella-serve` runs the agent loop
 and nothing else: it holds no model key and runs no tool. It asks the host
 for every completion and every tool call over an event stream, and the host
-answers on three POST routes. This package is that conversation.
+answers on POST routes: a provider result, a tool result, a requery result,
+and optional provider deltas. This package is that conversation.
+
+## Boundary
+
+- **Owns:** the typed wire to `stella-serve`, the HTTP transport, the SSE
+  decoder, the loop that drives one turn to its outcome, and the in-process
+  fake engine for tests.
+- **Does not own:** where the engine lives or how the host authenticates to
+  it (`STELLA_SERVE_URL` and `STELLA_SERVE_TOKEN` are read in
+  [`@oxagen/agent`](../agent/README.md), `src/runtime/engine/client.ts`);
+  answering provider requests through the gateway and tool requests through
+  governed tools (`@oxagen/agent`, `src/runtime/engine/provider.ts` and
+  `src/runtime/engine/tools.ts`); Stella itself, which is a separate
+  repository.
+- **Depends on:** No `@oxagen/*` runtime dependencies, and no npm runtime
+  dependencies. It uses the platform `fetch`.
+- **Used by:** `@oxagen/agent` (`src/runtime/engine/`,
+  `src/runtime/governed-turn.ts`, `src/runtime/assistant-run.ts`, and the
+  `get_assistant_engine` handler in `src/handlers/assistant.engine.get.ts`).
+
+## Seams
+
+| Seam | Kind | Source | Wired by |
+|---|---|---|---|
+| `StellaEngineClient` | export | `packages/stella-engine-client/src/client.ts` | `packages/agent/src/runtime/engine/client.ts` |
+| `DriveTurnHandlers` (`ProviderRequestHandler`, `ToolRequestHandler`, `RequeryRequestHandler`) | port | `packages/stella-engine-client/src/drive-turn.ts` | `packages/agent/src/runtime/engine/provider.ts`, `tools.ts` |
+| `stella-serve` HTTP and SSE routes (table below) | boundary | `packages/stella-engine-client/src/wire.ts`, `src/generated/serveframe.d.ts` | A `stella-serve` process at `STELLA_SERVE_URL` |
+| `FakeEngine`, `goldenScript` | export | `packages/stella-engine-client/src/fake-engine.ts` | `packages/agent/src/runtime/governed-turn.test.ts` |
+
+## Entry points
+
+- `.` → `src/index.ts`: the client, `driveTurn`, the SSE decoder,
+  `STELLA_SERVE_PINNED_VERSION`, and every wire type.
+- `./testing` → `src/fake-engine.ts`: the scripted fake engine and its golden
+  turn (`fixtures/golden-turn.json`, `fixtures/golden-turn.sse`).
+
+## Rules
+
+- Keep the package on `fetch` alone, so it stays in step with the server.
+- Bump `src/version.ts` in the same change that refreshes
+  `src/generated/serveframe.d.ts`. `src/version.ts` names the release the
+  types were copied from and the smoke test drove.
+
+## Tests
+
+```bash
+pnpm --filter @oxagen/stella-engine-client test:unit src/drive-turn.test.ts
+STELLA_SERVE_BIN=/path/to/stella-serve pnpm --filter @oxagen/stella-engine-client test:smoke
+```
+
+Never put `--` before the filename. The unit tests live beside the source in
+`src/*.test.ts`. `test:unit` excludes `*.smoke.test.ts`, and `test:smoke` runs
+`src/stella-serve.smoke.test.ts` alone.
+
+The smoke test boots the binary on a free loopback port and drives the same
+scripted turn the fake replays. A binary comes from a Stella checkout with
+`cargo build -p stella-serve --bin stella-serve`, or from the published image
+`ghcr.io/macanderson/stella-serve:<version>`.
+
+## Layout
 
 - `src/wire.ts` — the types. What the server sends is copied from Stella's
   generated declarations (`src/generated/serveframe.d.ts`); what the server
@@ -17,9 +77,6 @@ answers on three POST routes. This package is that conversation.
 - `src/fake-engine.ts` — an in-process fake for tests, scripted with the
   frames a real turn produced.
 
-`src/version.ts` names the release the types were copied from and the smoke
-test drove. Bump it in the same change that refreshes the generated file.
-
 ## Routes
 
 | Method | Path | Auth |
@@ -30,15 +87,3 @@ test drove. Bump it in the same change that refreshes the generated file.
 | GET | `/v1/turns/{id}/events` (SSE, one subscriber, `?after=` resumes) | bearer |
 | POST | `/v1/turns/{id}/provider-result`, `/provider-delta`, `/tool-result`, `/requery-result` | bearer |
 | POST | `/v1/turns/{id}/cancel`, `/steer`, `/pause`, `/resume` | bearer |
-
-## Tests
-
-```sh
-pnpm --filter @oxagen/stella-engine-client test:unit
-STELLA_SERVE_BIN=/path/to/stella-serve pnpm --filter @oxagen/stella-engine-client test:smoke
-```
-
-The smoke test boots the binary on a free loopback port and drives the same
-scripted turn the fake replays. A binary comes from a Stella checkout with
-`cargo build -p stella-serve --bin stella-serve`, or from the published image
-`ghcr.io/macanderson/stella-serve:<version>`.

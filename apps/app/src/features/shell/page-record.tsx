@@ -24,6 +24,10 @@
 // no declaration: the URL cannot disagree with the page about it, because there
 // is nothing to parse. The flyout keeps reading those from the path.
 //
+// A page may also declare the record's label, for the breadcrumb. The segment
+// is a key (`tch_…`) and a person reads the name the page drew from the record
+// (`mbell-mbp-16`); only the page has read the record, so only it can say.
+//
 // The store is a module singleton rather than context because the page is not
 // inside the shell's provider: `ShellClient` renders chrome, and the layout
 // places the page beside it. It holds one entry because one page is on screen.
@@ -35,7 +39,7 @@
 // last.
 import { useEffect, useSyncExternalStore } from "react";
 
-type Entry = { route: string; id: string | null };
+type Entry = { route: string; id: string | null; label: string | null };
 
 let current: Entry | null = null;
 const listeners = new Set<() => void>();
@@ -62,14 +66,14 @@ function subscribe(onChange: () => void): () => void {
  */
 export function usePageRecord(
   route: string | null,
-): { id: string | null } | null {
+): { id: string | null; label: string | null } | null {
   const entry = useSyncExternalStore(
     subscribe,
     () => current,
     () => null,
   );
   if (entry === null || route === null || entry.route !== route) return null;
-  return { id: entry.id };
+  return { id: entry.id, label: entry.label };
 }
 
 /**
@@ -82,14 +86,17 @@ export function usePageRecord(
 export function PageRecord({
   route,
   id,
+  label = null,
 }: {
   /** The first path segment after the workspace, as `parseShellPath` reads it. */
   route: string;
   /** The record on screen, from the page's own parse of its query. */
   id: string | null;
+  /** The record's name as the page drew it, for the breadcrumb in place of the id. */
+  label?: string | null;
 }) {
   useEffect(() => {
-    const mine: Entry = { route, id };
+    const mine: Entry = { route, id, label };
     current = mine;
     emit();
     return () => {
@@ -100,6 +107,6 @@ export function PageRecord({
       current = null;
       emit();
     };
-  }, [route, id]);
+  }, [route, id, label]);
   return null;
 }

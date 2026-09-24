@@ -204,7 +204,7 @@ describe("hook latency", () => {
    * every sample waited out the hook's 10 s PreToolUse response budget and
    * then decided locally. That measured the timeout (p50 10 158 ms on the
    * reference laptop, on main and on this branch alike), not start to
-   * decision (docs/specs/tacho/plan.md records p50 108 ms). With `spawn` the
+   * decision (oxagen-roadmap:docs/oxagen/specs/tacho/plan.md records p50 108 ms). With `spawn` the
    * event loop keeps serving the daemon while the child runs, as a separate
    * `tachod` process does in production.
    */
@@ -257,7 +257,7 @@ describe("hook latency", () => {
     process.stdout.write(
       `\n[bench] tacho-hook spawn to decision (${process.version}): p50 ${p50.toFixed(1)} ms, p95 ${p95.toFixed(1)} ms (n=${samples.length}); budget p95 < 30 ms\n`,
     );
-    // The figure is recorded in docs/specs/tacho/plan.md; a Node executable
+    // The figure is recorded in oxagen-roadmap:docs/oxagen/specs/tacho/plan.md; a Node executable
     // cannot meet the 30 ms budget, which is why the compiled hook is a
     // pre-GA follow-up rather than a gate here.
     expect(samples.length).toBe(20);

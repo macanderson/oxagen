@@ -1,8 +1,9 @@
 # @oxagen/tacho
 
 Tacho is the Oxagen wrapper that records, gates, and evidences agents Oxagen
-does not run itself: Claude Code, Codex CLI, Claude Agent SDK agents, and
-custom agents. Spec: `docs/specs/tacho/spec.md`. Column contract:
+does not run itself: the four wrapped harnesses (Claude Code, Codex CLI,
+Cursor, and Stella, ADR-101), Claude Agent SDK agents, and custom agents.
+Spec: `docs/specs/tacho/spec.md`. Column contract:
 `docs/specs/tacho/data-model.md`. The desktop app that installs it:
 `docs/specs/oxagen-desktop/spec.html`.
 
@@ -13,8 +14,80 @@ with the control plane by copy rather than import is `TACHO_RUNTIMES`
 (`src/envelope.ts`), the values `agent.runtime` may take;
 `packages/database/src/schema/tacho.ts` holds the same list for the
 `tacho.sessions.runtime` CHECK, and `packages/handlers/src/tacho.runtimes.test.ts`
-fails if they drift. Each harness maps to its own runtime (`contextForHarness`
-in `src/collector/registry.ts`): Claude Code to `claude-code`, Codex to `codex`.
+fails if they drift. Each wrapped harness maps to the runtime of the same
+name (`contextForHarness` and `RUNTIME_FOR_HARNESS` in
+`src/collector/registry.ts`): `claude-code`, `codex`, `cursor`, and `stella`.
+
+## Boundary
+
+- **Owns:** the `tacho/1.0` event envelope and per-session hash chain, the
+  host executables (`tacho`, `tachod`, `tacho-hook`), the hook adapters and
+  settings writers for each wrapped harness, the signed policy bundle's
+  offline evaluation, the loopback model proxy and MCP gateway, the evidence
+  primitives (Merkle, attestation, run export), and the `contextgraph-trace`
+  journal.
+- **Does not own:** the control-plane side of enrollment, bundles, ingest,
+  and commands ([`@oxagen/handlers`](../handlers/README.md), for example
+  `src/lib/tacho-host.ts`, served by [`apps/api`](../../apps/api/README.md)
+  under `/v1/tacho`); the capability contracts that carry these documents
+  ([`@oxagen/oxagen`](../oxagen/README.md), `src/tacho/schemas.ts`); the
+  `tacho_events` store ([`@oxagen/telemetry`](../telemetry/README.md)) and the
+  `tacho` Postgres schema ([`@oxagen/database`](../database/README.md),
+  `src/schema/tacho.ts`); the `oxagen tacho` command wrapper
+  ([`apps/cli`](../../apps/cli/README.md)); the desktop installer
+  ([`apps/desktop`](../../apps/desktop/README.md)).
+- **Depends on:** No `@oxagen/*` runtime dependencies. The package is a leaf
+  and publishes on its own.
+- **Used by:** `@oxagen/oxagen`, `@oxagen/handlers`, `@oxagen/telemetry`,
+  `@oxagen/run-ledger`, `@oxagen/inngest-functions`, `apps/api`, and
+  `apps/cli`.
+
+## Seams
+
+| Seam | Kind | Source | Wired by |
+|---|---|---|---|
+| Host and control-plane documents (bundle, claims, batch, envelope, commands) | export | `packages/tacho/src/wire.ts` | Re-exported by `packages/oxagen/src/tacho/schemas.ts` for its contracts |
+| `CliDeps` | port | `packages/tacho/src/cli/deps.ts` | `defaultCliDeps`, called from `apps/cli/src/commands/tacho.ts` |
+| `ControlClient` (ingest, bundle, commands endpoints) | boundary | `packages/tacho/src/host/control-client.ts` | `tachod` and `tacho` on the host, answered by `apps/api/src/app.ts` routes under `/v1/tacho` |
+| Harness hook and settings writers | boundary | `packages/tacho/src/host/settings-writer.ts`, `codex-writer.ts`, `cursor-writer.ts`, `stella-writer.ts` | `tacho enroll`, `reassign`, `unenroll` |
+| Cursor and Stella payload adapters | adapter | `packages/tacho/src/claude-code/cursor-adapter.ts`, `stella-adapter.ts` | `packages/tacho/src/claude-code/hook-client.ts`, for `tacho-hook --harness cursor` and `--harness stella` |
+| Collector socket and loopback listeners | boundary | `packages/tacho/src/collector/server.ts`, `model-proxy-listener.ts` | `startDaemon` in `packages/tacho/src/collector/daemon.ts` |
+| `TACHO_RUNTIMES` copy | boundary | `packages/tacho/src/envelope.ts` | Must equal `packages/database/src/schema/tacho.ts`. `packages/handlers/src/tacho.runtimes.test.ts` fails on drift |
+| `STEERING_MANIFEST_SCHEMA` copy | boundary | `packages/tacho/src/wire.ts` | Must equal the constant in `packages/steering-assembler/src/assemble.ts` |
+
+## Entry points
+
+- `.` → `src/index.ts`: envelope, chain, columns, digests, ids, timestamps,
+  wire documents, evidence, and session titles.
+- `./claude-code` → `src/claude-code/index.ts`: hook normalizers, the
+  OpenTelemetry and transcript readers, the recorder, and the hook client
+  with `FAIL_OPEN_HOOK_PATHS`.
+- `./collector` → `src/collector/index.ts`: the daemon and its parts.
+- `./host` → `src/host/index.ts`: host primitives and settings writers.
+- `./cli` → `src/cli/index.ts`: the `tacho` commands and `defaultCliDeps`.
+- `./trace` → `src/trace/index.ts`: the `contextgraph-trace` journal.
+- `bin`: `tacho` (`bin/tacho.mjs`), `tachod` (`bin/tachod.mjs`), and
+  `tacho-hook` (`bin/tacho-hook.mjs`).
+
+## Rules
+
+- The package takes no `@oxagen/*` runtime dependency, including the proxy.
+- A harness list in this package names all four wrapped harnesses, or its
+  change says which one cannot load it and why (ADR-101).
+- Hook-based control is `client_attested` (ADR-040). The tier words are
+  `observe`, `harness`, `gateway`, and `contained` (ADR-095).
+- The model proxy forwards prompt bodies to the vendor only. Oxagen receives
+  digests, counts, latency, and status (ADR-094).
+
+## Tests
+
+```bash
+pnpm --filter @oxagen/tacho test:unit src/chain.test.ts
+```
+
+Never put `--` before the filename. Tests sit beside their modules as
+`*.test.ts`. [Test fixtures and suites](#test-fixtures-and-suites) describes
+the recorded sessions and the daemon end-to-end test.
 
 ## Enrolling a machine
 
@@ -31,8 +104,9 @@ oxagen tacho unenroll
 writes `~/.config/oxagen/tacho/host.json` (0600) with the host API key and the
 signed policy bundle, installs `tachod` as a launchd agent, a systemd user
 unit, or a per-user Task Scheduler task, and merges Tacho's hook entries into
-each harness named by `--harness` (`claude-code`, `codex`, or both; default
-`claude-code`) without touching any entry it did not write. From that point
+each harness named by `--harness` (`claude-code`, `codex`, `cursor`, `stella`,
+or a comma list; `claude-code` by default on a fresh enrollment, the current
+list on a re-apply) without touching any entry it did not write. From that point
 every session of those harnesses on the machine is chained and shipped.
 
 `reassign --org … --workspace …` points the host at another workspace or org.
@@ -289,8 +363,9 @@ runtime package.
 ## Where this package is going
 
 Approved on 2026-09-18 (`docs/audits/2026-09-18-steering-graph-gateway-review.md`;
-the design is in `docs/specs/mission-control/spec.md` §7 and §10.5, the phases in
-`docs/specs/mission-control/plan.md` §8):
+the design is in `docs/mission-control-spec.md` §7 and §10.5, the phases in
+`docs/implementation-plan.md` §8, both in
+[oxagen-roadmap](https://github.com/macanderson/oxagen-roadmap)):
 
 - **Phase 0**, merged as PR #3289 on 2026-09-18 (ADR-091, issue #2592). The
   server compiles active `must` and `should` records into the bundle's
@@ -356,14 +431,16 @@ The tier words are fixed by ADR-095: `observe`, `harness`, `gateway`,
 | `cli/` | The `tacho` commands behind an injectable `CliDeps` port; `native.ts` is the compiled binary's multi-call entry |
 | `trace/` | The `contextgraph-trace` journal vocabulary, its strict parser, a port of the eight replay oracles, and the projection from Tacho events |
 
-## Tests
+## Test fixtures and suites
 
-`pnpm --filter @oxagen/tacho test:unit`. The recorded Claude Code 2.1.263
+Run one file at a time, as above. The recorded Claude Code 2.1.263
 session under `fixtures/claude-code/` drives the hook contract test (every
 event through `handleHookEvent`, decisions per the spec table, chains verify)
 and the daemon end-to-end test (real socket and port, fake control plane,
 commands, daemon-down spool and replay, restart). `src/bench/` prints the
-latency figures recorded in `docs/specs/tacho/plan.md`.
+latency figures recorded in the tacho build plan, now
+`docs/oxagen/specs/tacho/plan.md` in
+[oxagen-roadmap](https://github.com/macanderson/oxagen-roadmap).
 
 ## Building the executables
 

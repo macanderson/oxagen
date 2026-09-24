@@ -88,9 +88,19 @@ const ALLOWED: Record<
   features: (from, target, edge) => {
     const page = featurePage(from.file);
     if (page !== null && under(target, `features/${page}`)) return true;
-    if (isFeatureBarrel(target)) return true;
+    if (
+      isFeatureBarrel(target) ||
+      target === "features/fleet/client" ||
+      target === "features/shell/client"
+    )
+      return true;
     if (under(target, "ui") || under(target, "shared")) return true;
     if (isVocabulary(target) || target === "data/ports") return true;
+    if (target === "data/source")
+      return (
+        from.file === "features/shell/activity-actions" &&
+        from.directive === "use server"
+      );
     if (target === "server/viewer" || target === "server/session") return true;
     // `server/viewer-zone` has no row here on purpose. A write that places a
     // calendar day a person picked needs the zone they picked it in, and
@@ -295,9 +305,10 @@ const PLATFORM_NAMED_ROWS: Readonly<
   "src/server/tenancy-lookups.ts": {
     "@oxagen/billing": ["canAccessSSO", "resolveOrgTier"],
   },
-  // Browser controls read the shared ceiling without loading the contract registry.
-  "src/features/fleet/run-row-controls.tsx": {
-    "@oxagen/oxagen/tacho/command-limits": ["COMMAND_REASON_MAX"],
+  // Browser controls read the shared ceiling without loading the contract registry:
+  // Steer the fleet caps its text at the limit dispatch_command enforces.
+  "src/features/fleet/steer-fleet.tsx": {
+    "@oxagen/oxagen/tacho/command-limits": ["STEER_TEXT_MAX"],
   },
   "src/ui/command-failure.ts": {
     "@oxagen/oxagen/tacho/command-limits": ["COMMAND_REASON_MAX"],
