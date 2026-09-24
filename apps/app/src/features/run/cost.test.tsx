@@ -612,6 +612,59 @@ describe("CostTab", () => {
     );
   });
 
+  it("leaves the total unpriced when the book lacks a class the run spent in, and names no recorded cost or price entry the record lacks (negative)", () => {
+    const rollup = releaseRunCost().rollup;
+    if (rollup === null) throw new Error("the builder's rollup is present");
+    const book = opusBook();
+    renderTab(
+      props({
+        run: runRow({ ...RELEASE_RUN, cost: null }),
+        cost: readOk({ rollup: { ...rollup, cost: null, priceEntryIds: [] } }),
+        book: {
+          ...book,
+          entries: book.entries.filter(
+            (entry) => entry.tokenClass !== "reasoning",
+          ),
+        },
+      }),
+    );
+    const reasoning = screen
+      .getAllByTestId("token-class-row")
+      .find((row) => row.dataset.class === "reasoning");
+    expect(reasoning?.children[2]).toHaveTextContent("not recorded");
+    expect(screen.getByTestId("token-class-total")).toHaveTextContent(
+      "not recorded",
+    );
+    const note = screen.getByTestId("token-class-note");
+    expect(note).toHaveTextContent(
+      "The price book has no rate for a model this run used",
+    );
+    expect(note).not.toHaveTextContent("The run recorded");
+    expect(note).not.toHaveTextContent("It was priced with");
+    expect(
+      within(screen.getByTestId("prompt-composition")).getByText("Basis")
+        .nextElementSibling,
+    ).toHaveTextContent("not recorded");
+  });
+
+  it("names a recorded cost whose basis nobody recorded as such in the classes' note (negative)", () => {
+    const rollup = releaseRunCost().rollup;
+    if (rollup === null) throw new Error("the builder's rollup is present");
+    renderTab(
+      props({
+        cost: readOk({
+          rollup: {
+            ...rollup,
+            cost: { micros: "4130000", currency: "USD", basis: null },
+          },
+        }),
+      }),
+    );
+    expect(screen.getByTestId("token-class-note")).toHaveTextContent(
+      "The run recorded $4.13 basis not recorded.",
+    );
+  });
+
   it("names the transcript read's failure where the ledger would be (negative)", () => {
     renderTab(props({ transcript: readError("frame_store_unreachable", 502) }));
     expect(screen.getByTestId("waterfall-panel")).toHaveTextContent(

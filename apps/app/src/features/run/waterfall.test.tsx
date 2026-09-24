@@ -178,6 +178,55 @@ describe("WaterfallPanel", () => {
     expect(screen.queryByTestId("waterfall-empty")).toBeNull();
   });
 
+  it("counts the turns alone when the run recorded no cost, and says the total has nothing to be set against (negative)", () => {
+    renderPanel([turn({ turn: 1, seq: "1", cost: usd("400000") })], {
+      overrides: { cost: null },
+    });
+    expect(screen.getByTestId("waterfall-panel")).toHaveTextContent("1 turn");
+    expect(screen.getByTestId("waterfall-panel")).not.toHaveTextContent(
+      "1 turn ·",
+    );
+    expect(screen.getByTestId("waterfall-total").children[5]).toHaveTextContent(
+      "not recorded",
+    );
+  });
+
+  it("says a recorded cost's basis was not recorded rather than naming one (negative)", () => {
+    renderPanel([turn({ turn: 1, seq: "1" })], {
+      overrides: { cost: { micros: "4130000", currency: "USD", basis: null } },
+    });
+    expect(screen.getByTestId("waterfall-panel")).toHaveTextContent(
+      "1 turn · $4.13 basis not recorded",
+    );
+  });
+
+  it("draws no chart for a run priced in two currencies, and keeps each turn's own cost in the table (negative)", () => {
+    // `ledgerOf` has no one total across currencies, so there is no scale.
+    // The sentence drawn in the chart's place today says no turn carries a
+    // cost, which is not what the rows show; this test holds the rows.
+    renderPanel([
+      turn({ turn: 1, seq: "1", cost: usd("400000") }),
+      turn({
+        turn: 2,
+        seq: "10",
+        cost: { micros: "300000", currency: "EUR" },
+      }),
+    ]);
+    expect(screen.queryByTestId("waterfall")).toBeNull();
+    expect(screen.queryByTestId("waterfall-bar")).toBeNull();
+    const [usdTurn, eurTurn] = screen.getAllByTestId("waterfall-row");
+    if (usdTurn === undefined || eurTurn === undefined)
+      throw new Error("two turns");
+    expect(usdTurn.children[4]).toHaveTextContent("$0.40");
+    expect(usdTurn.children[5]).toHaveTextContent("$0.00 → $0.40");
+    expect(eurTurn.children[4]).toHaveTextContent("€0.30");
+    // No one running figure spans the two currencies.
+    expect(eurTurn.children[5]).toHaveTextContent("not recorded");
+    expect(screen.getByTestId("waterfall-total").children[4]).toHaveTextContent(
+      "not recorded",
+    );
+  });
+
   it("says the ledger stops short when the transcript was not read to its end (negative)", () => {
     renderPanel([turn({ turn: 1, seq: "1" })], {
       overrides: { whole: false },

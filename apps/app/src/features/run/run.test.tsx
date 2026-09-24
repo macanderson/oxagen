@@ -1989,6 +1989,89 @@ describe("the work", () => {
     expect(changes.getByText("none reported")).toBeTruthy();
     expect(changes.queryByText("+0")).toBeNull();
   });
+
+  it("heads Changes with the pull request's state when no check was read, and names a pull request it cannot link as text (negative)", async () => {
+    const [pull] = runWork().pullRequests;
+    if (pull === undefined) throw new Error("the builder holds a pull request");
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      work: ok(
+        runWork({
+          pullRequests: [
+            {
+              ...pull,
+              state: "merged",
+              url: "https://gitlab.com/acme/platform/-/merge_requests/482",
+              ci: null,
+            },
+          ],
+        }),
+      ),
+    });
+    const panel = await screen.findByTestId("run-changes");
+    const changes = within(panel);
+    expect(changes.getByText("acme/platform#482")).toBeTruthy();
+    expect(
+      changes.queryByRole("link", { name: "acme/platform#482" }),
+    ).toBeNull();
+    // With no check read, the panel's head is the pull request's own state.
+    expect(changes.getAllByText("merged")).toHaveLength(2);
+    expect(changes.getByText("none reported")).toBeTruthy();
+  });
+
+  it("names the pull request read's failure in Changes rather than saying there is none (negative)", async () => {
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      work: readError("github_unreachable", 502),
+    });
+    const changes = within(await screen.findByTestId("run-changes"));
+    expect(changes.queryByText("none")).toBeNull();
+    expect(changes.getByText(/github_unreachable/)).toBeTruthy();
+  });
+
+  it("names a running check by its status, marks a partial outputs read's file count as a floor, and folds files past eight into a count", async () => {
+    const [pull] = runWork().pullRequests;
+    if (pull === undefined || pull.ci === null)
+      throw new Error("the builder holds a pull request with checks");
+    const [check] = pull.ci.runs;
+    if (check === undefined) throw new Error("the builder holds a check");
+    const files = Array.from({ length: 10 }, (_, index) =>
+      runOutputNode({
+        seq: index === 0 ? null : String(100 + index),
+        name: `src/release/file-${String(index)}.ts`,
+        stat: { added: 1, removed: 0 },
+      }),
+    );
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      work: ok(
+        runWork({
+          pullRequests: [
+            {
+              ...pull,
+              ci: {
+                ...pull.ci,
+                overall: "pending",
+                runs: [{ ...check, status: "in_progress", conclusion: null }],
+              },
+            },
+            { ...pull, number: 483, ci: null },
+          ],
+        }),
+      ),
+      outputs: ok(runOutputs(files, { complete: false })),
+    });
+    const changes = within(await screen.findByTestId("run-changes"));
+    expect(changes.getByText("test in_progress")).toBeTruthy();
+    expect(changes.getByText("in 10 files+")).toBeTruthy();
+    expect(
+      within(changes.getByTestId("run-changed-files")).getAllByRole("listitem"),
+    ).toHaveLength(9);
+    expect(changes.getByText("2 more in the outputs")).toBeTruthy();
+  });
 });
 
 describe("issues", () => {
