@@ -21,6 +21,7 @@ import type {
   SpendReport,
 } from "@/data/contracts/spend";
 import { readOk } from "@/data/read";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 
 const nav = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
@@ -117,7 +118,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 function section(saving: SpendFindings["saving"]) {
-  render(
+  return render(
     <IntlProvider>
       <FindingsSection
         findings={listing(saving)}
@@ -135,8 +136,8 @@ const order = () =>
   );
 
 describe("Findings with an unknown total", () => {
-  it("prints no share it cannot divide for, rolls the ninth into the legend's tail, and names an unnamed operator by id", () => {
-    section(null);
+  it("prints no share it cannot divide for, rolls the ninth into the legend's tail, and names an unnamed operator by id", async () => {
+    const { container } = section(null);
     const hero = screen.getByTestId("spend-findings-hero");
     expect(hero.textContent).toContain("1 smaller findings");
     expect(
@@ -147,6 +148,7 @@ describe("Findings with an unknown total", () => {
     const first = document.querySelector('li[data-finding="fnd_0a"]');
     expect(first?.textContent).toContain("prn_ghost");
     expect(first?.textContent).toContain("at stake");
+    await expectNoAxe(container);
   });
 
   it("sorts by saving, high first, and by kind", async () => {
@@ -183,13 +185,18 @@ describe("Findings with an unknown total", () => {
 });
 
 describe("Findings with a known total", () => {
-  it("prints the tail's share as the sum of the findings it rolls up", () => {
-    section({ micros: "45000000", currency: "USD", basis: "gateway_observed" });
+  it("prints the tail's share as the sum of the findings it rolls up", async () => {
+    const { container } = section({
+      micros: "45000000",
+      currency: "USD",
+      basis: "gateway_observed",
+    });
     const hero = screen.getByTestId("spend-findings-hero");
     const tail = within(hero).getByText("1 smaller findings").closest("li");
     // The ninth finding saves 1 of 45.
     expect(tail?.textContent).toMatch(/2(\.\d)?%/);
     expect(hero.querySelectorAll("span[data-finding]")).toHaveLength(9);
+    await expectNoAxe(container);
   });
 });
 
@@ -219,6 +226,7 @@ describe("Finding evidence", () => {
       screen.getByText("The evidence lists no run for this finding."),
     ).toBeTruthy();
     const dialog = screen.getByTestId("spend-evidence-dialog");
+    await expectNoAxe(dialog);
     await user.click(within(dialog).getByRole("button", { name: "Close" }));
     await waitFor(() => {
       // Findings is the default tab, so the list is the bare Spend path.

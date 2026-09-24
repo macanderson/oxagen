@@ -7,6 +7,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SpendBudgets, SpendReport } from "@/data/contracts/spend";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import {
   AgentTable,
@@ -81,8 +82,8 @@ describe("the level tables", () => {
       expect(screen.getByText(sentence)).toBeTruthy();
   });
 
-  it("prints not recorded for a row with no cost, no tokens and savings that could not be read", () => {
-    render(
+  it("prints not recorded for a row with no cost, no tokens and savings that could not be read", async () => {
+    const { container } = render(
       <IntlProvider>
         <OperatorTable
           report={report([bare("prn_ghost")])}
@@ -109,10 +110,11 @@ describe("the level tables", () => {
       ).toBeGreaterThanOrEqual(2);
       expect(row?.textContent).not.toContain("$0");
     }
+    await expectNoAxe(container);
   });
 
-  it("names no provider it was not given, and prints the model total as not recorded", () => {
-    render(
+  it("names no provider it was not given, and prints the model total as not recorded", async () => {
+    const { container } = render(
       <IntlProvider>
         <ModelTable month={report([bare("mystery-model")])} at={AT} />
       </IntlProvider>,
@@ -124,6 +126,7 @@ describe("the level tables", () => {
         .querySelector("tr[data-total]")
         ?.querySelector('[data-recorded="false"]'),
     ).not.toBeNull();
+    await expectNoAxe(container);
   });
 });
 
@@ -141,7 +144,7 @@ describe("the budgets table", () => {
     ).toBeTruthy();
   });
 
-  it("reads a budget with no ceiling and an unrecorded window, and one past eighty percent in red", () => {
+  it("reads a budget with no ceiling and an unrecorded window, and one past eighty percent in red", async () => {
     const budgets: SpendBudgets = [
       {
         scope: "workspace",
@@ -164,7 +167,7 @@ describe("the budgets table", () => {
         state: "threshold_80",
       },
     ];
-    render(
+    const { container } = render(
       <IntlProvider>
         <BudgetsTable budgets={budgets} at={AT} />
       </IntlProvider>,
@@ -174,5 +177,6 @@ describe("the budgets table", () => {
     expect(workspace?.querySelector('[data-recorded="false"]')).not.toBeNull();
     const org = document.querySelector('tr[data-scope="org"]');
     expect(org?.querySelector(".bg-destructive[style]")).not.toBeNull();
+    await expectNoAxe(container);
   });
 });

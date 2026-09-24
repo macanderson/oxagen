@@ -6,6 +6,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { type RelatedItem, RelatedList } from "./related-list";
 import { recordLink } from "./view";
@@ -60,8 +61,8 @@ describe("RelatedList", () => {
     expect(card).not.toHaveTextContent("2026");
   });
 
-  it("reads a require effect apart from a forbid", () => {
-    render(
+  it("reads a require effect apart from a forbid", async () => {
+    const { container } = render(
       <IntlProvider>
         <RelatedList
           items={[
@@ -75,6 +76,7 @@ describe("RelatedList", () => {
     expect(list).toHaveTextContent("require");
     expect(list).toHaveTextContent("forbid");
     expect(list).toHaveTextContent("4d5e6f7");
+    await expectNoAxe(container);
   });
 
   it("says nothing matches when a search hides every record (negative)", async () => {
