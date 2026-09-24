@@ -222,6 +222,18 @@ export const BUNDLE_FEATURE_CONTAINMENT = "containment" as const;
 export const BUNDLE_FEATURE_DAILY_BUDGET = "daily_budget" as const;
 
 /**
+ * The host delivers a steer while the agent works, not only at the next
+ * prompt: after each tool call (PostToolUse and PostToolUseFailure, as
+ * `additionalContext`), when the agent tries to stop (a Stop `block`), and,
+ * for an interrupting steer, by refusing the next tool call with the message
+ * as the reason. Before this, a host held a steer until the operator's next
+ * prompt, which an autonomous agent never sends (#4019). This is a behavior
+ * flag, not a schema one: the control plane reads it to tell the operator
+ * whether a steer lands mid-turn or waits for the next prompt.
+ */
+export const BUNDLE_FEATURE_STEER_NEXT_STEP = "steer_next_step" as const;
+
+/**
  * Every bundle feature the host in *this* tree can parse, which is what it
  * advertises. One list, read by the daemon's health report and by enrollment,
  * so a field added to `policyBundleSchema` is advertised from the one place
@@ -236,6 +248,7 @@ export const TACHO_BUNDLE_FEATURES = [
   BUNDLE_FEATURE_STEERING_MANIFEST,
   BUNDLE_FEATURE_CONTAINMENT,
   BUNDLE_FEATURE_DAILY_BUDGET,
+  BUNDLE_FEATURE_STEER_NEXT_STEP,
 ] as const;
 
 export type TachoBundleFeature = (typeof TACHO_BUNDLE_FEATURES)[number];

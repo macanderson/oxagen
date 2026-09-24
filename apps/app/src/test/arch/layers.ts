@@ -301,9 +301,10 @@ const PLATFORM_NAMED_ROWS: Readonly<
   },
   // The org gate's Require SSO lookup asks one question of billing: does the
   // organisation's plan include SSO (ADR-145). The same single tier read the
-  // kernel's gates use, and nothing else from the package.
+  // kernel's gates use. The sign-up allowance read keys billing.plans by the
+  // Free plan's slug, which billing owns. Nothing else from the package.
   "src/server/tenancy-lookups.ts": {
-    "@oxagen/billing": ["canAccessSSO", "resolveOrgTier"],
+    "@oxagen/billing": ["canAccessSSO", "FREE_PLAN_SLUG", "resolveOrgTier"],
   },
   // Browser controls read the shared ceiling without loading the contract registry:
   // Steer the fleet caps its text at the limit dispatch_command enforces.
