@@ -65,11 +65,8 @@ export async function chooseToolPatterns(
         label: pattern,
         detail: version.name,
       });
-    each.push({
-      value: `${version.slug}@${version.version}`,
-      label: `${version.slug}@${version.version}`,
-      detail: version.name,
-    });
+    const exact = `${version.slug}@${String(version.version)}`;
+    each.push({ value: exact, label: exact, detail: version.name });
   }
   return loaded([...every.values(), ...each], list.partial);
 }
@@ -201,7 +198,7 @@ export async function chooseSwitchTargets(
     list.items.map((version) => ({
       value: version.id,
       label: version.name,
-      detail: `${version.slug}@${version.version}`,
+      detail: `${version.slug}@${String(version.version)}`,
     })),
     list.partial,
   );
