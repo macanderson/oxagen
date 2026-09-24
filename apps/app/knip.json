@@ -20,7 +20,8 @@
   ],
   "preprocessor": "./knip.preprocessor.ts",
   "ignoreIssues": {
-    "src/features/run/replay-actions.tsx": ["files"]
+    "src/features/run/replay-actions.tsx": ["files"],
+    "src/features/spend/fleet-tiles.tsx": ["files"]
   },
   "tags": ["-deregistered", "-internal"]
 }

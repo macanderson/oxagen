@@ -21,6 +21,11 @@ import type { RunRow } from "@/data/contracts/runs";
  */
 export type RowState = "live" | "parked" | "sealed" | "halted";
 
+/**
+ * The state `run`'s row reads as (see `RowState`).
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export function rowState(run: RunRow, parked: ReadonlySet<string>): RowState {
   if (run.status === "live") return parked.has(run.id) ? "parked" : "live";
   return run.status;
@@ -160,20 +165,18 @@ export function rowsPerPageOf(value: string): RowsPerPage {
 }
 
 /** The columns a header click sorts on. */
-export const SORT_KEYS = [
-  "run",
-  "agent",
-  "operator",
-  "status",
-  "tier",
-  "replay",
-  "cost",
-  "frames",
-  "started",
-] as const;
-export type SortKey = (typeof SORT_KEYS)[number];
+export type SortKey =
+  | "run"
+  | "agent"
+  | "operator"
+  | "status"
+  | "tier"
+  | "replay"
+  | "cost"
+  | "frames"
+  | "started";
 
-export type Sort = { key: SortKey; dir: 1 | -1 } | null;
+type Sort = { key: SortKey; dir: 1 | -1 } | null;
 
 /** The three facets the list offers, each over the words its column shows. */
 export type Facets = {

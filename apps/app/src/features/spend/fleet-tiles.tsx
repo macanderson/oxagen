@@ -19,6 +19,7 @@ type FleetSpendTilesProps = {
   embedded?: boolean;
 };
 
+/** @deregistered Retained after Fleet's rev1 rebuild (#3928); DEREGISTERED.md §16. */
 export async function FleetSpendTiles({
   ctx,
   source,

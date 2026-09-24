@@ -93,7 +93,11 @@ export function monthToDate(today: Date = new Date()): DayRange {
   return { from: `${to.slice(0, 8)}01`, to };
 }
 
-/** The one UTC day `today`, the clock's today by default. */
+/**
+ * The one UTC day `today`, the clock's today by default.
+ *
+ * @deregistered Retained with Fleet's spend tiles; DEREGISTERED.md §16.
+ */
 export function dayOf(today: Date = new Date()): DayRange {
   const day = today.toISOString().slice(0, 10);
   return { from: day, to: day };

@@ -453,3 +453,12 @@ On 2026-09-23 the Run page spec (`mockups/pages/run.md` in the roadmap repositor
 ### Run summary implementation (ADR-153)
 
 `packages/inngest-functions/src/functions/run.summarize.ts` is preserved but no longer registered. Nothing sends its `run/summarize` event any more: `summarize_run` sends `run/enrich`, which uses Stella and the workspace enrichment setting. A `run/summarize` event still queued when this shipped is not replayed. The five-minute sweep enriches that run instead. The manual `summarize_run` capability remains available.
+
+## 16. Fleet spend tiles (2026-09-24)
+
+Fleet's rev1 rebuild (#3928) sums its own rows into its four tiles and stopped drawing the Spend lane's two tiles, Spend today and Cache hit rate. The component stays in place with its test and its data path (`source.spend.fleet`, `toFleetSpend`, the `FleetSpend` contract and the `spend.fleet.*` messages):
+
+- `apps/app/src/features/spend/fleet-tiles.tsx`
+- `dayOf` in `apps/app/src/features/spend/view.ts`
+
+The Spend barrel no longer exports the component. The app's Knip configuration excludes the file from unused-file reporting, and `FleetSpendTiles` and `dayOf` carry `@deregistered`. No production route imports the component. Delete it with its data path, or draw it again, when the Spend or Fleet spec decides where the day's spend and cache hit rate belong.
