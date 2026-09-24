@@ -73,4 +73,30 @@ describe("StatusBadge", () => {
     expect(failed.className).toMatch(/error/);
     await expectNoAxe(failed);
   });
+
+  it("prints the lifecycle word on Fleet and keeps the outcome on hover", () => {
+    const { container } = render(
+      <IntlProvider>
+        <StatusBadge status="sealed" outcome="failed" vocabulary="lifecycle" />
+        <StatusBadge
+          status="halted"
+          outcome="cancelled"
+          vocabulary="lifecycle"
+        />
+        <StatusBadge status="live" outcome="running" vocabulary="lifecycle" />
+      </IntlProvider>,
+    );
+    const badges = [
+      ...container.querySelectorAll<HTMLElement>("span[data-status]"),
+    ];
+    expect(badges.map((b) => b.textContent)).toEqual([
+      "sealed",
+      "halted",
+      "live",
+    ]);
+    expect(badges[0]).toHaveAttribute("title", "failed");
+    expect(badges[1]).toHaveAttribute("title", "cancelled");
+    // An open run has no outcome yet, so there is nothing to hover.
+    expect(badges[2]).not.toHaveAttribute("title");
+  });
 });

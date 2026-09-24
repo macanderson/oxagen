@@ -185,7 +185,7 @@ export function Sub({
  * that read only the stored word would call a host enrolled while every
  * request it makes is refused.
  */
-export function isEnrolled(host: RuntimeEnrollment, now: number): boolean {
+function isEnrolled(host: RuntimeEnrollment, now: number): boolean {
   return host.status !== "revoked" && Date.parse(host.expiresAt) > now;
 }
 
@@ -237,7 +237,7 @@ const HARNESS_NAMES = [
 type HarnessName = (typeof HARNESS_NAMES)[number];
 
 function isHarnessName(value: string): value is HarnessName {
-  return (HARNESS_NAMES as readonly string[]).includes(value);
+  return HARNESS_NAMES.some((name) => name === value);
 }
 
 /**

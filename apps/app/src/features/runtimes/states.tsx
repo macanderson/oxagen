@@ -27,7 +27,7 @@ type Failure = Exclude<Read<unknown>, { ok: true }>;
  * UTC to the second. A person reads it aloud to whoever runs the workspace, so
  * it carries no `T` and no milliseconds.
  */
-export function traceStamp(at: number): string {
+function traceStamp(at: number): string {
   return `${new Date(at).toISOString().slice(0, 19).replace("T", " ")}Z`;
 }
 
@@ -210,7 +210,7 @@ export function RuntimesFailure({
         >
           <p className={body}>
             {t.rich("error.body", {
-              code: `${read.status} ${read.code}`,
+              code: `${String(read.status)} ${read.code}`,
               c: (chunks) => <code className={code}>{chunks}</code>,
             })}
           </p>

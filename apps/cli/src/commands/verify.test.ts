@@ -24,7 +24,7 @@ import {
 } from "@oxagen/tacho";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { CommandWriter } from "../lib/capture-writer.js";
-import { verifyBundle } from "./verify.js";
+import { formatVerification, verifyBundle } from "./verify.js";
 
 const RUN_ID = "arun_5f0c2e9a1b7d4c3e8f6a02";
 const ATTEMPT_ID = "arat_0a1b2c3d4e5f";
@@ -270,5 +270,40 @@ describe("oxagen verify", () => {
     await verifyBundle(join(dir, "nope.zip"), {}, writer);
     expect(err.join("\n")).toMatch(/does not exist/);
     expect(process.exitCode).toBe(1);
+  });
+});
+
+describe("formatVerification on a wrapped session", () => {
+  const frame = (digest: "held" | "not_carried") => ({
+    line: 1,
+    attempt_id: "0a1b2c3d-0000-4000-8000-000000000000",
+    seq: 0,
+    status: "held" as const,
+    digest,
+    link: "held" as const,
+    reasons: [],
+  });
+  const result = (digest: "held" | "not_carried") => ({
+    ok: true,
+    run_id: "tse_0a1b2c",
+    format: RUN_EXPORT_FORMAT,
+    frames: [frame(digest)],
+    checks: [],
+    redactions: null,
+  });
+
+  it("prints a wrapped frame whose event the bundle carries as digest held, with no caveat", () => {
+    const lines = formatVerification(result("held"));
+    expect(lines[1]).toContain("digest held");
+    expect(lines.join("\n")).not.toContain("not carried");
+  });
+
+  it("says why a wrapped frame's digest is not carried", () => {
+    const lines = formatVerification(result("not_carried"));
+    expect(lines[1]).toContain("digest not carried");
+    expect(lines[2]).toContain(
+      "Digest not carried on 1 wrapped (tse_) frame. A wrapped frame is hashed over its full event",
+    );
+    expect(lines[2]).toContain("before format 3");
   });
 });

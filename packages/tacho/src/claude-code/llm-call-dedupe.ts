@@ -114,8 +114,18 @@ export function countsLlmCallSplit(event: {
   );
 }
 
-/** How many calls one recorder remembers; older ones are forgotten in order. */
-export const LLM_CALL_LEDGER_CAPACITY = 1024;
+/**
+ * How many calls one recorder remembers; older ones are forgotten in order.
+ * Each call can register under up to three keys (a request id, a message
+ * id, and a tuple), so 1024 entries held room for roughly 340 calls — a
+ * transcript tailer running behind the live sources by more than that in
+ * one session aged its earliest calls out of the ledger before the
+ * transcript ever reported them, and they were sealed as first sightings
+ * a second time rather than recognised as duplicates. 8192 gives a lagging
+ * transcript room for a session over 2500 calls deep before the same thing
+ * recurs.
+ */
+export const LLM_CALL_LEDGER_CAPACITY = 8192;
 
 export type LlmCallVerdict =
   | { kind: "first" }
@@ -154,9 +164,12 @@ function num(value: unknown): number | undefined {
 /**
  * The id keys of a call, strongest first, and the token tuple. Two distinct
  * calls in one session can share a tuple (a title prompt asked twice), so
- * the tuple only joins a sighting that has no id to a sighting that has none
- * either, or an id-less sighting to an identified one. Two identified
- * sightings whose ids differ are two calls whatever their tuples say.
+ * the tuple only ever joins one id-less sighting to another id-less one. An
+ * id-less sighting matched to an already-identified entry by tuple alone
+ * used to be sealed as a duplicate of a call it might not be — two 0-token
+ * calls share a tuple trivially — and its usage silently dropped rather
+ * than doubled. Two identified sightings whose ids differ are two calls
+ * whatever their tuples say, tuple or no tuple.
  */
 export function llmCallKeys(body: Record<string, unknown>): {
   ids: string[];
@@ -223,7 +236,11 @@ export class LlmCallLedger {
     let byTuple: Entry | undefined;
     if (byId === undefined && tuple !== undefined) {
       const candidate = this.entries.get(tuple);
-      if (candidate !== undefined && (!identified || !candidate.identified))
+      // Only an id-less sighting may join an id-less entry by tuple alone.
+      // Letting an id-less sighting join an already-identified entry (or
+      // the reverse) treated two calls that merely share a token tuple as
+      // one, and the joined sighting's usage was then never counted.
+      if (candidate !== undefined && !identified && !candidate.identified)
         byTuple = candidate;
     }
     const seen = byId ?? byTuple;

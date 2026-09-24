@@ -79,6 +79,8 @@ export interface GitHubCommitStatus {
 
 /** Merged CI signal for a ref: resolved SHA plus both check streams. */
 export interface GitHubCiChecks {
+  /** False when a bounded provider read could not include every check. */
+  complete?: boolean;
   sha: string | null;
   checkRuns: GitHubCheckRun[];
   statuses: GitHubCommitStatus[];

@@ -179,6 +179,7 @@ function useFailureText(): (failure: Failure) => string {
  * reload and without this component holding a second copy of the queue.
  */
 export function ApprovalDecision({
+  onResolved,
   approvalId,
   tool,
   eligibility,
@@ -186,6 +187,7 @@ export function ApprovalDecision({
   ws,
   on,
 }: {
+  onResolved?: () => void;
   approvalId: string;
   /** The capability the parked call asked for, which titles the dialog. */
   tool: string;
@@ -263,6 +265,7 @@ export function ApprovalDecision({
         setOpen(false);
         reset();
         navigate.refresh();
+        onResolved?.();
       } else {
         setFailure(result);
       }

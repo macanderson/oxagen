@@ -34,12 +34,21 @@ const MEMBERSHIP_WRITERS: readonly OrgRole[] = ["owner", "admin"];
 export async function People({
   ctx,
   source,
+  view = "people",
 }: {
   ctx: OrgCtx;
   source: DataSource;
+  view?: "people" | "invitations";
 }) {
   const read = await source.org.members(ctx);
-  return <PeopleView orgSlug={ctx.orgSlug} orgRole={ctx.orgRole} read={read} />;
+  return (
+    <PeopleView
+      orgSlug={ctx.orgSlug}
+      orgRole={ctx.orgRole}
+      read={read}
+      view={view}
+    />
+  );
 }
 
 /* The two lists are the mockup's `.panel` with a `.panel-h`, on the shared table recipe. */
@@ -49,29 +58,34 @@ function PeopleView({
   orgSlug,
   orgRole,
   read,
+  view,
 }: {
   orgSlug: string;
   orgRole: OrgRole;
   read: Read<MemberList>;
+  view: "people" | "invitations";
 }) {
   const t = useTranslations("organization");
   return (
     <div className="flex flex-col gap-6">
-      <OrganizationTabs org={orgSlug} current="people" />
+      <OrganizationTabs org={orgSlug} current={view} />
       {read.ok ? (
         <>
-          <Members
-            members={read.value.members}
-            org={orgSlug}
-            writes={MEMBERSHIP_WRITERS.includes(orgRole)}
-            here={routes.people(orgSlug)}
-          />
-          <Invitations
-            invitations={read.value.invitations}
-            org={orgSlug}
-            writes={MEMBERSHIP_WRITERS.includes(orgRole)}
-            here={routes.people(orgSlug)}
-          />
+          {view === "people" ? (
+            <Members
+              members={read.value.members}
+              org={orgSlug}
+              writes={MEMBERSHIP_WRITERS.includes(orgRole)}
+              here={routes.organization(orgSlug, view)}
+            />
+          ) : (
+            <Invitations
+              invitations={read.value.invitations}
+              org={orgSlug}
+              writes={MEMBERSHIP_WRITERS.includes(orgRole)}
+              here={routes.organization(orgSlug, view)}
+            />
+          )}
         </>
       ) : read.reason === "denied" ? (
         <OutcomePanel

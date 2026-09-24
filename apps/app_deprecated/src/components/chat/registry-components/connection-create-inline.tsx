@@ -1,7 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { GithubIcon, Link as LinkIcon } from "lucide-react";
+import { Link as LinkIcon } from "lucide-react";
+import { GithubIcon } from "@/components/brand/github-icon";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { GitHubConnectionWizard } from "@/components/knowledge/connections/github-connection-wizard";

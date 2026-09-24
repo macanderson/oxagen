@@ -47,6 +47,31 @@ function handlerOver(
 }
 
 describe("list_runs", () => {
+  it("hides generated text when enrichment is off while preserving recorded facts", async () => {
+    const stores = memoryStores(
+      [],
+      [
+        tachoSession({
+          publicId: "tse_off",
+          session: { name: "Generated task", title: "Derived prompt" },
+        }),
+      ],
+    );
+    const list = createRunListHandler({
+      ...stores,
+      readEnrichmentEnabled: async () => false,
+    });
+    const run = (await list({ limit: 50 }, ctx())).runs[0];
+    expect(run).toMatchObject({
+      name: null,
+      summary: null,
+      enrichmentEnabled: false,
+      canSummarize: false,
+      frames: 207,
+      harness: { name: "Claude Code", version: "2.1.0" },
+    });
+  });
+
   it("merges ledger runs and root wrapped sessions newest first, in the caller's workspace only", async () => {
     const { list } = handlerOver(
       [

@@ -1,8 +1,15 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { dataSource } from "@/data/source";
-import { Steering, SteeringCreate } from "@/features/steering";
+import {
+  Steering,
+  SteeringCreate,
+  parseSteeringView,
+  steeringLink,
+} from "@/features/steering";
 import { requireViewer } from "@/server/viewer";
+import { redirectTo } from "@/shared/navigation";
+import { firstParam } from "@/shared/safe-path";
 import { PageHeader } from "@/ui/page-header";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -16,13 +23,22 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function SteeringPage({
   params,
   searchParams,
-}: PageProps<"/[org]/[ws]/steering">) {
+}: {
+  params: Promise<{ org: string; ws: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { org, ws } = await params;
   const ctx = await requireViewer(org, ws);
   const [t, query] = await Promise.all([
     getTranslations("pages"),
     searchParams,
   ]);
+  const view = parseSteeringView(query);
+  if (query.tab !== undefined)
+    redirectTo(
+      steeringLink({ org, ws }, { ...view, view: firstParam(query.view) }),
+    );
+  const st = await getTranslations("steering");
   return (
     <main
       id="main"
@@ -31,6 +47,7 @@ export default async function SteeringPage({
       <PageHeader
         eyebrow={t("workspaceEyebrow", { workspace: ctx.wsName })}
         title={t("steering")}
+        description={st("description")}
         actions={<SteeringCreate searchParams={query} />}
       />
       <Steering ctx={ctx} source={dataSource()} searchParams={query} />

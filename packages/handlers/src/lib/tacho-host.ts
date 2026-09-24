@@ -20,6 +20,7 @@ import { collectResourceScope } from "@oxagen/oxagen/iam";
 import { loadRuleSetIn } from "@oxagen/rules";
 import { PROVIDER_RATE_CARD, usdPerMillionToMicros } from "@oxagen/billing";
 import {
+  BUNDLE_FEATURE_CONTAINMENT,
   BUNDLE_FEATURE_GATEWAY_TOOLS,
   BUNDLE_FEATURE_INDEPENDENT_MODELS,
   BUNDLE_FEATURE_HOOK_FAIL_OPEN,
@@ -54,6 +55,7 @@ import {
 import {
   type AgentBudgetDoc,
   budgetDocFromVersion,
+  containmentFromVersion,
   deriveBundleBudget,
   mapMandateToBundlePermissions,
 } from "./tacho-mandate";
@@ -352,6 +354,8 @@ export interface HostMandate {
   permissions: PolicyBundle["permissions"];
   budget: PolicyBundle["budget"];
   models?: PolicyBundle["models"];
+  /** The active definition requires the contained tier (ADR-152). */
+  containment?: { required: true };
 }
 
 /**
@@ -391,15 +395,22 @@ function steeringManifest(
 }
 
 /**
- * The agent-definition `budget` table off the host's agent's ACTIVE version
- * definition source, with config as a fallback for legacy versions. It is
- * undefined when the host names no agent, has no active version, or declares
- * no budget.
+ * The agent-definition `budget` and `containment` tables off the host's
+ * agent's ACTIVE version definition source, with config as a fallback for
+ * legacy versions. It is undefined when the host names no agent or has no
+ * active version, and each table is undefined when the definition declares
+ * none.
  */
-async function readAgentBudgetDoc(
+async function readAgentDefinition(
   tx: TachoTx,
   agentId: string | null,
-): Promise<AgentBudgetDoc | undefined> {
+): Promise<
+  | {
+      budget: AgentBudgetDoc | undefined;
+      containment: { required: true } | undefined;
+    }
+  | undefined
+> {
   if (agentId === null) return undefined;
   const agent = (await tx.query.agents.findFirst({
     where: eq(schema.agents.id, agentId),
@@ -410,7 +421,12 @@ async function readAgentBudgetDoc(
     where: eq(schema.agentVersions.id, agent.activeVersionId),
     columns: { config: true, definitionSource: true },
   })) as { config: unknown; definitionSource: string | null } | undefined;
-  return version === undefined ? undefined : budgetDocFromVersion(version);
+  return version === undefined
+    ? undefined
+    : {
+        budget: budgetDocFromVersion(version),
+        containment: containmentFromVersion(version),
+      };
 }
 
 /**
@@ -462,9 +478,16 @@ export async function resolveHostMandate(
   });
   const models = await workspaceModels(tx, ctx, host);
   try {
-    const budgetDoc = await readAgentBudgetDoc(tx, host.agentId);
-    const budget = deriveBundleBudget(budgetDoc);
-    return { permissions, budget, ...models };
+    const definition = await readAgentDefinition(tx, host.agentId);
+    const budget = deriveBundleBudget(definition?.budget);
+    return {
+      permissions,
+      budget,
+      ...models,
+      ...(definition?.containment
+        ? { containment: definition.containment }
+        : {}),
+    };
   } catch (error) {
     if (
       !isHandlerError(error) ||
@@ -529,8 +552,17 @@ export function unsignedBundle(
   mandate: HostMandate,
   now: Date = new Date(),
 ): Omit<PolicyBundle, "signature"> {
+  // A host that cannot read a containment requirement would run the agent
+  // uncontained, so it is suspended rather than sent a bundle without it.
+  const containment =
+    mandate.containment?.required === true
+      ? host.bundleFeatures?.includes(BUNDLE_FEATURE_CONTAINMENT)
+        ? ("signed" as const)
+        : ("unreadable" as const)
+      : undefined;
   const status = tachoHostStatusSchema.parse(
-    mandate.invalidDefinition && host.status === "active"
+    (mandate.invalidDefinition || containment === "unreadable") &&
+      host.status === "active"
       ? "suspended"
       : host.status,
   );
@@ -554,6 +586,9 @@ export function unsignedBundle(
     ...gatewayTools(host),
     ...modelPrices(host),
     ...hookFailOpen(host),
+    ...(containment === "signed"
+      ? { containment: { required: true as const } }
+      : {}),
   };
   const etag = digestJcs(content as unknown as JsonValue).slice(
     "sha256:".length,
