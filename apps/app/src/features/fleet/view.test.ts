@@ -16,6 +16,7 @@ import {
   parkedRunIds,
   type RowWords,
   rowState,
+  rowsPerPageOf,
   spendShown,
   windowParts,
 } from "./view";
@@ -153,6 +154,34 @@ describe("tile figures", () => {
     });
     expect(oldestApproval([])).toBeNull();
   });
+
+  it("finds the oldest approval wherever it sits in the queue", () => {
+    expect(
+      oldestApproval([
+        approvalItem({
+          id: "apr_newer",
+          createdAt: "2026-09-15T08:59:00.000Z",
+          expiresAt: "2026-09-15T09:09:00.000Z",
+        }),
+        approvalItem({
+          id: "apr_older",
+          createdAt: "2026-09-15T08:50:00.000Z",
+          expiresAt: "2026-09-15T08:55:00.000Z",
+        }),
+      ])?.createdAt,
+    ).toBe(Date.parse("2026-09-15T08:50:00.000Z"));
+  });
+
+  it("never reads a negative window for an approval that expires before it was made (negative)", () => {
+    expect(
+      oldestApproval([
+        approvalItem({
+          createdAt: "2026-09-15T08:55:00.000Z",
+          expiresAt: "2026-09-15T08:50:00.000Z",
+        }),
+      ])?.windowSeconds,
+    ).toBe(0);
+  });
 });
 
 describe("the list controls", () => {
@@ -244,6 +273,88 @@ describe("the list controls", () => {
     ).toBe(11);
   });
 
+  it("sorts a text column in natural order both ways", () => {
+    const named = words.map((w, i) => ({
+      ...w,
+      agent: `agent-${String(12 - i)}`,
+    }));
+    const up = applyList(rows, named, {
+      ...base,
+      perPage: 0,
+      sort: { key: "agent", dir: 1 },
+    }).rows;
+    // agent-1 (row 11) before agent-2 (row 10) before agent-10 (row 2):
+    // numeric collation, not "agent-10" < "agent-2".
+    expect(up.slice(0, 3)).toEqual([11, 10, 9]);
+    expect(up.at(-1)).toBe(0);
+    const down = applyList(rows, named, {
+      ...base,
+      perPage: 0,
+      sort: { key: "agent", dir: -1 },
+    }).rows;
+    expect(down[0]).toBe(0);
+  });
+
+  it("sorts on when a run started", () => {
+    const started = listRuns(
+      [
+        runRow({ id: "arun_late", startedAt: "2026-09-15T08:30:00.000Z" }),
+        runRow({ id: "arun_early", startedAt: "2026-09-15T07:00:00.000Z" }),
+        runRow({ id: "arun_mid", startedAt: "2026-09-15T08:00:00.000Z" }),
+      ],
+      new Set(),
+    );
+    const startedWords = words.slice(0, 3);
+    expect(
+      applyList(started, startedWords, {
+        ...base,
+        sort: { key: "started", dir: 1 },
+      }).rows,
+    ).toEqual([1, 2, 0]);
+    expect(
+      applyList(started, startedWords, {
+        ...base,
+        sort: { key: "started", dir: -1 },
+      }).rows,
+    ).toEqual([0, 2, 1]);
+  });
+
+  it("keeps the order the read returned for rows that compare equal, in either direction", () => {
+    const dirs: (1 | -1)[] = [1, -1];
+    for (const dir of dirs)
+      expect(
+        applyList(rows, words, {
+          ...base,
+          perPage: 0,
+          sort: { key: "operator", dir },
+        }).rows,
+      ).toEqual(rows.map((_, i) => i));
+  });
+
+  it("keeps two unpriced rows in read order after every priced row", () => {
+    const unpriced = listRuns(
+      [
+        runRow({ id: "arun_a", cost: null }),
+        runRow({ id: "arun_b", cost: usd("1000000") }),
+        runRow({ id: "arun_c", cost: null }),
+      ],
+      new Set(),
+    );
+    expect(
+      applyList(unpriced, words.slice(0, 3), {
+        ...base,
+        sort: { key: "cost", dir: -1 },
+      }).rows,
+    ).toEqual([1, 0, 2]);
+  });
+
+  it("lists no row it was given no words for (negative)", () => {
+    expect(applyList(rows, words.slice(0, 2), base)).toMatchObject({
+      rows: [0, 1],
+      total: 2,
+    });
+  });
+
   it("answers an empty range when nothing matches (negative)", () => {
     expect(
       applyList(rows, words, { ...base, search: "nothing like this" }),
@@ -254,6 +365,25 @@ describe("the list controls", () => {
     expect(pagerSlots(1, 3)).toEqual([1, 2, 3]);
     expect(pagerSlots(1, 28)).toEqual([1, 2, "gap", 28]);
     expect(pagerSlots(14, 28)).toEqual([1, "gap", 13, 14, 15, "gap", 28]);
+  });
+
+  it("draws no gap where the neighbours already reach the first or last page", () => {
+    expect(pagerSlots(3, 8)).toEqual([1, 2, 3, 4, "gap", 8]);
+    expect(pagerSlots(6, 8)).toEqual([1, "gap", 5, 6, 7, 8]);
+    expect(pagerSlots(8, 8)).toEqual([1, "gap", 7, 8]);
+  });
+});
+
+describe("rowsPerPageOf", () => {
+  it("reads each offered choice, All included", () => {
+    expect(rowsPerPageOf("5")).toBe(5);
+    expect(rowsPerPageOf("50")).toBe(50);
+    expect(rowsPerPageOf("0")).toBe(0);
+  });
+
+  it("falls back to 10 for a value the select does not offer (negative)", () => {
+    expect(rowsPerPageOf("7")).toBe(10);
+    expect(rowsPerPageOf("all")).toBe(10);
   });
 });
 

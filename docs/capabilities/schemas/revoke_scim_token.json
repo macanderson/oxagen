@@ -1,0 +1,38 @@
+{
+  "name": "revoke_scim_token",
+  "domain": "org",
+  "description": "Revoke the organization's SCIM bearer token so the identity provider can no longer push users or groups. People already provisioned keep their access.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "revoked": {
+        "type": "boolean",
+        "description": "False when no token was live, so nothing changed"
+      }
+    },
+    "required": [
+      "revoked"
+    ],
+    "additionalProperties": false
+  }
+}

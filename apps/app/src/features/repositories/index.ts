@@ -2,4 +2,4 @@
 // imports from here; nothing else reaches into the folder (eslint:
 // `@/features/*/*` is restricted).
 export { Repositories } from "./repositories";
-export { parseRepositoryTab } from "./view";
+export { parseRepositoryView } from "./view";

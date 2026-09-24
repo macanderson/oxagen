@@ -38,6 +38,9 @@ const {
   verifySsoDomain,
   setSsoRequired,
   setSsoGroupRoles,
+  createScimToken,
+  rotateScimToken,
+  revokeScimToken,
 } = await import("./sso-actions");
 
 const ctx = unsafeMint(OrgCtx, {
@@ -446,3 +449,66 @@ describe("setSsoGroupRoles", () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 });
+
+describe("SCIM token (#3734)", () => {
+  const MINTED = {
+    token: "oxscim_the-whole-token-value",
+    baseUrl: "https://app.oxagen.sh/api/scim/v2",
+    view: {
+      tokenPrefix: "oxscim_the-whole",
+      createdAt: "2026-09-23T10:00:00.000Z",
+      lastUsedAt: null,
+    },
+  };
+
+  it("mints a token and answers it once with the base URL", async () => {
+    invoke.mockResolvedValue(MINTED);
+    const out = await createScimToken("acme");
+    expect(out).toEqual({
+      ok: true,
+      value: {
+        token: MINTED.token,
+        baseUrl: MINTED.baseUrl,
+        prefix: "oxscim_the-whole",
+      },
+    });
+    expect(invoke).toHaveBeenCalledWith("create_scim_token", {}, expect.anything());
+  });
+
+  it("passes scim_token_exists through as a conflict (negative)", async () => {
+    invoke.mockRejectedValue(refusal("conflict", "scim_token_exists"));
+    const out = await createScimToken("acme");
+    expect(out).toEqual({
+      ok: false,
+      reason: "conflict",
+      code: "scim_token_exists",
+    });
+  });
+
+  it("rotates the token", async () => {
+    invoke.mockResolvedValue(MINTED);
+    const out = await rotateScimToken("acme");
+    expect(out.ok && out.value.token).toBe(MINTED.token);
+    expect(invoke).toHaveBeenCalledWith("rotate_scim_token", {}, expect.anything());
+  });
+
+  it("revokes the token", async () => {
+    invoke.mockResolvedValue({ revoked: true });
+    await expect(revokeScimToken("acme")).resolves.toEqual({
+      ok: true,
+      value: { revoked: true },
+    });
+    expect(invoke).toHaveBeenCalledWith("revoke_scim_token", {}, expect.anything());
+  });
+
+  it("names the plan when minting is refused for it (negative)", async () => {
+    invoke.mockRejectedValue(refusal("forbidden", "sso_requires_enterprise"));
+    const out = await createScimToken("acme");
+    expect(out).toEqual({
+      ok: false,
+      reason: "denied",
+      code: "sso_requires_enterprise",
+    });
+  });
+});
+

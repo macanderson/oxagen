@@ -12,12 +12,18 @@ export { CliConsentForm } from "./cli-consent-form";
 export { handleGithubSetup } from "./github-setup";
 export { decideInvitation } from "./invitation";
 export { loadInvitation } from "./invitations";
-export { InvitationBody, InvitationNotFound } from "./invite-view";
+export {
+  InvitationBody,
+  InvitationNotFound,
+  InvitationWrongAccount,
+} from "./invite-view";
 export { oauthQueryOutcome } from "./auth-errors";
 export { LoginForm } from "./login-form";
 export { ForgotPasswordForm, ResetPasswordForm } from "./password-reset-forms";
 export { AFTER_SIGNUP } from "./routes";
+export { SignedInNotice } from "./signed-in-notice";
 export { SignupForm } from "./signup-form";
 export { TwoFactorForm } from "./two-factor-form";
-export { OAuthButtons } from "./ui/oauth-buttons";
+export { AuthTags } from "./ui/auth-card";
+export { InviteHint } from "./ui/invite-hint";
 export { VerifyPanel } from "./verify-panel";
