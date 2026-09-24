@@ -22,13 +22,13 @@ import {
   useMemo,
   useState,
 } from "react";
+import type { ApprovalItem } from "@/data/contracts/approvals";
 import { type Money as MoneyValue, sumMoney } from "@/data/contracts/money";
 import type { RunFrame } from "@/data/contracts/run";
-import type { EnforcementTier, RunStatus } from "@/data/contracts/runs";
+import type { RunStatus } from "@/data/contracts/runs";
 import { routes } from "@/shared/safe-path";
 import { Badge } from "@/ui/badge";
 import { buttonSecondary, linkText, mono, panel } from "@/ui/control-styles";
-import { EnforcementTierBadge } from "@/ui/enforcement-tier";
 import { Money } from "@/ui/money";
 import { useFormatter } from "@/ui/formatter";
 import { formatCount, formatDuration } from "@/ui/money-format";
@@ -87,6 +87,25 @@ function useTimeOfDay() {
 /** A tick drawn taller: a frame that needs a person (an approval or the operator). */
 function needsPerson(frame: RunFrame, family: FrameFamily): boolean {
   return family === "operator" || /approv/i.test(frame.type);
+}
+
+/** A frame that asked for a person's answer: an approval or a call blocked on one. */
+const ASKS = /approv|blocked_on_user/i;
+
+/**
+ * The frame the run is parked on: the last frame that asked for an answer,
+ * while the approvals read says a call on this run is still waiting. Null when
+ * nothing is parked or no frame on this page asked.
+ */
+export function parkedIndex(
+  frames: readonly RunFrame[],
+  parked: boolean,
+): number | null {
+  if (!parked) return null;
+  for (let index = frames.length - 1; index >= 0; index -= 1) {
+    if (ASKS.test(frames[index]?.type ?? "")) return index;
+  }
+  return null;
 }
 
 /**
@@ -166,12 +185,15 @@ function Timeline({
   total,
   status,
   position,
+  parkedAt,
   onPick,
 }: {
   frames: readonly RunFrame[];
   total: number;
   status: RunStatus;
   position: number;
+  /** The frame the run is parked on, which carries the "parked · approval" mark. */
+  parkedAt: number | null;
   onPick: (index: number) => void;
 }) {
   const t = useTranslations("run.player");
@@ -205,15 +227,20 @@ function Timeline({
       className={`${panel} flex flex-col gap-3 p-4`}
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 id="run-player-timeline" className="text-base font-semibold">
-          {t("timeline")}{" "}
-          <span className="text-xs font-normal text-muted-foreground">
+        <span className="flex flex-wrap items-baseline gap-2">
+          <h3 id="run-player-timeline" className="text-base font-semibold">
+            {t("timeline")}
+          </h3>
+          <span
+            data-testid="player-shown"
+            className="text-xs text-muted-foreground"
+          >
             {t("shown", {
               shown: formatCount(frames.length, locale),
               total: formatCount(total, locale),
             })}
           </span>
-        </h3>
+        </span>
         <Legend frames={frames} />
       </div>
       <div className="flex gap-1 overflow-x-auto pb-1">
@@ -229,32 +256,53 @@ function Timeline({
                 ? t("turnAfterSteer", { turn: band.turn })
                 : t("turn", { turn: band.turn })}
             </span>
-            <div className="flex h-9 items-end gap-[3px] rounded-md border border-border bg-muted/40 px-1.5 pb-1">
+            <div className="flex h-12 items-end gap-[3px] rounded-md border border-border bg-muted/40 px-1.5 pb-1">
               {frames.slice(band.from, band.to + 1).map((frame, offset) => {
                 const index = band.from + offset;
                 const family = frameFamily(frame);
                 const tall = needsPerson(frame, family);
+                // The spec's two marks on the Timeline: where the operator
+                // steered, and the call the run is parked on.
+                const mark =
+                  index === parkedAt
+                    ? "parked"
+                    : /steer/i.test(frame.type)
+                      ? "steer"
+                      : null;
                 return (
-                  <button
+                  <span
                     key={frame.cursor}
-                    type="button"
-                    data-testid="player-tick"
-                    data-family={family}
-                    aria-label={t("tickLabel", {
-                      seq: frame.seq,
-                      type: frame.type,
-                    })}
-                    aria-pressed={index === position}
-                    title={t("tickTitle", {
-                      seq: frame.seq,
-                      type: frame.type,
-                      summary: frame.summary,
-                    })}
-                    onClick={() => {
-                      onPick(index);
-                    }}
-                    className={`w-[5px] shrink-0 rounded-sm ${FAMILY_INK[family]} ${tall ? "h-7" : "h-4"} ${index === position ? "outline outline-2 outline-offset-1 outline-foreground" : ""}`}
-                  />
+                    className="relative flex shrink-0 flex-col items-center"
+                  >
+                    {mark === null ? null : (
+                      <span
+                        data-testid={`player-mark-${mark}`}
+                        className={`${mono} pointer-events-none absolute bottom-full mb-0.5 whitespace-nowrap rounded border px-1 text-[9.5px] leading-tight ${mark === "parked" ? "border-info/40 bg-info/10 text-info" : "border-border bg-card text-muted-foreground"}`}
+                      >
+                        {t(`mark.${mark}`)}
+                      </span>
+                    )}
+                    <button
+                      key={frame.cursor}
+                      type="button"
+                      data-testid="player-tick"
+                      data-family={family}
+                      aria-label={t("tickLabel", {
+                        seq: frame.seq,
+                        type: frame.type,
+                      })}
+                      aria-pressed={index === position}
+                      title={t("tickTitle", {
+                        seq: frame.seq,
+                        type: frame.type,
+                        summary: frame.summary,
+                      })}
+                      onClick={() => {
+                        onPick(index);
+                      }}
+                      className={`w-[5px] shrink-0 rounded-sm ${FAMILY_INK[family]} ${tall ? "h-7" : "h-4"} ${index === position ? "outline outline-2 outline-offset-1 outline-foreground" : ""}`}
+                    />
+                  </span>
                 );
               })}
             </div>
@@ -403,9 +451,9 @@ function Bar({
                   {t("of")} <Money value={runCost} /> {t("byHere")}
                 </>
               )}{" "}
-              {spent.basis === null ? null : (
-                <span className={mono}>{spent.basis}</span>
-              )}
+              <span data-testid="player-cost-basis" className={mono}>
+                {spent.basis ?? t("basisNotRecorded")}
+              </span>
             </>
           )}
         </span>
@@ -436,19 +484,72 @@ function Bar({
   );
 }
 
+/**
+ * The approval the parked frame waits on, as `list_approvals` recorded it
+ * (spec pages/run.md, the frame detail: the request, the call, the rule and
+ * how long it has waited). The approvals read names no frame, so the card
+ * pairs them only when the run has exactly one waiting call and this is the
+ * frame the run is parked on. Two waiting calls cannot be told apart from
+ * the frames, so the card says the drawer holds them instead of guessing.
+ */
+function ApprovalFacts({
+  waiting,
+  at,
+}: {
+  waiting: readonly ApprovalItem[];
+  at: number;
+}) {
+  const t = useTranslations("run.player.approval");
+  const locale = useLocale();
+  const only = waiting.length === 1 ? waiting[0] : undefined;
+  if (only === undefined) {
+    return (
+      <p
+        data-testid="player-approval-many"
+        className="text-xs text-muted-foreground"
+      >
+        {t("many", { count: waiting.length })}
+      </p>
+    );
+  }
+  return (
+    <dl
+      data-testid="player-approval"
+      className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 rounded-md border border-info/30 bg-info/5 p-3 text-sm"
+    >
+      <dt className="text-muted-foreground">{t("request")}</dt>
+      <dd className={`${mono} break-all text-xs`}>{only.id}</dd>
+      <dt className="text-muted-foreground">{t("call")}</dt>
+      <dd className={mono}>{only.tool}</dd>
+      <dt className="text-muted-foreground">{t("rule")}</dt>
+      <dd className={`${mono} break-all text-xs`}>
+        {only.rule ?? t("noRule")}
+      </dd>
+      <dt className="text-muted-foreground">{t("waited")}</dt>
+      <dd>
+        {formatDuration(
+          Math.max(0, at - new Date(only.createdAt).getTime()),
+          locale,
+        )}
+      </dd>
+    </dl>
+  );
+}
+
 function FrameDetail({
   frames,
   position,
   total,
-  tier,
   place,
+  approval,
   onPick,
 }: {
   frames: readonly RunFrame[];
   position: number;
   total: number;
-  tier: EnforcementTier;
   place: Place;
+  /** The calls waiting on a person, drawn when this frame is the parked one. */
+  approval: { waiting: readonly ApprovalItem[]; at: number } | null;
   onPick: (index: number) => void;
 }) {
   const t = useTranslations("run.player");
@@ -468,8 +569,9 @@ function FrameDetail({
         <h3 id="run-player-frame" className="text-base font-semibold">
           {t("frameTitle", { seq: frame.seq, type: frame.type })}
         </h3>
+        {/* No tier badge: a frame records no tier of its own, and the run's
+            tier printed on every frame would claim one it did not record. */}
         <span className="flex items-center gap-2">
-          <EnforcementTierBadge tier={tier} />
           <time
             dateTime={frame.observedAt}
             className={`${mono} text-xs text-muted-foreground`}
@@ -479,6 +581,9 @@ function FrameDetail({
         </span>
       </div>
       <p className="text-sm">{frame.summary}</p>
+      {approval === null ? null : (
+        <ApprovalFacts waiting={approval.waiting} at={approval.at} />
+      )}
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
         <dt className="text-muted-foreground">{t("family.label")}</dt>
         <dd>
@@ -516,7 +621,7 @@ function FrameDetail({
             <>
               <Money value={frame.cost} precision="exact" />{" "}
               <span className={`${mono} text-xs text-muted-foreground`}>
-                {frame.cost.basis ?? ""}
+                {frame.cost.basis ?? t("basisNotRecorded")}
               </span>
             </>
           )}
@@ -642,27 +747,34 @@ export function FramePlayer({
   frames,
   total,
   status,
-  tier,
   runCost,
   openSeq,
   place,
+  waiting = null,
+  at = 0,
 }: {
   /** The frames `get_run` returned for this page, in recorded order. */
   frames: readonly RunFrame[];
   /** Every frame the run recorded, the ones not on this page included. */
   total: number;
   status: RunStatus;
-  tier: EnforcementTier;
+  /** The calls on this run waiting on a person; null when that read failed. */
+  waiting?: readonly ApprovalItem[] | null;
+  /** The instant "waited" is read against. */
+  at?: number;
   /** The run's own cost, which "by here" is read against; null when not priced. */
   runCost: MoneyValue | null;
   /** `?body=`: the frame whose body is open opens the player on it. */
   openSeq: string | null;
   place: Place;
 }) {
+  const parkedAt = parkedIndex(frames, (waiting?.length ?? 0) > 0);
+  // The player opens on the frame `?body=` names, else on the frame the run
+  // is parked on, else on the last frame of the page it read.
   const start = useMemo(() => {
     const opened = frames.findIndex((frame) => frame.seq === openSeq);
-    return opened === -1 ? frames.length - 1 : opened;
-  }, [frames, openSeq]);
+    return opened === -1 ? (parkedAt ?? frames.length - 1) : opened;
+  }, [frames, openSeq, parkedAt]);
   const [position, setPosition] = useState(start);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<number>(1);
@@ -721,6 +833,7 @@ export function FramePlayer({
         total={total}
         status={status}
         position={position}
+        parkedAt={parkedAt}
         onPick={pick}
       />
       <Bar
@@ -741,8 +854,12 @@ export function FramePlayer({
           frames={frames}
           position={position}
           total={total}
-          tier={tier}
           place={place}
+          approval={
+            position === parkedAt && waiting !== null && waiting.length > 0
+              ? { waiting, at }
+              : null
+          }
           onPick={pick}
         />
         <FrameList

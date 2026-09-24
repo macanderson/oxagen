@@ -20,6 +20,7 @@ import type {
   RunFrameBody,
   RunFramePage,
 } from "@/data/contracts/run";
+import type { ApprovalItem } from "@/data/contracts/approvals";
 import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
@@ -168,6 +169,8 @@ export function GovernedActionsSection({
   body,
   frames,
   run,
+  waiting = null,
+  at = 0,
   org,
   ws,
   runId,
@@ -176,8 +179,16 @@ export function GovernedActionsSection({
   read: Read<{ frames: RunFramePage }>;
   /** The open frame's body, read only when `?body=` named a frame; null otherwise. */
   body: { seq: string; read: Read<RunFrameBody> } | null;
-  /** The run the frames belong to: its frame total, status, tier and cost. */
-  run: Pick<RunRow, "frames" | "status" | "enforcementTier" | "cost">;
+  /** The run the frames belong to: its frame total, status and cost. */
+  run: Pick<RunRow, "frames" | "status" | "cost">;
+  /**
+   * The calls on this run waiting on a person (`list_approvals` narrowed to
+   * the run); null when that read failed. The parked frame's card prints the
+   * one it is waiting on.
+   */
+  waiting?: readonly ApprovalItem[] | null;
+  /** The instant "waited" is read against. */
+  at?: number;
 } & View &
   Place) {
   const t = useTranslations("run.frames");
@@ -203,8 +214,9 @@ export function GovernedActionsSection({
           frames={page.frames}
           total={run.frames}
           status={run.status}
-          tier={run.enforcementTier}
           runCost={run.cost}
+          waiting={waiting}
+          at={at}
           openSeq={body?.seq ?? null}
           place={{ ...place, frames }}
         />

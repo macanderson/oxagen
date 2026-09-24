@@ -32,6 +32,7 @@ import { Badge, type BadgeTone } from "@/ui/badge";
 import { eyebrow, mono, panel } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
+import { ReviewApproval } from "./review-approval";
 
 /** More than this many nodes of one kind in a row fold to a count. */
 const FOLD_OVER = 3;
@@ -272,14 +273,9 @@ function Node({ node, place }: { node: RunOutputNode; place: Place }) {
         </div>
         {node.kind === "gate" ? (
           <p className="flex flex-wrap items-center gap-2 pt-1 text-xs text-muted-foreground">
-            <SafeLink
-              to={routes.run(place.org, place.ws, place.runId, {
-                tab: "actions",
-              })}
-              className={`${linkQuiet} font-medium text-info`}
-            >
-              {t("reviewApproval")}
-            </SafeLink>
+            <ReviewApproval
+              className={`${linkQuiet} min-h-11 font-medium text-info sm:min-h-0`}
+            />
             <span>{t("gateHint")}</span>
           </p>
         ) : null}

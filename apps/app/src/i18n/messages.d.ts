@@ -4138,6 +4138,7 @@ type Messages = {
       response: string;
       decision: string;
       decisionOn: string;
+      decisionFrame: string;
       calledWith: string;
       noHalves: string;
       showAll: string;
@@ -4318,6 +4319,7 @@ type Messages = {
         pending: string;
         queued: string;
         header: string;
+        transition: string;
       };
       resume: {
         open: string;
@@ -4327,6 +4329,7 @@ type Messages = {
         pending: string;
         queued: string;
         header: string;
+        transition: string;
       };
       steer: {
         open: string;
@@ -4562,6 +4565,7 @@ type Messages = {
         pinned: string;
       };
       noPin: string;
+      pinWhy: string;
       totalRow: string;
       recorded: string;
     };
@@ -4685,6 +4689,9 @@ type Messages = {
       copiedText: string;
       statusPaused: string;
       statusParked: string;
+      statusSealed: string;
+      statusHalted: string;
+      outcomeTip: string;
     };
     summary: {
       title: string;
@@ -4692,6 +4699,8 @@ type Messages = {
       generated: string;
       onBehalfOf: string;
       operator: string;
+      roleNotRecorded: string;
+      roleWhy: string;
       generatedBy: string;
     };
     stats: {
@@ -4708,8 +4717,9 @@ type Messages = {
       noPrompt: string;
       oneShot: string;
       corrective: string;
-      nothingWasted: string;
-      unproductive: string;
+      correctivePrompts: string;
+      wasteNotRecorded: string;
+      wasteWhy: string;
       soFar: string;
       splitNotRecorded: string;
       savingNotRecorded: string;
@@ -4782,7 +4792,6 @@ type Messages = {
         unreadable: string;
         tally: string;
         notDelivered: string;
-        rank: string;
         tokens: string;
         reason: {
           tier: string;
@@ -4798,6 +4807,12 @@ type Messages = {
         };
         supersededBy: string;
         footer: string;
+        footerNoAssembled: string;
+        kindForce: string;
+        gateNotice: string;
+        stablePrefix: string;
+        volatile: string;
+        moreCut: string;
         preview: string;
         previewGap: string;
       };
@@ -4812,6 +4827,7 @@ type Messages = {
         tokens: string;
         score: string;
         cited: string;
+        gap: string;
       };
       stats: {
         title: string;
@@ -4842,6 +4858,7 @@ type Messages = {
       basisNotRecorded: string;
       areasNotRecorded: string;
       dearestTools: string;
+      rankedByCalls: string;
       noTools: string;
       toolCostNotRecorded: string;
       allTools: string;
@@ -4950,6 +4967,7 @@ type Messages = {
       timeoutTitle: string;
       timeoutNotRecorded: string;
       pending: string;
+      pendingNoName: string;
       notHappened: string;
       skillLoaded: string;
       workspaceCreated: string;
@@ -5015,6 +5033,19 @@ type Messages = {
       nextFrame: string;
       frameOf: string;
       empty: string;
+      basisNotRecorded: string;
+      mark: {
+        steer: string;
+        parked: string;
+      };
+      approval: {
+        request: string;
+        call: string;
+        rule: string;
+        noRule: string;
+        waited: string;
+        many: string;
+      };
     };
   };
   runOutcomes: {

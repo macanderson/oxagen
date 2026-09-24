@@ -16,6 +16,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { nth } from "@/test/nth";
 import { runTranscript, transcriptEntry } from "./run.builders";
 import { Waterfall } from "./waterfall";
 
@@ -353,6 +354,17 @@ describe("Waterfall", () => {
     expect(screen.getByTestId("waterfall-total")).toHaveTextContent(
       "of $4.00 recorded",
     );
+    // No store keys a finding to a turn (#4001): Pinned says not recorded,
+    // never "none", and the total carries its basis.
+    const pinned = within(nth(rows, 0, "a first turn row")).getByText(
+      "not recorded",
+      {
+        selector: "td[data-gap='finding-pins']",
+      },
+    );
+    expect(pinned).toHaveAttribute("title", expect.stringContaining("#4001"));
+    expect(screen.queryByText("none")).toBeNull();
+    expect(screen.getByTestId("waterfall-total-basis")).toBeInTheDocument();
   });
 
   it("passes an axe check on the loaded render", async () => {

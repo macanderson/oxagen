@@ -345,7 +345,16 @@ export function RunInterjection({
             ))}
             {answer === null ? (
               <FrameRow
-                frame={{ type: ANSWER, summary: t("pending"), at: null }}
+                frame={{
+                  type: ANSWER,
+                  // The spec's "marcus answered · pending": the operator the
+                  // question is waiting on, by first name.
+                  summary:
+                    run.operatorName === null
+                      ? t("pendingNoName")
+                      : t("pending", { name: firstName }),
+                  at: null,
+                }}
                 pending
               />
             ) : null}

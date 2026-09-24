@@ -166,23 +166,47 @@ function Chip({
 function Decision({
   decision,
   subject,
+  org,
+  ws,
+  runId,
 }: {
   decision: TranscriptDecision;
   subject: string | null;
+  org: string;
+  ws: string;
+  runId: string;
 }) {
   const t = useTranslations("run.transcript");
+  // The ⚖ chip opens Oxagen's own frame for the decision on Governed actions
+  // (spec pages/run.md, Transcript). The spec's chip names the rule id; the
+  // transcript does not carry the rules that fired (#3971), so it names the
+  // decision and the call it was made on.
   return (
-    <p
-      data-testid="entry-decision"
-      className="m-0 text-xs text-muted-foreground"
-    >
-      {subject === null
-        ? t("decision", { decision: decision.decision, seq: decision.seq })
-        : t("decisionOn", {
-            decision: decision.decision,
-            subject,
-            seq: decision.seq,
-          })}
+    <p className="m-0 text-xs">
+      <SafeLink
+        data-testid="entry-decision"
+        to={routes.run(org, ws, runId, { tab: "actions", body: decision.seq })}
+        aria-label={
+          subject === null
+            ? t("decision", { decision: decision.decision, seq: decision.seq })
+            : t("decisionOn", {
+                decision: decision.decision,
+                subject,
+                seq: decision.seq,
+              })
+        }
+        className={`${chip} inline-flex min-h-11 items-center gap-1 text-foreground hover:bg-muted sm:min-h-0`}
+      >
+        <span aria-hidden="true">⚖</span>
+        <span className="font-mono">
+          {subject === null
+            ? decision.decision
+            : `${decision.decision} ${subject}`}
+        </span>
+        <span aria-hidden="true" className="text-muted-foreground">
+          {t("decisionFrame", { seq: decision.seq })}
+        </span>
+      </SafeLink>
     </p>
   );
 }
@@ -330,6 +354,7 @@ function FrameDetail({
           <Decision
             decision={frame.decision}
             subject={decisionSubject(frame)}
+            {...place}
           />
         )}
         {neither ? (

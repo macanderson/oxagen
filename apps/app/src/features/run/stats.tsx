@@ -3,23 +3,16 @@
 // Wasted, Wall clock, Cache hit, one number and one line each.
 //
 // Each figure is read from the record or left saying why it is missing. The
-// mockup computes waste from a heuristic over its fixture; here it is the
-// rollup's cost times the share the rollup did not count as productive, shown
-// only when the rollup holds both, and captioned "unproductive steps" because
-// that is what it measures. It is not a corrective-prompt figure, so its
-// caption never names the Prompts box's count. A prompt after the first is
-// corrective, and a prompt count read from a transcript that stopped short is
-// a floor, and says so.
+// spec's Wasted is `runWaste`, the money the corrective turns bought, and no
+// store prices that yet (G3, #3892). The box says "not recorded" and its line
+// repeats the Prompts box's corrective count, so the two agree. A prompt after
+// the first is corrective, and a prompt count read from a transcript that
+// stopped short is a floor, and says so.
 //
 // The Summary panel holds what the spec gives it and nothing more. Summarize
 // is offered only where there is no summary yet, as the way in; the workspace
 // switch for generated names and summaries sits on the Issues tab.
 import { useLocale, useTranslations } from "next-intl";
-import {
-  compareIntegers,
-  type Cost,
-  shareOfMicros,
-} from "@/data/contracts/money";
 import type { RunCost, RunTranscript, TokenCounts } from "@/data/contracts/run";
 import type { AgentDetail } from "@/data/contracts/agents";
 import type { RunRow } from "@/data/contracts/runs";
@@ -152,8 +145,18 @@ export function SummaryPanel({
           className="flex flex-col text-sm leading-snug"
         >
           <Operator run={run} />
-          <span className="text-xs text-muted-foreground">
-            {t("summary.operator")}
+          {/* The spec's "operator · workspace.owner · core-platform". The
+              workspace is the one this run was recorded in. The run record
+              carries no operator role, so that part says so. */}
+          <span
+            data-testid="run-operator-role"
+            className={`${mono} text-[11px] text-muted-foreground`}
+          >
+            {t("summary.operator")} ·{" "}
+            <span data-gap="operator-role" title={t("summary.roleWhy")}>
+              {t("summary.roleNotRecorded")}
+            </span>{" "}
+            · {ws}
           </span>
         </span>
       </div>
@@ -225,19 +228,6 @@ function Stat({
   );
 }
 
-/**
- * The part of `cost` the rollup did not count as productive. Exact in micros:
- * the share is rounded to a millionth, never the money.
- */
-function wasted(
-  cost: Cost | null,
-  productiveRatio: number | null,
-): Cost | null {
-  if (cost === null || productiveRatio === null) return null;
-  const part = shareOfMicros(cost, 1 - productiveRatio);
-  return part === null ? null : { ...part, basis: cost.basis };
-}
-
 export function StatRow({
   run,
   cost,
@@ -256,7 +246,6 @@ export function StatRow({
   const tr = useTranslations("run");
   const locale = useLocale();
   const rollup = cost.ok ? cost.value.rollup : null;
-  const waste = wasted(rollup?.cost ?? null, rollup?.productiveRatio ?? null);
   const count = (value: number) => formatCount(value, locale);
   const prompts = promptCount(transcript);
   // The page's whole-run read is one page of entries. Past that page, or past
@@ -269,7 +258,6 @@ export function StatRow({
   const wall =
     (run.sealedAt === null ? at : new Date(run.sealedAt).getTime()) -
     new Date(run.startedAt).getTime();
-  const wasteSign = waste === null ? null : compareIntegers(waste.micros, "0");
   return (
     <section
       aria-label={t("label")}
@@ -330,18 +318,24 @@ export function StatRow({
       >
         {displayedCost === null ? <NoValue /> : <Money value={displayedCost} />}
       </Stat>
+      {/* Wasted is `runWaste`: the money the corrective turns bought and the
+          cause the classifier listed (spec pages/run.md). No store prices a
+          corrective turn or lists a cause yet (G3, #3892), so the figure is
+          not recorded. The line carries the same corrective count the
+          Prompts box reads, so the two boxes agree. */}
       <Stat
         label={t("wasted")}
-        tone={wasteSign !== null && wasteSign > 0 ? "critical" : undefined}
         note={
-          waste === null
-            ? missingRollup
-            : wasteSign === 0
-              ? t("nothingWasted")
-              : t("unproductive")
+          prompts === null || cut || prompts < 2 ? (
+            <span data-gap="G3">{t("wasteNotRecorded")}</span>
+          ) : (
+            t("correctivePrompts", { count: prompts - 1 })
+          )
         }
       >
-        {waste === null ? <NoValue /> : <Money value={waste} />}
+        <span data-testid="run-wasted" data-gap="G3" title={t("wasteWhy")}>
+          <NoValue />
+        </span>
       </Stat>
       <Stat
         label={t("wallClock")}

@@ -643,7 +643,7 @@
     "list_approvals": {
       "route": "/[org]/[ws]",
       "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
-      "entry": "/[org]/[ws] \u2014 the Fleet Waiting on a human tile counts list_approvals and marks the runs a parked call names, and /[org]/[ws]/runs/[run]?tab=approvals reads it narrowed to one run (data/live/approvals.ts, features/fleet/board.tsx, features/fleet/approvals-panel.tsx, features/run/run.tsx)",
+      "entry": "/[org]/[ws] \u2014 the Fleet Waiting on a human tile counts list_approvals and marks the runs a parked call names, and /[org]/[ws]/runs/[run] reads it narrowed to one run (data/live/approvals.ts, features/fleet/board.tsx, features/fleet/approvals-panel.tsx, features/run/run.tsx)",
       "proof": "apps/app/src/features/run/run.test.tsx",
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-replay-ui"
@@ -787,7 +787,7 @@
     "list_resolved_approvals": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run]?tab=approvals: the Resolved section reads list_resolved_approvals narrowed to the run, showing the rule that auto-approved a call with no person (features/run/resolved-approvals.tsx, features/run/run.tsx, data/live/approvals.ts)",
+      "entry": "/[org]/[ws]/runs/[run]?tab=policy: the Resolved section under Policy decisions reads list_resolved_approvals narrowed to the run, showing the rule that auto-approved a call with no person (features/run/resolved-approvals.tsx, features/run/run.tsx, data/live/approvals.ts)",
       "proof": "apps/app/src/features/run/run.test.tsx",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session_011hCk8oPj1zX2ZgeBEfH1wT"
