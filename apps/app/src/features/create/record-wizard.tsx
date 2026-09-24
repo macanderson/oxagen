@@ -13,6 +13,7 @@
 // the dialog moves to Steering · Context PRs with the new pull request
 // selected, so closing the wizard lands there (creation-spec §5).
 import {
+  CONTEXT_RECORD_LINEAGE,
   contextRecordLabel,
   contextRecordSlug,
 } from "@oxagen/oxagen/context-record-label";
@@ -199,13 +200,16 @@ function recordOf(api: Api, ctx: CreateContext) {
     fits:
       sent !== "" &&
       sent.length <= STATEMENT_MAX &&
-      /^[a-z0-9][a-z0-9.-]*[a-z0-9]$/.test(lineageId) &&
+      CONTEXT_RECORD_LINEAGE.test(lineageId) &&
       (d.name === null || d.name.trim() !== ""),
   };
 }
 
 function DescribeStep({ api, ctx }: StepProps<RecordDraft>) {
   const t = useTranslations("createRecord.describe");
+  const slugValid = CONTEXT_RECORD_LINEAGE.test(
+    recordOf(api, ctx).choice.lineageId,
+  );
   return (
     <div className="flex flex-col gap-3 text-sm">
       <label className="flex flex-col gap-1">
@@ -245,7 +249,13 @@ function DescribeStep({ api, ctx }: StepProps<RecordDraft>) {
               api.update({ slug: contextRecordSlug(api.draft.slug) });
           }}
         />
-        <span className="text-xs text-muted-foreground">{t("slugHint")}</span>
+        {slugValid ? (
+          <span className="text-xs text-muted-foreground">{t("slugHint")}</span>
+        ) : (
+          <span role="alert" className="text-xs text-destructive">
+            {t("slugInvalid")}
+          </span>
+        )}
       </label>
       <DescriptionField
         api={api}
@@ -712,7 +722,13 @@ function useRecordStep(props: StepProps<RecordDraft>): StepView {
       title: t("describe.title"),
       subtitle: t("describe.subtitle"),
       body: <DescribeStep {...props} />,
-      primary: { label: t("describe.next"), enabled: d.desc.trim() !== "" },
+      primary: {
+        label: t("describe.next"),
+        enabled:
+          d.desc.trim() !== "" &&
+          CONTEXT_RECORD_LINEAGE.test(record.choice.lineageId) &&
+          (d.name === null || d.name.trim() !== ""),
+      },
     };
   if (step === 2)
     return {

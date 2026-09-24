@@ -211,6 +211,22 @@ describe("the context-record wizard: describe", () => {
     expect(slug.value).toBe("custom-release");
   });
 
+  it("says why Next is disabled when the name gives no usable slug", async () => {
+    mount();
+    const field = await screen.findByTestId<HTMLTextAreaElement>("wizard-desc");
+    fireEvent.input(field, { target: { value: "Cache the first read" } });
+    expect(screen.queryByRole("alert")).toBeNull();
+    const name = screen.getByLabelText<HTMLInputElement>(t("describe.name"));
+    fireEvent.change(name, { target: { value: "你好 世界" } });
+    expect(primary().disabled).toBe(true);
+    expect(screen.getByRole("alert").textContent).toBe(
+      t("describe.slugInvalid"),
+    );
+    fireEvent.change(name, { target: { value: "Hello world" } });
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(primary().disabled).toBe(false);
+  });
+
   it("fills the description from a suggestion", async () => {
     mount();
     await screen.findByTestId("wizard-desc");
@@ -393,7 +409,7 @@ describe("the context-record wizard: pull request", () => {
     expect(proposeRecord).toHaveBeenCalledWith("acme", "core-platform", {
       record: {
         lineageId: LINEAGE,
-        label: "Ctx Core Do Not Re Read",
+        label: "Do Not Re Read",
         kind: "rule",
         force: "must",
         sharingScope: "workspace",

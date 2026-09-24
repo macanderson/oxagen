@@ -1849,6 +1849,7 @@ type Messages = {
       name: string;
       slug: string;
       slugHint: string;
+      slugInvalid: string;
     };
     kind: {
       title: string;
