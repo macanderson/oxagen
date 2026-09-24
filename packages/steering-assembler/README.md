@@ -59,13 +59,23 @@ Never put `--` before the filename. The tests live beside the source in
 ## How it works
 
 ```ts
-import { assembleSteering } from "@oxagen/steering-assembler";
+import {
+  assembleSteering,
+  PREFIX_BUDGET_TOKENS,
+} from "@oxagen/steering-assembler";
 
 const { text, manifest } = assembleSteering(
   { orgId, workspaceId, runId, candidates },
-  4096,
+  PREFIX_BUDGET_TOKENS,
 );
 ```
+
+`PREFIX_BUDGET_TOKENS` is 2,000 budget tokens, at most 8,000 characters. One
+bundle serves every harness on a host, so the prefix fits the smallest limit
+any harness documents for hook text: 10,000 characters in Claude Code, and
+about 2,500 tokens in Codex. Past that limit the agent reads a file path and
+a preview, not the records. `HARNESS_CONTEXT_MAX_CHARS` lists each limit and
+its source.
 
 `candidates` are context records, operator steer commands and, later, skill
 descriptions, each with an id, a kind, a force (`must`, `should`, `may`,
