@@ -109,7 +109,7 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // The refunded/disputed half of the settlement ledger (ADR-085). org_id NOT
   // NULL, no workspace_id, written only by the webhook through withSystemDb.
   { table: "billing.gau_reversals", policyClass: "org_only" },
-  // ADR-158 (20260924000400_gau_ledger_and_prepaid_orders.sql). Both carry
+  // ADR-158 (20260924020000_gau_ledger_and_prepaid_orders.sql). Both carry
   // org_id NOT NULL and no workspace_id: the per-action ledger names the
   // workspace it attributes an action to in `attributed_workspace_id`, which
   // is a recorded fact and not a tenancy key, so a statement reads the org's
@@ -225,6 +225,13 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // SSO group → role mappings (ADR-145). auth.sso_providers is absent on
   // purpose: it is a Better Auth table read before any tenant scope exists.
   { table: "org.sso_group_roles", policyClass: "org_only" },
+  // SCIM provisioning (#3734): the organization's bearer token (hash only),
+  // the groups its identity provider pushed, and their members. org_id NOT
+  // NULL, no workspace_id. Read through withSystemDb before a tenant scope
+  // exists, so the policy is the backstop.
+  { table: "org.scim_tokens", policyClass: "org_only" },
+  { table: "org.scim_groups", policyClass: "org_only" },
+  { table: "org.scim_group_members", policyClass: "org_only" },
   { table: "org.assistant_model_keys", policyClass: "org_only" },
   // The onboarding gate (#2967): one row per organization, org_id is the
   // primary key and there is no workspace_id (the gate's workspace is a plain

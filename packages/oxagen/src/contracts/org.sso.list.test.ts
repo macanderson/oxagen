@@ -58,8 +58,22 @@ describe("org.sso.list capability", () => {
       ],
       policy: { ssoRequired: false },
       entitled: true,
+      scim: {
+        baseUrl: "https://app.oxagen.sh/api/scim/v2",
+        token: {
+          tokenPrefix: "oxscim_abcdefgh",
+          createdAt: "2026-09-23T00:00:00.000Z",
+          lastUsedAt: null,
+          tokenHash: "s3cret-hash",
+        },
+      },
     });
     expect(JSON.stringify(out)).not.toContain("s3cret");
+    expect(out.scim.token).toEqual({
+      tokenPrefix: "oxscim_abcdefgh",
+      createdAt: "2026-09-23T00:00:00.000Z",
+      lastUsedAt: null,
+    });
   });
 
   it("requires the plan flag, so the page never has to guess it", () => {
@@ -67,6 +81,7 @@ describe("org.sso.list capability", () => {
       orgSsoList.output.safeParse({
         providers: [],
         policy: { ssoRequired: false },
+        scim: { baseUrl: "https://app.oxagen.sh/api/scim/v2", token: null },
       }).success,
     ).toBe(false);
     expect(
@@ -74,7 +89,18 @@ describe("org.sso.list capability", () => {
         providers: [],
         policy: { ssoRequired: false },
         entitled: false,
+        scim: { baseUrl: "https://app.oxagen.sh/api/scim/v2", token: null },
       }).entitled,
+    ).toBe(false);
+  });
+
+  it("requires the SCIM view, so the page always has a base URL to show", () => {
+    expect(
+      orgSsoList.output.safeParse({
+        providers: [],
+        policy: { ssoRequired: false },
+        entitled: true,
+      }).success,
     ).toBe(false);
   });
 });

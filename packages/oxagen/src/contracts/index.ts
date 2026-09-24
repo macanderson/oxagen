@@ -339,6 +339,10 @@ import { orgSsoList } from "./org.sso.list";
 import { orgSsoPolicySet } from "./org.sso.policy.set";
 import { orgSsoUpdate } from "./org.sso.update";
 import { orgSsoVerifyDomain } from "./org.sso.verify_domain";
+import { orgScimTokenCreate } from "./org.scim_token.create";
+import { orgScimTokenRevoke } from "./org.scim_token.revoke";
+import { orgScimTokenRotate } from "./org.scim_token.rotate";
+import { scimRequest } from "./scim.request";
 import { orgSettingsRead } from "./org.settings.read";
 import { orgSettingsWrite } from "./org.settings.write";
 import { workspaceSettingsRead } from "./workspace.settings.read";
@@ -600,6 +604,12 @@ export {
   ssoProviderIdSchema,
   ssoProviderViewSchema,
 } from "./org.sso.shared";
+export {
+  scimTokenMintedSchema,
+  scimTokenViewSchema,
+  scimViewSchema,
+} from "./org.scim_token.shared";
+export type { ScimTokenView, ScimView } from "./org.scim_token.shared";
 export type {
   SsoGroupRole,
   SsoMappableRole,
@@ -930,6 +940,10 @@ export {
   orgSsoPolicySet,
   orgSsoUpdate,
   orgSsoVerifyDomain,
+  orgScimTokenCreate,
+  orgScimTokenRevoke,
+  orgScimTokenRotate,
+  scimRequest,
   orgSettingsRead,
   orgSettingsWrite,
   workspaceSettingsRead,
@@ -1322,6 +1336,10 @@ export const contracts: readonly CapabilityDeclaration[] = [
   orgSsoPolicySet,
   orgSsoUpdate,
   orgSsoVerifyDomain,
+  orgScimTokenCreate,
+  orgScimTokenRevoke,
+  orgScimTokenRotate,
+  scimRequest,
   orgSettingsRead,
   orgSettingsWrite,
   workspaceSettingsRead,
