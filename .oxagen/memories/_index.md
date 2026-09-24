@@ -45,3 +45,5 @@ Format: `- [title](file-name.md) — one-line hook · type (bug|observation) · 
 - [Atlas skips a migration whose timestamp prefix collides](atlas-duplicate-timestamp-prefix-skips-migration.md) — db:migrate reports success and the table is never created · bug · 2026-09-11 07:00pm GMT
 - [A "never throws" docstring with no try/catch behind it](jsdoc-never-throws-was-not-implemented.md) — a confident comment reads like verification and is not · observation · 2026-09-11 07:00pm GMT
 - [A timestamptz arrives as a Date or an ISO string, depending on the path](timestamptz-arrives-as-date-or-iso-string.md) — row types declare one shape and receive the other; fixtures cannot catch it · observation · 2026-09-11 07:35pm GMT
+- [Run commands refused on every observe-tier run](run-commands-refused-on-observe-tier.md) — the tier gate conflated policy enforcement with host reachability · bug · 2026-09-23 09:00pm GMT
+- [policy_source lives in the frame body, command.name in attrs](policy-source-lives-in-the-frame-body.md) — read the wrong column and every decision reads unsourced · observation · 2026-09-23 09:00pm GMT
