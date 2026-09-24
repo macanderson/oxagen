@@ -4,8 +4,9 @@
  * by the `tachod` executable and `tacho daemon` (the compiled single binary
  * is multi-call, so the service unit runs `tacho daemon`).
  */
-import { writeFileSync } from "node:fs";
+import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { tachoPaths } from "../host/paths";
+import { formatDaemonPid, parseDaemonPid } from "../host/process-scan";
 import { startDaemon } from "./daemon";
 
 /**
@@ -47,21 +48,115 @@ export function stopWithin(
     });
 }
 
+export interface ProcessGuardOptions {
+  /** Stop the daemon: persist its state and close its listeners. */
+  stop: () => Promise<void>;
+  /** End the process with this code. */
+  exit: (code: number) => void;
+  /** Write one line; each line ends in a newline, as `stopWithin`'s do. */
+  log: (line: string) => void;
+  /** `STOP_GRACE_MS` unless a test says. */
+  stopTimeoutMs?: number;
+  /** Where the handlers are registered; the process unless a test says. */
+  target?: Pick<NodeJS.EventEmitter, "on" | "off">;
+}
+
+function describeError(value: unknown): string {
+  return value instanceof Error
+    ? (value.stack ?? value.message)
+    : String(value);
+}
+
+/**
+ * One process serves every agent's model proxy, so an error nothing caught
+ * must not end it by accident. Without these handlers Node exits on the
+ * first stray rejection (a malformed request line reaching `new URL()`, one
+ * of the daemon's fire-and-forget lanes) and every harness gets connection
+ * refused until the service manager restarts it. An unhandled rejection is
+ * logged and the process keeps serving. An uncaught exception leaves the
+ * process in a state nothing vouches for, so it is logged, the daemon gets
+ * the same bounded stop a SIGTERM gets (`stopWithin`), and the process
+ * exits 1 for the service manager to start a fresh one. Returns a function
+ * that removes both.
+ */
+export function guardDaemonProcess(options: ProcessGuardOptions): () => void {
+  const target = options.target ?? process;
+  let crashing = false;
+  const onRejection = (reason: unknown) => {
+    options.log(`tachod: unhandled rejection: ${describeError(reason)}\n`);
+  };
+  const onException = (error: unknown) => {
+    options.log(`tachod: uncaught exception: ${describeError(error)}\n`);
+    if (crashing) return;
+    crashing = true;
+    stopWithin(
+      // A stop that throws synchronously counts as a failed stop, so this
+      // handler never throws itself.
+      () => Promise.resolve().then(() => options.stop()),
+      options.stopTimeoutMs ?? STOP_GRACE_MS,
+      () => options.exit(1),
+      options.log,
+    );
+  };
+  target.on("unhandledRejection", onRejection);
+  target.on("uncaughtException", onException);
+  return () => {
+    target.off("unhandledRejection", onRejection);
+    target.off("uncaughtException", onException);
+  };
+}
+
+/** Record this process in `tachod.pid`: its pid, start and executable. */
+export function writeDaemonPid(
+  path: string,
+  now: Date = new Date(),
+  execPath: string = process.execPath,
+): void {
+  writeFileSync(
+    path,
+    formatDaemonPid({
+      pid: process.pid,
+      started_at: now.toISOString(),
+      exe: execPath,
+    }),
+  );
+}
+
+/**
+ * Remove `tachod.pid` as the daemon exits, so the file never outlives it to
+ * name a pid the OS may give to another program. A file a newer daemon has
+ * written since is left alone.
+ */
+export function releaseDaemonPid(path: string): void {
+  try {
+    if (parseDaemonPid(readFileSync(path, "utf8"))?.pid === process.pid)
+      unlinkSync(path);
+  } catch {
+    // Gone already, or unreadable: nothing of this process to remove.
+  }
+}
+
 export async function runDaemonProcess(): Promise<void> {
   const paths = tachoPaths(process.env);
+  // Until the daemon has started there is nothing to stop.
+  let stopDaemon = (): Promise<void> => Promise.resolve();
+  let stopping: Promise<void> | undefined;
+  const stopOnce = () => (stopping ??= stopDaemon());
+  const exit = (code: number) => {
+    releaseDaemonPid(paths.pid);
+    process.exit(code);
+  };
+  const log = (line: string) => {
+    process.stderr.write(line);
+  };
+  guardDaemonProcess({ stop: stopOnce, exit, log });
   const daemon = await startDaemon({ paths });
-  writeFileSync(paths.pid, `${process.pid}\n`);
-  let stopping = false;
+  stopDaemon = () => daemon.stop();
+  writeDaemonPid(paths.pid);
   const stop = (signal: string) => {
-    if (stopping) return;
-    stopping = true;
+    if (stopping !== undefined) return;
     process.stderr.write(`tachod: ${signal}, stopping\n`);
-    stopWithin(
-      () => daemon.stop(),
-      STOP_GRACE_MS,
-      (code) => process.exit(code),
-      (line) => process.stderr.write(line),
-    );
+    stopWithin(stopOnce, STOP_GRACE_MS, exit, log);
   };
   process.on("SIGTERM", () => stop("SIGTERM"));
   process.on("SIGINT", () => stop("SIGINT"));

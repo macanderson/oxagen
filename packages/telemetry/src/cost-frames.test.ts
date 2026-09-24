@@ -26,6 +26,7 @@ import {
 } from "./cost-frames";
 
 const ORG = "00000000-0000-4000-8000-000000000001";
+const WS = "00000000-0000-4000-8000-000000000002";
 const RUN = "00000000-0000-4000-8000-0000000000aa";
 
 /**
@@ -99,6 +100,7 @@ describe("readModelCallFrames", () => {
     ]);
     const frames = await readModelCallFrames({
       orgId: ORG,
+      workspaceId: WS,
       run: { kind: "tacho", rootSessionUuid: RUN },
     });
 
@@ -122,6 +124,7 @@ describe("readModelCallFrames", () => {
     ]);
     expect(query_params).toEqual({
       orgId: ORG,
+      workspaceId: WS,
       rootSessionUuid: RUN,
       sources: ["otel_log", "collector", "hook", "transcript"],
       duplicateAttr: "oxagen.llm_call_duplicate_of",
@@ -196,6 +199,7 @@ describe("readModelCallFrames", () => {
     ]);
     const frames = await readModelCallFrames({
       orgId: ORG,
+      workspaceId: WS,
       run: { kind: "tacho", rootSessionUuid: RUN },
     });
 
@@ -223,6 +227,7 @@ describe("readModelCallFrames", () => {
     answer([]);
     await readModelCallFrames({
       orgId: ORG,
+      workspaceId: WS,
       run: { kind: "tacho", rootSessionUuid: RUN },
     });
     const { query } = lastQuery();
@@ -292,6 +297,7 @@ describe("readModelCallFrames", () => {
     ]);
     const frames = await readModelCallFrames({
       orgId: ORG,
+      workspaceId: WS,
       run: { kind: "tacho", rootSessionUuid: RUN },
     });
     const { query } = lastQuery();
@@ -325,6 +331,7 @@ describe("readModelCallFrames", () => {
     ]);
     const frames = await readModelCallFrames({
       orgId: ORG,
+      workspaceId: WS,
       run: { kind: "tacho", rootSessionUuid: RUN },
     });
     expect(frames).toEqual([
@@ -359,6 +366,7 @@ describe("readModelCallFrames", () => {
     ]);
     const frames = await readModelCallFrames({
       orgId: ORG,
+      workspaceId: WS,
       run: { kind: "ledger", runUuid: RUN },
     });
     const { query, query_params } = lastQuery();
@@ -391,12 +399,17 @@ describe("readTachoToolCallFrames", () => {
     answer([{ name: "Bash" }, { name: "" }]);
     const frames = await readTachoToolCallFrames({
       orgId: ORG,
+      workspaceId: WS,
       rootSessionUuid: RUN,
     });
     const { query, query_params } = lastQuery();
     expect(query).toContain("kind = 'tool_call'");
     expect(query).toContain("source = 'hook'");
-    expect(query_params).toEqual({ orgId: ORG, rootSessionUuid: RUN });
+    expect(query_params).toEqual({
+      orgId: ORG,
+      workspaceId: WS,
+      rootSessionUuid: RUN,
+    });
     expect(frames).toEqual([{ name: "Bash" }, { name: null }]);
   });
 });

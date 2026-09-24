@@ -107,7 +107,9 @@ const runOutputNodeSchema = z
     /**
      * The frame that produced it, decimal, so the `fr N` chip opens the
      * transcript there. Null on a gate and its `would`: the approval record
-     * carries no frame sequence, and a position must not be invented.
+     * carries no frame sequence, and a position must not be invented. Null
+     * too on a path a subagent chain touched, whose frame is numbered on that
+     * chain rather than on the run's.
      */
     seq: z.string().regex(/^\d+$/).nullable(),
     kind: z.enum(RUN_OUTPUT_KINDS),

@@ -62,6 +62,65 @@ export interface CodexAppServerOptions {
 
 const DEFAULT_TIMEOUT_MS = 20_000;
 
+/** What `spawn` is handed: the program, its argv, and how Windows quotes it. */
+export interface SpawnInvocation {
+  command: string;
+  args: string[];
+  windowsVerbatimArguments?: boolean;
+}
+
+/** The characters cmd.exe reads as syntax, each escaped with `^`. */
+const CMD_META = /([()\][%!^"`<>&|;, *?])/g;
+
+/**
+ * One argument quoted for a command line cmd.exe parses: backslashes before
+ * a quote doubled and the quote escaped (the C runtime's rules), the whole
+ * wrapped in quotes, then every cmd.exe metacharacter escaped twice, once
+ * for `cmd /c` and once for the batch file's own `%*`, which npm's shims
+ * hand on to node and cmd.exe parses again.
+ */
+function cmdArgument(value: string): string {
+  let quoted = "";
+  let slashes = 0;
+  for (const char of value) {
+    if (char === "\\") {
+      slashes += 1;
+      continue;
+    }
+    quoted +=
+      char === '"'
+        ? `${"\\".repeat(slashes * 2 + 1)}"`
+        : `${"\\".repeat(slashes)}${char}`;
+    slashes = 0;
+  }
+  quoted = `"${quoted}${"\\".repeat(slashes * 2)}"`;
+  return quoted.replace(CMD_META, "^$1").replace(CMD_META, "^$1");
+}
+
+/**
+ * How to spawn `command` so the platform can run it. On Windows a harness
+ * installed by npm resolves to a batch file (`codex.cmd`), and Node refuses
+ * to spawn one without a shell since 20.12 (EINVAL, CVE-2024-27980). So a
+ * batch file runs through `cmd.exe /d /s /c` with the line quoted by hand and
+ * `windowsVerbatimArguments`, which keeps Node from quoting it a second
+ * time. Anything else is spawned as it is.
+ */
+export function spawnInvocation(
+  command: string,
+  args: readonly string[],
+  platform: NodeJS.Platform = process.platform,
+  env: Record<string, string | undefined> = process.env,
+): SpawnInvocation {
+  if (platform !== "win32" || !/\.(cmd|bat)$/i.test(command))
+    return { command, args: [...args] };
+  const line = [command.replace(CMD_META, "^$1"), ...args.map(cmdArgument)];
+  return {
+    command: env["ComSpec"] ?? env["COMSPEC"] ?? "cmd.exe",
+    args: ["/d", "/s", "/c", `"${line.join(" ")}"`],
+    windowsVerbatimArguments: true,
+  };
+}
+
 function failure(problem: string, count: number): CodexAppServerResult {
   return { answers: Array.from({ length: count }, () => ({})), problem };
 }
@@ -78,10 +137,14 @@ export function codexAppServerClient(
       }
       let child;
       try {
-        child = spawn(options.binary, ["app-server"], {
+        const invocation = spawnInvocation(options.binary, ["app-server"]);
+        child = spawn(invocation.command, invocation.args, {
           cwd: options.cwd,
           env: options.env,
           stdio: ["pipe", "pipe", "ignore"],
+          ...(invocation.windowsVerbatimArguments === true
+            ? { windowsVerbatimArguments: true }
+            : {}),
         });
       } catch (error) {
         resolve(

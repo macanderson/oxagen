@@ -35,7 +35,18 @@ function head(value: unknown): string | undefined {
   if (typeof value !== "string" || value.length === 0) {
     return undefined;
   }
-  return value.length > TARGET_MAX ? value.slice(0, TARGET_MAX) : value;
+  return value.length > TARGET_MAX ? cutAt(value, TARGET_MAX) : value;
+}
+
+/**
+ * The first `max` UTF-16 units of `value`, one fewer when the cut would fall
+ * between the two halves of a surrogate pair. A lone high surrogate is not
+ * valid Unicode: ClickHouse stores it as a replacement character, and the
+ * stored target then no longer hashes to what the collector sealed.
+ */
+function cutAt(value: string, max: number): string {
+  const code = value.charCodeAt(max - 1);
+  return value.slice(0, code >= 0xd800 && code <= 0xdbff ? max - 1 : max);
 }
 
 function hostOf(url: unknown): string | undefined {
@@ -54,10 +65,22 @@ const WRITE_TOOLS = new Set(["Write"]);
 const EDIT_TOOLS = new Set(["Edit", "MultiEdit", "NotebookEdit"]);
 const NETWORK_TOOLS = new Set(["WebFetch", "WebSearch"]);
 /**
- * MCP tools that open a pull request. The effect is the same wherever it is
- * hosted, so this matches the tool name and not the server.
+ * Whether an MCP tool opens a pull request. The effect is the same wherever
+ * it is hosted, so this reads the tool name and not the server, and it reads
+ * the words of the name rather than its spelling: GitHub servers name the
+ * tool `create_pull_request`, `github_create_pull_request`,
+ * `createPullRequest` or `pull_request_create`. A name that goes on past the
+ * pull request (`create_pull_request_review`) does something else.
  */
-const PR_OPEN_MCP_TOOLS = new Set(["create_pull_request"]);
+function opensPullRequest(tool: string): boolean {
+  const words = tool
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((word) => word.length > 0);
+  const last = words.slice(-3).join("_");
+  return last === "create_pull_request" || last === "pull_request_create";
+}
 
 const READ_ONLY_BUILTINS = new Set([
   ...READ_TOOLS,
@@ -73,10 +96,11 @@ const READ_ONLY_BUILTINS = new Set([
 
 /**
  * Shell characters that end one simple command and begin another, or hand the
- * line to something this module cannot read. A command containing any of them
- * outside quotes is not classified: `git add . && git push` is a commit's
- * worth of work plus a push, and one frame carries one effect kind, so the
- * honest answer for a compound line is the generic `command`.
+ * line to something this module cannot read. `tokenizeSimpleCommand` refuses
+ * a command containing any of them outside quotes; `classifyShellEffect`
+ * first splits a line at `&&`, `||`, `;` and newlines with
+ * `splitCommandList`, and what is left of these (a pipe, a background `&`,
+ * a subshell) still refuses the piece that holds it.
  */
 const COMMAND_SEPARATORS = new Set(["&", "|", ";", "\n", "`", "(", ")"]);
 
@@ -112,6 +136,12 @@ export function tokenizeSimpleCommand(command: string): string[] | undefined {
     }
     if (char === "\\") {
       const next = command[i + 1];
+      // A backslash before a newline continues the line, and the shell
+      // removes both, so `git push \<newline> origin` is `git push origin`.
+      if (next === "\n") {
+        i += 1;
+        continue;
+      }
       if (next !== undefined) {
         current += next;
         started = true;
@@ -208,23 +238,131 @@ export function gitSubcommand(
 }
 
 /**
+ * The simple commands of one shell line, cut where the shell runs one after
+ * another: an unquoted `&&`, `||`, `;` or newline. Quotes and backslashes are
+ * tracked the way `tokenizeSimpleCommand` tracks them, so a separator inside
+ * an argument does not cut, and each piece still goes through that tokenizer,
+ * which refuses a piece holding a pipe, a background `&` or a subshell.
+ *
+ * An unquoted `<<` opens a here-document whose body is text rather than
+ * commands, so nothing after the line that opens it is returned: a body line
+ * that reads `git push` is not a push.
+ */
+export function splitCommandList(command: string): string[] {
+  const pieces: string[] = [];
+  let current = "";
+  let quote: '"' | "'" | undefined;
+  let heredoc = false;
+  for (let i = 0; i < command.length; i += 1) {
+    const char = command[i] as string;
+    const next = command[i + 1];
+    if (quote !== undefined) {
+      if (char === quote) quote = undefined;
+      current += char;
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      current += char;
+      continue;
+    }
+    if (char === "\\" && next !== undefined) {
+      current += char + next;
+      i += 1;
+      continue;
+    }
+    // A `#` that starts a word comments out the rest of the line, and a
+    // `;` or `&&` in the comment separates nothing.
+    if (char === "#" && (current.length === 0 || /\s$/.test(current))) {
+      while (i + 1 < command.length && command[i + 1] !== "\n") i += 1;
+      continue;
+    }
+    if (char === "<" && next === "<") heredoc = true;
+    if ((char === "&" && next === "&") || (char === "|" && next === "|")) {
+      pieces.push(current);
+      current = "";
+      i += 1;
+      continue;
+    }
+    if (char === ";" || char === "\n") {
+      pieces.push(current);
+      current = "";
+      if (char === "\n" && heredoc) return pieces;
+      continue;
+    }
+    current += char;
+  }
+  pieces.push(current);
+  return pieces;
+}
+
+/** Which effect a line reports when its commands have several: the furthest reaching. */
+const EFFECT_REACH: readonly EffectKind[] = [
+  "pr_open",
+  "git_push",
+  "git_commit",
+];
+
+/**
  * The effect kind a shell command declares, for the three effects that have a
  * kind of their own: a commit, a push, and opening a pull request.
  *
+ * A line of several commands (`git push && gh pr create --fill`,
+ * `cd repo && git commit -m x`) is read one command at a time. One frame
+ * carries one effect kind, so a line that both pushes and opens a pull
+ * request reports the pull request, and one that commits and pushes reports
+ * the push.
+ *
  * Undefined means the line is a plain `command`, and that is the answer for
- * everything this function is not sure of: a compound line, an unknown git
- * option, a dry run, a subcommand that only reads. `git status` and
+ * everything this function is not sure of: a pipe or a subshell, an unknown
+ * git option, a dry run, a subcommand that only reads. `git status` and
  * `echo git push` both land there, the first because `status` changes nothing
  * and the second because its first token is `echo`.
  */
 export function classifyShellEffect(command: string): EffectKind | undefined {
-  const tokens = tokenizeSimpleCommand(command);
-  if (tokens === undefined || tokens.length === 0) {
+  let found: EffectKind | undefined;
+  for (const piece of splitCommandList(command)) {
+    const effect = classifySimpleEffect(piece);
+    if (
+      effect !== undefined &&
+      (found === undefined ||
+        EFFECT_REACH.indexOf(effect) < EFFECT_REACH.indexOf(found))
+    ) {
+      found = effect;
+    }
+  }
+  return found;
+}
+
+/** A leading `NAME=value` sets a variable for the command and is not the command. */
+const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
+
+/**
+ * Where `gh` options that precede the subcommand end: `gh -R owner/repo pr
+ * create` names the repository before `pr`.
+ */
+function ghSubcommandIndex(tokens: string[]): number {
+  const first = tokens[1] ?? "";
+  if (first === "-R" || first === "--repo") return 3;
+  if (first.startsWith("--repo=") || /^-R./.test(first)) return 2;
+  return 1;
+}
+
+function classifySimpleEffect(command: string): EffectKind | undefined {
+  const words = tokenizeSimpleCommand(command);
+  if (words === undefined) {
     return undefined;
   }
+  // `GH_TOKEN=… gh pr create` is `gh pr create` with one more variable set.
+  const start = words.findIndex((word) => !ASSIGNMENT.test(word));
+  if (start === -1) {
+    return undefined;
+  }
+  const tokens = words.slice(start);
   const program = tokens[0] as string;
   if (program === "gh") {
-    if (tokens[1] !== "pr" || tokens[2] !== "create") return undefined;
+    const at = ghSubcommandIndex(tokens);
+    if (tokens[at] !== "pr" || tokens[at + 1] !== "create") return undefined;
     // `--dry-run` prints what it would do and `--web` opens a browser for a
     // person to finish or abandon. Neither creates a pull request by itself,
     // so counting either would put one on the run's record that may not
@@ -273,7 +411,7 @@ export function classifyTool(
       mcp_tool_name: tool as string,
       // Keyed off the tool name rather than the whole `mcp__…` string, so the
       // same capability on a second server classifies the same way.
-      effect_kind: PR_OPEN_MCP_TOOLS.has(tool ?? "") ? "pr_open" : "network",
+      effect_kind: opensPullRequest(tool ?? "") ? "pr_open" : "network",
       tool_is_mutating:
         !/^(get|list|read|search|find|fetch|describe|query)/i.test(tool ?? ""),
       ...(head(input["url"]) !== undefined
@@ -382,4 +520,37 @@ export function commandHead(command: string): string {
   const trimmed = command.trim();
   const match = /^[A-Za-z0-9_./-]+/.exec(trimmed);
   return match?.[0] ?? "";
+}
+
+/** A pull request's page on github.com: owner, repository and number. */
+const PULL_REQUEST_URL =
+  /https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/pull\/(\d+)/;
+
+/**
+ * The pull request a `pr_open` call created, read from the call's response
+ * as the attrs `pr.url`, `pr.number` and `pr.repository`, or `{}` when the
+ * response names none. `gh pr create` prints the new pull request's URL on
+ * stdout, so stdout is read first; the rest of the response (an MCP server's
+ * JSON) is read after it. The first URL is taken, and a branch's
+ * `/pull/new/<branch>` hint from `git push` is not a pull request.
+ */
+export function pullRequestAttrs(response: unknown): Record<string, string> {
+  const stdout =
+    typeof response === "object" && response !== null
+      ? (response as Record<string, unknown>)["stdout"]
+      : undefined;
+  const texts = [
+    typeof stdout === "string" ? stdout : "",
+    typeof response === "string" ? response : (JSON.stringify(response) ?? ""),
+  ];
+  for (const text of texts) {
+    const match = PULL_REQUEST_URL.exec(text);
+    if (match === null) continue;
+    return {
+      "pr.url": match[0],
+      "pr.number": match[3] as string,
+      "pr.repository": `${match[1]}/${match[2]}`,
+    };
+  }
+  return {};
 }

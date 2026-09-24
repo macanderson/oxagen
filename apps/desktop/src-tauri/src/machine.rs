@@ -203,6 +203,21 @@ pub fn enrollment(roots: &Roots) -> Enrollment {
     }
 }
 
+/// `host.json` as the Connection panel reads it. `Ok(None)` means there is
+/// no file. A file that is there and cannot be read, or is not a JSON
+/// object, is an `Err` naming why: read as absent, it sent an enrolled
+/// machine back to the setup wizard.
+pub fn read_host(path: &Path) -> Result<Option<Value>, String> {
+    let Some(text) = read_text(path)? else {
+        return Ok(None);
+    };
+    match serde_json::from_str::<Value>(&text) {
+        Ok(host @ Value::Object(_)) => Ok(Some(host)),
+        Ok(_) => Err(format!("{} is not a JSON object", path.display())),
+        Err(e) => Err(format!("{} is not valid JSON: {e}", path.display())),
+    }
+}
+
 /// Remove `dir` when it is empty. Anything in it is somebody's, so it stays.
 pub fn remove_dir_if_empty(dir: &Path) -> bool {
     match fs::read_dir(dir) {
@@ -342,5 +357,23 @@ mod tests {
         assert_eq!(enrollment(&roots), Enrollment::Retired);
         fs::write(&host, "{ truncated").unwrap();
         assert_eq!(enrollment(&roots), Enrollment::Unreadable);
+    }
+
+    #[test]
+    fn a_host_file_that_cannot_be_read_is_an_error_not_an_absent_host() {
+        let roots = scratch_roots("host-read", "/bin/zsh");
+        let host = roots.tacho_root().join("host.json");
+        assert_eq!(read_host(&host), Ok(None));
+        fs::create_dir_all(host.parent().unwrap()).unwrap();
+        fs::write(&host, r#"{"host_enrollment_id":"tch_1"}"#).unwrap();
+        assert_eq!(read_host(&host).unwrap().unwrap()["host_enrollment_id"], "tch_1");
+        // A write cut short, bytes that are not text, and JSON that is not a
+        // host: each says why, and none reads as "not enrolled".
+        fs::write(&host, "{ truncated").unwrap();
+        assert!(read_host(&host).unwrap_err().contains("not valid JSON"));
+        fs::write(&host, b"\xff\xfe").unwrap();
+        assert!(read_host(&host).unwrap_err().contains("not UTF-8"));
+        fs::write(&host, "[]").unwrap();
+        assert!(read_host(&host).unwrap_err().contains("not a JSON object"));
     }
 }

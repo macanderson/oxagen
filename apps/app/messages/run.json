@@ -3,7 +3,7 @@
     "notRecorded": "not recorded",
     "enrichment": {
       "label": "Automatic run names and summaries",
-      "description": "Stella reads captured turns and uses organization credits. Applies to this workspace. Turning this off stops generated names and summaries. Harness titles, recorded repositories, files, outputs, and harness facts remain available."
+      "description": "stella reads captured turns and uses organization credits. Applies to this workspace. Turning this off stops generated names and summaries. Harness titles, recorded repositories, files, outputs, and harness facts remain available."
     },
     "noSummary": "No summary yet. Open the transcript to review recorded prompts, model calls, and tools.",
     "facts": {

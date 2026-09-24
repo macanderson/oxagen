@@ -10,6 +10,8 @@ import {
   isNull,
   like,
   lt,
+  ne,
+  notInArray,
   or,
   sql,
 } from "drizzle-orm";
@@ -54,6 +56,26 @@ export function enrichableWorkspace() {
 export const FAILED_RETRY_MS = 30 * 60_000;
 
 /**
+ * How often a live run that already has a name is summarized again. Every
+ * ingest batch moves a live run's `updated_at`, so the revision rule alone
+ * made every active run due at every five-minute sweep, and each pass reads
+ * and summarizes the whole run from the start.
+ */
+export const LIVE_ENRICHMENT_INTERVAL_MS = 30 * 60_000;
+
+/**
+ * A run that has ended: a wrapped session no longer `running`, or a ledger
+ * run past `pending` and `running`.
+ */
+function sealedRun(
+  table: typeof schema.tachoSessions | typeof schema.agentRuns,
+) {
+  return table === schema.tachoSessions
+    ? ne(schema.tachoSessions.outcome, "running")
+    : notInArray(schema.agentRuns.status, ["pending", "running"]);
+}
+
+/**
  * The runs a sweep queues. A run is due when it was never observed, when its
  * row changed after the revision the last read saw, or when its last read
  * found bodies missing and five minutes have passed. The revision comparison
@@ -63,30 +85,51 @@ export const FAILED_RETRY_MS = 30 * 60_000;
  * A run whose last attempt failed is due when its row changed after the
  * failure, or when thirty minutes have passed, so a refusing gateway is asked
  * again once it may have recovered and is not asked on every sweep.
+ *
+ * A live run is held to `LIVE_ENRICHMENT_INTERVAL_MS` besides: it is due only
+ * while it has no name yet, or once its last enrichment is that old. Its seal
+ * moves `updated_at` again, so the finished run is always summarized. The
+ * first read names it for its first prompt, so a live run whose model call
+ * failed waits the interval too, where every batch would otherwise make it
+ * due again.
  */
 export function dueForEnrichment(
   table: typeof schema.tachoSessions | typeof schema.agentRuns,
   now: Date,
 ) {
   const changed = sql`${table.updatedAt} IS DISTINCT FROM ${table.summaryObservedRevision}`;
-  return or(
-    isNull(table.summaryObservedAt),
-    and(
-      isNull(table.summaryError),
-      or(
-        isNull(table.summaryObservedRevision),
-        changed,
-        and(
-          like(table.summaryInputDigest, "partial:%"),
-          lt(table.summaryObservedAt, new Date(now.getTime() - 5 * 60_000)),
+  return and(
+    or(
+      isNull(table.summaryObservedAt),
+      and(
+        isNull(table.summaryError),
+        or(
+          isNull(table.summaryObservedRevision),
+          changed,
+          and(
+            like(table.summaryInputDigest, "partial:%"),
+            lt(table.summaryObservedAt, new Date(now.getTime() - 5 * 60_000)),
+          ),
+        ),
+      ),
+      and(
+        isNotNull(table.summaryError),
+        or(
+          changed,
+          lt(
+            table.summaryObservedAt,
+            new Date(now.getTime() - FAILED_RETRY_MS),
+          ),
         ),
       ),
     ),
-    and(
-      isNotNull(table.summaryError),
-      or(
-        changed,
-        lt(table.summaryObservedAt, new Date(now.getTime() - FAILED_RETRY_MS)),
+    or(
+      sealedRun(table),
+      isNull(table.name),
+      isNull(table.summaryObservedAt),
+      lt(
+        table.summaryObservedAt,
+        new Date(now.getTime() - LIVE_ENRICHMENT_INTERVAL_MS),
       ),
     ),
   );

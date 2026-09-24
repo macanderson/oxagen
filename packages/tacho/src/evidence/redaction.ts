@@ -29,13 +29,18 @@ interface RedactionResult {
   redactions: Redaction[];
 }
 
-
 export type RedactionReason =
   | "private_key"
   | "aws_access_key"
   | "github_token"
+  | "gitlab_token"
   | "slack_token"
   | "model_api_key"
+  | "google_api_key"
+  | "stripe_key"
+  | "npm_token"
+  | "oxagen_api_key"
+  | "oxagen_run_token"
   | "bearer_token"
   | "jwt";
 
@@ -46,22 +51,67 @@ interface Detector {
   group?: number;
 }
 
+/** PEM (`RSA PRIVATE KEY`, `OPENSSH PRIVATE KEY`, ...) and PGP armor labels. */
+const PRIVATE_KEY_LABEL = "[A-Z ]*PRIVATE KEY(?: BLOCK)?";
+
+/**
+ * The key material after a BEGIN line whose END never arrived, as when a
+ * tool's output is cut off mid-key: base64 lines and armor headers
+ * (`Proc-Type:`, `Version:`), separated by whitespace or by the `\n` escapes
+ * of a JSON string. It stops at the first thing that is neither, so the text
+ * after a truncated key is kept.
+ */
+const TRUNCATED_KEY_BODY =
+  '(?:(?:\\s|\\\\[rn])+(?:[A-Za-z][A-Za-z-]*: (?:[^\\r\\n\\\\"]|\\\\")*|[A-Za-z0-9+/=]+))*';
+
+/** A base64url character: what may not border a fixed-length token. */
+const B64URL = "[A-Za-z0-9_-]";
+
 const DETECTORS: readonly Detector[] = [
   {
+    // A complete block runs to its END line. The scan for END stops at the
+    // next BEGIN, so a truncated key cannot swallow the text up to a later
+    // key's END, and many truncated keys stay linear rather than each
+    // scanning to the end of the text.
     reason: "private_key",
-    pattern:
-      /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
+    pattern: new RegExp(
+      `-----BEGIN ${PRIVATE_KEY_LABEL}-----(?:(?:(?!-----BEGIN )[\\s\\S])*?-----END ${PRIVATE_KEY_LABEL}-----|${TRUNCATED_KEY_BODY})`,
+      "g",
+    ),
   },
   { reason: "aws_access_key", pattern: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/g },
   {
     reason: "github_token",
     pattern: /\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,})\b/g,
   },
+  { reason: "gitlab_token", pattern: /\bglpat-[0-9A-Za-z_-]{20,}/g },
   { reason: "slack_token", pattern: /\bxox[abprs]-[A-Za-z0-9-]{10,}\b/g },
   { reason: "model_api_key", pattern: /\bsk-(?:ant-)?[A-Za-z0-9_-]{20,}\b/g },
   {
+    reason: "google_api_key",
+    pattern: new RegExp(`\\bAIza${B64URL}{35}(?!${B64URL})`, "g"),
+  },
+  { reason: "stripe_key", pattern: /\b[rs]k_live_[0-9A-Za-z]{16,}\b/g },
+  { reason: "npm_token", pattern: /\bnpm_[A-Za-z0-9]{36}\b/g },
+  {
+    // `ox_` and the base64url of 32 bytes, as `generateApiKey`
+    // (@oxagen/handlers) mints it. The length is exact, so an identifier
+    // that merely starts `ox_` does not match.
+    reason: "oxagen_api_key",
+    pattern: new RegExp(`(?<!${B64URL})ox_${B64URL}{43}(?!${B64URL})`, "g"),
+  },
+  {
+    // `oxrt_<claims>.<hmac>` (host/run-token.ts). The claims are not secret,
+    // but the whole token is removed: it is spendable until it expires.
+    reason: "oxagen_run_token",
+    pattern: new RegExp(`(?<!${B64URL})oxrt_${B64URL}{8,}\\.${B64URL}+`, "g"),
+  },
+  {
+    // The scheme is case-insensitive (RFC 9110 §11.1), and RFC 6750's
+    // b64token includes `_`: without it a token was cut at its first `_`
+    // and the rest shipped in the clear.
     reason: "bearer_token",
-    pattern: /\bBearer\s+([A-Za-z0-9._~+/=-]{20,})/g,
+    pattern: /\bbearer\s+([A-Za-z0-9_.~+/=-]{20,})/gi,
     group: 1,
   },
   {
@@ -158,6 +208,24 @@ export function redactBytes(bytes: Uint8Array): RedactionResult {
   }
   out += text.slice(last);
   return { bytes: encoder.encode(out), redactions };
+}
+
+/**
+ * The same removals on a value that ships inline rather than as a body, such
+ * as an event attribute: each credential is replaced by its marker. Nothing
+ * is recorded, because an inline value has no byte span or digest of its
+ * own to cite; the marker names the reason.
+ */
+export function redactText(text: string): string {
+  const spans = findSpans(text);
+  if (spans.length === 0) return text;
+  let out = "";
+  let last = 0;
+  for (const span of spans) {
+    out += text.slice(last, span.start) + redactionMarker(span.reason);
+    last = span.end;
+  }
+  return out + text.slice(last);
 }
 
 /** A frame's content after redaction: what is chained, and what was cut. */

@@ -188,7 +188,7 @@ describe("the fallback title", () => {
         "Please repair authentication. The redirect loops after login.",
         "fix/auth-redirect",
       ),
-    ).toBe("Please repair authentication · fix/auth-redirect");
+    ).toBe("Please repair authentication on fix/auth-redirect");
   });
   it("leaves out a branch that names no work", () => {
     for (const branch of ["main", "master", "HEAD", " ", null])
@@ -211,9 +211,9 @@ describe("the fallback title", () => {
     )!;
     expect(title.length).toBeLessThanOrEqual(80);
     expect(title).toMatch(
-      /^Refactor the billing proration path .*… · feature\//u,
+      /^Refactor the billing proration path .*… on feature\//u,
     );
-    expect(title.split(" · ")[0]!.length).toBeLessThanOrEqual(60);
+    expect(title.split(" on feature/")[0]!.length).toBeLessThanOrEqual(60);
   });
   it("gives no title for a prompt with no words", () => {
     expect(fallbackRunTitle(" \n <br> \n", "fix/x")).toBeNull();

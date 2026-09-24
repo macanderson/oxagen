@@ -167,9 +167,15 @@ const FRAME_CACHE_5M = `toInt64(greatest(0, ${FRAME_CACHE_WRITE} - ${FRAME_CACHE
 /**
  * Every model-call frame of one run, oldest first. Throws on a degraded
  * store: the rollup job retries rather than writing a row from missing frames.
+ *
+ * A wrapped run's frames are read in the run's own workspace. The producer
+ * names `root_session_uuid`, so a host in another workspace of the same
+ * organization can stamp its frames with this run's root; without the
+ * workspace predicate they were priced into this run.
  */
 export async function readModelCallFrames(args: {
   orgId: string;
+  workspaceId: string;
   run: FrameRunRef;
 }): Promise<ModelCallFrameRow[]> {
   const ch = clickhouse();
@@ -240,6 +246,7 @@ export async function readModelCallFrames(args: {
           thinking_tokens, cost_usd_micros, request_id, message_id
         FROM tacho_events FINAL
         WHERE org_id = {orgId:UUID}
+          AND workspace_id = {workspaceId:UUID}
           AND root_session_uuid = {rootSessionUuid:UUID}
           AND kind = 'llm_call'
           AND source IN {sources:Array(String)}
@@ -253,6 +260,7 @@ export async function readModelCallFrames(args: {
           toInt64(max(coalesce(cache_creation_1h_tokens, 0))) AS cache_1h
         FROM tacho_events FINAL
         WHERE org_id = {orgId:UUID}
+          AND workspace_id = {workspaceId:UUID}
           AND root_session_uuid = {rootSessionUuid:UUID}
           AND kind = 'llm_call'
           AND ${TRANSCRIPT_SPLIT_ROW}
@@ -266,6 +274,7 @@ export async function readModelCallFrames(args: {
           toInt64(max(coalesce(cache_creation_1h_tokens, 0))) AS cache_1h
         FROM tacho_events FINAL
         WHERE org_id = {orgId:UUID}
+          AND workspace_id = {workspaceId:UUID}
           AND root_session_uuid = {rootSessionUuid:UUID}
           AND kind = 'llm_call'
           AND ${TRANSCRIPT_SPLIT_ROW}
@@ -276,6 +285,7 @@ export async function readModelCallFrames(args: {
     `,
     query_params: {
       orgId: args.orgId,
+      workspaceId: args.workspaceId,
       rootSessionUuid: run.rootSessionUuid,
       sources: TACHO_TOKEN_SOURCES,
       duplicateAttr: LLM_CALL_DUPLICATE_OF_ATTR,
@@ -311,13 +321,15 @@ export async function readModelCallFrames(args: {
 }
 
 /**
- * Every tool-call frame of one wrapped run. The hook source is the one that
- * carries a tool call once (the ingest handler's `numToolCalls` rule); a
+ * Every tool-call frame of one wrapped run, read in the run's own workspace
+ * for the reason {@link readModelCallFrames} gives. The hook source is the one
+ * that carries a tool call once (the ingest handler's `numToolCalls` rule); a
  * ledger run's tool calls are its `tool.call_completed` events in Postgres,
  * which the rollup store reads.
  */
 export async function readTachoToolCallFrames(args: {
   orgId: string;
+  workspaceId: string;
   rootSessionUuid: string;
 }): Promise<ToolCallFrameRow[]> {
   const ch = clickhouse();
@@ -326,6 +338,7 @@ export async function readTachoToolCallFrames(args: {
       SELECT tool_name AS name
       FROM tacho_events FINAL
       WHERE org_id = {orgId:UUID}
+        AND workspace_id = {workspaceId:UUID}
         AND root_session_uuid = {rootSessionUuid:UUID}
         AND kind = 'tool_call'
         AND source = 'hook'
@@ -333,6 +346,7 @@ export async function readTachoToolCallFrames(args: {
     `,
     query_params: {
       orgId: args.orgId,
+      workspaceId: args.workspaceId,
       rootSessionUuid: args.rootSessionUuid,
     },
     format: "JSONEachRow",

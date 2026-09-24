@@ -304,6 +304,16 @@ const PRICES: NonNullable<PolicyBundle["model_prices"]> = [
     cache_read: 125_000,
     cache_write: 1_250_000,
   },
+  // A model is priced by its own row or its row plus a date stamp, never by
+  // another model's prefix, so Codex's model needs a row of its own.
+  {
+    provider: "openai",
+    model: "gpt-5-codex",
+    input: 1_250_000,
+    output: 10_000_000,
+    cache_read: 125_000,
+    cache_write: 1_250_000,
+  },
 ];
 
 const ANTHROPIC_EVENTS = [
@@ -1297,6 +1307,61 @@ describe("the loopback model proxy", () => {
       "daily_budget_exceeded",
     );
     expect(fake.requests).toHaveLength(3);
+  });
+
+  it("charges a stream cut before its closing count to the day at its estimate, and reads it back after a restart", async () => {
+    // 4,000 bytes of text is about 1,000 output tokens, which puts the call
+    // at $0.0186. Billed at the one output token the stream opened with, it
+    // would be $0.0036 and leave the day's $0.01 open.
+    const text = "t".repeat(4000);
+    let cut = true;
+    const fake = await vendor((req, res, seen) => {
+      if (!cut) return streamingAnthropic(1)(req, res, seen);
+      res.writeHead(200, { "Content-Type": "text/event-stream" });
+      res.write(ANTHROPIC_EVENTS[0]);
+      res.write(
+        `event: content_block_delta\ndata: ${JSON.stringify({ type: "content_block_delta", delta: { type: "text_delta", text } })}\n\n`,
+      );
+      setTimeout(() => res.destroy(), 30);
+    });
+    const paths = scratchPaths();
+    const budget = { mode: "enforced" as const, daily_limit_usd: 0.01 };
+    const daemon = { now: () => Date.parse("2026-09-24T09:00:00.000Z") };
+    const first = await boot(fake.url, { paths, bundle: { budget }, daemon });
+    const uuid = await first.session("sess-cut-day");
+    const ask = (port: number) =>
+      call(port, {
+        path: "/anthropic/v1/messages",
+        headers: [
+          "X-Api-Key",
+          FAKE_KEY,
+          "X-Claude-Code-Session-Id",
+          "sess-cut-day",
+        ],
+        body: JSON.stringify({ model: "claude-sonnet-5", stream: true }),
+      });
+
+    await ask(first.port);
+    await until(() => first.frames(uuid).length === 1);
+    expect(first.frames(uuid)[0]!.body).toMatchObject({
+      api_error_class: "upstream_reset",
+      output_tokens: 1000,
+      cost_usd_micros: 3000 + 15_000 + 600,
+      cost_basis: "estimated",
+    });
+    cut = false;
+    expect((await ask(first.port)).headers["x-oxagen-refusal"]).toBe(
+      "daily_budget_exceeded",
+    );
+
+    // The estimate is on the chain, so a restart counts it too.
+    await first.handle.stop();
+    const second = await boot(fake.url, { paths, bundle: { budget }, daemon });
+    await second.session("sess-cut-day");
+    expect((await ask(second.port)).headers["x-oxagen-refusal"]).toBe(
+      "daily_budget_exceeded",
+    );
+    expect(fake.requests).toHaveLength(1);
   });
 
   it("refuses nothing on the day ceiling under an observed budget, and names the session ceiling first when both are spent", async () => {

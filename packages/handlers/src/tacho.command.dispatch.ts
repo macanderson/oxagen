@@ -30,6 +30,12 @@
 // loopback proxy (`gateway`, `contained`), which can cut a call in flight.
 // Both modes are recorded, and the report shows the achieved one.
 //
+// A `steer` or `message` to a run whose harness reads steering text only when
+// its session starts (Stella) is refused with `no_prompt_carrier`
+// (`steerBlockOf`), and a broadcast records it as `failed` with that reason,
+// rather than queue text the host can never deliver. Pause, resume and cancel
+// still reach it.
+//
 // A new command supersedes an earlier `queued` command of the same kind on the
 // same run: the earlier row becomes `cancelled` with the successor's id, so a
 // run never receives two steers where the operator meant a correction.

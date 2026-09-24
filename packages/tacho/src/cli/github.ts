@@ -1,5 +1,5 @@
 /** Opt-in GitHub Git transport. Git receives a local lease, never a GitHub token. */
-import { readFileSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import type { CliDeps } from "./deps";
 import { shellQuote } from "./deps";
@@ -225,13 +225,36 @@ export function readCredentialInput(): string {
   return readFileSync(0, "utf8");
 }
 
-/** Remove recorded proxy settings before the daemon stops. Foreign helpers survive. */
+/**
+ * Whether `cwd` is gone or no longer a Git checkout. Only git's own "not a
+ * git repository" counts: a git that cannot run, or refuses a checkout it
+ * does not trust, says nothing about whether our settings are still in it.
+ */
+function checkoutGone(deps: CliDeps, cwd: string): boolean {
+  if (!existsSync(cwd)) return true;
+  const out = deps.exec("git", ["-C", cwd, "rev-parse", "--git-dir"]);
+  return out.status !== 0 && /not a git repository/i.test(out.stderr);
+}
+
+/**
+ * Remove recorded proxy settings before the daemon stops. Foreign helpers
+ * survive. A receipt whose checkout was deleted is dropped with a warning:
+ * its settings went with it, and refusing on it blocked every later
+ * unenroll and enroll.
+ */
 export function restoreGithubRepositories(
   host: Pick<HostFile, "github_repositories"> | undefined,
   deps: CliDeps,
+  warnings: string[] = [],
 ): string[] {
   const failures: string[] = [];
   for (const entry of host?.github_repositories ?? []) {
+    if (checkoutGone(deps, entry.cwd)) {
+      warnings.push(
+        `${entry.cwd} is gone or is no longer a Git checkout, so its GitHub proxy settings went with it; its receipt was dropped`,
+      );
+      continue;
+    }
     try {
       const helperKey = `credential.${entry.url}.helper`;
       const current = git(
