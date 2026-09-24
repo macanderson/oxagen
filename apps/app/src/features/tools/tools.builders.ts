@@ -108,7 +108,10 @@ export function agentPage(
     totals: {
       identities: agents.length,
       enrolled: agents.filter((agent) => agent.status === "enrolled").length,
+      unenrolled: agents.filter((agent) => agent.status === "unenrolled")
+        .length,
       holdingMandate: 0,
+      mandateHolders: [],
       tamperIncidents: 0,
       tamper: { recorded: 0, open: 0, newest: null },
     },

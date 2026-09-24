@@ -103,6 +103,34 @@
     overflow-wrap: anywhere;
     padding: 7px 0;
     white-space: normal;
+    /* A hairline rules each cell off from the next, as on a printed card. */
+    border-bottom-width: 1px;
+    border-bottom-style: solid;
+    border-bottom-color: color-mix(in oklab, var(--border) 60%, transparent);
+  }
+
+  table[data-cards] td:last-child,
+  table[data-cards] th[scope="row"]:last-child {
+    border-bottom-width: 0;
+  }
+
+  /* The first cell is the card's head: it names the row, so it carries no
+     column label and sits at the start edge. An unlabelled cell, such as the
+     row actions, sits there too. */
+  table[data-cards] td:first-child,
+  table[data-cards] th[scope="row"]:first-child,
+  table[data-cards] td:not([data-label]) {
+    justify-content: flex-start;
+  }
+
+  table[data-cards] td:first-child,
+  table[data-cards] th[scope="row"]:first-child {
+    padding-top: 9px;
+  }
+
+  table[data-cards] td:first-child::before,
+  table[data-cards] th[scope="row"]:first-child::before {
+    display: none;
   }
 
   table[data-cards] td[data-label]::before,

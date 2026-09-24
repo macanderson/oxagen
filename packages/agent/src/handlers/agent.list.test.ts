@@ -476,7 +476,13 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(out.totals).toEqual({
         identities: 5,
         enrolled: 2,
+        // charlie alone: delta is suspended and echo retired, and neither
+        // is waiting to enroll.
+        unenrolled: 1,
         holdingMandate: 1,
+        mandateHolders: [
+          `${tenant.orgNamespace}.${tenant.workspaceNamespace}.bravo`,
+        ],
         tamperIncidents: 1,
         tamper: {
           recorded: 2,
