@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import { readError, readOk } from "@/data/read";
 import { sumMoney } from "@/data/contracts/money";
 import type { RunCostRollup, TranscriptEntry } from "@/data/contracts/run";
-import { runMetrics, TOKEN_CLASSES } from "./metrics";
+import { runMetrics, TOKEN_CLASSES, turnFigures } from "./metrics";
 import {
   mockupTranscript,
   runCost,
@@ -165,14 +165,13 @@ describe("runMetrics", () => {
     expect(m.prompts).toEqual({ count: 1, corrective: 0 });
   });
 
-  it("reads the per-turn ledger and the tool calls off the transcript", () => {
+  it("reads the tool calls off the transcript, and leaves the per-turn ledger to get_run_turns", () => {
     const m = runMetrics({
       run: runRow(),
       cost: readOk(runCost()),
       transcript: readOk(mockupTranscript()),
     });
-    expect(m.turns?.map((turn) => turn.turn)).toEqual([1, 2]);
-    expect(m.turns?.[0]?.cost).toEqual({ micros: "380000", currency: "USD" });
+    expect("turns" in m).toBe(false);
     expect(m.toolCalls?.map((call) => call.name)).toEqual([
       "list_pull_requests",
       "create_tag",
@@ -261,7 +260,6 @@ describe("runMetrics", () => {
     expect(m.cost).toBeNull();
     expect(m.prompts).toBeNull();
     expect(m.wall.ms).toBeNull();
-    expect(m.turns).toBeNull();
     expect(m.toolCalls).toBeNull();
     expect(m.errors).toBeNull();
   });
@@ -330,19 +328,6 @@ function modelFrame(
 /** A tool call the producer wrote as one frame: the whole exchange, no request half. */
 function toolFrame(seq: number, atS: number, label: string, turn = 1) {
   return frame(seq, atS, { kind: "tool_call", type: "tool_call", label, turn });
-}
-
-function usage(
-  inputUncached: number | null,
-  cacheRead: number | null,
-): TranscriptEntry["usage"] {
-  return {
-    inputUncached,
-    cacheRead,
-    cacheWrite: null,
-    output: null,
-    reasoning: null,
-  };
 }
 
 describe("runMetrics over a partial record", () => {
@@ -628,40 +613,46 @@ describe("runMetrics over a partial record", () => {
     expect(none.modelCalls).toBe(0);
   });
 
-  it("reads each turn's cache hit from the usage its frames reported, and none where they reported none (negative)", () => {
-    const entries = [
-      frame(0, 0, { turn: 1 }),
-      modelFrame(1, 1, 1, usage(100, 300)),
-      modelFrame(2, 2, 1, usage(null, 100)),
-      frame(3, 3, { turn: 2 }),
-      modelFrame(4, 4, 2, null),
-      frame(5, 5, { turn: 3 }),
-      modelFrame(6, 6, 3, usage(0, null)),
-      frame(7, 7, { turn: 4 }),
-      modelFrame(8, 8, 4, undefined),
-    ];
-    const m = runMetrics({
-      run: runRow(),
-      cost: readOk(runCost()),
-      transcript: readOk(mockupTranscript({ entries })),
+  it("reads each turn's cache hit from the input its calls reported, and none where they reported none (negative)", () => {
+    const row = (
+      turn: number,
+      tokens: { inputUncached: number | null; cacheRead: number | null },
+    ) => ({
+      turn,
+      seq: String(turn * 10),
+      at: "2026-09-15T08:00:00.000Z",
+      frames: 3,
+      modelSteps: 2,
+      toolSteps: 1,
+      cost: null,
+      cumulativeCost: null,
+      tokens,
     });
-    expect(m.turns?.map((turn) => turn.cacheHit)).toEqual([
+    const figures = turnFigures([
+      row(1, { inputUncached: 100, cacheRead: 400 }),
+      // One class reported: the other counts for nothing, not for a guess.
+      row(2, { inputUncached: null, cacheRead: 100 }),
+      // No call reported input.
+      row(3, { inputUncached: null, cacheRead: null }),
+      // Input that counts no token names no hit rate, never 0%.
+      row(4, { inputUncached: 0, cacheRead: 0 }),
+    ]);
+    expect(figures.map((figure) => figure.cacheHit)).toEqual([
       // 400 read of 500 counted input.
       0.8,
-      // A frame with no usage reports nothing.
+      1,
       null,
-      // Usage that counts no input names no hit rate, never 0%.
-      null,
-      // A frame that carries no usage field at all reports nothing either.
       null,
     ]);
-    expect(m.turns?.[0]).toMatchObject({
-      steps: 2,
+    expect(figures[0]).toEqual({
+      turn: 1,
+      steps: 3,
       modelSteps: 2,
-      toolSteps: 0,
+      toolSteps: 1,
       frames: 3,
       cost: null,
-      seq: "0",
+      cacheHit: 0.8,
+      seq: "10",
     });
   });
 
@@ -897,7 +888,6 @@ describe("runMetrics over a partial record", () => {
       lead: null,
     });
     expect(m.prompts).toEqual({ count: 0, corrective: 0 });
-    expect(m.turns).toEqual([]);
     expect(m.modelCalls).toBe(54);
   });
 

@@ -360,6 +360,7 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
       get: refuse,
       frameBody: refuse,
       cost: refuse,
+      turns: refuse,
       transcript: refuse,
       chain: refuse,
       outputs: refuse,

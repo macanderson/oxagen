@@ -11,7 +11,11 @@
 //     the productive ratio, the per-model rows, and each model's recorded
 //     cost by token class and cache saving;
 //   - the whole-run transcript at `everything`: prompts, steps, tool calls,
-//     their families and batches, the per-turn ledger, the wall clock split.
+//     their families and batches, the wall clock split.
+//
+// The per-turn ledger is not derived here. The Cost tab reads it from
+// `get_run_turns`, which counts every frame of the run where the frames are
+// stored; `turnFigures` below only shapes those rows (#4067).
 //
 // It prices nothing. The rollup priced every frame from the price book at the
 // frame's instant (ADR-060) and recorded the split; this sums what it recorded,
@@ -24,6 +28,7 @@ import type {
   RunCost,
   RunCostRollup,
   RunTranscript,
+  RunTurn,
   TranscriptEntry,
 } from "@/data/contracts/run";
 import type { RunRow } from "@/data/contracts/runs";
@@ -33,7 +38,6 @@ import { groupOf, type ToolGroup } from "./tool-detail";
 import {
   buildTranscript,
   flatSteps,
-  frameCost,
   isOperatorPrompt,
   stepDigest,
   type TranscriptStep,
@@ -177,8 +181,8 @@ export type Batches = {
 };
 
 export type TurnFigure = {
-  /** 1-based; null for the frames before the first turn. */
-  turn: number | null;
+  /** 1-based, the number the transcript's entries carry for the same turn. */
+  turn: number;
   steps: number;
   modelSteps: number;
   toolSteps: number;
@@ -220,7 +224,6 @@ export type RunMetrics = {
   productiveRatio: number | null;
   prompts: Prompts | null;
   wall: WallClock;
-  turns: TurnFigure[] | null;
   modelCalls: number | null;
   toolCalls: ToolCall[] | null;
   families: Family[] | null;
@@ -303,40 +306,31 @@ function tokenFigures(rollup: RunCostRollup): TokenFigures {
   return { total: input + output, input, output, byClass };
 }
 
-/** The per-turn ledger: what each turn cost, how many steps it took, and its cache hit. */
-function turnFigures(turns: readonly TranscriptTurn[]): TurnFigure[] {
-  return turns
-    .filter((turn) => turn.turn !== null)
-    .map((turn) => {
-      let read = 0;
-      let fresh = 0;
-      let reported = false;
-      for (const frame of turn.frames) {
-        const usage = frame.usage;
-        if (usage === null || usage === undefined) continue;
-        if (usage.cacheRead !== null) {
-          read += usage.cacheRead;
-          reported = true;
-        }
-        if (usage.inputUncached !== null) {
-          fresh += usage.inputUncached;
-          reported = true;
-        }
-      }
-      const steps = flatSteps(turn);
-      const modelSteps = steps.filter((s) => s.kind === "model").length;
-      const toolSteps = steps.filter((s) => s.kind === "tool").length;
-      return {
-        turn: turn.turn,
-        steps: modelSteps + toolSteps,
-        modelSteps,
-        toolSteps,
-        frames: turn.frames.reduce((sum, frame) => sum + frame.frames, 0),
-        cost: frameCost(turn.frames),
-        cacheHit: reported && read + fresh > 0 ? read / (read + fresh) : null,
-        seq: turn.first.seq,
-      };
-    });
+/**
+ * The per-turn ledger from `get_run_turns`: what each turn cost, how many
+ * steps and frames it took, and its cache hit, cache_read ÷ (input_uncached +
+ * cache_read) over the input its model calls reported. A turn whose calls
+ * reported no input has no cache hit, never a zero.
+ */
+export function turnFigures(turns: readonly RunTurn[]): TurnFigure[] {
+  return turns.map((turn) => {
+    const { inputUncached, cacheRead } = turn.tokens;
+    const read = cacheRead ?? 0;
+    const input = read + (inputUncached ?? 0);
+    return {
+      turn: turn.turn,
+      steps: turn.modelSteps + turn.toolSteps,
+      modelSteps: turn.modelSteps,
+      toolSteps: turn.toolSteps,
+      frames: turn.frames,
+      cost: turn.cost,
+      cacheHit:
+        (inputUncached === null && cacheRead === null) || input === 0
+          ? null
+          : read / input,
+      seq: turn.seq,
+    };
+  });
 }
 
 /**
@@ -587,7 +581,6 @@ export function runMetrics({
         ? null
         : { count: promptCount, corrective: Math.max(0, promptCount - 1) },
     wall: wallClock(run, entries, turns, waits),
-    turns: turns === null ? null : turnFigures(turns),
     modelCalls:
       rollup?.modelCalls ??
       (turns === null

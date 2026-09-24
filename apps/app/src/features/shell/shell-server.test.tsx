@@ -75,6 +75,7 @@ function stubSource() {
       get: vi.fn(),
       frameBody: vi.fn(),
       cost: vi.fn(),
+      turns: vi.fn(),
       transcript: vi.fn(),
       chain: vi.fn(),
       outputs: vi.fn(),

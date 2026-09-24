@@ -493,10 +493,19 @@
     "get_run_cost": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run]?tab=cost \u2014 the page reads get_run_cost once for the six figures, and the Cost tab lays its token classes, instruments and waterfall out from the same rollup (data/live/runs.ts, features/run/metrics.ts, features/run/cost.tsx)",
+      "entry": "/[org]/[ws]/runs/[run]?tab=cost \u2014 the page reads get_run_cost once for the six figures, and the Cost tab lays its token classes and instruments out from the same rollup (data/live/runs.ts, features/run/metrics.ts, features/run/cost.tsx)",
       "proof": "apps/app/src/features/run/cost.test.tsx",
       "verifiedAt": "2026-09-24",
       "verifiedBy": "session_014z7BMxb5guRYRar9qDcvQn"
+    },
+    "get_run_turns": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "/[org]/[ws]/runs/[run]?tab=cost: the Cost tab reads get_run_turns once and draws the waterfall, its ledger table, and the Cost so far and Shape of the run instruments from its rows (data/live/runs.ts, features/run/cost.tsx, features/run/waterfall.tsx)",
+      "testid": "waterfall-panel",
+      "proof": "apps/app/src/features/run/cost.test.tsx",
+      "verifiedAt": "2026-09-24",
+      "verifiedBy": "session_01QEwd1CHGAXDubLiTupVwv3"
     },
     "get_run_frame_body": {
       "route": "/[org]/[ws]/runs/[run]",

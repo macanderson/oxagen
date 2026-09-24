@@ -1391,6 +1391,62 @@ describe("a subagent's steps under its Task call", () => {
       }),
     ).toEqual(["Bash", "Task", "Grep", "Read", "Bash"]);
   });
+
+  it("replaces an entry a live read sends again rather than drawing it twice (#4048)", async () => {
+    const instances = fakeEventSource(1);
+    // The view holds the run through the subagent's first call. The next read
+    // sends the turn's opening entry again, as it stands now, with what came
+    // after. A call's frames share a call key and fold into one row whatever
+    // happens, so the prompt, which has none, is the entry that would show a
+    // second copy.
+    const held = entries.slice(0, 9);
+    const again = frame({
+      seq: "1",
+      type: "turn_start",
+      request: transcriptBody({
+        seq: "1",
+        text: "Find the flaky test and quarantine nothing.",
+      }),
+    });
+    readTranscriptPage.mockResolvedValueOnce(
+      pageOk(
+        runTranscript({
+          zoom: "everything",
+          entries: [again, ...entries.slice(9)],
+          cursor: "c2",
+          complete: false,
+        }),
+      ),
+    );
+    vi.useFakeTimers();
+    try {
+      renderSection({
+        read: readOk(
+          runTranscript({ entries: held, cursor: "c1", complete: false }),
+        ),
+        status: "live",
+      });
+      const [source] = instances;
+      if (source === undefined) throw new Error("no EventSource opened");
+      source.onmessage?.(new MessageEvent("message", { data: "{}" }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(750);
+        for (let i = 0; i < 20; i += 1) await Promise.resolve();
+      });
+      expect(readTranscriptPage.mock.calls.map((c) => c[5])).toEqual(["c1"]);
+      // The same six rows as the whole run read at once, the prompt once and
+      // as the later read has it.
+      expect(rows()).toHaveLength(6);
+      const prompts = rows().filter((row) =>
+        row.textContent.includes("Find the flaky test"),
+      );
+      expect(prompts).toHaveLength(1);
+      expect(prompts[0]).toHaveTextContent("quarantine nothing");
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    }
+  });
 });
 
 describe("the effort a model call ran at", () => {

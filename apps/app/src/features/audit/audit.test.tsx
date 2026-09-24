@@ -118,6 +118,7 @@ const source: DataSource = {
     get: refuse,
     frameBody: refuse,
     cost: refuse,
+    turns: refuse,
     transcript: refuse,
     chain: refuse,
     outputs: refuse,

@@ -3,9 +3,9 @@
 // cost accumulating across them as a dashed line, and the per-turn table
 // under it with a total row.
 //
-// It reads the per-turn ledger `runMetrics` derives from the whole-run
-// transcript (`metrics.turns`), summed by `ledgerOf`, so a turn's cost here is
-// the same figure the Transcript tab prints against that turn, and the total
+// It reads the per-turn ledger `get_run_turns` counts over every frame of the
+// run (#4067), summed by `ledgerOf`, so a turn's cost here is the sum of the
+// costs the Transcript tab prints against that turn's entries, and the total
 // row's steps and frames are the Shape of the run instrument's. The total row
 // is the sum of the rows, set against the run's recorded cost ("of $ recorded")
 // rather than typed as it: the two differ when a cost record sits outside
@@ -22,7 +22,7 @@ import {
   ratioOfIntegers,
   shareOfMicros,
 } from "@/data/contracts/money";
-import type { RunTranscript } from "@/data/contracts/run";
+import type { RunTurns } from "@/data/contracts/run";
 import type { Read } from "@/data/read";
 import { Badge } from "@/ui/badge";
 import { mono } from "@/ui/control-styles";
@@ -138,7 +138,7 @@ function Chart({ ledger, total }: { ledger: Ledger; total: Money }) {
       />
       {ledger.rows.map((row, index) => {
         const top = barY(row.cost);
-        const turn = row.turn ?? index + 1;
+        const { turn } = row;
         return (
           <g key={row.seq}>
             {top === null || row.cost === null ? null : (
@@ -262,10 +262,10 @@ function LedgerTable({
         { label: t("columns.pinned") },
       ]}
     >
-      {ledger.rows.map((row, index) => (
+      {ledger.rows.map((row) => (
         <tr key={row.seq} data-testid="waterfall-row" data-seq={row.seq}>
           <td className={`${cell} ${mono}`}>
-            {t("turnLabel", { turn: row.turn ?? index + 1 })}
+            {t("turnLabel", { turn: row.turn })}
           </td>
           <td className={numericCell}>{count(row.steps)}</td>
           <td className={numericCell}>{count(row.frames)}</td>
@@ -325,12 +325,13 @@ function LedgerTable({
 export function WaterfallPanel({
   metrics,
   ledger,
-  transcript,
+  turns,
 }: {
   metrics: RunMetrics;
-  ledger: Ledger;
-  /** The whole-run transcript the ledger was derived from, for its failure. */
-  transcript: Read<RunTranscript>;
+  /** Null when `turns` failed. */
+  ledger: Ledger | null;
+  /** The `get_run_turns` read the ledger was summed from, for its failure and its end. */
+  turns: Read<RunTurns>;
 }) {
   const t = useTranslations("run.waterfall");
   const tCost = useTranslations("run.cost");
@@ -342,7 +343,7 @@ export function WaterfallPanel({
       testId="waterfall-panel"
       flush
       aside={
-        metrics.turns === null ? undefined : (
+        ledger === null ? undefined : (
           <Badge tone="quiet" dot={false}>
             {cost === null
               ? t("asideTurns", { turns: ledger.rows.length })
@@ -355,9 +356,9 @@ export function WaterfallPanel({
         )
       }
     >
-      {!transcript.ok ? (
+      {!turns.ok || ledger === null ? (
         <PanelBody>
-          <ReadFailure read={transcript} section={t("title")} />
+          {turns.ok ? null : <ReadFailure read={turns} section={t("title")} />}
         </PanelBody>
       ) : ledger.rows.length === 0 ? (
         <PanelBody>
@@ -412,13 +413,13 @@ export function WaterfallPanel({
           <div className="border-t border-border">
             <LedgerTable metrics={metrics} ledger={ledger} />
           </div>
-          {metrics.whole ? null : (
+          {turns.value.complete ? null : (
             <PanelBody rule>
               <p
                 data-testid="waterfall-cut"
                 className="m-0 max-w-prose text-[11.5px] text-muted-foreground"
               >
-                {t("cut")}
+                {t("cut", { count: ledger.rows.length })}
               </p>
             </PanelBody>
           )}
