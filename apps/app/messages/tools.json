@@ -1,7 +1,7 @@
 {
   "tools": {
-    "eyebrow": "Workspace {workspace}",
-    "lede": "The registry is the only source of tools an agent can see. What an agent may do with one is the classification below, the grants the broker mints, and the switches that can deny it at any level.",
+    "eyebrow": "{workspace}",
+    "lede": "The registry is the only source of tools an agent can see.",
     "loading": "Loading tools",
     "notCarried": "not recorded",
     "nextPage": "Next page",
@@ -15,39 +15,36 @@
     },
     "tabs": {
       "label": "Tools sections",
-      "registry": "Tools",
-      "connections": "Providers",
+      "tools": "Tools",
+      "toolbelts": "Toolbelts",
+      "providers": "Providers",
+      "policy": "Policy",
       "switches": "Kill switches",
-      "mandates": "Mandates",
+      "atLeast": "{count}+",
       "switchesOn": "{count, plural, one {# on} other {# on}}",
-      "switchesOnAtLeast": "{count, plural, one {# or more on} other {# or more on}}",
-      "autoapprovals": "Auto-approvals"
+      "switchesOnAtLeast": "{count, plural, one {# or more on} other {# or more on}}"
     },
     "gate": {
       "open": "Open",
-      "killed_version": "Killed · this version",
-      "killed_server": "Killed · its server",
-      "killed_class": "Killed · its class"
+      "killed_version": "Kill switch on this version",
+      "killed_server": "Kill switch on its provider",
+      "killed_class": "Kill switch on its class"
     },
     "registry": {
-      "title": "Tool versions",
-      "lead": "Access reaches the version. A server shipping a new version does not silently widen a belt.",
-      "categories": "Filter by consequence tag",
+      "title": "Tools",
+      "categories": "Filter by category",
       "allCategories": "All",
       "categoriesNote": "These tags and counts are this page of the registry. A tag carried only by a version on a later page appears once you reach that page.",
       "allOnPage": "All on this page",
-      "categoriesDeclaredNote": "These chips and the Category column show the tags recorded with a version's classification. A version can also carry tags declared where it was published, and both the filter and a class kill switch match those too — so a tag can select a version whose row shows none, and the Financial column can confirm a money tag but never rule one out.",
+      "categoriesDeclaredNote": "The chips and the Category column show the consequence tags a version’s classification records. The ten categories that group tools by what they act on are not recorded on a version yet. A version can also carry tags declared where it was published, which the filter and a class kill switch match too, so a tag can select a version whose row shows none.",
       "categoriesFilteredNote": "While a tag is selected, these chips count only the versions matching it: they are the tags carried alongside that one, not the registry's. Clear the filter to see the rest.",
       "unclassified": "Unclassified",
       "noTags": "No tag",
       "emptyCategory": "No tool version on this page carries that tag.",
-      "gateNote": "The gate shown is today’s, in the recorded order: the version’s own kill switch, then its server’s, then a class switch matching its consequence tags.",
-      "empty": {
-        "title": "No tool version is registered",
-        "body": "Until a server is imported, no agent in this workspace has a belt, and every call by name is unknown_tool. Import a registered MCP server to pull its tools/list, version it, and store its schema."
-      },
+      "gateNote": "The gate shown is today’s: the version’s own kill switch, then its provider’s, then its class’s. A toolbelt decides which agents are shown the tool; the gate decides whether the call survives. Open a provider on any row to see what it imported and the connection it is reached with.",
       "columns": {
         "version": "Tool version",
+        "provider": "Provider",
         "category": "Category",
         "hazard": "Hazard",
         "gate": "Gate today",
@@ -55,6 +52,8 @@
         "financial": "Financial",
         "origin": "Schema origin",
         "digest": "Digest",
+        "toolbelts": "Toolbelts",
+        "agents": "Agents",
         "calls": "Calls 30d"
       },
       "names": {
@@ -78,12 +77,36 @@
         "org_tenant": "org tenant",
         "third_party": "third party"
       },
-      "financial": {
-        "yes": "Moves money"
-      },
       "origin": {
         "declared": "Declared",
         "imported": "Imported"
+      },
+      "caption": "Every version imported from every provider. RBAC reaches the version, so a provider shipping a new one does not widen a toolbelt.",
+      "emptyRegistry": "The registry holds no tool version yet. Import a provider to add its tools.",
+      "observedNotBacked": "Output schemas observed rather than declared are not recorded, so no version here waits on approval. Where a provider declares no outputSchema, nothing files the observed schema as a registry proposal yet.",
+      "shown": "{shown} shown",
+      "shownOf": "{shown} of {total} shown",
+      "declaredSource": {
+        "builtin": "Built in",
+        "custom": "Declared here",
+        "mcp": "Imported",
+        "foundry": "Foundry"
+      },
+      "categoriesDialog": {
+        "open": "What the categories mean",
+        "title": "Tool categories",
+        "lead": "The chips group the registry by the consequence tags each version’s classification records. The starter set:",
+        "tags": {
+          "moves_money": "Moves funds or commits spend. A call needs a mandate that covers it.",
+          "destroys_data": "Deletes or overwrites data that cannot be read back.",
+          "alters_production": "Changes a production system or its configuration.",
+          "communicates_externally": "Sends a message or a file outside the organization.",
+          "changes_access": "Grants, revokes or changes who may reach something.",
+          "changes_entitlement": "Changes what an account is entitled to, such as a plan or a seat."
+        },
+        "decides": "Category is a registry attribute, not a policy: a rule may reference it, but only risk, side effect, financial effect and egress carry a decision by themselves.",
+        "note": "The ten categories the design groups tools by, from read-only to financial control, are not recorded on a tool version yet.",
+        "close": "Close"
       }
     },
     "tool": {
@@ -93,7 +116,7 @@
       "source": {
         "builtin": "Built in",
         "custom": "Custom",
-        "mcp": "MCP server",
+        "mcp": "Imported from a provider",
         "foundry": "Foundry"
       },
       "facts": {
@@ -128,35 +151,69 @@
       }
     },
     "import": {
-      "open": "Import tools from an MCP server",
-      "title": "Import tools from an MCP server",
-      "body": "Pulls the registered server’s pinned tools/list into this workspace’s registry: one immutable version per changed manifest. Re-importing an unchanged server changes nothing.",
-      "serverId": "Server",
+      "open": "Import a provider",
+      "openAdd": "Add a provider",
+      "title": "Import tools from a provider",
+      "subtitle": "The registry is the only source of tools an agent can see. Nothing reaches a belt until it is here.",
+      "reviewTitle": "Review tools/list",
+      "reviewSubtitle": "{count, plural, one {# tool} other {# tools}} listed by {name}",
+      "classifyTitle": "Classify and import",
+      "steps": {
+        "label": "Import steps",
+        "s1": "1 Connect",
+        "s2": "2 Review tools/list",
+        "s3": "3 Classify and import"
+      },
+      "provider": "Provider",
+      "newProvider": "A new provider",
+      "name": "Name",
+      "nameHint": "The system the tools belong to, such as GitHub. Up to 120 characters.",
+      "endpoint": "Endpoint URL",
+      "endpointHint": "An address reachable from the public internet. One that resolves inside this deployment is refused, because the health check carries the auth config to it.",
+      "wire": "Wire",
+      "wireHint": "The transport is mcp. Streamable HTTP is the wire this form can register; an SSE provider is installed through a plugin.",
+      "auth": "Auth",
+      "authStrategies": {
+        "none": "none",
+        "bearer": "bearer token",
+        "header": "header"
+      },
+      "authConfig": "Auth config",
+      "authConfigHint": "One name = value per line: the bearer token, or the header and its value. It is encrypted before storage and is not shown again.",
+      "authConfigPlaceholder": "token = …",
+      "connectNote": "Oxagen checks the endpoint and calls tools/list, then records every tool it lists. Nothing is versioned until you import.",
+      "connect": "Connect",
+      "pending": "Connecting…",
+      "back": "Back",
+      "classify": "Classify",
+      "cancel": "Cancel",
       "tools": "Tools",
-      "toolsHint": "Space- or comma-separated names. Leave it blank to import every pinned tool the server has.",
-      "confirm": "Import",
-      "pending": "Importing…",
-      "done": "{published, plural, =0 {No new version} one {# new version} other {# new versions}} · {unchanged, plural, =0 {nothing unchanged} one {# already registered} other {# already registered}}.",
-      "serverIdPlaceholder": "mcs_…",
-      "serverPick": "Pick a registered server",
-      "serverPickHint": "Pick a provider registered in this workspace. Add one on the Providers tab.",
-      "serverFallbackHint": "The server roster could not be read, so the server is named by its id.",
-      "serverNone": "No server is registered yet, so there is nothing to import from."
+      "toolsHint": "Space- or comma-separated names. Leave it blank to import every tool the provider pins.",
+      "nothingListed": "The provider listed no tools, so there is nothing to import yet.",
+      "listed": "Tools the provider listed",
+      "selected": "{selected} of {total} selected",
+      "allPins": "Every tool the provider pins.",
+      "grantsNothingTitle": "What import does not do.",
+      "grantsNothing": "It grants nothing. Each tool lands as a new version, unclassified, on no toolbelt, until someone classifies it on its row.",
+      "importAll": "Import every tool",
+      "importCount": "Import {count, plural, one {# tool} other {# tools}}",
+      "importing": "Importing…",
+      "done": "{published, plural, =0 {No new version} one {# new version} other {# new versions}} · {unchanged, plural, =0 {nothing unchanged} one {# already registered} other {# already registered}}."
     },
     "connections": {
-      "title": "Credential grants",
-      "lead": "Every credential the broker put to use for a tool server on behalf of a run, with the connection it drew on and how far it was narrowed. No agent holds any of these; the agent sees the result, never the credential.",
+      "title": "Credential grants log",
+      "lead": "Each grant is one credential the broker minted for one call, with the connection it drew on and how far it was narrowed. The agent sees the result, never the credential.",
       "noRun": "Outside a run",
       "brokerNote": "For each dispatched call the broker mints the narrowest credential the provider allows — a token exchange, a session policy, a restricted key, or the stored credential used server-side for that call only.",
-      "notCarriedNote": "The record carries the server the credential was presented to, not the tool version or the agent that asked for it, so neither is shown here rather than guessed.",
+      "notCarriedNote": "The grant record carries the provider the credential was presented to and the run, not the tool version or the agent, so those are not recorded here.",
       "empty": {
         "title": "No credential has been put to use",
-        "body": "A grant is recorded the first time a governed run reaches a tool server through a stored connection."
+        "body": "A grant is recorded the first time a governed run reaches a provider through a stored connection."
       },
       "columns": {
         "grant": "Grant",
-        "server": "Tool server",
-        "run": "Run",
+        "toolVersion": "Tool version",
+        "agentRun": "Agent and run",
         "connection": "Connection",
         "scope": "Scope",
         "ttl": "TTL",
@@ -180,10 +237,10 @@
       },
       "list": {
         "title": "Connections",
-        "lead": "Every stored connection this workspace can reach a tool server through. A connection holds the credential; a grant below is one use of it.",
+        "lead": "Every stored connection in this workspace. A connection holds the credential; a grant below is one use of it.",
         "empty": {
           "title": "No connection is stored",
-          "body": "Until a connection is added, no run in this workspace can reach a tool server that needs a credential."
+          "body": "Until a connection is added, no run in this workspace can reach a provider that needs a credential."
         },
         "columns": {
           "connection": "Connection",
@@ -197,7 +254,7 @@
           "nextReview": "Next review",
           "status": "Status"
         },
-        "notCarriedNote": "Owner, Reviewed and Next review have no field on the connection record, so they are shown as not recorded rather than guessed.",
+        "notCarriedNote": "Owner, Reviewed and Next review have no field on the connection record yet.",
         "open": "Open this connection",
         "status": {
           "pending_setup": "Pending setup",
@@ -265,35 +322,32 @@
         "confirm": "Add connection",
         "pending": "Adding…",
         "done": "{name} is stored as {id}. Its status is pending setup: the credential is held and nothing has drawn on it yet."
-      }
+      },
+      "fromProvider": "from {provider}"
     },
     "switches": {
-      "title": "Deny is available at every level",
-      "lead": "A flip takes effect at the next call boundary by bumping the deny generation, so every live run token is re-checked at its next call. Runs in flight are not killed; their next call fails closed and the frame names the switch and the reason.",
-      "generation": "Deny generation: {org} organization-wide, {workspace} in this workspace.",
-      "classHeading": "Class switches · organization-wide, in one action",
+      "classHeading": "Class switches",
       "scopedHeading": "Scoped switches",
-      "empty": "No kill switch has ever been flipped in this workspace. Flip one to record the first.",
       "truncated": "This board shows the {limit} newest switches and the record holds more, so the count on the tab is a floor. An older switch that is still denying is not on this page; flip it through the API or MCP, which name a switch by its target rather than by a page.",
       "allowing": "allowing",
       "denying": "denying",
       "flippedByUnrecorded": "not recorded",
       "takesEffect": "at the next call boundary, through deny generation {generation}",
       "kinds": {
-        "class": "Consequence class",
+        "class": "Class",
         "org": "Organization",
         "workspace": "Workspace",
-        "tool_server": "Tool server",
+        "tool_server": "Provider",
         "tool_version": "Tool version",
         "connection": "Connection",
         "agent": "Agent",
-        "operator": "Operator"
+        "operator": "Operator’s agents"
       },
       "blastRadius": {
         "class": "Every tool version carrying this consequence tag, across the organization — including one imported tomorrow.",
         "org": "Every agent in every workspace of this organization.",
         "workspace": "Every agent in this workspace.",
-        "tool_server": "Every tool version this server has published.",
+        "tool_server": "Every tool version this provider has published.",
         "tool_version": "This version only. Another version of the same tool is untouched.",
         "connection": "This connection, and every credential grant behind it: live grants are revoked with the flip.",
         "agent": "This agent, on every run.",
@@ -308,8 +362,6 @@
       },
       "dialog": {
         "openHeader": "Flip a kill switch",
-        "openDeny": "Deny now",
-        "openAllow": "Allow again",
         "titleDeny": "Flip this switch on",
         "titleAllow": "Clear this switch",
         "kind": "Level",
@@ -318,7 +370,7 @@
           "class": "The consequence tag every stopped tool carries, such as moves_money.",
           "org": "This organization.",
           "workspace": "This workspace.",
-          "tool_server": "The server’s id, mcs_….",
+          "tool_server": "The provider’s id, mcs_….",
           "tool_version": "The version’s id, tlv_….",
           "connection": "The stored credential’s id, mcrd_….",
           "agent": "The agent’s id, agt_….",
@@ -341,9 +393,57 @@
         "confirmDeny": "Deny now",
         "confirmAllow": "Allow again",
         "pending": "Recording…",
-        "unchanged": "Nothing changed: the switch was already that way, so no deny generation advanced and nothing new was recorded."
+        "unchanged": "Nothing changed: the switch was already that way, so no deny generation advanced and nothing new was recorded.",
+        "allowing": "allowing",
+        "denying": "denying",
+        "toggleDeny": "Deny {name}",
+        "toggleAllow": "Allow {name} again"
       },
-      "noNames": "A flip records the public id of whoever made it, the same usr_… id list_members and the audit log print. The record carries no display name, so this page prints the id rather than guessing at a person."
+      "generationBadge": "deny generation {generation}",
+      "classTitle": "every {tag} tool",
+      "reach": {
+        "class": "Organization-wide, in one action",
+        "org": "Every agent, every workspace",
+        "workspace": "Every agent in this workspace",
+        "tool_server": "Every tool from this provider",
+        "tool_version": "This version only",
+        "connection": "Kills the connection and every credential grant behind it",
+        "agent": "This agent, every run",
+        "operator": "Every agent this operator is accountable for"
+      },
+      "unbacked": {
+        "irreversible": "every irreversible tool",
+        "egress": "every tool with egress third_party",
+        "note": "A class switch stops tools by consequence tag, and side effect and egress are not tags, so this switch cannot be flipped yet."
+      },
+      "edit": {
+        "open": "Edit",
+        "title": "Edit this switch",
+        "reason": "Why it exists",
+        "note": "Editing a switch is not built yet: a switch row holds its target and its reason as written, and nothing changes them. Clear it and flip a new one instead.",
+        "confirm": "Save"
+      },
+      "remove": {
+        "open": "Remove",
+        "title": "Remove this switch",
+        "note": "Removing a switch is not built yet: nothing deletes a switch row. An allowing switch stops nothing, and its history stays for replay.",
+        "refused": "This switch is denying. Clear it first: clearing records who allowed the traffic, and removing would not.",
+        "confirm": "Remove it"
+      },
+      "create": {
+        "open": "Create a switch",
+        "title": "Create a switch",
+        "scope": "Scope",
+        "scopes": {
+          "agent": "Agent",
+          "device": "Enrolled device",
+          "operator": "Operator’s agents"
+        },
+        "target": "Target",
+        "why": "Why it exists",
+        "note": "A switch is stored only when it is flipped on, so creating one that starts allowing is not built yet, and the enrolled-device scope has no deny to write. Flip a kill switch in the header to deny an agent or an operator’s agents now.",
+        "confirm": "Create it"
+      }
     },
     "failure": {
       "back": "Back to Fleet",
@@ -369,7 +469,7 @@
       "failure": {
         "orgRoleRequired": "This needs an organization Owner or Admin. Nothing was changed.",
         "noPrincipal": "This session carries no person to record the action against. Nothing was changed.",
-        "serverNotFound": "No registered tool server has that id in this workspace.",
+        "serverNotFound": "No registered provider has that id in this workspace.",
         "versionNotFound": "No tool version has that id in this workspace.",
         "killSwitchOn": "A kill switch names this target, so it cannot be changed until the switch is cleared.",
         "refused": "Refused: {code}. Nothing was changed.",
@@ -517,21 +617,6 @@
         "title": "No auto-approval rules yet",
         "body": "Every call the policy sends to a person waits for one. Create a rule to let a call that meets its conditions skip the queue."
       },
-      "tiles": {
-        "label": "Auto-approval totals",
-        "on": {
-          "title": "Rules on",
-          "basis": "of {total} in the rule set"
-        },
-        "released": {
-          "title": "Auto-approved, {days} days",
-          "basis": "Calls a rule released with no person"
-        },
-        "held": {
-          "title": "Sent to a person, {days} days",
-          "basis": "Calls that reached a person with a rule read beside them"
-        }
-      },
       "columns": {
         "rule": "Rule",
         "appliesTo": "Applies to",
@@ -609,56 +694,263 @@
         "tool_scope_changed": "Disabled because {tool} newly matches this rule. Review the tool and save the rule before switching it on."
       }
     },
-    "servers": {
-      "title": "Providers",
-      "lead": "Providers registered through MCP in this workspace. Import their pinned tools to add versions to the registry.",
-      "empty": {
-        "title": "No provider is registered",
-        "body": "Registering a server health checks its endpoint and records the tools it pins. Nothing reaches the registry until those tools are imported."
-      },
-      "columns": {
-        "server": "Provider",
-        "transport": "Transport",
-        "endpoint": "Endpoint",
-        "health": "Health",
-        "checked": "Last health check",
-        "tools": "Pinned tools"
-      },
-      "health": {
-        "healthy": "Healthy",
-        "degraded": "Degraded",
-        "unreachable": "Unreachable",
-        "unknown": "Not checked"
-      },
-      "transport": {
-        "streamable-http": "Streamable HTTP",
-        "sse": "SSE",
-        "stdio": "stdio"
-      },
-      "unknownNote": "A server installed by a plugin is written with the SSE transport and no health check, so its health reads as not checked until one runs.",
-      "register": {
-        "open": "Register a provider",
-        "title": "Register a provider through MCP",
-        "body": "Health checks the endpoint, encrypts any auth config and records the tools the server pins. Importing those tools into the registry is the next step.",
-        "name": "Name",
-        "nameHint": "Up to 120 characters.",
-        "transport": "Transport",
-        "transportHint": "Register an HTTP endpoint. SSE servers are installed through plugins.",
-        "endpoint": "Endpoint URL",
-        "endpointHint": "An address reachable from the public internet. One that resolves inside this deployment is refused, because the health check carries the auth config to it.",
-        "authStrategy": "Auth",
-        "authConfig": "Auth config",
-        "authConfigHint": "One name = value per line: the bearer token, or the header and its value. It is encrypted before storage and is not shown again.",
-        "authConfigPlaceholder": "token = …",
-        "confirm": "Register provider",
-        "pending": "Registering…",
-        "done": "{name} is registered as {id}, {health}, with {tools, plural, =0 {no pinned tool} one {# pinned tool} other {# pinned tools}}.",
-        "doneHealth": {
-          "healthy": "reachable",
-          "degraded": "not health checked",
-          "unreachable": "unreachable"
+    "notBacked": "Not recorded yet",
+    "header": {
+      "newTool": "New tool",
+      "wizard": {
+        "title": "New tool",
+        "subtitle": "Describe it, then review the manifest and open a pull request",
+        "note": "The tool wizard is not built yet. It would take a description, recommend a manifest or an import, write the code in four languages, and open a pull request that adds the tool under .oxagen/tools/. Until then, import a provider to add its tools.",
+        "confirm": "Start",
+        "steps": {
+          "describe": "Describe what the tool does",
+          "recommend": "Read the recommendation: declare it, or import it from a provider",
+          "manifest": "Review the manifest or the import",
+          "code": "Read the code in four languages",
+          "pr": "Open the pull request"
         }
       }
+    },
+    "empty": {
+      "title": "No provider is registered",
+      "body": "Until a provider is imported, no agent in this workspace has a toolbelt, and every call by name is <code>unknown_tool</code>. Importing a provider pulls its tool list, versions each tool, and stores both schemas."
+    },
+    "state": {
+      "back": "Back to Fleet",
+      "denied": {
+        "title": "You cannot see the tool registry",
+        "body": "Your roles on <b>{org}</b> do not include <code>{permission} on {workspace}</code>. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+        "request": "Request access",
+        "signedIn": "Signed in as",
+        "needed": "Needed",
+        "neededValue": "{permission} on {workspace}",
+        "decidedBy": "Decided by",
+        "decidedByValue": "The workspace’s decision rules. Deny wins over every allow."
+      },
+      "requestAccess": {
+        "title": "Request access",
+        "role": "Role requested",
+        "rolePlaceholder": "{permission} on {workspace}",
+        "why": "Why",
+        "note": "Asking for a role from this page is not built yet. It would send the request to an organization owner, and granting it would be a governed action in the audit record with the granter’s name, your name and this reason. Until then, ask an owner to grant the role on the Organization page.",
+        "confirm": "Send the request"
+      },
+      "pending": {
+        "title": "Access to this workspace’s tools is waiting for approval",
+        "body": "Access request {request}"
+      },
+      "error": {
+        "title": "Tools could not be loaded",
+        "body": "The control plane answered <mono>{status} {code}</mono>. Nothing was changed. Runs kept recording while this page was down. Frames are written by the collector on each host, not by Oxagen.",
+        "retry": "Try again",
+        "incident": "Open an incident"
+      },
+      "incident": {
+        "title": "Open an incident",
+        "subject": "Subject",
+        "subjectPlaceholder": "Tools could not be loaded: {code}",
+        "severity": "Severity",
+        "severities": {
+          "critical": "critical",
+          "warning": "warning",
+          "info": "info"
+        },
+        "note": "Opening an incident from this page is not built yet. It would record the subject, the severity and the failed read with its trace. Until then, report the code above to whoever runs this deployment.",
+        "confirm": "Raise it"
+      }
+    },
+    "providers": {
+      "title": "Providers",
+      "caption": "{providers} providers hold {versions} tool versions. A provider is the system the tools belong to; the transport is how Oxagen reaches it.",
+      "captionPartial": "{providers} providers. A provider is the system the tools belong to; the transport is how Oxagen reaches it.",
+      "empty": "No provider is registered. Add one to import its tools.",
+      "columns": {
+        "provider": "Provider",
+        "transport": "Transport",
+        "tools": "Tools",
+        "toolbelts": "Toolbelts",
+        "agents": "Agents",
+        "health": "Health",
+        "connection": "Connection",
+        "authorization": "Authorization",
+        "lastImport": "Last import",
+        "actions": "Actions"
+      },
+      "transportNote": "MCP is one transport among several. A provider reached over http, native or a harness local hook is imported, versioned and decided the same way, so the transport is a property of the row and never the name of the collection.",
+      "attentionNotBacked": "Token expiry and review dates are not recorded on a connection, so no connection is counted here as expired or due for review.",
+      "open": "Open",
+      "openNamed": "Open {name}",
+      "wireLine": "{wire} · {endpoint}",
+      "atLeast": "{count}+",
+      "pinned": "{count} pinned at last check",
+      "health": {
+        "healthy": "ok",
+        "degraded": "degraded",
+        "unreachable": "unreachable",
+        "unknown": "not checked"
+      },
+      "remove": {
+        "open": "Remove",
+        "title": "Remove {name}",
+        "cancel": "Cancel",
+        "confirm": "Remove it",
+        "pending": "Removing…",
+        "stops": "Its tools stop registering at once, so no agent is shown them and every call by their names is unknown_tool.",
+        "kept": "The tool-descriptor snapshots are kept for at least 365 days, so every run that called them still replays.",
+        "switchNote": "The removal is recorded with your name.",
+        "notFound": "No live provider has that id, so nothing was removed. It may have been removed already."
+      },
+      "reimport": {
+        "open": "Re-import tools",
+        "pending": "Re-importing…",
+        "done": "{published, plural, =0 {No new version} one {# new version} other {# new versions}}, {unchanged, plural, =0 {nothing unchanged} one {# already registered} other {# already registered}}."
+      },
+      "edit": {
+        "open": "Edit",
+        "title": "Edit {name}",
+        "endpoint": "Endpoint",
+        "transport": "Transport",
+        "wire": "Wire",
+        "connection": "Connection",
+        "hint": "Changing the endpoint does not re-import. A version already on a belt keeps its digest until a re-import brings a new one.",
+        "note": "Editing a provider is not built yet: the roster records a provider only by the endpoint it was imported from, and nothing changes its endpoint, transport or connection after it is registered.",
+        "confirm": "Save"
+      },
+      "oauth": {
+        "open": "Connect with OAuth",
+        "title": "Authorize {name}",
+        "clientId": "Client id",
+        "clientSecret": "Client secret",
+        "authUrl": "Authorization URL",
+        "scopes": "Scopes",
+        "redirect": "Redirect URL",
+        "redirectHint": "Register this URL with the provider.",
+        "refusal": "Authorizing refuses without a client id and an authorization URL.",
+        "note": "Authorizing a provider is not built yet. It would open the provider, exchange the code, envelope the token under the organization key, and record who authorized it. No client registration, token or expiry is stored for a provider today.",
+        "confirm": "Authorize with {name}"
+      },
+      "drill": {
+        "subtitle": "mcp · {wire} · {endpoint}",
+        "healthWarning": {
+          "degraded": "This provider is degraded: its last health check did not answer cleanly.",
+          "unreachable": "This provider is unreachable: its last health check failed, so its tools cannot be called."
+        },
+        "facts": {
+          "system": "System",
+          "transport": "Transport",
+          "registryName": "Registry name",
+          "schemas": "Schemas",
+          "versions": "Tool versions",
+          "toolbelts": "Toolbelts",
+          "agents": "Agents reached",
+          "lastImport": "Last import",
+          "lastCheck": "Health"
+        },
+        "transportLine": "The registry, the policy and the receipts are the same whichever transport it is.",
+        "schemas": "{declared} declared, {imported} imported",
+        "atLeast": "{count}+",
+        "authTitle": "Authorization",
+        "authNotBacked": "No connection, token or scope is recorded against this provider yet, so what the broker would mint for it and who authorized it are not shown.",
+        "keyInstead": "Add a key or a role instead",
+        "keyTitle": "Add a key or a role",
+        "keyNote": "Binding a stored key or a cloud role to a provider is not built yet. A connection added on this tab holds a credential for a connector, and nothing ties it to a provider.",
+        "keyConfirm": "Save",
+        "toolsTitle": "Tools imported from {name}",
+        "noTools": "The registry holds no version from this provider. Re-import its tools to add them.",
+        "partial": "These are the versions on the registry’s first page. A later page may hold more.",
+        "columns": {
+          "version": "Tool version",
+          "hazard": "Hazard",
+          "gate": "Gate today",
+          "agents": "Agents",
+          "calls": "Calls 30d"
+        },
+        "transportMcp": "mcp"
+      },
+      "transportMcp": "mcp"
+    },
+    "toolbelts": {
+      "title": "Toolbelts",
+      "caption": "A toolbelt is a named set of tool versions assigned to agents. It decides what a model is shown, and nothing else.",
+      "notBacked": "Toolbelts are not stored yet. A belt exists today only as the tool list computed for each agent, so there is no named set, owner or availability to show.",
+      "note": "Assigning a belt is not a permission. Every call on it still meets the agent’s roles, the policy on the tool version, the kill switches, and the mandate ledger. A belt with a red availability has a tool its agents can see and cannot call today.",
+      "new": {
+        "open": "New toolbelt",
+        "title": "New toolbelt",
+        "name": "Name",
+        "purpose": "What it is for",
+        "owner": "Owner",
+        "ownerHint": "A belt is a job, not a category, so a reviewer can tell from the name alone whether an agent should carry it.",
+        "note": "Creating a toolbelt is not built yet: nothing stores a named set of tool versions or who carries it.",
+        "confirm": "Create it"
+      },
+      "assignments": {
+        "title": "Assignments",
+        "caption": "The same belt reaches many agents, which is what makes a change to it worth reviewing.",
+        "notBacked": "Assignments are not stored yet, so which agent carries which belt cannot be listed.",
+        "agents": "Each agent’s computed tool list is on its Toolbelt tab. Open Agents"
+      }
+    },
+    "policy": {
+      "versions": {
+        "title": "Policy versions",
+        "notBacked": "Policy versions are not stored yet. No version, rule or test is recorded, so none can be opened, drafted, activated or restored.",
+        "note": "A version is activated by a governed action with approval, and in regulated mode it is a Context PR instead. A draft is the only version you can edit or discard: once a version has decided anything it is kept, because every decision cites the version that made it.",
+        "draft": {
+          "open": "Draft a version",
+          "title": "Draft a version",
+          "basedOn": "Based on",
+          "whatChanged": "What changed",
+          "note": "Drafting a policy version is not built yet. A draft would hold the rules and their tests, run the tests, and wait for an activation that is itself a governed action.",
+          "confirm": "Save the draft"
+        }
+      },
+      "where": {
+        "title": "Where a version lives",
+        "caption": "This is the store a version is specified to live in once it exists.",
+        "terms": {
+          "store": "Store",
+          "regulated": "In regulated mode",
+          "compiledFrom": "Compiled from",
+          "readBy": "Who reads it",
+          "writes": "What it writes"
+        },
+        "values": {
+          "store": "One row in Postgres, <code>tools.policy_versions</code>, holding the rules, the tests and the version string. A policy version is not a context record and never reaches a model.",
+          "regulated": "The rules are a file in <code>.oxagen/policy/</code> in the main repo, and a change is a Context PR. Postgres holds the compiled copy the gateway reads.",
+          "compiledFrom": "The rules you write here, plus the enforcement grants on each agent and the role grants on each operator. A rule can read those, so you do not restate a grant as a rule.",
+          "readBy": "The gateway, on every tool call, before the call leaves. No model is in the decision path, so the same call and the same version always decide the same way.",
+          "writes": "One <code>policy.decision</code> frame per call, naming the version and the rules that fired. A replay reads the decision back without re-running it."
+        }
+      },
+      "conditions": {
+        "title": "Conditions a rule may test",
+        "items": {
+          "toolVersion": "tool version",
+          "risk": "risk",
+          "sideEffect": "side effect",
+          "egress": "egress",
+          "financialClass": "financial class",
+          "amountByPath": "amount by path",
+          "counterparty": "counterparty",
+          "repository": "repository",
+          "pathPrefix": "path prefix",
+          "recipientDomain": "recipient domain",
+          "taint": "taint and its sources",
+          "timeWindow": "time window",
+          "rate": "rate",
+          "sequence": "sequence",
+          "operatorRole": "operator role",
+          "enforcementTier": "enforcement tier",
+          "budgetPosition": "budget position",
+          "mandatePosition": "mandate position"
+        }
+      },
+      "sequence": {
+        "title": "Sequence rule",
+        "plain": "A rule names the call it governs, then the condition that lets it through. This one denies a payment unless the same run already priced it."
+      },
+      "versionsTable": "tools.policy_versions"
     }
   }
 }
