@@ -308,6 +308,19 @@
                 }
               ]
             },
+            "steerBlock": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "no_prompt_carrier"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "model": {
               "anyOf": [
                 {
