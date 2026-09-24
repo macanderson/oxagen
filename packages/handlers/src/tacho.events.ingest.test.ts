@@ -85,6 +85,7 @@ import {
   enforcementTierOf,
   foldDelta,
   isObservedModelCall,
+  lastRecordedContext,
   tachoEventsIngestHandler,
   usageCountedEvents,
 } from "./tacho.events.ingest";
@@ -4323,5 +4324,35 @@ describe("observed metering from the model proxy", () => {
     expect(
       dialect.sqlToQuery(update?.values["numModelCalls"] as SQL).params,
     ).toEqual([0]);
+  });
+});
+
+describe("lastRecordedContext", () => {
+  const frame = (context?: Record<string, unknown>) =>
+    ({ kind: "tool_call", context }) as unknown as TachoEvent;
+
+  it("keeps the last recorded value when the batch ends on a frame with no context", () => {
+    expect(
+      lastRecordedContext([
+        frame({ model: "claude-opus-4-1", permission_mode: "default" }),
+        frame({ model: "claude-sonnet-4-5", effort: "high" }),
+        frame(),
+        frame({}),
+      ]),
+    ).toEqual({
+      model: "claude-sonnet-4-5",
+      permissionMode: "default",
+      effort: "high",
+      gitHeadSha: null,
+    });
+  });
+
+  it("returns nulls for a batch that recorded none of them", () => {
+    expect(lastRecordedContext([frame(), frame({ cwd: "/repo" })])).toEqual({
+      model: null,
+      permissionMode: null,
+      effort: null,
+      gitHeadSha: null,
+    });
   });
 });
