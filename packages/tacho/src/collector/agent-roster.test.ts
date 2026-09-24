@@ -564,4 +564,30 @@ describe("session baselineCommit", () => {
     registry.ensure("sess-1", { cwd: "/repo-b" });
     expect(record.baselineCommit).toBe("bbb222");
   });
+
+  it("keeps the worktree a session writes in, and its baseline, when cwd moves", () => {
+    const clock = clockAt("2026-09-15T10:00:00.000Z");
+    const registry = new SessionRegistry({
+      context: CONTEXT,
+      scope: TEST_ENROLLMENT,
+      now: clock.now,
+    });
+    const { record } = registry.ensure("sess-1", {
+      cwd: "/repo",
+      workDir: "/worktrees/repo/fix/src",
+      baselineCommit: "aaa111",
+      baselineRoot: "/worktrees/repo/fix",
+    });
+    registry.ensure("sess-1", { cwd: "/elsewhere" });
+    expect(record.baselineCommit).toBe("aaa111");
+    const state = JSON.parse(JSON.stringify(registry.state())) as RegistryState;
+    const restored = new SessionRegistry({
+      context: CONTEXT,
+      scope: TEST_ENROLLMENT,
+      now: clock.now,
+    });
+    restored.restore(state);
+    expect(restored.get("sess-1")?.workDir).toBe("/worktrees/repo/fix/src");
+    expect(restored.get("sess-1")?.baselineRoot).toBe("/worktrees/repo/fix");
+  });
 });
