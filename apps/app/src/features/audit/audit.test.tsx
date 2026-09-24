@@ -728,6 +728,92 @@ describe("Events", () => {
       /^2\+ events in the last 30 days, with/,
     );
   });
+
+  it("says not recorded for an event with no actor, capability or result, never a blank (negative)", async () => {
+    answer({
+      window: recordOf([
+        event({ actor: null, capability: null, outcome: null }),
+      ]),
+    });
+    await renderAudit();
+
+    const table = screen.getByRole("table", { name: "Control-plane events" });
+    const row = nth(within(table).getAllByRole("row").slice(1), 0, "the row");
+    const cells = within(row).getAllByRole("cell");
+    // Actor, What and Result each say not recorded; no outcome badge is drawn.
+    expect(nth(cells, 2, "Actor")).toHaveTextContent(/^not recorded/);
+    expect(nth(cells, 3, "What")).toHaveTextContent(/^not recorded/);
+    expect(nth(cells, 4, "Result")).toHaveTextContent("not recorded");
+    expect(row.querySelector("[data-outcome]")).toBeNull();
+  });
+
+  it("names the tile and the CSV after the chosen days when the reader typed From or To", async () => {
+    answer({ window: recordOf([denied]) });
+    await renderAudit({ from: "2026-09-01", to: "2026-09-10" });
+
+    expect(tiles()[0]?.[0]).toBe("Events in chosen days");
+    fireEvent.click(screen.getByRole("button", { name: "CSV" }));
+    const dialog = await screen.findByRole("dialog", { name: "Export events" });
+    expect(within(dialog).getByTestId("audit-csv-body")).toHaveTextContent(
+      /^1 event in the chosen days, with/,
+    );
+  });
+
+  it("keeps an Actor filter for someone the roster no longer names, by public id", async () => {
+    answer({ window: recordOf([event({ actor: GONE })]) });
+    await renderAudit({ actor: GONE });
+
+    const actor = selectOf(screen.getByRole("combobox", { name: "Actor" }));
+    expect(actor.value).toBe(GONE);
+    expect(actor.selectedOptions[0]?.textContent).toBe(GONE);
+  });
+
+  it("names the picked actor from the roster, and by email when they set no name", async () => {
+    members.mockResolvedValue(
+      readOk<MemberList>({
+        members: [
+          {
+            id: ADA,
+            name: null,
+            email: "ada@acme.test",
+            role: "admin",
+            joinedAt: "2026-01-04T09:00:00.000Z",
+          },
+        ],
+        invitations: [],
+      }),
+    );
+    answer({ window: recordOf([denied]) });
+    await renderAudit({ actor: ADA });
+
+    const actor = selectOf(screen.getByRole("combobox", { name: "Actor" }));
+    expect(actor.selectedOptions[0]?.textContent).toBe("ada@acme.test");
+  });
+
+  it("prints actors by public id when the roster read fails, and keeps the page (negative)", async () => {
+    members.mockResolvedValue(readError("org_store_unavailable", 503));
+    answer({ window: recordOf([denied]) });
+    await renderAudit();
+
+    const table = screen.getByRole("table", { name: "Control-plane events" });
+    const row = nth(within(table).getAllByRole("row").slice(1), 0, "the row");
+    expect(row).toHaveTextContent(ADA);
+    expect(row).not.toHaveTextContent("Ada Lovelace");
+  });
+
+  it("offers no page past the last one read when the window is partial and the page is the end", async () => {
+    answer({
+      window: recordOf([denied], { hasMore: true }),
+      page: recordOf([denied], { hasMore: false, offset: 25, limit: 25 }),
+    });
+    await renderAudit({ rows: "25", offset: "25" });
+
+    const pager = screen.getByRole("navigation", {
+      name: "Pages of the audit record",
+    });
+    expect(pager).toHaveTextContent("26–26‹12›");
+    expect(within(pager).queryByRole("link", { name: "Next page" })).toBeNull();
+  });
 });
 
 describe("tabs", () => {
@@ -934,6 +1020,51 @@ describe("tabs", () => {
     expect(screen.getByTestId("audit-bundle-unread")).toHaveTextContent(
       `Export ${EXPORT_ID} could not be read. The control plane answered not_found.`,
     );
+    cleanup();
+
+    // A refusal names its reason where a failed read names its code.
+    bundle.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      permission: "org.owner or org.admin",
+    });
+    await renderAudit({ export: EXPORT_ID }, { tab: "exports" });
+    expect(screen.getByTestId("audit-bundle-unread")).toHaveTextContent(
+      `Export ${EXPORT_ID} could not be read. The control plane answered denied.`,
+    );
+  });
+
+  it("reads Exports again every five seconds while the export builds, and stops once the card is gone", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    try {
+      answer({ window: recordOf([event()]) });
+      await renderAudit({ export: EXPORT_ID }, { tab: "exports" });
+      expect(refresh).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(4_999);
+      expect(refresh).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1);
+      expect(refresh).toHaveBeenCalledTimes(1);
+      vi.advanceTimersByTime(5_000);
+      expect(refresh).toHaveBeenCalledTimes(2);
+
+      cleanup();
+      vi.advanceTimersByTime(15_000);
+      expect(refresh).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("prints a retention that is not whole years in days", async () => {
+    answer({ window: recordOf([event()]) });
+    retention.mockResolvedValue(readOk({ ...POLICY, bodyRetentionDays: 90 }));
+    await renderAudit({}, { tab: "retention" });
+
+    const body = [...sectionOf("Retention").querySelectorAll("dt")].find(
+      (dt) => dt.textContent === "Body retention",
+    );
+    expect(body?.nextElementSibling).toHaveTextContent("90 days from the seal");
   });
 
   it("prints the pinned body retention and the measured cold volume at its rate", async () => {
@@ -1448,5 +1579,51 @@ describe("the header's gold action", () => {
       "Only an organization owner or admin can export the organization. Nothing was queued.",
     );
     expect(push).not.toHaveBeenCalled();
+  });
+
+  it("names the access request an export waits on, and the code of a write that failed (negative)", async () => {
+    buildBundle.mockResolvedValueOnce({
+      ok: false,
+      reason: "pending_approval",
+      accessRequestId: "ar_01K5WAIT",
+    });
+    const dialog = await openBundle();
+    const build = () =>
+      fireEvent.click(
+        within(dialog).getByRole("button", { name: "Build bundle" }),
+      );
+
+    build();
+    expect(
+      await within(dialog).findByTestId("audit-bundle-failure"),
+    ).toHaveTextContent("The export waits on access request ar_01K5WAIT.");
+
+    buildBundle.mockResolvedValueOnce({
+      ok: false,
+      reason: "unavailable",
+      code: "export_queue_unavailable",
+    });
+    build();
+    await vi.waitFor(() => {
+      expect(
+        within(dialog).getByTestId("audit-bundle-failure"),
+      ).toHaveTextContent(
+        "The export was not queued. The control plane answered export_queue_unavailable.",
+      );
+    });
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("queues one export when Build bundle is pressed again while the first is pending", async () => {
+    buildBundle.mockReturnValue(new Promise(() => undefined));
+    const dialog = await openBundle();
+
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Build bundle" }),
+    );
+    fireEvent.click(
+      await within(dialog).findByRole("button", { name: "Queuing the export" }),
+    );
+    expect(buildBundle).toHaveBeenCalledTimes(1);
   });
 });
