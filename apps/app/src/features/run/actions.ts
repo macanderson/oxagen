@@ -19,6 +19,7 @@ import {
 import { runBisect } from "@oxagen/oxagen/contracts/run.bisect";
 import { runExport } from "@oxagen/oxagen/contracts/run.export";
 import { runExportGet } from "@oxagen/oxagen/contracts/run.export.get";
+import { runSeal } from "@oxagen/oxagen/contracts/run.seal";
 import { runFork } from "@oxagen/oxagen/contracts/run.fork";
 import { runSummarize } from "@oxagen/oxagen/contracts/run.summarize";
 import {
@@ -146,6 +147,40 @@ export async function summarizeRun(
   return result.ok
     ? { ok: true, value: { runId: result.value.runId } }
     : result;
+}
+
+/** What sealing a run did, exactly as `seal_run` answers it. */
+export type SealedRun = ContractOutput<typeof runSeal>;
+
+/**
+ * Seal a wrapped run the control plane still reads as live, and queue a kill
+ * for its agent on its host when the host can collect one (`seal_run`,
+ * ADR-169). The seal is final. The answer says whether the kill was queued,
+ * so the dialog never claims the agent stopped when no host could be told.
+ *
+ * The reason is held to the contract's ceiling here, as a halt's is, so a
+ * long one names the field rather than coming back as a schema refusal.
+ */
+export async function sealRun(
+  org: string,
+  ws: string,
+  runId: string,
+  reason: string,
+): Promise<ActionResult<SealedRun>> {
+  const ctx = await requireViewer(org, ws);
+  const trimmed = reason.trim();
+  if (trimmed.length > COMMAND_REASON_MAX) {
+    return {
+      ok: false,
+      reason: "invalid",
+      code: "command_reason",
+      field: "reason",
+    };
+  }
+  return kernelWrite(ctx, runSeal, {
+    runId,
+    ...(trimmed === "" ? {} : { reason: trimmed }),
+  });
 }
 
 /**
@@ -347,7 +382,6 @@ export async function readTranscriptPage(
  * attempt; the harness that admitted the run is what resumes it (ADR-043), so
  * this answers the attempt, not a running agent.
  */
-/** @deregistered Retained with the replay UI under ADR-130. */
 export async function forkRun(
   org: string,
   ws: string,
@@ -375,7 +409,6 @@ export async function forkRun(
  * recordings are aligned frame by frame on each frame's kind and call
  * identity; bodies are not read, so this works at grade `inspect` and above.
  */
-/** @deregistered Retained with the replay UI under ADR-130. */
 export async function bisectRuns(
   org: string,
   ws: string,

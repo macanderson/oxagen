@@ -76,6 +76,7 @@ import {
   inArray,
   isNull,
   lt,
+  ne,
   notInArray,
   or,
   type SQL,
@@ -342,7 +343,10 @@ export function ledgerRollupQuery(
     .from(events)
     .where(
       and(
-        eq(events.eventRecordVersion, 2),
+        // A literal, not a bind parameter: the partial index on
+        // `(run_id, run_seq) WHERE event_record_version = 2` is only usable
+        // when the planner can see the predicate matches it.
+        sql`${events.eventRecordVersion} = 2`,
         eq(events.orgId, scope.orgId),
         eq(events.workspaceId, scope.workspaceId),
         inArray(events.runId, [...runIds]),
@@ -385,7 +389,10 @@ export function ledgerCompactedRollupQuery(
         eq(seals.workspaceId, scope.workspaceId),
         inArray(seals.runId, [...runIds]),
         sql`${seals.archiveSegmentRef} is not null`,
-        sql`not exists (select 1 from ${events} where ${events.attemptId} = ${seals.attemptId})`,
+        // `event_record_version = 2` changes no answer (only a V2 row has an
+        // attempt id) but lets the partial `(attempt_id, attempt_seq)` index
+        // answer the probe instead of a scan of the event log.
+        sql`not exists (select 1 from ${events} where ${events.attemptId} = ${seals.attemptId} and ${events.eventRecordVersion} = 2)`,
       ),
     )
     .groupBy(seals.runId);
@@ -616,6 +623,30 @@ export function tachoSessionQuery(
     .limit(1);
 }
 
+/**
+ * The subagent chains under a root session, by `session_uuid`. Ingest writes
+ * a `tacho.sessions` row for every chain before it writes the chain's frames
+ * to ClickHouse, so this list names every chain a frame read can find, and
+ * `tacho_sessions_root_idx` answers it.
+ */
+export function tachoChildSessionsQuery(
+  db: QueryDb,
+  scope: RunScope,
+  rootSessionUuid: string,
+) {
+  return db
+    .select({ sessionUuid: sessions.sessionUuid })
+    .from(sessions)
+    .where(
+      and(
+        eq(sessions.orgId, scope.orgId),
+        eq(sessions.workspaceId, scope.workspaceId),
+        eq(sessions.rootSessionUuid, rootSessionUuid),
+        ne(sessions.sessionUuid, rootSessionUuid),
+      ),
+    );
+}
+
 // ---- Records and mapping -------------------------------------------------------------
 
 /** The generated summary columns a run row carries (`summarize_run`, G14). */
@@ -747,9 +778,9 @@ export type TachoSessionColumns = GeneratedSummaryColumns & {
   seqCount: number;
   startedAt: Date;
   sealedAt: Date | null;
-  /** `agent_stop` or `idle_timeout`; null while open or on a seal older than the column. */
+  /** `agent_stop`, `idle_timeout` or `operator`; null while open or on a seal older than the column. */
   sealSource?: string | null;
-  /** The `agent_stop` event's own timestamp, or after an idle close the last event's; null while open. */
+  /** The `agent_stop` event's own timestamp, or after an idle close or an operator's seal the last event's; null while open. */
   endedAt?: Date | null;
   /** The model the session started on and the one it ended on; either may be unrecorded. */
   modelInitial: string | null;
@@ -959,6 +990,7 @@ export function costIsEstimate(
 /**
  * What sealed a sealed session. A seal written before `seal_source` existed
  * was an `agent_stop`, which is the only thing that sealed a session then.
+ * `operator` is a person's `seal_run` (#4073).
  */
 export function recordedSealSource(
   sealedAt: Date | null,
@@ -966,6 +998,7 @@ export function recordedSealSource(
 ): RunItem["sealSource"] {
   if (sealedAt === null) return null;
   if (source === "idle_timeout") return "idle_timeout";
+  if (source === "operator") return "operator";
   if (source === null || source === undefined || source === "agent_stop")
     return "agent_stop";
   throw new RangeError(
@@ -1447,6 +1480,17 @@ export const postgresRunQueries: RunQueries = {
   },
 };
 
+/** The subagent chains under a root session in the scope's workspace. */
+export async function postgresTachoChildSessions(
+  scope: RunScope,
+  rootSessionUuid: string,
+): Promise<string[]> {
+  const rows = await withTenantDb((tx) =>
+    tachoChildSessionsQuery(tx, scope, rootSessionUuid),
+  );
+  return rows.map((r) => r.sessionUuid);
+}
+
 /** Seals and event rollups for a set of ledger runs, in parallel. */
 export async function ledgerEnrichment(
   deps: { queries: Pick<RunQueries, "ledgerRollups" | "ledgerSeals"> },
@@ -1491,9 +1535,14 @@ export function createRunListHandler(
       withoutWitnessRuns: hidesWitnessRuns(ctx),
     };
 
-    const [ledger, tacho] = await Promise.all([
+    // The enrichment flag depends on nothing the pages return, so it is read
+    // alongside them rather than after the rollups.
+    const [ledger, tacho, enabled] = await Promise.all([
       deps.queries.ledgerPage(scope, page),
       deps.queries.tachoPage(scope, page),
+      deps.readEnrichmentEnabled
+        ? deps.readEnrichmentEnabled(scope)
+        : Promise.resolve(true),
     ]);
     const merged = mergeNewestFirst<FleetItem>(
       [
@@ -1532,34 +1581,30 @@ export function createRunListHandler(
         merged.items.map((item) => item.id),
       ),
     ]);
-    const enabled = deps.readEnrichmentEnabled
-      ? await deps.readEnrichmentEnabled(scope)
-      : true;
     return {
-      runs: merged.items
-        .map((item) => {
-          const run =
-            item.kind === "ledger"
-              ? toLedgerRunItem(enrich(item.row), costs.get(item.id))
-              : toTachoRunItem(item.row, costs.get(item.id));
-          return {
-            ...run,
-            enrichmentEnabled: enabled,
-            ...(enabled
-              ? {}
-              : {
-                  // Turning automatic accounts off hides what Oxagen wrote,
-                  // not the title the harness gave the session.
-                  name:
-                    item.kind === "tacho"
-                      ? (item.row.session.harnessTitle ?? null)
-                      : null,
-                  summary: null,
-                  canSummarize: false,
-                  enrichmentError: undefined,
-                }),
-          };
-        }),
+      runs: merged.items.map((item) => {
+        const run =
+          item.kind === "ledger"
+            ? toLedgerRunItem(enrich(item.row), costs.get(item.id))
+            : toTachoRunItem(item.row, costs.get(item.id));
+        return {
+          ...run,
+          enrichmentEnabled: enabled,
+          ...(enabled
+            ? {}
+            : {
+                // Turning automatic accounts off hides what Oxagen wrote,
+                // not the title the harness gave the session.
+                name:
+                  item.kind === "tacho"
+                    ? (item.row.session.harnessTitle ?? null)
+                    : null,
+                summary: null,
+                canSummarize: false,
+                enrichmentError: undefined,
+              }),
+        };
+      }),
       nextCursor: merged.nextCursor,
     };
   };

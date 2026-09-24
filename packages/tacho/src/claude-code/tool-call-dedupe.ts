@@ -9,8 +9,10 @@
  * `tool_call` frames, eighteen of them digest only (#3661).
  *
  * The rule is the one ADR-140 settles: the first source to report a
- * `tool_use_id` on a chain seals its frame, and a later sighting from another
- * source seals nothing. The hook is canonical in practice because it is
+ * `tool_use_id` seals its frame, and a later sighting from another source
+ * seals nothing. One ledger serves a session and all of its subagents: a
+ * subagent's hook seals on the child's chain, and an OTel record that names
+ * no agent seals on the root's. The hook is canonical in practice because it is
  * synchronous with the call and is the only source that carries the body; the
  * ledger states the rule as first-sighting rather than hook-only so a host
  * that runs without hooks still records its tool calls.
@@ -33,7 +35,10 @@
 /** The attr a stamped sighting carries, naming the source sealed first. */
 export const TOOL_CALL_DUPLICATE_OF_ATTR = "oxagen.tool_call_duplicate_of";
 
-/** How many calls one recorder remembers; older ones are forgotten in order. */
+/**
+ * How many calls one session family remembers, the root session and its
+ * subagents together; older ones are forgotten in order.
+ */
 export const TOOL_CALL_LEDGER_CAPACITY = 1024;
 
 export type ToolCallVerdict =
@@ -105,15 +110,32 @@ export class ToolCallLedger {
       if (!entry.sources.includes(source)) entry.sources.push(source);
       entry.body = entry.body || hasBody;
       this.entries.set(toolUseId, entry);
-      while (this.entries.size > TOOL_CALL_LEDGER_CAPACITY) {
-        const oldest = this.entries.keys().next().value;
-        if (oldest === undefined) break;
-        this.entries.delete(oldest);
-      }
+      this.trim();
     };
     if (first === undefined) return { verdict: { kind: "first" }, commit };
     if (hasBody && seen?.body !== true)
       return { verdict: { kind: "body", of: first }, commit };
     return { verdict: { kind: "repeat" }, commit };
+  }
+
+  /**
+   * Take on the calls another ledger remembered. A call this ledger already
+   * holds keeps its own entry. Used when a restart restores a subagent chain
+   * whose state an older build wrote with a ledger of its own.
+   */
+  absorb(state: ToolCallLedgerState): void {
+    for (const [id, sources, body] of state.calls) {
+      if (!this.entries.has(id))
+        this.entries.set(id, { sources: [...sources], body });
+    }
+    this.trim();
+  }
+
+  private trim(): void {
+    while (this.entries.size > TOOL_CALL_LEDGER_CAPACITY) {
+      const oldest = this.entries.keys().next().value;
+      if (oldest === undefined) break;
+      this.entries.delete(oldest);
+    }
   }
 }

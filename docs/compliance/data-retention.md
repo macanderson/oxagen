@@ -27,6 +27,7 @@ Your retention review needs the deletion mechanism beside the period. These are 
 | Application logs | 30 days searchable, archived for 5,110 days | [CloudWatch and S3 lifecycle](../../infra/stacks-new/oxagen/observability.tf). Archives transition storage class before expiration. This is longer than seven years. |
 | Aurora backups | 35 days | [Cluster configuration](../../infra/stacks-new/oxagen/data-services.tf). Final snapshots have a separate lifecycle. |
 | Neo4j volume snapshots | Hourly, seven-day module default | [DLM policy](../../infra/modules/app-node/backup.tf), [variables](../../infra/modules/app-node/variables.tf). Verify stack overrides and actual snapshots. |
+| GAU ledger | No timed deletion | Append-only rows in `billing.gau_ledger` ([schema](../../packages/database/src/schema/billing.ts), [writer](../../packages/billing/src/gau-ledger.ts)), one per billed governed action since [#3911](https://github.com/macanderson/oxagen/pull/3911). Rows hold agent, operator, run, and tool-call identifiers. Its foreign key to the organization does not cascade. |
 | Accounts, billing records, graph nodes, other blobs | No single automatic expiry policy established here | Inspect the relevant schema and [privacy processor](../../packages/inngest-functions/src/functions/privacy.erasure.execute.ts). Do not promise full deletion on request. |
 
 ## Requests and verification

@@ -14,6 +14,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openCreate } from "@/shared/create";
@@ -110,6 +111,17 @@ async function toToolbelt(harness = "cursor") {
   await waitFor(() => {
     expect(currentStep()).toContain(shell("steps.toolbelt"));
   });
+}
+
+/** The belt picker's search box. */
+const beltBox = () => within(screen.getByTestId("belt")).getByRole("combobox");
+
+/** Type part of a tool's name into the belt picker and press Enter. */
+function pickTool(query: string) {
+  const box = beltBox();
+  fireEvent.focus(box);
+  fireEvent.change(box, { target: { value: query } });
+  fireEvent.keyDown(box, { key: "Enter" });
 }
 
 async function toPullRequest(harness = "cursor") {
@@ -372,20 +384,31 @@ describe("the agent wizard: definition", () => {
 describe("the agent wizard: toolbelt", () => {
   it("offers the registry, writes a pick into the definition, and says what parks", async () => {
     await toToolbelt();
-    const belt = await screen.findByTestId("belt");
+    await screen.findByTestId("belt");
     expect(readToolbelt).toHaveBeenCalledWith("acme", "core-platform");
-    expect(belt.textContent).toContain("github__create_pull_request@3");
+    expect(beltBox()).toHaveAccessibleName(t("toolbelt.label"));
     expect(screen.getByTestId("belt-note").textContent).toContain(
       "search_graph",
     );
 
-    fireEvent.click(
-      screen.getByRole("checkbox", { name: /Create pull request/ }),
+    // Opening the picker lists every tool by name, with the pattern a pick
+    // writes and the facts the row used to show on the second line.
+    fireEvent.focus(beltBox());
+    const listed = screen.getAllByRole("option");
+    expect(listed.map((o) => o.getAttribute("data-value"))).toEqual([
+      "github__create_pull_request@3",
+      "stripe__refund@1",
+    ]);
+    expect(listed[1]?.textContent).toContain("Refund a charge");
+    expect(listed[1]?.textContent).toContain(
+      "stripe__refund@1 · high risk · irreversible · moves money · parks for a person",
     );
+
+    pickTool("pull");
     expect(screen.getByTestId("belt-note").textContent).toBe(
       t("toolbelt.noneParks"),
     );
-    fireEvent.click(screen.getByRole("checkbox", { name: /Refund a charge/ }));
+    pickTool("refund");
     expect(screen.getByTestId("belt-note").textContent).not.toBe(
       t("toolbelt.noneParks"),
     );
@@ -399,14 +422,28 @@ describe("the agent wizard: toolbelt", () => {
     );
   });
 
+  it("picks a tool by its slug and drops it again from its chip", async () => {
+    await toToolbelt();
+    await screen.findByTestId("belt");
+    pickTool("stripe__");
+    const chip = screen
+      .getByTestId("belt")
+      .querySelector('[data-chip="stripe__refund@1"]');
+    expect(chip?.textContent).toContain("Refund a charge");
+    expect(screen.getByTestId("belt-note").textContent).toContain("park");
+    fireEvent.click(screen.getByRole("button", { name: /Refund a charge/ }));
+    expect(screen.getByTestId("belt").querySelector("[data-chip]")).toBeNull();
+    expect(screen.getByTestId("belt-note").textContent).toContain(
+      "search_graph",
+    );
+  });
+
   it("leaves a hand-edited definition alone and says so", async () => {
     const file = await toDefinition();
     fireEvent.change(file, { target: { value: `${file.value}# mine\n` } });
     fireEvent.click(primary());
     await screen.findByTestId("belt");
-    fireEvent.click(
-      screen.getByRole("checkbox", { name: /Create pull request/ }),
-    );
+    pickTool("Create");
     expect(screen.getByTestId("belt-hand-edited").textContent).toBe(
       t("toolbelt.handEdited"),
     );

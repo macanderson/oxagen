@@ -20,23 +20,27 @@
 // and a reader who cannot change a mandate is better told why by the write than
 // left guessing which of their roles is missing.
 //
-// **Limits are written verbatim, never scaled.** This is the same rule
-// `requestMandate` (features/agents/actions.ts) carries, and for the same
-// reason: whether a measure is money or a count is a property of the tool
-// version's declaration, and no contract the app may call answers a tool
-// version's `measures`. Storing a typed 50 as 50000000 micros would be a
-// millionfold over-grant whenever the declaration turns out to be a count, and
-// a mandate whose bound is wider than the operator typed is the one failure a
-// mandate surface must not have. So the figure typed is the figure stored, a
-// currency-denominated unit is refused here, and a money limit is changed over
-// the API or MCP by a caller that holds the declaration. The app reads one back
-// as money either way.
+// **A figure is scaled by the kind the stored limit carries, never by a
+// guess.** Whether a measure is money or a count is a property of the tool
+// version's declaration, and the handler stamps it onto the stored limit at
+// write time (ADR-108). A count is written verbatim: the figure typed is the
+// figure stored, as `requestMandate` (features/agents/actions.ts) writes one.
+// A money figure is typed as a decimal in the limit's currency and stored as
+// micros, and only after this action has read the mandate and found that the
+// named measure is stored as money in that currency. The kind never comes from
+// the browser, and never from the unit's spelling alone: storing a typed 50 as
+// 50000000 micros against a limit that is really a count would be a
+// millionfold over-grant, the one failure a mandate surface must not have. A
+// currency code on a measure the record does not hold as money is refused, so
+// a new money limit is still granted over the API or MCP by a caller that
+// holds the declaration.
+import { mandateGet } from "@oxagen/oxagen/contracts/mandate.get";
 import { mandateLimitsUpdate } from "@oxagen/oxagen/contracts/mandate.limits.update";
 import { mandateRevoke } from "@oxagen/oxagen/contracts/mandate.revoke";
 import { MEASURE_VALUE } from "@/data/contracts/mandates";
-import { isCurrencyCode } from "@/data/contracts/money";
+import { isCurrencyCode, microsFromDecimal } from "@/data/contracts/money";
 import type { ActionResult } from "@/server/kernel";
-import { kernelWrite } from "@/server/kernel";
+import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
 import { requireViewer, viewerTimeZone } from "@/server/viewer";
 import { endOfZonedDay, isCalendarDay } from "@/shared/calendar-day";
 
@@ -69,9 +73,15 @@ export type LimitsDraft = {
   mandateId: string;
   /** The measure the tool version declares the limit under. */
   measure: string;
-  /** What the measure counts, in its own name. Never an ISO 4217 code. */
+  /**
+   * What the measure counts, in its own name, or the ISO 4217 code of a limit
+   * the record holds as money.
+   */
   unit: string;
-  /** The limits as typed, in whole units of `unit`. Nothing here is scaled. */
+  /**
+   * The limits as typed: whole units of a count, or a decimal amount of a
+   * money limit's currency, which this action scales to micros.
+   */
   perCall: string;
   perPeriod: string;
   period: "daily" | "weekly" | "monthly";
@@ -122,11 +132,13 @@ function refuse(field: keyof LimitsDraft): ActionResult<never> {
 /**
  * Changes an active mandate's limits, and its validity end when one is given.
  *
- * **It sends what the operator changed, and nothing else — it does not read the
- * mandate.** `update_mandate_limits` also takes `limitChanges`, a set of changes
+ * **It sends what the operator changed, and nothing else, and merges nothing
+ * it read.** `update_mandate_limits` also takes `limitChanges`, a set of changes
  * keyed by measure, and merges them over the stored record inside the
- * transaction that locks the row (ADR-102). So this action makes exactly one
- * kernel call. The merge it used to do here read the record over the network
+ * transaction that locks the row (ADR-102). So a submission whose unit is not a
+ * currency makes one write and no read. A money limit adds one read, for the
+ * stored kind and currency alone, and nothing from that read reaches the write. The
+ * merge it used to do here read the record over the network
  * first, and that read was a snapshot nobody held a lock on: two operators
  * editing different bounds on one mandate each posted a complete record back,
  * and the later write restored the bound the earlier one had lowered. Restoring
@@ -195,25 +207,31 @@ export async function changeMandateLimits(
   if (callsPerDay !== "" && !MEASURE_VALUE.test(callsPerDay))
     return refuse("callsPerDay");
 
+  /**
+   * A currency code as the unit names a money limit. Whether the record holds
+   * this measure as money is checked against the stored kind before anything
+   * is written; the spelling only decides how the figures are read.
+   */
+  const money = unit !== "" && isCurrencyCode(unit.toUpperCase());
+
+  /** A typed figure as the value stored: micros for money, the digits for a count. */
+  const stored = (typed: string): string | null =>
+    money ? microsFromDecimal(typed) : MEASURE_VALUE.test(typed) ? typed : null;
+
   let perCallValue: string | null = null;
   let perPeriodValue: string | null = null;
   if (wantsMeasure) {
     if (measure === "" || measure === RESERVED_MEASURE)
       return refuse("measure");
-    // A unit that is an ISO 4217 code reads back as money (`isCurrencyCode`)
-    // while the figure beside it is whole units, which is the one shape this
-    // form cannot write correctly. Refused in either casing, because an
-    // operator who means money means it whichever way they type it.
-    if (unit === "" || isCurrencyCode(unit.toUpperCase()))
-      return refuse("unit");
+    if (unit === "") return refuse("unit");
     if (perCall === "" && perPeriod === "") return refuse("perPeriod");
     if (perCall !== "") {
-      if (!MEASURE_VALUE.test(perCall)) return refuse("perCall");
-      perCallValue = perCall;
+      perCallValue = stored(perCall);
+      if (perCallValue === null) return refuse("perCall");
     }
     if (perPeriod !== "") {
-      if (!MEASURE_VALUE.test(perPeriod)) return refuse("perPeriod");
-      perPeriodValue = perPeriod;
+      perPeriodValue = stored(perPeriod);
+      if (perPeriodValue === null) return refuse("perPeriod");
     }
   }
 
@@ -231,9 +249,22 @@ export async function changeMandateLimits(
    */
   const isSameMeasure = measure === was.measure;
 
+  // A money limit keeps the currency it was granted in. The handler checks a
+  // unit against the tool's declaration, and a currency change is a new grant,
+  // not an edit this form can scale for.
+  if (money && isSameMeasure && unit.toUpperCase() !== was.unit.toUpperCase())
+    return refuse("unit");
+
   /** A value that differs from the one this field opened with. */
   const edited = (value: string, prefilled: string) =>
     !isSameMeasure || value !== prefilled;
+
+  /**
+   * A prefilled figure read the way the typed one is, so "50" and "50.00" on a
+   * money limit are the same 50000000 micros and an echo is not an edit.
+   */
+  const storedWas = (prefilled: string): string =>
+    prefilled === "" ? "" : (stored(prefilled) ?? prefilled);
 
   /**
    * What this submission changed on the named measure, and nothing more.
@@ -248,18 +279,21 @@ export async function changeMandateLimits(
    * An absent field is what the merge reads as "keep what is stored", which is
    * what an untouched field means and what a cleared one means too: clearing is
    * not deletion, and a bound is removed by a whole-record `limits` write over
-   * the API or MCP, as the dialog's copy says.
+   * the API or MCP, as the dialog's copy says. A money limit's currency is never
+   * carried: it is the stored one, checked below.
    */
   const measureChange = wantsMeasure
     ? {
-        ...(perCallValue !== null && edited(perCallValue, was.perCall)
+        ...(perCallValue !== null &&
+        edited(perCallValue, storedWas(was.perCall))
           ? { perCall: perCallValue }
           : {}),
-        ...(perPeriodValue !== null && edited(perPeriodValue, was.perPeriod)
+        ...(perPeriodValue !== null &&
+        edited(perPeriodValue, storedWas(was.perPeriod))
           ? { perPeriod: perPeriodValue }
           : {}),
         ...(edited(draft.period, was.period) ? { period: draft.period } : {}),
-        ...(edited(unit, was.unit) ? { currencyOrUnit: unit } : {}),
+        ...(!money && edited(unit, was.unit) ? { currencyOrUnit: unit } : {}),
       }
     : {};
 
@@ -291,6 +325,31 @@ export async function changeMandateLimits(
     return refuse("perPeriod");
 
   const ctx = await requireViewer(org, ws);
+
+  // A money figure is scaled only once the record says the measure is money in
+  // this currency (ADR-108: the handler stamped `kind` from the declaration).
+  // The read is for that fact alone. Nothing from it is merged into the write,
+  // so it cannot restore a bound, and a submission whose unit is not a currency
+  // never makes it. It runs even when the money figures are echoes, because
+  // every value the form carries is checked, not only the ones that changed. A
+  // measure the record does not hold, or holds as a count, or in another
+  // currency, is refused rather than scaled.
+  if (money) {
+    const read = await kernelRead(ctx, {
+      contract: mandateGet,
+      input: { mandateId: draft.mandateId, ledgerLimit: 1 },
+      page: "mandates",
+    });
+    if (!read.ok) return readToActionResult<never>(read);
+    const held = read.value.mandate.authority.find(
+      (entry) => entry.measure === measure,
+    );
+    if (
+      held?.kind !== "money" ||
+      held.currencyOrUnit.toUpperCase() !== unit.toUpperCase()
+    )
+      return refuse("unit");
+  }
 
   // The day the operator picked is a day in the zone this app draws dates in,
   // not a day in UTC. This used to append `T23:59:59.999Z` to the picked day,

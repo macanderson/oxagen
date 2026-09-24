@@ -26,12 +26,16 @@ const {
   registerServer,
   setToolClassification,
   flipKillSwitch,
+  chooseMcpServers,
+  chooseSwitchTargets,
 } = vi.hoisted(() => ({
   router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
   importTools: vi.fn(),
   registerServer: vi.fn(),
   setToolClassification: vi.fn(),
   flipKillSwitch: vi.fn(),
+  chooseMcpServers: vi.fn(),
+  chooseSwitchTargets: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("./actions", () => ({
@@ -39,6 +43,10 @@ vi.mock("./actions", () => ({
   registerServer,
   setToolClassification,
   flipKillSwitch,
+}));
+vi.mock("@/features/shell/client", () => ({
+  chooseMcpServers,
+  chooseSwitchTargets,
 }));
 
 const { ImportProvider } = await import("./import-provider");
@@ -89,6 +97,25 @@ function fill(label: string | RegExp, value: string) {
   fireEvent.change(screen.getByLabelText(label), { target: { value } });
 }
 
+/** Types into a record picker and presses Enter, as a person picks a row. */
+function pick(label: string, typed: string) {
+  const input = screen.getByLabelText(label);
+  fireEvent.change(input, { target: { value: typed } });
+  fireEvent.keyDown(input, { key: "Enter" });
+}
+
+/** What a record picker's hidden input submits under `name`. */
+function submitted(name: string): string | undefined {
+  return document.querySelector<HTMLInputElement>(
+    `input[type="hidden"][name="${name}"]`,
+  )?.value;
+}
+
+/** A picker read that answered with these rows. */
+function loaded(options: { value: string; label: string; detail?: string }[]) {
+  return { ok: true, value: { options, partial: false } };
+}
+
 beforeEach(() => {
   for (const fn of [
     router.replace,
@@ -100,6 +127,8 @@ beforeEach(() => {
   ]) {
     fn.mockReset();
   }
+  chooseMcpServers.mockReset().mockResolvedValue(loaded([]));
+  chooseSwitchTargets.mockReset().mockResolvedValue(loaded([]));
 });
 
 afterEach(async () => {
@@ -528,7 +557,7 @@ describe("FlipControls", () => {
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(within(dialog).getByText(/deny generation 12 → 13/)).toBeVisible();
 
-    fill("Target", "moves_money");
+    pick("Target", "moves_money");
     fill(/^Reason/, "Suspected compromise.");
     fireEvent.submit(formOf(within(dialog).getByText("Deny now")));
     await waitFor(() => {
@@ -656,7 +685,7 @@ describe("FlipControls", () => {
       within(dialog).getByText(/if this flip changes the switch/),
     ).toBeVisible();
 
-    fill("Target", "moves_money");
+    pick("Target", "moves_money");
     fill(/^Reason/, "Suspected compromise.");
     fireEvent.submit(formOf(within(dialog).getByText("Deny now")));
     expect(await screen.findByTestId("tools-flip-unchanged")).toHaveTextContent(
@@ -837,12 +866,12 @@ describe("FlipControls", () => {
     fireEvent.change(screen.getByLabelText("Level"), {
       target: { value: "operator" },
     });
-    // No free-text uuid field: a select of the org's members, so the value it
-    // submits is always a usr_ id the contract can resolve.
-    expect(screen.queryByRole("textbox", { name: "Target" })).toBeNull();
-    fireEvent.change(screen.getByLabelText("Target"), {
-      target: { value: "usr_finops1" },
-    });
+    // A picker over the org's members, not a free-text field: the person
+    // finds them by name, and the value it submits is always the usr_ id the
+    // contract can resolve.
+    pick("Target", "priya");
+    expect(submitted("target")).toBe("usr_finops1");
+    expect(chooseSwitchTargets).not.toHaveBeenCalled();
     fill(/^Reason/, "Compromised laptop.");
     fireEvent.submit(formOf(within(dialog).getByText("Deny now")));
     await waitFor(() => {
@@ -853,6 +882,111 @@ describe("FlipControls", () => {
         reason: "Compromised laptop.",
       });
     });
+  });
+});
+
+describe("FlipControls target picker", () => {
+  it("picks an agent by name from the loaded roster and submits its id", async () => {
+    flipKillSwitch.mockResolvedValue({
+      ok: true,
+      value: {
+        switchId: "emd_new",
+        on: true,
+        changed: true,
+        denyGeneration: { org: 12, workspace: 5 },
+        grantsRevoked: 0,
+      },
+    });
+    chooseSwitchTargets.mockResolvedValue(
+      loaded([
+        { value: "agt_01k5r1", label: "Release bot", detail: "agt_01k5r1" },
+        { value: "agt_01k5r2", label: "Billing bot", detail: "agt_01k5r2" },
+      ]),
+    );
+    withIntl(
+      <FlipControls
+        at={at}
+        denyGeneration={GENERATION}
+        existing={null}
+        members={MEMBERS}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("tools-flip-open"));
+    const dialog = await screen.findByTestId("tools-flip-dialog");
+    fireEvent.change(screen.getByLabelText("Level"), {
+      target: { value: "agent" },
+    });
+    const input = screen.getByLabelText("Target");
+    fireEvent.change(input, { target: { value: "release" } });
+    expect(chooseSwitchTargets).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "agent",
+    );
+    expect(
+      await within(dialog).findByRole("option", { name: /Release bot/ }),
+    ).toBeVisible();
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(submitted("target")).toBe("agt_01k5r1");
+    fill(/^Reason/, "Runaway loop.");
+    fireEvent.submit(formOf(within(dialog).getByText("Deny now")));
+    await waitFor(() => {
+      expect(flipKillSwitch).toHaveBeenCalledWith("acme", "core-platform", {
+        kind: "agent",
+        target: "agt_01k5r1",
+        on: true,
+        reason: "Runaway loop.",
+      });
+    });
+  });
+
+  it("drops a picked target when the level changes", async () => {
+    chooseSwitchTargets.mockResolvedValue(
+      loaded([{ value: "agt_01k5r1", label: "Release bot" }]),
+    );
+    withIntl(
+      <FlipControls
+        at={at}
+        denyGeneration={GENERATION}
+        existing={null}
+        members={MEMBERS}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("tools-flip-open"));
+    const dialog = await screen.findByTestId("tools-flip-dialog");
+    fireEvent.change(screen.getByLabelText("Level"), {
+      target: { value: "agent" },
+    });
+    const input = screen.getByLabelText("Target");
+    fireEvent.change(input, { target: { value: "release" } });
+    await within(dialog).findByRole("option", { name: /Release bot/ });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(submitted("target")).toBe("agt_01k5r1");
+    // An agent id is no connection id, so the next level starts empty.
+    fireEvent.change(screen.getByLabelText("Level"), {
+      target: { value: "connection" },
+    });
+    expect(submitted("target")).toBe("");
+  });
+
+  it("offers the starter consequence tags at the class level", async () => {
+    withIntl(
+      <FlipControls
+        at={at}
+        denyGeneration={GENERATION}
+        existing={null}
+        members={MEMBERS}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("tools-flip-open"));
+    const dialog = await screen.findByTestId("tools-flip-dialog");
+    fireEvent.change(screen.getByLabelText("Target"), {
+      target: { value: "money" },
+    });
+    expect(
+      within(dialog).getByRole("option", { name: /moves_money/ }),
+    ).toBeVisible();
+    expect(chooseSwitchTargets).not.toHaveBeenCalled();
   });
 });
 
@@ -974,8 +1108,14 @@ describe("FlipControls operator picker", () => {
     fireEvent.change(screen.getByLabelText("Level"), {
       target: { value: "operator" },
     });
+    // The target is a RecordPicker now, so the member list opens on focus and
+    // the row reads as the name a person knows — here the email, because the
+    // member has no name recorded.
+    fireEvent.focus(screen.getByRole("combobox", { name: "Target" }));
     expect(
-      screen.getByRole("option", { name: "anon@acme.example" }),
+      within(screen.getByRole("listbox")).getByRole("option", {
+        name: /anon@acme\.example/,
+      }),
     ).toBeInTheDocument();
     cleanup();
     withIntl(

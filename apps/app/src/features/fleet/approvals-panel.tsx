@@ -38,7 +38,7 @@ import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
 import { ApprovalDecision, Eligibility } from "./approval-decision";
-import { Clock } from "./clock";
+import { Clock } from "@/ui/clock";
 
 type Place = { org: string; ws: string };
 

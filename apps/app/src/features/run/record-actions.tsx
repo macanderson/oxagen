@@ -19,6 +19,7 @@ import {
   type ReactNode,
   type SyntheticEvent,
   useEffect,
+  useId,
   useState,
 } from "react";
 import type { ActionResult } from "@/server/kernel";
@@ -313,6 +314,7 @@ function ExportStatus({
 function RecordDialog<O>({
   action,
   label,
+  testId = `run-${action}`,
   runId,
   write,
   receipt,
@@ -321,6 +323,8 @@ function RecordDialog<O>({
   action: "summarize" | "resummarize" | "export";
   /** The button's words; `summarize` and `resummarize` differ only here. */
   label: string;
+  /** The button's test hook; the dialog's is this with `-dialog` after it. */
+  testId?: string;
   runId: string;
   write: () => Promise<ActionResult<O>>;
   /** The id the queued job answered with, printed so a person can chase it. */
@@ -365,7 +369,7 @@ function RecordDialog<O>({
     <>
       <button
         type="button"
-        data-testid={`run-${action}`}
+        data-testid={testId}
         className={buttonSecondary}
         onClick={() => {
           setOpen(true);
@@ -377,7 +381,7 @@ function RecordDialog<O>({
         open={open}
         onOpenChange={openChange}
         title={t(`${key}.title`, { run: runId })}
-        testId={`run-${action}-dialog`}
+        testId={`${testId}-dialog`}
       >
         {queued === null ? (
           <form
@@ -421,7 +425,13 @@ function RecordDialog<O>({
   );
 }
 
-export function RecordActions({
+/**
+ * Summarize or re-summarize (`summarize_run`), in the Summary panel. Offered
+ * on a sealed run: the handler refuses a live one, whose summary the
+ * enrichment sweep writes as it records. Drawn disabled, with the reason, for
+ * a viewer the handler would refuse or a recording it could not read.
+ */
+export function SummarizeAction({
   org,
   ws,
   runId,
@@ -433,7 +443,6 @@ export function RecordActions({
   org: string;
   ws: string;
   runId: string;
-  /** Both writes need a sealed record: a live run is refused by both handlers. */
   sealed: boolean;
   hasSummary: boolean;
   /**
@@ -442,79 +451,124 @@ export function RecordActions({
    * answers it, so the button and the handler read one rule (#3285).
    */
   summarizable: boolean;
-  /**
-   * The viewer's organization role, which both handlers assert on:
-   * `summarize_run` admits an Owner, Admin or Member and `export_run` an Owner
-   * or Admin. A viewer a handler would refuse sees that button disabled with
-   * the reason, not a button that ends in `org_role_required`.
-   */
+  /** `summarize_run` admits an org Owner, Admin or Member. */
   orgRole: OrgRole;
 }) {
   const t = useTranslations("run.record");
   if (!sealed) return null;
-  const canExport = orgRole === "owner" || orgRole === "admin";
-  const hasRole = canExport || orgRole === "member";
+  const hasRole =
+    orgRole === "owner" || orgRole === "admin" || orgRole === "member";
   const canSummarize = hasRole && summarizable;
-  const summarizeAction = hasSummary ? "resummarize" : "summarize";
+  const action = hasSummary ? "resummarize" : "summarize";
+  if (canSummarize)
+    return (
+      <RecordDialog
+        action={action}
+        label={t(`${action}.open`)}
+        runId={runId}
+        write={() => summarizeRun(org, ws, runId)}
+        receipt={(value) => value.runId}
+      />
+    );
+  const reason = hasRole
+    ? t("summarize.needsBodies")
+    : t("summarize.needsRole");
   return (
-    <div className="flex flex-col items-start gap-2 lg:items-end">
-      <div className="flex flex-wrap gap-2">
-        {canSummarize ? (
-          <RecordDialog
-            action={summarizeAction}
-            label={t(`${summarizeAction}.open`)}
-            runId={runId}
-            write={() => summarizeRun(org, ws, runId)}
-            receipt={(value) => value.runId}
-          />
-        ) : (
-          <button
-            type="button"
-            disabled
-            data-testid={`run-${summarizeAction}`}
-            className={buttonSecondary}
-          >
-            {t(`${summarizeAction}.open`)}
-          </button>
+    <button
+      type="button"
+      disabled
+      title={reason}
+      data-testid={`run-${action}`}
+      data-reason={hasRole ? "summarize-no-bodies" : "summarize-no-role"}
+      className={buttonSecondary}
+    >
+      {t(`${action}.open`)}
+    </button>
+  );
+}
+
+/**
+ * Export (`export_run`), always the header's last action (pages/run.md), and
+ * the Chain tab's "Export the bundle". A signed bundle is built from a sealed
+ * record, so a live run draws it disabled with that reason; a viewer the
+ * handler would refuse (it admits an org Owner or Admin) sees it disabled
+ * with the role it needs.
+ */
+export function ExportAction({
+  org,
+  ws,
+  runId,
+  sealed,
+  closedIdle = false,
+  orgRole,
+  label,
+  testId = "run-export",
+}: {
+  org: string;
+  ws: string;
+  runId: string;
+  sealed: boolean;
+  /**
+   * Oxagen closed the run for silence (ADR-159). `export_run` refuses it,
+   * because the run's next event reopens it, so the bundle waits for a final
+   * seal: the host's own, or a person's (ADR-169).
+   */
+  closedIdle?: boolean;
+  orgRole: OrgRole;
+  /** The button's words where they are not the header's "Export". */
+  label?: string;
+  testId?: string;
+}) {
+  const t = useTranslations("run.record");
+  const reasonId = useId();
+  const canExport = orgRole === "owner" || orgRole === "admin";
+  const text = label ?? t("export.open");
+  if (sealed && !closedIdle && canExport)
+    return (
+      <RecordDialog
+        action="export"
+        label={text}
+        testId={testId}
+        runId={runId}
+        write={() => exportRun(org, ws, runId)}
+        receipt={(value) => value.exportId}
+        follow={(exportId) => (
+          <ExportStatus org={org} ws={ws} exportId={exportId} />
         )}
-        {canExport ? (
-          <RecordDialog
-            action="export"
-            label={t("export.open")}
-            runId={runId}
-            write={() => exportRun(org, ws, runId)}
-            receipt={(value) => value.exportId}
-            follow={(exportId) => (
-              <ExportStatus org={org} ws={ws} exportId={exportId} />
-            )}
-          />
-        ) : (
-          <button
-            type="button"
-            disabled
-            data-testid="run-export"
-            className={buttonSecondary}
-          >
-            {t("export.open")}
-          </button>
-        )}
-      </div>
-      {canSummarize ? null : (
-        <p
-          data-testid={hasRole ? "summarize-no-bodies" : "summarize-no-role"}
-          className="max-w-prose text-xs text-muted-foreground lg:text-right"
-        >
-          {hasRole ? t("summarize.needsBodies") : t("summarize.needsRole")}
-        </p>
-      )}
-      {canExport ? null : (
-        <p
-          data-testid="export-no-role"
-          className="max-w-prose text-xs text-muted-foreground lg:text-right"
-        >
-          {t("export.needsRole")}
-        </p>
-      )}
-    </div>
+      />
+    );
+  const reason = !sealed
+    ? t("export.needsSeal")
+    : closedIdle
+      ? t("export.needsFinalSeal")
+      : t("export.needsRole");
+  const why = !sealed
+    ? "export-live"
+    : closedIdle
+      ? "export-idle"
+      : "export-no-role";
+  // The reason is said on the disabled button: on hover, and to assistive
+  // tech as the button's description.
+  return (
+    <>
+      <button
+        type="button"
+        disabled
+        title={reason}
+        aria-describedby={reasonId}
+        data-testid={testId}
+        data-reason={why}
+        className={buttonSecondary}
+      >
+        {text}
+      </button>
+      <span
+        id={reasonId}
+        data-testid={testId === "run-export" ? why : `${testId}-refused`}
+        className="sr-only"
+      >
+        {reason}
+      </span>
+    </>
   );
 }

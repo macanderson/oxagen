@@ -369,23 +369,42 @@ interface CheckoutLink {
 /**
  * Today's slugs for the ids a link was written with, or null when either is
  * no longer reachable by this user.
+ *
+ * A link carries either form of each id. `oxagen init` writes the database
+ * id. The Organization page shows only the public id (`org_…`, `wrk_…`),
+ * because the app keeps database ids off every page (INV-11), so a link
+ * written by hand from that page holds the public id. Both lists return
+ * both forms, so either one finds its record.
  */
 async function currentSlugsFor(
   link: CheckoutLink,
   remainingMs: () => number,
 ): Promise<{ org: string; ws: string } | null> {
+  if (!link.orgId || !link.workspaceId) return null;
   const { userApiPostOrThrow } = await import("../lib/api.js");
   const { organizations } = await userApiPostOrThrow<{
-    organizations: { id: string; slug: string }[];
+    organizations: LinkableRecord[];
   }>("organizations", {}, { timeoutMs: remainingMs() });
-  const org = organizations.find((o) => o.id === link.orgId);
+  const org = organizations.find((o) => isNamedBy(o, link.orgId));
   if (!org) return null;
   const { workspaces } = await userApiPostOrThrow<{
-    workspaces: { id: string; slug: string }[];
+    workspaces: LinkableRecord[];
   }>("workspaces", { orgSlug: org.slug }, { timeoutMs: remainingMs() });
-  const ws = workspaces.find((w) => w.id === link.workspaceId);
+  const ws = workspaces.find((w) => isNamedBy(w, link.workspaceId));
   if (!ws) return null;
   return { org: org.slug, ws: ws.slug };
+}
+
+/** An org or workspace as `list_organizations` and `list_workspaces` return it. */
+interface LinkableRecord {
+  id: string;
+  publicId: string;
+  slug: string;
+}
+
+/** Whether a link's id names this record, in either of its two forms. */
+function isNamedBy(record: LinkableRecord, linkedId: string): boolean {
+  return record.id === linkedId || record.publicId === linkedId;
 }
 
 function rewriteLinkSlugs(

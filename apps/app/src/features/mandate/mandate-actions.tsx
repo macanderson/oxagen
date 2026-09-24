@@ -17,6 +17,7 @@ import { useTranslations } from "next-intl";
 import { type ReactNode, type SyntheticEvent, useState } from "react";
 import type { MandateRow, MeasureValue } from "@/data/contracts/mandates";
 import { isChangeable } from "@/data/contracts/mandates";
+import { decimalFromMicros } from "@/data/contracts/money";
 import type { SafePath } from "@/shared/safe-path";
 import { buttonPrimary, buttonSecondary, inputBase } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
@@ -78,12 +79,13 @@ function Field({
  * with a fresher mandate moves neither. Reopening the dialog unmounts the form
  * and reads both again.
  *
- * A money measure has no default figure here on purpose. `update_mandate_limits`
- * stores what it is given, and whether a figure is micros or whole units is a
- * property of the tool version's declaration that no read answers, so a money
- * limit is changed over the API or MCP rather than round-tripped through a form
- * that cannot scale it. The unit field refuses a currency code for the same
- * reason.
+ * A counted measure is preferred, so a mandate that holds both opens on the one
+ * whose figure is typed as it is stored. A mandate with no counted measure opens
+ * on its money limit instead: the currency in the unit field and each figure as
+ * a decimal of it ("12.5", never "12500000"). The dialog carries no kind. The
+ * action reads the stored kind before it scales a money figure to micros
+ * (actions.ts, ADR-108), so a figure typed here is never trusted as money on the
+ * strength of what the browser sent.
  */
 function measureDefaults(mandate: MandateRow): {
   measure: string;
@@ -103,13 +105,24 @@ function measureDefaults(mandate: MandateRow): {
    */
   callsPeriod: (typeof PERIODS)[number];
 } {
-  /** A count's own digits, or the empty string; a money figure defaults to blank. */
+  /** A count's own digits, or the empty string. */
   const countOf = (value: MeasureValue | null | undefined): string =>
     value?.kind === "count" ? value.count : "";
+  /** A figure as the field shows it: a count's digits, or money as a plain decimal. */
+  const figureOf = (value: MeasureValue | null | undefined): string =>
+    value?.kind === "money"
+      ? (decimalFromMicros(value.money.micros) ?? "")
+      : countOf(value);
   const unitOf = (value: MeasureValue | null | undefined): string =>
-    value?.kind === "count" ? value.unit : "";
+    value?.kind === "count"
+      ? value.unit
+      : value?.kind === "money"
+        ? value.money.currency
+        : "";
   const isCount = (value: MeasureValue | null | undefined): boolean =>
     value?.kind === "count";
+  const isMoney = (value: MeasureValue | null | undefined): boolean =>
+    value?.kind === "money";
   // Either bound is enough to prefill from. `mandateLimitSchema` requires only
   // that a limit names `perCall`, `perPeriod` or both, so a bound that caps a
   // single call and leaves the period open is valid and common; matching on
@@ -121,18 +134,24 @@ function measureDefaults(mandate: MandateRow): {
       entry.measure !== "calls" &&
       (isCount(entry.perPeriod) || isCount(entry.perCall)),
   );
+  const limited =
+    counted ??
+    mandate.authority.find(
+      (entry) =>
+        entry.measure !== "calls" &&
+        (isMoney(entry.perPeriod) || isMoney(entry.perCall)),
+    );
   // The unit belongs to whichever bound carries it, so a per-call-only limit
   // still names its own unit rather than falling back to blank.
-  const countedUnit = isCount(counted?.perPeriod)
-    ? counted?.perPeriod
-    : counted?.perCall;
+  const limitedUnit =
+    limited?.perPeriod == null ? limited?.perCall : limited.perPeriod;
   const calls = mandate.authority.find((entry) => entry.measure === "calls");
   return {
-    measure: counted?.measure ?? "",
-    unit: unitOf(countedUnit),
-    period: PERIODS.find((p) => p === counted?.period) ?? "monthly",
-    perCall: countOf(counted?.perCall),
-    perPeriod: countOf(counted?.perPeriod),
+    measure: limited?.measure ?? "",
+    unit: unitOf(limitedUnit),
+    period: PERIODS.find((p) => p === limited?.period) ?? "monthly",
+    perCall: figureOf(limited?.perCall),
+    perPeriod: figureOf(limited?.perPeriod),
     callsPerDay: countOf(calls?.perPeriod),
     // `daily` when nothing is stored, which is the window a new cap is written
     // under, so the label matches what a submission would create.
@@ -251,7 +270,7 @@ function ChangeLimits({ org, ws, mandate, here }: Place) {
             <input
               id={id("perCall")}
               name="perCall"
-              inputMode="numeric"
+              inputMode="decimal"
               defaultValue={defaults.perCall}
               className={inputBase}
             />
@@ -265,7 +284,7 @@ function ChangeLimits({ org, ws, mandate, here }: Place) {
             <input
               id={id("perPeriod")}
               name="perPeriod"
-              inputMode="numeric"
+              inputMode="decimal"
               defaultValue={defaults.perPeriod}
               className={inputBase}
             />

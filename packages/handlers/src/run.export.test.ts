@@ -49,6 +49,7 @@ const TACHO_ID = "tse_4q8r1t6v3x5z0b2d7h2k9m";
 const LIVE_ID = "tse_livelivelivelivelivel";
 const DIGEST_ONLY_ID = "tse_digestdigestdigestdig";
 const IDLE_ID = "tse_idleidleidleidleidlei";
+const OPERATOR_ID = "tse_operatoroperatoroper";
 
 function harness(role: string | null, keyCreator: string | null = KEY_CREATOR) {
   mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
@@ -77,6 +78,15 @@ function harness(role: string | null, keyCreator: string | null = KEY_CREATOR) {
         session: {
           outcome: "unknown",
           sealSource: "idle_timeout",
+          replayGrade: "inspect",
+          completenessGaps: ["unobserved_tail"],
+        },
+      }),
+      tachoSession({
+        publicId: OPERATOR_ID,
+        session: {
+          outcome: "unknown",
+          sealSource: "operator",
           replayGrade: "inspect",
           completenessGaps: ["unobserved_tail"],
         },
@@ -215,6 +225,16 @@ describe("export_run", () => {
       conflict("run_not_sealed"),
     );
     expect(h.insertExport).not.toHaveBeenCalled();
+  });
+
+  it("exports a run an operator sealed: unlike the idle close, that seal is final (#4073)", async () => {
+    const h = harness("Owner");
+    await expect(
+      h.exportRun({ runId: OPERATOR_ID }, ctx()),
+    ).resolves.toMatchObject({ status: "queued" });
+    expect(h.insertExport).toHaveBeenCalledWith(
+      expect.objectContaining({ runPublicId: OPERATOR_ID }),
+    );
   });
 
   it("is not_found for a run outside the workspace (negative)", async () => {

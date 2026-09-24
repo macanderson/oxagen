@@ -7,6 +7,7 @@ import {
   byMicrosDescending,
   compareMicros,
   Cost,
+  decimalFromMicros,
   divMicros,
   isCurrencyCode,
   maxMoney,
@@ -15,6 +16,7 @@ import {
   sumExceeds,
   moneyFromMicros,
   mulMicros,
+  perMillionTokens,
   ratioOfIntegers,
   ratioOfMicros,
   roundToCentsHalfEven,
@@ -103,6 +105,30 @@ describe("compareMicros", () => {
     expect(
       compareMicros({ micros: "1", currency: "EUR" }, usd("999")),
     ).toBeLessThan(0);
+  });
+});
+
+describe("perMillionTokens", () => {
+  it("answers the rate a cost for a count works out to: $1.823352 for 607,784 tokens is $3.00 a million", () => {
+    expect(
+      perMillionTokens({ micros: "1823352", currency: "USD" }, 607_784),
+    ).toEqual({ micros: "3000000", currency: "USD" });
+  });
+
+  it("answers the exact rate at a magnitude a float cannot hold", () => {
+    // 9,007,199,254,740,000 tokens at $1.50 a million.
+    const cost = { micros: "13510798882110000", currency: "USD" };
+    expect(perMillionTokens(cost, 9_007_199_254_740_000)).toEqual({
+      micros: "1500000",
+      currency: "USD",
+    });
+  });
+
+  it("answers null for no tokens and refuses a count that is not whole (negative)", () => {
+    expect(perMillionTokens({ micros: "5", currency: "USD" }, 0)).toBeNull();
+    expect(() =>
+      perMillionTokens({ micros: "5", currency: "USD" }, 1.5),
+    ).toThrow("safe integer");
   });
 });
 
@@ -238,6 +264,36 @@ describe("microsFromDecimal", () => {
     "refuses %j (negative)",
     (text) => {
       expect(microsFromDecimal(text)).toBeNull();
+    },
+  );
+});
+
+describe("decimalFromMicros", () => {
+  it.each([
+    ["50000000", "50"],
+    ["12500000", "12.5"],
+    ["250000", "0.25"],
+    ["12000001", "12.000001"],
+    ["0", "0"],
+    ["0007500000", "7.5"],
+    ["1", "0.000001"],
+  ])("writes %s micros as %j", (micros, text) => {
+    expect(decimalFromMicros(micros)).toBe(text);
+  });
+
+  it.each(["50000000", "12500000", "1", "999999999999999999"])(
+    "round-trips %s through microsFromDecimal",
+    (micros) => {
+      const text = decimalFromMicros(micros);
+      expect(text).not.toBeNull();
+      expect(microsFromDecimal(text ?? "")).toBe(micros);
+    },
+  );
+
+  it.each(["", "-5", "1.5", "1e3", "12 "])(
+    "refuses %j (negative)",
+    (micros) => {
+      expect(decimalFromMicros(micros)).toBeNull();
     },
   );
 });

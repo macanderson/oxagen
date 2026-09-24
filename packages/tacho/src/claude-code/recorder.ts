@@ -390,6 +390,17 @@ export class SessionRecorder {
   private llmCalls = new LlmCallLedger();
   private toolCalls = new ToolCallLedger();
   /**
+   * The recorder whose ledgers judge this chain's model and tool calls, when
+   * it is not this one. A subagent's call reaches more than one chain: the
+   * proxy seals a model call on the root, the subagent's transcript and hooks
+   * seal on the child, and OTel seals wherever `agent_id` or `agent.name`
+   * routes it. With ledgers per chain each chain saw the call first and
+   * counted it (#3944), so every child judges against its parent's ledgers.
+   * They are looked up on each sighting, never held: the root replaces its
+   * ledgers on a rollback.
+   */
+  private ledgerHost: SessionRecorder | undefined;
+  /**
    * Where this chain stood when the recorder was built. A caller whose
    * failed call created the session has no mark of its own to roll back to,
    * so it rolls back to this one. See `rollbackToBirth`.
@@ -493,6 +504,14 @@ export class SessionRecorder {
         },
         restore: link.state,
       });
+      // A state file an older build wrote gave each child ledgers of its
+      // own. Their calls move to the family's ledgers, so a later sighting of
+      // one of them is judged against them.
+      this.modelCallLedger.absorb(recorder.llmCalls.state());
+      this.toolCallLedger.absorb(recorder.toolCalls.state());
+      recorder.llmCalls = new LlmCallLedger();
+      recorder.toolCalls = new ToolCallLedger();
+      recorder.ledgerHost = this;
       this.children.set(subagentId, {
         recorder,
         ...(link.type !== undefined ? { type: link.type } : {}),
@@ -873,6 +892,7 @@ export class SessionRecorder {
     recorder.anthropic = { ...this.anthropic };
     recorder.host = { ...this.host };
     recorder.envSnapshot = this.envSnapshot;
+    recorder.ledgerHost = this;
     this.children.set(subagentId, {
       recorder,
       ...(subagentType !== undefined ? { type: subagentType } : {}),
@@ -901,12 +921,30 @@ export class SessionRecorder {
     return recorder;
   }
 
+  /**
+   * The one open subagent of a type, or undefined when none is open or more
+   * than one is. Two parallel subagents of one type used to both resolve to
+   * the one opened last, so the first one's OTel records were sealed on its
+   * sibling's chain. A record that names neither belongs on the parent's.
+   */
   private childByType(type: string): SessionRecorder | undefined {
     let candidate: SubagentLink | undefined;
     for (const link of this.children.values()) {
-      if (link.type === type && link.open) candidate = link;
+      if (link.type !== type || !link.open) continue;
+      if (candidate !== undefined) return undefined;
+      candidate = link;
     }
     return candidate?.recorder;
+  }
+
+  /** The ledger this chain's model calls are judged against. */
+  private get modelCallLedger(): LlmCallLedger {
+    return this.ledgerHost?.modelCallLedger ?? this.llmCalls;
+  }
+
+  /** The ledger this chain's tool calls are judged against. */
+  private get toolCallLedger(): ToolCallLedger {
+    return this.ledgerHost?.toolCallLedger ?? this.toolCalls;
   }
 
   private seal(
@@ -1057,7 +1095,7 @@ export class SessionRecorder {
     body: Record<string, unknown>,
     source: string,
   ): SightingAttrs {
-    const { verdict, commit } = this.llmCalls.judge(body, source);
+    const { verdict, commit } = this.modelCallLedger.judge(body, source);
     if (verdict.kind === "repeat") return { attrs: undefined, commit };
     if (verdict.kind === "duplicate")
       return { attrs: { [LLM_CALL_DUPLICATE_OF_ATTR]: verdict.of }, commit };
@@ -1082,7 +1120,7 @@ export class SessionRecorder {
   ): SightingAttrs {
     const toolUseId =
       typeof body["tool_use_id"] === "string" ? body["tool_use_id"] : undefined;
-    const { verdict, commit } = this.toolCalls.judge(
+    const { verdict, commit } = this.toolCallLedger.judge(
       toolUseId,
       source,
       hasBody,

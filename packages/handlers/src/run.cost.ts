@@ -10,10 +10,15 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
   runCostGet,
+  type RunCostByClass,
   type RunCostGetOutput,
   type RunCostProvisional,
 } from "@oxagen/oxagen/contracts/run.cost";
-import { costBasisSchema } from "@oxagen/oxagen/contracts/spend.shared";
+import {
+  costBasisSchema,
+  type Cost,
+  type CostBasis,
+} from "@oxagen/oxagen/contracts/spend.shared";
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { cost, readRunTotalsByIds, type SpendScope } from "./spend.shared";
@@ -118,6 +123,32 @@ export function provisionalOf(
   };
 }
 
+/**
+ * A model's recorded class split on the wire, every class carrying the
+ * model's basis. Null when the model has no basis, which is when none of its
+ * frames was priced, so the split is null exactly when the model's cost is.
+ */
+export function costByClassOf(
+  byClass: Record<keyof RunCostByClass, bigint>,
+  currency: string,
+  basis: CostBasis | null,
+): RunCostByClass | null {
+  if (basis === null) return null;
+  const figure = (micros: bigint): Cost => ({
+    micros: micros.toString(),
+    currency,
+    basis,
+  });
+  return {
+    input_uncached: figure(byClass.input_uncached),
+    cache_read: figure(byClass.cache_read),
+    cache_write_5m: figure(byClass.cache_write_5m),
+    cache_write_1h: figure(byClass.cache_write_1h),
+    output: figure(byClass.output),
+    reasoning: figure(byClass.reasoning),
+  };
+}
+
 export function createRunCostHandler(
   deps: RunCostDeps,
 ): CapabilityHandler<typeof runCostGet> {
@@ -152,6 +183,11 @@ export function createRunCostHandler(
           calls: m.calls,
           cost: cost(m.costMicros, row.currency, m.basis),
           tokens: m.tokens,
+          costByClass: costByClassOf(m.costByClass, row.currency, m.basis),
+          // The rollup recorded it at each frame's instant; a row rolled up
+          // before it did reads null here, never a zero.
+          cacheSaving: cost(m.cacheSavingMicros, row.currency, m.basis),
+          hasUnpriced: m.hasUnpriced,
         })),
         byTool: row.breakdown.tools,
         priceEntryIds: row.priceEntryIds,

@@ -145,4 +145,43 @@ describe("LlmCallLedger", () => {
       kind: "first",
     });
   });
+
+  it("keeps its own entry for a key it absorbs from another ledger", () => {
+    const root = new LlmCallLedger();
+    root.note(call(), "otel_log");
+    const child = new LlmCallLedger();
+    child.note(call(), "transcript");
+    child.note(
+      call({ request_id: "req_2", message_id: "msg_2" }),
+      "transcript",
+    );
+    root.absorb(child.state());
+    expect(root.note(call(), "collector")).toEqual({
+      kind: "duplicate",
+      of: "otel_log",
+    });
+    expect(
+      root.note(call({ request_id: "req_2", message_id: "msg_2" }), "otel_log"),
+    ).toEqual({ kind: "duplicate", of: "transcript" });
+  });
+
+  it("forgets its oldest keys when an absorb takes it past its capacity", () => {
+    const root = new LlmCallLedger();
+    root.note({ request_id: "req_root" }, "otel_log");
+    const child = new LlmCallLedger();
+    for (let i = 0; i < LLM_CALL_LEDGER_CAPACITY; i += 1) {
+      child.note({ request_id: `req_${i}` }, "transcript");
+    }
+    root.absorb(child.state());
+    expect(root.state().keys).toHaveLength(LLM_CALL_LEDGER_CAPACITY);
+    expect(root.note({ request_id: "req_root" }, "transcript")).toEqual({
+      kind: "first",
+    });
+    expect(
+      root.note(
+        { request_id: `req_${LLM_CALL_LEDGER_CAPACITY - 1}` },
+        "otel_log",
+      ),
+    ).toEqual({ kind: "duplicate", of: "transcript" });
+  });
 });

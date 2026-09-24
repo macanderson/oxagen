@@ -12,6 +12,7 @@ import { useTranslations } from "next-intl";
 import { type ReactNode, useId, useMemo, useState } from "react";
 import type { AgentDetail } from "@/data/contracts/agents";
 import { isEffective, type MandateList } from "@/data/contracts/mandates";
+import { chooseToolPatterns } from "@/features/shell/client";
 import { diffStat } from "@/shared/line-diff";
 import { parsePullRequestUrl } from "@/shared/pull-request-url";
 import type { SafePath } from "@/shared/safe-path";
@@ -36,8 +37,9 @@ import {
 } from "@/ui/control-styles";
 import { FormAlert } from "@/ui/form-feedback";
 import { PullRequestLink, SafeLink } from "@/ui/navigation";
-import { useDefinitionDraft } from "./draft-store";
+import { RecordMultiPicker } from "@/ui/record-picker";
 import { repositoryOf } from "./definition-repo";
+import { useDefinitionDraft } from "./draft-store";
 import { Facts, Instant, Panel } from "./parts";
 import { CommitDialog } from "./source-editor";
 
@@ -136,6 +138,11 @@ function readDraft(draft: string): {
     : { doc: {}, error: parsed };
 }
 
+/** The id of a field's hint, which the field names in `aria-describedby`. */
+function hintId(id: string): string {
+  return `${id}-hint`;
+}
+
 function Labelled({
   id,
   label,
@@ -154,64 +161,10 @@ function Labelled({
       </label>
       {children}
       {hint === undefined ? null : (
-        <p className="text-xs text-muted-foreground">{hint}</p>
+        <p id={hintId(id)} className="text-xs text-muted-foreground">
+          {hint}
+        </p>
       )}
-    </div>
-  );
-}
-
-/** A list of patterns as removable chips with an input that adds one on Enter. */
-function Chips({
-  id,
-  values,
-  onChange,
-  addLabel,
-  placeholder,
-  removeLabel,
-}: {
-  id: string;
-  values: string[];
-  onChange: (next: string[]) => void;
-  addLabel: string;
-  placeholder: string;
-  removeLabel: (value: string) => string;
-}) {
-  return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      {values.map((value, i) => (
-        <span
-          key={value}
-          className={`${mono} inline-flex items-center gap-1 rounded-md border border-border bg-muted px-1.5 py-0.5 text-xs`}
-        >
-          <span>{value}</span>
-          <button
-            type="button"
-            aria-label={removeLabel(value)}
-            className="rounded-sm px-0.5 text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
-            onClick={() => {
-              onChange(values.filter((_, j) => j !== i));
-            }}
-          >
-            ×
-          </button>
-        </span>
-      ))}
-      <input
-        id={id}
-        aria-label={addLabel}
-        placeholder={placeholder}
-        autoComplete="off"
-        spellCheck={false}
-        className={`${inputBase} ${mono} min-h-9 w-auto min-w-48 flex-1 py-1.5`}
-        onKeyDown={(event) => {
-          if (event.key !== "Enter") return;
-          const value = event.currentTarget.value.trim();
-          if (value.length === 0) return;
-          event.preventDefault();
-          if (!values.includes(value)) onChange([...values, value]);
-          event.currentTarget.value = "";
-        }}
-      />
     </div>
   );
 }
@@ -431,6 +384,7 @@ export function DefinitionForm({
               >
                 <input
                   id={field("slug")}
+                  aria-describedby={hintId(field("slug"))}
                   readOnly
                   value={text(tomlGet(doc, "slug"))}
                   className={`${inputBase} ${mono}`}
@@ -456,6 +410,7 @@ export function DefinitionForm({
             >
               <input
                 id={field("description")}
+                aria-describedby={hintId(field("description"))}
                 defaultValue={text(tomlGet(doc, "description"))}
                 key={`description:${text(tomlGet(doc, "description"))}`}
                 className={inputBase}
@@ -476,6 +431,7 @@ export function DefinitionForm({
               >
                 <select
                   id={field("tier")}
+                  aria-describedby={hintId(field("tier"))}
                   value={tier}
                   className={inputBase}
                   onChange={(event) => {
@@ -500,6 +456,7 @@ export function DefinitionForm({
                 {/* Any decimal: the stored value is a micro, and a step of a cent would flag the field invalid for the value the file itself holds. */}
                 <input
                   id={field("budget")}
+                  aria-describedby={hintId(field("budget"))}
                   type="number"
                   step="any"
                   min="0"
@@ -527,6 +484,7 @@ export function DefinitionForm({
               >
                 <input
                   id={field("budget-day")}
+                  aria-describedby={hintId(field("budget-day"))}
                   type="number"
                   step="any"
                   min="0"
@@ -561,15 +519,15 @@ export function DefinitionForm({
               label={t("tools.tools")}
               hint={t("tools.toolsHint")}
             >
-              <Chips
+              <RecordMultiPicker
                 id={field("tools")}
-                values={strings(tomlGet(doc, "tools"))}
+                aria-describedby={hintId(field("tools"))}
+                freeform
+                load={() => chooseToolPatterns(org, ws)}
+                value={strings(tomlGet(doc, "tools"))}
                 onChange={(next) => {
                   set(null, "tools", next);
                 }}
-                addLabel={t("tools.add", { key: "tools" })}
-                placeholder={t("tools.addPlaceholder")}
-                removeLabel={(value) => t("tools.remove", { value })}
               />
             </Labelled>
             <Labelled
@@ -577,15 +535,15 @@ export function DefinitionForm({
               label={t("tools.denyTools")}
               hint={t("tools.denyHint")}
             >
-              <Chips
+              <RecordMultiPicker
                 id={field("deny")}
-                values={strings(tomlGet(doc, "deny_tools"))}
+                aria-describedby={hintId(field("deny"))}
+                freeform
+                load={() => chooseToolPatterns(org, ws)}
+                value={strings(tomlGet(doc, "deny_tools"))}
                 onChange={(next) => {
                   set(null, "deny_tools", next);
                 }}
-                addLabel={t("tools.add", { key: "deny_tools" })}
-                placeholder={t("tools.addPlaceholder")}
-                removeLabel={(value) => t("tools.remove", { value })}
               />
             </Labelled>
             <fieldset className="flex min-w-0 flex-col gap-2">
@@ -650,6 +608,7 @@ export function DefinitionForm({
             >
               <textarea
                 id={field("body")}
+                aria-describedby={hintId(field("body"))}
                 rows={6}
                 key={`body:${body}`}
                 defaultValue={body}
@@ -684,6 +643,7 @@ export function DefinitionForm({
               >
                 <input
                   id={field("harness")}
+                  aria-describedby={hintId(field("harness"))}
                   readOnly
                   value={identity.harness}
                   className={`${inputBase} ${mono}`}
@@ -696,6 +656,7 @@ export function DefinitionForm({
               >
                 <select
                   id={field("color")}
+                  aria-describedby={hintId(field("color"))}
                   value={color}
                   className={inputBase}
                   onChange={(event) => {

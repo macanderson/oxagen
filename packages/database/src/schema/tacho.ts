@@ -76,10 +76,16 @@ export const TACHO_SESSION_OUTCOMES = [
  * What sealed a session. `agent_stop` is the host's own end, a seal that is
  * final. `idle_timeout` is the control plane closing a session that sent no
  * event for `TACHO_IDLE_CLOSE_AFTER_MS`: a later event reopens it and a later
- * `agent_stop` replaces it. Null on an open session, and on a session sealed
- * before the column existed, which reads as `agent_stop`.
+ * `agent_stop` replaces it. `operator` is a person sealing the run through
+ * `seal_run` (ADR-169), final like the host's own. Null on an open session,
+ * and on a session sealed before the column existed, which reads as
+ * `agent_stop`.
  */
-export const TACHO_SEAL_SOURCES = ["agent_stop", "idle_timeout"] as const;
+export const TACHO_SEAL_SOURCES = [
+  "agent_stop",
+  "idle_timeout",
+  "operator",
+] as const;
 export type TachoSealSource = (typeof TACHO_SEAL_SOURCES)[number];
 /**
  * How long a session may send nothing before the control plane closes it:

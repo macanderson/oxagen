@@ -746,6 +746,18 @@ describe("list_runs queries name the tenant", () => {
     expect(compacted.sql).toMatch(
       /not exists \(select 1 from "agent"\."agent_run_events"/,
     );
+    // Spelled out, so the partial `(attempt_id, attempt_seq)` index serves
+    // the probe.
+    expect(compacted.sql).toMatch(
+      /"agent_run_events"\."attempt_id" = "agent"\."agent_run_attempt_seals"\."attempt_id" and "agent"\."agent_run_events"\."event_record_version" = 2\)/,
+    );
+  });
+
+  it("writes the event record version as a literal, so the partial run index matches", () => {
+    const hot = ledgerRollupQuery(db, SCOPE, [RUN]).toSQL();
+    expect(hot.sql).toMatch(/"agent_run_events"\."event_record_version" = 2/);
+    // Not a bind parameter: a generic plan cannot prove `$1 = 2`.
+    expect(hot.sql).not.toMatch(/"event_record_version" = \$\d/);
   });
 
   it("adds a compacted rollup to the hot one, frame for frame, and hides turns an encrypted call hid", () => {
@@ -1074,6 +1086,30 @@ describe("a run row says whether a command can reach it", () => {
     expect(byId.get("tse_idle")?.commandBlock).toBeNull();
     // The host's own stop is final.
     expect(byId.get("tse_stopped")?.commandBlock).toBe("run_sealed");
+  });
+
+  it("lists a run an operator sealed as sealed and final, with its seal source (#4073)", async () => {
+    const { list } = handlerOver(
+      [],
+      [
+        tachoSession({
+          publicId: "tse_operator",
+          session: {
+            outcome: "unknown",
+            sealedAt: new Date("2026-09-15T21:00:00.000Z"),
+            sealSource: "operator",
+          },
+          host: host("active", 10),
+        }),
+      ],
+    );
+    const run = (await list({ limit: 50 }, ctx())).runs[0];
+    expect(run).toMatchObject({
+      status: "sealed",
+      sealSource: "operator",
+      // Final like the host's own stop: no command reaches it.
+      commandBlock: "run_sealed",
+    });
   });
 
   // #4023: Stella reads steering text only at session start, so its row
@@ -1509,6 +1545,11 @@ describe("an open run's cost and what sealed a run (#3980)", () => {
     expect(recordedSealSource(null, "idle_timeout")).toBeNull();
   });
 
+  it("names an operator's seal (#4073)", () => {
+    expect(recordedSealSource(sealed, "operator")).toBe("operator");
+    expect(recordedSealSource(null, "operator")).toBeNull();
+  });
+
   it("refuses a seal source outside the CHECK (negative)", () => {
     expect(() => recordedSealSource(sealed, "guessed")).toThrow(RangeError);
   });
@@ -1516,10 +1557,16 @@ describe("an open run's cost and what sealed a run (#3980)", () => {
 
 describe("tachoRunName", () => {
   it.each([
-    [{ harnessTitle: "Claude title", name: "Model name", title: "dir" }, "Claude title"],
+    [
+      { harnessTitle: "Claude title", name: "Model name", title: "dir" },
+      "Claude title",
+    ],
     [{ harnessTitle: null, name: "Model name", title: "dir" }, "Model name"],
     [{ name: "Fix login · fix/auth", title: "dir" }, "Fix login · fix/auth"],
-    [{ harnessTitle: null, name: null, title: "oxagen · 6 files" }, "oxagen · 6 files"],
+    [
+      { harnessTitle: null, name: null, title: "oxagen · 6 files" },
+      "oxagen · 6 files",
+    ],
     [{ name: null }, null],
   ])("names %o as %s", (session, expected) => {
     expect(tachoRunName(session)).toBe(expected);

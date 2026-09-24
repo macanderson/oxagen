@@ -96,7 +96,15 @@ const Workspace = z.object({
   costCenter: z.string().min(1).nullable(),
 });
 
-export const WorkspaceList = z.object({ workspaces: z.array(Workspace) });
+export const WorkspaceList = z.object({
+  /**
+   * The organization's public id (`org_…`), from the `organization` block
+   * `list_workspaces` answers beside its rows. The Workspaces tab prints it
+   * for copying, next to each workspace's own public id.
+   */
+  orgId: PublicId,
+  workspaces: z.array(Workspace),
+});
 export type WorkspaceList = z.infer<typeof WorkspaceList>;
 export type Workspace = z.infer<typeof Workspace>;
 

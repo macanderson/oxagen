@@ -1712,8 +1712,22 @@ export const tachoEventsIngestHandler: CapabilityHandler<
               // these frames without the reopen they owe it, and leave a
               // session that is plainly running reading as closed. Refused,
               // the batch is re-sent and its next read reopens the session.
+              //
+              // An operator's `seal_run` (#4073) also moves the seal without
+              // moving the head, and it can land on an idle-closed row. A
+              // batch that read the idle close computed a reopen, which would
+              // undo a seal that is final. So the batch writes only while the
+              // idle close it read still stands. Refused, the batch is
+              // re-sent and its next read sees the operator's seal.
               ...(existing.sealedAt
-                ? []
+                ? idleClosed
+                  ? [
+                      eq(
+                        schema.tachoSessions.sealSource,
+                        "idle_timeout" satisfies TachoSealSource,
+                      ),
+                    ]
+                  : []
                 : [isNull(schema.tachoSessions.sealedAt)]),
             ),
           )

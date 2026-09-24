@@ -273,10 +273,11 @@ const workspacesSample = {
 };
 
 describe("toWorkspaceList", () => {
-  it("carries each workspace by its public id, with the viewer's role and its archival date", () => {
+  it("carries the organization and each workspace by public id, with the viewer's role and its archival date", () => {
     const view = WorkspaceList.parse(
       toWorkspaceList(workspaceList.output.parse(workspacesSample)),
     );
+    expect(view.orgId).toBe("org_1");
     expect(view.workspaces).toEqual([
       {
         id: "wrk_0a1b2c3d4e5f6g7h8j9k0m",
@@ -299,13 +300,13 @@ describe("toWorkspaceList", () => {
     ]);
   });
 
-  it("carries the database uuid nowhere: the row's id is its public id (negative)", () => {
+  it("carries the database uuid nowhere: the row's id and the organization's are public ids (negative)", () => {
     const view = WorkspaceList.parse(
       toWorkspaceList(workspaceList.output.parse(workspacesSample)),
     );
-    expect(JSON.stringify(view)).not.toContain(
-      "7b000000-0000-4000-8000-000000000001",
-    );
+    const json = JSON.stringify(view);
+    expect(json).not.toContain("7b000000-0000-4000-8000-000000000001");
+    expect(json).not.toContain("7a000000-0000-4000-8000-0000000000a1");
   });
 });
 

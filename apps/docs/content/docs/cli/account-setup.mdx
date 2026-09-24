@@ -84,7 +84,7 @@ To target a self-hosted or staging API, set `OXAGEN_API_URL`. It defaults to `ht
 | File | Contents |
 |---|---|
 | `~/.config/oxagen/config.json` | Your Oxagen API key (`token`), `org`, `workspace`, and `api-url`. Written by `oxagen login`. |
-| `<project>/.oxagen/workspace.json` | The project's org and workspace binding, written by `oxagen init`. It contains no secrets and is safe to commit. |
+| `<project>/.oxagen/workspace.json` | The project's org and workspace binding, written by `oxagen init`. It holds no secrets. It is one checkout's link, so the pull request `oxagen repo init` opens adds it to `.gitignore`. |
 
 The config file holds a secret. It lives under your home directory with your user permissions. Keep it off shared machines and out of version control.
 

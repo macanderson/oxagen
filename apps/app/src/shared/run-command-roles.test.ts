@@ -1,7 +1,9 @@
-// The rule both run-command surfaces gate on, held to `dispatch_command`'s
-// own `defaultRoles`: org Owner or Admin, or workspace Owner or Member.
+// The rules the run controls gate on, each held to its contract's own
+// `defaultRoles`: `dispatch_command` admits an org Owner or Admin, or a
+// workspace Owner or Member; `seal_run` admits the org's and the workspace
+// Owner only (ADR-169).
 import { describe, expect, it } from "vitest";
-import { canCommandRun } from "./run-command-roles";
+import { canCommandRun, canSealRun } from "./run-command-roles";
 
 describe("canCommandRun", () => {
   it("admits an organization Owner or Admin whatever the workspace role is", () => {
@@ -25,5 +27,26 @@ describe("canCommandRun", () => {
   it("refuses a role value neither membership can hold (negative)", () => {
     expect(canCommandRun("Owner", "Member")).toBe(false);
     expect(canCommandRun("", "")).toBe(false);
+  });
+});
+
+describe("canSealRun", () => {
+  it("admits an organization Owner or Admin whatever the workspace role is", () => {
+    expect(canSealRun("owner", "viewer")).toBe(true);
+    expect(canSealRun("admin", "viewer")).toBe(true);
+  });
+
+  it("admits the workspace Owner whose organization role is only Viewer", () => {
+    expect(canSealRun("viewer", "owner")).toBe(true);
+  });
+
+  it("refuses a workspace Member, who can cancel but not seal (negative)", () => {
+    expect(canCommandRun("viewer", "member")).toBe(true);
+    expect(canSealRun("viewer", "member")).toBe(false);
+    for (const orgRole of ["member", "billing", "compliance", "viewer"]) {
+      for (const wsRole of ["member", "billing", "compliance", "viewer"]) {
+        expect(canSealRun(orgRole, wsRole)).toBe(false);
+      }
+    }
   });
 });

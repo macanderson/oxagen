@@ -1,7 +1,8 @@
 "use client";
 // "Steer the fleet" (fleet.md, Header): every agent in the workspace, selected
-// by default, with All and None; a Steering text field; and a Delivery block
-// whose Interrupt switch is disabled and says it is not yet available.
+// by default in a typeahead picker, with All and None; a Steering text field;
+// and a Delivery block whose Interrupt switch is disabled and says it is not
+// yet available.
 //
 // Sending queues one `dispatch_command` steer per selected agent at the turn
 // boundary (`steerFleet` in ./actions). The control plane fans each out to the
@@ -13,8 +14,6 @@ import { STEER_TEXT_MAX } from "@oxagen/oxagen/tacho/command-limits";
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useId, useState, useTransition } from "react";
 import type { RunRow } from "@/data/contracts/runs";
-import { AgentCard } from "@/ui/agent-card";
-import { Badge } from "@/ui/badge";
 import { UNANSWERED, useActionFailure } from "@/ui/command-failure";
 import {
   buttonPrimary,
@@ -24,8 +23,8 @@ import {
 } from "@/ui/control-styles";
 import { FormAlert } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
+import { type PickerOption, RecordMultiPicker } from "@/ui/record-picker";
 import { SheetDialog } from "@/ui/sheet-dialog";
-import { StatusBadge } from "@/ui/status-badge";
 import { type FleetSteer, steerFleet } from "./actions";
 import type { FleetAgent } from "./board";
 
@@ -71,12 +70,12 @@ export function SteerFleetDialog({
   onClose: () => void;
 }) {
   const t = useTranslations("fleet.steer");
-  const runWords = useTranslations("fleet.runs");
   const command = useTranslations("run.commands");
   const failureText = useActionFailure();
   const navigate = useNavigate();
   const formId = useId();
   const textId = useId();
+  const pickerId = useId();
   const [selected, setSelected] = useState<ReadonlySet<string>>(
     () => new Set(agents.map((agent) => agent.agentKey)),
   );
@@ -94,12 +93,23 @@ export function SteerFleetDialog({
   const inFlight = picked.filter((agent) => live.has(agent.agentKey)).length;
   const blocked = !canCommand || picked.length === 0 || text.trim() === "";
 
-  function toggle(agentKey: string, on: boolean) {
-    const next = new Set(selected);
-    if (on) next.add(agentKey);
-    else next.delete(agentKey);
-    setSelected(next);
-  }
+  // Each agent is offered by its key, with what it has in flight on the
+  // second line: the run, its turn and task, or that it is idle or parked.
+  const options: PickerOption[] = agents.map((agent) => {
+    const run = live.get(agent.agentKey);
+    const state = run !== undefined && parked.has(run.id) ? "parked" : "live";
+    const task = run?.name ?? run?.taskRef ?? "";
+    return {
+      value: agent.agentKey,
+      label: agent.agentKey,
+      detail:
+        run === undefined
+          ? t("idle")
+          : run.turns === null
+            ? t("inFlightNoTurn", { state, run: run.id, task })
+            : t("inFlight", { state, run: run.id, turn: run.turns, task }),
+    };
+  });
 
   function submit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -177,14 +187,10 @@ export function SteerFleetDialog({
         </div>
       ) : (
         <form id={formId} onSubmit={submit} className="flex flex-col gap-4">
-          <div
-            role="group"
-            aria-labelledby={`${formId}-agents`}
-            className="flex flex-col gap-1.5"
-          >
+          <div className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between gap-2">
-              <span
-                id={`${formId}-agents`}
+              <label
+                htmlFor={pickerId}
                 data-testid="steer-selected"
                 className="text-xs font-medium"
               >
@@ -192,7 +198,7 @@ export function SteerFleetDialog({
                   selected: picked.length,
                   total,
                 })}
-              </span>
+              </label>
               <span className="flex gap-1.5">
                 <button
                   type="button"
@@ -221,61 +227,17 @@ export function SteerFleetDialog({
                 {agentsRead ? t("noAgents") : t("agentsUnread")}
               </p>
             ) : (
-              <ul className="flex max-h-64 flex-col divide-y divide-border overflow-y-auto rounded-lg border border-border">
-                {agents.map((agent) => {
-                  const run = live.get(agent.agentKey);
-                  const task = run?.name ?? run?.taskRef ?? "";
-                  return (
-                    <li key={agent.agentKey}>
-                      <label className="flex min-h-11 cursor-pointer items-center gap-3 px-3 py-2">
-                        <input
-                          type="checkbox"
-                          checked={selected.has(agent.agentKey)}
-                          aria-label={t("pick", { agent: agent.agentKey })}
-                          onChange={(event) => {
-                            toggle(agent.agentKey, event.target.checked);
-                          }}
-                          className="size-4 flex-none"
-                        />
-                        <span className="min-w-0 grow">
-                          <AgentCard
-                            agentKey={agent.agentKey}
-                            notRecorded=""
-                            sub={
-                              run === undefined
-                                ? t("idleSub")
-                                : run.turns === null
-                                  ? t("inFlightNoTurn", { run: run.id, task })
-                                  : t("inFlight", {
-                                      run: run.id,
-                                      turn: run.turns,
-                                      task,
-                                    })
-                            }
-                          />
-                        </span>
-                        {run === undefined ? (
-                          <Badge tone="quiet">{t("idle")}</Badge>
-                        ) : parked.has(run.id) ? (
-                          <Badge
-                            tone="approval"
-                            dot={false}
-                            data-status="parked"
-                          >
-                            {runWords("parked")}
-                          </Badge>
-                        ) : (
-                          <StatusBadge
-                            status={run.status}
-                            outcome={run.outcome}
-                            vocabulary="lifecycle"
-                          />
-                        )}
-                      </label>
-                    </li>
-                  );
-                })}
-              </ul>
+              <RecordMultiPicker
+                id={pickerId}
+                options={options}
+                value={picked.map((agent) => agent.agentKey)}
+                onChange={(keys) => {
+                  setSelected(new Set(keys));
+                }}
+                placeholder={t("search")}
+                aria-describedby={`${formId}-hint`}
+                data-testid="steer-agents"
+              />
             )}
             {unlisted === 0 ? null : (
               <p
@@ -287,7 +249,7 @@ export function SteerFleetDialog({
                   : t("stopped", { listed: agents.length, count: unlisted })}
               </p>
             )}
-            <p className="text-xs text-muted-foreground">
+            <p id={`${formId}-hint`} className="text-xs text-muted-foreground">
               {t("hint", { workspace })}
             </p>
           </div>

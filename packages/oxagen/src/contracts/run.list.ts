@@ -298,12 +298,16 @@ export const runItemSchema = z
      */
     sealedAt: z.string().datetime().nullable(),
     /**
-     * What sealed a wrapped session: `agent_stop`, its host's own end, or
+     * What sealed a wrapped session: `agent_stop`, its host's own end;
      * `idle_timeout`, the control plane closing a run that sent nothing for
-     * twelve hours, which the run's next event reopens. Null while the run is
-     * open, and for a ledger run.
+     * twelve hours, which the run's next event reopens; or `operator`, a
+     * person sealing it through `seal_run` (ADR-169), which is final. Null
+     * while the run is open, and for a ledger run.
      */
-    sealSource: z.enum(["agent_stop", "idle_timeout"]).nullable().optional(),
+    sealSource: z
+      .enum(["agent_stop", "idle_timeout", "operator"])
+      .nullable()
+      .optional(),
     /**
      * RFC 3339; when the run stopped, by the recorder's own clock: the stop
      * event's timestamp for a wrapped session, the seal for a ledger run.

@@ -6,9 +6,13 @@
 // interface claim more than the control plane did: a command carries the run as
 // its target and nothing wider, and a steer is refused before the kernel when
 // its text is empty or past the contract's ceiling.
-import { STEER_TEXT_MAX } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
+import {
+  COMMAND_REASON_MAX,
+  STEER_TEXT_MAX,
+} from "@oxagen/oxagen/contracts/tacho.command.dispatch";
 import type { runTranscriptGet } from "@oxagen/oxagen/contracts/run.transcript.get";
 import type { ContractOutput } from "@/server/kernel";
+import { PAGE_FAILURES } from "@/data/read";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { invoke, requireViewer, captureError } = vi.hoisted(() => ({
@@ -41,6 +45,8 @@ const {
   haltRun,
   readRunExport,
   readTranscriptPage,
+  sealRun,
+  setRunEnrichment,
   steerRun,
   summarizeRun,
 } = await import("./actions");
@@ -92,6 +98,59 @@ beforeEach(() => {
   captureError.mockReset();
 });
 
+describe("sealRun", () => {
+  const answer = {
+    runId: RUN,
+    sealedAt: "2026-09-24T12:00:00.000Z",
+    sessionsSealed: 2,
+    kill: { status: "queued" as const, commandId: "tcm_kill1" },
+  };
+
+  it("seals this run with the trimmed reason and answers what seal_run did", async () => {
+    invoke.mockResolvedValue(answer);
+    expect(
+      await sealRun("acme", "core-platform", RUN, "  finished at noon  "),
+    ).toEqual({ ok: true, value: answer });
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    expect(invoke).toHaveBeenCalledWith(
+      "seal_run",
+      { runId: RUN, reason: "finished at noon" },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("sends no reason when the field was left blank, rather than an empty one", async () => {
+    invoke.mockResolvedValue(answer);
+    await sealRun("acme", "core-platform", RUN, "   ");
+    expect(invoke.mock.calls[0]?.[1]).toEqual({ runId: RUN });
+  });
+
+  it("refuses a reason past the contract's ceiling before the kernel runs (negative)", async () => {
+    expect(
+      await sealRun(
+        "acme",
+        "core-platform",
+        RUN,
+        "x".repeat(COMMAND_REASON_MAX + 1),
+      ),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "command_reason",
+      field: "reason",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("returns a denial as denied (negative)", async () => {
+    invoke.mockRejectedValue(denied("seal_run"));
+    expect(await sealRun("acme", "core-platform", RUN, "done")).toMatchObject({
+      ok: false,
+      reason: "denied",
+    });
+  });
+});
+
 describe("haltRun", () => {
   it("queues the command against this run alone and answers the command ids", async () => {
     invoke.mockResolvedValue({ commandIds: ["tcm_1"] });
@@ -131,6 +190,33 @@ describe("haltRun", () => {
     expect(
       await haltRun("acme", "core-platform", RUN, "pause", "stop"),
     ).toMatchObject({ ok: false, reason: "denied" });
+  });
+
+  it("refuses a reason past the contract's ceiling on the reason field, before the kernel runs (negative)", async () => {
+    expect(
+      await haltRun(
+        "acme",
+        "core-platform",
+        RUN,
+        "pause",
+        ` ${"x".repeat(COMMAND_REASON_MAX + 1)} `,
+      ),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "command_reason",
+      field: "reason",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("measures the reason after trimming, so padding does not push one at the ceiling over it", async () => {
+    invoke.mockResolvedValue({ commandIds: ["tcm_5"] });
+    const atCeiling = "x".repeat(COMMAND_REASON_MAX);
+    expect(
+      await haltRun("acme", "core-platform", RUN, "cancel", `  ${atCeiling}  `),
+    ).toEqual({ ok: true, value: { commandIds: ["tcm_5"] } });
+    expect(invoke.mock.calls[0]?.[1]).toMatchObject({ reason: atCeiling });
   });
 });
 
@@ -205,6 +291,19 @@ describe("steerRun", () => {
       field: "requestedMode",
     });
     expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("returns a denial as denied, and never claims the steer was queued (negative)", async () => {
+    invoke.mockRejectedValue(denied("dispatch_command"));
+    const result = await steerRun(
+      "acme",
+      "core-platform",
+      RUN,
+      "use the 3.2 branch",
+      "next_step",
+    );
+    expect(result).toMatchObject({ ok: false, reason: "denied" });
+    expect(result).not.toHaveProperty("value");
   });
 });
 
@@ -407,6 +506,61 @@ describe("bisectRuns", () => {
     }
     expect(invoke).not.toHaveBeenCalled();
   });
+
+  it("returns the handler's refusal to compare as a conflict naming it (negative)", async () => {
+    invoke.mockRejectedValue(refused("run_not_found"));
+    expect(
+      await bisectRuns("acme", "core-platform", RUN, "arun_9f2a"),
+    ).toMatchObject({ ok: false, reason: "conflict", code: "run_not_found" });
+  });
+});
+
+describe("setRunEnrichment", () => {
+  it("writes the workspace's automatic names setting and answers what the contract wrote", async () => {
+    const written = {
+      name: "Core platform",
+      slug: "core-platform",
+      description: null,
+      avatarUrl: null,
+      consequenceRoles: {},
+      steering: { autoSync: false, blockStaleRuns: false },
+      runEnrichmentEnabled: false,
+    };
+    invoke.mockResolvedValue(written);
+    expect(await setRunEnrichment("acme", "core-platform", false)).toEqual({
+      ok: true,
+      value: written,
+    });
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    expect(invoke).toHaveBeenCalledWith(
+      "update_workspace_settings",
+      { runEnrichmentEnabled: false },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("refuses a setting that is not a yes or a no before the kernel runs (negative)", async () => {
+    // A server action is an endpoint: the switch is typed, the request is not.
+    expect(
+      await Reflect.apply(setRunEnrichment, undefined, [
+        "acme",
+        "core-platform",
+        "false",
+      ]),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_enrichment_setting",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("returns a denial as denied (negative)", async () => {
+    invoke.mockRejectedValue(denied("update_workspace_settings"));
+    expect(await setRunEnrichment("acme", "core-platform", true)).toMatchObject(
+      { ok: false, reason: "denied" },
+    );
+  });
 });
 
 describe("readTranscriptPage", () => {
@@ -536,6 +690,149 @@ describe("readTranscriptPage", () => {
       reason: "invalid",
       code: "invalid_cursor",
       field: "after",
+    });
+  });
+
+  it("answers a denied read as denied, naming the permission the Run page needs (negative)", async () => {
+    invoke.mockRejectedValue(denied("get_run_transcript"));
+    expect(
+      await readTranscriptPage(
+        "acme",
+        "core-platform",
+        RUN,
+        "steps",
+        [],
+        "ZjoxMQ",
+      ),
+    ).toEqual({
+      ok: false,
+      reason: "denied",
+      code: PAGE_FAILURES.run.permission,
+    });
+  });
+
+  it("answers a read parked for approval with the request to wait on (negative)", async () => {
+    invoke.mockRejectedValue({
+      code: "pending_approval",
+      accessRequestId: "areq_01k4qj9e",
+    });
+    expect(
+      await readTranscriptPage(
+        "acme",
+        "core-platform",
+        RUN,
+        "steps",
+        [],
+        "ZjoxMQ",
+      ),
+    ).toEqual({
+      ok: false,
+      reason: "pending_approval",
+      accessRequestId: "areq_01k4qj9e",
+    });
+  });
+
+  it("answers a store that failed as unavailable with the Run page's error code, not as invalid (negative)", async () => {
+    invoke.mockRejectedValue(new Error("clickhouse unreachable"));
+    expect(
+      await readTranscriptPage(
+        "acme",
+        "core-platform",
+        RUN,
+        "steps",
+        [],
+        "ZjoxMQ",
+      ),
+    ).toEqual({
+      ok: false,
+      reason: "unavailable",
+      code: PAGE_FAILURES.run.error.code,
+    });
+  });
+
+  it("names the subagent chain on the entry and on each half recorded there, and on neither half recorded on the run's own", async () => {
+    const { toRunTranscript } = await import("@/data/live/mappers/run");
+    const CHAIN = "0192d4a8-7c1e-7a00-8000-0000000000c1";
+    type Half = NonNullable<TranscriptOutput["entries"][number]["request"]>;
+    const half: Omit<Half, "seq"> = {
+      type: "tool_call",
+      digest: `sha256:${"a".repeat(64)}`,
+      bytesRef: "evb:v1:k:abc",
+      redactions: [],
+      fidelity: "full",
+      text: '{"open":34}',
+      truncated: false,
+      assembly: null,
+    };
+    const out: TranscriptOutput = {
+      zoom: "everything",
+      kinds: [],
+      entries: [
+        {
+          seq: "3",
+          endSeq: "4",
+          subagent: { sessionUuid: CHAIN, id: "agent_1", type: "Explore" },
+          at: "2026-09-15T08:10:00.000Z",
+          elapsedMs: 3000,
+          kind: "tool_call",
+          type: "tool_requested",
+          label: "list_pull_requests",
+          callId: "tc_2",
+          usage: {
+            inputUncached: 10,
+            cacheRead: 90,
+            cacheWrite: null,
+            output: 5,
+            reasoning: null,
+          },
+          kinds: ["tools", "policy"],
+          turn: 2,
+          request: { ...half, seq: "3", sessionUuid: CHAIN },
+          response: { ...half, seq: "4" },
+          decision: {
+            seq: "4",
+            sessionUuid: CHAIN,
+            decision: "allow",
+            type: "policy_decision",
+            at: "2026-09-15T08:10:01.000Z",
+          },
+          frames: 2,
+          cost: null,
+          cumulativeCost: null,
+        },
+      ],
+      cursor: null,
+      complete: true,
+    };
+    invoke.mockResolvedValue(out);
+    const page = await readTranscriptPage(
+      "acme",
+      "core-platform",
+      RUN,
+      "everything",
+      [],
+      "ZjoxMA",
+    );
+    expect(page).toEqual({ ok: true, value: toRunTranscript(out) });
+    if (!page.ok) throw new Error("the page was read");
+    const [entry] = page.value.entries;
+    // #4026 carries the spawning call's id as `spawnKey`; this wire entry
+    // recorded none, so it reads null rather than being left off.
+    expect(entry?.subagent).toEqual({
+      chainRef: CHAIN,
+      type: "Explore",
+      spawnKey: null,
+    });
+    expect(entry?.request?.chainRef).toBe(CHAIN);
+    expect(entry?.response).not.toHaveProperty("chainRef");
+    expect(entry?.decision?.chainRef).toBe(CHAIN);
+    expect(entry?.cost).toBeNull();
+    expect(entry?.usage).toEqual({
+      inputUncached: 10,
+      cacheRead: 90,
+      cacheWrite: null,
+      output: 5,
+      reasoning: null,
     });
   });
 

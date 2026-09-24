@@ -200,6 +200,65 @@ describe("host file", () => {
     expect(existsSync(paths.hostFile)).toBe(true);
     expect(readFileSync(paths.hostFile, "utf8")).toContain("tacho.host.v1");
   });
+
+  it("takes an unchanged mandate signed later as a renewal, and never moves its window back", () => {
+    // The defect this covers (#3944): the etag covers the mandate's content
+    // and not its signed window, so the control plane signing an unchanged
+    // mandate again sends the etag this host already holds. Comparing etags
+    // alone dropped that copy, and the first window stayed on disk for ever.
+    const paths = scratchPaths();
+    const signer = bundleSigner();
+    const signedAt = (issued: string, expires: string) =>
+      signer.sign(unsignedBundle({ issued_at: issued, expires_at: expires }));
+    const first = signedAt(
+      "2026-09-10T00:00:00.000Z",
+      "2026-09-11T00:00:00.000Z",
+    );
+    const host = testHostFile(signer, first);
+    writeHostFile(paths.hostFile, host);
+    const renewed = signedAt(
+      "2026-09-10T13:00:00.000Z",
+      "2026-09-11T13:00:00.000Z",
+    );
+    expect(renewed.etag).toBe(first.etag);
+
+    const next = applyControlFacts(paths.hostFile, host, {
+      bundle: renewed,
+      bundle_fetched_at: "2026-09-10T13:00:00.000Z",
+    });
+    expect(next.bundle.expires_at).toBe("2026-09-11T13:00:00.000Z");
+    expect(readHostFile(paths.hostFile)).toMatchObject({
+      bundle: { etag: first.etag, expires_at: "2026-09-11T13:00:00.000Z" },
+      bundle_fetched_at: "2026-09-10T13:00:00.000Z",
+    });
+
+    // The same copy again moves nothing, and neither does an older signing of
+    // the same mandate: a window never moves back.
+    expect(applyControlFacts(paths.hostFile, next, { bundle: renewed })).toBe(
+      next,
+    );
+    expect(applyControlFacts(paths.hostFile, next, { bundle: first })).toBe(
+      next,
+    );
+    expect(readHostFile(paths.hostFile)?.bundle.expires_at).toBe(
+      "2026-09-11T13:00:00.000Z",
+    );
+  });
+
+  it("replaces a held copy that does not verify, whatever its etag and window", () => {
+    // An edit to host.json keeps the etag and window it was signed with, so
+    // comparing those alone kept the edited copy over the verified one the
+    // daemon had just fetched to replace it (#3944).
+    const paths = scratchPaths();
+    const signer = bundleSigner();
+    const signed = signer.sign(unsignedBundle({}));
+    const host = testHostFile(signer, { ...signed, mode: "observe" });
+    writeHostFile(paths.hostFile, host);
+
+    const next = applyControlFacts(paths.hostFile, host, { bundle: signed });
+    expect(next.bundle.mode).toBe("enforce");
+    expect(readHostFile(paths.hostFile)?.bundle.mode).toBe("enforce");
+  });
 });
 
 describe("control client", () => {

@@ -9,7 +9,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MandateList, MandateRow } from "@/data/contracts/mandates";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
@@ -22,9 +22,10 @@ import {
 } from "./agents.builders";
 import { definitionSeed } from "./definition-seed";
 
-const { router, commitAgentDefinition } = vi.hoisted(() => ({
+const { router, commitAgentDefinition, choices } = vi.hoisted(() => ({
   router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
   commitAgentDefinition: vi.fn(),
+  choices: { chooseToolPatterns: vi.fn() },
 }));
 vi.mock("next/link", () => ({
   default: ({ children, ...rest }: { children: ReactNode; href: string }) => (
@@ -33,6 +34,7 @@ vi.mock("next/link", () => ({
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("./actions", () => ({ commitAgentDefinition }));
+vi.mock("@/features/shell/client", () => choices);
 
 const { DefinitionForm } = await import("./definition-form");
 const { routes } = await import("@/shared/safe-path");
@@ -43,6 +45,30 @@ const ledger = (mandates: MandateRow[]): MandateList => ({
   mandates,
   truncatedAt: null,
   asOf: AS_OF,
+});
+
+/** The tool patterns the registry offers: a whole tool, then one version. */
+const TOOL_PATTERNS = {
+  ok: true,
+  value: {
+    options: [
+      {
+        value: "linear__*",
+        label: "linear__*",
+        detail: "Linear",
+      },
+      {
+        value: "linear__create_issue@4",
+        label: "linear__create_issue@4",
+        detail: "Create an issue",
+      },
+    ],
+    partial: false,
+  },
+};
+
+beforeEach(() => {
+  choices.chooseToolPatterns.mockResolvedValue(TOOL_PATTERNS);
 });
 
 afterEach(() => {
@@ -176,11 +202,50 @@ describe("DefinitionForm", () => {
     );
   });
 
+  it("finds a tool by its name and writes the pattern into the tools array", async () => {
+    renderForm();
+    // The list is read up front because the file already names tools, so
+    // each chip is drawn by its label.
+    expect(choices.chooseToolPatterns).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+    );
+    const tools = screen.getByRole("combobox", { name: "tools" });
+    await userEvent.type(tools, "create an");
+    await userEvent.keyboard("{Enter}");
+    expect(
+      screen.getByRole("button", { name: "Remove linear__create_issue@4" }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await screen.findByTestId("commit-definition");
+    let source = "";
+    commitAgentDefinition.mockImplementation(
+      (_org: string, _ws: string, input: { source: string }) => {
+        source = input.source;
+        return Promise.resolve({
+          ok: false,
+          reason: "not_found",
+          code: "agent_not_found",
+        });
+      },
+    );
+    await userEvent.type(screen.getByLabelText(/Summary/), "Tools");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Commit and open a pull request" }),
+    );
+    await screen.findByTestId("commit-failure");
+    expect(source).toContain(
+      'tools = ["github__*", "linear__get_issue", "linear__create_issue@4"]\n',
+    );
+    await expectNoAxe(document.body);
+  });
+
   it("adds and removes tool patterns, toggles a side effect, and writes the budget in micros", async () => {
     renderForm();
-    const add = screen.getByRole("textbox", { name: "Add to deny_tools" });
-    await userEvent.type(add, "github__merge_pull_request@*{Enter}");
-    expect(add).toHaveValue("");
+    const deny = screen.getByRole("combobox", { name: "deny_tools" });
+    await userEvent.type(deny, "github__merge_pull_request@*{Enter}");
+    expect(deny).toHaveValue("");
     expect(
       screen.getByRole("button", {
         name: "Remove github__merge_pull_request@*",
@@ -579,15 +644,15 @@ describe("DefinitionForm over a file it cannot fully read", () => {
 });
 
 describe("DefinitionForm edits that change nothing", () => {
-  it("writes no draft for a blank chip, a repeated chip, an unchanged name or a budget past what the file can hold (negative)", () => {
+  it("writes no draft for a blank entry, an unchanged name or a budget past what the file can hold (negative)", () => {
     renderForm();
-    const add = screen.getByRole("textbox", { name: "Add to tools" });
+    // Whitespace is not a chip, whether it is entered or left behind. A value
+    // already chosen is no longer part of this case: the picker is a combobox,
+    // so entering one that is already a chip removes it.
+    const add = screen.getByRole("combobox", { name: "tools" });
     fireEvent.change(add, { target: { value: "   " } });
     fireEvent.keyDown(add, { key: "Enter" });
-    fireEvent.change(add, { target: { value: "github__*" } });
-    fireEvent.keyDown(add, { key: "Enter" });
-    fireEvent.change(add, { target: { value: "linear__x" } });
-    fireEvent.keyDown(add, { key: "Tab" });
+    fireEvent.blur(add);
     expect(dirtyBar()).toBeNull();
     const name = screen.getByRole("textbox", { name: "Name" });
     fireEvent.blur(name);

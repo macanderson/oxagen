@@ -244,7 +244,11 @@ describe("selectTachoEvents", () => {
   });
   it("reads the effort a model call ran at, and an empty string where none was recorded", async () => {
     chSelect.mockResolvedValueOnce({
-      data: [{ seq: "1", effort: "high" }, { seq: "2", effort: "" }, { seq: "3" }],
+      data: [
+        { seq: "1", effort: "high" },
+        { seq: "2", effort: "" },
+        { seq: "3" },
+      ],
     });
     const rows = await selectTachoEvents({
       sessionUuid: SESSION,
@@ -253,6 +257,36 @@ describe("selectTachoEvents", () => {
     });
     expect(rows.map(({ effort }) => effort)).toEqual(["high", "", ""]);
     expect(chSelect.mock.calls.at(-1)?.[0]?.query).toContain("effort");
+  });
+});
+
+describe("selectTachoEvents: an upper bound", () => {
+  it("bounds the read at throughSeq when the caller knows where it ends", async () => {
+    chSelect.mockReset();
+    chSelect.mockResolvedValueOnce({ data: [] });
+    await selectTachoEvents({
+      sessionUuid: SESSION,
+      afterSeq: 99,
+      throughSeq: 599,
+      limit: 500,
+    });
+    const [call] = chSelect.mock.calls[0] ?? [];
+    expect(call?.query).toContain("seq <= {throughSeq:Int64}");
+    expect(call?.params).toEqual({
+      sessionUuid: SESSION,
+      afterSeq: 99,
+      throughSeq: 599,
+      limit: 500,
+    });
+  });
+
+  it("reads to the chain's end when no bound is given (negative)", async () => {
+    chSelect.mockReset();
+    chSelect.mockResolvedValueOnce({ data: [] });
+    await selectTachoEvents({ sessionUuid: SESSION, afterSeq: 99, limit: 500 });
+    const [call] = chSelect.mock.calls[0] ?? [];
+    expect(call?.query).not.toContain("throughSeq");
+    expect(call?.params).not.toHaveProperty("throughSeq");
   });
 });
 
@@ -321,6 +355,42 @@ describe("selectTachoSubagentEvents", () => {
       afterSeq: 7,
       limit: 50,
     });
+  });
+});
+
+describe("selectTachoSubagentEvents: listed chains", () => {
+  const CHILD = "0192d4a8-7c1e-7a00-8000-00000000c1d0";
+
+  it("reads only the listed chains, through the primary key", async () => {
+    chSelect.mockReset();
+    chSelect.mockResolvedValueOnce({ data: [] });
+    await selectTachoSubagentEvents({
+      rootSessionUuid: SESSION,
+      sessionUuids: [CHILD],
+      after: null,
+      limit: 50,
+    });
+    const [call] = chSelect.mock.calls[0] ?? [];
+    expect(call?.query).toContain("session_uuid IN {sessionUuids:Array(UUID)}");
+    // The root filter stays, so a listed chain from another run reads nothing.
+    expect(call?.query).toContain("root_session_uuid = {rootSessionUuid:UUID}");
+    expect(call?.params).toEqual({
+      rootSessionUuid: SESSION,
+      sessionUuids: [CHILD],
+      limit: 50,
+    });
+  });
+
+  it("filters on the root alone when no chains are listed (negative)", async () => {
+    chSelect.mockReset();
+    chSelect.mockResolvedValueOnce({ data: [] });
+    await selectTachoSubagentEvents({
+      rootSessionUuid: SESSION,
+      after: null,
+      limit: 50,
+    });
+    const [call] = chSelect.mock.calls[0] ?? [];
+    expect(call?.query).not.toContain("sessionUuids");
   });
 });
 

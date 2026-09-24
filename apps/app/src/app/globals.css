@@ -35,6 +35,14 @@
    * hues are their own family. None of them is a state hue and none is the
    * gold, so a reader never mistakes what a record IS for how it is doing. The
    * values are already set per theme below as --k-*. */
+  /* The five frame-kind hues (engine.css `.fk-*`): what a frame is on the Run
+   * page's timeline, transcript chips and instruments. A categorical family
+   * of their own, never a state hue and never the gold. */
+  --color-fk-model: var(--fk-model);
+  --color-fk-tool: var(--fk-tool);
+  --color-fk-gov: var(--fk-gov);
+  --color-fk-ctx: var(--fk-ctx);
+  --color-fk-op: var(--fk-op);
   --color-kind-rule: var(--k-rule);
   --color-kind-constraint: var(--k-constraint);
   --color-kind-procedure: var(--k-procedure);

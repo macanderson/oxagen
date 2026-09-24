@@ -44,13 +44,12 @@ export type ReplayGrade = z.infer<typeof ReplayGrade>;
  * changed. Labelled generated wherever it renders. The record is the frames,
  * never this sentence (ADR-058).
  */
-export const RunSummary = z.object({
+const RunSummary = z.object({
   text: z.string().min(1),
   generatedAt: z.iso.datetime({ offset: true }),
   /** The model that wrote it, named beside the text so the reader can weigh it. */
   model: z.string().min(1),
 });
-export type RunSummary = z.infer<typeof RunSummary>;
 
 /**
  * The witness verdict the rollup recorded (spec §8.5, §12.8; ADR-064), from
@@ -275,11 +274,15 @@ export const RunRow = z.object({
   /** When the server recorded the seal; receipt time, so never a wall-clock end. */
   sealedAt: z.iso.datetime({ offset: true }).nullable(),
   /**
-   * What sealed the run: `agent_stop`, its host's own end, or `idle_timeout`,
-   * Oxagen closing a run that sent nothing for 12 hours. Null while open and
-   * for a ledger run.
+   * What sealed the run: `agent_stop`, its host's own end; `idle_timeout`,
+   * Oxagen closing a run that sent nothing for 12 hours; or `operator`, a
+   * person sealing it with Seal run (ADR-169). Null while open and for a
+   * ledger run.
    */
-  sealSource: z.enum(["agent_stop", "idle_timeout"]).nullable().optional(),
+  sealSource: z
+    .enum(["agent_stop", "idle_timeout", "operator"])
+    .nullable()
+    .optional(),
   /** When the run stopped, by the recorder's clock; the end of a wall clock. */
   endedAt: z.iso.datetime({ offset: true }).nullable().optional(),
   /**
