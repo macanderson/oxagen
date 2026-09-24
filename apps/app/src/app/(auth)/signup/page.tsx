@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
-import { AFTER_SIGNUP, OAuthButtons, SignupForm } from "@/features/auth";
+import { AFTER_SIGNUP, AuthTags, SignupForm } from "@/features/auth";
 import { readNext, routes } from "@/shared/safe-path";
 import { AuthColumn, AuthFooter, AuthSkeleton } from "@/ui/auth-shell";
 import { linkText } from "@/ui/control-styles";
@@ -39,10 +39,7 @@ async function Signup({
         title={pages("signup")}
         description={t("signup.lead")}
       />
-      <div className="flex flex-col gap-4">
-        <OAuthButtons callbackURL={next} />
-        <SignupForm next={next} />
-      </div>
+      <SignupForm next={next} />
       <AuthFooter>
         {t("signup.haveAccount")}{" "}
         <SafeLink
@@ -52,19 +49,14 @@ async function Signup({
           {t("signup.logIn")}
         </SafeLink>
       </AuthFooter>
-      <ul
-        className="flex flex-wrap justify-center gap-2"
-        aria-label={t("shell.brand")}
-      >
-        {(["free", "markup", "evidence"] as const).map((tag) => (
-          <li
-            key={tag}
-            className="rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground"
-          >
-            {t(`shell.tags.${tag}`)}
-          </li>
-        ))}
-      </ul>
+      <AuthTags
+        label={t("shell.tagsLabel")}
+        tags={[
+          t("shell.tags.allowance"),
+          t("shell.tags.markup"),
+          t("shell.tags.evidence"),
+        ]}
+      />
     </AuthColumn>
   );
 }

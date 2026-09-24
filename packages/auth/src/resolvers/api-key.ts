@@ -32,12 +32,27 @@
  * row is missing is refused for the same reason — a scope that cannot be
  * confirmed is not a scope.
  *
+ * A key does not get around Require SSO (ADR-145). The web gate admits a
+ * non-Owner member of a require-SSO organization only with a session one of
+ * that organization's providers made. A key has no session, so the check here
+ * is on the person who created it: they must still be a member of the key's
+ * organization and either be an Owner there (the same break-glass exemption as
+ * the web gate) or have signed in through one of the organization's verified
+ * providers at least once, which leaves an `auth.accounts` row naming that
+ * provider. That makes them someone the organization's identity provider has
+ * vouched for, and someone that removal from the organization or a refused
+ * sign-in can reach. Otherwise the key is refused as `sso_required`, whatever
+ * its purpose. A key with no creator was minted by the system, not by a
+ * person, and the check does not apply to it. Require SSO applies only while
+ * the plan includes SSO, as it does at sign-in.
+ *
  * This function has no HTTP dependency — it can be called identically from
  * API middleware, MCP handler, CLI, or tests.
  */
 import { createHash, timingSafeEqual } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
 import { withSystemDb, schema } from "@oxagen/database";
+import { orgHasSso } from "../sso/entitlement";
 import { AGENT_CREDENTIAL_SCOPE_PURPOSE } from "@oxagen/oxagen/agent-credential";
 import { CLI_SESSION_SCOPE_PURPOSE } from "@oxagen/oxagen/cli-session";
 
@@ -81,7 +96,13 @@ export type ApiKeyResolutionError =
    * The workspace the key names is archived (or no longer resolvable), so the
    * key no longer authenticates into it. The key itself is untouched (ADR-105).
    */
-  | { kind: "workspace_archived" };
+  | { kind: "workspace_archived" }
+  /**
+   * The key's organization requires SSO and the person who created the key is
+   * not a member the organization's identity provider has vouched for (and is
+   * not an Owner). The key is genuine. The organization's policy refuses it.
+   */
+  | { kind: "sso_required" };
 
 function scopePurposeOf(scope: unknown): string | null {
   return typeof scope === "object" &&
@@ -178,48 +199,139 @@ export async function resolveApiKey(rawKey: string): Promise<ApiKeyResolution> {
     return { ok: false, kind: "workspace_archived" };
   }
 
-  if (purpose !== CLI_SESSION_SCOPE_PURPOSE) {
-    return {
-      ok: true,
-      apiKeyId: row.id,
-      orgId: row.orgId,
-      workspaceId: row.workspaceId,
-      userId: null,
-    };
+  let userId: string | null = null;
+  if (purpose === CLI_SESSION_SCOPE_PURPOSE) {
+    // A CLI session key speaks for its creator only while the creator is still
+    // a member of the key's org and workspace. The bearer path skips the org
+    // and workspace middleware's membership checks, so this is where a removed
+    // member's key stops working.
+    const creatorId = row.createdById;
+    if (!creatorId) return { ok: false, kind: "invalid" };
+    // tenancy: system bypass via withSystemDb (identity resolution before a tenant scope exists)
+    const member = await withSystemDb(async (tx) => {
+      const orgMember = await tx.query.orgUsers.findFirst({
+        where: and(
+          eq(schema.orgUsers.orgId, row.orgId),
+          eq(schema.orgUsers.userId, creatorId),
+        ),
+        columns: { id: true },
+      });
+      if (!orgMember) return false;
+      const workspaceMember = await tx.query.workspaceUsers.findFirst({
+        where: and(
+          eq(schema.workspaceUsers.workspaceId, row.workspaceId),
+          eq(schema.workspaceUsers.userId, creatorId),
+        ),
+        columns: { id: true },
+      });
+      return workspaceMember !== undefined;
+    });
+    if (!member) return { ok: false, kind: "invalid" };
+    userId = creatorId;
   }
 
-  // A CLI session key speaks for its creator only while the creator is still a
-  // member of the key's org and workspace. The bearer path skips the org and
-  // workspace middleware's membership checks, so this is where a removed
-  // member's key stops working.
-  const creatorId = row.createdById;
-  if (!creatorId) return { ok: false, kind: "invalid" };
-  // tenancy: system bypass via withSystemDb (identity resolution before a tenant scope exists)
-  const member = await withSystemDb(async (tx) => {
-    const orgMember = await tx.query.orgUsers.findFirst({
-      where: and(
-        eq(schema.orgUsers.orgId, row.orgId),
-        eq(schema.orgUsers.userId, creatorId),
-      ),
-      columns: { id: true },
-    });
-    if (!orgMember) return false;
-    const workspaceMember = await tx.query.workspaceUsers.findFirst({
-      where: and(
-        eq(schema.workspaceUsers.workspaceId, row.workspaceId),
-        eq(schema.workspaceUsers.userId, creatorId),
-      ),
-      columns: { id: true },
-    });
-    return workspaceMember !== undefined;
-  });
-  if (!member) return { ok: false, kind: "invalid" };
+  if (
+    row.createdById &&
+    (await refusedByRequireSso(row.orgId, row.createdById))
+  ) {
+    return { ok: false, kind: "sso_required" };
+  }
 
   return {
     ok: true,
     apiKeyId: row.id,
     orgId: row.orgId,
     workspaceId: row.workspaceId,
-    userId: creatorId,
+    userId,
   };
+}
+
+/**
+ * Whether the organization's Require SSO policy refuses a key that
+ * `creatorId` created. See the module comment for why the creator is the
+ * one checked. An organization without the policy costs one read.
+ */
+async function refusedByRequireSso(
+  orgId: string,
+  creatorId: string,
+): Promise<boolean> {
+  // tenancy: identity resolution before a tenant scope exists; the policy read is filtered by the orgId of the key just verified by its hash.
+  const policy = await withSystemDb((tx) =>
+    tx.query.orgSecurityPolicy.findFirst({
+      where: eq(schema.orgSecurityPolicy.orgId, orgId),
+      columns: { ssoRequired: true },
+    }),
+  );
+  if (!policy?.ssoRequired) return false;
+  // Off Enterprise, SSO sign-in is refused, so requiring it would lock out
+  // every key a non-Owner created (ADR-145).
+  if (!(await orgHasSso(orgId))) return false;
+
+  // tenancy: identity resolution before a tenant scope exists; the membership read is filtered by the verified key's orgId and its creator's userId.
+  const membership = await withSystemDb((tx) =>
+    tx.query.orgUsers.findFirst({
+      where: and(
+        eq(schema.orgUsers.orgId, orgId),
+        eq(schema.orgUsers.userId, creatorId),
+      ),
+      columns: { role: true },
+    }),
+  );
+  if (!membership) return true;
+  if (membership.role.toLowerCase() === "owner") return false;
+
+  // Only a provider this organization registered and whose domain it proved
+  // counts. An account from another organization's provider vouches for
+  // nothing here.
+  // tenancy: identity resolution before a tenant scope exists; filtered by the creator's userId and the verified key's orgId on the provider join.
+  const vouched = await withSystemDb((tx) =>
+    tx
+      .select({ id: schema.accounts.id })
+      .from(schema.accounts)
+      .innerJoin(
+        schema.ssoProviderTable,
+        eq(schema.ssoProviderTable.providerId, schema.accounts.providerId),
+      )
+      .where(
+        and(
+          eq(schema.accounts.userId, creatorId),
+          eq(schema.ssoProviderTable.organizationId, orgId),
+          eq(schema.ssoProviderTable.domainVerified, true),
+        ),
+      )
+      .limit(1),
+  );
+  if (vouched.length > 0) return false;
+
+  // Owner by the IAM record too, not only by the org_users role string: the
+  // two are written together, and a creator the IAM record makes an Owner
+  // keeps the break-glass exemption even if the role string lags.
+  // tenancy: identity resolution before a tenant scope exists; filtered by the verified key's orgId and its creator's userId on the principal join.
+  const iamOwner = await withSystemDb((tx) =>
+    tx
+      .select({ id: schema.principalRoleAssignments.id })
+      .from(schema.principalRoleAssignments)
+      .innerJoin(
+        schema.principals,
+        eq(schema.principals.id, schema.principalRoleAssignments.principalId),
+      )
+      .innerJoin(
+        schema.roles,
+        eq(schema.roles.id, schema.principalRoleAssignments.roleId),
+      )
+      .where(
+        and(
+          eq(schema.principalRoleAssignments.orgId, orgId),
+          eq(schema.principals.orgId, orgId),
+          eq(schema.principals.parentUserId, creatorId),
+          eq(schema.principals.kind, "human"),
+          eq(schema.roles.name, "Owner"),
+          eq(schema.roles.scopeKind, "org"),
+          isNull(schema.principalRoleAssignments.workspaceId),
+          isNull(schema.principalRoleAssignments.deletedAt),
+        ),
+      )
+      .limit(1),
+  );
+  return iamOwner.length === 0;
 }

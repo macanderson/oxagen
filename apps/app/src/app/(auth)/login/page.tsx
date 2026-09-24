@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
-import { LoginForm, OAuthButtons, oauthQueryOutcome } from "@/features/auth";
+import { InviteHint, LoginForm, oauthQueryOutcome } from "@/features/auth";
 import { firstParam, readNext, routes } from "@/shared/safe-path";
 import { AuthColumn, AuthFooter, AuthSkeleton } from "@/ui/auth-shell";
 import { linkText } from "@/ui/control-styles";
@@ -41,26 +41,26 @@ async function Login({
   ]);
   return (
     <AuthColumn>
-      <PageHeader
-        eyebrow={t("login.eyebrow")}
-        title={pages("login")}
-        description={t("login.lead")}
+      <LoginForm
+        next={next}
+        initialOutcome={initialOutcome}
+        ssoRequired={ssoRequired}
+        header={
+          <PageHeader eyebrow={t("login.eyebrow")} title={pages("login")} />
+        }
+        footer={
+          <AuthFooter>
+            {t("login.newHere")}{" "}
+            <SafeLink to={routes.signup(next)} className={linkText}>
+              {t("login.createAccount")}
+            </SafeLink>{" "}
+            <span aria-hidden className="mx-1 text-dim">
+              ·
+            </span>{" "}
+            <InviteHint />
+          </AuthFooter>
+        }
       />
-      <div className="flex flex-col gap-4">
-        <OAuthButtons callbackURL={next} />
-        <LoginForm
-          next={next}
-          initialOutcome={initialOutcome}
-          ssoRequired={ssoRequired}
-        />
-      </div>
-      <AuthFooter>
-        {t("login.newHere")}{" "}
-        <SafeLink to={routes.signup(next)} className={linkText}>
-          {t("login.createAccount")}
-        </SafeLink>
-      </AuthFooter>
-      <AuthFooter>{t("login.haveInvite")}</AuthFooter>
     </AuthColumn>
   );
 }

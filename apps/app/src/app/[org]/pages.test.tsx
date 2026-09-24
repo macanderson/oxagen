@@ -80,8 +80,8 @@ const {
     Steering: vi.fn((props: { searchParams: Record<string, string> }) => (
       <p data-testid="steering-body" data-tab={props.searchParams.tab} />
     )),
-    Spend: vi.fn((props: { searchParams: Record<string, string> }) => (
-      <p data-testid="spend-body" data-tab={props.searchParams.tab} />
+    Spend: vi.fn((props: { view: { tab: string } }) => (
+      <p data-testid="spend-body" data-tab={props.view.tab} />
     )),
     Run: vi.fn((_props: Record<string, unknown>) => (
       <p data-testid="run-body" />
@@ -146,7 +146,11 @@ vi.mock("@/features/steering", async (importOriginal) => ({
     <p data-testid="steering-create" data-tab={props.searchParams.tab} />
   ),
 }));
-vi.mock("@/features/spend", () => ({ Spend }));
+vi.mock("@/features/spend", async () => ({
+  // The real parser: the route's 404 is its answer, not the mock's.
+  parseSpendView: (await import("@/features/spend/view")).parseSpendView,
+  Spend,
+}));
 // People stays real, so the organization page still renders a roster; the two
 // sections the #2964 lane adds are stubbed to show what each route hands them.
 vi.mock("@/features/organization", async (importOriginal) => ({
@@ -180,6 +184,11 @@ vi.mock("@/features/organization/api-key-actions", () => ({
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+  // The Spend and Repositories routes answer a segment they do not know with
+  // Next's 404, which throws, as Next's does.
+  notFound: () => {
+    throw new Error("NEXT_NOT_FOUND");
+  },
 }));
 // The Skills route only moves to the Steering tab, and the Steering route moves
 // a legacy `?tab=` URL to its path; each redirect throws, as Next's does, with
@@ -223,7 +232,7 @@ const FLEET: Load = () => import("./[ws]/(fleet)/page");
 const AGENTS: Load = () => import("./[ws]/agents/page");
 const AGENT: Load = () => import("./[ws]/agents/[agent]/page");
 const AGENT_SOURCE: Load = () => import("./[ws]/agents/[agent]/source/page");
-const SPEND: Load = () => import("./[ws]/spend/page");
+const SPEND: Load = () => import("./[ws]/spend/[[...tab]]/page");
 
 const RUN: Load = () => import("./[ws]/runs/[run]/page");
 const API_KEYS: Load = () => import("./api-keys/page");
@@ -356,25 +365,51 @@ describe("the Steering page", () => {
 });
 
 describe("the Spend page", () => {
-  it("resolves the workspace viewer, names the page once and hands its body the viewer, the data source and the query", async () => {
+  // The Spend feature draws its own header, so a state that does not load can
+  // replace the whole body the way the design draws it; the route's part is the
+  // title, the viewer and the view its path names.
+  it("resolves the workspace viewer, titles the document and hands its body the viewer, the data source and the view the path names", async () => {
     const viewer = { wsSlug: "core-platform" };
     requireViewer.mockResolvedValue(viewer);
-    await expectPageTitle(
-      await SPEND(),
-      routeProps(SEGMENTS, { tab: "waste" }),
-      title("spend"),
-    );
+    const page = await SPEND();
+    const props = routeProps({
+      ...SEGMENTS,
+      tab: ["agent", "acme.core.triage"],
+    });
+    expect((await page.generateMetadata(props)).title).toBe(title("spend"));
+    await renderPage(await page.default(props));
     expect(requireViewer).toHaveBeenCalledWith(...WS);
     expect(Spend.mock.calls[0]?.[0]).toEqual({
       ctx: viewer,
       source,
-      searchParams: { tab: "waste" },
+      view: { tab: "agent", drill: "acme.core.triage", finding: null },
     });
     expect(screen.getByTestId("spend-body")).toHaveAttribute(
       "data-tab",
-      "waste",
+      "agent",
     );
     expect(screen.queryByTestId("not-recorded")).toBeNull();
+  });
+
+  it("opens one finding's evidence from the query on the bare path", async () => {
+    requireViewer.mockResolvedValue({ wsSlug: "core-platform" });
+    const page = await SPEND();
+    await renderPage(
+      await page.default(routeProps(SEGMENTS, { finding: "fnd_01k5rtgh" })),
+    );
+    expect(Spend.mock.calls.at(-1)?.[0]).toMatchObject({
+      view: { tab: "findings", drill: null, finding: "fnd_01k5rtgh" },
+    });
+  });
+
+  it("answers 404 for a segment that names no tab, before reading the viewer (negative)", async () => {
+    const page = await SPEND();
+    await expect(
+      Promise.resolve(
+        page.default(routeProps({ ...SEGMENTS, tab: ["reconciliation"] })),
+      ),
+    ).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(requireViewer).not.toHaveBeenCalled();
   });
 });
 
