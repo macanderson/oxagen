@@ -198,6 +198,21 @@ describe("builds of main", () => {
   });
 });
 
+describe("the version-free names", () => {
+  // The web app and the docs link these names without importing this file,
+  // so a rename here must reach both. This reads their tables as text.
+  it("are the ones the web app and the docs link", () => {
+    const names = FILES.map((f) => classifyInstaller(f, V)!.latest);
+    for (const consumer of [
+      "../../app/src/shared/desktop-downloads.ts",
+      "../../docs/src/components/mdx/latest-downloads.tsx",
+    ]) {
+      const text = readFileSync(new URL(consumer, import.meta.url), "utf8");
+      for (const name of names) expect(text, consumer).toContain(`"${name}"`);
+    }
+  });
+});
+
 describe("check-latest.mjs", () => {
   const check = (latest: string, version: string) => {
     const dir = mkdtempSync(join(tmpdir(), "downloads-latest-test-"));

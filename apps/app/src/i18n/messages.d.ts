@@ -6699,6 +6699,25 @@ type Messages = {
       next: string;
       pages: string;
     };
+    desktopDownloads: {
+      title: string;
+      lead: string;
+      platforms: {
+        macos: string;
+        windows: string;
+        linux: string;
+      };
+      installers: {
+        macAppleSilicon: string;
+        macIntel: string;
+        windowsExe: string;
+        windowsMsi: string;
+        linuxDeb: string;
+        linuxRpm: string;
+        linuxAppImage: string;
+      };
+      all: string;
+    };
   };
 };
 

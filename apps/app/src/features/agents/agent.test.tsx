@@ -819,6 +819,13 @@ describe("Enrollment", () => {
     const empty = screen.getByTestId("hosts-empty");
     expect(empty).toHaveTextContent("No host is enrolled under this agent");
     expect(empty).toHaveTextContent("oxagen agent enroll");
+    // The command needs the CLI, and the app is what installs it.
+    expect(
+      within(empty).getByRole("link", { name: ".deb (Debian, Ubuntu)" }),
+    ).toHaveAttribute(
+      "href",
+      "https://downloads.oxagen.sh/latest/Oxagen_amd64.deb",
+    );
   });
 });
 

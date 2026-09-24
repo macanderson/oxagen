@@ -10,6 +10,7 @@ import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
 import type { SafePath } from "@/shared/safe-path";
 import { buttonSecondary, mono, panel } from "@/ui/control-styles";
+import { DesktopDownloads } from "@/ui/desktop-downloads";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { SafeLink, useNavigate } from "@/ui/navigation";
 import { advanceOnboarding, issueEnrollmentToken } from "../actions";
@@ -83,6 +84,9 @@ function HostPath({
     <section className={`${panel} flex flex-col gap-3 p-4`}>
       <h3 className="text-sm font-semibold">{t("title")}</h3>
       <p className="max-w-prose text-sm text-muted-foreground">{t("body")}</p>
+      {/* Step one on the machine: install the app, which puts the CLIs the
+          enroll command runs on PATH. The token and its command come after. */}
+      <DesktopDownloads />
       {failure === null ? null : (
         <FormAlert testId="wrap-failure">{failure}</FormAlert>
       )}

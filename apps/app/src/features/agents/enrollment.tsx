@@ -13,6 +13,7 @@ import { useTranslations } from "next-intl";
 import type { AgentDetail } from "@/data/contracts/agents";
 import type { SafePath } from "@/shared/safe-path";
 import { mono } from "@/ui/control-styles";
+import { DesktopDownloads } from "@/ui/desktop-downloads";
 import { Table } from "@/ui/table";
 import { EnrollHost } from "./enrollment-controls";
 import { HostRow } from "./host-row";
@@ -65,6 +66,7 @@ export function EnrollmentSection({
       {hosts.length === 0 ? (
         <div data-testid="hosts-empty" className="flex flex-col gap-2 text-sm">
           <p className="font-medium">{t("empty.title")}</p>
+          <DesktopDownloads />
           <p className="text-muted-foreground">{t("empty.body")}</p>
           <code className={`${mono} self-start rounded-md bg-muted px-2 py-1`}>
             {t("empty.command")}

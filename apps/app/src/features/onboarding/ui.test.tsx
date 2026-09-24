@@ -206,6 +206,20 @@ describe("the wrap step", () => {
     });
     const user = userEvent.setup();
     renderWrap(true, "claude-code");
+    // Step one is installing the app, which puts the CLI the command runs on
+    // PATH, so its links come before the token control.
+    const downloads = screen.getByTestId("desktop-downloads");
+    expect(
+      screen.getByRole("link", { name: "Apple silicon (.dmg)" }),
+    ).toHaveAttribute(
+      "href",
+      "https://downloads.oxagen.sh/latest/Oxagen_aarch64.dmg",
+    );
+    expect(
+      downloads.compareDocumentPosition(
+        screen.getByRole("button", { name: "Mint the one-time token" }),
+      ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     await user.click(
       screen.getByRole("button", { name: "Mint the one-time token" }),
     );
@@ -379,6 +393,8 @@ describe("supported wrapping paths", () => {
       expect(
         screen.queryByRole("button", { name: "Mint the one-time token" }),
       ).toBeNull();
+      // Nothing on this step can be enrolled, so there is no app to install for it.
+      expect(screen.queryByTestId("desktop-downloads")).toBeNull();
       expect(document.body.textContent).not.toContain("@oxagen/sdk");
       expect(document.body.textContent).not.toContain("oxagen.agent.wrap");
       expect(advanceOnboarding).not.toHaveBeenCalled();
