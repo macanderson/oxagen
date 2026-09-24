@@ -1,7 +1,7 @@
 {
   "name": "bind_main_repository",
   "domain": "repository",
-  "description": "Bind a GitHub repository the workspace's GitHub App installation reaches as its main repo, and close the onboarding gate's provisional window.",
+  "description": "Bind the workspace's main repository and close the onboarding gate's provisional window: a GitHub repository the workspace's GitHub App installation reaches, or a gitlab.com project connected with attach_gitlab_project.",
   "mode": "sync",
   "surfaces": [
     "api"
@@ -16,24 +16,49 @@
   "render": null,
   "input": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "type": "object",
-    "properties": {
-      "owner": {
-        "type": "string",
-        "minLength": 1,
-        "maxLength": 39
+    "anyOf": [
+      {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "const": "github"
+          },
+          "owner": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 39
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          }
+        },
+        "required": [
+          "owner",
+          "name"
+        ],
+        "additionalProperties": false
       },
-      "name": {
-        "type": "string",
-        "minLength": 1,
-        "maxLength": 100
+      {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "const": "gitlab"
+          },
+          "projectPath": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 1024
+          }
+        },
+        "required": [
+          "provider",
+          "projectPath"
+        ],
+        "additionalProperties": false
       }
-    },
-    "required": [
-      "owner",
-      "name"
-    ],
-    "additionalProperties": false
+    ]
   },
   "output": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -44,6 +69,13 @@
       },
       "connectionId": {
         "type": "string"
+      },
+      "provider": {
+        "type": "string",
+        "enum": [
+          "github",
+          "gitlab"
+        ]
       },
       "fullName": {
         "type": "string",
@@ -63,6 +95,7 @@
     "required": [
       "bindingId",
       "connectionId",
+      "provider",
       "fullName",
       "defaultRef",
       "boundAt",

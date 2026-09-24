@@ -148,7 +148,7 @@ describe("Fleet spend tiles", () => {
     expect(fleet).toHaveBeenCalledExactlyOnceWith(ctx, DAY);
     const today = screen.getByText("Spend today").closest("div");
     expect(today).toHaveTextContent("$41.30");
-    expect(today).toHaveTextContent("gateway observed");
+    expect(today).toHaveTextContent("gateway_observed");
     const cache = screen.getByText("Cache hit rate").closest("div");
     expect(cache).toHaveTextContent("81%");
     expect(cache).toHaveTextContent(

@@ -98,6 +98,7 @@ import { repositoryInitPrOpen } from "./repository.init_pr.open";
 import { repositoryInstallationList } from "./repository.installation.list";
 import { repositoryInstallationCandidates } from "./repository.installation.candidates";
 import { repositoryInstallationAttach } from "./repository.installation.attach";
+import { repositoryGitlabAttach } from "./repository.gitlab.attach";
 import { runList } from "./run.list";
 import { runCostGet } from "./run.cost";
 import { runWorkGet } from "./run.work.get";
@@ -333,6 +334,10 @@ import { orgSsoList } from "./org.sso.list";
 import { orgSsoPolicySet } from "./org.sso.policy.set";
 import { orgSsoUpdate } from "./org.sso.update";
 import { orgSsoVerifyDomain } from "./org.sso.verify_domain";
+import { orgScimTokenCreate } from "./org.scim_token.create";
+import { orgScimTokenRevoke } from "./org.scim_token.revoke";
+import { orgScimTokenRotate } from "./org.scim_token.rotate";
+import { scimRequest } from "./scim.request";
 import { orgSettingsRead } from "./org.settings.read";
 import { orgSettingsWrite } from "./org.settings.write";
 import { workspaceSettingsRead } from "./workspace.settings.read";
@@ -594,6 +599,12 @@ export {
   ssoProviderIdSchema,
   ssoProviderViewSchema,
 } from "./org.sso.shared";
+export {
+  scimTokenMintedSchema,
+  scimTokenViewSchema,
+  scimViewSchema,
+} from "./org.scim_token.shared";
+export type { ScimTokenView, ScimView } from "./org.scim_token.shared";
 export type {
   SsoGroupRole,
   SsoMappableRole,
@@ -709,6 +720,7 @@ export {
   repositoryInstallationList,
   repositoryInstallationCandidates,
   repositoryInstallationAttach,
+  repositoryGitlabAttach,
   runList,
   runGet,
   runFrameBodyGet,
@@ -918,6 +930,10 @@ export {
   orgSsoPolicySet,
   orgSsoUpdate,
   orgSsoVerifyDomain,
+  orgScimTokenCreate,
+  orgScimTokenRevoke,
+  orgScimTokenRotate,
+  scimRequest,
   orgSettingsRead,
   orgSettingsWrite,
   workspaceSettingsRead,
@@ -1094,6 +1110,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   repositoryInstallationList,
   repositoryInstallationCandidates,
   repositoryInstallationAttach,
+  repositoryGitlabAttach,
   runList,
   runGet,
   runFrameBodyGet,
@@ -1304,6 +1321,10 @@ export const contracts: readonly CapabilityDeclaration[] = [
   orgSsoPolicySet,
   orgSsoUpdate,
   orgSsoVerifyDomain,
+  orgScimTokenCreate,
+  orgScimTokenRevoke,
+  orgScimTokenRotate,
+  scimRequest,
   orgSettingsRead,
   orgSettingsWrite,
   workspaceSettingsRead,

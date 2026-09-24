@@ -60,6 +60,15 @@
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session-mc-repositories-page"
     },
+    "attach_gitlab_project": {
+      "route": "/[org]/[ws]/repositories",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "Repositories › main repository: “Connect and bind” in the GitLab project form, and the same form repairing a GitLab binding whose token was revoked (features/repositories/main-repository.tsx, features/repositories/actions.ts)",
+      "testid": "workspace-gitlab-connect",
+      "proof": "apps/app/src/features/repositories/main-repository.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_012RZnK27nmESrihQgUhwwFk"
+    },
     "authorize_cli": {
       "route": "/cli/authorize",
       "page": "apps/app/src/app/cli/authorize/page.tsx",
@@ -210,7 +219,7 @@
     },
     "dismiss_finding": {
       "route": "/[org]/[ws]/spend",
-      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
       "entry": "/[org]/[ws]/spend \u2014 the rev1 surface that invokes dismiss_finding (features/spend/actions.ts)",
       "proof": "apps/app/src/features/spend/dialogs.test.tsx",
       "verifiedAt": "2026-09-16",
@@ -287,7 +296,7 @@
     },
     "export_statement": {
       "route": "/[org]/[ws]/spend",
-      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
       "entry": "/[org]/[ws]/spend \u2014 the rev1 surface that invokes export_statement (features/spend/actions.ts)",
       "proof": "apps/app/src/features/spend/spend.test.tsx",
       "verifiedAt": "2026-09-16",
@@ -379,7 +388,7 @@
     },
     "get_finding_evidence": {
       "route": "/[org]/[ws]/spend",
-      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
       "entry": "/[org]/[ws]/spend \u2014 the rev1 surface that invokes get_finding_evidence (data/live/mappers/spend.ts, data/live/spend.ts)",
       "proof": "apps/app/src/features/spend/spend.test.tsx",
       "verifiedAt": "2026-09-16",
@@ -508,7 +517,7 @@
     },
     "get_spend": {
       "route": "/[org]/[ws]/spend",
-      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
       "entry": "/[org]/[ws]/spend \u2014 the rev1 surface that invokes get_spend (data/live/mappers/spend.ts, data/live/spend.ts)",
       "proof": "apps/app/src/features/spend/spend.test.tsx",
       "verifiedAt": "2026-09-16",
@@ -516,7 +525,7 @@
     },
     "get_spend_budget": {
       "route": "/[org]/[ws]/spend",
-      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
       "entry": "/[org]/[ws]/spend \u2014 the rev1 surface that invokes get_spend_budget (data/live/mappers/spend.ts, data/live/spend.ts)",
       "proof": "apps/app/src/features/spend/spend.test.tsx",
       "verifiedAt": "2026-09-16",
@@ -534,7 +543,7 @@
     },
     "get_spend_drill": {
       "route": "/[org]/[ws]/spend",
-      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
       "entry": "/[org]/[ws]/spend \u2014 the rev1 surface that invokes get_spend_drill (data/live/mappers/spend.ts, data/live/spend.ts)",
       "proof": "apps/app/src/features/spend/spend.test.tsx",
       "verifiedAt": "2026-09-16",
@@ -550,7 +559,7 @@
     },
     "get_tacho_session_policy": {
       "route": "/[org]/[ws]/spend",
-      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
       "entry": "/[org]/[ws]/spend?tab=budgets \u2014 Gateway sessions, the panel that reads get_tacho_session_policy (data/live/spend.ts, data/live/mappers/spend.ts)",
       "proof": "apps/app/src/features/spend/gateway-policy.test.tsx",
       "verifiedAt": "2026-09-21",
@@ -657,7 +666,7 @@
     },
     "list_findings": {
       "route": "/[org]/[ws]/spend",
-      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
       "entry": "/[org]/[ws]/spend \u2014 the rev1 surface that invokes list_findings (data/live/mappers/spend.ts, data/live/spend.ts)",
       "proof": "apps/app/src/features/spend/spend.test.tsx",
       "verifiedAt": "2026-09-16",
@@ -745,7 +754,7 @@
     },
     "list_price_entries": {
       "route": "/[org]/[ws]/spend?tab=pricing",
-      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
       "entry": "Spend \u203a Pricing \u203a The price book \u2014 the table of list and negotiated rows the tab is built on (features/spend/pricing.tsx, data/live/spend.ts, data/live/mappers/spend.ts)",
       "proof": "apps/app/src/features/spend/pricing.test.tsx",
       "verifiedAt": "2026-09-17",
@@ -843,7 +852,7 @@
     },
     "list_unpriced_models": {
       "route": "/[org]/[ws]/spend?tab=pricing",
-      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
       "entry": "Spend \u203a Pricing \u203a Models the price book cannot price \u2014 the table that explains a run with no cost (features/spend/pricing.tsx, data/live/spend.ts, data/live/mappers/spend.ts)",
       "proof": "apps/app/src/features/spend/pricing.test.tsx",
       "verifiedAt": "2026-09-17",
@@ -851,7 +860,7 @@
     },
     "list_waste": {
       "route": "/[org]/[ws]/spend",
-      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
       "entry": "/[org]/[ws]/spend \u2014 the rev1 surface that invokes list_waste (data/live/mappers/spend.ts, data/live/spend.ts)",
       "proof": "apps/app/src/features/spend/spend.test.tsx",
       "verifiedAt": "2026-09-16",
@@ -956,7 +965,7 @@
     },
     "record_finding_fix": {
       "route": "/[org]/[ws]/spend",
-      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
       "entry": "/[org]/[ws]/spend \u2014 the rev1 surface that invokes record_finding_fix (features/spend/actions.ts)",
       "proof": "apps/app/src/features/spend/dialogs.test.tsx",
       "verifiedAt": "2026-09-16",
@@ -989,7 +998,7 @@
     },
     "remove_price_entry": {
       "route": "/[org]/[ws]/spend?tab=pricing",
-      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
       "entry": "Spend \u203a Pricing \u203a \u201cRemove\u201d on a negotiated row \u2014 ends the rate so the model falls back to the list price (features/spend/remove-rate-dialog.tsx, features/spend/actions.ts)",
       "testid": "spend-remove-rate-open",
       "proof": "apps/app/src/features/spend/price-actions.test.ts",
@@ -1028,7 +1037,17 @@
       "entry": "/[org]/[ws]/agents/[agent] \u2014 the rev1 surface that invokes retire_agent (features/agents/actions.ts)",
       "proof": "apps/app/src/features/agents/agent-actions.test.tsx",
       "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "verifiedBy": "session-20daa43b-cutover",
+      "also": [
+        {
+          "route": "/[org]/[ws]/register/[step]",
+          "page": "apps/app/src/app/[org]/[ws]/register/[step]/page.tsx",
+          "entry": "/[org]/[ws]/register/[step] — Cancel on the wrap and run steps retires the identity the name step minted (features/onboarding/ui/cancel-registration.tsx, features/onboarding/register-actions.ts)",
+          "proof": "apps/app/src/features/onboarding/ui.test.tsx",
+          "verifiedAt": "2026-09-23",
+          "verifiedBy": "session_01Gb3zJhinQuXfKoGwzRvVQo"
+        }
+      ]
     },
     "revise_context_record": {
       "route": "/[org]/[ws]/steering/records/[lineage]",
@@ -1095,7 +1114,17 @@
       "entry": "/[org]/[ws]/agents/[agent] \u2014 the rev1 surface that invokes rotate_agent_credential (features/agents/actions.ts)",
       "proof": "apps/app/src/features/agents/agent-actions.test.tsx",
       "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "verifiedBy": "session-20daa43b-cutover",
+      "also": [
+        {
+          "route": "/[org]/[ws]/register/[step]",
+          "page": "apps/app/src/app/[org]/[ws]/register/[step]/page.tsx",
+          "entry": "/[org]/[ws]/register/wrap — the SDK tab issues the agent credential once (features/onboarding/ui/wrap-agent.tsx, features/onboarding/register-actions.ts)",
+          "proof": "apps/app/src/features/onboarding/ui.test.tsx",
+          "verifiedAt": "2026-09-23",
+          "verifiedBy": "session_01Gb3zJhinQuXfKoGwzRvVQo"
+        }
+      ]
     },
     "rotate_api_key": {
       "route": "/[org]/api-keys",
@@ -1174,7 +1203,7 @@
     },
     "set_price_entry": {
       "route": "/[org]/[ws]/spend?tab=pricing",
-      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
       "entry": "Spend \u203a Pricing \u203a Set a negotiated rate: one set_price_entry call per atomic model card (features/spend/price-dialog.tsx, features/spend/actions.ts)",
       "testid": "spend-price-open",
       "proof": "apps/app/src/features/spend/price-dialog.test.tsx",
@@ -1199,7 +1228,7 @@
     },
     "set_spend_budget": {
       "route": "/[org]/[ws]/spend",
-      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
       "entry": "/[org]/[ws]/spend \u2014 the rev1 surface that invokes set_spend_budget (features/spend/actions.ts)",
       "proof": "apps/app/src/features/spend/dialogs.test.tsx",
       "verifiedAt": "2026-09-16",
@@ -1296,7 +1325,7 @@
     },
     "update_tacho_session_policy": {
       "route": "/[org]/[ws]/spend",
-      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
       "entry": "/[org]/[ws]/spend?tab=budgets \u2014 Gateway sessions \u203a Save the policy, which invokes update_tacho_session_policy (features/spend/actions.ts)",
       "proof": "apps/app/src/features/spend/gateway-policy.test.tsx",
       "verifiedAt": "2026-09-21",
@@ -1370,7 +1399,7 @@
     },
     "export_cost_center_statement": {
       "route": "/[org]/[ws]/spend",
-      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
       "entry": "/[org]/[ws]/spend export dialog, Organization by cost center (features/spend/actions.ts)",
       "proof": "apps/app/src/features/spend/dialogs.test.tsx",
       "verifiedAt": "2026-09-22",
@@ -1448,6 +1477,30 @@
       "proof": "apps/app/src/features/steering/actions.test.ts",
       "verifiedAt": "2026-09-24",
       "verifiedBy": "session_01GofFReg5qtDbMZjKu569CR"
+    },
+    "create_scim_token": {
+      "route": "/[org]/sso",
+      "page": "apps/app/src/app/[org]/sso/page.tsx",
+      "entry": "/[org]/sso: Generate token in the SCIM provisioning section (features/organization/scim-controls.tsx, sso-actions.ts)",
+      "proof": "apps/app/src/features/organization/sso.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session-scim-provisioning"
+    },
+    "rotate_scim_token": {
+      "route": "/[org]/sso",
+      "page": "apps/app/src/app/[org]/sso/page.tsx",
+      "entry": "/[org]/sso: Rotate token in the SCIM provisioning section (features/organization/scim-controls.tsx, sso-actions.ts)",
+      "proof": "apps/app/src/features/organization/sso.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session-scim-provisioning"
+    },
+    "revoke_scim_token": {
+      "route": "/[org]/sso",
+      "page": "apps/app/src/app/[org]/sso/page.tsx",
+      "entry": "/[org]/sso: Revoke token in the SCIM provisioning section (features/organization/scim-controls.tsx, sso-actions.ts)",
+      "proof": "apps/app/src/features/organization/sso.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session-scim-provisioning"
     }
   }
 }

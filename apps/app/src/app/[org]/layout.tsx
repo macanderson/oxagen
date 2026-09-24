@@ -1,5 +1,6 @@
 import { type ReactNode, Suspense } from "react";
 import { dataSource } from "@/data/source";
+import { SignedInNotice } from "@/features/auth";
 import { ShellChrome, ShellFrame, ViewerClock } from "@/features/shell";
 import { requireViewer } from "@/server/viewer";
 
@@ -10,7 +11,8 @@ import { requireViewer } from "@/server/viewer";
 // before the chrome renders. Each page resolves its own viewer, inside the
 // <Suspense> around the page (params of an unlisted slug are request data).
 // Inside that same <Suspense>, <OrganizationClock> resolves the viewer's time
-// zone and every date on the page renders in it.
+// zone and every date on the page renders in it. <SignedInNotice> shows
+// "Signed in as …" once on the first page a sign-in lands on.
 export default function OrganizationLayout({
   children,
   params,
@@ -36,6 +38,7 @@ async function OrganizationClock({
   return (
     <ViewerClock ctx={ctx} source={dataSource()}>
       {children}
+      <SignedInNotice />
     </ViewerClock>
   );
 }

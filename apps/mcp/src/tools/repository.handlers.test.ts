@@ -53,6 +53,7 @@ describe("list_repositories tool", () => {
       repositories: [
         {
           bindingId: "rpb_0a",
+          provider: "github",
           role: "main",
           owner: "acme",
           name: "platform",

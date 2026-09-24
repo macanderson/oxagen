@@ -61,12 +61,63 @@ describe("withSsoSecrets", () => {
       oidcConfig: string;
     };
     expect(JSON.parse(found.oidcConfig).clientSecret).toBe("s3cret");
+  });
+
+  // #3740: on a domain miss /sign-in/sso lists every provider. The listing
+  // used to open every row's secrets, and one unopenable row failed it.
+  it("lists providers with no secret and never resolves a key", async () => {
+    const { inner } = await fakeAdapter();
+    const resolveKms = vi.fn(() => kms);
+    const adapter = withSsoSecrets(
+      () => inner as unknown as DBAdapter,
+      resolveKms,
+    )({} as never);
     const many = (await adapter.findMany({
       model: "ssoProvider",
-    })) as unknown as {
-      oidcConfig: string;
-    }[];
-    expect(JSON.parse(many[0]!.oidcConfig).clientSecret).toBe("s3cret");
+    })) as unknown as { providerId: string; oidcConfig: string }[];
+    expect(many[0]!.providerId).toBe("acme");
+    expect(JSON.parse(many[0]!.oidcConfig)).toEqual({ clientId: "c" });
+    expect(many[0]!.oidcConfig).not.toContain("enc:v1:");
+    expect(resolveKms).not.toHaveBeenCalled();
+  });
+
+  it("lists a provider sealed under an unknown key id, or with a malformed config, without throwing", async () => {
+    const { inner, row } = await fakeAdapter();
+    const orphan = {
+      ...row,
+      providerId: "orphan",
+      oidcConfig: JSON.stringify({
+        clientId: "o",
+        clientSecret: "enc:v1:sso_v0:AAAA",
+      }),
+    };
+    const malformed = { ...row, providerId: "bad", oidcConfig: "{not json" };
+    inner.findMany.mockResolvedValueOnce([row, orphan, malformed]);
+    const adapter = wrap(inner, null);
+    const many = (await adapter.findMany({
+      model: "ssoProviders",
+    })) as unknown as { providerId: string; oidcConfig: string | null }[];
+    expect(many.map((p) => p.providerId)).toEqual(["acme", "orphan", "bad"]);
+    expect(JSON.parse(many[1]!.oidcConfig!)).toEqual({ clientId: "o" });
+    expect(many[2]!.oidcConfig).toBeNull();
+  });
+
+  it("still opens one provider read through findOne after a listing", async () => {
+    const { inner } = await fakeAdapter();
+    const adapter = wrap(inner);
+    await adapter.findMany({ model: "ssoProvider" });
+    const found = (await adapter.findOne({
+      model: "ssoProvider",
+      where: [{ field: "providerId", value: "acme" }],
+    })) as { oidcConfig: string };
+    expect(JSON.parse(found.oidcConfig).clientSecret).toBe("s3cret");
+  });
+
+  it("leaves a listing of another model untouched", async () => {
+    const { inner } = await fakeAdapter();
+    inner.findMany.mockResolvedValueOnce([{ id: "u1" }] as never);
+    const adapter = wrap(inner);
+    expect(await adapter.findMany({ model: "user" })).toEqual([{ id: "u1" }]);
   });
 
   it("leaves other models untouched", async () => {

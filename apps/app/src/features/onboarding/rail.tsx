@@ -1,4 +1,4 @@
-// The rail both flows draw: the gate's three steps over the real pages
+// The rails both flows draw: the gate's three steps over the real pages
 // (ADR-065 decision 1) and the register stepper's own three. Presentational —
 // the caller translates each step and hands its target, which is a SafePath or
 // nothing (INV-13). The state is a word as well as a mark, so it survives
@@ -88,6 +88,86 @@ export function Rail({
                 >
                   {content}
                 </SafeLink>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
+  );
+}
+
+const SEGMENT_MARK: Record<StepState, string> = {
+  done: "border-success text-success",
+  current: "border-accent-text text-accent-text",
+  todo: "border-border text-muted-foreground",
+};
+
+const segment =
+  "flex min-h-11 w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13px] max-md:justify-center";
+
+/**
+ * The register gate's rail (register-name spec, Shell; mockup `.reg-steps`):
+ * three segments in one bordered strip. A done step shows ✓ and links back to
+ * itself, the current step carries `aria-current="step"`, and a later step is
+ * a disabled button, because finishing this step is the only way to reach it.
+ * A phone keeps the marks and drops the labels to the accessibility tree.
+ */
+export function StepRail({
+  label,
+  steps,
+}: {
+  /** The rail's accessible name, already translated. */
+  label: string;
+  steps: readonly RailStep[];
+}) {
+  return (
+    <nav aria-label={label}>
+      <ol className="grid grid-cols-3 overflow-hidden rounded-xl border border-border bg-card">
+        {steps.map((step, index) => {
+          const body = (
+            <>
+              <span
+                aria-hidden="true"
+                className={`inline-flex size-[22px] flex-none items-center justify-center rounded-full border text-[11px] ${SEGMENT_MARK[step.state]}`}
+              >
+                {step.state === "done" ? "✓" : index + 1}
+              </span>
+              <span
+                className={`min-w-0 max-md:sr-only ${step.state === "done" ? "text-success" : step.state === "current" ? "font-medium text-foreground" : "text-muted-foreground"}`}
+              >
+                {step.label}
+              </span>
+              <span className="sr-only">{step.stateLabel}</span>
+            </>
+          );
+          return (
+            <li
+              key={step.key}
+              data-testid="rail-step"
+              data-step={step.key}
+              data-state={step.state}
+              className={`min-w-0 ${index > 0 ? "border-l border-border" : ""} ${step.state === "current" ? "bg-hl" : ""}`}
+            >
+              {step.state === "done" && step.to !== null ? (
+                <SafeLink
+                  to={step.to}
+                  className={`${segment} hover:bg-hl focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring`}
+                >
+                  {body}
+                </SafeLink>
+              ) : step.state === "current" ? (
+                <span aria-current="step" className={segment}>
+                  {body}
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  className={`${segment} disabled:cursor-not-allowed`}
+                >
+                  {body}
+                </button>
               )}
             </li>
           );

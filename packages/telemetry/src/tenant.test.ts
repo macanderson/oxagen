@@ -24,7 +24,11 @@ vi.mock("./clickhouse", () => ({
 
 import { runInTenantScope } from "@oxagen/tenancy";
 import { chInsert, chSelect } from "./tenant";
-import { selectTachoEventRecords, selectTachoEvents } from "./tacho-events";
+import {
+  selectAgentDaySpend,
+  selectTachoEventRecords,
+  selectTachoEvents,
+} from "./tacho-events";
 
 const ORG = "00000000-0000-0000-0000-00000000a111";
 const WS = "00000000-0000-0000-0000-00000000b222";
@@ -163,6 +167,26 @@ describe("clickhouse tenant seam", () => {
       );
     },
   );
+
+  it("passes selectAgentDaySpend through the source fence with FINAL kept (ADR-160)", async () => {
+    await runInTenantScope({ orgId: ORG, workspaceId: WS }, () =>
+      selectAgentDaySpend({ day: "2026-09-24", hostEnrollmentIds: ["tch_a"] }),
+    );
+    expect(query).toHaveBeenCalledOnce();
+    expect(query).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: expect.stringContaining(
+          "FROM (SELECT * FROM tacho_events FINAL WHERE org_id = {orgId:UUID} AND workspace_id = {workspaceId:UUID}) AS tacho_events",
+        ),
+        query_params: expect.objectContaining({
+          orgId: ORG,
+          workspaceId: WS,
+          hosts: ["tch_a"],
+          start: "2026-09-24 00:00:00.000",
+        }),
+      }),
+    );
+  });
 
   it("fails closed with no scope", async () => {
     await expect(chInsert("events", [{}])).rejects.toThrow(/tenant scope/);

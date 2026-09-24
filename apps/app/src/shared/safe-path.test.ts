@@ -242,7 +242,7 @@ describe("routes", () => {
       "/acme/core-platform/runs/arun_01k5",
     );
     expect(routes.spend("acme", "core-platform", { tab: "waste" })).toBe(
-      "/acme/core-platform/spend?tab=waste",
+      "/acme/core-platform/spend/waste",
     );
     expect(routes.skills("acme", "core-platform")).toBe(
       "/acme/core-platform/steering/skills",
@@ -256,14 +256,14 @@ describe("routes", () => {
         drill: "acme/core-platform/triage&tab=x",
       }),
     ).toBe(
-      "/acme/core-platform/spend?tab=agent&drill=acme%2Fcore-platform%2Ftriage%26tab%3Dx",
+      "/acme/core-platform/spend/agent/acme%2Fcore-platform%2Ftriage%26tab%3Dx",
     );
     expect(
       routes.spend("acme", "core-platform", {
         tab: "findings",
         finding: "fnd_01k5rtgh",
       }),
-    ).toBe("/acme/core-platform/spend?tab=findings&finding=fnd_01k5rtgh");
+    ).toBe("/acme/core-platform/spend?finding=fnd_01k5rtgh");
     expect(() => routes.run("", "x", "arun_1")).toThrow("unsafe_path");
   });
 });
