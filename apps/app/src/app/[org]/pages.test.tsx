@@ -13,8 +13,9 @@
 // theirs, with the tab and the chips the URL names, to the Tools feature
 // (#2958); Billing hands
 // its viewer, the data source, the checkout outcome and the invoices cursor to
-// the Billing feature (WL-38); People renders its sections from org.members and
-// API keys its table from org.apiKeys; Run hands its viewer, the data source, the
+// the Billing feature (WL-38); Organization, Roles and API keys hand their
+// viewer, the data source and the tab or the keys' workspace to the
+// Organization feature (pages/organization.md); Run hands its viewer, the data source, the
 // run id and the tab, zoom and frames cursor the URL carries to the Run feature
 // (WL-35).
 import { screen } from "@testing-library/react";
@@ -42,22 +43,18 @@ const {
   Steering,
   Spend,
   FleetSpendTiles,
-  Roles,
-  Workspaces,
-  CostCenters,
+  Organization,
+  OrganizationRoles,
+  OrganizationApiKeys,
   OnboardingGate,
   Skills,
   SkillsLoading,
   Tools,
   ToolsLoading,
-  members,
   workspaces,
-  apiKeys,
   source,
 } = vi.hoisted(() => {
-  const members = vi.fn();
   const workspaces = vi.fn();
-  const apiKeys = vi.fn();
   return {
     requireViewer: vi.fn<(org: string, ws?: string) => Promise<unknown>>(),
     Audit: vi.fn((_props: Record<string, unknown>) => null),
@@ -83,9 +80,9 @@ const {
     Run: vi.fn((_props: Record<string, unknown>) => (
       <p data-testid="run-body" />
     )),
-    Roles: vi.fn((_props: Record<string, unknown>) => null),
-    Workspaces: vi.fn((_props: Record<string, unknown>) => null),
-    CostCenters: vi.fn((_props: Record<string, unknown>) => null),
+    Organization: vi.fn((_props: Record<string, unknown>) => null),
+    OrganizationRoles: vi.fn((_props: Record<string, unknown>) => null),
+    OrganizationApiKeys: vi.fn((_props: Record<string, unknown>) => null),
     // The gate's own states are its component test; here it only has to render.
     OnboardingGate: vi.fn((_props: Record<string, unknown>) => (
       <p data-testid="onboarding-gate" />
@@ -98,10 +95,8 @@ const {
       <p data-testid="tools-body" data-tab={props.searchParams.tab} />
     )),
     ToolsLoading: vi.fn(() => null),
-    members,
     workspaces,
-    apiKeys,
-    source: { org: { members, workspaces, apiKeys } },
+    source: { org: { workspaces } },
   };
 });
 // `WsCtx.is` is how the API keys section tells a workspace scope from an
@@ -138,13 +133,14 @@ vi.mock("@/features/steering", () => ({
   ),
 }));
 vi.mock("@/features/spend", () => ({ Spend, FleetSpendTiles }));
-// People stays real, so the organization page still renders a roster; the two
-// sections the #2964 lane adds are stubbed to show what each route hands them.
+// The three Organization bodies are stubbed to show what each route hands
+// them; the frame, the tabs and the states have their own tests
+// (features/organization/frame.test.tsx).
 vi.mock("@/features/organization", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/features/organization")>()),
-  Roles,
-  Workspaces,
-  CostCenters,
+  Organization,
+  OrganizationRoles,
+  OrganizationApiKeys,
 }));
 vi.mock("@/features/onboarding", () => ({ OnboardingGate }));
 vi.mock("@/features/skills", () => ({ Skills, SkillsLoading }));
@@ -188,7 +184,6 @@ beforeEach(() => {
   requireViewer.mockReset();
   requireViewer.mockResolvedValue({});
   workspaces.mockReset();
-  apiKeys.mockReset();
 });
 
 /** Every segment a page under /[org] can have; each page reads the ones in its path. */
@@ -597,63 +592,62 @@ describe("the Run page", () => {
   });
 });
 
-// People renders for real, so this page pulls the whole organization feature
-// graph and is the slowest in this file. Two separate things outran the
-// default 5 s budget, and both are handled here.
-//
-// The cold import, under coverage instrumentation, outran it on its own, and
-// the render that timed out went on to call Workspaces during the next test
-// and counted a second call there. So the import is hoisted and awaited once,
-// under a hook budget of its own.
-//
-// The first real render of the roster then outran 5 s as well on a loaded
-// runner (three failed main runs on 2026-09-18), which the hook budget does
-// not cover because it happens inside the tests. So the describe carries a
-// budget too.
-describe("Organization › People", { timeout: 30_000 }, () => {
-  const people = import("./page");
-  beforeAll(async () => {
-    await people;
-  }, 60_000);
+/**
+ * The three Organization routes name themselves in the document title only:
+ * the h1 is the organization's name, which the body draws once the frame has
+ * checked the viewer may read it (pages/organization.md), so a stubbed body
+ * leaves the route with no h1 of its own.
+ */
+async function expectOrganizationRoute<P extends object>(
+  page: PageModule<P>,
+  props: RouteProps<P>,
+  name: string,
+) {
+  const metadata = await page.generateMetadata(props);
+  expect(metadata.title).toBe(name);
+  const container = await renderPage(await page.default(props));
+  expect(container.querySelectorAll("h1")).toHaveLength(0);
+  expect(container.querySelector("main#main")).not.toBeNull();
+}
+
+describe("Organization", () => {
   beforeEach(() => {
-    Workspaces.mockClear();
+    Organization.mockClear();
   });
 
-  it("resolves the organization viewer, names the page once and renders the roster org.members read for that viewer", async () => {
+  it("resolves the organization viewer, names the page once and hands the viewer, the data source and People to the body", async () => {
     const ctx = { orgSlug: "acme", orgRole: "owner" };
     requireViewer.mockResolvedValue(ctx);
-    members.mockResolvedValue({
-      ok: true,
-      value: {
-        members: [
-          {
-            id: "usr_7k2m9q4x8r1t5v3w6y0z2a",
-            name: "Marcus Bell",
-            email: "marcus.bell@acme.example",
-            role: "owner",
-            joinedAt: "2026-03-02T09:15:00.000Z",
-          },
-        ],
-        invitations: [],
-      },
-    });
-    await expectPageTitle(await people, routeProps(SEGMENTS), title("people"));
+    await expectOrganizationRoute(
+      await import("./page"),
+      routeProps(SEGMENTS),
+      title("people"),
+    );
     expect(requireViewer).toHaveBeenCalledWith(...ORG);
-    expect(members).toHaveBeenCalledWith(ctx);
-    expect(screen.getByRole("main")).toHaveTextContent("Marcus Bell");
-    expect(screen.queryByTestId("not-recorded")).toBeNull();
+    expect(Organization.mock.calls[0]?.[0]).toEqual({
+      ctx,
+      source,
+      tab: "people",
+    });
   });
 
-  it("renders the Workspaces section of the same page from the same viewer and data source (#2964)", async () => {
-    const ctx = { orgSlug: "acme", orgRole: "owner" };
-    requireViewer.mockResolvedValue(ctx);
-    members.mockResolvedValue({
-      ok: true,
-      value: { members: [], invitations: [] },
+  it("hands the tab the URL names, and People for one it does not (negative)", async () => {
+    requireViewer.mockResolvedValue({ orgSlug: "acme", orgRole: "owner" });
+    await expectOrganizationRoute(
+      await import("./page"),
+      routeProps(SEGMENTS, { tab: "workspaces" }),
+      title("people"),
+    );
+    expect(Organization.mock.calls[0]?.[0]).toMatchObject({
+      tab: "workspaces",
     });
-    await expectPageTitle(await people, routeProps(SEGMENTS), title("people"));
-    expect(Workspaces).toHaveBeenCalledOnce();
-    expect(Workspaces.mock.calls[0]?.[0]).toEqual({ ctx, source });
+    Organization.mockClear();
+    await expectOrganizationRoute(
+      await import("./page"),
+      routeProps(SEGMENTS, { tab: "nonsense" }),
+      title("people"),
+    );
+    expect(Organization.mock.calls[0]?.[0]).toMatchObject({ tab: "people" });
   });
 });
 
@@ -661,15 +655,14 @@ describe("Organization › Roles", () => {
   it("resolves the organization viewer, names the page once and hands the viewer and the data source to Roles", async () => {
     const ctx = { orgSlug: "acme", orgRole: "owner" };
     requireViewer.mockResolvedValue(ctx);
-    await expectPageTitle(
+    await expectOrganizationRoute(
       await import("./roles/page"),
       routeProps(SEGMENTS),
       title("roles"),
     );
     expect(requireViewer).toHaveBeenCalledWith(...ORG);
-    expect(Roles).toHaveBeenCalledOnce();
-    expect(Roles.mock.calls[0]?.[0]).toEqual({ ctx, source });
-    expect(screen.queryByTestId("not-recorded")).toBeNull();
+    expect(OrganizationRoles).toHaveBeenCalledOnce();
+    expect(OrganizationRoles.mock.calls[0]?.[0]).toEqual({ ctx, source });
   });
 });
 
@@ -681,6 +674,7 @@ describe("Organization › Roles", () => {
 const wsRow = (slug: string, name: string) => ({
   id: `wrk_${slug}`,
   slug,
+  namespace: slug,
   name,
   role: "Owner",
   archivedAt: null,
@@ -689,20 +683,20 @@ const wsRow = (slug: string, name: string) => ({
 
 describe("Organization › API keys", () => {
   beforeEach(() => {
+    OrganizationApiKeys.mockClear();
     workspaces.mockResolvedValue({
       ok: true,
       value: { workspaces: [wsRow("core-platform", "Core platform")] },
     });
   });
 
-  it("resolves the workspace the URL names and renders the keys org.apiKeys read in it", async () => {
+  it("resolves the workspace the URL names and hands its viewer to the keys", async () => {
     // A key names a workspace (ADR-073): the page resolves one before it reads.
-    const ctx = {
-      orgSlug: "acme",
-      orgRole: "owner",
-      wsSlug: "core-platform",
-    };
-    requireViewer.mockResolvedValue(ctx);
+    const orgCtx = { orgSlug: "acme", orgRole: "owner" };
+    const wsCtx = { ...orgCtx, wsSlug: "growth" };
+    requireViewer.mockImplementation((_org, ws) =>
+      Promise.resolve(ws === undefined ? orgCtx : wsCtx),
+    );
     workspaces.mockResolvedValue({
       ok: true,
       value: {
@@ -712,22 +706,7 @@ describe("Organization › API keys", () => {
         ],
       },
     });
-    apiKeys.mockResolvedValue({
-      ok: true,
-      value: [
-        {
-          id: "aky_7k2m9q4x8r1t5v3w6y0z2a",
-          name: "CI runner",
-          prefix: "ox_liveliveli",
-          createdAt: "2026-09-13T10:00:00.000Z",
-          lastUsedAt: null,
-          expiresAt: null,
-          revokedAt: null,
-          rotatable: true,
-        },
-      ],
-    });
-    await expectPageTitle(
+    await expectOrganizationRoute(
       await API_KEYS(),
       routeProps(SEGMENTS, { workspace: "growth" }),
       title("apiKeys"),
@@ -735,9 +714,11 @@ describe("Organization › API keys", () => {
     expect(requireViewer).toHaveBeenCalledWith(...ORG);
     expect(requireViewer).toHaveBeenCalledWith("acme", "growth");
     expect(workspaces).toHaveBeenCalledOnce();
-    expect(apiKeys).toHaveBeenCalledWith(ctx);
-    expect(screen.getByRole("main")).toHaveTextContent("ox_liveliveli");
-    expect(screen.queryByTestId("not-recorded")).toBeNull();
+    expect(OrganizationApiKeys.mock.calls[0]?.[0]).toMatchObject({
+      ctx: orgCtx,
+      keysCtx: wsCtx,
+      source,
+    });
   });
 
   it("falls back to the first workspace the viewer may enter when the URL names none", async () => {
@@ -746,8 +727,7 @@ describe("Organization › API keys", () => {
       orgRole: "owner",
       wsSlug: "core-platform",
     });
-    apiKeys.mockResolvedValue({ ok: true, value: [] });
-    await expectPageTitle(
+    await expectOrganizationRoute(
       await API_KEYS(),
       routeProps(SEGMENTS),
       title("apiKeys"),
@@ -755,16 +735,20 @@ describe("Organization › API keys", () => {
     expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
   });
 
-  it("resolves no workspace and reads no key when the viewer may enter none (negative)", async () => {
-    requireViewer.mockResolvedValue({ orgSlug: "acme", orgRole: "owner" });
+  it("resolves no workspace when the viewer may enter none, and hands the org viewer for both (negative)", async () => {
+    const orgCtx = { orgSlug: "acme", orgRole: "owner" };
+    requireViewer.mockResolvedValue(orgCtx);
     workspaces.mockResolvedValue({ ok: true, value: { workspaces: [] } });
-    await expectPageTitle(
+    await expectOrganizationRoute(
       await API_KEYS(),
       routeProps(SEGMENTS),
       title("apiKeys"),
     );
     expect(requireViewer).toHaveBeenCalledExactlyOnceWith(...ORG);
-    expect(apiKeys).not.toHaveBeenCalled();
+    expect(OrganizationApiKeys.mock.calls[0]?.[0]).toMatchObject({
+      ctx: orgCtx,
+      keysCtx: orgCtx,
+    });
   });
 });
 

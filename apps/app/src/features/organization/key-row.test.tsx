@@ -70,6 +70,28 @@ describe("a row's state and its controls come from one clock", () => {
     await expectNoAxe(document.body);
   });
 
+  it("words the Expires badge as the design does: active, expires in N days, never used", () => {
+    const soon = apiKey({
+      id: "aky_soon000000000000000000",
+      expiresAt: new Date(NOW + 21 * 86_400_000 - 1000).toISOString(),
+    });
+    renderRow(soon);
+    expect(screen.getByText("expires in 21 days")).toHaveAttribute(
+      "data-status",
+      "expiring",
+    );
+    cleanup();
+    renderRow(apiKey({ lastUsedAt: null }));
+    expect(screen.getByText("never used")).toHaveAttribute(
+      "data-status",
+      "never-used",
+    );
+    cleanup();
+    renderRow(apiKey());
+    expect(screen.getByText("active")).toHaveAttribute("data-status", "live");
+    expect(screen.getByText("Never")).toBeInTheDocument();
+  });
+
   it("reads expired with Revoke alone for a key whose expiry has passed", () => {
     const view = renderRow(apiKey({ expiresAt: "2026-09-15T12:00:00.000Z" }));
     expect(view.status()).toBe("expired");
@@ -101,13 +123,14 @@ describe("a row's state and its controls come from one clock", () => {
 
   it("turns the status and the controls over together when the expiry passes while the page is open", async () => {
     // The page clock is captured once, server-side. Both halves of the row read
-    // the same running clock, so the row cannot say "live" with no Rotate.
+    // the same running clock, so the row cannot offer Rotate on an expired key.
+    // Inside the last thirty days a live key reads "expires in N days".
     vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.setSystemTime(NOW);
     const view = renderRow(
       apiKey({ expiresAt: new Date(NOW + 20_000).toISOString() }),
     );
-    expect(view.status()).toBe("live");
+    expect(view.status()).toBe("expiring");
     expect(view.buttons()).toEqual(["Rotate", "Revoke"]);
 
     await act(async () => {

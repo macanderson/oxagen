@@ -73,6 +73,7 @@ const source: DataSource = {
     apiKeys: refuse,
     costCenters: refuse,
     modelCredential: refuse,
+    dataPlane: refuse,
     sso: refuse,
   },
   audit: { events: refuse, exportEvents, retention: refuse, bundle: refuse },

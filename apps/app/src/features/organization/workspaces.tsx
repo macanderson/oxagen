@@ -1,130 +1,147 @@
-// Organization › Workspaces (ARCHITECTURE.md §1.2, #2964): the organization's
-// workspaces, the archived ones beside the live ones, with the create, rename
-// and archive writes. This section closes rev1's one real hole: before it, an
-// organization that wanted a second workspace made it through the API, MCP or
-// CLI, and `create_org` made the first one.
+// Organization › Workspaces (pages/organization.md): every workspace of the
+// organization, the archived ones beside the live ones, with Open, Edit and
+// Archive, and Create a workspace in the panel. The frame reads the list once
+// (`list_workspaces {includeArchived:true}`).
+//
+// `list_workspaces` records a workspace's name, slug, namespace and archival.
+// It records no main repository, production branch, linked repositories,
+// agent count or owner, and the governance mode lives in
+// `.oxagen/rules/governance.toml` on the main repository, which no contract
+// reads back. Those cells say "not recorded", and the Governance chip says the
+// mode is not recorded with the namespace beneath it (macanderson/oxagen, the
+// Workspaces issue this lane filed).
+//
+// Open goes to the workspace's Fleet. A workspace the viewer holds no
+// membership of cannot be opened (`requireViewer` answers not found), so its
+// Open is left off rather than offered as a link that fails.
 import { useTranslations } from "next-intl";
 import type { Workspace, WorkspaceList } from "@/data/contracts/org";
-import type { DataSource } from "@/data/ports";
-import type { Read } from "@/data/read";
-import type { OrgCtx } from "@/server/viewer";
+import { routes } from "@/shared/safe-path";
 import { Badge } from "@/ui/badge";
 import {
+  buttonSecondary,
   mono,
   panel,
   panelBody,
   panelHeader,
   panelTitle,
 } from "@/ui/control-styles";
-import { ReadFailure } from "@/ui/read-failure";
-import { cell, Table } from "@/ui/table";
+import { SafeLink } from "@/ui/navigation";
+import { type ListRow, ListTable } from "./list-table";
+import { NotRecorded, note } from "./parts";
 import {
   ArchiveWorkspace,
   CreateWorkspace,
   EditWorkspace,
 } from "./workspace-actions";
 
-export async function Workspaces({
-  ctx,
-  source,
-}: {
-  ctx: OrgCtx;
-  source: DataSource;
-}) {
-  const read = await source.org.workspaces(ctx);
+function WorkspaceCell({ workspace }: { workspace: Workspace }) {
+  const t = useTranslations("organization.workspaces");
   return (
-    <WorkspacesView
-      org={ctx.orgSlug}
-      canEdit={ctx.orgRole === "owner" || ctx.orgRole === "admin"}
-      read={read}
-    />
+    <>
+      <div className="font-semibold text-foreground">{workspace.name}</div>
+      <div className={`${mono} text-[11px] text-dim`}>{workspace.slug}</div>
+      {workspace.archivedAt === null ? null : (
+        <Badge tone="quiet" data-status="archived">
+          {t("archived")}
+        </Badge>
+      )}
+    </>
   );
 }
 
-const lead = `${panelBody} text-sm text-muted-foreground`;
-
-/** The workspace's state as a dot and a word, so it survives greyscale. */
-function Status({ workspace }: { workspace: Workspace }) {
-  const t = useTranslations("organization.workspaces.status");
-  const archived = workspace.archivedAt !== null;
+function GovernanceCell({ workspace }: { workspace: Workspace }) {
+  const t = useTranslations("organization.workspaces");
   return (
-    <Badge
-      tone={archived ? "quiet" : "allowed"}
-      data-status={archived ? "archived" : "live"}
-    >
-      {archived ? t("archived") : t("live")}
-    </Badge>
+    <>
+      <Badge tone="quiet" dot={false} data-governance="not-recorded">
+        {t("governanceNotRecorded")}
+      </Badge>
+      <div className={`${mono} text-[11px] text-dim`}>
+        {t("retentionNotRecorded")} ·{" "}
+        {t("namespace", { namespace: workspace.namespace })}
+      </div>
+    </>
   );
 }
 
-function WorkspacesView({
+function Actions({ org, workspace }: { org: string; workspace: Workspace }) {
+  const t = useTranslations("organization.workspaces");
+  const live = workspace.archivedAt === null;
+  return (
+    <div className="flex flex-wrap gap-2">
+      {live && workspace.role !== null ? (
+        <SafeLink
+          to={routes.fleet(org, workspace.slug)}
+          className={buttonSecondary}
+        >
+          {t("open")}
+        </SafeLink>
+      ) : null}
+      {/* An archived workspace is a record, not a thing to edit:
+          `update_workspace_settings` refuses it (`workspace_archived`),
+          because releasing its slug would break the redirect
+          `archive_workspace` promises. So it is offered neither control. */}
+      {live ? (
+        <>
+          <EditWorkspace org={org} workspace={workspace} />
+          <ArchiveWorkspace org={org} workspace={workspace} />
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+export function WorkspacesTab({
   org,
-  canEdit,
-  read,
+  workspaces,
 }: {
   org: string;
-  /** Owners and admins write; each handler checks the role again. */
-  canEdit: boolean;
-  read: Read<WorkspaceList>;
+  workspaces: WorkspaceList;
 }) {
   const t = useTranslations("organization.workspaces");
-  const tActions = useTranslations("organization.actions");
   const columns = [
     { label: t("columns.workspace") },
-    { label: t("columns.role") },
-    { label: t("columns.status") },
-    ...(canEdit ? [{ label: t("columns.actions") }] : []),
+    { label: t("columns.mainRepo") },
+    { label: t("columns.productionBranch") },
+    { label: t("columns.linkedRepos") },
+    { label: t("columns.agents"), numeric: true },
+    { label: t("columns.owner") },
+    { label: t("columns.governance") },
+    { label: t("columns.actions") },
   ];
+  const rows: ListRow[] = workspaces.workspaces.map((workspace) => ({
+    key: workspace.id,
+    rowId: workspace.id,
+    search: `${workspace.name} ${workspace.slug} ${workspace.namespace}`,
+    cells: [
+      <WorkspaceCell key="workspace" workspace={workspace} />,
+      <NotRecorded key="main" />,
+      <NotRecorded key="branch" />,
+      <NotRecorded key="linked" />,
+      <NotRecorded key="agents" />,
+      <NotRecorded key="owner" />,
+      <GovernanceCell key="governance" workspace={workspace} />,
+      <Actions key="actions" org={org} workspace={workspace} />,
+    ],
+  }));
   return (
     <section aria-labelledby="org-workspaces" className={panel}>
       <div className={panelHeader}>
         <h2 id="org-workspaces" className={panelTitle}>
           {t("title")}
         </h2>
-        {canEdit ? <CreateWorkspace org={org} /> : null}
+        <CreateWorkspace org={org} />
       </div>
-      {canEdit ? null : <p className={lead}>{tActions("readOnly")}</p>}
-      {!read.ok ? (
-        <ReadFailure read={read} section={t("title")} />
-      ) : read.value.workspaces.length === 0 ? (
-        <p className={lead}>{t("empty")}</p>
-      ) : (
-        <Table label={t("tableLabel")} columns={columns}>
-          {read.value.workspaces.map((workspace) => (
-            <tr key={workspace.id} data-workspace={workspace.id}>
-              <td className={cell}>
-                <div className="font-medium text-foreground">
-                  {workspace.name}
-                </div>
-                <div className={`${mono} text-muted-foreground`}>
-                  {workspace.slug}
-                </div>
-              </td>
-              <td className={cell}>{workspace.role ?? t("noRole")}</td>
-              <td className={cell}>
-                <Status workspace={workspace} />
-              </td>
-              {canEdit ? (
-                <td className={cell}>
-                  {/* An archived workspace is a record, not a thing to
-                      edit: `update_workspace_settings` refuses it
-                      (`workspace_archived`), because releasing its slug would
-                      break the redirect `archive_workspace` promises. So it
-                      is offered neither control. */}
-                  <div className="flex flex-wrap gap-2">
-                    {workspace.archivedAt === null ? (
-                      <>
-                        <EditWorkspace org={org} workspace={workspace} />
-                        <ArchiveWorkspace org={org} workspace={workspace} />
-                      </>
-                    ) : null}
-                  </div>
-                </td>
-              ) : null}
-            </tr>
-          ))}
-        </Table>
-      )}
+      <ListTable
+        label={t("tableLabel")}
+        columns={columns}
+        rows={rows}
+        empty={workspaces.workspaces.length === 0 ? t("empty") : t("noMatch")}
+      />
+      <div className={panelBody}>
+        <p className={note}>{t("note")}</p>
+      </div>
     </section>
   );
 }

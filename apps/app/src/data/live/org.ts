@@ -15,6 +15,7 @@ import "server-only";
 import { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
 import { costCenterList } from "@oxagen/oxagen/contracts/cost_center.list";
 import { iamRoleList } from "@oxagen/oxagen/contracts/iam.role.list";
+import { orgDataPlaneGet } from "@oxagen/oxagen/contracts/org.data_plane.get";
 import { orgModelCredentialGet } from "@oxagen/oxagen/contracts/org.model_credential.get";
 import { orgSsoList } from "@oxagen/oxagen/contracts/org.sso.list";
 import { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
@@ -24,6 +25,7 @@ import type { z } from "zod";
 import {
   ApiKeyList,
   CostCenterList,
+  DataPlane,
   MemberList,
   ModelCredential,
   RoleCatalog,
@@ -36,6 +38,7 @@ import { kernelRead } from "@/server/kernel";
 import {
   toApiKeys,
   toCostCenterList,
+  toDataPlane,
   toMemberList,
   toModelCredential,
   toRoleCatalog,
@@ -189,6 +192,20 @@ export const org: DataSource["org"] = {
       toModelCredential(read.value),
       "org.modelCredential",
     );
+  },
+
+  // Where the organisation's Postgres data lives (ADR-042): org-scoped,
+  // Owner-or-Admin in its contract, redacted by the contract. The Data plane
+  // tab reads the Postgres binding because it is the one every tenant table
+  // sits on; the graph and event stores follow the same binding rules.
+  async dataPlane(ctx) {
+    const read = await kernelRead(ctx, {
+      contract: orgDataPlaneGet,
+      input: { kind: "postgres" },
+      page: "organization",
+    });
+    if (!read.ok) return read;
+    return view(ctx.orgId, DataPlane, toDataPlane(read.value), "org.dataPlane");
   },
 
   // The organisation's identity providers and its SSO policy (ADR-145):

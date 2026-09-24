@@ -11,6 +11,7 @@
 import type { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
 import type { costCenterList } from "@oxagen/oxagen/contracts/cost_center.list";
 import type { iamRoleList } from "@oxagen/oxagen/contracts/iam.role.list";
+import type { orgDataPlaneGet } from "@oxagen/oxagen/contracts/org.data_plane.get";
 import type { orgModelCredentialGet } from "@oxagen/oxagen/contracts/org.model_credential.get";
 import type { orgSsoList } from "@oxagen/oxagen/contracts/org.sso.list";
 import type { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
@@ -19,6 +20,7 @@ import type { z } from "zod";
 import type {
   ApiKeyList,
   CostCenterList,
+  DataPlane,
   MemberList,
   ModelCredential,
   RoleCatalog,
@@ -68,6 +70,7 @@ export function toRoleCatalog(
       permissions: role.permissions,
       heldBy: role.memberCount,
       createdBy: role.createdBy,
+      createdAt: role.createdAt,
     })),
     catalog: out.catalog.map((entry) => ({
       permission: entry.id,
@@ -89,6 +92,7 @@ export function toWorkspaceList(
     workspaces: out.workspaces.map((workspace) => ({
       id: workspace.publicId,
       slug: workspace.slug,
+      namespace: workspace.namespace,
       name: workspace.name,
       role: workspace.role,
       archivedAt: workspace.archivedAt,
@@ -195,5 +199,24 @@ export function toSsoSettings(
     })),
     policy: { ssoRequired: out.policy.ssoRequired },
     entitled: out.entitled,
+  };
+}
+
+/**
+ * `get_data_plane` onto the Data plane tab. The binding is already redacted
+ * by the contract (ADR-042 §4), and every field is named here, so nothing the
+ * contract gains later reaches the page unless this mapper copies it.
+ */
+export function toDataPlane(
+  out: ContractOutput<typeof orgDataPlaneGet>,
+): z.input<typeof DataPlane> {
+  return {
+    mode: out.mode,
+    status: out.status,
+    host: out.host,
+    database: out.database,
+    schemaVersion: out.schemaVersion,
+    lastVerifiedAt: out.lastVerifiedAt,
+    rotatedAt: out.rotatedAt,
   };
 }

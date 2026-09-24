@@ -26,12 +26,20 @@
 // shows `API_KEYS_PAGE` rows at a time. Both are query values on this one route
 // (`api-keys-view.ts`), so a filtered page survives a reload and a shared link.
 import { useLocale, useTranslations } from "next-intl";
+import type { ReactNode } from "react";
 import type { ApiKey, Workspace, WorkspaceList } from "@/data/contracts/org";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import type { OrgCtx, OrgRole } from "@/server/viewer";
 import { WsCtx } from "@/server/viewer";
-import { linkText } from "@/ui/control-styles";
+import {
+  linkText,
+  panel,
+  panelBody,
+  panelHeader,
+  panelTitle,
+} from "@/ui/control-styles";
+import { Badge } from "@/ui/badge";
 import { OutcomePanel } from "@/ui/form-feedback";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
@@ -49,8 +57,7 @@ import {
 } from "./api-keys-view";
 import { CreateKeyDialog } from "./create-key-dialog";
 import { KeyRow } from "./key-row";
-import { emptyLine } from "./parts";
-import { OrganizationTabs } from "./tabs";
+import { emptyLine, note } from "./parts";
 
 /**
  * The workspaces of the organization this viewer may actually enter: the ones
@@ -155,54 +162,133 @@ function ApiKeysSection({
   const mine = workspaces.ok ? enterable(workspaces.value) : [];
   const chosen = mine.find((ws) => ws.slug === current);
   return (
-    <div className="flex flex-col gap-6">
-      {/* The shared strip, not a local copy of it: a hand-rolled two-entry
-          list here left the Roles tab unreachable from this page the moment
-          Roles was added (#3110). One component owns which tabs exist. */}
-      <OrganizationTabs org={orgSlug} current="apiKeys" />
+    <div className="flex flex-col gap-3.5">
       {!workspaces.ok ? (
-        <Refused read={workspaces} orgRole={orgRole} />
+        <KeysPanel>
+          <Refused read={workspaces} orgRole={orgRole} />
+        </KeysPanel>
       ) : current === null || read === null ? (
-        <OutcomePanel
-          tone="neutral"
-          testId="api-keys-no-workspace"
-          title={t("apiKeys.noWorkspace.title")}
-        >
-          {t("apiKeys.noWorkspace.body")}
-        </OutcomePanel>
+        <KeysPanel>
+          <OutcomePanel
+            tone="neutral"
+            testId="api-keys-no-workspace"
+            title={t("apiKeys.noWorkspace.title")}
+          >
+            {t("apiKeys.noWorkspace.body")}
+          </OutcomePanel>
+        </KeysPanel>
+      ) : read.ok ? (
+        <Keys
+          keys={read.value}
+          org={orgSlug}
+          ws={current}
+          archived={chosen?.archivedAt != null}
+          now={now}
+          show={view.show}
+          offset={view.offset}
+          picker={
+            <WorkspacePicker
+              orgSlug={orgSlug}
+              workspaces={mine}
+              current={current}
+              show={view.show}
+            />
+          }
+          archivedNote={
+            chosen !== undefined && chosen.archivedAt !== null ? (
+              <p
+                data-testid="api-keys-archived-workspace"
+                className={`${panelBody} ${note}`}
+              >
+                {t("apiKeys.workspace.archivedNote")}
+              </p>
+            ) : null
+          }
+        />
       ) : (
-        <>
+        <KeysPanel>
           <WorkspacePicker
             orgSlug={orgSlug}
             workspaces={mine}
             current={current}
             show={view.show}
           />
-          {chosen !== undefined && chosen.archivedAt !== null ? (
-            <OutcomePanel
-              tone="neutral"
-              testId="api-keys-archived-workspace"
-              title={t("apiKeys.workspace.label")}
-            >
-              {t("apiKeys.workspace.archivedNote")}
-            </OutcomePanel>
-          ) : null}
-          {read.ok ? (
-            <Keys
-              keys={read.value}
-              org={orgSlug}
-              ws={current}
-              archived={chosen?.archivedAt != null}
-              now={now}
-              show={view.show}
-              offset={view.offset}
-            />
-          ) : (
-            <Refused read={read} orgRole={orgRole} />
-          )}
-        </>
+          <Refused read={read} orgRole={orgRole} />
+        </KeysPanel>
       )}
+      <Surfaces org={orgSlug} />
     </div>
+  );
+}
+
+/**
+ * The API keys panel (mockup `pOrganization` keys tab): the title, the caption
+ * that each key is a service principal with its own grants, the store badge
+ * and Create key, over whatever the read left to show.
+ */
+function KeysPanel({
+  create,
+  children,
+}: {
+  create?: ReactNode;
+  children: ReactNode;
+}) {
+  const t = useTranslations("organization.apiKeys");
+  return (
+    <section aria-labelledby="org-api-keys" className={panel}>
+      <div className={panelHeader}>
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h2 id="org-api-keys" className={panelTitle}>
+            {t("title")}
+          </h2>
+          <span className="text-xs text-dim">{t("caption")}</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge tone="quiet" dot={false} data-store="api-keys">
+            {t("badge")}
+          </Badge>
+          {create}
+        </div>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/**
+ * Surfaces this reaches: the API, MCP, the CLI and these screens run on one
+ * agent tool contract, so what a key may do here it may do everywhere. The
+ * four command lines are commands the `oxagen` CLI ships
+ * (apps/cli/src/program.ts), with this organization's slug filled in.
+ */
+function Surfaces({ org }: { org: string }) {
+  const t = useTranslations("organization.apiKeys.surfaces");
+  const lines = [
+    `$ oxagen login --org ${org}`,
+    "$ oxagen budget show",
+    "$ oxagen run export <run-id>",
+    "$ oxagen agent status <agent>",
+  ];
+  return (
+    <section aria-labelledby="org-api-surfaces" className={panel}>
+      <div className={panelHeader}>
+        <h2 id="org-api-surfaces" className={panelTitle}>
+          {t("title")}
+        </h2>
+        <Badge tone="quiet" dot={false}>
+          {t("badge")}
+        </Badge>
+      </div>
+      <div className={`${panelBody} flex flex-col gap-2.5`}>
+        <p className="text-[12.5px] text-muted-foreground">{t("body")}</p>
+        <pre
+          data-testid="api-keys-cli"
+          className="overflow-x-auto rounded-lg border border-border bg-hl px-3.5 py-3 font-mono text-[11.5px] leading-relaxed"
+        >
+          {lines.join("\n")}
+        </pre>
+      </div>
+    </section>
   );
 }
 
@@ -296,6 +382,8 @@ function Keys({
   now,
   show,
   offset,
+  picker,
+  archivedNote,
 }: {
   /** The workspace's whole roster, newest first, revoked rows included. */
   keys: readonly ApiKey[];
@@ -315,6 +403,10 @@ function Keys({
   show: ApiKeysShow;
   /** The page the URL asked for, before it is clamped to one that exists. */
   offset: number;
+  /** The workspace picker: a key names a workspace (ADR-073). */
+  picker: ReactNode;
+  /** The archived workspace's note, when the workspace in scope is archived. */
+  archivedNote: ReactNode;
 }) {
   const t = useTranslations("organization.apiKeys");
   const kept = filterKeys(keys, show);
@@ -337,22 +429,26 @@ function Keys({
   const here = apiKeysLink(org, { workspace: ws, show, offset: page.offset });
   const afterMint = apiKeysLink(org, { workspace: ws, show });
   return (
-    <div className="flex flex-col gap-3">
-      <p className="max-w-prose text-sm text-muted-foreground">{t("lead")}</p>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <RevokedFilter org={org} ws={ws} show={show} revoked={revoked} />
-        {archived ? null : (
+    <KeysPanel
+      create={
+        archived ? null : (
           <CreateKeyDialog
             org={org}
             ws={ws}
             listedIds={listedIds}
             after={afterMint}
           />
-        )}
+        )
+      }
+    >
+      <div className="flex flex-col gap-2 border-b border-border px-3 py-2.5">
+        {picker}
+        <RevokedFilter org={org} ws={ws} show={show} revoked={revoked} />
       </div>
+      {archivedNote}
       {page.total === 0 ? (
         <p
-          className={emptyLine}
+          className={`${emptyLine} ${panelBody}`}
           data-state={
             show === "all" || revoked === 0 ? "empty" : "empty-filtered"
           }
@@ -367,11 +463,12 @@ function Keys({
             label={t("tableLabel")}
             columns={[
               { label: t("columns.name") },
-              { label: t("columns.prefix") },
-              { label: t("columns.created") },
+              { label: t("columns.principal") },
+              { label: t("columns.grants") },
+              { label: t("columns.createdBy") },
               { label: t("columns.lastUsed") },
+              { label: t("columns.actions30d"), numeric: true },
               { label: t("columns.expires") },
-              { label: t("columns.status") },
               { label: t("columns.actions") },
             ]}
           >
@@ -389,10 +486,15 @@ function Keys({
               />
             ))}
           </Table>
-          <Pager org={org} ws={ws} show={show} page={page} />
+          <div className="px-3 py-2.5">
+            <Pager org={org} ws={ws} show={show} page={page} />
+          </div>
         </>
       )}
-    </div>
+      <div className={panelBody}>
+        <p className={note}>{t("note")}</p>
+      </div>
+    </KeysPanel>
   );
 }
 

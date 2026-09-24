@@ -74,6 +74,14 @@ const AGENT_SECTION_ALIASES: Readonly<Record<string, string>> = {
   runs: "activity",
 };
 
+/** The Organization tabs that live on `/{org}` as a `?tab=` value. */
+export type OrganizationQueryTab =
+  | "people"
+  | "invitations"
+  | "workspaces"
+  | "dataPlane"
+  | "costCenters";
+
 /** Every route the app navigates to; each builder returns a SafePath. */
 export const routes = {
   root: (): SafePath => ROOT,
@@ -110,6 +118,13 @@ export const routes = {
     withQuery(mint("/cli/authorize"), query),
   /** Organization › People is the organization's root. */
   people: (org: string): SafePath => pathOf(org),
+  /**
+   * A tab of the Organization page that has no route of its own: People (the
+   * root), Invitations, Workspaces, Data plane and Cost centers. The tab is a
+   * query value on `/{org}`, left off for People.
+   */
+  organization: (org: string, tab: OrganizationQueryTab): SafePath =>
+    withQuery(pathOf(org), { tab: tab === "people" ? undefined : tab }),
   /** Organization › Roles: the roles and the permission catalogue (#2964). */
   roles: (org: string): SafePath => pathOf(org, "roles"),
   /**

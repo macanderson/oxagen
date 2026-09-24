@@ -361,6 +361,14 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "get_data_plane": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "/[org]?tab=dataPlane: the Data plane tab reads the Postgres binding through get_data_plane (data/live/org.ts, data/live/mappers/org.ts, features/organization/data-plane.tsx)",
+      "proof": "apps/app/src/features/organization/data-plane.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01Q41TYoTUbgPir4sajMJP42"
+    },
     "get_export_status": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/layout.tsx",

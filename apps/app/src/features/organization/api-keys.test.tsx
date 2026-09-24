@@ -163,41 +163,72 @@ const rowFor = (key: ApiKey) => {
   return row;
 };
 
-describe("API keys tabs", () => {
-  it("link People, Roles and API keys by URL, API keys marked as the current page", async () => {
+describe("the API keys panel", () => {
+  it("carries the caption, the store badge and Create key", async () => {
     await renderApiKeys(readOk([live]));
-    const tabs = screen.getByRole("navigation", { name: "Organization" });
-    const people = within(tabs).getByRole("link", { name: "People" });
-    const keys = within(tabs).getByRole("link", { name: "API keys" });
-    expect(people).toHaveAttribute("href", "/acme");
-    expect(people).not.toHaveAttribute("aria-current");
-    expect(keys).toHaveAttribute("href", "/acme/api-keys");
-    expect(keys).toHaveAttribute("aria-current", "page");
+    const panel = screen.getByRole("region", { name: "API keys" });
+    expect(panel).toHaveTextContent(
+      "each key acts as the person who created it",
+    );
+    expect(
+      within(panel).getByText("postgres · iam + vault"),
+    ).toBeInTheDocument();
+    expect(
+      within(panel).getByRole("button", { name: "Create key" }),
+    ).toBeInTheDocument();
   });
 
-  it("carry Roles, the same strip every other Organization page shows", async () => {
-    // A hand-rolled two-entry strip here left Roles unreachable from this page
-    // the moment Roles was added (#3110). The shared component owns the set.
+  it("names the columns in the design's order", async () => {
     await renderApiKeys(readOk([live]));
-    const tabs = screen.getByRole("navigation", { name: "Organization" });
-    expect(within(tabs).getByRole("link", { name: "Roles" })).toHaveAttribute(
-      "href",
-      "/acme/roles",
+    expect(
+      within(keysTable())
+        .getAllByRole("columnheader")
+        .map((header) => header.textContent),
+    ).toEqual([
+      "Name",
+      "Principal",
+      "Grants",
+      "Created by",
+      "Last used",
+      "Actions 30d",
+      "Expires",
+      "Actions",
+    ]);
+  });
+
+  it("says not recorded for the principal, the grants, the creator and the 30-day count rather than a guess", async () => {
+    await renderApiKeys(readOk([live]));
+    expect(rowFor(live).querySelectorAll("[data-not-recorded]")).toHaveLength(
+      4,
     );
+  });
+
+  it("lists the surfaces a key reaches, with four oxagen command lines", async () => {
+    await renderApiKeys(readOk([live]));
+    const surfaces = screen.getByRole("region", {
+      name: "Surfaces this reaches",
+    });
+    expect(surfaces).toHaveTextContent("one agent tool contract");
+    expect(surfaces).toHaveTextContent(
+      "Parity is checked by the manifest gate.",
+    );
+    const lines = (
+      within(surfaces).getByTestId("api-keys-cli").textContent ?? ""
+    ).split("\n");
+    expect(lines).toHaveLength(4);
+    expect(lines[0]).toBe("$ oxagen login --org acme");
   });
 });
 
 describe("ok", () => {
-  it("lists each key with its name, prefix, creation, last use and expiry", async () => {
+  it("lists each key with its name, masked prefix, last use and expiry", async () => {
     await renderApiKeys(readOk([live, unused]));
     const row = rowFor(live);
     expect(row).toHaveTextContent("CI runner");
-    expect(row).toHaveTextContent("ox_liveliveli");
-    expect(row).toHaveTextContent("Sep 13, 2026");
-    expect(row).toHaveTextContent("Sep 14, 2026");
-    expect(within(row).getByText("Sep 13, 2026")).toHaveAttribute(
+    expect(row).toHaveTextContent("ox_liveliveli…");
+    expect(within(row).getByText("Sep 14, 2026")).toHaveAttribute(
       "datetime",
-      "2026-09-13T10:00:00.000Z",
+      "2026-09-14T11:30:00.000Z",
     );
     expect(rowFor(unused)).toHaveTextContent("Mar 1, 2099");
   });
@@ -213,7 +244,7 @@ describe("ok", () => {
     // Shown under the All filter, the only place a revoked row appears.
     await renderApiKeys(readOk([live, expired, revoked]), "owner", ALL);
     expect(
-      within(rowFor(live)).getByText("live").closest("[data-status]"),
+      within(rowFor(live)).getByText("active").closest("[data-status]"),
     ).toHaveAttribute("data-status", "live");
     // resolveApiKey refuses an expired key, so the roster must not call it live.
     expect(
@@ -228,7 +259,7 @@ describe("ok", () => {
     await renderApiKeys(readOk([live, revoked]), "owner", ALL);
     expect(
       screen.getByText(
-        "A key acts as the person who created it, in this workspace: on the API, MCP and the CLI it can do what that person can do here, and no more.",
+        "A key is shown once, at creation, and never again. Until keys carry grants of their own, a key acts as the person who created it, in its workspace. Revoking a key ends its access at the next call.",
       ),
     ).toBeInTheDocument();
     expect(keysTable()).not.toHaveTextContent(/secret|hash/i);
@@ -257,14 +288,16 @@ describe("ok", () => {
         .map((button) => button.textContent),
     ).toEqual(["Revoke"]);
     expect(
-      within(rowFor(serviceOwned)).getByText("live").closest("[data-status]"),
-    ).toHaveAttribute("data-status", "live");
+      within(rowFor(serviceOwned))
+        .getByText("never used")
+        .closest("[data-status]"),
+    ).toHaveAttribute("data-status", "never-used");
   });
 
   it("offers the create control above the table, closed until it is opened", async () => {
     await renderApiKeys(readOk([live]));
     expect(
-      screen.getByRole("button", { name: "Create a key" }),
+      screen.getByRole("button", { name: "Create key" }),
     ).toBeInTheDocument();
     expect(screen.queryByTestId("create-api-key")).toBeNull();
   });
@@ -391,7 +424,7 @@ describe("empty", () => {
     ).toBeInTheDocument();
     expect(screen.queryByRole("table")).toBeNull();
     expect(
-      screen.getByRole("button", { name: "Create a key" }),
+      screen.getByRole("button", { name: "Create key" }),
     ).toBeInTheDocument();
   });
 
@@ -699,7 +732,7 @@ describe("the workspace a key names", () => {
         }
       </IntlProvider>,
     );
-    expect(screen.queryByRole("button", { name: "Create a key" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Create key" })).toBeNull();
     expect(screen.getByTestId("api-keys-archived-workspace")).toHaveTextContent(
       "no new key is issued into it",
     );
@@ -718,7 +751,7 @@ describe("the workspace a key names", () => {
   it("offers Create in a workspace still in use", async () => {
     await renderApiKeys(readOk([live]));
     expect(
-      screen.getByRole("button", { name: "Create a key" }),
+      screen.getByRole("button", { name: "Create key" }),
     ).toBeInTheDocument();
   });
 
@@ -808,9 +841,6 @@ describe("a read that did not list", () => {
     expect(panel).toHaveTextContent("Signed in as Member. Needed: org.admin.");
     expect(screen.queryByRole("table")).toBeNull();
     expect(screen.queryAllByRole("button")).toEqual([]);
-    expect(
-      screen.getByRole("navigation", { name: "Organization" }),
-    ).toBeInTheDocument();
   });
 
   it("pending approval: names the access request it waits on, and no keys (negative)", async () => {

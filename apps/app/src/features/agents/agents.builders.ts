@@ -314,6 +314,7 @@ export function agentsSource(reads: AgentReads) {
       apiKeys: refuse,
       costCenters: refuse,
       modelCredential: refuse,
+      dataPlane: refuse,
       sso: refuse,
     },
     audit: {

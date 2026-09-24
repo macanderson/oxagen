@@ -147,6 +147,7 @@ const source: DataSource = {
     apiKeys: refuse,
     costCenters: refuse,
     modelCredential: refuse,
+    dataPlane: refuse,
     sso: refuse,
   },
   audit: { events, exportEvents, retention, bundle },
@@ -272,6 +273,7 @@ beforeEach(() => {
         {
           id: "ws_01K5ARCHIVED",
           slug: "old",
+          namespace: "old",
           name: "Old",
           role: "owner",
           archivedAt: "2026-01-01T00:00:00.000Z",
@@ -280,6 +282,7 @@ beforeEach(() => {
         {
           id: "ws_01K5CORE",
           slug: "core-platform",
+          namespace: "core-platform",
           name: "Core platform",
           role: "owner",
           archivedAt: null,
