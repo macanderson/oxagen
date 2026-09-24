@@ -62,6 +62,13 @@ Every invoke runs the IAM check and the audit and security emissions once, befor
 
 The live stream renews its idle deadline when it emits frames. Its terminal
 event carries the last emitted frame cursor, including on the final page.
-Unexpected failures are logged on the server and return `stream_unavailable`
-with a generic message. A named server error stops the browser subscription;
-a transport disconnect retains EventSource retry behavior.
+
+**Error codes.** An `event: error` carries one of three kinds of code (#3652):
+
+| Code | What it is | What the Run page does |
+|---|---|---|
+| `authz_denied`, `surface_denied`, `pending_approval`, `forbidden` | The viewer may no longer read the run | Stops and says access changed |
+| `invalid_input`, `unknown_capability`, `no_handler`, or a handler refusal's reason, such as `run_not_found` | A refusal the client caused, most often a cursor this capability did not write. The message says what was refused | Reads the tail once, then stops |
+| `stream_unavailable` | A server fault: a store timed out, or the kernel refused its own output (`invalid_output`). The message is always "Run stream unavailable", and the details go to the server log, never to the client | Reopens at the event's `cursor` after 1 s, doubling the wait each time, and reports the stream lost after five retries with no frame between them |
+
+A kernel code is forwarded only when the API's error middleware would answer it with a 4xx; every code it answers with a 500 is sent as `stream_unavailable`. A transport disconnect with no event keeps EventSource's own retry.

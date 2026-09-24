@@ -357,6 +357,36 @@ describe("header", () => {
     ).not.toBeChecked();
   });
 
+  it("prints the run's instants in the viewer's time zone, not the server's (#3368)", async () => {
+    const { source } = runSource({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+    });
+    const element = await Run({
+      ctx,
+      source,
+      runId: "tse_7k2m9q",
+      tab: null,
+      kinds: null,
+      frames: null,
+      body: null,
+      reads: null,
+      spine: null,
+      now: NOW,
+    });
+    await act(async () => {
+      render(<IntlProvider timeZone="Asia/Tokyo">{element}</IntlProvider>);
+      await Promise.resolve();
+    });
+    // Started 08:00 and sealed 08:55 UTC, which is 17:00 and 17:55 in Tokyo.
+    const when = screen.getByTestId("run-when");
+    expect(when).toHaveTextContent("5:00:00 PM");
+    expect(when).toHaveTextContent("5:55:00 PM");
+    expect(when).not.toHaveTextContent("8:00:00 AM");
+    // The summary's generated time reads in the same zone: 08:58 UTC.
+    expect(screen.getByTestId("run-summary")).toHaveTextContent("5:58 PM");
+  });
+
   it("falls back to the task label when names are disabled and the harness gave none", async () => {
     await renderRun({
       detail: ok(

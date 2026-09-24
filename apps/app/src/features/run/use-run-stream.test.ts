@@ -224,7 +224,7 @@ describe("useRunStream", () => {
     expect(result.current).toBe("lost");
   });
 
-  it.each(["stream_unavailable", "invalid_input"])(
+  it.each(["invalid_input", "run_not_found"])(
     "stops retrying after a typed server error %s",
     (code) => {
       const { result, onFrames } = follow();
@@ -239,7 +239,7 @@ describe("useRunStream", () => {
     },
   );
 
-  it.each(["authz_denied", "forbidden"])(
+  it.each(["authz_denied", "forbidden", "surface_denied"])(
     "retains the server refusal %s through the native error callback",
     (code) => {
       const { result, onFrames } = follow();
@@ -258,7 +258,7 @@ describe("useRunStream", () => {
   );
 
   it.each(["stream_unavailable", "invalid_input", "unknown"])(
-    "flushes delivered frames once before %s terminates",
+    "flushes delivered frames once when %s closes the source",
     (code) => {
       const { onFrames } = follow();
       act(() => {
@@ -273,6 +273,115 @@ describe("useRunStream", () => {
       expect(onFrames).toHaveBeenCalledOnce();
     },
   );
+
+  it("reopens at the route's cursor after stream_unavailable, and reaches open again (#3652)", () => {
+    const { result } = follow();
+    act(() => {
+      latest().open();
+      latest().frame();
+      latest().serverError({ code: "stream_unavailable", cursor: "ZjoxMQ" });
+    });
+    // Closed, and waiting out the first backoff rather than reporting a loss.
+    expect(opened[0]?.closed).toBe(true);
+    expect(opened).toHaveLength(1);
+    expect(result.current).toBe("connecting");
+    act(() => {
+      vi.advanceTimersByTime(999);
+    });
+    expect(opened).toHaveLength(1);
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    // The cursor is the last frame the route wrote, so nothing is read twice
+    // and nothing is skipped.
+    expect(opened).toHaveLength(2);
+    expect(latest().url).toBe(`${URL_UNDER_TEST}?after=ZjoxMQ`);
+    act(() => {
+      latest().open();
+    });
+    expect(result.current).toBe("open");
+  });
+
+  it("retries from where the failed source started when the route had no cursor to give", () => {
+    follow();
+    act(() => {
+      latest().open();
+      latest().done({ reason: "idle", cursor: "ZjoxMQ" });
+    });
+    act(() => {
+      latest().open();
+      latest().serverError({ code: "stream_unavailable", cursor: null });
+      vi.advanceTimersByTime(1000);
+    });
+    expect(latest().url).toBe(`${URL_UNDER_TEST}?after=ZjoxMQ`);
+  });
+
+  it("backs off twice as long each time and reports lost at the retry ceiling (negative)", () => {
+    const { result } = follow();
+    act(() => {
+      latest().open();
+    });
+    for (const wait of [1000, 2000, 4000, 8000, 16_000]) {
+      const before = opened.length;
+      act(() => {
+        latest().serverError({ code: "stream_unavailable", cursor: null });
+      });
+      expect(result.current).toBe("connecting");
+      act(() => {
+        vi.advanceTimersByTime(wait - 1);
+      });
+      expect(opened).toHaveLength(before);
+      act(() => {
+        vi.advanceTimersByTime(1);
+        latest().open();
+      });
+      expect(opened).toHaveLength(before + 1);
+    }
+    act(() => {
+      latest().serverError({ code: "stream_unavailable", cursor: null });
+    });
+    expect(result.current).toBe("lost");
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    // Five retries, then nothing more is opened.
+    expect(opened).toHaveLength(6);
+  });
+
+  it("starts the backoff over once a frame arrives between failures", () => {
+    follow();
+    act(() => {
+      latest().open();
+      latest().serverError({ code: "stream_unavailable", cursor: null });
+      vi.advanceTimersByTime(1000);
+      latest().open();
+      latest().serverError({ code: "stream_unavailable", cursor: null });
+      vi.advanceTimersByTime(2000);
+      latest().open();
+      latest().frame();
+      latest().serverError({ code: "stream_unavailable", cursor: "ZjoxMw" });
+    });
+    expect(opened).toHaveLength(3);
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    // Progress reset the count, so the wait is the first one again.
+    expect(opened).toHaveLength(4);
+    expect(latest().url).toBe(`${URL_UNDER_TEST}?after=ZjoxMw`);
+  });
+
+  it("opens nothing more when the view goes away during a backoff (negative)", () => {
+    const { unmount } = follow();
+    act(() => {
+      latest().open();
+      latest().serverError({ code: "stream_unavailable", cursor: null });
+    });
+    unmount();
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(opened).toHaveLength(1);
+  });
 
   it("stops on a malformed server error without claiming the run sealed", () => {
     const { result } = follow();
