@@ -18,6 +18,8 @@ import {
   SUBSCRIPTION_PLANS,
   CREDIT_PACKS,
   resolveRate,
+  resolveRateEntry,
+  isRateCardMiss,
   providerCostUsd,
   providerCostUsdMicros,
   solveMeterMarkup,
@@ -51,27 +53,27 @@ describe("resolveRate", () => {
     );
   });
 
-  it("prices Claude Fable 5 at the Opus tier, not the Sonnet fallback", () => {
-    // Fable is Anthropic's most capable model; without an explicit row it would
-    // resolve to the Sonnet fallback and under-charge. Both the bare and gateway
-    // (creator/model) forms must land on the Opus-tier $15/$75 rate.
+  it("prices Claude Fable 5 on its own row, not the Sonnet fallback", () => {
+    // Without an explicit row Fable would resolve to the Sonnet fallback and
+    // under-charge. The bare and gateway (creator/model) forms both land on
+    // the Fable row.
     expect(resolveRate("claude-fable-5")).toBe(
       PROVIDER_RATE_CARD["claude-fable-5"],
     );
     expect(resolveRate("anthropic/claude-fable-5")).toBe(
-      PROVIDER_RATE_CARD["anthropic/claude-fable-5"],
+      PROVIDER_RATE_CARD["claude-fable-5"],
     );
-    expect(resolveRate("claude-fable-5").outputPer1M).toBe(75.0);
+    expect(resolveRate("claude-fable-5").outputPer1M).toBe(50.0);
   });
 
-  it("prices Claude Sonnet 5 explicitly at the Sonnet tier", () => {
+  it("prices Claude Sonnet 5 explicitly at its own rate", () => {
     expect(resolveRate("claude-sonnet-5")).toBe(
       PROVIDER_RATE_CARD["claude-sonnet-5"],
     );
     expect(resolveRate("anthropic/claude-sonnet-5")).toBe(
       PROVIDER_RATE_CARD["anthropic/claude-sonnet-5"],
     );
-    expect(resolveRate("claude-sonnet-5").outputPer1M).toBe(15.0);
+    expect(resolveRate("claude-sonnet-5").outputPer1M).toBe(10.0);
   });
 
   it("matches the longest prefix for a versioned/date-stamped Sonnet 5 id", () => {
@@ -80,6 +82,91 @@ describe("resolveRate", () => {
     expect(resolveRate("claude-sonnet-5-20260101")).toBe(
       PROVIDER_RATE_CARD["claude-sonnet-5"],
     );
+  });
+});
+
+describe("Claude list prices (#3944)", () => {
+  // What 1M input and 1M output tokens cost at Anthropic's list price. Before
+  // #3944 the `claude-opus-4` prefix row and the `claude-opus` family row both
+  // held the legacy Opus 4 price of $15/$75, so every Opus release from 4.5 on
+  // billed at $90 here, three times the $30 invoice. The gateway row
+  // `anthropic/claude-opus-4` caught the dotted and hyphenated gateway ids
+  // before the bare-family pass could see them.
+  const ONE_MILLION_EACH: ReadonlyArray<readonly [string, number]> = [
+    ["claude-opus-4-5", 30],
+    ["claude-opus-4-5-20251101", 30],
+    ["claude-opus-4-6", 30],
+    ["claude-opus-4-7", 30],
+    ["claude-opus-4-8", 30],
+    ["anthropic/claude-opus-4.5", 30],
+    ["anthropic/claude-opus-4.6", 30],
+    ["anthropic/claude-opus-4.7", 30],
+    ["anthropic/claude-opus-4.8", 30],
+    ["anthropic/claude-opus-4-8", 30],
+    ["claude-opus-5", 30],
+    ["claude-opus-5-20260901", 30],
+    ["anthropic/claude-opus-5", 30],
+    ["claude-opus-5-5", 24],
+    ["anthropic/claude-opus-5.5", 24],
+    ["anthropic/claude-opus-5-5", 24],
+    ["claude-fable-5", 60],
+    ["anthropic/claude-fable-5", 60],
+    ["claude-fable-5-1", 60],
+    ["anthropic/claude-fable-5.1", 60],
+    ["anthropic/claude-fable-5-1", 60],
+    ["claude-sonnet-5", 12],
+    ["anthropic/claude-sonnet-5", 12],
+    // Controls: Opus 4 and 4.1 still list at $15/$75.
+    ["claude-opus-4-0", 90],
+    ["claude-opus-4-1", 90],
+    ["claude-opus-4-20250514", 90],
+    ["anthropic/claude-opus-4", 90],
+    ["anthropic/claude-opus-4.1", 90],
+    ["anthropic/claude-opus-4-1", 90],
+  ];
+
+  for (const [model, usd] of ONE_MILLION_EACH) {
+    it(`${model} costs $${usd} for 1M in and 1M out`, () => {
+      expect(
+        providerCostUsd({
+          model,
+          inputTokens: 1_000_000,
+          outputTokens: 1_000_000,
+        }),
+      ).toBeCloseTo(usd, 9);
+      expect(isRateCardMiss(model)).toBe(false);
+    });
+  }
+
+  it("never prices a gateway Opus 4.8 id through the legacy Opus 4 row", () => {
+    for (const model of [
+      "anthropic/claude-opus-4.8",
+      "anthropic/claude-opus-4-8",
+    ]) {
+      expect(resolveRateEntry(model).rate.inputPer1M).toBe(5);
+    }
+  });
+
+  it("prices cache reads at the rates Anthropic lists for each release", () => {
+    // Fable 5.1 reads at $0.25, a quarter of Fable 5's $1.00. Opus 5.5 reads
+    // at $0.20. Neither follows the usual 0.1x-of-input rule.
+    expect(resolveRate("claude-fable-5").cachedInputPer1M).toBe(1.0);
+    expect(resolveRate("claude-fable-5-1").cachedInputPer1M).toBe(0.25);
+    expect(resolveRate("anthropic/claude-fable-5.1").cachedInputPer1M).toBe(
+      0.25,
+    );
+    expect(resolveRate("anthropic/claude-fable-5-1").cachedInputPer1M).toBe(
+      0.25,
+    );
+    expect(resolveRate("claude-opus-5-5").cachedInputPer1M).toBe(0.2);
+    expect(resolveRate("anthropic/claude-opus-5.5").cachedInputPer1M).toBe(0.2);
+  });
+
+  it("keeps the 1.25x cache-write premium on every Anthropic row", () => {
+    for (const [key, rate] of Object.entries(PROVIDER_RATE_CARD)) {
+      if (rate.provider !== "anthropic") continue;
+      expect(rate.cacheWritePer1M, key).toBeCloseTo(rate.inputPer1M * 1.25, 9);
+    }
   });
 });
 
@@ -95,16 +182,15 @@ describe("providerCostUsd", () => {
     ).toBeCloseTo(0.06, 10);
   });
 
-  it("prices input + output at the Sonnet rate for claude-sonnet-5", () => {
-    // Same $3/$15 Sonnet-tier rate as claude-sonnet-4-6:
-    // 10k input @ $3/1M + 2k output @ $15/1M = 0.03 + 0.03 = $0.06
+  it("prices input + output at the $2/$10 list rate for claude-sonnet-5", () => {
+    // 10k input @ $2/1M + 2k output @ $10/1M = 0.02 + 0.02 = $0.04
     expect(
       providerCostUsd({
         model: "claude-sonnet-5",
         inputTokens: 10_000,
         outputTokens: 2_000,
       }),
-    ).toBeCloseTo(0.06, 10);
+    ).toBeCloseTo(0.04, 10);
   });
 
   it("bills cached-input tokens at the cheaper cached rate", () => {

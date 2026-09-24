@@ -983,6 +983,63 @@ describe("a run row names who ran it, on what, with which model", () => {
     });
   });
 
+  // #4024: ingest attributes a wrapped session to whoever enrolled the host,
+  // so the row says so; a ledger run names the principal it was admitted for.
+  it("marks a wrapped session's operator as the host's enroller", async () => {
+    const { list } = handlerOver(
+      [ledgerRun({ publicId: "arun_op", runId: RUN_A })],
+      [
+        tachoSession({ publicId: "tse_op" }),
+        tachoSession({
+          publicId: "tse_noop",
+          operatorPublicId: null,
+          operatorKind: null,
+          operatorUserName: null,
+        }),
+      ],
+    );
+    const byId = Object.fromEntries(
+      (await list({ limit: 50 }, ctx())).runs.map((r) => [r.id, r]),
+    );
+    expect(byId["tse_op"]?.operatorAttribution).toBe("host_enroller");
+    expect(byId["tse_noop"]?.operatorAttribution).toBeNull();
+    expect(byId["arun_op"]?.operatorAttribution).toBe("initiator");
+  });
+
+  // #4024: `sealed_at` is when the server received the stop; the wall clock
+  // ends at the stop event's own timestamp.
+  it("reports a wrapped session's end from the stop event, not the seal receipt", async () => {
+    const { list } = handlerOver(
+      [],
+      [
+        tachoSession({
+          publicId: "tse_ended",
+          session: {
+            endedAt: at("2026-09-11T09:04:30.000Z"),
+            sealedAt: at("2026-09-11T09:05:00.000Z"),
+          },
+        }),
+        tachoSession({
+          publicId: "tse_open",
+          session: {
+            outcome: "running",
+            endedAt: null,
+            sealedAt: null,
+            startedAt: at("2026-09-11T07:00:00.000Z"),
+          },
+        }),
+      ],
+    );
+    const byId = Object.fromEntries(
+      (await list({ limit: 50 }, ctx())).runs.map((r) => [r.id, r]),
+    );
+    expect(byId["tse_ended"]).toMatchObject({
+      endedAt: "2026-09-11T09:04:30.000Z",
+      sealedAt: "2026-09-11T09:05:00.000Z",
+    });
+    expect(byId["tse_open"]).toMatchObject({ endedAt: null, sealedAt: null });
+  });
+
   it("keeps session host observations separate from later enrollment metadata", async () => {
     const fixture = tachoSession({ publicId: "tse_snapshot" });
     const recorded = {

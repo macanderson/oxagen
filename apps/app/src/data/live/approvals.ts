@@ -105,4 +105,29 @@ export const approvals: DataSource["approvals"] = {
     }
     return readOk(view.data);
   },
+  // The approvals drawer's resolved list (mockup `apdBody()`): what was
+  // decided in this workspace since an instant, newest first. One page, not a
+  // walk: the drawer names the count and marks it `more` when the page stopped
+  // short, rather than reading 1,000 rows to print one figure.
+  async resolvedSince(ctx, q) {
+    const read = await kernelRead(ctx, {
+      contract: agentApprovalListResolved,
+      input: { since: q.since, limit: PAGE_SIZE },
+      page: "shell",
+    });
+    if (!read.ok) return read;
+    const view = z
+      .array(ResolvedApprovalItem)
+      .safeParse(toResolvedApprovalItems(read.value));
+    if (!view.success) {
+      captureError({
+        error: view.error,
+        source: "app",
+        orgId: ctx.orgId,
+        context: "approvals.resolvedSince record_unmappable",
+      });
+      return readError("record_unmappable", 502);
+    }
+    return readOk({ items: view.data, more: read.value.nextCursor !== null });
+  },
 };

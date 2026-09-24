@@ -325,8 +325,7 @@ const MESSAGE_BOUNDARIES = new Set([
 ]);
 
 /** What the agent is told when the operator resumes it mid-turn. */
-export const RESUMED_TEXT =
-  "Resumed by the operator. Continue the task.";
+export const RESUMED_TEXT = "Resumed by the operator. Continue the task.";
 
 /**
  * Inject the queued prompt content at this boundary and chain one

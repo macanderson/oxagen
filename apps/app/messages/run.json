@@ -609,8 +609,13 @@
       "reference": "Reference",
       "relation": "Relation",
       "task": "Task the run was started on",
-      "empty": "This run names no issue.",
-      "note": "The record keeps one task reference per run. Links to other issues are not captured."
+      "closedBy": "Pull request #{number} closes it",
+      "pullRequests": "Pull requests",
+      "empty": "This run names no issue, and no pull request it opened closes one.",
+      "emptyUnread": "This run names no issue. GitHub did not return the issues its pull requests close.",
+      "loading": "Reading the run's pull requests.",
+      "closingUnread": "GitHub did not return every issue the run's pull requests close, so this list may be short.",
+      "note": "The task reference comes from the run's dispatch. The other issues come from GitHub's record of what each pull request the run opened closes."
     },
     "policy": {
       "title": "Policy decisions",

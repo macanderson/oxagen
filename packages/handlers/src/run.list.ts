@@ -499,6 +499,7 @@ const tachoColumns = {
     startedAt: sessions.startedAt,
     sealedAt: sessions.sealedAt,
     sealSource: sessions.sealSource,
+    endedAt: sessions.endedAt,
     replayGrade: sessions.replayGrade,
     completenessGaps: sessions.completenessGaps,
     enforcementTier: sessions.enforcementTier,
@@ -735,6 +736,8 @@ export type TachoSessionColumns = GeneratedSummaryColumns & {
   sealedAt: Date | null;
   /** `agent_stop` or `idle_timeout`; null while open or on a seal older than the column. */
   sealSource?: string | null;
+  /** The `agent_stop` event's own timestamp, or after an idle close the last event's; null while open. */
+  endedAt?: Date | null;
   /** The model the session started on and the one it ended on; either may be unrecorded. */
   modelInitial: string | null;
   modelFinal: string | null;
@@ -1008,6 +1011,7 @@ export function toLedgerRunItem(
     operatorId: identity.operatorPublicId,
     operatorKind: principalKind(identity.operatorKind),
     operatorName: blankToNull(identity.operatorUserName),
+    operatorAttribution: identity.operatorPublicId ? "initiator" : null,
     status,
     outcome,
     turns: rollup.opaqueModelCalls === 0 ? rollup.turnIndexes : null,
@@ -1023,6 +1027,9 @@ export function toLedgerRunItem(
     sealedAt:
       status === "live" ? null : (record.seal?.sealedAt.toISOString() ?? null),
     sealSource: null,
+    // The ledger records no stop instant apart from its seal.
+    endedAt:
+      status === "live" ? null : (record.seal?.sealedAt.toISOString() ?? null),
     replayGrade:
       status === "live"
         ? null
@@ -1140,6 +1147,9 @@ export function toTachoRunItem(
     operatorId: row.operatorPublicId,
     operatorKind: principalKind(row.operatorKind),
     operatorName: blankToNull(row.operatorUserName),
+    // Ingest attributes a wrapped session to the host's enroller
+    // (`enrollingPrincipalId`), not to whoever ran it.
+    operatorAttribution: row.operatorPublicId ? "host_enroller" : null,
     status,
     outcome,
     turns: session.numTurns,
@@ -1156,10 +1166,14 @@ export function toTachoRunItem(
             basis: "client_attested",
           }
         : null,
+    // No dispatch record names a wrapped session's task (see the contract).
     taskRef: null,
     startedAt: session.startedAt.toISOString(),
     sealedAt: session.sealedAt?.toISOString() ?? null,
     sealSource: recordedSealSource(session.sealedAt, session.sealSource),
+    // The stop event's own timestamp (`terminalPatch`), never receipt time.
+    endedAt:
+      status === "live" ? null : (session.endedAt?.toISOString() ?? null),
     replayGrade: recordedGrade(session.replayGrade),
     verdict: totals?.verdict ?? null,
     enforcementTier: publishedTier(session.enforcementTier),

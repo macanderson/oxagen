@@ -72,6 +72,7 @@ const run = {
   // the mapping carries it through rather than merely tolerating the field.
   operatorKind: "human",
   operatorName: "Ada Lovelace",
+  operatorAttribution: "host_enroller",
   status: "live",
   outcome: "running",
   turns: null,
@@ -90,6 +91,7 @@ const run = {
   canSummarize: false,
   startedAt: "2026-09-15T08:55:00.000Z",
   sealedAt: null,
+  endedAt: null,
 };
 
 beforeEach(() => {
@@ -111,6 +113,7 @@ describe("runs.list", () => {
             operatorId: null,
             operatorKind: "human",
             operatorName: "Ada Lovelace",
+            operatorAttribution: "host_enroller",
             status: "live",
             outcome: "running",
             turns: null,
@@ -140,6 +143,7 @@ describe("runs.list", () => {
             startedAt: "2026-09-15T08:55:00.000Z",
             sealedAt: null,
             sealSource: null,
+            endedAt: null,
           },
         ],
         nextCursor: "c2",
@@ -842,6 +846,7 @@ describe("runs.work", () => {
         headSha: "abc123",
         headRef: "release/3.2",
         association: "recorded",
+        closingIssues: null,
         checkoutIds: ["chk_1"],
         observedAt: "2026-09-15T08:58:00.000Z",
         current: true,

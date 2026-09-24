@@ -250,6 +250,7 @@ export const RunRow = z.object({
    */
   canSummarize: z.boolean(),
   startedAt: z.iso.datetime({ offset: true }),
+  /** When the server recorded the seal; receipt time, so never a wall-clock end. */
   sealedAt: z.iso.datetime({ offset: true }).nullable(),
   /**
    * What sealed the run: `agent_stop`, its host's own end, or `idle_timeout`,
