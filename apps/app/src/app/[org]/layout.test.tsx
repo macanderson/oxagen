@@ -15,6 +15,10 @@ const { NotFound, requireViewer } = vi.hoisted(() => ({
 }));
 vi.mock("@/server/viewer", () => ({ requireViewer }));
 vi.mock("@/data/source", () => ({ dataSource: () => ({}) }));
+// The sign-in toast reads the session; here it only has to sit inside the clock.
+vi.mock("@/features/auth", () => ({
+  SignedInNotice: () => <div data-testid="signed-in-notice" />,
+}));
 // The frame streams the chrome inside its own <Suspense>, as the real one does.
 vi.mock("@/features/shell", () => ({
   ShellFrame: ({
@@ -79,11 +83,19 @@ describe("OrganizationLayout", () => {
     );
   });
 
+  it("mounts the sign-in toast inside the clock, after the page", async () => {
+    const { html } = await render("acme");
+    expect(html).toMatch(
+      /data-testid="clock" data-org="acme">.*data-testid="page".*data-testid="signed-in-notice"/s,
+    );
+  });
+
   it("is not found for an organization the viewer does not belong to, and neither the chrome nor the page renders", async () => {
     const { html, errors } = await render("globex");
     expect(errors.length).toBeGreaterThanOrEqual(1);
     expect(errors.every((e) => e instanceof NotFound)).toBe(true);
     expect(html).not.toContain('data-testid="chrome"');
     expect(html).not.toContain('data-testid="page"');
+    expect(html).not.toContain('data-testid="signed-in-notice"');
   });
 });

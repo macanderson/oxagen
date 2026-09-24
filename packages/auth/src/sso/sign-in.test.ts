@@ -44,6 +44,7 @@ import { authMethodForPath } from "./auth-method";
 import { SSO_DISABLED_PATHS, buildSsoPlugin } from "./plugin";
 import { createSsoProvisioner, type SsoProvisioningStore } from "./provision";
 import { createSsoDomainGuard } from "./domain-guard";
+import { selectSsoProviderPlugin } from "./select-provider-plugin";
 
 const BASE_URL = "http://localhost:3000";
 const ORG_ID = "0e7d8a4c-2f55-4c1b-9d7e-5c1f7f0a2b11";
@@ -237,6 +238,7 @@ function memoryRoles(mappings: SsoGroupRole[], entitled = true) {
     applyRole: async ({ orgId, userId, role }) => {
       if (role === null) roles.delete(key(orgId, userId));
       else roles.set(key(orgId, userId), role);
+      return "applied" as const;
     },
   };
   return { roles, store, key };
@@ -301,6 +303,20 @@ async function buildAuth(opts: {
           store: membership.store,
           emit: (e) => events.push(e),
         }),
+      }),
+      // The provider selection auth.ts installs, reading the memory database
+      // with the same predicate as its Postgres lookup: verified, by domain.
+      selectSsoProviderPlugin({
+        lookup: async (domains) =>
+          db
+            .ssoProvider!.filter(
+              (p) =>
+                p.domainVerified === true && domains.includes(String(p.domain)),
+            )
+            .map((p) => ({
+              providerId: String(p.providerId),
+              domain: String(p.domain),
+            })),
       }),
     ],
     disabledPaths: [...SSO_DISABLED_PATHS],
@@ -573,6 +589,49 @@ describe("SSO sign-in through a mock OIDC provider", () => {
     expect(start.status).toBe(401);
     expect(idp.tokenRequests).toBe(0);
     expect(events).toEqual([]);
+  });
+
+  // #3740: a subdomain email misses the exact-domain read, and the plugin
+  // then listed every provider with its secrets open. One row sealed under a
+  // key this server no longer holds failed that listing for everyone.
+  it("routes a subdomain email to its parent's provider past a provider it cannot open", async () => {
+    const { auth } = await buildAuth({
+      mappings: [{ group: "oxagen-admins", role: "admin" }],
+      seed: (db) => {
+        db.ssoProvider!.push({
+          id: "prov-2",
+          issuer: "https://globex.example",
+          oidcConfig: JSON.stringify({
+            clientId: "globex",
+            clientSecret: "enc:v1:sso_v0:AAAA",
+          }),
+          samlConfig: null,
+          userId: "admin-user",
+          providerId: "globex-okta",
+          organizationId: ORG_ID,
+          domain: "globex.com",
+          domainVerified: true,
+        });
+      },
+    });
+
+    const start = await auth.handler(
+      new Request(`${BASE_URL}/api/auth/sign-in/sso`, {
+        method: "POST",
+        headers: { "content-type": "application/json", origin: BASE_URL },
+        body: JSON.stringify({
+          email: "ada@eng.acme.com",
+          callbackURL: "/acme",
+        }),
+      }),
+    );
+
+    expect(start.status).toBe(200);
+    const authorize = new URL(((await start.json()) as { url: string }).url);
+    expect(authorize.searchParams.get("client_id")).toBe(CLIENT_ID);
+    expect(authorize.searchParams.get("redirect_uri")).toBe(
+      `${BASE_URL}/api/auth/sso/callback/acme-okta`,
+    );
   });
 
   it("refuses the callback when the domain lost its verification mid-flow", async () => {

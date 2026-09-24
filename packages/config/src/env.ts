@@ -337,6 +337,16 @@ export const baseEnvSchema = z.object({
   // development/test so local dev can boot without it. Generate with
   // `openssl rand -base64 32`.
   AUTH_TOKEN_ENCRYPTION_KEY: z.string().min(1).optional(),
+  // The SSO secret keyring (ADR-145, packages/database/src/sso-secrets.ts).
+  // SSO_SECRET_KEY_ID labels AUTH_TOKEN_ENCRYPTION_KEY inside each sealed
+  // token and defaults to sso_v1. SSO_SECRET_PREVIOUS_KEYS keeps retired keys
+  // readable after a rotation, as comma-separated <keyId>=<base64 key>.
+  // resolveSsoKms validates both and names the key id in any error.
+  SSO_SECRET_KEY_ID: z
+    .string()
+    .regex(/^[A-Za-z0-9_.-]{1,64}$/)
+    .optional(),
+  SSO_SECRET_PREVIOUS_KEYS: z.string().min(1).optional(),
 
   // Ingestion connector-credential encryption. INGESTION_CRYPTO_PROVIDER
   // selects the KMS adapter: "env" (default) wraps with a local base64 master key

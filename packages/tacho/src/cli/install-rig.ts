@@ -481,17 +481,25 @@ export function buildRig(seed: RigHome, options: RigOptions = {}): Rig {
       binDir: bin,
     },
     daemonGet: async (path) =>
-      loaded && path === "/health"
+      loaded && path === "/status"
         ? {
-            ok: true,
-            gateway: {
-              listening: options.gatewayListening !== false,
-              port: RIG_GATEWAY_PORT,
-              routes: ["/anthropic", "/backend-api/codex"],
-              calls_observed: 0,
-            },
+            uptime_s: 1,
+            spool_depth: 0,
+            last_control_at: "2026-01-01T00:00:00.000Z",
+            last_ingest_at: null,
+            last_error: null,
           }
-        : undefined,
+        : loaded && path === "/health"
+          ? {
+              ok: true,
+              gateway: {
+                listening: options.gatewayListening !== false,
+                port: RIG_GATEWAY_PORT,
+                routes: ["/anthropic", "/backend-api/codex"],
+                calls_observed: 0,
+              },
+            }
+          : undefined,
     findFreePort: async () => 47123,
     randomToken: () => "local-token-0123456789abcdef",
     sleep: async () => undefined,

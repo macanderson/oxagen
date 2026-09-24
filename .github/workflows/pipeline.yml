@@ -723,6 +723,13 @@ jobs:
       - name: Seat reservation concurrency proof
         run: pnpm --filter @oxagen/billing exec vitest run --config vitest.integration.config.ts
 
+      # #3734's reproduction against the migrated schema: an identity provider
+      # provisions a person, a mapped group admits them, they hold a session
+      # and API keys, and a SCIM deactivation leaves the key refused (401) and
+      # the session gone.
+      - name: SCIM deprovision proof
+        run: pnpm --filter @oxagen/handlers exec vitest run --config vitest.integration.config.ts
+
       - name: Migrate Neo4j
         run: DB_MIGRATE_STORES=neo4j npx tsx --env-file-if-exists=.env.local tools/scripts/db-migrate.ts
 

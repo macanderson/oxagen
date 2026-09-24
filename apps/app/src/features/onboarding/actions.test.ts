@@ -70,6 +70,7 @@ const agentForm = {
 const form = {
   name: "  Acme Robotics ",
   slug: "acme",
+  namespace: "acme",
   workspaceName: "Core platform",
   workspaceSlug: "core-platform",
 };
@@ -139,17 +140,41 @@ describe("createOrganizationAction", () => {
     });
   });
 
-  it("creates the organization as the signed-in person before any tenant and lands on its first workspace", async () => {
+  it("returns a taken namespace as the handler's conflict (negative)", async () => {
+    invoke.mockRejectedValue(
+      new kernel.HandlerError({ code: "conflict", reason: "namespace_taken" }),
+    );
+    expect(await createOrganizationAction(form)).toEqual({
+      ok: false,
+      reason: "conflict",
+      code: "namespace_taken",
+    });
+  });
+
+  it("refuses a namespace outside 2-6 letters or digits, creating nothing (negative)", async () => {
+    expect(
+      await createOrganizationAction({ ...form, namespace: "a-intel" }),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "namespaceInvalid",
+      field: "namespace",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("creates the organization with its chosen namespace as the signed-in person and continues to Wrap an agent", async () => {
     invoke.mockResolvedValue(created);
     expect(await createOrganizationAction(form)).toEqual({
       ok: true,
-      value: { to: "/acme/core-platform" },
+      value: { to: "/welcome/acme/core-platform/wrap" },
     });
     expect(invoke).toHaveBeenCalledWith(
       "create_org",
       {
         name: "Acme Robotics",
         slug: "acme",
+        namespace: "acme",
         workspace: { name: "Core platform", slug: "core-platform" },
       },
       expect.objectContaining({
@@ -174,15 +199,15 @@ describe("registerAgent", () => {
     },
   };
 
-  it("mints the identity for the workspace viewer and names the wrap step it continues to", async () => {
+  it("mints the identity for the workspace viewer, keeps the secret on the server and names the wrap step", async () => {
     invoke.mockResolvedValue(registered);
-    expect(await registerAgent("acme", "core-platform", agentForm)).toEqual({
+    const result = await registerAgent("acme", "core-platform", agentForm);
+    expect(JSON.stringify(result)).not.toContain("oxa_ag_s3cr3t");
+    expect(result).toEqual({
       ok: true,
       value: {
         agentId: "agt_releasebot",
         agentKey: "acme.core.release-bot",
-        secret: "oxa_ag_s3cr3t",
-        expiresAt: "2027-03-14T00:00:00.000Z",
         to: "/acme/core-platform/register/wrap?agent=agt_releasebot",
       },
     });
@@ -195,19 +220,36 @@ describe("registerAgent", () => {
   });
 
   it.each(["claude-agent-sdk", "custom"])(
-    "refuses unsupported %s before minting an identity",
+    "registers %s, which the wrap step's SDK tab takes",
     async (harness) => {
-      expect(
-        await registerAgent("acme", "core-platform", { ...agentForm, harness }),
-      ).toEqual({
-        ok: false,
-        reason: "invalid",
-        code: "agentHarnessInvalid",
-        field: "harness",
+      invoke.mockResolvedValue(registered);
+      const result = await registerAgent("acme", "core-platform", {
+        ...agentForm,
+        harness,
       });
-      expect(invoke).not.toHaveBeenCalled();
+      expect(result.ok).toBe(true);
+      expect(invoke).toHaveBeenCalledWith(
+        "register_agent",
+        expect.objectContaining({ harness }),
+        expect.objectContaining(TENANT),
+      );
     },
   );
+
+  it("refuses a harness the contract does not know, before minting an identity (negative)", async () => {
+    expect(
+      await registerAgent("acme", "core-platform", {
+        ...agentForm,
+        harness: "codex-cli",
+      }),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "agentHarnessInvalid",
+      field: "harness",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
 
   it("sends a description only when one was written", async () => {
     invoke.mockResolvedValue(registered);

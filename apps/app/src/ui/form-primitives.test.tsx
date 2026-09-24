@@ -38,7 +38,7 @@ describe("Field", () => {
     expect(input).not.toHaveAttribute("aria-describedby");
   });
 
-  it("toggles a password between hidden and shown, announcing the state", async () => {
+  it("toggles a password between hidden and shown, the word alone naming the state", async () => {
     const user = userEvent.setup();
     render(
       <PasswordField
@@ -52,12 +52,15 @@ describe("Field", () => {
     const input = screen.getByLabelText("Password");
     expect(input).toHaveAttribute("type", "password");
     const toggle = screen.getByRole("button", { name: "Show" });
-    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    // The label is the state, so no aria-pressed announces it a second time,
+    // and the design draws no eye beside the word.
+    expect(toggle).not.toHaveAttribute("aria-pressed");
+    expect(toggle.querySelector("svg")).toBeNull();
+    expect(toggle).toHaveAttribute("aria-controls", "password");
     await user.click(toggle);
     expect(input).toHaveAttribute("type", "text");
-    expect(screen.getByRole("button", { name: "Hide" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
+    expect(screen.getByRole("button", { name: "Hide" })).toHaveTextContent(
+      /^Hide$/,
     );
   });
 });

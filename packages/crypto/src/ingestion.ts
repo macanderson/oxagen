@@ -49,9 +49,10 @@ export interface IngestionCryptoAdapter {
  * row's stored keyId, not the current global env var. Use
  * {@link resolveIngestionCryptoAdapterForKeyId} on every decrypt path instead.
  *
- * Cheap for the env provider (a base64 decode). For the KMS provider it builds
- * a fresh `KMSClient`, so callers on a hot path should build it once and reuse
- * it rather than calling per request or per row.
+ * Cheap for both providers. The env provider decodes a base64 key; the KMS
+ * provider returns the one adapter this process holds for the configured ARN
+ * (see {@link buildKmsAdapter}), so calling this per request or per row costs
+ * no new `KMSClient`.
  */
 export function createIngestionCryptoAdapter(): IngestionCryptoAdapter {
   const provider = process.env["INGESTION_CRYPTO_PROVIDER"] ?? "env";
@@ -93,9 +94,8 @@ export function createIngestionCryptoAdapter(): IngestionCryptoAdapter {
  * key material is configured) or an actionable "this provider's key is not
  * configured" error that names the missing env var.
  *
- * Cost note: a `"ingestion:kms:v1"` row builds a fresh `KMSClient` on every
- * call. Callers that decrypt many rows in one pass should hoist the resolved
- * adapter out of the loop, keyed by the stored keyId.
+ * A `"ingestion:kms:v1"` row reuses the process's adapter for the configured
+ * ARN, so resolving per row is safe.
  *
  * @param storedKeyId  The `keyId` field read back from the stored envelope.
  * @throws if `storedKeyId` is unrecognized, or the provider it names is not
@@ -122,6 +122,19 @@ export function resolveIngestionCryptoAdapterForKeyId(
   );
 }
 
+/**
+ * One AWS adapter per key ARN for the life of the process.
+ *
+ * Every adapter owns a `KMSClient`, and a new client means a new credential
+ * resolution and a new TLS connection before its first call. The evidence
+ * store resolves an adapter for every frame body it writes, up to 200 per
+ * tacho batch, so building one per call made each body pay that setup on top
+ * of its `GenerateDataKey`, and production ingest took 6 to 16 seconds a
+ * batch against a host that gives up at 15. The client holds no key material:
+ * a fresh data key is still generated for every `encrypt()`.
+ */
+const kmsAdapters = new Map<string, KmsAdapter>();
+
 /** Build the AWS-KMS-backed adapter, requiring AWS_KMS_INGESTION_KEY_ARN. */
 function buildKmsAdapter(opts?: { context?: string }): IngestionCryptoAdapter {
   const keyArn = process.env["AWS_KMS_INGESTION_KEY_ARN"];
@@ -133,7 +146,12 @@ function buildKmsAdapter(opts?: { context?: string }): IngestionCryptoAdapter {
         "(e.g. arn:aws:kms:us-east-2:ACCOUNT_ID:key/KEY_ID).",
     );
   }
-  return { adapter: createAwsKmsAdapter(keyArn), keyId: INGESTION_KEY_ID_KMS };
+  let adapter = kmsAdapters.get(keyArn);
+  if (adapter === undefined) {
+    adapter = createAwsKmsAdapter(keyArn);
+    kmsAdapters.set(keyArn, adapter);
+  }
+  return { adapter, keyId: INGESTION_KEY_ID_KMS };
 }
 
 /** Build the local (env) adapter, requiring INGESTION_ENCRYPTION_KEY. */

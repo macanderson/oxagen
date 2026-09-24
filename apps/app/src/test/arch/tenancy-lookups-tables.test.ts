@@ -22,7 +22,7 @@ const TABLES: Readonly<Record<string, readonly string[] | null>> = {
   orgUsers: null,
   workspaceUsers: null,
   orgSecurityPolicy: null,
-  users: ["id", "twoFactorEnabled"],
+  users: ["id", "twoFactorEnabled", "displayName"],
   invitations: null,
   // The require-SSO gate needs an organization's verified provider ids and
   // nothing else; oidcConfig and samlConfig hold sealed secrets (ADR-145).
