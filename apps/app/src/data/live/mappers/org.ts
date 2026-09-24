@@ -10,19 +10,24 @@
 // view field.
 import type { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
 import type { costCenterList } from "@oxagen/oxagen/contracts/cost_center.list";
+import type { agentList } from "@oxagen/oxagen/contracts/agent.list";
 import type { iamRoleList } from "@oxagen/oxagen/contracts/iam.role.list";
+import type { orgDataPlaneGet } from "@oxagen/oxagen/contracts/org.data_plane.get";
 import type { orgModelCredentialGet } from "@oxagen/oxagen/contracts/org.model_credential.get";
 import type { orgSsoList } from "@oxagen/oxagen/contracts/org.sso.list";
+import type { repositoryList } from "@oxagen/oxagen/contracts/repository.list";
 import type { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
 import type { listMembers } from "@oxagen/oxagen/contracts/workspace.member.list";
 import type { z } from "zod";
 import type {
   ApiKeyList,
   CostCenterList,
+  DataPlane,
   MemberList,
   ModelCredential,
   RoleCatalog,
   SsoSettings,
+  WorkspaceFacts,
   WorkspaceList,
 } from "@/data/contracts/org";
 import type { ContractOutput } from "@/server/kernel";
@@ -68,6 +73,7 @@ export function toRoleCatalog(
       permissions: role.permissions,
       heldBy: role.memberCount,
       createdBy: role.createdBy,
+      createdAt: role.createdAt,
     })),
     catalog: out.catalog.map((entry) => ({
       permission: entry.id,
@@ -89,11 +95,47 @@ export function toWorkspaceList(
     workspaces: out.workspaces.map((workspace) => ({
       id: workspace.publicId,
       slug: workspace.slug,
+      namespace: workspace.namespace,
       name: workspace.name,
       role: workspace.role,
       archivedAt: workspace.archivedAt,
       costCenter: workspace.costCenter,
     })),
+  };
+}
+
+/**
+ * list_repositories and list_agents, read inside one workspace, to its
+ * Workspaces row: each binding's role, full name and approved production ref,
+ * and the identity total over the whole workspace (never the page length).
+ */
+/**
+ * The built-in interactive agent every workspace is seeded with
+ * (`INTERACTIVE_AGENT_SLUG`, packages/oxagen/src/interactive-agent.ts).
+ * `archive_workspace` leaves it out of the agents it refuses over. It is
+ * spelled here rather than imported, because that module carries the agent's
+ * whole definition and node:crypto, and the app's import graph admits neither.
+ */
+const INTERACTIVE_AGENT_SLUG = "qa-chat";
+
+export function toWorkspaceFacts(
+  repositories: ContractOutput<typeof repositoryList>,
+  agents: ContractOutput<typeof agentList>,
+): z.input<typeof WorkspaceFacts> {
+  return {
+    repositories: repositories.repositories.map((repo) => ({
+      role: repo.role,
+      fullName: repo.fullName,
+      defaultRef: repo.defaultRef,
+    })),
+    agents: agents.totals.identities,
+    archiveBlockers: {
+      count: agents.items.filter(
+        (agent) =>
+          agent.slug !== INTERACTIVE_AGENT_SLUG && agent.status !== "retired",
+      ).length,
+      more: agents.nextCursor !== null,
+    },
   };
 }
 
@@ -206,5 +248,24 @@ export function toSsoSettings(
               lastUsedAt: out.scim.token.lastUsedAt,
             },
     },
+  };
+}
+
+/**
+ * `get_data_plane` onto the Data plane tab. The binding is already redacted
+ * by the contract (ADR-042 §4), and every field is named here, so nothing the
+ * contract gains later reaches the page unless this mapper copies it.
+ */
+export function toDataPlane(
+  out: ContractOutput<typeof orgDataPlaneGet>,
+): z.input<typeof DataPlane> {
+  return {
+    mode: out.mode,
+    status: out.status,
+    host: out.host,
+    database: out.database,
+    schemaVersion: out.schemaVersion,
+    lastVerifiedAt: out.lastVerifiedAt,
+    rotatedAt: out.rotatedAt,
   };
 }

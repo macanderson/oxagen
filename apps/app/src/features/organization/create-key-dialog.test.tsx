@@ -8,7 +8,6 @@
 // secret on screen, and nothing keeps one there once the key is listed.
 import {
   cleanup,
-  fireEvent,
   render,
   screen,
   waitFor,
@@ -33,7 +32,10 @@ vi.mock("./api-key-actions", () => ({
   rotateApiKey,
 }));
 
-const { CreateKeyDialog, KeyRowActions } = await import("./create-key-dialog");
+const { CreateKeyDialog, KeyRowActions, expiryDayOf } = await import(
+  "./create-key-dialog"
+);
+const { Receipts } = await import("./receipt");
 
 /**
  * The view the row was read on: the third page of the revoked-keys-included
@@ -112,30 +114,27 @@ afterEach(async () => {
 });
 
 describe("create", () => {
-  it("mints the key under the name and day given, and shows the secret once", async () => {
+  it("mints the key under the name and the expiry chosen, and shows the secret once", async () => {
     createApiKey.mockResolvedValue({ ok: true, value: minted });
     render(createDialog());
-    const dialog = await openDialog("Create a key", "create-api-key");
+    const dialog = await openDialog("Create key", "create-api-key");
     await userEvent.type(within(dialog).getByLabelText("Name"), "CI runner");
-    fireEvent.change(
-      within(dialog).getByLabelText(
-        "Expires at the end of this day, UTC (optional)",
-      ),
-      { target: { value: "2027-03-01" } },
-    );
-    // The control carries no timezone, so the note says what will be stored.
+    const expires = within(dialog).getByLabelText("Expires");
+    expect(
+      within(expires)
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual(["90 days", "180 days", "1 year"]);
+    await userEvent.selectOptions(expires, "y1");
+    const day = expiryDayOf("y1", new Date());
+    // The note says what will be stored: the end of that day, UTC.
     expect(dialog).toHaveTextContent(
-      "The key stops working at 2027-03-01T23:59:59.999Z.",
+      `The key stops working at ${day}T23:59:59.999Z.`,
     );
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Create it" }),
+      within(dialog).getByRole("button", { name: "Create key" }),
     );
-    expect(createApiKey).toHaveBeenCalledWith(
-      "acme",
-      WS,
-      "CI runner",
-      "2027-03-01",
-    );
+    expect(createApiKey).toHaveBeenCalledWith("acme", WS, "CI runner", day);
     const panel = await screen.findByTestId("api-key-secret");
     expect(within(panel).getByTestId("api-key-secret-value")).toHaveTextContent(
       SECRET,
@@ -148,10 +147,10 @@ describe("create", () => {
   it("does not keep the secret through a re-render from server data (negative)", async () => {
     createApiKey.mockResolvedValue({ ok: true, value: minted });
     const view = render(createDialog([]));
-    const dialog = await openDialog("Create a key", "create-api-key");
+    const dialog = await openDialog("Create key", "create-api-key");
     await userEvent.type(within(dialog).getByLabelText("Name"), "CI runner");
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Create it" }),
+      within(dialog).getByRole("button", { name: "Create key" }),
     );
     expect(await screen.findByTestId("api-key-secret")).toBeInTheDocument();
 
@@ -164,17 +163,22 @@ describe("create", () => {
     expect(screen.queryByTestId("create-api-key")).toBeNull();
   });
 
-  it("says the day is read in UTC before one is picked", async () => {
+  it("opens on 90 days, and says when that key stops working", async () => {
     render(createDialog());
-    const dialog = await openDialog("Create a key", "create-api-key");
+    const dialog = await openDialog("Create key", "create-api-key");
+    const expires = within(dialog).getByLabelText("Expires");
+    expect(expires).toHaveValue("d90");
+    expect(expires).toHaveAttribute("aria-describedby", "api-key-expires-note");
     expect(dialog).toHaveTextContent(
-      "The day is read in UTC, not your local time.",
+      `The key stops working at ${expiryDayOf("d90", new Date())}T23:59:59.999Z.`,
     );
-    expect(
-      within(dialog).getByLabelText(
-        "Expires at the end of this day, UTC (optional)",
-      ),
-    ).toHaveAttribute("aria-describedby", "api-key-expires-note");
+  });
+
+  it("counts the presets in UTC days from today, and a year as the same date a year on", () => {
+    const now = new Date("2026-09-24T23:30:00.000Z");
+    expect(expiryDayOf("d90", now)).toBe("2026-12-23");
+    expect(expiryDayOf("d180", now)).toBe("2027-03-23");
+    expect(expiryDayOf("y1", now)).toBe("2027-09-24");
   });
 
   it("drops the secret when the roster first lists the key, so a later roster cannot bring it back (negative)", async () => {
@@ -183,10 +187,10 @@ describe("create", () => {
     // state would be shown a second time by that render.
     createApiKey.mockResolvedValue({ ok: true, value: minted });
     const view = render(createDialog([]));
-    const dialog = await openDialog("Create a key", "create-api-key");
+    const dialog = await openDialog("Create key", "create-api-key");
     await userEvent.type(within(dialog).getByLabelText("Name"), "CI runner");
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Create it" }),
+      within(dialog).getByRole("button", { name: "Create key" }),
     );
     expect(await screen.findByTestId("api-key-secret")).toBeInTheDocument();
 
@@ -214,12 +218,12 @@ describe("create", () => {
       }),
     );
     render(createDialog());
-    const dialog = await openDialog("Create a key", "create-api-key");
+    const dialog = await openDialog("Create key", "create-api-key");
     await userEvent.type(within(dialog).getByLabelText("Name"), "CI runner");
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Create it" }),
+      within(dialog).getByRole("button", { name: "Create key" }),
     );
-    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(screen.getByTestId("create-api-key")).toBeInTheDocument();
 
     answer({ ok: true, value: minted });
@@ -237,10 +241,10 @@ describe("create", () => {
   it("reloads the page when the person closes the secret, and shows it no more", async () => {
     createApiKey.mockResolvedValue({ ok: true, value: minted });
     render(createDialog());
-    const dialog = await openDialog("Create a key", "create-api-key");
+    const dialog = await openDialog("Create key", "create-api-key");
     await userEvent.type(within(dialog).getByLabelText("Name"), "CI runner");
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Create it" }),
+      within(dialog).getByRole("button", { name: "Create key" }),
     );
     await screen.findByTestId("api-key-secret");
     await userEvent.click(screen.getByRole("button", { name: "Close" }));
@@ -303,9 +307,9 @@ describe("create", () => {
     async (result, text) => {
       createApiKey.mockResolvedValue(result);
       render(createDialog());
-      const dialog = await openDialog("Create a key", "create-api-key");
+      const dialog = await openDialog("Create key", "create-api-key");
       await userEvent.click(
-        within(dialog).getByRole("button", { name: "Create it" }),
+        within(dialog).getByRole("button", { name: "Create key" }),
       );
       expect(
         await screen.findByTestId("create-api-key-failure"),
@@ -322,23 +326,23 @@ describe("create", () => {
       code: "authz_denied",
     });
     render(createDialog());
-    const dialog = await openDialog("Create a key", "create-api-key");
+    const dialog = await openDialog("Create key", "create-api-key");
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Create it" }),
+      within(dialog).getByRole("button", { name: "Create key" }),
     );
     await screen.findByTestId("create-api-key-failure");
-    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(router.replace).not.toHaveBeenCalled();
-    await openDialog("Create a key", "create-api-key");
+    await openDialog("Create key", "create-api-key");
     expect(screen.queryByTestId("create-api-key-failure")).toBeNull();
   });
 
   it("names a write that threw before it answered (negative)", async () => {
     createApiKey.mockRejectedValue(new Error("socket hang up"));
     render(createDialog());
-    const dialog = await openDialog("Create a key", "create-api-key");
+    const dialog = await openDialog("Create key", "create-api-key");
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Create it" }),
+      within(dialog).getByRole("button", { name: "Create key" }),
     );
     expect(
       await screen.findByTestId("create-api-key-failure"),
@@ -357,12 +361,15 @@ describe("rotate", () => {
     });
     renderRow();
     const dialog = await openDialog("Rotate", "rotate-api-key");
-    expect(dialog).toHaveTextContent("Rotate CI runner");
+    expect(
+      within(dialog).getByRole("heading", { name: "Rotate this key" }),
+    ).toBeInTheDocument();
+    expect(dialog).toHaveTextContent("CI runner");
     expect(dialog).toHaveTextContent(
       "Requests presenting the old key are refused from that moment",
     );
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Rotate it" }),
+      within(dialog).getByRole("button", { name: "Rotate" }),
     );
     expect(rotateApiKey).toHaveBeenCalledWith("acme", WS, KEY);
     expect(
@@ -385,7 +392,7 @@ describe("rotate", () => {
     renderRow();
     const dialog = await openDialog("Rotate", "rotate-api-key");
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Rotate it" }),
+      within(dialog).getByRole("button", { name: "Rotate" }),
     );
     await screen.findByTestId("api-key-secret");
     await userEvent.click(screen.getByRole("button", { name: "Close" }));
@@ -402,7 +409,7 @@ describe("rotate", () => {
     renderRow();
     const dialog = await openDialog("Rotate", "rotate-api-key");
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Rotate it" }),
+      within(dialog).getByRole("button", { name: "Rotate" }),
     );
     expect(
       await screen.findByTestId("rotate-api-key-failure"),
@@ -430,7 +437,7 @@ describe("a key that may not be rotated", () => {
     renderRow();
     const dialog = await openDialog("Rotate", "rotate-api-key");
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Rotate it" }),
+      within(dialog).getByRole("button", { name: "Rotate" }),
     );
     expect(
       await screen.findByTestId("rotate-api-key-failure"),
@@ -445,15 +452,41 @@ describe("revoke", () => {
   it("ends the key and reloads the page, showing no secret", async () => {
     revokeApiKey.mockResolvedValue({ ok: true, value: { keyId: KEY } });
     renderRow();
-    const dialog = await openDialog("Revoke", "revoke-api-key");
-    expect(dialog).toHaveTextContent("Revoke CI runner");
-    await userEvent.click(
-      within(dialog).getByRole("button", { name: "Revoke" }),
+    // The row's Revoke is the design's `btn sm danger`.
+    expect(screen.getByRole("button", { name: "Revoke" }).className).toContain(
+      "text-error-ink",
     );
+    const dialog = await openDialog("Revoke", "revoke-api-key");
+    expect(
+      within(dialog).getByRole("heading", { name: "Revoke this key" }),
+    ).toBeInTheDocument();
+    expect(dialog).toHaveTextContent("CI runner");
+    // Cancel then Revoke in the footer, the confirm red and never gold, and
+    // the header's close beside the title.
+    expect(
+      within(dialog)
+        .getAllByRole("button")
+        .map((button) => button.textContent)
+        .slice(-2),
+    ).toEqual(["Cancel", "Revoke"]);
+    const confirm = within(dialog).getByRole("button", { name: "Revoke" });
+    expect(confirm.className).toContain("text-error-ink");
+    expect(confirm.className).not.toContain("bg-button-primary-bg");
+    expect(dialog.querySelector("[data-header-close]")).not.toBeNull();
+    await userEvent.click(confirm);
     expect(revokeApiKey).toHaveBeenCalledWith("acme", WS, KEY);
     expect(router.replace).toHaveBeenCalledWith(HERE);
     expect(router.refresh).toHaveBeenCalledOnce();
     expect(screen.queryByTestId("api-key-secret")).toBeNull();
+    // The revoke leaves its receipt for the page it reloads.
+    render(
+      <IntlProvider>
+        <Receipts />
+      </IntlProvider>,
+    );
+    expect(screen.getByTestId("organization-receipts")).toHaveTextContent(
+      "CI runner was revoked. Its access ends at the next call. Recorded in the audit record.",
+    );
   });
 
   it("names a key that was already revoked and reloads nothing (negative)", async () => {
@@ -502,7 +535,7 @@ describe("leaving the page", () => {
     renderRow();
     const dialog = await openDialog("Rotate", "rotate-api-key");
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Rotate it" }),
+      within(dialog).getByRole("button", { name: "Rotate" }),
     );
 
     expect(tryToLeave()).toBe(true);
@@ -519,10 +552,10 @@ describe("leaving the page", () => {
   it("goes on holding it while the secret is on screen, unacknowledged", async () => {
     createApiKey.mockResolvedValue({ ok: true, value: minted });
     render(createDialog());
-    const dialog = await openDialog("Create a key", "create-api-key");
+    const dialog = await openDialog("Create key", "create-api-key");
     await userEvent.type(within(dialog).getByLabelText("Name"), "CI runner");
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Create it" }),
+      within(dialog).getByRole("button", { name: "Create key" }),
     );
     await screen.findByTestId("api-key-secret");
 
@@ -564,10 +597,10 @@ describe("leaving the page", () => {
     const pushState = vi.spyOn(window.history, "pushState");
     createApiKey.mockResolvedValue({ ok: true, value: minted });
     render(createDialog());
-    const dialog = await openDialog("Create a key", "create-api-key");
+    const dialog = await openDialog("Create key", "create-api-key");
     await userEvent.type(within(dialog).getByLabelText("Name"), "CI runner");
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Create it" }),
+      within(dialog).getByRole("button", { name: "Create key" }),
     );
     await screen.findByTestId("api-key-secret");
     await userEvent.click(screen.getByRole("button", { name: "Close" }));

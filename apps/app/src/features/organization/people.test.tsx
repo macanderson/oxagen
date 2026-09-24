@@ -1,15 +1,18 @@
 // @vitest-environment jsdom
-// People and Invitations share the organization roster read and render only
-// the selected section. Existing row writes, refusal states, and empty states
-// remain covered on the tab that owns them.
+// Organization › People and Organization › Invitations (pages/organization.md):
+// the design's panels and columns in order, the cells no contract records
+// saying "not recorded", the Open dialog with the member's facts, the row
+// writes, Roles in use counted from the People table, and the Invitations
+// table with Resend and Revoke. Checked with axe.
 import { cleanup, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MemberList } from "@/data/contracts/org";
-import type { OrgRole } from "@/server/viewer";
 import { expectNoAxe } from "@/test/expect-no-axe";
+import { nth } from "@/test/nth";
 import { IntlProvider } from "@/test/intl";
-import { orgSource } from "./organization.builders";
+import { roleCatalog, roleRow } from "./organization.builders";
 
 vi.mock("next/link", () => ({
   default: ({ children, ...rest }: { href: string; children: ReactNode }) => (
@@ -23,44 +26,13 @@ vi.mock("./actions", () => ({
   changeMemberRole: vi.fn(),
   removeOrgMember: vi.fn(),
   sendInvitation: vi.fn(),
+  resendInvitation: vi.fn(),
+  revokeInvitation: vi.fn(),
 }));
-vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
-vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 
-const { OrgCtx } = await import("@/server/viewer");
-const { unsafeMint } = await import("@/server/viewer.testing");
-const { readError, readOk } = await import("@/data/read");
-const { People } = await import("./people");
+const { InvitationsTab, PeopleTab } = await import("./people");
 
-afterEach(() => {
-  cleanup();
-});
-
-type Members = Parameters<typeof People>[0]["source"]["org"]["members"];
-
-async function renderPeople(
-  read: Awaited<ReturnType<Members>>,
-  orgRole: OrgRole = "owner",
-  selected: "people" | "invitations" = "people",
-) {
-  const ctx = unsafeMint(OrgCtx, {
-    userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
-    orgId: "7a000000-0000-4000-8000-0000000000a1",
-    orgSlug: "acme",
-    orgName: "Acme Robotics",
-    orgRole,
-  });
-  const { source, calls } = orgSource({ members: read });
-  const view = render(
-    <IntlProvider>
-      {await People({ ctx, source, view: selected })}
-    </IntlProvider>,
-  );
-  expect(calls.members).toEqual([[ctx]]);
-  expect(calls.apiKeys).toEqual([]);
-  await expectNoAxe(view.container);
-  return view;
-}
+afterEach(cleanup);
 
 const roster: MemberList = {
   members: [
@@ -75,8 +47,15 @@ const roster: MemberList = {
       id: "usr_0a1b2c3d4e5f6g7h8j9k0m",
       name: null,
       email: "ops@acme.example",
-      role: "viewer",
+      role: "admin",
       joinedAt: "2026-05-11T16:40:00.000Z",
+    },
+    {
+      id: "usr_1a1b2c3d4e5f6g7h8j9k0m",
+      name: "Dana Okafor",
+      email: "dana@acme.example",
+      role: "admin",
+      joinedAt: "2026-05-12T16:40:00.000Z",
     },
   ],
   invitations: [
@@ -97,213 +76,270 @@ const roster: MemberList = {
   ],
 };
 
-function sectionTitles(): (string | null)[] {
-  return screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
+const catalog = roleCatalog({
+  roles: [
+    roleRow({
+      id: "rol_owner",
+      name: "Owner",
+      kind: "human",
+      scope: "org",
+      builtIn: true,
+      description: "everything, including the data plane and funding",
+    }),
+    roleRow({
+      id: "rol_admin",
+      name: "Admin",
+      kind: "human",
+      description: null,
+    }),
+    roleRow(),
+    roleRow({ id: "rol_other", name: "agent.graph.read" }),
+  ],
+});
+
+/** The list row a member or invitation id keys. */
+function rowOf(id: string): HTMLElement {
+  const row = document.querySelector<HTMLElement>(`[data-row="${id}"]`);
+  if (row === null) throw new Error(`no row for ${id}`);
+  return row;
 }
 
-describe("People tabs", () => {
-  it("link People, Roles and API keys by URL, People marked as the current page", async () => {
-    await renderPeople(readOk(roster));
-    const tabs = screen.getByRole("navigation", { name: "Organization" });
-    const people = within(tabs).getByRole("link", { name: "People" });
-    const roles = within(tabs).getByRole("link", { name: "Roles" });
-    const keys = within(tabs).getByRole("link", { name: "API keys" });
-    expect(people).toHaveAttribute("href", "/acme");
-    expect(people).toHaveAttribute("aria-current", "page");
-    expect(roles).toHaveAttribute("href", "/acme/roles");
-    expect(roles).not.toHaveAttribute("aria-current");
-    expect(keys).toHaveAttribute("href", "/acme/api-keys");
-    expect(keys).not.toHaveAttribute("aria-current");
-  });
-});
+function headers(table: HTMLElement): string[] {
+  return within(table)
+    .getAllByRole("columnheader")
+    .map((th) => th.textContent);
+}
 
-it("marks Invitations selected and preserves the People destination", async () => {
-  await renderPeople(readOk(roster), "owner", "invitations");
-  const tabs = screen.getByRole("navigation", { name: "Organization" });
-  expect(
-    within(tabs).getByRole("link", { name: "Invitations" }),
-  ).toHaveAttribute("href", "/acme?tab=invitations");
-  expect(
-    within(tabs).getByRole("link", { name: "Invitations" }),
-  ).toHaveAttribute("aria-current", "page");
-  expect(
-    within(tabs).getByRole("link", { name: "People" }),
-  ).not.toHaveAttribute("aria-current");
-  expect(sectionTitles()).toEqual(["Pending invitations"]);
-  expect(screen.queryByRole("region", { name: "People" })).toBeNull();
-});
-
-describe("ok", () => {
-  it("lists each member with name, email, role and join date", async () => {
-    await renderPeople(readOk(roster));
-    const members = screen.getByRole("region", { name: "People" });
-    const [marcus, unnamed] = within(members).getAllByRole("row").slice(1);
-    expect(marcus).toHaveAttribute("data-member", "usr_7k2m9q4x8r1t5v3w6y0z2a");
-    expect(marcus).toHaveTextContent("Marcus Bell");
-    expect(marcus).toHaveTextContent("marcus.bell@acme.example");
-    expect(marcus).toHaveTextContent("Owner");
-    expect(within(members).getByText("Mar 2, 2026")).toHaveAttribute(
-      "datetime",
-      "2026-03-02T09:15:00.000Z",
+describe("People", () => {
+  async function renderPeople(
+    members: MemberList = roster,
+    twoFactorRequired = true,
+  ) {
+    const view = render(
+      <IntlProvider>
+        <PeopleTab
+          org="acme"
+          members={members}
+          roles={catalog}
+          twoFactorRequired={twoFactorRequired}
+        />
+      </IntlProvider>,
     );
-    expect(unnamed).toHaveTextContent("Viewer");
-    expect(within(members).getAllByText("ops@acme.example")).toHaveLength(1);
-  });
+    await expectNoAxe(view.container);
+    return view;
+  }
 
-  it("lists each pending invitation with email, role offered, sent and expiry, and Never for one that does not expire", async () => {
-    await renderPeople(readOk(roster), "owner", "invitations");
-    const invitations = screen.getByRole("region", {
-      name: "Pending invitations",
-    });
-    const [dana, audit] = within(invitations).getAllByRole("row").slice(1);
-    expect(dana).toHaveAttribute(
-      "data-invitation",
-      "invi_4n5p6q7r8s9t0v1w2x3y4z",
+  it("draws the People panel with its badge, Invite, and the design's columns in order", async () => {
+    await renderPeople();
+    const panel = screen.getByRole("region", { name: "People" });
+    expect(within(panel).getByText("two-factor required")).toHaveAttribute(
+      "data-policy",
+      "required",
     );
-    expect(dana).toHaveTextContent("dana.reyes@acme.example");
-    expect(dana).toHaveTextContent("Admin");
-    expect(dana).toHaveTextContent("Sep 10, 2026");
-    expect(dana).toHaveTextContent("Sep 17, 2026");
-    expect(audit).toHaveTextContent("Compliance");
-    expect(audit).toHaveTextContent("Never");
-  });
-
-  it("keeps invitations and workspace tables off People (negative)", async () => {
-    await renderPeople(readOk(roster));
-    expect(sectionTitles()).toEqual(["People"]);
-    expect(screen.queryByTestId("not-recorded")).toBeNull();
-    expect(screen.queryByText(/settings/i)).toBeNull();
-    expect(screen.queryByRole("region", { name: "Workspaces" })).toBeNull();
-  });
-});
-
-describe("the writes on a member's row", () => {
-  it("an Owner opens the two writes on every member", async () => {
-    await renderPeople(readOk(roster));
-    const members = screen.getByRole("region", { name: "People" });
-    for (const row of within(members).getAllByRole("row").slice(1)) {
-      expect(
-        within(row).getByRole("button", { name: "Change role" }),
-      ).toBeInTheDocument();
-      expect(
-        within(row).getByRole("button", { name: "Remove" }),
-      ).toBeInTheDocument();
-    }
-    expect(screen.queryByTestId("member-actions-denied")).toBeNull();
-  });
-
-  it("a Member sees the roster with both writes refused, and opens neither (negative)", async () => {
-    await renderPeople(readOk(roster), "member");
-    const members = screen.getByRole("region", { name: "People" });
-    const rows = within(members).getAllByRole("row").slice(1);
-    expect(screen.getAllByTestId("member-actions-denied")).toHaveLength(
-      rows.length,
-    );
-    expect(screen.getAllByTestId("member-actions-denied")[0]).toHaveTextContent(
-      "Changing a role and removing a member are Owner and Admin actions.",
-    );
-    expect(screen.queryByRole("button", { name: "Change role" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Remove" })).toBeNull();
-  });
-});
-
-describe("the Invite control", () => {
-  it("an Owner opens it from the Pending invitations section", async () => {
-    await renderPeople(readOk(roster), "owner", "invitations");
-    const invitations = screen.getByRole("region", {
-      name: "Pending invitations",
-    });
+    expect(within(panel).getByRole("button", { name: "Invite" })).toBeTruthy();
     expect(
-      within(invitations).getByRole("button", { name: "Invite" }),
-    ).toBeInTheDocument();
-    expect(screen.queryByTestId("invite-denied")).toBeNull();
-  });
-
-  it("a Member reads the refusal in its place, and opens nothing (negative)", async () => {
-    await renderPeople(readOk(roster), "member", "invitations");
-    expect(screen.getByTestId("invite-denied")).toHaveTextContent(
-      "Inviting someone is an Owner and Admin action.",
+      headers(within(panel).getByRole("table", { name: "People" })),
+    ).toEqual([
+      "Person",
+      "Role",
+      "Workspaces",
+      "Two-factor",
+      "Last seen",
+      "Status",
+      // The row actions column has an empty header, as the design draws it,
+      // and names itself to assistive tech.
+      "",
+    ]);
+    expect(
+      within(within(panel).getByRole("table", { name: "People" }))
+        .getAllByRole("columnheader")
+        .at(-1),
+    ).toHaveAccessibleName("Actions");
+    expect(within(panel).getByLabelText("Status")).toBeInTheDocument();
+    // The design's Two-factor filter is drawn, and disabled with the reason,
+    // because no contract records a member's method to filter on.
+    const twoFactor = within(panel).getByLabelText("Two-factor");
+    expect(twoFactor).toBeDisabled();
+    expect(twoFactor).toHaveAccessibleDescription(
+      "No contract records a member's two-factor method yet, so this filter cannot narrow the list.",
     );
-    expect(screen.queryByRole("button", { name: "Invite" })).toBeNull();
-  });
-
-  it("stays offered when no invitation is waiting", async () => {
-    await renderPeople(
-      readOk({ members: [], invitations: [] }),
-      "owner",
-      "invitations",
-    );
-    expect(screen.getByRole("button", { name: "Invite" })).toBeInTheDocument();
-  });
-
-  it("is not offered when the read did not list (negative)", async () => {
-    await renderPeople(
-      readError("control_plane_unavailable", 503),
-      "owner",
-      "invitations",
-    );
-    expect(screen.queryByRole("button", { name: "Invite" })).toBeNull();
-    expect(screen.queryByTestId("invite-denied")).toBeNull();
-  });
-});
-
-describe("empty", () => {
-  it.each([
-    ["people", "People", "This organization has no members."],
-    [
-      "invitations",
-      "Pending invitations",
-      "No invitations are waiting for an answer.",
-    ],
-  ] as const)(
-    "keeps the %s empty state in its selected section",
-    async (selected, title, message) => {
-      await renderPeople(
-        readOk({ members: [], invitations: [] }),
-        "owner",
-        selected,
-      );
-      expect(sectionTitles()).toEqual([title]);
-      expect(screen.getByText(message)).toBeInTheDocument();
-      expect(screen.queryByRole("table")).toBeNull();
-    },
-  );
-});
-
-describe("a read that did not list", () => {
-  it("denied: a Member viewer sees their role and the permission needed, and no roster (negative)", async () => {
-    await renderPeople(
-      { ok: false, reason: "denied", permission: "org.admin" },
-      "member",
-    );
-    const panel = screen.getByTestId("people-denied");
+    expect(
+      within(twoFactor)
+        .getAllByRole("option")
+        .map((option) => option.textContent),
+    ).toEqual([
+      "All · Two-factor",
+      "TOTP",
+      "hardware key",
+      "passkey",
+      "passkey + TOTP",
+    ]);
+    expect(within(panel).getByLabelText("Rows")).toBeInTheDocument();
     expect(panel).toHaveTextContent(
-      "You cannot see this organization’s people",
+      "Changing a role is a governed action. It passes IAM and writes an audit record.",
     );
-    expect(panel).toHaveTextContent("Signed in as Member. Needed: org.admin.");
-    expect(screen.queryByRole("table")).toBeNull();
+  });
+
+  it("says two-factor is optional when the organization's policy does not require it", async () => {
+    await renderPeople(roster, false);
+    const panel = screen.getByRole("region", { name: "People" });
+    expect(within(panel).getByText("two-factor optional")).toHaveAttribute(
+      "data-policy",
+      "optional",
+    );
+    expect(within(panel).queryByText("two-factor required")).toBeNull();
+  });
+
+  it("prints a member's name and email, the recorded role, active status, and not recorded where the roster has nothing", async () => {
+    await renderPeople();
+    const cells = within(rowOf("usr_7k2m9q4x8r1t5v3w6y0z2a")).getAllByRole(
+      "cell",
+    );
+    expect(cells[0]).toHaveTextContent("Marcus Bell");
+    expect(cells[0]).toHaveTextContent("marcus.bell@acme.example");
+    expect(cells[1]).toHaveTextContent("org.owner");
+    for (const index of [2, 3, 4]) {
+      expect(cells[index]).toHaveTextContent("not recorded");
+    }
+    expect(cells[5]).toHaveTextContent("active");
     expect(
-      screen.getByRole("navigation", { name: "Organization" }),
+      within(nth(cells, 6, "an actions cell"))
+        .getAllByRole("button")
+        .map((b) => b.textContent),
+    ).toEqual(["Open", "Change role", "Remove"]);
+  });
+
+  it("opens a member's facts from Open", async () => {
+    await renderPeople();
+    const row = rowOf("usr_7k2m9q4x8r1t5v3w6y0z2a");
+    await userEvent.click(within(row).getByRole("button", { name: "Open" }));
+    const dialog = screen.getByTestId("member-usr_7k2m9q4x8r1t5v3w6y0z2a");
+    // Titled with the person, the email beneath, as the design's `member` is.
+    expect(
+      within(dialog).getByRole("heading", { name: "Marcus Bell" }),
     ).toBeInTheDocument();
+    expect(dialog).toHaveTextContent("marcus.bell@acme.example");
+    expect(dialog).toHaveTextContent("usr_7k2m9q4x8r1t5v3w6y0z2a");
+    expect(dialog).toHaveTextContent("not recorded");
   });
 
-  it("pending approval: names the access request it waits on, and no roster (negative)", async () => {
-    await renderPeople({
-      ok: false,
-      reason: "pending_approval",
-      accessRequestId: "areq_5t6u7v8w",
-    });
-    expect(screen.getByTestId("people-pending")).toHaveTextContent(
-      "Access request areq_5t6u7v8w is waiting for an owner’s decision.",
+  it("draws the member dialog's Role per workspace, Agents they operate and Mandates, not recorded (#3932)", async () => {
+    await renderPeople();
+    const row = rowOf("usr_7k2m9q4x8r1t5v3w6y0z2a");
+    await userEvent.click(within(row).getByRole("button", { name: "Open" }));
+    const dialog = screen.getByTestId("member-usr_7k2m9q4x8r1t5v3w6y0z2a");
+    expect(
+      within(dialog)
+        .getAllByRole("heading", { level: 3 })
+        .map((h) => h.textContent),
+    ).toEqual(["Role per workspace", "Agents they operate", "Mandates"]);
+    expect(
+      within(dialog).getByRole("table", { name: "Role per workspace" }),
+    ).toHaveTextContent("not recorded");
+    expect(dialog.querySelector("[data-member-agents]")).toHaveTextContent(
+      "not recorded",
     );
-    expect(screen.queryByRole("table")).toBeNull();
+    expect(dialog).toHaveTextContent("Granted");
+    expect(dialog).toHaveTextContent("Held by their agents");
+    await expectNoAxe(dialog);
   });
 
-  it("error: names the status and code, and no roster (negative)", async () => {
-    await renderPeople(readError("control_plane_unavailable", 503));
-    const panel = screen.getByTestId("people-error");
-    expect(panel).toHaveTextContent("Organization could not be loaded");
-    expect(panel).toHaveTextContent("503 control_plane_unavailable");
-    expect(screen.queryByRole("table")).toBeNull();
+  it("counts Roles in use from the People table, with each role's description", async () => {
+    await renderPeople();
+    const panel = screen.getByRole("region", { name: "Roles in use" });
+    expect(
+      within(panel).getByRole("link", { name: "Manage roles" }),
+    ).toHaveAttribute("href", "/acme/roles");
+    const owner = panel.querySelector('[data-role-in-use="owner"]');
+    const admin = panel.querySelector('[data-role-in-use="admin"]');
+    expect(owner).toHaveTextContent(
+      "org.owner1everything, including the data plane and funding",
+    );
+    expect(admin).toHaveTextContent("org.admin2no description recorded");
+    expect(panel).toHaveTextContent("2 agent roles are on the Roles tab.");
+  });
+
+  it("says the organization has no members when the roster is empty", async () => {
+    await renderPeople({ members: [], invitations: [] });
+    expect(
+      screen.getByText("This organization has no members."),
+    ).toBeInTheDocument();
+    expect(document.querySelectorAll("[data-row]")).toHaveLength(0);
+  });
+});
+
+describe("Invitations", () => {
+  async function renderInvitations(members: MemberList = roster) {
+    const view = render(
+      <IntlProvider>
+        <InvitationsTab
+          org="acme"
+          members={members}
+          twoFactorRequired={false}
+        />
+      </IntlProvider>,
+    );
+    await expectNoAxe(view.container);
+    return view;
+  }
+
+  it("draws Pending invitations with Invite and the design's columns", async () => {
+    await renderInvitations();
+    const panel = screen.getByRole("region", { name: "Pending invitations" });
+    expect(within(panel).getByRole("button", { name: "Invite" })).toBeTruthy();
+    expect(
+      headers(
+        within(panel).getByRole("table", { name: "Pending invitations" }),
+      ),
+    ).toEqual(["Email", "Role offered", "Invited by", "Sent", "Expires", ""]);
+  });
+
+  it("prints each invitation with Invited by not recorded, and Resend and Revoke", async () => {
+    await renderInvitations();
+    const row = rowOf("invi_9z8y7x6w5v4t3s2r1q0p9n");
+    const cells = within(row).getAllByRole("cell");
+    expect(cells[0]).toHaveTextContent("audit@acme.example");
+    expect(cells[1]).toHaveTextContent("org.compliance");
+    expect(cells[2]).toHaveTextContent("not recorded");
+    expect(cells[4]).toHaveTextContent("Never");
+    expect(within(row).getByRole("button", { name: "Resend" })).toBeTruthy();
+    expect(within(row).getByRole("button", { name: "Revoke" })).toBeTruthy();
+  });
+
+  it("filters by the day an invitation was sent and the day it expires", async () => {
+    await renderInvitations();
+    const panel = screen.getByRole("region", { name: "Pending invitations" });
+    const sent = within(panel).getByLabelText("Sent");
+    const expires = within(panel).getByLabelText("Expires");
+    expect(
+      within(sent)
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual(["All · Sent", "Sep 1, 2026", "Sep 10, 2026"]);
+    expect(
+      within(expires)
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual(["All · Expires", "Sep 17, 2026"]);
+    await userEvent.selectOptions(sent, "Sep 10, 2026");
+    expect(
+      document.querySelector('[data-row="invi_4n5p6q7r8s9t0v1w2x3y4z"]'),
+    ).not.toBeNull();
+    expect(
+      document.querySelector('[data-row="invi_9z8y7x6w5v4t3s2r1q0p9n"]'),
+    ).toBeNull();
+    await userEvent.selectOptions(sent, "");
+    await userEvent.selectOptions(expires, "Sep 17, 2026");
+    // An invitation that never expires falls outside any expiry day.
+    expect(
+      document.querySelector('[data-row="invi_9z8y7x6w5v4t3s2r1q0p9n"]'),
+    ).toBeNull();
+  });
+
+  it("says no invitation is waiting when there are none", async () => {
+    await renderInvitations({ members: roster.members, invitations: [] });
+    expect(
+      screen.getByText("No invitations are waiting for an answer."),
+    ).toBeInTheDocument();
   });
 });
