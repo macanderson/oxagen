@@ -197,6 +197,42 @@ describe("RoleEditor: edit", () => {
     );
     expect(router.replace).not.toHaveBeenCalled();
   });
+
+  it("sends the set without a permission that was unticked", async () => {
+    setRolePermissions.mockResolvedValue({
+      ok: true,
+      value: { id, name: "agent.release" },
+    });
+    editor(
+      "edit",
+      roleRow({ permissions: ["run.read", "budget.set"] }),
+      "Edit",
+    );
+    const dialog = await open("Edit", `role-editor-edit-${id}`);
+    await userEvent.click(within(dialog).getByLabelText(/run\.read/));
+    expect(within(dialog).getByTestId("role-selected-count")).toHaveTextContent(
+      "1 selected",
+    );
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Save changes" }),
+    );
+    // Revoking a permission reaches the write: the set is what stays ticked.
+    expect(setRolePermissions).toHaveBeenCalledWith("acme", id, ["budget.set"]);
+  });
+
+  it("names a write that threw and stays open (negative)", async () => {
+    setRolePermissions.mockRejectedValue(new Error("network"));
+    editor("edit", roleRow(), "Edit");
+    const dialog = await open("Edit", `role-editor-edit-${id}`);
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Save changes" }),
+    );
+    expect(
+      await screen.findByTestId("role-editor-failure"),
+    ).not.toBeEmptyDOMElement();
+    expect(screen.getByTestId(`role-editor-edit-${id}`)).toBeInTheDocument();
+    expect(router.replace).not.toHaveBeenCalled();
+  });
 });
 
 describe("RoleEditor: view and duplicate", () => {
@@ -303,6 +339,32 @@ describe("DeleteRole", () => {
     expect(
       await screen.findByTestId(`delete-role-${free.id}-failure`),
     ).toHaveTextContent("Principals still hold this role.");
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it("names a delete that threw and deletes once however often it is pressed (negative)", async () => {
+    let fail: (error: Error) => void = () => undefined;
+    deleteRole.mockReturnValue(
+      new Promise((_resolve, reject) => {
+        fail = reject;
+      }),
+    );
+    render(
+      <IntlProvider>
+        <DeleteRole org="acme" role={free} />
+      </IntlProvider>,
+    );
+    const dialog = await open("Delete", `delete-role-${free.id}`);
+    const confirm = within(dialog).getAllByRole("button").at(-1);
+    if (confirm === undefined) throw new Error("no confirm button");
+    await userEvent.click(confirm);
+    await userEvent.click(confirm);
+    expect(deleteRole).toHaveBeenCalledTimes(1);
+
+    fail(new Error("network"));
+    expect(
+      await screen.findByTestId(`delete-role-${free.id}-failure`),
+    ).not.toBeEmptyDOMElement();
     expect(router.replace).not.toHaveBeenCalled();
   });
 
