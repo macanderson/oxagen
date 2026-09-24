@@ -44,10 +44,10 @@ function mint(path: string): DesktopDownloadUrl {
   throw new Error(`unsafe_download_url ${JSON.stringify(raw)}`);
 }
 
-export type DesktopPlatform = "macos" | "windows" | "linux";
+type DesktopPlatform = "macos" | "windows" | "linux";
 
 /** A catalog key under `ui.desktopDownloads.installers`: what a person picks the file by. */
-export type DesktopInstallerKey =
+type DesktopInstallerKey =
   | "macAppleSilicon"
   | "macIntel"
   | "windowsExe"
