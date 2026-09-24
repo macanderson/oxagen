@@ -153,6 +153,15 @@ function useFailureText(): (failure: Failure) => string {
 const code = (chunks: ReactNode) => <span className={mono}>{chunks}</span>;
 
 /**
+ * A typed name as the person wrote it, trimmed and with runs of whitespace
+ * collapsed. contextRecordLabel is for a label built from a slug: run on a
+ * typed name it drops punctuation and recases every word.
+ */
+function tidyName(name: string): string {
+  return name.trim().replace(/\s+/g, " ");
+}
+
+/**
  * What the draft adds up to: the record propose_record will be sent.
  * `statement` is the editor's text as typed; `sent` is that text on one line
  * (normalizeStatement), which is what the choice carries, what the preview
@@ -168,9 +177,7 @@ function recordOf(api: Api, ctx: CreateContext) {
     d.name === null ? lineageOf(ctx.ws, d.desc) : contextRecordSlug(d.name);
   const lineageId = d.slug === null ? suggestedSlug : contextRecordSlug(d.slug);
   const label =
-    d.name === null
-      ? contextRecordLabel(lineageId)
-      : contextRecordLabel(d.name);
+    d.name === null ? contextRecordLabel(lineageId) : tidyName(d.name);
   const force = forceOf(kind, d.force);
   const choice: RecordChoice = {
     lineageId,
@@ -215,7 +222,7 @@ function DescribeStep({ api, ctx }: StepProps<RecordDraft>) {
           }}
           onBlur={() => {
             if (api.draft.name?.trim())
-              api.update({ name: contextRecordLabel(api.draft.name) });
+              api.update({ name: tidyName(api.draft.name) });
           }}
         />
       </label>

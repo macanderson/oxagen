@@ -200,10 +200,10 @@ describe("the context-record wizard: describe", () => {
     const slug = screen.getByLabelText<HTMLInputElement>(t("describe.slug"), {
       exact: false,
     });
-    fireEvent.change(name, { target: { value: "release-checklist!" } });
+    fireEvent.change(name, { target: { value: "  Don't retry   502s " } });
     fireEvent.blur(name);
-    expect(name.value).toBe("Release Checklist");
-    expect(slug.value).toBe("release-checklist");
+    expect(name.value).toBe("Don't retry 502s");
+    expect(slug.value).toBe("dont-retry-502s");
     fireEvent.change(slug, { target: { value: "custom / release!" } });
     fireEvent.blur(slug);
     expect(slug.value).toBe("custom-release");
