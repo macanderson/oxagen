@@ -23,7 +23,7 @@ import type { MandateList } from "@/data/contracts/mandates";
 import type { RunWork } from "@/data/contracts/run-work";
 import type { RunRow } from "@/data/contracts/runs";
 import type { DataSource } from "@/data/ports";
-import type { AgentDetail } from "@/data/contracts/agents";
+import type { AgentDetail, AgentPage } from "@/data/contracts/agents";
 import { type Read, readOk } from "@/data/read";
 
 /** The instant every Run test renders at. */
@@ -512,6 +512,12 @@ export function runOutputs(
 type RunReads = {
   detail: Read<RunDetail>;
   /**
+   * `list_agents`' first page, which the header's agent card reads for the
+   * agent's 30-day runs and spend. A test that says nothing about it gets a
+   * refusal, so the card names the harness alone.
+   */
+  roster?: Read<AgentPage>;
+  /**
    * `get_run_work`, started with the page and awaited by the header's
    * checkout strip and the Changes panel. A test that says nothing about it
    * gets a run whose host enrolled no checkout and opened no pull request.
@@ -665,7 +671,8 @@ export function runSource(reads: RunReads) {
       ),
     },
     agents: {
-      list: refuse,
+      list: () =>
+        reads.roster === undefined ? refuse() : Promise.resolve(reads.roster),
       get: answer("agent", reads.agent ?? AGENT_UNREAD),
       toolbelt: refuse,
       incidents: refuse,
@@ -793,5 +800,51 @@ export function runWork(overrides: Partial<RunWork> = {}): RunWork {
     complete: true,
     warnings: [],
     ...overrides,
+  };
+}
+
+/** `list_agents`' first page holding the run's agent, with its 30-day figures. */
+export function runRoster(
+  overrides: Partial<AgentPage["agents"][number]> = {},
+): AgentPage {
+  return {
+    agents: [
+      {
+        id: "agt_releasebot",
+        slug: "release-bot",
+        name: "Release bot",
+        description: null,
+        agentKey: "acme.core.release-bot",
+        harness: "claude-code",
+        operatorId: "usr_marcusbell",
+        operatorName: "Marcus Bell",
+        principalId: "prn_91",
+        credentials: 1,
+        hosts: 1,
+        host: "mac-studio.local",
+        status: "enrolled",
+        enforcementTier: "harness",
+        runs30d: 212,
+        spend30d: {
+          micros: "612480000",
+          currency: "USD",
+          basis: "gateway_observed",
+        },
+        tokens30d: null,
+        mandates: 0,
+        incidents: 0,
+        tamperIncidents: 0,
+        tamperIncidentsRecorded: 0,
+        ...overrides,
+      },
+    ],
+    nextCursor: null,
+    totals: {
+      identities: 1,
+      enrolled: 1,
+      holdingMandate: 0,
+      tamperIncidents: 0,
+      tamper: { recorded: 0, open: 0, newest: null },
+    },
   };
 }

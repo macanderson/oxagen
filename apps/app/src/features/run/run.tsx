@@ -204,25 +204,44 @@ export async function Run({
   // checks, diffs) streams inside the boundaries that draw it and cannot hold
   // the rest of the page.
   const work = readRunWork(ctx, source, run.id);
-  const [outputs, everything, cost, pending, agent, book] = await Promise.all([
-    // A thrown outputs read folds to the Run page's own read error, so the
-    // spine says the read failed rather than the page throwing.
-    source.runs
-      .outputs(ctx, run.id)
-      .catch(() =>
-        readError(PAGE_FAILURES.run.error.code, PAGE_FAILURES.run.error.status),
-      ),
-    readWholeTranscript(source, ctx, run.id, "everything"),
-    source.runs.cost(ctx, run.id),
-    source.approvals.pending(ctx, { runId: run.id }),
-    agentSlug === null ? null : source.agents.get(ctx, agentSlug),
-    // The book prices the token classes and the cache's saving; a viewer who
-    // may not read it sees those figures as not recorded.
-    source.spend
-      .priceBook(ctx)
-      .then((answer) => (answer.ok ? answer.value : null))
-      .catch(() => null),
-  ]);
+  const [outputs, everything, cost, pending, agent, book, roster] =
+    await Promise.all([
+      // A thrown outputs read folds to the Run page's own read error, so the
+      // spine says the read failed rather than the page throwing.
+      source.runs
+        .outputs(ctx, run.id)
+        .catch(() =>
+          readError(
+            PAGE_FAILURES.run.error.code,
+            PAGE_FAILURES.run.error.status,
+          ),
+        ),
+      readWholeTranscript(source, ctx, run.id, "everything"),
+      source.runs.cost(ctx, run.id),
+      source.approvals.pending(ctx, { runId: run.id }),
+      agentSlug === null ? null : source.agents.get(ctx, agentSlug),
+      // The book prices the token classes and the cache's saving; a viewer who
+      // may not read it sees those figures as not recorded.
+      source.spend
+        .priceBook(ctx)
+        .then((answer) => (answer.ok ? answer.value : null))
+        .catch(() => null),
+      // The agent card's 30-day runs and spend are the Agents table's row. An
+      // agent past the first page, or a refused read, draws the card without
+      // them rather than a figure nobody read.
+      run.agentKey === null
+        ? null
+        : source.agents
+            .list(ctx, { cursor: null })
+            .then((answer) =>
+              answer.ok
+                ? (answer.value.agents.find(
+                    (row) => row.agentKey === run.agentKey,
+                  ) ?? null)
+                : null,
+            )
+            .catch(() => null),
+    ]);
   const metrics = runMetrics({ run, cost, transcript: everything, book });
   const props: RunTabProps = {
     ctx,
@@ -247,6 +266,7 @@ export async function Run({
       <RunHeader
         run={run}
         agent={agent}
+        roster={roster}
         work={work}
         pulls={
           outputs.ok

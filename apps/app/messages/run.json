@@ -567,7 +567,8 @@
       "fit": {
         "fit": "Model fit",
         "wrongTier": "Wrong model tier"
-      }
+      },
+      "runs30d": "{count} runs 30d"
     },
     "summary": {
       "title": "Summary",

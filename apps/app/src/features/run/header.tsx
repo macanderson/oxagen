@@ -8,9 +8,9 @@
 // checkout the host did not enroll) is said to be missing in words rather
 // than left blank or guessed.
 import { Folder, GitBranch, GitPullRequest } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Suspense, use } from "react";
-import type { AgentDetail } from "@/data/contracts/agents";
+import type { AgentDetail, AgentPage } from "@/data/contracts/agents";
 import type { RunOutputNode } from "@/data/contracts/run";
 import type { RunWork } from "@/data/contracts/run-work";
 import type { RunRow } from "@/data/contracts/runs";
@@ -22,6 +22,8 @@ import { Badge } from "@/ui/badge";
 import { eyebrow, linkChip } from "@/ui/control-styles";
 import { EnforcementTierBadge } from "@/ui/enforcement-tier";
 import { useFormatter } from "@/ui/formatter";
+import { Money } from "@/ui/money";
+import { formatCount } from "@/ui/money-format";
 import { GitHubLink } from "@/ui/navigation";
 import { ReplayGradeBadge } from "@/ui/replay-grade";
 import { StatusBadge } from "@/ui/status-badge";
@@ -398,17 +400,42 @@ function When({ run }: { run: RunRow }) {
   );
 }
 
-/** The compact agent card's line: the harness, and the agent's 30-day figures where the read carries them. */
+/** One row of the Agents table: the agent's 30-day runs and spend. */
+type AgentRow = AgentPage["agents"][number];
+
+/**
+ * The compact agent card's line (`agentCard` compact): the harness, then the
+ * agent's runs and spend over 30 days where the Agents read carried its row.
+ */
 function AgentLine({
   run,
   agent,
+  roster,
 }: {
   run: RunRow;
   agent: Read<AgentDetail> | null;
+  roster: AgentRow | null;
 }) {
   const t = useTranslations("run.header");
+  const locale = useLocale();
   const harness = useHarness(run, agent);
-  return harness === null ? t("harnessNotRecorded") : harness.name;
+  return (
+    <>
+      {harness === null ? t("harnessNotRecorded") : harness.name}
+      {roster === null ? null : (
+        <>
+          {" · "}
+          {t("runs30d", { count: formatCount(roster.runs30d, locale) })}
+          {roster.spend30d === null ? null : (
+            <>
+              {" · "}
+              <Money value={roster.spend30d} />
+            </>
+          )}
+        </>
+      )}
+    </>
+  );
 }
 
 /** "Paused" or "Paused at …": the banner under the header while ingress is held. */
@@ -429,6 +456,7 @@ function PauseBanner({ run }: { run: RunRow }) {
 export function RunHeader({
   run,
   agent,
+  roster,
   work,
   pulls,
   metrics,
@@ -439,6 +467,8 @@ export function RunHeader({
   run: RunRow;
   /** `get_agent` for the run's agent; null when the run names no agent. */
   agent: Read<AgentDetail> | null;
+  /** The agent's row on the Agents table's first page; null when it is not there. */
+  roster: AgentRow | null;
   /** `get_run_work`, started by the page: the checkout strip awaits it. */
   work: Promise<Read<RunWork>>;
   /** The pull requests the outputs recorded; null when the outputs read failed. */
@@ -477,7 +507,7 @@ export function RunHeader({
               layout="compact"
               agentKey={run.agentKey}
               notRecorded={t("notRecorded")}
-              sub={<AgentLine run={run} agent={agent} />}
+              sub={<AgentLine run={run} agent={agent} roster={roster} />}
             />
             <StatusBadge status={run.status} outcome={run.outcome} />
             <EnforcementTierBadge

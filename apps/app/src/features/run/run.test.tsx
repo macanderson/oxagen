@@ -34,6 +34,7 @@ import {
   runRow,
   mockupTranscript,
   runSource,
+  runRoster,
   runTranscript,
   runWork,
   transcriptBody,
@@ -305,6 +306,27 @@ describe("header", () => {
       "effort not captured",
     );
     await expectNoAxe(container);
+  });
+
+  it("reads the agent's 30-day runs and spend onto its card, and leaves them off when the roster does not hold it", async () => {
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      roster: ok(runRoster()),
+    });
+    expect(
+      within(screen.getByTestId("run-chips")).getByText(/212 runs 30d/),
+    ).toBeTruthy();
+    expect(screen.getByTestId("run-chips")).toHaveTextContent(
+      "Claude Code · 212 runs 30d · $612.48",
+    );
+    cleanup();
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      roster: ok(runRoster({ agentKey: "acme.core.someone-else" })),
+    });
+    expect(screen.getByTestId("run-chips")).not.toHaveTextContent("runs 30d");
   });
 
   it("prints the checkout the host enrolled: the repository, the branch, the pull request and a copyable path", async () => {

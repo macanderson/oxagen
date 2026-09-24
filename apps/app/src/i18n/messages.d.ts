@@ -4507,6 +4507,7 @@ type Messages = {
         fit: string;
         wrongTier: string;
       };
+      runs30d: string;
     };
     summary: {
       title: string;
