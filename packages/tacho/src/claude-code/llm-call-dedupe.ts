@@ -18,7 +18,10 @@
  * message id as the next key and the token tuple as the last resort for a
  * source that carries neither.
  *
- * The ledger remembers what it has sealed and answers, for each new
+ * One ledger serves a session and all of its subagents, because a
+ * subagent's call reaches more than one chain: the proxy seals it on the
+ * root session and the subagent's transcript seals it on the child's. The
+ * ledger remembers what the family has sealed and answers, for each new
  * `llm_call`, whether it is the first sighting of its call, a second sighting
  * from another source (sealed, stamped `oxagen.llm_call_duplicate_of` with
  * the first source so the control plane counts the tokens once), or a repeat
@@ -115,7 +118,9 @@ export function countsLlmCallSplit(event: {
 }
 
 /**
- * How many calls one recorder remembers; older ones are forgotten in order.
+ * How many keys one session family remembers, the root session and its
+ * subagents together; older ones are forgotten in order. Parallel subagents
+ * fill it faster than one chain would.
  * Each call can register under up to three keys (a request id, a message
  * id, and a tuple), so 1024 entries held room for roughly 340 calls — a
  * transcript tailer running behind the live sources by more than that in
@@ -252,11 +257,7 @@ export class LlmCallLedger {
       for (const key of [...ids, ...(tuple !== undefined ? [tuple] : [])]) {
         if (!this.entries.has(key)) this.entries.set(key, entry);
       }
-      while (this.entries.size > LLM_CALL_LEDGER_CAPACITY) {
-        const oldest = this.entries.keys().next().value;
-        if (oldest === undefined) break;
-        this.entries.delete(oldest);
-      }
+      this.trim();
     };
     let verdict: LlmCallVerdict;
     if (first === undefined) verdict = { kind: "first" };
@@ -268,5 +269,26 @@ export class LlmCallLedger {
       verdict = byId !== undefined ? { kind: "repeat" } : { kind: "first" };
     else verdict = { kind: "duplicate", of: first };
     return { verdict, commit };
+  }
+
+  /**
+   * Take on the keys another ledger remembered. A key this ledger already
+   * holds keeps its own entry. Used when a restart restores a subagent chain
+   * whose state an older build wrote with a ledger of its own.
+   */
+  absorb(state: LlmCallLedgerState): void {
+    for (const [key, sources, identified] of state.keys) {
+      if (!this.entries.has(key))
+        this.entries.set(key, { sources: [...sources], identified });
+    }
+    this.trim();
+  }
+
+  private trim(): void {
+    while (this.entries.size > LLM_CALL_LEDGER_CAPACITY) {
+      const oldest = this.entries.keys().next().value;
+      if (oldest === undefined) break;
+      this.entries.delete(oldest);
+    }
   }
 }
