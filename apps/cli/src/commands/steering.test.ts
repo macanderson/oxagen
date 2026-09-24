@@ -782,6 +782,34 @@ describe("resolveContext", () => {
     expect(ctx.policy.blockStaleRuns).toBe(false);
   });
 
+  // A GitLab main project (#3762): the platform names its host, and the
+  // project may sit in nested groups.
+  it("matches a GitLab main project in nested groups against its gitlab.com remote, and nothing on github.com", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
+    await mkdir(join(tmp, ".oxagen"), { recursive: true });
+    remotes({ origin: "git@gitlab.com:acme/platform/rules.git" });
+    apiPostOrThrow.mockResolvedValue({
+      steeringVersion: 7,
+      headCommit: null,
+      repository: "acme/platform/rules",
+      provider: "gitlab",
+      defaultBranch: "main",
+      policy: { blockStaleRuns: true },
+    });
+    expect((await resolveContext(tmp)).platform).not.toBeNull();
+
+    remotes({ origin: "git@github.com:acme/rules.git" });
+    apiPostOrThrow.mockResolvedValue({
+      steeringVersion: 7,
+      headCommit: null,
+      repository: "acme/rules",
+      provider: "gitlab",
+      defaultBranch: "main",
+      policy: { blockStaleRuns: true },
+    });
+    expect((await resolveContext(tmp)).platform).toBeNull();
+  });
+
   it("says so when a personal exclusion was refused", async () => {
     const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
     await mkdir(join(tmp, ".oxagen"), { recursive: true });
@@ -1222,6 +1250,10 @@ describe("parseRemoteUrl", () => {
     ["ssh://git@github.com/acme/app.git", "github.com/acme/app"],
     ["ssh://git@github.com:22/acme/app.git", "github.com/acme/app"],
     ["git@gitlab.com:acme/app.git", "gitlab.com/acme/app"],
+    [
+      "https://gitlab.com/Acme/Platform/Rules.git",
+      "gitlab.com/acme/platform/rules",
+    ],
   ])("reads %s as %s", (url, expected) => {
     expect(parseRemoteUrl(url)).toBe(expected);
   });

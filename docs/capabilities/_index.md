@@ -435,6 +435,7 @@ after the registered name separately when their contract uses a dotted stem.
 | Capability | Contract | Declared surfaces |
 | --- | --- | --- |
 | [attach_github_installation](repository.installation.attach.md) | [repository.installation.attach.ts](../../packages/oxagen/src/contracts/repository.installation.attach.ts) | api |
+| [attach_gitlab_project](repository.gitlab.attach.md) | [repository.gitlab.attach.ts](../../packages/oxagen/src/contracts/repository.gitlab.attach.ts) | api |
 | [bind_main_repository](repository.main.bind.md) | [repository.main.bind.ts](../../packages/oxagen/src/contracts/repository.main.bind.ts) | api |
 | [get_main_repository](repository.main.get.md) | [repository.main.get.ts](../../packages/oxagen/src/contracts/repository.main.get.ts) | api, mcp |
 | [get_repository_tree](repository.tree.get.md) | [repository.tree.get.ts](../../packages/oxagen/src/contracts/repository.tree.get.ts) | api, mcp, cli |

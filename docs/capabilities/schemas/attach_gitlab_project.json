@@ -1,0 +1,98 @@
+{
+  "name": "attach_gitlab_project",
+  "domain": "repository",
+  "description": "Connect a gitlab.com project to the workspace with a project access token scoped to that project. The token is verified, encrypted and never returned; a project webhook for merge request events is registered when the token's role allows it. Connecting the same project again rotates the token.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "projectPath": {
+        "type": "string",
+        "minLength": 3,
+        "maxLength": 1024
+      },
+      "token": {
+        "type": "string",
+        "minLength": 20,
+        "maxLength": 255
+      }
+    },
+    "required": [
+      "projectPath",
+      "token"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "connectionId": {
+        "type": "string"
+      },
+      "projectId": {
+        "type": "string"
+      },
+      "fullName": {
+        "type": "string",
+        "minLength": 1
+      },
+      "defaultRef": {
+        "type": "string",
+        "minLength": 1
+      },
+      "tokenExpiresAt": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "rotated": {
+        "type": "boolean"
+      },
+      "webhook": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "registered",
+              "refused",
+              "unchanged"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "connectionId",
+      "projectId",
+      "fullName",
+      "defaultRef",
+      "tokenExpiresAt",
+      "rotated",
+      "webhook"
+    ],
+    "additionalProperties": false
+  }
+}

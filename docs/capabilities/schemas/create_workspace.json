@@ -1,7 +1,7 @@
 {
   "name": "create_workspace",
   "domain": "workspace",
-  "description": "Create a workspace within the active tenant together with its main GitHub repository, which is required. Refused for a slug already used in the organization, or a repository the org's GitHub App installation cannot reach or another workspace already steers by.",
+  "description": "Create a workspace within the active tenant together with its main repository, which is required: a GitHub repository, or a gitlab.com project with a project access token (web app and API only). Refused for a slug already used in the organization, or a repository the org's GitHub App installation cannot reach or another workspace already steers by.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -37,28 +37,56 @@
         "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
       },
       "mainRepo": {
-        "type": "object",
-        "properties": {
-          "provider": {
-            "const": "github",
-            "default": "github"
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "provider": {
+                "const": "github",
+                "default": "github"
+              },
+              "owner": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 39
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              }
+            },
+            "required": [
+              "owner",
+              "name"
+            ],
+            "additionalProperties": false
           },
-          "owner": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 39
-          },
-          "name": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 100
+          {
+            "type": "object",
+            "properties": {
+              "provider": {
+                "const": "gitlab"
+              },
+              "projectPath": {
+                "type": "string",
+                "minLength": 3,
+                "maxLength": 1024
+              },
+              "token": {
+                "type": "string",
+                "minLength": 20,
+                "maxLength": 255
+              }
+            },
+            "required": [
+              "provider",
+              "projectPath",
+              "token"
+            ],
+            "additionalProperties": false
           }
-        },
-        "required": [
-          "owner",
-          "name"
-        ],
-        "additionalProperties": false
+        ]
       }
     },
     "required": [
@@ -96,6 +124,13 @@
           "connectionId": {
             "type": "string"
           },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "github",
+              "gitlab"
+            ]
+          },
           "fullName": {
             "type": "string",
             "minLength": 1
@@ -108,6 +143,7 @@
         "required": [
           "bindingId",
           "connectionId",
+          "provider",
           "fullName",
           "defaultRef"
         ],
