@@ -939,6 +939,15 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "list_working_copies": {
+      "route": "/[org]/[ws]/repositories/working-copies",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "Repositories \u203a Working copies: one row per directory the CLI reported, with machine and path, repository, branch and head, .oxagen/, symlinks, the commit last pulled, and when it was last seen (features/repositories/working-copies.tsx, features/repositories/repositories.tsx, features/repositories/actions.ts readWorkingCopies)",
+      "testid": "working-copies-table",
+      "proof": "apps/app/src/features/repositories/working-copies.test.tsx",
+      "verifiedAt": "2026-09-24",
+      "verifiedBy": "session_01GZPHxxMpQQN1NwQRuGakEq"
+    },
     "list_workspaces": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/page.tsx",
