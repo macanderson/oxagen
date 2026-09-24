@@ -2265,20 +2265,17 @@ describe("loading", () => {
     await expectNoAxe(container);
   });
 
-  it("keeps the page's own main container, and draws four blocks and seven rows with no figure", () => {
+  it("leaves main#main to the page, and draws four blocks and seven rows with no figure (negative)", () => {
     render(
       <IntlProvider>
         <RunLoading />
       </IntlProvider>,
     );
-    // Next swaps page.tsx's whole return value for this default export while
-    // the route suspends, so the skip-to-content target and the page frame
-    // have to come from here too, or a stranger's tab-order loses its anchor
-    // and the layout jumps once the real page takes the same container.
-    const main = document.getElementById("main");
-    expect(main).not.toBeNull();
-    expect(main?.tagName).toBe("MAIN");
-    expect(main).toContainElement(screen.getByRole("status"));
+    // While the page streams in, this fallback and the hidden page share the
+    // document, so a second main#main here would give the skip link two
+    // targets (#4036). The frame is a plain container with the page's classes.
+    expect(document.getElementById("main")).toBeNull();
+    expect(document.querySelector("main")).toBeNull();
     // The design's skeleton: shapes only, so nothing reads as a figure.
     expect(screen.getByTestId("run-loading")).toHaveTextContent(
       /^Loading this run$/,

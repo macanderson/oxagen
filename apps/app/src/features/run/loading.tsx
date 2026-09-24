@@ -6,10 +6,12 @@
 //
 // No figure, no zero and no stale row is drawn: the skeleton is shapes only.
 //
-// Next replaces page.tsx's whole return value with this default export while
-// the route segment suspends, `<main id="main">` included, so this reproduces
-// it: the skip-to-content link keeps a target, and the frame does not jump
-// once the read finishes and the real page takes over the same container.
+// The frame keeps the page's container classes, so nothing jumps when the page
+// takes over, but it is not `main#main`. While the page streams in, the
+// document holds this fallback and the hidden page together, and only the page
+// may own the landmark: two would give the skip link two targets and fail the
+// page-load oracle's strict locator, as the onboarding gate did on 2026-09-24
+// (#4036).
 import { useTranslations } from "next-intl";
 import { panel, panelBody, panelHeader } from "@/ui/control-styles";
 
@@ -28,10 +30,7 @@ const sk = "block animate-pulse bg-hl motion-reduce:animate-none";
 export function RunLoading() {
   const t = useTranslations("run");
   return (
-    <main
-      id="main"
-      className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-10"
-    >
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-10">
       <div
         role="status"
         aria-busy="true"
@@ -61,6 +60,6 @@ export function RunLoading() {
           </div>
         </div>
       </div>
-    </main>
+    </div>
   );
 }
