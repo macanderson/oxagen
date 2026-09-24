@@ -581,6 +581,44 @@
           "additionalProperties": false
         }
       },
+      "subagents": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "type": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "firstSeq": {
+              "type": "string"
+            },
+            "lastSeq": {
+              "type": "string"
+            },
+            "stopped": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "id",
+            "type",
+            "firstSeq",
+            "lastSeq",
+            "stopped"
+          ],
+          "additionalProperties": false
+        }
+      },
       "complete": {
         "type": "boolean"
       },
@@ -597,6 +635,7 @@
       "checkouts",
       "diffs",
       "pullRequests",
+      "subagents",
       "complete",
       "warnings"
     ],

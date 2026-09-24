@@ -118,13 +118,13 @@
       "verifiedBy": "session-20daa43b-cutover"
     },
     "create_connection": {
-      "route": "/[org]/[ws]/tools?tab=connections",
-      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "Tools \u203a Connections: \u201cAdd a connection\u201d opens the dialog that invokes create_connection (features/tools/add-connection.tsx, features/tools/actions.ts)",
+      "route": "/[org]/[ws]/tools/providers",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Providers › Connections: “Add a connection” opens the dialog that invokes create_connection (features/tools/add-connection.tsx, features/tools/actions.ts)",
       "testid": "connection-add-open",
       "proof": "apps/app/src/features/tools/connections.test.tsx",
-      "verifiedAt": "2026-09-20",
-      "verifiedBy": "session-mc2-connections"
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
     "create_enrollment_token": {
       "route": "/[org]/[ws]/register/[step]",
@@ -186,12 +186,12 @@
       "verifiedBy": "session-20daa43b-cutover"
     },
     "delete_approval_rule": {
-      "route": "/[org]/[ws]/tools?tab=autoapprovals",
-      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "Tools \u203a Auto-approvals \u203a Delete on a row (features/tools/approval-rule-controls.tsx RuleDelete, deleteApprovalRule in features/tools/actions.ts)",
+      "route": "/[org]/[ws]/tools/policy",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Policy › Auto-approval rules › Delete on a row (features/tools/approval-rule-controls.tsx RuleDelete, deleteApprovalRule in features/tools/actions.ts)",
       "proof": "apps/app/src/features/tools/approval-rule-controls.test.tsx",
-      "verifiedAt": "2026-09-19",
-      "verifiedBy": "session-tools-gaps"
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
     "delete_model_credential": {
       "route": "/[org]/model-funding",
@@ -345,13 +345,13 @@
       "verifiedBy": "skills-lifecycle-ci-witness"
     },
     "get_connection": {
-      "route": "/[org]/[ws]/tools?tab=connections",
-      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "Tools \u203a Connections: a row opens the connection drawer, which reads get_connection on open (features/tools/connection-drawer.tsx, features/tools/actions.ts)",
+      "route": "/[org]/[ws]/tools/providers",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Providers › Connections: a row opens the connection drawer, which reads get_connection on open (features/tools/connection-drawer.tsx, features/tools/actions.ts)",
       "testid": "connection-open-con_01k5n1",
       "proof": "apps/app/src/features/tools/connections.test.tsx",
-      "verifiedAt": "2026-09-20",
-      "verifiedBy": "session-mc2-connections"
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
     "get_context_pr": {
       "route": "/[org]/[ws]/steering",
@@ -575,20 +575,20 @@
       "proof": "apps/app/src/features/shell/account-dialog.test.tsx"
     },
     "grant_mandate": {
-      "route": "/[org]/[ws]/tools?tab=mandates",
-      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "/[org]/[ws]/tools?tab=mandates \u2014 Grant a mandate in the ledger header, and Grant on a requested row (features/tools/grant-mandate.tsx \u2192 features/tools/grant-actions.ts)",
+      "route": "/[org]/[ws]/tools/policy",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Policy › Mandates ledger: Grant a mandate in the ledger header, and Grant on a requested row (features/tools/grant-mandate.tsx → features/tools/grant-actions.ts)",
       "proof": "apps/app/src/features/tools/grant-mandate.test.tsx",
-      "verifiedAt": "2026-09-19",
-      "verifiedBy": "session-tools-gaps"
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
     "import_tools": {
       "route": "/[org]/[ws]/tools",
-      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "/[org]/[ws]/tools \u2014 the rev1 surface that invokes import_tools (features/tools/actions.ts)",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools header, Tools panel and Providers: “Import a provider” and “Add a provider” open the three-step import dialog whose last step invokes import_tools; a provider's drill-down re-imports (features/tools/import-provider.tsx, features/tools/provider-dialog.tsx, features/tools/actions.ts)",
       "proof": "apps/app/src/features/tools/write-controls.test.tsx",
-      "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
     "link_repository": {
       "route": "/[org]/[ws]/repositories",
@@ -633,12 +633,12 @@
       "verifiedBy": "session-20daa43b-cutover"
     },
     "list_approval_rules": {
-      "route": "/[org]/[ws]/tools?tab=autoapprovals",
-      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "Tools \u203a Auto-approvals: the rules table and its three totals (features/tools/auto-approvals.tsx, data/live/tools.ts, data/live/mappers/tools.ts)",
-      "proof": "apps/app/src/features/tools/tools.test.tsx",
-      "verifiedAt": "2026-09-19",
-      "verifiedBy": "session-tools-gaps"
+      "route": "/[org]/[ws]/tools/policy",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Policy: the auto-approval rules table (features/tools/auto-approvals.tsx, data/live/tools.ts, data/live/mappers/tools.ts)",
+      "proof": "apps/app/src/features/tools/policy.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
     "list_approvals": {
       "route": "/[org]/[ws]",
@@ -649,20 +649,20 @@
       "verifiedBy": "session-replay-ui"
     },
     "list_connections": {
-      "route": "/[org]/[ws]/tools?tab=connections",
-      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "Tools \u203a Connections: the connections table above the credential grants log (features/tools/connections.tsx, data/live/tools.ts, data/live/mappers/tools.ts)",
+      "route": "/[org]/[ws]/tools/providers",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Providers: the connections table above the credential grants log (features/tools/connections.tsx, data/live/tools.ts, data/live/mappers/tools.ts)",
       "proof": "apps/app/src/features/tools/connections.test.tsx",
-      "verifiedAt": "2026-09-20",
-      "verifiedBy": "session-mc2-connections"
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
     "list_credential_grants": {
-      "route": "/[org]/[ws]/tools",
-      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "/[org]/[ws]/tools \u2014 the rev1 surface that invokes list_credential_grants (data/live/mappers/tools.ts, data/live/tools.ts)",
+      "route": "/[org]/[ws]/tools/providers",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Providers: the credential grants log (features/tools/connections.tsx GrantsLog, data/live/tools.ts)",
       "proof": "apps/app/src/features/tools/tools.test.tsx",
-      "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
     "list_findings": {
       "route": "/[org]/[ws]/spend",
@@ -713,12 +713,12 @@
       "verifiedBy": "session-20daa43b-cutover"
     },
     "list_kill_switches": {
-      "route": "/[org]/[ws]/tools",
-      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "/[org]/[ws]/tools \u2014 the rev1 surface that invokes list_kill_switches (data/live/mappers/tools.ts, data/live/tools.ts)",
+      "route": "/[org]/[ws]/tools/switches",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Kill switches: the class and scoped switches with the deny generation, and the tab's count of switches on (features/tools/switches.tsx, data/live/tools.ts)",
       "proof": "apps/app/src/features/tools/tools.test.tsx",
-      "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
     "list_mandates": {
       "route": "/[org]/[ws]",
@@ -729,12 +729,12 @@
       "verifiedBy": "session-20daa43b-cutover"
     },
     "list_mcp_servers": {
-      "route": "/[org]/[ws]/tools",
-      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "Tools \u203a Registry: the Tool servers section under the registry, and the server picker in the import dialog (features/tools/servers.tsx, features/tools/import-controls.tsx, data/live/tools.ts)",
-      "proof": "apps/app/src/features/tools/servers.test.tsx",
-      "verifiedAt": "2026-09-20",
-      "verifiedBy": "session-mc2-connections"
+      "route": "/[org]/[ws]/tools/providers",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Providers: the providers table and drill-down, the Provider cell on each tool row, and the provider picker in the import dialog (features/tools/providers.tsx, features/tools/provider-row.tsx, features/tools/provider-dialog.tsx, data/live/tools.ts)",
+      "proof": "apps/app/src/features/tools/tools.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
     "list_members": {
       "route": "/[org]",
@@ -855,11 +855,11 @@
     },
     "list_tool_versions": {
       "route": "/[org]/[ws]/tools",
-      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "/[org]/[ws]/tools \u2014 the rev1 surface that invokes list_tool_versions (data/live/mappers/tools.ts, data/live/tools.ts)",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Tools: the tool versions table, its category chips and the tab count (features/tools/registry.tsx, data/live/tools.ts)",
       "proof": "apps/app/src/features/tools/tools.test.tsx",
-      "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
     "list_unpriced_models": {
       "route": "/[org]/[ws]/spend?tab=pricing",
@@ -991,13 +991,13 @@
       "verifiedBy": "session-20daa43b-cutover"
     },
     "register_mcp_server": {
-      "route": "/[org]/[ws]/tools",
-      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "Tools \u203a Registry \u203a Tool servers: \u201cRegister a server\u201d opens the dialog that invokes register_mcp_server (features/tools/register-server.tsx, features/tools/actions.ts)",
-      "testid": "server-register-open",
-      "proof": "apps/app/src/features/tools/servers.test.tsx",
-      "verifiedAt": "2026-09-20",
-      "verifiedBy": "session-mc2-connections"
+      "route": "/[org]/[ws]/tools/providers",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Providers: “Add a provider” (and “Import a provider” in the header) opens the import dialog whose Connect step invokes register_mcp_server (features/tools/import-provider.tsx, features/tools/actions.ts)",
+      "testid": "tools-import-open",
+      "proof": "apps/app/src/features/tools/write-controls.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
     "remove_org_member": {
       "route": "/[org]",
@@ -1175,21 +1175,21 @@
       "verifiedBy": "session-mc3-invite"
     },
     "set_approval_rule_enabled": {
-      "route": "/[org]/[ws]/tools?tab=autoapprovals",
-      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "Tools \u203a Auto-approvals \u203a Switch on or Switch off on a row, and Switch off instead in the delete dialog (features/tools/approval-rule-controls.tsx RuleToggle and RuleDelete, setApprovalRuleEnabled in features/tools/actions.ts)",
+      "route": "/[org]/[ws]/tools/policy",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Policy › Auto-approval rules: Switch on or Switch off on a row, and Switch off instead in the delete dialog (features/tools/approval-rule-controls.tsx RuleToggle and RuleDelete, setApprovalRuleEnabled in features/tools/actions.ts)",
       "proof": "apps/app/src/features/tools/approval-rule-controls.test.tsx",
-      "verifiedAt": "2026-09-19",
-      "verifiedBy": "session-tools-gaps"
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
     "set_approval_rules": {
-      "route": "/[org]/[ws]/tools?tab=autoapprovals",
-      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "Tools \u203a Auto-approvals \u203a Create rule, and Edit on a row (features/tools/approval-rule-controls.tsx RuleEditor, saveApprovalRule in features/tools/actions.ts)",
+      "route": "/[org]/[ws]/tools/policy",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Policy › Auto-approval rules: Create rule, and Edit on a row (features/tools/approval-rule-controls.tsx RuleEditor, saveApprovalRule in features/tools/actions.ts)",
       "testid": "rule-create-open",
       "proof": "apps/app/src/features/tools/approval-rule-controls.test.tsx",
-      "verifiedAt": "2026-09-19",
-      "verifiedBy": "session-tools-gaps"
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
     "set_auto_topup": {
       "route": "/[org]/billing",
@@ -1208,12 +1208,12 @@
       "verifiedBy": "session-1818a309-workspace-governance-mode"
     },
     "set_kill_switch": {
-      "route": "/[org]/[ws]/tools",
-      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "/[org]/[ws]/tools \u2014 the rev1 surface that invokes set_kill_switch (features/tools/actions.ts)",
+      "route": "/[org]/[ws]/tools/switches",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools header “Flip a kill switch”, and the toggle on each switch card (features/tools/switch-controls.tsx FlipControls, flipKillSwitch in features/tools/actions.ts)",
       "proof": "apps/app/src/features/tools/write-controls.test.tsx",
-      "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
     "set_model_credential": {
       "route": "/[org]/model-funding",
@@ -1283,11 +1283,11 @@
     },
     "set_tool_classification": {
       "route": "/[org]/[ws]/tools",
-      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "/[org]/[ws]/tools \u2014 the rev1 surface that invokes set_tool_classification (features/tools/actions.ts)",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Tools: a row opens the tool dialog, whose form reclassifies the version (features/tools/tool-dialog.tsx, setToolClassification in features/tools/actions.ts)",
       "proof": "apps/app/src/features/tools/write-controls.test.tsx",
-      "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
     "start_subscription_upgrade": {
       "route": "/[org]/billing",
@@ -1519,6 +1519,14 @@
       "proof": "apps/app/src/features/steering/steering.test.tsx",
       "verifiedAt": "2026-09-22",
       "verifiedBy": "steering-rescue-ci"
+    },
+    "delete_mcp_server": {
+      "route": "/[org]/[ws]/tools/providers",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Providers: Remove on a provider row and in the provider drill-down's footer invokes delete_mcp_server after saying what stops and what is kept for replay (features/tools/provider-dialog.tsx, removeProvider in features/tools/actions.ts)",
+      "proof": "apps/app/src/features/tools/tools.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
     "create_scim_token": {
       "route": "/[org]/sso",

@@ -325,25 +325,26 @@ export const routes = {
       cursor: q?.cursor,
     }),
   /**
-   * Tools; a tab, a category chip, the API-names toggle and a cursor are query
-   * values on the one route (#2958 adds no route, ARCHITECTURE.md §1.2).
+   * Tools; its tabs are path segments (`/tools/providers`), as the mockup's
+   * route names them, and the first tab is the bare path. A category chip, the
+   * API-names toggle and a cursor are query values.
    */
   tools: (
     org: string,
     ws: string,
     q: {
-      tab?: string;
+      tab?: "toolbelts" | "providers" | "policy" | "switches";
       category?: string;
       names?: string;
       cursor?: string;
     } = {},
   ): SafePath =>
-    withQuery(pathOf(org, ws, "tools"), {
-      tab: q.tab,
-      category: q.category,
-      names: q.names,
-      cursor: q.cursor,
-    }),
+    withQuery(
+      q.tab === undefined
+        ? pathOf(org, ws, "tools")
+        : pathOf(org, ws, "tools", q.tab),
+      { category: q.category, names: q.names, cursor: q.cursor },
+    ),
   /**
    * Repositories; its tabs are path segments (`/repositories/changes`), as the
    * mockup's route names them, and the first tab is the bare path.
