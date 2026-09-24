@@ -38,6 +38,8 @@ vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("./actions", () => ({ addConnection, readConnection }));
 
 const { ConnectionsTable, GrantsLog } = await import("./connections");
+const { AddConnection } = await import("./add-connection");
+const { buttonPrimary, buttonSecondary } = await import("@/ui/control-styles");
 const { connectionList, credentialGrantPage } = await import(
   "./tools.builders"
 );
@@ -553,5 +555,27 @@ describe("Add connection", () => {
     expect(
       await screen.findByTestId("connection-add-failure"),
     ).toHaveTextContent("action_failed");
+  });
+});
+
+describe("AddConnection opener", () => {
+  it("is gold where it is the screen's one primary action, and quiet by default", () => {
+    render(
+      <IntlProvider>
+        <AddConnection at={at} connectors={[]} primary />
+      </IntlProvider>,
+    );
+    expect(screen.getByTestId("connection-add-open").className).toBe(
+      buttonPrimary,
+    );
+    cleanup();
+    render(
+      <IntlProvider>
+        <AddConnection at={at} connectors={[]} />
+      </IntlProvider>,
+    );
+    expect(screen.getByTestId("connection-add-open").className).toBe(
+      buttonSecondary,
+    );
   });
 });

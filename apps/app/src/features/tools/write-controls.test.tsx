@@ -902,3 +902,119 @@ describe("useActionFailure", () => {
     hook.unmount();
   });
 });
+
+describe("FlipControls with a fixed target", () => {
+  it("flips the fixed class target with no level select, naming the level when no label is given", async () => {
+    flipKillSwitch.mockReturnValue(new Promise(() => undefined));
+    withIntl(
+      <FlipControls
+        at={at}
+        denyGeneration={GENERATION}
+        existing={null}
+        fixed={{ kind: "class", ref: "moves_money" }}
+        members={MEMBERS}
+      />,
+    );
+    const toggle = screen.getByTestId("tools-flip-class-moves_money");
+    expect(toggle).toHaveAccessibleName("Deny Class");
+    fireEvent.click(toggle);
+    const dialog = await screen.findByTestId("tools-flip-dialog");
+    expect(within(dialog).queryByLabelText("Level")).toBeNull();
+    expect(dialog).toHaveTextContent("Class · Class");
+    fill(/^Reason/, "Freeze payments.");
+    const form = formOf(within(dialog).getByText("Deny now"));
+    fireEvent.submit(form);
+    // A second submit while the first is pending sends nothing.
+    fireEvent.submit(form);
+    expect(flipKillSwitch).toHaveBeenCalledTimes(1);
+    expect(flipKillSwitch).toHaveBeenCalledWith("acme", "core-platform", {
+      kind: "class",
+      target: "moves_money",
+      on: true,
+      reason: "Freeze payments.",
+    });
+  });
+
+  it("marks a self-targeted fixed switch as self and sends no target", async () => {
+    flipKillSwitch.mockReturnValue(new Promise(() => undefined));
+    withIntl(
+      <FlipControls
+        at={at}
+        denyGeneration={GENERATION}
+        existing={null}
+        fixed={{ kind: "org", ref: null }}
+        label="Organization"
+        members={MEMBERS}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("tools-flip-org-self"));
+    const dialog = await screen.findByTestId("tools-flip-dialog");
+    fill(/^Reason/, "Stop everything.");
+    fireEvent.submit(formOf(within(dialog).getByText("Deny now")));
+    expect(flipKillSwitch).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      expect.objectContaining({ kind: "org", target: null }),
+    );
+  });
+});
+
+describe("FlipControls operator picker", () => {
+  it("names a member with no name by email, and says when there is nobody to choose (negative)", async () => {
+    withIntl(
+      <FlipControls
+        at={at}
+        denyGeneration={GENERATION}
+        existing={null}
+        members={[{ id: "usr_anon", name: null, email: "anon@acme.example" }]}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("tools-flip-open"));
+    await screen.findByTestId("tools-flip-dialog");
+    fireEvent.change(screen.getByLabelText("Level"), {
+      target: { value: "operator" },
+    });
+    expect(
+      screen.getByRole("option", { name: "anon@acme.example" }),
+    ).toBeInTheDocument();
+    cleanup();
+    withIntl(
+      <FlipControls
+        at={at}
+        denyGeneration={GENERATION}
+        existing={null}
+        members={[]}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("tools-flip-open"));
+    await screen.findByTestId("tools-flip-dialog");
+    fireEvent.change(screen.getByLabelText("Level"), {
+      target: { value: "operator" },
+    });
+    expect(
+      screen.getByText("No org members to choose from."),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("ToolDialog while a classification is pending", () => {
+  it("says a disabled version is not enabled, and sends one classification however often the form is submitted", async () => {
+    setToolClassification.mockReturnValue(new Promise(() => undefined));
+    withIntl(
+      <ToolDialog
+        at={at}
+        version={{ ...financial(), enabled: false }}
+        canClassify
+      >
+        <span>Create payment</span>
+      </ToolDialog>,
+    );
+    fireEvent.click(screen.getByText("Create payment"));
+    const dialog = await screen.findByTestId("tool-dialog");
+    expect(dialog).toHaveTextContent("EnabledNo");
+    const form = element(dialog.querySelector("form"), "classify form");
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    expect(setToolClassification).toHaveBeenCalledTimes(1);
+  });
+});
