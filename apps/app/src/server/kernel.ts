@@ -17,6 +17,12 @@
 //   6. the output is parsed with the contract's own schema;
 //   7. a failure is classified by its `code` property alone.
 //
+// The in-app agent's refusals have rows of their own (#3227). Before them,
+// `engine_unavailable`, `insufficient_credits` and `assistant_spend_cap` fell
+// through to `kernel_failure`, so every turn Stella could not answer read "could
+// not be reached", whether the engine was down, the ledger refused the run, or
+// the organization had no credit left, and the person had no way to tell which.
+//
 // A refusal that is a programming error (an unbranded ctx, an unregistered or
 // wrongly typed contract, output that does not match its contract, a failure
 // with no known code) is reported to telemetry exactly once.
@@ -89,7 +95,12 @@ export type ActionResult<O> =
   | {
       ok: false;
       reason: "exhausted";
-      code: "gau_exhausted" | "billing_suspended" | "budget_exceeded";
+      code:
+        | "gau_exhausted"
+        | "billing_suspended"
+        | "budget_exceeded"
+        | "insufficient_credits"
+        | "assistant_spend_cap";
     };
 
 type ExhaustedCode = Extract<
@@ -113,7 +124,24 @@ const EXHAUSTED_CODES: readonly string[] = [
   "gau_exhausted",
   "billing_suspended",
   "budget_exceeded",
+  // The in-app agent's credit gate (`@oxagen/billing` turn-credit-gate.ts):
+  // the organization's credit balance is empty, or it spent its monthly cap
+  // of platform-paid agent tokens (ADR-053 §3).
+  "insufficient_credits",
+  "assistant_spend_cap",
 ] satisfies readonly ExhaustedCode[];
+
+/**
+ * The in-app agent's service failures (`@oxagen/agent`), with the status the
+ * API gives each (`apps/api/src/middleware/error.ts`,
+ * `ASSISTANT_TURN_ERROR_STATUS`). The engine is down or unconfigured, or the
+ * evidence ledger would not admit the turn as a run: the service could not
+ * answer, and the code says which part of it.
+ */
+const ASSISTANT_SERVICE_CODES: Readonly<Record<string, number>> = {
+  engine_unavailable: 503,
+  assistant_run_not_recorded: 503,
+};
 
 const isExhaustedCode = (code: string): code is ExhaustedCode =>
   EXHAUSTED_CODES.includes(code);
@@ -158,12 +186,19 @@ function classifyKernelFailure(err: unknown): Failure {
     case "not_found":
     case "conflict":
       return { kind: code, code: stringField(err, "reason") ?? code };
+    // A turn the engine stopped before it answered: a per-turn budget stop
+    // or a cancel. It conflicts with the state it was asked in.
+    case "engine_aborted":
+      return { kind: "conflict", code };
     case null:
       return { kind: "unclassified" };
-    default:
-      return isExhaustedCode(code)
-        ? { kind: "exhausted", code }
-        : { kind: "unclassified" };
+    default: {
+      if (isExhaustedCode(code)) return { kind: "exhausted", code };
+      const status = ASSISTANT_SERVICE_CODES[code];
+      return status === undefined
+        ? { kind: "unclassified" }
+        : { kind: "unavailable", code, status };
+    }
   }
 }
 

@@ -210,9 +210,15 @@
         "denied": "You do not have permission to ask Stella in this workspace.",
         "invalid": "That question was refused. A question is 1 to 32,768 characters.",
         "exhausted": "This organization has no budget left for Stella.",
+        "noCredit": "This organization has no credit left for Stella. An owner can add credit on Billing, or store a model key under Model funding.",
+        "spendCap": "This organization reached its monthly cap on Stella turns paid by Oxagen. An owner can store a model key under Model funding, or wait for the next month.",
         "parked": "That turn is waiting on an approval before it can answer.",
+        "engine": "Stella\u2019s engine could not be reached, so this question was not answered. Ask again once the engine is back.",
+        "unrecorded": "Stella did not answer because the turn could not be recorded as a run. Nothing ran. Ask again.",
+        "aborted": "Stella stopped this turn before it answered, usually at the per-turn budget. Ask again, or raise the budget.",
         "unavailable": "Stella could not be reached. Try again."
-      }
+      },
+      "retry": "Ask again"
     },
     "avatar": {
       "title": "Your avatar",

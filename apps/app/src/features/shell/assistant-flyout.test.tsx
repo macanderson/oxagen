@@ -506,6 +506,51 @@ describe("AssistantFlyout", () => {
     expect(await screen.findByTestId("assistant-exhausted")).toBeTruthy();
   });
 
+  // #3227: each of these used to read "could not be reached", whatever the
+  // cause. The sentence names the cause and the code rides beneath it.
+  it.each([
+    ["unavailable", "engine_unavailable", "assistant-engine", true],
+    ["unavailable", "assistant_run_not_recorded", "assistant-unrecorded", true],
+    ["conflict", "engine_aborted", "assistant-aborted", true],
+    ["exhausted", "insufficient_credits", "assistant-noCredit", false],
+    ["exhausted", "assistant_spend_cap", "assistant-spendCap", false],
+    ["unavailable", "kernel_failure", "assistant-unavailable", true],
+  ] as const)(
+    "tells a %s refusal coded %s apart (negative)",
+    async (reason, code, testId, retryable) => {
+      askAssistant.mockResolvedValue({ ok: false, reason, code });
+      const { user, flyout } = await openFlyout();
+      await ask(user, "what is live?");
+      expect(await screen.findByTestId(testId)).toBeTruthy();
+      expect(screen.getByTestId("assistant-refusal-code")).toHaveTextContent(
+        code,
+      );
+      expect(screen.queryByTestId("assistant-retry") !== null).toBe(retryable);
+      await expectNoAxe(flyout);
+    },
+  );
+
+  it("asks a refused question again as it was, leaving the draft alone", async () => {
+    askAssistant.mockResolvedValueOnce({
+      ok: false,
+      reason: "unavailable",
+      code: "engine_unavailable",
+    });
+    const { user } = await openFlyout();
+    await ask(user, "what is live?");
+    await screen.findByTestId("assistant-engine");
+    await user.type(screen.getByTestId("assistant-composer"), "half typed");
+
+    await user.click(screen.getByTestId("assistant-retry"));
+
+    await findAnswerText("Three runs are live.");
+    expect(askAssistant).toHaveBeenCalledTimes(2);
+    expect(askAssistant.mock.calls[1]?.[2]).toMatchObject({
+      content: "what is live?",
+    });
+    expect(screen.getByTestId("assistant-composer")).toHaveValue("half typed");
+  });
+
   it("survives a thrown action without claiming an answer (negative)", async () => {
     askAssistant.mockRejectedValue(new Error("network"));
     const { user } = await openFlyout();

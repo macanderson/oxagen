@@ -127,7 +127,15 @@ type Entry =
       runId: string;
       parked: readonly ParkedCard[];
     }
-  | { kind: "refused"; id: string; code: Refusal };
+  | {
+      kind: "refused";
+      id: string;
+      code: Refusal;
+      /** The code the action answered with, shown so an operator can look it up. */
+      detail: string | null;
+      /** The question that was refused, so "Ask again" can send it unchanged. */
+      question: string;
+    };
 
 /**
  * One workspace's conversation with the assistant: what was said, the
@@ -150,8 +158,32 @@ const EMPTY_THREAD: Thread = {
   pending: false,
 };
 
-/** The refusal reasons a turn can come back with, each said plainly. */
-type Refusal = "denied" | "invalid" | "exhausted" | "parked" | "unavailable";
+/**
+ * The refusal reasons a turn can come back with, each said plainly (#3227).
+ * The engine being down, a run the ledger would not admit, and a turn the
+ * engine stopped are told apart from a network failure, and an empty credit
+ * balance from a spent monthly cap, because each asks the person to do
+ * something different.
+ */
+type Refusal =
+  | "denied"
+  | "invalid"
+  | "exhausted"
+  | "noCredit"
+  | "spendCap"
+  | "parked"
+  | "engine"
+  | "unrecorded"
+  | "aborted"
+  | "unavailable";
+
+/** The refusals worth asking again: the service, not the question, failed. */
+const RETRYABLE: ReadonlySet<Refusal> = new Set([
+  "engine",
+  "unrecorded",
+  "aborted",
+  "unavailable",
+]);
 
 /**
  * Below `md` the flyout is `w-full` and covers the application, so it is a
@@ -256,14 +288,36 @@ function recordOnPage(
   return found;
 }
 
-function refusalKey(
-  result: Extract<Awaited<ReturnType<typeof askAssistant>>, { ok: false }>,
-): Refusal {
-  if (result.reason === "denied") return "denied";
-  if (result.reason === "invalid") return "invalid";
-  if (result.reason === "exhausted") return "exhausted";
-  if (result.reason === "pending_approval") return "parked";
-  return "unavailable";
+type Refused = Extract<
+  Awaited<ReturnType<typeof askAssistant>>,
+  { ok: false }
+>;
+
+function refusalKey(result: Refused): Refusal {
+  switch (result.reason) {
+    case "denied":
+      return "denied";
+    case "invalid":
+      return "invalid";
+    case "pending_approval":
+      return "parked";
+    case "exhausted":
+      if (result.code === "insufficient_credits") return "noCredit";
+      if (result.code === "assistant_spend_cap") return "spendCap";
+      return "exhausted";
+    case "conflict":
+      return result.code === "engine_aborted" ? "aborted" : "unavailable";
+    case "not_found":
+    case "unavailable":
+      if (result.code === "engine_unavailable") return "engine";
+      if (result.code === "assistant_run_not_recorded") return "unrecorded";
+      return "unavailable";
+  }
+}
+
+/** The code a refusal carries, if it carries one. */
+function refusalDetail(result: Refused): string | null {
+  return result.reason === "pending_approval" ? null : result.code;
 }
 
 /**
@@ -280,8 +334,18 @@ function RefusalText({ code }: { code: Refusal }) {
       return <>{t("invalid")}</>;
     case "exhausted":
       return <>{t("exhausted")}</>;
+    case "noCredit":
+      return <>{t("noCredit")}</>;
+    case "spendCap":
+      return <>{t("spendCap")}</>;
     case "parked":
       return <>{t("parked")}</>;
+    case "engine":
+      return <>{t("engine")}</>;
+    case "unrecorded":
+      return <>{t("unrecorded")}</>;
+    case "aborted":
+      return <>{t("aborted")}</>;
     case "unavailable":
       return <>{t("unavailable")}</>;
   }
@@ -462,9 +526,17 @@ export function AssistantFlyout() {
   const navigate = useNavigate();
   const inWorkspace = scope !== null;
 
-  async function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
+  function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
-    const content = draft.trim();
+    void send(draft.trim(), { fromDraft: true });
+  }
+
+  /**
+   * Ask `content` in the workspace the person is standing in. From the
+   * composer the draft is cleared; "Ask again" sends a refused question as it
+   * was and leaves whatever the person has typed since alone.
+   */
+  async function send(content: string, { fromDraft }: { fromDraft: boolean }) {
     if (
       pending ||
       content === "" ||
@@ -499,8 +571,7 @@ export function AssistantFlyout() {
     updateThread(asked, (t) => ({
       ...t,
       entries: [...t.entries, { kind: "asked", id, text: content }],
-      draft: "",
-      draftTooLong: false,
+      ...(fromDraft ? { draft: "", draftTooLong: false } : {}),
       pending: true,
     }));
     try {
@@ -543,6 +614,8 @@ export function AssistantFlyout() {
           kind: "refused",
           id: `${id}-a`,
           code: refusalKey(result),
+          detail: refusalDetail(result),
+          question: content,
         };
         updateThread(asked, (t) => ({
           ...t,
@@ -554,6 +627,8 @@ export function AssistantFlyout() {
         kind: "refused",
         id: `${id}-a`,
         code: "unavailable",
+        detail: null,
+        question: content,
       };
       updateThread(asked, (t) => ({
         ...t,
@@ -694,19 +769,42 @@ export function AssistantFlyout() {
                     )}
                   </div>
                 ) : (
-                  <p
-                    role="alert"
-                    data-testid={`assistant-${entry.code}`}
-                    className="flex items-start gap-2 text-sm text-error-ink"
-                  >
-                    <CircleAlert
-                      aria-hidden="true"
-                      className="mt-0.5 size-4 flex-none text-error"
-                    />
-                    <span>
-                      <RefusalText code={entry.code} />
-                    </span>
-                  </p>
+                  <div>
+                    <p
+                      role="alert"
+                      data-testid={`assistant-${entry.code}`}
+                      className="flex items-start gap-2 text-sm text-error-ink"
+                    >
+                      <CircleAlert
+                        aria-hidden="true"
+                        className="mt-0.5 size-4 flex-none text-error"
+                      />
+                      <span>
+                        <RefusalText code={entry.code} />
+                      </span>
+                    </p>
+                    {entry.detail === null ? null : (
+                      <p
+                        data-testid="assistant-refusal-code"
+                        className="mt-1 ml-6 font-mono text-[11px] text-muted-foreground"
+                      >
+                        {entry.detail}
+                      </p>
+                    )}
+                    {RETRYABLE.has(entry.code) && inWorkspace ? (
+                      <button
+                        type="button"
+                        data-testid="assistant-retry"
+                        disabled={pending}
+                        onClick={() => {
+                          void send(entry.question, { fromDraft: false });
+                        }}
+                        className={`mt-1.5 ml-6 text-[12px] ${linkText} disabled:opacity-60`}
+                      >
+                        {t("retry")}
+                      </button>
+                    ) : null}
+                  </div>
                 )}
               </li>
             ))}
@@ -717,7 +815,7 @@ export function AssistantFlyout() {
 
       <div className="flex-none border-t border-border px-3 py-3">
         {inWorkspace ? (
-          <form onSubmit={(e) => void onSubmit(e)}>
+          <form onSubmit={onSubmit}>
             <div className="flex items-end gap-2 rounded-lg border border-border bg-background px-3 py-2">
               <textarea
                 rows={2}

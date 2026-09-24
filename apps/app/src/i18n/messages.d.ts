@@ -5021,9 +5021,15 @@ type Messages = {
         denied: string;
         invalid: string;
         exhausted: string;
+        noCredit: string;
+        spendCap: string;
         parked: string;
+        engine: string;
+        unrecorded: string;
+        aborted: string;
         unavailable: string;
       };
+      retry: string;
     };
     avatar: {
       title: string;
