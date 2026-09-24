@@ -10,7 +10,10 @@
 // and Next.js refuses the build otherwise), so a value both sides read cannot
 // live in one.
 
-/** The commands a run's row sends. `dispatch_command` refuses a payload on all three. */
+/**
+ * The commands a run's row sends. `dispatch_command` refuses a payload on all three.
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export const ROW_COMMANDS = ["pause", "resume", "cancel"] as const;
 export type RowCommand = (typeof ROW_COMMANDS)[number];
 
