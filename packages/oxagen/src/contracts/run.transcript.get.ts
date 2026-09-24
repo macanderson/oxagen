@@ -276,9 +276,20 @@ export const transcriptDecisionSchema = z
     seq: z.string().regex(/^\d+$/),
     /** The subagent chain the decision was recorded on; absent on the run's own. */
     sessionUuid: z.string().uuid().optional(),
-    /** The recorded word: `allow`, `deny`, `route`, or whatever the rule wrote. */
+    /**
+     * The recorded word: `allow`, `deny`, `route`, or whatever the rule
+     * wrote. An operator command (`oxagen:command_applied`) records the
+     * command: `pause`, `resume`, `cancel` or `steer`.
+     */
     decision: z.string(),
     type: z.string(),
+    /**
+     * Who decided, in the envelope's `policy_source` words: `bundle` and
+     * `kernel` are Oxagen policy, `human` is an operator, `harness` and
+     * `managed_settings` are the agent's harness checking itself. Null when
+     * the frame names none.
+     */
+    source: z.string().nullable().optional(),
     /** RFC 3339. */
     at: z.string().datetime(),
   })

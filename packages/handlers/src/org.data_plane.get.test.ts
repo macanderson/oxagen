@@ -3,6 +3,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   findFirst: vi.fn(),
   loadDataPlaneBinding: vi.fn(),
+  // The handler-side role guard (lib/capability-role-guard). Allows by
+  // default, an org Owner, so every case below keeps asserting what it was
+  // written to assert; the role-gate case sets it to refuse.
+  assertCallerRole: vi.fn(async () => undefined),
+}));
+
+vi.mock("./lib/capability-role-guard", () => ({
+  assertCallerRole: mocks.assertCallerRole,
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -28,6 +36,28 @@ import { TEST_CTX as CTX } from "./test-utils/fixtures";
 beforeEach(() => {
   mocks.findFirst.mockReset();
   mocks.loadDataPlaneBinding.mockReset();
+  mocks.assertCallerRole.mockReset();
+  mocks.assertCallerRole.mockImplementation(async () => undefined);
+});
+
+describe("org.data_plane.get handler — the role gate", () => {
+  it("asks the contract's own roles before it reads a binding", async () => {
+    mocks.findFirst.mockResolvedValue(undefined);
+    await orgDataPlaneGetHandler({ kind: "postgres" }, CTX);
+    expect(mocks.assertCallerRole).toHaveBeenCalledWith(orgDataPlaneGet, CTX);
+  });
+
+  it("refuses a member below Owner or Admin and reads nothing", async () => {
+    mocks.assertCallerRole.mockImplementation(async () => {
+      throw Object.assign(new Error("forbidden: org role required"), {
+        code: "forbidden",
+      });
+    });
+    await expect(
+      orgDataPlaneGetHandler({ kind: "postgres" }, CTX),
+    ).rejects.toThrow(/forbidden/);
+    expect(mocks.findFirst).not.toHaveBeenCalled();
+  });
 });
 
 describe("hostFor", () => {

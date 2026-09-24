@@ -1,5 +1,11 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { IntlProvider } from "@/test/intl";
@@ -29,11 +35,16 @@ function show(allowed = true) {
       <InvitationControls
         org="acme"
         invitationId="invi_abc"
+        email="ada@acme.example"
         allowed={allowed}
       />
     </IntlProvider>,
   );
 }
+const dialog = () => screen.getByTestId("revoke-invitation-invi_abc");
+const confirmButton = () =>
+  within(dialog()).getByRole("button", { name: "Revoke" });
+
 describe("invitation controls", () => {
   it("renders readable disabled controls without authority", async () => {
     const { container } = show(false);
@@ -71,8 +82,10 @@ describe("invitation controls", () => {
     const { container } = show();
     await user.click(screen.getByRole("button", { name: "Revoke" }));
     expect(mocks.revoke).not.toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "Confirm revoke" }));
-    expect(screen.getByRole("button", { name: "Resend" })).toBeDisabled();
+    await user.click(confirmButton());
+    expect(
+      screen.getByRole("button", { name: "Resend", hidden: true }),
+    ).toBeDisabled();
     await expectNoAxe(container);
     finish?.({ ok: true, value: {} });
     await waitFor(() =>
@@ -87,8 +100,10 @@ describe("invitation controls", () => {
     const { container } = show();
     await user.click(screen.getByRole("button", { name: "Revoke" }));
     expect(mocks.revoke).not.toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "Confirm revoke" }));
-    await screen.findByRole("alert");
+    await user.click(confirmButton());
+    // The refusal is named in the dialog, which stays open to retry or cancel.
+    expect(await within(dialog()).findByRole("alert")).toBeTruthy();
+    await user.click(within(dialog()).getByRole("button", { name: "Cancel" }));
     expect(screen.getByRole("button", { name: "Revoke" })).toBeEnabled();
     await expectNoAxe(container);
   });
@@ -112,7 +127,34 @@ it("allows cancelling invitation revocation without a write", async () => {
   const user = userEvent.setup();
   show();
   await user.click(screen.getByRole("button", { name: "Revoke" }));
-  await user.click(screen.getByRole("button", { name: "Keep invitation" }));
+  await user.click(within(dialog()).getByRole("button", { name: "Cancel" }));
   expect(mocks.revoke).not.toHaveBeenCalled();
-  expect(screen.queryByRole("button", { name: "Confirm revoke" })).toBeNull();
+  expect(screen.queryByTestId("revoke-invitation-invi_abc")).toBeNull();
+});
+
+it("opens the design's revoke dialog: the email, its body, and Cancel then a red Revoke", async () => {
+  const user = userEvent.setup();
+  show();
+  const opener = screen.getByRole("button", { name: "Revoke" });
+  // The row's Revoke is the design's `btn sm danger`.
+  expect(opener.className).toContain("text-error-ink");
+  await user.click(opener);
+  const shown = dialog();
+  expect(within(shown).getByRole("heading")).toHaveTextContent(
+    /^Revoke invitation$/,
+  );
+  expect(shown).toHaveTextContent(
+    "The link stops working the moment this is revoked, and ada@acme.example gets no notice.",
+  );
+  expect(shown).toHaveTextContent("Inviting them again issues a new link.");
+  expect(
+    within(shown)
+      .getAllByRole("button")
+      .map((button) => button.textContent)
+      .slice(-2),
+  ).toEqual(["Cancel", "Revoke"]);
+  expect(confirmButton().className).toContain("text-error-ink");
+  expect(confirmButton().className).not.toContain("bg-button-primary-bg");
+  expect(shown.querySelector("[data-header-close]")).not.toBeNull();
+  await expectNoAxe(document.body);
 });

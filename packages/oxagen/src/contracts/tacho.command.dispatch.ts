@@ -11,8 +11,8 @@
  *
  * The output is one command id per recipient run. A broadcast that reaches
  * no live run answers an empty list; a broadcast recipient that cannot
- * receive (an `observe`-tier run) is recorded as `failed` with the reason,
- * so the delivery report is complete (§7.6). A direct target that cannot
+ * receive (its host is missing, revoked or silent) is recorded as `failed`
+ * with the reason, so the delivery report is complete (§7.6). A direct target that cannot
  * receive is refused instead of queued (§7.3).
  */
 import { z } from "zod";

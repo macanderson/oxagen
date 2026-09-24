@@ -313,6 +313,26 @@ describe("createWorkspace", () => {
     ).toEqual({ ok: false, reason: "conflict", code: "slug_taken" });
   });
 
+  it("makes the slug from the name when the form sends none, as the design's form has no slug", async () => {
+    invoke.mockResolvedValue(CREATED);
+    await createWorkspace("acme", {
+      name: "  Data Platform (EU) ",
+      mainRepo: "acme/research",
+    });
+    expect(invoke.mock.calls[0]?.[1]).toMatchObject({
+      name: "Data Platform (EU)",
+      slug: "data-platform-eu",
+    });
+  });
+
+  it("names a slug the name made invalid on the Name field, which is the one the person can fix (negative)", async () => {
+    // A one-letter name makes a slug the contract refuses as too short.
+    expect(
+      await createWorkspace("acme", { name: "X", mainRepo: "acme/research" }),
+    ).toMatchObject({ ok: false, reason: "invalid", field: "name" });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
   // The five repository refusals `create_workspace` documents, each carried
   // with its reason intact so the dialog can print its own sentence.
   it.each([

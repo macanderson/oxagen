@@ -46,7 +46,7 @@ A step is one request and one response wherever the producer writes two — the 
 | `prompt` | the request half of a model call |
 | `responses` | the response half of a model call, or a single model receipt |
 | `tools` | either half of a tool call |
-| `policy` | a decision a rule or a person made: allow, deny, route |
+| `policy` | a decision a rule or a person made: allow, deny, route, and an operator's pause, resume, cancel or steer as the host applied it (`oxagen:command_applied`) |
 | `recall` | what was pulled into the model's context |
 | `usage` | a frame that carried a cost record |
 | `errors` | a call whose recorded outcome is failed, denied, cancelled, error, timeout or refused |
@@ -77,7 +77,7 @@ The Mission Control mockup also draws a `thinking` chip. Neither the ledger's ev
 | `entries[].{request,response}.text` | string or null | the body as UTF-8, cut at the zoom's cap (see below); null when no body was retained, the body is not text, the frame carried no content, the stored bytes do not hash to the recorded digest, or the half carries an `assembly` instead |
 | `entries[].{request,response}.truncated` | boolean | true when `text` was cut |
 | `entries[].{request,response}.assembly` | object or null | a recorded model stream folded into the message it was; null for every other half |
-| `entries[].decision` | object or null | `{ seq, decision, type, at }` — the decision folded into the entry |
+| `entries[].decision` | object or null | `{ seq, decision, type, source, at }`, the decision folded into the entry. An operator command records the command as `decision`. `source` is who decided, in the envelope's `policy_source` words: `bundle` or `kernel` for Oxagen policy, `human` for an operator, `harness` or `managed_settings` for the agent's own harness; null when the frame names none. At the `steps` and `turns` zooms an operator command is not the decision of the step it folds into, because it is about the run and not about that call |
 | `entries[].frames` | integer | frames folded, the opening frame included |
 | `entries[].turn` | integer or null | the turn the opening frame belongs to, 1-based, the same at every zoom and under every chip filter. A recording with `turn_start` frames counts them, and a frame before the first one is in no turn (null). A recording without them starts a new turn wherever the turn index changes, and every frame is in one. A client groups `everything` entries into turns by this value |
 | `entries[].cost` | `{ micros, currency, basis }` or null | the folded frames' cost records summed; null when none carried one. Ledger frames carry no cost record; spend is metered per run |

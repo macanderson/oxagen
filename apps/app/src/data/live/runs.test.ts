@@ -134,6 +134,8 @@ describe("runs.list", () => {
             replayGrade: null,
             verdict: null,
             enforcementTier: "observe",
+            commandBlock: null,
+            steerBlock: null,
             enrichmentEnabled: true,
             ingressPaused: false,
             ingressRevoked: false,
