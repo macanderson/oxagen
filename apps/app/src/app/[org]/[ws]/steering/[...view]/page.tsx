@@ -1,15 +1,17 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
-import { Suspense } from "react";
 import { dataSource } from "@/data/source";
 import {
-  resolveSteeringRoute,
   Steering,
-  SteeringLoading,
+  SteeringCreate,
+  parseSteeringView,
+  steeringLink,
+  steeringPathParams,
 } from "@/features/steering";
 import { requireViewer } from "@/server/viewer";
 import { redirectTo } from "@/shared/navigation";
+import { firstParam } from "@/shared/safe-path";
 import { PageHeader } from "@/ui/page-header";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -17,50 +19,61 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("steering") };
 }
 
-// One Steering tab or Library shelf (roadmap pages/steering.md): Library,
-// Assignments, Gates, Proposals and Compiler, and the shelves Records,
-// Instructions, Skills, Memory and Ontology, each a path segment. An address
-// written before the five tabs (policy, preview, prs, settings, deliveries,
-// library/<shelf>) moves to where it lives now; a segment that names nothing
-// is a 404. `/steering/records/<lineage>` is the record page, its own route.
-export default async function SteeringViewPage({
+export default async function SteeringSectionPage({
   params,
   searchParams,
-}: PageProps<"/[org]/[ws]/steering/[...view]">) {
+}: {
+  params: Promise<{ org: string; ws: string; view: string[] }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { org, ws, view: segments } = await params;
+  const [section = "", shelf] = segments;
+  const allowed = [
+    "library",
+    "proposals",
+    "freshness",
+    "deliveries",
+    "records",
+    "skills",
+    "memory",
+    "settings",
+    "prs",
+  ];
+  if (
+    !allowed.includes(section) ||
+    segments.length > 2 ||
+    (segments.length === 2 && section !== "library")
+  )
+    notFound();
+  if (
+    section === "library" &&
+    shelf &&
+    !["all", "records", "skills", "memory"].includes(shelf)
+  )
+    notFound();
   const ctx = await requireViewer(org, ws);
-  const [t, st, query] = await Promise.all([
+  const query = steeringPathParams(segments, await searchParams);
+  const view = parseSteeringView(query);
+  if (!["library", "proposals", "freshness", "deliveries"].includes(section))
+    redirectTo(
+      steeringLink({ org, ws }, { ...view, view: firstParam(query.view) }),
+    );
+  const [t, st] = await Promise.all([
     getTranslations("pages"),
-    getTranslations("steering.hub"),
-    searchParams,
+    getTranslations("steering"),
   ]);
-  const route = resolveSteeringRoute(
-    { org: ctx.orgSlug, ws: ctx.wsSlug },
-    segments,
-    query,
-  );
-  if (route.kind === "redirect") redirectTo(route.to);
-  if (route.kind === "not_found") notFound();
   return (
     <main
       id="main"
-      className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10"
+      className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-10"
     >
-      <Suspense fallback={<SteeringLoading />}>
-        <Steering
-          ctx={ctx}
-          source={dataSource()}
-          view={route.view}
-          header={(actions) => (
-            <PageHeader
-              eyebrow={ctx.wsName}
-              title={t("steering")}
-              description={st("description")}
-              actions={actions}
-            />
-          )}
-        />
-      </Suspense>
+      <PageHeader
+        eyebrow={t("workspaceEyebrow", { workspace: ctx.wsName })}
+        title={t("steering")}
+        description={st("description")}
+        actions={<SteeringCreate searchParams={query} />}
+      />
+      <Steering ctx={ctx} source={dataSource()} searchParams={query} />
     </main>
   );
 }

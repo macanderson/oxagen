@@ -23,8 +23,13 @@ jobs:
             const issue = context.payload.issue;
             const P = /^P[0-4]$/;
             const allowed = process.env.TRIAGE_LOGINS.split(/\s+/);
-            const trusted = allowed.includes(context.payload.sender.login);
             const names = issue.labels.map(l => (typeof l === 'string' ? l : l.name));
+            // deployment-failure.yml files P0 issues when main goes red or a
+            // deploy fails (Mac, 2026-09-23). That P0 is a standing decision
+            // for this one class of issue, so CI may set it there and nowhere else.
+            const ciIncident = context.payload.sender.login === 'github-actions[bot]'
+              && names.includes('deployment-failure');
+            const trusted = allowed.includes(context.payload.sender.login) || ciIncident;
             const rm = (name) => github.rest.issues.removeLabel({
               ...context.repo, issue_number: issue.number, name }).catch(() => {});
             const add = (labels) => github.rest.issues.addLabels({

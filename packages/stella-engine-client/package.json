@@ -17,9 +17,9 @@
     "test:smoke": "vitest run src/stella-serve.smoke.test.ts"
   },
   "devDependencies": {
-    "@types/node": "25.9.1",
+    "@types/node": "25.9.8",
     "@vitest/coverage-v8": "2.1.9",
-    "eslint": "9.39.4",
+    "eslint": "9.39.5",
     "typescript": "6.0.3",
     "vitest": "2.1.9"
   }

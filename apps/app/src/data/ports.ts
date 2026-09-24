@@ -80,13 +80,10 @@ import type {
   ContextPr,
   ProposalPage,
   RecordDetail,
-  MemoryPage,
-  OxagenTree,
   RecordKind,
   RecordPage,
   SteeringFreshness,
   SteeringDeliveries,
-  SteeringHub,
 } from "./contracts/steering";
 import type {
   ApprovalRuleSet,
@@ -221,8 +218,9 @@ export interface DataSource {
   /**
    * The Agents pages (#2956), each read by the agent's public id or slug:
    * list_agents, one cursor page of the workspace's identities, callers
-   * features/agents/agents.tsx and features/tools/tools.tsx (the grant
-   * dialog's agent picker); get_agent, the identity with its credentials,
+   * features/agents/agents.tsx, features/tools/tools.tsx (the grant
+   * dialog's agent picker) and features/fleet/fleet.tsx (the steer dialog's
+   * agents and the Live runs tile's workspace total); get_agent, the identity with its credentials,
    * roles, hosts and cached definition, callers features/agents/agent.tsx and
    * agent-source.tsx; get_agent_toolbelt, the computed belt, and
    * list_incidents narrowed to the agent, one cursor page, caller
@@ -242,8 +240,10 @@ export interface DataSource {
    * The mandates of the workspace, or of one agent (#2957): `list_mandates`,
    * each row carrying the remaining authority its ledger records. Callers:
    * features/tools/mandates-ledger.tsx (the ledger the accountable office
-   * reads), features/agents/mandates.tsx (the mandates one agent holds) and
-   * features/fleet/fleet.tsx (the bar on an approval card that names one).
+   * reads) and features/agents/mandates.tsx (the mandates one agent holds).
+   * features/run/run.tsx and the shell's approvals drawer
+   * (features/shell/activity-actions.ts) read it for the bar on their approval
+   * cards; Fleet draws no approval card and reads none.
    */
   mandates: {
     list(ctx: WsCtx, q: { agentId: string | null }): Promise<Read<MandateList>>;
@@ -395,12 +395,7 @@ export interface DataSource {
     /** list_records, status active: one page of the records in force, of one kind or all */
     records(
       ctx: WsCtx,
-      q: {
-        kind: RecordKind | null;
-        offset: number;
-        /** Rows to a page, 1 to `STEERING_READ_MAX`; `STEERING_PAGE` when omitted. */
-        limit?: number;
-      },
+      q: { kind: RecordKind | null; offset: number },
     ): Promise<Read<RecordPage>>;
     /**
      * get_record on a lineage: the published record's page (#3395). Reads the
@@ -423,25 +418,6 @@ export interface DataSource {
     contextPr(ctx: WsCtx, proposalId: string): Promise<Read<ContextPr>>;
     /** get_steering_freshness: what is published, where, and the two gates */
     freshness(ctx: WsCtx): Promise<Read<SteeringFreshness>>;
-    /**
-     * The hub header's reads: list_repositories and get_repository_tree for
-     * the governance mode on the main repository, and three list_proposals
-     * counts for the proposals waiting. Each half fails on its own inside the
-     * value, so a GitHub outage never takes the library down with it.
-     */
-    hub(ctx: WsCtx): Promise<Read<SteeringHub>>;
-    /**
-     * list_memories: the workspace's active `:AgentMemory` nodes, newest
-     * first, up to `limit` (1 to `STEERING_READ_MAX`); the Memory shelf and
-     * its chip count.
-     */
-    memories(ctx: WsCtx, q: { limit: number }): Promise<Read<MemoryPage>>;
-    /**
-     * list_repositories and get_repository_tree: every path under `.oxagen/`
-     * on the main repository's production branch, for the Records shelf's On
-     * disk panel; `unbound` when no main repository is bound.
-     */
-    tree(ctx: WsCtx): Promise<Read<OxagenTree>>;
   };
   /**
    * The Tools page's six reads on the workspace (#2958), each role-checked in

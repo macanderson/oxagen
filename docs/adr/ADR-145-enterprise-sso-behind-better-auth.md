@@ -23,7 +23,7 @@ role. Removing someone from the IdP removes their access.
 
 Before this change Oxagen had email and password, Google and GitHub sign-in,
 and TOTP two-factor, all on Better Auth 1.6.11 (ADR-006). The docs said SSO
-was not available, and `docs/mission-control/GAP-INVENTORY.md` listed it as
+was not available, and `oxagen-roadmap:docs/oxagen/mission-control/GAP-INVENTORY.md` listed it as
 cut.
 
 Better Auth ships `@better-auth/sso` at the same version. It handles OIDC and

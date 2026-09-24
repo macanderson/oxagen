@@ -65,7 +65,7 @@ these headline facts:
   agent in production today.
 - **Live:** A2A v1.0 transport (`apps/api/src/routes/a2a/`) with
   `/.well-known/agent-card.json` discovery — currently pointed *inward* at the
-  local engine, and (per `docs/specs/a2a-agent-identity/spec.md`) still
+  local engine, and (per `docs/specs/a2a-agent-identity/spec.md`, removed 2026-09-23) still
   anonymous/lineage-less.
 - **Approved spec, half-built:** `docs/specs/run-evidence-ingress/spec.md`
   defines `RunEvidenceEnvelopeV1` (producer payload) vs `RunEvidenceManifestV1`

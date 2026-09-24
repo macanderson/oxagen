@@ -6,6 +6,63 @@ host under Tacho for Claude Code, Codex, Cursor, and Stella, and lets the
 operator see the connection, pick or change the workspace the host reports
 to, add or drop a wrapper, and unenroll. Spec: `docs/specs/oxagen-desktop/spec.html`.
 
+## Boundary
+
+- **Owns:** the Tauri shell and its React UI, the argv each panel hands to a
+  sidecar (`src/commands.ts`), the sidecar bridge (`src/bridge.ts`), putting
+  the two CLIs on PATH (`src-tauri/src/cli_install.rs`), the two user-scoped
+  API reads, the tray, and the in-app updater.
+- **Does not own:** enrollment, hook writing, or the collector
+  ([`@oxagen/tacho`](../../packages/tacho/README.md), run as the `tacho`
+  sidecar); sign-in and workspace defaults ([`apps/cli`](../cli/README.md),
+  run as the `oxagen` sidecar); the organization and workspace lists
+  ([`apps/api`](../api/README.md)); the house tokens and fonts
+  ([`@oxagen/ui`](../../packages/ui/README.md)).
+- **Depends on:** `@oxagen/ui`, for `styles/house-tokens.css` and
+  `styles/fonts/space-grotesk.css` (`src/styles.css`). The `tacho` and
+  `oxagen` binaries are staged into the bundle by `scripts/sidecars.mjs`, not
+  imported.
+- **Used by:** no workspace package imports it. It ships as a signed desktop
+  installer.
+
+## Seams
+
+| Seam | Kind | Source | Wired by |
+|---|---|---|---|
+| Sidecar bridge (`Command.sidecar`) | boundary | `apps/desktop/src/bridge.ts` | Every panel action. `externalBin` in `src-tauri/tauri.conf.json` lists `binaries/tacho` and `binaries/oxagen` |
+| Panel-to-argv mapping and the `Harness` union | boundary | `apps/desktop/src/commands.ts` | `apps/desktop/src/app.tsx`. The union must track `WRAPPED_HARNESSES` in `packages/tacho/src/wire.ts` plus `claude-desktop` (ADR-101) |
+| Sidecar and updater permissions | boundary | `apps/desktop/src-tauri/capabilities/default.json` | Tauri, at runtime |
+| User-scoped API calls (`USER_ROUTES`) | boundary | `apps/desktop/src-tauri/src/lib.rs` | The Workspace panel. Served by `apps/api/src/app.ts` |
+| Release feed (`latest.json`) | boundary | `apps/desktop/src-tauri/tauri.conf.json` (`plugins.updater.endpoints`) | `apps/desktop/src/updater.ts` |
+
+The desktop app bootstraps no kernel gate and invokes no capability directly.
+
+## Entry points
+
+- `src/main.tsx`: the React entry, rendering `src/app.tsx`.
+- `src-tauri/src/lib.rs`: the Rust shell.
+- `src-tauri/tauri.conf.json`: bundle, sidecars, and updater config.
+- `pnpm --filter @oxagen/desktop dev`: `tauri dev` with the Vite UI.
+
+## Rules
+
+- The app owns no state. It reads the files the CLIs write and runs a sidecar
+  for every action.
+- It never overwrites a PATH entry it did not write.
+- A harness list in the UI names all four wrapped harnesses (ADR-101).
+
+## Tests
+
+```bash
+pnpm --filter @oxagen/desktop test:unit src/commands.test.ts
+```
+
+Never put `--` before the filename. TypeScript tests sit beside their
+sources in `src/`. `pnpm --filter @oxagen/desktop test:rust` runs the Rust
+unit tests in `src-tauri/`.
+
+## Panels
+
 The app owns no state. Every panel reads the files the CLIs write
 (`~/.config/oxagen/config.json`, `~/.config/oxagen/tacho/host.json`, the
 collector's `/status` on loopback) and every action runs a sidecar:

@@ -13,12 +13,12 @@
 
 import * as React from "react";
 import {
-  GithubIcon,
   ExternalLinkIcon,
   RefreshCwIcon,
   CheckCircle2,
   AlertTriangle,
 } from "lucide-react";
+import { GithubIcon } from "@/components/brand/github-icon";
 import {
   fetchGithubStatus,
   type GithubStatusResponse,

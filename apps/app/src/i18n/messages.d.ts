@@ -2026,23 +2026,75 @@ type Messages = {
     };
   };
   fleet: {
+    subtitle: string;
     loading: string;
     actions: {
+      steer: string;
       register: string;
+    };
+    steer: {
+      title: string;
+      agents: string;
+      all: string;
+      none: string;
+      pick: string;
+      inFlight: string;
+      inFlightNoTurn: string;
+      idle: string;
+      idleSub: string;
+      hint: string;
+      noAgents: string;
+      agentsUnread: string;
+      keyless: string;
+      stopped: string;
+      text: string;
+      delivery: string;
+      boundary: string;
+      boundaryBody: string;
+      interrupt: string;
+      interruptUnavailable: string;
+      interruptHint: string;
+      recorded: string;
+      note: string;
+      footer: string;
+      send: string;
+      sending: string;
+      cancel: string;
+      queued: string;
+      refused: string;
     };
     stats: {
       label: string;
       live: {
         title: string;
         basis: string;
+        basisUnread: string;
       };
       waiting: {
         title: string;
+        open: string;
         oldest: string;
         none: string;
+        drawer: string;
         more: string;
         moreBasis: string;
-        open: string;
+        window: string;
+        windowSeconds: string;
+        interjections: string;
+        unread: string;
+      };
+      spend: {
+        title: string;
+        noBasis: string;
+        unbased: string;
+        unpriced: string;
+        notRecorded: string;
+        mixed: string;
+      };
+      tokens: {
+        title: string;
+        notRecorded: string;
+        noCache: string;
       };
     };
     approvals: {
@@ -2118,53 +2170,130 @@ type Messages = {
     };
     runs: {
       title: string;
+      chipsLabel: string;
+      chips: {
+        all: string;
+        live: string;
+        parked: string;
+        sealed: string;
+      };
+      search: string;
+      facetAll: string;
+      facetLabel: string;
+      rows: string;
+      rowsAll: string;
+      sortBy: string;
+      tokensUnsorted: string;
       columns: {
         run: string;
         agent: string;
         operator: string;
         status: string;
         tier: string;
+        replay: string;
+        tokens: string;
         cost: string;
         frames: string;
         started: string;
-        controls: string;
       };
+      parked: string;
       notRecorded: string;
       basisNotRecorded: string;
-      unpriced: string;
-      unpricedLink: string;
       source: {
         ledger: string;
         tacho: string;
-      };
-      older: string;
-      newest: string;
-      pager: string;
-      empty: {
-        title: string;
-        body: string;
-        enroll: string;
-        command: string;
-      };
-      controls: {
-        group: string;
-        action: string;
-        verbs: {
-          pause: string;
-          resume: string;
-          cancel: string;
-        };
-        sending: string;
-        queued: string;
-        reread: string;
-        unavailable: string;
       };
       operatorKind: {
         human: string;
         agent: string;
         service: string;
       };
-      rowsShown: string;
+      noMatch: string;
+      pager: {
+        label: string;
+        range: string;
+        rangeMore: string;
+        none: string;
+        previous: string;
+        next: string;
+        page: string;
+        older: string;
+        newest: string;
+      };
+      pause: string;
+      resolve: string;
+      export: string;
+      rowAction: string;
+      exportQueued: string;
+      exportFailed: string;
+    };
+    pause: {
+      title: string;
+      body: string;
+      run: string;
+      position: string;
+      positionValue: string;
+      positionNoTurn: string;
+      recordedAs: string;
+      recordedValue: string;
+      reason: string;
+      note: string;
+      footer: string;
+      confirm: string;
+      pending: string;
+      cancel: string;
+      queued: string;
+    };
+    empty: {
+      title: string;
+      body: string;
+      register: string;
+      agents: string;
+    };
+    error: {
+      title: string;
+      body: string;
+      retry: string;
+      incident: string;
+      trace: string;
+    };
+    denied: {
+      title: string;
+      body: string;
+      back: string;
+      signedIn: string;
+      signedInValue: string;
+      needed: string;
+      neededValue: string;
+      decidedBy: string;
+      decidedByValue: string;
+    };
+    pending: {
+      title: string;
+      body: string;
+    };
+    requestAccess: {
+      title: string;
+      role: string;
+      why: string;
+      note: string;
+      send: string;
+      cancel: string;
+      unbacked: string;
+    };
+    incident: {
+      title: string;
+      subject: string;
+      severity: string;
+      severities: {
+        critical: string;
+        warning: string;
+        info: string;
+      };
+      attach: string;
+      raise: string;
+      cancel: string;
+      unbacked: string;
     };
   };
   mandate: {
@@ -2423,7 +2552,8 @@ type Messages = {
         badge: string;
         title: string;
         body: string;
-        open: string;
+        dismiss: string;
+        agentNotRecorded: string;
       };
     };
     register: {
@@ -5577,171 +5707,11 @@ type Messages = {
   steering: {
     tabs: {
       label: string;
-      library: string;
-      assignments: string;
-      gates: string;
       proposals: string;
-      compiler: string;
-      candidates: string;
-      prs: string;
-      segments: string;
-    };
-    hub: {
-      description: string;
-    };
-    shelves: {
-      label: string;
-      all: string;
-      records: string;
-      instructions: string;
-      skills: string;
-      memory: string;
-      ontology: string;
-      notRecorded: string;
-    };
-    governance: {
-      chip: string;
-      chipTitle: string;
-      absentTitle: string;
-      invalidTitle: string;
-      unboundTitle: string;
-      unreadTitle: string;
-      shown: {
-        invalid: string;
-        unbound: string;
-        unread: string;
-      };
-      title: string;
-      subtitle: string;
-      mainRepository: string;
-      pick: string;
-      now: string;
-      modes: {
-        solo: {
-          summary: string;
-          hint: string;
-        };
-        team: {
-          summary: string;
-          hint: string;
-        };
-        regulated: {
-          summary: string;
-          hint: string;
-        };
-      };
-      tomlHeader: string;
-      note: string;
-      cancel: string;
-      close: string;
-      submit: string;
-      pending: string;
-      commit: string;
-      commitPending: string;
-      proposed: string;
-      applied: string;
-      unchanged: string;
-      openPr: string;
-      failure: {
-        denied: string;
-        noRepository: string;
-        refused: string;
-        pendingApproval: string;
-        unavailable: string;
-      };
-      lowering: string;
-    };
-    library: {
-      items: string;
-      itemsNote: string;
-      byKind: string;
-      byKindNote: string;
-      compiledSize: string;
-      compiledSizeNote: string;
-      grants: string;
-      grantsNote: string;
-      notRecorded: string;
-      kindRecord: string;
-      lead: string;
-      planes: string;
-      title: string;
-      receives: string;
-      columns: {
-        item: string;
-        kind: string;
-        force: string;
-        scope: string;
-        compiles: string;
-        tokens: string;
-        source: string;
-      };
-      compilesNotRecorded: string;
-      compilesTitle: string;
-      tokensTitle: string;
-      scopeTargetTitle: string;
-      sourceNone: string;
-      gap: string;
-      truncated: string;
-    };
-    state: {
-      loading: string;
-      empty: {
-        title: string;
-        body: string;
-        repository: string;
-      };
-      error: {
-        title: string;
-        answered: string;
-        body: string;
-        retry: string;
-        incident: string;
-        incidentNote: string;
-        trace: string;
-      };
-      denied: {
-        title: string;
-        body: string;
-        request: string;
-        requestNote: string;
-        back: string;
-        signedIn: string;
-        signedInValue: string;
-        signedInNamed: string;
-        needed: string;
-        neededValue: string;
-        decidedBy: string;
-        decidedByValue: string;
-      };
-      pending: {
-        title: string;
-        body: string;
-      };
-    };
-    bodies: {
-      notBacked: string;
-      issue: string;
-      assignments: {
-        what: string;
-      };
-      gates: {
-        what: string;
-      };
-      compiler: {
-        what: string;
-      };
-      memory: {
-        what: string;
-      };
-      ontology: {
-        what: string;
-      };
-      instructions: {
-        what: string;
-      };
-      skillSource: {
-        pending: string;
-      };
+      settings: string;
+      library: string;
+      freshness: string;
+      deliveries: string;
     };
     failure: {
       denied: string;
@@ -5922,6 +5892,20 @@ type Messages = {
       skill: string;
       record: string;
     };
+    library: {
+      label: string;
+      all: string;
+      records: string;
+      skills: string;
+      memory: string;
+    };
+    proposalSections: {
+      label: string;
+      candidates: string;
+      prs: string;
+    };
+    description: string;
+    governance: string;
     deliveries: {
       title: string;
       lead: string;
@@ -6615,7 +6599,6 @@ type Messages = {
     };
     dialog: {
       close: string;
-      dismiss: string;
     };
     record: {
       kinds: {
@@ -6652,6 +6635,8 @@ type Messages = {
     };
     runStatus: {
       live: string;
+      sealed: string;
+      halted: string;
       running: string;
       completed: string;
       failed: string;
@@ -6728,20 +6713,6 @@ type Messages = {
       name: string;
       hint: string;
       invalid: string;
-    };
-    list: {
-      search: string;
-      filterBy: string;
-      all: string;
-      rows: string;
-      allRows: string;
-      noMatch: string;
-      pager: string;
-      range: string;
-      rangeEmpty: string;
-      previous: string;
-      next: string;
-      page: string;
     };
     listTable: {
       search: string;

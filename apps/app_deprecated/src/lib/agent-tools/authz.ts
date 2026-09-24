@@ -14,7 +14,7 @@ import {
  * in apps/app may make that decision.
  *
  * Why one seam: RBAC for this surface (a "Marketplace Install" role — see
- * docs/specs/rbac-permissions-plane.md) does not exist yet. When it lands,
+ * oxagen-roadmap:docs/oxagen/specs/rbac-permissions-plane.md) does not exist yet. When it lands,
  * swapping the `canManage` check below for the role lookup gates every
  * install path in the product at once, with zero call-site changes.
  *

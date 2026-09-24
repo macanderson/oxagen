@@ -237,7 +237,6 @@ export function orgSource(reads: OrgReads): {
       proposals: refuse,
       contextPr: refuse,
       freshness: refuse,
-      hub: refuse,
       deliveries: refuse,
     },
     tools: {
