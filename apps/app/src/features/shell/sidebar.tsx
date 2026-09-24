@@ -29,14 +29,15 @@ const FOOT_GAP = "#3851";
 function navCount(
   key: NavKey,
   counts: ShellCounts,
-): { value: number | null; hot: boolean } | null {
+): { value: number | null; hot: boolean; more: boolean } | null {
   if (key !== "fleet" && key !== "steering" && key !== "audit") return null;
   const hot = key !== "steering";
   // A read that landed without a figure says so; it never reads as zero.
-  if (counts.unrecorded.includes(key)) return { value: null, hot };
+  if (counts.unrecorded.includes(key)) return { value: null, hot, more: false };
   const value = counts[key];
   if (value === null || value <= 0) return null;
-  return { value, hot };
+  // A queue that ran past the read says "+", as the drawer's header does.
+  return { value, hot, more: key === "fleet" && counts.fleetMore };
 }
 
 export function SidebarNav({
@@ -106,13 +107,18 @@ export function SidebarNav({
                             : "border-border text-sidebar-nav-label-fg"
                         }`}
                       >
-                        <span aria-hidden="true">{waiting.value}</span>
+                        <span aria-hidden="true">
+                          {waiting.value}
+                          {waiting.more ? "+" : ""}
+                        </span>
                         <span className="sr-only">
                           {/* Audit counts open critical incidents, which
                               are open, not waiting (mobileNav.incidents). */}
                           {item.key === "audit"
                             ? t("sidebar.open", { count: waiting.value })
-                            : t("sidebar.waiting", { count: waiting.value })}
+                            : t("sidebar.waiting", {
+                                count: `${String(waiting.value)}${waiting.more ? "+" : ""}`,
+                              })}
                         </span>
                       </span>
                     )}

@@ -4350,11 +4350,14 @@ type Messages = {
         };
         tools: {
           label: string;
+          note: string;
         };
       };
       shortcut: string;
       assistant: {
         open: string;
+        askTampered: string;
+        askTamperedDraft: string;
         askCost: string;
         askCostDraft: string;
         mintKey: string;
@@ -4373,6 +4376,7 @@ type Messages = {
       };
       search: {
         failed: string;
+        toolsNotBacked: string;
       };
     };
     mobileNav: {

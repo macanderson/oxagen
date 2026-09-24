@@ -45,7 +45,16 @@ const slotClass =
  * read that landed without a figure: it draws "?" in a dashed pill and says
  * the count is not recorded, the way the sidebar does, never a zero.
  */
-function SlotCount({ count, label }: { count: number | null; label: string }) {
+function SlotCount({
+  count,
+  label,
+  more = false,
+}: {
+  count: number | null;
+  label: string;
+  /** The queue ran past the read: the count says "+". */
+  more?: boolean;
+}) {
   return count === null ? (
     <span
       data-count-unrecorded=""
@@ -59,7 +68,10 @@ function SlotCount({ count, label }: { count: number | null; label: string }) {
       data-count={count}
       className="absolute left-[calc(50%+6px)] top-0.5 min-w-[18px] rounded-full border border-info/40 bg-app-panel-bg px-1 text-center font-mono text-[10px] text-info"
     >
-      <span aria-hidden="true">{count}</span>
+      <span aria-hidden="true">
+        {count}
+        {more ? "+" : ""}
+      </span>
       <span className="sr-only">{label}</span>
     </span>
   );
@@ -247,6 +259,7 @@ export function ShellMobileNav({ data }: { data: ShellData }) {
                 // The name reads "Fleet, 3 approvals waiting".
                 <SlotCount
                   count={waiting}
+                  more={counts.fleetMore}
                   label={t("mobileNav.waiting", { count: waiting })}
                 />
               ) : null}

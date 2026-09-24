@@ -24,6 +24,7 @@ import { searchCommands } from "./command-actions";
 import {
   type Command,
   type CommandGroup,
+  TOOL_ROW_GAP,
   buildCommands,
   filterCommands,
   fromSearchRows,
@@ -128,6 +129,7 @@ function CommandPalette({
     assistant: t("commands.groups.assistant.note"),
     create: t("commands.groups.create.note"),
     actions: t("commands.groups.actions.note"),
+    tools: t("commands.groups.tools.note"),
   };
 
   const commands = useMemo(
@@ -290,6 +292,17 @@ function CommandPalette({
                   </div>
                 );
               })}
+              {group === "tools" ? (
+                // A tool row has a name and a description; the chips the
+                // design draws have no field to read (#3969).
+                <p
+                  data-testid="command-tools-not-backed"
+                  data-gap={TOOL_ROW_GAP}
+                  className="px-3 pb-1 pt-0.5 text-xs text-muted-foreground"
+                >
+                  {t("commands.search.toolsNotBacked")}
+                </p>
+              ) : null}
             </div>
           ))}
         </div>

@@ -119,19 +119,22 @@
           "note": "Each one is a governed action."
         },
         "tools": {
-          "label": "Tools on the belt"
+          "label": "Tools on the belt",
+          "note": "Risk and side effect, the same trailer the model sees."
         }
       },
       "shortcut": "⌘{n}",
       "assistant": {
         "open": "Open the assistant",
+        "askTampered": "Ask why a run came back tampered",
+        "askTamperedDraft": "Why did a run in this workspace come back tampered, and what does its record show?",
         "askCost": "Ask what an agent cost this month",
         "askCostDraft": "What did each agent in this workspace cost this month, and on what basis?",
         "mintKey": "Mint a model key for this organization"
       },
       "actions": {
         "pauseAll": "Pause every live run in this workspace",
-        "pauseAllNotBacked": "No capability pauses every live run at once yet. Pause each run from Fleet.",
+        "pauseAllNotBacked": "No capability pauses every live run at once yet.",
         "steer": "Steer the fleet",
         "register": "Register an agent",
         "grant": "Grant a mandate",
@@ -142,7 +145,8 @@
         "apiKey": "Create an API key"
       },
       "search": {
-        "failed": "search_tools could not be read, so runs, agents, approvals and tools are not listed."
+        "failed": "search_tools could not be read, so runs, agents, approvals and tools are not listed.",
+        "toolsNotBacked": "search_tools returns no version, risk, side effect or decision for a tool yet."
       }
     },
     "mobileNav": {
@@ -369,7 +373,7 @@
       "rowNotBacked": "Risk, amount, side effect, taint and task are not returned for a parked call yet.",
       "truncated": "Oxagen read the first {count} workspaces of this organization. Calls parked in the rest are not counted here.",
       "note": "A resolution mints a single-use approval token bound to the call digest, the agent, the run, and an expiry. It cannot be replayed on a second call. On expiry the call ends and the reason reaches the model.",
-      "interjectionNotBacked": "An open interjection is not recorded yet, so this list holds approvals only.",
+      "interjectionNotBacked": "An open interjection has no record yet.",
       "resolvedCard": {
         "chain": "Chain",
         "who": "Who asked",

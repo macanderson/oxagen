@@ -26,6 +26,8 @@ export type ShellCounts = {
   /** The topbar button's figure; null when no workspace's queue could be read. */
   waiting: OrgWaiting | null;
   fleet: number | null;
+  /** True when this workspace's queue ran past the read: the Fleet count says "+", as the drawer's header does. */
+  fleetMore: boolean;
   steering: number | null;
   audit: number | null;
   /** The counts whose read landed without a figure: drawn as "not recorded", never as zero. */
@@ -70,6 +72,7 @@ export function useShellCounts(data: ShellData): ShellCounts {
   return {
     waiting: orgWaiting(data),
     fleet: here?.pending.ok ? here.pending.value.items.length : null,
+    fleetMore: here?.pending.ok === true && here.pending.value.more,
     steering,
     audit,
     unrecorded,

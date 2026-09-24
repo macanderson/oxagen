@@ -47,6 +47,9 @@ export const SHORTCUT_PAGES: readonly WorkspaceNavKey[] = [
   "spend",
 ];
 
+/** The issue that owns a tool row's missing version, risk, side effect and decision. */
+export const TOOL_ROW_GAP = "#3969";
+
 /** The issue that owns the one action with no write, carried as a data attribute only. */
 export const PAUSE_ALL_GAP = "#3862";
 
@@ -72,6 +75,8 @@ export type Command =
 /** The copy the menu's own entries need, beyond the nav labels. */
 export type CommandTextKey =
   | "assistant.open"
+  | "assistant.askTampered"
+  | "assistant.askTamperedDraft"
   | "assistant.askCost"
   | "assistant.askCostDraft"
   | "assistant.mintKey"
@@ -121,8 +126,8 @@ export function buildCommands(
       // The organization's other pages, in the tab order.
       go("roles", orgHref(org, "roles"));
       go("apiKeys", orgHref(org, "apiKeys"));
-      go("modelFunding", orgHref(org, "modelFunding"));
-      go("sso", orgHref(org, "sso"));
+      // Model funding and single sign-on are routes the design does not
+      // have (audit-prompt check 1), so the menu does not list them.
     }
   }
 
@@ -133,6 +138,12 @@ export function buildCommands(
         label: labels.text("assistant.open"),
         group: "assistant",
         assistant: null,
+      },
+      {
+        id: "assistant:tampered",
+        label: labels.text("assistant.askTampered"),
+        group: "assistant",
+        assistant: labels.text("assistant.askTamperedDraft"),
       },
       {
         id: "assistant:cost",

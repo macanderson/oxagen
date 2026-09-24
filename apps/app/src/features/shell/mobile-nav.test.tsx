@@ -180,7 +180,7 @@ describe("thumb bar", () => {
     );
   });
 
-  const waitingIn = (count: number) =>
+  const waitingIn = (count: number, more = false) =>
     shellData({
       approvals: {
         workspaces: [
@@ -189,7 +189,7 @@ describe("thumb bar", () => {
               items: Array.from({ length: count }, (_, i) =>
                 approvalItem({ id: `apr_0${String(i)}` }),
               ),
-              more: false,
+              more,
             }),
           }),
         ],
@@ -209,6 +209,11 @@ describe("thumb bar", () => {
     // More carries Audit's critical incidents, which no store records yet.
     for (const slot of rest)
       expect(slot.querySelector("[data-count]")).toBeNull();
+  });
+
+  it('says "+" on the Fleet slot when the queue ran past the read', () => {
+    renderPhone(waitingIn(2, true));
+    expect(slots()[0]?.querySelector("[data-count]")).toHaveTextContent("2+");
   });
 
   it("shows no count when nothing waits (negative)", () => {

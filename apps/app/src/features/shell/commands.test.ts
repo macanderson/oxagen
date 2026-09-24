@@ -38,30 +38,18 @@ describe("buildCommands", () => {
       "/acme",
       "/acme/roles",
       "/acme/api-keys",
-      "/acme/model-funding",
-      "/acme/sso",
       "/acme/billing",
       "/acme/audit",
     ]);
     expect(go.every((c) => c.id.startsWith("go:"))).toBe(true);
     expect(
       go.map((c) => ("shortcut" in c ? (c.shortcut ?? null) : null)),
-    ).toEqual([
-      1,
-      2,
-      3,
-      4,
-      5,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-    ]);
+    ).toEqual([1, 2, 3, 4, 5, null, null, null, null, null, null, null]);
+  });
+
+  it("offers no Model funding or Single sign-on page: neither is a route in the design (negative)", () => {
+    expect(commands.find((c) => c.id === "go:modelFunding")).toBeUndefined();
+    expect(commands.find((c) => c.id === "go:sso")).toBeUndefined();
   });
 
   it("offers no Skills page: Skills is a tab of Steering (negative)", () => {
@@ -75,6 +63,12 @@ describe("buildCommands", () => {
         label: "text:assistant.open",
         group: "assistant",
         assistant: null,
+      },
+      {
+        id: "assistant:tampered",
+        label: "text:assistant.askTampered",
+        group: "assistant",
+        assistant: "text:assistant.askTamperedDraft",
       },
       {
         id: "assistant:cost",
@@ -148,8 +142,6 @@ describe("buildCommands", () => {
       "go:organization",
       "go:roles",
       "go:apiKeys",
-      "go:modelFunding",
-      "go:sso",
       "go:billing",
       "go:audit",
       "assistant:key",

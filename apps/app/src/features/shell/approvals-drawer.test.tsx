@@ -232,6 +232,35 @@ describe("the approvals button", () => {
     expect(button()).toHaveAccessibleName("Approvals, 1+ waiting");
   });
 
+  it('carries a queue that ran past the read into the list\'s eyebrow and the Fleet count as "+"', async () => {
+    const user = userEvent.setup();
+    renderShell(
+      shellData({
+        approvals: {
+          workspaces: [
+            shellWorkspace({
+              pending: readOk({
+                items: [
+                  approvalItem({ expiresAt: soon(9) }),
+                  approvalItem({ id: "apr_02K5RS8F3J", expiresAt: soon(9) }),
+                ],
+                more: true,
+              }),
+            }),
+          ],
+          truncated: false,
+          readAt: Date.now(),
+        },
+      }),
+    );
+    expect(button()).toHaveAccessibleName("Approvals, 2+ waiting");
+    const fleet = document.querySelector('[data-count="fleet"]');
+    expect(fleet).toHaveTextContent("2+");
+    expect(fleet).toHaveTextContent(", 2+ waiting");
+    await user.click(button());
+    expect(drawer()).toHaveTextContent("2+ waiting on you");
+  });
+
   it("draws no count and no figure when no queue could be read (negative)", () => {
     renderShell(
       shellData({
@@ -329,9 +358,7 @@ describe("the drawer", () => {
     // No interjection is recorded, and the list says so rather than implying none is open.
     expect(
       within(aside).getByTestId("interjection-not-backed"),
-    ).toHaveTextContent(
-      "An open interjection is not recorded yet, so this list holds approvals only.",
-    );
+    ).toHaveTextContent("An open interjection has no record yet.");
     expect(
       within(aside).getByTestId("interjection-not-backed"),
     ).toHaveAttribute("data-gap");

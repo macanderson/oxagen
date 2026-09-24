@@ -408,7 +408,10 @@ export function ApprovalsDrawer({
               {pending.length > 0 ? (
                 <>
                   <p className={eyebrow}>
-                    {t("waitingOnYou", { count: pending.length })}
+                    {/* The header's "+" carries into the list it heads. */}
+                    {t("waitingOnYou", {
+                      count: `${String(pending.length)}${waiting?.partial === true ? "+" : ""}`,
+                    })}
                   </p>
                   <ul className="flex flex-col gap-2">
                     {pending.map(({ item, wsName }) => (

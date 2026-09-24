@@ -128,13 +128,13 @@
         "retry": "Try again",
         "incident": "Open an incident",
         "trace": "trace {id}",
-        "incidentNotBacked": "Oxagen cannot open an incident from this page yet. Report the code and the time above to your organization owner."
+        "incidentNotBacked": "Oxagen cannot open an incident from this page yet."
       },
       "denied": {
         "body": "Your roles on <b>{org}</b> do not include <code>{permission}</code>. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
         "request": "Request access",
         "back": "Back to Fleet",
-        "requestNotBacked": "Oxagen has no request for a role yet. An organization owner grants one on the Organization page.",
+        "requestNotBacked": "Oxagen cannot send a request for a role yet.",
         "signedIn": "Signed in as",
         "needed": "Needed",
         "decidedBy": "Decided by",

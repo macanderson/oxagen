@@ -235,7 +235,7 @@ describe("PageDenied", () => {
     });
     expect(request).toHaveAttribute("aria-disabled", "true");
     expect(request).toHaveAccessibleDescription(
-      /An organization owner grants one on the Organization page/,
+      /Oxagen cannot send a request for a role yet\./,
     );
   });
 
