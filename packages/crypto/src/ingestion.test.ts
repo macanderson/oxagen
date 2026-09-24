@@ -145,6 +145,50 @@ describe("createIngestionCryptoAdapter", () => {
     );
   });
 
+  // The evidence store resolves an adapter for every frame body it writes. A
+  // new adapter is a new KMSClient, whose connection setup made tacho ingest
+  // slower than the host's timeout in production.
+  it("reuses one KMS adapter per key ARN across write and read resolution", () => {
+    withEnv(
+      {
+        INGESTION_CRYPTO_PROVIDER: "kms",
+        AWS_KMS_INGESTION_KEY_ARN:
+          "arn:aws:kms:us-east-2:123456789012:key/reused-key",
+      },
+      () => {
+        const first = createIngestionCryptoAdapter().adapter;
+        expect(createIngestionCryptoAdapter().adapter).toBe(first);
+        expect(
+          resolveIngestionCryptoAdapterForKeyId(INGESTION_KEY_ID_KMS).adapter,
+        ).toBe(first);
+      },
+    );
+  });
+
+  it("builds a separate KMS adapter for a different key ARN", () => {
+    let first: unknown;
+    withEnv(
+      {
+        INGESTION_CRYPTO_PROVIDER: "kms",
+        AWS_KMS_INGESTION_KEY_ARN:
+          "arn:aws:kms:us-east-2:123456789012:key/first-key",
+      },
+      () => {
+        first = createIngestionCryptoAdapter().adapter;
+      },
+    );
+    withEnv(
+      {
+        INGESTION_CRYPTO_PROVIDER: "kms",
+        AWS_KMS_INGESTION_KEY_ARN:
+          "arn:aws:kms:us-east-2:123456789012:key/second-key",
+      },
+      () => {
+        expect(createIngestionCryptoAdapter().adapter).not.toBe(first);
+      },
+    );
+  });
+
   it("INGESTION_KEY_ID_ENV is the expected constant", () => {
     expect(INGESTION_KEY_ID_ENV).toBe("ingestion:env:v1");
   });
