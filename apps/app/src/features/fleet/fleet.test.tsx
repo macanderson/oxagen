@@ -621,7 +621,12 @@ describe("the Runs panel", () => {
   it("says why a run whose host stopped polling cannot be paused (negative)", async () => {
     await loaded({
       runs: runPage([
-        runRow({ id: "tse_quiet", commandBlock: "host_offline" }),
+        // A wrapped run: a ledger run is refused first, for its own reason.
+        runRow({
+          id: "tse_quiet",
+          source: "tacho",
+          commandBlock: "host_offline",
+        }),
       ]),
       approvals: NO_APPROVALS,
     });

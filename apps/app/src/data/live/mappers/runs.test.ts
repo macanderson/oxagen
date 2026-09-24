@@ -121,6 +121,9 @@ describe("toRunPage", () => {
           replayGrade: "fork",
           verdict: null,
           enforcementTier: "gateway",
+          // A row the control plane sent no answer for reads as reachable.
+          commandBlock: null,
+          steerBlock: null,
           enrichmentEnabled: true,
           ingressRevoked: false,
           ingressPaused: false,
@@ -183,6 +186,23 @@ describe("toRunPage", () => {
       status: "live",
       ingressRevoked: true,
       ingressPaused: true,
+    });
+  });
+
+  it("carries why a command or a steer cannot reach the run (ADR-163)", () => {
+    const page = toRunPage({
+      runs: [
+        {
+          ...unpricedSession,
+          commandBlock: "host_offline",
+          steerBlock: "no_prompt_carrier",
+        },
+      ],
+      nextCursor: null,
+    });
+    expect(RunPage.parse(page).runs[0]).toMatchObject({
+      commandBlock: "host_offline",
+      steerBlock: "no_prompt_carrier",
     });
   });
 
