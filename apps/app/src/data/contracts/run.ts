@@ -155,7 +155,7 @@ export type RunCostRollup = z.infer<typeof RunCostRollup>;
 export const RunCost = z.object({ rollup: RunCostRollup.nullable() });
 export type RunCost = z.infer<typeof RunCost>;
 
-export const TRANSCRIPT_ZOOMS = ["turns", "steps", "everything"] as const;
+const TRANSCRIPT_ZOOMS = ["turns", "steps", "everything"] as const;
 export const TranscriptZoom = z.enum(TRANSCRIPT_ZOOMS);
 export type TranscriptZoom = z.infer<typeof TranscriptZoom>;
 
