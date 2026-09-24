@@ -287,17 +287,17 @@
       "launcher": "Ask Stella",
       "launcherNotBacked": "Model and state not read here",
       "close": "Close Stella",
-      "thinking": "Working\u2026",
+      "thinking": "Working…",
       "recordedAs": "recorded as",
       "parked": "{count, plural, one {# write is waiting on a person} other {# writes are waiting on a person}}. Approve or deny them on Fleet.",
       "needsWorkspace": "Stella works inside one workspace. Open a workspace to ask Stella something.",
       "intro": {
         "title": "Ask Stella",
-        "body": "Stella reads this workspace\u2019s runs, agents, spend and knowledge graph, changes its settings and context records when you ask, and works on repositories in a scratch workbench. Every turn is recorded as a run of its own."
+        "body": "Stella reads this workspace’s runs, agents, spend and knowledge graph. Every turn is recorded as a run of its own."
       },
       "composer": {
         "label": "Ask Stella",
-        "placeholder": "Ask about a run, change a setting, or start work on a repository\u2026",
+        "placeholder": "Ask about a run, an agent, or what this is costing…",
         "send": "Send",
         "draftTooLong": "This request would exceed the message limit. Your existing draft is unchanged. Send or shorten it, then open the recommendation again."
       },
@@ -307,12 +307,12 @@
         "exhausted": "This organization has no budget left for Stella.",
         "noCredit": "This organization has no credit left for Stella. An owner can add credit on Billing, or store a model key under Model funding.",
         "spendCap": "This organization reached its monthly cap on Stella turns paid by Oxagen. An owner can store a model key under Model funding, or wait for the next month.",
-        "keyLimit": "The model key Oxagen holds for this organization reached its daily spend ceiling. Stella can answer again after midnight UTC, or an owner can store the organization\u2019s own key under Model funding.",
+        "keyLimit": "The model key Oxagen holds for this organization reached its daily spend ceiling. Stella can answer again after midnight UTC, or an owner can store the organization’s own key under Model funding.",
         "parked": "That turn is waiting on an approval before it can answer.",
-        "engine": "Stella\u2019s engine could not be reached, so this question was not answered. Ask again once the engine is back.",
+        "engine": "Stella’s engine could not be reached, so this question was not answered. Ask again once the engine is back.",
         "unrecorded": "Stella did not answer because the turn could not be recorded as a run. Nothing ran. Ask again.",
         "aborted": "Stella stopped this turn before it answered, usually at the per-turn budget. Ask again, or raise the budget.",
-        "model": "The model provider refused or failed Stella\u2019s request, so this question was not answered. An owner can check the key and model under Model funding. Ask again.",
+        "model": "The model provider refused or failed Stella’s request, so this question was not answered. An owner can check the key and model under Model funding. Ask again.",
         "unavailable": "Stella could not be reached. Try again."
       },
       "retry": "Ask again"
