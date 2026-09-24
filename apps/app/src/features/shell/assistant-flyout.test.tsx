@@ -863,9 +863,7 @@ describe("AssistantFlyout", () => {
 
       if (close === "escape") await user.keyboard("{Escape}");
       else
-        await user.click(
-          screen.getByRole("button", { name: "Close Stella" }),
-        );
+        await user.click(screen.getByRole("button", { name: "Close Stella" }));
 
       expect(flyout).toHaveAttribute("inert");
       // Not left on a control inside an inert panel, and not dropped to <body>.

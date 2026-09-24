@@ -288,10 +288,7 @@ function recordOnPage(
   return found;
 }
 
-type Refused = Extract<
-  Awaited<ReturnType<typeof askAssistant>>,
-  { ok: false }
->;
+type Refused = Extract<Awaited<ReturnType<typeof askAssistant>>, { ok: false }>;
 
 function refusalKey(result: Refused): Refusal {
   switch (result.reason) {

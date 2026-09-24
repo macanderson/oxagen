@@ -50,7 +50,9 @@ describe("the Stella marks match the house kit", () => {
     expect(STELLA_ICON_MARK).toBe(attr(icon, /class="mark" d="([^"]+)"/));
     expect(STELLA_ICON_TRANSFORM).toBe(attr(icon, /<g transform="([^"]+)"/));
     expect(STELLA_ICON_VIEWBOX).toBe(attr(icon, /viewBox="([^"]+)"/));
-    expect(STELLA_GOLD).toBe(attr(icon, /class="mark" d="[^"]+" fill="([^"]+)"/));
+    expect(STELLA_GOLD).toBe(
+      attr(icon, /class="mark" d="[^"]+" fill="([^"]+)"/),
+    );
   });
 });
 
