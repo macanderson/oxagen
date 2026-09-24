@@ -262,6 +262,100 @@ describe("ModelFundingForm: Test and save", () => {
     ).toContain("owner or admin");
   });
 
+  it.each<[string, Record<string, unknown>, string]>([
+    [
+      "an unknown credential",
+      { reason: "not_found", code: "model_credential_missing" },
+      "Refused (model_credential_missing).",
+    ],
+    [
+      "a conflicting write",
+      { reason: "conflict", code: "model_credential_changed" },
+      "Refused (model_credential_changed).",
+    ],
+    [
+      "a write parked for approval",
+      { reason: "pending_approval", accessRequestId: "ar_01K5WAIT" },
+      "This change is waiting for approval.",
+    ],
+    [
+      "an unreachable key service",
+      { reason: "unavailable", code: "kms_unavailable" },
+      "Oxagen could not reach the key service (kms_unavailable). Try again.",
+    ],
+    // A wart, pinned as it ships: an exhausted balance is worded as the key
+    // service being unreachable, with the code as the only tell.
+    [
+      "an exhausted balance",
+      { reason: "exhausted", code: "gau_exhausted" },
+      "Oxagen could not reach the key service (gau_exhausted). Try again.",
+    ],
+  ])(
+    "names %s across the whole form, and keeps the key unsaved (negative)",
+    async (_case, refusal, sentence) => {
+      testModelKey.mockResolvedValue(ACCEPTED);
+      saveModelKey.mockResolvedValue({ ok: false, ...refusal });
+      renderForm();
+      await userEvent.type(screen.getByLabelText(KEY_LABEL), KEY);
+      await testAndSave();
+      expect(await screen.findByTestId("funding-failure")).toHaveTextContent(
+        sentence,
+      );
+      // The key stays in the field so the person can try again.
+      expect(screen.getByLabelText(KEY_LABEL)).toHaveValue(KEY);
+      expect(router.refresh).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each<[string, string, string]>([
+    ["key_required", "apiKey", "Paste a key of at least 8 characters."],
+    ["base_url_required", "baseUrl", "Enter the server's URL."],
+  ])(
+    "puts %s beside its field rather than across the form",
+    async (code, field, sentence) => {
+      testModelKey.mockResolvedValue({
+        ok: false,
+        reason: "invalid",
+        code,
+        field,
+      });
+      renderForm();
+      await choose("openai_compatible");
+      await userEvent.type(screen.getByLabelText(KEY_LABEL), KEY);
+      await testAndSave();
+      expect(await screen.findByText(sentence)).toBeInTheDocument();
+      expect(screen.queryByTestId("funding-failure")).toBeNull();
+      expect(saveModelKey).not.toHaveBeenCalled();
+    },
+  );
+
+  it("says no reason was given when the vendor refuses without one (negative)", async () => {
+    testModelKey.mockResolvedValue({
+      ok: true,
+      value: { ok: false, toolCalling: null, latencyMs: 40, error: null },
+    });
+    renderForm();
+    await userEvent.type(screen.getByLabelText(KEY_LABEL), KEY);
+    await testAndSave();
+    expect(
+      await screen.findByTestId("funding-verdict-refused"),
+    ).toHaveTextContent("The vendor refused the key: no reason given");
+    expect(saveModelKey).not.toHaveBeenCalled();
+  });
+
+  it("tests and saves once when Test and save is pressed again while the first is running", async () => {
+    testModelKey.mockReturnValue(new Promise(() => undefined));
+    renderForm();
+    await userEvent.type(screen.getByLabelText(KEY_LABEL), KEY);
+    await testAndSave();
+    const pending = screen
+      .getAllByRole("button")
+      .find((button) => button.getAttribute("type") === "submit");
+    if (pending === undefined) throw new Error("no submit button");
+    await userEvent.click(pending);
+    expect(testModelKey).toHaveBeenCalledTimes(1);
+  });
+
   it("reports a write that threw instead of answering", async () => {
     testModelKey.mockRejectedValue(new Error("network"));
     renderForm();
