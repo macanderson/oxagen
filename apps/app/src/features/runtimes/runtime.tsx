@@ -185,7 +185,7 @@ function HostPanel({
  * label: it stays in the hover card, copyable. A roster that did not load, or
  * that does not hold the id, leaves the name unknown rather than guessed.
  */
-export function operatorOf(
+function operatorOf(
   operatorId: string,
   members: Read<MemberList>,
 ): OperatorIdentity {
