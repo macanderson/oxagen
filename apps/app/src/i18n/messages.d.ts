@@ -538,6 +538,8 @@ type Messages = {
           tierHint: string;
           budget: string;
           budgetHint: string;
+          budgetDay: string;
+          budgetDayHint: string;
         };
         tools: {
           title: string;
@@ -4596,6 +4598,8 @@ type Messages = {
       description: string;
     };
     noSummary: string;
+    summaryOff: string;
+    summaryFailed: string;
     source: {
       ledger: string;
       tacho: string;
@@ -5119,17 +5123,43 @@ type Messages = {
       rig: string;
       versionNotCaptured: string;
       harnessVersion: string;
-      effortNotCaptured: string;
+      effort: string;
+      effortNotRecorded: string;
+      thinkingOn: string;
+      thinkingOff: string;
+      permissionMode: string;
+      permissionModeNotRecorded: string;
       checkout: string;
-      repoNotCaptured: string;
+      repoNotRecorded: string;
+      branchNotRecorded: string;
+      moreCheckouts: string;
+      workLoading: string;
+      workUnread: string;
       noPullRequest: string;
-      pathNotCaptured: string;
-      derived: string;
+      pathNotRecorded: string;
       noMachine: string;
+      subagents: string;
+      noSubagents: string;
+      subagentsUnread: string;
+      subagentTypeNotRecorded: string;
+      subagentNoStop: string;
+      subagentRunning: string;
+      moreSubagents: string;
+      usage: string;
+      tokensInput: string;
+      tokensOutput: string;
+      tokensCacheRead: string;
+      tokensCacheWrite: string;
+      tokensNotRecorded: string;
+      costNotRecorded: string;
+      costReported: string;
       started: string;
       sealed: string;
       running: string;
+      sealNotRecorded: string;
+      ended: string;
       by: string;
+      enrolledBy: string;
       paused: string;
       copy: string;
       copyLabel: string;
@@ -5154,6 +5184,7 @@ type Messages = {
       wallClock: string;
       cacheHit: string;
       tokensNote: string;
+      tokensProvisional: string;
       promptsCut: string;
       wastedNote: string;
       running: string;
@@ -5199,6 +5230,7 @@ type Messages = {
       spend: string;
       toolCalls: string;
       noSpend: string;
+      spendProvisional: string;
       callCount: string;
     };
     workCi: {

@@ -8,14 +8,14 @@ The [model gateway audit](../audits/2026-09-21-model-gateway-arming.md) explains
 
 Each source abbreviation below links to the implementation. “Metered” and “budget” cover calls that pass through the model proxy. An operator can still change a local setting or call a provider directly. No row claims OS containment.
 
-| Harness | Recorded | Metered | Can deny | Can ask | Enforced budget | Contained |
-|---|---|---|---|---|---|---|
-| Claude Code | 33 configured events: 5 command hooks and 28 HTTP events [C] | Routed Anthropic calls [M] | PreToolUse denial [H] | Native permission prompt via `ask` [H] | Routed session ceiling when the mandate enables it [B] | No contained tier [T] |
-| Codex | 12 command events [X]; hooks must be trusted [O] | Routed OpenAI calls [M] | PreToolUse denial [H], [O] | Unsupported: the current client forwards `ask`, which Codex ignores after reporting a hook error [H], [O] | Routed session ceiling [B] | No contained tier [T] |
-| Cursor | 10 configured events [U] | No configured model route [M] | Tool, prompt, and subagent refusals [U] | Converted to deny with an explanation [U] | None through the current model proxy [M] | No contained tier [T] |
-| Stella | 8 command events; no SessionEnd [S] | Anthropic provider route only [M] | Native deny [A] | Native `require_approval` [A] | Routed Anthropic session ceiling only with exactly one live Stella session [B], [M] | No contained tier [T] |
-| Gemini CLI, not verified by enrollment | No Oxagen adapter [W]; vendor has hooks [G] | No Oxagen route [M]; API-key base-URL extension exists [GC] | Not implemented; vendor BeforeTool can refuse [G] | No native ask in the documented decision schema [G] | Not implemented; BeforeModel can refuse a call [G] | No Oxagen contained tier [T] |
-| Aider, not verified by enrollment | No Oxagen adapter [W]; history files offer an extension point [AI] | No Oxagen route [M]; OpenAI base-URL option exists [AI] | No pre-action hook documented in its options [AI] | No documented pre-action approval adapter [AI] | Not implemented; a future proxy route could gate model calls [AI], [B] | No Oxagen contained tier [T] |
+| Harness | Recorded | Metered | Can deny | Can ask | Enforced budget | Model list | Contained |
+|---|---|---|---|---|---|---|---|
+| Claude Code | 33 configured events: 5 command hooks and 28 HTTP events [C] | Routed Anthropic calls [M] | PreToolUse denial [H] | Native permission prompt via `ask` [H] | Routed session ceiling, and the agent's UTC-day ceiling on a host that advertises `daily_budget`, when the mandate enables them [B], [D] | Routed calls refused with `model_not_permitted` when the workspace arms its lists [L] | No contained tier [T] |
+| Codex | 12 command events [X]; hooks must be trusted [O] | Routed OpenAI calls [M] | PreToolUse denial [H], [O] | Unsupported: the current client forwards `ask`, which Codex ignores after reporting a hook error [H], [O] | Routed session ceiling and UTC-day ceiling [B], [D] | Routed calls, as for Claude Code [L] | No contained tier [T] |
+| Cursor | 10 configured events [U] | No configured model route [M] | Tool, prompt, and subagent refusals [U] | Converted to deny with an explanation [U] | None. Cursor's model calls do not reach the proxy, so neither the session nor the day ceiling holds [M] | None. Out of scope: Cursor documents no base URL the proxy could take, so no list is checked [M] | No contained tier [T] |
+| Stella | 8 command events; no SessionEnd [S] | Anthropic provider route only [M] | Native deny [A] | Native `require_approval` [A] | Routed Anthropic session ceiling only with exactly one live Stella session [B], [M]. The day ceiling covers every routed Anthropic call, attributed or not [D] | Anthropic route only [L], [M] | No contained tier [T] |
+| Gemini CLI, not verified by enrollment | No Oxagen adapter [W]; vendor has hooks [G] | No Oxagen route [M]; API-key base-URL extension exists [GC] | Not implemented; vendor BeforeTool can refuse [G] | No native ask in the documented decision schema [G] | Not implemented; BeforeModel can refuse a call [G] | Not implemented [M] | No Oxagen contained tier [T] |
+| Aider, not verified by enrollment | No Oxagen adapter [W]; history files offer an extension point [AI] | No Oxagen route [M]; OpenAI base-URL option exists [AI] | No pre-action hook documented in its options [AI] | No documented pre-action approval adapter [AI] | Not implemented; a future proxy route could gate model calls [AI], [B] | Not implemented [M] | No Oxagen contained tier [T] |
 
 [C]: ../../packages/tacho/src/host/settings-writer.ts
 [X]: ../../packages/tacho/src/host/codex-writer.ts
@@ -25,6 +25,8 @@ Each source abbreviation below links to the implementation. “Metered” and �
 [A]: ../../packages/tacho/src/claude-code/stella-adapter.ts
 [M]: ../../packages/tacho/src/host/model-base-url.ts
 [B]: ../../packages/tacho/src/collector/model-proxy.ts
+[D]: ../../packages/tacho/src/collector/day-spend.ts
+[L]: ../../packages/tacho/src/collector/model-allowlist.ts
 [T]: ../../packages/tacho/src/envelope.ts
 [W]: ../../packages/tacho/src/wire.ts
 [O]: https://learn.chatgpt.com/docs/hooks
@@ -40,7 +42,7 @@ The current enrollment writer installs hooks but does not persist their trust. C
 
 ### Cursor and Stella
 
-Cursor's adapter refuses an ask because its pre-tool protocol cannot provide the requested approval behavior. Enrollment writes no Cursor model route, so its recorded tool activity does not establish metered spend or a budget ceiling. Stella's writer routes its Anthropic provider; another provider can bypass that route. Stella supplies no session identifier. The proxy attributes a request only when exactly one Stella session is live on the host. With two or more, it records the call as unattributed and skips the session ceiling in the audited revision. Operators cannot rely on a per-session ceiling for concurrent Stella processes. Stella has no SessionEnd hook, so the collector uses process lifecycle evidence to close its sessions. See the adapters above and [the collector](../../packages/tacho/src/collector/daemon.ts).
+Cursor's adapter refuses an ask because its pre-tool protocol cannot provide the requested approval behavior. Enrollment writes no Cursor model route, so its recorded tool activity does not establish metered spend or a budget ceiling. The per-run budget, the per-day budget (ADR-160) and the workspace model list therefore do not apply to Cursor, and Oxagen does not plan a Cursor model route on the current CLI. Stella's writer routes its Anthropic provider; another provider can bypass that route. Stella supplies no session identifier. The proxy attributes a request only when exactly one Stella session is live on the host. With two or more, it records the call as unattributed and skips the session ceiling in the audited revision. Operators cannot rely on a per-session ceiling for concurrent Stella processes. Stella has no SessionEnd hook, so the collector uses process lifecycle evidence to close its sessions. See the adapters above and [the collector](../../packages/tacho/src/collector/daemon.ts).
 
 ### Gemini CLI extension
 

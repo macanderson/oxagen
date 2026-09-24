@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   bodyPut: vi.fn(),
   recordProofFrames: vi.fn(),
   fetchAgentRunAuthzIn: vi.fn(),
+  selectAgentDaySpend: vi.fn(),
 }));
 
 vi.mock("./lib/proof", () => ({
@@ -51,6 +52,7 @@ vi.mock("@oxagen/telemetry", async (importOriginal) => {
     insertTachoEvents: mocks.insertTachoEvents,
     selectTachoEvents: mocks.selectTachoEvents,
     selectTachoStoredFrames: mocks.selectTachoStoredFrames,
+    selectAgentDaySpend: mocks.selectAgentDaySpend,
   };
 });
 
@@ -85,6 +87,7 @@ import {
   enforcementTierOf,
   foldDelta,
   isObservedModelCall,
+  lastRecordedContext,
   tachoEventsIngestHandler,
   usageCountedEvents,
 } from "./tacho.events.ingest";
@@ -579,7 +582,10 @@ function wire(db: FakeDb): void {
               },
             }),
           },
-          tachoHosts: { findFirst: async () => db.hosts[0] },
+          tachoHosts: {
+            findFirst: async () => db.hosts[0],
+            findMany: async () => db.hosts,
+          },
           principals: {
             findFirst: async () => {
               db.principalLookups();
@@ -944,6 +950,39 @@ describe("ingest_tacho_events", () => {
       expect(repaired.control.host_status).toBe("active");
     },
   );
+
+  it("sends the agent's day spend on the envelope only when the mandate carries a daily ceiling (ADR-160)", async () => {
+    const db = fakeDb();
+    db.hosts[0]!["agentId"] = "agent-daily";
+    db.hosts[0]!["bundleFeatures"] = ["daily_budget"];
+    db.activeDefinition = "budget = { per_day_micros = 20000000 }";
+    wire(db);
+    mocks.selectAgentDaySpend.mockReset();
+    mocks.selectAgentDaySpend.mockResolvedValue(
+      new Map([
+        [HOST_PUBLIC, 4_000],
+        ["tch_other_host", 1_000],
+      ]),
+    );
+    const before = new Date().toISOString().slice(0, 10);
+    const output = await tachoEventsIngestHandler(batch(session()), CONTEXT);
+    const after = new Date().toISOString().slice(0, 10);
+    expect(output.control.agent_day_spend).toMatchObject({
+      this_host_usd_micros: 4_000,
+      other_hosts_usd_micros: 1_000,
+    });
+    // The handler's own clock picks the day; a run across midnight UTC may
+    // land on either side of it.
+    expect([before, after]).toContain(output.control.agent_day_spend?.day);
+
+    // The same agent on a host that does not enforce a day: no ceiling is
+    // signed, so no figure is read or sent.
+    mocks.selectAgentDaySpend.mockClear();
+    db.hosts[0]!["bundleFeatures"] = [];
+    const older = await tachoEventsIngestHandler(batch(session()), CONTEXT);
+    expect(older.control.agent_day_spend).toBeUndefined();
+    expect(mocks.selectAgentDaySpend).not.toHaveBeenCalled();
+  });
 
   it("accepts a verified session, rolls it up, and answers the control envelope", async () => {
     const db = fakeDb();
@@ -4323,5 +4362,35 @@ describe("observed metering from the model proxy", () => {
     expect(
       dialect.sqlToQuery(update?.values["numModelCalls"] as SQL).params,
     ).toEqual([0]);
+  });
+});
+
+describe("lastRecordedContext", () => {
+  const frame = (context?: Record<string, unknown>) =>
+    ({ kind: "tool_call", context }) as unknown as TachoEvent;
+
+  it("keeps the last recorded value when the batch ends on a frame with no context", () => {
+    expect(
+      lastRecordedContext([
+        frame({ model: "claude-opus-4-1", permission_mode: "default" }),
+        frame({ model: "claude-sonnet-4-5", effort: "high" }),
+        frame(),
+        frame({}),
+      ]),
+    ).toEqual({
+      model: "claude-sonnet-4-5",
+      permissionMode: "default",
+      effort: "high",
+      gitHeadSha: null,
+    });
+  });
+
+  it("returns nulls for a batch that recorded none of them", () => {
+    expect(lastRecordedContext([frame(), frame({ cwd: "/repo" })])).toEqual({
+      model: null,
+      permissionMode: null,
+      effort: null,
+      gitHeadSha: null,
+    });
   });
 });
