@@ -96,7 +96,7 @@ describe("WorkspaceDenied", () => {
       screen.getByRole("link", { name: "Back to Fleet" }).getAttribute("href"),
     ).toBe("/acme/core-platform");
     expect(screen.getByTestId("page-denied-decided-by").textContent).toBe(
-      "The refusal does not record which policy decided it.",
+      "policy not recorded · deny wins over every allow",
     );
   });
 
