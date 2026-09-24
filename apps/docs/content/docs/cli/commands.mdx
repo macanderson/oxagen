@@ -97,6 +97,22 @@ Resolves an org and workspace (from the picker, or reused from an existing link)
 
 `init` is idempotent. Running it again in a linked project reuses the existing link.
 
+The link names the org and the workspace by slug, ID, and name:
+
+```json
+{
+  "orgSlug": "acme",
+  "orgId": "org_2BqKc9",
+  "orgName": "Acme",
+  "workspaceSlug": "payments",
+  "workspaceId": "ws_7XpLm4",
+  "workspaceName": "Payments",
+  "linkedAt": "2026-09-24T16:00:00.000Z"
+}
+```
+
+Commands address the workspace by its slugs. The CLI reads the IDs only to find the org and workspace again after one is renamed, and then rewrites the slugs. `init` writes database IDs. To write the file by hand, copy the public IDs (`org_…` and `ws_…`) from the Workspaces section of the Organization page. The CLI accepts either form.
+
 ## oxagen agent: the agent identity
 
 ```bash

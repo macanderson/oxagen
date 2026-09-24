@@ -21,9 +21,15 @@ import { join } from "node:path";
 
 export interface WorkspaceLink {
   orgSlug: string;
+  /**
+   * The org's database id, which `oxagen init` writes, or its public id
+   * (`org_…`), which the Organization page shows for copying. Read only to
+   * find the org again after a rename; either form works.
+   */
   orgId: string;
   orgName: string;
   workspaceSlug: string;
+  /** The workspace's database id or its public id (`ws_…`). As `orgId`. */
   workspaceId: string;
   workspaceName: string;
   /** GitHub (or other VCS) repos this workspace is linked to. */

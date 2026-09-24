@@ -651,6 +651,99 @@ describe("resolveContext", () => {
     });
   });
 
+  // The Organization page shows only public ids, so a link written by hand
+  // from it carries `org_…` and `ws_…` rather than database ids. Those must
+  // find the renamed records too, and must not match a record whose database
+  // id happens to be absent from the answer.
+  it("follows a renamed org or workspace through public ids in the link", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
+    await mkdir(join(tmp, ".oxagen"), { recursive: true });
+    await writeFile(
+      join(tmp, ".oxagen", "workspace.json"),
+      JSON.stringify({
+        orgSlug: "acme-old",
+        orgId: "org_2BqKc9",
+        workspaceSlug: "payments-old",
+        workspaceId: "ws_7XpLm4",
+      }),
+      "utf8",
+    );
+    remotes({ origin: "git@github.com:acme/app.git" });
+    apiPostOrThrow.mockImplementation(async (_path, _body, scope) => {
+      const s = scope as { org: string; ws: string } | undefined;
+      if (s?.org === "acme" && s.ws === "payments")
+        return {
+          steeringVersion: 4,
+          headCommit: null,
+          repository: "acme/app",
+          defaultBranch: "main",
+          policy: { blockStaleRuns: true },
+        };
+      throw new MockApiError("not found", 404);
+    });
+    userApiPostOrThrow.mockImplementation(async (path, body) => {
+      if (path === "organizations")
+        return {
+          organizations: [
+            {
+              id: "3c9bd760-d44a-4891-a4a5-35878d4fcfaa",
+              publicId: "org_0other",
+              slug: "other",
+            },
+            {
+              id: "0d6f1b2e-7a55-4a47-9c1c-2f1f0f6b8a10",
+              publicId: "org_2BqKc9",
+              slug: "acme",
+            },
+          ],
+        };
+      if (path === "workspaces") {
+        expect(body).toEqual({ orgSlug: "acme" });
+        return {
+          workspaces: [
+            {
+              id: "778d509d-ea0b-4f1a-be73-d1d7fb5f97df",
+              publicId: "ws_7XpLm4",
+              slug: "payments",
+            },
+          ],
+        };
+      }
+      throw new Error(`unexpected ${path}`);
+    });
+
+    const ctx = await resolveContext(tmp);
+    expect(ctx.platform?.steeringVersion).toBe(4);
+    const rewritten = JSON.parse(
+      await readFile(join(tmp, ".oxagen", "workspace.json"), "utf8"),
+    ) as Record<string, string>;
+    expect(rewritten).toMatchObject({
+      orgSlug: "acme",
+      orgId: "org_2BqKc9",
+      workspaceSlug: "payments",
+      workspaceId: "ws_7XpLm4",
+    });
+  });
+
+  // A hand-written link may leave the ids out. Recovery then has nothing to
+  // match on and must not pick a record by accident.
+  it("does not recover a link that carries no ids", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
+    await mkdir(join(tmp, ".oxagen"), { recursive: true });
+    await writeFile(
+      join(tmp, ".oxagen", "workspace.json"),
+      JSON.stringify({ orgSlug: "acme-old", workspaceSlug: "payments-old" }),
+      "utf8",
+    );
+    apiPostOrThrow.mockRejectedValue(new MockApiError("not found", 404));
+    userApiPostOrThrow.mockResolvedValue({
+      organizations: [{ id: "x", publicId: "org_x", slug: "acme" }],
+    });
+    const ctx = await resolveContext(tmp);
+    expect(ctx.platform).toBeNull();
+    expect(userApiPostOrThrow).not.toHaveBeenCalled();
+  });
+
   // The recovery calls run inside the same deadline as the read, so a hung
   // list endpoint cannot spend the hook's budget either.
   it("bounds the slug-recovery calls by the same deadline", async () => {
