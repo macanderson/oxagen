@@ -7,6 +7,7 @@ import {
   byMicrosDescending,
   compareMicros,
   Cost,
+  decimalFromMicros,
   divMicros,
   isCurrencyCode,
   maxMoney,
@@ -312,6 +313,36 @@ describe("microsFromDecimal", () => {
     "refuses %j (negative)",
     (text) => {
       expect(microsFromDecimal(text)).toBeNull();
+    },
+  );
+});
+
+describe("decimalFromMicros", () => {
+  it.each([
+    ["50000000", "50"],
+    ["12500000", "12.5"],
+    ["250000", "0.25"],
+    ["12000001", "12.000001"],
+    ["0", "0"],
+    ["0007500000", "7.5"],
+    ["1", "0.000001"],
+  ])("writes %s micros as %j", (micros, text) => {
+    expect(decimalFromMicros(micros)).toBe(text);
+  });
+
+  it.each(["50000000", "12500000", "1", "999999999999999999"])(
+    "round-trips %s through microsFromDecimal",
+    (micros) => {
+      const text = decimalFromMicros(micros);
+      expect(text).not.toBeNull();
+      expect(microsFromDecimal(text ?? "")).toBe(micros);
+    },
+  );
+
+  it.each(["", "-5", "1.5", "1e3", "12 "])(
+    "refuses %j (negative)",
+    (micros) => {
+      expect(decimalFromMicros(micros)).toBeNull();
     },
   );
 });

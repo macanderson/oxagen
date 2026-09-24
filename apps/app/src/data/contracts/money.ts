@@ -316,3 +316,18 @@ export function microsFromDecimal(text: string): string | null {
   const [, whole = "", fraction = ""] = match;
   return `${whole}${fraction.padEnd(6, "0")}`.replace(/^0+(?=\d)/, "");
 }
+
+/**
+ * Integer micros as the plain decimal a person would type back into a form:
+ * `"12500000"` is `"12.5"`, `"50000000"` is `"50"`. No grouping, no currency
+ * sign, and no trailing zeros, so `microsFromDecimal` reads the result back
+ * to the same micros. Digit shifting on the string, like its inverse, so no
+ * float carries the amount. Null for anything but a non-negative integer.
+ */
+export function decimalFromMicros(micros: string): string | null {
+  if (!/^\d+$/.test(micros)) return null;
+  const digits = micros.replace(/^0+(?=\d)/, "").padStart(7, "0");
+  const whole = digits.slice(0, -6).replace(/^0+(?=\d)/, "");
+  const fraction = digits.slice(-6).replace(/0+$/, "");
+  return fraction === "" ? whole : `${whole}.${fraction}`;
+}
