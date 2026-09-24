@@ -534,6 +534,7 @@ export function createRunTranscriptGetHandler(
                   : { sessionUuid: fold.decision.sessionUuid }),
                 decision: fold.decision.decision,
                 type: fold.decision.type,
+                source: fold.decision.source,
                 at: fold.decision.at.toISOString(),
               },
         frames: fold.frames,

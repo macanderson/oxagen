@@ -590,7 +590,18 @@
       "call": "Call",
       "outcome": "Outcome",
       "type": "Decision type",
+      "decidedBy": "Decided by",
+      "by": {
+        "oxagen": "Oxagen policy",
+        "operator": "Operator",
+        "harness": "Agent harness",
+        "managedSettings": "Managed settings",
+        "unrecorded": "Not recorded"
+      },
       "empty": "No policy decision was recorded on this run.",
+      "onlyChecks": "Neither Oxagen policy nor an operator made a decision on this run. The agent harness's own checks are listed below.",
+      "checks": "{count, plural, one {# harness check} other {# harness checks}}",
+      "checksTitle": "Harness checks",
       "cut": "The transcript read stopped short, so later decisions are missing here.",
       "at": "Into the run"
     },

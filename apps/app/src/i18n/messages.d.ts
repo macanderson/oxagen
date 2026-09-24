@@ -5182,7 +5182,18 @@ type Messages = {
       call: string;
       outcome: string;
       type: string;
+      decidedBy: string;
+      by: {
+        oxagen: string;
+        operator: string;
+        harness: string;
+        managedSettings: string;
+        unrecorded: string;
+      };
       empty: string;
+      onlyChecks: string;
+      checks: string;
+      checksTitle: string;
       cut: string;
       at: string;
     };
