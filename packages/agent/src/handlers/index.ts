@@ -26,6 +26,12 @@ const LOADERS: Record<string, LoaderEntry> = {
   resolve_mcp_servers: () => import("./agent.mcp.resolve"),
   set_mcp_enabled: () => import("./agent.mcp.set_enabled"),
   delete_mcp_server: () => import("./agent.mcp.delete"),
+  // The Add a provider wizard (#4132): search the MCP Registry, and OAuth for
+  // a registry or custom server without leaving the dialog.
+  search_mcp_registry: () => import("./agent.mcp.registry.search"),
+  start_mcp_authorization: () => import("./agent.mcp.authorize.start"),
+  authorize_mcp_server: () =>
+    import("./agent.mcp.authorize.complete"),
   resolve_mcp_consent: () => import("./agent.mcp_consent.resolve"),
   list_mcp_consents: () => import("./agent.mcp_consent.list"),
   recall_memory: () => import("./agent.memory.recall"),

@@ -421,6 +421,42 @@
       }
     },
     {
+      "name": "authorize_mcp_server",
+      "file": "agent.mcp.authorize.complete.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "start_mcp_authorization",
+      "file": "agent.mcp.authorize.start.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "delete_mcp_server",
       "file": "agent.mcp.delete.ts",
       "domain": "agent",
@@ -473,6 +509,24 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "search_mcp_registry",
+      "file": "agent.mcp.registry.search.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
         "docs": true,
         "app": true
       }

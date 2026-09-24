@@ -34,6 +34,7 @@ after the registered name separately when their contract uses a dotted stem.
 | --- | --- | --- |
 | [assign_agent_role](agent.role.assign.md) | [agent.role.assign.ts](../../packages/oxagen/src/contracts/agent.role.assign.ts) | api, mcp, agent |
 | [attach_memory_evidence](agent.memory_evidence.attach.md) | [agent.memory_evidence.attach.ts](../../packages/oxagen/src/contracts/agent.memory_evidence.attach.ts) | api, mcp, agent |
+| [authorize_mcp_server](agent.mcp.authorize.complete.md) | [agent.mcp.authorize.complete.ts](../../packages/oxagen/src/contracts/agent.mcp.authorize.complete.ts) | api, mcp |
 | [bind_agent_environment](agent.environment.bind.md) | [agent.environment.bind.ts](../../packages/oxagen/src/contracts/agent.environment.bind.ts) | api, mcp, agent |
 | [cite_memory](agent.memory.cite.md) | [agent.memory.cite.ts](../../packages/oxagen/src/contracts/agent.memory.cite.ts) | api, mcp, agent |
 | [commit_agent_definition](agent.definition.commit.md) | [agent.definition.commit.ts](../../packages/oxagen/src/contracts/agent.definition.commit.ts) | api |
@@ -81,7 +82,9 @@ after the registered name separately when their contract uses a dotted stem.
 | [revoke_agent_role](agent.role.revoke.md) | [agent.role.revoke.ts](../../packages/oxagen/src/contracts/agent.role.revoke.ts) | api, mcp, agent |
 | [rotate_agent_credential](agent.credential.rotate.md) | [agent.credential.rotate.ts](../../packages/oxagen/src/contracts/agent.credential.rotate.ts) | api |
 | [save_memory](agent.memory.remember.md) | [agent.memory.remember.ts](../../packages/oxagen/src/contracts/agent.memory.remember.ts) | api, mcp, agent |
+| [search_mcp_registry](agent.mcp.registry.search.md) | [agent.mcp.registry.search.ts](../../packages/oxagen/src/contracts/agent.mcp.registry.search.ts) | api, mcp |
 | [set_mcp_enabled](agent.mcp.set_enabled.md) | [agent.mcp.set_enabled.ts](../../packages/oxagen/src/contracts/agent.mcp.set_enabled.ts) | api, mcp |
+| [start_mcp_authorization](agent.mcp.authorize.start.md) | [agent.mcp.authorize.start.ts](../../packages/oxagen/src/contracts/agent.mcp.authorize.start.ts) | api, mcp |
 | [suggest_agent_def](agent.definition.suggest.md) | [agent.definition.suggest.ts](../../packages/oxagen/src/contracts/agent.definition.suggest.ts) | api, mcp, agent |
 | [suggest_promotion_rationales](agent.memory_promotion.rationales.md) | [agent.memory_promotion.rationales.ts](../../packages/oxagen/src/contracts/agent.memory_promotion.rationales.ts) | api, mcp, agent |
 | [summarize_agent_def](agent.definition.summarize.md) | [agent.definition.summarize.ts](../../packages/oxagen/src/contracts/agent.definition.summarize.ts) | api, mcp, agent |
