@@ -451,6 +451,7 @@ describe("the Agents pages", () => {
       "cursor",
       "header",
       "source",
+      "viewerName",
     ]);
     expect(screen.queryByTestId("not-recorded")).toBeNull();
   });
