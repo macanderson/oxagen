@@ -188,7 +188,7 @@ describe("computeAgentRows: hook presence", () => {
     const codex = rows.find((r) => r.key === "codex")!;
     const stella = rows.find((r) => r.key === "stella")!;
     expect(codex.details).toEqual(["Codex 0.9.0", "hooks complete"]);
-    expect(stella.details).toEqual(["Stella 1.0.0", "hooks complete"]);
+    expect(stella.details).toEqual(["stella 1.0.0", "hooks complete"]);
   });
 
   it("says how each harness gets its model credential (ADR-143)", () => {

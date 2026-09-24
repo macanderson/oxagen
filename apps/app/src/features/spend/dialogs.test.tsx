@@ -405,7 +405,7 @@ describe("Fix a finding", () => {
         screen.getByText(/Implementation cost is not estimated/),
       ).toBeInTheDocument();
       expect(
-        screen.getByRole("button", { name: "Plan a code PR with Stella" }),
+        screen.getByRole("button", { name: "Plan a code PR with stella" }),
       ).toBeInTheDocument();
       await userEvent.click(
         screen.getByRole("button", { name: "Draft a context PR" }),
@@ -434,7 +434,7 @@ describe("Fix a finding", () => {
     try {
       await openDialog();
       await userEvent.click(
-        screen.getByRole("button", { name: "Plan a code PR with Stella" }),
+        screen.getByRole("button", { name: "Plan a code PR with stella" }),
       );
       expect(listener).toHaveBeenCalledOnce();
       const event = events[0];

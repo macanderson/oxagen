@@ -248,7 +248,7 @@ export function StellaIcon({
   return (
     <Icon
       geometry={STELLA}
-      label="Stella"
+      label="stella"
       tone={tone}
       className={className}
       style={style}

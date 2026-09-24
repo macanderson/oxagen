@@ -14,7 +14,7 @@ export const HARNESS_LABEL: Record<Harness, string> = {
   "claude-code": "Claude Code",
   codex: "Codex",
   cursor: "Cursor",
-  stella: "Stella",
+  stella: "stella",
   "claude-desktop": "Claude Desktop",
 };
 

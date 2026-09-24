@@ -424,7 +424,7 @@
         "absent": "{branch} on {repository} has no <code>.oxagen/</code> directory.",
         "at": "{repository} @ {branch} \u00b7 {head}",
         "noHead": "no head commit",
-        "note": "Stella symlinks into this directory rather than copying it, so its loader and its CI validation work unchanged on the same files with no second copy that could drift. Oxagen reads <code>.oxagen/</code> and nothing else.",
+        "note": "stella symlinks into this directory rather than copying it, so its loader and its CI validation work unchanged on the same files with no second copy that could drift. Oxagen reads <code>.oxagen/</code> and nothing else.",
         "comments": {
           "workspace": "linked repos, providers, budgets",
           "governance": "{mode, select, absent {no mode declared} invalid {mode unreadable} other {mode = {mode}}}",
