@@ -137,16 +137,18 @@ export const routes = {
    */
   apiKeys: (
     org: string,
-    q?: { workspace?: string; show?: string; offset?: string },
+    q?: { workspace?: string; show?: string; rows?: string; offset?: string },
   ): SafePath =>
     withQuery(pathOf(org, "api-keys"), {
       workspace: q?.workspace,
       show: q?.show,
+      rows: q?.rows,
       offset: q?.offset,
     }),
   /**
-   * Organization › Model funding: whose key pays for the assistant's model
-   * calls (ADR-053 §2). Org-scoped — the key pays for every workspace.
+   * Organization › Model funding and routes: which key pays for Oxagen's own
+   * model calls (ADR-053, ADR-131) and the route each tier takes. Org-scoped:
+   * the key pays for every workspace.
    */
   modelFunding: (org: string): SafePath => pathOf(org, "model-funding"),
   /**

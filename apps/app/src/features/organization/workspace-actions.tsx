@@ -345,6 +345,7 @@ export function CreateWorkspace({
   primary?: boolean;
 }) {
   const t = useTranslations("organization.actions");
+  const tr = useTranslations("organization.receipts");
   const tf = useTranslations("organization.actions.fields");
   const navigate = useNavigate();
   return (
@@ -354,6 +355,7 @@ export function CreateWorkspace({
         title: t("createWorkspace.title"),
         confirm: t("createWorkspace.confirm"),
         pending: t("createWorkspace.pending"),
+        receipt: tr("workspaceCreated"),
       }}
       testId="create-workspace"
       primary={primary}
@@ -366,6 +368,14 @@ export function CreateWorkspace({
       }}
     >
       <Fields idPrefix="create-workspace" mainRepo />
+      {/* The design asks for the namespace here. create_workspace derives it
+          from the slug (workspace-bootstrap.ts, deriveNamespace) and takes
+          none, so the field says so rather than collecting a value it drops. */}
+      <UnrecordedField
+        id="create-workspace-namespace"
+        label={tf("namespace")}
+        hint={tf("namespaceCreateHint")}
+      />
       <UnrecordedField
         id="create-workspace-branch"
         label={tf("productionBranch")}
@@ -389,6 +399,7 @@ export function EditWorkspace({
   workspace: Workspace;
 }) {
   const t = useTranslations("organization.actions");
+  const tr = useTranslations("organization.receipts");
   const tf = useTranslations("organization.actions.fields");
   const tg = useTranslations("organization.actions.governance");
   const navigate = useNavigate();
@@ -399,6 +410,7 @@ export function EditWorkspace({
         title: t("editWorkspace.title", { name: workspace.name }),
         confirm: t("editWorkspace.confirm"),
         pending: t("editWorkspace.pending"),
+        receipt: tr("workspaceSaved", { name: workspace.name }),
       }}
       testId={`edit-workspace-${workspace.id}`}
       submit={(form) =>
@@ -466,6 +478,7 @@ export function ArchiveWorkspace({
   workspace: Workspace;
 }) {
   const t = useTranslations("organization.actions");
+  const tr = useTranslations("organization.receipts");
   const navigate = useNavigate();
   return (
     <WriteDialog
@@ -474,6 +487,7 @@ export function ArchiveWorkspace({
         title: t("archiveWorkspace.title", { name: workspace.name }),
         confirm: t("archiveWorkspace.confirm"),
         pending: t("archiveWorkspace.pending"),
+        receipt: tr("workspaceArchived", { name: workspace.name }),
       }}
       testId={`archive-workspace-${workspace.id}`}
       submit={() => archiveWorkspace(org, workspace.id)}

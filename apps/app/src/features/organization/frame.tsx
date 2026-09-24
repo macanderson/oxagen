@@ -25,6 +25,7 @@ import { getSession } from "@/server/session";
 import type { OrgCtx, OrgRole } from "@/server/viewer";
 import { routes, type SafePath } from "@/shared/safe-path";
 import { OrganizationHeader } from "./header";
+import { Receipts } from "./receipt";
 import {
   OrganizationDenied,
   OrganizationEmpty,
@@ -148,6 +149,7 @@ export async function OrganizationFrame({
           workspaces: workspaces.value,
         })
       }
+      <Receipts />
     </div>
   );
 }

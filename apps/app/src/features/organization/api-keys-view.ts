@@ -20,8 +20,14 @@
 import type { ApiKey } from "@/data/contracts/org";
 import { firstParam, routes, type SafePath } from "@/shared/safe-path";
 
-/** Rows per page. The roster is read whole, so this is where it is cut. */
-export const API_KEYS_PAGE = 20;
+/**
+ * Rows per page by default: the design's list default of 10. The roster is
+ * read whole, so this is where it is cut.
+ */
+export const API_KEYS_PAGE = 10;
+
+/** The Rows choices the design's lists offer; 0 is All. */
+export const API_KEYS_ROWS = [5, 10, 25, 50, 0] as const;
 
 /** `active` hides revoked keys (the default); `all` shows them. */
 export const API_KEYS_SHOW = ["active", "all"] as const;
@@ -31,8 +37,17 @@ export type ApiKeysView = {
   /** The workspace the URL named, before the page checks the viewer may enter it. */
   workspace: string | undefined;
   show: ApiKeysShow;
+  /** Rows per page, one of `API_KEYS_ROWS`; 0 shows every row. */
+  rows: number;
   offset: number;
 };
+
+/** The Rows value a query may carry: a choice from `API_KEYS_ROWS`, or `all`. */
+function readRows(raw: string | undefined): number {
+  if (raw === "all") return 0;
+  const rows = API_KEYS_ROWS.find((n) => n !== 0 && String(n) === raw);
+  return rows ?? API_KEYS_PAGE;
+}
 
 /**
  * An offset the query may carry: a non-negative integer, without leading zeros
@@ -59,22 +74,29 @@ export function parseApiKeysView(params: Params): ApiKeysView {
   return {
     workspace: firstParam(params.workspace),
     show: API_KEYS_SHOW.find((s) => s === rawShow) ?? "active",
+    rows: readRows(firstParam(params.rows)),
     offset: readOffset(firstParam(params.offset)),
   };
 }
 
 /**
- * The route for a view. The defaults — the active keys, the first page — are
- * left off the query, so the plain link to the page is the plain link to the
- * page however a person arrived at it.
+ * The route for a view. The defaults — the active keys, ten rows, the first
+ * page — are left off the query, so the plain link to the page is the plain
+ * link to the page however a person arrived at it.
  */
 export function apiKeysLink(
   org: string,
-  to: { workspace: string; show?: ApiKeysShow; offset?: number },
+  to: { workspace: string; show?: ApiKeysShow; rows?: number; offset?: number },
 ): SafePath {
   return routes.apiKeys(org, {
     workspace: to.workspace,
     show: to.show === undefined || to.show === "active" ? undefined : to.show,
+    rows:
+      to.rows === undefined || to.rows === API_KEYS_PAGE
+        ? undefined
+        : to.rows === 0
+          ? "all"
+          : String(to.rows),
     offset:
       to.offset === undefined || to.offset === 0
         ? undefined
@@ -97,6 +119,8 @@ export type ApiKeysPage = {
   offset: number;
   /** How many rows the filter kept, across every page. */
   total: number;
+  /** Rows per page, with All resolved to the whole roster. */
+  size: number;
 };
 
 /**
@@ -106,7 +130,7 @@ export type ApiKeysPage = {
  * because revoking the last key on the last page, or narrowing the filter from
  * a deep page, otherwise answers an out-of-range offset with an empty table and
  * no way back except editing the URL; clamping lands on the last page instead.
- * **Aligned down to a multiple of `API_KEYS_PAGE`**, because the query string is
+ * **Aligned down to a multiple of the page size**, because the query string is
  * shareable and hand-editable: `?offset=1` would show rows 2 to 21 and put
  * Previous at offset 0, which shows rows 1 to 20, so the two pages would repeat
  * 19 rows between them and no sequence of clicks would ever reach a page
@@ -119,15 +143,18 @@ export type ApiKeysPage = {
 export function pageOfKeys(
   kept: readonly ApiKey[],
   offset: number,
+  rows: number = API_KEYS_PAGE,
 ): ApiKeysPage {
   const total = kept.length;
-  const lastPageStart =
-    total === 0 ? 0 : Math.floor((total - 1) / API_KEYS_PAGE) * API_KEYS_PAGE;
+  // All is one page that holds every row.
+  const size = rows === 0 ? Math.max(total, 1) : rows;
+  const lastPageStart = total === 0 ? 0 : Math.floor((total - 1) / size) * size;
   const wanted = Math.min(Math.max(offset, 0), lastPageStart);
-  const start = Math.floor(wanted / API_KEYS_PAGE) * API_KEYS_PAGE;
+  const start = Math.floor(wanted / size) * size;
   return {
-    rows: kept.slice(start, start + API_KEYS_PAGE),
+    rows: kept.slice(start, start + size),
     offset: start,
     total,
+    size,
   };
 }

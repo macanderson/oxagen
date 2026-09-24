@@ -22,8 +22,8 @@
 // `list_api_keys` answers the workspace's whole roster, revoked rows included,
 // with no filter and no page of its own. The cut is made here: the page opens
 // on the keys that have not been revoked, hides the revoked ones behind one
-// link, and
-// shows `API_KEYS_PAGE` rows at a time. Both are query values on this one route
+// link, and shows ten rows at a time, or the 5, 25, 50 or All the Rows select
+// picks, under a numbered pager. All three are query values on this one route
 // (`api-keys-view.ts`), so a filtered page survives a reload and a shared link.
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
@@ -32,21 +32,16 @@ import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import type { OrgCtx, OrgRole } from "@/server/viewer";
 import { WsCtx } from "@/server/viewer";
-import {
-  linkText,
-  panel,
-  panelBody,
-  panelHeader,
-  panelTitle,
-} from "@/ui/control-styles";
+import { panel, panelBody, panelHeader, panelTitle } from "@/ui/control-styles";
 import { Badge } from "@/ui/badge";
 import { OutcomePanel } from "@/ui/form-feedback";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { RouteTabs } from "@/ui/route-tabs";
 import { Table } from "@/ui/table";
+import { ApiKeysRows } from "./api-keys-rows";
 import {
-  API_KEYS_PAGE,
+  API_KEYS_ROWS,
   API_KEYS_SHOW,
   type ApiKeysPage,
   type ApiKeysShow,
@@ -185,6 +180,7 @@ function ApiKeysSection({
           archived={chosen?.archivedAt != null}
           now={now}
           show={view.show}
+          rows={view.rows}
           offset={view.offset}
           picker={
             <WorkspacePicker
@@ -381,6 +377,7 @@ function Keys({
   archived,
   now,
   show,
+  rows,
   offset,
   picker,
   archivedNote,
@@ -401,6 +398,8 @@ function Keys({
   now: number;
   /** Whether the revoked keys are on the roster; they are not, by default. */
   show: ApiKeysShow;
+  /** Rows per page; 0 is All. */
+  rows: number;
   /** The page the URL asked for, before it is clamped to one that exists. */
   offset: number;
   /** The workspace picker: a key names a workspace (ADR-073). */
@@ -410,7 +409,7 @@ function Keys({
 }) {
   const t = useTranslations("organization.apiKeys");
   const kept = filterKeys(keys, show);
-  const page = pageOfKeys(kept, offset);
+  const page = pageOfKeys(kept, offset, rows);
   // How many rows the default filter is holding back. It names the link that
   // brings them, so "show the revoked ones" is never a guess about whether
   // there are any.
@@ -426,8 +425,13 @@ function Keys({
   // one place the new key is certain to be. Revoke changes no order and holds
   // its place, so it returns to the page the person was reading; under the
   // default filter the row it ended leaves that page, which is the point.
-  const here = apiKeysLink(org, { workspace: ws, show, offset: page.offset });
-  const afterMint = apiKeysLink(org, { workspace: ws, show });
+  const here = apiKeysLink(org, {
+    workspace: ws,
+    show,
+    rows,
+    offset: page.offset,
+  });
+  const afterMint = apiKeysLink(org, { workspace: ws, show, rows });
   return (
     <KeysPanel
       create={
@@ -443,7 +447,24 @@ function Keys({
     >
       <div className="flex flex-col gap-2 border-b border-border px-3 py-2.5">
         {picker}
-        <RevokedFilter org={org} ws={ws} show={show} revoked={revoked} />
+        <div className="flex flex-wrap items-center gap-2">
+          <RevokedFilter
+            org={org}
+            ws={ws}
+            show={show}
+            rows={rows}
+            revoked={revoked}
+          />
+          {/* A new page size starts again from the first page: page four of
+              ten rows is not page four of fifty. */}
+          <ApiKeysRows
+            current={rows}
+            options={API_KEYS_ROWS.map((n) => ({
+              rows: n,
+              to: apiKeysLink(org, { workspace: ws, show, rows: n }),
+            }))}
+          />
+        </div>
       </div>
       {archivedNote}
       {page.total === 0 ? (
@@ -469,7 +490,7 @@ function Keys({
               { label: t("columns.lastUsed") },
               { label: t("columns.actions30d"), numeric: true },
               { label: t("columns.expires") },
-              { label: t("columns.actions") },
+              { label: t("columns.actions"), hidden: true },
             ]}
           >
             {page.rows.map((key) => (
@@ -487,7 +508,7 @@ function Keys({
             ))}
           </Table>
           <div className="px-3 py-2.5">
-            <Pager org={org} ws={ws} show={show} page={page} />
+            <Pager org={org} ws={ws} show={show} rows={rows} page={page} />
           </div>
         </>
       )}
@@ -510,11 +531,14 @@ function RevokedFilter({
   org,
   ws,
   show,
+  rows,
   revoked,
 }: {
   org: string;
   ws: string;
   show: ApiKeysShow;
+  /** The page size in force, which a filter change keeps. */
+  rows: number;
   /** How many revoked keys the roster holds, for the label. */
   revoked: number;
 }) {
@@ -524,10 +548,11 @@ function RevokedFilter({
       {API_KEYS_SHOW.map((option) => (
         <SafeLink
           key={option}
-          to={apiKeysLink(org, { workspace: ws, show: option })}
+          to={apiKeysLink(org, { workspace: ws, show: option, rows })}
           data-show={option}
+          data-touch-target=""
           aria-current={show === option ? "page" : undefined}
-          className="inline-flex min-h-9 items-center rounded-md border border-transparent px-3 text-sm text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring aria-[current=page]:border-border aria-[current=page]:text-foreground"
+          className="inline-flex min-h-9 max-md:min-h-11 items-center rounded-md border border-transparent px-3 text-sm text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring aria-[current=page]:border-border aria-[current=page]:text-foreground"
         >
           {option === "all" && revoked > 0
             ? t("allWithCount", { revoked })
@@ -538,57 +563,84 @@ function RevokedFilter({
   );
 }
 
-/** Previous and next pages of the filtered roster; nothing when one page holds it all. */
+/**
+ * The filtered roster's range and pages (the design's "1–10 of 14 ‹ 1 2 ›"):
+ * a link to each page, with ‹ and › for the previous and next. Every one is a
+ * link on this route, so paging works without JavaScript and survives a
+ * reload.
+ */
 function Pager({
   org,
   ws,
   show,
+  rows,
   page,
 }: {
   org: string;
   ws: string;
   show: ApiKeysShow;
+  rows: number;
   page: ApiKeysPage;
 }) {
   const t = useTranslations("organization.apiKeys.pager");
   const locale = useLocale();
-  const previous = page.offset - API_KEYS_PAGE;
   const next = page.offset + page.rows.length;
-  if (page.offset === 0 && next >= page.total) return null;
+  const pages = Math.max(1, Math.ceil(page.total / page.size));
+  const current = Math.floor(page.offset / page.size) + 1;
+  const link = (n: number) =>
+    apiKeysLink(org, {
+      workspace: ws,
+      show,
+      rows,
+      offset: (n - 1) * page.size,
+    });
+  const pagerLink =
+    "inline-flex min-h-7 min-w-7 items-center justify-center rounded-[7px] border border-button-default-border bg-button-default-bg px-2 py-0.5 text-[12px] tabular-nums text-button-default-fg hover:bg-button-default-hover-bg aria-[current=page]:border-gold aria-[current=page]:text-accent-text max-md:min-h-11 max-md:min-w-11";
   return (
     <nav
       aria-label={t("label")}
-      className="flex flex-wrap items-center gap-4 text-sm"
+      className="flex flex-wrap items-center gap-2 text-[11.5px] text-muted-foreground"
     >
-      <span className="text-muted-foreground">
+      <span className="font-mono tabular-nums text-dim">
         {t("range", {
           from: formatCount(page.offset + 1, locale),
           to: formatCount(next, locale),
           total: formatCount(page.total, locale),
         })}
       </span>
-      {page.offset > 0 ? (
-        <SafeLink
-          to={apiKeysLink(org, {
-            workspace: ws,
-            show,
-            offset: Math.max(previous, 0),
-          })}
-          data-page="previous"
-          className={linkText}
-        >
-          {t("previous")}
-        </SafeLink>
-      ) : null}
-      {next < page.total ? (
-        <SafeLink
-          to={apiKeysLink(org, { workspace: ws, show, offset: next })}
-          data-page="next"
-          className={linkText}
-        >
-          {t("next")}
-        </SafeLink>
-      ) : null}
+      <span className="ml-auto flex flex-wrap items-center gap-1">
+        {current > 1 ? (
+          <SafeLink
+            to={link(current - 1)}
+            data-page="previous"
+            aria-label={t("previous")}
+            className={pagerLink}
+          >
+            ‹
+          </SafeLink>
+        ) : null}
+        {Array.from({ length: pages }, (_, i) => i + 1).map((n) => (
+          <SafeLink
+            key={n}
+            to={link(n)}
+            data-page={n}
+            aria-current={n === current ? "page" : undefined}
+            className={pagerLink}
+          >
+            {formatCount(n, locale)}
+          </SafeLink>
+        ))}
+        {current < pages ? (
+          <SafeLink
+            to={link(current + 1)}
+            data-page="next"
+            aria-label={t("next")}
+            className={pagerLink}
+          >
+            ›
+          </SafeLink>
+        ) : null}
+      </span>
     </nav>
   );
 }

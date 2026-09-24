@@ -1,6 +1,7 @@
 "use client";
-// The write surface of Organization › Model funding: choose a vendor, paste a
-// key, test it, save it, or remove the one stored (ADR-053 §2).
+// The write surface of Organization › Model funding and routes, drawn inside
+// the Funding source panel when the source is customer_key: choose a vendor,
+// paste a key, test it, save it, or remove the one stored (ADR-053 §2).
 //
 // The fields follow the vendor. OpenRouter and the Vercel AI Gateway take a
 // key and nothing else — one key reaches every model and understands Oxagen's
@@ -18,7 +19,7 @@ import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
 import type { ModelCredential, ModelProvider } from "@/data/contracts/org";
 import type { ActionResult } from "@/server/kernel";
-import { buttonSecondary, inputBase, mono, panel } from "@/ui/control-styles";
+import { buttonSecondary, inputBase, mono } from "@/ui/control-styles";
 import { Field, PasswordField } from "@/ui/field";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
@@ -35,6 +36,7 @@ import {
   needsBaseUrl,
   needsModelMap,
 } from "./model-funding-rules";
+import { recordReceipt } from "./receipt";
 
 type Failure = Exclude<ActionResult<unknown>, { ok: true }>;
 
@@ -187,6 +189,7 @@ export function ModelFundingForm({
   credential: ModelCredential;
 }) {
   const t = useTranslations("organization.modelFunding");
+  const tReceipt = useTranslations("organization.receipts");
   const failureText = useFailureText();
   const navigate = useNavigate();
 
@@ -252,6 +255,7 @@ export function ModelFundingForm({
         setApiKey("");
         setVerdict(null);
         setSaved(true);
+        recordReceipt(tReceipt("modelKeySaved"));
         navigate.refresh();
       },
     );
@@ -264,6 +268,7 @@ export function ModelFundingForm({
       () => {
         setConfirmingRemove(false);
         setVerdict(null);
+        recordReceipt(tReceipt("modelKeyRemoved"));
         navigate.refresh();
       },
     );
@@ -276,8 +281,8 @@ export function ModelFundingForm({
 
   return (
     <div className="flex flex-col gap-6">
-      <section className={`${panel} flex flex-col gap-3 p-5`}>
-        <h2 className="text-base font-semibold">{t("current.title")}</h2>
+      <section className="flex flex-col gap-3">
+        <h3 className="text-sm font-semibold">{t("current.title")}</h3>
         <Current credential={credential} />
         <p className="text-sm text-muted-foreground">
           {credential.configured ? t("explain.byok") : t("explain.platform")}
@@ -325,14 +330,14 @@ export function ModelFundingForm({
       </section>
 
       <form
-        className={`${panel} flex flex-col gap-4 p-5`}
+        className="flex flex-col gap-4 border-t border-border pt-4"
         onSubmit={onSave}
         noValidate
         data-testid="funding-form"
       >
-        <h2 className="text-base font-semibold">
+        <h3 className="text-sm font-semibold">
           {credential.configured ? t("form.replaceTitle") : t("form.title")}
-        </h2>
+        </h3>
 
         <div className="flex flex-col gap-1.5">
           <label

@@ -1,5 +1,6 @@
 // The Organization pages' bodies (pages/organization.md,
-// organization-roles.md, organization-api-keys.md): each renders inside the
+// organization-roles.md, organization-api-keys.md), Model funding and routes
+// among them: each renders inside the
 // frame, which checks the permission, reads what the header and the tab
 // counts need, and draws the not-loaded states. The route passes the tab; the
 // frame hands the tab the reads it already made.
@@ -16,6 +17,7 @@ import { ApiKeys } from "./api-keys";
 import type { ApiKeysView } from "./api-keys-view";
 import { CostCenters } from "./cost-centers";
 import { DataPlaneTab } from "./data-plane";
+import { ModelFundingTab } from "./model-funding";
 import { OrganizationFrame } from "./frame";
 import { InvitationsTab, PeopleTab } from "./people";
 import { RolesTab } from "./roles";
@@ -114,6 +116,35 @@ export function OrganizationRoles({
           org={ctx.orgSlug}
           catalog={roles}
           sso={await source.org.sso(ctx)}
+        />
+      )}
+    </OrganizationFrame>
+  );
+}
+
+/**
+ * `/{org}/model-funding`: Model funding and routes. Its one read of its own is
+ * made inside the frame, so a viewer the frame refused never reaches it.
+ */
+export function OrganizationModelFunding({
+  ctx,
+  source,
+}: {
+  ctx: OrgCtx;
+  source: DataSource;
+}) {
+  return (
+    <OrganizationFrame
+      ctx={ctx}
+      source={source}
+      current="modelFunding"
+      retry={routes.modelFunding(ctx.orgSlug)}
+    >
+      {async () => (
+        <ModelFundingTab
+          org={ctx.orgSlug}
+          orgName={ctx.orgName}
+          read={await source.org.modelCredential(ctx)}
         />
       )}
     </OrganizationFrame>

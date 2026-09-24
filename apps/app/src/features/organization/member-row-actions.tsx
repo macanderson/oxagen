@@ -181,6 +181,8 @@ function ChangeRole({
   const roleName = useTranslations("organization.roles");
   const [role, setRole] = useState<string>(() => currentRole(member));
   const selectId = `member-role-${member.id}`;
+  const granted = GrantableOrgRole.options.find((option) => option === role);
+  const roleLabel = granted === undefined ? role : roleName(granted);
   return (
     <WriteDialog
       open={t("actions.role.open")}
@@ -191,7 +193,7 @@ function ChangeRole({
       write={() => changeMemberRole(org, member.id, role)}
       receipt={t("receipts.roleChanged", {
         name: member.name ?? member.email,
-        role: roleName(role),
+        role: roleLabel,
       })}
       after={after}
     >

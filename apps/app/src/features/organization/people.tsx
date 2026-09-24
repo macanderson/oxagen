@@ -27,7 +27,7 @@ import {
   panelTitle,
 } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
-import { cell, numericCell } from "@/ui/table";
+import { cell, headCell, numericCell } from "@/ui/table";
 import { InvitationControls } from "./invitation-controls";
 import { InviteDialog } from "./invite-dialog";
 import { type ListRow, ListTable } from "./list-table";
@@ -48,35 +48,80 @@ function PersonCell({ member }: { member: Member }) {
   );
 }
 
+/**
+ * The member dialog (mockup `member`): the person's facts, then Role per
+ * workspace, Agents they operate and Mandates. `list_members` carries the
+ * org role and the join date; it carries no per-workspace role, no agents a
+ * person operates and no mandates, so those sections say "not recorded"
+ * (#3932).
+ */
 function MemberFacts({ member }: { member: Member }) {
   const t = useTranslations("organization.people.member");
   const tRole = useTranslations("organization.roles");
   const term = "text-muted-foreground";
+  const sectionTitle =
+    "mt-4 mb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.09em] text-dim";
   return (
-    <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-      <dt className={term}>{t("email")}</dt>
-      <dd className={mono}>{member.email}</dd>
-      <dt className={term}>{t("role")}</dt>
-      <dd className={mono}>{tRole(member.role)}</dd>
-      <dt className={term}>{t("joined")}</dt>
-      <dd>
-        <DateCell iso={member.joinedAt} />
-      </dd>
-      <dt className={term}>{t("workspaces")}</dt>
-      <dd>
+    <div data-issue="3932">
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+        <dt className={term}>{t("email")}</dt>
+        <dd className={mono}>{member.email}</dd>
+        <dt className={term}>{t("role")}</dt>
+        <dd className={mono}>{tRole(member.role)}</dd>
+        <dt className={term}>{t("joined")}</dt>
+        <dd>
+          <DateCell iso={member.joinedAt} />
+        </dd>
+        <dt className={term}>{t("twoFactor")}</dt>
+        <dd>
+          <NotRecorded />
+        </dd>
+        <dt className={term}>{t("lastSeen")}</dt>
+        <dd>
+          <NotRecorded />
+        </dd>
+        <dt className={term}>{t("id")}</dt>
+        <dd className={`${mono} select-all`}>{member.id}</dd>
+      </dl>
+      <h3 className={sectionTitle}>{t("perWorkspace")}</h3>
+      <table aria-label={t("perWorkspace")} className="w-full text-[13px]">
+        <thead>
+          <tr>
+            <th scope="col" className={`${headCell} text-left`}>
+              {t("workspace")}
+            </th>
+            <th scope="col" className={`${headCell} text-left`}>
+              {t("workspaceRole")}
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr data-member-workspaces="not-recorded">
+            <td className={cell}>
+              <NotRecorded />
+            </td>
+            <td className={cell}>
+              <NotRecorded />
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <h3 className={sectionTitle}>{t("agents")}</h3>
+      <p data-member-agents="not-recorded">
         <NotRecorded />
-      </dd>
-      <dt className={term}>{t("twoFactor")}</dt>
-      <dd>
-        <NotRecorded />
-      </dd>
-      <dt className={term}>{t("lastSeen")}</dt>
-      <dd>
-        <NotRecorded />
-      </dd>
-      <dt className={term}>{t("id")}</dt>
-      <dd className={`${mono} select-all`}>{member.id}</dd>
-    </dl>
+      </p>
+      <h3 className={sectionTitle}>{t("mandates")}</h3>
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+        <dt className={term}>{t("granted")}</dt>
+        <dd>
+          <NotRecorded />
+        </dd>
+        <dt className={term}>{t("heldByAgents")}</dt>
+        <dd>
+          <NotRecorded />
+        </dd>
+      </dl>
+    </div>
   );
 }
 
@@ -137,7 +182,12 @@ export function PeopleTab({
             {t("title")}
           </h2>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge tone="quiet" dot={false} data-policy="two-factor">
+            <Badge
+              tone="quiet"
+              dot={false}
+              data-policy="two-factor"
+              data-issue="3932"
+            >
               {t("twoFactorPolicy")}
             </Badge>
             <InviteDialog

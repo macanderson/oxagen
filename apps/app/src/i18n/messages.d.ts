@@ -2721,11 +2721,16 @@ type Messages = {
         email: string;
         role: string;
         joined: string;
-        workspaces: string;
         twoFactor: string;
         lastSeen: string;
-        status: string;
         id: string;
+        perWorkspace: string;
+        workspace: string;
+        workspaceRole: string;
+        agents: string;
+        mandates: string;
+        granted: string;
+        heldByAgents: string;
       };
       inUse: {
         title: string;
@@ -2766,6 +2771,7 @@ type Messages = {
         mainRepoFixed: string;
         namespace: string;
         namespaceHint: string;
+        namespaceCreateHint: string;
       };
       createRole: {
         open: string;
@@ -3102,10 +3108,6 @@ type Messages = {
         scope: string;
         origin: string;
       };
-      originFilter: {
-        builtIn: string;
-        custom: string;
-      };
       noMatch: string;
       editor: {
         createTitle: string;
@@ -3172,8 +3174,6 @@ type Messages = {
       noMatch: string;
     };
     modelFunding: {
-      title: string;
-      intro: string;
       explain: {
         platform: string;
         byok: string;
@@ -3253,10 +3253,6 @@ type Messages = {
         pending: string;
         cancel: string;
       };
-      denied: {
-        title: string;
-        body: string;
-      };
       failure: {
         denied: string;
         keyRequired: string;
@@ -3266,6 +3262,106 @@ type Messages = {
         refused: string;
         pendingApproval: string;
         unavailable: string;
+      };
+      funding: {
+        title: string;
+        source: string;
+        sourceUnrecorded: string;
+        unknown: string;
+        preview: string;
+        note: string;
+        sources: {
+          platform_minted: {
+            option: string;
+            summary: string;
+            about: string;
+          };
+          platform: {
+            option: string;
+            summary: string;
+            about: string;
+          };
+          customer_key: {
+            option: string;
+            summary: string;
+            about: string;
+          };
+        };
+        facts: {
+          key: string;
+          billing: string;
+          storage: string;
+          engine: string;
+          secret: string;
+          provisionedId: string;
+          accountName: string;
+          minted: string;
+          cap: string;
+          reads: string;
+        };
+        customer: {
+          keyHint: string;
+          keyNone: string;
+          billing: string;
+          storage: string;
+        };
+        shared: {
+          key: string;
+          billing: string;
+        };
+        minted: {
+          unrecorded: string;
+          mint: {
+            open: string;
+            title: string;
+            body: string;
+          };
+          rotate: {
+            open: string;
+            title: string;
+            body: string;
+          };
+          revoke: {
+            open: string;
+            title: string;
+            body: string;
+          };
+        };
+        change: {
+          open: string;
+          title: string;
+          current: string;
+          reconciles: string;
+          note: string;
+        };
+      };
+      routes: {
+        title: string;
+        badge: string;
+        columns: {
+          tier: string;
+          provider: string;
+          route: string;
+          fallback: string;
+          use: string;
+          cost: string;
+          edit: string;
+        };
+        tiers: {
+          complex: string;
+          light: string;
+          embed: string;
+          rerank: string;
+        };
+        total: string;
+        basis: string;
+        currency: string;
+        unrecorded: string;
+        edit: {
+          open: string;
+          title: string;
+          body: string;
+        };
       };
     };
     sso: {
@@ -3428,6 +3524,7 @@ type Messages = {
         groupRequired: string;
         groupDuplicate: string;
       };
+      ssoSettings: string;
     };
     costCenters: {
       title: string;
@@ -3478,13 +3575,7 @@ type Messages = {
       title: string;
     };
     list: {
-      search: string;
       all: string;
-      rows: string;
-      range: string;
-      pager: string;
-      previous: string;
-      next: string;
     };
     notRecorded: string;
     states: {
@@ -3550,8 +3641,6 @@ type Messages = {
         attester: string;
         gateway: string;
         resolver: string;
-        postgresHost: string;
-        postgresDatabase: string;
         deployment: string;
         bundleVersion: string;
         bundleSignature: string;
@@ -3559,7 +3648,8 @@ type Messages = {
         airGapped: string;
         licence: string;
         nextBundle: string;
-        outbound: string;
+        tenantPostgres: string;
+        identityPostgres: string;
       };
       status: {
         active: string;
@@ -3606,6 +3696,32 @@ type Messages = {
           body: string;
         };
       };
+      identityShared: string;
+      outbound: {
+        title: string;
+        destination: string;
+        why: string;
+        state: string;
+      };
+    };
+    receipts: {
+      saved: string;
+      roleChanged: string;
+      memberRemoved: string;
+      invited: string;
+      invitationResent: string;
+      invitationRevoked: string;
+      roleCreated: string;
+      roleSaved: string;
+      roleDeleted: string;
+      keyCreated: string;
+      keyRotated: string;
+      keyRevoked: string;
+      workspaceCreated: string;
+      workspaceSaved: string;
+      workspaceArchived: string;
+      modelKeySaved: string;
+      modelKeyRemoved: string;
     };
   };
   record: {

@@ -45,13 +45,18 @@
       "member": {
         "title": "Person",
         "email": "Email",
-        "role": "Role",
+        "role": "Org role",
         "joined": "Joined",
-        "workspaces": "Workspaces",
         "twoFactor": "Two-factor",
         "lastSeen": "Last seen",
-        "status": "Status",
-        "id": "Id"
+        "id": "Id",
+        "perWorkspace": "Role per workspace",
+        "workspace": "Workspace",
+        "workspaceRole": "Role",
+        "agents": "Agents they operate",
+        "mandates": "Mandates",
+        "granted": "Granted",
+        "heldByAgents": "Held by their agents"
       },
       "inUse": {
         "title": "Roles in use",
@@ -91,7 +96,8 @@
         "retentionHint": "content_exact keeps prompts and tool bodies in full. digest_only lowers the replay grade. No contract records the mode per workspace yet.",
         "mainRepoFixed": "Changing main is an org-owner action with approval. list_workspaces does not return the main repository yet.",
         "namespace": "Namespace",
-        "namespaceHint": "Immutable. It is in every agent key in this workspace."
+        "namespaceHint": "Immutable. It is in every agent key in this workspace.",
+        "namespaceCreateHint": "Derived from the slug when the workspace is created, 2 to 6 characters, and immutable. It is part of every agent key in the workspace. create_workspace takes no namespace yet (#3933)."
       },
       "createRole": {
         "open": "Create role",
@@ -132,8 +138,8 @@
       "governance": {
         "heading": "Governance mode",
         "about": "Written to .oxagen/rules/governance.toml on the main repository through a Context PR. It takes effect on merge. The mode decides who merges a Context PR in this workspace.",
-        "unchanged": "Leave unchanged (the mode in force is not read here)",
-        "unchangedHint": "Nothing is read from GitHub and nothing is written, so this page does not say which mode is in force. The workspace's Repositories page does.",
+        "unchanged": "Leave unchanged",
+        "unchangedHint": "Nothing is read from GitHub and nothing is written. The workspace's Repositories page shows the mode in force.",
         "solo": "Any workspace member merges, the author included.",
         "team": "An org Owner or Admin, or a workspace Owner, other than the author merges.",
         "regulated": "An org Owner or Admin other than the author merges, recorded as the accountable approver.",
@@ -226,8 +232,8 @@
     },
     "invite": {
       "open": "Invite",
-      "title": "Invite someone to this organization",
-      "confirm": "Send invitation",
+      "title": "Invite a person",
+      "confirm": "Send the invitation",
       "pending": "Sending",
       "body": "The invitation admits this person to the organization with the role you pick. It grants no workspace of its own.",
       "email": "Email",
@@ -343,7 +349,7 @@
       },
       "filter": {
         "label": "Which keys",
-        "active": "Not revoked",
+        "active": "Active",
         "all": "All",
         "allWithCount": "All ({revoked} revoked)"
       },
@@ -428,10 +434,6 @@
         "scope": "Scope",
         "origin": "Origin"
       },
-      "originFilter": {
-        "builtIn": "built-in",
-        "custom": "custom"
-      },
       "noMatch": "No role matches this search.",
       "editor": {
         "createTitle": "Create a role",
@@ -489,8 +491,8 @@
       },
       "noRole": "No membership",
       "empty": "This organization has no workspaces.",
-      "governanceNotRecorded": "mode not recorded",
-      "retentionNotRecorded": "retention not recorded",
+      "governanceNotRecorded": "mode not recorded (#3907)",
+      "retentionNotRecorded": "retention not recorded (#3933)",
       "namespace": "ns {namespace}",
       "open": "Open",
       "archived": "archived",
@@ -498,8 +500,6 @@
       "noMatch": "No workspace matches this search."
     },
     "modelFunding": {
-      "title": "Model funding",
-      "intro": "The assistant needs a model to answer questions. Choose whose key pays for it. With no key stored, your organization runs on Oxagen's key and the tokens are billed as assistant usage. With your own key, your vendor bills you directly and Oxagen charges nothing for those tokens.",
       "explain": {
         "platform": "Your organization runs on Oxagen's key. Add your own key below to pay your vendor directly.",
         "byok": "Your key pays your vendor directly. Oxagen does not charge for these tokens."
@@ -579,10 +579,6 @@
         "pending": "Removing",
         "cancel": "Keep it"
       },
-      "denied": {
-        "title": "Owners and admins only",
-        "body": "Only an organization owner or admin can see or change whose key pays for the assistant."
-      },
       "failure": {
         "denied": "Only an organization owner or admin can change this.",
         "keyRequired": "Paste a key of at least 8 characters.",
@@ -592,6 +588,106 @@
         "refused": "Refused ({code}).",
         "pendingApproval": "This change is waiting for approval.",
         "unavailable": "Oxagen could not reach the key service ({code}). Try again."
+      },
+      "funding": {
+        "title": "Funding source",
+        "source": "Source",
+        "sourceUnrecorded": "source not recorded",
+        "unknown": "Oxagen pays for this organization's model calls, on its minted key or on the shared key. No capability reads which one yet (#4005).",
+        "preview": "Preview of {source}. The recorded source is {current}, and this page cannot switch it yet (#4005).",
+        "note": "No call reads the environment. Keys and routes come from the model layer’s resolver, and a path that bypasses it is a defect.",
+        "sources": {
+          "platform_minted": {
+            "option": "platform_minted: one key minted for this organization on Oxagen’s OpenRouter account",
+            "summary": "One key minted for this organization on Oxagen’s OpenRouter account.",
+            "about": "Oxagen owns, pays, rotates and revokes it. Its tokens are billed. The provider reports it on its own line, so the bill and the ledger can be compared."
+          },
+          "platform": {
+            "option": "platform: Oxagen’s shared account",
+            "summary": "Oxagen’s shared account.",
+            "about": "One key for every customer. Its tokens are billed. The provider returns one total for every customer, so Oxagen’s meter is the only record of this organization’s share."
+          },
+          "customer_key": {
+            "option": "customer_key: your own OpenRouter or vendor key",
+            "summary": "Your own OpenRouter or vendor key.",
+            "about": "You own and pay for it. Oxagen stores it encrypted and never returns it. Your vendor bills these tokens and Oxagen charges nothing for them."
+          }
+        },
+        "facts": {
+          "key": "Key",
+          "billing": "Billing",
+          "storage": "Key storage",
+          "engine": "Engine",
+          "secret": "Secret",
+          "provisionedId": "Provisioned id",
+          "accountName": "Name on the account",
+          "minted": "Minted",
+          "cap": "Monthly cap",
+          "reads": "Reads"
+        },
+        "customer": {
+          "keyHint": "ends in {hint}",
+          "keyNone": "none saved yet",
+          "billing": "your vendor bills these tokens and Oxagen charges nothing for them",
+          "storage": "encrypted under the organization’s key and never returned to a screen"
+        },
+        "shared": {
+          "key": "Oxagen’s shared account",
+          "billing": "Oxagen pays the provider and bills the tokens as assistant usage"
+        },
+        "minted": {
+          "unrecorded": "No capability returns this organization’s minted key yet, so its facts are not recorded here (#4005).",
+          "mint": {
+            "open": "Mint a key for {org}",
+            "title": "Mint a model key for {org}",
+            "body": "Oxagen would call OpenRouter’s provisioning API, mint a key named for this organization with a spend cap set at the provider, and store it encrypted. Minting would be a governed action with your name on it. No capability mints a key from this page yet, so nothing is sent (#4005)."
+          },
+          "rotate": {
+            "open": "Rotate",
+            "title": "Rotate this key",
+            "body": "Rotation would provision a new key at the provider, then revoke the old one once the engine has picked the new one up. Turns in flight would finish on the key they started with. No capability rotates the minted key yet, so nothing is sent (#4005)."
+          },
+          "revoke": {
+            "open": "Revoke",
+            "title": "Revoke this key",
+            "body": "Revoking would end the key at the provider at the next call, and the in-app agent would stop for everyone in {org}. No capability revokes the minted key yet, so nothing is sent (#4005)."
+          }
+        },
+        "change": {
+          "open": "Change source",
+          "title": "Change funding source",
+          "current": "current",
+          "reconciles": "reconciles per organization",
+          "note": "Pick a source on the panel behind this dialog. It carries the key field and the lifecycle. On a customer key your vendor bills the tokens and Oxagen charges nothing for them. On the other two they are billed to this organization."
+        }
+      },
+      "routes": {
+        "title": "Model routes",
+        "badge": "customer agents call their providers with their own keys, and Oxagen records what each harness reports",
+        "columns": {
+          "tier": "Tier",
+          "provider": "Provider",
+          "route": "Route",
+          "fallback": "Fallback",
+          "use": "Use",
+          "cost": "Cost",
+          "edit": "Edit"
+        },
+        "tiers": {
+          "complex": "reflection, promotion rationale, Context PR bodies, run names and summaries",
+          "light": "classification, labeling, entity and property naming, redaction hints, approval summaries, reranking",
+          "embed": "embeddings for entities, records, documents, issues, code",
+          "rerank": "reordering hybrid retrieval candidates"
+        },
+        "total": "Total",
+        "basis": "basis client_attested",
+        "currency": "USD",
+        "unrecorded": "Oxagen’s own model routes are not stored per organization yet, and no read returns a tier’s use or cost this month (#4006).",
+        "edit": {
+          "open": "Edit",
+          "title": "Edit the {tier} route",
+          "body": "Saving would set this tier’s provider, route and fallback for the organization, recorded as a control-plane event and applied at the next model call. No capability stores a route yet, so nothing is sent (#4006)."
+        }
       }
     },
     "sso": {
@@ -753,7 +849,8 @@
       "failure": {
         "groupRequired": "Enter a group name.",
         "groupDuplicate": "This group already has a row. Give each group one role."
-      }
+      },
+      "ssoSettings": "Single sign-on"
     },
     "costCenters": {
       "title": "Cost centers",
@@ -804,13 +901,7 @@
       "title": "Organization"
     },
     "list": {
-      "search": "Search this list",
-      "all": "All · {filter}",
-      "rows": "Rows",
-      "range": "{from}–{to} of {total}",
-      "pager": "Pages of {list}",
-      "previous": "Previous",
-      "next": "Next"
+      "all": "All · {filter}"
     },
     "notRecorded": "not recorded",
     "states": {
@@ -876,8 +967,6 @@
         "attester": "Attester key",
         "gateway": "Gateway",
         "resolver": "Resolver",
-        "postgresHost": "Postgres host",
-        "postgresDatabase": "Postgres database",
         "deployment": "Deployment",
         "bundleVersion": "Bundle version",
         "bundleSignature": "Bundle signature",
@@ -885,7 +974,8 @@
         "airGapped": "Air-gapped mode",
         "licence": "Licence",
         "nextBundle": "Next bundle",
-        "outbound": "Outbound connections"
+        "tenantPostgres": "Tenant data in Postgres",
+        "identityPostgres": "Identity and billing in Postgres"
       },
       "status": {
         "active": "active",
@@ -931,7 +1021,33 @@
           "title": "Rotate keys",
           "body": "Rotate keys would rotate this organization’s key-encryption key and land on Audit under Keys. No capability rotates it yet, so nothing is sent from here."
         }
+      },
+      "identityShared": "stay on the shared plane by design",
+      "outbound": {
+        "title": "Outbound connections in use",
+        "destination": "Destination",
+        "why": "Why",
+        "state": "State"
       }
+    },
+    "receipts": {
+      "saved": "Saved. Recorded in the audit record.",
+      "roleChanged": "{name} now holds {role}. Recorded in the audit record.",
+      "memberRemoved": "{name} was removed from the organization. Recorded in the audit record.",
+      "invited": "Invitation sent to {email}. Recorded in the audit record.",
+      "invitationResent": "Invitation sent again. Recorded in the audit record.",
+      "invitationRevoked": "Invitation revoked. Recorded in the audit record.",
+      "roleCreated": "{name} was created. Recorded in the audit record.",
+      "roleSaved": "{name} was saved. Each holder's permission changes at their next call. Recorded in the audit record.",
+      "roleDeleted": "{name} was deleted. Its definition and grants stay in the audit record.",
+      "keyCreated": "{name} was created. Recorded in the audit record.",
+      "keyRotated": "{name} was rotated. Recorded in the audit record.",
+      "keyRevoked": "{name} was revoked. Its access ends at the next call. Recorded in the audit record.",
+      "workspaceCreated": "The workspace was created. Recorded in the audit record.",
+      "workspaceSaved": "{name} was saved. Recorded in the audit record.",
+      "workspaceArchived": "{name} was archived. Recorded in the audit record.",
+      "modelKeySaved": "Your key was saved. The next assistant turn uses it. Recorded in the audit record.",
+      "modelKeyRemoved": "Your key was removed. Turns run on Oxagen's key from the next call. Recorded in the audit record."
     }
   }
 }

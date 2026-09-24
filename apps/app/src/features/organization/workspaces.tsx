@@ -54,11 +54,18 @@ function GovernanceCell({ workspace }: { workspace: Workspace }) {
   const t = useTranslations("organization.workspaces");
   return (
     <>
-      <Badge tone="quiet" dot={false} data-governance="not-recorded">
+      <Badge
+        tone="quiet"
+        dot={false}
+        data-governance="not-recorded"
+        data-issue="3907"
+      >
         {t("governanceNotRecorded")}
       </Badge>
+      <div className="text-[11px] text-dim" data-issue="3933">
+        {t("retentionNotRecorded")}
+      </div>
       <div className={`${mono} text-[11px] text-dim`}>
-        {t("retentionNotRecorded")} ·{" "}
         {t("namespace", { namespace: workspace.namespace })}
       </div>
     </>
