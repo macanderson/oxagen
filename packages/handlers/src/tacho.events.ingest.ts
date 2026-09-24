@@ -81,7 +81,7 @@ import {
   recordGovernedActions,
   recordSpend,
 } from "@oxagen/billing";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
 import { writeAssembly } from "@oxagen/run-ledger";
 import {
@@ -91,6 +91,7 @@ import {
 } from "./lib/tacho-containment";
 import { machineSnapshotOf } from "./lib/machine-facts";
 import { rollupFiles } from "./lib/file-facts-rollup";
+import { latestHarnessTitle } from "./lib/harness-title";
 import { unlockOnboardingGate } from "./lib/onboarding";
 import {
   gatewayInvocationColumnReady,
@@ -1810,6 +1811,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
           now,
           observedStatusColumn,
         );
+        await refreshHarnessTitle(tx, sessionId, fresh);
       }
       if (accepted) {
         for (const event of fresh) {
@@ -2469,6 +2471,33 @@ async function refreshSessionTitle(
     .update(schema.tachoSessions)
     .set({ title, updatedAt: now })
     .where(eq(schema.tachoSessions.id, sessionId));
+}
+
+/**
+ * Store the latest title the harness gave the session (`harness-title.ts`).
+ * The update keeps a stored title whose frame is newer, so a batch that
+ * arrives late cannot bring back an older name. It leaves `updated_at` alone:
+ * the title is not input to the run's generated account.
+ */
+async function refreshHarnessTitle(
+  tx: Tx,
+  sessionId: string,
+  events: TachoEvent[],
+): Promise<void> {
+  const latest = latestHarnessTitle(events);
+  if (latest === null) return;
+  await tx
+    .update(schema.tachoSessions)
+    .set({ harnessTitle: latest.title, harnessTitleAt: latest.at })
+    .where(
+      and(
+        eq(schema.tachoSessions.id, sessionId),
+        or(
+          isNull(schema.tachoSessions.harnessTitleAt),
+          lte(schema.tachoSessions.harnessTitleAt, latest.at),
+        ),
+      ),
+    );
 }
 
 async function rollupCommands(

@@ -220,6 +220,7 @@ const ledgerColumns = {
     summary: runs.summary,
     summaryGeneratedAt: runs.summaryGeneratedAt,
     summaryModel: runs.summaryModel,
+    summaryError: runs.summaryError,
   },
   identity: {
     orgNamespace: schema.organizations.namespace,
@@ -517,9 +518,12 @@ const tachoColumns = {
     // showed one for ever. That is the whole point of deriving a title, and
     // it was being written to a column nothing read.
     title: sessions.title,
+    // The title the harness gave the session itself (`harness-title.ts`).
+    harnessTitle: sessions.harnessTitle,
     summary: sessions.summary,
     summaryGeneratedAt: sessions.summaryGeneratedAt,
     summaryModel: sessions.summaryModel,
+    summaryError: sessions.summaryError,
     // `to_jsonb` takes a row, addressed by the FROM-clause's own
     // correlation name for this table, which is just its bare name and
     // never schema-qualified even though every column reference above is.
@@ -621,9 +625,13 @@ type GeneratedSummaryColumns = {
    * run has no such column, so it is optional here rather than shared.
    */
   title?: string | null;
+  /** The title the harness gave the session itself; wrapped sessions only. */
+  harnessTitle?: string | null;
   summary: string | null;
   summaryGeneratedAt: Date | null;
   summaryModel: string | null;
+  /** Why the last automatic account failed, as a short reason code. */
+  summaryError?: string | null;
 };
 
 type LedgerRunCore = GeneratedSummaryColumns & {
@@ -893,6 +901,15 @@ function generatedSummary(
   };
 }
 
+/** The failure reason, carried only while the run has no account to show. */
+function enrichmentError(
+  columns: GeneratedSummaryColumns,
+): Pick<RunItem, "enrichmentError"> {
+  return columns.summaryError && generatedSummary(columns) === null
+    ? { enrichmentError: columns.summaryError }
+    : {};
+}
+
 /** Integer micro-units as the wire's decimal string; refuses a float or NaN. */
 export function microsString(micros: number): string {
   if (!Number.isSafeInteger(micros))
@@ -1015,6 +1032,7 @@ export function toLedgerRunItem(
     machine: null,
     name: run.name,
     summary: generatedSummary(run),
+    ...enrichmentError(run),
   };
 }
 
@@ -1066,6 +1084,26 @@ export function tachoRunOutcome(outcome: string): RunItem["outcome"] {
         `tacho session outcome outside the CHECK: ${outcome}`,
       );
   }
+}
+
+/**
+ * The name a wrapped session shows, first match wins:
+ *
+ * 1. The title the harness gave the session (Claude Code's `ai-title`). The
+ *    operator already sees it in their terminal, so a name Oxagen wrote does
+ *    not replace it.
+ * 2. `name`: the model-written name, or until one exists, the first sentence
+ *    of the first prompt plus the branch that `run.enrich` writes.
+ * 3. `title`: the place-and-counts title the ingest derives.
+ *
+ * A run always has something to be called.
+ */
+export function tachoRunName(session: {
+  harnessTitle?: string | null;
+  name: string | null;
+  title?: string | null;
+}): string | null {
+  return session.harnessTitle ?? session.name ?? session.title ?? null;
 }
 
 /**
@@ -1191,10 +1229,9 @@ export function toTachoRunItem(
           runtime: session.runtime ?? null,
         }
       : null,
-    // The model-written name when `summarize_run` has produced one, and the
-    // derived title until then. A run always has something to be called.
-    name: session.name ?? session.title ?? null,
+    name: tachoRunName(session),
     summary: generatedSummary(session),
+    ...enrichmentError(session),
   };
 }
 
@@ -1447,18 +1484,29 @@ export function createRunListHandler(
       : true;
     return {
       runs: merged.items
-        .map((item) =>
-          item.kind === "ledger"
-            ? toLedgerRunItem(enrich(item.row), costs.get(item.id))
-            : toTachoRunItem(item.row, costs.get(item.id)),
-        )
-        .map((run) => ({
-          ...run,
-          enrichmentEnabled: enabled,
-          ...(enabled
-            ? {}
-            : { name: null, summary: null, canSummarize: false }),
-        })),
+        .map((item) => {
+          const run =
+            item.kind === "ledger"
+              ? toLedgerRunItem(enrich(item.row), costs.get(item.id))
+              : toTachoRunItem(item.row, costs.get(item.id));
+          return {
+            ...run,
+            enrichmentEnabled: enabled,
+            ...(enabled
+              ? {}
+              : {
+                  // Turning automatic accounts off hides what Oxagen wrote,
+                  // not the title the harness gave the session.
+                  name:
+                    item.kind === "tacho"
+                      ? (item.row.session.harnessTitle ?? null)
+                      : null,
+                  summary: null,
+                  canSummarize: false,
+                  enrichmentError: undefined,
+                }),
+          };
+        }),
       nextCursor: merged.nextCursor,
     };
   };
