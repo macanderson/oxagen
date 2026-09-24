@@ -16,11 +16,11 @@
     },
     "tiles": {
       "label": "Summary",
-      "events48h": "Events · 48 hours",
-      "events7d": "Events · 7 days",
-      "events30d": "Events · 30 days",
-      "eventsDays": "Events · chosen days",
-      "eventsNote": "every IAM decision is recorded, allowed or not",
+      "events48h": "Events in 48 hours",
+      "events7d": "Events in 7 days",
+      "events30d": "Events in 30 days",
+      "eventsDays": "Events in chosen days",
+      "eventsNote": "every allowed and denied IAM decision is recorded",
       "atLeast": "{count}+",
       "denied": "Denied",
       "deniedNote": "denials are recorded and cost nothing",
@@ -31,7 +31,7 @@
     "events": {
       "title": "Control-plane events",
       "caption": "admin actions, IAM changes, repo bindings, plane changes, key rotations",
-      "store": "postgres · 7 years",
+      "store": "postgres for 7 years",
       "filters": "Filter the audit record",
       "actor": "Actor",
       "anyActor": "All actors",
@@ -45,9 +45,9 @@
       "searchPlaceholder": "Search events, receipts, actors, external ids",
       "searchNotRecorded": "Search is not recorded yet. The audit read takes no text query, so use the Actor, Range and Result filters.",
       "result": "Result",
-      "anyResult": "All · Result",
+      "anyResult": "All results",
       "severity": "Severity",
-      "anySeverity": "All · Severity",
+      "anySeverity": "All severities",
       "severities": {
         "critical": "critical",
         "info": "info",
@@ -85,7 +85,7 @@
     "csv": {
       "open": "CSV",
       "title": "Export events",
-      "subtitle": "CSV · the same rows the API and MCP return",
+      "subtitle": "CSV of the same rows the API and MCP return",
       "body": "The file holds the events this table reads over the same actor, range and result, with the event id, actor, capability, result, workspace, IP address, user agent and request id. It is signed with HMAC-SHA256 and the signature travels in the response headers. Nothing in a control-plane event is a prompt or tool body, so this export carries no redaction step.",
       "download": "Download CSV"
     },
@@ -113,7 +113,7 @@
     },
     "incidents": {
       "open": "Open",
-      "critical": "Critical · 12 months",
+      "critical": "Critical in 12 months",
       "median": "Median time to resolve",
       "money": "Money moved without a receipt",
       "title": "Incidents",
@@ -187,7 +187,7 @@
     },
     "rotate": {
       "title": "Rotate the key-encryption key",
-      "subtitle": "a new generation, nothing rewritten",
+      "subtitle": "a new generation with nothing rewritten",
       "facts": {
         "generation": "New generation",
         "effect": "Takes effect",

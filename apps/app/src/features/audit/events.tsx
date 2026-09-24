@@ -173,7 +173,13 @@ const ACTOR_KINDS = ["human", "agent", "service"] as const;
 // disabled with its note until an audit event records a severity.
 const AUDIT_SEVERITIES = ["critical", "info", "warning"] as const;
 const ACTOR_KIND_NOTE = "audit-actor-kind-note";
-const select = `${inputBase} w-auto max-md:text-base`;
+/**
+ * A 44 px tap target and 16 px text on a phone (rev1 audit.md, Mobile): the
+ * house input is about 38 px tall, and 16 px keeps the browser from zooming
+ * the page when the field takes focus.
+ */
+const control = `${inputBase} max-md:min-h-11 max-md:text-base`;
+const select = `${control} w-auto`;
 
 function Filters({ org, query }: { org: string; query: AuditQuery }) {
   const t = useTranslations("audit.events");
@@ -195,7 +201,7 @@ function Filters({ org, query }: { org: string; query: AuditQuery }) {
             disabled
             placeholder={t("searchPlaceholder")}
             aria-describedby={searchNote}
-            className={`${inputBase} max-md:text-base`}
+            className={control}
           />
         </label>
         <label>

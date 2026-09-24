@@ -92,8 +92,11 @@ function Missing({ id, gap, text }: { id: string; gap: Gap; text: string }) {
 
 const field = "flex flex-col gap-1 text-[13px]";
 const label = "text-xs font-medium text-muted-foreground";
-/** 16px on a phone so the browser does not zoom the page on focus (audit.md, Mobile). */
-const control = `${inputBase} max-md:text-base`;
+/**
+ * A 44 px tap target and 16 px text on a phone (audit.md, Mobile), so the
+ * browser does not zoom the page when a field takes focus.
+ */
+const control = `${inputBase} max-md:min-h-11 max-md:text-base`;
 
 /** A submit the missing write keeps disabled, described by the sentence that says why. */
 function DisabledSubmit({

@@ -347,9 +347,9 @@ describe("Events", () => {
 
     expect(tiles()).toEqual([
       [
-        "Events · 30 days",
+        "Events in 30 days",
         "3",
-        "every IAM decision is recorded, allowed or not",
+        "every allowed and denied IAM decision is recorded",
       ],
       ["Denied", "2", "denials are recorded and cost nothing"],
       [
@@ -363,10 +363,10 @@ describe("Events", () => {
     ]);
     expect(document.body).not.toHaveTextContent("with a receipt");
     // The Events tab carries the same count the first tile does.
-    expect(screen.getByRole("link", { name: /Events/ })).toHaveTextContent(
+    expect(screen.getByRole("tab", { name: /Events/ })).toHaveTextContent(
       "Events3",
     );
-    expect(screen.getByRole("link", { name: /Events/ })).toHaveAttribute(
+    expect(screen.getByRole("tab", { name: /Events/ })).toHaveAttribute(
       "aria-current",
       "page",
     );
@@ -385,7 +385,7 @@ describe("Events", () => {
     answer({ window: recordOf([denied]) });
     await renderAudit({ range: "48h" });
 
-    expect(tiles()[0]?.[0]).toBe("Events · 48 hours");
+    expect(tiles()[0]?.[0]).toBe("Events in 48 hours");
     expect(events.mock.calls[0]?.[1]).toMatchObject({
       since: "2026-09-14T12:00:00.000Z",
     });
@@ -442,7 +442,7 @@ describe("Events", () => {
     expect(panel).toHaveTextContent(
       "admin actions, IAM changes, repo bindings, plane changes, key rotations",
     );
-    expect(panel).toHaveTextContent("postgres · 7 years");
+    expect(panel).toHaveTextContent("postgres for 7 years");
     expect(panel).toHaveTextContent(
       "The record is written by the kernel, never by an agent. A client-attested call is labeled as such and can never be shown as decided by Oxagen.",
     );
@@ -487,7 +487,7 @@ describe("Events", () => {
       within(result)
         .getAllByRole("option")
         .map((option) => option.textContent),
-    ).toEqual(["All · Result", "allowed", "denied"]);
+    ).toEqual(["All results", "allowed", "denied"]);
     expect(screen.getByRole("combobox", { name: "Rows" })).toHaveValue("25");
 
     const search = screen.getByRole("searchbox", {
@@ -505,7 +505,16 @@ describe("Events", () => {
     expect(severity).toBeDisabled();
     expect(
       [...(severity as HTMLSelectElement).options].map((o) => o.textContent),
-    ).toEqual(["All · Severity", "critical", "info", "warning"]);
+    ).toEqual(["All severities", "critical", "info", "warning"]);
+    // Every filter is a 44 px tap target with 16 px text on a phone (rev1
+    // audit.md, Mobile); the house input alone is about 38 px tall.
+    const filters = screen.getByTestId("audit-filters");
+    for (const each of filters.querySelectorAll(
+      "select, input:not([type=hidden])",
+    )) {
+      expect(each.className).toContain("max-md:min-h-11");
+      expect(each.className).toContain("max-md:text-base");
+    }
 
     // The table's page is narrowed by the result and sized by Rows; the
     // window the tiles count is not narrowed by the result.
@@ -582,7 +591,7 @@ describe("Events", () => {
     fireEvent.click(screen.getByRole("button", { name: "CSV" }));
     const dialog = await screen.findByRole("dialog", { name: "Export events" });
     expect(dialog).toHaveTextContent(
-      "CSV · the same rows the API and MCP return",
+      "CSV of the same rows the API and MCP return",
     );
     expect(
       within(dialog).getByRole("link", { name: "Download CSV" }),
@@ -602,19 +611,26 @@ describe("tabs", () => {
     await renderAudit({}, { tab: "keys" });
 
     const nav = screen.getByRole("navigation", { name: "Audit sections" });
+    // The design's tab semantics (audit.audit-prompt.md check 12): a tablist
+    // of tabs with aria-selected, each still a link to its own segment.
+    const list = within(nav).getByRole("tablist", { name: "Audit sections" });
     expect(
-      within(nav)
-        .getAllByRole("link")
-        .map((link) => [link.textContent, link.getAttribute("href")]),
+      within(list)
+        .getAllByRole("tab")
+        .map((tab) => [
+          tab.textContent,
+          tab.getAttribute("href"),
+          tab.getAttribute("aria-selected"),
+        ]),
     ).toEqual([
-      ["Events1", "/acme/audit"],
-      ["Incidents", "/acme/audit/incidents"],
-      ["Receipts", "/acme/audit/receipts"],
-      ["Exports", "/acme/audit/exports"],
-      ["Keys", "/acme/audit/keys"],
-      ["Retention", "/acme/audit/retention"],
+      ["Events1", "/acme/audit", "false"],
+      ["Incidents", "/acme/audit/incidents", "false"],
+      ["Receipts", "/acme/audit/receipts", "false"],
+      ["Exports", "/acme/audit/exports", "false"],
+      ["Keys", "/acme/audit/keys", "true"],
+      ["Retention", "/acme/audit/retention", "false"],
     ]);
-    expect(within(nav).getByRole("link", { name: "Keys" })).toHaveAttribute(
+    expect(within(nav).getByRole("tab", { name: "Keys" })).toHaveAttribute(
       "aria-current",
       "page",
     );
@@ -659,7 +675,7 @@ describe("tabs", () => {
 
     expect(tiles().map(([term, value]) => [term, value])).toEqual([
       ["Open", "not recorded"],
-      ["Critical · 12 months", "not recorded"],
+      ["Critical in 12 months", "not recorded"],
       ["Median time to resolve", "not recorded"],
       ["Money moved without a receipt", "not recorded"],
     ]);
@@ -678,6 +694,7 @@ describe("tabs", () => {
       "agent key, tool, external effect id, call digest, receipt id",
     );
     expect(search).toHaveAccessibleDescription(why);
+    expect(search.className).toContain("max-md:min-h-11");
     expect(screen.getByRole("button", { name: "Search" })).toBeDisabled();
     const chips = within(screen.getByRole("list", { name: "Examples" }))
       .getAllByRole("button")
@@ -926,6 +943,36 @@ describe("tabs", () => {
       expect(
         within(dialog).queryByRole("button", { name: "Close" }),
       ).toBeNull();
+      // Every field is a 44 px tap target with 16 px text on a phone (audit.md, Mobile).
+      for (const each of dialog.querySelectorAll("input, select, textarea")) {
+        expect(each.className).toContain("max-md:min-h-11");
+        expect(each.className).toContain("max-md:text-base");
+      }
+    },
+  );
+
+  it.each([
+    "events",
+    "incidents",
+    "receipts",
+    "exports",
+    "keys",
+    "retention",
+  ] as const)(
+    "on %s, no heading, tile, badge or option carries a mid-dot, a comma or a not/never contrast",
+    async (tab) => {
+      answer({ window: recordOf([event()]) });
+      await renderAudit({}, { tab });
+
+      // The house rule the spec repeats (rev1 audit.md): a label is a plain noun.
+      const labels = [
+        ...screen.getAllByRole("heading"),
+        ...document.querySelectorAll("dt, option, th"),
+      ].map((each) => each.textContent ?? "");
+      expect(labels.length).toBeGreaterThan(0);
+      for (const text of labels) {
+        expect(text).not.toMatch(/·|,|\b(not|never)\b/);
+      }
     },
   );
 

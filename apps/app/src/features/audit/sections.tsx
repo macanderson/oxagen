@@ -166,7 +166,7 @@ export function ReceiptsTab() {
               disabled
               placeholder={t("searchPlaceholder")}
               aria-describedby={note}
-              className={`${inputBase} max-md:text-base`}
+              className={`${inputBase} max-md:min-h-11 max-md:text-base`}
             />
           </label>
           <button
