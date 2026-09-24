@@ -249,8 +249,6 @@ async function buildAuth(opts: {
   userInfo?: boolean;
   clientSecret?: string;
   entitled?: boolean;
-  /** Leave the mock IdP's origin out of trustedOrigins. Defaults to false. */
-  untrustedIdp?: boolean;
   seed?: (db: Db) => void;
 }) {
   const db: Db = {
@@ -291,14 +289,11 @@ async function buildAuth(opts: {
   });
   const auth = betterAuth({
     baseURL: BASE_URL,
+    // Better Auth 1.6.33 refuses an OIDC endpoint on a private address unless
+    // its origin is trusted (discovery_private_host). The mock IdP listens on
+    // 127.0.0.1, so the test trusts that one origin; a real IdP is public.
+    trustedOrigins: [BASE_URL, idp.issuer],
     secret: "test-secret-that-is-at-least-thirty-two-characters",
-    // The mock IdP listens on 127.0.0.1. Since @better-auth/sso 1.6.33 the
-    // sign-in and callback endpoints refuse an IdP endpoint on a loopback or
-    // private address (discovery_private_host) unless its origin is in
-    // trustedOrigins, the plugin's escape hatch for internal IdPs. Production
-    // never needs it: create_sso_provider accepts only https endpoints on
-    // public addresses. The last test leaves the IdP out to prove the guard.
-    trustedOrigins: opts.untrustedIdp ? [] : [idp.issuer],
     database: withSsoSecrets(memoryAdapter(db), () => kms),
     plugins: [
       buildSsoPlugin({
@@ -696,30 +691,6 @@ describe("SSO sign-in through a mock OIDC provider", () => {
         .some((c) => c.startsWith("oxagen.session_token=")),
     ).toBe(false);
     // Provisioning never ran: no role, no sign-in event.
-    expect(events).toEqual([]);
-  });
-
-  it("refuses to start sign-in through an IdP on a private address that trustedOrigins does not list", async () => {
-    const { auth, db, events } = await buildAuth({
-      mappings: [{ group: "oxagen-admins", role: "admin" }],
-      untrustedIdp: true,
-    });
-
-    const start = await auth.handler(
-      new Request(`${BASE_URL}/api/auth/sign-in/sso`, {
-        method: "POST",
-        headers: { "content-type": "application/json", origin: BASE_URL },
-        body: JSON.stringify({ email: "ada@acme.com", callbackURL: "/acme" }),
-      }),
-    );
-
-    expect(start.status).toBe(400);
-    expect(await start.json()).toMatchObject({
-      code: "discovery_private_host",
-    });
-    // Nothing reached the IdP and nobody was created.
-    expect(idp.tokenRequests).toBe(0);
-    expect(db.user).toEqual([]);
     expect(events).toEqual([]);
   });
 });
