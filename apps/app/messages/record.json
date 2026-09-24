@@ -6,6 +6,18 @@
       "record": "record",
       "published": "published",
       "archived": "archived",
+      "slugTitle": "The slug: the record's file stem under .oxagen/rules/. It never changes.",
+      "notRecorded": "not recorded",
+      "versionValue": "v{version}",
+      "props": {
+        "kind": "Kind",
+        "force": "Force",
+        "effect": "Effect",
+        "scope": "Scope",
+        "status": "Status",
+        "version": "Version",
+        "pending": "Open change"
+      },
       "forceTitle": "steering force",
       "effectTitle": "constraint effect",
       "kindLine": {

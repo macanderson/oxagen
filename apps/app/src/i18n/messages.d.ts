@@ -4894,6 +4894,18 @@ type Messages = {
       record: string;
       published: string;
       archived: string;
+      slugTitle: string;
+      notRecorded: string;
+      versionValue: string;
+      props: {
+        kind: string;
+        force: string;
+        effect: string;
+        scope: string;
+        status: string;
+        version: string;
+        pending: string;
+      };
       forceTitle: string;
       effectTitle: string;
       kindLine: {
