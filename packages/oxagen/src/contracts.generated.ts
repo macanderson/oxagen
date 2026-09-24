@@ -308,6 +308,7 @@ import "./contracts/run.recent.list";
 import "./contracts/run.summarize";
 import "./contracts/run.token.issue";
 import "./contracts/run.transcript.get";
+import "./contracts/run.turns.get";
 import "./contracts/run.work.get";
 import "./contracts/schema.chat";
 import "./contracts/schema.delete";

@@ -9,8 +9,11 @@
 //     pnpm --filter @oxagen/handlers test:unit src/run.transcript.get.bench.test.ts
 //
 // Each case replays a read the Run page makes: the transcript's first page,
-// the next page, the poll a live run's stream triggers, and the whole-run
-// reads behind the Cost tab. Every case reports the median wall time over
+// the next page, the poll a live run's stream triggers, the whole-run read
+// the page's figures come from (at 200 entries a page, as it read before
+// #4067, and at 500, as it reads now), the two whole-run reads the Cost tab
+// made before #4067, and the one `get_run_turns` read it makes now. Every
+// case reports the median wall time over
 // several runs, the ClickHouse queries it issued, and the rows and bytes
 // ClickHouse read for it (from `system.query_log`). Body reads are left out:
 // the seeded frames keep no bodies, so both versions pay the same zero. The
@@ -18,7 +21,11 @@
 // lists them in production is not timed. A case that times out is recorded
 // with its error, and the rest still run.
 import { writeFileSync } from "node:fs";
-import { runTranscriptGet } from "@oxagen/oxagen/contracts/run.transcript.get";
+import {
+  runTranscriptGet,
+  TRANSCRIPT_ENTRY_MAX,
+} from "@oxagen/oxagen/contracts/run.transcript.get";
+import { runTurnsGet } from "@oxagen/oxagen/contracts/run.turns.get";
 import {
   runInTenantScope,
   setDataPlaneResolver,
@@ -28,12 +35,15 @@ import {
   closeClickhouse,
   selectTachoEvents,
   selectTachoSubagentEvents,
+  selectTachoTurnFacts,
+  selectTachoTurnGroups,
 } from "@oxagen/telemetry";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   createRunTranscriptGetHandler,
   type RunTranscriptGetDeps,
 } from "./run.transcript.get";
+import { createRunTurnsGetHandler } from "./run.turns.get";
 import {
   ctx,
   memoryEvents,
@@ -68,7 +78,7 @@ const MID = {
 
 type Counted = { queries: number };
 
-function handler(outcome: string, counted: Counted) {
+function deps(outcome: string, counted: Counted): RunTranscriptGetDeps {
   const stores = memoryStores(
     [],
     [BIG, MID].map((run) =>
@@ -86,7 +96,7 @@ function handler(outcome: string, counted: Counted) {
       }),
     ),
   );
-  const deps: RunTranscriptGetDeps = {
+  const built: RunTranscriptGetDeps = {
     queries: stores.queries,
     store: {
       getRunByPublicId: () => Promise.resolve(null),
@@ -110,7 +120,26 @@ function handler(outcome: string, counted: Counted) {
     },
     priceBook: () => Promise.resolve([]),
   };
-  return createRunTranscriptGetHandler(deps);
+  return built;
+}
+
+function handler(outcome: string, counted: Counted) {
+  return createRunTranscriptGetHandler(deps(outcome, counted));
+}
+
+/** `get_run_turns` over the same store, counting its ClickHouse reads. */
+function turnsHandler(counted: Counted) {
+  return createRunTurnsGetHandler({
+    ...deps("completed", counted),
+    tachoTurnFacts: (args) => {
+      counted.queries += 1;
+      return selectTachoTurnFacts(args);
+    },
+    tachoTurnGroups: (args) => {
+      counted.queries += 1;
+      return selectTachoTurnGroups(args);
+    },
+  });
 }
 
 async function clickhouse(sql: string): Promise<string> {
@@ -205,21 +234,27 @@ async function measure(
 const input = (over: Record<string, unknown>) =>
   runTranscriptGet.input.parse(over);
 
-/** The whole-run read the Cost, Policy and Context tabs make (whole-transcript.ts). */
+/**
+ * A whole-run read the way whole-transcript.ts pages it: `limit` entries a
+ * page, up to 10,000 entries in all.
+ */
 async function whole(
   transcript: ReturnType<typeof handler>,
   runId: string,
   zoom: string,
+  limit = 200,
 ): Promise<{ entries: number; complete: boolean }> {
-  let page = await transcript(input({ runId, zoom }), ctx(SCOPE));
+  let page = await transcript(input({ runId, zoom, limit }), ctx(SCOPE));
   let entries = page.entries.length;
   for (
     let pages = 1;
-    pages < 50 && page.cursor !== null && page.entries.length >= 200;
+    pages < 10_000 / limit &&
+    page.cursor !== null &&
+    page.entries.length >= limit;
     pages += 1
   ) {
     page = await transcript(
-      input({ runId, zoom, after: page.cursor }),
+      input({ runId, zoom, limit, after: page.cursor }),
       ctx(SCOPE),
     );
     entries += page.entries.length;
@@ -300,8 +335,26 @@ describe.skipIf(!url)("get_run_transcript benchmark", () => {
         );
         return { entries: page.entries.length, complete: page.complete };
       });
+      await measure(`${size} whole run, 200 a page`, (counted) =>
+        whole(handler("completed", counted), run.publicId, "everything"),
+      );
+      await measure(`${size} whole run, 500 a page`, (counted) =>
+        whole(
+          handler("completed", counted),
+          run.publicId,
+          "everything",
+          TRANSCRIPT_ENTRY_MAX,
+        ),
+      );
+      await measure(`${size} cost tab (get_run_turns)`, async (counted) => {
+        const out = await turnsHandler(counted)(
+          runTurnsGet.input.parse({ runId: run.publicId }),
+          ctx(SCOPE),
+        );
+        return { entries: out.turns.length, complete: out.complete };
+      });
       await measure(
-        `${size} cost tab (turns + steps, whole run)`,
+        `${size} cost tab before #4067 (turns + steps, whole run)`,
         async (counted) => {
           const transcript = handler("completed", counted);
           const [turns, steps] = await Promise.all([
