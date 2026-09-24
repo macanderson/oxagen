@@ -26,6 +26,7 @@ export function toRunRow(
     operatorId: run.operatorId,
     operatorKind: run.operatorKind,
     operatorName: run.operatorName,
+    operatorAttribution: run.operatorAttribution,
     status: run.status,
     reportedCost: run.reportedCost ?? null,
     outcome: run.outcome,
@@ -71,6 +72,7 @@ export function toRunRow(
     canSummarize: run.canSummarize,
     startedAt: run.startedAt,
     sealedAt: run.sealedAt,
+    endedAt: run.endedAt,
   };
 }
 

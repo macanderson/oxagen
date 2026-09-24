@@ -213,7 +213,15 @@ export const RunRow = z.object({
    */
   canSummarize: z.boolean(),
   startedAt: z.iso.datetime({ offset: true }),
+  /** When the server recorded the seal; receipt time, so never a wall-clock end. */
   sealedAt: z.iso.datetime({ offset: true }).nullable(),
+  /** When the run stopped, by the recorder's clock; the end of a wall clock. */
+  endedAt: z.iso.datetime({ offset: true }).nullable().optional(),
+  /**
+   * `host_enroller` when the operator is the person who enrolled the machine
+   * a wrapped session ran on, which a page labels "enrolled by".
+   */
+  operatorAttribution: z.enum(["initiator", "host_enroller"]).nullable().optional(),
 });
 export type RunRow = z.infer<typeof RunRow>;
 
