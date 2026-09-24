@@ -81,7 +81,7 @@ export const SIGNED_IN_ROUTES: readonly RouteRow[] = [
   { path: `/welcome/${org}/${ws}/wrap`, titleKey: "welcomeWrap" },
   { path: `/welcome/${org}/${ws}/run`, titleKey: "welcomeRun" },
   { path: `/welcome/${org}/${ws}/installer`, titleKey: "installer" },
-] as const;
+];
 
 /**
  * The rows the oracle walks with no session at all.
