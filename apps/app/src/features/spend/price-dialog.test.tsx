@@ -2,7 +2,13 @@
 // The Pricing tab's two dialogs with their actions faked.
 //
 // A submitted card crosses the action boundary once, including every class.
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
 import type { ReactNode } from "react";
@@ -33,10 +39,22 @@ vi.mock("./actions", () => ({
   removePriceEntryAction,
 }));
 
-const { PriceDialog } = await import("./price-dialog");
+const { PriceDialog, usePriceFailureText } = await import("./price-dialog");
 const { RemoveRateDialog } = await import("./remove-rate-dialog");
 
 const at = { org: "acme", ws: "core-platform" };
+
+function WithMessages({ children }: { children: ReactNode }) {
+  return (
+    <NextIntlClientProvider
+      locale="en"
+      messages={{ ...spend, ...ui }}
+      timeZone="UTC"
+    >
+      {children}
+    </NextIntlClientProvider>
+  );
+}
 
 function renderWithIntl(node: ReactNode) {
   return render(
@@ -133,7 +151,7 @@ describe("Set a negotiated rate", () => {
 
     await waitFor(() => {
       expect(router.replace).toHaveBeenCalledWith(
-        "/acme/core-platform/spend?tab=pricing",
+        "/acme/core-platform/spend/pricing",
       );
     });
     expect(setPriceEntryAction).toHaveBeenCalledTimes(1);
@@ -301,7 +319,7 @@ describe("Remove a negotiated rate", () => {
     );
     await waitFor(() => {
       expect(router.replace).toHaveBeenCalledWith(
-        "/acme/core-platform/spend?tab=pricing",
+        "/acme/core-platform/spend/pricing",
       );
     });
     expect(removePriceEntryAction).toHaveBeenCalledWith(at, {
@@ -337,7 +355,7 @@ describe("Remove a negotiated rate", () => {
     );
     await waitFor(() => {
       expect(router.replace).toHaveBeenCalledWith(
-        "/acme/core-platform/spend?tab=pricing",
+        "/acme/core-platform/spend/pricing",
       );
     });
   });
@@ -439,5 +457,31 @@ describe("Remove a negotiated rate", () => {
       }),
     ).toBeInTheDocument();
     expect(removePriceEntryAction).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("price refusal wording", () => {
+  it("says each refusal the price book can give in its own words", () => {
+    const { result } = renderHook(usePriceFailureText, {
+      wrapper: WithMessages,
+    });
+    const text = result.current;
+    expect(text({ ok: false, reason: "denied", code: "no_principal" })).toBe(
+      "The request carried no signed-in user. Sign in and try again.",
+    );
+    expect(
+      text({ ok: false, reason: "conflict", code: "price_entry_overlaps" }),
+    ).toBe("The price book refused the change: price_entry_overlaps.");
+    expect(text({ ok: false, reason: "invalid", code: "rate_invalid" })).toBe(
+      "The price book refused the figure as invalid: rate_invalid.",
+    );
+    expect(
+      text({ ok: false, reason: "pending_approval", accessRequestId: "acr_1" }),
+    ).toBe("The change is waiting for approval, request acr_1.");
+    expect(
+      text({ ok: false, reason: "exhausted", code: "billing_suspended" }),
+    ).toBe(
+      "The change could not be confirmed: billing_suspended. Open this tab again to see what the book holds.",
+    );
   });
 });

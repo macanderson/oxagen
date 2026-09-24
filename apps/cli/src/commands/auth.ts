@@ -86,7 +86,7 @@ async function promptLine(question: string): Promise<string> {
  */
 export type TokenProbe =
   | { kind: "valid" }
-  | { kind: "forbidden" }
+  | { kind: "forbidden"; detail?: string }
   | { kind: "invalid" }
   | { kind: "network"; detail: string }
   | { kind: "unexpected"; status: number };
@@ -120,9 +120,16 @@ export async function validatePlatformToken(
   // 401 is the auth layer rejecting the key itself (missing/malformed/invalid/
   // expired). This is the only "not a valid key" signal.
   if (res.status === 401) return { kind: "invalid" };
-  // 403 should not occur against whoami (no authz gate), but if any probe ever
-  // returns it, the key still authenticated — treat it as a real key.
-  if (res.status === 403) return { kind: "forbidden" };
+  // 403 means the key is genuine and a policy refuses it: an organization
+  // that requires single sign-on answers 403 when the key's creator has not
+  // signed in through SSO (ADR-145). Keep the server's reason, so the note
+  // below names the policy rather than guessing at one.
+  if (res.status === 403) {
+    const detail = await res.text?.().catch(() => "");
+    return detail
+      ? { kind: "forbidden", detail: detail.trim() }
+      : { kind: "forbidden" };
+  }
   return { kind: "unexpected", status: res.status };
 }
 
@@ -343,10 +350,12 @@ export async function handleLogin(input: LoginOptions): Promise<void> {
 
   if (probe.kind === "forbidden") {
     process.stderr.write(
-      `\nNote: this key authenticated, but the API currently denies it access ` +
+      `\nNote: this key authenticated, but the API currently refuses it ` +
         `(HTTP 403).\n` +
-        `  Capability calls for org "${orgSlug}" may be blocked until the org's ` +
-        `API-key access is enabled.\n`,
+        (probe.detail
+          ? `  ${probe.detail}\n`
+          : `  Capability calls for org "${orgSlug}" may be blocked until the org's ` +
+            `API-key access is enabled.\n`),
     );
   }
 }

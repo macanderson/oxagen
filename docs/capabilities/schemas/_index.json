@@ -1,5 +1,5 @@
 {
-  "generatedCount": 373,
+  "generatedCount": 377,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -422,6 +422,16 @@
       "consumes": []
     },
     {
+      "name": "create_scim_token",
+      "domain": "org",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "create_sso_provider",
       "domain": "org",
       "surfaces": [
@@ -798,6 +808,14 @@
         "mcp",
         "agent"
       ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "execute_scim_request",
+      "domain": "org",
+      "surfaces": [],
       "component": null,
       "produces": [],
       "consumes": []
@@ -3301,6 +3319,17 @@
       "consumes": []
     },
     {
+      "name": "revoke_scim_token",
+      "domain": "org",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "revoke_tacho_enrollment",
       "domain": "tacho",
       "surfaces": [
@@ -3327,6 +3356,16 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "rotate_scim_token",
+      "domain": "org",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],

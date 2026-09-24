@@ -57,6 +57,13 @@ describe("McpUnauthorizedError", () => {
     expect(err.message).toContain("expired_token");
   });
 
+  it("tells the caller to sign in through SSO for an sso_required refusal", () => {
+    const err = new McpUnauthorizedError("sso_required");
+    expect(err.message).toBe(
+      "MCP request unauthorized: sso_required. This organization requires single sign-on. The person who created this key must sign in through SSO.",
+    );
+  });
+
   it("is an instance of Error", () => {
     expect(new McpUnauthorizedError("unauthenticated")).toBeInstanceOf(Error);
   });
@@ -216,6 +223,17 @@ describe("resolveMcpContext", () => {
 
     const result = await resolveMcpContext("Bearer ox_old", requestId);
     expect(result).toEqual({ ok: false, reason: "expired_token" });
+  });
+
+  it("returns sso_required when the key's organization requires SSO (ADR-145)", async () => {
+    vi.mocked(resolveApiKey).mockResolvedValue({
+      ok: false,
+      kind: "sso_required",
+    });
+
+    const result = await resolveMcpContext("Bearer ox_member", requestId);
+    expect(result).toEqual({ ok: false, reason: "sso_required" });
+    expect(emitSecurityEventMock).not.toHaveBeenCalled();
   });
 
   // ── Session token path: rejected at edge with invalid_token ───────────────

@@ -9,7 +9,12 @@ export type InvitationDecision =
   | { kind: "accept" }
   | { kind: "sign-in" }
   | { kind: "wrong-account"; signedInAs: string }
-  | { kind: "closed"; status: Exclude<InvitationStatus, "pending"> };
+  | {
+      kind: "closed";
+      status: Exclude<InvitationStatus, "pending">;
+      /** Who is signed in, for the card's footer; null when nobody is. */
+      signedInAs: string | null;
+    };
 
 /**
  * What the invite page offers. A pending invitation past its expiry is closed as
@@ -21,12 +26,16 @@ export function decideInvitation(
   now: Date = new Date(),
 ): InvitationDecision {
   if (invitation.status !== "pending")
-    return { kind: "closed", status: invitation.status };
+    return {
+      kind: "closed",
+      status: invitation.status,
+      signedInAs: viewerEmail,
+    };
   if (
     invitation.expiresAt !== null &&
     new Date(invitation.expiresAt).getTime() <= now.getTime()
   ) {
-    return { kind: "closed", status: "expired" };
+    return { kind: "closed", status: "expired", signedInAs: viewerEmail };
   }
   if (viewerEmail === null) return { kind: "sign-in" };
   if (

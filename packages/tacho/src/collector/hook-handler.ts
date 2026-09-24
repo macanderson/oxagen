@@ -5,6 +5,7 @@
  * optional bundle refresh for the `defer` path. The daemon, the spool
  * replay, and (in PR 5) the Claude Agent SDK adapter all call this.
  */
+import { dirname, isAbsolute } from "node:path";
 import {
   hookInputSchema,
   normalizeHook,
@@ -516,6 +517,8 @@ async function routeHook(
   if (inferredCwd && record.cwd === undefined && input.cwd !== undefined) {
     record.cwd = input.cwd;
   }
+  const wrote = writtenDir(input);
+  if (wrote !== undefined) record.workDir = wrote;
   // A replay of a hook this session already recorded — the client's own
   // request timed out and it fell back to a spool file, but the daemon had
   // already processed the live request before that timeout fired. Sealing
@@ -901,4 +904,34 @@ async function routeHook(
       return { events, response: {}, record };
     }
   }
+}
+
+/** The tools that write a file named by an absolute path in their input. */
+const FILE_WRITING_TOOLS = new Set([
+  "Edit",
+  "Write",
+  "MultiEdit",
+  "NotebookEdit",
+]);
+
+/**
+ * The directory of the file a write tool call names, when it names one by
+ * absolute path. The daemon reads git from here, because the file an agent
+ * writes shows which checkout it is working in, and its `cwd` may not.
+ */
+export function writtenDir(input: {
+  hook_event_name?: string;
+  tool_name?: string;
+  tool_input?: Record<string, unknown>;
+}): string | undefined {
+  if (
+    input.hook_event_name !== "PreToolUse" &&
+    input.hook_event_name !== "PostToolUse"
+  )
+    return undefined;
+  if (!FILE_WRITING_TOOLS.has(input.tool_name ?? "")) return undefined;
+  const path =
+    input.tool_input?.["file_path"] ?? input.tool_input?.["notebook_path"];
+  if (typeof path !== "string" || !isAbsolute(path)) return undefined;
+  return dirname(path);
 }

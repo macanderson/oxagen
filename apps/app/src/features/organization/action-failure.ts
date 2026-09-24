@@ -34,6 +34,10 @@ const WORDS = {
     repository_linked_elsewhere: "repositoryLinkedElsewhere",
     // Deleting a provider another admin already removed (ADR-145).
     sso_provider_not_found: "ssoProviderNotFound",
+    // The SCIM token dialogs on Organization › Single sign-on (#3734).
+    sso_requires_enterprise: "ssoRequiresEnterprise",
+    scim_token_exists: "scimTokenExists",
+    scim_token_changed: "scimTokenChanged",
   },
 } as const;
 

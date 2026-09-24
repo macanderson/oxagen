@@ -1,53 +1,47 @@
 {
   "spend": {
-    "period": "{from} to {to}",
     "notRecorded": "not recorded",
     "basisNotRecorded": "basis not recorded",
     "basis": {
-      "gateway_observed": "gateway observed",
-      "client_attested": "client attested",
-      "mixed": "mixed",
+      "gateway_observed": "gateway_observed",
+      "client_attested": "client_attested",
+      "mixed": "gateway_observed + client_attested",
       "estimated": "estimated"
     },
     "tabs": {
       "label": "Spend views",
       "findings": "Findings",
+      "tokens": "Tokens",
+      "coaching": "Coaching",
       "operator": "By operator",
       "agent": "By agent",
+      "model": "By model",
       "tool": "By tool",
-      "task": "By task",
-      "cost_center": "By cost center",
       "waste": "Wasted spend",
       "budgets": "Budgets",
-      "pricing": "Pricing",
-      "model": "By model",
-      "tokens": "Tokens"
+      "task": "By task",
+      "cost_center": "By cost center",
+      "pricing": "Pricing"
     },
     "actions": {
       "exportReport": "Export report",
       "setBudget": "Set a budget"
     },
     "findings": {
-      "eyebrow": "Opportunities to reduce spend",
-      "heroTitle": "Potential savings in this workspace",
-      "saving": "Potential savings",
-      "savingNote": "estimated reduction on the cited workload",
-      "share": "Share of priced spend",
-      "shareNote": "the annualised saving against the spend this window priced",
-      "annualised": "A year at this run rate",
-      "annualisedNote": "projection if the same workload repeats for 365 days",
-      "spend": "Priced spend in this window",
-      "spendNote": "the span the listed findings cover",
       "strip": {
         "label": "Share of the identified savings by finding",
         "tail": "{count} smaller findings"
       },
-      "facts": "{findings} findings \u00b7 {operators} operators involved \u00b7 {high} high confidence \u00b7 {medium} medium",
-      "note": "Potential savings compare recorded costs with an alternative on the cited calls. They are estimates, not savings already achieved. Review the calculation and proposed change before acting.",
-      "list": "Findings, largest saving first",
+      "facts": {
+        "findings": "findings",
+        "operators": "operators involved",
+        "high": "high confidence",
+        "medium": "medium",
+        "evidence": "every one opens to its evidence"
+      },
+      "note": "Each saving is measured minus counterfactual over the runs it cites, at the price each call actually paid. Evidence opens the runs and the arithmetic behind every number, and Fix opens the change that removes it.",
       "emptyTitle": "No finding is open",
       "empty": "No open finding matches the supported patterns in the available data. Missing usage or prices can prevent a cost estimate.",
-      "rank": "#{rank}",
       "kind": {
         "cache_writes_never_read": "Cache written and never read",
         "duplicate_tool_calls": "Duplicate tool calls",
@@ -64,15 +58,8 @@
         "high": "high confidence",
         "medium": "medium confidence"
       },
-      "why": "Why it costs money:",
-      "fixLabel": "Recommended change:",
-      "cites": "{runs} runs \u00b7 {calls} calls",
-      "shareOfIdentified": "{share} of the identified savings",
-      "shareUnknown": "share not comparable",
       "evidence": {
-        "open": "Review calculation",
-        "eyebrow": "Evidence",
-        "back": "Back to the findings",
+        "open": "Evidence",
         "atStake": "Potential savings",
         "atStakeNote": "estimated reduction on the cited workload",
         "confidence": "Confidence",
@@ -80,8 +67,7 @@
         "coveredValue": "{covered} of {calls}",
         "coveredNote": "the rest are cited and add nothing to the saving",
         "tokens": "Tokens",
-        "tokensValue": "{measured} measured \u00b7 {counterfactual} counterfactual",
-        "tokensNote": "what the covered calls carried, against the alternative",
+        "tokensValue": "{measured} measured · {counterfactual} counterfactual",
         "measured": "What the cited calls cost",
         "counterfactual": "What the alternative would have cost",
         "runs": "The cited runs with the largest saving",
@@ -92,10 +78,13 @@
           "measured": "Measured",
           "counterfactual": "Alternative estimate"
         },
-        "note": "Every run above is a sealed record. Open one to read the frames the arithmetic came from."
+        "note": "Every run above is a sealed record. Open one to read the frames the arithmetic came from.",
+        "title": "Evidence",
+        "window": "Window",
+        "to": "to"
       },
       "fix": {
-        "open": "Review fix",
+        "open": "Fix",
         "title": "Review the recommended change",
         "body": "Review the recommendation before changing instructions, a harness, or a tool. Recording a fix only updates this finding. It does not edit code, open a pull request, or measure realised savings.",
         "record": "Record the fix as applied",
@@ -123,49 +112,97 @@
         "codeAction": "Plan a code PR with Stella",
         "codeDraft": "Inspect this spend finding and read the cited calls before proposing a change. Plan the smallest harness hook, custom tool, or code fix that addresses the behavior, with tests. Separate measured costs from potential savings. Estimate implementation cost only with stated assumptions. Open a reviewable code PR only if repository tools and access are available. Otherwise report the missing access. Do not mark the finding fixed.\n\n{finding}"
       },
-      "costData": "Cost data: {basis}"
-    },
-    "strip": {
-      "spend": "Spend",
-      "runs": "Runs",
-      "runsNote": "runs included in this report",
-      "calls": "Calls",
-      "callsNote": "calls included in this report",
-      "coverage": "Cost data",
-      "coverageNote": "Recorded amounts can exclude unpriced calls. Check Pricing for gaps.",
-      "missing": "Missing",
-      "available": "Available",
-      "estimated": "Includes estimates",
-      "estimatedNote": "{count, plural, one {# run is still open. Its cost covers the calls so far and is final when it seals.} other {# runs are still open. Their cost covers the calls so far and is final when they seal.}}"
+      "costData": "Cost data: {basis}",
+      "hero": "Savings identified",
+      "heroShare": "{share} of",
+      "heroWindow": "spent over these findings’ window.",
+      "heroYearStart": "About",
+      "heroYearEnd": "a year at this run rate.",
+      "attributionMissing": "The operator and agent behind a tool or workspace finding, and each finding’s trend, are not recorded yet.",
+      "evidenceLine": "evidence {runs} runs · {calls} calls · {from} to {to}",
+      "atStake": "at stake · {share} of identified",
+      "atStakeUnknown": "at stake",
+      "list": "Findings ranked by savings",
+      "filters": {
+        "label": "Filter findings",
+        "level": "Level",
+        "confidence": "Confidence",
+        "sort": "Sort",
+        "rows": "Rows",
+        "all": "All",
+        "sorts": {
+          "rank": "Rank",
+          "savingDesc": "Savings high first",
+          "savingAsc": "Savings low first",
+          "kind": "Finding A to Z"
+        },
+        "none": "No finding matches these filters."
+      },
+      "pager": {
+        "label": "Pages",
+        "range": "{from} to {to} of {total}",
+        "previous": "Previous",
+        "next": "Next"
+      }
     },
     "columns": {
-      "provider": "Provider",
+      "operator": "Operator",
+      "role": "Role",
+      "agents": "Agents",
       "runs": "Runs",
-      "calls": "Calls",
       "spend": "Spend",
-      "share": "Share of spend"
+      "tokens": "Tokens",
+      "cacheHit": "Cache hit",
+      "savings": "Potential savings",
+      "budgetPosition": "Budget position",
+      "agent": "Agent",
+      "perRun": "Per run",
+      "trend": "Trend",
+      "model": "Model",
+      "providerKey": "Provider key",
+      "modelCalls": "Model calls",
+      "cacheHitRate": "Cache hit rate",
+      "basis": "Basis",
+      "tool": "Tool",
+      "server": "Server",
+      "calls": "Calls",
+      "cumulative": "Cumulative",
+      "share": "Share",
+      "perCall": "Avg per call",
+      "perRunMoney": "Avg per run",
+      "frames": "What the frames say",
+      "noFinding": "none",
+      "findings": "{count, plural, one {# finding} other {# findings}}",
+      "shareOfSpend": "Share of spend"
     },
     "groups": {
       "operator": {
         "unnamed": "Unnamed operator",
         "title": "By operator",
-        "key": "Operator",
-        "empty": "No run in this period names an operator."
+        "empty": "No run in this period names an operator.",
+        "note": "Every run has exactly one operator. A run that arrived without one is attributed to the agent’s owning operator and flagged, never dropped and never spread.",
+        "budgetMissing": "No spend ceiling names an operator yet, so Budget position is not recorded, and the rollup does not count an operator’s agents."
       },
       "agent": {
         "title": "By agent",
-        "key": "Agent",
-        "empty": "No run in this period names an agent."
+        "empty": "No run in this period names an agent.",
+        "note": "Every figure is a rollup of the agent’s runs, rebuilt from frames. An agent on the harness tier is self-reported, and a class its harness does not report is marked absent, never zero.",
+        "trendMissing": "The rollup does not compare an agent’s month with the one before, so Trend is not recorded."
       },
       "model": {
-        "title": "By model and provider",
-        "key": "Model",
-        "empty": "No model call in this period has been rolled up."
+        "title": "Models and keys",
+        "note": "Every model the workspace called this month, and the provider key it was billed to.",
+        "routes": "Model routes",
+        "footer": "Consumption reads here. The routes themselves are configured under Organization, in Model funding.",
+        "keyMissing": "The rollup names each model’s provider, not the key it was billed to.",
+        "total": "Total",
+        "totalNote": "the month’s spend"
       },
       "tool": {
         "title": "By tool",
-        "key": "Tool",
-        "empty": "No tool call in this period has been rolled up."
+        "empty": "No tool call in this period has been rolled up.",
+        "note": "A tool’s spend is the tokens of the turn that called it plus the turn that read its result, so a cheap tool with a large result body is an expensive tool.",
+        "framesMissing": "The server each tool belongs to and what its frames say are not recorded yet."
       },
       "task": {
         "title": "By task",
@@ -183,16 +220,37 @@
     },
     "waste": {
       "wasted": "Wasted",
+      "currency": "{currency}",
       "share": "Share of spend",
+      "shareNote": "of this month’s spend",
       "runsWithWaste": "Runs with waste",
+      "runsNote": "of {runs} runs this month",
       "largestCause": "Largest cause",
+      "largestNote": "{runs} runs",
       "noCause": "No waste found",
       "byCause": "By cause",
-      "none": "No run in this period shows waste in its frames.",
-      "proof": "Related runs",
+      "causeRuns": "{runs} runs",
       "cause": {
-        "cache_write_never_read": "Cache written and never read"
-      }
+        "cache_write_never_read": "cache written and never read"
+      },
+      "why": {
+        "cache_write_never_read": "a prefix was written to the cache and no later call read it"
+      },
+      "designCause": {
+        "cacheMisses": "cache misses",
+        "correctivePrompts": "corrective prompts",
+        "retryLoops": "retry loops",
+        "contextBloat": "context bloat",
+        "idleWhileParked": "idle while parked",
+        "haltedEarly": "halted early"
+      },
+      "causesMissing": "The waste record reads one cause today. The six causes the design meters are not recorded yet.",
+      "runs": "Runs with waste",
+      "note": "Wasted is a claim about frames, not about outcomes. Work a human accepted is never counted.",
+      "runAmountMissing": "What each run wasted, its task and its steps are not on the waste record yet.",
+      "none": "No run in this period shows waste in its frames.",
+      "openRun": "Open the run",
+      "showFrames": "Show the frames"
     },
     "budgets": {
       "title": "Budgets",
@@ -200,7 +258,6 @@
       "scopeColumn": "Scope",
       "periodColumn": "Period",
       "limitColumn": "Limit",
-      "spentColumn": "Spent",
       "positionColumn": "Position",
       "scope": {
         "org": "Organization",
@@ -209,15 +266,21 @@
       "monthly": "Monthly",
       "rolling": "Rolling {days} days",
       "noLimit": "No ceiling",
-      "disabled": "Not enforced",
-      "position": "{ratio} \u00b7 {state}",
+      "disabled": "not enforced",
+      "position": "{ratio} · {state}",
       "state": {
         "ok": "under the ceiling",
         "threshold_50": "past 50%",
         "threshold_80": "past 80%",
         "threshold_95": "past 95%",
         "exceeded": "over the ceiling"
-      }
+      },
+      "usedColumn": "Used",
+      "modeColumn": "Mode",
+      "hard": "hard",
+      "positionLabel": "{ratio} of the limit used",
+      "note": "A hard budget is checked at each hook boundary from a running counter. A breach is a policy.decision frame and a pause at the next boundary.",
+      "scopesMissing": "A ceiling for one agent or one operator, a per-run or daily period, and soft mode are not recorded yet."
     },
     "pricing": {
       "class": {
@@ -293,7 +356,7 @@
         "provider": "Vendor",
         "model": "Model",
         "aliases": "Other names for this model",
-        "aliasesHint": "Separate them with commas. Leave it empty to keep the names already stored \u2014 an empty list would replace them.",
+        "aliasesHint": "Separate them with commas. Leave it empty to keep the names already stored — an empty list would replace them.",
         "effectiveFrom": "In effect from",
         "effectiveFromHint": "A UTC day, tomorrow or later. Leave it empty to start now. A rate cannot start in the past: runs already priced keep the rate they were priced with.",
         "rates": "Rates, in US dollars per one million units",
@@ -302,7 +365,7 @@
         "submit": "Set these rates",
         "pending": "Writing the rates",
         "errors": {
-          "providerInvalid": "Enter the vendor\u2019s name, up to 128 characters.",
+          "providerInvalid": "Enter the vendor’s name, up to 128 characters.",
           "modelInvalid": "Enter the model id, up to 256 characters.",
           "regionInvalid": "A region is at most 64 characters.",
           "aliasesInvalid": "Enter up to 32 names, each at most 256 characters.",
@@ -312,7 +375,7 @@
           "ratesEmpty": "Fill in at least one class. Nothing was written."
         },
         "partial": {
-          "written": "In effect now: {classes}. Setting a class again is safe \u2014 it supersedes its own row.",
+          "written": "In effect now: {classes}. Setting a class again is safe — it supersedes its own row.",
           "noneWritten": "Nothing was written. The price book is unchanged.",
           "notWritten": "Not written: {classes}. Those classes are still priced as they were."
         }
@@ -321,11 +384,11 @@
         "open": "Remove",
         "label": "Remove the negotiated rate for {model}, {class}",
         "title": "Fall back to the list price",
-        "body": "Ending your negotiated rate for {model}, {class} means every call from now on is priced at the provider\u2019s list price instead. Nothing is deleted.",
+        "body": "Ending your negotiated rate for {model}, {class} means every call from now on is priced at the provider’s list price instead. Nothing is deleted.",
         "kept": "The row is closed at this instant and kept, so a run priced before now still names the rate it was priced with. You can negotiate the class again at any time.",
         "submit": "End this rate, use the list price",
         "pending": "Ending the rate",
-        "unpricedTitle": "Rate ended \u2014 now unpriced",
+        "unpricedTitle": "Rate ended — now unpriced",
         "unpriced": "Your negotiated rate for {model}, {class} is ended. No list or override price covers this model and class, so calls from now on are UNPRICED, not priced at the list rate, until you set a new rate or a catalog publishes one.",
         "unpricedClose": "Close",
         "confirmUnpricedTitle": "This class would become unpriced",
@@ -345,39 +408,60 @@
       }
     },
     "drill": {
-      "title": {
+      "kind": {
         "operator": "Operator",
         "agent": "Agent",
         "tool": "Tool"
       },
-      "back": "Back to the table",
-      "perCall": "Average per call",
-      "perRun": "Average per run",
-      "share": "Share of workspace spend",
+      "crumbLabel": "Breadcrumb",
+      "crumb": "← {tab}",
+      "counts": "{runs} runs and {calls} calls from {from} to {to}",
+      "openAgent": "Open the agent",
+      "export": "Export this view",
+      "exportTitle": "Export this view",
+      "exportBody": "Export this view would build this {kind}’s report for the window. The statement export covers the whole workspace today, so nothing was built. Export report builds the workspace’s statement.",
+      "savings": "Potential savings",
+      "noSaving": "none identified",
+      "findingsFailed": "The findings could not be read.",
+      "direct": "{count, plural, one {# finding} other {# findings}} on this {kind} directly",
+      "attributedMissing": "Findings attributed through their evidence are not recorded yet.",
+      "tiles": {
+        "spend": "Spend",
+        "tokens": "Tokens",
+        "cacheHit": "Cache hit rate",
+        "observed": "Observed",
+        "wasted": "Wasted",
+        "productive": "Productive ratio",
+        "runs": "Runs",
+        "modelCalls": "Model calls",
+        "budget": "Budget position",
+        "agentBudget": "Budget",
+        "trend": "Trend",
+        "toolDefinitions": "Tool definitions",
+        "perRun": "Spend per run",
+        "calls": "Calls",
+        "perCall": "Average per call",
+        "avgPerRun": "Average per run",
+        "resultBody": "Result body",
+        "repeatCalls": "Repeat calls",
+        "retries": "Retries"
+      },
       "byDay": "Spend by day",
-      "day": "Day",
-      "tools": "Tools its runs called",
-      "toolsEmpty": "Its runs called no tools in this window."
-    },
-    "failure": {
-      "denied": {
-        "title": "You cannot see this workspace\u2019s spend",
-        "body": "Your roles on this organization do not include {permission}. An owner can grant it, and the grant is recorded as a governed action."
+      "peak": "Peak",
+      "on": "on {day}",
+      "average": "Average",
+      "sparkline": "Spend by day from {from} to {to}",
+      "cross": {
+        "tool": "By tool",
+        "agent": "By agent",
+        "operator": "By operator",
+        "model": "By model"
       },
-      "pending": {
-        "title": "Access to this workspace\u2019s spend is waiting for approval",
-        "body": "Access request {request}"
-      },
-      "error": {
-        "title": "Spend could not be loaded",
-        "body": "Nothing was changed. Runs keep recording while this page is down: the gateway writes frames, not the operator console.",
-        "code": "{code} \u00b7 {status}"
-      }
-    },
-    "empty": {
-      "title": "No spend to report yet",
-      "body": "No cost rollup is available for this period. Missing usage or prices do not mean the work was free. Check Pricing and the run records.",
-      "back": "Back to Fleet"
+      "crossMissing": "The drill does not split this key’s spend at this level yet.",
+      "toolsEmpty": "Its runs called no tools in this window.",
+      "findings": "Findings",
+      "noFindings": "No open finding names this key.",
+      "share": "{share} of the workspace’s spend over this window."
     },
     "budgetDialog": {
       "title": "Set a budget",
@@ -395,7 +479,7 @@
         "windowDaysInvalid": "Enter a whole number of days above zero."
       },
       "alert": {
-        "denied": "Your role cannot set this ceiling. An organization owner, admin or billing member sets either ceiling; a workspace owner or admin sets this workspace\u2019s own.",
+        "denied": "Your role cannot set this ceiling. An organization owner, admin or billing member sets either ceiling; a workspace owner or admin sets this workspace’s own.",
         "failed": "The ceiling could not be confirmed. Open the Budgets tab to see what is set; setting it again replaces it."
       }
     },
@@ -420,7 +504,7 @@
         "monthInvalid": "Enter a month as YYYY-MM."
       },
       "alert": {
-        "denied": "Your roles on this organization do not let you export this workspace\u2019s spend.",
+        "denied": "Your roles on this organization do not let you export this workspace’s spend.",
         "deniedCostCenter": "Only an organization Owner, Admin or Billing member can export the chargeback statement.",
         "failed": "The report could not be built. Nothing was changed; try again."
       }
@@ -430,11 +514,11 @@
       "spendToday": "Spend today",
       "spendTodayNote": "{from}, UTC",
       "cacheHitRate": "Cache hit rate",
-      "cacheHitRateNote": "cache_read \u00f7 (input_uncached + cache_read)"
+      "cacheHitRateNote": "cache_read ÷ (input_uncached + cache_read)"
     },
     "gateway": {
       "title": "Gateway models",
-      "note": "Model lists apply to routed calls from Claude Code, Codex, and Stella\u2019s Anthropic provider after an upgraded host refreshes its signed mandate. Cursor model calls are not routed. Agent budgets remain separate.",
+      "note": "Model lists apply to routed calls from Claude Code, Codex, and Stella’s Anthropic provider after an upgraded host refreshes its signed mandate. Cursor model calls are not routed. Agent budgets remain separate.",
       "notApplied": "Lists disabled",
       "sessionLimit": "Recorded workspace ceiling (USD)",
       "sessionLimitHint": "This legacy value is recorded only. Set an enforced run budget on the agent mandate.",
@@ -470,22 +554,140 @@
       "mode": "Model enforcement"
     },
     "tokens": {
-      "title": "By token class",
-      "note": "Recorded token counts for this period. The spend rollup does not split cost by token class.",
-      "class": "Class",
-      "count": "Tokens",
-      "share": "Share",
-      "input_uncached": "Uncached input",
-      "cache_read": "Cache read",
-      "cache_write": "Cache write",
-      "output": "Output",
-      "reasoning": "Reasoning",
-      "total": "Total recorded tokens",
+      "byClass": "By token class",
+      "classTotal": "{tokens} tokens · {from} to {to}",
       "cacheHit": "Cache hit rate",
-      "cacheNote": "Cache reads divided by uncached input and cache reads.",
-      "byModel": "By model",
-      "model": "Model",
-      "basis": "Recorded spend"
+      "cacheHitNote": "cache_read ÷ (input_uncached + cache_read), token-weighted",
+      "cacheWriteShare": "Cache write cost share",
+      "effectiveInput": "Effective input price",
+      "unmapped": "Unmapped classes",
+      "costByClassMissing": "The rollup prices each call as a whole, not each token class.",
+      "unmappedMissing": "The rollup does not count the tokens whose class it could not map.",
+      "columns": {
+        "class": "Class",
+        "tokens": "Tokens",
+        "share": "Share",
+        "cost": "Cost",
+        "agent": "Agent",
+        "runs": "Runs",
+        "perRun": "Per run",
+        "cacheHit": "Cache hit",
+        "toolDefs": "Tool defs",
+        "context": "Context",
+        "toolResults": "Tool results",
+        "reasoning": "Reasoning",
+        "basis": "Basis"
+      },
+      "composition": "Prompt composition",
+      "compositionMissing": "The rollup does not count tokens by prompt part. These are the parts it will meter from the request, every call:",
+      "parts": {
+        "conversation": "Conversation",
+        "toolResults": "Tool results",
+        "contextFrames": "Context frames",
+        "toolDefinitions": "Tool definitions",
+        "steering": "Steering",
+        "system": "System",
+        "output": "Output",
+        "reasoning": "Reasoning"
+      },
+      "byHarness": "By harness",
+      "harnessMissing": "The rollup does not group tokens by harness or count the share the gateway observed, so the harness, its agents and its basis are not recorded.",
+      "byAgent": "By agent",
+      "agentNote": "The twelve agents with the most tokens this month. A row opens the agent’s page. Tool definition, context and tool result shares are not on the rollup yet."
+    },
+    "notBacked": {
+      "lead": "Not recorded yet."
+    },
+    "header": {
+      "description": "What the tokens bought, with the basis on every number."
+    },
+    "summary": {
+      "label": "Month to date",
+      "spend": "Spend",
+      "currency": "{currency}",
+      "estimated": "{count, plural, one {includes # open run as an estimate} other {includes # open runs as estimates}}",
+      "tokens": "Tokens",
+      "cache": "{share} served from cache",
+      "cacheNotRecorded": "cache share not recorded",
+      "observed": "Observed by the gateway",
+      "observedNote": "of tokens counted by the proxy",
+      "wasted": "Wasted",
+      "wastedShare": "{share} of spend"
+    },
+    "states": {
+      "loading": "Loading spend",
+      "empty": {
+        "title": "No spend to report yet",
+        "body": "Rollups are derived indexes rebuilt from frames. With no model call recorded there is nothing to roll up, and nothing billable.",
+        "back": "Back to Fleet"
+      },
+      "denied": {
+        "title": "You cannot see this workspace’s spend",
+        "needed": "{permission} on {workspace}",
+        "body": "Your roles on {organization} do not include",
+        "bodyEnd": ". An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+        "request": "Request access",
+        "requestTitle": "Request access",
+        "requestBody": "Request access would ask an organization owner to grant {needed}, and the grant would land in the audit record with your name on it. Oxagen has no access request record yet, so nothing was sent. Ask an organization owner to grant it.",
+        "back": "Back to Fleet",
+        "signedInAs": "Signed in as",
+        "roles": "org.{orgRole}, workspace.{wsRole} on {workspace}",
+        "neededLabel": "Needed",
+        "decidedByLabel": "Decided by",
+        "decidedBy": "Policy not recorded. Deny wins over every allow."
+      },
+      "pending": {
+        "title": "Access to this workspace’s spend is waiting for approval",
+        "body": "Access request {request}"
+      },
+      "error": {
+        "title": "Spend could not be loaded",
+        "bodyStart": "The control plane answered",
+        "bodyEnd": ". Nothing was changed. Runs kept recording while this page was down. Frames are written by the collector on each host, not by Oxagen.",
+        "retry": "Try again",
+        "incident": "Open an incident",
+        "incidentTitle": "Open an incident",
+        "incidentBody": "Open an incident would file one with this page’s error, {code}, and its trace attached. Oxagen has no incident record yet, so nothing was filed. Send the code to your organization owner.",
+        "trace": "trace not recorded, region not recorded, read at {at}"
+      },
+      "section": {
+        "denied": "Your roles on this organization do not include {permission}. An organization owner can grant it.",
+        "error": "The read answered {status} {code}. Nothing was changed."
+      }
+    },
+    "coaching": {
+      "title": "Coaching",
+      "notBacked": "Coaching lists one change for each agent and each operator, with the tokens and money at stake and the one action that moves it. No coaching record exists yet, and the signals it reads are not on the rollup.",
+      "agents": "Agent coaching",
+      "operators": "Operator coaching",
+      "agentSignals": {
+        "narrowBelt": "Narrow the belt",
+        "stablePrefix": "Keep the prefix stable",
+        "pageResults": "Page the tool results",
+        "contextBudget": "Lower the context budget",
+        "lightModel": "Route classification-shaped work to a light model",
+        "retryStorms": "Stop the retry storms",
+        "oneTurnCache": "Stop writing cache for one-turn runs"
+      },
+      "operatorSignals": {
+        "grants": "Grants are wider than the work",
+        "reRead": "Prompts that make the agent re-read",
+        "onePrompt": "Get to one prompt per session",
+        "publishSteering": "Publish steering between runs",
+        "resizeBudget": "Resize the budget before it stops a run",
+        "selfReported": "Move the last self-reported agents behind the gateway"
+      }
+    },
+    "toolChart": {
+      "metric": {
+        "cumulative": "Cumulative spend",
+        "perRun": "Avg per run",
+        "perCall": "Avg per call"
+      },
+      "switcher": "Chart",
+      "label": "{metric} for the leading tools",
+      "empty": "No tool has a recorded amount.",
+      "footer": "The leading {shown} of {total}. The table holds every tool."
     }
   }
 }
