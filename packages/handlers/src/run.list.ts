@@ -340,7 +340,10 @@ export function ledgerRollupQuery(
     .from(events)
     .where(
       and(
-        eq(events.eventRecordVersion, 2),
+        // A literal, not a bind parameter: the partial index on
+        // `(run_id, run_seq) WHERE event_record_version = 2` is only usable
+        // when the planner can see the predicate matches it.
+        sql`${events.eventRecordVersion} = 2`,
         eq(events.orgId, scope.orgId),
         eq(events.workspaceId, scope.workspaceId),
         inArray(events.runId, [...runIds]),
@@ -383,7 +386,10 @@ export function ledgerCompactedRollupQuery(
         eq(seals.workspaceId, scope.workspaceId),
         inArray(seals.runId, [...runIds]),
         sql`${seals.archiveSegmentRef} is not null`,
-        sql`not exists (select 1 from ${events} where ${events.attemptId} = ${seals.attemptId})`,
+        // `event_record_version = 2` changes no answer (only a V2 row has an
+        // attempt id) but lets the partial `(attempt_id, attempt_seq)` index
+        // answer the probe instead of a scan of the event log.
+        sql`not exists (select 1 from ${events} where ${events.attemptId} = ${seals.attemptId} and ${events.eventRecordVersion} = 2)`,
       ),
     )
     .groupBy(seals.runId);
@@ -1381,9 +1387,14 @@ export function createRunListHandler(
       withoutWitnessRuns: hidesWitnessRuns(ctx),
     };
 
-    const [ledger, tacho] = await Promise.all([
+    // The enrichment flag depends on nothing the pages return, so it is read
+    // alongside them rather than after the rollups.
+    const [ledger, tacho, enabled] = await Promise.all([
       deps.queries.ledgerPage(scope, page),
       deps.queries.tachoPage(scope, page),
+      deps.readEnrichmentEnabled
+        ? deps.readEnrichmentEnabled(scope)
+        : Promise.resolve(true),
     ]);
     const merged = mergeNewestFirst<FleetItem>(
       [
@@ -1422,9 +1433,6 @@ export function createRunListHandler(
         merged.items.map((item) => item.id),
       ),
     ]);
-    const enabled = deps.readEnrichmentEnabled
-      ? await deps.readEnrichmentEnabled(scope)
-      : true;
     return {
       runs: merged.items
         .map((item) =>

@@ -249,7 +249,12 @@ export async function Agent({
         />
       );
       break;
-    case "permissions":
+    case "permissions": {
+      // Neither read needs the other, so they run together.
+      const [budgets, mandates] = await Promise.all([
+        source.spend.budgets(ctx),
+        source.mandates.list(ctx, { agentId: identity.id }),
+      ]);
       body = (
         <div className="flex flex-col gap-4">
           <Roles
@@ -267,11 +272,11 @@ export async function Agent({
             }
           />
           <BudgetSection
-            read={await source.spend.budgets(ctx)}
+            read={budgets}
             spend={routes.spend(place.org, place.ws, { tab: "budgets" })}
           />
           <MandatesSection
-            read={await source.mandates.list(ctx, { agentId: identity.id })}
+            read={mandates}
             orgRole={ctx.orgRole}
             agentStatus={identity.status}
             org={place.org}
@@ -282,6 +287,7 @@ export async function Agent({
         </div>
       );
       break;
+    }
     case "overview":
       body = <Overview detail={detail} {...place} />;
       break;
