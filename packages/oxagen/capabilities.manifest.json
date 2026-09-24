@@ -2347,6 +2347,25 @@
       }
     },
     {
+      "name": "get_published_steering",
+      "file": "context.steering.published.get.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "cli": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "archive_conversation",
       "file": "conversation.archive.ts",
       "domain": "conversation",
@@ -4785,6 +4804,41 @@
         "unit": false,
         "docs": true,
         "app": true
+      }
+    },
+    {
+      "name": "list_working_copies",
+      "file": "repository.working_copy.list.ts",
+      "domain": "repository",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "record_working_copy",
+      "file": "repository.working_copy.record.ts",
+      "domain": "repository",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "cli": true,
+        "unit": true,
+        "docs": true
       }
     },
     {

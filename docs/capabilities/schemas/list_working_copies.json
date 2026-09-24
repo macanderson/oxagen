@@ -1,0 +1,179 @@
+{
+  "name": "list_working_copies",
+  "domain": "repository",
+  "description": "List the directories the CLI linked to this workspace, with machine, path, repository, branch, head, the state of .oxagen/, the commit last pulled and when each was last seen.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "low",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 200,
+        "default": 100
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "workingCopies": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "hostname": {
+              "type": "string"
+            },
+            "directory": {
+              "type": "string"
+            },
+            "repository": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "branch": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "headCommit": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "oxagenPresent": {
+              "type": "boolean"
+            },
+            "symlinks": {
+              "type": "string",
+              "enum": [
+                "linked",
+                "missing",
+                "none"
+              ]
+            },
+            "pulledCommit": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "lastEvent": {
+              "type": "string",
+              "enum": [
+                "init",
+                "pull"
+              ]
+            },
+            "reportedBy": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "userId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "userId",
+                    "name"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "cliVersion": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "firstSeenAt": {
+              "type": "string"
+            },
+            "lastSeenAt": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "hostname",
+            "directory",
+            "repository",
+            "branch",
+            "headCommit",
+            "oxagenPresent",
+            "symlinks",
+            "pulledCommit",
+            "lastEvent",
+            "reportedBy",
+            "cliVersion",
+            "firstSeenAt",
+            "lastSeenAt"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "workingCopies"
+    ],
+    "additionalProperties": false
+  }
+}
