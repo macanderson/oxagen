@@ -1,12 +1,19 @@
 // The Issues tab (spec pages/run.md, `issuesTab` and `linkedWork`): every
 // issue the session touched, then the work it linked to.
 //
-// The run record keeps one task reference, so the table has at most one row:
-// the task the run was started on, whose relation is `task` and whose edge is
-// `stated`, because the producer stated it rather than Oxagen observing it. A
-// reference in the `owner/repo#N` shape links to that issue on GitHub; any
-// other shape names no tracker page, and says so. The tracker's own status is
-// not read (no connection reads it yet), so the cell says that.
+// The first row is the one task reference the run record keeps: relation
+// `task`, edge `stated`, because the producer stated it rather than Oxagen
+// observing it. A reference in the `owner/repo#N` shape links to that issue on
+// GitHub; any other shape names no tracker page, and says so. The tracker's own
+// status is not read for it (no connection reads it yet), so the cell says that.
+//
+// The rows after it are the issues the run's own pull requests close, by
+// GitHub's record (`closingIssues` on `get_run_work`, #4024): relation
+// `closes`, edge `observed`, with the title and status GitHub returned. Only a
+// pull request the collector recorded the run opening counts; one matched by
+// head commit or branch name is a guess about the task and adds nothing. A
+// list GitHub did not return, or cut short, says so, so an unread list never
+// reads as closing nothing.
 //
 // Linked work reads `get_run_work` for the repositories and pull requests,
 // each a link to the forge, and the outputs spine for the commits and the
@@ -74,23 +81,105 @@ function EdgeChip({ seq, place }: { seq: string | null; place: Place }) {
 }
 
 /**
- * How many issues the session touched: the one task reference the run record
- * keeps, or none. The Issues tab's count and its table both read this.
+ * How many issues the run record names: its one task reference, or none. The
+ * tab bar reads this before the work read settles, so it leaves out the issues
+ * the run's pull requests close; the table's own count includes them.
  */
 export function issueCount(run: Pick<RunRow, "taskRef">): number {
   return run.taskRef === null ? 0 : 1;
 }
 
-function IssuesTable({ run }: { run: RunRow }) {
+/** An issue a recorded pull request closes, with that pull request's number. */
+type ClosingIssue = NonNullable<
+  RunWorkPull["closingIssues"]
+>["issues"][number] & { pr: number };
+
+/**
+ * The issues the run's recorded pull requests close, once each. `unread` is
+ * true when the work read failed or any recorded pull request's list is
+ * missing or cut short. Null while the page did not read the work.
+ *
+ * @internal Exported for its unit test.
+ */
+export function closingIssuesOf(
+  work: Read<RunWork> | null,
+): { issues: ClosingIssue[]; unread: boolean } | null {
+  if (work === null) return null;
+  if (!work.ok) return { issues: [], unread: true };
+  const issues = new Map<string, ClosingIssue>();
+  let unread = false;
+  for (const pull of work.value.pullRequests) {
+    if (pull.association !== "recorded") continue;
+    if (pull.closingIssues === null || !pull.closingIssues.complete)
+      unread = true;
+    for (const issue of pull.closingIssues?.issues ?? []) {
+      const key = `${issue.owner}/${issue.repo}#${String(issue.number)}`;
+      if (!issues.has(key)) issues.set(key, { ...issue, pr: pull.number });
+    }
+  }
+  return { issues: [...issues.values()], unread };
+}
+
+function ClosingRow({ issue }: { issue: ClosingIssue }) {
+  const t = useTranslations("run.issues");
+  const label = `${issue.owner}/${issue.repo}#${String(issue.number)}`;
+  const url = parseGitHubUrl(issue.url);
+  return (
+    <tr data-testid="run-issue-row">
+      <td className={cell}>
+        <span className={`${mono} block`}>{label}</span>
+        <span className="block text-xs text-muted-foreground">
+          {issue.title}
+        </span>
+      </td>
+      <td className={cell}>{t(`state.${issue.state}`)}</td>
+      <td className={cell}>
+        <Badge tone="quiet" dot={false}>
+          {t("relation.closes")}
+        </Badge>
+        <span className="block pt-1 text-xs text-muted-foreground">
+          {t("closedBy", { number: issue.pr })}
+        </span>
+      </td>
+      <td className={cell}>
+        <Badge tone="allowed">{t("edge.observed")}</Badge>
+      </td>
+      <td className={cell}>
+        {url === null ? (
+          <span className="text-muted-foreground">{t("noLink")}</span>
+        ) : (
+          <GitHubLink to={url} className={linkText}>
+            {t("viewLink")}
+          </GitHubLink>
+        )}
+      </td>
+    </tr>
+  );
+}
+
+function IssuesTable({
+  run,
+  work,
+}: {
+  run: RunRow;
+  work: Read<RunWork> | null;
+}) {
   const t = useTranslations("run.issues");
   const ref = run.taskRef;
   const url = ref === null ? null : issueUrl(ref);
+  const closing = closingIssuesOf(work);
+  const closes = (closing?.issues ?? []).filter(
+    (issue) =>
+      ref === null ||
+      ref.trim() !== `${issue.owner}/${issue.repo}#${String(issue.number)}`,
+  );
+  const unread = closing?.unread === true;
   return (
     <Panel
       title={t("title")}
       aside={
         <Badge tone="quiet" dot={false}>
-          {t("count", { count: issueCount(run) })}
+          {t("count", { count: issueCount(run) + closes.length })}
         </Badge>
       }
     >
@@ -104,13 +193,13 @@ function IssuesTable({ run }: { run: RunRow }) {
           { label: t("columns.view") },
         ]}
       >
-        {ref === null ? (
+        {ref === null && closes.length === 0 ? (
           <tr>
             <td colSpan={5} className={`${cell} text-muted-foreground`}>
-              {t("empty")}
+              {unread ? t("emptyUnread") : t("empty")}
             </td>
           </tr>
-        ) : (
+        ) : ref === null ? null : (
           <tr data-testid="run-issue-row">
             <td className={cell}>
               <span className={`${mono} block`}>{ref}</span>
@@ -143,7 +232,18 @@ function IssuesTable({ run }: { run: RunRow }) {
             </td>
           </tr>
         )}
+        {closes.map((issue) => (
+          <ClosingRow
+            key={`${issue.owner}/${issue.repo}#${String(issue.number)}`}
+            issue={issue}
+          />
+        ))}
       </Table>
+      {unread && (ref !== null || closes.length > 0) ? (
+        <p className="pt-3 text-xs text-muted-foreground">
+          {t("closingUnread")}
+        </p>
+      ) : null}
       <p className="pt-3 text-xs text-muted-foreground">{t("note")}</p>
     </Panel>
   );
@@ -365,7 +465,7 @@ export function IssuesSection({
 }) {
   return (
     <div className="flex flex-col gap-4">
-      <IssuesTable run={run} />
+      <IssuesTable run={run} work={work} />
       <LinkedWork read={outputs} work={work} place={place} />
       {children}
     </div>

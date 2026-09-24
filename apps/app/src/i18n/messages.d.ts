@@ -2669,11 +2669,6 @@ type Messages = {
       };
     };
     approvals: {
-      title: string;
-      parked: string;
-      more: string;
-      empty: string;
-      emptyDetail: string;
       timesOut: string;
       notRecorded: string;
       openRun: string;
@@ -5911,9 +5906,17 @@ type Messages = {
         view: string;
       };
       empty: string;
+      emptyUnread: string;
+      closingUnread: string;
+      closedBy: string;
+      state: {
+        open: string;
+        closed: string;
+      };
       statusNotRead: string;
       relation: {
         task: string;
+        closes: string;
       };
       edge: {
         observed: string;

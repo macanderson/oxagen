@@ -548,6 +548,7 @@ export function runWork(overrides: Partial<RunWork> = {}): RunWork {
         headSha: "a4c91e2",
         headRef: "release/4.11.0-notes",
         association: "recorded",
+        closingIssues: { issues: [], complete: true },
         checkoutRefs: ["chk_1"],
         observedAt: at(-60),
         current: true,

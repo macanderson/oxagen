@@ -1,5 +1,5 @@
-// The approvals panel: one card per pending approval, soonest expiry first as
-// list_approvals orders them, each card carrying the decision that answers it.
+// The approval card: one pending approval with the decision that answers it,
+// drawn by the shell's approvals drawer through `ApprovalCardAlone`.
 //
 // A card draws the four-hop chain (MC spec §7.5): who asked, which agent,
 // which action, which rule. Every hop is either a value the store recorded or
@@ -26,17 +26,14 @@
 // under the period that has since rolled. Neither the reservation nor its
 // period key is on `list_approvals`, so the card says what the figures are
 // counted over rather than implying they isolate this call.
-import { useLocale, useTranslations } from "next-intl";
-import type { ApprovalItem, ApprovalQueue } from "@/data/contracts/approvals";
+import { useTranslations } from "next-intl";
+import type { ApprovalItem } from "@/data/contracts/approvals";
 import type { MandateRow } from "@/data/contracts/mandates";
-import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
-import { linkText, mono, panel, panelHeader } from "@/ui/control-styles";
+import { linkText, mono } from "@/ui/control-styles";
 import { drawsBar, MandateBar } from "@/ui/mandate-bar";
 import { NamedMeasure } from "@/ui/measure";
-import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
-import { ReadFailure } from "@/ui/read-failure";
 import { ApprovalDecision, Eligibility } from "./approval-decision";
 import { Clock } from "./clock";
 
@@ -170,89 +167,6 @@ function ApprovalCard({
         on={on}
       />
     </li>
-  );
-}
-
-export function ApprovalsPanel({
-  approvals,
-  mandates,
-  now,
-  org,
-  ws,
-  on = "fleet",
-  onResolved,
-}: {
-  approvals: Read<ApprovalQueue>;
-  /** The mandates the cards name, by public id; empty when none was read. */
-  mandates: ReadonlyMap<string, MandateRow>;
-  now: number;
-  /**
-   * Which page is drawing the panel. It names the heading's element, so the
-   * Run page's copy cannot collide with Fleet's id, and it is the page key a
-   * refused eligibility re-read reports its permission under. Nothing a reader
-   * acts on changes with it: an approval must read the same on both pages.
-   */
-  on?: "fleet" | "run";
-  onResolved?: () => void;
-} & Place) {
-  const t = useTranslations("fleet.approvals");
-  const locale = useLocale();
-  const headingId = `${on}-approvals`;
-  return (
-    <section aria-labelledby={headingId} className={`${panel} p-4`}>
-      <div className={`${panelHeader} -mx-4 -mt-4 mb-3`}>
-        <h2 id={headingId} className="text-sm font-semibold">
-          {t("title")}
-        </h2>
-        {approvals.ok ? (
-          <span className="text-xs text-muted-foreground">
-            {/*
-              The figure the header and the waiting tile both stand behind: the
-              count the read took, marked `+` when the read stopped before the
-              end of the queue. Writing the bare length here read as the whole
-              queue, which is the figure an operator staffs against. The `more`
-              call sits in the component rather than in a helper the translator
-              is passed to, because INV-12 follows a translator to its calls
-              and a key it cannot see is a key it reports as unused.
-            */}
-            {t("parked", {
-              count: approvals.value.more
-                ? t("more", {
-                    count: formatCount(approvals.value.items.length, locale),
-                  })
-                : formatCount(approvals.value.items.length, locale),
-            })}
-          </span>
-        ) : null}
-      </div>
-      {!approvals.ok ? (
-        <ReadFailure read={approvals} section={t("title")} />
-      ) : approvals.value.items.length === 0 ? (
-        <div className="flex flex-col gap-1 text-sm">
-          <p>{t("empty")}</p>
-          <p className="text-xs text-muted-foreground">{t("emptyDetail")}</p>
-        </div>
-      ) : (
-        <ul className="grid gap-3 md:grid-cols-2">
-          {approvals.value.items.map((item) => (
-            <ApprovalCard
-              onResolved={onResolved}
-              key={item.id}
-              item={item}
-              mandate={
-                item.mandateId === null
-                  ? null
-                  : (mandates.get(item.mandateId) ?? null)
-              }
-              now={now}
-              org={org}
-              ws={ws}
-              on={on}
-            />
-          ))}
-        </ul>
-      )}
-    </section>
   );
 }
 

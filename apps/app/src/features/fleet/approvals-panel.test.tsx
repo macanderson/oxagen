@@ -1,19 +1,19 @@
 // @vitest-environment jsdom
-// The approvals panel over its reads: one card per pending approval with its
-// four hops, its expiry clock, the recorded auto-approval evaluation and the
-// mandate bar, and the panel's own empty, denied and failed states, with an
-// axe check in every one.
+// The approval card: its four hops, its expiry clock, the recorded
+// auto-approval evaluation and the mandate bar, with an axe check in every
+// case.
 //
-// Fleet no longer draws this panel (fleet.md: its "Waiting on a human" tile
-// opens the shell's approvals drawer); the Run page's Approvals tab and the
-// drawer do. So the panel is tested on its own, over the reads a caller hands
-// it, where Fleet's suite used to test it through the page.
+// The card is drawn by the shell's approvals drawer through
+// `ApprovalCardAlone`. Fleet opens that drawer from its "Waiting on a human"
+// tile, and the Run page from Review on an Outputs gate row, so neither draws
+// a panel of cards any more and the panel is gone. These cases draw each card
+// of a queue under one "Approvals" region, as the drawer's list does.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MandateList, MandateRow } from "@/data/contracts/mandates";
 import type { ApprovalQueue } from "@/data/contracts/approvals";
-import { type Read, readError } from "@/data/read";
+import type { Read } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import {
@@ -41,17 +41,9 @@ vi.mock("./actions", async (importOriginal) => ({
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 
-const { ApprovalsPanel } = await import("./approvals-panel");
+const { ApprovalCardAlone } = await import("./approvals-panel");
 
-const DENIED = {
-  ok: false,
-  reason: "denied",
-  permission: "workspace.read",
-} as const;
-const DOWN = readError("run_index_unavailable", 503);
-const NO_APPROVALS = approvalQueue([]);
-
-/** The mandates a caller read, keyed as the panel takes them; empty when the read was refused. */
+/** The mandates a caller read, keyed as the card takes them; empty when the read was refused. */
 function mandatesOf(read: Read<MandateList> | undefined) {
   const map = new Map<string, MandateRow>();
   if (read?.ok) for (const m of read.value.mandates) map.set(m.id, m);
@@ -62,15 +54,21 @@ async function renderPanel(reads: {
   approvals: Read<ApprovalQueue>;
   mandates?: Read<MandateList>;
 }) {
+  const mandates = mandatesOf(reads.mandates);
   const { container } = render(
     <IntlProvider>
-      <ApprovalsPanel
-        approvals={reads.approvals}
-        mandates={mandatesOf(reads.mandates)}
-        now={NOW}
-        org="acme"
-        ws="core-platform"
-      />
+      <section aria-label="Approvals">
+        {(reads.approvals.ok ? reads.approvals.value.items : []).map((item) => (
+          <ApprovalCardAlone
+            key={item.id}
+            item={item}
+            mandates={mandates}
+            now={NOW}
+            org="acme"
+            ws="core-platform"
+          />
+        ))}
+      </section>
     </IntlProvider>,
   );
   return Promise.resolve({ container });
@@ -89,7 +87,7 @@ afterEach(async () => {
   cleanup();
 });
 
-describe("the approvals panel", () => {
+describe("the approval card", () => {
   it("draws one card per pending approval with its four hops and expiry clock", async () => {
     await renderPanel({
       approvals: approvalQueue([
@@ -107,7 +105,6 @@ describe("the approvals panel", () => {
       mandates: mandateList([mandateRow()]),
     });
     const section = approvalsSection();
-    expect(section).toHaveTextContent("2 parked");
     const [first, second] = within(section).getAllByTestId("approval");
     // Four hops, in the order the chain runs: who asked, which agent, which
     // action, which rule. A hop the store does not record says so.
@@ -195,52 +192,9 @@ describe("the approvals panel", () => {
       "Rule small-vendor-payments would have released this call. A mandate asked for a person anyway.",
     );
   });
-
-  it("marks a count the read could not finish", async () => {
-    await renderPanel({
-      approvals: approvalQueue([approvalItem()], true),
-    });
-    expect(approvalsSection()).toHaveTextContent("1+ parked");
-  });
-
-  it("says nothing is waiting on a human when the queue is empty", async () => {
-    await renderPanel({ approvals: NO_APPROVALS });
-    expect(approvalsSection()).toHaveTextContent(
-      "Nothing is waiting on a human.",
-    );
-    expect(within(approvalsSection()).queryAllByTestId("approval")).toEqual([]);
-  });
-
-  it("names the permission a denied read needed, with no cards (negative)", async () => {
-    await renderPanel({ approvals: DENIED });
-    expect(approvalsSection()).toHaveTextContent(
-      "You cannot see Approvals in this workspace. Your roles do not include workspace.read",
-    );
-    expect(approvalsSection()).not.toHaveTextContent("parked");
-  });
-
-  it("names the code a failed read answered (negative)", async () => {
-    await renderPanel({ approvals: DOWN });
-    expect(approvalsSection()).toHaveTextContent(
-      "Approvals could not be loaded: the control plane answered run_index_unavailable.",
-    );
-  });
-
-  it("carries the request id of an access request still waiting (negative)", async () => {
-    await renderPanel({
-      approvals: {
-        ok: false,
-        reason: "pending_approval",
-        accessRequestId: "acr_91",
-      },
-    });
-    expect(approvalsSection()).toHaveTextContent(
-      "Access to Approvals is waiting for approval, request acr_91.",
-    );
-  });
 });
 
-describe("the approvals panel › the mandate bar", () => {
+describe("the approval card › the mandate bar", () => {
   const parked = approvalItem({ mandateId: "mnd_4f2a9c" });
 
   it("draws the bar of the mandate a parked call drew on", async () => {
@@ -251,7 +205,7 @@ describe("the approvals panel › the mandate bar", () => {
     const bar = within(approvalsSection()).getByTestId("mandate-bar");
     expect(bar).toHaveAttribute("data-measure", "amount");
     expect(bar).toHaveTextContent("$615.82");
-    // The measure is on the card, not only in a data attribute: this panel is
+    // The measure is on the card, not only in a data attribute: the card is
     // where a mandate draws one bar per measure.
     expect(bar).toHaveTextContent("Remaining authority · amount · monthly");
     expect(within(bar).getByRole("img")).toHaveAccessibleName(

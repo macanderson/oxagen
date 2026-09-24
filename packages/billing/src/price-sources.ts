@@ -127,6 +127,31 @@ function dottedRelease(id: string): string | null {
   return `${parts.slice(0, -1).join("-")}.${minor}`;
 }
 
+/** A release number written with a dot: `5.5`, one or two digits either side. */
+const DOTTED_RELEASE = /^(\d{1,2})\.(\d{1,2})$/;
+
+/**
+ * The hyphenated spelling of a dotted release number, the inverse of {@link
+ * dottedRelease}, or null when the id carries no such number.
+ *
+ * Catalogs publish Claude under the gateway's dotted id
+ * (`anthropic/claude-opus-5.5`), while Claude Code and the Anthropic API send
+ * the hyphenated one (`claude-opus-5-5`). A catalog row with only the dotted
+ * spelling therefore priced none of that traffic, and it also claimed the
+ * dotted name in the merge, so the lower-precedence row that did carry the
+ * hyphenated id was dropped as a duplicate. Opus 5.5 went unpriced that way.
+ * The rule mirrors `dottedRelease`: only a tail that is a dotted digit pair,
+ * behind a segment that is not itself a number.
+ */
+function hyphenatedRelease(id: string): string | null {
+  const parts = id.split("-");
+  if (parts.length < 2) return null;
+  const tail = DOTTED_RELEASE.exec(parts[parts.length - 1]!);
+  if (tail === null) return null;
+  if (ALL_DIGITS.test(parts[parts.length - 2]!)) return null;
+  return `${parts.slice(0, -1).join("-")}-${tail[1]}-${tail[2]}`;
+}
+
 /**
  * Every other id that names the same model as `model`.
  *
@@ -147,22 +172,26 @@ function dottedRelease(id: string): string | null {
  * default fast model and so the most common traffic there is.
  *
  * The spelling is derived rather than listed, so the next release that ships
- * needs no second edit and cannot be forgotten. Deriving it joins nothing that
- * the identity rule splits, because an id whose tail is not a hyphenated digit
- * pair derives nothing at all: `gpt-5`, `gpt-5.2`, `gpt-5.5`, `grok-4`,
- * `grok-4.3`, `grok-4.5`, `glm`, `glm-5.2`, `gpt-5-mini` and `claude-opus-4`
- * each yield no dotted alias, and the one alias `claude-opus-4-8` does yield is
- * `claude-opus-4.8`, which is not the same identity as `claude-opus-4` either.
- * A stamped id derives nothing either — see {@link dottedRelease}.
+ * needs no second edit and cannot be forgotten. It runs both ways: a dotted
+ * catalog id gains its hyphenated twin through {@link hyphenatedRelease}, which
+ * is the spelling Claude Code reports. Deriving it joins nothing that the
+ * identity rule splits, because only the spelling of a release number changes:
+ * `gpt-5.5` gains `gpt-5-5` and never `gpt-5`, and an id whose tail is not a
+ * digit pair derives nothing at all: `gpt-5`, `grok-4`, `glm`, `gpt-5-mini` and
+ * `claude-opus-4` each yield no alias, and the one alias `claude-opus-4-8` does
+ * yield is `claude-opus-4.8`, which is not the same identity as `claude-opus-4`
+ * either. A stamped id derives nothing either — see {@link dottedRelease}.
  */
 function aliasesFor(model: string, vendor?: string): string[] {
   const out = new Set<string>();
   const slash = model.indexOf("/");
   const bare = slash >= 0 ? model.slice(slash + 1) : model;
   if (slash >= 0) out.add(bare);
-  const dotted = dottedRelease(bare);
-  if (dotted !== null) {
-    out.add(dotted);
+  // A release number is hyphenated in the card and at the Anthropic API, and
+  // dotted at the gateway; whichever spelling `model` uses, the other is added.
+  const respelled = dottedRelease(bare) ?? hyphenatedRelease(bare);
+  if (respelled !== null) {
+    out.add(respelled);
     // Both spellings of the gateway form, so the card's row claims the dotted
     // name in the merge and matches it on the resolver's FIRST pass. Left to
     // the family fallback alone, a catalog row published under
@@ -170,7 +199,7 @@ function aliasesFor(model: string, vendor?: string): string[] {
     // the same model, and the resolver's direct pass would prefer it to the
     // hand-verified card row it was meant to be displaced by.
     const prefix = slash >= 0 ? model.slice(0, slash) : vendor;
-    if (prefix !== undefined) out.add(`${prefix}/${dotted}`);
+    if (prefix !== undefined) out.add(`${prefix}/${respelled}`);
   }
   out.delete(model);
   return [...out];

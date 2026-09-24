@@ -48,7 +48,7 @@ function isDrawn(value: MandateAuthority["reserved"]): boolean {
  * Whether this measure has what a bar needs: a per-period limit for its
  * denominator and the two ratios drawn against it. Exported because a caller
  * deciding what else to render has to ask the same question the component
- * answers — the approvals panel partitions a mandate's measures by it — and
+ * answers — the approval card partitions a mandate's measures by it — and
  * two predicates that must agree are one that will eventually not.
  */
 export function drawsBar(authority: MandateAuthority): boolean {

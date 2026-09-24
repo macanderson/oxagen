@@ -1,4 +1,4 @@
-// list_approvals output to the Fleet approvals panel (ARCHITECTURE.md §3.4).
+// list_approvals output to the shell's approvals drawer (ARCHITECTURE.md §3.4).
 // Typed from the contract's `_output`; the agent key is the chain's first hop
 // the store has, and it is null until the gateway records it.
 //

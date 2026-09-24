@@ -718,10 +718,18 @@
         "edge": "Edge",
         "view": "View"
       },
-      "empty": "No issue is linked to this session.",
+      "empty": "No issue is linked to this session, and no pull request it opened closes one.",
+      "emptyUnread": "No issue is linked to this session. GitHub did not return the issues its pull requests close.",
+      "closingUnread": "GitHub did not return every issue the run's pull requests close, so this list may be short.",
+      "closedBy": "by pull request #{number}",
+      "state": {
+        "open": "open",
+        "closed": "closed"
+      },
       "statusNotRead": "not read",
       "relation": {
-        "task": "task"
+        "task": "task",
+        "closes": "closes"
       },
       "edge": {
         "observed": "observed",
@@ -731,7 +739,7 @@
       "frame": "fr {seq}",
       "noLink": "no link",
       "viewLink": "View ↗",
-      "note": "A session can touch more than one issue: the task it was started for, and any it read, referenced or closed on the way. The relation says which and the edge says how Oxagen knows. The run record keeps one task reference, and the tracker's status is not read yet.",
+      "note": "A session can touch more than one issue: the task it was started for, and any it read, referenced or closed on the way. The relation says which and the edge says how Oxagen knows. The run record keeps one task reference, whose status is not read from the tracker yet. A closed issue comes from GitHub's record of what each pull request the run opened closes, with its status as GitHub returned it.",
       "linked": {
         "title": "Linked work",
         "observed": "written by Oxagen from a frame it recorded",

@@ -72,11 +72,6 @@
       }
     },
     "approvals": {
-      "title": "Approvals",
-      "parked": "{count} parked",
-      "more": "{count}+",
-      "empty": "Nothing is waiting on a human.",
-      "emptyDetail": "A call parks here when policy returns approve. Denials never park: they end the call.",
       "timesOut": "Times out in <clock></clock>, then the call ends",
       "notRecorded": "not recorded",
       "openRun": "Open run",

@@ -609,6 +609,7 @@ describe("header", () => {
             headSha: null,
             headRef: "release/3.2",
             association: "recorded",
+            closingIssues: null,
             checkoutRefs: [],
             observedAt: "2026-09-23T10:00:00.000Z",
             current: true,
@@ -2911,7 +2912,9 @@ describe("issues", () => {
       { tab: "issues" },
     );
     expect(
-      screen.getByText("No issue is linked to this session."),
+      screen.getByText(
+        "No issue is linked to this session, and no pull request it opened closes one.",
+      ),
     ).toBeTruthy();
     expect(screen.getByTestId("run-tab-count-issues")).toHaveTextContent("0");
   });

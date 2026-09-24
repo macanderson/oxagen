@@ -1,4 +1,4 @@
-// A pending tool-call approval as the Fleet approvals panel reads it
+// A pending tool-call approval as the shell's approvals drawer reads it
 // (ARCHITECTURE.md §1.2), from `list_approvals`. The store records no run and
 // no agent on an approval today, so both are nullable and null until it does.
 import { z } from "zod";
