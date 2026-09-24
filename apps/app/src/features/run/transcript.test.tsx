@@ -22,7 +22,8 @@ import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   TRANSCRIPT_ENTRY_DEFAULT,
-  type RunTranscript,
+  RunTranscript,
+  type TranscriptEntry,
   type TranscriptKind,
 } from "@/data/contracts/run";
 import type { RunRow } from "@/data/contracts/runs";
@@ -30,6 +31,7 @@ import type { Read } from "@/data/read";
 import { readError, readOk } from "@/data/read";
 import type { ActionResult } from "@/server/kernel";
 import { expectNoAxe } from "@/test/expect-no-axe";
+import { toRunTranscript } from "@/data/live/mappers/run";
 import { IntlProvider } from "@/test/intl";
 import {
   mockupTranscript,
@@ -1242,5 +1244,455 @@ describe("a body the recorder kept whole", () => {
     expect(screen.getByTestId("transcript-agent")).toHaveTextContent(
       "cutting it now",
     );
+  });
+});
+
+// ── Carried from #4026 ──────────────────────────────────────────────────────
+//
+// #4026 changed how a wrapped Claude Code session reads on the Transcript tab,
+// and tested it against the turn-and-step view this page replaced with the
+// rev1 feed. The tests below state the same behaviour on the feed: where #4026
+// asserted a step number, a zoom or a chip link, the feed's equivalent is a
+// nested row, the transport's count, or the chip's own pressed state.
+
+describe("a subagent's steps under its Task call", () => {
+  // The shape of a wrapped Claude Code run: the gate, the harness check and
+  // the receipt of one call share its tool_use_id, and the subagent's own
+  // calls land on its chain, numbered from 0, between the Task call's frames.
+  const CHAIN = "0192d4a8-7c1e-7a00-8000-0000000000c3";
+  const sub = { chainRef: CHAIN, type: "Explore", spawnKey: "toolu_C" };
+  const frame = (over: Partial<TranscriptEntry>): TranscriptEntry =>
+    transcriptEntry({
+      kind: "frame",
+      type: "oxagen:note",
+      label: "oxagen:note",
+      callKey: null,
+      request: null,
+      response: null,
+      decision: null,
+      turn: 1,
+      frames: 1,
+      cost: null,
+      cumulativeCost: null,
+      kinds: [],
+      ...over,
+    });
+  const gate = (
+    seq: string,
+    key: string,
+    tool: string,
+    target: string | null,
+    over: Partial<TranscriptEntry> = {},
+  ) =>
+    frame({
+      seq,
+      kind: "policy",
+      type: "policy_decision",
+      label: `allow ${tool}`,
+      callKey: key,
+      target,
+      decision: {
+        seq,
+        decision: "allow",
+        type: "policy_decision",
+        at: transcriptEntry().at,
+      },
+      ...over,
+    });
+  const harness = (seq: string, key: string) =>
+    frame({
+      seq,
+      type: "harness_permission",
+      label: "allow Bash",
+      callKey: key,
+    });
+  const call = (
+    seq: string,
+    key: string,
+    label: string,
+    over: Partial<TranscriptEntry> = {},
+  ) =>
+    frame({
+      seq,
+      kind: "tool_call",
+      type: "tool_call",
+      label,
+      callKey: key,
+      response: transcriptBody({
+        seq,
+        fidelity: "digest_only",
+        bytesRef: null,
+        text: null,
+      }),
+      ...over,
+    });
+  const entries = [
+    frame({
+      seq: "1",
+      type: "turn_start",
+      request: transcriptBody({ seq: "1", text: "Find the flaky test." }),
+    }),
+    gate("2", "toolu_A", "Bash", "git status"),
+    harness("3", "toolu_A"),
+    call("4", "toolu_A", "Bash ok"),
+    gate("5", "toolu_C", "Task", null),
+    harness("6", "toolu_C"),
+    frame({ seq: "7", type: "subagent_start", callKey: "toolu_C" }),
+    gate("0", "toolu_X1", "Grep", "flaky", { subagent: sub }),
+    call("1", "toolu_X1", "Grep ok", { subagent: sub }),
+    gate("2", "toolu_X2", "Read", "apps/app/src/flaky.test.ts", {
+      subagent: sub,
+    }),
+    call("3", "toolu_X2", "Read ok", { subagent: sub }),
+    call("8", "toolu_C", "Task ok"),
+    gate("9", "toolu_B", "Bash", "git diff"),
+    harness("10", "toolu_B"),
+    call("11", "toolu_B", "Bash ok"),
+  ];
+
+  it("draws the subagent's calls inside the Task row, with no gap in the run's count", () => {
+    renderSection({ read: readOk(runTranscript({ entries })) });
+    const nested = screen.getByTestId("transcript-subagent-steps");
+    const task = nested.closest('[data-testid="tx-row"]');
+    if (!(task instanceof HTMLElement))
+      throw new Error("expected the Task row");
+    expect(within(task).getAllByTestId("tx-tool-name")[0]).toHaveTextContent(
+      "Task",
+    );
+    const inner = within(nested).getAllByTestId("tx-row");
+    expect(inner.map((row) => row.textContent)).toEqual([
+      expect.stringContaining("Grep"),
+      expect.stringContaining("Read"),
+    ]);
+    expect(inner[0]).toHaveTextContent("flaky");
+    // One row per call. The harness's allow draws no row of its own, so the
+    // transport counts the rows drawn with no gap: the prompt, the two Bash
+    // calls, the Task call and the subagent's two calls under it. (#4026
+    // numbered steps 1, 2, 2.1, 2.2, 3; the feed has no step numbers.)
+    expect(rows()).toHaveLength(6);
+    expect(readout()).toHaveTextContent("6 / 6");
+    expect(
+      rows().flatMap((row) => {
+        const name = row.querySelector('[data-testid="tx-tool-name"]');
+        return name === null ? [] : [name.textContent];
+      }),
+    ).toEqual(["Bash", "Task", "Grep", "Read", "Bash"]);
+  });
+});
+
+describe("the effort a model call ran at", () => {
+  it("maps the server's effort, and reads a missing one as unrecorded (negative)", () => {
+    const first = runTranscript({ entries: [transcriptEntry()] }).entries[0];
+    if (!first) throw new Error("Missing transcript fixture entry");
+    const { subagent: _appSubagent, ...entry } = first;
+    const wire = (seq: string, effort?: string | null) => ({
+      ...entry,
+      seq,
+      endSeq: seq,
+      callId: null,
+      cost: null,
+      cumulativeCost: null,
+      request: null,
+      response: null,
+      ...(effort === undefined ? {} : { effort }),
+    });
+    const mapped = RunTranscript.parse(
+      toRunTranscript({
+        ...runTranscript(),
+        entries: [wire("5", "high"), wire("6", null), wire("7")],
+      }),
+    );
+    expect(mapped.entries.map((e) => e.effort)).toEqual(["high", null, null]);
+  });
+});
+
+describe("thinking and effort on a model step", () => {
+  const usage = {
+    inputUncached: 10,
+    cacheRead: 0,
+    cacheWrite: 0,
+    output: 5,
+    reasoning: 42,
+  };
+  /** A model call that thought, then a tool call after it. */
+  const thought = (withBlocks: boolean) =>
+    readOk(
+      runTranscript({
+        entries: [
+          transcriptEntry({
+            seq: "1",
+            endSeq: "1",
+            frames: 1,
+            kind: "model_call",
+            type: "llm_call",
+            label: "anthropic/claude-fable-5-1",
+            kinds: ["responses", "thinking", "usage"],
+            effort: "high",
+            usage,
+            response: transcriptBody({
+              seq: "1",
+              type: "llm_call",
+              text: "Tagging now.",
+              blocks: withBlocks
+                ? [
+                    { kind: "thinking", text: "Check the tag is free first." },
+                    { kind: "text", text: "Tagging now." },
+                  ]
+                : [{ kind: "text", text: "Tagging now." }],
+            }),
+          }),
+          transcriptEntry({
+            seq: "2",
+            endSeq: "2",
+            frames: 1,
+            kind: "tool_call",
+            type: "tool_call",
+            label: "create_tag ok",
+            callKey: "call_1",
+            kinds: ["tools"],
+            response: transcriptBody({
+              seq: "2",
+              type: "tool_call",
+              text: '{"ok":true}',
+            }),
+          }),
+        ],
+      }),
+    );
+
+  it("names the effort and the thinking tokens on the step", () => {
+    renderSection({ read: thought(true) });
+    expect(screen.getByTestId("step-effort")).toHaveTextContent("effort high");
+    expect(screen.getByTestId("step-thinking-tokens")).toHaveTextContent(
+      "42 thinking tokens",
+    );
+  });
+
+  it("opens every kept thought on expand thinking, and closes them again", () => {
+    renderSection({ read: thought(true) });
+    const toggle = screen.getByTestId("expand-thinking");
+    expect(toggle).toHaveTextContent("expand thinking");
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    expect(toggle).toHaveTextContent("collapse thinking");
+    expect(screen.getByTestId("tx-think")).toHaveTextContent(
+      "Check the tag is free first.",
+    );
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    expect(toggle).toHaveTextContent("expand thinking");
+  });
+
+  it("says the harness kept no thought where only the token count was recorded (negative)", () => {
+    renderSection({ read: thought(false) });
+    expect(screen.queryByTestId("tx-think")).toBeNull();
+    expect(screen.getByTestId("step-thinking-unkept")).toHaveTextContent(
+      "The model spent 42 tokens thinking.",
+    );
+  });
+
+  it("draws no effort or thinking chip on a step that recorded neither (negative)", () => {
+    renderSection();
+    expect(screen.queryByTestId("step-effort")).toBeNull();
+    expect(screen.queryByTestId("step-thinking-tokens")).toBeNull();
+    expect(screen.queryByTestId("step-thinking-unkept")).toBeNull();
+  });
+});
+
+describe("searching the transcript", () => {
+  const search = (text: string) => {
+    fireEvent.change(
+      screen.getByRole("searchbox", { name: "Search the transcript" }),
+      { target: { value: text } },
+    );
+  };
+
+  it("draws only the rows that match, and counts what it found", () => {
+    renderSection();
+    expect(screen.queryByTestId("tx-matches")).toBeNull();
+    search("changelog");
+    expect(screen.getByTestId("tx-matches")).toHaveTextContent(
+      "5 of 20 entries",
+    );
+    expect(rows()).toHaveLength(5);
+    // A folded thought can hold its match below the fold, so the marks are
+    // counted rather than every row's visible text.
+    expect(
+      screen.getAllByText(/changelog/i, { selector: "mark" }).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("keeps a found row's place in the run", () => {
+    renderSection();
+    const clockOf = () =>
+      rows()
+        .find((row) => /changelog/i.test(row.textContent))
+        ?.querySelector("time")
+        ?.getAttribute("dateTime");
+    const before = clockOf();
+    expect(before).toBeDefined();
+    search("changelog");
+    expect(clockOf()).toBe(before);
+  });
+
+  it("says nothing matches rather than drawing an empty transcript (negative)", () => {
+    renderSection();
+    search("no-such-words");
+    expect(screen.getByTestId("transcript-empty")).toHaveTextContent(
+      "Nothing matches this search.",
+    );
+    expect(rows()).toHaveLength(0);
+  });
+
+  it("draws the whole transcript again when the search is cleared", () => {
+    renderSection();
+    const all = rows().length;
+    search("changelog");
+    search("   ");
+    expect(rows()).toHaveLength(all);
+    expect(screen.queryByTestId("tx-matches")).toBeNull();
+  });
+});
+
+describe("the filter chips, as #4026 drew them", () => {
+  const chipOrder = () =>
+    within(screen.getByTestId("transcript-chips"))
+      .getAllByRole("button")
+      .map((chip) => chip.getAttribute("data-testid"));
+
+  it("draws the mockup's chips in the mockup's order, then all/none and errors, and no policy or proof chip (negative)", () => {
+    renderSection();
+    expect(chipOrder()).toEqual([
+      "chip-prompt",
+      "chip-responses",
+      "chip-thinking",
+      "chip-tools",
+      "chip-usage",
+      "chip-recall",
+      "chip-seal",
+      "chip-all",
+      "chip-errors",
+    ]);
+    expect(screen.queryByTestId("chip-policy")).toBeNull();
+    expect(screen.queryByTestId("chip-proof")).toBeNull();
+  });
+
+  it("draws every chip on when nothing is filtered, and offers none", () => {
+    renderSection();
+    for (const chip of ["prompt", "tools", "seal", "thinking"]) {
+      expect(screen.getByTestId(`chip-${chip}`)).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+    }
+    expect(screen.getByTestId("chip-errors")).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(screen.getByTestId("chip-all")).toHaveTextContent("none");
+  });
+
+  it("turns one chip off and leaves every other chip on", () => {
+    renderSection();
+    fireEvent.click(screen.getByTestId("chip-tools"));
+    expect(screen.getByTestId("chip-tools")).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    for (const chip of ["prompt", "responses", "thinking", "usage", "recall"]) {
+      expect(screen.getByTestId(`chip-${chip}`)).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+    }
+    expect(screen.getByTestId("chip-all")).toHaveTextContent("all");
+  });
+
+  it("files the tools chip over tools and their gate decisions, and offers all when a chip is off", () => {
+    renderSection({ kinds: ["tools", "policy"] });
+    expect(screen.getByTestId("chip-tools")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByTestId("chip-prompt")).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    // A decision draws as the ⚖ chip on the call it was made about, so the
+    // tools chip alone still shows the gate decisions.
+    expect(kinds()).toContain("tool");
+    expect(kinds()).not.toContain("prompt");
+    expect(screen.getAllByText(/⚖/).length).toBeGreaterThan(0);
+    const toggle = screen.getByTestId("chip-all");
+    expect(toggle).toHaveTextContent("all");
+    fireEvent.click(toggle);
+    expect(screen.getByTestId("chip-prompt")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  it("draws every chip off for none, reads no entries, and says how to get the run back", () => {
+    renderSection();
+    fireEvent.click(screen.getByTestId("chip-all"));
+    expect(screen.getByTestId("chip-prompt")).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(screen.getByTestId("chip-all")).toHaveTextContent("all");
+    expect(screen.getByTestId("transcript-empty")).toHaveTextContent(
+      "Nothing to show with these filters.",
+    );
+    expect(rows()).toHaveLength(0);
+    // The chips filter the read in hand; none asks the server for nothing.
+    expect(readTranscriptPage).not.toHaveBeenCalled();
+  });
+
+  it("shows only failed calls behind errors, and back to everything from it", () => {
+    renderSection();
+    const errors = screen.getByTestId("chip-errors");
+    expect(errors).toHaveAttribute("title", "Show only failed calls");
+    fireEvent.click(errors);
+    expect(errors).toHaveAttribute("aria-pressed", "true");
+    expect(rows().length).toBeGreaterThan(0);
+    expect(rows()).toHaveLength(1);
+    fireEvent.click(errors);
+    expect(errors).toHaveAttribute("aria-pressed", "false");
+    expect(rows()).toHaveLength(20);
+  });
+
+  it("counts each chip's rows from the whole-run read", () => {
+    renderSection();
+    expect(screen.getByTestId("chip-tools-count")).toHaveTextContent(
+      String(kinds().filter((kind) => kind === "tool").length),
+    );
+    expect(screen.getByTestId("chip-errors-count")).toHaveTextContent("1");
+    expect(screen.getByTestId("chip-prompt-count")).toHaveTextContent("1");
+    expect(screen.getByTestId("chip-seal-count")).toHaveTextContent("0");
+  });
+
+  it("marks a count from a read that stopped short as a floor", () => {
+    renderSection({
+      read: readOk(releaseTranscript({ complete: false, cursor: "ZjoxMQ" })),
+    });
+    expect(screen.getByTestId("chip-tools-count")).toHaveTextContent("6+");
+  });
+
+  it("draws no counts when the whole-run read failed, rather than zeros (negative)", () => {
+    renderSection({ read: readError("frame_store_unreachable", 502) });
+    expect(screen.queryByTestId("chip-tools-count")).toBeNull();
+  });
+
+  it("names its own failure when the read was refused, since no chip can have caused it (negative)", () => {
+    // #4026 kept the chips on a refused read so a filter that narrowed the
+    // read could be undone. The feed reads the whole run once and filters in
+    // the browser, so no chip narrows the read and a refusal is the read's own.
+    renderSection({
+      read: readError("frame_store_unreachable", 502),
+      kinds: ["policy"],
+    });
+    expect(screen.queryByTestId("transcript-chips")).toBeNull();
+    expect(screen.queryByTestId("transcript")).toBeNull();
   });
 });

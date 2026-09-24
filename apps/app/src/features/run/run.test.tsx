@@ -1125,6 +1125,58 @@ describe("transcript", () => {
     ).toBeGreaterThan(0);
   });
 
+  // Carried from #4026, which added rewind and to-the-end buttons and the
+  // mockup's speeds to the turn-and-step transport this page replaced. The
+  // feed's transport counts rows drawn (`at / total`) rather than frames.
+  it("rewinds to the first row, jumps to the last, and offers the mockup's four speeds", async () => {
+    await renderRun(
+      { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
+      { tab: "transcript" },
+    );
+    const readout = screen.getByTestId("transport-readout");
+    const total = /\/ (\d+)/.exec(readout.textContent)?.[1];
+    if (total === undefined) throw new Error("no total in the readout");
+    const rewind = screen.getByRole("button", { name: "Rewind" });
+    const end = screen.getByRole("button", { name: "To the end" });
+    // A sealed run opens at its end.
+    expect(end).toBeDisabled();
+    fireEvent.click(rewind);
+    expect(readout).toHaveTextContent(`0 / ${total}`);
+    expect(rewind).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Step back" })).toBeDisabled();
+    fireEvent.click(end);
+    expect(readout).toHaveTextContent(`${total} / ${total}`);
+    const speeds = within(
+      screen.getByRole("group", { name: "Playback speed" }),
+    ).getAllByRole("button");
+    expect(speeds.map((button) => button.textContent)).toEqual([
+      "1×",
+      "2×",
+      "3×",
+      "6×",
+    ]);
+    expect(speeds[0]).toHaveAttribute("aria-pressed", "true");
+    const six = speeds[3];
+    if (six === undefined) throw new Error("no 6× speed button");
+    fireEvent.click(six);
+    expect(speeds[3]).toHaveAttribute("aria-pressed", "true");
+    expect(speeds[0]).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("draws no zoom tabs, and puts no zoom on the Transcript tab's link", async () => {
+    await renderRun(
+      { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
+      { tab: "transcript" },
+    );
+    for (const name of ["Turns", "Steps", "Everything"]) {
+      expect(screen.queryByRole("button", { name })).toBeNull();
+    }
+    expect(screen.getByRole("tab", { name: /Transcript/ })).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=transcript",
+    );
+  });
+
   it("says a run with no frames has none (negative)", async () => {
     await renderRun(
       {
@@ -1541,6 +1593,24 @@ describe("chips", () => {
       "false",
     );
     expect(screen.queryByTestId("chip-proof")).toBeNull();
+  });
+
+  // Carried from #4026: turning every chip off reads nothing more and says
+  // how to get the run back. The chips filter the one read in the browser.
+  it("reads nothing more when every chip is off, and says how to get the run back", async () => {
+    const { calls } = await renderRun(
+      { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
+      { tab: "transcript" },
+    );
+    fireEvent.click(screen.getByTestId("chip-all"));
+    expect(calls.transcript).toEqual([
+      [ctx, "tse_7k2m9q", "everything", { kinds: [] }],
+    ]);
+    expect(screen.getByTestId("transcript-empty")).toHaveTextContent(
+      "Nothing to show with these filters.",
+    );
+    expect(screen.queryAllByTestId("tx-row")).toHaveLength(0);
+    expect(screen.getByTestId("chip-all")).toHaveTextContent("all");
   });
 
   it("carries the chips on the Transcript tab's own link, so one filter has one URL", async () => {

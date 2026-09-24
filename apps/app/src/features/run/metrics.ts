@@ -35,6 +35,7 @@ import type { Read } from "@/data/read";
 import { groupOf, type ToolGroup } from "./tool-detail";
 import {
   buildTranscript,
+  flatSteps,
   frameCost,
   isOperatorPrompt,
   stepDigest,
@@ -332,8 +333,9 @@ function turnFigures(turns: readonly TranscriptTurn[]): TurnFigure[] {
           reported = true;
         }
       }
-      const modelSteps = turn.steps.filter((s) => s.kind === "model").length;
-      const toolSteps = turn.steps.filter((s) => s.kind === "tool").length;
+      const steps = flatSteps(turn);
+      const modelSteps = steps.filter((s) => s.kind === "model").length;
+      const toolSteps = steps.filter((s) => s.kind === "tool").length;
       return {
         turn: turn.turn,
         steps: modelSteps + toolSteps,
@@ -360,7 +362,7 @@ function toolCallsOf(
   let batch = -1;
   let open = false;
   for (const turn of turns) {
-    for (const step of turn.steps) {
+    for (const step of flatSteps(turn)) {
       if (step.kind === "model") {
         open = false;
         continue;
@@ -426,7 +428,7 @@ function batchesOf(
   if (calls.length === 0) return null;
   const steps = new Map<string, TranscriptStep>();
   for (const turn of turns)
-    for (const step of turn.steps) steps.set(step.first.seq, step);
+    for (const step of flatSteps(turn)) steps.set(step.first.seq, step);
   const groups = new Map<number, ToolCall[]>();
   for (const call of calls) {
     const group = groups.get(call.batch) ?? [];
@@ -518,7 +520,7 @@ function wallClock(
   let model = 0;
   let tool = 0;
   for (const turn of turns) {
-    for (const step of turn.steps) {
+    for (const step of flatSteps(turn)) {
       if (step.kind === "model") model += spanOf(step);
       else if (step.kind === "tool")
         tool += Math.max(0, spanOf(step) - waitIn(step, waits));
@@ -593,7 +595,7 @@ export function runMetrics({
         ? null
         : turns.reduce(
             (sum, turn) =>
-              sum + turn.steps.filter((s) => s.kind === "model").length,
+              sum + flatSteps(turn).filter((s) => s.kind === "model").length,
             0,
           )),
     toolCalls: calls,

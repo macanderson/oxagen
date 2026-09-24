@@ -4008,7 +4008,7 @@
       "writes": []
     }
   ],
-  "contentHash": "47e19de6c364ebd284e5c2dd948c00462e38ca49251b0a7aa7d762e0a8b36c35",
+  "contentHash": "98c3d38822f31b683cf94f374bc011fc9b7315149946acf8d063cfcd97f6daca",
   "domains": [
     {
       "name": "agent",
@@ -7470,6 +7470,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "timestamp with time zone"
+        },
+        {
+          "name": "summary_error",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
         },
         {
           "name": "spec_version",
@@ -22527,6 +22533,24 @@
         },
         {
           "name": "summary_observed_revision",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "summary_error",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "harness_title",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "harness_title_at",
           "nullable": true,
           "primaryKey": false,
           "type": "timestamp with time zone"

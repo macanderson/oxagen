@@ -274,6 +274,8 @@ const txFeed =
  * `.tx-row { display:grid; grid-template-columns:82px 30px minmax(0,1fr);
  * padding:1px 12px 1px 0 }`; a phone drops the clock (`0 22px`).
  */
+/** A subagent's rows under the call that spawned it, on a rule of their own. */
+const txNested = "mt-1 border-l border-border pl-2";
 const txRow =
   "grid grid-cols-[82px_30px_minmax(0,1fr)] items-baseline py-px pr-3 max-md:grid-cols-[0_22px_minmax(0,1fr)]";
 /** `.tx-clock { color:var(--dim); font-size:10.5px; text-align:right; padding-right:10px }` */
@@ -742,6 +744,14 @@ function ThinkingRow({
   row: Extract<FeedRow, { kind: "thinking" }>;
 }) {
   const t = useTranslations("run.transcript");
+  const locale = useLocale();
+  if (row.text === null) {
+    return (
+      <div data-testid="step-thinking-unkept" className={txThink}>
+        {t("thinkingUnkept", { count: formatCount(row.tokens ?? 0, locale) })}
+      </div>
+    );
+  }
   const lines = row.text.split("\n").length;
   const { head, rest } = foldText(row.text);
   const folded = !open && rest.length > 0;
@@ -958,6 +968,18 @@ function UsageRow({
       </span>
       <span className={txChips}>
         <SubagentChip row={row} />
+        {row.effort === null ? null : (
+          <span data-testid="step-effort" className={CHIP.plain}>
+            {t("effort", { effort: row.effort })}
+          </span>
+        )}
+        {usage?.reasoning == null || usage.reasoning === 0 ? null : (
+          <span data-testid="step-thinking-tokens" className={CHIP.plain}>
+            {t("thinkingTokens", {
+              count: formatCount(usage.reasoning, locale),
+            })}
+          </span>
+        )}
         {row.cost === null ? null : <CostChip value={row.cost} tone="cost" />}
         {row.spent === null ? null : (
           <CostChip value={row.spent} tone="burn" prefix="Σ" />
@@ -1225,6 +1247,7 @@ function NodeDot({ row }: { row: FeedRow }) {
 /** `TX_HUE`, as the chip's accessible hue is its word: the dot only repeats it. */
 function KindChips({
   counts,
+  floor,
   on,
   errors,
   errorsOnly,
@@ -1233,6 +1256,11 @@ function KindChips({
   onErrors,
 }: {
   counts: Record<FeedGroup, number>;
+  /**
+   * More of the run lies past the rows read, so each count is how many at
+   * least, and reads `12+` rather than a total the record has not shown.
+   */
+  floor: boolean;
   on: Record<FeedGroup, boolean>;
   errors: number;
   errorsOnly: boolean;
@@ -1243,6 +1271,10 @@ function KindChips({
   const t = useTranslations("run.transcript");
   const locale = useLocale();
   const anyOff = FEED_GROUPS.some((group) => !on[group]);
+  const count = (n: number): string =>
+    floor
+      ? t("countFloor", { count: formatCount(n, locale) })
+      : formatCount(n, locale);
   return (
     <div
       role="group"
@@ -1267,8 +1299,8 @@ function KindChips({
             className={`size-2 flex-none rounded-[2px] ${on[group] ? DOT[group].on : DOT[group].off}`}
           />
           <span>{t(`chip.${group}`)}</span>
-          <span className={txKindCount}>
-            {formatCount(counts[group], locale)}
+          <span data-testid={`chip-${group}-count`} className={txKindCount}>
+            {count(counts[group])}
           </span>
         </button>
       ))}
@@ -1292,7 +1324,9 @@ function KindChips({
       >
         <span>{t("errors")}</span>
         {errors > 0 ? (
-          <span className={txKindCount}>{formatCount(errors, locale)}</span>
+          <span data-testid="chip-errors-count" className={txKindCount}>
+            {count(errors)}
+          </span>
         ) : null}
       </button>
     </div>
@@ -1337,6 +1371,31 @@ function Burn({ spent, total }: { spent: Cost | null; total: Cost | null }) {
 
 // ── The view ────────────────────────────────────────────────────────────────
 
+/** A row drawn, its place in the rows shown, and the subagent rows under it. */
+type Drawn = { row: FeedRow; index: number; children: Drawn[] };
+
+/**
+ * The rows shown, with each subagent's rows moved under the Task or Agent
+ * call row that spawned it (`FeedRow.parent`), so the subagent's work reads
+ * as that call's and not as the run's own. `buildFeed` puts a subagent's rows
+ * right after their call's, so the order on screen is the order of the list.
+ * A row whose call is not shown (a filter hid it, or the transport has not
+ * reached it) draws at the top level rather than disappearing.
+ */
+function nest(rows: readonly FeedRow[]): Drawn[] {
+  const top: Drawn[] = [];
+  const byKey = new Map<string, Drawn>();
+  rows.forEach((row, index) => {
+    const drawn: Drawn = { row, index, children: [] };
+    const parent = row.parent === null ? undefined : byKey.get(row.parent);
+    if (parent === undefined) {
+      top.push(drawn);
+      byKey.set(row.key, drawn);
+    } else parent.children.push(drawn);
+  });
+  return top;
+}
+
 /** Every chip on, except where the URL's older `?kinds=` named the ones it wanted. */
 function initialGroups(
   kinds: readonly TranscriptKind[],
@@ -1346,9 +1405,11 @@ function initialGroups(
   // is a row here, so a link carrying only those opens every chip.
   const named: Partial<Record<TranscriptKind, FeedGroup>> = {
     responses: "responses",
+    thinking: "thinking",
     tools: "tools",
     recall: "recall",
     usage: "usage",
+    seal: "seal",
   };
   const asked = new Set(kinds.flatMap((kind) => named[kind] ?? []));
   return eachGroup((group) => asked.size === 0 || asked.has(group));
@@ -1669,6 +1730,39 @@ export function TranscriptView({
                 ? t("cut", { count: formatCount(entries.length, locale) })
                 : null;
 
+  // One drawn row, with the subagent rows under it drawn inside it.
+  const drawRow = ({ row, index, children }: Drawn): ReactNode => (
+    <div
+      key={row.key}
+      data-testid="tx-row"
+      data-kind={row.kind}
+      className={txRow}
+    >
+      <Clock at={row.at} elapsedMs={row.elapsedMs} />
+      <span className={txNode}>
+        <NodeDot row={row} />
+      </span>
+      <div className="min-w-0">
+        <FeedRowView
+          row={row}
+          q={q}
+          open={open.has(row.key) || (row.kind === "thinking" && thinking)}
+          onToggle={toggle}
+          place={place}
+          run={run}
+          live={live}
+          answer={index === answer}
+          sealed={index === lastSeal && run.sealedAt !== null}
+        />
+        {children.length === 0 ? null : (
+          <div data-testid="transcript-subagent-steps" className={txNested}>
+            {children.map(drawRow)}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <section aria-label={t("title")} data-testid="transcript" className={txs}>
       <div className={txTools}>
@@ -1695,6 +1789,7 @@ export function TranscriptView({
         )}
         <KindChips
           counts={counts}
+          floor={cursor !== null || !complete}
           on={on}
           errors={errors}
           errorsOnly={errorsOnly}
@@ -1711,6 +1806,8 @@ export function TranscriptView({
         <div role="group" aria-label={t("transportLabel")} className={txPlay}>
           <button
             type="button"
+            data-testid="expand-thinking"
+            aria-pressed={thinking}
             className={txGhost}
             onClick={() => {
               setThinking((prev) => !prev);
@@ -1726,6 +1823,7 @@ export function TranscriptView({
                 className={txButton}
                 aria-label={t("rewind")}
                 title={t("rewind")}
+                disabled={at <= 0}
                 onClick={() => {
                   seek(0);
                 }}
@@ -1772,6 +1870,7 @@ export function TranscriptView({
                 className={txButton}
                 aria-label={t("end")}
                 title={t("end")}
+                disabled={at >= total}
                 onClick={() => {
                   seek(total);
                 }}
@@ -1839,34 +1938,7 @@ export function TranscriptView({
               {empty}
             </div>
           ) : (
-            visible.slice(0, at).map((row, index) => (
-              <div
-                key={row.key}
-                data-testid="tx-row"
-                data-kind={row.kind}
-                className={txRow}
-              >
-                <Clock at={row.at} elapsedMs={row.elapsedMs} />
-                <span className={txNode}>
-                  <NodeDot row={row} />
-                </span>
-                <div className="min-w-0">
-                  <FeedRowView
-                    row={row}
-                    q={q}
-                    open={
-                      open.has(row.key) || (row.kind === "thinking" && thinking)
-                    }
-                    onToggle={toggle}
-                    place={place}
-                    run={run}
-                    live={live}
-                    answer={index === answer}
-                    sealed={index === lastSeal && run.sealedAt !== null}
-                  />
-                </div>
-              </div>
-            ))
+            nest(visible.slice(0, at)).map(drawRow)
           )}
         </div>
         {footer === null && pageFailure === null ? null : (

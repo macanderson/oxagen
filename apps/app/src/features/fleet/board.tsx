@@ -805,10 +805,7 @@ type PauseRefusal =
  * enforcement tier plays no part (ADR-163): the row's `commandBlock` says
  * whether the run's host can collect a command.
  */
-function pauseRefusal(
-  run: RunRow,
-  canCommand: boolean,
-): PauseRefusal | null {
+function pauseRefusal(run: RunRow, canCommand: boolean): PauseRefusal | null {
   if (run.source === "ledger") return "ledgerReason";
   const block = commandBlockOf(run);
   if (block !== null) return `blocked.${COMMAND_BLOCK_COPY[block]}`;

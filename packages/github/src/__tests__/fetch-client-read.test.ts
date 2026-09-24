@@ -132,7 +132,10 @@ describe("listClosingIssues", () => {
   it("marks a list GitHub truncated as incomplete", async () => {
     const truncated = structuredClone(refs);
     truncated.data.repository.pullRequest.closingIssuesReferences.totalCount = 30;
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(makeResponse(truncated)));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce(makeResponse(truncated)),
+    );
     const client = createGitHubClient({ token: "tok" });
     const result = await client.listClosingIssues({
       owner: "acme",

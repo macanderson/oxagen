@@ -564,6 +564,17 @@ describe("readTranscriptPage", () => {
           type: "tool_result",
           label: "create_release ok",
           callId: "tc_1",
+          // Fields the port gained after this copy was written: a later page
+          // must carry them too, or the step loses its target and effort once
+          // it scrolls past the first page.
+          target: "gh release create v1.2.0",
+          effort: "high",
+          subagent: {
+            sessionUuid: "7f0c2d1e-5b8a-4c3d-9e2f-1a2b3c4d5e6f",
+            id: "agent_1",
+            type: "general-purpose",
+            spawnCallId: "tu_spawn",
+          },
           kinds: ["tools"],
           turn: 1,
           request: null,
@@ -751,7 +762,13 @@ describe("readTranscriptPage", () => {
     expect(page).toEqual({ ok: true, value: toRunTranscript(out) });
     if (!page.ok) throw new Error("the page was read");
     const [entry] = page.value.entries;
-    expect(entry?.subagent).toEqual({ chainRef: CHAIN, type: "Explore" });
+    // #4026 carries the spawning call's id as `spawnKey`; this wire entry
+    // recorded none, so it reads null rather than being left off.
+    expect(entry?.subagent).toEqual({
+      chainRef: CHAIN,
+      type: "Explore",
+      spawnKey: null,
+    });
     expect(entry?.request?.chainRef).toBe(CHAIN);
     expect(entry?.response).not.toHaveProperty("chainRef");
     expect(entry?.decision?.chainRef).toBe(CHAIN);

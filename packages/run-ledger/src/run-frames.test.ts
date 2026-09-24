@@ -13,10 +13,10 @@ import {
   type RunFrame,
   stepKind,
   tachoFrame,
-  tachoStage,
   tachoTimestamp,
   turnOrdinals,
 } from "./run-frames";
+import { tachoStage } from "./tacho-kinds";
 import type { AttemptEventReadRecord } from "./run-store";
 
 function event(
@@ -776,6 +776,60 @@ describe("frameKinds and filterFramesByKind", () => {
     expect(frameKinds(usage).sort()).toEqual(["responses", "usage"]);
     expect(frameKinds(policy)).toEqual(["policy"]);
     expect(frameKinds(recall)).toEqual(["recall"]);
+  });
+
+  it("counts the prompt an operator typed, once, and not a subagent's", () => {
+    const typed = tachoFrame(tachoRow(6, "turn_start", { turnSeq: 1 }));
+    const handed = tachoFrame(
+      tachoRow(7, "turn_start", {
+        sessionUuid: "sub",
+        rootSessionUuid: "root",
+      }),
+    );
+    // The transcript tailer's copy of the same prompt.
+    const copy = tachoFrame(
+      tachoRow(8, "oxagen:message", {
+        body: JSON.stringify({ prompt_digest: "sha256:ab", prompt_length: 3 }),
+      }),
+    );
+    expect(frameKinds(typed)).toEqual(["prompt"]);
+    expect(frameKinds(handed)).toEqual([]);
+    expect(frameKinds(copy)).toEqual([]);
+    expect(
+      filterFramesByKind([typed, handed, copy, tool], ["prompt"]).map(
+        (f) => f.seq,
+      ),
+    ).toEqual(["6"]);
+  });
+
+  it("answers thinking for a call that reasoned, and seal for the chain's own integrity frames", () => {
+    const reasoned = {
+      ...usage,
+      usage: {
+        inputUncached: null,
+        cacheRead: null,
+        cacheWrite: null,
+        output: 40,
+        reasoning: 12,
+      },
+    };
+    const plain = { ...usage, usage: { ...reasoned.usage, reasoning: 0 } };
+    const checkpoint = tachoFrame(tachoRow(9, "checkpoint"));
+    const gap = tachoFrame(tachoRow(10, "telemetry_gap"));
+    const terminated = ledgerFrame({
+      ...event(11, "terminal.attempt_terminated", {}),
+      stage: "terminal",
+    });
+    expect(frameKinds(reasoned).sort()).toEqual([
+      "responses",
+      "thinking",
+      "usage",
+    ]);
+    expect(frameKinds(plain)).not.toContain("thinking");
+    expect(frameKinds(checkpoint)).toEqual(["seal"]);
+    expect(frameKinds(gap)).toEqual(["seal"]);
+    expect(frameKinds(terminated)).toEqual(["seal"]);
+    expect(frameKinds(tool)).not.toContain("seal");
   });
 
   it("keeps everything for an empty selection, and only the chips pressed otherwise", () => {

@@ -80,12 +80,15 @@ import {
  * is pinned in run-spec-v2.test.ts so any drift fails a test rather than a
  * production manifest.
  *
- * Two deliberate narrowings versus full JCS, both fail-closed: only safe
- * integers are accepted (this implementation has no ES6 float-serialization
- * step, so a float must never enter a digest input here), and non-JSON values
- * are refused rather than coerced. `@oxagen/run-evidence` DOES serialize
- * floats, so the two agree only on the values this one accepts — which is
- * exactly why the consolidation needs vectors, not an import swap.
+ * Numbers follow RFC 8785 section 3.2.2.3: every finite IEEE-754 double is
+ * written the way ECMAScript's Number-to-String writes it, which is what
+ * `JSON.stringify` does for a finite number (`0.1`, `1e+21`, `-0` as `0`).
+ * A contract default such as `recallThreshold: 0.1` is an ordinary JSON value,
+ * and refusing it failed every spec that carried one. NaN and the infinities
+ * have no JSON form, so they are still refused, as are non-JSON values.
+ * Before this, only safe integers were accepted, so no stored digest covers a
+ * float and none changes. `@oxagen/run-evidence` serializes numbers by the same
+ * rule, but the consolidation still needs vectors, not an import swap.
  */
 export function canonicalJson(value: unknown): string {
   return writeCanonical(value, "");
@@ -100,12 +103,13 @@ function writeCanonical(value: unknown, path: string): string {
     case "string":
       return JSON.stringify(value);
     case "number":
-      if (!Number.isSafeInteger(value)) {
+      if (!Number.isFinite(value)) {
         throw new CanonicalJsonError(
           path,
-          "only safe integers may be canonicalized",
+          "only finite numbers have a JSON form",
         );
       }
+      // ECMAScript Number-to-String, the serialization RFC 8785 requires.
       return JSON.stringify(value);
     case "object":
       break;

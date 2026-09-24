@@ -5805,6 +5805,10 @@ type Messages = {
       errorsOnly: string;
       expandThinking: string;
       collapseThinking: string;
+      effort: string;
+      thinkingTokens: string;
+      thinkingUnkept: string;
+      countFloor: string;
       transportLabel: string;
       rewind: string;
       back: string;

@@ -21,6 +21,7 @@ import {
   ledgerRunOutcome,
   ledgerRunStatus,
   tachoRunOutcome,
+  tachoRunName,
   tachoRunStatus,
 } from "./run.list";
 import {
@@ -70,6 +71,51 @@ describe("list_runs", () => {
       frames: 207,
       harness: { name: "Claude Code", version: "2.1.0" },
     });
+  });
+
+  it("keeps the harness's own title when enrichment is off", async () => {
+    const stores = memoryStores(
+      [],
+      [
+        tachoSession({
+          publicId: "tse_titled",
+          session: {
+            harnessTitle: "tacho installer daemon reliability",
+            name: "Generated task",
+            title: "oxagen · 6 files",
+          },
+        }),
+      ],
+    );
+    const list = createRunListHandler({
+      ...stores,
+      readEnrichmentEnabled: async () => false,
+    });
+    const run = (await list({ limit: 50 }, ctx())).runs[0];
+    expect(run).toMatchObject({
+      name: "tacho installer daemon reliability",
+      summary: null,
+    });
+  });
+
+  it("names a wrapped session by the harness title, then the written name, then the derived title", async () => {
+    const stores = memoryStores(
+      [],
+      [
+        tachoSession({
+          publicId: "tse_harness",
+          session: {
+            harnessTitle: "tacho installer daemon reliability",
+            name: "Model name",
+            title: "oxagen · 6 files",
+          },
+        }),
+      ],
+    );
+    const list = createRunListHandler(stores);
+    const out = await list({ limit: 50 }, ctx());
+    expect(runList.output.parse(out)).toEqual(out);
+    expect(out.runs[0]?.name).toBe("tacho installer daemon reliability");
   });
 
   it("merges ledger runs and root wrapped sessions newest first, in the caller's workspace only", async () => {
@@ -1388,5 +1434,23 @@ describe("run outcome", () => {
     // The status read guessed `sealed` here, which said the record was
     // complete when the row said nothing of the kind.
     expect(() => tachoRunStatus("abandoned")).toThrow(RangeError);
+  });
+});
+
+describe("tachoRunName", () => {
+  it.each([
+    [
+      { harnessTitle: "Claude title", name: "Model name", title: "dir" },
+      "Claude title",
+    ],
+    [{ harnessTitle: null, name: "Model name", title: "dir" }, "Model name"],
+    [{ name: "Fix login · fix/auth", title: "dir" }, "Fix login · fix/auth"],
+    [
+      { harnessTitle: null, name: null, title: "oxagen · 6 files" },
+      "oxagen · 6 files",
+    ],
+    [{ name: null }, null],
+  ])("names %o as %s", (session, expected) => {
+    expect(tachoRunName(session)).toBe(expected);
   });
 });

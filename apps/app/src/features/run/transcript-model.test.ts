@@ -14,6 +14,7 @@ import {
   decisionSubject,
   entryKey,
   type FeedRow,
+  flatSteps,
   frameCost,
   type Frames,
   isOperatorPrompt,
@@ -2009,5 +2010,199 @@ describe("frameCost", () => {
         edgeFrame({ cost: { micros: "1", currency: "EUR", basis: null } }),
       ]),
     ).toBeNull();
+  });
+});
+
+// ── A wrapped Claude Code session ────────────────────────────────────────────
+//
+// The shape of run bcfb444f: Oxagen's gate decides each call, Claude Code's
+// own permission check writes a `harness_permission` frame for the same call,
+// and the call's receipt lands later, often with other calls' frames between.
+// Each group below shares one `tool_use_id`.
+
+describe("a wrapped Claude Code session", () => {
+  const CHAIN = "0192d4a8-7c1e-7a00-8000-0000000000c2";
+  const gate = (
+    seq: string,
+    key: string,
+    target: string | null,
+    over: Partial<TranscriptEntry> = {},
+  ) =>
+    frame({
+      seq,
+      kind: "policy",
+      type: "policy_decision",
+      label: "allow Bash",
+      callKey: key,
+      target,
+      decision: { seq, decision: "allow", type: "policy_decision", at: T0 },
+      ...over,
+    });
+  const harness = (seq: string, key: string | null, verdict = "allow") =>
+    frame({
+      seq,
+      type: "harness_permission",
+      label: `${verdict} Bash`,
+      callKey: key,
+    });
+  const call = (
+    seq: string,
+    key: string,
+    label: string,
+    response: TranscriptBody | null = body(seq, null),
+    over: Partial<TranscriptEntry> = {},
+  ) =>
+    frame({
+      seq,
+      kind: "tool_call",
+      type: "tool_call",
+      label,
+      callKey: key,
+      response,
+      ...over,
+    });
+  const sub = { chainRef: CHAIN, type: "Explore", spawnKey: "toolu_C" };
+  // Claude Code fires PreToolUse inside a subagent too, so Oxagen gates the
+  // subagent's calls on the subagent's chain.
+  const subGate = (seq: string, key: string, tool: string, target: string) =>
+    gate(seq, key, target, {
+      label: `allow ${tool}`,
+      subagent: sub,
+    });
+
+  const entries = [
+    frame({
+      seq: "1",
+      type: "turn_start",
+      request: body("1", "Fetch main and find the flaky test."),
+    }),
+    gate("2", "toolu_A", "git fetch origin main"),
+    gate("3", "toolu_B", "git status"),
+    harness("4", "toolu_A"),
+    harness("5", "toolu_B"),
+    call("6", "toolu_A", "Bash ok"),
+    call(
+      "7",
+      "toolu_B",
+      "Bash ok",
+      body(
+        "7",
+        JSON.stringify({
+          name: "Bash",
+          input: { command: "git status" },
+          output: { stdout: "nothing to commit" },
+        }),
+      ),
+    ),
+    gate("8", "toolu_C", null),
+    harness("9", "toolu_C"),
+    frame({ seq: "10", type: "subagent_start", callKey: "toolu_C" }),
+    subGate("0", "toolu_X1", "Grep", "flaky"),
+    call("1", "toolu_X1", "Grep ok", body("1", null), { subagent: sub }),
+    subGate("2", "toolu_X2", "Read", "apps/app/src/flaky.test.ts"),
+    call("3", "toolu_X2", "Read ok", body("3", null), { subagent: sub }),
+    call("11", "toolu_C", "Task ok"),
+    harness("12", "toolu_D", "deny"),
+    harness("13", "toolu_E"),
+  ];
+  const steps = stepsIn(entries);
+  const turn = buildTranscript(entries)[0];
+  if (turn === undefined) throw new Error("expected a turn");
+  // The rows the Transcript tab draws. The branch this merged into reads the
+  // run as a feed of rows (`buildFeed`) where main read it as visible steps
+  // under a zoom; each assertion below states the same behaviour of #4026 on
+  // the feed.
+  const rows = buildFeed(entries);
+  const callRows = tools(rows);
+  const stepFor = (key: string) => {
+    const found = turn.steps.find((s) => s.first.callKey === key);
+    if (found === undefined) throw new Error(`expected the ${key} step`);
+    return found;
+  };
+  const rowFor = (key: string) => {
+    const id = stepFor(key).id;
+    const found = callRows.find((row) => row.key === id);
+    if (found === undefined) throw new Error(`expected the ${key} row`);
+    return found;
+  };
+
+  it("draws one step per call, not one row per permission check", () => {
+    const calls = turn.steps.filter((s) => s.kind === "tool");
+    expect(calls.map((s) => stepDigest(s).name)).toEqual([
+      "Bash",
+      "Bash",
+      "Task",
+    ]);
+    expect(calls[0]?.frames.map((f) => f.seq)).toEqual(["2", "4", "6"]);
+    expect(calls[1]?.frames.map((f) => f.seq)).toEqual(["3", "5", "7"]);
+    expect(
+      callRows.filter((row) => row.parent === null).map((row) => row.call.name),
+    ).toEqual(["Bash", "Bash", "Task"]);
+  });
+
+  it("shows the command the gate recorded when the call kept no body", () => {
+    const fetch = stepFor("toolu_A");
+    expect(stepDigest(fetch)).toMatchObject({
+      node: "tool",
+      arg: "git fetch origin main",
+    });
+    const detail = stepTool(fetch);
+    expect(detail?.headline).toBe("git fetch origin main");
+    // Main drew the target as a command pane; the feed draws the call as it
+    // was made in the row's fold (`raw`), and its headline as the argument.
+    expect(detail?.raw).toBe("git fetch origin main");
+    expect(rowFor("toolu_A").call).toMatchObject({
+      name: "Bash",
+      arg: "git fetch origin main",
+      raw: "git fetch origin main",
+    });
+  });
+
+  it("shows the command and its output when the call kept its body", () => {
+    const detail = stepTool(stepFor("toolu_B"));
+    expect(detail?.headline).toBe("git status");
+    expect(detail?.output).toBe("nothing to commit");
+    // The harness's allow says nothing the call does not: the row carries
+    // Oxagen's gate and no chip for the harness's check.
+    expect(
+      rowFor("toolu_B").call.gates.map((gate) => [
+        gate.frame.type,
+        gate.frame.seq,
+      ]),
+    ).toEqual([["policy_decision", "3"]]);
+  });
+
+  it("nests the subagent's calls under the Task call that spawned it", () => {
+    const task = stepFor("toolu_C");
+    expect(task.frames.map((f) => f.type)).toContain("subagent_start");
+    expect(task.children?.map((s) => stepDigest(s).name)).toEqual([
+      "Grep",
+      "Read",
+    ]);
+    expect(steps.some((s) => s.first.subagent !== undefined)).toBe(false);
+    // In the feed the subagent's rows follow the Task row and name it.
+    const nested = callRows.filter((row) => row.parent === task.id);
+    expect(nested.map((row) => [row.call.name, row.call.arg])).toEqual([
+      ["Grep", "flaky"],
+      ["Read", "apps/app/src/flaky.test.ts"],
+    ]);
+    const order = callRows.map((row) => row.call.name);
+    expect(order.indexOf("Grep")).toBe(order.indexOf("Task") + 1);
+    // A reader that counts steps still sees the subagent's, in recorded order.
+    expect(flatSteps(turn).map((s) => s.id)).toContain(task.children?.[0]?.id);
+  });
+
+  it("shows a harness refusal and hides a harness allow with nothing else", () => {
+    const refused = rows.filter((row) => row.key === stepFor("toolu_D").id);
+    expect(refused).toEqual([
+      expect.objectContaining({ kind: "event", name: "Bash", failed: true }),
+    ]);
+    expect(rows.some((row) => row.key === stepFor("toolu_E").id)).toBe(false);
+    const harnessRows = rows.filter((row) =>
+      turn.steps.some(
+        (s) => s.id === row.key && s.first.type === "harness_permission",
+      ),
+    );
+    expect(harnessRows).toHaveLength(1);
   });
 });

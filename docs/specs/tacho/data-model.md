@@ -111,7 +111,7 @@ choose and which needs no secret to stay meaningful. ADR-084 has the reasoning.
 ### 2.4 Kind and source
 | Column | Type | Values |
 |---|---|---|
-| `kind` | LC | tacho kind (`agent_start`, `turn_start`, `tool_requested`, `tool_call`, `llm_call`, `policy_decision`, `approval_request`, `approval_decision`, `token_issued`, `token_use`, `token_denied`, `file_io`, `network`, `command`, `subagent_start`, `subagent_stop`, `agent_stop`, `error`, `telemetry_gap`, `checkpoint`, `oxagen:compaction`, `oxagen:config_change`, `oxagen:instructions_loaded`, `oxagen:hook_health`, `oxagen:mcp_connection`, `oxagen:notification`, `oxagen:message`, `oxagen:model_switch`, `oxagen:task`, `oxagen:worktree`, `oxagen:cwd_change`, `oxagen:file_changed`, `oxagen:elicitation`, `oxagen:rate_limit`, `oxagen:unobserved_session`, `oxagen:hooks_removed`, `oxagen:kill_attempted`, `oxagen:permission_mode_change`, `oxagen:queue`, `oxagen:session_title`, `oxagen:pr_link`) |
+| `kind` | LC | tacho kind (`agent_start`, `turn_start`, `tool_requested`, `tool_call`, `llm_call`, `policy_decision`, `approval_request`, `approval_decision`, `token_issued`, `token_use`, `token_denied`, `harness_permission`, `file_io`, `network`, `command`, `subagent_start`, `subagent_stop`, `agent_stop`, `error`, `telemetry_gap`, `checkpoint`, `oxagen:compaction`, `oxagen:config_change`, `oxagen:instructions_loaded`, `oxagen:hook_health`, `oxagen:mcp_connection`, `oxagen:notification`, `oxagen:message`, `oxagen:model_switch`, `oxagen:task`, `oxagen:worktree`, `oxagen:cwd_change`, `oxagen:file_changed`, `oxagen:elicitation`, `oxagen:rate_limit`, `oxagen:unobserved_session`, `oxagen:hooks_removed`, `oxagen:kill_attempted`, `oxagen:permission_mode_change`, `oxagen:queue`, `oxagen:session_title`, `oxagen:pr_link`) |
 | `source` | LC | `hook` \| `otel_log` \| `otel_metric` \| `otel_span` \| `transcript` \| `result` \| `collector` \| `control_plane` |
 | `hook_event_name` | LC | the Claude Code event, when `source = hook` |
 | `hook_source_kind` | LC | `SessionStart.source` (`startup`/`resume`/`clear`/`compact`/`fork`), `SessionEnd.reason`, `PreCompact.trigger`, `Notification` type |
@@ -158,6 +158,8 @@ choose and which needs no secret to stay meaningful. ADR-084 has the reasoning.
 | `batch_size`, `batch_index` | N(UInt8) | `PostToolBatch.tool_calls[]` |
 | `attribution_skill`, `attribution_mcp_server`, `attribution_mcp_tool` | String | transcript assistant record |
 | `effect_id`, `effect_kind` | String, LC | collector (`file_write`, `file_read`, `file_delete`, `command`, `network`, `git_commit`, `git_push`, `pr_open`) |
+
+OTel `tool_decision` and `tool.blocked_on_user` seal as `harness_permission`, not `policy_decision`. They record Claude Code's own permission check, which runs on every tool call. Oxagen's verdict is the collector's `policy_decision` for the same `tool_use_id`. Rows written before this change carry `policy_decision` with `policy_source` `harness` and source `otel_log`, and the run reader reads them as `harness_permission`.
 
 ### 2.7 Model-call facts (`llm_call`, `error` with `api_error`)
 | Column | Type | From |
