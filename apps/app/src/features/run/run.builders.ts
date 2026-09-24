@@ -20,6 +20,7 @@ import type {
   ResolvedApprovalItem,
 } from "@/data/contracts/approvals";
 import type { MandateList } from "@/data/contracts/mandates";
+import type { RunWork as RunWorkView } from "@/data/contracts/run-work";
 import type { RunRow } from "@/data/contracts/runs";
 import type { DataSource } from "@/data/ports";
 import type { AgentDetail } from "@/data/contracts/agents";
@@ -556,6 +557,12 @@ type RunReads = {
    * drew on none must not reach.
    */
   mandates?: Read<MandateList>;
+  /**
+   * get_run_work, read with the page for the header's checkout and subagent
+   * strips and the Changes panel. A test that says nothing about it gets a
+   * run that recorded no checkout and no subagent.
+   */
+  work?: Read<RunWorkView>;
 };
 
 /** The agent read a test left out: refused, so nothing about the agent is invented. */
@@ -619,15 +626,16 @@ export function runSource(reads: RunReads) {
         ),
       work: (_ctx, runId) =>
         Promise.resolve(
-          readOk({
-            runId,
-            machine: null,
-            checkouts: [],
-            diffs: [],
-            pullRequests: [],
-            complete: false,
-            warnings: ["checkout_context_not_recorded"],
-          }),
+          reads.work ??
+            readOk({
+              runId,
+              machine: null,
+              checkouts: [],
+              diffs: [],
+              pullRequests: [],
+              complete: false,
+              warnings: ["checkout_context_not_recorded"],
+            }),
         ),
       get: answer("get", reads.detail),
       frameBody: answer("frameBody", reads.frameBody),

@@ -31,6 +31,7 @@ import type { AgentPage, AgentStatus } from "@/data/contracts/agents";
 import type { MandateList } from "@/data/contracts/mandates";
 import type { MemberList } from "@/data/contracts/org";
 import { type Read, readOk } from "@/data/read";
+import { mandateList } from "@/test/mandate-views";
 import {
   approvalRuleListOutput,
   connectionListOutput,
@@ -137,7 +138,16 @@ export function mcpServerList(
 }
 
 type ToolsReads = {
-  versions?: Read<ToolVersionPage>;
+  /**
+   * The registry. A function answers per query, for a test whose narrowed
+   * page differs from the unfiltered first page the header counts.
+   */
+  versions?:
+    | Read<ToolVersionPage>
+    | ((q: {
+        category: string | null;
+        cursor: string | null;
+      }) => Read<ToolVersionPage>);
   grants?: Read<CredentialGrantPage>;
   killSwitches?: Read<KillSwitchBoard>;
   /** The Mandates tab's read (#2957); built by `@/test/mandate-views`, which
@@ -158,7 +168,13 @@ type ToolsReads = {
   mcpServers?: Read<McpServerList>;
 };
 
-/** A DataSource answering the Tools reads it was handed; `calls` records each read's arguments. */
+/**
+ * A DataSource answering the Tools reads it was handed; `calls` records each
+ * read's arguments. Every page load reads the registry's first page, the
+ * provider roster and the switch board for the header and the tab strip, and
+ * each tab adds its own, so every read defaults to its fixture and a test hands
+ * over only the one it is about.
+ */
 export function toolsSource(reads: ToolsReads) {
   const calls: Record<keyof ToolsReads, unknown[][]> = {
     versions: [],
@@ -250,10 +266,20 @@ export function toolsSource(reads: ToolsReads) {
       tree: refuse,
     },
     tools: {
-      versions: answer(reads.versions, "versions"),
-      grants: answer(reads.grants, "grants"),
-      killSwitches: answer(reads.killSwitches, "killSwitches"),
-      approvalRules: answer(reads.approvalRules, "approvalRules"),
+      versions: (ctx, q) => {
+        calls.versions.push([ctx, q]);
+        const read = reads.versions ?? readOk(toolVersionPage());
+        return Promise.resolve(typeof read === "function" ? read(q) : read);
+      },
+      grants: answer(reads.grants ?? readOk(credentialGrantPage()), "grants"),
+      killSwitches: answer(
+        reads.killSwitches ?? readOk(killSwitchBoard()),
+        "killSwitches",
+      ),
+      approvalRules: answer(
+        reads.approvalRules ?? readOk(approvalRuleSet()),
+        "approvalRules",
+      ),
       // Both tabs make these reads on every load beside the one under test,
       // so they default rather than making every test supply one.
       connections: answer(
@@ -265,7 +291,10 @@ export function toolsSource(reads: ToolsReads) {
         "mcpServers",
       ),
     },
-    mandates: { list: answer(reads.mandates, "mandates"), get: refuse },
+    mandates: {
+      list: answer(reads.mandates ?? mandateList([]), "mandates"),
+      get: refuse,
+    },
   };
   // The switches tab reads the org roster on every load, for the operator
   // level's picker (#3147): the same as the switch board itself, which every
