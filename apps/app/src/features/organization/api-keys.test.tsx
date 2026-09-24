@@ -11,6 +11,7 @@
 // not. With no workspace the viewer may enter, the section says so and reads
 // nothing.
 import { cleanup, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ApiKey, Workspace, WorkspaceList } from "@/data/contracts/org";
@@ -25,8 +26,11 @@ vi.mock("next/link", () => ({
     <a {...rest}>{children}</a>
   ),
 }));
+const { router } = vi.hoisted(() => ({
+  router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
+}));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => router,
 }));
 vi.mock("./api-key-actions", () => ({
   createApiKey: vi.fn(),
@@ -40,12 +44,7 @@ const { OrgCtx, WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const { readError, readOk } = await import("@/data/read");
 const { ApiKeys, chooseWorkspace } = await import("./api-keys");
-const { API_KEYS_PAGE, pageOfKeys, parseApiKeysView } = await import(
-  "./api-keys-view"
-);
-/** `API_KEYS_PAGE` and the figures around it, as the pager prints them. */
-const PAGE = String(API_KEYS_PAGE);
-const nth = (n: number) => String(API_KEYS_PAGE + n);
+const { parseApiKeysView } = await import("./api-keys-view");
 
 /** The view a request with no query asks for: the unrevoked keys, first page. */
 const ACTIVE = parseApiKeysView({});
@@ -163,41 +162,72 @@ const rowFor = (key: ApiKey) => {
   return row;
 };
 
-describe("API keys tabs", () => {
-  it("link People, Roles and API keys by URL, API keys marked as the current page", async () => {
+describe("the API keys panel", () => {
+  it("carries the caption, the store badge and Create key", async () => {
     await renderApiKeys(readOk([live]));
-    const tabs = screen.getByRole("navigation", { name: "Organization" });
-    const people = within(tabs).getByRole("link", { name: "People" });
-    const keys = within(tabs).getByRole("link", { name: "API keys" });
-    expect(people).toHaveAttribute("href", "/acme");
-    expect(people).not.toHaveAttribute("aria-current");
-    expect(keys).toHaveAttribute("href", "/acme/api-keys");
-    expect(keys).toHaveAttribute("aria-current", "page");
+    const panel = screen.getByRole("region", { name: "API keys" });
+    expect(panel).toHaveTextContent(
+      "each key acts as the person who created it",
+    );
+    expect(
+      within(panel).getByText("postgres iam and vault"),
+    ).toBeInTheDocument();
+    expect(
+      within(panel).getByRole("button", { name: "Create key" }),
+    ).toBeInTheDocument();
   });
 
-  it("carry Roles, the same strip every other Organization page shows", async () => {
-    // A hand-rolled two-entry strip here left Roles unreachable from this page
-    // the moment Roles was added (#3110). The shared component owns the set.
+  it("names the columns in the design's order", async () => {
     await renderApiKeys(readOk([live]));
-    const tabs = screen.getByRole("navigation", { name: "Organization" });
-    expect(within(tabs).getByRole("link", { name: "Roles" })).toHaveAttribute(
-      "href",
-      "/acme/roles",
+    expect(
+      within(keysTable())
+        .getAllByRole("columnheader")
+        .map((header) => header.textContent),
+    ).toEqual([
+      "Name",
+      "Principal",
+      "Grants",
+      "Created by",
+      "Last used",
+      "Actions 30d",
+      "Expires",
+      "",
+    ]);
+  });
+
+  it("says not recorded for the principal, the grants, the creator and the 30-day count rather than a guess", async () => {
+    await renderApiKeys(readOk([live]));
+    expect(rowFor(live).querySelectorAll("[data-not-recorded]")).toHaveLength(
+      4,
     );
+  });
+
+  it("lists the surfaces a key reaches, with four oxagen command lines", async () => {
+    await renderApiKeys(readOk([live]));
+    const surfaces = screen.getByRole("region", {
+      name: "Surfaces this reaches",
+    });
+    expect(surfaces).toHaveTextContent("one agent tool contract");
+    expect(surfaces).toHaveTextContent(
+      "Parity is checked by the manifest gate.",
+    );
+    const lines = within(surfaces)
+      .getByTestId("api-keys-cli")
+      .textContent.split("\n");
+    expect(lines).toHaveLength(4);
+    expect(lines[0]).toBe("$ oxagen login --org acme");
   });
 });
 
 describe("ok", () => {
-  it("lists each key with its name, prefix, creation, last use and expiry", async () => {
+  it("lists each key with its name, masked prefix, last use and expiry", async () => {
     await renderApiKeys(readOk([live, unused]));
     const row = rowFor(live);
     expect(row).toHaveTextContent("CI runner");
-    expect(row).toHaveTextContent("ox_liveliveli");
-    expect(row).toHaveTextContent("Sep 13, 2026");
-    expect(row).toHaveTextContent("Sep 14, 2026");
-    expect(within(row).getByText("Sep 13, 2026")).toHaveAttribute(
+    expect(row).toHaveTextContent("ox_liveliveli…");
+    expect(within(row).getByText("Sep 14, 2026")).toHaveAttribute(
       "datetime",
-      "2026-09-13T10:00:00.000Z",
+      "2026-09-14T11:30:00.000Z",
     );
     expect(rowFor(unused)).toHaveTextContent("Mar 1, 2099");
   });
@@ -213,7 +243,7 @@ describe("ok", () => {
     // Shown under the All filter, the only place a revoked row appears.
     await renderApiKeys(readOk([live, expired, revoked]), "owner", ALL);
     expect(
-      within(rowFor(live)).getByText("live").closest("[data-status]"),
+      within(rowFor(live)).getByText("active").closest("[data-status]"),
     ).toHaveAttribute("data-status", "live");
     // resolveApiKey refuses an expired key, so the roster must not call it live.
     expect(
@@ -228,7 +258,7 @@ describe("ok", () => {
     await renderApiKeys(readOk([live, revoked]), "owner", ALL);
     expect(
       screen.getByText(
-        "A key acts as the person who created it, in this workspace: on the API, MCP and the CLI it can do what that person can do here, and no more.",
+        "A key is shown once, at creation, and never again. Until keys carry grants of their own, a key acts as the person who created it, in its workspace. Revoking a key ends its access at the next call.",
       ),
     ).toBeInTheDocument();
     expect(keysTable()).not.toHaveTextContent(/secret|hash/i);
@@ -257,14 +287,16 @@ describe("ok", () => {
         .map((button) => button.textContent),
     ).toEqual(["Revoke"]);
     expect(
-      within(rowFor(serviceOwned)).getByText("live").closest("[data-status]"),
-    ).toHaveAttribute("data-status", "live");
+      within(rowFor(serviceOwned))
+        .getByText("never used")
+        .closest("[data-status]"),
+    ).toHaveAttribute("data-status", "never-used");
   });
 
   it("offers the create control above the table, closed until it is opened", async () => {
     await renderApiKeys(readOk([live]));
     expect(
-      screen.getByRole("button", { name: "Create a key" }),
+      screen.getByRole("button", { name: "Create key" }),
     ).toBeInTheDocument();
     expect(screen.queryByTestId("create-api-key")).toBeNull();
   });
@@ -294,38 +326,41 @@ function manyRevoked(n: number): ApiKey[] {
 }
 
 const filterNav = () => screen.getByRole("navigation", { name: "Which keys" });
-const pagerNav = () =>
-  screen.getByRole("navigation", { name: "Pages of API keys" });
+const pagerNav = () => screen.getByRole("navigation", { name: /pages/i });
 const rowIds = () =>
   Array.from(keysTable().querySelectorAll("[data-api-key]")).map((row) =>
     row.getAttribute("data-api-key"),
   );
 
-describe("the revoked keys the page hides", () => {
-  it("opens on the unrevoked keys, with no revoked row on the table", async () => {
-    // A revoked key authenticates nothing — resolveApiKey never sees the row
-    // again — so it is a record of a key, not a key, and it does not push the
-    // unrevoked ones below it. An expired key is not revoked and stays.
+describe("the ended keys the page hides", () => {
+  it("opens on the active keys, with no revoked or expired row on the table", async () => {
+    // A revoked or expired key authenticates nothing, so it is a record of a
+    // key, not a key, and it does not push the active ones below it.
     await renderApiKeys(readOk([live, expired, revoked]));
-    expect(rowIds()).toEqual([live.id, expired.id]);
+    expect(rowIds()).toEqual([live.id]);
     expect(keysTable()).not.toHaveTextContent("Laptop");
   });
 
-  it("keeps an expired key on the default roster, because its state is a clock away and not a record", async () => {
-    // Expiry is crossed by the row's own running clock (`key-row.tsx`). A
-    // filter on it would move a row out from under a reader as a second ticked
-    // over; revocation is recorded and cannot un-happen.
+  it("files a key that expired before the read under All, judged at the read instant", async () => {
+    // Expiry is judged at the instant the roster was read, the clock the
+    // server render shares with every later render, so no row leaves the
+    // table while it is open.
     await renderApiKeys(readOk([expired]));
-    expect(rowIds()).toEqual([expired.id]);
+    expect(
+      document.querySelector("[data-state=empty-filtered]"),
+    ).toHaveTextContent(
+      "Every key in this workspace has been revoked or has expired. Choose All to see it.",
+    );
+    expect(parseApiKeysView({}).show).toBe("active");
   });
 
   it("marks Active as the current filter and offers All, counting what it holds back", async () => {
     const view = await renderApiKeys(readOk([live, revoked]));
     const active = within(filterNav()).getByRole("link", {
-      name: "Not revoked",
+      name: "Active",
     });
     const all = within(filterNav()).getByRole("link", {
-      name: "All (1 revoked)",
+      name: "All (1 ended)",
     });
     expect(active).toHaveAttribute("aria-current", "page");
     expect(active).toHaveAttribute(
@@ -351,27 +386,33 @@ describe("the revoked keys the page hides", () => {
     await renderApiKeys(readOk([live, revoked]), "owner", ALL);
     expect(rowIds()).toEqual([live.id, revoked.id]);
     expect(
-      within(filterNav()).getByRole("link", { name: "All (1 revoked)" }),
+      within(filterNav()).getByRole("link", { name: "All (1 ended)" }),
     ).toHaveAttribute("aria-current", "page");
     expect(
       within(rowFor(revoked)).getByText("revoked").closest("[data-status]"),
     ).toHaveAttribute("data-status", "revoked");
   });
 
-  it("names the filter for the predicate it has, not for a state it cannot see (negative)", async () => {
-    // `filterKeys` keeps a row on `revokedAt` alone, so an expired key stays.
-    // A filter called "Active" over a row whose own status chip reads
-    // "expired" is the page contradicting itself in two places at once.
+  it("names the filter Active and lists no row whose badge says otherwise (negative)", async () => {
+    // A filter called Active over a row whose own status reads expired would
+    // be the page contradicting itself, so Active keeps only live keys.
     await renderApiKeys(readOk([live, expired, revoked]));
     expect(
-      within(filterNav()).queryByRole("link", { name: "Active" }),
-    ).toBeNull();
-    expect(
-      within(filterNav()).getByRole("link", { name: "Not revoked" }),
+      within(filterNav()).getByRole("link", { name: "Active" }),
     ).toHaveAttribute("aria-current", "page");
     expect(
-      within(rowFor(expired)).getByText("expired").closest("[data-status]"),
-    ).toHaveAttribute("data-status", "expired");
+      within(filterNav()).queryByRole("link", { name: "Not revoked" }),
+    ).toBeNull();
+    expect(keysTable().querySelector('[data-status="expired"]')).toBeNull();
+    expect(keysTable().querySelector('[data-status="revoked"]')).toBeNull();
+  });
+
+  it("gives the filter links a 44px target on a phone", async () => {
+    await renderApiKeys(readOk([live, revoked]));
+    for (const link of within(filterNav()).getAllByRole("link")) {
+      expect(link).toHaveAttribute("data-touch-target");
+      expect(link.className).toContain("max-md:min-h-11");
+    }
   });
 
   it("falls back to the active keys for a filter it does not understand (negative)", () => {
@@ -391,7 +432,7 @@ describe("empty", () => {
     ).toBeInTheDocument();
     expect(screen.queryByRole("table")).toBeNull();
     expect(
-      screen.getByRole("button", { name: "Create a key" }),
+      screen.getByRole("button", { name: "Create key" }),
     ).toBeInTheDocument();
   });
 
@@ -421,129 +462,45 @@ describe("empty", () => {
   });
 });
 
-describe("paging a roster larger than a page", () => {
-  it("shows no pager while one page holds the whole roster (negative)", async () => {
-    await renderApiKeys(readOk(manyKeys(API_KEYS_PAGE)));
-    expect(rowIds()).toHaveLength(API_KEYS_PAGE);
-    expect(
-      screen.queryByRole("navigation", { name: "Pages of API keys" }),
-    ).toBeNull();
+describe("the list controls every list carries", () => {
+  it("searches the roster by what the rows print", async () => {
+    const user = userEvent.setup();
+    await renderApiKeys(readOk([live, unused]));
+    await user.type(screen.getByRole("searchbox"), "release");
+    expect(rowFor(unused)).toBeVisible();
+    expect(rowFor(live)).not.toBeVisible();
   });
 
-  // 20 seconds, not the 5-second default. This is the only test in the file
-  // that runs axe over a FULL page — twenty rows, each with its own Rotate and
-  // Revoke, plus the pager — and axe's cost grows with the node count, so it
-  // routinely ran past 5s on a loaded CI runner and failed as a timeout on
-  // pull requests that had not touched this feature at all. The accessibility
-  // assertion is the one worth keeping here (a full page with a pager is
-  // exactly where a11y breaks), so the budget moves rather than the check.
-  it("cuts the roster at API_KEYS_PAGE rows and offers the next page", async () => {
-    const keys = manyKeys(API_KEYS_PAGE + 5);
-    const view = await renderApiKeys(readOk(keys));
-    expect(rowIds()).toEqual(keys.slice(0, API_KEYS_PAGE).map((k) => k.id));
-    expect(pagerNav()).toHaveTextContent(`1–${PAGE} of ${nth(5)}`);
-    const next = within(pagerNav()).getByRole("link", { name: "Next" });
-    expect(next).toHaveAttribute(
-      "href",
-      `/acme/api-keys?workspace=core-platform&offset=${PAGE}`,
-    );
-    expect(
-      within(pagerNav()).queryByRole("link", { name: "Previous" }),
-    ).toBeNull();
-    await expectNoAxe(view.container);
-  }, 20_000);
-
-  it("shows the last page's rows and the way back, with no Next beyond the end", async () => {
-    const keys = manyKeys(API_KEYS_PAGE + 5);
-    await renderApiKeys(readOk(keys), "owner", {
-      ...ACTIVE,
-      offset: API_KEYS_PAGE,
+  it("sorts on a header click and says so with aria-sort", async () => {
+    const user = userEvent.setup();
+    await renderApiKeys(readOk([live, unused]));
+    const header = within(keysTable()).getByRole("columnheader", {
+      name: /Name/,
     });
-    expect(rowIds()).toEqual(keys.slice(API_KEYS_PAGE).map((k) => k.id));
-    expect(pagerNav()).toHaveTextContent(`${nth(1)}–${nth(5)} of ${nth(5)}`);
-    expect(
-      within(pagerNav()).getByRole("link", { name: "Previous" }),
-    ).toHaveAttribute("href", "/acme/api-keys?workspace=core-platform");
-    expect(within(pagerNav()).queryByRole("link", { name: "Next" })).toBeNull();
+    await user.click(within(header).getByRole("button"));
+    expect(header).toHaveAttribute("aria-sort", "ascending");
+    expect(rowIds()).toEqual([live.id, unused.id]);
+    await user.click(within(header).getByRole("button"));
+    expect(header).toHaveAttribute("aria-sort", "descending");
+    expect(rowIds()).toEqual([unused.id, live.id]);
   });
 
-  it("carries the filter through the pager, so a page of All stays All", async () => {
-    const keys = [...manyKeys(API_KEYS_PAGE), ...manyRevoked(5)];
-    await renderApiKeys(readOk(keys), "owner", ALL);
-    expect(
-      within(pagerNav()).getByRole("link", { name: "Next" }),
-    ).toHaveAttribute(
-      "href",
-      `/acme/api-keys?workspace=core-platform&show=all&offset=${PAGE}`,
-    );
+  it("shows ten rows by default under a numbered pager, and every row on All", async () => {
+    const user = userEvent.setup();
+    await renderApiKeys(readOk(manyKeys(15)));
+    const shown = () =>
+      Array.from(keysTable().querySelectorAll<HTMLElement>("[data-api-key]"))
+        .filter((row) => row.style.display !== "none")
+        .map((row) => row.getAttribute("data-api-key"));
+    expect(shown()).toHaveLength(10);
+    expect(pagerNav()).toHaveTextContent("1–10 of 15");
+    await user.selectOptions(screen.getByLabelText("Rows"), "0");
+    expect(shown()).toHaveLength(15);
   });
 
-  it("pages the filtered roster, not the read: hidden keys take up no page", async () => {
-    // 5 live keys buried under 20 revoked ones is one page of Active, not two.
-    const keys = [...manyRevoked(API_KEYS_PAGE), ...manyKeys(5)];
-    await renderApiKeys(readOk(keys));
-    expect(rowIds()).toHaveLength(5);
-    expect(
-      screen.queryByRole("navigation", { name: "Pages of API keys" }),
-    ).toBeNull();
-  });
-
-  it("clamps an offset past the end onto the last page that exists (negative)", async () => {
-    // Revoking the last key on the last page, or narrowing the filter from a
-    // deep page, otherwise answers with an empty table and no way back except
-    // editing the URL.
-    const keys = manyKeys(API_KEYS_PAGE + 5);
-    await renderApiKeys(readOk(keys), "owner", {
-      ...ACTIVE,
-      offset: API_KEYS_PAGE * 9,
-    });
-    expect(rowIds()).toEqual(keys.slice(API_KEYS_PAGE).map((k) => k.id));
-    expect(pagerNav()).toHaveTextContent(`${nth(1)}–${nth(5)} of ${nth(5)}`);
-  });
-
-  it("starts a page on a page boundary, so no two pages repeat a row (negative)", async () => {
-    // The query string is shareable and hand-editable. `?offset=1` would show
-    // rows 2 to 21 while Previous, at offset 0, shows rows 1 to 20 -- the two
-    // pages repeating 19 rows, with no sequence of clicks ever reaching a
-    // boundary again.
-    const keys = manyKeys(API_KEYS_PAGE + 5);
-    await renderApiKeys(readOk(keys), "owner", { ...ACTIVE, offset: 1 });
-    expect(rowIds()).toEqual(keys.slice(0, API_KEYS_PAGE).map((k) => k.id));
-    expect(pagerNav()).toHaveTextContent(`1\u2013${PAGE} of ${nth(5)}`);
-    expect(
-      within(pagerNav()).queryByRole("link", { name: "Previous" }),
-    ).toBeNull();
-  });
-
-  it("aligns an unaligned offset down, never up, so no row is skipped", () => {
-    const keys = manyKeys(API_KEYS_PAGE * 3);
-    expect(pageOfKeys(keys, 1).offset).toBe(0);
-    expect(pageOfKeys(keys, API_KEYS_PAGE - 1).offset).toBe(0);
-    expect(pageOfKeys(keys, API_KEYS_PAGE).offset).toBe(API_KEYS_PAGE);
-    expect(pageOfKeys(keys, API_KEYS_PAGE + 1).offset).toBe(API_KEYS_PAGE);
-  });
-
-  it("falls back to the first page for an offset it does not understand (negative)", () => {
-    expect(parseApiKeysView({ offset: "20" }).offset).toBe(20);
-    expect(parseApiKeysView({ offset: "-1" }).offset).toBe(0);
-    expect(parseApiKeysView({ offset: "020" }).offset).toBe(0);
-    expect(parseApiKeysView({ offset: "1e3" }).offset).toBe(0);
-    expect(parseApiKeysView({}).offset).toBe(0);
-  });
-
-  it("reads an offset far past any real roster rather than resetting it to the first page (negative)", () => {
-    // The bound is what a double holds exactly, not a guess at how many keys a
-    // workspace may have. A ceiling of the latter kind fails the wrong way: an
-    // offset above it falls back to 0, so Next on the last page of a roster
-    // past the ceiling would jump to the first page instead. `pageOfKeys`
-    // clamps a too-large offset onto the last page that exists, which is where
-    // an offset beyond the roster is supposed to land.
-    expect(parseApiKeysView({ offset: "9999999999" }).offset).toBe(9999999999);
-    expect(pageOfKeys(manyKeys(3), 9999999999).offset).toBe(0);
-    // Past what a double holds exactly, the parse would round — and a rounded
-    // offset is a silently different page — so it falls back instead.
-    expect(parseApiKeysView({ offset: "9007199254740993" }).offset).toBe(0);
-    expect(parseApiKeysView({ offset: "99999999999999999999" }).offset).toBe(0);
+  it("pages the filtered roster, not the read: hidden keys take up no row", async () => {
+    await renderApiKeys(readOk([...manyRevoked(12), live]));
+    expect(rowIds()).toEqual([live.id]);
   });
 });
 
@@ -567,31 +524,29 @@ describe("the workspace a key names", () => {
     expect(WsCtx.is(calls.apiKeys[0]?.[0])).toBe(true);
   });
 
-  it("links every workspace the viewer may enter and marks the one in scope", async () => {
+  it("draws every workspace the viewer may enter as a tab and selects the one in scope", async () => {
     await renderApiKeys(readOk([live]));
-    const picker = screen.getByRole("navigation", { name: "Workspace" });
-    const here = within(picker).getByRole("link", { name: "Core platform" });
-    const other = within(picker).getByRole("link", { name: "Growth" });
+    const picker = screen.getByRole("tablist", { name: "Workspace" });
+    const here = within(picker).getByRole("tab", { name: "Core platform" });
+    const other = within(picker).getByRole("tab", { name: "Growth" });
     expect(here).toHaveAttribute(
       "href",
       "/acme/api-keys?workspace=core-platform",
     );
+    expect(here).toHaveAttribute("aria-selected", "true");
     expect(here).toHaveAttribute("aria-current", "page");
     expect(other).toHaveAttribute("href", "/acme/api-keys?workspace=growth");
-    expect(other).not.toHaveAttribute("aria-current");
+    expect(other).toHaveAttribute("aria-selected", "false");
   });
 
-  it("carries the filter to the next workspace and drops the page", async () => {
-    // A person who asked to see revoked keys asked about keys. The page is the
-    // other way round: page four of this roster says nothing about the next.
-    await renderApiKeys(readOk([live]), "owner", {
-      ...ALL,
-      offset: API_KEYS_PAGE,
-    });
-    const picker = screen.getByRole("navigation", { name: "Workspace" });
-    expect(
-      within(picker).getByRole("link", { name: "Growth" }),
-    ).toHaveAttribute("href", "/acme/api-keys?workspace=growth&show=all");
+  it("carries the filter to the next workspace", async () => {
+    // A person who asked to see revoked keys asked about keys.
+    await renderApiKeys(readOk([live]), "owner", ALL);
+    const picker = screen.getByRole("tablist", { name: "Workspace" });
+    expect(within(picker).getByRole("tab", { name: "Growth" })).toHaveAttribute(
+      "href",
+      "/acme/api-keys?workspace=growth&show=all",
+    );
   });
 
   it("keeps an archived workspace in the picker, named as archived, so its live keys stay revocable", async () => {
@@ -612,9 +567,9 @@ describe("the workspace a key names", () => {
         }
       </IntlProvider>,
     );
-    const picker = screen.getByRole("navigation", { name: "Workspace" });
+    const picker = screen.getByRole("tablist", { name: "Workspace" });
     expect(
-      within(picker).getByRole("link", { name: "Sunset (archived)" }),
+      within(picker).getByRole("tab", { name: "Sunset (archived)" }),
     ).toHaveAttribute("href", "/acme/api-keys?workspace=sunset");
     await expectNoAxe(view.container);
   });
@@ -638,10 +593,10 @@ describe("the workspace a key names", () => {
         }
       </IntlProvider>,
     );
-    const picker = screen.getByRole("navigation", { name: "Workspace" });
-    expect(within(picker).queryByRole("link", { name: "Finance" })).toBeNull();
+    const picker = screen.getByRole("tablist", { name: "Workspace" });
+    expect(within(picker).queryByRole("tab", { name: "Finance" })).toBeNull();
     expect(
-      within(picker).getByRole("link", { name: "Core platform" }),
+      within(picker).getByRole("tab", { name: "Core platform" }),
     ).toBeInTheDocument();
     expect(chooseWorkspace(readOk(list(foreign)), "finance")).toBeNull();
   });
@@ -669,13 +624,18 @@ describe("the workspace a key names", () => {
       </IntlProvider>,
     );
     expect(screen.getByTestId("api-keys-archived-workspace")).toHaveTextContent(
-      "Its keys still authenticate, so they are listed here until they are revoked — but no new key is issued into it.",
+      "This workspace is archived. Its keys stop working while it is archived and are listed so they can be revoked. No new key is issued into it.",
     );
+    // The resolver refuses a key into an archived workspace
+    // (`workspace_archived`), so the note never says the keys still work.
+    expect(
+      screen.getByTestId("api-keys-archived-workspace"),
+    ).not.toHaveTextContent("still authenticate");
   });
 
   it("offers no Create in an archived workspace, and says the page will not issue one (negative)", async () => {
     // The page lists an archived workspace's keys for one reason and says so:
-    // they still authenticate and have to be revocable. Minting another there
+    // they stop working while it is archived and have to be revocable. Minting another there
     // is the opposite of winding down, and `create_api_key` refuses it
     // (conflict / workspace_archived) — this is the courtesy above it.
     const ctx = unsafeMint(WsCtx, {
@@ -699,9 +659,9 @@ describe("the workspace a key names", () => {
         }
       </IntlProvider>,
     );
-    expect(screen.queryByRole("button", { name: "Create a key" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Create key" })).toBeNull();
     expect(screen.getByTestId("api-keys-archived-workspace")).toHaveTextContent(
-      "no new key is issued into it",
+      "No new key is issued into it.",
     );
     // The keys themselves are still listed, with Revoke and no Rotate: a
     // rotation mints fresh material for a workspace meant to be inert, while
@@ -718,7 +678,7 @@ describe("the workspace a key names", () => {
   it("offers Create in a workspace still in use", async () => {
     await renderApiKeys(readOk([live]));
     expect(
-      screen.getByRole("button", { name: "Create a key" }),
+      screen.getByRole("button", { name: "Create key" }),
     ).toBeInTheDocument();
   });
 
@@ -805,12 +765,11 @@ describe("a read that did not list", () => {
     expect(panel).toHaveTextContent(
       "You cannot see this organization’s API keys",
     );
-    expect(panel).toHaveTextContent("Signed in as Member. Needed: org.admin.");
+    expect(panel).toHaveTextContent(
+      "Signed in as org.member. Needed: org.admin.",
+    );
     expect(screen.queryByRole("table")).toBeNull();
     expect(screen.queryAllByRole("button")).toEqual([]);
-    expect(
-      screen.getByRole("navigation", { name: "Organization" }),
-    ).toBeInTheDocument();
   });
 
   it("pending approval: names the access request it waits on, and no keys (negative)", async () => {

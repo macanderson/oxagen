@@ -45,7 +45,7 @@ import { Money } from "@/ui/money";
 import { formatCount, formatRatio } from "@/ui/money-format";
 import { SafeLink, useNavigate } from "@/ui/navigation";
 import { OperatorName } from "@/ui/operator";
-import { pageList } from "@/ui/list-table";
+import { pageList } from "@/ui/page-list";
 import { cell, headCell, numericCell } from "@/ui/table";
 import { RetireAgent } from "./agent-actions";
 import { AgentStatusBadge, NotRecordedValue } from "./parts";

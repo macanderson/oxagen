@@ -212,6 +212,7 @@ export function SsoProviderDialog({
             ? t("editTitle", { name: provider.displayName })
             : t("addTitle")
         }
+        headerClose
         closeLabel={t("cancel")}
         wide
         testId={idBase}

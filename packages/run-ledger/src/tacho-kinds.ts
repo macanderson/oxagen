@@ -72,6 +72,8 @@ export function tachoStage(kind: string): string {
     case "token_issued":
     case "token_use":
     case "token_denied":
+    // An operator's pause, resume, cancel or steer as the host applied it.
+    case "oxagen:command_applied":
       return "policy";
     case "file_io":
     case "network":
@@ -111,6 +113,12 @@ export function tachoFrameSummary(row: TachoFrameRowLike): string {
       return row.toolName === ""
         ? `policy ${row.policyDecision}`
         : `${row.policyDecision} ${row.toolName}`;
+    }
+    // The command leads, because it is what the operator decided; the
+    // recorded allow or deny is how the host carried it out.
+    case "oxagen:command_applied": {
+      const command = row.attrs?.["command.name"] ?? "";
+      return command === "" ? row.kind : `operator ${command}`;
     }
     default:
       return row.kind;

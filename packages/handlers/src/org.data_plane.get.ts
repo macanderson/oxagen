@@ -10,6 +10,7 @@ import {
 import { and, eq, isNull } from "drizzle-orm";
 import { schema, withSystemDb, type DataPlaneRow } from "@oxagen/database";
 import type { DataPlaneKind } from "@oxagen/tenancy";
+import { assertCallerRole } from "./lib/capability-role-guard";
 import { logger } from "./logger";
 
 /**
@@ -101,8 +102,12 @@ export function toBindingDto(args: {
  * always lives on the SHARED plane (ADR-042 §2), and reading it through
  * withTenantDb would ask the resolver to resolve the very table that decides
  * what the resolver returns. The org filter below is therefore the isolation
- * boundary for this read, and it is an explicit equality on `ctx.orgId` — the
- * kernel's IAM gate has already established the caller is an Owner/Admin of it.
+ * boundary for this read, and it is an explicit equality on `ctx.orgId`.
+ *
+ * The Owner/Admin check runs here, from the contract's own `defaultRoles`,
+ * the way `set_data_plane` runs it. The kernel's IAM gate allows every
+ * capability for a non-enterprise organization, so without this any member
+ * could read where the organization's data lives (oxagen#2819, INV-29).
  *
  * The read intentionally does NOT decrypt the envelope in the common case: the
  * only fields it needs from the config are host and database name, and the
@@ -113,6 +118,7 @@ export function toBindingDto(args: {
 export const orgDataPlaneGetHandler: CapabilityHandler<
   typeof orgDataPlaneGet
 > = async (input, ctx) => {
+  await assertCallerRole(orgDataPlaneGet, ctx);
   const kind = input.kind;
   const row = await withSystemDb((tx) =>
     tx.query.dataPlanes.findFirst({

@@ -1631,6 +1631,16 @@
                     "type": {
                       "type": "string"
                     },
+                    "source": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "at": {
                       "type": "string"
                     }
