@@ -176,7 +176,6 @@ const CommandBlock = z.enum([
   "host_revoked",
   "host_offline",
 ]);
-type CommandBlock = z.infer<typeof CommandBlock>;
 
 /** Token totals by kind, as the recorder counted them. */
 const RunTokens = z.object({
@@ -185,7 +184,6 @@ const RunTokens = z.object({
   cacheRead: z.number().int().nonnegative(),
   cacheWrite: z.number().int().nonnegative(),
 });
-type RunTokens = z.infer<typeof RunTokens>;
 
 export const RunRow = z.object({
   id: PublicId,

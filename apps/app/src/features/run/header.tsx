@@ -368,13 +368,15 @@ function SubagentChip({
 }) {
   const t = useTranslations("run.header");
   return (
-    <span className={chip} title={subagent.id}>
+    <span className={chip} title={subagent.agentRef}>
       {subagent.type ?? (
         <span className="text-muted-foreground">
           {t("subagentTypeNotRecorded")}
         </span>
       )}
-      <span className="text-muted-foreground">{subagent.id.slice(0, 7)}</span>
+      <span className="text-muted-foreground">
+        {subagent.agentRef.slice(0, 7)}
+      </span>
       {subagent.stopped ? null : (
         <span className="text-muted-foreground">
           {live ? t("subagentRunning") : t("subagentNoStop")}
@@ -398,7 +400,7 @@ function Subagents({ run, work }: { run: RunRow; work: Read<RunWork> }) {
         <>
           {subagents.slice(0, SUBAGENT_CHIPS).map((subagent) => (
             <SubagentChip
-              key={subagent.id}
+              key={subagent.agentRef}
               subagent={subagent}
               live={run.status === "live"}
             />
