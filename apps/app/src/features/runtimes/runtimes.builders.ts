@@ -88,30 +88,95 @@ export function runtimesSource(reads: {
   source: DataSource;
   calls: { agents: (readonly string[])[]; members: number };
 } {
-  const calls = { agents: [] as (readonly string[])[], members: 0 };
-  const runtimes: DataSource["runtimes"] = {
-    list: () => Promise.resolve(reads.list),
-    agents: (_ctx, keys) => {
-      calls.agents.push(keys);
-      return Promise.resolve(
-        reads.agents ?? readOk({ agents: [runtimeAgent()] }),
-      );
+  const calls: { agents: (readonly string[])[]; members: number } = {
+    agents: [],
+    members: 0,
+  };
+  // Only the runtimes port and the roster are read by these pages; any other
+  // read rejects, which fails the test that made it.
+  const refuse = () => Promise.reject(new Error("not a Runtimes read"));
+  const source: DataSource = {
+    runtimes: {
+      list: () => Promise.resolve(reads.list),
+      agents: (_ctx, keys) => {
+        calls.agents.push(keys);
+        return Promise.resolve(
+          reads.agents ?? readOk({ agents: [runtimeAgent()] }),
+        );
+      },
+    },
+    pretenant: { orgs: refuse, workspaces: refuse },
+    shell: { context: refuse, preferences: refuse },
+    billing: {
+      plan: refuse,
+      usageCredits: refuse,
+      retention: refuse,
+      bucket: refuse,
+      contractRate: refuse,
+      invoices: refuse,
+    },
+    runs: {
+      list: refuse,
+      get: refuse,
+      frameBody: refuse,
+      cost: refuse,
+      transcript: refuse,
+      chain: refuse,
+      outputs: refuse,
+      work: refuse,
+      outcomesSettings: refuse,
+    },
+    approvals: { pending: refuse, resolved: refuse },
+    agents: {
+      list: refuse,
+      get: refuse,
+      toolbelt: refuse,
+      incidents: refuse,
+    },
+    mandates: { list: refuse, get: refuse },
+    spend: {
+      byGroup: refuse,
+      fleet: refuse,
+      drill: refuse,
+      waste: refuse,
+      gatewayPolicy: refuse,
+      budgets: refuse,
+      findings: refuse,
+      findingEvidence: refuse,
+      priceBook: refuse,
+      unpricedModels: refuse,
+    },
+    onboarding: { state: refuse, firstFrame: refuse },
+    org: {
+      members: () => {
+        calls.members += 1;
+        return Promise.resolve(reads.members ?? memberList());
+      },
+      roles: refuse,
+      workspaces: refuse,
+      apiKeys: refuse,
+      costCenters: refuse,
+      modelCredential: refuse,
+      sso: refuse,
+    },
+    audit: { events: refuse, exportEvents: refuse },
+    skills: { inventory: refuse, configuration: refuse },
+    steering: {
+      records: refuse,
+      record: refuse,
+      proposals: refuse,
+      contextPr: refuse,
+      freshness: refuse,
+      deliveries: refuse,
+    },
+    tools: {
+      versions: refuse,
+      grants: refuse,
+      killSwitches: refuse,
+      approvalRules: refuse,
+      connections: refuse,
+      mcpServers: refuse,
     },
   };
-  const org = {
-    members: () => {
-      calls.members += 1;
-      return Promise.resolve(reads.members ?? memberList());
-    },
-  } as unknown as DataSource["org"];
-  // Only the runtimes port and the roster are read by these pages; any other
-  // access is a test bug.
-  const source = new Proxy({ runtimes, org } as DataSource, {
-    get(target, key) {
-      if (key === "runtimes") return target.runtimes;
-      if (key === "org") return target.org;
-      throw new Error(`unexpected port ${String(key)}`);
-    },
-  });
   return { source, calls };
 }

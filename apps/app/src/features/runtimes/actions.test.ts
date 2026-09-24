@@ -4,14 +4,12 @@
 // for. A refusal comes back unchanged, so the dialog can name it.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const kernelWrite = vi.fn();
-const requireViewer = vi.fn();
-vi.mock("@/server/kernel", () => ({
-  kernelWrite: (...args: unknown[]) => kernelWrite(...args),
+const { kernelWrite, requireViewer } = vi.hoisted(() => ({
+  kernelWrite: vi.fn(),
+  requireViewer: vi.fn(),
 }));
-vi.mock("@/server/viewer", () => ({
-  requireViewer: (...args: unknown[]) => requireViewer(...args),
-}));
+vi.mock("@/server/kernel", () => ({ kernelWrite }));
+vi.mock("@/server/viewer", () => ({ requireViewer }));
 
 const { tachoEnrollmentRevoke } = await import(
   "@oxagen/oxagen/contracts/tacho.enrollment.revoke"

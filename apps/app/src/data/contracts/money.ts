@@ -198,6 +198,18 @@ export function sumExceeds(a: string, b: string, whole: string): boolean {
 }
 
 /**
+ * The order of two integer micros strings, for a sort comparator: negative
+ * when `a` is less, positive when it is more, 0 when equal. The comparison is
+ * BigInt on the digits, so two figures past what a double holds exactly still
+ * order correctly.
+ */
+export function compareMicros(a: string, b: string): number {
+  const x = toBigInt(a);
+  const y = toBigInt(b);
+  return x === y ? 0 : x < y ? -1 : 1;
+}
+
+/**
  * A decimal amount a person typed ("500", "0.25", "12.000001") as integer
  * micros, or null for anything else: a sign, a grouping separator, more than
  * six fractional digits, or more than twelve whole digits. The conversion is

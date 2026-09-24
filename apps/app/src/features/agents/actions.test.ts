@@ -1104,28 +1104,33 @@ describe("requestMandate", () => {
   });
 });
 
+/** The fields of a `list_iam_roles` row a test may set. */
+type RoleRowOverrides = {
+  kind: "human" | "agent";
+  scopeKind: "org" | "workspace";
+  isSystemDefault: boolean;
+  description: string | null;
+};
+
 /** One row of `list_iam_roles`, with the fields the offer reads. */
-const roleRow = (
-  name: string,
-  over: Partial<{
-    kind: "human" | "agent";
-    scopeKind: "org" | "workspace";
-    isSystemDefault: boolean;
-    description: string | null;
-  }> = {},
-) => ({
-  id: `rol_${name.toLowerCase().replaceAll(" ", "_")}`,
-  name,
-  description: null as string | null,
-  scopeKind: "org" as const,
-  kind: "agent" as const,
-  isSystemDefault: false,
-  version: "1",
-  memberCount: 0,
-  createdBy: null,
-  permissions: [],
-  ...over,
-});
+const roleRow = (name: string, over: Partial<RoleRowOverrides> = {}) => {
+  const defaults: RoleRowOverrides = {
+    description: null,
+    scopeKind: "org",
+    kind: "agent",
+    isSystemDefault: false,
+  };
+  return {
+    id: `rol_${name.toLowerCase().replaceAll(" ", "_")}`,
+    name,
+    ...defaults,
+    version: "1",
+    memberCount: 0,
+    createdBy: null,
+    permissions: [],
+    ...over,
+  };
+};
 
 const catalogue = (
   roles: ReturnType<typeof roleRow>[],

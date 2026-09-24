@@ -70,7 +70,7 @@ import {
   parkedRunIds,
   RUN_CHIPS,
   ROWS_PER_PAGE,
-  type RowsPerPage,
+  rowsPerPageOf,
   type RowWords,
   type RunChip,
   type SortKey,
@@ -468,11 +468,9 @@ function ListBar({
           data-testid="rows-per-page"
           value={String(query.perPage)}
           onChange={(event) => {
-            setQuery({
-              ...query,
-              perPage: Number(event.target.value) as RowsPerPage,
-              page: 1,
-            });
+            const perPage = rowsPerPageOf(event.target.value);
+            if (perPage === null) return;
+            setQuery({ ...query, perPage, page: 1 });
           }}
           className={selectBase}
         >

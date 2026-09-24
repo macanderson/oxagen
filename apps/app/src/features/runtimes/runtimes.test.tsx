@@ -39,10 +39,8 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh }),
   notFound: () => notFound(),
 }));
-const unenrollRuntime = vi.fn();
-vi.mock("./actions", () => ({
-  unenrollRuntime: (...args: unknown[]) => unenrollRuntime(...args),
-}));
+const { unenrollRuntime } = vi.hoisted(() => ({ unenrollRuntime: vi.fn() }));
+vi.mock("./actions", () => ({ unenrollRuntime }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 

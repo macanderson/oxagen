@@ -4,6 +4,7 @@
 // shifting.
 import { describe, expect, it } from "vitest";
 import {
+  compareMicros,
   Cost,
   isCurrencyCode,
   Money,
@@ -308,5 +309,25 @@ describe("roundToCentsHalfEven", () => {
 
   it("refuses micros that are not an integer string (negative)", () => {
     expect(() => roundToCentsHalfEven(usd("1.5"))).toThrow(/micros/);
+  });
+});
+
+describe("compareMicros", () => {
+  it.each([
+    ["1", "2", -1],
+    ["2", "1", 1],
+    ["7", "7", 0],
+    ["0", "0", 0],
+  ])("orders %s against %s as %i", (a, b, expected) => {
+    expect(Math.sign(compareMicros(a, b))).toBe(expected);
+  });
+
+  it("orders figures past what a double holds exactly", () => {
+    expect(compareMicros("9007199254740993", "9007199254740992")).toBe(1);
+    expect(compareMicros("9007199254740992", "9007199254740993")).toBe(-1);
+  });
+
+  it("refuses micros that are not an integer string (negative)", () => {
+    expect(() => compareMicros("1.5", "2")).toThrow(/micros/);
   });
 });

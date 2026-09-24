@@ -29,24 +29,24 @@ export function useToasts(): {
   toast: (text: string, tone?: ToastTone) => void;
 } {
   const [toasts, setToasts] = useState<readonly Toast[]>([]);
-  const next = useRef(0);
-  const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
+  const nextRef = useRef(0);
+  const timersRef = useRef(new Set<ReturnType<typeof setTimeout>>());
   useEffect(() => {
-    const pending = timers.current;
+    const pending = timersRef.current;
     return () => {
       for (const timer of pending) clearTimeout(timer);
       pending.clear();
     };
   }, []);
   const toast = useCallback((text: string, tone: ToastTone = "allowed") => {
-    next.current += 1;
-    const id = next.current;
+    nextRef.current += 1;
+    const id = nextRef.current;
     setToasts((rows) => [...rows, { id, text, tone }]);
     const timer = setTimeout(() => {
-      timers.current.delete(timer);
+      timersRef.current.delete(timer);
       setToasts((rows) => rows.filter((row) => row.id !== id));
     }, TOAST_MS);
-    timers.current.add(timer);
+    timersRef.current.add(timer);
   }, []);
   return { toasts, toast };
 }

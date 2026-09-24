@@ -2,6 +2,7 @@
 // The toast stack: a row per event in one polite live region, newest last,
 // each gone after the design's 4.2 seconds.
 import { act, cleanup, render, screen } from "@testing-library/react";
+import { useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TOAST_MS, ToastStack, type ToastTone, useToasts } from "./toast";
 
@@ -9,7 +10,11 @@ let push: (text: string, tone?: ToastTone) => void = () => undefined;
 
 function Host() {
   const { toasts, toast } = useToasts();
-  push = toast;
+  // Hand the test the hook's one way to add a row, after render, as an
+  // effect does anything that reaches outside the component.
+  useEffect(() => {
+    push = toast;
+  }, [toast]);
   return <ToastStack toasts={toasts} testId="toasts" />;
 }
 
