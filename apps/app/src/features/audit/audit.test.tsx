@@ -24,7 +24,7 @@ import type {
 } from "@/data/contracts/audit";
 import type { MemberList, WorkspaceList } from "@/data/contracts/org";
 import type { DataSource } from "@/data/ports";
-import { type Read, readError, readOk } from "@/data/read";
+import { PAGE_FAILURES, type Read, readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 
@@ -46,6 +46,7 @@ const { OrgCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const { Audit, AuditSkeleton } = await import("./audit");
 const { AuditHeaderAction } = await import("./header-action");
+const { AuditRetentionLine } = await import("./retention");
 type AuditTab = import("./tabs").AuditTab;
 
 /** A member the roster names, and a former member it no longer does. */
@@ -500,7 +501,11 @@ describe("Events", () => {
     expect(search).toHaveAccessibleDescription(
       "Search is not recorded yet. The audit read takes no text query, so use the Actor, Range and Result filters.",
     );
-    expect(screen.getByRole("combobox", { name: "Severity" })).toBeDisabled();
+    const severity = screen.getByRole("combobox", { name: "Severity" });
+    expect(severity).toBeDisabled();
+    expect(
+      [...(severity as HTMLSelectElement).options].map((o) => o.textContent),
+    ).toEqual(["All · Severity", "critical", "info", "warning"]);
 
     // The table's page is narrowed by the result and sized by Rows; the
     // window the tiles count is not narrowed by the result.
@@ -669,6 +674,10 @@ describe("tabs", () => {
       ["external effect id", true],
       ["clear", true],
     ]);
+    // A 44 px tap target on a phone, like every other button (rev1 audit.md, Mobile).
+    expect(screen.getByRole("button", { name: "clear" }).className).toContain(
+      "max-md:min-h-11",
+    );
   });
 
   it("opens Exports on the design's callout, with no Exports heading", async () => {
@@ -687,6 +696,17 @@ describe("tabs", () => {
     expect(document.body).not.toHaveTextContent(
       "does not build evidence bundles",
     );
+    // The callout describes the signed evidence bundle, so it follows the
+    // sentence that says the organization has none yet.
+    const gap = screen
+      .getAllByTestId("audit-not-recorded")
+      .find((p) => p.textContent?.startsWith("No store lists"));
+    const callout = screen.getByTestId("audit-exports-callout");
+    expect(gap).toBeDefined();
+    expect(
+      (gap as HTMLElement).compareDocumentPosition(callout) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(bundle).not.toHaveBeenCalled();
   });
 
@@ -709,9 +729,13 @@ describe("tabs", () => {
       }),
     ).toBeInTheDocument();
     expect(card.querySelector("[data-status]")).toHaveTextContent("ready");
-    expect(
-      within(card).getByRole("link", { name: "Download" }),
-    ).toHaveAttribute("href", `/acme/account/export/${EXPORT_ID}`);
+    const download = within(card).getByRole("link", { name: "Download" });
+    expect(download).toHaveAttribute(
+      "href",
+      `/acme/account/export/${EXPORT_ID}`,
+    );
+    // The header's Export evidence bundle is the screen's one gold action.
+    expect(download.className).not.toContain("bg-button-primary-bg");
     expect(
       within(card).getByRole("button", { name: "Verify bundle" }),
     ).toBeDisabled();
@@ -778,7 +802,7 @@ describe("tabs", () => {
     ]);
   });
 
-  it("says not recorded for a policy nobody pinned or a read that is refused (negative)", async () => {
+  it("says not recorded for a policy nobody pinned, and unread with the code for a read that did not answer (negative)", async () => {
     answer({ window: recordOf([event()]) });
     retention.mockResolvedValue(
       readOk({
@@ -802,13 +826,52 @@ describe("tabs", () => {
     retention.mockResolvedValue({
       ok: false,
       reason: "denied",
-      permission: "org.admin",
+      permission: "org.owner or org.admin",
     });
     await renderAudit({}, { tab: "retention" });
-    expect(values()).toEqual(Array(5).fill("not recorded"));
+    // Body retention and Cold storage cost come from the read; the other three
+    // have no read at all.
+    expect(values()).toEqual([
+      "unread (denied)",
+      "not recorded",
+      "not recorded",
+      "not recorded",
+      "unread (denied)",
+    ]);
     // A refused retention read does not refuse the page.
     expect(screen.queryByTestId("audit-denied")).toBeNull();
+    cleanup();
+
+    retention.mockResolvedValue(readError("evidence_store_unavailable", 503));
+    await renderAudit({}, { tab: "retention" });
+    expect(values()).toEqual([
+      "unread (evidence_store_unavailable)",
+      "not recorded",
+      "not recorded",
+      "not recorded",
+      "unread (evidence_store_unavailable)",
+    ]);
   });
+
+  it.each([
+    [readOk(POLICY), "bodies 7 years"],
+    [readOk({ ...POLICY, bodyRetentionDays: null }), "bodies not recorded"],
+    [
+      readError("evidence_store_unavailable", 503),
+      "bodies unread (evidence_store_unavailable)",
+    ],
+  ] as const)(
+    "prints the header's bodies segment from the retention read (%#)",
+    async (read, segment) => {
+      retention.mockResolvedValue(read);
+      const element = await AuditRetentionLine({ ctx, source });
+      render(<IntlProvider>{element}</IntlProvider>);
+      const line = screen.getByTestId("audit-retention-line");
+      expect(line).toHaveTextContent(
+        `control-plane events retained 7 years · run ledger not recorded · ${segment} · acme`,
+      );
+    },
+  );
 
   it("says what Redaction does, before write", async () => {
     answer({ window: recordOf([event()]) });
@@ -848,6 +911,17 @@ describe("tabs", () => {
       ).toBeNull();
     },
   );
+
+  it("names no store on Keys while nothing records the keys (negative)", async () => {
+    answer({ window: recordOf([event()]) });
+    await renderAudit({}, { tab: "keys" });
+
+    const keys = screen
+      .getByRole("heading", { name: "Keys" })
+      .closest("section") as HTMLElement;
+    expect(keys).toHaveTextContent("Keys are not recorded yet.");
+    expect(keys).not.toHaveTextContent("kms + postgres");
+  });
 
   it("lists the six facts of a rotation, the new generation not recorded", async () => {
     answer({ window: recordOf([event()]) });
@@ -966,7 +1040,7 @@ describe("states", () => {
     events.mockResolvedValue({
       ok: false,
       reason: "denied",
-      permission: "org.admin",
+      permission: PAGE_FAILURES.audit.permission,
     });
     await renderAudit({}, { viewer: memberCtx });
 
@@ -975,7 +1049,7 @@ describe("states", () => {
     expect(denied.querySelector("[data-state-icon] svg")).not.toBeNull();
     expect(denied).toHaveTextContent("You cannot see the audit record");
     expect(denied).toHaveTextContent(
-      "Your roles on Acme Robotics do not include org.admin. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+      "Your roles on Acme Robotics do not include org.owner or org.admin. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
     );
     expect(
       within(denied).getByRole("link", { name: "Back to Fleet" }),
@@ -986,7 +1060,7 @@ describe("states", () => {
     ]);
     expect(facts).toEqual([
       ["Signed in as", "Sam Reyes · org.member · acme"],
-      ["Needed", "org.admin"],
+      ["Needed", "org.owner or org.admin"],
       ["Decided by", "not recorded"],
     ]);
 

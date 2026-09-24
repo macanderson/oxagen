@@ -4,9 +4,10 @@
 // Each segment prints what backs it and nothing stronger. Control-plane events
 // are held seven years by the audit partition maintenance (ADR-125). The body
 // retention is the longest window a pinned retention policy declares
-// (get_evidence_retention), and "not recorded" when none is pinned or the read
-// does not answer. The run ledger's retention has no record at all (#3878), so
-// its segment says so instead of "forever".
+// (get_evidence_retention), "not recorded" when none is pinned, and "unread"
+// with the control plane's code when the read does not answer. The run
+// ledger's retention has no record at all (#3878), so its segment says so
+// instead of "forever".
 import "server-only";
 import { useTranslations } from "next-intl";
 import type { AuditRetention } from "@/data/contracts/audit";
@@ -15,6 +16,20 @@ import type { Read } from "@/data/read";
 import type { OrgCtx } from "@/server/viewer";
 
 const DAYS_PER_YEAR = 365;
+
+/** A read that did not answer: refused, awaiting access, or failed. */
+type Unanswered = Exclude<Read<unknown>, { ok: true }>;
+
+/**
+ * What a read that did not answer says in place of its value: "unread" and the
+ * code the control plane gave (the reason for a refusal), so a failed read is
+ * never shown as a policy nobody pinned.
+ */
+export function useUnread(): (read: Unanswered) => string {
+  const t = useTranslations("audit");
+  return (read) =>
+    t("unread", { code: read.reason === "error" ? read.code : read.reason });
+}
 
 /**
  * A retention window in the words a person reads it in: whole years when the
@@ -39,13 +54,16 @@ function RetentionLine({
 }) {
   const t = useTranslations("audit");
   const windowOf = useRetentionWindow();
-  const bodies = read.ok ? windowOf(read.value.bodyRetentionDays) : null;
+  const unread = useUnread();
+  const bodies = read.ok
+    ? (windowOf(read.value.bodyRetentionDays) ?? t("notRecorded"))
+    : unread(read);
   return (
     <p
       data-testid="audit-retention-line"
       className="font-mono text-[11.5px] text-dim"
     >
-      {t("retentionLine", { bodies: bodies ?? t("notRecorded"), org })}
+      {t("retentionLine", { bodies, org })}
     </p>
   );
 }

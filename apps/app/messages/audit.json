@@ -48,6 +48,11 @@
       "anyResult": "All · Result",
       "severity": "Severity",
       "anySeverity": "All · Severity",
+      "severities": {
+        "critical": "critical",
+        "info": "info",
+        "warning": "warning"
+      },
       "severityNotRecorded": "An audit event records no severity yet.",
       "rows": "Rows",
       "apply": "Apply",
@@ -176,7 +181,6 @@
     },
     "keys": {
       "title": "Keys",
-      "store": "kms + postgres",
       "rotate": "Rotate KEK",
       "notRecorded": "Keys are not recorded yet. No store lists the organization's key-encryption key, its generations or the signing keys receipts cite."
     },
@@ -262,6 +266,7 @@
     },
     "retentionYears": "{count, plural, one {# year} other {# years}}",
     "retentionDays": "{count, plural, one {# day} other {# days}}",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "unread": "unread ({code})"
   }
 }
