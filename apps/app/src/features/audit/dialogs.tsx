@@ -205,10 +205,20 @@ export function BundleDialog({ org, gap }: { org: string; gap: Gap }) {
             </span>
             <label className={field}>
               <span className={label}>{t("format")}</span>
-              <select className={control} defaultValue="bundle">
-                <option value="bundle">{t("formatBundle")}</option>
-                <option value="csv">{t("formatCsv")}</option>
-                <option value="json">{t("formatJson")}</option>
+              {/* export_data builds one ZIP and nothing else, so that is the
+                  selected value. The design's three formats stay listed and
+                  disabled until the signed bundle exists (#3876). */}
+              <select className={control} defaultValue="zip">
+                <option value="zip">{t("formatZip")}</option>
+                <option value="bundle" disabled>
+                  {t("formatBundle")}
+                </option>
+                <option value="csv" disabled>
+                  {t("formatCsv")}
+                </option>
+                <option value="json" disabled>
+                  {t("formatJson")}
+                </option>
               </select>
             </label>
             <p id={fields} className="text-xs text-muted-foreground">

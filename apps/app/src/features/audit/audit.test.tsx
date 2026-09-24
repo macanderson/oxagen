@@ -44,7 +44,7 @@ vi.mock("next/navigation", async (importOriginal) => ({
 
 const { OrgCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
-const { Audit, AuditSkeleton } = await import("./audit");
+const { Audit, AuditSkeleton, traceTime } = await import("./audit");
 const { AuditHeaderAction } = await import("./header-action");
 const { AuditRetentionLine } = await import("./retention");
 type AuditTab = import("./tabs").AuditTab;
@@ -534,6 +534,23 @@ describe("Events", () => {
       "href",
       "/acme/audit?outcome=deny&rows=25&offset=50",
     );
+    // A 44 px tap target on a phone (rev1 audit.md, Mobile).
+    for (const name of ["Newer events", "Older events"]) {
+      expect(screen.getByRole("link", { name }).className).toContain(
+        "max-md:min-h-11",
+      );
+    }
+  });
+
+  it("opens an event's recorded facts from a 44 px summary on a phone", async () => {
+    answer({
+      window: recordOf([event({ detail: { rule: "auto-approve-reads" } })]),
+    });
+    await renderAudit({});
+
+    const summary = screen.getByText("Recorded facts");
+    expect(summary.tagName).toBe("SUMMARY");
+    expect(summary.className).toContain("max-md:min-h-11");
   });
 
   it("says so in the panel when the filters match nothing, rather than the empty record", async () => {
@@ -997,6 +1014,12 @@ describe("states", () => {
     expect(tiles()[0]?.[1]).toBe("0");
   });
 
+  it("prints the error line's time as the design does", async () => {
+    expect(traceTime(Date.parse("2026-09-11T09:16:04.123Z"))).toBe(
+      "2026-09-11 09:16:04Z",
+    );
+  });
+
   it("renders the error state with the code, Try again, Open an incident and the time it failed", async () => {
     events.mockResolvedValue(readError("audit_store_unavailable", 503));
     await renderAudit({}, { tab: "keys" });
@@ -1015,8 +1038,14 @@ describe("states", () => {
       within(error).getByRole("button", { name: "Open an incident" }),
     ).toBeInTheDocument();
     expect(error).toHaveTextContent(
-      "trace not recorded · region not recorded · 2026-09-16T12:00:00.000Z",
+      "trace not recorded · region not recorded · 2026-09-16 12:00:00Z",
     );
+    // Side by side on a phone too, as the design keeps them (rev1 audit.md, Mobile).
+    const row = within(error).getByRole("link", {
+      name: "Try again",
+    }).parentElement;
+    expect(row?.className).not.toContain("max-md:flex-col");
+    expect(row?.className).not.toContain("max-md:w-full");
   });
 
   it("keeps the query on Try again", async () => {
@@ -1174,10 +1203,23 @@ describe("the header's gold action", () => {
 
   it("opens Export an evidence bundle with Scope, the disabled range and format, the callout and Build bundle", async () => {
     const dialog = await openBundle();
-    expect(dialog).toHaveTextContent(
+    expect(dialog).toHaveTextContent("The organization's data as one ZIP");
+    expect(dialog).not.toHaveTextContent(
       "segments, attestations, key ids, and the verifier",
     );
     expect(within(dialog).getByLabelText("Scope")).toBeEnabled();
+    // The ZIP export_data builds is the selected format; the design's three
+    // formats stay listed and disabled until the signed bundle exists (#3876).
+    const format = within(dialog).getByLabelText("Format") as HTMLSelectElement;
+    expect(format.value).toBe("zip");
+    expect(
+      [...format.options].map((option) => [option.text, option.disabled]),
+    ).toEqual([
+      ["Organization ZIP", false],
+      ["Signed bundle (segments + verifier)", true],
+      ["Receipts as CSV", true],
+      ["Receipts as JSON", true],
+    ]);
     for (const field of ["From", "To", "Format"]) {
       expect(within(dialog).getByLabelText(field)).toBeDisabled();
     }

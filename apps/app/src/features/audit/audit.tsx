@@ -288,7 +288,7 @@ function AuditBody({
         retry={retryPath(org, tab, query, exportId)}
         fleet={loaded.fleet}
         organization={routes.people(org)}
-        at={new Date(now).toISOString()}
+        at={traceTime(now)}
       />
     );
   }
@@ -338,6 +338,16 @@ function AuditBody({
  * It marks itself `data-audit-state` like the other states, so the header
  * steps out of view and the skeleton is shown alone, as the design draws it.
  */
+
+/**
+ * The error line's time as the design prints it: `2026-09-11 09:16:04Z`.
+ *
+ * @internal Exported for its unit test.
+ */
+export function traceTime(epochMs: number): string {
+  return `${new Date(epochMs).toISOString().slice(0, 19).replace("T", " ")}Z`;
+}
+
 export function AuditSkeleton() {
   const t = useTranslations("audit");
   const block = "animate-pulse rounded bg-muted motion-reduce:animate-none";

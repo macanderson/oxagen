@@ -962,6 +962,7 @@ type Messages = {
       from: string;
       to: string;
       format: string;
+      formatZip: string;
       formatBundle: string;
       formatCsv: string;
       formatJson: string;

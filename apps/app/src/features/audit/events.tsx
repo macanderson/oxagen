@@ -410,7 +410,7 @@ function EventsTable({
               // The stored evidence the event carries (#3554): approval-rule
               // invalidation facts and the SSO and governance details.
               <details className="pt-1 text-xs">
-                <summary className="cursor-pointer text-muted-foreground">
+                <summary className="cursor-pointer text-muted-foreground max-md:inline-flex max-md:min-h-11 max-md:items-center">
                   {t("detail")}
                 </summary>
                 <pre className="max-w-prose whitespace-pre-wrap break-all pt-1 font-mono">
@@ -474,7 +474,7 @@ function Pager({
           <SafeLink
             to={routes.audit(org, auditQueryParams(query, { offset: newer }))}
             data-page="newer"
-            className={linkText}
+            className={`${linkText} max-md:inline-flex max-md:min-h-11 max-md:items-center`}
           >
             {t("newer")}
           </SafeLink>
@@ -486,7 +486,7 @@ function Pager({
               auditQueryParams(query, { offset: page.offset + page.limit }),
             )}
             data-page="older"
-            className={linkText}
+            className={`${linkText} max-md:inline-flex max-md:min-h-11 max-md:items-center`}
           >
             {t("older")}
           </SafeLink>
