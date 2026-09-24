@@ -1377,6 +1377,8 @@ describe("the other tabs", () => {
   });
 
   it("Changes: opens a change by keyboard, and says when a search matches none", async () => {
+    const [first] = CHANGES.changes;
+    if (first === undefined) throw new Error("CHANGES fixture holds no change");
     actions.readRepositoryChanges.mockResolvedValue({
       ok: true,
       value: {
@@ -1384,7 +1386,7 @@ describe("the other tabs", () => {
         changes: [
           ...CHANGES.changes,
           {
-            ...(CHANGES.changes[0] as RepositoryChanges["changes"][number]),
+            ...first,
             proposalId: "prp_run1",
             lineage: "ctx.scr.003-running",
             status: "checks_running",
