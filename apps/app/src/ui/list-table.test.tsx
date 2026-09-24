@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 // ListTable (list-table.tsx): the design's list controls over a table. Search
-// narrows the rows to those whose rendered text holds the query; a header
+// narrows the rows to those whose rendered text holds the query; a small
+// enumeration column offers a filter by the design's rule; a header
 // sorts its column ascending, then descending, then back to the caller's
 // order, as a number when the column is numeric; Rows sets the page size and
 // the pager walks the pages. A hidden column names itself through aria-label
@@ -10,7 +11,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
-import { type ListRow, ListTable, leadingNumber } from "./list-table";
+import { facetsOf, type ListRow, ListTable, leadingNumber } from "./list-table";
 
 const COLUMNS = [
   { label: "Invoice" },
@@ -219,7 +220,7 @@ describe("ListTable past the first screen", () => {
     expect(visible()).toEqual(["B", "A", "C"]);
   });
 
-  it("keeps a row that arrived after the last search in the list until the reader searches again", async () => {
+  it("applies the current search to a row that arrives after it", async () => {
     const { rerender } = render(
       <IntlProvider>
         <ListTable label="Invoices" columns={COLUMNS} rows={rowsOf(3)} />
@@ -242,12 +243,115 @@ describe("ListTable past the first screen", () => {
         />
       </IntlProvider>,
     );
-    expect(visible()).toEqual(["OXA-001", "LATE-1"]);
-    await userEvent.type(
-      screen.getByRole("searchbox", { name: "Search this list" }),
-      " ",
-    );
+    // The new row is read as it mounts, so the query already in the box
+    // applies to it.
     expect(visible()).toEqual(["OXA-001"]);
+    await userEvent.clear(
+      screen.getByRole("searchbox", { name: "Search this list" }),
+    );
+    expect(visible()).toEqual(["OXA-001", "OXA-002", "OXA-003", "LATE-1"]);
+  });
+});
+
+describe("ListTable filters", () => {
+  const STATUS_COLUMNS = [
+    { label: "Invoice" },
+    { label: "Currency" },
+    { label: "Status" },
+    { label: "Amount", numeric: true },
+  ];
+  const STATUSES = ["paid", "open", "paid", "void", "paid"];
+  const statusRows = (): ListRow[] =>
+    STATUSES.map((status, i) => ({
+      key: `inv_${String(i)}`,
+      cells: [
+        `OXA-${String(i)}`,
+        i === 0 ? "EUR" : "USD",
+        <span key="s">{status}</span>,
+        `$${String(i + 1)}.00`,
+      ],
+    }));
+
+  function renderStatuses(rows: ListRow[]) {
+    render(
+      <IntlProvider>
+        <ListTable label="Invoices" columns={STATUS_COLUMNS} rows={rows} />
+      </IntlProvider>,
+    );
+  }
+
+  it("offers a status-like column first, reads the values the cells show, and filters on one", async () => {
+    renderStatuses(statusRows());
+    const filters = screen
+      .getAllByRole("combobox")
+      .map((select) => select.getAttribute("aria-label"));
+    // Status before Currency though Currency has fewer values; Invoice is one
+    // value per row and Amount is a number, so neither offers a filter.
+    expect(filters).toEqual(["Filter by Status", "Filter by Currency", null]);
+    const status = screen.getByRole("combobox", { name: "Filter by Status" });
+    expect(
+      within(status)
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual(["All · Status", "open", "paid", "void"]);
+    await userEvent.selectOptions(status, "paid");
+    expect(visible()).toEqual(["OXA-0", "OXA-2", "OXA-4"]);
+    expect(pager()).toHaveTextContent("1–3 of 3");
+    await userEvent.selectOptions(
+      screen.getByRole("combobox", { name: "Filter by Currency" }),
+      "EUR",
+    );
+    expect(visible()).toEqual(["OXA-0"]);
+    await userEvent.selectOptions(status, "");
+    await userEvent.selectOptions(
+      screen.getByRole("combobox", { name: "Filter by Currency" }),
+      "",
+    );
+    expect(visible()).toHaveLength(5);
+  });
+
+  it("offers no filter under four rows (negative)", () => {
+    renderStatuses(statusRows().slice(0, 3));
+    expect(screen.queryByRole("combobox", { name: /^Filter by/ })).toBeNull();
+  });
+});
+
+describe("facetsOf", () => {
+  const columns = [{ label: "Name" }, { label: "Health" }, { label: "Kind" }];
+
+  it("refuses a column with one value, a value over 28 characters, or more than eight values (negative)", () => {
+    const one = Array.from({ length: 5 }, (_, i) => [
+      `n${String(i)}`,
+      "not recorded",
+      i === 0 ? "x".repeat(29) : "short",
+    ]);
+    expect(facetsOf(columns, one)).toEqual([]);
+    const many = Array.from({ length: 10 }, (_, i) => [
+      `n${String(i)}`,
+      `h${String(i % 9)}`,
+      "a",
+    ]);
+    expect(facetsOf(columns, many)).toEqual([]);
+  });
+
+  it("keeps three at most, status-like first, then fewer values", () => {
+    const cols = [
+      { label: "Owner" },
+      { label: "Region" },
+      { label: "Team" },
+      { label: "Tier" },
+    ];
+    const texts = Array.from({ length: 8 }, (_, i) => [
+      `o${String(i % 4)}`,
+      `r${String(i % 3)}`,
+      `t${String(i % 2)}`,
+      `x${String(i % 5)}`,
+    ]);
+    expect(facetsOf(cols, texts).map((f) => cols[f.column]?.label)).toEqual([
+      "Tier",
+      "Team",
+      "Region",
+    ]);
   });
 });
 

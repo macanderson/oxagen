@@ -4672,6 +4672,7 @@ type Messages = {
       collector: string;
       gaps: string;
       hookCount: string;
+      hookCountAll: string;
       note: string;
     };
     modelSurface: {
@@ -4697,6 +4698,8 @@ type Messages = {
       "claude-agent-sdk": string;
       custom: string;
       none: string;
+      atEnrollment: string;
+      versionUnrecorded: string;
     };
     ladder: {
       title: string;
@@ -4772,6 +4775,7 @@ type Messages = {
       collectorGaps: string;
       hookEnforce: string;
       hookObserve: string;
+      hooksFive: string;
       modelLoopback: string;
       modelMixed: string;
       modelDirect: string;
@@ -4796,6 +4800,10 @@ type Messages = {
         smoke: string;
         unenroll: string;
       };
+      settings: {
+        managed: string;
+        user: string;
+      };
     };
     unenroll: {
       title: string;
@@ -4812,6 +4820,9 @@ type Messages = {
         pendingApproval: string;
         unavailable: string;
       };
+    };
+    os: {
+      unreported: string;
     };
   };
   shell: {
@@ -6694,6 +6705,8 @@ type Messages = {
     };
     listTable: {
       search: string;
+      facetAll: string;
+      facetLabel: string;
       rows: string;
       all: string;
       noMatch: string;
