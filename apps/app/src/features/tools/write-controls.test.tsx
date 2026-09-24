@@ -417,6 +417,63 @@ describe("ToolDialog", () => {
     });
   });
 
+  it("classifies a version that had none from the form's defaults, with no measure to carry", async () => {
+    setToolClassification.mockResolvedValue({
+      ok: true,
+      value: { classifiedAt: "2026-09-16T09:00:00.000Z" },
+    });
+    withIntl(
+      <ToolDialog at={at} version={plain()} canClassify>
+        <span>Get file contents</span>
+      </ToolDialog>,
+    );
+    fireEvent.click(screen.getByText("Get file contents"));
+    await screen.findByTestId("tool-dialog");
+    // An unclassified version opens on the narrowest axes, never blank ones.
+    expect(screen.getByLabelText("Side effect")).toHaveValue("read");
+    expect(screen.getByLabelText("Egress")).toHaveValue("local");
+    expect(screen.getByLabelText("Consequence tags")).toHaveValue("");
+    fill("Reason", "First classification.");
+    fireEvent.submit(formOf(screen.getByText("Reclassify this version")));
+    await waitFor(() => {
+      expect(setToolClassification).toHaveBeenCalledWith(
+        "acme",
+        "core-platform",
+        {
+          toolVersionId: "tlv_01k5a2",
+          riskGrade: "low",
+          sideEffect: "read",
+          egress: "local",
+          consequenceTags: [],
+          dataClasses: [],
+          measures: [],
+          reason: "First classification.",
+        },
+      );
+    });
+    await waitFor(() => {
+      expect(screen.queryByTestId("tool-dialog")).not.toBeInTheDocument();
+    });
+  });
+
+  it("names a reclassification that threw before it answered, and keeps the dialog open", async () => {
+    setToolClassification.mockRejectedValue(new Error("network"));
+    withIntl(
+      <ToolDialog at={at} version={financial()} canClassify>
+        <span>Create payment</span>
+      </ToolDialog>,
+    );
+    fireEvent.click(screen.getByText("Create payment"));
+    await screen.findByTestId("tool-dialog");
+    fill("Reason", "x");
+    fireEvent.submit(formOf(screen.getByText("Reclassify this version")));
+    expect(
+      await screen.findByTestId("tool-classify-failure"),
+    ).toHaveTextContent("action_failed");
+    expect(screen.getByTestId("tool-dialog")).toBeInTheDocument();
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+
   it("names a refusal on the form", async () => {
     setToolClassification.mockResolvedValue({
       ok: false,
@@ -607,6 +664,63 @@ describe("FlipControls", () => {
     );
     // Nothing moved, so the dialog does not close on a reload that shows the
     // same board.
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it("forgets that nothing changed once the dialog is closed, so the next flip starts clean", async () => {
+    flipKillSwitch.mockResolvedValue({
+      ok: true,
+      value: {
+        switchId: "emd_01k5c1",
+        on: true,
+        changed: false,
+        denyGeneration: { org: 12, workspace: 4 },
+        grantsRevoked: 0,
+      },
+    });
+    withIntl(
+      <FlipControls
+        at={at}
+        denyGeneration={GENERATION}
+        existing={null}
+        members={MEMBERS}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("tools-flip-open"));
+    const dialog = await screen.findByTestId("tools-flip-dialog");
+    fill("Target", "moves_money");
+    fill(/^Reason/, "Suspected compromise.");
+    fireEvent.submit(formOf(within(dialog).getByText("Deny now")));
+    await screen.findByTestId("tools-flip-unchanged");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+    await waitFor(() => {
+      expect(screen.queryByTestId("tools-flip-dialog")).not.toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId("tools-flip-open"));
+    await screen.findByTestId("tools-flip-dialog");
+    expect(
+      screen.queryByTestId("tools-flip-unchanged"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("names a flip that threw before it answered, and navigates nowhere", async () => {
+    flipKillSwitch.mockRejectedValue(new Error("network"));
+    withIntl(
+      <FlipControls
+        at={at}
+        denyGeneration={GENERATION}
+        existing={null}
+        members={MEMBERS}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("tools-flip-open"));
+    const dialog = await screen.findByTestId("tools-flip-dialog");
+    fill("Target", "moves_money");
+    fill(/^Reason/, "Suspected compromise.");
+    fireEvent.submit(formOf(within(dialog).getByText("Deny now")));
+    expect(await screen.findByTestId("tools-flip-failure")).toHaveTextContent(
+      "action_failed",
+    );
     expect(router.replace).not.toHaveBeenCalled();
   });
 

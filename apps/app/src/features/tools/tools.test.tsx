@@ -231,6 +231,30 @@ describe("Tools › tabs", () => {
     );
   });
 
+  it("shows no provider count when the roster did not answer, and still draws the registry", async () => {
+    await renderTools({
+      mcpServers: readError("tool_registry_unavailable", 503),
+    });
+    expect(document.querySelector('[data-count="providers"]')).toBeNull();
+    expect(document.querySelector('[data-count="tools"]')?.textContent).toBe(
+      "2",
+    );
+    // A registry holding versions is not the empty state, whatever the
+    // roster said.
+    expect(screen.getByRole("table", { name: "Tools" })).toBeVisible();
+  });
+
+  it("is not the empty state when the registry is empty but the roster did not answer", async () => {
+    await renderTools({
+      versions: readOk(toolVersionPage({ items: [] })),
+      mcpServers: readError("tool_registry_unavailable", 503),
+    });
+    // Nothing says the workspace has no provider: the roster could not say.
+    expect(screen.queryByTestId("tools-empty")).not.toBeInTheDocument();
+    expect(screen.getByRole("tablist")).toBeVisible();
+    expect(document.querySelector('[data-count="providers"]')).toBeNull();
+  });
+
   it("shows no switch count when the board did not answer", async () => {
     await renderTools({
       killSwitches: readError("tool_registry_unavailable", 503),
@@ -825,6 +849,23 @@ describe("Tools › kill switches tab", () => {
         screen.getByTestId(`tools-switch-unbacked-${which}`),
       ).toHaveAttribute("data-gap", "#3922");
     }
+  });
+
+  it("prints who flipped a switch by the id the record holds when the org roster did not answer", async () => {
+    await renderTools(
+      {
+        members: readError("org_unavailable", 503),
+        agents: readError("agents_unavailable", 503),
+      },
+      "switches",
+    );
+    const money = cardOf('[data-switch="emd_01k5c1"]');
+    const flippedBy = money.querySelector('[data-fact="flippedBy"] dd');
+    expect(flippedBy).toHaveTextContent("7c9e6679-7425-40de-944b-e07fc1f90ae7");
+    // The board itself is a separate read and is still drawn in full.
+    expect(
+      screen.getByRole("region", { name: /Scoped switches/ }),
+    ).toBeVisible();
   });
 
   it("ships the organization and workspace switches, named by what they stop, allowing until flipped", async () => {

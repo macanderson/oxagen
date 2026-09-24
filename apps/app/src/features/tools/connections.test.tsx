@@ -41,7 +41,9 @@ const { ConnectionsTable, GrantsLog } = await import("./connections");
 const { connectionList, credentialGrantPage } = await import(
   "./tools.builders"
 );
-const { connectionGetOutput } = await import("@/test/tools-outputs");
+const { connectionGetOutput, credentialGrantListOutput } = await import(
+  "@/test/tools-outputs"
+);
 const { ConnectionDetail } = await import("@/data/contracts/tools");
 
 const at = { org: "acme", ws: "core-platform" };
@@ -187,6 +189,94 @@ describe("Connections table", () => {
     expect(screen.getByTestId("tools-error")).toHaveTextContent(
       "tools_unavailable",
     );
+  });
+});
+
+describe("Credential grants log", () => {
+  it("shows the denied state for the log's read and keeps the connections", () => {
+    renderTab({
+      grants: { ok: false, reason: "denied", permission: "tools.read" },
+    });
+    expect(screen.getByTestId("tools-denied")).toHaveTextContent("tools.read");
+    expect(
+      screen.queryByRole("table", { name: "Credential grants log" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("table", { name: "Connections" }),
+    ).toBeInTheDocument();
+  });
+
+  it("names the log's outage with its code, and offers Try again on the Providers tab", () => {
+    renderTab({ grants: readError("tools_unavailable", 502) });
+    const error = screen.getByTestId("tools-error");
+    expect(error).toHaveTextContent("tools_unavailable");
+    expect(
+      within(error).getByRole("link", { name: "Try again" }),
+    ).toHaveAttribute("href", CONNECTIONS);
+  });
+
+  it("says no credential has been put to use when the log is empty from its start", () => {
+    renderTab({ grants: readOk(credentialGrantPage({ items: [] })) });
+    const empty = screen
+      .getByRole("heading", { name: "No credential has been put to use" })
+      .closest("section");
+    expect(empty).toHaveAttribute("data-state", "empty");
+    expect(
+      screen.queryByRole("table", { name: "Credential grants log" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps the log's frame on a later page that came back empty, rather than calling the log empty", () => {
+    withIntl(
+      <GrantsLog
+        at={at}
+        orgRole="owner"
+        cursor="cur_2"
+        read={readOk(credentialGrantPage({ items: [] }))}
+      />,
+    );
+    expect(
+      screen.getByRole("table", { name: "Credential grants log" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("No credential has been put to use"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("links the next page of the log on the Providers tab", () => {
+    renderTab({
+      grants: readOk(credentialGrantPage({ nextCursor: "cur_2" })),
+    });
+    expect(screen.getByTestId("tools-next-page")).toHaveAttribute(
+      "href",
+      `${CONNECTIONS}?cursor=cur_2`,
+    );
+  });
+
+  it("prints a grant's TTL in minutes, and a dash for a window that ends before it starts", () => {
+    const [first, second] = credentialGrantListOutput().items;
+    if (first === undefined || second === undefined) {
+      throw new Error("fixture lost a grant");
+    }
+    renderTab({
+      grants: readOk(
+        credentialGrantPage({
+          items: [
+            first,
+            {
+              ...second,
+              issuedAt: "2026-09-11T08:50:19.000Z",
+              expiresAt: "2026-09-11T08:40:19.000Z",
+            },
+          ],
+        }),
+      ),
+    });
+    const log = screen.getByRole("table", { name: "Credential grants log" });
+    const ttl = (id: string) =>
+      within(rowOf(within(log).getByText(id))).getAllByRole("cell")[5];
+    expect(ttl("mcgr_01k5g1")).toHaveTextContent(/^5m$/);
+    expect(ttl("mcgr_01k5g2")).toHaveTextContent(/^—$/);
   });
 });
 
@@ -336,6 +426,120 @@ describe("Add connection", () => {
       await screen.findByTestId("connection-add-failure"),
     ).toHaveTextContent("This needs an organization Owner or Admin.");
     expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it("suggests the connectors already in use, and none when the workspace has none", () => {
+    renderTab();
+    fireEvent.click(screen.getByTestId("connection-add-open"));
+    const suggestions = element(
+      document.querySelector("#connection-add-slugs"),
+      "connector suggestions",
+    );
+    expect(
+      [...suggestions.querySelectorAll("option")].map((o) => o.value),
+    ).toEqual(["github", "stripe"]);
+    expect(screen.getByLabelText("Connector")).toHaveAttribute(
+      "list",
+      "connection-add-slugs",
+    );
+    cleanup();
+
+    renderTab({ connections: readOk(connectionList({ connections: [] })) });
+    fireEvent.click(screen.getByTestId("connection-add-open"));
+    expect(document.querySelector("#connection-add-slugs")).toBeNull();
+    expect(screen.getByLabelText("Connector")).not.toHaveAttribute("list");
+  });
+
+  it("clears a refusal when the dialog is closed, so reopening starts clean", async () => {
+    addConnection.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      code: "org_role_required",
+    });
+    renderTab();
+    fireEvent.click(screen.getByTestId("connection-add-open"));
+    fill("Connector", "linear");
+    fill("Name", "Acme Linear");
+    fill("API key", "key-secret");
+    fireEvent.submit(formOf(screen.getByText("Add connection")));
+    await screen.findByTestId("connection-add-failure");
+    fireEvent.click(
+      within(screen.getByTestId("connection-add-dialog")).getByRole("button", {
+        name: "Close",
+      }),
+    );
+    await waitFor(() => {
+      expect(
+        screen.queryByTestId("connection-add-dialog"),
+      ).not.toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId("connection-add-open"));
+    await screen.findByTestId("connection-add-dialog");
+    expect(
+      screen.queryByTestId("connection-add-failure"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers the form again, empty, after a stored connection's dialog is closed", async () => {
+    addConnection.mockResolvedValue({
+      ok: true,
+      value: {
+        id: "con_01k5n9",
+        status: "pending_setup",
+        connectorId: "linear",
+        displayName: "Acme Linear",
+      },
+    });
+    renderTab();
+    fireEvent.click(screen.getByTestId("connection-add-open"));
+    fill("Connector", "linear");
+    fill("Name", "Acme Linear");
+    fill("API key", "key-secret");
+    fireEvent.submit(formOf(screen.getByText("Add connection")));
+    await screen.findByTestId("connection-add-done");
+    fireEvent.click(
+      within(screen.getByTestId("connection-add-dialog")).getByRole("button", {
+        name: "Close",
+      }),
+    );
+    await waitFor(() => {
+      expect(
+        screen.queryByTestId("connection-add-dialog"),
+      ).not.toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId("connection-add-open"));
+    await screen.findByTestId("connection-add-dialog");
+    expect(screen.queryByTestId("connection-add-done")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Name")).toHaveValue("");
+  });
+
+  it("sends one create while the first is still answering", async () => {
+    let answer: (value: unknown) => void = () => undefined;
+    addConnection.mockReturnValue(
+      new Promise((resolve) => {
+        answer = resolve;
+      }),
+    );
+    renderTab();
+    fireEvent.click(screen.getByTestId("connection-add-open"));
+    fill("Connector", "linear");
+    fill("Name", "Acme Linear");
+    fill("API key", "key-secret");
+    const form = formOf(screen.getByText("Add connection"));
+    fireEvent.submit(form);
+    await screen.findByText("Adding…");
+    fireEvent.submit(form);
+    expect(addConnection).toHaveBeenCalledTimes(1);
+    answer({
+      ok: true,
+      value: {
+        id: "con_01k5n9",
+        status: "pending_setup",
+        connectorId: "linear",
+        displayName: "Acme Linear",
+      },
+    });
+    await screen.findByTestId("connection-add-done");
   });
 
   it("names a write that threw before it answered", async () => {
