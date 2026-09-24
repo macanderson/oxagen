@@ -353,6 +353,45 @@ describe("facetsOf", () => {
       "Region",
     ]);
   });
+
+  it("offers nothing on a numeric, a hidden or an unlabelled column, however few values it holds (negative)", () => {
+    // Each column repeats two values over six rows, which the rule would
+    // otherwise offer, so only the column's kind can refuse it.
+    const cols = [
+      { label: "Amount", numeric: true },
+      { label: "Status", hidden: true },
+      { label: " " },
+      { label: "Health" },
+    ];
+    const texts = Array.from({ length: 6 }, (_, i) =>
+      Array.from({ length: 4 }, () => (i % 2 === 0 ? "1" : "2")),
+    );
+    expect(facetsOf(cols, texts)).toEqual([{ column: 3, values: ["1", "2"] }]);
+  });
+
+  it("skips a blank cell rather than offering it as a value, and still offers the column", () => {
+    const texts = [
+      ["a", "", "k"],
+      ["b", "degraded", "k"],
+      ["c", "", "k"],
+      ["d", "healthy", "k"],
+      ["e", "healthy", "k"],
+    ];
+    expect(facetsOf(columns, texts)).toEqual([
+      { column: 1, values: ["degraded", "healthy"] },
+    ]);
+  });
+
+  it("refuses a column with a value on every row, even under eight values (negative)", () => {
+    const texts = Array.from({ length: 5 }, (_, i) => [
+      "n",
+      `h${String(i)}`,
+      i < 3 ? "a" : "b",
+    ]);
+    expect(facetsOf(columns, texts)).toEqual([
+      { column: 2, values: ["a", "b"] },
+    ]);
+  });
 });
 
 describe("leadingNumber", () => {
