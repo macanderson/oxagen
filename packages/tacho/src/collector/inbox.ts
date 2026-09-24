@@ -120,18 +120,47 @@ async function applyToSession(
   switch (command.command) {
     case "pause":
       record.control.paused = reasonOf(command);
+      record.control.pauseEffect = undefined;
       events.push(applied(record.recorder, command, "session_paused"));
       return { events, status: "applied" };
-    case "resume":
+    case "resume": {
+      // A pause is a tool-call deny, not a halt: the model keeps generating
+      // and usually ends its turn on the refusal. Clearing the flag alone
+      // left a resumed agent idle. So a resume on an agent the pause refused
+      // owes it a continuation, which the next boundary that carries text
+      // delivers: a `PostToolUse` if the agent is still working, or the
+      // `Stop` it is about to send, answered `decision: "block"` so the turn
+      // goes on (`hook-handler.ts`).
+      //
+      // An agent that already ended its turn while paused sends no further
+      // hook, and a synchronous hook answer cannot wake an idle session. Only
+      // a background `asyncRewake` hook can, which the settings writer does
+      // not install. Holding the paused `Stop` open instead would stall the
+      // daemon's serial hook queue, and blocking it would spin the model
+      // against denied tools until Claude Code's eight-block cap. So that
+      // case is acknowledged `applied` with a detail saying the agent is idle
+      // until its next prompt, and the Run page can say so.
+      const effect = record.control.pauseEffect;
       record.control.paused = null;
+      record.control.pauseEffect = undefined;
+      if (effect === "refused") record.control.resumeOwed = command.id;
       events.push(applied(record.recorder, command, "session_resumed"));
-      return { events, status: "applied" };
+      return effect === "stopped"
+        ? {
+            events,
+            status: "applied",
+            detail:
+              "The agent ended its turn while paused and stays idle until its next prompt.",
+          }
+        : { events, status: "applied" };
+    }
     case "cancel":
     case "kill": {
       const signal = command.command === "kill" ? "SIGKILL" : "SIGTERM";
       const reasonCode =
         command.command === "kill" ? "session_killed" : "session_cancelled";
       record.control.cancelled = reasonOf(command);
+      record.control.resumeOwed = undefined;
       events.push(applied(record.recorder, command, reasonCode));
       const attempt = killAttempt(record, command, signal, deps);
       events.push(attempt.event);
