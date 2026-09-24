@@ -292,8 +292,15 @@ export interface ModelProxy {
   handle: (req: IncomingMessage, res: ServerResponse) => void;
   /** Answer a websocket upgrade: the proxy speaks HTTP only. */
   handleUpgrade: (req: IncomingMessage, socket: Duplex) => void;
-  /** Abort every in-flight call of a session. Returns how many were cut. */
-  abortSession: (sessionUuid: string, reason: string) => number;
+  /**
+   * Abort every in-flight call of a session. Returns how many were cut.
+   * `retry` answers the cut call as one the harness retries (see `InFlight`).
+   */
+  abortSession: (
+    sessionUuid: string,
+    reason: string,
+    retry?: RetryableCut,
+  ) => number;
   /** Model calls observed for a session since the daemon started. */
   callsObservedFor: (sessionUuid: string) => number;
   stats: () => ModelProxyStats;
@@ -304,13 +311,22 @@ const DEFAULT_MAX_REQUEST_BYTES = 64 * 1024 * 1024;
 const DEFAULT_UPSTREAM_IDLE_MS = 10 * 60_000;
 const DEFAULT_BEFORE_FORWARD_TIMEOUT_MS = 250;
 
+/**
+ * Why a cut call may be retried. `daemon_stopping`: the service manager
+ * starts the daemon again within seconds. `steer`: an operator's interrupt
+ * steer cut the call so the steer lands before the step the call would have
+ * produced. A refusal there would end the turn in StopFailure, whose answer
+ * Claude Code ignores, and the steer would never reach the agent. A retried
+ * call reaches the next hook, which delivers it.
+ */
+export type RetryableCut = "daemon_stopping" | "steer";
+
 interface InFlight {
   /**
-   * End the call. An operator's interrupt is a refusal the harness must not
-   * retry. A daemon shutting down is not: the service manager starts it again
-   * within seconds, so that call is answered as retryable.
+   * End the call. An operator's pause, cancel or kill is a refusal the
+   * harness must not retry. Every `RetryableCut` is answered as retryable.
    */
-  abort: (reason: string, retryable?: boolean) => void;
+  abort: (reason: string, retry?: RetryableCut) => void;
 }
 
 function isLoopbackPeer(address: string | undefined): boolean {
@@ -1168,14 +1184,23 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     });
 
     const entry: InFlight = {
-      abort: (reason, retryable = false) => {
+      abort: (reason, retry) => {
         abortReason = reason;
         upstreamReq.destroy(new Error(reason));
         if (!res.headersSent) {
           // A 403 reads to Claude Code as a failed login and tells the person
           // to run /login, which is wrong for a daemon restart. That case gets
           // a 503 the harness retries once the service is back.
-          if (retryable)
+          if (retry === "steer")
+            sendProviderError(
+              res,
+              route,
+              503,
+              "steered_by_operator",
+              `The session's Oxagen operator sent a steer during this model call: ${reason}. Retry the call.`,
+              true,
+            );
+          else if (retry === "daemon_stopping")
             sendProviderError(
               res,
               route,
@@ -1632,9 +1657,9 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
         "HTTP/1.1 426 Upgrade Required\r\nConnection: close\r\nContent-Length: 0\r\n\r\n",
       );
     },
-    abortSession: (sessionUuid, reason) => {
+    abortSession: (sessionUuid, reason, retry) => {
       const calls = [...(inFlight.get(sessionUuid) ?? [])];
-      for (const call of calls) call.abort(reason);
+      for (const call of calls) call.abort(reason, retry);
       return calls.length;
     },
     callsObservedFor: (sessionUuid) => observed.get(sessionUuid) ?? 0,
@@ -1646,7 +1671,7 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     close: () => {
       for (const calls of inFlight.values())
         for (const call of [...calls])
-          call.abort("the daemon is stopping", true);
+          call.abort("the daemon is stopping", "daemon_stopping");
       httpAgent.destroy();
       httpsAgent.destroy();
     },

@@ -97,6 +97,9 @@ export function hostSummary(
     agentKey: row.agentKey,
     hostname: row.hostname,
     platform: row.platform as "darwin" | "linux" | "win32",
+    // Blank is a host that sent an empty string: the same as not reporting.
+    osVersion: row.osVersion?.trim() || null,
+    arch: row.arch?.trim() || null,
     osUser: row.osUser,
     status: row.status as TachoHostListOutput["hosts"][number]["status"],
     mode: row.mode as "observe" | "enforce",

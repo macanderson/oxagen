@@ -231,9 +231,23 @@ export function RetireAgent({
       : roles === null
         ? t("endsValueNoRoles", holds)
         : t("endsValue", { ...holds, roles });
-  const facts: readonly [string, string][] = [
+  // In flight is the design's third row. No read counts an agent's live runs
+  // and `retire_agent` cancels none, so the row says so and names the gap
+  // (#3975) rather than printing a count or a promise.
+  const facts: readonly [string, ReactNode][] = [
     [t("kept"), t("keptValue")],
     [t("ends"), ends],
+    [
+      t("inFlight"),
+      <span
+        key="in-flight"
+        data-not-backed=""
+        data-gap="#3975"
+        className="text-muted-foreground"
+      >
+        {t("inFlightUnrecorded")}
+      </span>,
+    ],
   ];
   return (
     <>

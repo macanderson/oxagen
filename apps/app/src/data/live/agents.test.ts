@@ -68,7 +68,9 @@ const listOut = {
   totals: {
     identities: 1,
     enrolled: 0,
+    unenrolled: 1,
     holdingMandate: null,
+    mandateHolders: [],
     tamperIncidents: 0,
     tamper: { recorded: 0, open: 0, newest: null },
   },
