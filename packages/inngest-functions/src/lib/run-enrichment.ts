@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { runGovernedTurn } from "@oxagen/agent";
 import { resolveModelFundingSource, selectModelFromFunding } from "@oxagen/ai";
 import { evaluateTurnCreditGate } from "@oxagen/billing";
+import { NonRetriableError } from "@oxagen/functions";
 import type { RunFrame } from "@oxagen/run-ledger";
 import { digestBytes } from "@oxagen/tacho";
 import type { RunScope } from "./run-record";
@@ -22,6 +23,9 @@ export async function collectRunText(
   let unavailable = 0;
   const fingerprint = createHash("sha256");
   const firstBodyFrame = new Map<string, RunFrame["seq"]>();
+  // The run's own first prompt, kept for the fallback title. A subagent's
+  // prompt is written by the parent agent, not by the operator, so it is skipped.
+  let firstPrompt: string | null = null;
   function append(text: string) {
     while (text.length > 0) {
       const room = ENRICHMENT_CHUNK_CHARS - buffer.length;
@@ -53,6 +57,8 @@ export async function collectRunText(
       if (digestBytes(bytes) !== bodyDigest)
         throw new Error("body digest mismatch");
       const text = decoder.decode(bytes);
+      if (firstPrompt === null && frame.type === "turn_start" && !frame.chain)
+        firstPrompt = text;
       const firstSeq = firstBodyFrame.get(bodyDigest);
       if (firstSeq === undefined) {
         append(text);
@@ -77,7 +83,70 @@ export async function collectRunText(
     unavailable,
     frames: frames.length,
     digest: fingerprint.digest("hex"),
+    firstPrompt,
   };
+}
+
+const TITLE_PROMPT_CHARS = 60;
+const TITLE_CHARS = 80;
+const UNNAMED_BRANCHES = new Set(["main", "master", "HEAD"]);
+
+/**
+ * A title that needs no model: the first sentence of the run's first prompt,
+ * cut at a word boundary, then the branch when it names the work. The model's
+ * name replaces it once an account is written. Returns null when the prompt
+ * holds no words.
+ */
+export function fallbackRunTitle(
+  prompt: string,
+  branch: string | null,
+): string | null {
+  const line =
+    prompt
+      .replace(/<[^>]*>/gu, " ")
+      .split(/\r?\n/u)
+      .map((part) => part.replace(/\s+/gu, " ").trim())
+      .find((part) => part.length > 0) ?? "";
+  const sentence = (/^.*?[.?!](?=\s|$)/u.exec(line)?.[0] ?? line)
+    .replace(/[.]$/u, "")
+    .trim();
+  if (!sentence) return null;
+  let title = sentence;
+  if (title.length > TITLE_PROMPT_CHARS) {
+    const cut = title.slice(0, TITLE_PROMPT_CHARS - 1);
+    const space = cut.lastIndexOf(" ");
+    title = `${(space > TITLE_PROMPT_CHARS / 2 ? cut.slice(0, space) : cut).trimEnd()}…`;
+  }
+  const named = branch?.trim();
+  if (!named || UNNAMED_BRANCHES.has(named)) return title;
+  return `${title} · ${named}`.slice(0, TITLE_CHARS);
+}
+
+/**
+ * A short code for why an enrichment attempt failed, safe to store on the run
+ * and show an operator. It never carries the provider's own text, which can
+ * quote billing state.
+ */
+export function enrichmentFailureReason(error: unknown): string {
+  const { name, message } =
+    typeof error === "object" && error !== null
+      ? (error as { name?: unknown; message?: unknown })
+      : { name: undefined, message: error };
+  const text = String(message ?? "");
+  const credit = /^Run enrichment unavailable: ([\w.-]+)/u.exec(text);
+  if (credit) return `credit_refused:${credit[1]}`.slice(0, 64);
+  if (text === "Run enrichment was disabled") return "disabled";
+  if (text === "Stella returned no run account") return "empty_account";
+  if (name === "ZodError" || name === "SyntaxError") return "invalid_account";
+  if (name === "TimeoutError" || name === "AbortError" || /timed? ?out/iu.test(text))
+    return "timeout";
+  if (
+    /free tier|does not have access|unauthori[sz]ed|forbidden|insufficient|quota|\b40[123]\b/iu.test(
+      text,
+    )
+  )
+    return "model_refused";
+  return "unknown";
 }
 
 export async function runNarrativeTurn(
@@ -91,7 +160,10 @@ export async function runNarrativeTurn(
   const gate = await evaluateTurnCreditGate(scope.orgId, {
     fundedBy: selection.fundedBy,
   });
-  if (!gate.ok) throw new Error(`Run enrichment unavailable: ${gate.code}`);
+  // A refusal does not clear within a retry's backoff. The sweep tries again
+  // after the failure is recorded, so spending the retries here buys nothing.
+  if (!gate.ok)
+    throw new NonRetriableError(`Run enrichment unavailable: ${gate.code}`);
   const turn = await runGovernedTurn({
     ...selection,
     ...(funding.modelKey ? { credential: funding.modelKey } : {}),

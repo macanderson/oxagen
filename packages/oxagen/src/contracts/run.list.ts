@@ -413,6 +413,11 @@ export const runItemSchema = z
       .optional(),
     /** False when the workspace turned automatic run names and summaries off (ADR-153). */
     enrichmentEnabled: z.boolean().optional(),
+    /**
+     * Why the last automatic account failed, as a short reason code such as
+     * `model_refused` or `credit_refused:<code>`. Absent once an account exists.
+     */
+    enrichmentError: z.string().optional(),
     /** The generated name; null until `summarize_run` wrote one. */
     name: z.string().nullable(),
     summary: runSummarySchema.nullable(),

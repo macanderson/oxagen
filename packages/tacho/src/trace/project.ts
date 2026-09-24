@@ -142,6 +142,7 @@ export function projectToTrace(
         break;
       }
       case "policy_decision":
+      case "harness_permission":
       case "token_denied": {
         if (
           turn === undefined ||

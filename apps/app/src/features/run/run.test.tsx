@@ -1005,10 +1005,12 @@ describe("tabs", () => {
       "everything",
       { kinds: [] },
     ]);
-    expect(screen.getByRole("button", { name: "Steps" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    // Steps opens every turn.
+    expect(
+      screen
+        .getAllByTestId("transcript-turn")
+        .every((turn) => turn.hasAttribute("open")),
+    ).toBe(true);
   });
 
   it("opens the transcript at the level the URL asked for, from the same read", async () => {
@@ -1022,9 +1024,9 @@ describe("tabs", () => {
       "everything",
       { kinds: [] },
     ]);
-    expect(screen.getByRole("button", { name: "Turns" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
+    // Turns opens none but the one holding the newest frame.
+    expect(screen.getAllByTestId("transcript-turn")[0]).not.toHaveAttribute(
+      "open",
     );
   });
 
@@ -1102,7 +1104,7 @@ describe("transcript", () => {
     ]);
     expect(turns[1]).toHaveTextContent("done");
     expect(turns[1]).toHaveTextContent("2 steps");
-    expect(turns[1]).toHaveTextContent("seq 2 to 8");
+    expect(turns[1]).toHaveTextContent("steps 1 to 2");
     // What was asked sits above the turn it opened, outside the disclosure,
     // so a collapsed turn still shows it.
     const asked = screen.getByTestId("transcript-you");
@@ -1128,6 +1130,12 @@ describe("transcript", () => {
     expect(
       screen.getAllByText(/Both failures predate the release scope/),
     ).toHaveLength(1);
+    // The steps are numbered over the rows drawn: the run start, the
+    // digest-only model call and the turn text above have no row, and
+    // leave no gap in the count.
+    expect(
+      screen.getAllByTestId("step-number").map((n) => n.textContent),
+    ).toEqual(["1", "2", "3"]);
     await expectNoAxe(container);
   });
 
@@ -1137,8 +1145,9 @@ describe("transcript", () => {
       { tab: "transcript" },
     );
     const readout = screen.getByTestId("transport-readout");
-    expect(readout).toHaveTextContent("seq 12");
-    expect(readout).toHaveTextContent("/ 12");
+    // The position counts frames from 1, not the recorded seq, so it runs
+    // without gaps whatever seq numbers the chain carries.
+    expect(readout).toHaveTextContent("frame 13 / 13");
     expect(readout).toHaveTextContent("0:24 / 0:24");
     expect(readout).toHaveTextContent("$0.90");
     const now = screen
@@ -1162,14 +1171,48 @@ describe("transcript", () => {
       target: { value: "4" },
     });
     const readout = screen.getByTestId("transport-readout");
-    expect(readout).toHaveTextContent("seq 4");
+    expect(readout).toHaveTextContent("frame 5 /");
     expect(readout).toHaveTextContent("$0.38");
     const steps = screen.getAllByTestId("transcript-step");
     const now = steps.find((step) => step.hasAttribute("data-now"));
     expect(now).toHaveTextContent("claude-fable-5-1");
     expect(steps[steps.length - 1]?.className).toContain("opacity-35");
     fireEvent.click(screen.getByRole("button", { name: "Step back" }));
-    expect(readout).toHaveTextContent("seq 3");
+    expect(readout).toHaveTextContent("frame 4 /");
+  });
+
+  it("rewinds to the first frame, jumps to the last, and offers the mockup's four speeds", async () => {
+    await renderRun(
+      { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
+      { tab: "transcript" },
+    );
+    const readout = screen.getByTestId("transport-readout");
+    const rewind = screen.getByRole("button", {
+      name: "Rewind to the first frame",
+    });
+    const end = screen.getByRole("button", { name: "Go to the last frame" });
+    expect(end).toBeDisabled();
+    fireEvent.click(rewind);
+    expect(readout).toHaveTextContent("frame 1 / 13");
+    expect(rewind).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Step back" })).toBeDisabled();
+    fireEvent.click(end);
+    expect(readout).toHaveTextContent("frame 13 / 13");
+    const speeds = within(
+      screen.getByRole("group", { name: "Playback speed" }),
+    ).getAllByRole("button");
+    expect(speeds.map((button) => button.textContent)).toEqual([
+      "1×",
+      "2×",
+      "3×",
+      "6×",
+    ]);
+    expect(speeds[0]).toHaveAttribute("aria-pressed", "true");
+    const six = speeds[3];
+    if (six === undefined) throw new Error("no 6× speed button");
+    fireEvent.click(six);
+    expect(speeds[3]).toHaveAttribute("aria-pressed", "true");
+    expect(speeds[0]).toHaveAttribute("aria-pressed", "false");
   });
 
   it("opens every step's frames at Everything, and says a digest_only frame has nothing to read", async () => {
@@ -1192,26 +1235,21 @@ describe("transcript", () => {
     );
   });
 
-  it("closes everything at Turns and keeps the position", async () => {
-    const replaceState = vi.spyOn(window.history, "replaceState");
+  it("draws no zoom tabs, and keeps the URL's zoom on the Transcript tab's link", async () => {
     await renderRun(
       { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
       { tab: "transcript", zoom: "everything" },
     );
-    fireEvent.click(screen.getByRole("button", { name: "Turns" }));
-    expect(screen.queryAllByTestId("transcript-frame")).toHaveLength(0);
-    expect(
-      screen
-        .getAllByTestId("transcript-turn")
-        .every((turn) => !turn.hasAttribute("open")),
-    ).toBe(true);
-    expect(screen.getByTestId("transport-readout")).toHaveTextContent("seq 12");
-    expect(replaceState).toHaveBeenCalledWith(
-      null,
-      "",
-      "/acme/core-platform/runs/tse_7k2m9q?tab=transcript&zoom=turns",
+    for (const name of ["Turns", "Steps", "Everything"]) {
+      expect(screen.queryByRole("button", { name })).toBeNull();
+    }
+    const tabs = within(
+      screen.getByRole("navigation", { name: "Run sections" }),
     );
-    replaceState.mockRestore();
+    expect(tabs.getByRole("link", { name: /Transcript/ })).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=transcript&zoom=everything",
+    );
   });
 
   it("says which half a frame carried, and the decision a rule made about the call", async () => {
@@ -1285,11 +1323,11 @@ describe("transcript", () => {
         target: { value: "2" },
       });
       expect(screen.getByTestId("transport-readout")).not.toHaveTextContent(
-        "seq 12",
+        "frame 13 /",
       );
       fireEvent.click(screen.getByRole("button", { name: "go live" }));
       expect(screen.getByTestId("transport-readout")).toHaveTextContent(
-        "seq 12",
+        "frame 13 /",
       );
     } finally {
       vi.useRealTimers();
@@ -1305,21 +1343,21 @@ describe("transcript", () => {
       );
       fireEvent.click(screen.getByRole("button", { name: "Play" }));
       const readout = screen.getByTestId("transport-readout");
-      expect(readout).toHaveTextContent("seq 0");
+      expect(readout).toHaveTextContent("frame 1 /");
       act(() => {
         vi.advanceTimersByTime(2000);
       });
-      expect(readout).toHaveTextContent("seq 1");
-      fireEvent.click(screen.getByRole("button", { name: "×2" }));
+      expect(readout).toHaveTextContent("frame 2 /");
+      fireEvent.click(screen.getByRole("button", { name: "2×" }));
       act(() => {
         vi.advanceTimersByTime(1000);
       });
-      expect(readout).toHaveTextContent("seq 2");
+      expect(readout).toHaveTextContent("frame 3 /");
       fireEvent.click(screen.getByRole("button", { name: "Pause playback" }));
       act(() => {
         vi.advanceTimersByTime(10_000);
       });
-      expect(readout).toHaveTextContent("seq 2");
+      expect(readout).toHaveTextContent("frame 3 /");
     } finally {
       vi.useRealTimers();
     }
@@ -1707,10 +1745,9 @@ describe("chips", () => {
   it("drops a word the contract does not publish rather than refusing the page (negative)", async () => {
     const { calls } = await renderRun(
       { detail: ok(runDetail()), transcript: ok(runTranscript()) },
-      { tab: "transcript", kinds: "thinking,proof,tools" },
+      { tab: "transcript", kinds: "proof,tools" },
     );
     expect(calls.transcript[1]?.[3]).toEqual({ kinds: ["tools"] });
-    expect(screen.queryByTestId("chip-thinking")).toBeNull();
     expect(screen.queryByTestId("chip-proof")).toBeNull();
   });
 
@@ -1722,14 +1759,37 @@ describe("chips", () => {
       },
       { tab: "transcript", zoom: "turns", kinds: "tools" },
     );
-    expect(screen.getByTestId("chip-errors")).toHaveAttribute(
+    // Turning a chip on adds its kinds; tools brings its gate decisions.
+    expect(screen.getByTestId("chip-prompt")).toHaveAttribute(
       "href",
-      "/acme/core-platform/runs/tse_7k2m9q?tab=transcript&zoom=turns&kinds=tools%2Cerrors",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=transcript&zoom=turns&kinds=prompt%2Ctools%2Cpolicy",
     );
-    // Pressing a chip that is on takes it off again.
+    // Turning off the one chip that is on turns every chip off.
     expect(screen.getByTestId("chip-tools")).toHaveAttribute(
       "href",
-      "/acme/core-platform/runs/tse_7k2m9q?tab=transcript&zoom=turns",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=transcript&zoom=turns&kinds=none",
+    );
+    expect(screen.getByTestId("chip-errors")).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=transcript&zoom=turns&kinds=errors",
+    );
+  });
+
+  it("reads nothing more when every chip is off, and says how to get the run back", async () => {
+    const { calls } = await renderRun(
+      { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
+      { tab: "transcript", kinds: "none" },
+    );
+    expect(calls.transcript).toEqual([
+      [ctx, "tse_7k2m9q", "everything", { kinds: [] }],
+    ]);
+    expect(screen.getByTestId("transcript-empty")).toHaveTextContent(
+      "Choose all",
+    );
+    expect(screen.queryByTestId("transcript")).toBeNull();
+    expect(screen.getByTestId("chip-all")).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=transcript&zoom=steps",
     );
   });
 
@@ -1742,7 +1802,7 @@ describe("chips", () => {
       { tab: "transcript", kinds: "policy" },
     );
     expect(screen.getByTestId("transcript-empty")).toHaveTextContent(
-      "Clear the filter",
+      "Choose all",
     );
     expect(screen.queryByTestId("run-transport")).toBeNull();
   });

@@ -462,7 +462,9 @@ describe("createFunction adapter", () => {
       // Second call is the on-failure function
       const failureTrigger = capturedTriggers[1] as Record<string, unknown>;
       expect(failureTrigger.event).toBe("inngest/function.failed");
-      expect(failureTrigger.if).toBe("event.data.function_id == 'my-function'");
+      expect(failureTrigger.if).toBe(
+        "event.data.function_id == 'oxagen-runner-my-function'",
+      );
     });
 
     it("companion handler invokes the onFailure handler with adapted step", async () => {

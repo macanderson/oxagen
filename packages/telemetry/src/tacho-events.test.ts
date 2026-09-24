@@ -206,6 +206,7 @@ describe("selectTachoEvents", () => {
         turnSeq: 2,
         ttftMs: null,
         apiDurationMs: null,
+        effort: "",
       },
     ]);
     const [call] = chSelect.mock.calls[0] ?? [];
@@ -240,6 +241,18 @@ describe("selectTachoEvents", () => {
     ]);
     expect(chSelect.mock.calls[0]?.[0]?.query).toContain("ttft_ms");
     expect(chSelect.mock.calls[0]?.[0]?.query).toContain("api_duration_ms");
+  });
+  it("reads the effort a model call ran at, and an empty string where none was recorded", async () => {
+    chSelect.mockResolvedValueOnce({
+      data: [{ seq: "1", effort: "high" }, { seq: "2", effort: "" }, { seq: "3" }],
+    });
+    const rows = await selectTachoEvents({
+      sessionUuid: SESSION,
+      afterSeq: 0,
+      limit: 10,
+    });
+    expect(rows.map(({ effort }) => effort)).toEqual(["high", "", ""]);
+    expect(chSelect.mock.calls.at(-1)?.[0]?.query).toContain("effort");
   });
 });
 

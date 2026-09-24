@@ -627,6 +627,9 @@
           "enrichmentEnabled": {
             "type": "boolean"
           },
+          "enrichmentError": {
+            "type": "string"
+          },
           "name": {
             "anyOf": [
               {
