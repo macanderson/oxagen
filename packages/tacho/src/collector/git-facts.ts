@@ -173,6 +173,18 @@ function firstLine(value: string | undefined): string | undefined {
  * recording a guess. A repository that answers `HEAD` but has no branch
  * (detached) or no remote simply omits those members.
  */
+/**
+ * The top of the worktree that holds `dir`, or undefined when `dir` is in no
+ * repository. A linked worktree answers its own root, not the primary
+ * checkout's.
+ */
+export async function readGitRoot(
+  exec: ExecAsync,
+  dir: string,
+): Promise<string | undefined> {
+  return firstLine(await git(exec, dir, ["rev-parse", "--show-toplevel"]));
+}
+
 export async function readGitFacts(
   exec: ExecAsync,
   cwd: string,
