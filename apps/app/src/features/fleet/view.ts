@@ -9,7 +9,7 @@
 // not on `list_runs` yet, so there is no token sum to take and the tile says
 // so rather than printing a zero.
 import type { ApprovalItem } from "@/data/contracts/approvals";
-import { type Money, sumMoney } from "@/data/contracts/money";
+import { compareMicros, type Money, sumMoney } from "@/data/contracts/money";
 import type { RunRow } from "@/data/contracts/runs";
 
 /**
@@ -153,6 +153,12 @@ export function windowParts(windowSeconds: number): {
 export const ROWS_PER_PAGE = [5, 10, 25, 50, 0] as const;
 export type RowsPerPage = (typeof ROWS_PER_PAGE)[number];
 
+/** The rows-per-page choice a select's value names; anything else is the default, 10. */
+export function rowsPerPageOf(value: string): RowsPerPage {
+  const n = Number(value);
+  return ROWS_PER_PAGE.find((per) => per === n) ?? 10;
+}
+
 /** The columns a header click sorts on. */
 export const SORT_KEYS = [
   "run",
@@ -205,10 +211,6 @@ function compareText(a: string, b: string): number {
   return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
 }
 
-function micros(row: ListedRun): bigint | null {
-  return row.run.cost === null ? null : BigInt(row.run.cost.micros);
-}
-
 function compare(
   a: ListedRun,
   b: ListedRun,
@@ -218,12 +220,12 @@ function compare(
 ): number {
   switch (key) {
     case "cost": {
-      const x = micros(a);
-      const y = micros(b);
+      const x = a.run.cost;
+      const y = b.run.cost;
       // A row with no cost sorts after every priced row, in either direction
       // of the figures among themselves.
       if (x === null || y === null) return x === y ? 0 : x === null ? 1 : -1;
-      return x === y ? 0 : x < y ? -1 : 1;
+      return compareMicros(x, y);
     }
     case "frames":
       return a.run.frames - b.run.frames;
