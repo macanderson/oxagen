@@ -45,8 +45,6 @@ describe("scim.request capability", () => {
       status: 204,
       body: null,
     });
-    expect(
-      scimRequest.output.safeParse({ status: 99, body: null }).success,
-    ).toBe(false);
+    expect(scimRequest.output.safeParse({ status: 99, body: null }).success).toBe(false);
   });
 });

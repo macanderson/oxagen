@@ -71,11 +71,7 @@ beforeEach(() => {
   );
   mocks.readLive.mockResolvedValue(null);
   mocks.insert.mockResolvedValue({ token: TOKEN, row: ROW });
-  mocks.revokeLive.mockResolvedValue({
-    ...ROW,
-    id: "row-old",
-    tokenPrefix: "oxscim_oldoldol",
-  });
+  mocks.revokeLive.mockResolvedValue({ ...ROW, id: "row-old", tokenPrefix: "oxscim_oldoldol" });
 });
 
 const emitted = () => mocks.emit.mock.calls.map((c) => c[0]);
@@ -92,11 +88,7 @@ describe("create_scim_token", () => {
         lastUsedAt: null,
       },
     });
-    expect(mocks.insert).toHaveBeenCalledWith(
-      expect.anything(),
-      CTX.orgId,
-      CTX.userId,
-    );
+    expect(mocks.insert).toHaveBeenCalledWith(expect.anything(), CTX.orgId, CTX.userId);
   });
 
   it("audits the mint by prefix and never writes the token into the row", async () => {
@@ -124,9 +116,7 @@ describe("create_scim_token", () => {
 
   it("refuses a caller who is not an org Owner or Admin", async () => {
     roleGate.refuse = true;
-    await expect(orgScimTokenCreateHandler({}, CTX)).rejects.toThrow(
-      /forbidden/,
-    );
+    await expect(orgScimTokenCreateHandler({}, CTX)).rejects.toThrow(/forbidden/);
     expect(mocks.withSystemDb).not.toHaveBeenCalled();
   });
 
@@ -144,11 +134,7 @@ describe("rotate_scim_token", () => {
   it("revokes the live token and mints its replacement in one transaction", async () => {
     const out = await orgScimTokenRotateHandler({}, CTX);
     expect(mocks.withSystemDb).toHaveBeenCalledTimes(1);
-    expect(mocks.revokeLive).toHaveBeenCalledWith(
-      expect.anything(),
-      CTX.orgId,
-      CTX.userId,
-    );
+    expect(mocks.revokeLive).toHaveBeenCalledWith(expect.anything(), CTX.orgId, CTX.userId);
     expect(mocks.insert).toHaveBeenCalledTimes(1);
     expect(out.token).toBe(TOKEN);
     expect(emitted()).toEqual([
@@ -205,9 +191,7 @@ describe("revoke_scim_token", () => {
 
   it("refuses a caller who is not an org Owner or Admin", async () => {
     roleGate.refuse = true;
-    await expect(orgScimTokenRevokeHandler({}, CTX)).rejects.toThrow(
-      /forbidden/,
-    );
+    await expect(orgScimTokenRevokeHandler({}, CTX)).rejects.toThrow(/forbidden/);
     expect(mocks.revokeLive).not.toHaveBeenCalled();
   });
 });

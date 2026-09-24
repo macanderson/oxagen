@@ -21,9 +21,7 @@ function setup(opts: {
     currentRole: vi.fn(async () => opts.current ?? null),
     applyRole: vi.fn(async () => {
       if (opts.failApply) throw new Error("db down");
-      return opts.scimSuspended
-        ? ("scim_suspended" as const)
-        : ("applied" as const);
+      return opts.scimSuspended ? ("scim_suspended" as const) : ("applied" as const);
     }),
   };
   const emit = vi.fn();
@@ -121,11 +119,7 @@ describe("createSsoProvisioner", () => {
       mappings: [{ group: "a", role: "admin" }],
       scimSuspended: true,
     });
-    const out = await provision({
-      user,
-      provider,
-      userInfo: { groups: ["a"] },
-    });
+    const out = await provision({ user, provider, userInfo: { groups: ["a"] } });
     expect(out).toEqual({
       grantedRole: null,
       previousRole: null,

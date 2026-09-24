@@ -97,10 +97,7 @@ describe("org.sso.list handler", () => {
       baseUrl: `${SSO_BASE_URL}/api/scim/v2`,
       token: null,
     });
-    expect(mocks.readScimToken).toHaveBeenCalledWith(
-      expect.anything(),
-      CTX.orgId,
-    );
+    expect(mocks.readScimToken).toHaveBeenCalledWith(expect.anything(), CTX.orgId);
   });
 
   it("describes the live SCIM token by its prefix and dates, never the token", async () => {

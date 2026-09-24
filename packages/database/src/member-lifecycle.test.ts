@@ -91,10 +91,8 @@ function query(op: Stmt["op"], table: string, values?: object) {
     stmt.params = compiled.params;
     return q;
   };
-  q.then = (
-    resolve: (v: unknown) => unknown,
-    reject: (e: unknown) => unknown,
-  ) => Promise.resolve(answer(op, stmt.table)).then(resolve, reject);
+  q.then = (resolve: (v: unknown) => unknown, reject: (e: unknown) => unknown) =>
+    Promise.resolve(answer(op, stmt.table)).then(resolve, reject);
   return q;
 }
 
@@ -148,10 +146,7 @@ beforeEach(() => {
       { id: "plain-key", scope: {} },
       { id: "cli-key", scope: { purpose: "cli_session_v1" } },
       { id: "agent-key", scope: { purpose: "agent_credential_v1" } },
-      {
-        id: "stella-key",
-        scope: { purpose: "stella_operational_telemetry_v1" },
-      },
+      { id: "stella-key", scope: { purpose: "stella_operational_telemetry_v1" } },
     ],
     "delete:sessions": [{ id: "sess-1" }, { id: "sess-2" }],
   };
@@ -179,9 +174,7 @@ describe("removeOrgMemberInTx — a SCIM deprovision", () => {
     expect(result.wasMember).toBe(true);
 
     // Sessions are deleted by user, across every organization.
-    const sessions = stmts.find(
-      (s) => s.op === "delete" && s.table === "sessions",
-    );
+    const sessions = stmts.find((s) => s.op === "delete" && s.table === "sessions");
     expect(sessions?.params).toEqual([USER]);
 
     // Role assignments at every scope: no workspace predicate.
@@ -231,9 +224,7 @@ describe("removeOrgMemberInTx — a SCIM deprovision", () => {
     await removeOrgMemberInTx(fakeTx() as never, deprovision());
     const types = events().map((e) => e.eventType);
     expect(types.filter((t) => t === "auth.sign_out")).toHaveLength(2);
-    expect(types.filter((t) => t === "security.session_revoked")).toHaveLength(
-      2,
-    );
+    expect(types.filter((t) => t === "security.session_revoked")).toHaveLength(2);
     expect(types.filter((t) => t === "api_key.revoked")).toHaveLength(6);
     expect(types.filter((t) => t === "tacho.host_revoked")).toHaveLength(1);
     expect(types.at(-1)).toBe("scim.user_deprovisioned");
@@ -287,9 +278,7 @@ describe("removeOrgMemberInTx — a manual removal", () => {
     expect(result.sessionIds).toEqual([]);
     expect(stmts.some((s) => s.table === "sessions")).toBe(false);
     expect(stmts.some((s) => s.table === "hosts")).toBe(false);
-    const sweep = stmts.find(
-      (s) => s.op === "update" && s.table === "api_keys",
-    );
+    const sweep = stmts.find((s) => s.op === "update" && s.table === "api_keys");
     expect(sweep?.sql).toContain("purpose");
     expect(sweep?.params).toContain("cli_session_v1");
     expect(events().map((e) => e.eventType)).toEqual(["api_key.revoked"]);
@@ -392,19 +381,13 @@ describe("applyMappedOrgRoleInTx", () => {
     const membership = stmts.find(
       (s) => s.op === "insert" && s.table === "org_users",
     );
-    expect(membership?.values).toMatchObject({
-      orgId: ORG,
-      userId: USER,
-      role: "admin",
-    });
+    expect(membership?.values).toMatchObject({ orgId: ORG, userId: USER, role: "admin" });
   });
 
   it("creates the principal when none exists, named after the user", async () => {
     rows["select:org_users"] = [];
     queued["select:principals"] = [[]];
-    rows["select:principals"] = [
-      { id: "prn-new", status: "active", metadata: {} },
-    ];
+    rows["select:principals"] = [{ id: "prn-new", status: "active", metadata: {} }];
     rows["select:users"] = [{ displayName: null, email: "ada@acme.com" }];
     rows["select:roles"] = [{ id: "role-admin" }];
     // The first read is the Owner probe, which must find no Owner assignment.
@@ -430,9 +413,7 @@ describe("applyMappedOrgRoleInTx", () => {
   });
 
   it("maps member to a membership with no org-wide role", async () => {
-    rows["select:principals"] = [
-      { id: "prn-1", status: "active", metadata: {} },
-    ];
+    rows["select:principals"] = [{ id: "prn-1", status: "active", metadata: {} }];
     await applyMappedOrgRoleInTx(fakeTx() as never, {
       orgId: ORG,
       userId: USER,
@@ -451,9 +432,7 @@ describe("applyMappedOrgRoleInTx", () => {
   });
 
   it("throws when the grant did not take, so the caller's transaction rolls back", async () => {
-    rows["select:principals"] = [
-      { id: "prn-1", status: "active", metadata: {} },
-    ];
+    rows["select:principals"] = [{ id: "prn-1", status: "active", metadata: {} }];
     rows["select:roles"] = [{ id: "role-admin" }];
     rows["select:principal_role_assignments"] = [];
     await expect(
@@ -468,9 +447,7 @@ describe("applyMappedOrgRoleInTx", () => {
   });
 
   it("throws when the organization has no such IAM role", async () => {
-    rows["select:principals"] = [
-      { id: "prn-1", status: "active", metadata: {} },
-    ];
+    rows["select:principals"] = [{ id: "prn-1", status: "active", metadata: {} }];
     rows["select:roles"] = [];
     await expect(
       applyMappedOrgRoleInTx(fakeTx() as never, {
@@ -485,9 +462,7 @@ describe("applyMappedOrgRoleInTx", () => {
 
   it("reactivates a principal a manual removal marked deleted", async () => {
     rows["select:org_users"] = [];
-    rows["select:principals"] = [
-      { id: "prn-1", status: "deleted", metadata: {} },
-    ];
+    rows["select:principals"] = [{ id: "prn-1", status: "deleted", metadata: {} }];
     await applyMappedOrgRoleInTx(fakeTx() as never, {
       orgId: ORG,
       userId: USER,

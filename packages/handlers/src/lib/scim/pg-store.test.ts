@@ -95,17 +95,13 @@ function expectOrgUserFilter(stmt: Stmt | undefined): void {
   expect(boundTo(stmt!, '"iam"."principals"."kind"')).toEqual(["human"]);
   expect(stmt!.sql).toContain('"iam"."principals"."workspace_id" is null');
   expect(stmt!.sql).toContain('"auth"."users"."deleted_at" is null');
-  expect(stmt!.sql).toContain(
-    `NOT ("iam"."principals"."metadata" ? 'scim_deleted_at')`,
-  );
+  expect(stmt!.sql).toContain(`NOT ("iam"."principals"."metadata" ? 'scim_deleted_at')`);
 }
 
 /** The one principal that is this person in this organization. */
 function expectPrincipalOf(stmt: Stmt | undefined, userId: string): void {
   expectFenced(stmt, PRINCIPAL_ORG);
-  expect(boundTo(stmt!, '"iam"."principals"."parent_user_id"')).toEqual([
-    userId,
-  ]);
+  expect(boundTo(stmt!, '"iam"."principals"."parent_user_id"')).toEqual([userId]);
   expect(boundTo(stmt!, '"iam"."principals"."kind"')).toEqual(["human"]);
   expect(stmt!.sql).toContain('"iam"."principals"."workspace_id" is null');
 }
@@ -114,18 +110,16 @@ const find = (re: RegExp) => stmts.find((s) => re.test(s.sql));
 const all = (re: RegExp) => stmts.filter((s) => re.test(s.sql));
 
 /** A joined user row in the port's select-list order. */
-function userRow(
-  over: {
-    id?: string;
-    email?: string;
-    displayName?: string | null;
-    createdAt?: Date;
-    updatedAt?: Date;
-    externalId?: string | null;
-    metadata?: unknown;
-    principalUpdatedAt?: Date;
-  } = {},
-): unknown[] {
+function userRow(over: {
+  id?: string;
+  email?: string;
+  displayName?: string | null;
+  createdAt?: Date;
+  updatedAt?: Date;
+  externalId?: string | null;
+  metadata?: unknown;
+  principalUpdatedAt?: Date;
+} = {}): unknown[] {
   return [
     over.id ?? USER,
     over.email ?? "ada@acme.com",
@@ -140,11 +134,13 @@ function userRow(
   ];
 }
 
-const groupRow = (
-  id = GROUP,
-  displayName = "Engineering",
-  externalId: string | null = null,
-) => [id, displayName, externalId, T1, T1];
+const groupRow = (id = GROUP, displayName = "Engineering", externalId: string | null = null) => [
+  id,
+  displayName,
+  externalId,
+  T1,
+  T1,
+];
 
 beforeEach(() => {
   stmts = [];
@@ -156,26 +152,15 @@ beforeEach(() => {
 
 describe("the organization's own settings", () => {
   it("reads only this organization's verified domains, lowercased", async () => {
-    answers.push({
-      match: /sso_providers/,
-      rows: [["Acme.COM"], ["eu.acme.com"]],
-    });
-    await expect(store().verifiedDomains()).resolves.toEqual([
-      "acme.com",
-      "eu.acme.com",
-    ]);
+    answers.push({ match: /sso_providers/, rows: [["Acme.COM"], ["eu.acme.com"]] });
+    await expect(store().verifiedDomains()).resolves.toEqual(["acme.com", "eu.acme.com"]);
     const [stmt] = stmts;
     expectFenced(stmt, '"auth"."sso_providers"."organization_id"');
-    expect(boundTo(stmt!, '"auth"."sso_providers"."domain_verified"')).toEqual([
-      true,
-    ]);
+    expect(boundTo(stmt!, '"auth"."sso_providers"."domain_verified"')).toEqual([true]);
   });
 
   it("reads only this organization's group to role mappings", async () => {
-    answers.push({
-      match: /sso_group_roles/,
-      rows: [["Oxagen Admins", "admin"]],
-    });
+    answers.push({ match: /sso_group_roles/, rows: [["Oxagen Admins", "admin"]] });
     await expect(store().groupRoleMappings()).resolves.toEqual([
       { group: "Oxagen Admins", role: "admin" },
     ]);
@@ -243,16 +228,9 @@ describe("users", () => {
   it("ignores name parts that are not strings and metadata that is not an object", async () => {
     answers.push({
       match: /from "iam"."principals"/,
-      rows: [
-        userRow({
-          metadata: { scim: { givenName: 7, familyName: "Lovelace" } },
-        }),
-      ],
+      rows: [userRow({ metadata: { scim: { givenName: 7, familyName: "Lovelace" } } })],
     });
-    answers.push({
-      match: /from "iam"."principals"/,
-      rows: [userRow({ metadata: null })],
-    });
+    answers.push({ match: /from "iam"."principals"/, rows: [userRow({ metadata: null })] });
     expect(await store().findUser(USER)).toMatchObject({
       givenName: null,
       familyName: "Lovelace",
@@ -269,28 +247,21 @@ describe("users", () => {
     answers.push({ match: /from "iam"."principals"/, rows: [userRow()] });
     await store().findUserByEmail("Ada@ACME.com");
     expectOrgUserFilter(stmts[0]);
-    expect(boundTo(stmts[0]!, '"auth"."users"."email"')).toEqual([
-      "ada@acme.com",
-    ]);
+    expect(boundTo(stmts[0]!, '"auth"."users"."email"')).toEqual(["ada@acme.com"]);
   });
 });
 
 describe("listing users", () => {
   it("counts and pages under the same organization fence", async () => {
     answers.push({ match: /count\(\*\)/, rows: [[3]] });
-    answers.push({
-      match: /order by/,
-      rows: [userRow(), userRow({ id: OTHER_USER })],
-    });
+    answers.push({ match: /order by/, rows: [userRow(), userRow({ id: OTHER_USER })] });
     const out = await store().listUsers(null, 1, 2);
     expect(out.total).toBe(3);
     expect(out.rows.map((r) => r.id)).toEqual([USER, OTHER_USER]);
     expect(stmts).toHaveLength(2);
     for (const stmt of stmts) expectOrgUserFilter(stmt);
     const page = find(/order by/)!;
-    expect(page.sql).toMatch(
-      /order by "auth"."users"."created_at", "auth"."users"."id"/,
-    );
+    expect(page.sql).toMatch(/order by "auth"."users"."created_at", "auth"."users"."id"/);
     expect(page.sql).toMatch(/offset \$\d+/);
     expect(page.params.slice(-2)).toEqual([2, 1]);
   });
@@ -303,10 +274,7 @@ describe("listing users", () => {
   });
 
   it("answers a total of zero when the count comes back empty", async () => {
-    await expect(store().listUsers(null, 0, 10)).resolves.toEqual({
-      rows: [],
-      total: 0,
-    });
+    await expect(store().listUsers(null, 0, 10)).resolves.toEqual({ rows: [], total: 0 });
   });
 
   it.each([
@@ -314,16 +282,13 @@ describe("listing users", () => {
     ["emails.value", "ADA@acme.com", '"auth"."users"."email"', "ada@acme.com"],
     ["externalid", "00u1ABCD", '"iam"."principals"."idp_subject"', "00u1ABCD"],
     ["id", USER, '"auth"."users"."id"', USER],
-  ])(
-    "filters %s eq on its column, still inside the fence",
-    async (attribute, value, column, bound) => {
-      await store().listUsers({ attribute, value }, 0, 10);
-      for (const stmt of stmts) {
-        expectOrgUserFilter(stmt);
-        expect(boundTo(stmt, column)).toEqual([bound]);
-      }
-    },
-  );
+  ])("filters %s eq on its column, still inside the fence", async (attribute, value, column, bound) => {
+    await store().listUsers({ attribute, value }, 0, 10);
+    for (const stmt of stmts) {
+      expectOrgUserFilter(stmt);
+      expect(boundTo(stmt, column)).toEqual([bound]);
+    }
+  });
 
   it.each(["not-a-uuid", "-".repeat(36), "0".repeat(36)])(
     "matches nobody for the id %s rather than failing the uuid cast",
@@ -339,25 +304,15 @@ describe("listing users", () => {
 });
 
 describe("provisioning a user", () => {
-  const name = {
-    displayName: "Ada Lovelace",
-    givenName: "Ada",
-    familyName: "Lovelace",
-  };
+  const name = { displayName: "Ada Lovelace", givenName: "Ada", familyName: "Lovelace" };
 
   it("creates the account and a human principal in this organization", async () => {
     answers.push({ match: /insert into "auth"."users"/, rows: [[USER]] });
-    const out = await store().provisionUser({
-      email: "ada@acme.com",
-      name,
-      externalId: "00u1",
-    });
+    const out = await store().provisionUser({ email: "ada@acme.com", name, externalId: "00u1" });
     expect(out).toEqual({ userId: USER, linked: false });
 
     const lookup = stmts[0]!;
-    expect(lookup.sql).toMatch(
-      /^select "id", "email_verified" from "auth"."users"/,
-    );
+    expect(lookup.sql).toMatch(/^select "id", "email_verified" from "auth"."users"/);
     expect(boundTo(lookup, '"auth"."users"."email"')).toEqual(["ada@acme.com"]);
     expect(lookup.sql).toContain('"auth"."users"."deleted_at" is null');
 
@@ -371,14 +326,7 @@ describe("provisioning a user", () => {
 
     const principal = find(/insert into "iam"."principals"/)!;
     expect(principal.params).toEqual(
-      expect.arrayContaining([
-        ORG,
-        "human",
-        "Ada Lovelace",
-        "active",
-        USER,
-        "00u1",
-      ]),
+      expect.arrayContaining([ORG, "human", "Ada Lovelace", "active", USER, "00u1"]),
     );
     expect(principal.params).toContainEqual(
       JSON.stringify({ scim: { givenName: "Ada", familyName: "Lovelace" } }),
@@ -403,9 +351,7 @@ describe("provisioning a user", () => {
       `("iam"."principals"."metadata" - 'scim_deprovisioned_at' - 'scim_deleted_at') ||`,
     );
     // No display name falls back to the email.
-    expect(update.params).toEqual(
-      expect.arrayContaining(["active", "ada@acme.com"]),
-    );
+    expect(update.params).toEqual(expect.arrayContaining(["active", "ada@acme.com"]));
   });
 
   it("links an unverified account only after dropping what its registration left", async () => {
@@ -424,9 +370,7 @@ describe("provisioning a user", () => {
     expect(verify.params).toContain(true);
     const password = find(/^update "auth"."accounts"/)!;
     expect(boundTo(password, '"auth"."accounts"."user_id"')).toEqual([USER]);
-    expect(boundTo(password, '"auth"."accounts"."provider_id"')).toEqual([
-      "credential",
-    ]);
+    expect(boundTo(password, '"auth"."accounts"."provider_id"')).toEqual(["credential"]);
     expect(password.sql).toContain('"password" = $');
     const sessions = find(/^delete from "auth"."sessions"/)!;
     expect(boundTo(sessions, '"auth"."sessions"."user_id"')).toEqual([USER]);
@@ -462,9 +406,7 @@ describe("updating a user", () => {
     expect(err).toBeInstanceOf(ScimError);
     expect(err).toMatchObject({ status: 409, scimType: "uniqueness" });
     expect(stmts).toHaveLength(1);
-    expect(boundTo(stmts[0]!, '"auth"."users"."email"')).toEqual([
-      "grace@acme.com",
-    ]);
+    expect(boundTo(stmts[0]!, '"auth"."users"."email"')).toEqual(["grace@acme.com"]);
     expect(stmts[0]!.sql).toMatch(/"auth"."users"."id" <> \$\d/);
   });
 
@@ -526,9 +468,7 @@ describe("updating a user", () => {
     await store().reactivate(USER);
     expect(stmts).toHaveLength(1);
     expectPrincipalOf(stmts[0], USER);
-    expect(stmts[0]!.sql).toContain(
-      `"metadata" = "iam"."principals"."metadata" - 'scim_deprovisioned_at'`,
-    );
+    expect(stmts[0]!.sql).toContain(`"metadata" = "iam"."principals"."metadata" - 'scim_deprovisioned_at'`);
     expect(stmts[0]!.params).toContain("active");
   });
 });
@@ -563,16 +503,12 @@ describe("deprovisioning", () => {
     });
     const members = find(/^delete from "org"."scim_group_members"/)!;
     expectFenced(members, MEMBER_ORG);
-    expect(boundTo(members, '"org"."scim_group_members"."user_id"')).toEqual([
-      USER,
-    ]);
+    expect(boundTo(members, '"org"."scim_group_members"."user_id"')).toEqual([USER]);
     const marker = find(/^update "iam"."principals"/)!;
     expectPrincipalOf(marker, USER);
-    expect(
-      marker.params.some(
-        (p) => typeof p === "string" && p.includes("scim_deleted_at"),
-      ),
-    ).toBe(true);
+    expect(marker.params.some((p) => typeof p === "string" && p.includes("scim_deleted_at"))).toBe(
+      true,
+    );
   });
 
   it("writes nothing of its own when the removal refuses", async () => {
@@ -621,9 +557,7 @@ describe("group membership reads", () => {
     // a member row that names another organization's group grants nothing.
     expectFenced(stmt, MEMBER_ORG);
     expectFenced(stmt, GROUP_ORG);
-    expect(boundTo(stmt, '"org"."scim_group_members"."user_id"')).toEqual([
-      USER,
-    ]);
+    expect(boundTo(stmt, '"org"."scim_group_members"."user_id"')).toEqual([USER]);
   });
 
   it("answers known users without a query for an empty list", async () => {
@@ -633,19 +567,13 @@ describe("group membership reads", () => {
 
   it("keeps only people with a live human principal in this organization", async () => {
     answers.push({ match: /from "iam"."principals"/, rows: [[USER], [null]] });
-    await expect(store().knownUsers([USER, OTHER_USER])).resolves.toEqual(
-      new Set([USER]),
-    );
+    await expect(store().knownUsers([USER, OTHER_USER])).resolves.toEqual(new Set([USER]));
     const stmt = stmts[0]!;
     expectFenced(stmt, PRINCIPAL_ORG);
     expect(boundTo(stmt, '"iam"."principals"."kind"')).toEqual(["human"]);
     expect(stmt.sql).toContain('"iam"."principals"."workspace_id" is null');
-    expect(stmt.sql).toContain(
-      `NOT ("iam"."principals"."metadata" ? 'scim_deleted_at')`,
-    );
-    expect(stmt.sql).toMatch(
-      /"iam"."principals"."parent_user_id" in \(\$\d+, \$\d+\)/,
-    );
+    expect(stmt.sql).toContain(`NOT ("iam"."principals"."metadata" ? 'scim_deleted_at')`);
+    expect(stmt.sql).toMatch(/"iam"."principals"."parent_user_id" in \(\$\d+, \$\d+\)/);
     expect(stmt.params).toEqual(expect.arrayContaining([USER, OTHER_USER]));
   });
 
@@ -662,9 +590,7 @@ describe("group membership reads", () => {
       { userId: OTHER_USER, display: "grace@acme.com" },
     ]);
     expectFenced(stmts[0], MEMBER_ORG);
-    expect(boundTo(stmts[0]!, '"org"."scim_group_members"."group_id"')).toEqual(
-      [GROUP],
-    );
+    expect(boundTo(stmts[0]!, '"org"."scim_group_members"."group_id"')).toEqual([GROUP]);
   });
 });
 
@@ -684,9 +610,7 @@ describe("groups", () => {
     expectFenced(stmts[0], GROUP_ORG);
     expect(boundTo(stmts[0]!, '"org"."scim_groups"."id"')).toEqual([GROUP]);
     expectFenced(stmts[1], GROUP_ORG);
-    expect(boundTo(stmts[1]!, '"org"."scim_groups"."display_name"')).toEqual([
-      "Engineering",
-    ]);
+    expect(boundTo(stmts[1]!, '"org"."scim_groups"."display_name"')).toEqual(["Engineering"]);
   });
 
   it("counts and pages groups under the organization fence", async () => {
@@ -698,61 +622,37 @@ describe("groups", () => {
   });
 
   it("answers the group count alone for count=0, and zero for an empty count", async () => {
-    await expect(store().listGroups(null, 0, 0)).resolves.toEqual({
-      rows: [],
-      total: 0,
-    });
+    await expect(store().listGroups(null, 0, 0)).resolves.toEqual({ rows: [], total: 0 });
     expect(stmts).toHaveLength(1);
   });
 
   it.each([
-    [
-      "displayname",
-      "Engineering",
-      '"org"."scim_groups"."display_name"',
-      "Engineering",
-    ],
-    [
-      "externalid",
-      "okta-grp-1",
-      '"org"."scim_groups"."external_id"',
-      "okta-grp-1",
-    ],
+    ["displayname", "Engineering", '"org"."scim_groups"."display_name"', "Engineering"],
+    ["externalid", "okta-grp-1", '"org"."scim_groups"."external_id"', "okta-grp-1"],
     ["id", GROUP, '"org"."scim_groups"."id"', GROUP],
-  ])(
-    "filters groups on %s, still inside the fence",
-    async (attribute, value, column, bound) => {
-      await store().listGroups({ attribute, value }, 0, 10);
-      for (const stmt of stmts) {
-        expectFenced(stmt, GROUP_ORG);
-        expect(boundTo(stmt, column)).toEqual([bound]);
-      }
-    },
-  );
+  ])("filters groups on %s, still inside the fence", async (attribute, value, column, bound) => {
+    await store().listGroups({ attribute, value }, 0, 10);
+    for (const stmt of stmts) {
+      expectFenced(stmt, GROUP_ORG);
+      expect(boundTo(stmt, column)).toEqual([bound]);
+    }
+  });
 
-  it.each(["grp-1", "-".repeat(36)])(
-    "matches no group for the id %s",
-    async (value) => {
-      await store().listGroups({ attribute: "id", value }, 0, 10);
-      for (const stmt of stmts) {
-        expectFenced(stmt, GROUP_ORG);
-        expect(stmt.params).not.toContain(value);
-        expect(stmt.sql).toContain("and false)");
-      }
-    },
-  );
+  it.each(["grp-1", "-".repeat(36)])("matches no group for the id %s", async (value) => {
+    await store().listGroups({ attribute: "id", value }, 0, 10);
+    for (const stmt of stmts) {
+      expectFenced(stmt, GROUP_ORG);
+      expect(stmt.params).not.toContain(value);
+      expect(stmt.sql).toContain("and false)");
+    }
+  });
 
   it("creates a group owned by this organization", async () => {
-    answers.push({
-      match: /insert into "org"."scim_groups"/,
-      rows: [groupRow(GROUP, "Engineering", "okta-1")],
-    });
+    answers.push({ match: /insert into "org"."scim_groups"/, rows: [groupRow(GROUP, "Engineering", "okta-1")] });
     await expect(
       store().createGroup({ displayName: "Engineering", externalId: "okta-1" }),
     ).resolves.toMatchObject({ id: GROUP, externalId: "okta-1" });
-    expect(stmts[0]!.params).toEqual(
-      expect.arrayContaining([ORG, "Engineering", "okta-1"]),
-    );
+    expect(stmts[0]!.params).toEqual(expect.arrayContaining([ORG, "Engineering", "okta-1"]));
   });
 
   it("throws when the group insert answers no row", async () => {
@@ -788,12 +688,8 @@ describe("groups", () => {
     await store().removeGroupMembers(GROUP, [USER]);
     const del = find(/^delete from "org"."scim_group_members"/)!;
     expectFenced(del, MEMBER_ORG);
-    expect(boundTo(del, '"org"."scim_group_members"."group_id"')).toEqual([
-      GROUP,
-    ]);
-    expect(del.sql).toMatch(
-      /"org"."scim_group_members"."user_id" in \(\$\d+\)/,
-    );
+    expect(boundTo(del, '"org"."scim_group_members"."group_id"')).toEqual([GROUP]);
+    expect(del.sql).toMatch(/"org"."scim_group_members"."user_id" in \(\$\d+\)/);
     expectFenced(find(/^update "org"."scim_groups"/), GROUP_ORG);
   });
 });

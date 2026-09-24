@@ -89,12 +89,7 @@ scimRoute.all("*", async (c) => {
     try {
       body = await c.req.json();
     } catch {
-      return scimError(
-        c,
-        400,
-        "The request body is not valid JSON",
-        "invalidSyntax",
-      );
+      return scimError(c, 400, "The request body is not valid JSON", "invalidSyntax");
     }
   }
 
@@ -108,9 +103,7 @@ scimRoute.all("*", async (c) => {
 
   const mountAt = c.req.path.indexOf(SCIM_MOUNT);
   const path =
-    mountAt >= 0
-      ? c.req.path.slice(mountAt + SCIM_MOUNT.length) || "/"
-      : c.req.path;
+    mountAt >= 0 ? c.req.path.slice(mountAt + SCIM_MOUNT.length) || "/" : c.req.path;
   try {
     // No `surface`: execute_scim_request declares none, and this route is its
     // only caller (see the contract).
@@ -126,30 +119,17 @@ scimRoute.all("*", async (c) => {
       ctx,
     )) as { status: number; body: unknown; location?: string };
     if (result.location) c.header("Location", result.location);
-    return scimJson(
-      c,
-      result.status,
-      result.status === 204 ? null : result.body,
-    );
+    return scimJson(c, result.status, result.status === 204 ? null : result.body);
   } catch (err) {
     const code =
       typeof err === "object" && err !== null
         ? (err as { code?: unknown }).code
         : undefined;
     if (code === "invalid_input") {
-      return scimError(
-        c,
-        400,
-        "The request is not a valid SCIM request",
-        "invalidSyntax",
-      );
+      return scimError(c, 400, "The request is not a valid SCIM request", "invalidSyntax");
     }
     if (code === "authz_denied" || code === "forbidden") {
-      return scimError(
-        c,
-        403,
-        "This organization's policy refuses the request",
-      );
+      return scimError(c, 403, "This organization's policy refuses the request");
     }
     logger.error(
       { err, orgId: resolution.orgId, method, path },

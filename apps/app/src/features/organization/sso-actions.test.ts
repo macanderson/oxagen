@@ -472,11 +472,7 @@ describe("SCIM token (#3734)", () => {
         prefix: "oxscim_the-whole",
       },
     });
-    expect(invoke).toHaveBeenCalledWith(
-      "create_scim_token",
-      {},
-      expect.anything(),
-    );
+    expect(invoke).toHaveBeenCalledWith("create_scim_token", {}, expect.anything());
   });
 
   it("passes scim_token_exists through as a conflict (negative)", async () => {
@@ -493,11 +489,7 @@ describe("SCIM token (#3734)", () => {
     invoke.mockResolvedValue(MINTED);
     const out = await rotateScimToken("acme");
     expect(out.ok && out.value.token).toBe(MINTED.token);
-    expect(invoke).toHaveBeenCalledWith(
-      "rotate_scim_token",
-      {},
-      expect.anything(),
-    );
+    expect(invoke).toHaveBeenCalledWith("rotate_scim_token", {}, expect.anything());
   });
 
   it("revokes the token", async () => {
@@ -506,11 +498,7 @@ describe("SCIM token (#3734)", () => {
       ok: true,
       value: { revoked: true },
     });
-    expect(invoke).toHaveBeenCalledWith(
-      "revoke_scim_token",
-      {},
-      expect.anything(),
-    );
+    expect(invoke).toHaveBeenCalledWith("revoke_scim_token", {}, expect.anything());
   });
 
   it("names the plan when minting is refused for it (negative)", async () => {
@@ -523,3 +511,4 @@ describe("SCIM token (#3734)", () => {
     });
   });
 });
+

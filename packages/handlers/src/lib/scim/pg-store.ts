@@ -169,10 +169,7 @@ export function createPgScimStore(
         })
         .from(schema.ssoGroupRoles)
         .where(eq(schema.ssoGroupRoles.orgId, orgId));
-      return rows.map((r) => ({
-        group: r.group,
-        role: r.role as SsoMappableRole,
-      }));
+      return rows.map((r) => ({ group: r.group, role: r.role as SsoMappableRole }));
     },
 
     async findUser(userId) {
@@ -219,14 +216,9 @@ export function createPgScimStore(
     async provisionUser({ email, name, externalId }) {
       const now = new Date();
       const [existing] = await tx
-        .select({
-          id: schema.users.id,
-          emailVerified: schema.users.emailVerified,
-        })
+        .select({ id: schema.users.id, emailVerified: schema.users.emailVerified })
         .from(schema.users)
-        .where(
-          and(eq(schema.users.email, email), isNull(schema.users.deletedAt)),
-        )
+        .where(and(eq(schema.users.email, email), isNull(schema.users.deletedAt)))
         .limit(1);
       let userId = existing?.id;
       if (existing && !existing.emailVerified) {
@@ -334,9 +326,7 @@ export function createPgScimStore(
       await tx
         .update(schema.principals)
         .set({
-          ...(name.displayName !== null
-            ? { displayName: name.displayName }
-            : {}),
+          ...(name.displayName !== null ? { displayName: name.displayName } : {}),
           metadata: sql`${schema.principals.metadata} || ${JSON.stringify({
             scim: { givenName: name.givenName, familyName: name.familyName },
           })}::jsonb`,
@@ -403,10 +393,7 @@ export function createPgScimStore(
         .select({ role: schema.orgUsers.role })
         .from(schema.orgUsers)
         .where(
-          and(
-            eq(schema.orgUsers.orgId, orgId),
-            eq(schema.orgUsers.userId, userId),
-          ),
+          and(eq(schema.orgUsers.orgId, orgId), eq(schema.orgUsers.userId, userId)),
         )
         .limit(1);
       return row ? row.role.toLowerCase() : null;
@@ -470,12 +457,7 @@ export function createPgScimStore(
       const [row] = await tx
         .select(groupRow)
         .from(schema.scimGroups)
-        .where(
-          and(
-            eq(schema.scimGroups.orgId, orgId),
-            eq(schema.scimGroups.id, groupId),
-          ),
-        )
+        .where(and(eq(schema.scimGroups.orgId, orgId), eq(schema.scimGroups.id, groupId)))
         .limit(1);
       return (row as ScimGroupRow | undefined) ?? null;
     },
@@ -495,10 +477,7 @@ export function createPgScimStore(
     },
 
     async listGroups(filter, offset, limit) {
-      const where = and(
-        eq(schema.scimGroups.orgId, orgId),
-        groupFilter(filter),
-      );
+      const where = and(eq(schema.scimGroups.orgId, orgId), groupFilter(filter));
       const [total] = await tx
         .select({ n: count() })
         .from(schema.scimGroups)
@@ -529,24 +508,14 @@ export function createPgScimStore(
       await tx
         .update(schema.scimGroups)
         .set({ ...args, updatedAt: new Date() })
-        .where(
-          and(
-            eq(schema.scimGroups.orgId, orgId),
-            eq(schema.scimGroups.id, groupId),
-          ),
-        );
+        .where(and(eq(schema.scimGroups.orgId, orgId), eq(schema.scimGroups.id, groupId)));
     },
 
     async deleteGroup(groupId) {
       // Members go with the group (ON DELETE CASCADE).
       await tx
         .delete(schema.scimGroups)
-        .where(
-          and(
-            eq(schema.scimGroups.orgId, orgId),
-            eq(schema.scimGroups.id, groupId),
-          ),
-        );
+        .where(and(eq(schema.scimGroups.orgId, orgId), eq(schema.scimGroups.id, groupId)));
     },
 
     async groupMembers(groupId) {
@@ -557,10 +526,7 @@ export function createPgScimStore(
           email: schema.users.email,
         })
         .from(schema.scimGroupMembers)
-        .innerJoin(
-          schema.users,
-          eq(schema.users.id, schema.scimGroupMembers.userId),
-        )
+        .innerJoin(schema.users, eq(schema.users.id, schema.scimGroupMembers.userId))
         .where(
           and(
             eq(schema.scimGroupMembers.orgId, orgId),

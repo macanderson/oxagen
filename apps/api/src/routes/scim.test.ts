@@ -70,7 +70,7 @@ describe("/api/scim/v2", () => {
   it("invokes execute_scim_request as the token's organization, with no user and no key", async () => {
     mocks.invoke.mockResolvedValue({ status: 200, body: { totalResults: 0 } });
     const res = await app.request(
-      "/api/scim/v2/Users?filter=userName%20eq%20%22ada%40acme.com%22",
+      '/api/scim/v2/Users?filter=userName%20eq%20%22ada%40acme.com%22',
       { headers: auth },
     );
     expect(res.status).toBe(200);
@@ -84,11 +84,7 @@ describe("/api/scim/v2", () => {
       path: "/Users",
       query: { filter: 'userName eq "ada@acme.com"' },
     });
-    expect(ctx).toMatchObject({
-      orgId: "org-acme",
-      userId: null,
-      apiKeyId: null,
-    });
+    expect(ctx).toMatchObject({ orgId: "org-acme", userId: null, apiKeyId: null });
     // No surface: the contract declares none and this route is its caller.
     expect(opts).toBeUndefined();
   });
@@ -97,11 +93,7 @@ describe("/api/scim/v2", () => {
     mocks.invoke.mockResolvedValue({ status: 201, body: {} });
     await app.request("/api/scim/v2/Users?orgId=org-other", {
       method: "POST",
-      headers: {
-        ...auth,
-        "Content-Type": "application/scim+json",
-        "X-Org-Id": "org-other",
-      },
+      headers: { ...auth, "Content-Type": "application/scim+json", "X-Org-Id": "org-other" },
       body: JSON.stringify({ userName: "ada@acme.com", orgId: "org-other" }),
     });
     expect(mocks.invoke.mock.calls[0]![2]).toMatchObject({ orgId: "org-acme" });
@@ -150,9 +142,7 @@ describe("/api/scim/v2", () => {
   });
 
   it("answers a kernel refusal as 403 and a failure as 500, both in SCIM form", async () => {
-    mocks.invoke.mockRejectedValueOnce(
-      Object.assign(new Error("no"), { code: "authz_denied" }),
-    );
+    mocks.invoke.mockRejectedValueOnce(Object.assign(new Error("no"), { code: "authz_denied" }));
     const denied = await app.request("/api/scim/v2/Groups", { headers: auth });
     expect(denied.status).toBe(403);
     mocks.invoke.mockRejectedValueOnce(new Error("db down"));

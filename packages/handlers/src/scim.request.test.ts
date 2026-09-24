@@ -104,9 +104,7 @@ describe("execute_scim_request", () => {
     mocks.tokenRow = { orgId: "org_2" };
     const out = await scimRequestHandler(INPUT, SCIM_CTX);
     expect(out.status).toBe(401);
-    expect(denials()[0]?.detail).toMatchObject({
-      reason: "cross_organization",
-    });
+    expect(denials()[0]?.detail).toMatchObject({ reason: "cross_organization" });
     expect(mocks.serveScim).not.toHaveBeenCalled();
   });
 
@@ -119,12 +117,7 @@ describe("execute_scim_request", () => {
 
   it("answers an Owner refusal as a SCIM 403 that names the reason, and audits it", async () => {
     mocks.serveScim.mockRejectedValue(
-      new ScimError(
-        403,
-        "This person is an Owner in Oxagen.",
-        "mutability",
-        "owner_protected",
-      ),
+      new ScimError(403, "This person is an Owner in Oxagen.", "mutability", "owner_protected"),
     );
     const out = await scimRequestHandler(INPUT, SCIM_CTX);
     expect(out).toEqual({
@@ -154,20 +147,13 @@ describe("execute_scim_request", () => {
   });
 
   it("answers a unique-key race as 409", async () => {
-    mocks.serveScim.mockRejectedValue(
-      Object.assign(new Error("dup"), { code: "23505" }),
-    );
+    mocks.serveScim.mockRejectedValue(Object.assign(new Error("dup"), { code: "23505" }));
     const out = await scimRequestHandler(INPUT, SCIM_CTX);
-    expect(out).toMatchObject({
-      status: 409,
-      body: { scimType: "uniqueness" },
-    });
+    expect(out).toMatchObject({ status: 409, body: { scimType: "uniqueness" } });
   });
 
   it("lets any other failure reach the kernel", async () => {
     mocks.serveScim.mockRejectedValue(new Error("db down"));
-    await expect(scimRequestHandler(INPUT, SCIM_CTX)).rejects.toThrow(
-      "db down",
-    );
+    await expect(scimRequestHandler(INPUT, SCIM_CTX)).rejects.toThrow("db down");
   });
 });

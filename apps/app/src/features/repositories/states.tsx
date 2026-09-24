@@ -131,7 +131,8 @@ export function ErrorBody({
   const t = useTranslations("repositories.page.error");
   const known = PAGE_FAILURES.repositories.error;
   const code = "code" in failure ? failure.code : failure.reason;
-  const answer = code === known.code ? `${String(known.status)} ${code}` : code;
+  const answer =
+    code === known.code ? `${String(known.status)} ${code}` : code;
   return (
     <StateWrap
       testId="repositories-error"

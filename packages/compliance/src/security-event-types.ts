@@ -494,11 +494,7 @@ export interface ScimUserDetail {
  */
 export interface MemberRemovalDetail {
   userId: string;
-  trigger:
-    | "scim_active_false"
-    | "scim_delete"
-    | "scim_group_change"
-    | "sso_deny";
+  trigger: "scim_active_false" | "scim_delete" | "scim_group_change" | "sso_deny";
   sessionsEnded: number;
   apiKeysRevoked: number;
   hostsRevoked: number;

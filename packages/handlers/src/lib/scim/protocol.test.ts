@@ -142,24 +142,19 @@ describe("scimBoolean", () => {
 describe("readPatch", () => {
   it("lowercases op, and reads a lowercase `operations` key too", () => {
     expect(
-      readPatch({
-        Operations: [{ op: "Replace", path: "active", value: "False" }],
-      }),
+      readPatch({ Operations: [{ op: "Replace", path: "active", value: "False" }] }),
     ).toEqual([{ op: "replace", path: "active", value: "False" }]);
-    expect(
-      readPatch({ operations: [{ op: "remove", path: "externalId" }] }),
-    ).toEqual([{ op: "remove", path: "externalId" }]);
+    expect(readPatch({ operations: [{ op: "remove", path: "externalId" }] })).toEqual([
+      { op: "remove", path: "externalId" },
+    ]);
   });
 
-  it.each([null, "Operations", 7])(
-    "refuses a body that is not an object: %j",
-    (body) => {
-      expect(refusal(() => readPatch(body))).toMatchObject({
-        status: 400,
-        scimType: "invalidSyntax",
-      });
-    },
-  );
+  it.each([null, "Operations", 7])("refuses a body that is not an object: %j", (body) => {
+    expect(refusal(() => readPatch(body))).toMatchObject({
+      status: 400,
+      scimType: "invalidSyntax",
+    });
+  });
 
   it("refuses a body with no Operations array", () => {
     const err = refusal(() => readPatch({ Operations: { op: "add" } }));
@@ -175,9 +170,7 @@ describe("readPatch", () => {
   });
 
   it.each([["move"], ["copy"], [undefined], [3]])("refuses the op %j", (op) => {
-    expect(
-      refusal(() => readPatch({ Operations: [{ op, path: "active" }] })),
-    ).toMatchObject({
+    expect(refusal(() => readPatch({ Operations: [{ op, path: "active" }] }))).toMatchObject({
       status: 400,
       scimType: "invalidSyntax",
     });
@@ -185,9 +178,7 @@ describe("readPatch", () => {
 
   it("refuses a path that is not a string", () => {
     expect(
-      refusal(() =>
-        readPatch({ Operations: [{ op: "add", path: ["members"] }] }),
-      ),
+      refusal(() => readPatch({ Operations: [{ op: "add", path: ["members"] }] })),
     ).toMatchObject({ status: 400, scimType: "invalidPath" });
   });
 });
