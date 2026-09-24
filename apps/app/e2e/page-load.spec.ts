@@ -40,6 +40,10 @@ for (const row of SIGNED_IN_ROUTES) {
     page,
   }) => {
     await loadsAndTitlesItself(page, row);
+    // A route with a loading.tsx streams its page into a hidden node beside
+    // the skeleton's own main#main before React swaps them, so wait for the
+    // one main the settled page keeps.
+    await expect(page.locator("main#main")).toHaveCount(1, { timeout: 15_000 });
     await expect(page.locator("main#main")).toBeVisible();
     const desktopPath = test.info().outputPath("desktop.png");
     await page.screenshot({
