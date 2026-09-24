@@ -6,6 +6,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { DeniedBody, ErrorBody } from "./states";
 
@@ -15,7 +16,13 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-afterEach(cleanup);
+afterEach(async () => {
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
+});
 
 describe("the error state", () => {
   it("prints the page's own failure with its status", () => {

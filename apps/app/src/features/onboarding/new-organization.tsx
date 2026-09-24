@@ -46,7 +46,7 @@ export async function NewOrganizationScreen({
 /** The loading state: the shell and the rail stay, the card is the skeleton. */
 export function NewOrganizationLoading() {
   return (
-    <GateShell step="organization" email={null} cancel={routes.root()}>
+    <GateShell step="organization" email={null} cancel={routes.root()} pending>
       <GateSkeleton />
     </GateShell>
   );

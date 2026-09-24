@@ -643,10 +643,24 @@ jobs:
 
       # One shard: the suite is three tests (INV-20), and the login project
       # writes the storage state the other two depend on.
+      #
+      # --log-order=stream prints Playwright's lines as they happen. turbo's
+      # default holds a task's output until the task exits, so when this step
+      # hung for 29 minutes on 2026-09-24 the log showed nothing about where.
+      # The step limit fails a hang long before the job's 45 minutes, and
+      # playwright.config.ts caps the run itself with globalTimeout.
       - name: E2E tests
+        timeout-minutes: 20
         run: |
           set -f  # keep the unquoted ...[origin/main] filter literal (no globbing)
-          pnpm turbo run test:e2e $TURBO_FILTER
+          pnpm turbo run test:e2e $TURBO_FILTER --log-order=stream
+
+      # Names any process the web server left behind. Playwright kills the
+      # server's process group at teardown; a survivor listed here is one that
+      # left the group, the kind that held the teardown open on 2026-09-24.
+      - name: List processes left after e2e
+        if: always()
+        run: ps -eo pid,pgid,sid,ppid,etime,args || ls -l /proc/[0-9]*/exe
 
       - name: Upload Playwright screenshots and traces
         if: always()

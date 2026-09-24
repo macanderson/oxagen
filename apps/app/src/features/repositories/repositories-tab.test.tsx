@@ -6,6 +6,7 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import type { RepositoryTree } from "@/data/contracts/repository";
 import { IntlProvider } from "@/test/intl";
 import { RepositoriesTab, TreeBadge } from "./repositories-tab";
@@ -56,7 +57,13 @@ const ROWS: RepositoryRow[] = [
   }),
 ];
 
-afterEach(cleanup);
+afterEach(async () => {
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
+});
 
 function tab(truncated = false) {
   const onAddOxagen = vi.fn();
