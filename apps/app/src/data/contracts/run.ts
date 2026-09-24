@@ -275,6 +275,12 @@ const TranscriptDecision = z.object({
   chainRef: z.string().optional(),
   decision: z.string(),
   type: z.string(),
+  /**
+   * Who decided: `bundle` or `kernel` for Oxagen policy, `human` for an
+   * operator, `harness` or `managed_settings` for the agent's own harness.
+   * Null or absent when the frame names none.
+   */
+  source: z.string().nullable().optional(),
   at: z.iso.datetime({ offset: true }),
 });
 

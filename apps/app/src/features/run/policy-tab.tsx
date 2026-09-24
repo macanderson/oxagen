@@ -2,7 +2,11 @@
 // "Policy decisions", one row per decision the run's record carries, from the
 // whole-run transcript the page read to its end.
 //
-// Frame and Call and Outcome are recorded on every decision frame. The rules
+// Frame and Call and Outcome are recorded on every decision frame, and the
+// Outcome cell names who decided from the frame's `policy_source`. The table
+// lists what Oxagen policy and operators decided, operator commands included
+// (#4034). The agent harness's own permission checks sit folded below it, so
+// hundreds of permission prompts do not bury the few Oxagen made. The rules
 // that fired, the taint on the call's inputs and the decision's own latency
 // are not on the transcript today, so each of those cells says so rather than
 // guessing. A list read from a transcript that stopped short says it is a
@@ -62,6 +66,56 @@ function outcomeTone(decision: string): BadgeTone {
   return "quiet";
 }
 
+/**
+ * The `policy_source` words that name the agent's own harness checking itself
+ * rather than Oxagen policy or an operator deciding. The table folds these
+ * away (#4023, #4034).
+ */
+const HARNESS_SOURCES: ReadonlySet<string> = new Set([
+  "harness",
+  "managed_settings",
+]);
+
+/** The key under `run.policy.by` each recorded source reads as. */
+const SOURCE_COPY = {
+  bundle: "oxagen",
+  kernel: "oxagen",
+  human: "operator",
+  harness: "harness",
+  managed_settings: "managedSettings",
+} as const;
+
+function sourceCopy(
+  source: string,
+): (typeof SOURCE_COPY)[keyof typeof SOURCE_COPY] | undefined {
+  return Object.entries(SOURCE_COPY).find(([key]) => key === source)?.[1];
+}
+
+/**
+ * Whether a decision is the harness checking itself.
+ *
+ * @internal Exported for its unit test.
+ */
+export function isHarnessCheck(entry: TranscriptEntry): boolean {
+  const source = entry.decision?.source ?? null;
+  return source !== null && HARNESS_SOURCES.has(source);
+}
+
+/** Who decided, under the outcome: a recorded source by name, else that it is not recorded. */
+function DecidedBy({ source }: { source: string | null }) {
+  const t = useTranslations("run.policy");
+  const copy = source === null ? undefined : sourceCopy(source);
+  return (
+    <span data-testid="policy-decided-by" className="text-[11px] text-dim">
+      {source === null
+        ? t("decidedByUnrecorded")
+        : t("decidedBy", {
+            who: copy === undefined ? source : t(`by.${copy}`),
+          })}
+    </span>
+  );
+}
+
 /** A cell the transcript does not carry yet, with the reason on hover. */
 function Unrecorded() {
   const t = useTranslations("run.policy");
@@ -106,9 +160,12 @@ function row(entry: TranscriptEntry, place: Place): ListRow {
       decision === null ? (
         <NoValue key="outcome" />
       ) : (
-        <Badge key="outcome" tone={outcomeTone(decision.decision)}>
-          {decision.decision}
-        </Badge>
+        <span key="outcome" className="flex flex-col items-start gap-1">
+          <Badge tone={outcomeTone(decision.decision)}>
+            {decision.decision}
+          </Badge>
+          <DecidedBy source={decision.source ?? null} />
+        </span>
       ),
       <Unrecorded key="rules" />,
       <Unrecorded key="taint" />,
@@ -137,25 +194,38 @@ export function PolicyDecisions({
         {read.ok ? null : <ReadFailure read={read} section={t("title")} />}
       </Panel>
     );
+  // Oxagen policy and operator decisions lead; the harness's own checks sit
+  // folded below them, one click away (#4034).
+  const decided = entries.filter((entry) => !isHarnessCheck(entry));
+  const checks = entries.filter(isHarnessCheck);
   return (
     <Panel title={t("title")} flush testId="run-policy">
       {entries.length === 0 ? (
         <PanelBody>
           <p className="text-sm text-muted-foreground">{t("empty")}</p>
         </PanelBody>
+      ) : decided.length === 0 ? (
+        <PanelBody>
+          <p className="text-sm text-muted-foreground">{t("onlyChecks")}</p>
+        </PanelBody>
       ) : (
-        <ListTable
-          label={t("title")}
-          columns={[
-            { label: t("frame") },
-            { label: t("call") },
-            { label: t("outcome") },
-            { label: t("rules") },
-            { label: t("taint") },
-            { label: t("latency"), numeric: true },
-          ]}
-          rows={entries.map((entry) => row(entry, place))}
-        />
+        <DecisionTable entries={decided} label={t("title")} place={place} />
+      )}
+      {checks.length === 0 ? null : (
+        <PanelBody rule>
+          <details data-testid="harness-checks">
+            <summary className="cursor-pointer text-sm text-muted-foreground">
+              {t("checks", { count: checks.length })}
+            </summary>
+            <div className="pt-2">
+              <DecisionTable
+                entries={checks}
+                label={t("checksTitle")}
+                place={place}
+              />
+            </div>
+          </details>
+        </PanelBody>
       )}
       <PanelBody rule={entries.length > 0}>
         <div className="flex flex-col gap-2">
@@ -166,6 +236,33 @@ export function PolicyDecisions({
         </div>
       </PanelBody>
     </Panel>
+  );
+}
+
+/** The mockup's six columns over a set of decisions. */
+function DecisionTable({
+  entries,
+  label,
+  place,
+}: {
+  entries: TranscriptEntry[];
+  label: string;
+  place: Place;
+}) {
+  const t = useTranslations("run.policy");
+  return (
+    <ListTable
+      label={label}
+      columns={[
+        { label: t("frame") },
+        { label: t("call") },
+        { label: t("outcome") },
+        { label: t("rules") },
+        { label: t("taint") },
+        { label: t("latency"), numeric: true },
+      ]}
+      rows={entries.map((entry) => row(entry, place))}
+    />
   );
 }
 

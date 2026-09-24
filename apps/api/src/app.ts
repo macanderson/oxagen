@@ -29,6 +29,9 @@ import { billingAutoTopupSetRoute } from "./routes/v1/billing.auto_topup.set";
 import { billingContractRateGetRoute } from "./routes/v1/billing.contract_rate.get";
 import { billingGauBucketGetRoute } from "./routes/v1/billing.gau_bucket.get";
 import { billingInvoiceListRoute } from "./routes/v1/billing.invoice.list";
+import { billingPrepaidOrderListRoute } from "./routes/v1/billing.prepaid_order.list";
+import { billingStatementGetRoute } from "./routes/v1/billing.statement.get";
+import { billingStatementExportRoute } from "./routes/v1/billing.statement.export";
 import { billingSubscriptionReadRoute } from "./routes/v1/billing.subscription.read";
 import { billingUsageBreakdownRoute } from "./routes/v1/billing.usage.breakdown";
 import { billingSubscriptionUpgradeStartRoute } from "./routes/v1/billing.subscription_upgrade.start";
@@ -805,6 +808,11 @@ orgScoped.route("/cost/price-entries/remove", costPriceEntryRemoveRoute);
 orgScoped.route("/cost/unpriced-models", costUnpricedModelListRoute);
 orgScoped.route("/billing/gau-bucket", billingGauBucketGetRoute);
 orgScoped.route("/billing/invoices", billingInvoiceListRoute);
+// ADR-165: the prepaid orders an enterprise paid for in advance.
+orgScoped.route("/billing/prepaid-orders", billingPrepaidOrderListRoute);
+// ADR-165: the billing statement for a period, as data and as a file.
+orgScoped.route("/billing/statement", billingStatementGetRoute);
+orgScoped.route("/billing/statement/export", billingStatementExportRoute);
 orgScoped.route("/billing/auto-topup", billingAutoTopupSetRoute);
 orgScoped.route("/billing/subscription", billingSubscriptionReadRoute);
 orgScoped.route("/billing/contract-rate", billingContractRateGetRoute);

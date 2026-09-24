@@ -162,9 +162,16 @@ export function runtimesSource(reads: {
       apiKeys: refuse,
       costCenters: refuse,
       modelCredential: refuse,
+      dataPlane: refuse,
+      workspaceFacts: refuse,
       sso: refuse,
     },
-    audit: { events: refuse, exportEvents: refuse },
+    audit: {
+      events: refuse,
+      exportEvents: refuse,
+      retention: refuse,
+      bundle: refuse,
+    },
     skills: { inventory: refuse, configuration: refuse },
     steering: {
       records: refuse,

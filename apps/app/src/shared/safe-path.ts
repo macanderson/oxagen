@@ -74,6 +74,14 @@ const AGENT_SECTION_ALIASES: Readonly<Record<string, string>> = {
   runs: "activity",
 };
 
+/** The Organization tabs that live on `/{org}` as a `?tab=` value. */
+export type OrganizationQueryTab =
+  | "people"
+  | "invitations"
+  | "workspaces"
+  | "dataPlane"
+  | "costCenters";
+
 /**
  * The path segments each Steering tab or shelf id lands on, old ids included
  * (roadmap pages/steering.md, "Old URLs still land").
@@ -146,10 +154,12 @@ export const routes = {
     withQuery(mint("/cli/authorize"), query),
   /** Organization › People is the organization's root. */
   people: (org: string): SafePath => pathOf(org),
-  organization: (
-    org: string,
-    tab: "people" | "invitations" | "workspaces" | "costCenters",
-  ): SafePath =>
+  /**
+   * A tab of the Organization page that has no route of its own: People (the
+   * root), Invitations, Workspaces, Data plane and Cost centers. The tab is a
+   * query value on `/{org}`, left off for People.
+   */
+  organization: (org: string, tab: OrganizationQueryTab): SafePath =>
     withQuery(pathOf(org), { tab: tab === "people" ? undefined : tab }),
   /** Organization › Roles: the roles and the permission catalogue (#2964). */
   roles: (org: string): SafePath => pathOf(org, "roles"),
@@ -163,16 +173,18 @@ export const routes = {
    */
   apiKeys: (
     org: string,
-    q?: { workspace?: string; show?: string; offset?: string },
+    q?: { workspace?: string; show?: string; rows?: string; offset?: string },
   ): SafePath =>
     withQuery(pathOf(org, "api-keys"), {
       workspace: q?.workspace,
       show: q?.show,
+      rows: q?.rows,
       offset: q?.offset,
     }),
   /**
-   * Organization › Model funding: whose key pays for the assistant's model
-   * calls (ADR-053 §2). Org-scoped — the key pays for every workspace.
+   * Organization › Model funding and routes: which key pays for Oxagen's own
+   * model calls (ADR-053, ADR-131) and the route each tier takes. Org-scoped:
+   * the key pays for every workspace.
    */
   modelFunding: (org: string): SafePath => pathOf(org, "model-funding"),
   /**
@@ -277,6 +289,15 @@ export const routes = {
     org: string,
     q: Readonly<Record<string, string | undefined>> = {},
   ): SafePath => withQuery(pathOf(org, "audit"), q),
+  /**
+   * One of Audit's other tabs, each a URL segment under the page (§1.2). The
+   * query carries the export Build bundle queued, on Exports.
+   */
+  auditTab: (
+    org: string,
+    tab: "incidents" | "receipts" | "exports" | "keys" | "retention",
+    q: Readonly<Record<string, string | undefined>> = {},
+  ): SafePath => withQuery(pathOf(org, "audit", tab), q),
   /**
    * The authenticated download of a queued data export. The archive is a
    * private object, so this route streams the bytes rather than the tab

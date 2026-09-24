@@ -1464,6 +1464,18 @@
       }
     },
     {
+      "name": "set_contract_terms",
+      "file": "billing.contract_terms.set.ts",
+      "domain": "billing",
+      "mode": "sync",
+      "surfaces": [],
+      "layers": {
+        "schema": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "purchase_credits",
       "file": "billing.credits.purchase.ts",
       "domain": "billing",
@@ -1565,6 +1577,74 @@
       "surfaces": [],
       "layers": {
         "schema": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "create_prepaid_invoice",
+      "file": "billing.prepaid_invoice.create.ts",
+      "domain": "billing",
+      "mode": "sync",
+      "surfaces": [],
+      "layers": {
+        "schema": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "list_prepaid_orders",
+      "file": "billing.prepaid_order.list.ts",
+      "domain": "billing",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "export_billing_statement",
+      "file": "billing.statement.export.ts",
+      "domain": "billing",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "cli": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "get_billing_statement",
+      "file": "billing.statement.get.ts",
+      "domain": "billing",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "cli": true,
         "unit": true,
         "docs": true
       }
@@ -3425,7 +3505,8 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {

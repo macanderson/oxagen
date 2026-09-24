@@ -34,9 +34,13 @@ const consumeCreditsMock = vi.fn().mockResolvedValue({
   shortfallCents: 0n,
   balanceCents: 0n,
 });
+// What the org owes from a turn that outran its balance: nothing, unless a
+// case says otherwise. The gate admits on the balance net of it.
+const owedCreditsMock = vi.fn().mockResolvedValue(0n);
 vi.mock("./credits", () => ({
   effectiveBalance: effectiveBalanceMock,
   consumeCredits: consumeCreditsMock,
+  owedCredits: owedCreditsMock,
 }));
 
 vi.mock("./logger", () => ({

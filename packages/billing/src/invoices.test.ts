@@ -43,10 +43,9 @@ function makeDb(
       ? opts.subscriptionRow
       : { orgId: "org-abc", id: "sub-internal-1" };
 
+  const onConflictDoUpdate = vi.fn().mockResolvedValue(undefined);
   const insertInvoiceChain = {
-    values: vi.fn().mockReturnValue({
-      onConflictDoUpdate: vi.fn().mockResolvedValue(undefined),
-    }),
+    values: vi.fn().mockReturnValue({ onConflictDoUpdate }),
   };
 
   const insertFn = vi.fn(() => insertInvoiceChain);
@@ -64,6 +63,7 @@ function makeDb(
     delete: deleteFn,
     _txInsert: insertFn,
     _txDelete: deleteFn,
+    _onConflictDoUpdate: onConflictDoUpdate,
   };
 }
 
@@ -169,6 +169,28 @@ describe("syncInvoiceFromStripe", () => {
     await syncInvoiceFromStripe("in_test_001");
 
     expect(dbState.instance!._txInsert).not.toHaveBeenCalled();
+  });
+
+  it("a later event refreshes the number, due date and paid time a draft row was mirrored without", async () => {
+    // invoice.created mirrors a draft (number null); invoice.finalized and
+    // invoice.paid then arrive for the same stripe_invoice_id and land in the
+    // conflict branch, which must take the fields Stripe assigned since.
+    dbState.instance = makeDb();
+    const dueAt = new Date("2026-10-31T00:00:00.000Z");
+    const paidAt = new Date("2026-10-20T00:00:00.000Z");
+    getInvoiceMock.mockResolvedValue(
+      makeInvoice({ number: "OXA-0042", dueAt, paidAt }),
+    );
+
+    await syncInvoiceFromStripe("in_test_001");
+
+    const [conflict] = dbState.instance!._onConflictDoUpdate.mock.calls[0]!;
+    expect(conflict.set).toMatchObject({
+      number: "OXA-0042",
+      dueAt,
+      paidAt,
+      status: "paid",
+    });
   });
 
   it("provider line items are ignored — only the header row is written", async () => {

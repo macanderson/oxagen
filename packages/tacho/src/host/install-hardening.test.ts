@@ -387,24 +387,27 @@ describe("the service managers", () => {
     workingDirectory: "/home/dev",
   };
 
-  it("retries launchctl bootstrap while the old instance is still going down", () => {
+  it("retries a launchctl bootstrap that launchd refuses once the label is gone", () => {
     const home = scratch();
-    const calls: string[] = [];
     let bootstraps = 0;
+    let loaded = false;
     const manager = serviceManagerFor({
       platform: "darwin",
       home,
       uid: 501,
       sleep: () => undefined,
       exec: (_command, args) => {
-        calls.push(args[0] ?? "");
         if (args[0] === "bootstrap") {
           bootstraps += 1;
-          // 5 is launchd's "Input/output error": the label is still loaded.
-          return bootstraps < 3
-            ? { status: 5, stdout: "", stderr: "Bootstrap failed: 5" }
-            : { status: 0, stdout: "", stderr: "" };
+          // 5 is launchd's "Input/output error".
+          if (bootstraps < 3)
+            return { status: 5, stdout: "", stderr: "Bootstrap failed: 5" };
+          loaded = true;
         }
+        if (args[0] === "print")
+          return loaded
+            ? { status: 0, stdout: "state = running", stderr: "" }
+            : { status: 113, stdout: "", stderr: "Could not find service" };
         return { status: 0, stdout: "", stderr: "" };
       },
     });
@@ -421,22 +424,35 @@ describe("the service managers", () => {
       exec: (_command, args) =>
         args[0] === "bootstrap"
           ? { status: 5, stdout: "", stderr: "Bootstrap failed: 5" }
-          : { status: 0, stdout: "", stderr: "" },
+          : args[0] === "print"
+            ? { status: 113, stdout: "", stderr: "Could not find service" }
+            : { status: 0, stdout: "", stderr: "" },
     });
     expect(() => manager.install(spec)).toThrow("Bootstrap failed: 5");
   });
 
   it("keeps the plist and throws when launchd still has the service after bootout", () => {
     const home = scratch();
+    // Installs normally, then launchd refuses to let the label go.
+    let stuck = false;
+    let loaded = false;
     const manager = serviceManagerFor({
       platform: "darwin",
       home,
       uid: 501,
       sleep: () => undefined,
-      // `print` answering 0 means the label is still loaded.
-      exec: () => ({ status: 0, stdout: "state = running", stderr: "" }),
+      exec: (_command, args) => {
+        if (args[0] === "bootstrap") loaded = true;
+        if (args[0] === "bootout" && !stuck) loaded = false;
+        if (args[0] === "print")
+          return loaded
+            ? { status: 0, stdout: "state = running", stderr: "" }
+            : { status: 113, stdout: "", stderr: "Could not find service" };
+        return { status: 0, stdout: "", stderr: "" };
+      },
     });
     manager.install(spec);
+    stuck = true;
     expect(() => manager.uninstall()).toThrow("still loaded");
     expect(existsSync(manager.unitPath)).toBe(true);
   });

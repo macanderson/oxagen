@@ -24,6 +24,7 @@ import { RunHeader } from "./header";
 import { IssuesCount } from "./issues-tab";
 import { runMetrics } from "./metrics";
 import { OutputsSpine } from "./outputs";
+import { isHarnessCheck } from "./policy-tab";
 import { ContextTab, entriesOf, IssuesTab, PolicyTab } from "./sections";
 import { RunDenied, RunEmpty, RunError, RunPending } from "./states";
 import { StatRow, SummaryPanel } from "./stats";
@@ -89,8 +90,13 @@ function Tabs({
       count: metrics.cost === null ? undefined : <Money value={metrics.cost} />,
       money: true,
     },
+    // The rows the Policy table lists: the harness's own checks fold below
+    // it and are not counted here.
     policy: {
-      count: policy === null ? undefined : floor(policy.length),
+      count:
+        policy === null
+          ? undefined
+          : floor(policy.filter((entry) => !isHarnessCheck(entry)).length),
       parked,
     },
     context: { count: recall === null ? undefined : floor(recall.length) },

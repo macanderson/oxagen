@@ -6,16 +6,27 @@
 // anything exchangeable for access are proven here.
 import { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
 import { iamRoleList } from "@oxagen/oxagen/contracts/iam.role.list";
+import {
+  type OrgDataPlaneGetOutput,
+  orgDataPlaneGet,
+} from "@oxagen/oxagen/contracts/org.data_plane.get";
 import { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
 import { listMembers } from "@oxagen/oxagen/contracts/workspace.member.list";
 import { describe, expect, it } from "vitest";
 import {
   ApiKeyList,
+  DataPlane,
   MemberList,
   RoleCatalog,
   WorkspaceList,
 } from "@/data/contracts/org";
-import { toApiKeys, toMemberList, toRoleCatalog, toWorkspaceList } from "./org";
+import {
+  toApiKeys,
+  toDataPlane,
+  toMemberList,
+  toRoleCatalog,
+  toWorkspaceList,
+} from "./org";
 
 function roster(sample: unknown) {
   const out = listMembers.output.parse(sample);
@@ -175,6 +186,7 @@ describe("toRoleCatalog", () => {
         permissions: ["run.read"],
         heldBy: 2,
         createdBy: "Priya Natarajan",
+        createdAt: "2026-09-15T00:00:00.000Z",
       },
       {
         id: "rol_9z8y7x6w5v4t3s2r1q0p9n",
@@ -186,6 +198,7 @@ describe("toRoleCatalog", () => {
         permissions: ["run.read"],
         heldBy: 3,
         createdBy: null,
+        createdAt: "2026-09-15T00:00:00.000Z",
       },
     ]);
   });
@@ -268,6 +281,7 @@ describe("toWorkspaceList", () => {
       {
         id: "wrk_0a1b2c3d4e5f6g7h8j9k0m",
         slug: "core-platform",
+        namespace: "core",
         name: "Core platform",
         role: "Owner",
         archivedAt: null,
@@ -276,6 +290,7 @@ describe("toWorkspaceList", () => {
       {
         id: "wrk_9z8y7x6w5v4t3s2r1q0p9n",
         slug: "research",
+        namespace: "research",
         name: "Research",
         role: null,
         archivedAt: "2026-09-01T08:00:00.000Z",
@@ -396,5 +411,62 @@ describe("toApiKeys", () => {
       ],
     });
     expect(ApiKeyList.safeParse(toApiKeys(out)).success).toBe(false);
+  });
+});
+
+describe("toDataPlane", () => {
+  const dedicated: OrgDataPlaneGetOutput = {
+    kind: "postgres",
+    mode: "dedicated",
+    status: "degraded",
+    host: "db.acme.internal",
+    database: "oxagen_acme",
+    schemaVersion: "20260920000000",
+    lastVerifiedAt: "2026-09-20T08:00:00.000Z",
+    rotatedAt: null,
+  };
+
+  it("carries the redacted binding the Data plane tab prints", () => {
+    const view = DataPlane.parse(
+      toDataPlane(orgDataPlaneGet.output.parse(dedicated)),
+    );
+    expect(view).toEqual({
+      mode: "dedicated",
+      status: "degraded",
+      host: "db.acme.internal",
+      database: "oxagen_acme",
+      schemaVersion: "20260920000000",
+      lastVerifiedAt: "2026-09-20T08:00:00.000Z",
+      rotatedAt: null,
+    });
+  });
+
+  it("copies no field it does not name, so a credential beside the binding does not reach the page (negative)", () => {
+    // The contract strips unknown keys when it parses; the mapper is the second
+    // fence, so hand it the unparsed answer a future contract could produce.
+    const leaky = {
+      ...dedicated,
+      password: "hunter2-the-customer-db-password",
+      dsn: "postgres://acme:hunter2@db.acme.internal/oxagen_acme",
+    };
+    const view = DataPlane.parse(toDataPlane(leaky));
+    expect(Object.keys(view)).toEqual([
+      "mode",
+      "status",
+      "host",
+      "database",
+      "schemaVersion",
+      "lastVerifiedAt",
+      "rotatedAt",
+    ]);
+    expect(JSON.stringify(view)).not.toContain("hunter2");
+  });
+
+  it("refuses a timestamp the binding recorded as free text (negative)", () => {
+    const out = orgDataPlaneGet.output.parse({
+      ...dedicated,
+      lastVerifiedAt: "last Tuesday",
+    });
+    expect(DataPlane.safeParse(toDataPlane(out)).success).toBe(false);
   });
 });

@@ -158,7 +158,7 @@ describe("bootstrapBillingRuntime", () => {
     expect(setUsageRecorderMock).toHaveBeenCalledTimes(1);
   });
 
-  it("the registered recorder hands the kernel's record to recordGovernedAction and nothing more", async () => {
+  it("the registered recorder hands the kernel's whole record to recordGovernedAction, as its ledger entry", async () => {
     const { bootstrapBillingRuntime } = await import("./bootstrap");
     bootstrapBillingRuntime();
     const recorder = setUsageRecorderMock.mock.calls[0]?.[0] as
@@ -169,27 +169,52 @@ describe("bootstrapBillingRuntime", () => {
     const occurredAt = new Date("2026-03-04T05:06:07.000Z");
     await recorder!({
       orgId: "org-test",
-      workspaceId: "ws-test",
+      workspaceId: "00000000-0000-0000-0000-0000000000b1",
       capability: "query_ontology",
       surface: "api",
-      principalId: null,
-      principalKind: null,
-      userId: null,
+      principalId: "prn_agent",
+      principalKind: "agent",
+      userId: "usr_1",
       runId: "run-test",
       requestId: "req-test",
+      agentId: "agt_1",
+      operatorUserId: "usr_1",
+      toolCallId: "call_1",
+      idempotencyKey: "kernel:tool:run-test:call_1",
       actions: 3,
       durationMs: 12,
       occurredAt,
     });
 
     // The terms, mode and period are resolved inside the recorder, never taken
-    // from the record — a caller cannot talk itself onto cheaper terms.
+    // from the record — a caller cannot talk itself onto cheaper terms. The
+    // attribution goes on the ledger (ADR-165).
     expect(recordGovernedActionMock).toHaveBeenCalledWith({
       orgId: "org-test",
       actions: 3,
       capability: "query_ontology",
       runId: "run-test",
       now: occurredAt,
+      entry: {
+        idempotencyKey: "kernel:tool:run-test:call_1",
+        source: "kernel",
+        units: 3,
+        occurredAt,
+        capability: "query_ontology",
+        toolName: null,
+        mcpServer: null,
+        surface: "api",
+        harness: null,
+        workspaceId: "00000000-0000-0000-0000-0000000000b1",
+        agentId: "agt_1",
+        principalId: "prn_agent",
+        principalKind: "agent",
+        operatorUserId: "usr_1",
+        runId: "run-test",
+        sessionId: null,
+        toolCallId: "call_1",
+        requestId: "req-test",
+      },
     });
   });
 });

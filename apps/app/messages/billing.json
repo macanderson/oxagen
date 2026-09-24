@@ -105,6 +105,51 @@
       "older": "Older invoices",
       "newest": "Newest invoices"
     },
+    "statements": {
+      "title": "Statements",
+      "intro": "Download the statement for a week, month, quarter, year or a custom range of three days or more. The CSV lists every billed governed action with its workspace, agent, operator and tool call. The HTML document is the printable statement, with its reconciliation checks.",
+      "roleRequired": "Statements need the Owner, Admin or Billing role on this organization. Ask an Owner to assign you one.",
+      "period": "Period",
+      "kinds": {
+        "week": "Week",
+        "month": "Month",
+        "quarter": "Quarter",
+        "year": "Year",
+        "custom": "Custom"
+      },
+      "anchor": "Any day in the period",
+      "anchorHint": {
+        "week": "The UTC week, Monday to Sunday, that contains this day.",
+        "month": "The UTC calendar month that contains this day.",
+        "quarter": "The UTC calendar quarter that contains this day.",
+        "year": "The UTC calendar year that contains this day."
+      },
+      "firstDay": "First day",
+      "lastDay": "Last day",
+      "customHint": "Both days are included, in UTC. Three days at least, 366 at most.",
+      "download": {
+        "csv": "Download CSV",
+        "html": "Download HTML"
+      },
+      "preparing": {
+        "csv": "Preparing CSV…",
+        "html": "Preparing HTML…"
+      },
+      "progress": "{rows} rows read so far.",
+      "saved": "Saved",
+      "partial": "Saved the first {rows} rows. The period has more. Export it whole with the oxagen billing statement command or the API.",
+      "errors": {
+        "dayInvalid": "Enter a date.",
+        "future": "Pick today or an earlier day.",
+        "rangeTooShort": "Pick at least three days. For two days or fewer, download the week that contains them.",
+        "rangeTooLong": "Pick at most 366 days, or download a year."
+      },
+      "failure": {
+        "denied": "Your role on this organization cannot download statements. Ask an Owner to assign you Owner, Admin or Billing.",
+        "invalid": "Oxagen could not state that period. Check the dates and try again.",
+        "unavailable": "The statement did not download. Try again in a minute. If it keeps failing, the oxagen billing statement command reads the same statement."
+      }
+    },
     "priceList": {
       "title": "Price list",
       "free": "Free",

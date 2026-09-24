@@ -4,6 +4,7 @@ import { schema, withTenantDb } from "@oxagen/database";
 import {
   consumeCredits,
   effectiveBalance,
+  owedCredits,
   type ConsumeCreditsArgs,
 } from "./credits";
 import { CREDIT_REASONS, type CreditReason } from "./constants";
@@ -138,10 +139,12 @@ export type TurnFunding = "platform" | "org";
 
 export interface StartTurnOptions {
   /**
-   * `platform` (the default) adds the assistant spend cap to the gate; `org`
-   * means the organisation's own key pays the vendor, so the cap does not
-   * apply. The credit gate itself runs either way: governed tool calls still
-   * consume credits under ADR-052 whoever pays for tokens.
+   * `platform` (the default) holds the turn to the credit balance and the
+   * assistant spend cap. `org` means the organisation's own key pays the
+   * vendor, so the turn's tokens are never debited as credits and neither
+   * check applies: only the suspension check runs. Governed tool calls inside
+   * the turn are admitted by their own gate, `assertGauAvailable`, which
+   * reads the GAU bucket, not the credit balance (ADR-055).
    */
   fundedBy?: TurnFunding;
 }
@@ -156,11 +159,14 @@ export { BillingSuspendedError };
  * ADR-055), which the kernel runs through setBillingAdmissionGate.
  *
  * Order:
- *   1. assertOrgCanConsume → throws BillingSuspendedError when dunningState==='suspended'
+ *   1. assertOrgCanConsume → throws BillingSuspendedError when dunningState==='suspended'.
+ *                            The only step an org-funded (BYOK) turn runs.
  *   2. maybeAutoReload     → charges and grants credits if balance is low and auto-reload enabled
- *   3. effectiveBalance    → after any auto-reload, if still 0, throw InsufficientCreditsError
- *   4. assistant spend cap → for a platform-funded turn only, throw
- *                            AssistantSpendCapError once the month's cap is spent (ADR-053 §3)
+ *   3. spendable balance   → the effective balance minus what the org owes
+ *                            ({@link owedCredits}); at zero or below, after any
+ *                            auto-reload, throw InsufficientCreditsError
+ *   4. assistant spend cap → throw AssistantSpendCapError once the month's cap
+ *                            is spent (ADR-053 §3)
  */
 export async function assertCanStartTurn(
   orgId: string,
@@ -171,6 +177,17 @@ export async function assertCanStartTurn(
 
   // Step 1: refuse suspended orgs immediately.
   await assertOrgCanConsume(orgId);
+
+  // The organisation's own key pays for this turn's tokens, so nothing is
+  // debited from credits and a zero balance is no reason to refuse it. Nor is
+  // there a reason to top up credits it will not spend.
+  if (fundedBy === "org") {
+    logger.debug(
+      { orgId, fundedBy, durationMs: Date.now() - start },
+      "billing: assertCanStartTurn — admitted on the organisation's own key",
+    );
+    return;
+  }
 
   // Step 2: try auto-reload if balance is low. BEST-EFFORT — a reload failure
   // (Stripe/DB hiccup) must never block the turn or surface as an unclassified
@@ -185,20 +202,30 @@ export async function assertCanStartTurn(
     );
   }
 
-  // Step 3: require a positive balance after any reload attempt.
-  const balance = await effectiveBalance(orgId);
+  // Step 3: require a positive balance after any reload attempt, net of what
+  // an earlier turn left owing. A turn can outrun the balance it was admitted
+  // on; the shortfall is kept as a debt (consumeCredits' carryShortfall), and
+  // an org still in debt has nothing left to spend.
+  const [lots, owed] = await Promise.all([
+    effectiveBalance(orgId),
+    owedCredits(orgId),
+  ]);
+  const balance = lots - owed;
   if (balance <= 0n) {
     logger.warn(
-      { orgId, balanceCents: 0, durationMs: Date.now() - start },
+      {
+        orgId,
+        balanceCents: Number(lots),
+        owedCents: Number(owed),
+        durationMs: Date.now() - start,
+      },
       "billing: assertCanStartTurn — insufficient credits, refusing turn",
     );
     throw new InsufficientCreditsError();
   }
 
-  // Step 4: a turn the platform key would pay for is held to the org's cap.
-  if (fundedBy === "platform") {
-    await assertUnderAssistantSpendCap(orgId);
-  }
+  // Step 4: a turn the platform key pays for is held to the org's cap.
+  await assertUnderAssistantSpendCap(orgId);
 
   logger.debug(
     {
@@ -306,10 +333,25 @@ export interface ChargeUsageResult {
    * per-call figure to show a user.
    */
   creditsMetered: bigint;
-  /** Credits actually debited (clamped to the available balance). */
+  /**
+   * Credits actually debited (clamped to the available balance). For
+   * `consume_assistant_tokens` this includes any debt an earlier turn left,
+   * which the charge collects before its own cost.
+   */
   creditsCharged: bigint;
-  /** Metered − charged. Non-zero only when the balance was exhausted. */
+  /**
+   * Credits the balance could not cover after this call. Non-zero only when
+   * the balance was exhausted. For `consume_assistant_tokens` they are kept as
+   * a debt ({@link ChargeUsageResult.owedCredits}); for every other reason
+   * they are dropped.
+   */
   shortfallCredits: bigint;
+  /**
+   * Credits the org owes under this call's reason once it is done: the
+   * durable form of the shortfall, collected by the next charge or grant.
+   * Zero for a reason whose shortfall is dropped.
+   */
+  owedCredits: bigint;
   /**
    * True when no rate-card row priced this model, so the charge came from
    * {@link FALLBACK_RATE_MODEL} rather than from the model's own rate. The
@@ -321,14 +363,20 @@ export interface ChargeUsageResult {
 
 /**
  * The single DB-charging chokepoint for every modality. Given a model and the
- * USD cost a call incurred, applies the solved meter markup, converts to
- * credits, and debits them via the atomic {@link consumeCredits} (reason
- * `consume_assistant_tokens`), which row-locks the balance and clamps the debit to
- * what's available — credit_balances enforces `balance_cents >= 0` (no
- * overdraft). A non-zero `shortfallCredits` means the org outran its credits
- * mid-turn; the pre-turn guard ({@link assertCanStartTurn}) is the real
- * admission gate. May throw on a DB failure — callers invoke it best-effort
- * (try/catch in the gate) so metering never fails the user's turn.
+ * USD cost a call incurred, applies the markup for the call's reason, converts
+ * to credits, and debits them via the atomic {@link consumeCredits}, which
+ * row-locks the balance and clamps the debit to what's available —
+ * credit_balances enforces `balance_cents >= 0` (no overdraft).
+ *
+ * A non-zero `shortfallCredits` means the org outran its credits mid-turn. The
+ * pre-turn gate admits a turn on any positive balance and a turn runs up to
+ * twelve model steps, so the last turn before the balance empties, and any
+ * turn running beside it, can cost more than was left. For
+ * `consume_assistant_tokens` that remainder is kept as a debt rather than
+ * dropped: the gate refuses the next turn until it is paid, and the next
+ * grant pays it ({@link settleOwedCredits}). May throw on a DB failure —
+ * callers invoke it best-effort (try/catch in the gate) so metering never
+ * fails the user's turn.
  *
  * Instrumentation: logs orgId, model, costUsdMicros, creditsMetered/charged,
  * shortfall, durationMs, plus any modality-specific `logFields`, on every call.
@@ -352,6 +400,8 @@ async function chargeCostUsd(
     markup?: number;
     /** True when the rate came from the fallback because no card row matched. */
     rateCardMiss?: boolean;
+    /** The person the debit is attributed to (credit_ledger.created_by_id). */
+    createdById?: string;
     /**
      * Ledger reason. Required, not defaulted: the old default was
      * `consume_token_overage`, which ADR-052 retired and ADR-053 says must not be
@@ -426,6 +476,7 @@ async function chargeCostUsd(
       creditsMetered: 0n,
       creditsCharged: 0n,
       shortfallCredits: 0n,
+      owedCredits: 0n,
       rateCardMiss,
     };
   }
@@ -433,16 +484,29 @@ async function chargeCostUsd(
   const consume = transaction
     ? (args: ConsumeCreditsArgs) => consumeCredits(args, transaction)
     : consumeCredits;
-  const { chargedCents, shortfallCents, carryMicroCents } = await consume({
+  const {
+    chargedCents,
+    shortfallCents,
+    carryMicroCents,
+    priorOwedCents,
+    owedCents,
+  } = await consume({
     orgId: params.orgId,
     requestedMicroCents: microCredits,
     reason: params.reason,
     referenceType: "token_usage",
     referenceId: params.referenceId,
+    // Platform-key assistant tokens are a cost Oxagen paid, so what the
+    // balance cannot cover is owed, not forgiven.
+    carryShortfall: params.reason === CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+    ...(params.createdById === undefined
+      ? {}
+      : { createdById: params.createdById }),
   });
-  // What this call actually owed in whole credits, after the carry: the debit
-  // plus anything the balance could not cover.
-  const creditsMetered = chargedCents + shortfallCents;
+  // What this call alone came to owe in whole credits, after the carry: the
+  // debit plus anything the balance could not cover, less the debt an earlier
+  // call left, which the debit collected first.
+  const creditsMetered = chargedCents + shortfallCents - priorOwedCents;
 
   logger.info(
     {
@@ -453,6 +517,7 @@ async function chargeCostUsd(
       creditsMetered: Number(creditsMetered),
       creditsCharged: Number(chargedCents),
       shortfallCredits: Number(shortfallCents),
+      owedCredits: Number(owedCents),
       microCredits: Number(microCredits),
       carryMicroCents: Number(carryMicroCents),
       referenceId: params.referenceId ?? null,
@@ -467,6 +532,7 @@ async function chargeCostUsd(
     creditsMetered,
     creditsCharged: chargedCents,
     shortfallCredits: shortfallCents,
+    owedCredits: owedCents,
     rateCardMiss,
   };
 }
@@ -485,6 +551,12 @@ export interface ChargeUsageArgs extends TokenUsageInput {
    * why a default here was a trap.
    */
   reason: CreditReason;
+  /**
+   * The person who drove the call, written to `credit_ledger.created_by_id`
+   * so a statement can show assistant spend by operator. A user id (uuid) the
+   * caller holds, never a guess: leave it off when no person acted.
+   */
+  createdById?: string;
 }
 
 /**
@@ -512,6 +584,7 @@ export function snapshotUsageCharge(args: ChargeUsageArgs): ChargeUsageArgs {
         : resolveMeterMarkup()),
   };
   if (args.referenceId !== undefined) snapshot.referenceId = args.referenceId;
+  if (args.createdById !== undefined) snapshot.createdById = args.createdById;
   if (args.cachedTokens !== undefined)
     snapshot.cachedTokens = args.cachedTokens;
   if (args.cacheWriteTokens !== undefined)
@@ -532,6 +605,9 @@ export async function chargeUsageCredits(
       referenceId: args.referenceId,
       markup: args.markup,
       reason: args.reason,
+      ...(args.createdById === undefined
+        ? {}
+        : { createdById: args.createdById }),
       rateCardMiss:
         resolveRateEntry(args.model, args.rateCard).matchedKey === null,
       logFields: {
@@ -546,10 +622,15 @@ export async function chargeUsageCredits(
 }
 
 /**
- * True when the org has any non-expired credits left — the pre-turn admission
- * check. Reads the effective balance from lots (lazy expiry) rather than the
- * cached credit_balances mirror so it is always authoritative.
+ * True when the org has credits left to spend: non-expired lots worth more
+ * than what it owes ({@link owedCredits}). Reads the effective balance from
+ * lots (lazy expiry) rather than the cached credit_balances mirror so it is
+ * always authoritative.
  */
 export async function hasCreditBalance(orgId: string): Promise<boolean> {
-  return (await effectiveBalance(orgId)) > 0n;
+  const [lots, owed] = await Promise.all([
+    effectiveBalance(orgId),
+    owedCredits(orgId),
+  ]);
+  return lots - owed > 0n;
 }

@@ -9,7 +9,7 @@
  * inserts, so a read never writes.
  */
 
-import { withTenantDb, withSystemDb, schema } from "@oxagen/database";
+import { withTenantDb, withSystemDb, schema, type Tx } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { billingProvider } from "./client";
 import { logger } from "./logger";
@@ -502,4 +502,94 @@ export async function updateAssistantSpendCap(
     "billing: assistant spend cap updated",
   );
   return rowToSettings(row);
+}
+
+// ── The assistant spend cap on a system transaction ───────────────────────────
+
+/** A valid cap: a non-negative whole number of credit cents, or null for none. */
+function assertAssistantSpendCap(capCents: number | null): void {
+  if (capCents !== null && (!Number.isSafeInteger(capCents) || capCents < 0)) {
+    throw new Error(
+      "assistantSpendCapCents must be a non-negative integer or null",
+    );
+  }
+}
+
+/**
+ * The org's monthly cap on platform-paid assistant tokens, read on the
+ * caller's executor: the stored value, or the column default
+ * ({@link DEFAULT_ASSISTANT_SPEND_CAP_CENTS}) for an org with no settings row.
+ * Null means no cap. Never inserts.
+ */
+export async function readAssistantSpendCapOn(
+  tx: Tx,
+  orgId: string,
+): Promise<number | null> {
+  const rows = await tx
+    .select({ capCents: schema.orgBillingSettings.assistantSpendCapCents })
+    .from(schema.orgBillingSettings)
+    .where(eq(schema.orgBillingSettings.orgId, orgId))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return DEFAULT_ASSISTANT_SPEND_CAP_CENTS;
+  return row.capCents === null ? null : Number(row.capCents);
+}
+
+/**
+ * {@link readAssistantSpendCapOn} for a caller with no tenant: the operator
+ * scripts, which read the cap to warn before an order's credits outrun it.
+ */
+export async function readAssistantSpendCap(
+  orgId: string,
+): Promise<number | null> {
+  // tenancy: platform-operator read with no tenant scope, filtered by orgId, the
+  // organisation the operator named; the settings row is keyed on it.
+  return withSystemDb((tx) => readAssistantSpendCapOn(tx, orgId));
+}
+
+/**
+ * Write the org's assistant spend cap on the caller's executor and return the
+ * stored value. An upsert keyed on `org_id`, so an org with no settings row
+ * gets one with every other column at its default. Used by the platform
+ * operator's two paths to the cap: `set_org_billing_terms` and the credits
+ * grant of a prepaid order that carries a cap (prepaid-orders.ts).
+ */
+export async function writeAssistantSpendCapOn(
+  tx: Tx,
+  orgId: string,
+  capCents: number | null,
+): Promise<number | null> {
+  assertAssistantSpendCap(capCents);
+  const value = capCents === null ? null : BigInt(capCents);
+  const [saved] = await tx
+    .insert(schema.orgBillingSettings)
+    .values({ orgId, assistantSpendCapCents: value })
+    .onConflictDoUpdate({
+      target: schema.orgBillingSettings.orgId,
+      set: { assistantSpendCapCents: value, updatedAt: new Date() },
+    })
+    .returning({ capCents: schema.orgBillingSettings.assistantSpendCapCents });
+  if (!saved) {
+    throw new Error(
+      `billing-settings: failed to save the assistant spend cap for org ${orgId}`,
+    );
+  }
+  logger.info(
+    { orgId, assistantSpendCapCents: capCents },
+    "billing: assistant spend cap set by a platform operator",
+  );
+  return saved.capCents === null ? null : Number(saved.capCents);
+}
+
+/**
+ * {@link writeAssistantSpendCapOn} for `set_org_billing_terms`, which carries
+ * no tenant.
+ */
+export async function setAssistantSpendCap(
+  orgId: string,
+  capCents: number | null,
+): Promise<number | null> {
+  // tenancy: platform-operator write with no tenant scope, keyed on orgId from the
+  // capability input; platformOnly means the kernel verified the operator binding.
+  return withSystemDb((tx) => writeAssistantSpendCapOn(tx, orgId, capCents));
 }

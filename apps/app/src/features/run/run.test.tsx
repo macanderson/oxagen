@@ -780,6 +780,21 @@ describe("controls", () => {
     }
   });
 
+  it("disables only Steer on a live run whose harness carries no mid-session prompt", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({ status: "live", steerBlock: "no_prompt_carrier" }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-steer")).toBeDisabled();
+    for (const command of ["pause", "resume", "cancel"]) {
+      expect(screen.getByTestId(`run-${command}`)).not.toBeDisabled();
+    }
+  });
+
   it("allows ledger ingress control and explains the remaining control limit", async () => {
     await renderRun({
       detail: ok(
@@ -2209,6 +2224,37 @@ describe("policy and context", () => {
     expect(policy.queryByText("engram recall")).toBeNull();
     expect(screen.getByTestId("run-tab-count-policy")).toHaveTextContent("1");
     await expectNoAxe(container);
+  });
+
+  it("counts on the Policy tab only the decisions its table lists, not the harness's folded checks", async () => {
+    const check = transcriptEntry({
+      seq: "50",
+      endSeq: "51",
+      kind: "tool_call",
+      label: "Read",
+      kinds: ["tools", "policy"],
+      decision: {
+        seq: "51",
+        decision: "allow",
+        type: "permission",
+        at: "2026-09-20T00:00:00Z",
+        source: "harness",
+      },
+    });
+    await renderRun(
+      {
+        detail: ok(runDetail()),
+        transcript: ok(runTranscript({ entries: [decided, check] })),
+      },
+      { tab: "policy" },
+    );
+    expect(
+      within(
+        screen.getByRole("table", { name: "Policy decisions" }),
+      ).getAllByTestId("run-policy-decision"),
+    ).toHaveLength(1);
+    expect(screen.getByTestId("harness-checks")).toBeTruthy();
+    expect(screen.getByTestId("run-tab-count-policy")).toHaveTextContent(/^1$/);
   });
 
   it("lists each recall, and says when there is none (negative)", async () => {

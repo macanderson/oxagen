@@ -39,6 +39,8 @@ import type { CapabilityContext, CapabilityHandler } from "@oxagen/oxagen";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
 import {
   canSummarizeRun,
+  commandBlockOf,
+  steerBlockOf,
   IN_APP_AGENT_SURFACES,
   type RunItem,
   runList,
@@ -551,6 +553,9 @@ const tachoColumns = {
     osVersion: hosts.osVersion,
     arch: hosts.arch,
     nodeVersion: hosts.nodeVersion,
+    // Whether a command can reach the run (`commandBlockOf`, ADR-163).
+    status: hosts.status,
+    lastSeenAt: hosts.lastSeenAt,
   },
 };
 
@@ -759,6 +764,10 @@ export type TachoHostColumns = {
   osVersion: string | null;
   arch: string | null;
   nodeVersion: string | null;
+  /** `tacho.hosts.status`; absent where a reader did not select it. */
+  status?: string | null;
+  /** The host's last poll; absent where a reader did not select it. */
+  lastSeenAt?: Date | null;
 };
 
 export type TachoSessionRow = {
@@ -991,6 +1000,9 @@ export function toLedgerRunItem(
         : recordedGrade(record.seal?.replayGrade ?? null),
     verdict: totals?.verdict ?? null,
     enforcementTier: publishedTier(record.seal?.enforcementTier),
+    // A ledger run's controls fence evidence ingress; no host carries them.
+    commandBlock: null,
+    steerBlock: null,
     completenessGaps: gaps,
     canSummarize: canSummarizeRun({ status, completenessGaps: gaps }),
     // The ledger records evidence an external engine submits. It names no
@@ -1057,6 +1069,29 @@ export function tachoRunOutcome(outcome: string): RunItem["outcome"] {
 }
 
 /**
+ * The run row's `commandBlock`: `dispatch_command`'s rule read over the same
+ * session and host (ADR-163). Omitted when the reader selected no host
+ * liveness, so a caller reads "not known" rather than a refusal nobody made.
+ */
+function tachoCommandBlock(
+  row: TachoSessionRow,
+  now: Date,
+): Pick<RunItem, "commandBlock"> {
+  const host = row.host?.hostname == null ? null : row.host;
+  if (host !== null && host.status === undefined) return {};
+  return {
+    commandBlock: commandBlockOf({
+      outcome: row.session.outcome,
+      host:
+        host === null || host.status == null
+          ? null
+          : { status: host.status, lastSeenAt: host.lastSeenAt ?? null },
+      now,
+    }),
+  };
+}
+
+/**
  * The session's token counters, as ingest folded them from the counted
  * `llm_call` frames. Null for a session that recorded no model usage, so a
  * header says "not recorded" rather than "0 tokens".
@@ -1090,6 +1125,7 @@ export function reportedTokensOf(
 export function toTachoRunItem(
   row: TachoSessionRow,
   totals: RunRollup | undefined,
+  now: Date = new Date(),
 ): RunItem {
   const { session } = row;
   const status = tachoRunStatus(session.outcome);
@@ -1130,6 +1166,12 @@ export function toTachoRunItem(
     replayGrade: recordedGrade(session.replayGrade),
     verdict: totals?.verdict ?? null,
     enforcementTier: publishedTier(session.enforcementTier),
+    ...tachoCommandBlock(row, now),
+    // Whether a steer can reach it (`steerBlockOf`); omitted when the reader
+    // selected no runtime.
+    ...(session.runtime === undefined
+      ? {}
+      : { steerBlock: steerBlockOf(session.runtime) }),
     completenessGaps: gaps,
     canSummarize: canSummarizeRun({ status, completenessGaps: gaps }),
     // The model the session ended on is the one that did most of its work, so
