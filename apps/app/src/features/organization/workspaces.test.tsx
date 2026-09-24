@@ -469,6 +469,7 @@ describe("Workspaces › public ids", () => {
     try {
       await act(async () => {
         fireEvent.click(button);
+        await Promise.resolve();
       });
       expect(status).toHaveTextContent("Copied");
       act(() => {
@@ -482,6 +483,7 @@ describe("Workspaces › public ids", () => {
 
       await act(async () => {
         fireEvent.click(button);
+        await Promise.resolve();
       });
       expect(status).toHaveTextContent("Copy failed. Select the ID instead.");
       act(() => {

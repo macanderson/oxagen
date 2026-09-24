@@ -32,13 +32,18 @@ export function CopyId({
 }) {
   const t = useTranslations("organization.copyId");
   const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
-  const latest = useRef(0);
-  const clear = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  useEffect(() => () => clearTimeout(clear.current), []);
+  const latestRef = useRef(0);
+  const clearRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(
+    () => () => {
+      clearTimeout(clearRef.current);
+    },
+    [],
+  );
 
   async function copy() {
-    const attempt = ++latest.current;
-    clearTimeout(clear.current);
+    const attempt = ++latestRef.current;
+    clearTimeout(clearRef.current);
     setState("idle");
     let outcome: "copied" | "failed";
     try {
@@ -47,10 +52,12 @@ export function CopyId({
     } catch {
       outcome = "failed";
     }
-    if (attempt !== latest.current) return;
+    if (attempt !== latestRef.current) return;
     setState(outcome);
     if (outcome === "copied") {
-      clear.current = setTimeout(() => setState("idle"), COPIED_MS);
+      clearRef.current = setTimeout(() => {
+        setState("idle");
+      }, COPIED_MS);
     }
   }
 
