@@ -395,6 +395,7 @@ describe("divMicros", () => {
 
   it("answers null for nothing to divide by and refuses a fraction", () => {
     expect(divMicros(usd("10"), 0)).toBeNull();
+    expect(divMicros(usd("10"), -2)).toBeNull();
     expect(() => divMicros(usd("10"), 1.5)).toThrow();
   });
 });

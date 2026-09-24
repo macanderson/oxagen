@@ -3,7 +3,13 @@
 // `pauseAgent` for the agent and workspace named, and shows the pause outcome
 // honestly — a count of runs paused, none live, no agent key to broadcast to,
 // or the broadcast itself failing after the switch already took effect.
-import { cleanup, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
@@ -225,5 +231,18 @@ describe("AgentKillSwitch", () => {
       await screen.findByTestId("agent-kill-switch-failure"),
     ).toHaveTextContent("Your organization role does not allow this change");
     expect(screen.queryByTestId("kill-switch-outcome")).toBeNull();
+  });
+});
+
+describe("AgentKillSwitch while a stop is pending", () => {
+  it("sends one stop however often the form is submitted (negative)", async () => {
+    pauseAgent.mockReturnValue(new Promise(() => undefined));
+    renderSwitch();
+    const dialog = await open();
+    const form = dialog.querySelector("form");
+    if (form === null) throw new Error("kill switch form not drawn");
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    expect(pauseAgent).toHaveBeenCalledTimes(1);
   });
 });

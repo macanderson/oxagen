@@ -3,7 +3,13 @@
 // organization's list when it opens, offers None and every label, submits
 // the chosen label by the agent's slug, and reloads the agent's page once the
 // write answers. A refusal is named in the dialog and nothing navigates.
-import { cleanup, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { routes } from "@/shared/safe-path";
@@ -180,5 +186,39 @@ describe("ChargeAgent", () => {
       await within(dialog).findByTestId("agent-cost-center-list-failure"),
     ).toHaveTextContent("action_failed");
     expect(within(dialog).queryByRole("button", { name: "Save" })).toBeNull();
+  });
+});
+
+describe("ChargeAgent while the dialog is open", () => {
+  it("sends one write however often the form is submitted while it is pending (negative)", async () => {
+    setAgentCostCenter.mockReturnValue(new Promise(() => undefined));
+    renderCharge();
+    const dialog = await open();
+    await within(dialog).findByLabelText("Cost center");
+    const form = dialog.querySelector("form");
+    if (form === null) throw new Error("cost center form not drawn");
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    expect(setAgentCostCenter).toHaveBeenCalledTimes(1);
+  });
+
+  it("forgets a refused write when the dialog is closed and opened again", async () => {
+    setAgentCostCenter.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      code: "org_role_required",
+    });
+    renderCharge();
+    let dialog = await open();
+    await within(dialog).findByLabelText("Cost center");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await screen.findByTestId("agent-cost-center-failure");
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: /^(Close|Cancel)$/ }),
+    );
+    dialog = await open();
+    expect(
+      within(dialog).queryByTestId("agent-cost-center-failure"),
+    ).toBeNull();
   });
 });
