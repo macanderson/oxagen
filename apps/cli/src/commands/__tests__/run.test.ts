@@ -289,7 +289,7 @@ describe("oxagen run turns", () => {
     const cut = memoryWriter();
     await runTurns("tse_0a1b2c", {}, cut.writer);
     expect(cut.out.at(-1)).toBe(
-      "The run has more turns than one read carries. These are its first 2.",
+      "The run is longer than one read carries. These are its first 2 turns.",
     );
   });
 

@@ -183,6 +183,10 @@ function tallyFrame(
  * The per-turn ledger of `frames`, in the order a run's frames are read (for
  * a wrapped run, each subagent chain spliced in where it was spawned).
  *
+ * A turn opens at its first frame on the run's own chain. A subagent chain
+ * spliced ahead of it numbers its seqs on its own chain, so its seq would
+ * point at a different frame of the run.
+ *
  * The caller has already removed the cost and usage of a harness's late
  * report (`withoutLateReports` in run-read.ts). A later sighting of a model
  * call already carries no cost (`tachoFrame`), and its usage is not counted
@@ -198,6 +202,8 @@ export function framesTurns(
     number,
     {
       opening: TurnOpening;
+      /** Whether `opening` is a frame on the run's own chain. */
+      rooted: boolean;
       chains: Map<string, { tally: TurnTally; keys: Set<string> }>;
     }
   >();
@@ -207,13 +213,18 @@ export function framesTurns(
       before = addNullable(before, frame.costMicros);
       return;
     }
+    const rooted = frame.chain === undefined;
     let entry = byTurn.get(turn);
     if (entry === undefined) {
       entry = {
         opening: { turn, seq: frame.seq, at: frame.observedAt },
+        rooted,
         chains: new Map(),
       };
       byTurn.set(turn, entry);
+    } else if (rooted && !entry.rooted) {
+      entry.opening = { turn, seq: frame.seq, at: frame.observedAt };
+      entry.rooted = true;
     }
     const chain = frame.chain?.sessionUuid ?? "";
     const held = entry.chains.get(chain) ?? {
@@ -246,8 +257,7 @@ export function tachoTurnStarts(root: TachoChainTurnFacts | undefined): {
   starts: number[];
   boundaries: "turn_start" | "turn_index";
 } {
-  if (root === undefined || root.firstSeq === null)
-    return { starts: [], boundaries: "turn_start" };
+  if (root === undefined) return { starts: [], boundaries: "turn_start" };
   if (root.turnStarts.length > 0)
     return { starts: root.turnStarts, boundaries: "turn_start" };
   return {
@@ -303,11 +313,16 @@ export function placeChains(args: {
   };
   const placed = new Map<string, Placement>();
 
-  // The chains the root holds directly, in the order the chain read lists
-  // them, matched to the root's spawns in the order they were recorded.
+  const began = (id: string): number =>
+    tachoTimestamp(chains.get(id)?.firstAt ?? "").getTime();
+  // The chains the root holds directly, matched to the root's spawns in the
+  // order the spawns were recorded. Where two chains could answer one spawn,
+  // the one that began first is tried first, then the lower session id: the
+  // order `spliceSubagentChains` tries them in, so a chain falls in the same
+  // turn here and on the transcript.
   const candidates = [...chains.keys()]
     .filter((id) => parentOf(id) === ROOT)
-    .sort();
+    .sort((a, b) => began(a) - began(b) || (a < b ? -1 : a > b ? 1 : 0));
   const taken = new Set<string>();
   const spawns: { spawn: TachoSpawnFact; turn: Placement }[] = [
     ...args.beforeSpawns.map((spawn) => ({ spawn, turn: null })),
@@ -338,9 +353,9 @@ export function placeChains(args: {
   // A chain no spawn names goes in the turn in progress when it began.
   for (const id of candidates) {
     if (taken.has(id)) continue;
-    const began = tachoTimestamp(chains.get(id)?.firstAt ?? "").getTime();
+    const at = began(id);
     let turn: Placement = null;
-    for (const t of args.rootTurns) if (t.at <= began) turn = t.index;
+    for (const t of args.rootTurns) if (t.at <= at) turn = t.index;
     placed.set(id, turn);
   }
   // A chain inside another falls in that chain's turn.

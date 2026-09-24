@@ -55,8 +55,8 @@ export interface TachoChainTurnFacts {
    * changes, and this is where each index first appears.
    */
   turnIndexStarts: number[];
-  /** The chain's first seq; null for a chain with no frames. */
-  firstSeq: number | null;
+  /** The chain's first seq. A chain with no frames has no row. */
+  firstSeq: number;
   /** The seq of the first model call the proxy observed on the chain; null when it observed none. */
   firstObservedSeq: number | null;
 }
@@ -66,7 +66,6 @@ interface RawChainFacts {
   starts: (string | number)[];
   index_starts: [unknown[], (string | number)[]] | null;
   first_seq: string | number;
-  frames: string | number;
   observed: string | number;
   first_observed: string | number;
 }
@@ -86,7 +85,6 @@ export async function selectTachoTurnFacts(args: {
         arraySort(groupArrayIf(seq, kind = 'turn_start')) AS starts,
         minMapIf([assumeNotNull(turn_seq)], [seq], turn_seq IS NOT NULL) AS index_starts,
         min(seq) AS first_seq,
-        count() AS frames,
         countIf(${OBSERVED}) AS observed,
         minIf(seq, ${OBSERVED}) AS first_observed
       FROM ${TACHO_EVENTS_TABLE} FINAL
@@ -105,7 +103,7 @@ export async function selectTachoTurnFacts(args: {
       sessionUuid: r.chain,
       turnStarts: r.starts.map(Number),
       turnIndexStarts: [...new Set(indexSeqs)].sort((a, b) => a - b),
-      firstSeq: Number(r.frames) > 0 ? Number(r.first_seq) : null,
+      firstSeq: Number(r.first_seq),
       firstObservedSeq:
         Number(r.observed) > 0 ? Number(r.first_observed) : null,
     };

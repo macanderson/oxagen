@@ -433,7 +433,7 @@ export async function runTurns(
   if (!result.complete) {
     writer.write("");
     writer.write(
-      `The run has more turns than one read carries. These are its first ${result.turns.length}.`,
+      `The run is longer than one read carries. These are its first ${result.turns.length} turns.`,
     );
   }
 }

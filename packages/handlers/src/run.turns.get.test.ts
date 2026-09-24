@@ -68,6 +68,7 @@ function harness(args: {
   facts?: TachoChainTurnFacts[];
   groups?: TachoTurnGroup[];
   events?: Parameters<typeof memoryEvents>[0];
+  ledgerFrameCap?: number;
 }) {
   const stores = memoryStores(
     [ledgerRun({ publicId: LEDGER_ID, runId: RUN_UUID })],
@@ -95,6 +96,9 @@ function harness(args: {
     tachoChildSessions,
     tachoTurnFacts,
     tachoTurnGroups,
+    ...(args.ledgerFrameCap === undefined
+      ? {}
+      : { ledgerFrameCap: args.ledgerFrameCap }),
   };
   return {
     turns: createRunTurnsGetHandler(deps),
@@ -174,6 +178,17 @@ describe("get_run_turns on a wrapped run", () => {
     expect(h.tachoTurnGroups).not.toHaveBeenCalled();
   });
 
+  it("answers no turns when only a subagent chain recorded frames", async () => {
+    const h = harness({
+      children: [CHILD],
+      facts: [facts({ sessionUuid: CHILD, turnStarts: [0] })],
+    });
+    const out = await h.turns(input(TACHO_ID), ctx());
+    // A run's turns are the root's. A subagent chain alone opens none.
+    expect(out).toEqual({ runId: TACHO_ID, turns: [], complete: true });
+    expect(h.tachoTurnGroups).not.toHaveBeenCalled();
+  });
+
   it("opens the turns where the index changes when the root recorded no turn_start", async () => {
     const h = harness({
       facts: [facts({ turnStarts: [], firstSeq: 0, turnIndexStarts: [2, 9] })],
@@ -202,28 +217,36 @@ describe("get_run_turns on a wrapped run", () => {
   });
 });
 
+const LEDGER_EVENTS = [
+  event(1, {
+    eventType: "model.engine_call_started",
+    payload: { model_call_id: "m1" },
+  }),
+  event(2, {
+    eventType: "model.engine_call_completed",
+    payload: { model_call_id: "m1" },
+  }),
+  event(3, {
+    eventType: "tool.engine_call_started",
+    payload: { tool_call_id: "t1" },
+  }),
+  event(4, {
+    eventType: "tool.engine_call_completed",
+    payload: { tool_call_id: "t1" },
+  }),
+];
+
 describe("get_run_turns on a ledger run", () => {
+  it("says the list stops short when the run has more frames than one read carries", async () => {
+    const h = harness({ events: LEDGER_EVENTS, ledgerFrameCap: 2 });
+    const out = await h.turns(input(LEDGER_ID), ctx());
+    expect(out.complete).toBe(false);
+    // The turn holds the two frames read, not the four recorded.
+    expect(out.turns).toMatchObject([{ turn: 1, frames: 2, modelSteps: 1 }]);
+  });
+
   it("reads the ledger and counts its frames, with no ClickHouse read", async () => {
-    const h = harness({
-      events: [
-        event(1, {
-          eventType: "model.engine_call_started",
-          payload: { model_call_id: "m1" },
-        }),
-        event(2, {
-          eventType: "model.engine_call_completed",
-          payload: { model_call_id: "m1" },
-        }),
-        event(3, {
-          eventType: "tool.engine_call_started",
-          payload: { tool_call_id: "t1" },
-        }),
-        event(4, {
-          eventType: "tool.engine_call_completed",
-          payload: { tool_call_id: "t1" },
-        }),
-      ],
-    });
+    const h = harness({ events: LEDGER_EVENTS });
     const out = await h.turns(input(LEDGER_ID), ctx());
     expect(h.tachoTurnFacts).not.toHaveBeenCalled();
     expect(h.tachoChildSessions).not.toHaveBeenCalled();

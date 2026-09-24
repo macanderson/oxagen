@@ -10,8 +10,10 @@
 // further block, a harness report after the proxy began observing, parallel
 // and duplicated tool results, unkeyed tool frames, a turn with no cost, cost
 // recorded before the first turn, and subagent chains placed by tool call id,
-// by agent id, by when they began, and inside another subagent. A second run
-// records no `turn_start` and opens its turns on the turn index.
+// by agent id, by when they began, and inside another subagent. One subagent
+// chain is observed by the proxy partway through, so the late-report rule is
+// held per chain. A second run records no `turn_start`, opens its turns on the
+// turn index, and has a subagent that began before its first frame.
 //
 // Skipped unless a ClickHouse at CLICKHOUSE_URL already holds `tacho_events`.
 // CI's test job runs one with the migrations applied. Each run writes under
@@ -61,6 +63,7 @@ const CHILD_B = randomUUID();
 const CHILD_LOOSE = randomUUID();
 const NESTED = randomUUID();
 const INDEXED = randomUUID();
+const INDEXED_EARLY = randomUUID();
 const RUN_ID = "tse_turnsintegration0000001";
 const INDEXED_ID = "tse_turnsintegration0000002";
 
@@ -246,6 +249,23 @@ const ROWS: Row[] = [
     spawnToolUseId: "tu_task",
     toolUseId: "tu_a1",
   }),
+  // The proxy begins observing subagent A's calls, so the harness's report of
+  // the next one is a second account of a call already metered.
+  row(CHILD_A, 5, 13, "llm_call", {
+    ...observed,
+    subagentId: "agent_a",
+    spawnToolUseId: "tu_task",
+    cost: 9,
+    input: 2,
+    requestId: "req_a2",
+  }),
+  row(CHILD_A, 6, 14, "llm_call", {
+    subagentId: "agent_a",
+    spawnToolUseId: "tu_task",
+    cost: 9,
+    input: 4,
+    requestId: "req_a3",
+  }),
   // A subagent spawned by subagent A.
   row(NESTED, 0, 10, "llm_call", {
     parent: CHILD_A,
@@ -275,6 +295,13 @@ const ROWS: Row[] = [
 
 /** A run with no turn_start: its turns follow the recorded turn index. */
 const INDEXED_ROWS: Row[] = [
+  // A subagent no spawn names, which began before the run's first frame.
+  row(INDEXED_EARLY, 0, -5, "llm_call", {
+    root: INDEXED,
+    subagentId: "agent_early",
+    cost: 4,
+    requestId: "ie1",
+  }),
   row(INDEXED, 0, 0, "agent_start", { root: INDEXED }),
   row(INDEXED, 1, 1, "llm_call", {
     root: INDEXED,
@@ -304,7 +331,7 @@ const INDEXED_ROWS: Row[] = [
 
 const CHILDREN: Record<string, string[]> = {
   [ROOT]: [CHILD_A, CHILD_B, CHILD_LOOSE, NESTED],
-  [INDEXED]: [],
+  [INDEXED]: [INDEXED_EARLY],
 };
 
 async function harness() {
@@ -328,7 +355,8 @@ async function harness() {
         session: {
           id: "0192d4a8-7c1e-7000-8000-00000000c0df",
           sessionUuid: INDEXED,
-          seqCount: INDEXED_ROWS.length,
+          seqCount: INDEXED_ROWS.filter((r) => r["session_uuid"] === INDEXED)
+            .length,
         },
       }),
     ],
@@ -400,24 +428,25 @@ describe.skipIf(!chUp)("get_run_turns against ClickHouse", () => {
         t.cost?.micros ?? null,
       ]),
     ).toEqual([
-      // Root 16 frames, subagent A 5, the nested chain 1. One model call on
-      // the root however many sighted it, and the late report, then A's and
-      // the nested chain's. Tool calls: tu_a, tu_b, tu_task, and A's tu_a1.
-      // Cost: the proxy's 100, A's 20 and the nested 1; the late report's 60
-      // and the sightings' copies count for nothing.
-      [1, 22, 4, 4, "121"],
+      // Root 16 frames, subagent A 7, the nested chain 1. One model call on
+      // the root however many sighted it, and the late report, then A's three
+      // and the nested chain's. Tool calls: tu_a, tu_b, tu_task, and A's
+      // tu_a1. Cost: the proxy's 100, A's 20 and 9, and the nested 1. The two
+      // late reports (the root's 60, A's second 9) and the sightings' copies
+      // count for nothing.
+      [1, 24, 6, 4, "130"],
       // Root 5 frames and the loose subagent's 2. The unkeyed request and its
       // two results pair as two calls; the loose chain's tool call is a third.
       [2, 7, 2, 3, "3"],
       [3, 4, 2, 0, "37"],
     ]);
-    expect(out.turns[0]?.cumulativeCost?.micros).toBe("126");
-    expect(out.turns[0]?.tokens).toEqual({ inputUncached: 16, cacheRead: 105 });
+    expect(out.turns[0]?.cumulativeCost?.micros).toBe("135");
+    expect(out.turns[0]?.tokens).toEqual({ inputUncached: 18, cacheRead: 105 });
     expect(out.turns[1]?.tokens).toEqual({
       inputUncached: null,
       cacheRead: null,
     });
-    expect(out.turns[2]?.cumulativeCost?.micros).toBe("166");
+    expect(out.turns[2]?.cumulativeCost?.micros).toBe("175");
   });
 
   it("opens the turns on the turn index for a recording with no turn_start", async () => {
@@ -428,10 +457,13 @@ describe.skipIf(!chUp)("get_run_turns against ClickHouse", () => {
     );
     const expected = await runInTenantScope(SCOPE, () => reference(INDEXED_ID));
     expect(out.turns).toEqual(expected.turns);
-    expect(out.turns.map((t) => [t.turn, t.seq, t.frames])).toEqual([
-      [1, "0", 3],
-      [2, "3", 2],
-      [3, "5", 1],
+    // The subagent that began before the run's first frame is in turn 1, and
+    // the turn still opens on the run's own first frame.
+    expect(out.turns.map((t) => [t.turn, t.seq, t.at, t.frames])).toEqual([
+      [1, "0", "2026-09-11T09:00:00.000Z", 4],
+      [2, "3", "2026-09-11T09:00:03.000Z", 2],
+      [3, "5", "2026-09-11T09:00:05.000Z", 1],
     ]);
+    expect(out.turns[0]?.cost?.micros).toBe("14");
   });
 });

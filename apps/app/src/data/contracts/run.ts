@@ -232,7 +232,7 @@ export type RunTurn = z.infer<typeof RunTurn>;
 
 /**
  * `get_run_turns`: every turn of the run, over every frame it recorded.
- * `complete` is false only when the run has more turns than one read carries.
+ * `complete` is false when the list stops short of the run's end.
  */
 export const RunTurns = z.object({
   turns: z.array(RunTurn),

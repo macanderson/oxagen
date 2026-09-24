@@ -26,7 +26,7 @@ import { framesTurns, tachoTurns, tachoTurnStarts } from "./lib/run-turns";
 
 /**
  * The most frames a ledger run is read to. The ledger reads 500 frames a
- * query, so this bounds the read at 100 queries; a run past it answers the
+ * query, so this bounds the read at 100 queries. A run past it answers the
  * turns of its first 50,000 frames and says the list stops short.
  */
 const LEDGER_FRAME_CAP = 50_000;
@@ -34,6 +34,8 @@ const LEDGER_FRAME_CAP = 50_000;
 export type RunTurnsGetDeps = RunReadDeps & {
   tachoTurnFacts: typeof selectTachoTurnFacts;
   tachoTurnGroups: typeof selectTachoTurnGroups;
+  /** The ledger read's frame cap. Tests set it low. */
+  ledgerFrameCap?: number;
 };
 
 export function createRunTurnsGetHandler(
@@ -42,7 +44,11 @@ export function createRunTurnsGetHandler(
   return async (input, ctx): Promise<RunTurnsGetOutput> => {
     const run = await resolveRun(deps, ctx, input.runId);
     if (run.source === "ledger") {
-      const read = await readAllFrames(deps, run, LEDGER_FRAME_CAP);
+      const read = await readAllFrames(
+        deps,
+        run,
+        deps.ledgerFrameCap ?? LEDGER_FRAME_CAP,
+      );
       const ledger = framesTurns(read.frames, RUN_TURNS_MAX);
       return {
         runId: input.runId,

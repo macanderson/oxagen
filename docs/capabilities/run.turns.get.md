@@ -31,7 +31,7 @@ A wrapped run is counted in ClickHouse in two reads, whatever its length: one fi
 |---|---|---|
 | `runId` | string | as asked |
 | `turns` | object[] | one per turn, in order; at most 10,000 |
-| `complete` | boolean | false only when the run has more than 10,000 turns and `turns` holds the first of them |
+| `complete` | boolean | false when the list stops short of the run's end: the run has more than 10,000 turns, or a ledger run has more than the 50,000 frames one read counts |
 
 Each turn:
 

@@ -165,13 +165,12 @@ describe("runMetrics", () => {
     expect(m.prompts).toEqual({ count: 1, corrective: 0 });
   });
 
-  it("reads the tool calls off the transcript, and leaves the per-turn ledger to get_run_turns", () => {
+  it("reads the tool calls off the transcript", () => {
     const m = runMetrics({
       run: runRow(),
       cost: readOk(runCost()),
       transcript: readOk(mockupTranscript()),
     });
-    expect("turns" in m).toBe(false);
     expect(m.toolCalls?.map((call) => call.name)).toEqual([
       "list_pull_requests",
       "create_tag",

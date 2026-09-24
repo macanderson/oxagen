@@ -220,6 +220,20 @@ describe("framesTurns", () => {
     ]);
   });
 
+  it("opens a turn at its first frame on the run's own chain, not a subagent's spliced ahead of it", () => {
+    const frames = [
+      // A subagent that began before the run's first frame, seq 7 of its own chain.
+      sub(CHILD_A, 7, { ts: "2026-09-11 08:59:55.000", turnSeq: null }),
+      frame(3, { turnSeq: 1 }),
+      frame(4, { turnSeq: 2 }),
+    ];
+    const { turns } = framesTurns(frames, 10);
+    expect(turns.map((t) => [t.turn, t.seq, t.at, t.frames])).toEqual([
+      [1, "3", "2026-09-11T09:00:03.000Z", 2],
+      [2, "4", "2026-09-11T09:00:04.000Z", 1],
+    ]);
+  });
+
   it("stops at the cap and says the list is short", () => {
     const frames = [turnStart(0), turnStart(1), turnStart(2)];
     const { turns, complete } = framesTurns(frames, 2);
@@ -259,7 +273,6 @@ describe("tachoTurnStarts", () => {
 
   it("answers no turns for a root with no frames", () => {
     expect(tachoTurnStarts(undefined).starts).toEqual([]);
-    expect(tachoTurnStarts(facts({ firstSeq: null })).starts).toEqual([]);
   });
 });
 
@@ -334,21 +347,90 @@ describe("placeChains", () => {
     expect(placed.get(CHILD_B)).toBeNull();
   });
 
-  it("gives each spawn one chain, the first the chain list names", () => {
+  it("gives a spawn two chains could answer to the one that began first, whatever their ids", () => {
     const placed = placeChains({
       chains: [
-        chain(CHILD_B, { spawnToolUseId: "tu_task_a" }),
         chain(CHILD_A, {
           spawnToolUseId: "tu_task_a",
-          firstAt: "2026-09-11 09:11:00.000",
+          firstAt: "2026-09-11 09:12:00.000",
+        }),
+        chain(CHILD_B, {
+          spawnToolUseId: "tu_task_a",
+          firstAt: "2026-09-11 09:00:30.000",
         }),
       ],
       rootTurns,
       beforeSpawns: [],
     });
-    expect(placed.get(CHILD_A)).toBe(1);
-    // The spawn is taken, so the other chain is placed by when it began.
+    // CHILD_A sorts first by id, but CHILD_B began first.
     expect(placed.get(CHILD_B)).toBe(1);
+    // The spawn is taken, so CHILD_A is placed by when it began: in turn 2.
+    expect(placed.get(CHILD_A)).toBe(2);
+  });
+
+  it("breaks a tie on when two chains began by the lower session id", () => {
+    const placed = placeChains({
+      chains: [
+        chain(CHILD_B, { spawnToolUseId: "tu_task_a" }),
+        chain(CHILD_A, {
+          spawnToolUseId: "tu_task_a",
+          firstAt: "2026-09-11 09:00:00.000",
+        }),
+      ],
+      rootTurns: rootTurns.map((t) => ({
+        ...t,
+        at: t.index === 2 ? Date.parse("2026-09-11T08:59:00Z") : t.at,
+      })),
+      beforeSpawns: [],
+    });
+    expect(placed.get(CHILD_A)).toBe(1);
+  });
+
+  it("gives a chain one spawn even when two spawns name it", () => {
+    const placed = placeChains({
+      chains: [
+        chain(CHILD_A, { subagentId: "agent_r" }),
+        chain(CHILD_B, {
+          subagentId: "agent_r",
+          firstAt: "2026-09-11 09:00:30.000",
+        }),
+      ],
+      rootTurns: [
+        {
+          index: 1,
+          at: Date.parse("2026-09-11T08:59:00Z"),
+          spawns: [{ seq: 2, toolUseId: null, subagentId: "agent_r" }],
+        },
+        {
+          index: 2,
+          at: Date.parse("2026-09-11T09:10:00Z"),
+          spawns: [{ seq: 30, toolUseId: null, subagentId: "agent_r" }],
+        },
+      ],
+      beforeSpawns: [],
+    });
+    // Both chains began in turn 1, so only the spawns can put one in turn 2.
+    expect(placed.get(CHILD_A)).toBe(1);
+    expect(placed.get(CHILD_B)).toBe(2);
+  });
+
+  it("falls back to the agent id when the spawn's tool call names no chain", () => {
+    const placed = placeChains({
+      chains: [chain(CHILD_B, { subagentId: "agent_b" })],
+      rootTurns: rootTurns.map((t) =>
+        t.index === 2
+          ? {
+              ...t,
+              spawns: [
+                { seq: 30, toolUseId: "tu_missing", subagentId: "agent_b" },
+              ],
+            }
+          : t,
+      ),
+      beforeSpawns: [],
+    });
+    // Placed by when it began, it would be turn 1.
+    expect(placed.get(CHILD_B)).toBe(2);
   });
 
   it("places a chain spawned by a subagent in its parent's turn", () => {
@@ -466,6 +548,60 @@ describe("tachoTurns", () => {
         tokens: { inputUncached: null, cacheRead: null },
       },
     ]);
+  });
+
+  it("counts a subagent spawned before the first turn in the cost so far, in no turn's row", () => {
+    const { turns } = tachoTurns({
+      rootSessionUuid: ROOT,
+      starts: [1],
+      boundaries: "turn_start",
+      cap: 10,
+      groups: [
+        group({
+          turnKey: null,
+          frames: 2,
+          costMicros: 5,
+          spawns: [{ seq: 0, toolUseId: "tu_early", subagentId: null }],
+        }),
+        group({ turnKey: 1, firstSeq: 1, frames: 3, costMicros: 100 }),
+        chain(CHILD_A, {
+          spawnToolUseId: "tu_early",
+          frames: 4,
+          costMicros: 20,
+        }),
+      ],
+    });
+    expect(turns).toHaveLength(1);
+    expect(turns[0]).toMatchObject({
+      frames: 3,
+      cost: { micros: "100" },
+      cumulativeCost: { micros: "125" },
+    });
+  });
+
+  it("pairs a request with a response on its own chain, never with one on another", () => {
+    const { turns } = tachoTurns({
+      rootSessionUuid: ROOT,
+      starts: [0],
+      boundaries: "turn_start",
+      cap: 10,
+      groups: [
+        group({
+          turnKey: 0,
+          modelRequests: 1,
+          unkeyedToolRequests: 1,
+          spawns: [{ seq: 1, toolUseId: "tu_task", subagentId: null }],
+        }),
+        chain(CHILD_A, {
+          spawnToolUseId: "tu_task",
+          modelResponses: 1,
+          unkeyedToolCalls: 1,
+        }),
+      ],
+    });
+    // One unanswered request on the root and one lone response on the
+    // subagent are two calls, not one.
+    expect(turns[0]).toMatchObject({ modelSteps: 2, toolSteps: 2 });
   });
 
   it("puts a chain placed before every root frame in turn 1 when the turns follow the index", () => {

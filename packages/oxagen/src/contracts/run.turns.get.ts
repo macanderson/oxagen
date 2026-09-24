@@ -95,9 +95,11 @@ export const runTurnsGet = registerCapability({
       runId: runPublicIdSchema,
       turns: z.array(runTurnSchema).max(RUN_TURNS_MAX),
       /**
-       * False when the run has more than `RUN_TURNS_MAX` turns and `turns`
-       * holds the first of them. The caller says the list stops short rather
-       * than presenting it as the whole run.
+       * False when the list stops short of the run's end: the run has more
+       * than `RUN_TURNS_MAX` turns, or a ledger run has more than the 50,000
+       * frames one read counts. `turns` then holds the turns up to the cut.
+       * The caller says the list stops short rather than presenting it as the
+       * whole run.
        */
       complete: z.boolean(),
     })

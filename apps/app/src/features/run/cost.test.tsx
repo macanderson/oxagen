@@ -829,9 +829,11 @@ describe("CostTab", () => {
   });
 
   it("names the per-turn read's failure where the ledger would be (negative)", async () => {
-    await renderTab(props({ turns: readError("clickhouse_unreachable", 502) }));
+    await renderTab(
+      props({ turns: readError("frame_store_unreachable", 502) }),
+    );
     expect(screen.getByTestId("waterfall-panel")).toHaveTextContent(
-      "clickhouse_unreachable",
+      "frame_store_unreachable",
     );
     expect(screen.queryAllByTestId("waterfall-row")).toHaveLength(0);
     expect(screen.queryByTestId("waterfall-cut")).toBeNull();
@@ -851,7 +853,7 @@ describe("CostTab", () => {
     await renderTab(props({ turns: readOk({ ...turns, complete: false }) }));
     expect(screen.getAllByTestId("waterfall-row")).toHaveLength(7);
     expect(screen.getByTestId("waterfall-cut")).toHaveTextContent(
-      "The run has more turns than one read carries, so this shows its first 7.",
+      "The run is longer than one read carries, so this shows its first 7 turns.",
     );
   });
 

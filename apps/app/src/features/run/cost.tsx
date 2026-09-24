@@ -25,7 +25,7 @@
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type { RunTurns } from "@/data/contracts/run";
-import type { Read } from "@/data/read";
+import { type Read, readOk } from "@/data/read";
 import type { RunTabProps } from "./tab-props";
 import { classPrices, ledgerOf } from "./cost-figures";
 import { Instruments } from "./instruments";
@@ -34,7 +34,7 @@ import { ModelFitPanel } from "./model-fit";
 import { SpendByArea } from "./spend-by-area";
 import { TokenClassesAndComposition } from "./token-classes";
 import { ToolCalls } from "./tool-calls";
-import { WaterfallPanel } from "./waterfall";
+import { type TurnLedger, WaterfallPanel } from "./waterfall";
 
 /** The line that says an open run's figures are an estimate (#3980). */
 function CostEstimate() {
@@ -63,7 +63,13 @@ function CostSections({
   cost,
   turns,
 }: RunTabProps & { turns: Read<RunTurns> }) {
-  const ledger = turns.ok ? ledgerOf(turnFigures(turns.value.turns)) : null;
+  const summed: Read<TurnLedger> = turns.ok
+    ? readOk({
+        ledger: ledgerOf(turnFigures(turns.value.turns)),
+        complete: turns.value.complete,
+      })
+    : turns;
+  const ledger = summed.ok ? summed.value.ledger : null;
   const prices = classPrices(metrics.priced, metrics.tokens);
   const rollup = cost.ok ? cost.value.rollup : null;
   const retries = rollup?.retries ?? null;
@@ -85,7 +91,7 @@ function CostSections({
       />
       <SpendByArea metrics={metrics} prices={prices} />
       <ToolCalls metrics={metrics} />
-      <WaterfallPanel metrics={metrics} ledger={ledger} turns={turns} />
+      <WaterfallPanel metrics={metrics} turns={summed} />
       <TokenClassesAndComposition
         metrics={metrics}
         prices={prices}

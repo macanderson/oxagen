@@ -1,7 +1,8 @@
 // The two reads behind `get_run_turns`, against a mocked `chSelect`: the
 // query each sends, the parameters it binds, and how each answer row maps.
-// `tacho-turns.integration.test.ts` runs the same reads against a real
-// ClickHouse, which is the only place the SQL itself can be checked.
+// These pin the query's text, not what it counts. What it counts is checked
+// against a real ClickHouse in
+// packages/handlers/src/run.turns.get.integration.test.ts.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const chSelect = vi.fn(
@@ -48,7 +49,6 @@ describe("selectTachoTurnFacts", () => {
             ["1", "63", "125"],
           ],
           first_seq: "0",
-          frames: "186",
           observed: "4",
           first_observed: "70",
         },
@@ -57,7 +57,6 @@ describe("selectTachoTurnFacts", () => {
           starts: [],
           index_starts: [[], []],
           first_seq: "0",
-          frames: "12",
           observed: "0",
           first_observed: "0",
         },
@@ -90,6 +89,40 @@ describe("selectTachoTurnFacts", () => {
       meteringAttr: "oxagen.metering",
       observed: "observed",
     });
+  });
+
+  it("reads each turn index's first seq once and in seq order, and a chain with no index as none", async () => {
+    chSelect.mockResolvedValue({
+      data: [
+        {
+          chain: ROOT,
+          starts: [],
+          // A minMap answers per key, in key order, and two keys can share a
+          // seq. tachoTurnStarts drops the first, so the order matters.
+          index_starts: [
+            [3, 1, 2],
+            ["125", "1", "1"],
+          ],
+          first_seq: "0",
+          observed: "0",
+          first_observed: "0",
+        },
+        {
+          chain: CHILD,
+          starts: [],
+          index_starts: null,
+          first_seq: "4",
+          observed: "0",
+          first_observed: "0",
+        },
+      ],
+    });
+    const [root, child] = await selectTachoTurnFacts({
+      sessionUuids: [ROOT, CHILD],
+    });
+    expect(root?.turnIndexStarts).toEqual([1, 125]);
+    expect(child?.turnIndexStarts).toEqual([]);
+    expect(child?.firstSeq).toBe(4);
   });
 });
 

@@ -62,7 +62,8 @@ function turn(overrides: Partial<TurnFigure>): TurnFigure {
 
 /**
  * The panel over `turns`, as the Cost tab hands it: the ledger summed from
- * the rows, and the read they came from. A failed `read` draws no ledger.
+ * the rows, and whether the read reached the last turn. A failed `read` is
+ * handed on as it is.
  */
 function renderPanel(
   turns: TurnFigure[],
@@ -79,8 +80,11 @@ function renderPanel(
     <IntlProvider>
       <WaterfallPanel
         metrics={m}
-        ledger={read.ok ? ledgerOf(turns) : null}
-        turns={read}
+        turns={
+          read.ok
+            ? readOk({ ledger: ledgerOf(turns), complete: read.value.complete })
+            : read
+        }
       />
     </IntlProvider>,
   );
@@ -175,10 +179,10 @@ describe("WaterfallPanel", () => {
 
   it("names the per-turn read's failure rather than drawing an empty chart (negative)", () => {
     renderPanel([], {
-      read: readError("clickhouse_unreachable", 502),
+      read: readError("frame_store_unreachable", 502),
     });
     expect(screen.getByTestId("waterfall-panel")).toHaveTextContent(
-      "clickhouse_unreachable",
+      "frame_store_unreachable",
     );
     expect(screen.queryByTestId("waterfall-empty")).toBeNull();
     // No turn count is claimed for a read that did not answer.
@@ -244,7 +248,7 @@ describe("WaterfallPanel", () => {
       read: readOk({ turns: [], complete: false }),
     });
     expect(screen.getByTestId("waterfall-cut")).toHaveTextContent(
-      "The run has more turns than one read carries, so this shows its first 2.",
+      "The run is longer than one read carries, so this shows its first 2 turns.",
     );
   });
 
