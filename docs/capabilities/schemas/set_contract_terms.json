@@ -1,0 +1,128 @@
+{
+  "name": "set_contract_terms",
+  "domain": "billing",
+  "description": "Platform-operator only: record an organization's negotiated governed-action terms (agreement reference, currency, rate per unit, block size, included units per month) from an effective date, closing the agreement they replace.",
+  "mode": "sync",
+  "surfaces": [],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "orgId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "agreementRef": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 140
+      },
+      "currency": {
+        "type": "string"
+      },
+      "ratePerGauMicros": {
+        "type": "string"
+      },
+      "blockSizeGau": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 2147483647
+      },
+      "includedGauPerMonth": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 2147483647
+      },
+      "effectiveFrom": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "orgId",
+      "agreementRef",
+      "currency",
+      "ratePerGauMicros",
+      "blockSizeGau",
+      "includedGauPerMonth"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "orgId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "agreementRef": {
+        "type": "string"
+      },
+      "currency": {
+        "type": "string"
+      },
+      "ratePerGauMicros": {
+        "type": "string"
+      },
+      "blockSizeGau": {
+        "type": "integer"
+      },
+      "includedGauPerMonth": {
+        "type": "integer"
+      },
+      "effectiveFrom": {
+        "type": "string"
+      },
+      "changed": {
+        "type": "boolean"
+      },
+      "previous": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "agreementRef": {
+                "type": "string"
+              },
+              "effectiveFrom": {
+                "type": "string"
+              },
+              "effectiveTo": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "agreementRef",
+              "effectiveFrom",
+              "effectiveTo"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "orgId",
+      "agreementRef",
+      "currency",
+      "ratePerGauMicros",
+      "blockSizeGau",
+      "includedGauPerMonth",
+      "effectiveFrom",
+      "changed",
+      "previous"
+    ],
+    "additionalProperties": false
+  }
+}

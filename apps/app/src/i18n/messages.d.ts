@@ -2010,6 +2010,51 @@ type Messages = {
       older: string;
       newest: string;
     };
+    statements: {
+      title: string;
+      intro: string;
+      roleRequired: string;
+      period: string;
+      kinds: {
+        week: string;
+        month: string;
+        quarter: string;
+        year: string;
+        custom: string;
+      };
+      anchor: string;
+      anchorHint: {
+        week: string;
+        month: string;
+        quarter: string;
+        year: string;
+      };
+      firstDay: string;
+      lastDay: string;
+      customHint: string;
+      download: {
+        csv: string;
+        html: string;
+      };
+      preparing: {
+        csv: string;
+        html: string;
+      };
+      progress: string;
+      saved: string;
+      partial: string;
+      errors: {
+        dayInvalid: string;
+        future: string;
+        rangeTooShort: string;
+        rangeTooLong: string;
+      };
+      failure: {
+        denied: string;
+        invalid: string;
+        unavailable: string;
+      };
+    };
     priceList: {
       title: string;
       free: string;
@@ -7329,7 +7374,9 @@ type Messages = {
         invalid: string;
         exhausted: string;
         noCredit: string;
+        noCreditLink: string;
         spendCap: string;
+        spendCapLink: string;
         keyLimit: string;
         parked: string;
         engine: string;

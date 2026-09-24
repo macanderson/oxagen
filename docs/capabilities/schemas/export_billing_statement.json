@@ -1,0 +1,119 @@
+{
+  "name": "export_billing_statement",
+  "domain": "billing",
+  "description": "Export the organization's billing statement for a week, month, quarter, year or custom period longer than 48 hours, as CSV with every billed governed action (paged by cursor) or as a printable HTML document.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "period": {
+        "type": "string",
+        "enum": [
+          "week",
+          "month",
+          "quarter",
+          "year",
+          "custom"
+        ]
+      },
+      "anchor": {
+        "type": "string"
+      },
+      "from": {
+        "type": "string"
+      },
+      "to": {
+        "type": "string"
+      },
+      "format": {
+        "type": "string",
+        "enum": [
+          "csv",
+          "html"
+        ],
+        "default": "csv"
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 50000,
+        "default": 10000
+      },
+      "cursor": {
+        "type": "string",
+        "maxLength": 512
+      }
+    },
+    "required": [
+      "period"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "reference": {
+        "type": "string"
+      },
+      "format": {
+        "type": "string",
+        "enum": [
+          "csv",
+          "html"
+        ]
+      },
+      "filename": {
+        "type": "string"
+      },
+      "mediaType": {
+        "type": "string",
+        "enum": [
+          "text/csv",
+          "text/html"
+        ]
+      },
+      "content": {
+        "type": "string"
+      },
+      "lines": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "nextCursor": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "reference",
+      "format",
+      "filename",
+      "mediaType",
+      "content",
+      "lines",
+      "nextCursor"
+    ],
+    "additionalProperties": false
+  }
+}

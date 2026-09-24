@@ -163,7 +163,7 @@ const EMPTY_THREAD: Thread = {
  * The engine being down, a run the ledger would not admit, and a turn the
  * engine stopped are told apart from a network failure, and an empty credit
  * balance from a spent monthly cap, because each asks the person to do
- * something different.
+ * something different. The two credit-gate refusals link to their way out.
  */
 type Refusal =
   | "denied"
@@ -327,7 +327,7 @@ function refusalDetail(result: Refused): string | null {
  * catalog walk reads `t()` keys statically, and a computed key reaches no
  * catalog it can check.
  */
-function RefusalText({ code }: { code: Refusal }) {
+function RefusalText({ code, org }: { code: Refusal; org: string | null }) {
   const t = useTranslations("shell.assistant.refused");
   switch (code) {
     case "denied":
@@ -336,10 +336,46 @@ function RefusalText({ code }: { code: Refusal }) {
       return <>{t("invalid")}</>;
     case "exhausted":
       return <>{t("exhausted")}</>;
+    // The way out is a top-up on Billing, where the usage credit balance and
+    // its purchase form live (features/billing/usage-credits.tsx).
     case "noCredit":
-      return <>{t("noCredit")}</>;
+      return (
+        <>
+          {t("noCredit")}
+          {org === null ? null : (
+            <>
+              {" "}
+              <SafeLink
+                to={routes.billing(org)}
+                data-testid="assistant-buy-credits"
+                className={linkText}
+              >
+                {t("noCreditLink")}
+              </SafeLink>
+            </>
+          )}
+        </>
+      );
+    // The cap bounds only what the platform key pays (ADR-053 §3); a turn on
+    // the organization's own key is not held to it.
     case "spendCap":
-      return <>{t("spendCap")}</>;
+      return (
+        <>
+          {t("spendCap")}
+          {org === null ? null : (
+            <>
+              {" "}
+              <SafeLink
+                to={routes.modelFunding(org)}
+                data-testid="assistant-model-funding"
+                className={linkText}
+              >
+                {t("spendCapLink")}
+              </SafeLink>
+            </>
+          )}
+        </>
+      );
     case "keyLimit":
       return <>{t("keyLimit")}</>;
     case "parked":
@@ -786,7 +822,7 @@ export function AssistantFlyout() {
                         className="mt-0.5 size-4 flex-none text-error"
                       />
                       <span>
-                        <RefusalText code={entry.code} />
+                        <RefusalText code={entry.code} org={org} />
                       </span>
                     </p>
                     {entry.detail === null ? null : (
