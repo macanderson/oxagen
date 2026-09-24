@@ -61,7 +61,7 @@ export function tokensOut(tokens: TokenCounts): number {
 }
 
 /** The prompt entries of the whole-run transcript; null when the read failed. */
-export function promptCount(transcript: Read<RunTranscript>): number | null {
+function promptCount(transcript: Read<RunTranscript>): number | null {
   return transcript.ok
     ? transcript.value.entries.filter((entry) => entry.kinds.includes("prompt"))
         .length

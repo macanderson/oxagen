@@ -42,7 +42,7 @@ type Place = { org: string; ws: string; runId: string };
 const GITHUB_ISSUE = /^([\w.-]+)\/([\w.-]+)#(\d+)$/;
 
 /** The tracker page for a reference, when its shape names one. */
-export function issueUrl(ref: string): GitHubUrl | null {
+function issueUrl(ref: string): GitHubUrl | null {
   const match = GITHUB_ISSUE.exec(ref.trim());
   if (match === null) return null;
   const [, owner, repo, number] = match;

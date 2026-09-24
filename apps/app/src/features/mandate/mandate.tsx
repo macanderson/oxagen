@@ -382,7 +382,7 @@ function Loaded({
 }
 
 /** The design's empty state, in place of the page body. */
-export function MandateNeverDrawn() {
+function MandateNeverDrawn() {
   const t = useTranslations("mandate.ledger");
   return (
     <StateWrap

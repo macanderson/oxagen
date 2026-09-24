@@ -38,7 +38,7 @@ import { isWhole } from "./whole-transcript";
 type Place = { org: string; ws: string; runId: string };
 
 /** The frame type a wrapped session seals its steering manifest under. */
-export const MANIFEST_FRAME = "steering.manifest";
+const MANIFEST_FRAME = "steering.manifest";
 
 /** The entries of a whole-run transcript that answer to one chip. */
 export function entriesOf(

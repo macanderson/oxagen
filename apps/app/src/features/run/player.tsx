@@ -34,7 +34,7 @@ import { useFormatter } from "@/ui/formatter";
 import { formatCount, formatDuration } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 
-export const FRAME_FAMILIES = [
+const FRAME_FAMILIES = [
   "model",
   "tool",
   "governance",
@@ -53,9 +53,7 @@ const OPERATOR = /prompt|steer|interject|answer|command|operator|message/i;
  * because a policy decision on a tool call is governance and a steer is the
  * operator speaking, whatever stage the recorder filed it under.
  */
-export function frameFamily(
-  frame: Pick<RunFrame, "type" | "stage">,
-): FrameFamily {
+function frameFamily(frame: Pick<RunFrame, "type" | "stage">): FrameFamily {
   if (GOVERNANCE.test(frame.type)) return "governance";
   if (OPERATOR.test(frame.type)) return "operator";
   if (frame.stage === "model" || /model|llm/i.test(frame.type)) return "model";
@@ -97,7 +95,7 @@ const ASKS = /approv|blocked_on_user/i;
  * while the approvals read says a call on this run is still waiting. Null when
  * nothing is parked or no frame on this page asked.
  */
-export function parkedIndex(
+function parkedIndex(
   frames: readonly RunFrame[],
   parked: boolean,
 ): number | null {
@@ -112,7 +110,7 @@ export function parkedIndex(
  * The turn each frame sits in. The first frame opens turn 1, and every
  * operator frame after the first opens the next turn.
  */
-export function turnsOf(frames: readonly RunFrame[]): number[] {
+function turnsOf(frames: readonly RunFrame[]): number[] {
   let turn = 1;
   return frames.map((frame, index) => {
     if (index > 0 && frameFamily(frame) === "operator") turn += 1;

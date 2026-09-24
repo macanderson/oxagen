@@ -21,7 +21,7 @@ import { eyebrow, mono, panel } from "@/ui/control-styles";
 import { InterjectionAnswer } from "./interjection-answer";
 
 /** The frame kind that marks a run as held on an interjection. */
-export const INTERJECT = "control.interject";
+const INTERJECT = "control.interject";
 const ANSWER = "control.answer";
 /** The frames the spec lists after an answer, in order, while the run waits. */
 const AFTER_ANSWER = [

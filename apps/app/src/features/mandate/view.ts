@@ -174,12 +174,7 @@ export type LedgerView = {
 };
 
 /** The columns a ledger header can sort on: the ones whose cells carry a recorded value. */
-export const SORTABLE_COLUMNS = [
-  "when",
-  "amount",
-  "state",
-  "external",
-] as const;
+const SORTABLE_COLUMNS = ["when", "amount", "state", "external"] as const;
 export type SortableColumn = (typeof SORTABLE_COLUMNS)[number];
 export type LedgerSort = { column: SortableColumn; dir: 1 | -1 };
 
@@ -338,6 +333,8 @@ export function openCalls(
  * The calendar day an instant falls on in a zone, as `YYYY-MM-DD`: the form the
  * design prints and `<input type="date">` takes. Null for a zone this runtime
  * cannot read, so a caller falls back to the formatter rather than guessing UTC.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
  */
 export function zonedDay(instant: string, timeZone: string): string | null {
   if (!supportsTimeZone(timeZone)) return null;

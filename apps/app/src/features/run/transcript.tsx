@@ -90,7 +90,7 @@ function hasThinking(entry: TranscriptEntry): boolean {
  * failed: a chip with no count says nothing rather than zero. `seal` has no
  * count because no transcript kind carries it.
  */
-export function chipCounts(
+function chipCounts(
   read: Read<RunTranscript>,
 ): Partial<Record<ChipName | TranscriptKind, number>> | null {
   if (!read.ok) return null;
