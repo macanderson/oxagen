@@ -42,7 +42,14 @@ async function renderUnder(read: unknown) {
   preferences.mockResolvedValue(read);
   const tree = await ViewerClock({
     ctx,
-    source: { shell: { context: vi.fn(), preferences } },
+    source: {
+      shell: {
+        context: vi.fn(),
+        preferences,
+        counts: vi.fn(),
+        notifications: vi.fn(),
+      },
+    },
     children: <Clock />,
   });
   const { container } = render(<IntlProvider>{tree}</IntlProvider>);

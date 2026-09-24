@@ -127,7 +127,9 @@ export function agentPage(
     totals: {
       identities,
       enrolled: identities,
+      unenrolled: 0,
       holdingMandate: null,
+      mandateHolders: [],
       tamperIncidents: 0,
       tamper: { recorded: 0, open: 0, newest: null },
     },
@@ -159,7 +161,12 @@ export function fleetSource(reads: FleetReads) {
   const source: DataSource = {
     runtimes: { list: refuse, agents: refuse },
     pretenant: { orgs: refuse, workspaces: refuse },
-    shell: { context: refuse, preferences: refuse },
+    shell: {
+      context: refuse,
+      preferences: refuse,
+      counts: refuse,
+      notifications: refuse,
+    },
     runs: {
       list: (...args) => {
         calls.runs.push(args);
@@ -182,6 +189,7 @@ export function fleetSource(reads: FleetReads) {
       // Fleet reads only the pending approvals; the resolved ledger is a Run
       // page read (#3153).
       resolved: refuse,
+      resolvedSince: refuse,
     },
     agents: {
       list: (...args) => {

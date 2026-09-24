@@ -25,13 +25,19 @@ const nav = vi.hoisted(() => {
     notFound: interrupt("NEXT_NOT_FOUND"),
   };
 });
-const { requestHeaders, getSessionMock, resolveMock, invitationByToken } =
-  vi.hoisted(() => ({
-    requestHeaders: new Headers(),
-    getSessionMock: vi.fn(),
-    resolveMock: vi.fn<() => Promise<ViewerResolution>>(),
-    invitationByToken: vi.fn<() => Promise<InvitationRecord | null>>(),
-  }));
+const {
+  requestHeaders,
+  getSessionMock,
+  resolveMock,
+  invitationByToken,
+  freePlanIncludedGau,
+} = vi.hoisted(() => ({
+  requestHeaders: new Headers(),
+  getSessionMock: vi.fn(),
+  resolveMock: vi.fn<() => Promise<ViewerResolution>>(),
+  invitationByToken: vi.fn<() => Promise<InvitationRecord | null>>(),
+  freePlanIncludedGau: vi.fn<() => Promise<number | null>>(),
+}));
 
 vi.mock("next/navigation", () => nav);
 // requireViewer defers its clock read behind connection(), which needs a request scope.
@@ -44,7 +50,7 @@ vi.mock("next/headers", () => ({
 }));
 vi.mock("./session", () => ({ getSession: getSessionMock }));
 vi.mock("./tenancy-lookups", () => ({
-  systemLookups: { name: "live", invitationByToken },
+  systemLookups: { name: "live", invitationByToken, freePlanIncludedGau },
 }));
 vi.mock("./viewer-resolution", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./viewer-resolution")>()),
@@ -59,10 +65,12 @@ import {
   OrgCtx,
   type OrgFields,
   PretenantCtx,
+  readFreePlanAllowance,
   readInvitation,
   requireInvitee,
   requireUser,
   requireViewer,
+  resolveWorkspaceViewer,
   WsCtx,
   type WsFields,
 } from "./viewer";
@@ -101,6 +109,7 @@ beforeEach(() => {
   for (const key of [...requestHeaders.keys()]) requestHeaders.delete(key);
   resolveMock.mockReset();
   invitationByToken.mockReset();
+  freePlanIncludedGau.mockReset();
   getSessionMock.mockResolvedValue(null);
 });
 
@@ -295,6 +304,63 @@ describe("requireViewer", () => {
   });
 });
 
+describe("resolveWorkspaceViewer", () => {
+  const {
+    orgId: _o,
+    orgSlug: _s,
+    orgName: _n,
+    orgRole: _r,
+    userId: _u,
+    ...ws
+  } = wsFields;
+  /** The organization resolves; the workspace answers `forWs`. */
+  function resolveWith(forWs: ViewerResolution) {
+    resolveMock.mockImplementation((...args: unknown[]) =>
+      Promise.resolve(
+        args[2] === undefined
+          ? { kind: "ok", org: orgFields, ws: null }
+          : forWs,
+      ),
+    );
+  }
+
+  it("mints a WsCtx for a member of the workspace", async () => {
+    resolveWith({ kind: "ok", org: orgFields, ws });
+    const out = await resolveWorkspaceViewer("acme", "core-platform");
+    expect(out.kind).toBe("ok");
+    expect(WsCtx.is(out.ctx)).toBe(true);
+    expect(fieldsOf(out.ctx)).toEqual(wsFields);
+  });
+
+  it("answers refused with the organization ctx for a workspace it will not admit (negative)", async () => {
+    resolveWith({ kind: "not_found" });
+    const out = await resolveWorkspaceViewer("acme", "finops");
+    expect(out.kind).toBe("refused");
+    expect(OrgCtx.is(out.ctx)).toBe(true);
+    expect(WsCtx.is(out.ctx)).toBe(false);
+    expect(fieldsOf(out.ctx)).toEqual(orgFields);
+    expect(nav.notFound).not.toHaveBeenCalled();
+  });
+
+  it("still 404s an organization the viewer is not a member of (negative)", async () => {
+    resolveMock.mockResolvedValue({ kind: "not_found" });
+    await expect(resolveWorkspaceViewer("acme", "finops")).rejects.toThrow(
+      "NEXT_NOT_FOUND",
+    );
+  });
+
+  it("still redirects a historical workspace slug to its canonical URL", async () => {
+    requestHeaders.set("x-url", "https://app.oxagen.sh/acme/platform/tools");
+    resolveWith({ kind: "redirect", org: "acme", ws: "core-platform" });
+    await expect(resolveWorkspaceViewer("acme", "platform")).rejects.toThrow(
+      "NEXT_PERMANENT_REDIRECT",
+    );
+    expect(nav.permanentRedirect).toHaveBeenCalledWith(
+      "/acme/core-platform/tools",
+    );
+  });
+});
+
 describe("requireUser", () => {
   it("mints a PretenantCtx for the signed-in person", async () => {
     getSessionMock.mockResolvedValue(session);
@@ -347,6 +413,19 @@ describe("readInvitation", () => {
     await expect(readInvitation("")).resolves.toBeNull();
     await expect(readInvitation("a".repeat(65))).resolves.toBeNull();
     expect(invitationByToken).not.toHaveBeenCalled();
+  });
+});
+
+describe("readFreePlanAllowance", () => {
+  it("reads the Free plan's allowance with no session", async () => {
+    freePlanIncludedGau.mockResolvedValue(5000);
+    await expect(readFreePlanAllowance()).resolves.toBe(5000);
+    expect(getSessionMock).not.toHaveBeenCalled();
+  });
+
+  it("passes a missing plan row through as null (negative)", async () => {
+    freePlanIncludedGau.mockResolvedValue(null);
+    await expect(readFreePlanAllowance()).resolves.toBeNull();
   });
 });
 

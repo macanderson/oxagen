@@ -1,16 +1,25 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
-import { AFTER_SIGNUP, AuthTags, SignupForm } from "@/features/auth";
+import {
+  AFTER_SIGNUP,
+  AuthTags,
+  SignupForm,
+  queryEmail,
+  signupIncludesAllowance,
+} from "@/features/auth";
 import { readNext, routes } from "@/shared/safe-path";
 import { AuthColumn, AuthFooter, AuthSkeleton } from "@/ui/auth-shell";
 import { linkText } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
 import { PageHeader } from "@/ui/page-header";
 
+// The one sign-in page whose document title is not its h1 (ARCHITECTURE.md
+// §1.2): the h1 is the tagline, so the tab and a screen reader's window list
+// name the page by its eyebrow, "Create your account".
 export async function generateMetadata(): Promise<Metadata> {
-  const t = await getTranslations("pages");
-  return { title: t("signup") };
+  const t = await getTranslations("auth");
+  return { title: t("signup.eyebrow") };
 }
 
 export default function SignupPage(props: PageProps<"/signup">) {
@@ -28,9 +37,10 @@ async function Signup({
 }) {
   const params = await searchParams;
   const next = readNext(params, AFTER_SIGNUP);
-  const [t, pages] = await Promise.all([
+  const [t, pages, allowance] = await Promise.all([
     getTranslations("auth"),
     getTranslations("pages"),
+    signupIncludesAllowance(),
   ]);
   return (
     <AuthColumn>
@@ -39,7 +49,8 @@ async function Signup({
         title={pages("signup")}
         description={t("signup.lead")}
       />
-      <SignupForm next={next} />
+      {/* Verify email's Change it returns the address here, editable. */}
+      <SignupForm next={next} email={queryEmail(params.email)} />
       <AuthFooter>
         {t("signup.haveAccount")}{" "}
         <SafeLink
@@ -52,7 +63,9 @@ async function Signup({
       <AuthTags
         label={t("shell.tagsLabel")}
         tags={[
-          t("shell.tags.allowance"),
+          // Drawn only when the Free plan, where a new organization starts,
+          // includes governed actions (billing.plans).
+          ...(allowance ? [t("shell.tags.allowance")] : []),
           t("shell.tags.markup"),
           t("shell.tags.evidence"),
         ]}

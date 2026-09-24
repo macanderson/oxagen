@@ -16,6 +16,17 @@
  * writes the listing page at the bucket root, copies the page's webfonts
  * beside it, and invalidates both on CloudFront.
  *
+ * The page and the version-free links follow the newest version only. When
+ * the version being published is at least as new as the one `latest.json`
+ * names, each installer is copied server side to `latest/<name>` (the names
+ * are in src/downloads.ts; the web app and the docs link them), `latest.json`
+ * is rewritten, and the page is redrawn. An older version still gets its
+ * immutable `desktop/<version>/` prefix, but moves nothing, so a slow build
+ * finishing after a newer one cannot take the links backwards (ADR-158).
+ *
+ * The version is either a release (`X.Y.Z`, from a `desktop-v*` tag) or a
+ * build of main (`X.Y.Z-N`) that a production deploy published.
+ *
  * `.github/workflows/desktop.yml` runs this with --dir after every tagged
  * build, so a `desktop-v*` tag is enough to update https://downloads.oxagen.sh/;
  * the invocations above are for a build made some other way.
@@ -31,7 +42,8 @@
  * already published, from what the bucket holds: the object sizes from a
  * listing of `desktop/<version>/` and the digests from its SHA256SUMS.txt.
  * No installer is read or written. It is how a change to the page's design
- * reaches the live version between releases.
+ * reaches the live version between releases, and how a version published
+ * before `latest/` existed gets its version-free links.
  *
  * Versioned URLs are served immutable, so a version that is already published
  * is refused, and a version two invocations race for is won by one of them:
@@ -61,9 +73,14 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  advancesLatest,
   classifyInstaller,
   decidePublication,
   FONT_FILES,
+  LATEST_CACHE_CONTROL,
+  latestCopyArgs,
+  latestManifest,
+  readLatestVersion,
   renderIndexHtml,
   reportPublicationDecision,
   reservationArgs,
@@ -353,14 +370,76 @@ async function redrawFromBucket({ probeCliRelease, plannedObjects = [] }) {
       );
   }
   const dir = mkdtempSync(join(tmpdir(), "oxagen-downloads-page-"));
-  publishPage(dir, sortInstallers(published), publishedAt, cliRelease);
-  invalidate(["/", "/index.html", "/fonts/*"]);
+  if (advanceLatest(dir, sortInstallers(published), publishedAt)) {
+    publishPage(dir, sortInstallers(published), publishedAt, cliRelease);
+    invalidate(LATEST_PATHS);
+  }
   for (const entry of sortInstallers(published))
     console.log(`${entry.file}  ${entry.bytes} bytes  ${entry.sha256}`);
   console.log(`https://${host}/`);
   rmSync(dir, { recursive: true, force: true });
   return digests;
 }
+
+/**
+ * The version `latest.json` names, or null when there is none. Anything but
+ * "no such key" stops the publish: guessing null here could move the links
+ * backwards, and a re-run with --resume finishes the move.
+ */
+function currentLatestVersion() {
+  const result = spawnSync(
+    "aws",
+    ["s3", "cp", `s3://${bucket}/latest.json`, "-", "--only-show-errors"],
+    { encoding: "utf8", env: NO_COLOUR_ENV },
+  );
+  if (result.status === 0) return readLatestVersion(result.stdout);
+  const stderr = String(result.stderr ?? "");
+  if (/NoSuchKey|\(404\)|Not Found|does not exist/i.test(stderr)) return null;
+  console.error(
+    `✖ could not read s3://${bucket}/latest.json: ${stderr.trim() || `exit ${result.status}`}`,
+  );
+  process.exit(1);
+}
+
+/**
+ * Point `latest/` and `latest.json` at `entries` when this version is the
+ * newest; returns whether it moved. The installers must already be under
+ * `desktop/<version>/`: the copies are server side.
+ */
+function advanceLatest(dir, entries, publishedAt) {
+  const current = currentLatestVersion();
+  if (!advancesLatest(current, version)) {
+    console.warn(
+      `! latest is ${current}, newer than ${version}; the page and latest/ stay on ${current}`,
+    );
+    return false;
+  }
+  for (const entry of entries) {
+    const args = latestCopyArgs({ bucket, version, entry });
+    if (dryRun) console.log(`[dry-run] aws ${args.join(" ")}`);
+    else sh("aws", args);
+  }
+  const manifest = join(dir, "latest.json");
+  writeFileSync(
+    manifest,
+    `${JSON.stringify(latestManifest({ version, publishedAt, entries, host }), null, 2)}\n`,
+  );
+  upload(
+    manifest,
+    `s3://${bucket}/latest.json`,
+    "application/json",
+    LATEST_CACHE_CONTROL,
+  );
+  return true;
+}
+
+const LATEST_PATHS = [
+  "/",
+  "/index.html",
+  "/fonts/*",
+  "/latest/*",
+  "/latest.json",
+];
 
 // --page-only: the version is already there; describe it from the bucket.
 if (pageOnly) {
@@ -605,19 +684,26 @@ if (dryRun) {
 for (const entry of entries) {
   upload(entry.path, `${prefix}/${entry.file}`, entry.contentType, immutable);
 }
-publishPage(work, entries, new Date().toISOString().slice(0, 10));
 
-// 5. Invalidate the page when the distribution exists. Only an
+// 5. Move latest/ and the page when this is the newest version.
+const publishedAt = new Date().toISOString().slice(0, 10);
+const moved = advanceLatest(work, entries, publishedAt);
+if (moved) publishPage(work, entries, publishedAt);
+
+// 6. Invalidate what changed when the distribution exists. Only an
 // --allow-overwrite republish can have a stale edge copy of the versioned
 // prefix, and only the edge is reachable: anything further downstream was
 // promised a year. Invalidating a prefix that was never cached costs nothing,
 // so it is always included.
-invalidate(["/", "/index.html", "/fonts/*", `/desktop/${version}/*`]);
+invalidate([...(moved ? LATEST_PATHS : []), `/desktop/${version}/*`]);
 
 for (const entry of entries)
   console.log(
     `https://${host}/desktop/${version}/${encodeURIComponent(entry.file)}`,
   );
 console.log(`https://${host}/desktop/${version}/SHA256SUMS.txt`);
+if (moved)
+  for (const entry of entries)
+    console.log(`https://${host}/latest/${encodeURIComponent(entry.latest)}`);
 console.log(`https://${host}/`);
 rmSync(work, { recursive: true, force: true });

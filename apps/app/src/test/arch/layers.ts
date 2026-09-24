@@ -49,23 +49,6 @@ const isFeatureBarrel = (target: string): boolean =>
 const onlyNames = (edge: ImportEdge, names: readonly string[]): boolean =>
   edge.names.length > 0 && edge.names.every((name) => names.includes(name));
 
-/**
- * The `"use server"` modules that read a `DataSource` port directly. A page
- * reads through the port when the route renders and hands the rows down; these
- * two read when a person asks, and the record they answer with is already
- * mapped, so reaching the port is what stops each of them copying a mapper.
- *
- * - `activity-actions` fills the shell drawers, which open over any page.
- * - `choice-actions` fills a record picker, which opens inside a form.
- *
- * Both resolve their own viewer first (INV-19, actions.test.ts) and answer in
- * `ActionResult`. The list is exact: a third module needs its own reason here.
- */
-const PORT_READING_ACTIONS: readonly string[] = [
-  "features/shell/activity-actions",
-  "features/shell/choice-actions",
-];
-
 const isVocabulary = (target: string): boolean =>
   target === "data/read" ||
   under(target, "data/contracts") ||
@@ -105,19 +88,10 @@ const ALLOWED: Record<
   features: (from, target, edge) => {
     const page = featurePage(from.file);
     if (page !== null && under(target, `features/${page}`)) return true;
-    if (
-      isFeatureBarrel(target) ||
-      target === "features/fleet/client" ||
-      target === "features/shell/client"
-    )
+    if (isFeatureBarrel(target) || target === "features/shell/client")
       return true;
     if (under(target, "ui") || under(target, "shared")) return true;
     if (isVocabulary(target) || target === "data/ports") return true;
-    if (target === "data/source")
-      return (
-        PORT_READING_ACTIONS.includes(from.file) &&
-        from.directive === "use server"
-      );
     if (target === "server/viewer" || target === "server/session") return true;
     // `server/viewer-zone` has no row here on purpose. A write that places a
     // calendar day a person picked needs the zone they picked it in, and
@@ -318,9 +292,10 @@ const PLATFORM_NAMED_ROWS: Readonly<
   },
   // The org gate's Require SSO lookup asks one question of billing: does the
   // organisation's plan include SSO (ADR-145). The same single tier read the
-  // kernel's gates use, and nothing else from the package.
+  // kernel's gates use. The sign-up allowance read keys billing.plans by the
+  // Free plan's slug, which billing owns. Nothing else from the package.
   "src/server/tenancy-lookups.ts": {
-    "@oxagen/billing": ["canAccessSSO", "resolveOrgTier"],
+    "@oxagen/billing": ["canAccessSSO", "FREE_PLAN_SLUG", "resolveOrgTier"],
   },
   // Browser controls read the shared ceiling without loading the contract registry:
   // Steer the fleet caps its text at the limit dispatch_command enforces.

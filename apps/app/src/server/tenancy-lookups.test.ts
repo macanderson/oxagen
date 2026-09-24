@@ -32,6 +32,7 @@ const { resolveOrgTier } = vi.hoisted(() => ({
 vi.mock("@oxagen/billing", () => ({
   resolveOrgTier,
   canAccessSSO: (tier: string) => tier === "enterprise",
+  FREE_PLAN_SLUG: "free",
 }));
 
 import * as schema from "@oxagen/database/schema";
@@ -322,6 +323,20 @@ describe("systemLookups", () => {
       await expect(l.invitationByToken("invi_live")).resolves.toMatchObject({
         expiresAt: null,
       });
+    });
+  });
+
+  describe("freePlanIncludedGau", () => {
+    it("reads the Free plan's monthly allowance from billing.plans by its slug", async () => {
+      queue.push([{ included: 5000 }]);
+      await expect(l.freePlanIncludedGau()).resolves.toBe(5000);
+      expect(tables).toEqual([schema.plans]);
+      expect(where).toHaveBeenLastCalledWith(eq(schema.plans.slug, "free"));
+    });
+
+    it("reads a missing plan row as null (negative)", async () => {
+      queue.push([]);
+      await expect(l.freePlanIncludedGau()).resolves.toBeNull();
     });
   });
 });

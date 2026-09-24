@@ -2,6 +2,7 @@
 // api/auth). This barrel reaches server-only modules, so import it from Server
 // Components and route handlers only; client islands import their siblings.
 export { getAuthUser, handleAuthRequest } from "@/server/session";
+export { signupIncludesAllowance } from "./allowance";
 export {
   authorizeReturnPath,
   checkAuthorizeParams,
@@ -20,6 +21,7 @@ export {
 export { oauthQueryOutcome } from "./auth-errors";
 export { LoginForm } from "./login-form";
 export { ForgotPasswordForm, ResetPasswordForm } from "./password-reset-forms";
+export { queryEmail } from "./query-email";
 export { AFTER_SIGNUP } from "./routes";
 export { SignedInNotice } from "./signed-in-notice";
 export { SignupForm } from "./signup-form";

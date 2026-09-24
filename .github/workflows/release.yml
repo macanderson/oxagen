@@ -17,7 +17,8 @@ name: Release
 #         whose publish job builds the app, copies the installers to
 #         downloads.oxagen.sh and rewrites its page. The docs page deploys
 #         with main, so docs.oxagen.sh/docs/releases/vX.Y.Z is live before the
-#         installers are.
+#         installers are. Between releases, every production deploy publishes
+#         a build of main (`X.Y.(Z+1)-N`) the same way (ADR-158).
 #
 # RELEASE_TOKEN is required: a fine-grained personal access token for this
 # repository with contents: write, pull requests: write and workflows: write,

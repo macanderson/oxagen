@@ -149,7 +149,10 @@ export interface ScimStore {
     groupId: string,
   ): Promise<{ userId: string; display: string | null }[]>;
   addGroupMembers(groupId: string, userIds: readonly string[]): Promise<void>;
-  removeGroupMembers(groupId: string, userIds: readonly string[]): Promise<void>;
+  removeGroupMembers(
+    groupId: string,
+    userIds: readonly string[],
+  ): Promise<void>;
 
   /** Write a scim.* audit row in the request's transaction. */
   audit(
@@ -219,7 +222,10 @@ function emailOf(resource: Record<string, unknown>): string | null {
     : [];
   const primary: unknown =
     emails.find(
-      (e) => typeof e === "object" && e !== null && (e as { primary?: unknown }).primary,
+      (e) =>
+        typeof e === "object" &&
+        e !== null &&
+        (e as { primary?: unknown }).primary,
     ) ?? emails[0];
   const value =
     typeof primary === "object" && primary !== null
@@ -273,7 +279,11 @@ async function ownsIdentity(store: ScimStore, email: string): Promise<boolean> {
 async function assertOrgDomain(store: ScimStore, email: string): Promise<void> {
   const domain = emailDomainOf(email);
   if (domain === null) {
-    throw new ScimError(400, "userName must be an email address", "invalidValue");
+    throw new ScimError(
+      400,
+      "userName must be an email address",
+      "invalidValue",
+    );
   }
   const verified = await store.verifiedDomains();
   if (onVerifiedDomain(email, verified)) return;
@@ -317,7 +327,10 @@ async function recomputeRole(
   const current = await store.currentRole(userId);
   const user = await store.findUser(userId);
   if (!user || !user.active) return current;
-  const granted = resolveSsoGrantedRole(await store.groupNamesOf(userId), mappings);
+  const granted = resolveSsoGrantedRole(
+    await store.groupNamesOf(userId),
+    mappings,
+  );
   if (granted === current || (granted === null && current === null)) {
     return current;
   }
@@ -379,7 +392,10 @@ async function applyUserChanges(
     });
     changed.push("name");
   }
-  if (changes.externalId !== undefined && changes.externalId !== user.externalId) {
+  if (
+    changes.externalId !== undefined &&
+    changes.externalId !== user.externalId
+  ) {
     await store.setExternalId(user.id, changes.externalId);
     changed.push("externalId");
   }
@@ -418,7 +434,8 @@ function userPatchChanges(user: ScimUserRow, body: unknown): UserChanges {
     if (p === "active") {
       if (!remove) changes.active = scimBoolean(value, "active");
     } else if (p === "username") {
-      if (remove) throw new ScimError(400, "userName cannot be removed", "mutability");
+      if (remove)
+        throw new ScimError(400, "userName cannot be removed", "mutability");
       const email = str(value, "userName");
       if (email) changes.email = email.toLowerCase();
     } else if (p === "externalid") {
@@ -463,7 +480,9 @@ function userPatchChanges(user: ScimUserRow, body: unknown): UserChanges {
     }
     for (const [key, value] of Object.entries(op.value)) {
       if (key === "name" && typeof value === "object" && value !== null) {
-        for (const [sub, v] of Object.entries(value as Record<string, unknown>)) {
+        for (const [sub, v] of Object.entries(
+          value as Record<string, unknown>,
+        )) {
           setAttr(`name.${sub}`, v, false);
         }
       } else {
@@ -477,7 +496,11 @@ function userPatchChanges(user: ScimUserRow, body: unknown): UserChanges {
 
 function objectBody(body: unknown): Record<string, unknown> {
   if (typeof body !== "object" || body === null || Array.isArray(body)) {
-    throw new ScimError(400, "The request body must be a JSON object", "invalidSyntax");
+    throw new ScimError(
+      400,
+      "The request body must be a JSON object",
+      "invalidSyntax",
+    );
   }
   return body as Record<string, unknown>;
 }
@@ -497,7 +520,11 @@ async function serveUsers(
         "id",
       ]);
       const { startIndex, count } = pageOf(req.query);
-      const { rows, total } = await store.listUsers(filter, startIndex - 1, count);
+      const { rows, total } = await store.listUsers(
+        filter,
+        startIndex - 1,
+        count,
+      );
       return {
         status: 200,
         body: listResponse(
@@ -570,11 +597,17 @@ async function serveUsers(
           ? { active: scimBoolean(resource.active, "active") }
           : {}),
       });
-      return { status: 200, body: renderUser(await requireUser(store, id), baseUrl) };
+      return {
+        status: 200,
+        body: renderUser(await requireUser(store, id), baseUrl),
+      };
     }
     case "PATCH": {
       await applyUserChanges(store, user, userPatchChanges(user, req.body));
-      return { status: 200, body: renderUser(await requireUser(store, id), baseUrl) };
+      return {
+        status: 200,
+        body: renderUser(await requireUser(store, id), baseUrl),
+      };
     }
     case "DELETE":
       await refuseOwner(store, user.id);
@@ -683,7 +716,11 @@ function groupPatchChange(body: unknown): GroupChange {
       setAttr(op.op, op.path, op.value);
       continue;
     }
-    if (typeof op.value !== "object" || op.value === null || op.op === "remove") {
+    if (
+      typeof op.value !== "object" ||
+      op.value === null ||
+      op.op === "remove"
+    ) {
       throw new ScimError(
         400,
         "An operation without a path needs an object value",
@@ -707,12 +744,18 @@ async function applyGroupChange(
   change: GroupChange,
   kind: "created" | "updated",
 ): Promise<void> {
-  const before = new Set((await store.groupMembers(group.id)).map((m) => m.userId));
+  const before = new Set(
+    (await store.groupMembers(group.id)).map((m) => m.userId),
+  );
 
   const renamed =
-    (change.displayName !== undefined && change.displayName !== group.displayName) ||
+    (change.displayName !== undefined &&
+      change.displayName !== group.displayName) ||
     (change.externalId !== undefined && change.externalId !== group.externalId);
-  if (change.displayName !== undefined && change.displayName !== group.displayName) {
+  if (
+    change.displayName !== undefined &&
+    change.displayName !== group.displayName
+  ) {
     const clash = await store.findGroupByName(change.displayName);
     if (clash && clash.id !== group.id) {
       throw new ScimError(
@@ -724,8 +767,12 @@ async function applyGroupChange(
   }
   if (renamed) {
     await store.updateGroup(group.id, {
-      ...(change.displayName !== undefined ? { displayName: change.displayName } : {}),
-      ...(change.externalId !== undefined ? { externalId: change.externalId } : {}),
+      ...(change.displayName !== undefined
+        ? { displayName: change.displayName }
+        : {}),
+      ...(change.externalId !== undefined
+        ? { externalId: change.externalId }
+        : {}),
     });
   }
 
@@ -780,7 +827,11 @@ async function serveGroups(
         "id",
       ]);
       const { startIndex, count } = pageOf(req.query);
-      const { rows, total } = await store.listGroups(filter, startIndex - 1, count);
+      const { rows, total } = await store.listGroups(
+        filter,
+        startIndex - 1,
+        count,
+      );
       const resources = [];
       for (const row of rows) {
         resources.push(await renderGroup(store, row, baseUrl, withMembers));
@@ -822,7 +873,10 @@ async function serveGroups(
   const group = await requireGroup(store, id);
   switch (req.method) {
     case "GET":
-      return { status: 200, body: await renderGroup(store, group, baseUrl, withMembers) };
+      return {
+        status: 200,
+        body: await renderGroup(store, group, baseUrl, withMembers),
+      };
     case "PUT": {
       const resource = objectBody(req.body);
       const displayName = str(resource.displayName, "displayName");
@@ -847,15 +901,30 @@ async function serveGroups(
       );
       return {
         status: 200,
-        body: await renderGroup(store, await requireGroup(store, id), baseUrl, true),
+        body: await renderGroup(
+          store,
+          await requireGroup(store, id),
+          baseUrl,
+          true,
+        ),
       };
     }
     case "PATCH": {
-      await applyGroupChange(store, group, groupPatchChange(req.body), "updated");
+      await applyGroupChange(
+        store,
+        group,
+        groupPatchChange(req.body),
+        "updated",
+      );
       // Entra ID accepts 204; Okta reads the group back. Answer the group.
       return {
         status: 200,
-        body: await renderGroup(store, await requireGroup(store, id), baseUrl, withMembers),
+        body: await renderGroup(
+          store,
+          await requireGroup(store, id),
+          baseUrl,
+          withMembers,
+        ),
       };
     }
     case "DELETE": {
@@ -880,7 +949,10 @@ async function serveGroups(
       return { status: 204, body: null };
     }
     default:
-      throw new ScimError(405, `${req.method} is not supported on /Groups/{id}`);
+      throw new ScimError(
+        405,
+        `${req.method} is not supported on /Groups/{id}`,
+      );
   }
 }
 
