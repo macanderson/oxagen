@@ -829,7 +829,11 @@ async function initializeDaemon(
         if (!recorder.bornOnDisk) continue;
         const born = recorder.birthCursor;
         const tail = context.chainTail?.(recorder.sessionUuid);
-        if (tail?.seq === born.seq && tail.prevHash === born.prevHash)
+        if (
+          tail !== undefined &&
+          tail.seq === born.seq &&
+          tail.prevHash === born.prevHash
+        )
           recorder.rollbackToBirth();
       }
     }
@@ -2395,8 +2399,9 @@ async function initializeDaemon(
   }
 
   /**
-   * When this process began answering hooks, and the sessions it has already
-   * chained a `daemon_down` gap on for the outage that ended then.
+   * When this process began answering hooks (infinity until it does), and
+   * the sessions it has already chained a `daemon_down` gap on for the
+   * outage that ended then.
    *
    * A hook is spooled whenever its client gets no good answer: the daemon was
    * down, or it answered with an error or past the hook's time budget. Only
@@ -2408,7 +2413,7 @@ async function initializeDaemon(
    * (#4094). The startup gap below and `drainSpool` both add here, so one
    * outage gives a session one gap.
    */
-  let servingSince: number | undefined;
+  let servingSince = Number.POSITIVE_INFINITY;
   const outageGapped = new Set<string>();
 
   /** Replay what `tacho-hook` spooled while the daemon was down, in order. */
@@ -2451,9 +2456,9 @@ async function initializeDaemon(
       // A hook spooled since this process began serving was refused or
       // answered late, not missed: its replay here recovers it, and nothing
       // else the daemon receives directly was lost.
-      const spooledWhileDown =
-        servingSince === undefined ||
-        !(Date.parse(file.received_at) >= servingSince);
+      const spooledWhileDown = !(
+        Date.parse(file.received_at) >= servingSince
+      );
       if (sessionId !== undefined && spooledWhileDown && !gapped.has(sessionId))
         gapped.set(sessionId, file.received_at);
       try {
