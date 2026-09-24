@@ -1200,7 +1200,9 @@ describe("an open run's cost and what sealed a run (#3980)", () => {
 
   it("calls no cost an estimate (negative)", () => {
     expect(costIsEstimate(null, undefined)).toBe(false);
-    expect(costIsEstimate(null, { cost: null, verdict: null })).toBe(false);
+    expect(
+      costIsEstimate(null, { cost: null, verdict: null, sealedAt: null }),
+    ).toBe(false);
   });
 
   it("names the idle close, and reads every other seal as the host's own", () => {
