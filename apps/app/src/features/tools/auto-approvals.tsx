@@ -18,8 +18,9 @@
 //
 // The two counters are what the contract counts: calls a rule released with
 // no person (`hits30d`), and calls that reached a person with the rule read
-// beside them (`skipped30d`). The tiles add those up over the rules and add
-// nothing else.
+// beside them (`skipped30d`). The table prints them per rule. The page draws
+// no totals above it: the design has no summary tiles on Tools, and every
+// count on the page is a rollup of rows a person can see.
 import { useLocale, useTranslations } from "next-intl";
 import type { ApprovalRule, ApprovalRuleSet } from "@/data/contracts/tools";
 import type { Read } from "@/data/read";
@@ -33,59 +34,6 @@ import { ToolsReadFailure } from "./read-failure";
 import { type ToolsAt, toolsLink, weekdayKey } from "./view";
 
 const MINUTE_MS = 60_000;
-
-function Tile({
-  name,
-  title,
-  value,
-  basis,
-}: {
-  name: string;
-  title: string;
-  value: string;
-  basis: string;
-}) {
-  return (
-    <dl
-      data-tile={name}
-      className="flex min-w-0 flex-col gap-1 rounded-lg border border-border bg-card p-4"
-    >
-      <dt className="text-xs font-medium text-muted-foreground">{title}</dt>
-      <dd className="text-2xl font-semibold tabular-nums">{value}</dd>
-      <dd className="text-xs text-muted-foreground">{basis}</dd>
-    </dl>
-  );
-}
-
-function Tiles({ rules, windowDays }: ApprovalRuleSet) {
-  const t = useTranslations("tools.autoApprovals.tiles");
-  const locale = useLocale();
-  const on = rules.filter((rule) => rule.enabled).length;
-  const released = rules.reduce((sum, rule) => sum + rule.released, 0);
-  const held = rules.reduce((sum, rule) => sum + rule.held, 0);
-  return (
-    <section aria-label={t("label")} className="grid gap-3 sm:grid-cols-3">
-      <Tile
-        name="on"
-        title={t("on.title")}
-        value={formatCount(on, locale)}
-        basis={t("on.basis", { total: formatCount(rules.length, locale) })}
-      />
-      <Tile
-        name="released"
-        title={t("released.title", { days: windowDays })}
-        value={formatCount(released, locale)}
-        basis={t("released.basis")}
-      />
-      <Tile
-        name="held"
-        title={t("held.title", { days: windowDays })}
-        value={formatCount(held, locale)}
-        basis={t("held.basis")}
-      />
-    </section>
-  );
-}
 
 /** Each condition a rule names, one line apiece, in the order the evaluator reads them. */
 function Requires({ rule }: { rule: ApprovalRule }) {
@@ -254,7 +202,7 @@ export function AutoApprovals({
         at={at}
         orgRole={orgRole}
         read={read}
-        retry={toolsLink(at, { tab: "autoapprovals" })}
+        retry={toolsLink(at, { tab: "policy" })}
       />
     );
   }
@@ -278,7 +226,6 @@ export function AutoApprovals({
   }
   return (
     <div className="flex flex-col gap-4">
-      <Tiles rules={rules} windowDays={windowDays} />
       <Section
         id="tools-autoapprovals"
         title={t("title")}

@@ -269,6 +269,36 @@ export function usageCountedEvents(
 }
 
 /**
+ * The run facts a batch last recorded: the model, the permission mode, the
+ * effort, and the head commit. Each is the latest non-empty value in the
+ * batch, so a batch whose last frame carries no context (a daemon frame, a
+ * reconciliation) does not read as a session that stopped reporting them.
+ * The caller writes each one only when it is non-null (#4010).
+ */
+export function lastRecordedContext(fresh: readonly TachoEvent[]): {
+  model: string | null;
+  permissionMode: string | null;
+  effort: string | null;
+  gitHeadSha: string | null;
+} {
+  const facts = {
+    model: null as string | null,
+    permissionMode: null as string | null,
+    effort: null as string | null,
+    gitHeadSha: null as string | null,
+  };
+  for (const event of fresh) {
+    const context = event.context;
+    if (!context) continue;
+    facts.model = str(context.model) ?? facts.model;
+    facts.permissionMode = str(context.permission_mode) ?? facts.permissionMode;
+    facts.effort = str(context.effort) ?? facts.effort;
+    facts.gitHeadSha = str(context.git_head_sha) ?? facts.gitHeadSha;
+  }
+  return facts;
+}
+
+/**
  * Fold one event into the session's counters. Model usage counts each call
  * once, from its first sighting (OTel log, transcript, or hook), or the
  * proxy's observed view when the session has one: the caller passes the
@@ -1286,6 +1316,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         terminalColumns["replayGrade"] = seal.replayGrade;
       }
       const tail = fresh.at(-1);
+      const latest = lastRecordedContext(fresh);
       const increments = {
         numTurns: sql`${schema.tachoSessions.numTurns} + ${delta.numTurns}`,
         numPrompts: sql`${schema.tachoSessions.numPrompts} + ${delta.numPrompts}`,
@@ -1347,9 +1378,30 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         ...(tail
           ? {
               lastHash: tail.hash,
-              modelFinal: tail.context?.model ?? null,
-              permissionModeFinal: tail.context?.permission_mode ?? null,
-              gitHeadShaEnd: tail.context?.git_head_sha ?? null,
+              // Each fact moves only when the batch recorded one. Writing the
+              // tail frame's value unconditionally cleared the model and the
+              // permission mode whenever a batch ended on a frame with no
+              // context, and the Run header then read them as not recorded.
+              ...(latest.model === null ? {} : { modelFinal: latest.model }),
+              ...(latest.permissionMode === null
+                ? {}
+                : { permissionModeFinal: latest.permissionMode }),
+              ...(latest.gitHeadSha === null
+                ? {}
+                : { gitHeadShaEnd: latest.gitHeadSha }),
+              // The genesis row takes effort and the first permission mode
+              // from its own frame. A session whose genesis carried neither
+              // gets them from the first batch that does.
+              ...(latest.effort === null
+                ? {}
+                : {
+                    effort: sql`COALESCE(${schema.tachoSessions.effort}, ${latest.effort})`,
+                  }),
+              ...(latest.permissionMode === null
+                ? {}
+                : {
+                    permissionModeInitial: sql`COALESCE(${schema.tachoSessions.permissionModeInitial}, ${latest.permissionMode})`,
+                  }),
             }
           : {}),
         // The rise to `gateway`, on every batch rather than only the one that
