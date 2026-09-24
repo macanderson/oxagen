@@ -356,8 +356,8 @@ describe("get_run_outputs — a wrapped session", () => {
           url: "https://github.com/acme/app/pull/41",
           number: "41",
           repository: "acme/app",
-          seq: 20,
-          ts: "2026-09-23 10:00:00.000",
+          first_seq: 20,
+          first_ts: "2026-09-23 10:00:00.000",
         },
       ],
     });
