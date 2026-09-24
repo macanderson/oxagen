@@ -329,7 +329,7 @@
     "get_auto_eligibility": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run]?tab=approvals \u2014 the card on the Approvals tab draws the recorded eligibility line, and opening its decision dialog reads get_auto_eligibility again, so who has already resolved the call is current at the moment of the decision (features/fleet/approval-decision.tsx, features/fleet/actions.ts). Fleet draws no approval card since its rev1 rebuild; the shell's approvals drawer draws the same card",
+      "entry": "/[org]/[ws]/runs/[run] \u2014 Review on a gate row in the Outputs section opens the shell's approvals drawer, whose card draws the recorded eligibility line, and opening its decision dialog reads get_auto_eligibility again, so who has already resolved the call is current at the moment of the decision (features/run/outputs.tsx, features/run/review-approval.tsx, features/shell/activity.tsx, features/fleet/approval-decision.tsx, features/fleet/actions.ts). The Run page has no Approvals tab; an old ?tab=approvals link opens Governed actions",
       "testid": "eligibility",
       "proof": "apps/app/src/features/fleet/approval-decision.test.tsx",
       "verifiedAt": "2026-09-23",
@@ -1025,7 +1025,7 @@
     "resolve_approval": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run]?tab=approvals \u2014 Decide on a parked approval card opens the approve or deny dialog, which invokes resolve_approval through the kernel seam (features/fleet/approval-decision.tsx, features/fleet/actions.ts, features/fleet/approvals-panel.tsx, features/run/run.tsx). Fleet draws no approval card since its rev1 rebuild; the shell's approvals drawer draws the same card",
+      "entry": "/[org]/[ws]/runs/[run] \u2014 Review on a gate row in the Outputs section opens the shell's approvals drawer, where Decide on a parked approval card opens the approve or deny dialog, which invokes resolve_approval through the kernel seam (features/run/outputs.tsx, features/run/review-approval.tsx, features/shell/activity.tsx, features/fleet/approval-decision.tsx, features/fleet/actions.ts, features/fleet/approvals-panel.tsx). The Run page has no Approvals tab; an old ?tab=approvals link opens Governed actions",
       "testid": "decide",
       "proof": "apps/app/src/features/fleet/approval-decision.test.tsx",
       "verifiedAt": "2026-09-23",
