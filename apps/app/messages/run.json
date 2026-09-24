@@ -18,14 +18,24 @@
       }
     },
     "resolvedApprovals": {
-      "title": "Resolved",
-      "resolution": "Resolution",
-      "resolvedBy": "Resolved by",
-      "resolvedAt": "Resolved at",
-      "empty": "Nothing resolved for this run yet.",
+      "title": "Decided approvals",
+      "resolution": {
+        "approved": "approved",
+        "denied": "denied",
+        "expired": "expired"
+      },
+      "resolvedBy": "Decided by",
+      "resolvedAt": "Decided at",
       "execution": "Execution",
       "reason": "Reason",
-      "resumedRun": "Resumed run"
+      "resumedRun": "Resumed run",
+      "noMatch": "The record ties no approval on this run to this frame.",
+      "others": "Decided on this run",
+      "by": {
+        "system": "system",
+        "notRecorded": "not recorded",
+        "rule": "rule {rule} with no person"
+      }
     },
     "tabs": {
       "label": "Run sections",
@@ -139,38 +149,105 @@
       }
     },
     "frames": {
-      "title": "Frames",
-      "onThisPage": "{count} on this page",
-      "columns": {
-        "seq": "Seq",
-        "type": "Event",
-        "observed": "Observed",
-        "body": "Body",
-        "cost": "Cost"
-      },
-      "stage": "stage {stage}",
+      "title": "Frame {seq}",
+      "recorded": "Recorded",
+      "stage": "Stage",
+      "turn": "Turn",
+      "turnValue": "turn {turn}",
+      "beforeTurns": "before the first turn",
+      "decision": "Decision",
+      "cost": "Cost",
+      "basisNotRecorded": "basis not recorded",
+      "digest": "Frame digest",
+      "body": "Body",
       "fidelity": {
         "full": "bytes retained",
         "digest_only": "digest only"
       },
       "noContent": "no content",
+      "bodyDigest": "Body digest",
+      "retainedAt": "Retained at",
       "redacted": "removed {path}: {reason}",
-      "openBody": "Open body",
+      "offPage": "This page of frames does not hold frame {seq}. What the transcript and the body read carry is shown.",
+      "previous": "Previous",
+      "next": "Next",
+      "position": "frame {index} of {shown} shown · {total} in the run",
+      "positionOff": "{shown} frames shown · {total} in the run",
       "pager": "Frame pages",
       "first": "First frames",
-      "next": "Later frames",
+      "later": "Later frames",
+      "emptyTitle": "Frames",
       "empty": "This run has no frames yet. A run with no frames has cost nothing.",
       "emptyPage": "Nothing lies past the frame this page starts from.",
-      "body": {
+      "read": {
         "title": "Frame {seq} body",
-        "close": "Close body",
-        "digest": "Digest",
-        "contentType": "Content type",
-        "size": "Size",
-        "bytes": "{count} bytes",
+        "heading": "Body",
+        "noType": "no content type",
         "noBytes": "no bytes retained",
+        "bytes": "{count} bytes",
         "digestOnly": "The recorder kept this frame's digest and no bytes, so there is no body to read. The digest still proves what was recorded.",
         "notText": "The retained bytes are not UTF-8 text, so they are not shown here. Read them through the API with get_run_frame_body and check them against the digest."
+      },
+      "list": {
+        "title": "Timeline",
+        "label": "Frames on this page",
+        "state": {
+          "live": "live",
+          "paused": "paused",
+          "sealed": "sealed",
+          "halted": "halted"
+        },
+        "basisNotRecorded": "basis not recorded"
+      }
+    },
+    "player": {
+      "timeline": {
+        "title": "Timeline",
+        "shown": "{shown} frames shown · {total} in the run",
+        "legendLabel": "Frames by kind",
+        "legend": {
+          "model": "model calls",
+          "tool": "tool calls",
+          "gov": "governance",
+          "ctx": "context",
+          "op": "operator",
+          "life": "lifecycle"
+        },
+        "turn": "turn {turn}",
+        "turnShort": "t{turn}",
+        "turnAfterSteer": "turn {turn} after steer",
+        "tick": "Frame {seq} {type}",
+        "end": "+{elapsed} · {end}",
+        "endLive": "+{elapsed} · {end} · live",
+        "steer": "steer",
+        "parked": "parked · approval",
+        "foot": "Every tick is a frame. The taller ones need a person. Select a tick to open its frame below.",
+        "turnsInView": "{count, plural, one {# turn} other {# turns}} in view"
+      },
+      "bar": {
+        "label": "Frame player",
+        "first": "First frame",
+        "previous": "Previous frame",
+        "next": "Next frame",
+        "last": "Last frame",
+        "scrub": "Frame",
+        "scrubValue": "frame {index} of {shown}",
+        "position": "<b>{index}</b> / {shown} · seq {seq} · {time}",
+        "positionUntimed": "<b>{index}</b> / {shown} · seq {seq}",
+        "positionOff": "seq {seq} · outside the {shown} frames shown",
+        "spent": "<spent></spent> of <total></total> by here · {basis}",
+        "spentOnly": "<spent></spent> by here · {basis}",
+        "spentNotRecorded": "spend by here not recorded",
+        "basisNotRecorded": "basis not recorded",
+        "keys": "<k>←</k><k>→</k> step <k>home</k><k>end</k>"
+      },
+      "approvals": {
+        "parked": "<b>Parked.</b> The call waits for a person to approve or deny it. Decide on its card opens both.",
+        "parkedBadge": "parked",
+        "more": "{count, plural, one {# more call is} other {# more calls are}} parked on this run.",
+        "openDrawer": "Open approvals",
+        "elsewhere": "<code>{tool}</code> is parked at frame {seq}.",
+        "openFrame": "Open frame {seq}"
       }
     },
     "cost": {
