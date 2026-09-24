@@ -652,7 +652,7 @@ describe("resolveContext", () => {
   });
 
   // The Organization page shows only public ids, so a link written by hand
-  // from it carries `org_…` and `ws_…` rather than database ids. Those must
+  // from it carries `org_…` and `wrk_…` rather than database ids. Those must
   // find the renamed records too, and must not match a record whose database
   // id happens to be absent from the answer.
   it("follows a renamed org or workspace through public ids in the link", async () => {
@@ -662,9 +662,9 @@ describe("resolveContext", () => {
       join(tmp, ".oxagen", "workspace.json"),
       JSON.stringify({
         orgSlug: "acme-old",
-        orgId: "org_2BqKc9",
+        orgId: "org_8fK2mQ9xLw3RtY6bN1pZ4c",
         workspaceSlug: "payments-old",
-        workspaceId: "ws_7XpLm4",
+        workspaceId: "wrk_3Hs7Vd1QkP9mXe2Lt5Ga8r",
       }),
       "utf8",
     );
@@ -692,7 +692,7 @@ describe("resolveContext", () => {
             },
             {
               id: "0d6f1b2e-7a55-4a47-9c1c-2f1f0f6b8a10",
-              publicId: "org_2BqKc9",
+              publicId: "org_8fK2mQ9xLw3RtY6bN1pZ4c",
               slug: "acme",
             },
           ],
@@ -703,7 +703,7 @@ describe("resolveContext", () => {
           workspaces: [
             {
               id: "778d509d-ea0b-4f1a-be73-d1d7fb5f97df",
-              publicId: "ws_7XpLm4",
+              publicId: "wrk_3Hs7Vd1QkP9mXe2Lt5Ga8r",
               slug: "payments",
             },
           ],
@@ -719,9 +719,9 @@ describe("resolveContext", () => {
     ) as Record<string, string>;
     expect(rewritten).toMatchObject({
       orgSlug: "acme",
-      orgId: "org_2BqKc9",
+      orgId: "org_8fK2mQ9xLw3RtY6bN1pZ4c",
       workspaceSlug: "payments",
-      workspaceId: "ws_7XpLm4",
+      workspaceId: "wrk_3Hs7Vd1QkP9mXe2Lt5Ga8r",
     });
   });
 

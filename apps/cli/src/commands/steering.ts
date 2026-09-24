@@ -371,7 +371,7 @@ interface CheckoutLink {
  * no longer reachable by this user.
  *
  * A link carries either form of each id. `oxagen init` writes the database
- * id. The Organization page shows only the public id (`org_…`, `ws_…`),
+ * id. The Organization page shows only the public id (`org_…`, `wrk_…`),
  * because the app keeps database ids off every page (INV-11), so a link
  * written by hand from that page holds the public id. Both lists return
  * both forms, so either one finds its record.

@@ -291,6 +291,7 @@ beforeEach(() => {
   workspaces.mockReset();
   workspaces.mockResolvedValue(
     readOk<WorkspaceList>({
+      orgId: "org_7k2m9q4x8r1t5v3w6y0z2a",
       workspaces: [
         {
           id: "ws_01K5ARCHIVED",

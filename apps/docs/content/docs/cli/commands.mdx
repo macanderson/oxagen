@@ -102,16 +102,16 @@ The link names the org and the workspace by slug, ID, and name:
 ```json
 {
   "orgSlug": "acme",
-  "orgId": "org_2BqKc9",
+  "orgId": "org_8fK2mQ9xLw3RtY6bN1pZ4c",
   "orgName": "Acme",
   "workspaceSlug": "payments",
-  "workspaceId": "ws_7XpLm4",
+  "workspaceId": "wrk_3Hs7Vd1QkP9mXe2Lt5Ga8r",
   "workspaceName": "Payments",
   "linkedAt": "2026-09-24T16:00:00.000Z"
 }
 ```
 
-Commands address the workspace by its slugs. The CLI reads the IDs only to find the org and workspace again after one is renamed, and then rewrites the slugs. `init` writes database IDs. To write the file by hand, copy the public IDs (`org_…` and `ws_…`) from the Workspaces section of the Organization page. The CLI accepts either form.
+Commands address the workspace by its slugs. The CLI reads the IDs only to find the org and workspace again after one is renamed, and then rewrites the slugs. `init` writes database IDs. To write the file by hand, copy the public IDs (`org_…` and `wrk_…`) from the Workspaces section of the Organization page. The CLI accepts either form.
 
 ## oxagen agent: the agent identity
 

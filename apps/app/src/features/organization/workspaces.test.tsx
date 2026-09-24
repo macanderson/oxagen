@@ -6,8 +6,17 @@
 // viewer cannot enter or an archived one, the Governance chip that states the mode is
 // not recorded with the namespace beneath it, Open only onto a workspace the
 // viewer can enter, Edit and Archive only on a live workspace, the panel's
-// Create a workspace, and the note. Checked with axe.
-import { cleanup, render, screen, within } from "@testing-library/react";
+// Create a workspace, the note, and the public ids: the organization's under
+// the panel title and each workspace's under its slug, each with a button that
+// copies it exactly. Checked with axe.
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceList } from "@/data/contracts/org";
@@ -54,9 +63,38 @@ const CORE_FACTS: Facts = new Map([
   ],
 ]);
 
-afterEach(cleanup);
+/** The clipboard as the test left it, put back after each test. */
+let restoreClipboard: (() => void) | null = null;
+
+afterEach(() => {
+  cleanup();
+  restoreClipboard?.();
+  restoreClipboard = null;
+});
+
+/**
+ * Replace `navigator.clipboard` for one test: a spy that records what it was
+ * asked to copy, or `undefined` for a browser that offers no clipboard (plain
+ * HTTP). The original descriptor goes back after the test.
+ */
+function stubClipboard(writeText: (() => Promise<void>) | undefined) {
+  const original = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+  const spy = writeText === undefined ? undefined : vi.fn(writeText);
+  Object.defineProperty(navigator, "clipboard", {
+    value: spy === undefined ? undefined : { writeText: spy },
+    configurable: true,
+  });
+  restoreClipboard = () => {
+    if (original) Object.defineProperty(navigator, "clipboard", original);
+    else Reflect.deleteProperty(navigator, "clipboard");
+  };
+  return spy;
+}
+
+const ORG_ID = "org_7k2m9q4x8r1t5v3w6y0z2a";
 
 const list: WorkspaceList = {
+  orgId: ORG_ID,
   workspaces: [
     workspaceRow(),
     workspaceRow({
@@ -97,6 +135,13 @@ async function renderTab(
 function row(id: string): HTMLElement {
   const found = document.querySelector(`[data-row="${id}"]`);
   if (!(found instanceof HTMLElement)) throw new Error(`no row ${id}`);
+  return found;
+}
+
+/** The id and its copy button, found by the id it copies. */
+function copyId(id: string): HTMLElement {
+  const found = document.querySelector(`[data-copy-id="${id}"]`);
+  if (!(found instanceof HTMLElement)) throw new Error(`no copy id ${id}`);
   return found;
 }
 
@@ -262,18 +307,99 @@ describe("Workspaces", () => {
     expect(within(other).getByRole("button", { name: "Edit" })).toBeTruthy();
   });
 
-  it("marks an archived workspace and offers it no control", async () => {
+  it("marks an archived workspace and offers it no control but copying its id", async () => {
     await renderTab();
     const archived = row("wrk_2c3d4e5f6g7h8j9k0m1n2p");
     expect(archived).toHaveTextContent("archived");
-    expect(within(archived).queryByRole("button")).toBeNull();
+    const buttons = within(archived).getAllByRole("button");
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]).toHaveAccessibleName("Copy workspace ID for Legacy");
     expect(within(archived).queryByRole("link")).toBeNull();
   });
 
-  it("says the organization has no workspaces when the list is empty", async () => {
-    await renderTab({ workspaces: [] });
+  it("says the organization has no workspaces when the list is empty, and still prints its id", async () => {
+    await renderTab({ orgId: ORG_ID, workspaces: [] });
     expect(
       screen.getByText("This organization has no workspaces."),
     ).toBeInTheDocument();
+    expect(copyId(ORG_ID)).toHaveTextContent(ORG_ID);
+  });
+});
+
+describe("Workspaces › public ids", () => {
+  it("prints the organization's public id under the panel title, outside the table, and copies it exactly", async () => {
+    const writeText = stubClipboard(() => Promise.resolve());
+    await renderTab();
+    const panel = screen.getByRole("region", { name: "Workspaces" });
+    const table = within(panel).getByRole("table", { name: "Workspaces" });
+    const org = copyId(ORG_ID);
+    expect(panel).toContainElement(org);
+    expect(table).not.toContainElement(org);
+    expect(org.parentElement).toHaveTextContent("Organization ID");
+    fireEvent.click(
+      within(org).getByRole("button", { name: "Copy organization ID" }),
+    );
+    await waitFor(() => {
+      expect(within(org).getByRole("status")).toHaveTextContent("Copied");
+    });
+    expect(writeText).toHaveBeenCalledOnce();
+    expect(writeText).toHaveBeenCalledWith(ORG_ID);
+    await expectNoAxe(document.body);
+  });
+
+  it("prints each workspace's public id below its name and slug, and each button copies that workspace's id", async () => {
+    const writeText = stubClipboard(() => Promise.resolve());
+    await renderTab();
+    for (const workspace of list.workspaces) {
+      const cell = within(row(workspace.id)).getAllByRole("cell")[0];
+      if (cell === undefined) throw new Error(`no cell for ${workspace.id}`);
+      // The name leads the cell; the id is a detail beneath it.
+      expect(cell.firstElementChild).toHaveTextContent(workspace.name);
+      const id = copyId(workspace.id);
+      expect(cell).toContainElement(id);
+      expect(id).toHaveTextContent(workspace.id);
+      fireEvent.click(
+        within(id).getByRole("button", {
+          name: `Copy workspace ID for ${workspace.name}`,
+        }),
+      );
+      await waitFor(() => {
+        expect(writeText).toHaveBeenLastCalledWith(workspace.id);
+      });
+      expect(within(id).getByRole("status")).toHaveTextContent("Copied");
+    }
+    expect(writeText).toHaveBeenCalledTimes(list.workspaces.length);
+  });
+
+  it("says so when the browser refuses the clipboard, and leaves the id readable (negative)", async () => {
+    stubClipboard(() => Promise.reject(new Error("not allowed")));
+    await renderTab();
+    const id = copyId("wrk_0a1b2c3d4e5f6g7h8j9k0m");
+    fireEvent.click(
+      within(id).getByRole("button", {
+        name: "Copy workspace ID for Core platform",
+      }),
+    );
+    await waitFor(() => {
+      expect(within(id).getByRole("status")).toHaveTextContent(
+        "Copy failed. Select the ID instead.",
+      );
+    });
+    expect(id).toHaveTextContent("wrk_0a1b2c3d4e5f6g7h8j9k0m");
+    expect(id).not.toHaveTextContent("Copied");
+  });
+
+  it("says so when the browser offers no clipboard at all (negative)", async () => {
+    stubClipboard(undefined);
+    await renderTab();
+    const org = copyId(ORG_ID);
+    fireEvent.click(
+      within(org).getByRole("button", { name: "Copy organization ID" }),
+    );
+    await waitFor(() => {
+      expect(within(org).getByRole("status")).toHaveTextContent(
+        "Copy failed. Select the ID instead.",
+      );
+    });
   });
 });

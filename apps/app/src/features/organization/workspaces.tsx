@@ -20,6 +20,10 @@
 // Open goes to the workspace's Fleet. A workspace the viewer holds no
 // membership of cannot be opened (`requireViewer` answers not found), so its
 // Open is left off rather than offered as a link that fails.
+//
+// The organization's public id sits under the panel title and each
+// workspace's under its slug, small and dim with a button that copies it
+// (`CopyId`). Public ids only: a database uuid never reaches the page (INV-11).
 import { useTranslations } from "next-intl";
 import type {
   Workspace,
@@ -38,6 +42,7 @@ import {
   panelTitle,
 } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
+import { CopyId } from "./copy-id";
 import { type ListRow, ListTable } from "./list-table";
 import { NotRecordedValue, note } from "./parts";
 import {
@@ -163,6 +168,12 @@ function WorkspaceCell({ workspace }: { workspace: Workspace }) {
           {t("archived")}
         </Badge>
       )}
+      <div className="min-w-0">
+        <CopyId
+          value={workspace.id}
+          label={t("copyWorkspaceId", { name: workspace.name })}
+        />
+      </div>
     </>
   );
 }
@@ -292,9 +303,15 @@ export function WorkspacesTab({
   return (
     <section aria-labelledby="org-workspaces" className={panel}>
       <div className={panelHeader}>
-        <h2 id="org-workspaces" className={panelTitle}>
-          {t("title")}
-        </h2>
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <h2 id="org-workspaces" className={panelTitle}>
+            {t("title")}
+          </h2>
+          <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-dim">
+            <span>{t("orgId")}</span>
+            <CopyId value={workspaces.orgId} label={t("copyOrgId")} />
+          </div>
+        </div>
         <CreateWorkspace org={org} enterable={enterable} />
       </div>
       <ListTable

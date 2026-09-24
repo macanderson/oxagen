@@ -29,7 +29,7 @@ export interface WorkspaceLink {
   orgId: string;
   orgName: string;
   workspaceSlug: string;
-  /** The workspace's database id or its public id (`ws_…`). As `orgId`. */
+  /** The workspace's database id or its public id (`wrk_…`). As `orgId`. */
   workspaceId: string;
   workspaceName: string;
   /** GitHub (or other VCS) repos this workspace is linked to. */
