@@ -11,6 +11,8 @@ const base: InvitationView = {
   status: "pending",
   invitedAt: "2026-09-11T09:00:00.000Z",
   expiresAt: "2026-09-18T09:00:00.000Z",
+  inviterName: "Priya Natarajan",
+  inviterRole: "owner",
 };
 const now = new Date("2026-09-12T12:00:00.000Z");
 
@@ -38,7 +40,18 @@ describe("decideInvitation", () => {
     ).toEqual({
       kind: "closed",
       status: "accepted",
+      signedInAs: base.email,
     });
+  });
+
+  it("closes an invitation for a signed-out visitor with nobody named in the footer", () => {
+    expect(decideInvitation({ ...base, status: "revoked" }, null, now)).toEqual(
+      {
+        kind: "closed",
+        status: "revoked",
+        signedInAs: null,
+      },
+    );
   });
 
   it("closes a pending invitation past its expiry as expired", () => {
@@ -51,6 +64,7 @@ describe("decideInvitation", () => {
     ).toEqual({
       kind: "closed",
       status: "expired",
+      signedInAs: base.email,
     });
   });
 

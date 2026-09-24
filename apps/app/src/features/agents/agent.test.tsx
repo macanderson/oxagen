@@ -347,7 +347,7 @@ describe("Overview", () => {
       within(coaching).getByRole("link", {
         name: "All coaching for this workspace →",
       }),
-    ).toHaveAttribute("href", "/acme/core-platform/spend?tab=findings");
+    ).toHaveAttribute("href", "/acme/core-platform/spend");
   });
 
   it("badges the composition with the health verdict and opens each row's owner", async () => {

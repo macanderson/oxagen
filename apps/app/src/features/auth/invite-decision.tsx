@@ -1,8 +1,10 @@
 "use client";
-// Accept or decline, for the invited account (mockup `obInvite` @ mc-baseline-w1).
+// Accept or decline, for the invited account (mockup `obInvite`). Declining
+// changes the invitation and nothing else: no one is notified today.
 
 import { useTranslations } from "next-intl";
 import { useState } from "react";
+import { rememberSignedIn } from "./auth-client";
 import { acceptInvitation, declineInvitation } from "./invite-actions";
 import { FormAlert } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
@@ -15,13 +17,7 @@ type Failure = "denied" | "closed" | "failed";
 const failureOf = (reason: string): Failure =>
   reason === "denied" ? "denied" : reason === "conflict" ? "closed" : "failed";
 
-export function InviteDecision({
-  token,
-  orgName,
-}: {
-  token: string;
-  orgName: string;
-}) {
+export function InviteDecision({ token }: { token: string }) {
   const t = useTranslations("auth.invite");
   const navigate = useNavigate();
   const [pending, setPending] = useState<"accept" | "decline" | null>(null);
@@ -35,8 +31,11 @@ export function InviteDecision({
     try {
       if (kind === "accept") {
         const result = await acceptInvitation(token);
-        if (result.ok) navigate.replace(result.value.to);
-        else setFailure(failureOf(result.reason));
+        if (result.ok) {
+          // Fleet shows "Signed in as …" once (SignedInToast), as the design does.
+          rememberSignedIn();
+          navigate.replace(result.value.to);
+        } else setFailure(failureOf(result.reason));
       } else {
         const result = await declineInvitation(token);
         if (result.ok) setDeclined(true);
@@ -56,7 +55,7 @@ export function InviteDecision({
         data-testid="invite-declined"
         className="text-sm text-muted-foreground"
       >
-        {t("declined", { org: orgName })}
+        {t("declined")}
       </p>
     );
   }
@@ -68,14 +67,15 @@ export function InviteDecision({
           {failure === "denied"
             ? t("denied")
             : failure === "closed"
-              ? t("closedTitle")
+              ? t("failedClosed")
               : t("failed")}
         </FormAlert>
       ) : null}
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
-          className={buttonPrimary}
+          data-touch-target=""
+          className={`${buttonPrimary} max-md:flex-1`}
           aria-disabled={pending !== null || undefined}
           onClick={() => void run("accept")}
         >
@@ -89,7 +89,8 @@ export function InviteDecision({
         </button>
         <button
           type="button"
-          className={buttonSecondary}
+          data-touch-target=""
+          className={`${buttonSecondary} max-md:flex-1`}
           aria-disabled={pending !== null || undefined}
           onClick={() => void run("decline")}
         >

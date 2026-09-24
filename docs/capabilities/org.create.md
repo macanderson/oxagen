@@ -7,7 +7,7 @@
 ## Intent
 
 Complete the org bootstrap for a signed-in user in one call: the organization
-with a globally-unique slug and a server-derived namespace, the caller's owner
+with a globally-unique slug and an immutable namespace (chosen, or derived from the slug), the caller's owner
 membership, the IAM bootstrap (system roles, owner principal, owner role
 assignment, role grants) and the first workspace with everything a workspace
 needs (owner membership, built-in agent, default MCP registry, default
@@ -36,10 +36,12 @@ it.
 | `website`        | `string` (URL, ≤ 2048)            | Business only.                                                        |
 | `industry`       | industry slug                     | Business only.                                                        |
 | `employeeSize`   | employee-size slug                | Business only.                                                        |
+| `namespace`      | `string` (2 – 6 chars)            | Optional. Lowercase letters and digits. The immutable prefix of every agent key; used verbatim, refused if taken. Derived from the slug when absent. |
 | `workspace`      | `{ name, slug }`                  | The first workspace. Defaults to `{ name: "Default", slug: "default" }`; the slug follows the org slug rules and may not be an org-level route segment. |
 
-The namespace is not an input: it is derived from the slug server-side and
-kept unique across organizations.
+The namespace is optional. Given, it is stored verbatim or refused as
+`namespace_taken`. Absent, it is derived from the slug server-side and kept
+unique across organizations.
 
 ## Output
 
@@ -71,6 +73,7 @@ No `billing.*` row.
 | message                                              | meaning                                                          |
 | ---------------------------------------------------- | ---------------------------------------------------------------- |
 | `slug "<slug>" already in use`                       | Slug collides with an existing organization (pre-check or race). |
+| `namespace "<ns>" already in use`                    | The chosen namespace belongs to another organization (`conflict: namespace_taken`). |
 | `organization.create requires an authenticated user` | No user on the context.                                          |
 | zod issue at `slug` / `workspace.slug`               | Slug fails the regex or is a reserved route segment.             |
 

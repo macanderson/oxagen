@@ -95,7 +95,7 @@ describe("BudgetSection", () => {
     ).toHaveTextContent("Oxagen records no ceiling for one agent");
     expect(
       within(panel).getByRole("link", { name: "Set ceilings on Spend" }),
-    ).toHaveAttribute("href", "/acme/core-platform/spend?tab=budgets");
+    ).toHaveAttribute("href", "/acme/core-platform/spend/budgets");
   });
 
   it("keeps that line when no ceiling is configured at all (empty)", () => {

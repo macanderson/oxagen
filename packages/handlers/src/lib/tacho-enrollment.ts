@@ -6,15 +6,15 @@
  */
 import { z } from "zod";
 
-export const TACHO_HOST_SCOPE_PURPOSE = "tacho_host_v1" as const;
+// Both purposes are declared in @oxagen/database/member-lifecycle, beside the
+// host revocation that selects on them, so a member removal outside this
+// package names the same literals.
+import {
+  TACHO_GATEWAY_SCOPE_PURPOSE,
+  TACHO_HOST_SCOPE_PURPOSE,
+} from "@oxagen/database/member-lifecycle";
 
-/**
- * The scope purpose on the second key an enrollment mints: the one the local
- * MCP gateway serves a connected app's tools with (ADR-078). Separate from the
- * host key because the two jobs have different blast radii; `machineKeyDenial`
- * in `@oxagen/iam` is what holds each to its own.
- */
-export const TACHO_GATEWAY_SCOPE_PURPOSE = "tacho_gateway_v1" as const;
+export { TACHO_GATEWAY_SCOPE_PURPOSE, TACHO_HOST_SCOPE_PURPOSE };
 
 export const tachoHostApiKeyScopeSchema = z
   .object({

@@ -1,6 +1,6 @@
 # Single sign-on
 
-This guide sets up single sign-on (SSO) for an Oxagen organization. People from your email domain sign in through your identity provider (IdP), and the groups the IdP sends decide their organization role. Oxagen supports OIDC and SAML 2.0. [ADR-145](../adr/ADR-145-enterprise-sso-behind-better-auth.md) records how it is built.
+This guide sets up single sign-on (SSO) for an Oxagen organization. People from your email domain sign in through your identity provider (IdP), and the groups the IdP sends decide their organization role. Oxagen supports OIDC and SAML 2.0 for sign-in, and SCIM 2.0 for creating and removing people. [ADR-145](../adr/ADR-145-enterprise-sso-behind-better-auth.md) records how it is built.
 
 ## Before you start
 
@@ -108,6 +108,78 @@ Members other than Owners reach the organization only with a session one of its 
 
 Owners keep password access, so an IdP outage cannot lock the organization out.
 
+Require SSO also covers API keys and the MCP server. A key authenticates only while the person who created it is a member of your organization and has signed in at least once through one of its verified providers. Owners are exempt, the same break-glass rule as the app. The API answers any other key with `403` and "This organization requires single sign-on. The person who created this key must sign in through SSO.", and the MCP server refuses the call, until that person signs in through SSO. This includes machine keys: a Tacho host or gateway key that an Admin enrolled stops working until that Admin signs in through SSO once.
+
+An SSO sign-in that no mapped group admits removes the person from the organization the way a SCIM group change does: their roles at every scope, their workspace memberships, and every key they created here. It leaves their sessions alone, because they may belong to other organizations.
+
+## Provision people with SCIM
+
+Your IdP can create people in Oxagen before their first sign-in and remove them when they leave. Oxagen serves SCIM 2.0 at one endpoint per organization, authenticated by a bearer token only that organization's Owners and Admins can mint. SCIM uses the same IdP group mappings as SSO sign-in.
+
+### What SCIM changes in Oxagen
+
+- **A pushed user exists before their first sign-in.** The `userName` must be an email on one of your verified domains, or a subdomain of one. When an Oxagen account already uses that email, SCIM links it instead of creating a second one. Creating a user grants no role.
+- **Groups decide roles.** When a group's members change, Oxagen recomputes the organization role of each person the change touches, through the IdP group mappings on **Organization › Roles**. A mapping matches a SCIM group by its display name or by its external ID. SCIM reads the mappings of every provider in your organization, because a SCIM token belongs to the organization rather than to one provider. The highest mapped role wins. A person left in no mapped group loses their organization role and their membership, as they would at an SSO sign-in.
+- **Deactivating or deleting a user deprovisions them, in one transaction.** Oxagen ends their sessions (see below), revokes every API key they created in the organization (CLI session keys and machine keys included), revokes each Tacho host they enrolled, expires any unused enrollment token issued to them, and removes every role assignment and their membership. Their API keys answer `401`, and a person on your domain is signed out of their browser on its next request.
+- **A session belongs to the person, not to one organization.** When the person's email is on one of your verified domains, deprovisioning signs them out of every organization they belong to: your IdP owns that identity, so its removal ends it everywhere. A member whose email is on another domain, such as a contractor invited on a personal address, loses their access to your organization and their keys here, and keeps their sessions in other organizations.
+- **SCIM changes the Oxagen account only for identities you own.** An Oxagen account is shared by every organization its person belongs to. SCIM changes a person's email only when their current email is on one of your verified domains, and never an Owner's email. It answers `403` otherwise. A name change for anyone else is kept in your organization only.
+- **A removal inside Oxagen lasts until your IdP next speaks.** If an Owner or Admin removes someone on the Organization page while your IdP still assigns them to a mapped group, the next group change your IdP pushes admits them again, as their next SSO sign-in would. Unassign them in your IdP too.
+- **An SSO sign-in does not re-admit a deprovisioned person.** Reactivate them in your IdP. The reactivation reaches Oxagen over SCIM and their groups decide their role again.
+- **Owners are never changed.** SCIM refuses to deactivate or delete an Owner and answers `403` with the reason. A group change never alters an Owner's role. Ownership passes only by a transfer inside Oxagen.
+- **Keys go with the person who created them.** Before you deprovision someone who registered agents or enrolled hosts other people rely on, re-register those agents or re-enroll those hosts under someone who is staying.
+
+Removing someone from a group is not a deprovisioning. It recomputes their role, and it removes their membership only when no mapped group is left.
+
+### Generate the SCIM token
+
+1. Open **Organization › Single sign-on** (`/{org}/sso`).
+2. In **SCIM provisioning**, copy the **SCIM base URL**. It is `https://app.oxagen.sh/api/scim/v2`.
+3. Choose **Generate token**.
+4. Copy the token. Oxagen stores only its hash and cannot show it again.
+
+To replace the token, choose **Rotate token**. The old token stops working at once, so enter the new one in your IdP straight away. To stop provisioning, choose **Revoke token**. People your IdP already created keep their access.
+
+### Connect Okta
+
+1. In the Okta Admin Console, open the Oxagen app you created for SSO.
+2. On the **General** tab, edit **App Settings** and turn on SCIM provisioning. Save.
+3. On the **Provisioning** tab, choose **Integration** and edit it.
+4. Set **SCIM connector base URL** to the SCIM base URL.
+5. Set **Unique identifier field for users** to `userName`.
+6. Under **Supported provisioning actions**, select **Push New Users**, **Push Profile Updates**, and **Push Groups**.
+7. Set **Authentication Mode** to **HTTP Header** and paste the token as the bearer token.
+8. Choose **Test Connector Configuration**, then save.
+9. Under **Provisioning › To App**, enable **Create Users**, **Update User Attributes**, and **Deactivate Users**.
+10. Assign the people and groups who should reach Oxagen.
+11. On **Push Groups**, push each group you mapped on the Roles page.
+
+Okta deactivates an unassigned or deactivated person with `active: false`, which Oxagen treats as a deprovisioning.
+
+### Connect Microsoft Entra ID
+
+1. In the Microsoft Entra admin center, open **Enterprise applications** and the Oxagen app you created for SSO.
+2. Open **Provisioning** and set **Provisioning Mode** to **Automatic**.
+3. Set **Tenant URL** to the SCIM base URL.
+4. Set **Secret Token** to the token.
+5. Choose **Test Connection**, then save.
+6. Under **Mappings**, keep users and groups enabled. Map `userName` to an attribute that holds the person's email on your verified domain, such as `userPrincipalName` or `mail`.
+7. Under **Users and groups**, assign the people and groups who should reach Oxagen.
+8. Set **Provisioning Status** to **On** and save.
+
+Entra ID sends a group's object ID as its external ID. If you mapped group object IDs for SSO sign-in, the same rows work for SCIM. Entra ID provisions on a cycle, so a change can take up to 40 minutes to arrive unless you provision on demand.
+
+### What the endpoint serves
+
+| Resource | Methods |
+|---|---|
+| `/ServiceProviderConfig`, `/ResourceTypes`, `/Schemas` | GET |
+| `/Users` | GET with a `userName`, `externalId`, or `emails.value` `eq` filter, POST |
+| `/Users/{id}` | GET, PUT, PATCH, DELETE |
+| `/Groups` | GET with a `displayName` or `externalId` `eq` filter, POST |
+| `/Groups/{id}` | GET, PUT, PATCH, DELETE |
+
+Oxagen keeps the core User attributes `userName`, `name`, `displayName`, `emails`, `externalId`, and `active`, and the core Group attributes `displayName`, `externalId`, and `members`. It ignores the rest, so your IdP can send its full profile. It accepts PATCH operations in the shapes Okta and Entra ID send, including capitalized operation names and the booleans `"True"` and `"False"` as strings. A group member your IdP has not provisioned into this organization is not stored.
+
 ## Leaving the Enterprise plan
 
 When your organization moves off the Enterprise plan:
@@ -116,6 +188,7 @@ When your organization moves off the Enterprise plan:
 - **Require SSO** stops applying, so password, Google, and GitHub sign-in work again for your domains.
 - Members sign in with a password, or with Google or GitHub. A member who never set a password sets one with **Forgot password** on the login page.
 - An Owner or Admin can still delete providers and turn off **Require SSO**.
+- The SCIM endpoint refuses every request. An Owner or Admin can still revoke the SCIM token.
 
 ## Sign in
 
@@ -140,6 +213,15 @@ Each change and each SSO sign-in writes a row to `security.security_events`. Rea
 | `sso.policy_updated` | Require SSO is turned on or off |
 | `sso.group_roles_set` | The group mappings are saved |
 | `sso.sign_in` | A person signs in through SSO |
+| `scim.token_created` | An Owner or Admin generates the SCIM token |
+| `scim.token_rotated` | The SCIM token is replaced |
+| `scim.token_revoked` | The SCIM token is revoked |
+| `scim.user_provisioned` | Your IdP creates or links a person |
+| `scim.user_updated` | Your IdP changes a person's email, name, or external ID, or reactivates them |
+| `scim.user_deprovisioned` | Your IdP deactivates or deletes a person. Its detail counts the sessions, keys, and hosts it ended |
+| `scim.group_changed` | Your IdP creates, changes, or deletes a group. Its detail lists members added and removed and the roles recomputed |
+| `scim.request_denied` | The endpoint refuses a request: a revoked token, a plan without SSO, an Owner, a domain you have not verified, or an identity on a domain you do not own |
+| `tacho.host_revoked` | A removal revokes a Tacho host the person enrolled |
 
 An `sso.sign_in` row carries outcome `success` when the sign-in granted a role, `deny` when no group mapped, and `error` when Oxagen could not apply the role. Its detail holds `providerId`, `groups`, `grantedRole`, `previousRole`, and `reason`.
 
@@ -186,12 +268,40 @@ The IdP is down or misconfigured, and members cannot sign in.
 
 An Owner who also forgot their password resets it from the login page.
 
+### SCIM answers 401
+
+The token was rotated or revoked, or your IdP holds an old copy.
+
+1. Choose **Rotate token** on the Single sign-on page.
+2. Enter the new token in your IdP.
+
+### SCIM refuses a user's domain
+
+The IdP sent a `userName` outside your verified domains. The `scim.request_denied` row carries reason `domain_not_verified`.
+
+1. Register and verify a provider for that domain, or change the attribute your IdP maps to `userName`.
+
+### A group does not change anyone's role
+
+1. Open **Organization › Roles** and check the IdP group mappings.
+2. Map the group by the exact name your IdP pushes, or by its external ID.
+3. Read the `scim.group_changed` row: `rolesRecomputed` shows the role each person holds after the change.
+
 ### Previews
 
 On a preview deployment, the IdP sends people back to the host in `BETTER_AUTH_URL`. The OAuth proxy that relays Google and GitHub sign-in on previews does not relay SSO. Test SSO on a deployment whose `BETTER_AUTH_URL` is the host you registered in the IdP.
 
-## What is not included yet
+## Rotate the key that seals SSO secrets
 
-Oxagen does not yet support SCIM provisioning. Your IdP cannot push users and groups to Oxagen, and it cannot deprovision them.
+This section is for operators who run Oxagen. It does not apply to an organization on the hosted service.
 
-Removing someone from the IdP stops their next SSO sign-in. It does not end a session they already hold, and it does not revoke their API keys. Until SCIM lands, remove the person on the Organization page and revoke their keys on **Organization › API keys**.
+1. Set `AUTH_TOKEN_ENCRYPTION_KEY` to the new key.
+2. Set `SSO_SECRET_KEY_ID` to a new id, such as `sso_v2`.
+3. Add the old key to `SSO_SECRET_PREVIOUS_KEYS` under the id it was sealed with, such as `sso_v1=<old base64 key>`. Use the old `SSO_SECRET_KEY_ID` if you set one.
+4. Deploy all three changes together. Sign-in keeps working, because every stored secret opens under its own key id.
+5. Send the `auth/sso-secrets.reseal.requested` event from the Inngest dashboard, or wait for the daily `auth/sso-reseal-daily` run. Either run re-seals every provider under the new key.
+6. When a run reports `failed: []` and `resealed: 0`, remove the old entry from `SSO_SECRET_PREVIOUS_KEYS`.
+
+If sign-in fails with `SsoSecretKeyMissingError`, the error names the key id that is missing. Add that key back to `SSO_SECRET_PREVIOUS_KEYS`.
+
+`/sign-in/sso` opens only the provider it signs someone in through. A provider whose secrets cannot be opened breaks sign-in for its own domain and no other.

@@ -82,6 +82,20 @@ export function sumMoney(values: readonly Money[]): Money | null {
   return { micros: total.toString(), currency: first.currency };
 }
 
+/**
+ * `value` divided by a whole `count` (spend per call, per run, per day),
+ * truncated toward zero at the micro, or null when there is nothing to divide
+ * by. The division is BigInt, so the average stays exact at any magnitude.
+ */
+export function divMicros(value: Money, count: number): Money | null {
+  if (!Number.isSafeInteger(count)) throw new InvalidQuantityError(count);
+  if (count <= 0) return null;
+  return {
+    micros: (toBigInt(value.micros) / BigInt(count)).toString(),
+    currency: value.currency,
+  };
+}
+
 /** Micros in one cent. */
 const MICROS_PER_CENT = BigInt(10_000);
 
@@ -107,6 +121,32 @@ export function roundToCentsHalfEven(value: Money): Money {
   };
 }
 
+/**
+ * The largest of `values`, or null when there is none or they carry more than
+ * one currency: the peak of a series of days is only a figure within one.
+ */
+export function maxMoney(values: readonly Money[]): Money | null {
+  const [first] = values;
+  if (first === undefined) return null;
+  let peak = first;
+  for (const value of values) {
+    if (value.currency !== first.currency) return null;
+    if (toBigInt(value.micros) > toBigInt(peak.micros)) peak = value;
+  }
+  return { micros: toBigInt(peak.micros).toString(), currency: peak.currency };
+}
+
+/**
+ * Orders two values of one currency largest first, for a ranked list: a
+ * negative number when `a` is the larger. Values in different currencies
+ * compare equal, since neither is larger in any unit a person was charged.
+ */
+export function byMicrosDescending(a: Money, b: Money): number {
+  if (a.currency !== b.currency) return 0;
+  const diff = toBigInt(b.micros) - toBigInt(a.micros);
+  return diff > BigInt(0) ? 1 : diff < BigInt(0) ? -1 : 0;
+}
+
 /** The precision `ratioOfMicros` divides at: a ratio carries six decimal places. */
 const RATIO_SCALE = 1_000_000;
 
@@ -126,18 +166,6 @@ export function ratioOfMicros(part: Money, whole: Money): number | null {
   return Number(scaled) / RATIO_SCALE;
 }
 
-/**
- * `value` split evenly over a whole `count` (a spend figure per run, per
- * call), exact in BigInt and truncated toward zero. A count below one names
- * no share, so the answer is null and the caller shows the figure as missing.
- */
-export function divMicros(value: Money, count: number): Money | null {
-  if (!Number.isSafeInteger(count) || count < 1) return null;
-  return {
-    micros: (toBigInt(value.micros) / BigInt(count)).toString(),
-    currency: value.currency,
-  };
-}
 
 /**
  * Orders two amounts by their micros, for a column a person sorts by cost.

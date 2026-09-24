@@ -4,10 +4,12 @@
 // shifting.
 import { describe, expect, it } from "vitest";
 import {
+  byMicrosDescending,
   compareMicros,
   Cost,
   divMicros,
   isCurrencyCode,
+  maxMoney,
   Money,
   microsFromDecimal,
   sumExceeds,
@@ -309,6 +311,49 @@ describe("sumExceeds", () => {
   });
 });
 
+describe("divMicros", () => {
+  it("divides exactly at a magnitude a float cannot hold, truncating at the micro", () => {
+    expect(divMicros(usd("90071992547409930"), 10)).toEqual(
+      usd("9007199254740993"),
+    );
+    expect(divMicros(usd("10"), 3)).toEqual(usd("3"));
+  });
+
+  it("answers null for nothing to divide by and refuses a fraction", () => {
+    expect(divMicros(usd("10"), 0)).toBeNull();
+    expect(divMicros(usd("10"), -2)).toBeNull();
+    expect(() => divMicros(usd("10"), 1.5)).toThrow();
+  });
+});
+
+describe("maxMoney", () => {
+  it("answers the largest value in canonical form", () => {
+    expect(maxMoney([usd("3"), usd("0012"), usd("7")])).toEqual(usd("12"));
+  });
+
+  it("answers null for no values or mixed currencies", () => {
+    expect(maxMoney([])).toBeNull();
+    expect(maxMoney([usd("3"), { micros: "4", currency: "EUR" }])).toBeNull();
+  });
+});
+
+describe("byMicrosDescending", () => {
+  it("ranks the larger value first, exactly past a float's reach", () => {
+    const values = [usd("9007199254740993"), usd("9007199254740995"), usd("1")];
+    expect([...values].sort(byMicrosDescending)).toEqual([
+      usd("9007199254740995"),
+      usd("9007199254740993"),
+      usd("1"),
+    ]);
+  });
+
+  it("leaves values in different currencies unordered", () => {
+    expect(byMicrosDescending(usd("1"), { micros: "2", currency: "EUR" })).toBe(
+      0,
+    );
+  });
+});
+
 describe("roundToCentsHalfEven", () => {
   it("rounds a half cent to the even cent, up and down", () => {
     expect(roundToCentsHalfEven(usd("1005000"))).toEqual(usd("1000000"));
@@ -333,24 +378,5 @@ describe("roundToCentsHalfEven", () => {
 
   it("refuses micros that are not an integer string (negative)", () => {
     expect(() => roundToCentsHalfEven(usd("1.5"))).toThrow(/micros/);
-  });
-});
-
-describe("divMicros", () => {
-  it("splits a figure over a whole count, truncated toward zero", () => {
-    expect(divMicros(usd("10000000"), 4)).toEqual(usd("2500000"));
-    expect(divMicros(usd("10"), 3)).toEqual(usd("3"));
-  });
-
-  it("is exact past what a double holds", () => {
-    expect(divMicros(usd("90071992547409930"), 10)).toEqual(
-      usd("9007199254740993"),
-    );
-  });
-
-  it("names no share for a count below one or not a whole number (negative)", () => {
-    expect(divMicros(usd("100"), 0)).toBeNull();
-    expect(divMicros(usd("100"), -2)).toBeNull();
-    expect(divMicros(usd("100"), 1.5)).toBeNull();
   });
 });

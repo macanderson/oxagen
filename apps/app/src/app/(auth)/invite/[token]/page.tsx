@@ -5,6 +5,7 @@ import { cache, Suspense } from "react";
 import {
   InvitationBody,
   InvitationNotFound,
+  InvitationWrongAccount,
   decideInvitation,
   getAuthUser,
   loadInvitation,
@@ -67,6 +68,17 @@ async function Invite({
   // Expiry is judged against the request's clock, never a prerendered one.
   await connection();
   const decision = decideInvitation(read.value, user?.email ?? null);
+  // Another signed-in account gets one full card in place of the page.
+  if (decision.kind === "wrong-account") {
+    return (
+      <AuthColumn wide>
+        <InvitationWrongAccount
+          invitation={read.value}
+          signedInAs={decision.signedInAs}
+        />
+      </AuthColumn>
+    );
+  }
   return (
     <AuthColumn wide>
       <PageHeader eyebrow={t("eyebrow")} title={title} />

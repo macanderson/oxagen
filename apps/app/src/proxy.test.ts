@@ -21,6 +21,8 @@ describe("isPublicPath", () => {
     "/reset-password",
     "/invite/tok_123",
     "/api/auth/get-session",
+    "/api/scim/v2/Users",
+    "/api/scim/v2",
     "/cli/authorize",
     "/cli/complete",
     "/github/setup",
@@ -39,6 +41,8 @@ describe("isPublicPath", () => {
     "/cli/authorizex",
     "/cli/completex",
     "/github/setupx",
+    "/api/scim/v2x",
+    "/api/scim/v1/Users",
   ])("%s is gated", (path) => {
     expect(isPublicPath(path)).toBe(false);
   });
@@ -120,9 +124,8 @@ describe("proxy", () => {
 
 /**
  * The §1.2 routes: every page.tsx under src/app, route groups removed, as
- * `/[org]/[ws]/steering`. A page under a trailing optional catch-all
- * (`tools/[[...tab]]/page.tsx`) serves its parent path with no segment, so
- * it counts as that path (`/[org]/[ws]/tools`).
+ * `/[org]/[ws]/steering`. A page under an optional catch-all
+ * (`spend/[[...tab]]`) also serves the bare path, so both are listed.
  */
 const PAGE_ROUTES: ReadonlySet<string> = new Set(
   readdirSync(join(import.meta.dirname, "app"), {
@@ -131,12 +134,14 @@ const PAGE_ROUTES: ReadonlySet<string> = new Set(
   })
     .map((file) => file.split(sep))
     .filter((parts) => parts.at(-1) === "page.tsx")
-    .map((parts) => {
-      const dirs = parts.slice(0, -1).filter((part) => !part.startsWith("("));
-      const last = dirs.at(-1);
-      const served =
-        last?.startsWith("[[...") === true ? dirs.slice(0, -1) : dirs;
-      return `/${served.join("/")}`;
+    .flatMap((parts) => {
+      const segments = parts
+        .slice(0, -1)
+        .filter((part) => !part.startsWith("("));
+      const route = `/${segments.join("/")}`;
+      return segments.at(-1)?.startsWith("[[...") === true
+        ? [route, `/${segments.slice(0, -1).join("/")}`]
+        : [route];
     }),
 );
 
