@@ -174,8 +174,7 @@ export type LedgerView = {
 };
 
 /** The columns a ledger header can sort on: the ones whose cells carry a recorded value. */
-const SORTABLE_COLUMNS = ["when", "amount", "state", "external"] as const;
-export type SortableColumn = (typeof SORTABLE_COLUMNS)[number];
+export type SortableColumn = "when" | "amount" | "state" | "external";
 export type LedgerSort = { column: SortableColumn; dir: 1 | -1 };
 
 /**

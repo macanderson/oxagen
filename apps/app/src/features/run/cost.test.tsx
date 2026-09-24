@@ -169,8 +169,8 @@ describe("CostSection › the dearest turn and the per-turn chart", () => {
     expect(instrument(0)).toHaveTextContent("dearest turn turn 3 $2.50");
     const chart = screen.getByTestId("instrument-per-turn");
     expect(chart).toHaveAccessibleName("Cost of each of 2 priced turns");
-    const columns = [...chart.children].map(
-      (column) => (column as HTMLElement).style.height,
+    const columns = [...chart.querySelectorAll<HTMLElement>(":scope > *")].map(
+      (column) => column.style.height,
     );
     // The dearest is the full height; a cheap turn keeps a visible floor.
     expect(columns).toEqual(["8%", "100%"]);
