@@ -44,7 +44,11 @@ describe("Fork", () => {
       value: { attemptId: "arun_9x2k", attemptNumber: 2 },
     });
     const user = userEvent.setup();
-    const run = runRow({ id: "tse_7k2m9q", source: "ledger", replayGrade: "fork" });
+    const run = runRow({
+      id: "tse_7k2m9q",
+      source: "ledger",
+      replayGrade: "fork",
+    });
     renderReplay(run);
     await user.click(screen.getByTestId("run-fork"));
     await user.type(screen.getByLabelText("Replay up to frame"), "120");
@@ -67,7 +71,7 @@ describe("Fork", () => {
     const run = runRow({ source: "ledger", replayGrade: "retry" });
     renderReplay(run);
     expect(screen.getByTestId("run-fork")).not.toBeDisabled();
-    expect(screen.queryByTestId("fork-refused")).toBeNull();
+    expect(screen.getByTestId("run-fork")).not.toHaveAttribute("title");
   });
 
   it("draws Fork disabled with the needs-a-ledger-run reason on a tacho run, and opens no dialog and calls nothing (negative)", async () => {
@@ -76,7 +80,8 @@ describe("Fork", () => {
     renderReplay(run);
     const button = screen.getByTestId("run-fork");
     expect(button).toBeDisabled();
-    expect(screen.getByTestId("fork-refused")).toHaveTextContent(
+    expect(screen.getByTestId("run-fork")).toHaveAttribute(
+      "title",
       "Forking replays an attempt from the evidence ledger. This run was recorded by a wrapped agent, which has no attempt to branch from.",
     );
     await user.click(button);
@@ -99,7 +104,7 @@ describe("Fork", () => {
       const run = runRow({ source: "ledger", replayGrade: grade });
       renderReplay(run);
       expect(screen.getByTestId("run-fork")).toBeDisabled();
-      expect(screen.getByTestId("fork-refused")).toHaveTextContent(sentence);
+      expect(screen.getByTestId("run-fork")).toHaveAttribute("title", sentence);
     },
   );
 
@@ -107,7 +112,8 @@ describe("Fork", () => {
     const run = runRow({ source: "ledger", replayGrade: null });
     renderReplay(run);
     expect(screen.getByTestId("run-fork")).toBeDisabled();
-    expect(screen.getByTestId("fork-refused")).toHaveTextContent(
+    expect(screen.getByTestId("run-fork")).toHaveAttribute(
+      "title",
       "This run's seal recorded no replay grade, so Oxagen cannot say the recording is complete enough to fork.",
     );
   });
@@ -207,7 +213,9 @@ describe("Bisect", () => {
     renderReplay(runRow());
     await user.click(screen.getByTestId("run-bisect"));
     await user.type(screen.getByLabelText("The other run"), "tse_other1");
-    await user.click(screen.getByRole("button", { name: "Find the divergence" }));
+    await user.click(
+      screen.getByRole("button", { name: "Find the divergence" }),
+    );
     await waitFor(() => {
       expect(screen.getByTestId("bisect-diverged")).toHaveTextContent(
         "The runs diverge at frame 42, after 41 frames that agreed.",
@@ -226,7 +234,9 @@ describe("Bisect", () => {
     renderReplay(runRow());
     await user.click(screen.getByTestId("run-bisect"));
     await user.type(screen.getByLabelText("The other run"), "tse_other1");
-    await user.click(screen.getByRole("button", { name: "Find the divergence" }));
+    await user.click(
+      screen.getByRole("button", { name: "Find the divergence" }),
+    );
     await waitFor(() => {
       expect(screen.getByTestId("bisect-same")).toHaveTextContent(
         "The two runs agree at every frame. 431 frames were compared.",
@@ -248,7 +258,9 @@ describe("Bisect", () => {
     renderReplay(runRow());
     await user.click(screen.getByTestId("run-bisect"));
     await user.type(screen.getByLabelText("The other run"), "tse_other1");
-    await user.click(screen.getByRole("button", { name: "Find the divergence" }));
+    await user.click(
+      screen.getByRole("button", { name: "Find the divergence" }),
+    );
     await waitFor(() => {
       expect(screen.getByTestId("bisect-diverged")).toBeInTheDocument();
     });
@@ -258,5 +270,137 @@ describe("Bisect", () => {
     );
     const keyBLabel = screen.getByText("The other run");
     expect(keyBLabel.nextElementSibling).toHaveTextContent("tool_call:xyz");
+  });
+
+  it("says the other run has no frame at the divergence when its key is missing (negative)", async () => {
+    bisectRuns.mockResolvedValue({
+      ok: true,
+      value: {
+        divergentSeq: "432",
+        keyA: "tool_call:xyz",
+        keyB: null,
+        aligned: 431,
+      },
+    });
+    const user = userEvent.setup();
+    renderReplay(runRow());
+    await user.click(screen.getByTestId("run-bisect"));
+    await user.type(screen.getByLabelText("The other run"), "tse_other1");
+    await user.click(
+      screen.getByRole("button", { name: "Find the divergence" }),
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId("bisect-diverged")).toBeInTheDocument();
+    });
+    expect(
+      screen.getByText("The other run").nextElementSibling,
+    ).toHaveTextContent("no frame at this position");
+  });
+
+  it("keeps the form and names the refusal when the comparison is refused, and when the action throws (negative)", async () => {
+    bisectRuns.mockResolvedValueOnce({
+      ok: false,
+      reason: "conflict",
+      code: "run_not_found",
+    });
+    bisectRuns.mockRejectedValueOnce(new Error("network"));
+    const user = userEvent.setup();
+    renderReplay(runRow());
+    await user.click(screen.getByTestId("run-bisect"));
+    await user.type(screen.getByLabelText("The other run"), "tse_gone");
+    await user.click(
+      screen.getByRole("button", { name: "Find the divergence" }),
+    );
+    const refused = await screen.findByTestId("run-bisect-failure");
+    expect(refused.textContent).not.toBe("");
+    expect(screen.queryByTestId("bisect-diverged")).toBeNull();
+    expect(screen.getByLabelText("The other run")).toHaveValue("tse_gone");
+    const first = refused.textContent;
+    await user.click(
+      screen.getByRole("button", { name: "Find the divergence" }),
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId("run-bisect-failure").textContent).not.toBe(
+        first,
+      );
+    });
+    expect(bisectRuns).toHaveBeenCalledTimes(2);
+  });
+
+  it("opens on an empty form after it was closed on an answer", async () => {
+    bisectRuns.mockResolvedValue({
+      ok: true,
+      value: { divergentSeq: null, keyA: null, keyB: null, aligned: 12 },
+    });
+    const user = userEvent.setup();
+    renderReplay(runRow());
+    await user.click(screen.getByTestId("run-bisect"));
+    await user.type(screen.getByLabelText("The other run"), "tse_other1");
+    await user.click(
+      screen.getByRole("button", { name: "Find the divergence" }),
+    );
+    await screen.findByTestId("bisect-same");
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    await user.click(screen.getByTestId("run-bisect"));
+    expect(screen.queryByTestId("bisect-same")).toBeNull();
+    expect(screen.getByLabelText("The other run")).toHaveValue("");
+  });
+
+  it("sends one comparison while the first is in flight, however often it is pressed", async () => {
+    bisectRuns.mockReturnValue(new Promise(() => undefined));
+    const user = userEvent.setup();
+    renderReplay(runRow());
+    await user.click(screen.getByTestId("run-bisect"));
+    await user.type(screen.getByLabelText("The other run"), "tse_other1");
+    const submit = screen.getByRole("button", { name: "Find the divergence" });
+    await user.click(submit);
+    // The pending button is aria-disabled, not disabled, so this click submits.
+    await user.click(submit);
+    expect(bisectRuns).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Fork dialog", () => {
+  const forkable = () =>
+    runRow({ id: "tse_7k2m9q", source: "ledger", replayGrade: "fork" });
+
+  it("opens on an empty field and no attempt after it was closed on a minted one", async () => {
+    forkRun.mockResolvedValue({
+      ok: true,
+      value: { attemptId: "arun_9x2k", attemptNumber: 2 },
+    });
+    const user = userEvent.setup();
+    renderReplay(forkable());
+    await user.click(screen.getByTestId("run-fork"));
+    await user.type(screen.getByLabelText("Replay up to frame"), "120");
+    await user.click(screen.getByRole("button", { name: "Mint the attempt" }));
+    await screen.findByTestId("fork-attempt");
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    await user.click(screen.getByTestId("run-fork"));
+    expect(screen.queryByTestId("fork-attempt")).toBeNull();
+    expect(screen.getByLabelText("Replay up to frame")).toHaveValue("");
+  });
+
+  it("mints one attempt while the first is in flight, however often it is pressed", async () => {
+    forkRun.mockReturnValue(new Promise(() => undefined));
+    const user = userEvent.setup();
+    renderReplay(forkable());
+    await user.click(screen.getByTestId("run-fork"));
+    await user.type(screen.getByLabelText("Replay up to frame"), "120");
+    const submit = screen.getByRole("button", { name: "Mint the attempt" });
+    await user.click(submit);
+    await user.click(submit);
+    expect(forkRun).toHaveBeenCalledTimes(1);
+  });
+
+  it("says the fork went unanswered when the action itself throws, and mints nothing (negative)", async () => {
+    forkRun.mockRejectedValue(new Error("network"));
+    const user = userEvent.setup();
+    renderReplay(forkable());
+    await user.click(screen.getByTestId("run-fork"));
+    await user.type(screen.getByLabelText("Replay up to frame"), "120");
+    await user.click(screen.getByRole("button", { name: "Mint the attempt" }));
+    expect(await screen.findByTestId("run-fork-failure")).toBeTruthy();
+    expect(screen.queryByTestId("fork-attempt")).toBeNull();
   });
 });

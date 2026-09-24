@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   type CodeToken,
-  languageForPath,
   tokenizeCode,
   tokenizeJson,
   tokenizeShell,
@@ -110,29 +109,5 @@ describe("tokenizeCode", () => {
   it("dispatches to the scanner the language names", () => {
     expect(kindOf(tokenizeCode("git status", "shell"), "git")).toBe("table");
     expect(kindOf(tokenizeCode('{"a":1}', "json"), '"a"')).toBe("key");
-  });
-});
-
-describe("languageForPath", () => {
-  it("reads JSON and shell from the extension, whatever its case", () => {
-    expect(languageForPath("apps/app/package.json")).toBe("json");
-    expect(languageForPath("tsconfig.JSON")).toBe("json");
-    expect(languageForPath("scripts/deploy.sh")).toBe("shell");
-    expect(languageForPath("scripts/deploy.zsh")).toBe("shell");
-  });
-
-  it("reads the shell files that carry no extension", () => {
-    expect(languageForPath("infra/Dockerfile")).toBe("shell");
-    expect(languageForPath("Makefile")).toBe("shell");
-    expect(languageForPath(".env.local")).toBe("shell");
-  });
-
-  it("is honest plain text about everything else", () => {
-    expect(languageForPath("src/kernel.ts")).toBe("text");
-    expect(languageForPath("README.md")).toBe("text");
-    expect(languageForPath("")).toBe("text");
-    // A directory that looks like a JSON file must not fool the extension
-    // test into painting the file inside it.
-    expect(languageForPath("fixtures.json/notes.md")).toBe("text");
   });
 });

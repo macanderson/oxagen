@@ -239,6 +239,8 @@ describe("AgentSource", () => {
     expect(loading).toHaveAttribute("aria-busy", "true");
     expect(loading).toHaveTextContent("Loading this agent");
     expect(screen.queryByRole("textbox")).toBeNull();
+    // The streamed page owns main#main; the fallback beside it must not.
+    expect(document.getElementById("main")).toBeNull();
   });
 });
 
