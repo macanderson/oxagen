@@ -6974,7 +6974,6 @@ type Messages = {
     };
     dialog: {
       close: string;
-      dismiss: string;
     };
     record: {
       kinds: {

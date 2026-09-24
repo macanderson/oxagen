@@ -135,9 +135,7 @@ describe("the governance dialog", () => {
     expect(within(dialog).getByTestId("governance-gap")).toHaveTextContent(
       "Not recorded yet: an org-owner approval and a security event when the mode is lowered. Tracked in #3859.",
     );
-    expect(
-      within(dialog).getByRole("button", { name: "Close the dialog" }),
-    ).toBeVisible();
+    expect(within(dialog).getByRole("button", { name: "Close" })).toBeVisible();
     expect(
       within(dialog).getByRole("button", { name: "Cancel" }),
     ).toBeVisible();
@@ -204,9 +202,7 @@ describe("the governance dialog", () => {
   it("closes from the header ×", async () => {
     renderChip();
     const dialog = openDialog();
-    fireEvent.click(
-      within(dialog).getByRole("button", { name: "Close the dialog" }),
-    );
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
     await waitFor(() => {
       expect(screen.queryByTestId("governance-dialog")).toBeNull();
     });
