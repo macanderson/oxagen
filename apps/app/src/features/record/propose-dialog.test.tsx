@@ -14,6 +14,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 
 const revise = vi.hoisted(() => vi.fn());
@@ -60,7 +61,13 @@ beforeEach(() => {
   revise.mockReset();
   onOpened.mockReset();
 });
-afterEach(cleanup);
+afterEach(async () => {
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
+});
 
 describe("Propose a change", () => {
   it("keeps unchanged lines as context in the diff, with no repository badge when none was read", () => {
