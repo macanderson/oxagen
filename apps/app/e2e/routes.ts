@@ -9,8 +9,15 @@
 //
 // The table is data so the same rows can be read by the deploy verification
 // (WL-52) against a real organization, not only by the e2e run against the seed.
+//
+// A page addressed by a record the seed mints (a mandate's `mnd_…` id) cannot
+// be a static row, so its rows come from the seed record `seed:e2e` writes
+// before Playwright starts. Without that file (a checkout that never seeded)
+// the table carries the static rows alone; with it, a record missing the id
+// is a broken seed and fails loudly rather than dropping the rows.
+import { existsSync, readFileSync } from "node:fs";
 import pages from "../messages/en.json" with { type: "json" };
-import { SEED } from "./support";
+import { SEED, SEED_RECORD } from "./support";
 
 export type RouteRow = {
   /** The path to visit, with the seeded org and workspace already substituted. */
@@ -22,11 +29,40 @@ export type RouteRow = {
 const org = SEED.orgSlug;
 const ws = SEED.workspaceSlug;
 
+/** The seeded agent every seeded record belongs to (`seed/index.ts`). */
+const SEEDED_AGENT = "e2e-agent";
+
+/**
+ * The rows for pages addressed by a record the seed minted: both Mandate
+ * addresses, the flat one every surface links to and the design's nested one
+ * (apps/app/ARCHITECTURE.md §1.2, the Mandate row).
+ */
+function seededRows(): RouteRow[] {
+  if (!existsSync(SEED_RECORD)) return [];
+  const record = JSON.parse(readFileSync(SEED_RECORD, "utf8")) as {
+    mandatePublicId?: unknown;
+  };
+  const mandate = record.mandatePublicId;
+  if (typeof mandate !== "string" || !/^mnd_[0-9a-z]+$/i.test(mandate)) {
+    throw new Error(
+      `${SEED_RECORD} carries no mandatePublicId; re-run pnpm --filter @oxagen/app seed:e2e`,
+    );
+  }
+  return [
+    { path: `/${org}/${ws}/mandates/${mandate}`, titleKey: "mandate" },
+    {
+      path: `/${org}/${ws}/agents/${SEEDED_AGENT}/mandates/${mandate}`,
+      titleKey: "mandate",
+    },
+  ];
+}
+
 /** Every signed-in rev1 surface, in navigation order. */
 export const SIGNED_IN_ROUTES: readonly RouteRow[] = [
   { path: `/${org}/${ws}`, titleKey: "fleet" },
   { path: `/${org}/${ws}/agents`, titleKey: "agents" },
-  { path: `/${org}/${ws}/agents/e2e-agent/overview`, titleKey: "agent" },
+  { path: `/${org}/${ws}/agents/${SEEDED_AGENT}/overview`, titleKey: "agent" },
+  ...seededRows(),
   { path: `/${org}/${ws}/tools`, titleKey: "tools" },
   { path: `/${org}/${ws}/steering`, titleKey: "steering" },
   { path: `/${org}/${ws}/steering/library`, titleKey: "steering" },
@@ -40,7 +76,7 @@ export const SIGNED_IN_ROUTES: readonly RouteRow[] = [
   { path: `/${org}/sso`, titleKey: "sso" },
   { path: `/${org}/billing`, titleKey: "billing" },
   { path: `/${org}/audit`, titleKey: "audit" },
-] as const;
+];
 
 /**
  * The rows the oracle walks with no session at all.

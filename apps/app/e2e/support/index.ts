@@ -27,8 +27,9 @@ export const OWNER_STATE = path.join(AUTH_DIR, "owner.json");
 
 /**
  * What `seed:e2e` minted that a spec cannot know ahead of time: the seeded
- * run's `arun_…` public id, as `{ runPublicId }`. Written by the seed; the
- * reader lands with its first consumer, the WL-47 routes oracle.
+ * run's `arun_…` public id and the seeded mandate's `mnd_…` public id, as
+ * `{ runPublicId, mandatePublicId }`. Written by the seed; `routes.ts` reads
+ * the mandate id for the two Mandate rows.
  */
 export const SEED_RECORD = path.join(AUTH_DIR, "seed.json");
 
