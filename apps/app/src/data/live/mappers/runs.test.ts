@@ -104,13 +104,13 @@ describe("toRunPage", () => {
             basis: "gateway_observed",
           },
           reportedCost: null,
-          model: null,
           // A ledger run whose frames report no effort, thinking, permission
           // mode or token tally carries each as null, not as a stand-in.
+          reportedTokens: null,
           effort: null,
           thinking: null,
           permissionMode: null,
-          reportedTokens: null,
+          model: null,
           harness: null,
           machine: null,
           taskRef: "ENG-4121",

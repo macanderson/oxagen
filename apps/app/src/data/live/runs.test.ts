@@ -118,12 +118,12 @@ describe("runs.list", () => {
             frames: 9,
             cost: null,
             reportedCost: null,
-            model: viewModel,
             // No frame of this session reported them, so each reads null.
+            reportedTokens: null,
             effort: null,
             thinking: null,
             permissionMode: null,
-            reportedTokens: null,
+            model: viewModel,
             harness: null,
             machine,
             taskRef: null,
@@ -848,6 +848,9 @@ describe("runs.work", () => {
         diff: null,
       },
     ],
+    // `get_run_work` always sends this array, empty for a ledger run
+    // (`run.work.get.ts`, `subagents`). The adapter maps it unguarded, so a
+    // fixture that omits it tests a shape the wire never sends.
     subagents: [
       {
         id: "a0182b6cd3a21d284",
@@ -877,9 +880,11 @@ describe("runs.work", () => {
       checkoutRefs: ["chk_1"],
     });
     expect(read.value.pullRequests[0]).not.toHaveProperty("checkoutIds");
+    // The harness mints a subagent's id, so the view carries it as `agentRef`
+    // rather than an `id` a reader would take for a public id (INV-11).
     expect(read.value.subagents).toEqual([
       {
-        ref: "a0182b6cd3a21d284",
+        agentRef: "a0182b6cd3a21d284",
         type: "Explore",
         firstSeq: "12",
         lastSeq: "30",

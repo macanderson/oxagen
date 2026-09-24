@@ -155,13 +155,15 @@ async function renderRun(
     now: NOW,
   });
   // The header's checkout and subagent strips and the work section suspend on
-  // `use(work)`. A synchronous render (plain `render`) ends its act scope while
-  // they are suspended, and React drops the queued retry with that scope, so
-  // they would stay on their fallbacks. An awaited act lets the resolved read
-  // settle before the test reads the page.
-  const { container } = await act(() =>
-    Promise.resolve(render(<IntlProvider>{element}</IntlProvider>)),
-  );
+  // the work read (`use(work)`). A render inside a synchronous act ends its
+  // scope while they are suspended, and React drops the queued retry with that
+  // scope, so they would stay on their fallbacks. Awaiting act lets the
+  // resolved read land before the test reads the page.
+  let container!: HTMLElement;
+  await act(async () => {
+    ({ container } = render(<IntlProvider>{element}</IntlProvider>));
+    await Promise.resolve();
+  });
   return { container, calls };
 }
 
@@ -498,14 +500,14 @@ describe("header", () => {
         pullRequests: [],
         subagents: [
           {
-            ref: "a0182b6cd3a21d284",
+            agentRef: "a0182b6cd3a21d284",
             type: "Explore",
             firstSeq: "12",
             lastSeq: "30",
             stopped: true,
           },
           {
-            ref: "b77c01e9f2d4a8c10",
+            agentRef: "b77c01e9f2d4a8c10",
             type: null,
             firstSeq: "31",
             lastSeq: "31",

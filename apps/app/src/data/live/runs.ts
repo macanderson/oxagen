@@ -121,7 +121,7 @@ export const runs: DataSource["runs"] = {
         // The harness's own agent id, which Oxagen does not mint (INV-11).
         subagents: read.value.subagents.map(({ id, ...subagent }) => ({
           ...subagent,
-          ref: id,
+          agentRef: id,
         })),
       },
       "runs.work",
