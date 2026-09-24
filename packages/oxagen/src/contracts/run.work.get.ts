@@ -52,6 +52,28 @@ export const runPrDiffFileSchema = z
     patch: z.string().nullable(),
   })
   .strict();
+/**
+ * The issues a pull request closes on merge, as GitHub records them (closing
+ * keywords and sidebar links). Null when they could not be read, so an unread
+ * list never reads as "closes nothing".
+ */
+const runPrClosingIssuesSchema = z
+  .object({
+    issues: z.array(
+      z
+        .object({
+          owner: z.string(),
+          repo: z.string(),
+          number: z.number().int(),
+          title: z.string(),
+          url: z.string().url(),
+          state: z.enum(["open", "closed"]),
+        })
+        .strict(),
+    ),
+    complete: z.boolean(),
+  })
+  .strict();
 export const runWorkPrSchema = z
   .object({
     repository: runRepositorySchema,
@@ -62,6 +84,7 @@ export const runWorkPrSchema = z
     headSha: z.string().nullable(),
     headRef: z.string(),
     association: z.enum(["recorded", "head_commit", "branch"]),
+    closingIssues: runPrClosingIssuesSchema.nullable(),
     checkoutIds: z.array(z.string()),
     observedAt: z.string(),
     current: z.boolean(),

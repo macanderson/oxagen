@@ -805,6 +805,7 @@ describe("runs.work", () => {
         headSha: "abc123",
         headRef: "release/3.2",
         association: "recorded",
+        closingIssues: null,
         checkoutIds: ["chk_1"],
         observedAt: "2026-09-15T08:58:00.000Z",
         current: true,
