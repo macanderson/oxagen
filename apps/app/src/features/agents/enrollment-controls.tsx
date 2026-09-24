@@ -21,6 +21,7 @@ import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useFormatter } from "@/ui/formatter";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
+import { buttonDanger } from "./parts";
 import { UNANSWERED, useActionFailure } from "./action-failure";
 import {
   type EnrollmentToken,
@@ -261,7 +262,7 @@ export function RevokeHost({
         type="button"
         data-testid="revoke-host"
         aria-label={t("label", { hostname })}
-        className={`${buttonSecondary} h-8 px-2 text-xs`}
+        className={buttonDanger}
         onClick={() => {
           setOpen(true);
         }}
