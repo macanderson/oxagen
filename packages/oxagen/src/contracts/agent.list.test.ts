@@ -185,4 +185,35 @@ describe("list_agents contract", () => {
       }).success,
     ).toBe(false);
   });
+
+  it("refuses more than 100 mandate holders, a blank holder key, and totals without unenrolled (negative)", () => {
+    const totals = {
+      identities: 101,
+      enrolled: 0,
+      unenrolled: 101,
+      holdingMandate: 101,
+      mandateHolders: Array.from(
+        { length: 100 },
+        (_, i) => `acme.core.agent-${String(i)}`,
+      ),
+      tamperIncidents: 0,
+      tamper: { recorded: 0, open: 0, newest: null },
+    };
+    const parse = (t: Record<string, unknown>) =>
+      agentList.output.safeParse({ items: [], nextCursor: null, totals: t })
+        .success;
+    // The handler names at most 100 holders while the count may run past it.
+    expect(parse(totals)).toBe(true);
+    expect(
+      parse({
+        ...totals,
+        mandateHolders: [...totals.mandateHolders, "acme.core.agent-100"],
+      }),
+    ).toBe(false);
+    expect(parse({ ...totals, mandateHolders: [""] })).toBe(false);
+    const withoutUnenrolled = Object.fromEntries(
+      Object.entries(totals).filter(([key]) => key !== "unenrolled"),
+    );
+    expect(parse(withoutUnenrolled)).toBe(false);
+  });
 });
