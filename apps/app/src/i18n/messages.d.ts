@@ -2987,14 +2987,16 @@ type Messages = {
       facetAll: string;
       facetLabel: string;
       rows: string;
-      rowsAll: string;
       sortBy: string;
       tokensUnsorted: string;
       columns: {
         run: string;
+        summary: string;
         agent: string;
         operator: string;
         status: string;
+        pullRequests: string;
+        diff: string;
         tier: string;
         replay: string;
         tokens: string;
@@ -3021,9 +3023,6 @@ type Messages = {
         range: string;
         rangeMore: string;
         none: string;
-        previous: string;
-        next: string;
-        page: string;
         older: string;
         newest: string;
       };
@@ -3033,6 +3032,57 @@ type Messages = {
       rowAction: string;
       exportQueued: string;
       exportFailed: string;
+      actionsColumn: string;
+      summaryNone: string;
+      summaryOff: string;
+      prFilter: {
+        label: string;
+        any: string;
+        with: string;
+        without: string;
+        note: string;
+        noneWith: string;
+        noneWithout: string;
+      };
+      columnsPicker: {
+        open: string;
+        title: string;
+        subtitle: string;
+        legend: string;
+        fixed: string;
+        reset: string;
+        saved: string;
+      };
+      prs: {
+        none: string;
+        notRead: string;
+        onRunPage: string;
+        ledgerHint: string;
+        unread: string;
+        openedNoLink: string;
+        noLinkHint: string;
+        more: string;
+        unnamed: string;
+        stateUnknown: string;
+        stateUnknownHint: string;
+        state: {
+          open: string;
+          draft: string;
+          merged: string;
+          closed: string;
+        };
+        openOnGitHub: string;
+        openOnGitLab: string;
+      };
+      diff: {
+        none: string;
+        uncommitted: string;
+        spoken: string;
+        basis: {
+          harness_reported: string;
+          git_observed: string;
+        };
+      };
     };
     pause: {
       title: string;
@@ -6632,6 +6682,12 @@ type Messages = {
       repoNotCaptured: string;
       repoOnlyNotCaptured: string;
       noPullRequest: string;
+      pullState: {
+        open: string;
+        closed: string;
+        merged: string;
+        unknown: string;
+      };
       pathNotCaptured: string;
       noMachine: string;
       subagents: string;

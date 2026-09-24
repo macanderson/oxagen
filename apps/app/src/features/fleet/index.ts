@@ -8,6 +8,14 @@
 // wherever it is decided. Fleet itself draws no approvals panel (fleet.md):
 // its "Waiting on a human" tile opens the drawer.
 export { Fleet } from "./fleet";
+// The route reads the saved table choice from its cookie and the filter from
+// its URL, so Fleet's first render already draws what the person chose.
+export {
+  FLEET_PREFS_COOKIE,
+  type FleetPrefs,
+  pullRequestFilterOf,
+  readFleetPrefs,
+} from "./prefs";
 export { FleetLoading } from "./loading";
 export { ApprovalsPanel } from "./approvals-panel";
 // The approvals drawer draws one card alone, with no panel heading around it,

@@ -55,9 +55,9 @@ import {
 import { toRunPage } from "./mappers/runs";
 
 /**
- * Runs per Fleet read: the contract's ceiling. Fleet's search, facets, sort
- * and rows-per-page run over the rows one read returns, so the read takes as
- * many as the contract answers and the pager says when more are older.
+ * Runs per read when the caller names no page size: the contract's ceiling.
+ * Fleet names one (its page-size choice); the agents page and the choice
+ * dialogs read the ceiling.
  */
 const RUN_PAGE = 100;
 
@@ -132,10 +132,13 @@ export const runs: DataSource["runs"] = {
   async list(ctx, q) {
     const read = await kernelRead(ctx, {
       contract: runList,
-      input:
-        q.cursor === null
-          ? { limit: RUN_PAGE }
-          : { limit: RUN_PAGE, cursor: q.cursor },
+      input: {
+        limit: q.limit ?? RUN_PAGE,
+        ...(q.cursor === null ? {} : { cursor: q.cursor }),
+        ...(q.pullRequests === undefined || q.pullRequests === "any"
+          ? {}
+          : { pullRequests: q.pullRequests }),
+      },
       page: "fleet",
     });
     if (!read.ok) return read;
