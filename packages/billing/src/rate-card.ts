@@ -83,8 +83,7 @@ export interface RateCardEntry {
 export const RATE_CARD: RateCardEntry[] = [
   // Fable 5.1 and Opus 5.5 break from their family's price, so each gets a row
   // for both the hyphenated and the dotted gateway spelling. Their cache reads
-  // (0.025x and 0.05x input) are the list prices, not typos. Legacy Opus 4 and
-  // 4.1 ($15/$75) have no row: the CLI projects them at the family rate.
+  // (0.025x and 0.05x input) are the list prices, not typos.
   {
     family: "claude-fable-5-1",
     label: "Claude Fable 5.1",
@@ -127,6 +126,109 @@ export const RATE_CARD: RateCardEntry[] = [
       outputPer1M: 20.0,
       cachedInputPer1M: 0.2,
       cacheWritePer1M: 5.0,
+    },
+  },
+  // Legacy Opus 4 and 4.1 list at $15/$75, three times Opus 4.5 and later.
+  // "claude-opus-4" prefixes every Opus 4.x id in both spellings, so the 4.5
+  // to 4.8 rows MUST sort before it, and it MUST sort before the "claude-opus"
+  // family row, which would otherwise price 4 and 4.1 at $5/$25.
+  {
+    family: "claude-opus-4-8",
+    label: "Claude Opus 4.8",
+    vendor: "anthropic",
+    rate: {
+      inputPer1M: 5.0,
+      outputPer1M: 25.0,
+      cachedInputPer1M: 0.5,
+      cacheWritePer1M: 6.25,
+    },
+  },
+  {
+    family: "claude-opus-4-7",
+    label: "Claude Opus 4.7",
+    vendor: "anthropic",
+    rate: {
+      inputPer1M: 5.0,
+      outputPer1M: 25.0,
+      cachedInputPer1M: 0.5,
+      cacheWritePer1M: 6.25,
+    },
+  },
+  {
+    family: "claude-opus-4-6",
+    label: "Claude Opus 4.6",
+    vendor: "anthropic",
+    rate: {
+      inputPer1M: 5.0,
+      outputPer1M: 25.0,
+      cachedInputPer1M: 0.5,
+      cacheWritePer1M: 6.25,
+    },
+  },
+  {
+    family: "claude-opus-4-5",
+    label: "Claude Opus 4.5",
+    vendor: "anthropic",
+    rate: {
+      inputPer1M: 5.0,
+      outputPer1M: 25.0,
+      cachedInputPer1M: 0.5,
+      cacheWritePer1M: 6.25,
+    },
+  },
+  {
+    family: "claude-opus-4.8",
+    label: "Claude Opus 4.8",
+    vendor: "anthropic",
+    rate: {
+      inputPer1M: 5.0,
+      outputPer1M: 25.0,
+      cachedInputPer1M: 0.5,
+      cacheWritePer1M: 6.25,
+    },
+  },
+  {
+    family: "claude-opus-4.7",
+    label: "Claude Opus 4.7",
+    vendor: "anthropic",
+    rate: {
+      inputPer1M: 5.0,
+      outputPer1M: 25.0,
+      cachedInputPer1M: 0.5,
+      cacheWritePer1M: 6.25,
+    },
+  },
+  {
+    family: "claude-opus-4.6",
+    label: "Claude Opus 4.6",
+    vendor: "anthropic",
+    rate: {
+      inputPer1M: 5.0,
+      outputPer1M: 25.0,
+      cachedInputPer1M: 0.5,
+      cacheWritePer1M: 6.25,
+    },
+  },
+  {
+    family: "claude-opus-4.5",
+    label: "Claude Opus 4.5",
+    vendor: "anthropic",
+    rate: {
+      inputPer1M: 5.0,
+      outputPer1M: 25.0,
+      cachedInputPer1M: 0.5,
+      cacheWritePer1M: 6.25,
+    },
+  },
+  {
+    family: "claude-opus-4",
+    label: "Claude Opus 4",
+    vendor: "anthropic",
+    rate: {
+      inputPer1M: 15.0,
+      outputPer1M: 75.0,
+      cachedInputPer1M: 1.5,
+      cacheWritePer1M: 18.75,
     },
   },
   {

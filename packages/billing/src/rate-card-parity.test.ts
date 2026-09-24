@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { RATE_CARD, estimateCostUsd } from "./rate-card";
-import { providerCostUsd, isRateCardMiss, PROVIDER_RATE_CARD } from "./pricing";
+import { RATE_CARD, estimateCostUsd, rateFor } from "./rate-card";
+import {
+  providerCostUsd,
+  isRateCardMiss,
+  PROVIDER_RATE_CARD,
+  resolveRate,
+} from "./pricing";
 
 /**
  * The two rate cards, held together.
@@ -85,6 +90,41 @@ describe("rate-card parity: engine card vs billing card", () => {
           ).toBeCloseTo(engine, 9);
         });
       }
+    });
+  }
+});
+
+describe("rate-card parity: model ids as callers send them (#3944)", () => {
+  // The walk above prices each card family by its own name, so it cannot see a
+  // dated or dotted id that the engine's first-match order sends to a different
+  // row than billing's longest-prefix match does. Opus 4.1 was one: billing
+  // priced it at $15/$75 and the engine card at the $5/$25 family rate.
+  const IDS = [
+    "claude-opus-4-20250514",
+    "anthropic/claude-opus-4",
+    "claude-opus-4-1-20250805",
+    "anthropic/claude-opus-4.1",
+    "claude-opus-4-5-20251101",
+    "anthropic/claude-opus-4.8",
+    "claude-opus-5",
+    "anthropic/claude-opus-5.5",
+    "claude-fable-5",
+    "anthropic/claude-fable-5.1",
+    "claude-sonnet-5",
+    "claude-sonnet-4-6",
+    "claude-haiku-4-5-20251001",
+  ];
+
+  for (const id of IDS) {
+    it(`${id} resolves to the same rate in both cards`, () => {
+      const billing = resolveRate(id);
+      const engine = rateFor(id);
+      expect(engine).toEqual({
+        inputPer1M: billing.inputPer1M,
+        outputPer1M: billing.outputPer1M,
+        cachedInputPer1M: billing.cachedInputPer1M,
+        cacheWritePer1M: billing.cacheWritePer1M,
+      });
     });
   }
 });
