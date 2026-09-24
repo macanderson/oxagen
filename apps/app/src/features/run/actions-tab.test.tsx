@@ -98,6 +98,8 @@ type Setup = {
   everything?: Read<RunTranscript>;
   approvals?: Read<ApprovalQueue>;
   resolved?: Read<ResolvedApprovalItem[]>;
+  /** The resolved read stopped at its bound with decisions left unread (#3477). */
+  resolvedMore?: boolean;
   mandates?: Read<MandateList>;
   frameBody?: Read<RunFrameBody>;
   run?: Partial<RunRow>;
@@ -128,7 +130,13 @@ async function renderTab(setup: Setup = {}) {
     detail: ok(detail),
     frameBody: setup.frameBody,
     approvals: setup.approvals,
-    resolvedApprovals: setup.resolved,
+    resolvedApprovals:
+      setup.resolved === undefined || !setup.resolved.ok
+        ? setup.resolved
+        : ok({
+            items: setup.resolved.value,
+            more: setup.resolvedMore ?? false,
+          }),
     mandates: setup.mandates,
   });
   const everything = setup.everything ?? ok(releaseTranscript());
@@ -767,6 +775,46 @@ describe("decided calls", () => {
     expect(within(other).getByTestId("resolved-approver")).toHaveTextContent(
       /^system$/,
     );
+  });
+
+  // #3477: the run's decided approvals are read up to 1,000 rows. When the
+  // read stops with more left, the list says it is the latest part only, so
+  // an unmatched frame does not read as having no decision anywhere.
+  it("says the decided list is the latest part when the read stopped at its bound (#3477)", async () => {
+    await renderTab({
+      body: "15",
+      frameBody: ok(runFrameBody({ seq: "15" })),
+      resolved: ok([
+        decidedRelease({
+          id: "apr_expired",
+          tool: "delete_workspace",
+          resolution: "expired",
+          resolvedBy: null,
+        }),
+      ]),
+      resolvedMore: true,
+    });
+    expect(screen.getByTestId("approval-unmatched")).toBeTruthy();
+    expect(screen.getByTestId("approvals-partial")).toHaveTextContent(
+      "This run has more decided approvals than one read carries. These are the latest 1, so an older decision is not listed here.",
+    );
+  });
+
+  it("says nothing about a partial list when the read reached the end of the run's decisions (negative)", async () => {
+    await renderTab({
+      body: "15",
+      frameBody: ok(runFrameBody({ seq: "15" })),
+      resolved: ok([
+        decidedRelease({
+          id: "apr_expired",
+          tool: "delete_workspace",
+          resolution: "expired",
+          resolvedBy: null,
+        }),
+      ]),
+    });
+    expect(screen.getByTestId("approval-unmatched")).toBeTruthy();
+    expect(screen.queryByTestId("approvals-partial")).toBeNull();
   });
 
   it("names the resolved read's failure inside the approval frame (negative)", async () => {

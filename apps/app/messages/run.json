@@ -26,6 +26,7 @@
       "reason": "Reason",
       "resumedRun": "Resumed run",
       "noMatch": "The record ties no approval on this run to this frame.",
+      "partial": "This run has more decided approvals than one read carries. These are the latest {count, number}, so an older decision is not listed here.",
       "others": "Decided on this run",
       "by": {
         "system": "system",

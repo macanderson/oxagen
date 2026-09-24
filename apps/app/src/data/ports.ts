@@ -15,6 +15,7 @@ import type {
 import type {
   ApprovalQueue,
   ResolvedApprovalItem,
+  ResolvedApprovals,
 } from "./contracts/approvals";
 import type {
   AuditBundle,
@@ -247,11 +248,13 @@ export interface DataSource {
      * list_resolved_approvals, narrowed to one run: the Run page's Approvals
      * tab reads back a resolved decision, including one a decision rule
      * auto-approved with no person, that `pending` never shows (#3153).
+     * Walked to the end of the run's ledger under a bound, with `more` set
+     * when the bound stopped the walk (#3477).
      */
     resolved(
       ctx: WsCtx,
       q: { runId: string },
-    ): Promise<Read<ResolvedApprovalItem[]>>;
+    ): Promise<Read<ResolvedApprovals>>;
     /**
      * list_resolved_approvals since an instant, one page: the approvals
      * drawer's "N resolved today" (mockup `apdBody()`), with `more` set when

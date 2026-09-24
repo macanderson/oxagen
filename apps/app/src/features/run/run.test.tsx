@@ -1941,7 +1941,7 @@ describe("approvals on the run", () => {
       {
         detail: ok(runDetail()),
         approvals: ok({ items: [], more: false }),
-        resolvedApprovals: ok([]),
+        resolvedApprovals: ok({ items: [], more: false }),
       },
       // Transcript, not Governed actions: the parked dot reads on every tab.
       { tab: "transcript" },
@@ -1956,7 +1956,7 @@ describe("approvals on the run", () => {
       {
         detail: ok(runDetail()),
         approvals: ok({ items: [], more: false }),
-        resolvedApprovals: ok([]),
+        resolvedApprovals: ok({ items: [], more: false }),
       },
       { tab: "approvals" },
     );
@@ -1985,7 +1985,7 @@ describe("approvals on the run", () => {
           ],
           more: false,
         }),
-        resolvedApprovals: ok([]),
+        resolvedApprovals: ok({ items: [], more: false }),
       },
       { tab: "approvals" },
     );
@@ -2024,7 +2024,7 @@ describe("approvals on the run", () => {
           ],
           more: false,
         }),
-        resolvedApprovals: ok([]),
+        resolvedApprovals: ok({ items: [], more: false }),
       },
       { tab: "approvals" },
     );
@@ -2063,7 +2063,7 @@ describe("approvals on the run", () => {
           ],
           more: false,
         }),
-        resolvedApprovals: ok([]),
+        resolvedApprovals: ok({ items: [], more: false }),
         mandates: mandateList([mandateRow()]),
       },
       { tab: "approvals" },
@@ -2098,7 +2098,7 @@ describe("approvals on the run", () => {
           ],
           more: false,
         }),
-        resolvedApprovals: ok([]),
+        resolvedApprovals: ok({ items: [], more: false }),
       },
       { tab: "approvals" },
     );

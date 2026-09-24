@@ -16,6 +16,7 @@ import {
   ApprovalItem,
   ApprovalQueue,
   ResolvedApprovalItem,
+  ResolvedApprovals,
 } from "@/data/contracts/approvals";
 import type { DataSource } from "@/data/ports";
 import { readError, readOk } from "@/data/read";
@@ -78,10 +79,13 @@ export const approvals: DataSource["approvals"] = {
   // resolved calls would otherwise silently show only the newest 100 as if
   // that were the whole ledger. Bounded at MAX_RESOLVED_PAGES: a run holding
   // that many resolved approvals is far outside what the page renders
-  // usefully, so the read stops there rather than growing unbounded.
+  // usefully, so the read stops there rather than growing unbounded, and says
+  // `more` when the last page it took still carried a cursor (#3477), so the
+  // page never presents a cut ledger as the whole one.
   async resolved(ctx, q) {
     const items: z.input<typeof ResolvedApprovalItem>[] = [];
     let cursor: string | undefined;
+    let more = false;
     for (let page = 0; page < MAX_RESOLVED_PAGES; page += 1) {
       const read = await kernelRead(ctx, {
         contract: agentApprovalListResolved,
@@ -92,8 +96,11 @@ export const approvals: DataSource["approvals"] = {
       items.push(...toResolvedApprovalItems(read.value));
       if (read.value.nextCursor === null) break;
       cursor = read.value.nextCursor;
+      // The last page the bound allows still carried a cursor, so the run
+      // holds decided approvals this read did not take.
+      more = page === MAX_RESOLVED_PAGES - 1;
     }
-    const view = z.array(ResolvedApprovalItem).safeParse(items);
+    const view = ResolvedApprovals.safeParse({ items, more });
     if (!view.success) {
       captureError({
         error: view.error,
