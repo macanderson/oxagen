@@ -4,13 +4,16 @@ import { dataSource } from "@/data/source";
 import { Agent } from "@/features/agents";
 import { requireViewer } from "@/server/viewer";
 import { firstParam } from "@/shared/safe-path";
-import { PageHeader } from "@/ui/page-header";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("pages");
   return { title: t("agent") };
 }
 
+// The agent page (spec pages/agent.md): the eyebrow says "Agent" and the h1
+// is the agent card, both drawn by <Agent> once the identity is read, so the
+// tab title is `pages.agent` and the h1 is the agent itself. A tab is a path
+// segment; the bare route is Overview.
 export default async function AgentPage({
   params,
   searchParams,
@@ -18,16 +21,11 @@ export default async function AgentPage({
   const { org, ws, agent } = await params;
   const ctx = await requireViewer(org, ws);
   const { tab, cursor } = await searchParams;
-  const t = await getTranslations("pages");
   return (
     <main
       id="main"
       className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10"
     >
-      <PageHeader
-        eyebrow={t("workspaceEyebrow", { workspace: ctx.wsName })}
-        title={t("agent")}
-      />
       <Agent
         ctx={ctx}
         source={dataSource()}

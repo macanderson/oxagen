@@ -36,7 +36,7 @@ const { GrantMandate } = await import("./grant-mandate");
 const { useGrantFailure } = await import("./grant-failure");
 
 const at = { org: "acme", ws: "core-platform" };
-const MANDATES = routes.tools("acme", "core-platform", { tab: "mandates" });
+const MANDATES = routes.tools("acme", "core-platform", { tab: "policy" });
 
 const AGENTS: AgentChoices = {
   ok: true,

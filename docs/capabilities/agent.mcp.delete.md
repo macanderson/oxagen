@@ -32,6 +32,10 @@ is audited.
 - Tool-descriptor snapshots retained >= 365 days before a retention job purges them.
 - ClickHouse: emit `agent.mcp.deleted` audit event.
 
+## App
+
+Tools › Providers at `/{org}/{ws}/tools/providers`: **Remove** on a provider row and in the provider drill-down. The dialog says what stops working and what is kept for replay before it asks, and says nothing was removed when the answer is `deleted: false`. The handler asserts an organization Owner or Admin, or a workspace Owner.
+
 ## SPEC references
 
 - §2.3 — external MCP client
