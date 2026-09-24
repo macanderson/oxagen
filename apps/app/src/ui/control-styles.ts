@@ -32,6 +32,14 @@ export const buttonPrimary = `${buttonBase} border border-button-primary-border 
  */
 export const buttonSecondary = `${buttonBase} border border-button-default-border bg-button-default-bg text-button-default-fg hover:border-rule hover:bg-button-default-hover-bg active:bg-button-default-active-bg`;
 
+/**
+ * `.btn.danger { color:var(--st-failed); border-color:color-mix(in srgb,
+ * var(--st-failed) 40%,transparent) }` and its hover wash at 12%: an action
+ * that ends something (Revoke). Red ink and a red hairline, never a fill, so
+ * it never outranks the one gold action on the screen.
+ */
+export const buttonDanger = `${buttonBase} border border-error/40 bg-button-default-bg text-error-ink hover:bg-error/10 active:bg-error/15`;
+
 /** `a { color:var(--accent-text) }` — gold as ink, underlined on hover. */
 export const linkText =
   "font-medium text-link underline-offset-4 hover:text-link-hover hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring rounded-sm";

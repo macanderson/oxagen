@@ -13,7 +13,7 @@
 // lanes were apart.
 import type {
   MandateDetail,
-  MandateLedgerRow,
+  MandateDraw,
   MandateList,
   MandateRow,
 } from "@/data/contracts/mandates";
@@ -52,7 +52,11 @@ export function mandateRow(overrides: Partial<MandateRow> = {}): MandateRow {
     consequenceTags: ["moves_money"],
     tools: ["stripe__create_payment@*"],
     targets: [
-      { measure: "amount", allow: ["vendor:aws", "vendor:github"], deny: ["*"] },
+      {
+        measure: "amount",
+        allow: ["vendor:aws", "vendor:github"],
+        deny: ["*"],
+      },
     ],
     approval: {
       humanAbove: [
@@ -95,14 +99,12 @@ export function callsAuthority(): MandateRow["authority"][number] {
 }
 
 /**
- * One ledger movement. The default is the settlement the demo record carries: an
- * amount drawn against the monthly limit with the payment intent it recorded.
+ * One draw. The default is the settlement the demo record carries: an amount
+ * drawn against the monthly limit with the payment intent it recorded.
  */
-export function mandateMovement(
-  overrides: Partial<MandateLedgerRow> = {},
-): MandateLedgerRow {
+export function mandateDraw(overrides: Partial<MandateDraw> = {}): MandateDraw {
   return {
-    kind: "settle",
+    state: "settle",
     measure: "amount",
     value: money("884600000"),
     externalEffectRef: "pi_3QaL8f2Xk",
@@ -118,7 +120,7 @@ export function mandateDetail(
 ): MandateDetail {
   return {
     mandate: mandateRow(),
-    ledger: [mandateMovement()],
+    draws: [mandateDraw()],
     asOf: "2026-09-16T12:00:00.000Z",
     readBound: null,
     ...overrides,

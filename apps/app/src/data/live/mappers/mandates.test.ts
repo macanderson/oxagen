@@ -474,10 +474,10 @@ describe("toMandateDetail", () => {
     });
   });
 
-  it("keeps each movement's measure, figure, state, external effect and window", () => {
-    const [row] = detail().ledger;
+  it("keeps each draw's measure, figure, state, external effect and window", () => {
+    const [row] = detail().draws;
     expect(row).toEqual({
-      kind: "settle",
+      state: "settle",
       measure: "amount",
       value: {
         kind: "money",
@@ -492,7 +492,7 @@ describe("toMandateDetail", () => {
   // INV-11: the ledger row's `id` and `toolCallId` are raw database uuids, and
   // the view model admits neither. A regression here would put a uuid on screen.
   it("carries no identifier out of the ledger row (negative)", () => {
-    const [row] = detail().ledger;
+    const [row] = detail().draws;
     expect(row).not.toHaveProperty("id");
     expect(row).not.toHaveProperty("toolCallId");
     expect(JSON.stringify(row)).not.toContain("0199a0d4");
@@ -514,9 +514,9 @@ describe("toMandateDetail", () => {
       // that measure (ADR-108), so the fixture must limit `calls` too, not
       // only `amount`.
       mandateOutput({ authority: [authorityOutput(), callsAuthorityOutput()] }),
-    ).ledger;
+    ).draws;
     expect(row).toMatchObject({
-      kind: "reserve",
+      state: "reserve",
       value: { kind: "count", count: "1", unit: "calls" },
       externalEffectRef: null,
     });
@@ -530,7 +530,7 @@ describe("toMandateDetail", () => {
     // survive.
     const [row] = detail([
       ledgerOutput({ measureKind: "count", unitOrCurrency: "seats" }),
-    ]).ledger;
+    ]).draws;
     expect(row).toMatchObject({
       value: { kind: "count", count: "884600000", unit: "seats" },
     });
@@ -544,10 +544,81 @@ describe("toMandateDetail", () => {
       [ledgerOutput({ measureKind: null })],
       500,
       mandateOutput({ authority: [] }),
-    ).ledger;
+    ).draws;
     expect(row).toMatchObject({
       value: { kind: "money", money: { currency: "USD" } },
     });
+  });
+
+  // A call's reservation and the settlement or release that closes it are one
+  // draw. Listed as movements, a settled call read as two rows and kept a
+  // `reserved` badge on money that had since settled.
+  it("folds a call's reservation and its settlement into one settled draw", () => {
+    const call = "0199a0d4-0000-7000-8000-0000000000b2";
+    const draws = detail([
+      ledgerOutput({
+        id: "0199a0d4-0000-7000-8000-000000000003",
+        toolCallId: call,
+        kind: "settle",
+        at: "2026-09-04T08:40:19.000Z",
+      }),
+      ledgerOutput({
+        id: "0199a0d4-0000-7000-8000-000000000002",
+        toolCallId: call,
+        kind: "reserve",
+        externalEffectId: null,
+        at: "2026-09-04T08:40:11.000Z",
+      }),
+    ]).draws;
+    expect(draws).toHaveLength(1);
+    expect(draws[0]).toMatchObject({
+      state: "settle",
+      externalEffectRef: "pi_3QaL8f2Xk",
+      at: "2026-09-04T08:40:19.000Z",
+    });
+  });
+
+  it("reads a released call as released, and an open one as reserved", () => {
+    const draws = detail([
+      ledgerOutput({
+        toolCallId: "0199a0d4-0000-7000-8000-0000000000c1",
+        kind: "reserve",
+        externalEffectId: null,
+        at: "2026-09-11T09:31:08.000Z",
+      }),
+      ledgerOutput({
+        toolCallId: "0199a0d4-0000-7000-8000-0000000000c2",
+        kind: "release",
+        externalEffectId: null,
+        at: "2026-09-01T10:00:05.000Z",
+      }),
+      ledgerOutput({
+        toolCallId: "0199a0d4-0000-7000-8000-0000000000c2",
+        kind: "reserve",
+        externalEffectId: null,
+        at: "2026-09-01T10:00:00.000Z",
+      }),
+    ]).draws;
+    expect(draws.map((d) => d.state)).toEqual(["reserve", "release"]);
+    expect(draws[1]?.at).toBe("2026-09-01T10:00:05.000Z");
+  });
+
+  it("keeps one call's draws on two measures apart", () => {
+    const draws = detail(
+      [
+        ledgerOutput({ kind: "reserve", externalEffectId: null }),
+        ledgerOutput({
+          kind: "reserve",
+          measure: "calls",
+          value: "1",
+          unitOrCurrency: "calls",
+          externalEffectId: null,
+        }),
+      ],
+      500,
+      mandateOutput({ authority: [authorityOutput(), callsAuthorityOutput()] }),
+    ).draws;
+    expect(draws.map((d) => d.measure)).toEqual(["amount", "calls"]);
   });
 
   // `readBound` is what the read can establish and nothing more. A ledger of
@@ -579,7 +650,7 @@ describe("toMandateDetail, an empty recorded effect id", () => {
       500,
       new Date("2026-09-19T00:00:00.000Z"),
     );
-    expect(detail.ledger[0]?.externalEffectRef).toBeNull();
+    expect(detail.draws[0]?.externalEffectRef).toBeNull();
     expect(MandateDetail.safeParse(detail).success).toBe(true);
   });
 });

@@ -1,18 +1,21 @@
 // @vitest-environment jsdom
-// The change-limits dialog's payload: what it prefills, and what it tells the
-// action the operator actually changed.
+// The two dialogs the mandate header opens, as the design draws them:
+// `mandateedit` (per call, per period, approval above, valid to; Cancel and
+// Save) and `mandaterevoke` (what is reserved, what already settled, the ledger
+// kept; Cancel and Revoke it).
 //
-// This suite exists for one seam. `measureDefaults` fills the measure, the unit,
-// the window and both figures from the mandate the page read, and every one of
-// those values is submitted whether or not the operator touched it. The handler
-// merges whatever a change carries over the row it locks, so a prefill sent back
-// as an edit restores a bound another operator may have lowered while this dialog
-// was open (ADR-102, amended 2026-09-19). The dialog therefore carries each
-// prefill back in a hidden field beside the one it fills, and
-// `changeMandateLimits` compares the two. The cases below prove the two halves
-// meet: that the baseline reaches the action, and that it is the string the
-// operator saw. What the action then does with it is pinned in actions.test.ts.
-import { cleanup, render, screen, within } from "@testing-library/react";
+// The change dialog's one seam is the baseline: every editable field is
+// prefilled from the mandate the page read and carried back beside a hidden
+// copy of that prefill, so the action can send only what the operator changed
+// (ADR-102). The cases below prove the two halves meet; what the action does
+// with them is pinned in actions.test.ts.
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MandateRow } from "@/data/contracts/mandates";
@@ -35,64 +38,51 @@ vi.mock("./actions", () => ({ changeMandateLimits, revokeMandate }));
 
 const { MandateActions } = await import("./mandate-actions");
 
-/** 50 rows a call, 1000 rows a month, 50 calls a day: three prefills. */
-const bounded = mandateRow({
-  authority: [
-    mandateAuthority({
-      measure: "rows",
-      period: "monthly",
-      perCall: { kind: "count", count: "50", unit: "rows" },
-      perPeriod: { kind: "count", count: "1000", unit: "rows" },
-    }),
-    callsAuthority(),
-  ],
+/** $250 a call, $2,000 a month, approval above $100, and a calls cap beside it. */
+const mandate = mandateRow({
+  authority: [mandateAuthority(), callsAuthority()],
 });
 
-// The page resolves this server-side and hands it down as a prop (`mandate.tsx`'s
-// `readAt`), so the test does the same rather than let the component read a
-// clock: a fixed instant inside the fixture's own default window
-// (validFrom 2026-09-01, validTo 2026-12-31).
+// A fixed instant inside the fixture's window, as the page passes it down.
 const NOW = new Date("2026-10-01T00:00:00.000Z");
+const here = routes.mandate("acme", "core-platform", mandate.id);
 
-function draw(mandate: MandateRow = bounded, now: Date = NOW) {
-  render(
+function actions(row: MandateRow, now: Date) {
+  return (
     <IntlProvider>
       <MandateActions
         org="acme"
         ws="core-platform"
-        mandate={mandate}
+        mandate={row}
         now={now}
-        here={routes.mandate("acme", "core-platform", mandate.id)}
+        here={here}
+        agentKey="a-intel.finops.invoice-bot"
       />
-    </IntlProvider>,
+    </IntlProvider>
   );
 }
 
-const dialog = () => screen.getByTestId("change-limits");
+function draw(row: MandateRow = mandate, now: Date = NOW) {
+  return render(actions(row, now));
+}
 
-async function open() {
-  // `delay: null` keeps every interaction synchronous; the default wraps each in
-  // a timer, which under the package's coverage run costs more than the case
-  // timeout allows.
+const editDialog = () => screen.getByTestId("change-limits");
+const revokeDialog = () => screen.getByTestId("revoke-mandate");
+
+async function click(name: string) {
+  // `delay: null` keeps every interaction synchronous under the coverage run.
   const user = userEvent.setup({ delay: null });
-  await user.click(screen.getByRole("button", { name: "Change limits" }));
+  await user.click(screen.getByRole("button", { name }));
   return user;
 }
 
-const confirm = async (user: ReturnType<typeof userEvent.setup>) => {
-  await user.click(
-    within(dialog()).getByRole("button", { name: "Change the limits" }),
-  );
-};
-
-/** What the dialog's three count bounds prefill, on this mandate. */
+// Valid to opens on the last day before the fixture's exclusive end,
+// 2026-12-31T00:00Z, in the provider's zone (UTC).
 const PREFILLED = {
-  measure: "rows",
-  unit: "rows",
-  perCall: "50",
-  perPeriod: "1000",
-  period: "monthly",
-  callsPerDay: "50",
+  perCall: "250.00",
+  perPeriod: "2000.00",
+  approvalAbove: "100.00",
+  validTo: "2026-12-30",
 };
 
 beforeEach(() => {
@@ -100,87 +90,130 @@ beforeEach(() => {
   changeMandateLimits.mockReset();
   changeMandateLimits.mockResolvedValue({
     ok: true,
-    value: { mandateId: bounded.id, status: "active" },
+    value: { mandateId: mandate.id, status: "active" },
+  });
+  revokeMandate.mockReset();
+  revokeMandate.mockResolvedValue({
+    ok: true,
+    value: { mandateId: mandate.id, status: "revoked" },
   });
 });
 afterEach(cleanup);
 
-describe("ChangeLimits", () => {
-  it("opens on the bound the mandate holds, and labels the calls cap with its own window", async () => {
+describe("MandateActions", () => {
+  it("draws Change limits as an ordinary button and Revoke as a danger one, neither gold", () => {
     draw();
-    await open();
-    const form = dialog();
-    expect(within(form).getByLabelText("Measure")).toHaveValue("rows");
-    expect(within(form).getByLabelText("Unit")).toHaveValue("rows");
-    expect(within(form).getByLabelText("Per call")).toHaveValue("50");
-    expect(within(form).getByLabelText("Per period")).toHaveValue("1000");
-    expect(within(form).getByLabelText("Period")).toHaveValue("monthly");
-    // The stored cap is counted daily, and the label says which window the
-    // figure belongs to rather than assuming one.
-    expect(within(form).getByLabelText("Calls per day")).toHaveValue("50");
-    // The window is the one field with no prefill: a blank date keeps the
-    // window, so there is nothing to echo back.
-    expect(within(form).getByLabelText("Valid to")).toHaveValue("");
+    const change = screen.getByRole("button", { name: "Change limits" });
+    const revoke = screen.getByRole("button", { name: "Revoke" });
+    expect(change.className).not.toContain("bg-button-primary-bg");
+    expect(revoke.className).not.toContain("bg-button-primary-bg");
+    expect(revoke.className).toContain("text-error-ink");
+  });
+
+  it("hides Change limits once the window has closed, and keeps Revoke", () => {
+    draw(mandate, new Date("2027-01-01T00:00:00.000Z"));
+    expect(
+      screen.queryByRole("button", { name: "Change limits" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Revoke" })).toBeInTheDocument();
+  });
+});
+
+describe("mandateedit", () => {
+  it("opens titled with the mandate's id, fields in the measure's unit, and Cancel beside Save", async () => {
+    draw();
+    await click("Change limits");
+    const form = editDialog();
+    expect(within(form).getByText("Edit mnd_4f2a9c")).toBeInTheDocument();
+    expect(
+      within(form).getByText("a-intel.finops.invoice-bot"),
+    ).toBeInTheDocument();
+    expect(within(form).getByLabelText("Per call (USD)")).toHaveValue("250.00");
+    expect(within(form).getByLabelText("Per month (USD)")).toHaveValue(
+      "2000.00",
+    );
+    expect(within(form).getByLabelText("Approval above (USD)")).toHaveValue(
+      "100.00",
+    );
+    expect(within(form).getByLabelText("Valid to")).toHaveValue("2026-12-30");
+    expect(form).toHaveTextContent(
+      "A call above this parks for a human, and no rule elsewhere can release it.",
+    );
+    expect(form).toHaveTextContent(
+      "Lowering a ceiling below what is already reserved does not claw the reservation back. It applies from the next call.",
+    );
+    // The design's header close, labelled, beside the footer's Cancel.
+    expect(
+      within(form).getByRole("button", { name: "Close" }),
+    ).toBeInTheDocument();
+    expect(form).toHaveAttribute("aria-modal", "true");
+    expect(
+      within(form).getByRole("button", { name: "Cancel" }),
+    ).toBeInTheDocument();
+    expect(
+      within(form).getByRole("button", { name: "Save" }),
+    ).toBeInTheDocument();
+    expect(form).toHaveAttribute("role", "dialog");
     await expectNoAxe(document.body);
   });
 
-  // The baseline is what the action compares against, so it has to be the string
-  // that seeded the field, not a value recomputed from a prop. A submission that
-  // touched nothing therefore arrives with every field equal to its baseline,
-  // which is how the action knows to send no limit change at all.
   it("carries every prefill back as the baseline for the field beside it", async () => {
     draw();
-    const user = await open();
-    await confirm(user);
-    expect(changeMandateLimits).toHaveBeenCalledWith("acme", "core-platform", {
-      mandateId: bounded.id,
-      ...PREFILLED,
-      validTo: "",
-      baseline: PREFILLED,
-    });
-  });
-
-  it("sends the figure the operator typed beside the prefill it replaced", async () => {
-    draw();
-    const user = await open();
-    const form = dialog();
-    await user.clear(within(form).getByLabelText("Per period"));
-    await user.type(within(form).getByLabelText("Per period"), "800");
-    await user.type(within(form).getByLabelText("Valid to"), "2027-03-31");
-    await confirm(user);
-    expect(changeMandateLimits).toHaveBeenCalledWith("acme", "core-platform", {
-      mandateId: bounded.id,
-      ...PREFILLED,
-      perPeriod: "800",
-      validTo: "2027-03-31",
-      // Unmoved: the action reads this and leaves the other bounds, the unit and
-      // the window out of the change.
-      baseline: PREFILLED,
-    });
-    expect(router.replace).toHaveBeenCalledWith(
-      routes.mandate("acme", "core-platform", bounded.id),
+    const user = await click("Change limits");
+    await user.click(
+      within(editDialog()).getByRole("button", { name: "Save" }),
     );
-  });
-
-  // A field cleared to blank is submitted blank against a baseline that still
-  // holds the prefill, which is what lets the action tell clearing from editing.
-  // Clearing leaves the stored bound alone; it does not delete it.
-  it("sends a cleared field blank, with its prefill still in the baseline", async () => {
-    draw();
-    const user = await open();
-    const form = dialog();
-    await user.clear(within(form).getByLabelText("Per call"));
-    await user.clear(within(form).getByLabelText("Per period"));
-    await user.type(within(form).getByLabelText("Per period"), "800");
-    await confirm(user);
     expect(changeMandateLimits).toHaveBeenCalledWith("acme", "core-platform", {
-      mandateId: bounded.id,
+      mandateId: mandate.id,
+      measure: "amount",
       ...PREFILLED,
-      perCall: "",
-      perPeriod: "800",
-      validTo: "",
       baseline: PREFILLED,
     });
+  });
+
+  it("sends what the operator typed beside the prefill it replaced, then reloads the page", async () => {
+    draw();
+    const user = await click("Change limits");
+    const form = editDialog();
+    await user.clear(within(form).getByLabelText("Per month (USD)"));
+    await user.type(within(form).getByLabelText("Per month (USD)"), "1500");
+    fireEvent.change(within(form).getByLabelText("Valid to"), {
+      target: { value: "2027-03-31" },
+    });
+    await user.click(within(form).getByRole("button", { name: "Save" }));
+    expect(changeMandateLimits).toHaveBeenCalledWith("acme", "core-platform", {
+      mandateId: mandate.id,
+      measure: "amount",
+      ...PREFILLED,
+      perPeriod: "1500",
+      validTo: "2027-03-31",
+      baseline: PREFILLED,
+    });
+    expect(router.replace).toHaveBeenCalledWith(here);
+    // The write that landed says so: the mandate, and where it is recorded.
+    const outcome = screen.getByTestId("mandate-outcome");
+    expect(outcome).toHaveAttribute("role", "status");
+    expect(outcome).toHaveTextContent(
+      "mnd_4f2a9c has its new limits. They apply from the next call. Open the audit record",
+    );
+    expect(
+      within(outcome).getByRole("link", { name: "Open the audit record" }),
+    ).toHaveAttribute("href", "/acme/audit?capability=update_mandate_limits");
+  });
+
+  it("edits the calls cap in calls when that is the mandate's only limit", async () => {
+    draw(
+      mandateRow({
+        authority: [callsAuthority()],
+        approval: { humanAbove: [], alwaysHumanFor: [], approvers: [] },
+      }),
+    );
+    await click("Change limits");
+    const form = editDialog();
+    expect(within(form).getByLabelText("Per day (calls)")).toHaveValue("50");
+    expect(within(form).getByLabelText("Approval above (calls)")).toHaveValue(
+      "",
+    );
   });
 
   it("names a refusal in the dialog and does not navigate (negative)", async () => {
@@ -190,130 +223,102 @@ describe("ChangeLimits", () => {
       code: "org_role_required",
     });
     draw();
-    const user = await open();
-    await confirm(user);
+    const user = await click("Change limits");
+    await user.click(
+      within(editDialog()).getByRole("button", { name: "Save" }),
+    );
     expect(
-      within(dialog()).getByTestId("change-limits-failure"),
+      within(editDialog()).getByTestId("change-limits-failure"),
     ).toHaveTextContent("not accountable for this mandate's consequences");
     expect(router.replace).not.toHaveBeenCalled();
   });
-});
 
-// `mandateLimitSchema` requires only that a limit names `perCall`, `perPeriod` or
-// both, so a bound that caps a single call and leaves the period open is valid.
-// The dialog used to match on `perPeriod` alone and opened blank on one of those,
-// making the operator retype the measure and unit before they could lower a cap
-// the mandate already held.
-describe("ChangeLimits on a per-call-only bound", () => {
-  const perCallOnly = mandateRow({
-    authority: [
-      mandateAuthority({
-        measure: "rows",
-        period: "monthly",
-        perCall: { kind: "count", count: "25", unit: "rows" },
-        // No per-period bound, so the ratios that divide by it are null too:
-        // a fixture that carried both would not be a record this app can read.
-        perPeriod: null,
-        settledRatio: null,
-        reservedRatio: null,
-        remaining: null,
-      }),
-    ],
-  });
-
-  it("prefills the measure, the unit and the figure it does hold", async () => {
-    draw(perCallOnly);
-    const user = userEvent.setup({ delay: null });
-    await user.click(screen.getByRole("button", { name: "Change limits" }));
-    const form = dialog();
-    expect(within(form).getByLabelText("Measure")).toHaveValue("rows");
-    // The unit comes from whichever bound carries it, so it is not blank here.
-    expect(within(form).getByLabelText("Unit")).toHaveValue("rows");
-    expect(within(form).getByLabelText("Per call")).toHaveValue("25");
-    // Nothing is stored for the period, so that field stays empty rather than
-    // inventing a figure the mandate does not hold.
-    expect(within(form).getByLabelText("Per period")).toHaveValue("");
+  it("says the write went unanswered when the action throws (negative)", async () => {
+    changeMandateLimits.mockRejectedValue(new Error("network"));
+    draw();
+    const user = await click("Change limits");
+    await user.click(
+      within(editDialog()).getByRole("button", { name: "Save" }),
+    );
+    expect(
+      within(editDialog()).getByTestId("change-limits-failure"),
+    ).toBeInTheDocument();
   });
 });
 
-// `revoke_mandate` takes a draft as well as an active mandate, because declining
-// a request is the revocation of a mandate that never took effect. This component
-// is the app's only caller of it, so a draft the header refuses to act on is a
-// request nobody can decline anywhere in the app.
-describe("MandateActions on a draft", () => {
-  const requested = mandateRow({ status: "draft" });
-
-  it("offers a decline and no limit change", () => {
-    draw(requested);
-    expect(screen.getByRole("button", { name: "Decline" })).toBeInTheDocument();
-    // Change limits refuses anything but an active mandate, so offering it here
-    // would be offering a control the kernel is certain to refuse.
-    expect(
-      screen.queryByRole("button", { name: "Change limits" }),
-    ).not.toBeInTheDocument();
-  });
-
-  it("says it is declining a request, not ending a mandate", async () => {
-    draw(requested);
-    const user = userEvent.setup({ delay: null });
-    await user.click(screen.getByRole("button", { name: "Decline" }));
-    const panel = screen.getByTestId("revoke-mandate");
-    // Nothing was ever reserved against a draft and the ledger holds no movement
-    // for it, so the revoke copy is false of it in every sentence.
-    expect(within(panel).getByText(/never takes effect/)).toBeInTheDocument();
-    expect(
-      within(panel).queryByText(/Every reservation held by a call/),
-    ).not.toBeInTheDocument();
-    expect(
-      within(panel).getByRole("button", { name: "Decline this request" }),
-    ).toBeInTheDocument();
-  });
-
-  it("offers nothing once the mandate has ended", () => {
-    // Both handlers refuse a revoked or expired mandate.
-    for (const status of ["revoked", "expired"] as const) {
-      cleanup();
-      draw(mandateRow({ status }));
-      expect(screen.queryByRole("button")).not.toBeInTheDocument();
-    }
-  });
-
-  // The opposite edge of the same window, and the reason this gate is not
-  // `isEffective`. A granted mandate whose window has not opened is `active`,
-  // and `update_mandate_limits` accepts it: the handler requires active status
-  // and an unelapsed validTo, and says nothing about validFrom. This component
-  // is the app's only limit-change control, so gating it on `isEffective` left
-  // no way to correct a scheduled bound short of revoking and re-granting.
-  it("offers Change limits on a granted mandate whose window has not opened", () => {
-    draw(
-      mandateRow({
-        status: "active",
-        validFrom: "2026-11-01T00:00:00.000Z",
-        validTo: "2026-12-31T00:00:00.000Z",
-      }),
-      new Date("2026-10-01T00:00:00.000Z"),
+describe("mandaterevoke", () => {
+  it("names what is reserved and what already settled, and keeps the ledger", async () => {
+    draw();
+    await click("Revoke");
+    const form = revokeDialog();
+    expect(within(form).getByText("Revoke mnd_4f2a9c?")).toBeInTheDocument();
+    expect(within(form).getByTestId("revoke-warning")).toHaveTextContent(
+      "a-intel.finops.invoice-bot can move no money after this. $180.00 is reserved, and a call that has not dispatched gives its share back now. $1,204.18 already settled and stays on the ledger.",
+    );
+    expect(form).toHaveTextContent(
+      "The ledger is kept, never deleted. A revoked mandate still answers for every draw it made.",
     );
     expect(
-      screen.getByRole("button", { name: "Change limits" }),
+      within(form).getByRole("button", { name: "Cancel" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Revoke" })).toBeInTheDocument();
+    // The design draws the confirmation as a danger button, not gold.
+    const confirm = within(form).getByRole("button", { name: "Revoke it" });
+    expect(confirm.className).toContain("text-error-ink");
+    expect(confirm.className).not.toContain("bg-button-primary-bg");
+    expect(
+      within(form).getByRole("button", { name: "Close" }),
+    ).toBeInTheDocument();
+    await expectNoAxe(document.body);
   });
 
-  // Status can still read active after exclusive validTo, before the expiry
-  // job flips the row. Change limits must not appear: submitting a future
-  // validTo through it would reopen ended authority. Revoke stays so the
-  // operator can mark the row revoked before the cron does.
-  it("hides Change limits when active status outlives exclusive validTo", () => {
-    draw(
-      mandateRow({
-        status: "active",
-        validFrom: "2020-01-01T00:00:00.000Z",
-        validTo: "2020-06-01T00:00:00.000Z",
-      }),
-    );
+  it("revokes this mandate with the reason written, then reloads the page and says so", async () => {
+    const view = draw();
+    const user = await click("Revoke");
+    const form = revokeDialog();
+    await user.type(within(form).getByLabelText("Reason"), "vendor offboarded");
+    await user.click(within(form).getByRole("button", { name: "Revoke it" }));
+    expect(revokeMandate).toHaveBeenCalledWith("acme", "core-platform", {
+      mandateId: mandate.id,
+      reason: "vendor offboarded",
+    });
+    expect(router.replace).toHaveBeenCalledWith(here);
+    // The refreshed record reads revoked: the buttons go and the line stays.
+    view.rerender(actions(mandateRow({ status: "revoked" }), NOW));
     expect(
-      screen.queryByRole("button", { name: "Change limits" }),
+      screen.queryByRole("button", { name: "Revoke" }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Revoke" })).toBeInTheDocument();
+    expect(screen.getByTestId("mandate-outcome")).toHaveTextContent(
+      "mnd_4f2a9c is revoked.",
+    );
+  });
+
+  it("declines a draft and claims nothing about money", async () => {
+    draw(mandateRow({ status: "draft", grantedBy: null }));
+    const user = await click("Decline");
+    const form = revokeDialog();
+    expect(within(form).getByText("Decline mnd_4f2a9c?")).toBeInTheDocument();
+    expect(
+      within(form).queryByTestId("revoke-warning"),
+    ).not.toBeInTheDocument();
+    await user.type(within(form).getByLabelText("Reason"), "not needed");
+    await user.click(within(form).getByRole("button", { name: "Decline it" }));
+    expect(revokeMandate).toHaveBeenCalledOnce();
+  });
+
+  it("names a refusal and does not navigate (negative)", async () => {
+    revokeMandate.mockResolvedValue({
+      ok: false,
+      reason: "conflict",
+      code: "mandate_ended",
+    });
+    draw();
+    const user = await click("Revoke");
+    const form = revokeDialog();
+    await user.type(within(form).getByLabelText("Reason"), "x");
+    await user.click(within(form).getByRole("button", { name: "Revoke it" }));
+    expect(
+      within(form).getByTestId("revoke-mandate-failure"),
+    ).toHaveTextContent("already ended");
+    expect(router.replace).not.toHaveBeenCalled();
   });
 });

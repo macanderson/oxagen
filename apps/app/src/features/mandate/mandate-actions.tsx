@@ -1,42 +1,65 @@
 "use client";
-// The two writes in the mandate header, each behind a dialog that says what it
-// will do before it does it: change the limits, and revoke.
+// The two writes in the mandate header, each behind the dialog the design
+// names: Change limits opens `mandateedit`, Revoke opens `mandaterevoke`. Both
+// carry the id of the mandate the route names, so neither can act on another.
 //
-// **One gold action on the screen.** Change limits carries the primary
-// (identity) style and Revoke carries the ordinary one. Gold marks the action a
-// reader is meant to take, never a state and never a severity, so the ending of
-// a mandate does not get the loudest control on the page; its dialog says what
-// it ends, and the confirm sits behind a reason the operator has to write.
+// **No gold on the page.** The design gives the page body no gold action:
+// Change limits is an ordinary button and Revoke a danger one. Save is the
+// edit dialog's gold; Revoke it is drawn as a danger button, as the design
+// draws it, because an irreversible write is not the screen's identity.
+//
+// **A write that lands says so.** The dialog closes, the page reads the record
+// again, and a line under the actions names the mandate, what it now is, and
+// where the change is recorded (the Audit page, filtered to the capability).
+// The line lives in `MandateActions`, which stays mounted across the refresh,
+// so it survives a revoke that removes the buttons it came from.
 //
 // Neither control is hidden from a reader whose roles cannot make the write.
-// Hiding a button is not a gate — the handlers hold the gate (see actions.ts) —
-// and a reader told "your roles are not accountable for this mandate's
-// consequences" has learned something, where a reader shown nothing has only
-// been left to guess.
-import { useTranslations } from "next-intl";
-import { type ReactNode, type SyntheticEvent, useState } from "react";
-import type { MandateRow, MeasureValue } from "@/data/contracts/mandates";
-import { isChangeable } from "@/data/contracts/mandates";
-import type { SafePath } from "@/shared/safe-path";
-import { buttonPrimary, buttonSecondary, inputBase } from "@/ui/control-styles";
+// Hiding a button is not a gate. The handlers hold the gate (actions.ts), and a
+// reader told why the write was refused has learned something.
+import { LoaderCircle } from "lucide-react";
+import { useTimeZone, useTranslations } from "next-intl";
+import { type ReactNode, type SyntheticEvent, useId, useState } from "react";
+import { isChangeable, type MandateRow } from "@/data/contracts/mandates";
+import { routes, type SafePath } from "@/shared/safe-path";
+import {
+  buttonDanger,
+  buttonSecondary,
+  inputBase,
+  linkText,
+  mono,
+} from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
-import { useNavigate } from "@/ui/navigation";
+import { useMeasureText } from "@/ui/measure";
+import { SafeLink, useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { UNANSWERED, useActionFailure } from "./action-failure";
 import { changeMandateLimits, revokeMandate } from "./actions";
+import { editableOf, lastDayOf, measuresOf, thresholdOf, unitOf } from "./view";
 
-const PERIODS = ["daily", "weekly", "monthly"] as const;
+/** What a write that landed did, for the line under the actions. */
+type Outcome = {
+  kind: "limits" | "revoked" | "declined";
+  mandate: string;
+  capability: "update_mandate_limits" | "revoke_mandate";
+};
 
-type Place = { org: string; ws: string; mandate: MandateRow; here: SafePath };
+type Place = {
+  org: string;
+  ws: string;
+  mandate: MandateRow;
+  here: SafePath;
+  /** The agent's key (`org.ws.slug`), which the dialogs name; null when the agent read did not answer. */
+  agentKey: string | null;
+  done: (outcome: Outcome) => void;
+};
+
+// 16px on a phone, as the design's inputs are, so iOS does not zoom the sheet.
+const field = `${inputBase} max-md:min-h-11 max-md:text-base`;
 
 function text(form: FormData, name: string): string {
   const value = form.get(name);
   return typeof value === "string" ? value : "";
-}
-
-function period(form: FormData, name: string): (typeof PERIODS)[number] {
-  const raw = text(form, name);
-  return PERIODS.find((p) => p === raw) ?? "monthly";
 }
 
 function Field({
@@ -52,7 +75,9 @@ function Field({
 }) {
   return (
     <div className="flex flex-col gap-1 text-sm text-foreground">
-      <label htmlFor={id}>{label}</label>
+      <label htmlFor={id} className="text-xs font-semibold">
+        {label}
+      </label>
       {children}
       {hint === undefined ? null : (
         <p className="text-xs text-muted-foreground">{hint}</p>
@@ -61,312 +86,81 @@ function Field({
   );
 }
 
-/**
- * The measure entry the dialog opens with, taken from the mandate's own
- * authority: the first limited measure that is not the built-in `calls`, so an
- * operator changing one figure does not have to retype it. The other measures
- * need no defaults, because the handler keeps every bound a submission does not
- * name (ADR-102).
- *
- * **Every value this returns is rendered twice: into the field the operator
- * edits, and into a hidden field beside it.** The hidden one is the baseline
- * `changeMandateLimits` compares against, so a prefill the operator never touched
- * is left out of the change instead of asserted as an edit over a record another
- * operator may have narrowed since. Both come from this one call in one render
- * and both are seeded through `defaultValue`, so the pair is set together or not
- * at all: the baseline cannot drift from the visible default, and a later render
- * with a fresher mandate moves neither. Reopening the dialog unmounts the form
- * and reads both again.
- *
- * A money measure has no default figure here on purpose. `update_mandate_limits`
- * stores what it is given, and whether a figure is micros or whole units is a
- * property of the tool version's declaration that no read answers, so a money
- * limit is changed over the API or MCP rather than round-tripped through a form
- * that cannot scale it. The unit field refuses a currency code for the same
- * reason.
- */
-function measureDefaults(mandate: MandateRow): {
-  measure: string;
-  unit: string;
-  period: (typeof PERIODS)[number];
-  perCall: string;
-  perPeriod: string;
-  callsPerDay: string;
-  /**
-   * The window the stored calls cap is counted in, which the form does not let
-   * anyone change. It is carried so the field can be LABELLED with it: the label
-   * read "Calls per day" against a figure that might be per week, and since the
-   * submission now keeps the stored window rather than rewriting it to daily,
-   * typing 20 into a field marked "per day" would write twenty calls a week.
-   * A label that names the window is honest with one string; a second period
-   * control would be a wider change to a form that cannot delete a limit either.
-   */
-  callsPeriod: (typeof PERIODS)[number];
-} {
-  /** A count's own digits, or the empty string; a money figure defaults to blank. */
-  const countOf = (value: MeasureValue | null | undefined): string =>
-    value?.kind === "count" ? value.count : "";
-  const unitOf = (value: MeasureValue | null | undefined): string =>
-    value?.kind === "count" ? value.unit : "";
-  const isCount = (value: MeasureValue | null | undefined): boolean =>
-    value?.kind === "count";
-  // Either bound is enough to prefill from. `mandateLimitSchema` requires only
-  // that a limit names `perCall`, `perPeriod` or both, so a bound that caps a
-  // single call and leaves the period open is valid and common; matching on
-  // `perPeriod` alone opened this dialog blank on one, and the operator had to
-  // retype the measure and the unit before they could lower a cap that was
-  // already recorded.
-  const counted = mandate.authority.find(
-    (entry) =>
-      entry.measure !== "calls" &&
-      (isCount(entry.perPeriod) || isCount(entry.perCall)),
+/** The design's `.note`: a gold rule on the left, muted copy. */
+function Note({ children }: { children: ReactNode }) {
+  return (
+    <p className="border-l-2 border-gold py-0.5 pl-3 text-[12.5px] text-muted-foreground">
+      {children}
+    </p>
   );
-  // The unit belongs to whichever bound carries it, so a per-call-only limit
-  // still names its own unit rather than falling back to blank.
-  const countedUnit = isCount(counted?.perPeriod)
-    ? counted?.perPeriod
-    : counted?.perCall;
-  const calls = mandate.authority.find((entry) => entry.measure === "calls");
-  return {
-    measure: counted?.measure ?? "",
-    unit: unitOf(countedUnit),
-    period: PERIODS.find((p) => p === counted?.period) ?? "monthly",
-    perCall: countOf(counted?.perCall),
-    perPeriod: countOf(counted?.perPeriod),
-    callsPerDay: countOf(calls?.perPeriod),
-    // `daily` when nothing is stored, which is the window a new cap is written
-    // under, so the label matches what a submission would create.
-    callsPeriod: PERIODS.find((p) => p === calls?.period) ?? "daily",
-  };
 }
 
-function ChangeLimits({ org, ws, mandate, here }: Place) {
+/**
+ * `mandateedit`: per call, per period, approval above and valid to, for the
+ * measure the tiles speak for, in that measure's own unit.
+ *
+ * **Every field renders twice: the one the operator edits, and a hidden
+ * baseline beside it seeded from the same value in the same render.** The
+ * action carries a field into the change only when the two differ, so a prefill
+ * nobody touched cannot restore a bound another operator lowered while this
+ * dialog was open (ADR-102). A field left blank keeps what is stored: removing a
+ * limit is a whole-record write over the API.
+ */
+function ChangeLimits({ org, ws, mandate, here, agentKey, done }: Place) {
   const t = useTranslations("mandate.actions.limits");
+  const timeZone = useTimeZone();
   const failureText = useActionFailure();
   const navigate = useNavigate();
+  const formId = useId();
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
-  const defaults = measureDefaults(mandate);
-  const id = (name: string) => `change-limits-${name}`;
+  const { primary } = measuresOf(mandate);
+  if (primary === null) return null;
+  const unit = unitOf(primary);
+  const threshold = thresholdOf(mandate, primary.measure);
+  const defaults = {
+    perCall: editableOf(primary.perCall),
+    perPeriod: editableOf(primary.perPeriod),
+    approvalAbove: threshold === null ? "" : editableOf(threshold.value),
+    // The last day the mandate may be drawn on, in the zone this app draws
+    // dates in. Blank when the zone is unknown: a guessed zone would prefill
+    // a day the window does not end on.
+    validTo:
+      timeZone === undefined
+        ? ""
+        : (lastDayOf(mandate.validTo, timeZone) ?? ""),
+  };
+  const id = (name: string) => `${formId}-${name}`;
 
   async function submit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (pending) return;
+    if (pending || primary === null) return;
     const form = new FormData(event.currentTarget);
     setPending(true);
     setFailure(null);
     try {
       const result = await changeMandateLimits(org, ws, {
         mandateId: mandate.id,
-        measure: text(form, "measure"),
-        unit: text(form, "unit"),
+        measure: primary.measure,
         perCall: text(form, "perCall"),
         perPeriod: text(form, "perPeriod"),
-        period: period(form, "period"),
-        callsPerDay: text(form, "callsPerDay"),
+        approvalAbove: text(form, "approvalAbove"),
         validTo: text(form, "validTo"),
-        // Read from the form rather than from `defaults` in this closure, so what
-        // the action compares against is the string that seeded the field the
-        // operator saw, not one recomputed from a prop that may have moved on.
         baseline: {
-          measure: text(form, "baselineMeasure"),
-          unit: text(form, "baselineUnit"),
           perCall: text(form, "baselinePerCall"),
           perPeriod: text(form, "baselinePerPeriod"),
-          period: period(form, "baselinePeriod"),
-          callsPerDay: text(form, "baselineCallsPerDay"),
+          approvalAbove: text(form, "baselineApprovalAbove"),
+          validTo: text(form, "baselineValidTo"),
         },
       });
       if (result.ok) {
         setOpen(false);
-        navigate.replace(here);
-      } else {
-        setFailure(failureText(result));
-      }
-    } catch {
-      setFailure(failureText(UNANSWERED));
-    } finally {
-      setPending(false);
-    }
-  }
-
-  return (
-    <>
-      <button
-        type="button"
-        className={buttonPrimary}
-        onClick={() => {
-          setOpen(true);
-        }}
-      >
-        {t("open")}
-      </button>
-      <SheetDialog
-        open={open}
-        onOpenChange={(next) => {
-          setOpen(next);
-          if (!next) setFailure(null);
-        }}
-        title={t("title", { mandate: mandate.id })}
-        testId="change-limits"
-      >
-        <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-3">
-          <p className="text-sm text-muted-foreground">{t("body")}</p>
-          <Field
-            id={id("measure")}
-            label={t("measure")}
-            hint={t("measureHint")}
-          >
-            <input
-              id={id("measure")}
-              name="measure"
-              defaultValue={defaults.measure}
-              className={inputBase}
-            />
-            {/* What this field opened with. The action carries a field into the
-                change only when the operator's value differs from it, so a
-                prefill nobody touched cannot restore a bound somebody lowered
-                while this dialog was open (actions.ts, ADR-102). */}
-            <input
-              type="hidden"
-              name="baselineMeasure"
-              defaultValue={defaults.measure}
-            />
-          </Field>
-          <Field id={id("unit")} label={t("unit")} hint={t("unitHint")}>
-            <input
-              id={id("unit")}
-              name="unit"
-              defaultValue={defaults.unit}
-              className={inputBase}
-            />
-            <input
-              type="hidden"
-              name="baselineUnit"
-              defaultValue={defaults.unit}
-            />
-          </Field>
-          <Field id={id("perCall")} label={t("perCall")}>
-            <input
-              id={id("perCall")}
-              name="perCall"
-              inputMode="numeric"
-              defaultValue={defaults.perCall}
-              className={inputBase}
-            />
-            <input
-              type="hidden"
-              name="baselinePerCall"
-              defaultValue={defaults.perCall}
-            />
-          </Field>
-          <Field id={id("perPeriod")} label={t("perPeriod")}>
-            <input
-              id={id("perPeriod")}
-              name="perPeriod"
-              inputMode="numeric"
-              defaultValue={defaults.perPeriod}
-              className={inputBase}
-            />
-            <input
-              type="hidden"
-              name="baselinePerPeriod"
-              defaultValue={defaults.perPeriod}
-            />
-          </Field>
-          <Field id={id("period")} label={t("period")}>
-            <select
-              id={id("period")}
-              name="period"
-              defaultValue={defaults.period}
-              className={inputBase}
-            >
-              {PERIODS.map((value) => (
-                <option key={value} value={value}>
-                  {t(`periods.${value}`)}
-                </option>
-              ))}
-            </select>
-            <input
-              type="hidden"
-              name="baselinePeriod"
-              defaultValue={defaults.period}
-            />
-          </Field>
-          <Field
-            id={id("callsPerDay")}
-            label={t("callsPer", {
-              period: t(`periodsPer.${defaults.callsPeriod}`),
-            })}
-          >
-            <input
-              id={id("callsPerDay")}
-              name="callsPerDay"
-              inputMode="numeric"
-              defaultValue={defaults.callsPerDay}
-              className={inputBase}
-            />
-            <input
-              type="hidden"
-              name="baselineCallsPerDay"
-              defaultValue={defaults.callsPerDay}
-            />
-          </Field>
-          <Field
-            id={id("validTo")}
-            label={t("validTo")}
-            hint={t("validToHint")}
-          >
-            <input
-              id={id("validTo")}
-              name="validTo"
-              type="date"
-              className={inputBase}
-            />
-          </Field>
-          {failure === null ? null : (
-            <FormAlert testId="change-limits-failure">{failure}</FormAlert>
-          )}
-          <SubmitButton
-            pending={pending}
-            label={t("confirm")}
-            pendingLabel={t("pending")}
-          />
-        </form>
-      </SheetDialog>
-    </>
-  );
-}
-
-function Revoke({ org, ws, mandate, here }: Place) {
-  const t = useTranslations("mandate.actions.revoke");
-  const d = useTranslations("mandate.actions.revoke.draft");
-  // A draft was never in effect, so nothing in the revoke copy is true of it: no
-  // reservation was ever held against it and the ledger has no movement to keep.
-  // Declining a request is its own act and the dialog says so. The two
-  // namespaces are read separately rather than through one chosen translator,
-  // because each `t` is typed to the keys of its own namespace.
-  const isDraft = mandate.status === "draft";
-  const failureText = useActionFailure();
-  const navigate = useNavigate();
-  const [open, setOpen] = useState(false);
-  const [pending, setPending] = useState(false);
-  const [failure, setFailure] = useState<string | null>(null);
-
-  async function submit(event: SyntheticEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (pending) return;
-    const form = new FormData(event.currentTarget);
-    setPending(true);
-    setFailure(null);
-    try {
-      const result = await revokeMandate(org, ws, {
-        mandateId: mandate.id,
-        reason: text(form, "reason"),
-      });
-      if (result.ok) {
-        setOpen(false);
+        done({
+          kind: "limits",
+          mandate: result.value.mandateId,
+          capability: "update_mandate_limits",
+        });
         navigate.replace(here);
       } else {
         setFailure(failureText(result));
@@ -387,6 +181,170 @@ function Revoke({ org, ws, mandate, here }: Place) {
           setOpen(true);
         }}
       >
+        {t("open")}
+      </button>
+      <SheetDialog
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (!next) setFailure(null);
+        }}
+        title={t("title", { mandate: mandate.id })}
+        subtitle={agentKey ?? mandate.agentSlug}
+        closeLabel={t("cancel")}
+        headerClose
+        testId="change-limits"
+        footer={
+          <SubmitButton
+            form={formId}
+            fullWidth={false}
+            pending={pending}
+            label={t("confirm")}
+            pendingLabel={t("pending")}
+          />
+        }
+      >
+        <form
+          id={formId}
+          onSubmit={(e) => void submit(e)}
+          className="flex flex-col gap-3"
+        >
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field id={id("perCall")} label={t("perCall", { unit })}>
+              <input
+                id={id("perCall")}
+                name="perCall"
+                inputMode="decimal"
+                defaultValue={defaults.perCall}
+                className={field}
+              />
+              <input
+                type="hidden"
+                name="baselinePerCall"
+                defaultValue={defaults.perCall}
+              />
+            </Field>
+            <Field
+              id={id("perPeriod")}
+              label={t("perPeriod", {
+                window: t(`windows.${primary.period}`),
+                unit,
+              })}
+            >
+              <input
+                id={id("perPeriod")}
+                name="perPeriod"
+                inputMode="decimal"
+                defaultValue={defaults.perPeriod}
+                className={field}
+              />
+              <input
+                type="hidden"
+                name="baselinePerPeriod"
+                defaultValue={defaults.perPeriod}
+              />
+            </Field>
+          </div>
+          <Field
+            id={id("approvalAbove")}
+            label={t("approvalAbove", { unit })}
+            hint={t("approvalHint")}
+          >
+            <input
+              id={id("approvalAbove")}
+              name="approvalAbove"
+              inputMode="decimal"
+              defaultValue={defaults.approvalAbove}
+              className={field}
+            />
+            <input
+              type="hidden"
+              name="baselineApprovalAbove"
+              defaultValue={defaults.approvalAbove}
+            />
+          </Field>
+          <Field id={id("validTo")} label={t("validTo")}>
+            <input
+              id={id("validTo")}
+              name="validTo"
+              type="date"
+              defaultValue={defaults.validTo}
+              className={field}
+            />
+            <input
+              type="hidden"
+              name="baselineValidTo"
+              defaultValue={defaults.validTo}
+            />
+          </Field>
+          <Note>{t("note")}</Note>
+          {failure === null ? null : (
+            <FormAlert testId="change-limits-failure">{failure}</FormAlert>
+          )}
+        </form>
+      </SheetDialog>
+    </>
+  );
+}
+
+/**
+ * `mandaterevoke`: says what is reserved and what already settled, keeps the
+ * ledger, and asks for the reason `revoke_mandate` requires. A draft was never
+ * in effect, so its dialog declines a request instead and claims nothing about
+ * money.
+ */
+function Revoke({ org, ws, mandate, here, agentKey, done }: Place) {
+  const t = useTranslations("mandate.actions.revoke");
+  const d = useTranslations("mandate.actions.revoke.draft");
+  const measureText = useMeasureText();
+  const isDraft = mandate.status === "draft";
+  const failureText = useActionFailure();
+  const navigate = useNavigate();
+  const formId = useId();
+  const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  const { primary } = measuresOf(mandate);
+
+  async function submit(event: SyntheticEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (pending) return;
+    const form = new FormData(event.currentTarget);
+    setPending(true);
+    setFailure(null);
+    try {
+      const result = await revokeMandate(org, ws, {
+        mandateId: mandate.id,
+        reason: text(form, "reason"),
+      });
+      if (result.ok) {
+        setOpen(false);
+        done({
+          kind: isDraft ? "declined" : "revoked",
+          mandate: result.value.mandateId,
+          capability: "revoke_mandate",
+        });
+        navigate.replace(here);
+      } else {
+        setFailure(failureText(result));
+      }
+    } catch {
+      setFailure(failureText(UNANSWERED));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  const confirm = isDraft ? d("confirm") : t("confirm");
+  return (
+    <>
+      <button
+        type="button"
+        className={buttonDanger}
+        onClick={() => {
+          setOpen(true);
+        }}
+      >
         {isDraft ? d("open") : t("open")}
       </button>
       <SheetDialog
@@ -400,88 +358,141 @@ function Revoke({ org, ws, mandate, here }: Place) {
             ? d("title", { mandate: mandate.id })
             : t("title", { mandate: mandate.id })
         }
+        closeLabel={t("cancel")}
+        headerClose
         testId="revoke-mandate"
+        footer={
+          // The design draws the confirmation as a danger button, not gold:
+          // it ends the agent's authority, and gold is identity, never a
+          // warning (SubmitButton draws only gold or secondary).
+          <button
+            type="submit"
+            form={formId}
+            data-touch-target=""
+            aria-disabled={pending || undefined}
+            className={buttonDanger}
+          >
+            {pending ? (
+              <>
+                <LoaderCircle
+                  aria-hidden
+                  className="size-4 animate-spin motion-reduce:animate-none"
+                />
+                <span>{isDraft ? d("pending") : t("pending")}</span>
+              </>
+            ) : (
+              confirm
+            )}
+          </button>
+        }
       >
-        <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-3">
-          <p className="text-sm text-muted-foreground">
-            {isDraft ? d("body") : t("body")}
-          </p>
+        <form
+          id={formId}
+          onSubmit={(e) => void submit(e)}
+          className="flex flex-col gap-3"
+        >
+          {isDraft ? (
+            <p className="text-sm text-muted-foreground">{d("body")}</p>
+          ) : (
+            <>
+              <div
+                data-testid="revoke-warning"
+                className="rounded-[10px] border border-critical/45 bg-critical/10 px-3.5 py-2.5 text-[12.5px] text-foreground"
+              >
+                <b className="text-critical">
+                  {t("warnTitle", { agent: agentKey ?? mandate.agentSlug })}
+                </b>{" "}
+                {primary === null
+                  ? t("warnNoMeasure")
+                  : t("warnBody", {
+                      reserved: measureText(primary.reserved),
+                      settled: measureText(primary.settled),
+                    })}
+              </div>
+              <Note>{t("note")}</Note>
+            </>
+          )}
           <Field
-            id="revoke-mandate-reason"
+            id={`${formId}-reason`}
             label={t("reason")}
             hint={t("reasonHint")}
           >
             <textarea
-              id="revoke-mandate-reason"
+              id={`${formId}-reason`}
               name="reason"
               required
               rows={2}
               maxLength={2000}
-              className={inputBase}
+              className={field}
             />
           </Field>
           {failure === null ? null : (
             <FormAlert testId="revoke-mandate-failure">{failure}</FormAlert>
           )}
-          <SubmitButton
-            pending={pending}
-            label={isDraft ? d("confirm") : t("confirm")}
-            pendingLabel={isDraft ? d("pending") : t("pending")}
-          />
         </form>
       </SheetDialog>
     </>
   );
 }
 
+/** The line a landed write leaves: the mandate, what it now is, and where the change is recorded. */
+function OutcomeLine({ org, outcome }: { org: string; outcome: Outcome }) {
+  const t = useTranslations("mandate.actions.outcome");
+  return (
+    <p
+      role="status"
+      data-testid="mandate-outcome"
+      className="text-xs text-muted-foreground sm:text-right"
+    >
+      {t.rich(outcome.kind, {
+        mandate: outcome.mandate,
+        id: (chunks) => <span className={mono}>{chunks}</span>,
+      })}{" "}
+      <SafeLink
+        to={routes.audit(org, { capability: outcome.capability })}
+        className={linkText}
+      >
+        {t("audit")}
+      </SafeLink>
+    </p>
+  );
+}
+
 /**
  * The header's actions, each offered only where its handler will accept it.
  *
- * `update_mandate_limits` takes an `active` mandate alone. `revoke_mandate`
- * takes `active` or `draft`, because declining a request is a revocation of a
- * mandate that never took effect, and this page is the only place in the app
- * that calls it: an earlier comment here said a request was declined from the
- * agent's own page, and no such control exists there. A draft with no decline
- * control is a capability the API has and the app does not, which is the one
- * gap this repo treats as seriously as a missing route.
+ * `update_mandate_limits` takes an active mandate whose exclusive `validTo`
+ * has not elapsed (`isChangeable`, which mirrors the handler and deliberately
+ * not `isEffective`: a granted mandate whose window has not opened is the one
+ * an operator most needs to correct). `revoke_mandate` takes `active` or
+ * `draft`; declining a request is a revocation of a mandate that never took
+ * effect. A revoked or expired mandate offers neither.
  *
- * Change limits while `update_mandate_limits` would still accept a change
- * (`isChangeable`), which mirrors that handler's own two conditions: active
- * status, and an exclusive `validTo` that has not elapsed. A row still reading
- * `active` past `validTo`, before the expiry job flips it, must not expose a
- * control that could push validTo forward and reopen ended authority.
- *
- * It is deliberately not `isEffective`, which this used and which also requires
- * `validFrom` to have passed. That hid the control on a granted mandate whose
- * window has not opened yet, and this component is the app's only limit-change
- * control, so a scheduled bound could not be corrected here at all. The handler
- * accepts that state, so being stricter than it did not protect anything: it
- * left revoke-and-re-grant as the only way to change a number before the
- * window opens. Upcoming is the case an operator most needs to edit.
- *
- * Revoke stays available so an operator can end a draft request or mark a
- * lapsed row revoked before the cron does. A revoked or expired status offers
- * neither.
- *
- * **`now` is a prop, not a local clock read.** This component is `"use
- * client"`, and a client component still server-renders once in the App
- * Router; a `new Date()` in its own body (or in a `useState` initializer,
- * which only fixes re-renders, not the server/client split) runs once on the
- * server and again on the client during hydration, and those two instants can
- * disagree across `mandate`'s validity boundary — one render shows
- * `ChangeLimits`, the other does not, a hydration mismatch on the control
- * that grants or withholds a limit-changing affordance. `readAt` is resolved
- * once, server-side, in `Mandate` (`mandate.tsx`, the same pattern
- * `readFleet` in `features/fleet/fleet.tsx` uses), and travels down as a prop
- * so both renders agree by construction.
+ * `now` is the instant the server read the mandate, passed down so the server
+ * render and the hydration agree on whether Change limits exists.
  */
-export function MandateActions(place: Place & { now: Date }) {
+export function MandateActions(place: Omit<Place, "done"> & { now: Date }) {
+  const t = useTranslations("mandate.actions");
   const { mandate, now } = place;
-  if (mandate.status !== "active" && mandate.status !== "draft") return null;
+  const [outcome, setOutcome] = useState<Outcome | null>(null);
+  const writable = mandate.status === "active" || mandate.status === "draft";
+  if (!writable && outcome === null) return null;
+  const withDone = { ...place, done: setOutcome };
   return (
-    <>
-      {isChangeable(mandate, now) ? <ChangeLimits {...place} /> : null}
-      <Revoke {...place} />
-    </>
+    <div className="flex shrink-0 flex-col gap-2 sm:items-end">
+      {writable ? (
+        <div
+          role="group"
+          aria-label={t("label")}
+          className="flex flex-wrap items-center gap-2"
+        >
+          {isChangeable(mandate, now) ? <ChangeLimits {...withDone} /> : null}
+          <Revoke {...withDone} />
+        </div>
+      ) : null}
+      {outcome === null ? null : (
+        <OutcomeLine org={place.org} outcome={outcome} />
+      )}
+    </div>
   );
 }

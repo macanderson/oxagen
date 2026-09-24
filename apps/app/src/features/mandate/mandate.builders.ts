@@ -1,14 +1,26 @@
-// A DataSource answering the mandate page's one read (ARCHITECTURE.md §5), and
-// nothing else: the page reads `get_mandate` alone, so every other port refuses
-// and a test that accidentally reaches for one fails rather than passing on a
+// A DataSource answering the mandate page's reads (ARCHITECTURE.md §5) and
+// nothing else: `get_mandate`, and beside it the agent (`get_agent`) and the
+// org's members (`list_members`) that name the grant. Every other port refuses,
+// so a test that accidentally reaches for one fails rather than passing on a
 // stub. The mandate values themselves come from `@/test/mandate-views`, which
 // four features share because no feature may reach into another's folder.
 // Importable from tests only (`testOnlyTarget` in src/test/arch/layers.ts).
+import type { AgentDetail } from "@/data/contracts/agents";
 import type { MandateDetail } from "@/data/contracts/mandates";
+import type { MemberList } from "@/data/contracts/org";
 import type { DataSource } from "@/data/ports";
-import type { Read } from "@/data/read";
+import { type Read, readError } from "@/data/read";
 
-export function mandateSource(read: Read<MandateDetail> | undefined) {
+/** The two reads that name the grant; each refuses unless a test supplies it. */
+type Names = {
+  members?: Read<MemberList>;
+  agent?: Read<AgentDetail>;
+};
+
+export function mandateSource(
+  read: Read<MandateDetail> | undefined,
+  names: Names = {},
+) {
   const calls: unknown[][] = [];
   const refuse = () => Promise.reject(new Error("not a Mandate read"));
   const source: DataSource = {
@@ -33,7 +45,8 @@ export function mandateSource(read: Read<MandateDetail> | undefined) {
     approvals: { pending: refuse, resolved: refuse },
     agents: {
       list: refuse,
-      get: refuse,
+      get: () =>
+        Promise.resolve(names.agent ?? readError("agent_unavailable", 503)),
       toolbelt: refuse,
       incidents: refuse,
     },
@@ -51,7 +64,8 @@ export function mandateSource(read: Read<MandateDetail> | undefined) {
     },
     onboarding: { state: refuse, firstFrame: refuse },
     org: {
-      members: refuse,
+      members: () =>
+        Promise.resolve(names.members ?? readError("members_unavailable", 503)),
       roles: refuse,
       workspaces: refuse,
       apiKeys: refuse,

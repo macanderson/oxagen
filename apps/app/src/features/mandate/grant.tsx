@@ -1,230 +1,271 @@
-// The grant that created this mandate: who asked, who granted it and under
-// which role, what consequence it answers for, which counterparties and tools it
-// reaches, when a person has to answer, and how long it runs.
+// The Grant panel (the design's `pMandate`, right column): the agent, who
+// granted the mandate and under which role, the second approver, the
+// consequence it answers for, the counterparties and tools it reaches, when a
+// person has to answer, and how long it runs.
 //
 // It is the accountability record, so every field is what was recorded and
-// nothing is inferred. A field the contract may leave unset reads as unset:
-// `grantedBy` is null on a draft nobody has granted, and the panel then names
-// the operator who asked instead of printing a blank, because a ledger of drafts
-// that cannot say who sought the authority is not an accountability record. The
-// `roleAtGrant` is the role the granter held at the moment of the grant, not the
-// role they hold now: it is the fact the audit needs, and it is labelled as of
-// the grant so nobody reads it as current.
+// nothing is inferred:
 //
-// The scope and the approval rule are the two fields a reader is most likely to
-// misread, so both are stated in full. `MandateScope` calls out a mandate scoped
-// to every tool rather than leaving a reader to spot one character in a list, and
-// the approval rule is spelled as sentences rather than as a JSON shape: an empty
-// `approvers` list is not "nobody", it is "the roles accountable for the
-// consequence", and printing it as empty would read as the opposite.
+//   - A person is named by their name, resolved server-side from the org's
+//     members (`list_members`); a reader whose roles cannot read the member
+//     list sees the principal id instead, in mono, which is still the fact.
+//   - `roleAtGrant` is the role the granter held at the moment of the grant,
+//     labelled "at grant" so nobody reads it as current.
+//   - A mandate stores no second approver, so that row says so (`NotBacked`)
+//     rather than naming a person the record does not hold.
+//   - An empty counterparty allow list permits every target the deny list does
+//     not name (`targetAllowed`), and an empty approvers list leaves the answer
+//     to the roles accountable for the consequence. Both are spelled out,
+//     because printing them as empty would say the opposite of what they mean.
+//   - The window is half-open, `[validFrom, validTo)`, as enforcement's is. It
+//     is printed as days, the design's `2026-09-01 → 2026-12-31`, when each end
+//     sits on a day boundary in the viewer's zone, and with its time when it
+//     does not, so a mandate ending at 14:00 is never shown as giving the rest
+//     of that day (`validDays`).
+//   - The agent card's line names the harness from `get_agent`. That read
+//     answers no 30-day runs or spend for one agent, so the card says so rather
+//     than print the list page's figures for a different read (#3926).
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
+import type { AgentDetail } from "@/data/contracts/agents";
 import type { MandateRow } from "@/data/contracts/mandates";
-import { mono, panel } from "@/ui/control-styles";
-import { useFormatter } from "@/ui/formatter";
+import { routes } from "@/shared/safe-path";
+import { AgentCard } from "@/ui/agent-card";
+import {
+  mono,
+  panel,
+  panelBody,
+  panelHeader,
+  panelTitle,
+} from "@/ui/control-styles";
 import { MandateScope } from "@/ui/mandate-scope";
 import { useMeasureText } from "@/ui/measure";
+import { SafeLink } from "@/ui/navigation";
+import { NotBacked } from "./state";
+import { ValidWindow } from "./valid-window";
+import type { MandateAt } from "./view";
 
-const term = "text-xs font-medium text-muted-foreground";
-const value = "text-sm text-foreground";
+/** The agent as the agent read resolved it, or null when that read did not answer. */
+export type GrantAgent = {
+  agentKey: string | null;
+  name: string;
+  harness: AgentDetail["identity"]["harness"];
+} | null;
 
-function Row({
-  label,
-  basis,
-  children,
-}: {
-  label: string;
-  /**
-   * How to read the value, in the same block as the value. The tiles carry one
-   * on every money figure for the same reason: a number a reader cannot source
-   * is a number they have to trust.
-   */
-  basis?: string;
-  children: ReactNode;
-}) {
-  // A grouping `<div>` is fine under a `<dl>` (HTML5); a sibling `<p>` is not.
-  // Axe's definition-list rule fails the whole list when any group contains a
-  // non-dt/dd child, so the basis rides inside the `<dd>` with the value.
+/** A principal id → the person's name, for the ids this page prints. */
+export type PeopleNames = Readonly<Record<string, string>>;
+
+function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex flex-col gap-0.5 border-t border-border px-4 py-2.5 first:border-t-0">
-      <dt className={term}>{label}</dt>
-      <dd className={value}>
-        {children}
-        {basis === undefined ? null : (
-          <p className="mt-0.5 text-xs text-muted-foreground">{basis}</p>
-        )}
-      </dd>
-    </div>
+    <>
+      <dt className="whitespace-nowrap text-dim">{label}</dt>
+      <dd className="m-0 min-w-0 [overflow-wrap:anywhere]">{children}</dd>
+    </>
+  );
+}
+
+/** A person by name, or their principal id in mono when no name was read. */
+export function Person({ id, people }: { id: string; people: PeopleNames }) {
+  const name = people[id];
+  return name === undefined ? (
+    <span className={mono} data-person={id}>
+      {id}
+    </span>
+  ) : (
+    <span data-person={id}>{name}</span>
   );
 }
 
 /**
- * The approval rule as sentences. `humanAbove` is a measure-keyed record of
- * thresholds, `alwaysHumanFor` a list of consequence tags, and `approvers` the
- * entries that narrow who may answer. Each is omitted when it is empty rather
- * than printed as an empty list, except `approvers`: empty there means the
- * consequence roles decide, which is a rule and not an absence.
+ * The approval rule as one line, the design's form: "above $100.00, always
+ * for moves_funds, approvers role:Billing". Each clause is left out when the
+ * rule does not set it, except the approvers: they mean something only once
+ * something can park a call, and then an empty list is the consequence roles.
  */
 function Approval({ mandate }: { mandate: MandateRow }) {
   const t = useTranslations("mandate.grant");
   const measureText = useMeasureText();
   const { approval } = mandate;
-  return (
-    <span className="flex flex-col gap-1">
-      {approval.humanAbove.map((threshold) => (
-        // A threshold in a form the mandate's limits establish is printed in
-        // that form; one whose form nothing records is printed as the digits
-        // the record holds, beside its measure. Neither is guessed into money.
-        <span key={threshold.measure} data-approval="above">
-          {t("approvalAbove", {
-            value:
-              threshold.value === null
-                ? threshold.recorded
-                : measureText(threshold.value),
-            measure: threshold.measure,
-          })}
-        </span>
-      ))}
-      {approval.alwaysHumanFor.length === 0 ? null : (
-        <span data-approval="always">
-          {t("approvalAlways", { tags: approval.alwaysHumanFor.join(", ") })}
-        </span>
-      )}
-      {/* Approvers only mean something once something can park a call. The gate
-          fills `ruleIds` from a matching `alwaysHumanFor` tag or an exceeded
-          `humanAbove` threshold and proceeds when it is empty
-          (`packages/rules/src/mandates.ts`), and the contract defaults both to
-          empty. Naming approvers on such a mandate described a review path that
-          does not exist, on the record an operator reads to know what it does. */}
-      {approval.humanAbove.length === 0 &&
-      approval.alwaysHumanFor.length === 0 ? (
-        <span data-approval="none">{t("approvalNone")}</span>
+  const named = approval.humanAbove.length > 1;
+  const clauses: ReactNode[] = approval.humanAbove.map((threshold) => {
+    // A threshold in a form the mandate's limits establish is printed in that
+    // form; one whose form nothing records is printed as the digits the record
+    // holds, beside its measure. Neither is guessed into money.
+    const value =
+      threshold.value === null
+        ? threshold.recorded
+        : measureText(threshold.value);
+    return (
+      <span key={`above-${threshold.measure}`} data-approval="above">
+        {named || threshold.value === null
+          ? t("approvalAboveMeasure", { value, measure: threshold.measure })
+          : t("approvalAbove", { value })}
+      </span>
+    );
+  });
+  if (approval.alwaysHumanFor.length > 0)
+    clauses.push(
+      <span key="always" data-approval="always">
+        {t("approvalAlways")}{" "}
+        <span className={mono}>{approval.alwaysHumanFor.join(", ")}</span>
+      </span>,
+    );
+  if (clauses.length === 0)
+    return <span data-approval="none">{t("approvalNone")}</span>;
+  clauses.push(
+    <span key="approvers" data-approval="approvers">
+      {approval.approvers.length === 0 ? (
+        t("approvalConsequenceRoles")
       ) : (
-        <span data-approval="approvers">
-          {approval.approvers.length === 0
-            ? t("approvalConsequenceRoles")
-            : t("approvalApprovers", {
-                approvers: approval.approvers.join(", "),
-              })}
-        </span>
+        <>
+          {t("approvalApprovers")}{" "}
+          <span className={mono}>{approval.approvers.join(", ")}</span>
+        </>
       )}
+    </span>,
+  );
+  return (
+    <span>
+      {clauses.map((clause, index) => [index === 0 ? null : ", ", clause])}
     </span>
   );
 }
 
-export function MandateGrant({ mandate }: { mandate: MandateRow }) {
+function Counterparties({ mandate }: { mandate: MandateRow }) {
   const t = useTranslations("mandate.grant");
-  const format = useFormatter();
+  if (mandate.targets.length === 0)
+    return <span className="text-muted-foreground">{t("anyTarget")}</span>;
+  const named = mandate.targets.length > 1;
+  return (
+    <span className="flex flex-col gap-1">
+      {mandate.targets.map((rule) => (
+        <span key={rule.measure} data-target={rule.measure}>
+          {named ? (
+            <span className="block text-xs text-muted-foreground">
+              {rule.measure}
+            </span>
+          ) : null}
+          {t("allow")}{" "}
+          <span className={mono}>
+            {/* An empty allow list permits every target the deny list does
+                not name (`targetAllowed`), so it is never printed as none. */}
+            {rule.allow.length > 0
+              ? rule.allow.join(", ")
+              : rule.deny.length === 0
+                ? t("allowAnyTarget")
+                : t("anyNotDenied")}
+          </span>
+          <br />
+          {t("deny")}{" "}
+          <span className={mono}>
+            {rule.deny.length === 0 ? t("noPattern") : rule.deny.join(", ")}
+          </span>
+        </span>
+      ))}
+    </span>
+  );
+}
+
+export function MandateGrant({
+  mandate,
+  agent,
+  people,
+  at,
+}: {
+  mandate: MandateRow;
+  agent: GrantAgent;
+  people: PeopleNames;
+  at: MandateAt;
+}) {
+  const t = useTranslations("mandate.grant");
+  const harness = useTranslations("agents.harness");
   return (
     <section
       aria-labelledby="mandate-grant"
       data-testid="mandate-grant"
       className={panel}
     >
-      <h2 id="mandate-grant" className="px-4 pb-2 pt-4 text-base font-semibold">
-        {t("title")}
-      </h2>
-      <dl className="pb-2">
-        <Row label={t("agent")}>
-          <span className={mono}>{mandate.agentSlug}</span>
-        </Row>
-        <Row label={t("grantedBy")}>
-          {mandate.grantedBy === null ? (
-            <span className="flex flex-col gap-0.5">
-              <span className="text-muted-foreground">{t("notGranted")}</span>
-              {mandate.requestedBy === null ? null : (
-                <span
-                  data-requested-by={mandate.requestedBy}
-                  className="text-xs text-muted-foreground"
-                >
-                  {t("requestedBy", { user: mandate.requestedBy })}
-                </span>
-              )}
-            </span>
-          ) : (
-            <span className="flex flex-col gap-0.5">
-              <span className={`${mono} break-all`}>{mandate.grantedBy}</span>
-              {mandate.roleAtGrant === null ? null : (
-                <span className="text-xs text-muted-foreground">
-                  {t("roleAtGrant", { role: mandate.roleAtGrant })}
-                </span>
-              )}
-            </span>
-          )}
-        </Row>
-        <Row label={t("effect")}>
-          <span className={mono}>{mandate.consequenceTags.join(", ")}</span>
-        </Row>
-        <Row label={t("counterparties")}>
-          {mandate.targets.length === 0 ? (
-            <span className="text-muted-foreground">{t("anyTarget")}</span>
-          ) : (
-            <span className="flex flex-col gap-1">
-              {mandate.targets.map((rule) => (
-                <span
-                  key={rule.measure}
-                  data-target={rule.measure}
-                  className="flex flex-col"
-                >
-                  <span className="text-xs text-muted-foreground">
-                    {rule.measure}
-                  </span>
-                  <span>
-                    {t("allow")}{" "}
-                    <span className={`${mono} break-all`}>
-                      {/* `targetAllowed` ends on `rule.allow.length === 0`, so an
-                          empty allow list permits every target the deny list does
-                          not name. Rendering it as "no pattern" said the mandate
-                          permitted nothing where enforcement permitted
-                          everything, which is the misreading an audit surface
-                          must not offer: it reads as tightly scoped. */}
-                      {rule.allow.length > 0
-                        ? rule.allow.join(", ")
-                        : rule.deny.length === 0
-                          ? t("allowAnyTarget")
-                          : t("anyNotDenied")}
-                    </span>
-                  </span>
-                  <span>
-                    {t("deny")}{" "}
-                    <span className={`${mono} break-all`}>
-                      {rule.deny.length === 0
-                        ? t("noPattern")
-                        : rule.deny.join(", ")}
-                    </span>
-                  </span>
-                </span>
-              ))}
-            </span>
-          )}
-        </Row>
-        <Row label={t("tools")}>
-          <MandateScope tools={mandate.tools} />
-        </Row>
-        <Row label={t("approval")}>
-          <Approval mandate={mandate} />
-        </Row>
-        <Row label={t("valid")} basis={t("validWindowBasis")}>
-          {/* The end instant carries its TIME and zone, not just its day. The
-              window is half-open, `[validFrom, validTo)`, because enforcement's
-              is (`isEffective`, data/contracts/mandates.ts, and
-              `findCoveringMandate` in packages/rules), and the API and MCP can
-              set `validTo` to any offset datetime. Printing the day alone and
-              calling it "through" said a mandate ending at midnight was good
-              for all of that day, when the gate had already stopped honouring
-              it. */}
-          {t("validWindow", {
-            from: format.dateTime(new Date(mandate.validFrom), {
-              dateStyle: "medium",
-              timeStyle: "short",
-            }),
-            to: format.dateTime(new Date(mandate.validTo), {
-              dateStyle: "medium",
-              timeStyle: "short",
-            }),
-          })}
-        </Row>
-      </dl>
+      <div className={panelHeader}>
+        <h2 id="mandate-grant" className={panelTitle}>
+          {t("title")}
+        </h2>
+      </div>
+      <div className={panelBody}>
+        <dl className="grid grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-[7px] text-[12.5px]">
+          <Row label={t("agent")}>
+            <SafeLink
+              to={routes.agent(at.org, at.ws, mandate.agentSlug, {
+                tab: "mandates",
+              })}
+              className="inline-flex max-w-full rounded-lg border border-border px-2.5 py-1.5 hover:bg-hl"
+            >
+              <AgentCard
+                agentKey={agent?.agentKey ?? mandate.agentSlug}
+                notRecorded={t("agentNotRecorded")}
+                sub={
+                  agent === null ? (
+                    mandate.agentSlug
+                  ) : (
+                    <>
+                      {harness(agent.harness)}
+                      {" · "}
+                      <NotBacked gap="agent-activity">
+                        {t("agentActivityNotBacked")}
+                      </NotBacked>
+                    </>
+                  )
+                }
+              />
+            </SafeLink>
+          </Row>
+          <Row label={t("grantedBy")}>
+            {mandate.grantedBy === null ? (
+              <span className="text-muted-foreground">
+                {t("notGranted")}
+                {mandate.requestedBy === null ? null : (
+                  <>
+                    {", "}
+                    {t("requestedBy")}{" "}
+                    <Person id={mandate.requestedBy} people={people} />
+                  </>
+                )}
+              </span>
+            ) : (
+              <span data-testid="granted-by">
+                <Person id={mandate.grantedBy} people={people} />
+                {mandate.roleAtGrant === null ? null : (
+                  <>
+                    {" · "}
+                    <span className={mono}>{mandate.roleAtGrant}</span>{" "}
+                    {t("atGrant")}
+                  </>
+                )}
+              </span>
+            )}
+          </Row>
+          <Row label={t("secondApprover")}>
+            <NotBacked gap="G1">{t("secondApproverNotBacked")}</NotBacked>
+          </Row>
+          <Row label={t("effect")}>
+            <span className={mono}>{mandate.consequenceTags.join(", ")}</span>
+          </Row>
+          <Row label={t("counterparties")}>
+            <Counterparties mandate={mandate} />
+          </Row>
+          <Row label={t("tools")}>
+            <MandateScope tools={mandate.tools} />
+          </Row>
+          <Row label={t("approval")}>
+            <Approval mandate={mandate} />
+          </Row>
+          <Row label={t("valid")}>
+            <ValidWindow
+              validFrom={mandate.validFrom}
+              validTo={mandate.validTo}
+            />
+          </Row>
+        </dl>
+      </div>
     </section>
   );
 }

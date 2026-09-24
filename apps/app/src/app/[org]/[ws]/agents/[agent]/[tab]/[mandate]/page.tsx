@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
 import { dataSource } from "@/data/source";
@@ -11,19 +12,16 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("mandate") };
 }
 
-// One mandate (#2957; ADR-059) at the flat route every other surface links to:
-// `/{org}/{ws}/mandates/{mandate}`. The design's route nests the same page
-// under its agent (`agents/[agent]/[tab]/[mandate]`), and both render the one
-// feature. The ledger's search, facet, rows and pager are state in the table,
-// so the page takes no query values.
-//
-// The page renders no PageHeader: the mandate's own header belongs to the body,
-// because it names the mandate, and a not-loaded state replaces the body rather
-// than leaving a heading that discloses the record the reader was refused.
-export default async function MandatePage({
+// One mandate at the design's route, nested under the agent it was granted to:
+// `/{org}/{ws}/agents/{agent}/mandates/{mandate}`. It renders the same feature
+// as the flat route. The segment above the id must read `mandates`, and the
+// feature checks the agent slug against the record, so a wrong agent is a 404
+// rather than a second, unchecked name for the mandate.
+export default async function AgentMandatePage({
   params,
-}: PageProps<"/[org]/[ws]/mandates/[mandate]">) {
-  const { org, ws, mandate } = await params;
+}: PageProps<"/[org]/[ws]/agents/[agent]/[tab]/[mandate]">) {
+  const { org, ws, agent, tab, mandate } = await params;
+  if (tab !== "mandates") notFound();
   const ctx = await requireViewer(org, ws);
   // The denied state names the person it refused (*Signed in as*); the
   // session is memoized for this request, so this reads nothing new.
@@ -39,6 +37,7 @@ export default async function MandatePage({
           ctx={ctx}
           source={dataSource()}
           mandate={mandate}
+          agent={agent}
           viewerName={viewerName}
         />
       </Suspense>

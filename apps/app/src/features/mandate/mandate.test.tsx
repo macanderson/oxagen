@@ -1,23 +1,24 @@
 // @vitest-environment jsdom
-// The mandate page over a fake DataSource: the loaded record, the mandate that
-// has never been drawn on, the skeleton, the read error and the refusal, each
-// with an axe check (INV-26). The two writes are proven in actions.test.ts, and
-// what the ledger's search, facet and pager select in view.test.ts; this suite
-// is about what the page renders and what it refuses to claim.
+// The mandate page over a fake DataSource, state by state as the design draws
+// them (the design's `pMandate`): loaded, never drawn on, loading, error and
+// access denied, each with an axe check (INV-26). The two writes are proven in
+// actions.test.ts and their dialogs in mandate-actions.test.tsx; this suite is
+// about what the page renders and what it refuses to claim.
 import { cleanup, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { AgentDetail } from "@/data/contracts/agents";
 import type { OrgRole } from "@/data/contracts/common";
-import type { MandateRow } from "@/data/contracts/mandates";
+import type { MemberList } from "@/data/contracts/org";
 import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import {
   callsAuthority,
   mandateAuthority,
-  mandateDetail,
   mandateDetailRead,
-  mandateMovement,
+  mandateDraw,
   mandateRow,
 } from "@/test/mandate-views";
 import { mandateSource } from "./mandate.builders";
@@ -59,32 +60,73 @@ const viewer = (orgRole: OrgRole) =>
 
 const ctx = viewer("billing");
 
+const members: MemberList = {
+  members: [
+    {
+      id: "usr_priyanatarajan",
+      name: "Priya Natarajan",
+      email: "priya@example.com",
+      role: "billing",
+      joinedAt: "2026-01-01T00:00:00.000Z",
+    },
+  ],
+  invitations: [],
+};
+
+const agent = {
+  identity: {
+    id: "agt_invoicebot",
+    slug: "invoice-bot",
+    name: "Invoice bot",
+    description: null,
+    agentKey: "a-intel.finops.invoice-bot",
+    harness: "claude-code",
+    principalId: null,
+    operatorId: null,
+    status: "active",
+    registeredAt: "2026-09-01T00:00:00.000Z",
+    firstFrameAt: null,
+    costCenter: null,
+  },
+  credentials: [],
+  roles: [],
+  hosts: [],
+  definition: null,
+} as unknown as AgentDetail;
+
 type DetailRead = Parameters<typeof mandateSource>[0];
+type Names = Parameters<typeof mandateSource>[1];
 
 async function renderMandate(
   read: DetailRead,
-  query: Readonly<Record<string, string>> = {},
-  options: { mandate?: string; as?: OrgRole } = {},
+  options: {
+    mandate?: string;
+    as?: OrgRole;
+    agent?: string | null;
+    names?: Names;
+    viewerName?: string | null;
+  } = {},
 ) {
-  const { source, calls } = mandateSource(read);
+  const { source, calls } = mandateSource(
+    read,
+    options.names ?? { members: readOk(members), agent: readOk(agent) },
+  );
   const element = await Mandate({
     ctx: options.as === undefined ? ctx : viewer(options.as),
     source,
     mandate: options.mandate ?? "mnd_4f2a9c",
-    searchParams: query,
+    agent: options.agent ?? null,
+    viewerName: options.viewerName ?? null,
   });
   const view = render(<IntlProvider>{element}</IntlProvider>);
   return { calls, ...view };
 }
 
-const movements = () => screen.getAllByTestId("ledger-movement");
+const draws = () => screen.getAllByTestId("ledger-draw");
+const tile = (id: string) => screen.getByTestId(id);
 
-// `cleanup()` runs whether or not the axe check passes. Without the `finally`
-// one violation unmounts nothing, the next render appends beside the last, and
-// every test after it inherits the leftover markup: the violation is reported
-// again, `getByTestId` finds two panels, and a filtered ledger counts rows a
-// previous test rendered. One accessibility defect then reads as twelve
-// unrelated failures, which is what it did.
+// `cleanup()` runs whether or not the axe check passes, so one violation does
+// not leave markup behind for every test after it.
 afterEach(async () => {
   try {
     await expectNoAxe(document.body);
@@ -99,23 +141,46 @@ describe("Mandate › loaded", () => {
     expect(calls).toEqual([[ctx, "mnd_4f2a9c"]]);
   });
 
-  it("names the page Mandate and the mandate by its id", async () => {
+  it("names the page Mandate and the mandate by its id in the mono face", async () => {
     await renderMandate(mandateDetailRead());
     expect(screen.getByText("Mandate")).toBeInTheDocument();
+    const h1 = screen.getByRole("heading", { level: 1, name: "mnd_4f2a9c" });
+    expect(h1.className).toContain("font-mono");
+  });
+
+  it("badges the status as a dot and a word, the granter by name, and the currency", async () => {
+    await renderMandate(mandateDetailRead());
+    expect(screen.getByText("active")).toHaveAttribute("data-status", "active");
+    expect(screen.getByText("granted by Priya Natarajan")).toBeInTheDocument();
+    expect(screen.getByText("USD")).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { level: 1, name: "mnd_4f2a9c" }),
+      screen.getByText("monthly infrastructure invoices, PO-4471"),
     ).toBeInTheDocument();
   });
 
-  // Gold is identity and never state: the status reads as a dot and a word, so
-  // it survives greyscale.
-  it("reads the status as a word beside its dot", async () => {
-    await renderMandate(mandateDetailRead());
-    const badge = screen.getByText("active");
-    expect(badge).toHaveAttribute("data-status", "active");
+  it("names the granter by principal id when the member list cannot be read", async () => {
+    await renderMandate(mandateDetailRead(), {
+      names: { members: readError("denied", 403) },
+    });
+    expect(
+      screen.getByText("granted by usr_priyanatarajan"),
+    ).toBeInTheDocument();
   });
 
-  it("shows four tiles, each with its figure and the basis of that figure", async () => {
+  it("offers Change limits and Revoke, in that order, and no gold action", async () => {
+    await renderMandate(mandateDetailRead());
+    const actions = screen.getByRole("group", { name: "Mandate actions" });
+    const buttons = within(actions).getAllByRole("button");
+    expect(buttons.map((b) => b.textContent)).toEqual([
+      "Change limits",
+      "Revoke",
+    ]);
+    // Gold is identity: the body of this page carries none.
+    for (const button of screen.getAllByRole("button"))
+      expect(button.className).not.toContain("bg-button-primary-bg");
+  });
+
+  it("draws four tiles, each one figure and the design's basis line", async () => {
     await renderMandate(
       mandateDetailRead({
         mandate: mandateRow({
@@ -123,108 +188,297 @@ describe("Mandate › loaded", () => {
         }),
       }),
     );
-    const tiles = screen.getByTestId("mandate-tiles");
-    for (const heading of ["Per call", "Per period", "Settled", "Remaining"]) {
-      expect(within(tiles).getByText(heading)).toBeInTheDocument();
-    }
-    const text = tiles.textContent;
-    // The limits and the ledger's own accounting, each in its measure's form.
-    for (const figure of ["$250.00", "$2,000.00", "$615.82", "50 calls"]) {
-      expect(text).toContain(figure);
-    }
-    // Every money number carries its basis.
-    expect(text).toContain("from the ledger's settlements");
-    expect(text).toContain("reserved at decision time");
+    expect(tile("tile-per-call")).toHaveTextContent("Per call");
+    expect(tile("tile-per-call")).toHaveTextContent("$250.00");
+    expect(tile("tile-per-call")).toHaveTextContent(
+      "read from the call by its declared path",
+    );
+    expect(tile("tile-per-period")).toHaveTextContent("$2,000.00");
+    expect(tile("tile-per-period")).toHaveTextContent(
+      "monthly with 50 calls per day",
+    );
+    expect(tile("tile-settled")).toHaveTextContent("$1,204.18");
+    expect(tile("tile-settled")).toHaveTextContent(
+      "this period, from the ledger",
+    );
+    expect(tile("tile-remaining")).toHaveTextContent("$615.82");
+    expect(tile("tile-remaining")).toHaveTextContent(
+      "after $180.00 reserved at decision time",
+    );
   });
 
-  it("lists each movement with its measure, figure, state and external effect", async () => {
+  it("draws the remaining-authority bar as an image that states all three figures", async () => {
     await renderMandate(mandateDetailRead());
-    const [row] = movements();
-    expect(row).toHaveAttribute("data-state", "settle");
-    const text = row?.textContent ?? "";
-    expect(text).toContain("amount");
-    expect(text).toContain("$884.60");
-    expect(text).toContain("settled");
-    expect(text).toContain("pi_3QaL8f2Xk");
-  });
-
-  // Receipt frames have no read, so the column says so rather than opening a
-  // dialog onto nothing or printing a zero.
-  it("says a receipt is not recorded rather than offering one (negative)", async () => {
-    await renderMandate(mandateDetailRead());
-    const [row] = movements();
-    if (!row) throw new Error("the ledger rendered no movement row");
+    const bar = screen.getByTestId("authority-bar");
+    expect(within(bar).getByText("Remaining authority")).toBeInTheDocument();
+    expect(within(bar).getByText("of $2,000.00 USD")).toBeInTheDocument();
+    expect(within(bar).getByRole("img")).toHaveAccessibleName(
+      "$1,204.18 settled, $180.00 reserved by calls in flight, $615.82 remaining of $2,000.00",
+    );
+    expect(within(bar).getByText("settled $1,204.18")).toBeInTheDocument();
+    expect(within(bar).getByText("(60.2%)")).toBeInTheDocument();
+    expect(within(bar).getByText("(9%)")).toBeInTheDocument();
     expect(
-      row.querySelector('[data-receipt="not-recorded"]')?.textContent,
-    ).toBe("not recorded");
-    expect(within(row).queryByRole("button")).toBeNull();
+      screen.getByText(
+        "Two concurrent calls cannot both fit under the same remaining limit: the reservation is taken before dispatch.",
+      ),
+    ).toBeInTheDocument();
   });
 
-  it("says the external effect is not recorded on a reservation (negative)", async () => {
+  it("draws the reservation only while one is held", async () => {
     await renderMandate(
       mandateDetailRead({
-        ledger: [
-          mandateMovement({
-            kind: "reserve",
+        mandate: mandateRow({
+          authority: [
+            mandateAuthority({
+              reserved: {
+                kind: "money",
+                money: { micros: "0", currency: "USD" },
+              },
+              reservedRatio: 0,
+            }),
+          ],
+        }),
+      }),
+    );
+    const bar = screen.getByTestId("authority-bar");
+    expect(bar.querySelector('[data-part="reserved"]')).toBeNull();
+    expect(within(bar).getByRole("img")).toHaveAccessibleName(
+      "$1,204.18 settled, $615.82 remaining of $2,000.00",
+    );
+  });
+
+  it("says the reservation is held by this call when one call holds it", async () => {
+    await renderMandate(
+      mandateDetailRead({
+        draws: [
+          mandateDraw({ state: "reserve", externalEffectRef: null }),
+          mandateDraw(),
+        ],
+      }),
+    );
+    const bar = screen.getByTestId("authority-bar");
+    expect(
+      within(bar).getByText("reserved by this call $180.00"),
+    ).toBeInTheDocument();
+    expect(within(bar).getByRole("img")).toHaveAccessibleName(
+      "$1,204.18 settled, $180.00 reserved by this call, $615.82 remaining of $2,000.00",
+    );
+  });
+
+  it("counts the calls that hold a reservation, and claims no count past the read bound", async () => {
+    const open = [
+      mandateDraw({ state: "reserve", externalEffectRef: null }),
+      mandateDraw({ state: "reserve", externalEffectRef: null }),
+    ];
+    await renderMandate(mandateDetailRead({ draws: open }));
+    expect(
+      within(screen.getByTestId("authority-bar")).getByText(
+        "reserved by 2 calls in flight $180.00",
+      ),
+    ).toBeInTheDocument();
+    cleanup();
+    await renderMandate(mandateDetailRead({ draws: open, readBound: 500 }));
+    expect(
+      within(screen.getByTestId("authority-bar")).getByText(
+        "reserved by calls in flight $180.00",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("lays the ledger out with the design's six columns and a receipt cell that says it is not recorded", async () => {
+    await renderMandate(mandateDetailRead());
+    const table = screen.getByRole("table", { name: "Draws on this mandate" });
+    expect(
+      within(table)
+        .getAllByRole("columnheader")
+        .map((h) => h.textContent),
+    ).toEqual(["When", "Call", "Amount", "State", "External id", "Receipt"]);
+    const [row] = draws();
+    expect(row).toHaveTextContent("2026-09-04");
+    expect(row).toHaveTextContent("pi_3QaL8f2Xk");
+    expect(row).toHaveTextContent("settled");
+    const cells = row?.querySelectorAll("td") ?? [];
+    // The Call cell names what is missing (#3871), never the measure or a uuid.
+    expect(cells[1]).toHaveTextContent("tool version not recorded");
+    expect(
+      cells[1]?.querySelector('[data-state="not-backed"]'),
+    ).toHaveAttribute("data-gap", "tool-version");
+    expect(
+      cells[5]?.querySelector('[data-state="not-backed"]'),
+    ).toHaveAttribute("data-gap", "G8");
+  });
+
+  it("shows one row per call in the state it reached, with the time for today's draw", async () => {
+    await renderMandate(
+      mandateDetailRead({
+        draws: [
+          mandateDraw({
+            state: "reserve",
             externalEffectRef: null,
-            value: {
-              kind: "money",
-              money: { micros: "2450000000", currency: "USD" },
-            },
+            at: "2026-09-16T09:31:08.000Z",
           }),
         ],
       }),
     );
-    const [row] = movements();
+    const [row] = draws();
     expect(row).toHaveAttribute("data-state", "reserve");
-    expect(row?.textContent).toContain("reserved");
-    expect(row?.textContent).toContain("not recorded");
+    expect(row).toHaveTextContent("09:31:08");
+    // A reservation has no receipt yet: the design's dash, named for a reader.
+    const receipt = row?.querySelector('[data-state="no-receipt-yet"]');
+    expect(receipt).toHaveTextContent("—No receipt yet");
   });
 
-  it("carries no raw identifier into the ledger table (negative)", async () => {
+  it("marks a draw counted in an earlier period, which the Settled tile leaves out", async () => {
+    await renderMandate(
+      mandateDetailRead({
+        draws: [mandateDraw(), mandateDraw({ periodKey: "2026-08" })],
+      }),
+    );
+    const [current, earlier] = draws();
+    expect(current?.querySelector('[data-state="earlier-period"]')).toBeNull();
+    expect(
+      earlier?.querySelector('[data-state="earlier-period"]'),
+    ).toHaveTextContent("counted in 2026-08");
+  });
+
+  it("names the measure on a draw that is not the one the tiles speak for", async () => {
+    await renderMandate(
+      mandateDetailRead({
+        mandate: mandateRow({
+          authority: [mandateAuthority(), callsAuthority()],
+        }),
+        draws: [
+          mandateDraw({
+            state: "reserve",
+            measure: "calls",
+            value: { kind: "count", count: "1", unit: "calls" },
+            externalEffectRef: null,
+            periodKey: "2026-09-16",
+          }),
+        ],
+      }),
+    );
+    expect(draws()[0]?.querySelectorAll("td")[2]).toHaveTextContent("calls");
+  });
+
+  it("says a reservation has no effect yet and a release has none, rather than a blank", async () => {
+    await renderMandate(
+      mandateDetailRead({
+        draws: [
+          mandateDraw({ state: "reserve", externalEffectRef: null }),
+          mandateDraw({ state: "release", externalEffectRef: null }),
+        ],
+      }),
+    );
+    const [reserve, release] = draws();
+    expect(reserve).toHaveTextContent("no effect yet");
+    expect(release).toHaveTextContent("released, no effect");
+  });
+
+  it("searches, facets on State, and pages the ledger with a range line", async () => {
+    const user = userEvent.setup({ delay: null });
+    const ledger = Array.from({ length: 12 }, (_, index) =>
+      mandateDraw({
+        externalEffectRef: `pi_${String(index).padStart(2, "0")}`,
+        state: index % 3 === 0 ? "reserve" : "settle",
+      }),
+    );
+    await renderMandate(mandateDetailRead({ draws: ledger }));
+    expect(draws()).toHaveLength(10);
+    expect(screen.getByTestId("ledger-range")).toHaveTextContent("1–10 of 12");
+    await user.click(screen.getByRole("button", { name: "Next page" }));
+    expect(draws()).toHaveLength(2);
+    expect(screen.getByTestId("ledger-range")).toHaveTextContent("11–12 of 12");
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "State" }),
+      "reserve",
+    );
+    expect(draws()).toHaveLength(4);
+    await user.type(
+      screen.getByRole("searchbox", { name: "Search this list" }),
+      "pi_03",
+    );
+    expect(draws()).toHaveLength(1);
+    await user.clear(
+      screen.getByRole("searchbox", { name: "Search this list" }),
+    );
+    await user.type(
+      screen.getByRole("searchbox", { name: "Search this list" }),
+      "nothing",
+    );
+    expect(screen.getByText("No draw matches this search")).toBeInTheDocument();
+  });
+
+  it("offers 5, 10, 25, 50 and All rows", async () => {
+    const user = userEvent.setup({ delay: null });
+    const ledger = Array.from({ length: 7 }, () => mandateDraw());
+    await renderMandate(mandateDetailRead({ draws: ledger }));
+    const rows = screen.getByRole("combobox", { name: "Rows" });
+    expect(
+      within(rows)
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual(["5", "10", "25", "50", "All"]);
+    await user.selectOptions(rows, "5");
+    expect(draws()).toHaveLength(5);
+    await user.selectOptions(rows, "0");
+    expect(draws()).toHaveLength(7);
+  });
+
+  it("states the read bound above the table when the answer filled it", async () => {
+    await renderMandate(mandateDetailRead({ readBound: 500 }));
+    expect(screen.getByText(/newest 500 ledger movements/)).toBeInTheDocument();
+  });
+
+  it("fills the grant panel in the design's order, with the agent card and the granter's role at grant", async () => {
     await renderMandate(mandateDetailRead());
-    expect(document.body.textContent).not.toMatch(
-      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/,
+    const grant = screen.getByTestId("mandate-grant");
+    expect(
+      within(grant).getByRole("heading", { name: "Grant" }),
+    ).toBeInTheDocument();
+    expect(
+      [...grant.querySelectorAll("dt")].map((dt) => dt.textContent),
+    ).toEqual([
+      "Agent",
+      "Granted by",
+      "Second approver",
+      "Effect",
+      "Counterparties",
+      "Tools",
+      "Approval",
+      "Valid",
+    ]);
+    expect(
+      within(grant).getByText("a-intel.finops.invoice-bot"),
+    ).toBeInTheDocument();
+    // The harness from get_agent; that read answers no runs or spend.
+    expect(grant).toHaveTextContent(
+      "Claude Code · runs and spend not read here",
+    );
+    expect(within(grant).getByTestId("valid-window")).toHaveTextContent(
+      "2026-09-01 → 2026-12-30",
+    );
+    expect(within(grant).getByTestId("granted-by")).toHaveTextContent(
+      "Priya Natarajan · Billing at grant",
+    );
+    expect(grant).toHaveTextContent("allow vendor:aws, vendor:githubdeny *");
+    expect(grant).toHaveTextContent(
+      "above $100.00, always for moves_money, approvers role:Billing",
     );
   });
 
-  it("links to the agent the record names, since the route carries no agent", async () => {
-    await renderMandate(mandateDetailRead());
-    expect(screen.getByRole("link", { name: "invoice-bot" })).toHaveAttribute(
-      "href",
-      "/a-intel/core-platform/agents/invoice-bot/permissions",
-    );
-  });
-
-  it("shows the grant: the agent, who granted it, the effect, the scope and the window", async () => {
+  it("says a mandate stores no second approver rather than naming one", async () => {
     await renderMandate(mandateDetailRead());
     const grant = screen.getByTestId("mandate-grant");
-    const text = grant.textContent;
-    for (const fact of [
-      "invoice-bot",
-      "usr_priyanatarajan",
-      "Billing at grant",
-      "moves_money",
-      "stripe__create_payment@*",
-      "vendor:aws",
-    ]) {
-      expect(text).toContain(fact);
-    }
+    expect(
+      within(grant).getByText(
+        "Not recorded. A mandate stores no second approver yet.",
+      ),
+    ).toHaveAttribute("data-state", "not-backed");
   });
 
-  it("spells the approval rule rather than printing its shape", async () => {
-    await renderMandate(mandateDetailRead());
-    const grant = screen.getByTestId("mandate-grant");
-    expect(grant.textContent).toContain("above $100.00");
-    expect(grant.textContent).toContain("always answers for moves_money");
-  });
-
-  // Approvers only mean something once something can park a call. The gate
-  // fills `ruleIds` from a matching `alwaysHumanFor` tag or an exceeded
-  // `humanAbove` threshold, and proceeds when it is empty
-  // (`packages/rules/src/mandates.ts`). A mandate with neither parks nothing,
-  // so naming approvers on it would describe a review path that never runs.
-  it("says no call waits for a person when the rule can park none", async () => {
+  it("says the approval rule parks nothing when it sets no threshold and no tag", async () => {
     await renderMandate(
       mandateDetailRead({
         mandate: mandateRow({
@@ -232,340 +486,222 @@ describe("Mandate › loaded", () => {
         }),
       }),
     );
-    expect(screen.getByTestId("mandate-grant").textContent).toContain(
-      "no call on this mandate waits for a person",
-    );
+    expect(
+      screen.getByText("no call on this mandate waits for a person"),
+    ).toBeInTheDocument();
   });
 
-  // Once a tag can park a call, an empty approvers list is a rule and not an
-  // absence: the consequence roles decide. Printing it as empty would say the
-  // opposite of what it means.
-  it("reads an empty approver list as the consequence roles", async () => {
+  it("reads an empty allow list as any target, never as none", async () => {
     await renderMandate(
       mandateDetailRead({
         mandate: mandateRow({
-          approval: {
-            humanAbove: [],
-            alwaysHumanFor: ["moves_money"],
-            approvers: [],
-          },
+          targets: [{ measure: "amount", allow: [], deny: [] }],
         }),
       }),
     );
-    expect(screen.getByTestId("mandate-grant").textContent).toContain(
-      "org roles accountable for the consequence",
+    expect(screen.getByTestId("mandate-grant")).toHaveTextContent(
+      "allow any targetdeny no pattern",
     );
   });
 
-  // A store that records no receipts cannot say a charge was accounted for.
-  it("declines to claim the ledger reconciles, and points at Audit", async () => {
+  it("declines to claim the ledger reconciles, and names the gap", async () => {
     await renderMandate(mandateDetailRead());
-    const panel = screen.getByTestId("mandate-reconciliation");
+    const panel = screen.getByTestId("mandate-exceptions");
     expect(
-      panel.querySelector('[data-state="not-recorded"]'),
+      within(panel).getByRole("heading", { name: "Ledger" }),
     ).toBeInTheDocument();
+    expect(panel.querySelector('[data-state="not-backed"]')).toHaveAttribute(
+      "data-gap",
+      "G8",
+    );
+    expect(panel).not.toHaveTextContent(/Nothing is outstanding/);
+  });
+
+  it("offers Decline on a draft and nothing on a revoked mandate", async () => {
+    await renderMandate(
+      mandateDetailRead({
+        mandate: mandateRow({ status: "draft", grantedBy: null }),
+      }),
+    );
+    expect(screen.getByRole("button", { name: "Decline" })).toBeInTheDocument();
     expect(
-      within(panel).getByRole("link", { name: "Open the audit record" }),
-    ).toHaveAttribute("href", "/a-intel/audit");
-  });
-
-  // What the read can establish, and no more: a ledger of exactly the bound
-  // looks the same as one of the bound plus a thousand, so the line says what it
-  // read and that it cannot tell whether there is more. Claiming truncation would
-  // be a false statement about an audit record.
-  it("says what the read bound was without claiming older movements exist", async () => {
-    await renderMandate(mandateDetailRead({ readBound: 500 }));
-    const notice = document.querySelector('[data-state="read-bound"]');
-    expect(notice?.textContent).toContain("newest 500 movements");
-    expect(notice?.textContent).toContain("cannot tell you whether");
-  });
-
-  it("says nothing about the bound when the answer came back short of it", async () => {
-    await renderMandate(mandateDetailRead());
-    expect(document.querySelector('[data-state="read-bound"]')).toBeNull();
-  });
-
-  // The gate fills `ruleIds` from a matching `alwaysHumanFor` tag or an exceeded
-  // `humanAbove` threshold and proceeds when it is empty, and the contract
-  // defaults both to empty. Naming approvers on such a mandate described a review
-  // path that does not exist, on the record an operator reads to know what it
-  // does.
-  describe("a mandate with no approval trigger", () => {
-    it("says nothing waits for a person, and names no approvers", async () => {
-      await renderMandate(
-        mandateDetailRead({
-          mandate: mandateRow({
-            approval: {
-              humanAbove: [],
-              alwaysHumanFor: [],
-              approvers: ["Billing"],
-            },
-          }),
-        }),
-      );
-      expect(
-        document.querySelector('[data-approval="none"]'),
-      ).toHaveTextContent("no call on this mandate waits for a person");
-      // Not merely hidden: an approver list beside "nothing waits" would be the
-      // same claim in two minds.
-      expect(document.querySelector('[data-approval="approvers"]')).toBeNull();
-    });
-
-    it("names the approvers once a threshold can park a call", async () => {
-      await renderMandate(mandateDetailRead());
-      expect(document.querySelector('[data-approval="none"]')).toBeNull();
-      expect(
-        document.querySelector('[data-approval="approvers"]'),
-      ).not.toBeNull();
-    });
-  });
-
-  // `targetAllowed` (packages/rules/src/mandates/measures.ts) ends on
-  // `rule.allow.length === 0`, so an empty allow list permits every target the
-  // deny list does not name. The panel used to render that as "allow no pattern",
-  // which reads as a mandate that permits nothing where enforcement permits
-  // everything: the one misreading an authority record must not offer, because it
-  // is the reassuring one.
-  describe("a target rule with no allow pattern", () => {
-    const withTargets = (targets: MandateRow["targets"]) =>
-      mandateDetailRead({ mandate: mandateRow({ targets }) });
-
-    it("says any target when nothing is allowed and nothing is denied", async () => {
-      await renderMandate(
-        withTargets([{ measure: "amount", allow: [], deny: [] }]),
-      );
-      const rule = document.querySelector('[data-target="amount"]');
-      expect(rule).toHaveTextContent("allow any target");
-      expect(rule).toHaveTextContent("deny no pattern");
-    });
-
-    it("says anything not denied when only a deny pattern is recorded", async () => {
-      await renderMandate(
-        withTargets([
-          { measure: "amount", allow: [], deny: ["vendor:stripe"] },
-        ]),
-      );
-      const rule = document.querySelector('[data-target="amount"]');
-      expect(rule).toHaveTextContent("allow anything not denied");
-      expect(rule).toHaveTextContent("deny vendor:stripe");
-    });
-
-    it("still lists the patterns when an allow list is recorded", async () => {
-      await renderMandate(
-        withTargets([
-          { measure: "amount", allow: ["vendor:aws"], deny: ["*"] },
-        ]),
-      );
-      const rule = document.querySelector('[data-target="amount"]');
-      expect(rule).toHaveTextContent("allow vendor:aws");
-      expect(rule).not.toHaveTextContent("any target");
-    });
-  });
-
-  it("offers exactly one gold action, and both writes, on an active mandate", async () => {
-    await renderMandate(mandateDetailRead());
-    expect(
-      screen.getByRole("button", { name: "Change limits" }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Revoke" })).toBeInTheDocument();
-  });
-
-  // A revoked mandate is refused by both handlers, so offering either control
-  // would be offering a write the kernel is certain to refuse. A draft is not
-  // this case: `revoke_mandate` accepts one, because declining a request is the
-  // revocation of a mandate that never took effect, and `mandate-actions.test.tsx`
-  // covers it.
-  it("offers neither write on a revoked mandate (negative)", async () => {
+      screen.queryByRole("button", { name: "Change limits" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("not granted")).toBeInTheDocument();
+    cleanup();
     await renderMandate(
       mandateDetailRead({ mandate: mandateRow({ status: "revoked" }) }),
     );
-    expect(screen.queryByRole("button", { name: "Change limits" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Revoke" })).toBeNull();
-    expect(screen.getByText("revoked")).toHaveAttribute(
-      "data-status",
-      "revoked",
-    );
+    expect(
+      screen.queryByRole("group", { name: "Mandate actions" }),
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe("Mandate › routes", () => {
+  it("answers a URL that could never name a mandate with a 404", async () => {
+    await expect(
+      renderMandate(mandateDetailRead(), { mandate: "not-a-mandate" }),
+    ).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+
+  it("answers a mandate this workspace has not recorded with a 404", async () => {
+    await expect(
+      renderMandate(readError("mandate_not_found", 404)),
+    ).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+
+  it("renders on the design's route when the agent segment matches the record", async () => {
+    await renderMandate(mandateDetailRead(), { agent: "invoice-bot" });
+    expect(
+      screen.getByRole("heading", { level: 1, name: "mnd_4f2a9c" }),
+    ).toBeInTheDocument();
+  });
+
+  it("answers an agent segment the record contradicts with a 404", async () => {
+    await expect(
+      renderMandate(mandateDetailRead(), { agent: "someone-else" }),
+    ).rejects.toThrow("NEXT_NOT_FOUND");
   });
 });
 
 describe("Mandate › empty", () => {
-  it("says the mandate has never been drawn on, and that remaining is the full limit", async () => {
-    await renderMandate(mandateDetailRead({ ledger: [] }));
-    const empty = document.querySelector('[data-state="empty"]');
-    expect(empty?.textContent).toContain("never been drawn on");
-    expect(empty?.textContent).toContain("remaining authority equals the full");
-    expect(screen.queryAllByTestId("ledger-movement")).toHaveLength(0);
-    // The tiles still carry the record's own figures: an empty ledger is not an
-    // absent limit.
-    expect(screen.getByTestId("mandate-tiles").textContent).toContain(
-      "$2,000.00",
+  it("replaces the page body with the design's state and no actions", async () => {
+    await renderMandate(mandateDetailRead({ draws: [] }));
+    const empty = screen.getByTestId("mandate-empty");
+    expect(
+      within(empty).getByRole("heading", {
+        level: 1,
+        name: "This mandate has never been drawn on",
+      }),
+    ).toBeInTheDocument();
+    expect(empty).toHaveTextContent(
+      "It is active and its ledger is empty. Remaining authority equals the full period limit.",
     );
+    // The state is the body: no header, no tiles, no table, no action.
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("mandate-tiles")).not.toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  });
+
+  it("does not call an undrawn limit authority on a mandate that is not in effect", async () => {
+    await renderMandate(
+      mandateDetailRead({
+        draws: [],
+        mandate: mandateRow({ status: "expired" }),
+      }),
+    );
+    expect(screen.getByTestId("mandate-empty")).toHaveTextContent(
+      "This mandate is not in effect now, so its undrawn limit authorizes nothing.",
+    );
+    // Not the design's "it is active" state, so the header stays.
+    expect(
+      screen.getByRole("heading", { level: 1, name: "mnd_4f2a9c" }),
+    ).toBeInTheDocument();
   });
 });
 
 describe("Mandate › loading", () => {
-  it("is the skeleton the design shows: four tile blocks and a panel of seven rows", () => {
+  it("draws four tile blocks and a panel of seven rows, with no figure", () => {
     render(
       <IntlProvider>
         <MandateLoading />
       </IntlProvider>,
     );
-    const skeleton = document.querySelector('[data-state="loading"]');
+    const skeleton = screen.getByRole("status", {
+      name: "Loading this mandate",
+    });
     expect(skeleton).toHaveAttribute("aria-busy", "true");
-    // No figure and no zero: a skeleton that flashed a zero would read as a
-    // mandate with no authority.
-    expect(skeleton?.textContent).toBe("");
-    expect(document.querySelectorAll('[class*="animate-pulse"]')).toHaveLength(
-      4 * 3 + 7,
-    );
+    expect(skeleton).toHaveTextContent("");
+    expect(skeleton.querySelectorAll(".h-8")).toHaveLength(7);
   });
 });
 
 describe("Mandate › error", () => {
-  it("names the code, offers Try again, and says nothing was changed", async () => {
+  it("names the code the control plane answered, and offers Try again and Open an incident", async () => {
+    const user = userEvent.setup({ delay: null });
     await renderMandate(readError("mandate_ledger_unavailable", 503));
-    const panel = screen.getByTestId("mandate-error");
-    expect(panel.textContent).toContain("This mandate could not be loaded");
-    expect(panel.textContent).toContain("mandate_ledger_unavailable");
-    expect(panel.textContent).toContain("503");
-    expect(panel.textContent).toContain("Nothing was changed");
+    const error = screen.getByTestId("mandate-error");
     expect(
-      within(panel).getByRole("link", { name: "Try again" }),
-    ).toHaveAttribute("href", "/a-intel/core-platform/mandates/mnd_4f2a9c");
-  });
-
-  it("names the instant the read was attempted", async () => {
-    await renderMandate(readError("mandate_ledger_unavailable", 503));
-    expect(screen.getByTestId("mandate-error").textContent).toContain(
-      "Read at",
+      within(error).getByRole("heading", {
+        name: "This mandate could not be loaded",
+      }),
+    ).toBeInTheDocument();
+    expect(error).toHaveTextContent(
+      "The control plane answered 503 mandate_ledger_unavailable. Nothing was changed. Runs kept recording while this page was down. Frames are written by the collector on each host, not by Oxagen.",
     );
+    expect(
+      within(error).getByRole("link", { name: "Try again" }),
+    ).toHaveAttribute("href", "/a-intel/core-platform/mandates/mnd_4f2a9c");
+    expect(screen.getByTestId("mandate-trace")).toHaveTextContent(
+      /Trace not recorded\. Read at /,
+    );
+    await user.click(
+      within(error).getByRole("button", { name: "Open an incident" }),
+    );
+    const dialog = await screen.findByTestId("open-incident");
+    expect(dialog).toHaveTextContent(/does not record incidents/);
+    expect(dialog.querySelector('[data-state="not-backed"]')).not.toBeNull();
   });
 
-  it("renders no header naming the mandate beside a body that could not load it (negative)", async () => {
-    await renderMandate(readError("mandate_ledger_unavailable", 503));
-    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
-    expect(screen.queryByTestId("mandate-tiles")).toBeNull();
+  it("points Try again at the design's route when that is the route it came from", async () => {
+    await renderMandate(readError("mandate_ledger_unavailable", 503), {
+      agent: "invoice-bot",
+    });
+    expect(screen.getByRole("link", { name: "Try again" })).toHaveAttribute(
+      "href",
+      "/a-intel/core-platform/agents/invoice-bot/mandates/mnd_4f2a9c",
+    );
   });
 });
 
 describe("Mandate › access denied", () => {
-  it("names the permission, the signed-in role and who decides, and offers a way out", async () => {
+  it("names the permission, offers Request access and Back to Fleet, and says who decided", async () => {
+    const user = userEvent.setup({ delay: null });
     await renderMandate(
       { ok: false, reason: "denied", permission: "org.billing" },
-      {},
-      { as: "member" },
+      { as: "member", viewerName: "Marcus Bell" },
     );
-    const panel = screen.getByTestId("mandate-denied");
-    expect(panel.textContent).toContain("You cannot see this mandate");
-    expect(panel.textContent).toContain("org.billing");
-    expect(panel.textContent).toContain("Signed in as: Member");
-    expect(panel.textContent).toContain("Needed:");
-    expect(panel.textContent).toContain("Decided by:");
-    expect(panel.textContent).toContain(
-      "An owner can grant an accountable role",
+    const denied = screen.getByTestId("mandate-denied");
+    expect(
+      within(denied).getByRole("heading", {
+        name: "You cannot see this mandate",
+      }),
+    ).toBeInTheDocument();
+    expect(denied).toHaveTextContent(
+      "Your roles on Anderson Intelligence Corp. do not include org.billing",
+    );
+    expect(denied).toHaveTextContent(
+      "An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
     );
     expect(
-      within(panel).getByRole("link", { name: "Back to Fleet" }),
+      within(denied).getByRole("link", { name: "Back to Fleet" }),
     ).toHaveAttribute("href", "/a-intel/core-platform");
+    expect(
+      [...denied.querySelectorAll("dt")].map((dt) => dt.textContent),
+    ).toEqual(["Signed in as", "Needed", "Decided by"]);
+    expect(within(denied).getByTestId("signed-in-as")).toHaveTextContent(
+      "Marcus Bell · workspace.member · core-platform",
+    );
+    expect(denied).toHaveTextContent("Deny wins over every allow.");
+    // The header goes with the body: a refused reader is not told the id.
+    expect(screen.queryByText("mnd_4f2a9c")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      "You cannot see this mandate",
+    );
+    await user.click(
+      within(denied).getByRole("button", { name: "Request access" }),
+    );
+    const dialog = await screen.findByTestId("request-access");
+    expect(dialog).toHaveTextContent(/does not record access requests/);
   });
 
-  it("names the access request while one is waiting", async () => {
+  it("says an access request is waiting when the read parked for approval", async () => {
     await renderMandate({
       ok: false,
       reason: "pending_approval",
-      accessRequestId: "areq_01K4",
+      accessRequestId: "arq_01",
     });
-    expect(screen.getByTestId("mandate-pending").textContent).toContain(
-      "areq_01K4",
-    );
-  });
-});
-
-describe("Mandate › not found", () => {
-  // A mandate this workspace has not recorded, and an address that could never
-  // name one, are both 404s. The second would otherwise reach the kernel and
-  // come back as invalid_input, which renders as "the store is down".
-  it("is a 404 for a mandate the workspace has not recorded", async () => {
-    await expect(renderMandate(readError("not_found", 404))).rejects.toThrow(
-      "NEXT_NOT_FOUND",
-    );
-  });
-
-  it("is a 404 for an address that is not a mandate id, without reading (negative)", async () => {
-    const { source, calls } = mandateSource(readOk(mandateDetail()));
-    await expect(
-      Mandate({
-        ctx,
-        source,
-        mandate: "not-a-mandate",
-        searchParams: {},
-      }),
-    ).rejects.toThrow("NEXT_NOT_FOUND");
-    expect(calls).toEqual([]);
-  });
-});
-
-describe("Mandate › the ledger's search, facet and pager", () => {
-  const three = () => [
-    mandateMovement({ measure: "amount", externalEffectRef: "pi_3QaL8f2Xk" }),
-    mandateMovement({
-      kind: "reserve",
-      measure: "amount",
-      externalEffectRef: null,
-    }),
-    mandateMovement({
-      kind: "release",
-      measure: "calls",
-      value: { kind: "count", count: "1", unit: "calls" },
-      externalEffectRef: null,
-    }),
-  ];
-
-  it("narrows to the movements a search matches", async () => {
-    await renderMandate(mandateDetailRead({ ledger: three() }), {
-      q: "pi_3QaL",
-    });
-    expect(movements()).toHaveLength(1);
-    expect(movements()[0]?.textContent).toContain("pi_3QaL8f2Xk");
-  });
-
-  it("narrows to one state on the facet", async () => {
-    await renderMandate(mandateDetailRead({ ledger: three() }), {
-      state: "release",
-    });
-    expect(movements()).toHaveLength(1);
-    expect(movements()[0]).toHaveAttribute("data-state", "release");
-  });
-
-  it("says no movement matched rather than that the mandate has none", async () => {
-    await renderMandate(mandateDetailRead({ ledger: three() }), {
-      q: "nothing-matches-this",
-    });
-    expect(
-      document.querySelector('[data-state="filtered-empty"]')?.textContent,
-    ).toContain("No movement matches");
-    expect(document.querySelector('[data-state="empty"]')).toBeNull();
-  });
-
-  it("keeps the tiles at the record's own figures while a search narrows the rows", async () => {
-    await renderMandate(mandateDetailRead({ ledger: three() }), {
-      q: "calls",
-    });
-    expect(movements()).toHaveLength(1);
-    expect(screen.getByTestId("mandate-tiles").textContent).toContain(
-      "$2,000.00",
-    );
-  });
-
-  it("offers a later page only when one exists", async () => {
-    await renderMandate(mandateDetailRead({ ledger: three() }));
-    expect(document.querySelector('[data-page="older"]')).toBeNull();
-    const many = Array.from({ length: 30 }, () => mandateMovement());
-    cleanup();
-    await renderMandate(mandateDetailRead({ ledger: many }));
-    expect(movements()).toHaveLength(25);
-    expect(
-      document.querySelector('[data-page="older"]')?.getAttribute("href"),
-    ).toContain("offset=25");
+    expect(screen.getByTestId("mandate-pending")).toHaveTextContent("arq_01");
   });
 });
