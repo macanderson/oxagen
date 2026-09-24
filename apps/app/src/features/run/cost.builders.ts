@@ -9,8 +9,8 @@
 import type { Cost } from "@/data/contracts/money";
 import type {
   RunCost,
+  RunCostRollup,
   RunTranscript,
-  TokenCounts,
   TranscriptEntry,
   TranscriptKind,
 } from "@/data/contracts/run";
@@ -250,7 +250,7 @@ export function costRollup({
   modelCalls,
 }: {
   micros: string;
-  tokens: TokenCounts;
+  tokens: RunCostRollup["tokens"];
   cacheHitRate: number | null;
   productiveRatio?: number | null;
   retries?: number | null;

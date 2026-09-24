@@ -35,6 +35,7 @@ export function kindsParam(
   return picked.length === 0 ? undefined : picked.join(",");
 }
 
+/** @internal The tab's body over one read; the page renders it through `TranscriptTab`. */
 export function TranscriptSection({
   read,
   run,

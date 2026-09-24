@@ -119,8 +119,6 @@ const TokenCounts = z.object({
   output: Count,
   reasoning: Count,
 });
-export type TokenCounts = z.infer<typeof TokenCounts>;
-
 const RunCostByModel = z.object({
   model: z.string().min(1),
   provider: z.string().nullable(),
