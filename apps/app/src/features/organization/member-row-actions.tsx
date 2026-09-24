@@ -14,6 +14,7 @@ import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { changeMemberRole, removeOrgMember } from "./actions";
+import { recordReceipt } from "./receipt";
 
 type Failure = Exclude<ActionResult<unknown>, { ok: true }>;
 
@@ -80,6 +81,7 @@ function WriteDialog({
   pending: pendingLabel,
   testId,
   write,
+  receipt,
   after,
   children,
 }: {
@@ -89,6 +91,8 @@ function WriteDialog({
   pending: string;
   testId: string;
   write: () => Promise<ActionResult<unknown>>;
+  /** The line the write leaves once it answered ok. */
+  receipt: string;
   /** The roster, reloaded once the write answered ok. */
   after: SafePath;
   children: ReactNode;
@@ -112,6 +116,7 @@ function WriteDialog({
     try {
       const result = await write();
       if (result.ok) {
+        recordReceipt(receipt);
         setOpen(false);
         navigate.replace(after);
       } else {
@@ -184,6 +189,10 @@ function ChangeRole({
       pending={t("actions.role.pending")}
       testId="change-member-role"
       write={() => changeMemberRole(org, member.id, role)}
+      receipt={t("receipts.roleChanged", {
+        name: member.name ?? member.email,
+        role: roleName(role),
+      })}
       after={after}
     >
       <p className="text-sm text-muted-foreground">{t("actions.role.body")}</p>
@@ -226,6 +235,9 @@ function RemoveMember({
       pending={t("actions.remove.pending")}
       testId="remove-member"
       write={() => removeOrgMember(org, member.id)}
+      receipt={t("receipts.memberRemoved", {
+        name: member.name ?? member.email,
+      })}
       after={after}
     >
       <p className="text-sm text-muted-foreground">

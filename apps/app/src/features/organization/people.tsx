@@ -99,12 +99,11 @@ export function PeopleTab({
     { label: t("twoFactor") },
     { label: t("lastSeen") },
     { label: t("status") },
-    { label: t("actions") },
+    { label: t("actions"), hidden: true },
   ];
   const rows: ListRow[] = members.members.map((member) => ({
     key: member.id,
     rowId: member.id,
-    search: `${member.name ?? ""} ${member.email} ${member.role}`,
     values: { status: "active" },
     cells: [
       <PersonCell key="person" member={member} />,
@@ -261,12 +260,11 @@ export function InvitationsTab({
     { label: t("invitedBy") },
     { label: t("sent") },
     { label: t("expires") },
-    { label: t("actions") },
+    { label: t("actions"), hidden: true },
   ];
   const rows: ListRow[] = members.invitations.map((invitation) => ({
     key: invitation.id,
     rowId: invitation.id,
-    search: `${invitation.email} ${invitation.role}`,
     cells: [
       <span key="email" className={`${mono} text-xs`}>
         {invitation.email}

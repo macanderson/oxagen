@@ -108,12 +108,11 @@ export function WorkspacesTab({
     { label: t("columns.agents"), numeric: true },
     { label: t("columns.owner") },
     { label: t("columns.governance") },
-    { label: t("columns.actions") },
+    { label: t("columns.actions"), hidden: true },
   ];
   const rows: ListRow[] = workspaces.workspaces.map((workspace) => ({
     key: workspace.id,
     rowId: workspace.id,
-    search: `${workspace.name} ${workspace.slug} ${workspace.namespace}`,
     cells: [
       <WorkspaceCell key="workspace" workspace={workspace} />,
       <NotRecorded key="main" />,

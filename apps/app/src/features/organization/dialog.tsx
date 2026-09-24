@@ -1,21 +1,25 @@
 "use client";
 // The frame every Organization write shares: a button that opens a dialog, the
 // fields the caller supplies, and one submit that runs the write. A refusal is
-// named in the dialog and changes nothing; a write that answered reloads the
-// section it changed, so the table redraws from the kernel rather than from
-// state this component kept.
+// named in the dialog and changes nothing; a write that answered leaves its
+// receipt (`receipt.tsx`) and reloads the section it changed, so the table
+// redraws from the kernel rather than from state this component kept.
+import { useTranslations } from "next-intl";
 import { type ReactNode, type SyntheticEvent, useState } from "react";
 import type { ActionResult } from "@/server/kernel";
 import { buttonPrimary, buttonSecondary } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { UNANSWERED, useActionFailure } from "./action-failure";
+import { recordReceipt } from "./receipt";
 
 export type DialogCopy = {
   open: string;
   title: string;
   confirm: string;
   pending: string;
+  /** The receipt line once the write answered; "Saved. Recorded in the audit record." when absent. */
+  receipt?: string;
 };
 
 export function WriteDialog<O>({
@@ -64,6 +68,7 @@ export function WriteDialog<O>({
   children?: ReactNode;
 }) {
   const failureText = useActionFailure();
+  const tReceipt = useTranslations("organization.receipts");
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
@@ -97,6 +102,7 @@ export function WriteDialog<O>({
     try {
       const answer = await submit(form);
       if (answer.ok) {
+        recordReceipt(copy.receipt ?? tReceipt("saved"));
         const panel = done?.render(answer.value) ?? null;
         if (panel === null) finish(answer.value);
         else setResult({ value: answer.value });

@@ -29,6 +29,7 @@ import {
   revokeApiKey,
   rotateApiKey,
 } from "./api-key-actions";
+import { recordReceipt } from "./receipt";
 
 type Failure = Exclude<ActionResult<unknown>, { ok: true }>;
 
@@ -132,6 +133,7 @@ function KeyWriteDialog({
   pending: pendingLabel,
   testId,
   write,
+  receipt,
   listedIds,
   after,
   children,
@@ -142,6 +144,8 @@ function KeyWriteDialog({
   pending: string;
   testId: string;
   write: () => Promise<ActionResult<Written>>;
+  /** The line the write leaves once it answered ok. */
+  receipt: string;
   listedIds: readonly string[];
   /** The page, reloaded once a write answered. */
   after: SafePath;
@@ -210,6 +214,7 @@ function KeyWriteDialog({
         setFailure(failureText(result));
         return;
       }
+      recordReceipt(receipt);
       const minted = secretOf(result.value);
       if (minted === null) {
         setOpen(false);
@@ -283,6 +288,7 @@ export function CreateKeyDialog({
   after: SafePath;
 }) {
   const t = useTranslations("organization.apiKeys.actions.create");
+  const tReceipt = useTranslations("organization.receipts");
   const [name, setName] = useState("");
   const [expiresOn, setExpiresOn] = useState("");
   // The control carries no timezone, so the note under it prints the instant
@@ -297,6 +303,7 @@ export function CreateKeyDialog({
       pending={t("pending")}
       testId="create-api-key"
       write={() => createApiKey(org, ws, name, expiresOn)}
+      receipt={tReceipt("keyCreated", { name: name.trim() })}
       listedIds={listedIds}
       after={after}
     >
@@ -364,6 +371,7 @@ export function KeyRowActions({
   afterRotate: SafePath;
 }) {
   const t = useTranslations("organization.apiKeys.actions");
+  const tReceipt = useTranslations("organization.receipts");
   return (
     <div className="flex flex-wrap gap-2">
       {rotatable ? (
@@ -374,6 +382,7 @@ export function KeyRowActions({
           pending={t("rotate.pending")}
           testId="rotate-api-key"
           write={() => rotateApiKey(org, ws, keyId)}
+          receipt={tReceipt("keyRotated", { name: keyName })}
           listedIds={listedIds}
           after={afterRotate}
         >
@@ -387,6 +396,7 @@ export function KeyRowActions({
         pending={t("revoke.pending")}
         testId="revoke-api-key"
         write={() => revokeApiKey(org, ws, keyId)}
+        receipt={tReceipt("keyRevoked", { name: keyName })}
         listedIds={listedIds}
         after={after}
       >

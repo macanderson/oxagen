@@ -5,6 +5,7 @@ import { buttonSecondary } from "@/ui/control-styles";
 import { FormAlert } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { resendInvitation, revokeInvitation } from "./actions";
+import { recordReceipt } from "./receipt";
 import {
   type ActionFailure,
   UNANSWERED,
@@ -21,6 +22,7 @@ export function InvitationControls({
   allowed: boolean;
 }) {
   const t = useTranslations("organization.invitations");
+  const tReceipt = useTranslations("organization.receipts");
   const describeFailure = useActionFailure();
   const navigate = useNavigate();
   const busyRef = useRef(false);
@@ -41,6 +43,9 @@ export function InvitationControls({
         ? resendInvitation
         : revokeInvitation)(org, invitationId);
       if (result.ok) {
+        recordReceipt(
+          verb === "resend" ? tReceipt("invitationResent") : tReceipt("invitationRevoked"),
+        );
         setOutcome(
           verb === "resend"
             ? "delivery" in result.value && result.value.delivery === "failed"

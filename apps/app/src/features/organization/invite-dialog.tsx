@@ -35,6 +35,7 @@ import {
   useActionFailure,
 } from "./action-failure";
 import { sendInvitation } from "./actions";
+import { recordReceipt } from "./receipt";
 import { INVITABLE_ROLES, type InvitableRole } from "./invitation-roles";
 
 /**
@@ -98,6 +99,7 @@ export function InviteDialog({
   after: SafePath;
 }) {
   const t = useTranslations("organization.invite");
+  const tReceipt = useTranslations("organization.receipts");
   const roleName = useTranslations("organization.roles");
   const failureText = useInviteFailure();
   const navigate = useNavigate();
@@ -142,6 +144,7 @@ export function InviteDialog({
         setFailure(failureText(result));
         return;
       }
+      recordReceipt(tReceipt("invited", { email: email.trim() }));
       setOutcome({
         email: email.trim(),
         role,
