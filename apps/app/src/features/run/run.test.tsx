@@ -132,7 +132,6 @@ async function renderRun(
   reads: Parameters<typeof runSource>[0],
   view: {
     tab?: string;
-    zoom?: string;
     kinds?: string;
     frames?: string;
     body?: string;
@@ -147,7 +146,6 @@ async function renderRun(
     source,
     runId: "tse_7k2m9q",
     tab: view.tab ?? null,
-    zoom: view.zoom ?? null,
     kinds: view.kinds ?? null,
     frames: view.frames ?? null,
     body: view.body ?? null,
@@ -735,16 +733,6 @@ describe("tabs", () => {
     expect(calls.chain).toHaveLength(0);
   });
 
-  it("reads every frame once whatever zoom the URL names (negative)", async () => {
-    const { calls } = await renderRun(
-      { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
-      { zoom: "everything-else" },
-    );
-    expect(calls.transcript).toEqual([
-      [ctx, "tse_7k2m9q", "everything", { kinds: [] }],
-    ]);
-  });
-
   it("opens Transcript for a tab that is not a section, and Cost for the retired proof tab (negative)", async () => {
     const { calls } = await renderRun(
       { detail: ok(runDetail()), transcript: ok(runTranscript()) },
@@ -1299,9 +1287,10 @@ describe("chain and seal", () => {
     );
     expect(calls.chain).toEqual([[ctx, "tse_7k2m9q"]]);
     expect(screen.getByTestId("chain-checkpoint")).toBeTruthy();
-    expect(
-      screen.getByRole("link", { name: /Chain and seal/ }),
-    ).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("tab", { name: /Chain and seal/ })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     await expectNoAxe(container);
   });
 
@@ -1642,8 +1631,12 @@ describe("issues", () => {
       { tab: "issues" },
     );
     const issues = within(screen.getByRole("region", { name: "Issues" }));
-    expect(issues.getByText(/ENG-4121/)).toBeTruthy();
-    expect(issues.getByText("Task the run was started on")).toBeTruthy();
+    const row = issues.getByTestId("run-issue");
+    expect(row).toHaveTextContent("ENG-4121");
+    // The relation is the one the record carries: the task the run was
+    // started for, on the edge the run's own reference states.
+    expect(within(row).getByText("task")).toBeTruthy();
+    expect(within(row).getByText("stated")).toBeTruthy();
     await expectNoAxe(container);
   });
 
@@ -1689,10 +1682,10 @@ describe("policy and context", () => {
       },
       { tab: "policy" },
     );
-    // The page's own read, then the tab's: its own chip, read to the end.
+    // The tab lists from the page's one whole-run read and makes none of
+    // its own, so its rows and the tab's count cannot disagree.
     expect(calls.transcript).toEqual([
       [ctx, "tse_7k2m9q", "everything", { kinds: [] }],
-      [ctx, "tse_7k2m9q", "everything", { kinds: ["policy"] }],
     ]);
     const policy = within(
       screen.getByRole("region", { name: "Policy decisions" }),
@@ -1718,7 +1711,7 @@ describe("policy and context", () => {
       { tab: "context" },
     );
     const context = within(
-      screen.getByRole("region", { name: "Recalled context" }),
+      screen.getByRole("region", { name: "Context frames" }),
     );
     expect(context.getByText("engram recall")).toBeTruthy();
     expect(context.queryByText("Bash")).toBeNull();
@@ -1852,7 +1845,6 @@ it("returns the Run page without waiting for connected provider evidence", async
     source,
     runId: "tse_7k2m9q",
     tab: "transcript",
-    zoom: null,
     kinds: null,
     frames: null,
     body: null,

@@ -8,7 +8,7 @@
 // buttons carry.
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
-import type { TranscriptKind, TranscriptZoom } from "@/data/contracts/run";
+import type { TranscriptKind } from "@/data/contracts/run";
 import { routes } from "@/shared/safe-path";
 import { SafeLink } from "@/ui/navigation";
 import { tabCount, tabLink } from "@/ui/route-tabs";
@@ -63,13 +63,11 @@ export type TabFigure = {
 export function RunTabs({
   selected,
   figures,
-  zoom,
   kinds,
   place,
 }: {
   selected: Tab;
   figures: Partial<Record<Tab, TabFigure>>;
-  zoom: TranscriptZoom;
   kinds: readonly TranscriptKind[];
   place: Place;
 }) {
@@ -89,19 +87,14 @@ export function RunTabs({
             role="tab"
             aria-selected={tab === selected}
             aria-current={tab === selected ? "page" : undefined}
-            // The Transcript tab keeps the zoom and the chips a person chose,
-            // so leaving it for the chain and coming back does not reset the
-            // view they built.
+            // The Transcript tab keeps the chips a link opened it with, so
+            // leaving it for the chain and coming back does not reset them.
             to={routes.run(
               place.org,
               place.ws,
               place.runId,
               tab === "transcript"
-                ? {
-                    tab,
-                    zoom: zoom === "steps" ? undefined : zoom,
-                    kinds: kindsParam(kinds),
-                  }
+                ? { tab, kinds: kindsParam(kinds) }
                 : { tab },
             )}
             className={tabLink}

@@ -129,7 +129,7 @@ function props({
     run,
     detail,
     place: { org: "acme", ws: "core-platform", runId: run.id },
-    view: { zoom: "everything", kinds: [], frames: null, body: null },
+    view: { kinds: [], frames: null, body: null },
     metrics: runMetrics({ run, cost, transcript, book }),
     everything: transcript,
     cost,

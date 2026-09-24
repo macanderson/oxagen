@@ -255,9 +255,8 @@ export const routes = {
   ): SafePath => withQuery(pathOf(org, "audit", "export"), q),
   /**
    * A run opened from a list (a run id is a public id, never a raw row id).
-   * `tab` picks the section, `zoom` the transcript's level, `kinds` the chips
-   * it is filtered by (comma-separated) and `frames` a later page of the
-   * frames. The spine above the tabs adds `reads`, which folds its read marks
+   * `tab` picks the section, `kinds` the chips the transcript opens with
+   * (comma-separated) and `frames` a later page of the frames. The spine above the tabs adds `reads`, which folds its read marks
    * away, and `spine`, the folded groups a person opened (comma-separated
    * indexes). Each is a query value, so the run keeps one route (§1.2).
    */
@@ -267,7 +266,6 @@ export const routes = {
     run: string,
     q?: {
       tab?: string;
-      zoom?: string;
       kinds?: string;
       frames?: string;
       body?: string;
@@ -277,7 +275,6 @@ export const routes = {
   ): SafePath =>
     withQuery(pathOf(org, ws, "runs", run), {
       tab: q?.tab,
-      zoom: q?.zoom,
       kinds: q?.kinds,
       frames: q?.frames,
       body: q?.body,

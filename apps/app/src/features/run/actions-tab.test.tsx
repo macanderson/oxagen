@@ -140,7 +140,6 @@ async function renderTab(setup: Setup = {}) {
     detail,
     place: { org: "acme", ws: "core-platform", runId: run.id },
     view: {
-      zoom: "steps",
       kinds: [],
       frames: setup.page ?? null,
       body: setup.body ?? null,

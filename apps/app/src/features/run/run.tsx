@@ -7,12 +7,10 @@
 // transcript, the cost rollup, the outputs, the work, the agent, the price
 // book and the approvals parked on the run), derives the figures once
 // (`runMetrics`), and hands the open tab the whole bundle. A tab's own heavy
-// read (the chain, a frame body, the per-zoom ledger) happens only when that
-// tab is open.
+// read (the chain, a frame body) happens only when that tab is open.
 import { notFound } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Suspense, type ReactNode } from "react";
-import { TranscriptZoom } from "@/data/contracts/run";
 import type { TranscriptKind } from "@/data/contracts/run";
 import { TRANSCRIPT_KINDS } from "@/data/contracts/run";
 import type { DataSource } from "@/data/ports";
@@ -84,7 +82,6 @@ function Tabs({
     <RunTabs
       selected={selected}
       figures={figures}
-      zoom={view.zoom}
       kinds={view.kinds}
       place={place}
     />
@@ -141,7 +138,6 @@ export async function Run({
   source,
   runId,
   tab,
-  zoom,
   kinds,
   frames,
   body,
@@ -155,8 +151,6 @@ export async function Run({
   runId: string;
   /** `?tab=`; anything but a tab's name or an old alias opens Transcript. */
   tab: string | null;
-  /** `?zoom=`; anything but a level opens the transcript at steps. */
-  zoom: string | null;
   /** `?kinds=`, the chips pressed, comma-separated; an unknown word is dropped. */
   kinds: string | null;
   /** `?frames=`, the opaque cursor a later frames page was read from. */
@@ -171,9 +165,7 @@ export async function Run({
   now?: number;
 }) {
   const selected = tabOf(tab);
-  const level = TranscriptZoom.safeParse(zoom);
   const view = {
-    zoom: level.success ? level.data : ("steps" as const),
     kinds: parseKinds(kinds),
     frames,
     body,

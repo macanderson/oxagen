@@ -11,7 +11,6 @@ import type {
   RunOutputs,
   RunTranscript,
   TranscriptKind,
-  TranscriptZoom,
 } from "@/data/contracts/run";
 import type { RunWork } from "@/data/contracts/run-work";
 import type { RunRow } from "@/data/contracts/runs";
@@ -26,7 +25,6 @@ export type Place = { org: string; ws: string; runId: string };
 
 /** The URL's view of the run: the query values a tab reads. */
 export type RunView = {
-  zoom: TranscriptZoom;
   /** The transcript chips pressed; empty when none is. */
   kinds: readonly TranscriptKind[];
   /** `?frames=`, the opaque cursor a later frames page was read from. */

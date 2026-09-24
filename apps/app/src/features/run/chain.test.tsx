@@ -1,25 +1,68 @@
 // @vitest-environment jsdom
-// The Chain and seal tab (spec §8.3, §8.4): the panel states the grade the
-// seal recorded and nothing stronger, a gap is a fact about the record and
-// not a fault to soften, and a value the store did not carry reads "not
-// recorded" rather than a blank cell.
+// The Chain and seal tab (mockup `chainTab`; spec §8.3, §8.4): four panels
+// over `get_run_chain`. The tab states the grade the seal recorded and
+// nothing stronger, a gap is a fact about the record and not a fault to
+// soften, a value the read does not carry reads "not recorded", and its three
+// actions keep the role and grade gates the header's copies keep.
 import { cleanup, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import type { ReactNode } from "react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ChainCheckpoint, RunChain } from "@/data/contracts/run";
+import type { RunRow } from "@/data/contracts/runs";
 import { readError, readOk } from "@/data/read";
+import type { Read } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
-import { ChainSection } from "./chain";
-import { runChain } from "./run.builders";
+import { runChain, runRow, runSource } from "./run.builders";
+import { tabProps } from "./sections.builders";
+
+vi.mock("next/link", () => ({
+  default: ({ children, ...rest }: { children: ReactNode; href: string }) => (
+    <a {...rest}>{children}</a>
+  ),
+}));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+}));
+vi.mock("./actions", () => ({
+  forkRun: vi.fn(),
+  bisectRuns: vi.fn(),
+  exportRun: vi.fn(),
+  readRunExport: vi.fn(),
+  summarizeRun: vi.fn(),
+}));
+vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
+vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
+
+const { WsCtx } = await import("@/server/viewer");
+const { unsafeMint } = await import("@/server/viewer.testing");
+const { ChainSection, ChainTab } = await import("./chain");
 
 afterEach(cleanup);
 
+const PLACE = { org: "acme", ws: "core-platform", runId: "tse_7k2m9q" };
+
 function renderChain(
-  read: ReturnType<typeof readOk<RunChain>> | ReturnType<typeof readError>,
+  read: Read<RunChain>,
+  {
+    run = runRow(),
+    orgRole = "owner",
+    fromSeq = null,
+  }: {
+    run?: RunRow;
+    orgRole?: "owner" | "admin" | "member" | "viewer";
+    fromSeq?: string | null;
+  } = {},
 ) {
   return render(
     <IntlProvider>
-      <ChainSection read={read} />
+      <ChainSection
+        read={read}
+        run={run}
+        place={PLACE}
+        orgRole={orgRole}
+        fromSeq={fromSeq}
+      />
     </IntlProvider>,
   );
 }
@@ -36,210 +79,305 @@ const CHECKPOINT: ChainCheckpoint = {
   anchoredAt: null,
 };
 
+const panel = (name: string) => within(screen.getByRole("region", { name }));
+
 describe("ChainSection", () => {
-  it("states the recorded grade even where the ladder shows a stronger rung met: the load-bearing honesty test", () => {
-    const { container } = renderChain(
-      readOk(runChain({ recordedGrade: "view" })),
-    );
-    // The panel's own grade fact says View, never Fork.
-    const gradeFact = screen.getByText("Replay grade").nextElementSibling;
-    expect(gradeFact).toHaveTextContent("View");
-    // The aside badge (computed once at seal) carries the same recorded word.
-    const badge = container.querySelector("[data-grade]");
-    expect(badge).toHaveAttribute("data-grade", "view");
-    // Nothing on the page claims the run's grade is Fork, even though the
-    // ladder's fork rung is met.
-    expect(container.querySelector('[data-grade="fork"]')).toBeNull();
-    const forkRung = screen
+  it("draws the four panels of the design in order, with the hash rule and the frame range", async () => {
+    const { container } = renderChain(readOk(runChain()));
+    const headings = screen
+      .getAllByRole("heading", { level: 3 })
+      .map((heading) => heading.textContent);
+    expect(headings).toEqual([
+      "Hash chain",
+      "Seal and attestation",
+      "Replay grade",
+      "Checkpoints",
+    ]);
+    const hash = panel("Hash chain");
+    expect(hash.getByText("431 read · seq 1 to 431")).toBeTruthy();
+    expect(hash.getByText("tacho.sha256_prev_hash_v1")).toBeTruthy();
+    expect(hash.getByText("no gaps")).toBeTruthy();
+    expect(hash.getByTestId("chain-no-gaps")).toHaveTextContent("none found");
+    // A wrapped agent's frames are client-attested, and the note says so.
+    expect(hash.getByText(/client-attested/)).toBeTruthy();
+    await expectNoAxe(container);
+  });
+
+  it("states the recorded grade even where the ladder shows a stronger rung reached: the load-bearing honesty test", () => {
+    renderChain(readOk(runChain({ recordedGrade: "view" })));
+    const grade = panel("Replay grade");
+    // The aside states the recorded word, and only the recorded rung is highlighted.
+    expect(grade.getByText("view", { selector: "[data-grade]" })).toBeTruthy();
+    const recorded = screen
       .getAllByTestId("chain-rung")
-      .find((rung) => rung.textContent.includes("Fork"));
-    expect(forkRung).toHaveAttribute("data-met", "true");
-  });
-
-  it("renders the no-grade ladder sentence and no grade badge when recordedGrade is null (negative)", () => {
-    const { container } = renderChain(
-      readOk(runChain({ recordedGrade: null })),
+      .filter((row) => row.dataset.recorded === "true");
+    expect(recorded.map((row) => row.querySelector("td")?.textContent)).toEqual(
+      ["view"],
     );
-    expect(container.querySelector("[data-grade]")).toBeNull();
-    expect(
-      screen.getByText(
-        "This run's seal recorded no grade, so nothing here states one. The ladder says what the recording holds.",
-      ),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("Replay grade").nextElementSibling,
-    ).toHaveTextContent("not recorded");
+    // The fork rung is reached on what the read could see, and the table says so without raising the grade.
+    const fork = screen
+      .getAllByTestId("chain-rung")
+      .find((row) => row.textContent.startsWith("fork"));
+    expect(fork?.dataset.met).toBe("true");
+    expect(fork?.dataset.recorded).toBeUndefined();
+    expect(grade.queryByText("fork", { selector: "[data-grade]" })).toBeNull();
   });
 
-  it("renders sequence gaps as ranges, a single-sequence gap as one number, and the missing-frame and missing-body counts", () => {
+  it("says no grade was recorded rather than stating one (negative)", () => {
+    renderChain(readOk(runChain({ recordedGrade: null })));
+    const grade = panel("Replay grade");
+    expect(grade.getByText("not recorded")).toBeTruthy();
+    expect(grade.getByText(/recorded no grade/)).toBeTruthy();
+    expect(
+      screen
+        .getAllByTestId("chain-rung")
+        .some((row) => row.dataset.recorded === "true"),
+    ).toBe(false);
+  });
+
+  it("names each gap the walk found and the seal recorded, and marks the chain as having gaps", () => {
     renderChain(
       readOk(
         runChain({
-          complete: true,
           gaps: {
             missingSequences: [
-              { from: "12", to: "14" },
-              { from: "20", to: "20" },
+              { from: "12", to: "19" },
+              { from: "40", to: "40" },
             ],
-            missingFrameCount: 4,
-            missingBodies: 2,
-            recorded: [],
+            missingFrameCount: 9,
+            missingBodies: 3,
+            recorded: ["telemetry_gap", "tool_bodies"],
           },
         }),
       ),
     );
+    const hash = panel("Hash chain");
+    expect(hash.getByText("gaps found")).toBeTruthy();
+    expect(hash.getByText("9 missing frames:")).toBeTruthy();
+    expect(hash.getByText("12-19, 40")).toBeTruthy();
+    expect(hash.getByText("3 frames with no retained body")).toBeTruthy();
     expect(
-      screen.getByText("Missing sequences").nextElementSibling,
-    ).toHaveTextContent("12-14, 20");
-    expect(
-      screen.getByText("Missing frames").nextElementSibling,
-    ).toHaveTextContent("4");
-    expect(
-      screen.getByText("Frames with no retained body").nextElementSibling,
-    ).toHaveTextContent("2");
+      hash.getAllByTestId("chain-recorded-gap").map((item) => item.textContent),
+    ).toEqual([
+      "telemetry stopped for part of the run",
+      "no tool result body was retained",
+    ]);
+    expect(hash.getByText("the seal recorded a telemetry gap")).toBeTruthy();
   });
 
-  it("renders the chain-no-gaps line rather than a table of zeros when there is no gap at all", () => {
+  it("says the gaps are a prefix's when the walk stopped short (negative)", () => {
+    renderChain(readOk(runChain({ complete: false })));
+    expect(screen.getByTestId("chain-prefix")).toBeTruthy();
+    expect(
+      panel("Hash chain").getByText("no gaps in the part read"),
+    ).toBeTruthy();
+  });
+
+  it("draws the seal's recorded fields and says the signature is not in the read, never a guessed key", () => {
+    renderChain(readOk(runChain()));
+    const seal = panel("Seal and attestation");
+    expect(seal.getByText("sealed")).toBeTruthy();
+    expect(seal.getByText("Signature").nextElementSibling).toHaveTextContent(
+      "not recorded",
+    );
+    expect(seal.getByText("Signs over").nextElementSibling).toHaveTextContent(
+      "not recorded",
+    );
+    expect(seal.getByText(`sha256:${"c".repeat(64)}`)).toBeTruthy();
+    expect(
+      seal.getByText("Archive segment").nextElementSibling,
+    ).toHaveTextContent("not recorded");
+    expect(seal.getByText("completed")).toBeTruthy();
+    expect(seal.getByText("431 frames")).toBeTruthy();
+    expect(seal.getByText("harness")).toBeTruthy();
+  });
+
+  it("says a live run has no seal yet and draws no seal facts (negative)", () => {
+    renderChain(readOk(runChain({ seals: [], merkleRoot: null })), {
+      run: runRow({ status: "live", sealedAt: null }),
+    });
+    expect(screen.getByTestId("chain-unsealed")).toBeTruthy();
+    expect(screen.queryByTestId("chain-seals")).toBeNull();
+    expect(panel("Hash chain").getByText("counted at the seal")).toBeTruthy();
+  });
+
+  it("labels each seal with its attempt when a run was retried", () => {
+    const [seal] = runChain().seals;
+    if (seal === undefined) throw new Error("fixture has a seal");
     renderChain(
       readOk(
         runChain({
-          gaps: {
-            missingSequences: [],
-            missingFrameCount: 0,
-            missingBodies: 0,
-            recorded: [],
-          },
+          seals: [seal, { ...seal, sealedAt: "2026-09-15T08:58:00.000Z" }],
         }),
       ),
     );
-    expect(screen.getByTestId("chain-no-gaps")).toHaveTextContent(
-      "The walk found no missing sequence and no missing body, and the seal recorded no gap.",
-    );
-    expect(screen.queryByText("Missing sequences")).toBeNull();
-  });
-
-  it("renders the chain-prefix line when the walk stopped before the end of the recording", () => {
-    renderChain(readOk(runChain({ complete: false })));
-    expect(screen.getByTestId("chain-prefix")).toHaveTextContent(
-      "This walk stopped before the end of the recording, so these are the gaps of the part it read, not of the whole run.",
-    );
-  });
-
-  it("renders the chain-unsealed line and no seal facts when seals is empty (negative)", () => {
-    renderChain(readOk(runChain({ seals: [] })));
-    expect(screen.getByTestId("chain-unsealed")).toHaveTextContent(
-      "This run has no seal yet. A seal is written when the run ends, and it is what an attestation signs.",
-    );
-    expect(screen.queryByText("Seal")).toBeNull();
-    expect(screen.queryByText("Terminal status")).toBeNull();
-  });
-
-  it("renders the seal's terminal status, event stream digest and Merkle root, with a null seal Merkle root reading 'not recorded' rather than blank", () => {
-    const base = runChain();
-    const [firstSeal] = base.seals;
-    if (firstSeal === undefined) throw new Error("the fixture carries a seal");
-    const chain = runChain({
-      seals: [{ ...firstSeal, merkleRoot: null }],
-    });
-    renderChain(readOk(chain));
-    const sealHeading = screen.getByText("Seal");
-    const sealSection = sealHeading.closest("div");
-    if (sealSection === null) throw new Error("the seal has a section");
-    const scoped = within(sealSection);
     expect(
-      scoped.getByText("Terminal status").nextElementSibling,
-    ).toHaveTextContent("completed");
-    expect(
-      scoped.getByText("Event stream digest").nextElementSibling,
-    ).toHaveTextContent(firstSeal.eventStreamDigest ?? "");
-    expect(
-      scoped.getByText("Merkle root").nextElementSibling,
-    ).toHaveTextContent("not recorded");
+      screen
+        .getAllByTestId("chain-attempt")
+        .map((node) => node.querySelector("h4")?.textContent),
+    ).toEqual(["Attempt 1", "Attempt 2"]);
   });
 
-  it("labels each seal with its attempt number when a run has more than one (finding 8, negative)", () => {
-    const base = runChain();
-    const [firstSeal] = base.seals;
-    if (firstSeal === undefined) throw new Error("the fixture carries a seal");
-    const chain = runChain({
-      seals: [
-        { ...firstSeal, terminalStatus: "abandoned" },
-        { ...firstSeal, terminalStatus: "completed" },
-      ],
-    });
-    renderChain(readOk(chain));
-    expect(screen.getByText("Seal: Attempt 1")).toBeInTheDocument();
-    expect(screen.getByText("Seal: Attempt 2")).toBeInTheDocument();
-    // A single-seal run keeps the plain heading, with no attempt suffix.
-    expect(screen.queryByText("Seal: Attempt")).not.toBeInTheDocument();
-  });
-
-  it("renders the chain-no-checkpoints explanation rather than an empty table when checkpoints is empty", () => {
-    renderChain(readOk(runChain({ checkpoints: [] })));
-    expect(screen.getByTestId("chain-no-checkpoints")).toHaveTextContent(
-      "This recording carries no checkpoint. A ledger run commits at its seal rather than along the way, so there is nothing missing here.",
-    );
-  });
-
-  it("says a checkpoint's countersignedAt is not recorded rather than rendering an empty cell", () => {
+  it("lists each checkpoint with its frame link, short chain head, coverage and signature", () => {
     renderChain(
       readOk(
         runChain({
           checkpoints: [
-            { ...CHECKPOINT, countersignedAt: null, platformKey: null },
+            CHECKPOINT,
+            {
+              ...CHECKPOINT,
+              seq: "400",
+              chainHead: `sha256:${"7".repeat(64)}`,
+              eventCount: 400,
+              countersignedAt: null,
+              platformKey: null,
+            },
           ],
         }),
       ),
     );
-    const row = screen.getByTestId("chain-checkpoint");
-    const cells = within(row).getAllByRole("cell");
-    expect(cells[4]).toHaveTextContent("not recorded");
+    const rows = screen.getAllByTestId("chain-checkpoint");
+    expect(rows).toHaveLength(2);
+    const [first, second] = rows;
+    if (first === undefined || second === undefined)
+      throw new Error("two rows");
+    expect(within(first).getByRole("link", { name: "200" })).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=actions&body=200",
+    );
+    expect(within(first).getByText("dddddddd…")).toHaveAttribute(
+      "title",
+      CHECKPOINT.chainHead,
+    );
+    expect(within(first).getByText("countersigned")).toBeTruthy();
+    expect(within(first).getByText("pk_01k4qj9e")).toBeTruthy();
+    expect(
+      within(second).getByTestId("chain-not-countersigned"),
+    ).toHaveTextContent("host signed");
+    expect(
+      panel("Hash chain").getByText(
+        "2 signed by the host device key, 1 countersigned by Oxagen at ingest",
+      ),
+    ).toBeTruthy();
   });
 
-  it("renders the recorded gap kinds as prose from run.chain.gap.*", () => {
+  it("says a ledger run commits at its seal rather than drawing an empty checkpoint table", () => {
     renderChain(
       readOk(
         runChain({
-          gaps: {
-            missingSequences: [],
-            missingFrameCount: 0,
-            missingBodies: 0,
-            recorded: ["digest_only", "chain_break"],
-          },
+          hashRule: "ledger.event_stream_digest_v1",
+          checkpoints: [],
         }),
       ),
     );
-    const list = screen.getByTestId("chain-recorded-gaps");
-    expect(list).toHaveTextContent("digests kept, bodies not retained");
-    expect(list).toHaveTextContent("the hash chain does not hold end to end");
-  });
-
-  it("renders the ReadFailure treatment for a refused read from the frame store", () => {
-    renderChain(readError("frame_store_unreachable", 502));
-    expect(
-      screen.getByText(
-        "Chain and seal could not be loaded: the control plane answered frame_store_unreachable. Nothing was changed, and runs kept recording.",
-      ),
-    ).toBeInTheDocument();
-  });
-
-  it("renders the ReadFailure treatment for a read denied on run.read (negative)", () => {
-    render(
-      <IntlProvider>
-        <ChainSection
-          read={{ ok: false, reason: "denied", permission: "run.read" }}
-        />
-      </IntlProvider>,
+    expect(screen.getByTestId("chain-no-checkpoints")).toHaveTextContent(
+      "commits at its seal",
     );
     expect(
-      screen.getByText(
-        "You cannot see Chain and seal in this workspace. Your roles do not include run.read; an organization owner can grant it.",
-      ),
-    ).toBeInTheDocument();
+      panel("Hash chain").getByText("ledger.event_stream_digest_v1"),
+    ).toBeTruthy();
+    expect(
+      panel("Hash chain").getByText("none, a ledger run commits at its seal"),
+    ).toBeTruthy();
   });
 
-  it("passes an axe check on the loaded render", async () => {
-    const { container } = renderChain(readOk(runChain()));
+  it("offers bisect, fork from the open frame and the export on a sealed ledger run graded fork", () => {
+    renderChain(readOk(runChain()), {
+      run: runRow({ source: "ledger", replayGrade: "fork" }),
+      fromSeq: "15",
+    });
+    expect(screen.getByTestId("chain-bisect")).toHaveTextContent(
+      "Bisect against another run",
+    );
+    expect(screen.getByTestId("chain-fork")).toHaveTextContent(
+      "Fork replay from frame 15",
+    );
+    expect(screen.getByTestId("chain-fork")).not.toBeDisabled();
+    expect(screen.getByTestId("chain-export")).toHaveTextContent(
+      "Export the bundle",
+    );
+    expect(screen.getByTestId("chain-export")).not.toBeDisabled();
+  });
+
+  it("keeps the fork's grade gate and the export's role gate, with the reason on the button (negative)", () => {
+    renderChain(readOk(runChain()), {
+      run: runRow({ source: "tacho", replayGrade: "fork" }),
+      orgRole: "member",
+    });
+    expect(screen.getByTestId("chain-fork")).toBeDisabled();
+    expect(screen.getByTestId("chain-fork")).toHaveTextContent(
+      "Fork replay from a frame",
+    );
+    expect(screen.getByTestId("chain-fork-refused")).toHaveTextContent(
+      "wrapped agent",
+    );
+    expect(screen.getByTestId("chain-export")).toBeDisabled();
+    expect(screen.getByTestId("chain-export-refused")).toHaveTextContent(
+      "Owner or Admin",
+    );
+  });
+
+  it("offers no bisect on a live run (negative)", () => {
+    renderChain(readOk(runChain({ seals: [] })), {
+      run: runRow({ status: "live", sealedAt: null }),
+    });
+    expect(screen.queryByTestId("chain-bisect")).toBeNull();
+    expect(screen.getByTestId("chain-fork")).toBeDisabled();
+  });
+
+  it("names a refused read and draws no panel of a chain it could not read (negative)", async () => {
+    const { container } = renderChain({
+      ok: false,
+      reason: "denied",
+      permission: "run.read",
+    });
+    expect(screen.getByText(/run\.read/)).toBeTruthy();
+    expect(screen.queryByTestId("chain-checkpoint")).toBeNull();
+    expect(screen.queryByRole("region", { name: "Hash chain" })).toBeNull();
     await expectNoAxe(container);
+  });
+
+  it("names a failed read from the frame store (negative)", () => {
+    renderChain(readError("frame_store_unreachable", 502));
+    expect(screen.getByTestId("chain-failure")).toBeTruthy();
+    expect(screen.queryByTestId("chain-rung")).toBeNull();
+  });
+});
+
+describe("ChainTab", () => {
+  const ctx = unsafeMint(WsCtx, {
+    userId: "usr_marcusbell",
+    orgId: "7a000000-0000-4000-8000-0000000000a1",
+    orgSlug: "acme",
+    orgName: "Acme Robotics",
+    orgRole: "owner",
+    workspaceId: "7b000000-0000-4000-8000-000000000001",
+    wsSlug: "core-platform",
+    wsName: "Core platform",
+    wsRole: "member",
+  });
+
+  it("reads the chain once, for this run, and starts the fork from the frame the page has open", async () => {
+    const { source, calls } = runSource({
+      detail: readOk({
+        run: runRow(),
+        frames: { frames: [], cursor: null, more: false },
+        witnessed: false,
+      }),
+      chain: readOk(runChain()),
+    });
+    const body = await ChainTab(
+      tabProps({
+        ctx,
+        source,
+        run: runRow({ source: "ledger", replayGrade: "fork" }),
+        body: "41",
+      }),
+    );
+    render(<IntlProvider>{body}</IntlProvider>);
+    expect(calls.chain).toEqual([[ctx, "tse_7k2m9q"]]);
+    expect(screen.getByTestId("chain-fork")).toHaveTextContent(
+      "Fork replay from frame 41",
+    );
   });
 });
