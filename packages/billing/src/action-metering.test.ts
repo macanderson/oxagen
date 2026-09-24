@@ -730,6 +730,7 @@ describe("recordGovernedAction", () => {
       expect(order).toEqual([
         "commit", // the debit
         "commit", // the claim
+        "commit", // the line's bucket month and agreement, read before the provider call
         "createGauInvoice",
         "commit", // recordGauInvoice
         "finalizeAndPayGauInvoice",
@@ -741,6 +742,7 @@ describe("recordGovernedAction", () => {
           settlementId: result.autoTopup!.id,
           kind: "gau_auto_topup",
           quantityGau: 5_000,
+          period: { start: bucket.periodStart, end: bucket.periodEnd },
           collection: {
             method: "charge_automatically",
             defaultPaymentMethodId: "pm_1",
@@ -883,9 +885,10 @@ describe("recordGovernedAction", () => {
         seq: 1,
         quantityGau: 1_000,
       });
-      expect(order.slice(0, 3)).toEqual([
-        "commit",
-        "commit",
+      expect(order.slice(0, 4)).toEqual([
+        "commit", // the debit
+        "commit", // the claim
+        "commit", // the line's bucket month and agreement
         "createGauInvoice",
       ]);
       expect(mocks.ensureStripeCustomer).toHaveBeenCalledWith(ORG);
