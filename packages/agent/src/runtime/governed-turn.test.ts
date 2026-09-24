@@ -60,6 +60,7 @@ import {
   ENGINE_PROVIDER_ID,
   ENGINE_REVERSE_REQUEST_TIMEOUT_MS,
   EngineUnavailableError,
+  ModelCallFailedError,
   aggregateStepUsage,
   buildTurnUserMessage,
   runGovernedTurn,
@@ -1017,6 +1018,133 @@ describe("runGovernedTurn on the engine", () => {
     expect(outcomes).toEqual([
       { status: "failed", error: expect.stringContaining("unavailable") },
     ]);
+  });
+
+  // The engine learns only a classified error when a model call fails, and
+  // reports it back as text. Before this the turn's error part was a bare
+  // Error, and every surface said "could not be reached" for a revoked key,
+  // an unknown model or a provider outage alike.
+  describe("a model call that fails ends the turn with the failure's own code", () => {
+    const failingScript = (): ServerFrame[] => [
+      {
+        type: "provider_request",
+        request_id: "prov-1-0",
+        provider_id: "openrouter",
+        role: "worker",
+        request: { messages: [{ role: "user", content: "hi" }] },
+      } as ServerFrame,
+      {
+        type: "event",
+        event: { type: "error", message: "provider rejected the request" },
+      } as ServerFrame,
+      {
+        type: "turn_complete",
+        outcome: {
+          status: "aborted",
+          reason: "provider error",
+          cost_usd: 0,
+        },
+      } as ServerFrame,
+    ];
+
+    async function failWith(err: unknown) {
+      streamAgentReply.mockReset();
+      streamAgentReply.mockImplementation(() => {
+        throw err;
+      });
+      const { client } = setup(failingScript());
+      const result = await runGovernedTurn({
+        telemetry,
+        system: "s",
+        history: [],
+        instruction: "hi",
+        tools: {},
+        engine: client,
+      });
+      const parts = await drain(result);
+      const errors = parts.filter((p) => p.type === "error");
+      await expect(result.finalText).resolves.toBeDefined();
+      return errors.map((p) => p.error);
+    }
+
+    it("names the provider's status", async () => {
+      const errors = await failWith(
+        Object.assign(new Error("Unauthorized: key sk-or-v1-abc revoked"), {
+          statusCode: 401,
+        }),
+      );
+      expect(errors.length).toBeGreaterThan(0);
+      for (const error of errors) {
+        expect(error).toBeInstanceOf(ModelCallFailedError);
+        expect(error).toMatchObject({ code: "model_call_failed", status: 401 });
+        // The vendor's body can echo the request; the message names the status.
+        expect((error as Error).message).not.toContain("sk-or");
+      }
+    });
+
+    it("says the call failed before the provider answered when there is no status", async () => {
+      const errors = await failWith(new Error("socket hang up"));
+      expect(errors.length).toBeGreaterThan(0);
+      for (const error of errors) {
+        expect(error).toMatchObject({
+          code: "model_call_failed",
+          status: null,
+        });
+        expect((error as Error).message).toBe(
+          "the model call failed before the provider answered",
+        );
+      }
+    });
+
+    // A cancel is the turn's own doing, not the provider's. A caller that
+    // disconnects mid-call must read as engine_aborted (409), not as a model
+    // failure (502) that sends an owner to check the model key.
+    it("leaves the turn's own cancel alone (negative)", async () => {
+      streamAgentReply.mockReset();
+      const controller = new AbortController();
+      streamAgentReply.mockImplementation(() => {
+        controller.abort();
+        throw Object.assign(new Error("aborted"), { statusCode: 499 });
+      });
+      const { client } = setup(failingScript());
+      const modelCalls: TurnLedgerModelCall[] = [];
+      const result = await runGovernedTurn({
+        telemetry,
+        system: "s",
+        history: [],
+        instruction: "hi",
+        tools: {},
+        abortSignal: controller.signal,
+        engine: client,
+        ledger: {
+          modelCallStarted: async () => undefined,
+          modelCall: async (record) => {
+            modelCalls.push(record);
+          },
+          toolCallStarted: async () => undefined,
+          toolCall: async () => undefined,
+          seal: async () => undefined,
+        },
+      });
+      const parts = await drain(result);
+      const errors = parts
+        .filter((p) => p.type === "error")
+        .map((p) => p.error);
+      expect(errors.length).toBeGreaterThan(0);
+      for (const error of errors)
+        expect(error).not.toBeInstanceOf(ModelCallFailedError);
+      // The record says the call was cancelled, not that the provider failed.
+      expect(modelCalls.map((c) => c.outcome)).toEqual(["cancelled"]);
+    });
+
+    it("keeps a failure that already carries a code", async () => {
+      const limit = Object.assign(new Error("daily ceiling"), {
+        code: "assistant_model_key_limit",
+      });
+      const errors = await failWith(limit);
+      expect(errors.length).toBeGreaterThan(0);
+      for (const error of errors) expect(error).toBe(limit);
+    });
   });
 
   it("declares the whole belt to the engine and shows the model only the pinned tools, the meta-tools and what it loaded", async () => {

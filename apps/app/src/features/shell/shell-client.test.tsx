@@ -210,9 +210,10 @@ describe("the shell on /{org}/{ws}", () => {
     expect(launcher).toBeInTheDocument();
     // What it opens is a dialog, and it says so before it is pressed.
     expect(launcher).toHaveAttribute("aria-haspopup", "dialog");
-    // The mock's label, and under it the model and engine state, which the
-    // chrome does not read: the line says so rather than naming a model.
-    expect(launcher).toHaveTextContent("Assistant");
+    // The launcher is branded Stella (#3973), and under the label the model
+    // and engine state, which the chrome does not read: the line says so
+    // rather than naming a model.
+    expect(launcher).toHaveTextContent("Ask Stella");
     expect(
       within(launcher).getByTestId("assistant-launcher-not-backed"),
     ).toHaveAttribute("data-gap", "#2968");
