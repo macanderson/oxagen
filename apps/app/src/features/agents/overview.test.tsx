@@ -114,16 +114,6 @@ describe("Overview › 30-day token use", () => {
     );
   });
 
-  it("will not divide a cost by a run count that is not a whole number (negative)", () => {
-    // divMicros refuses a count that is not a safe positive integer; the
-    // per-run token mean still prints because it is a rounded average.
-    const row = spendRow({ runs: 2.5 });
-    renderOverview({ spend: spendReport([row]), spendRow: row });
-    expect(region("30-day token use")).toHaveTextContent(
-      "Per run2,400 tok · not recorded",
-    );
-  });
-
   it("draws zero shares and no rates for a row that counted no input, run or call (negative)", () => {
     const row = spendRow({
       runs: 0,

@@ -9,6 +9,7 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ComponentProps, ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readError, readOk } from "@/data/read";
+import { routes } from "@/shared/safe-path";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import {
@@ -156,7 +157,7 @@ describe("Activity › last 30 days", () => {
       within(last30).getByRole("link", { name: "Open on Spend" }),
     ).toHaveAttribute(
       "href",
-      "/acme/core-platform/spend?tab=agent&drill=acme.core.release-bot",
+      routes.spend("acme", "core-platform", { tab: "agent", drill: KEY }),
     );
   });
 

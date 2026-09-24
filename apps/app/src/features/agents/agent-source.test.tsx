@@ -469,3 +469,112 @@ describe("SourceEditor", () => {
     );
   });
 });
+
+describe("SourceEditor find and keys", () => {
+  const findBox = () => screen.getByRole("searchbox", { name: "Find in file" });
+  const count = () => screen.getByTestId("find-count");
+
+  it("steps backwards from the last match with ⇧Enter, wraps forwards, and Escape clears the find", async () => {
+    renderEditor();
+    await userEvent.type(findBox(), "release");
+    await userEvent.type(findBox(), "{Shift>}{Enter}{/Shift}");
+    expect(count()).toHaveTextContent("3 of 3");
+    await userEvent.type(findBox(), "{Shift>}{Enter}{/Shift}");
+    expect(count()).toHaveTextContent("2 of 3");
+    // Each press is typed into the find box afresh: a jump moves focus to the
+    // editor, so a second Enter in one burst would land there instead.
+    await userEvent.type(findBox(), "{Enter}");
+    expect(count()).toHaveTextContent("3 of 3");
+    await userEvent.type(findBox(), "{Enter}");
+    expect(count()).toHaveTextContent("1 of 3");
+    await userEvent.type(findBox(), "{Escape}");
+    expect(findBox()).toHaveValue("");
+    expect(count()).toBeEmptyDOMElement();
+    expect(editor()).toHaveFocus();
+  });
+
+  it("hands focus to the editor with the match selected, so a second Enter replaces the match (characterization)", async () => {
+    // A wart, pinned rather than fixed: jump() focuses the textarea so the
+    // selection is painted, and the next Enter is then typed into the file
+    // over the selected match. Changing it is a focus-model decision (a
+    // textarea paints no selection without focus), so this test records the
+    // behaviour until that decision is made.
+    renderEditor();
+    await userEvent.type(findBox(), "release{Enter}");
+    expect(editor()).toHaveFocus();
+    await userEvent.keyboard("{Enter}");
+    expect(count()).toHaveTextContent("1 of 2");
+    expect(editor()).not.toHaveValue(DEFINITION_SOURCE);
+  });
+
+  it("moves nowhere on Enter when nothing matches (negative)", async () => {
+    renderEditor();
+    await userEvent.type(findBox(), "zzz{Enter}");
+    expect(count()).toHaveTextContent("0");
+    expect(findBox()).toHaveFocus();
+  });
+
+  it("focuses the find with ⌘F, and leaves the text alone for a key it does not bind (negative)", () => {
+    renderEditor();
+    const area = screen.getByRole<HTMLTextAreaElement>("textbox", {
+      name: PATH,
+    });
+    fireEvent.keyDown(area, { key: "f", ctrlKey: true });
+    expect(findBox()).toHaveFocus();
+    fireEvent.keyDown(area, { key: "Tab", metaKey: true });
+    fireEvent.keyDown(area, { key: "a" });
+    expect(area).toHaveValue(DEFINITION_SOURCE);
+  });
+});
+
+describe("CommitDialog", () => {
+  it("sends nothing when the form is submitted with no summary (negative)", async () => {
+    renderEditor();
+    await userEvent.click(button("Save"));
+    const dialog = screen.getByTestId("commit-definition");
+    const form = dialog.querySelector("form");
+    if (form === null) throw new Error("commit form not drawn");
+    fireEvent.submit(form);
+    expect(commitAgentDefinition).not.toHaveBeenCalled();
+  });
+
+  it("names an invalid new branch on its own field, and clears the refusal when the dialog closes", async () => {
+    commitAgentDefinition.mockResolvedValue({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "branch",
+    });
+    renderEditor();
+    await userEvent.click(button("Save"));
+    let dialog = screen.getByTestId("commit-definition");
+    await userEvent.selectOptions(
+      within(dialog).getByRole("combobox"),
+      "+ New branch",
+    );
+    await userEvent.type(
+      within(dialog).getByLabelText("New branch name"),
+      "refs/heads/x",
+    );
+    await userEvent.type(within(dialog).getByLabelText(/Summary/), "x");
+    await userEvent.click(
+      within(dialog).getByRole("button", {
+        name: "Commit and open a pull request",
+      }),
+    );
+    expect(
+      await within(dialog).findByText(/Name a branch: letters, digits/),
+    ).toBeInTheDocument();
+    // The error sits on the field, not in the dialog's alert.
+    expect(within(dialog).queryByTestId("commit-failure")).toBeNull();
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Cancel" }),
+    );
+    expect(screen.queryByTestId("commit-definition")).toBeNull();
+    await userEvent.click(button("Save"));
+    dialog = screen.getByTestId("commit-definition");
+    expect(
+      within(dialog).queryByText(/Name a branch: letters, digits/),
+    ).toBeNull();
+  });
+});
