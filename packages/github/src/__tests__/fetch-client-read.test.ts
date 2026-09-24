@@ -28,6 +28,122 @@ afterEach(() => {
 });
 
 // ---------------------------------------------------------------------------
+// listClosingIssues
+// ---------------------------------------------------------------------------
+
+describe("listClosingIssues", () => {
+  const refs = {
+    data: {
+      repository: {
+        pullRequest: {
+          closingIssuesReferences: {
+            totalCount: 2,
+            nodes: [
+              {
+                number: 7,
+                title: "Checkout fails on retry",
+                url: "https://github.com/acme/repo/issues/7",
+                state: "OPEN",
+                repository: { name: "repo", owner: { login: "acme" } },
+              },
+              {
+                number: 3,
+                title: "Old bug",
+                url: "https://github.com/acme/other/issues/3",
+                state: "CLOSED",
+                repository: { name: "other", owner: { login: "acme" } },
+              },
+            ],
+          },
+        },
+      },
+    },
+  };
+
+  it("reads GitHub's closing references over GraphQL", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(makeResponse(refs));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createGitHubClient({ token: "tok" });
+    const result = await client.listClosingIssues({
+      owner: "acme",
+      repo: "repo",
+      number: 42,
+    });
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe("https://api.github.com/graphql");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body).variables).toEqual({
+      owner: "acme",
+      repo: "repo",
+      number: 42,
+    });
+    expect(result).toEqual({
+      issues: [
+        {
+          owner: "acme",
+          repo: "repo",
+          number: 7,
+          title: "Checkout fails on retry",
+          url: "https://github.com/acme/repo/issues/7",
+          state: "open",
+        },
+        {
+          owner: "acme",
+          repo: "other",
+          number: 3,
+          title: "Old bug",
+          url: "https://github.com/acme/other/issues/3",
+          state: "closed",
+        },
+      ],
+      complete: true,
+    });
+  });
+
+  it("posts to /api/graphql on GitHub Enterprise Server", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(makeResponse(refs));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createGitHubClient({
+      token: "tok",
+      baseUrl: "https://ghe.example.com/api/v3",
+    });
+    await client.listClosingIssues({ owner: "acme", repo: "repo", number: 1 });
+    expect(fetchMock.mock.calls[0]![0]).toBe(
+      "https://ghe.example.com/api/graphql",
+    );
+  });
+
+  it("throws on a GraphQL error instead of answering closes-nothing", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce(
+        makeResponse({
+          data: { repository: { pullRequest: null } },
+          errors: [{ message: "Could not resolve to a PullRequest" }],
+        }),
+      ),
+    );
+    const client = createGitHubClient({ token: "tok" });
+    await expect(
+      client.listClosingIssues({ owner: "acme", repo: "repo", number: 9 }),
+    ).rejects.toThrow("Could not resolve to a PullRequest");
+  });
+
+  it("marks a list GitHub truncated as incomplete", async () => {
+    const truncated = structuredClone(refs);
+    truncated.data.repository.pullRequest.closingIssuesReferences.totalCount = 30;
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(makeResponse(truncated)));
+    const client = createGitHubClient({ token: "tok" });
+    const result = await client.listClosingIssues({
+      owner: "acme",
+      repo: "repo",
+      number: 42,
+    });
+    expect(result.complete).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // getPullRequest
 // ---------------------------------------------------------------------------
 

@@ -2,6 +2,8 @@ export type {
   GitHubClient,
   GitHubClientOptions,
   GitHubPullRequest,
+  GitHubClosingIssue,
+  GitHubClosingIssues,
   GitHubPrComment,
   GitHubPrComments,
   GitHubCheckRun,

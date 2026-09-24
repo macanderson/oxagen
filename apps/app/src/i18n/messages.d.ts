@@ -5741,7 +5741,12 @@ type Messages = {
       reference: string;
       relation: string;
       task: string;
+      closedBy: string;
+      pullRequests: string;
       empty: string;
+      emptyUnread: string;
+      loading: string;
+      closingUnread: string;
       note: string;
     };
     policy: {
