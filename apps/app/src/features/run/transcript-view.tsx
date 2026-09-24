@@ -839,7 +839,7 @@ function TurnBlock({
                       <StepRow
                         key={child.id}
                         step={child}
-                        number={`${number}.${at + 1}`}
+                        number={`${String(number)}.${String(at + 1)}`}
                         digest={stepDigest(child)}
                         pos={pos}
                         open={openIds.has(child.id)}
@@ -859,7 +859,10 @@ function TurnBlock({
 }
 
 /** Whether a step, or a subagent step under it, holds an entry the search found. */
-function stepMatches(step: TranscriptStep, matched: ReadonlySet<string>): boolean {
+function stepMatches(
+  step: TranscriptStep,
+  matched: ReadonlySet<string>,
+): boolean {
   return (
     step.frames.some((frame) => matched.has(entryKey(frame))) ||
     (step.children ?? []).some((child) => stepMatches(child, matched))
@@ -953,12 +956,13 @@ export function TranscriptView({
   // Each turn's first step number, counted over the rows drawn, so the
   // numbers run 1, 2, 3 across the run whatever frames have no row.
   const firstSteps = useMemo(() => {
+    const starts: number[] = [];
     let next = 1;
-    return turns.map((turn) => {
-      const at = next;
+    for (const turn of turns) {
+      starts.push(next);
       next += visibleSteps(turn).length;
-      return at;
-    });
+    }
+    return starts;
   }, [turns]);
   const live = status === "live";
 

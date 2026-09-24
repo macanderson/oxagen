@@ -461,7 +461,8 @@ describe("the effort a model call ran at", () => {
 });
 
 describe("the filter chips", () => {
-  const RUN_URL = "/acme/core-platform/runs/tse_7k2m9q?tab=transcript&zoom=turns";
+  const RUN_URL =
+    "/acme/core-platform/runs/tse_7k2m9q?tab=transcript&zoom=turns";
   const chipOrder = () =>
     within(screen.getByTestId("transcript-chips"))
       .getAllByRole("link")
@@ -716,7 +717,7 @@ describe("searching the transcript", () => {
     const numberOf = () =>
       screen
         .getAllByTestId("transcript-step")
-        .find((step) => step.textContent?.includes("create_tag"))
+        .find((step) => step.textContent.includes("create_tag"))
         ?.querySelector("[data-testid=step-number]")?.textContent;
     const before = numberOf();
     expect(before).toBeDefined();

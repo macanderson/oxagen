@@ -810,7 +810,9 @@ describe("transcript", () => {
       "6×",
     ]);
     expect(speeds[0]).toHaveAttribute("aria-pressed", "true");
-    fireEvent.click(speeds[3] as HTMLElement);
+    const six = speeds[3];
+    if (six === undefined) throw new Error("no 6× speed button");
+    fireEvent.click(six);
     expect(speeds[3]).toHaveAttribute("aria-pressed", "true");
     expect(speeds[0]).toHaveAttribute("aria-pressed", "false");
   });
