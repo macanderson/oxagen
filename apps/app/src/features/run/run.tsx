@@ -21,6 +21,7 @@ import { GovernedActionsTab } from "./actions-tab";
 import { ChainTab } from "./chain";
 import { CostTab } from "./cost";
 import { RunHeader } from "./header";
+import { IssuesCount } from "./issues-tab";
 import { runMetrics } from "./metrics";
 import { OutputsSpine } from "./outputs";
 import { ContextTab, entriesOf, IssuesTab, PolicyTab } from "./sections";
@@ -70,7 +71,17 @@ function Tabs({
         ? floor(buildFeed(everything.value.entries).length)
         : undefined,
     },
-    issues: { count: run.taskRef === null ? "0" : "1" },
+    // The task reference now, and the issues the run's pull requests close
+    // once GitHub answers; the table under the tab counts the same rows.
+    issues: {
+      count: (
+        <Suspense
+          fallback={t("atLeast", { count: run.taskRef === null ? 0 : 1 })}
+        >
+          <IssuesCount run={run} work={props.work} />
+        </Suspense>
+      ),
+    },
     actions: governed
       ? { count: floor(policy.length), parked }
       : { label: t("player"), count: String(run.frames), parked },

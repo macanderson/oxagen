@@ -145,6 +145,61 @@ describe("legacy backfill address retirement", () => {
   });
 });
 
+describe("backfill cost (#3944)", () => {
+  it("prices each session at the billing rate card's list price", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oxagen-backfill-"));
+    try {
+      const path = join(dir, "cost.jsonl");
+      const line = (model: string, uuid: string) =>
+        JSON.stringify({
+          type: "assistant",
+          uuid,
+          sessionId: "33333333-3333-4333-8333-333333333333",
+          timestamp: "2026-09-20T00:00:00.000Z",
+          message: {
+            model,
+            content: [],
+            usage: {
+              input_tokens: 1_000_000,
+              output_tokens: 1_000_000,
+              cache_creation_input_tokens: 2_000_000,
+              cache_read_input_tokens: 1_000_000,
+              cache_creation: {
+                ephemeral_5m_input_tokens: 1_000_000,
+                ephemeral_1h_input_tokens: 1_000_000,
+              },
+            },
+          },
+        });
+      await writeFile(
+        path,
+        [
+          line("claude-opus-4-8", "44444444-4444-4444-8444-444444444444"),
+          line(
+            "claude-haiku-4-5-20251001",
+            "55555555-5555-4555-8555-555555555555",
+          ),
+        ].join("\n"),
+      );
+      const { rows, fail } = await parseAllFiles(
+        [{ path, isSubagent: false }],
+        undefined,
+        () => {},
+      );
+      expect(fail).toBe(0);
+      const cost = (model: string) =>
+        rows.find((r) => r.model === model)?.cost_usd_micros;
+      // Opus 4.8: $5 in + $25 out + $6.25 5m write + $10 1h write + $0.50 read.
+      // The old table billed $15/$75 and a 1h write at 2.5x input.
+      expect(cost("claude-opus-4-8")).toBe(46_750_000);
+      // Haiku 4.5: $1 + $5 + $1.25 + $2 + $0.10. The old table used Haiku 3.5's $0.80/$4.
+      expect(cost("claude-haiku-4-5-20251001")).toBe(9_350_000);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("legacy replacement keys", () => {
   afterEach(() => {
     vi.unstubAllEnvs();

@@ -2093,7 +2093,7 @@ describe("issues", () => {
     await expectNoAxe(container);
   });
 
-  it("says a run with no task reference names no issue (negative)", async () => {
+  it("says a run with no task reference names no issue, and counts a floor while GitHub's closing list is unread (negative)", async () => {
     await renderRun(
       {
         detail: ok(runDetail({ run: runRow({ taskRef: null }) })),
@@ -2101,8 +2101,64 @@ describe("issues", () => {
       },
       { tab: "issues" },
     );
-    expect(screen.getByText("This run names no issue.")).toBeTruthy();
-    expect(screen.getByTestId("run-tab-count-issues")).toHaveTextContent("0");
+    // No pull request was recorded, so the answer is exact.
+    expect(
+      screen.getByText(
+        "This run names no issue, and no pull request it opened closes one.",
+      ),
+    ).toBeTruthy();
+    expect(screen.getByTestId("run-tab-count-issues")).toHaveTextContent(/^0$/);
+    cleanup();
+    await renderRun(
+      {
+        detail: ok(runDetail({ run: runRow({ taskRef: null }) })),
+        transcript: ok(runTranscript()),
+        work: ok(runWork()),
+      },
+      { tab: "issues" },
+    );
+    // A recorded pull request whose closing list GitHub did not return.
+    expect(
+      screen.getByText(
+        "This run names no issue. GitHub did not return the issues its pull requests close.",
+      ),
+    ).toBeTruthy();
+    expect(screen.getByTestId("run-tab-count-issues")).toHaveTextContent("0+");
+  });
+
+  it("counts the issues the run's pull requests close in the tab, the same rows the table draws", async () => {
+    const work = runWork();
+    await renderRun(
+      {
+        detail: ok(runDetail()),
+        transcript: ok(runTranscript()),
+        work: ok({
+          ...work,
+          pullRequests: work.pullRequests.map((pr) => ({
+            ...pr,
+            closingIssues: {
+              issues: [
+                {
+                  owner: "acme",
+                  repo: "platform",
+                  number: 490,
+                  title: "Release checklist",
+                  url: "https://github.com/acme/platform/issues/490",
+                  state: "open" as const,
+                },
+              ],
+              complete: true,
+            },
+          })),
+        }),
+      },
+      { tab: "issues" },
+    );
+    const rows = screen.getAllByTestId("run-issue");
+    expect(screen.getByTestId("run-tab-count-issues")).toHaveTextContent(
+      String(rows.length),
+    );
+    expect(rows).toHaveLength(2);
   });
 });
 

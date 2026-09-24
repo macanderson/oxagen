@@ -938,8 +938,18 @@
       "noLink": "no link",
       "task": "task",
       "statusWhy": "No tracker read is recorded for this run, so the issue's status is not shown.",
-      "empty": "This run names no issue.",
-      "note": "The record keeps the task a run was started for. Issues the run read, referenced or closed are not captured yet, and no tracker read gives the task's status.",
+      "empty": "This run names no issue, and no pull request it opened closes one.",
+      "emptyUnread": "This run names no issue. GitHub did not return the issues its pull requests close.",
+      "loading": "Reading the issues the run's pull requests close.",
+      "closingUnread": "GitHub did not return every issue the run's pull requests close, so this list may be short.",
+      "pullRequests": "The run's pull requests",
+      "closedBy": "closed by #{number}",
+      "state": {
+        "open": "open",
+        "closed": "closed"
+      },
+      "stateWhy": "GitHub's state for the issue when the run's pull requests were read.",
+      "note": "The task comes from the run's dispatch, and no tracker read gives its status. The other rows are the issues GitHub records each pull request the run opened as closing. Issues the run only read or referenced are not captured.",
       "linked": {
         "title": "Linked work",
         "edge": {

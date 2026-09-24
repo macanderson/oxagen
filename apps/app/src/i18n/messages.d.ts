@@ -2397,6 +2397,7 @@ type Messages = {
       name: string;
       slug: string;
       slugHint: string;
+      slugInvalid: string;
     };
     kind: {
       title: string;
@@ -6077,6 +6078,16 @@ type Messages = {
       task: string;
       statusWhy: string;
       empty: string;
+      emptyUnread: string;
+      loading: string;
+      closingUnread: string;
+      pullRequests: string;
+      closedBy: string;
+      state: {
+        open: string;
+        closed: string;
+      };
+      stateWhy: string;
       note: string;
       linked: {
         title: string;

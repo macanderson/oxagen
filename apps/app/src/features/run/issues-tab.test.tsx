@@ -159,7 +159,7 @@ describe("the Issues panel", () => {
       }),
     ).toHaveAttribute("href", "https://github.com/a-intel/platform/issues/482");
     expect(
-      issues.getByText(/The record keeps the task a run was started for\./),
+      issues.getByText(/The task comes from the run's dispatch,/),
     ).toBeTruthy();
     await screen.findByTestId("run-linked-work");
     await expectNoAxe(container);
@@ -176,13 +176,137 @@ describe("the Issues panel", () => {
     );
   });
 
-  it("says a run with no task names no issue, and draws no table (negative)", async () => {
-    await renderIssues({ run: runRow({ taskRef: null }) });
-    expect(screen.getByText("This run names no issue.")).toBeTruthy();
+  it("says a run with no task names no issue, and draws no table, when its pull requests close none (negative)", async () => {
+    await renderIssues({
+      run: runRow({ taskRef: null }),
+      work: readOk(closing({ issues: [], complete: true })),
+    });
+    expect(
+      screen.getByText(
+        "This run names no issue, and no pull request it opened closes one.",
+      ),
+    ).toBeTruthy();
     expect(screen.getByText("0 in this session")).toBeTruthy();
     expect(screen.queryByRole("table", { name: "Issues" })).toBeNull();
   });
+
+  it("never reads an unread closing list as closing nothing (negative)", async () => {
+    await renderIssues({ run: runRow({ taskRef: null }) });
+    expect(
+      screen.getByText(
+        "This run names no issue. GitHub did not return the issues its pull requests close.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("lists the issues the run's own pull requests close, with GitHub's state, the closing pull request, an observed edge and a link", async () => {
+    const { container } = await renderIssues({
+      work: readOk(
+        closing({
+          issues: [
+            issue(490, "open"),
+            issue(477, "closed"),
+            // The task reference is one row, however many sources name it.
+            issue(482, "open"),
+          ],
+          complete: true,
+        }),
+      ),
+    });
+    const rows = screen.getAllByTestId("run-issue");
+    // The task first, then each issue a pull request closes, the task not again.
+    expect(
+      rows.map(
+        (row) =>
+          within(row).getAllByText(/^a-intel\/platform#/)[0]?.textContent,
+      ),
+    ).toEqual([
+      "a-intel/platform#482",
+      "a-intel/platform#490",
+      "a-intel/platform#477",
+    ]);
+    expect(screen.getByText("3 in this session")).toBeTruthy();
+    const open = rows.find((row) => row.textContent.includes("#490"));
+    if (open === undefined) throw new Error("expected the #490 row");
+    expect(within(open).getByText("open")).toBeTruthy();
+    expect(within(open).getByText("closed by #511")).toBeTruthy();
+    expect(within(open).getByText("observed")).toBeTruthy();
+    expect(
+      within(open).getByRole("link", {
+        name: "View a-intel/platform#490 on its tracker",
+      }),
+    ).toHaveAttribute("href", "https://github.com/a-intel/platform/issues/490");
+    const shut = rows.find((row) => row.textContent.includes("#477"));
+    if (shut === undefined) throw new Error("expected the #477 row");
+    expect(within(shut).getByText("closed")).toBeTruthy();
+    expect(screen.queryByText(/so this list may be short/)).toBeNull();
+    await expectNoAxe(container);
+  });
+
+  it("adds nothing for a pull request matched only by branch or head commit (negative)", async () => {
+    for (const association of ["branch", "head_commit"] as const) {
+      await renderIssues({
+        work: readOk(
+          closing(
+            { issues: [issue(490, "open")], complete: true },
+            association,
+          ),
+        ),
+      });
+      expect(screen.getAllByTestId("run-issue")).toHaveLength(1);
+      expect(screen.queryByText("closed by #511")).toBeNull();
+      cleanup();
+    }
+  });
+
+  it("says the list may be short when GitHub cut it short (negative)", async () => {
+    await renderIssues({
+      work: readOk(closing({ issues: [issue(490, "open")], complete: false })),
+    });
+    expect(screen.getAllByTestId("run-issue")).toHaveLength(2);
+    expect(
+      screen.getByText(
+        "GitHub did not return every issue the run's pull requests close, so this list may be short.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("keeps the task and names the failed read when the pull requests could not be read (negative)", async () => {
+    await renderIssues({ work: readError("frame_store_unreachable", 502) });
+    const issues = region("Issues");
+    expect(issues.getAllByTestId("run-issue")).toHaveLength(1);
+    expect(
+      issues.getByText(/The run's pull requests could not be loaded/),
+    ).toBeTruthy();
+  });
 });
+
+/** The work read with the one recorded pull request closing what GitHub lists. */
+function closing(
+  closingIssues: NonNullable<RunWork["pullRequests"][number]["closingIssues"]>,
+  association: RunWork["pullRequests"][number]["association"] = "recorded",
+): RunWork {
+  const work = runWork();
+  return {
+    ...work,
+    pullRequests: work.pullRequests.map((pr) => ({
+      ...pr,
+      association,
+      closingIssues,
+    })),
+  };
+}
+
+function issue(number: number, state: "open" | "closed") {
+  return {
+    owner: "a-intel",
+    repo: "platform",
+    number,
+    title: `Issue ${String(number)}`,
+    url: `https://github.com/a-intel/platform/issues/${String(number)}`,
+    state,
+  };
+}
 
 describe("Linked work", () => {
   it("lists the recorded checkout's repository as observed, with the frames that saw it", async () => {

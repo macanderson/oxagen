@@ -1355,6 +1355,25 @@ function claimer(
 }
 
 /**
+ * Whether a text row is the run's own copy of a prompt the turn already draws
+ * as its prompt row: a message or turn-end frame on the run's own chain whose
+ * text is the operator's words. A subagent's frames never match, so the words
+ * a parent sent its subagent keep their row.
+ */
+function echoesPrompt(
+  step: TranscriptStep,
+  text: string,
+  asked: ReadonlySet<string>,
+): boolean {
+  const { first } = step;
+  return (
+    first.subagent === undefined &&
+    (first.type === MESSAGE || first.type === "turn_end") &&
+    asked.has(text)
+  );
+}
+
+/**
  * The run as the Transcript tab's rows, in the order the steps happened
  * (mockup `txEntries`). Every row is read from the frames; a frame with
  * nothing to read (a hook registering, a turn boundary with no body, a
@@ -1366,6 +1385,16 @@ export function buildFeed(entries: readonly TranscriptEntry[]): FeedRow[] {
   const rows: FeedRow[] = [];
   const claimed = new Set<string>();
   for (const turn of buildTranscript(entries)) {
+    // The operator's words for this turn. A run recorded before #4051 also
+    // sealed the transcript's copy of the prompt with its text, as a message
+    // frame, so that copy would draw the prompt a second time.
+    const asked = new Set(
+      turn.steps.flatMap((step) => {
+        if (!isOperatorPrompt(step.first)) return [];
+        const text = soleText(step.frames);
+        return text === null ? [] : [text.trim()];
+      }),
+    );
     // The last words drawn in this turn: a turn's closing message repeats
     // the reply the model gave when both were recorded, and is one row.
     let said: string | null = null;
@@ -1378,8 +1407,10 @@ export function buildFeed(entries: readonly TranscriptEntry[]): FeedRow[] {
             : eventRows(step);
       for (const row of made) {
         if (row.kind === "text") {
-          if (said !== null && row.text.trim() === said) continue;
-          said = row.text.trim();
+          const text = row.text.trim();
+          if (echoesPrompt(step, text, asked)) continue;
+          if (said !== null && text === said) continue;
+          said = text;
         }
         rows.push(row);
       }

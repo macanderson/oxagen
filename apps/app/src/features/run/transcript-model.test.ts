@@ -1071,6 +1071,61 @@ describe("buildFeed, the turn's frames", () => {
     ]);
   });
 
+  it("draws the prompt once when the transcript's copy of it was sealed with its text", () => {
+    // Before #4051 the recorder sealed Claude Code's transcript copy of each
+    // prompt with the full text, as a message frame beside the turn_start.
+    // It can land on either side of the turn_start.
+    const prompt = (seq: string) =>
+      frame({
+        seq,
+        type: "turn_start",
+        request: transcriptBody({ seq, text: "Fix the build." }),
+      });
+    const copy = (seq: string) =>
+      frame({
+        seq,
+        type: "oxagen:message",
+        request: transcriptBody({ seq, text: "Fix the build.\n" }),
+      });
+    const reply = frame({
+      seq: "3",
+      kind: "model_call",
+      type: "model.response",
+      label: "anthropic/claude-opus-5",
+      response: transcriptBody({ seq: "3", text: "The build is fixed." }),
+    });
+    for (const entries of [
+      [prompt("1"), copy("2"), reply],
+      [copy("1"), prompt("2"), reply],
+    ]) {
+      const rows = buildFeed(entries);
+      expect(rows.map((row) => row.kind)).toEqual(["prompt", "text"]);
+      expect(only(rows, "text").text).toBe("The build is fixed.");
+    }
+  });
+
+  it("keeps a subagent's message that repeats the operator's words (negative)", () => {
+    const sub = {
+      chainRef: "0192d4a8-7c1e-7a00-8000-0000000000c1",
+      type: "Explore",
+    };
+    const rows = buildFeed([
+      frame({
+        seq: "1",
+        type: "turn_start",
+        request: transcriptBody({ seq: "1", text: "Find the flaky test." }),
+      }),
+      frame({
+        seq: "2",
+        type: "oxagen:message",
+        subagent: sub,
+        response: transcriptBody({ seq: "2", text: "Find the flaky test." }),
+      }),
+    ]);
+    expect(rows.map((row) => row.kind)).toEqual(["prompt", "text"]);
+    expect(rows[1]?.subagent).toEqual(sub);
+  });
+
   it("reads no prompt when turn_start carries both halves, rather than guess which (negative)", () => {
     const rows = buildFeed([
       frame({

@@ -751,6 +751,19 @@ export function rememberHookId(
 }
 
 /**
+ * Drop a hook id from the ledger. The daemon calls this when a hook routed
+ * but its frames never reached the WAL: the client saw a failure and spools
+ * the same id, and that replay has to be sealed, not dropped as a repeat.
+ */
+export function forgetHookId(
+  record: Pick<SessionRecord, "recentHookIds">,
+  hookId: string,
+): void {
+  const at = record.recentHookIds.indexOf(hookId);
+  if (at !== -1) record.recentHookIds.splice(at, 1);
+}
+
+/**
  * Which of two records for the same session id a caller that named no agent
  * means: a live chain over a sealed one, then the more recently seen.
  * `lastSeenAt` is a protocol timestamp, so it sorts as text.
