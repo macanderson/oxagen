@@ -25,6 +25,7 @@ import type {
 } from "@/data/contracts/spend";
 import type { DataSource } from "@/data/ports";
 import { type Read, readError, readOk } from "@/data/read";
+import type { WsRole } from "@/server/viewer";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import enMessages from "../../../messages/en.json";
 import spendMessages from "../../../messages/spend.json";
@@ -55,8 +56,9 @@ const { Spend } = await import("./spend");
 const { SpendLoading } = await import("./states");
 const { parseSpendView } = await import("./view");
 
-function ctxAs(wsRole: "member" | "owner") {
-  return unsafeMint(WsCtx, {
+/** The viewer in the workspace, holding `wsRole` there. */
+const ctxAs = (wsRole: WsRole) =>
+  unsafeMint(WsCtx, {
     userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
     orgId: "7a000000-0000-4000-8000-0000000000a1",
     orgSlug: "acme",
@@ -67,8 +69,6 @@ function ctxAs(wsRole: "member" | "owner") {
     wsName: "Core platform",
     wsRole,
   });
-}
-
 const ctx = ctxAs("member");
 
 const TODAY = new Date("2026-09-15T12:00:00.000Z");

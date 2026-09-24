@@ -100,6 +100,32 @@ describe("GateShell", () => {
       "/acme/core",
     );
   });
+
+  it("as a Suspense fallback beside the streamed step, leaves main#main to the step alone", () => {
+    // While a step streams in, the document holds the fallback and the step
+    // together. Both claimed main#main until 2026-09-24, and the page-load
+    // oracle's strict locator failed on the three gate pages.
+    const { container } = render(
+      <IntlProvider>
+        <GateShell step="wrap" email={null} cancel={routes.root()} pending>
+          <p>loading</p>
+        </GateShell>
+        <GateShell
+          step="wrap"
+          email="marcus@a-intel.example"
+          cancel={routes.root()}
+        >
+          <p>step</p>
+        </GateShell>
+      </IntlProvider>,
+    );
+    const mains = container.querySelectorAll("main#main");
+    expect(mains).toHaveLength(1);
+    expect(mains[0]).toHaveTextContent("step");
+    expect(
+      screen.getByText("loading").closest("[aria-busy='true']"),
+    ).not.toBeNull();
+  });
 });
 
 describe("GateSkeleton", () => {
