@@ -1,6 +1,8 @@
 "use client";
 // Accept or decline, for the invited account (mockup `obInvite`). Declining
-// changes the invitation and nothing else: no one is notified today.
+// changes the invitation and nothing else: no one is notified today (#3886).
+// The decline is confirmed by a toast, as the design's `act()` does, and the
+// two buttons stay in place, now inert, so focus stays on Decline.
 
 import { useTranslations } from "next-intl";
 import { useState } from "react";
@@ -9,6 +11,7 @@ import { acceptInvitation, declineInvitation } from "./invite-actions";
 import { FormAlert } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { buttonPrimary, buttonSecondary } from "@/ui/control-styles";
+import { ToastStack, useToasts } from "@/ui/toast";
 import { LoaderCircle } from "lucide-react";
 
 /** The refusal the alert names: another account, a closed invitation, or any other failure. */
@@ -23,9 +26,12 @@ export function InviteDecision({ token }: { token: string }) {
   const [pending, setPending] = useState<"accept" | "decline" | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [declined, setDeclined] = useState(false);
+  const { toasts, toast } = useToasts();
+  // Pressing either button does nothing while one is running or once declined.
+  const inert = pending !== null || declined;
 
   async function run(kind: "accept" | "decline") {
-    if (pending) return;
+    if (inert) return;
     setPending(kind);
     setFailure(null);
     try {
@@ -38,26 +44,16 @@ export function InviteDecision({ token }: { token: string }) {
         } else setFailure(failureOf(result.reason));
       } else {
         const result = await declineInvitation(token);
-        if (result.ok) setDeclined(true);
-        else setFailure(failureOf(result.reason));
+        if (result.ok) {
+          setDeclined(true);
+          toast(t("declined"));
+        } else setFailure(failureOf(result.reason));
       }
     } catch {
       setFailure("failed");
     } finally {
       setPending(null);
     }
-  }
-
-  if (declined) {
-    return (
-      <p
-        role="status"
-        data-testid="invite-declined"
-        className="text-sm text-muted-foreground"
-      >
-        {t("declined")}
-      </p>
-    );
   }
 
   return (
@@ -77,7 +73,7 @@ export function InviteDecision({ token }: { token: string }) {
           type="button"
           data-touch-target=""
           className={`${buttonPrimary} max-md:w-full`}
-          aria-disabled={pending !== null || undefined}
+          aria-disabled={inert || undefined}
           onClick={() => void run("accept")}
         >
           {pending === "accept" ? (
@@ -92,12 +88,13 @@ export function InviteDecision({ token }: { token: string }) {
           type="button"
           data-touch-target=""
           className={`${buttonSecondary} max-md:w-full`}
-          aria-disabled={pending !== null || undefined}
+          aria-disabled={inert || undefined}
           onClick={() => void run("decline")}
         >
           {pending === "decline" ? t("declining") : t("decline")}
         </button>
       </div>
+      <ToastStack toasts={toasts} testId="invite-toasts" />
     </div>
   );
 }

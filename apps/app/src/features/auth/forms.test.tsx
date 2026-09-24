@@ -683,6 +683,25 @@ describe("SignupForm", () => {
     });
   });
 
+  it("an address returned by Verify email's Change it starts in the field, editable", async () => {
+    live.liveSignUp.mockResolvedValue({ ok: true, needsVerification: true });
+    renderWithIntl(<SignupForm email="marcus@a-intel.example" />);
+    const field = screen.getByLabelText("Work email");
+    expect(field).toHaveValue("marcus@a-intel.example");
+    await userEvent.clear(field);
+    await fill();
+    await waitFor(() => {
+      expect(router.replace).toHaveBeenCalledWith(
+        "/verify?email=marcus.bell%40acme.example&next=%2Fnew-organization",
+      );
+    });
+  });
+
+  it("with no address handed in, the field starts empty (negative)", () => {
+    renderWithIntl(<SignupForm />);
+    expect(screen.getByLabelText("Work email")).toHaveValue("");
+  });
+
   it("otherwise straight to next", async () => {
     live.liveSignUp.mockResolvedValue({ ok: true, needsVerification: false });
     renderWithIntl(<SignupForm />);
@@ -1436,11 +1455,47 @@ describe("InviteDecision", () => {
       value: { invitationPublicId: "invi_1", status: "declined" },
     });
     renderWithIntl(<InviteDecision token="invi_1" />);
-    await userEvent.click(screen.getByRole("button", { name: "Decline" }));
-    expect(await screen.findByTestId("invite-declined")).toHaveTextContent(
-      "Invitation declined. Nothing else changes.",
+    // The stack is mounted before the decline, so the polite region announces the row.
+    const stack = screen.getByTestId("invite-toasts");
+    expect(stack).toHaveAttribute("aria-live", "polite");
+    expect(stack).toBeEmptyDOMElement();
+    const decline = screen.getByRole("button", { name: "Decline" });
+    await userEvent.click(decline);
+    await waitFor(() => {
+      expect(stack).toHaveTextContent(
+        "Invitation declined. Nothing else changes.",
+      );
+    });
+    expect(stack.querySelector("[data-toast]")).toHaveAttribute(
+      "data-tone",
+      "allowed",
     );
+    // The row stays, so focus stays on Decline; both buttons are now inert.
+    expect(decline).toBeInTheDocument();
+    expect(decline).toHaveFocus();
+    expect(decline).toHaveAttribute("aria-disabled", "true");
+    expect(
+      screen.getByRole("button", { name: "Accept invitation" }),
+    ).toHaveAttribute("aria-disabled", "true");
     expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it("once declined, neither button sends anything more (negative)", async () => {
+    inviteActions.declineInvitation.mockResolvedValue({
+      ok: true,
+      value: { invitationPublicId: "invi_1", status: "declined" },
+    });
+    renderWithIntl(<InviteDecision token="invi_1" />);
+    await userEvent.click(screen.getByRole("button", { name: "Decline" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("invite-toasts")).not.toBeEmptyDOMElement();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Decline" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Accept invitation" }),
+    );
+    expect(inviteActions.declineInvitation).toHaveBeenCalledTimes(1);
+    expect(inviteActions.acceptInvitation).not.toHaveBeenCalled();
   });
 
   it("names the refusal: another account, a closed invitation, any other failure", async () => {

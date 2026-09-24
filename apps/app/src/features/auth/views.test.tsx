@@ -272,6 +272,49 @@ describe("InvitationBody", () => {
     expect(document.body).not.toHaveTextContent("Signed in as");
   });
 
+  it("closed · accepted and signed out, the footer offers the Log in its alert names", async () => {
+    await renderServer(
+      <InvitationBody
+        invitation={invitation}
+        decision={{ kind: "closed", status: "accepted", signedInAs: null }}
+      />,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent("Log in instead.");
+    expect(screen.getByRole("link", { name: "Log in" })).toHaveAttribute(
+      "href",
+      "/login",
+    );
+    expect(document.body).not.toHaveTextContent("Signed in as");
+  });
+
+  it.each(["declined", "revoked", "expired"] as const)(
+    "closed · %s and signed out, no Log in is drawn, because the alert names none (negative)",
+    async (status) => {
+      await renderServer(
+        <InvitationBody
+          invitation={invitation}
+          decision={{ kind: "closed", status, signedInAs: null }}
+        />,
+      );
+      expect(screen.queryByRole("link", { name: "Log in" })).toBeNull();
+    },
+  );
+
+  it("closed · accepted while signed in, the footer names the account and draws no second Log in (negative)", async () => {
+    await renderServer(
+      <InvitationBody
+        invitation={invitation}
+        decision={{
+          kind: "closed",
+          status: "accepted",
+          signedInAs: "marcus.bell@acme.example",
+        }}
+      />,
+    );
+    expect(screen.queryByRole("link", { name: "Log in" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Not you?" })).toBeInTheDocument();
+  });
+
   it("not found", async () => {
     await renderServer(<InvitationNotFound />);
     const card = screen.getByTestId("invite-not-found");

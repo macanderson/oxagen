@@ -119,6 +119,12 @@ export async function InvitationBody({
       : decision.kind === "closed"
         ? decision.signedInAs
         : null;
+  // An accepted invitation tells the visitor to log in instead; when nobody is
+  // signed in, the footer carries that Log in, since the card's actions are off.
+  const logInInstead =
+    decision.kind === "closed" &&
+    decision.status === "accepted" &&
+    decision.signedInAs === null;
 
   return (
     <>
@@ -234,6 +240,12 @@ export async function InvitationBody({
           </span>{" "}
           <SafeLink to={routes.login(here)} className={linkText}>
             {t("notYou")}
+          </SafeLink>
+        </AuthFooter>
+      ) : logInInstead ? (
+        <AuthFooter>
+          <SafeLink to={routes.login()} className={linkText}>
+            {t("logInInstead")}
           </SafeLink>
         </AuthFooter>
       ) : null}
