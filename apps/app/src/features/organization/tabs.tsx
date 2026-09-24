@@ -53,6 +53,7 @@ export function OrganizationTabs({
   return (
     <RouteTabs
       label={t("label")}
+      tablist
       tabs={[
         tab("people", routes.people(org), counts.people),
         tab("roles", routes.roles(org), counts.roles),

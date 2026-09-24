@@ -5,7 +5,11 @@
 // by the server section; this island only picks which one shows.
 //
 // Choosing here is a preview. No capability sets the source yet (#4005), so a
-// source other than the recorded one says so and writes nothing. The customer
+// source other than the recorded one says so and writes nothing. When the
+// record names no source (Oxagen pays, on the minted key or the shared one,
+// and nothing reads which), no source is chosen: the select opens on "Choose a
+// source" and the panel says the source is not recorded, rather than drawing
+// one of Oxagen's keys as the one that pays. The customer
 // key's state carries the one write this panel has: saving a key makes
 // customer_key the source, because a stored key is what decides it.
 import { useTranslations } from "next-intl";
@@ -23,7 +27,7 @@ export function FundingPicker({
 }) {
   const t = useTranslations("organization.modelFunding.funding");
   const id = useId();
-  const [chosen, setChosen] = useState<FundingSource>(current ?? "platform");
+  const [chosen, setChosen] = useState<FundingSource | null>(current);
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1.5">
@@ -32,14 +36,15 @@ export function FundingPicker({
         </label>
         <select
           id={id}
-          value={chosen}
+          value={chosen ?? ""}
           aria-describedby={`${id}-about`}
           className={inputBase}
           onChange={(event) => {
             const { value } = event.currentTarget;
-            setChosen(FUNDING_SOURCES.find((s) => s === value) ?? chosen);
+            setChosen(FUNDING_SOURCES.find((s) => s === value) ?? null);
           }}
         >
+          {chosen === null ? <option value="">{t("choose")}</option> : null}
           {FUNDING_SOURCES.map((source) => (
             <option key={source} value={source}>
               {t(`sources.${source}.option`)}
@@ -47,21 +52,23 @@ export function FundingPicker({
           ))}
         </select>
         <p id={`${id}-about`} className="text-xs text-muted-foreground">
-          {t(`sources.${chosen}.about`)}
+          {chosen === null ? t("unknown") : t(`sources.${chosen}.about`)}
         </p>
       </div>
-      {chosen === current ? null : (
+      {chosen === null || chosen === current ? null : (
         <p
           data-testid="funding-preview"
           data-issue="4005"
           className="text-[12px] text-dim"
         >
           {current === null
-            ? t("unknown")
+            ? t("unknownPreview", { source: chosen })
             : t("preview", { source: chosen, current })}
         </p>
       )}
-      <div data-funding-state={chosen}>{states[chosen]}</div>
+      {chosen === null ? null : (
+        <div data-funding-state={chosen}>{states[chosen]}</div>
+      )}
     </div>
   );
 }

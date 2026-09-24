@@ -111,10 +111,18 @@ function headers(table: HTMLElement): string[] {
 }
 
 describe("People", () => {
-  async function renderPeople(members: MemberList = roster) {
+  async function renderPeople(
+    members: MemberList = roster,
+    twoFactorRequired = true,
+  ) {
     const view = render(
       <IntlProvider>
-        <PeopleTab org="acme" members={members} roles={catalog} />
+        <PeopleTab
+          org="acme"
+          members={members}
+          roles={catalog}
+          twoFactorRequired={twoFactorRequired}
+        />
       </IntlProvider>,
     );
     await expectNoAxe(view.container);
@@ -124,9 +132,10 @@ describe("People", () => {
   it("draws the People panel with its badge, Invite, and the design's columns in order", async () => {
     await renderPeople();
     const panel = screen.getByRole("region", { name: "People" });
-    expect(
-      within(panel).getByText("two-factor policy not recorded"),
-    ).toBeInTheDocument();
+    expect(within(panel).getByText("two-factor required")).toHaveAttribute(
+      "data-policy",
+      "required",
+    );
     expect(within(panel).getByRole("button", { name: "Invite" })).toBeTruthy();
     expect(
       headers(within(panel).getByRole("table", { name: "People" })),
@@ -171,6 +180,16 @@ describe("People", () => {
     );
   });
 
+  it("says two-factor is optional when the organization's policy does not require it", async () => {
+    await renderPeople(roster, false);
+    const panel = screen.getByRole("region", { name: "People" });
+    expect(within(panel).getByText("two-factor optional")).toHaveAttribute(
+      "data-policy",
+      "optional",
+    );
+    expect(within(panel).queryByText("two-factor required")).toBeNull();
+  });
+
   it("prints a member's name and email, the recorded role, active status, and not recorded where the roster has nothing", async () => {
     await renderPeople();
     const cells = within(rowOf("usr_7k2m9q4x8r1t5v3w6y0z2a")).getAllByRole(
@@ -195,6 +214,10 @@ describe("People", () => {
     const row = rowOf("usr_7k2m9q4x8r1t5v3w6y0z2a");
     await userEvent.click(within(row).getByRole("button", { name: "Open" }));
     const dialog = screen.getByTestId("member-usr_7k2m9q4x8r1t5v3w6y0z2a");
+    // Titled with the person, the email beneath, as the design's `member` is.
+    expect(
+      within(dialog).getByRole("heading", { name: "Marcus Bell" }),
+    ).toBeInTheDocument();
     expect(dialog).toHaveTextContent("marcus.bell@acme.example");
     expect(dialog).toHaveTextContent("usr_7k2m9q4x8r1t5v3w6y0z2a");
     expect(dialog).toHaveTextContent("not recorded");
@@ -249,7 +272,11 @@ describe("Invitations", () => {
   async function renderInvitations(members: MemberList = roster) {
     const view = render(
       <IntlProvider>
-        <InvitationsTab org="acme" members={members} />
+        <InvitationsTab
+          org="acme"
+          members={members}
+          twoFactorRequired={false}
+        />
       </IntlProvider>,
     );
     await expectNoAxe(view.container);
@@ -277,6 +304,36 @@ describe("Invitations", () => {
     expect(cells[4]).toHaveTextContent("Never");
     expect(within(row).getByRole("button", { name: "Resend" })).toBeTruthy();
     expect(within(row).getByRole("button", { name: "Revoke" })).toBeTruthy();
+  });
+
+  it("filters by the day an invitation was sent and the day it expires", async () => {
+    await renderInvitations();
+    const panel = screen.getByRole("region", { name: "Pending invitations" });
+    const sent = within(panel).getByLabelText("Sent");
+    const expires = within(panel).getByLabelText("Expires");
+    expect(
+      within(sent)
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual(["All · Sent", "Sep 1, 2026", "Sep 10, 2026"]);
+    expect(
+      within(expires)
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual(["All · Expires", "Sep 17, 2026"]);
+    await userEvent.selectOptions(sent, "Sep 10, 2026");
+    expect(
+      document.querySelector('[data-row="invi_4n5p6q7r8s9t0v1w2x3y4z"]'),
+    ).not.toBeNull();
+    expect(
+      document.querySelector('[data-row="invi_9z8y7x6w5v4t3s2r1q0p9n"]'),
+    ).toBeNull();
+    await userEvent.selectOptions(sent, "");
+    await userEvent.selectOptions(expires, "Sep 17, 2026");
+    // An invitation that never expires falls outside any expiry day.
+    expect(
+      document.querySelector('[data-row="invi_9z8y7x6w5v4t3s2r1q0p9n"]'),
+    ).toBeNull();
   });
 
   it("says no invitation is waiting when there are none", async () => {

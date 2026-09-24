@@ -21,6 +21,7 @@ import { ModelFundingTab } from "./model-funding";
 import { OrganizationFrame } from "./frame";
 import { InvitationsTab, PeopleTab } from "./people";
 import { RolesTab } from "./roles";
+import { readWorkspaceFacts } from "./workspace-reads";
 import { WorkspacesTab } from "./workspaces";
 
 const QUERY_TABS: readonly OrganizationQueryTab[] = [
@@ -56,23 +57,63 @@ export function Organization({
       current={tab}
       retry={routes.organization(ctx.orgSlug, tab)}
     >
-      {({ members, roles, workspaces }) => {
+      {({ members, roles, workspaces, twoFactor, enterable }) => {
         switch (tab) {
           case "invitations":
-            return <InvitationsTab org={ctx.orgSlug} members={members} />;
+            return (
+              <InvitationsTab
+                org={ctx.orgSlug}
+                members={members}
+                twoFactorRequired={twoFactor.required}
+              />
+            );
           case "workspaces":
-            return <WorkspacesTab org={ctx.orgSlug} workspaces={workspaces} />;
+            return workspacesTab(ctx, workspaces, enterable);
           case "dataPlane":
             return dataPlane(ctx, source, workspaces);
           case "costCenters":
             return <CostCenters ctx={ctx} source={source} />;
           default:
             return (
-              <PeopleTab org={ctx.orgSlug} members={members} roles={roles} />
+              <PeopleTab
+                org={ctx.orgSlug}
+                members={members}
+                roles={roles}
+                twoFactorRequired={twoFactor.required}
+              />
             );
         }
       }}
     </OrganizationFrame>
+  );
+}
+
+/**
+ * The Workspaces tab, with what each workspace the viewer may enter binds and
+ * registers: one `list_repositories` and one `list_agents` inside each, made
+ * together. A workspace the viewer is not a member of is not read, and its
+ * row says "not recorded" for those cells.
+ */
+async function workspacesTab(
+  ctx: OrgCtx,
+  workspaces: WorkspaceList,
+  enterable: readonly string[],
+) {
+  const facts = new Map(
+    await Promise.all(
+      enterable.map(
+        async (slug) =>
+          [slug, await readWorkspaceFacts(ctx.orgSlug, slug)] as const,
+      ),
+    ),
+  );
+  return (
+    <WorkspacesTab
+      org={ctx.orgSlug}
+      workspaces={workspaces}
+      facts={facts}
+      enterable={enterable}
+    />
   );
 }
 

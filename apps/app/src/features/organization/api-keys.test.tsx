@@ -44,12 +44,7 @@ const { OrgCtx, WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const { readError, readOk } = await import("@/data/read");
 const { ApiKeys, chooseWorkspace } = await import("./api-keys");
-const { API_KEYS_PAGE, pageOfKeys, parseApiKeysView } = await import(
-  "./api-keys-view"
-);
-/** `API_KEYS_PAGE` and the figures around it, as the pager prints them. */
-const PAGE = String(API_KEYS_PAGE);
-const nth = (n: number) => String(API_KEYS_PAGE + n);
+const { parseApiKeysView } = await import("./api-keys-view");
 
 /** The view a request with no query asks for: the unrevoked keys, first page. */
 const ACTIVE = parseApiKeysView({});
@@ -331,8 +326,7 @@ function manyRevoked(n: number): ApiKey[] {
 }
 
 const filterNav = () => screen.getByRole("navigation", { name: "Which keys" });
-const pagerNav = () =>
-  screen.getByRole("navigation", { name: "Pages of API keys" });
+const pagerNav = () => screen.getByRole("navigation", { name: /pages/i });
 const rowIds = () =>
   Array.from(keysTable().querySelectorAll("[data-api-key]")).map((row) =>
     row.getAttribute("data-api-key"),
@@ -468,164 +462,45 @@ describe("empty", () => {
   });
 });
 
-describe("paging a roster larger than a page", () => {
-  it("shows the range and one page, with no Previous or Next, while one page holds the roster (negative)", async () => {
-    await renderApiKeys(readOk(manyKeys(API_KEYS_PAGE)));
-    expect(rowIds()).toHaveLength(API_KEYS_PAGE);
-    expect(pagerNav()).toHaveTextContent(`1–${PAGE} of ${PAGE}`);
-    expect(
-      within(pagerNav())
-        .getAllByRole("link")
-        .map((link) => link.textContent),
-    ).toEqual(["1"]);
+describe("the list controls every list carries", () => {
+  it("searches the roster by what the rows print", async () => {
+    const user = userEvent.setup();
+    await renderApiKeys(readOk([live, unused]));
+    await user.type(screen.getByRole("searchbox"), "release");
+    expect(rowFor(unused)).toBeVisible();
+    expect(rowFor(live)).not.toBeVisible();
   });
 
-  it("offers the design's Rows choices and carries the choice in the URL", async () => {
-    await renderApiKeys(readOk(manyKeys(API_KEYS_PAGE + 5)));
-    const rowsSelect = screen.getByLabelText("Rows");
-    expect(
-      within(rowsSelect)
-        .getAllByRole("option")
-        .map((option) => option.textContent),
-    ).toEqual(["5", "10", "25", "50", "All"]);
-    await userEvent.selectOptions(rowsSelect, "25");
-    expect(router.push).toHaveBeenCalledWith(
-      "/acme/api-keys?workspace=core-platform&rows=25",
-    );
-  });
-
-  it("shows every key on one page when Rows is All", async () => {
-    const keys = manyKeys(API_KEYS_PAGE + 5);
-    await renderApiKeys(readOk(keys), "owner", { ...ACTIVE, rows: 0 });
-    expect(rowIds()).toHaveLength(keys.length);
-    expect(parseApiKeysView({ rows: "all" }).rows).toBe(0);
-    expect(parseApiKeysView({ rows: "7" }).rows).toBe(API_KEYS_PAGE);
-  });
-
-  it("numbers the pages and marks the current one", async () => {
-    await renderApiKeys(readOk(manyKeys(API_KEYS_PAGE + 5)));
-    const one = within(pagerNav()).getByRole("link", { name: "1" });
-    const two = within(pagerNav()).getByRole("link", { name: "2" });
-    expect(one).toHaveAttribute("aria-current", "page");
-    expect(two).toHaveAttribute(
-      "href",
-      `/acme/api-keys?workspace=core-platform&offset=${PAGE}`,
-    );
-  });
-
-  // 20 seconds, not the 5-second default. This is the only test in the file
-  // that runs axe over a FULL page — twenty rows, each with its own Rotate and
-  // Revoke, plus the pager — and axe's cost grows with the node count, so it
-  // routinely ran past 5s on a loaded CI runner and failed as a timeout on
-  // pull requests that had not touched this feature at all. The accessibility
-  // assertion is the one worth keeping here (a full page with a pager is
-  // exactly where a11y breaks), so the budget moves rather than the check.
-  it("cuts the roster at API_KEYS_PAGE rows and offers the next page", async () => {
-    const keys = manyKeys(API_KEYS_PAGE + 5);
-    const view = await renderApiKeys(readOk(keys));
-    expect(rowIds()).toEqual(keys.slice(0, API_KEYS_PAGE).map((k) => k.id));
-    expect(pagerNav()).toHaveTextContent(`1–${PAGE} of ${nth(5)}`);
-    const next = within(pagerNav()).getByRole("link", { name: "Next" });
-    expect(next).toHaveAttribute(
-      "href",
-      `/acme/api-keys?workspace=core-platform&offset=${PAGE}`,
-    );
-    expect(
-      within(pagerNav()).queryByRole("link", { name: "Previous" }),
-    ).toBeNull();
-    await expectNoAxe(view.container);
-  }, 20_000);
-
-  it("shows the last page's rows and the way back, with no Next beyond the end", async () => {
-    const keys = manyKeys(API_KEYS_PAGE + 5);
-    await renderApiKeys(readOk(keys), "owner", {
-      ...ACTIVE,
-      offset: API_KEYS_PAGE,
+  it("sorts on a header click and says so with aria-sort", async () => {
+    const user = userEvent.setup();
+    await renderApiKeys(readOk([live, unused]));
+    const header = within(keysTable()).getByRole("columnheader", {
+      name: /Name/,
     });
-    expect(rowIds()).toEqual(keys.slice(API_KEYS_PAGE).map((k) => k.id));
-    expect(pagerNav()).toHaveTextContent(`${nth(1)}–${nth(5)} of ${nth(5)}`);
-    expect(
-      within(pagerNav()).getByRole("link", { name: "Previous" }),
-    ).toHaveAttribute("href", "/acme/api-keys?workspace=core-platform");
-    expect(within(pagerNav()).queryByRole("link", { name: "Next" })).toBeNull();
+    await user.click(within(header).getByRole("button"));
+    expect(header).toHaveAttribute("aria-sort", "ascending");
+    expect(rowIds()).toEqual([live.id, unused.id]);
+    await user.click(within(header).getByRole("button"));
+    expect(header).toHaveAttribute("aria-sort", "descending");
+    expect(rowIds()).toEqual([unused.id, live.id]);
   });
 
-  it("carries the filter through the pager, so a page of All stays All", async () => {
-    const keys = [...manyKeys(API_KEYS_PAGE), ...manyRevoked(5)];
-    await renderApiKeys(readOk(keys), "owner", ALL);
-    expect(
-      within(pagerNav()).getByRole("link", { name: "Next" }),
-    ).toHaveAttribute(
-      "href",
-      `/acme/api-keys?workspace=core-platform&show=all&offset=${PAGE}`,
-    );
+  it("shows ten rows by default under a numbered pager, and every row on All", async () => {
+    const user = userEvent.setup();
+    await renderApiKeys(readOk(manyKeys(15)));
+    const shown = () =>
+      Array.from(keysTable().querySelectorAll<HTMLElement>("[data-api-key]"))
+        .filter((row) => row.style.display !== "none")
+        .map((row) => row.getAttribute("data-api-key"));
+    expect(shown()).toHaveLength(10);
+    expect(pagerNav()).toHaveTextContent("1–10 of 15");
+    await user.selectOptions(screen.getByLabelText("Rows"), "0");
+    expect(shown()).toHaveLength(15);
   });
 
-  it("pages the filtered roster, not the read: hidden keys take up no page", async () => {
-    // 5 live keys buried under 20 revoked ones is one page of Active, not two.
-    const keys = [...manyRevoked(API_KEYS_PAGE), ...manyKeys(5)];
-    await renderApiKeys(readOk(keys));
-    expect(rowIds()).toHaveLength(5);
-    expect(pagerNav()).toHaveTextContent("1–5 of 5");
-    expect(within(pagerNav()).queryByRole("link", { name: "Next" })).toBeNull();
-  });
-
-  it("clamps an offset past the end onto the last page that exists (negative)", async () => {
-    // Revoking the last key on the last page, or narrowing the filter from a
-    // deep page, otherwise answers with an empty table and no way back except
-    // editing the URL.
-    const keys = manyKeys(API_KEYS_PAGE + 5);
-    await renderApiKeys(readOk(keys), "owner", {
-      ...ACTIVE,
-      offset: API_KEYS_PAGE * 9,
-    });
-    expect(rowIds()).toEqual(keys.slice(API_KEYS_PAGE).map((k) => k.id));
-    expect(pagerNav()).toHaveTextContent(`${nth(1)}–${nth(5)} of ${nth(5)}`);
-  });
-
-  it("starts a page on a page boundary, so no two pages repeat a row (negative)", async () => {
-    // The query string is shareable and hand-editable. `?offset=1` would show
-    // rows 2 to 21 while Previous, at offset 0, shows rows 1 to 20 -- the two
-    // pages repeating 19 rows, with no sequence of clicks ever reaching a
-    // boundary again.
-    const keys = manyKeys(API_KEYS_PAGE + 5);
-    await renderApiKeys(readOk(keys), "owner", { ...ACTIVE, offset: 1 });
-    expect(rowIds()).toEqual(keys.slice(0, API_KEYS_PAGE).map((k) => k.id));
-    expect(pagerNav()).toHaveTextContent(`1\u2013${PAGE} of ${nth(5)}`);
-    expect(
-      within(pagerNav()).queryByRole("link", { name: "Previous" }),
-    ).toBeNull();
-  });
-
-  it("aligns an unaligned offset down, never up, so no row is skipped", () => {
-    const keys = manyKeys(API_KEYS_PAGE * 3);
-    expect(pageOfKeys(keys, 1).offset).toBe(0);
-    expect(pageOfKeys(keys, API_KEYS_PAGE - 1).offset).toBe(0);
-    expect(pageOfKeys(keys, API_KEYS_PAGE).offset).toBe(API_KEYS_PAGE);
-    expect(pageOfKeys(keys, API_KEYS_PAGE + 1).offset).toBe(API_KEYS_PAGE);
-  });
-
-  it("falls back to the first page for an offset it does not understand (negative)", () => {
-    expect(parseApiKeysView({ offset: "20" }).offset).toBe(20);
-    expect(parseApiKeysView({ offset: "-1" }).offset).toBe(0);
-    expect(parseApiKeysView({ offset: "020" }).offset).toBe(0);
-    expect(parseApiKeysView({ offset: "1e3" }).offset).toBe(0);
-    expect(parseApiKeysView({}).offset).toBe(0);
-  });
-
-  it("reads an offset far past any real roster rather than resetting it to the first page (negative)", () => {
-    // The bound is what a double holds exactly, not a guess at how many keys a
-    // workspace may have. A ceiling of the latter kind fails the wrong way: an
-    // offset above it falls back to 0, so Next on the last page of a roster
-    // past the ceiling would jump to the first page instead. `pageOfKeys`
-    // clamps a too-large offset onto the last page that exists, which is where
-    // an offset beyond the roster is supposed to land.
-    expect(parseApiKeysView({ offset: "9999999999" }).offset).toBe(9999999999);
-    expect(pageOfKeys(manyKeys(3), 9999999999).offset).toBe(0);
-    // Past what a double holds exactly, the parse would round — and a rounded
-    // offset is a silently different page — so it falls back instead.
-    expect(parseApiKeysView({ offset: "9007199254740993" }).offset).toBe(0);
-    expect(parseApiKeysView({ offset: "99999999999999999999" }).offset).toBe(0);
+  it("pages the filtered roster, not the read: hidden keys take up no row", async () => {
+    await renderApiKeys(readOk([...manyRevoked(12), live]));
+    expect(rowIds()).toEqual([live.id]);
   });
 });
 
@@ -649,31 +524,29 @@ describe("the workspace a key names", () => {
     expect(WsCtx.is(calls.apiKeys[0]?.[0])).toBe(true);
   });
 
-  it("links every workspace the viewer may enter and marks the one in scope", async () => {
+  it("draws every workspace the viewer may enter as a tab and selects the one in scope", async () => {
     await renderApiKeys(readOk([live]));
-    const picker = screen.getByRole("navigation", { name: "Workspace" });
-    const here = within(picker).getByRole("link", { name: "Core platform" });
-    const other = within(picker).getByRole("link", { name: "Growth" });
+    const picker = screen.getByRole("tablist", { name: "Workspace" });
+    const here = within(picker).getByRole("tab", { name: "Core platform" });
+    const other = within(picker).getByRole("tab", { name: "Growth" });
     expect(here).toHaveAttribute(
       "href",
       "/acme/api-keys?workspace=core-platform",
     );
+    expect(here).toHaveAttribute("aria-selected", "true");
     expect(here).toHaveAttribute("aria-current", "page");
     expect(other).toHaveAttribute("href", "/acme/api-keys?workspace=growth");
-    expect(other).not.toHaveAttribute("aria-current");
+    expect(other).toHaveAttribute("aria-selected", "false");
   });
 
-  it("carries the filter to the next workspace and drops the page", async () => {
-    // A person who asked to see revoked keys asked about keys. The page is the
-    // other way round: page four of this roster says nothing about the next.
-    await renderApiKeys(readOk([live]), "owner", {
-      ...ALL,
-      offset: API_KEYS_PAGE,
-    });
-    const picker = screen.getByRole("navigation", { name: "Workspace" });
-    expect(
-      within(picker).getByRole("link", { name: "Growth" }),
-    ).toHaveAttribute("href", "/acme/api-keys?workspace=growth&show=all");
+  it("carries the filter to the next workspace", async () => {
+    // A person who asked to see revoked keys asked about keys.
+    await renderApiKeys(readOk([live]), "owner", ALL);
+    const picker = screen.getByRole("tablist", { name: "Workspace" });
+    expect(within(picker).getByRole("tab", { name: "Growth" })).toHaveAttribute(
+      "href",
+      "/acme/api-keys?workspace=growth&show=all",
+    );
   });
 
   it("keeps an archived workspace in the picker, named as archived, so its live keys stay revocable", async () => {
@@ -694,9 +567,9 @@ describe("the workspace a key names", () => {
         }
       </IntlProvider>,
     );
-    const picker = screen.getByRole("navigation", { name: "Workspace" });
+    const picker = screen.getByRole("tablist", { name: "Workspace" });
     expect(
-      within(picker).getByRole("link", { name: "Sunset (archived)" }),
+      within(picker).getByRole("tab", { name: "Sunset (archived)" }),
     ).toHaveAttribute("href", "/acme/api-keys?workspace=sunset");
     await expectNoAxe(view.container);
   });
@@ -720,10 +593,10 @@ describe("the workspace a key names", () => {
         }
       </IntlProvider>,
     );
-    const picker = screen.getByRole("navigation", { name: "Workspace" });
-    expect(within(picker).queryByRole("link", { name: "Finance" })).toBeNull();
+    const picker = screen.getByRole("tablist", { name: "Workspace" });
+    expect(within(picker).queryByRole("tab", { name: "Finance" })).toBeNull();
     expect(
-      within(picker).getByRole("link", { name: "Core platform" }),
+      within(picker).getByRole("tab", { name: "Core platform" }),
     ).toBeInTheDocument();
     expect(chooseWorkspace(readOk(list(foreign)), "finance")).toBeNull();
   });

@@ -14,11 +14,17 @@ import { CreateWorkspace } from "./workspace-actions";
 export function OrganizationHeader({
   ctx,
   pendingIds,
+  twoFactorRequired,
+  enterable,
   after,
 }: {
   ctx: OrgCtx;
   /** The pending invitations' ids, so Invite can tell a new one from a resend. */
   pendingIds: readonly string[];
+  /** The organization's two-factor policy, which Invite states. */
+  twoFactorRequired: boolean;
+  /** The live workspaces the viewer may enter, whose repositories Create a workspace offers. */
+  enterable: readonly string[];
   /** Where Invite reloads once an invitation was sent. */
   after?: SafePath;
 }) {
@@ -34,9 +40,10 @@ export function OrganizationHeader({
             org={ctx.orgSlug}
             pendingIds={pendingIds}
             allowed
+            twoFactorRequired={twoFactorRequired}
             after={after ?? routes.organization(ctx.orgSlug, "invitations")}
           />
-          <CreateWorkspace org={ctx.orgSlug} primary />
+          <CreateWorkspace org={ctx.orgSlug} enterable={enterable} primary />
         </>
       }
     />

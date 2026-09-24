@@ -34,7 +34,7 @@
     "apiKeys": "API keys",
     "billing": "Billing",
     "audit": "Audit",
-    "modelFunding": "Model funding",
+    "modelFunding": "Model funding and routes",
     "sso": "Single sign-on",
     "organizationEyebrow": "Organization {organization}"
   },

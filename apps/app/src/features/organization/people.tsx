@@ -7,13 +7,15 @@
 // the People table by role and takes each role's description from the role
 // catalogue. `list_members` records a member's name, email, role and join
 // date. It records no per-member workspaces, two-factor method or last sign-in,
-// and no organization two-factor policy, so those cells say "not recorded"
-// rather than a guess (#3932).
+// so those cells say "not recorded" rather than a guess (#3932). The badge
+// states the organization's two-factor policy, which the frame reads from the
+// record the MFA gate enforces (security.org_security_policy).
 // Every member on the roster holds a membership row, so Status reads "active".
 //
 // Invitations: Email, Role offered, Invited by, Sent and Expires, with Resend
-// and Revoke. The contract does not return who sent an invitation, so Invited
-// by says "not recorded".
+// and Revoke, filtered by the day it was sent and the day it expires. The
+// contract does not return who sent an invitation, so Invited by says "not
+// recorded".
 import { useTranslations } from "next-intl";
 import type { MemberList, RoleCatalog } from "@/data/contracts/org";
 import { routes } from "@/shared/safe-path";
@@ -26,6 +28,7 @@ import {
   panelHeader,
   panelTitle,
 } from "@/ui/control-styles";
+import { useFormatter } from "@/ui/formatter";
 import { SafeLink } from "@/ui/navigation";
 import { cell, headCell, numericCell } from "@/ui/table";
 import { InvitationControls } from "./invitation-controls";
@@ -129,10 +132,13 @@ export function PeopleTab({
   org,
   members,
   roles,
+  twoFactorRequired,
 }: {
   org: string;
   members: MemberList;
   roles: RoleCatalog;
+  /** security.org_security_policy.mfa_required, as the frame read it. */
+  twoFactorRequired: boolean;
 }) {
   const t = useTranslations("organization.people");
   const tRole = useTranslations("organization.roles");
@@ -164,8 +170,8 @@ export function PeopleTab({
       <div key="actions" className="flex flex-wrap gap-2">
         <DetailsDialog
           open={t("open")}
-          title={t("member.title")}
-          subtitle={member.name ?? member.email}
+          title={member.name ?? member.email}
+          subtitle={member.email}
           testId={`member-${member.id}`}
         >
           <MemberFacts member={member} />
@@ -183,17 +189,19 @@ export function PeopleTab({
           </h2>
           <div className="flex flex-wrap items-center gap-2">
             <Badge
-              tone="quiet"
-              dot={false}
-              data-policy="two-factor"
-              data-issue="3932"
+              tone={twoFactorRequired ? "allowed" : "quiet"}
+              dot={twoFactorRequired}
+              data-policy={twoFactorRequired ? "required" : "optional"}
             >
-              {t("twoFactorPolicy")}
+              {twoFactorRequired
+                ? t("twoFactorRequired")
+                : t("twoFactorOptional")}
             </Badge>
             <InviteDialog
               org={org}
               pendingIds={members.invitations.map((i) => i.id)}
               allowed
+              twoFactorRequired={twoFactorRequired}
               after={routes.organization(org, "invitations")}
             />
           </div>
@@ -298,12 +306,21 @@ function RolesInUse({
 export function InvitationsTab({
   org,
   members,
+  twoFactorRequired,
 }: {
   org: string;
   members: MemberList;
+  twoFactorRequired: boolean;
 }) {
   const t = useTranslations("organization.invitations");
   const tRole = useTranslations("organization.roles");
+  const format = useFormatter();
+  // A filter value is the day as the cell prints it, so an option and the
+  // rows it keeps can never disagree on which day an instant falls in.
+  const day = (iso: string) =>
+    format.dateTime(new Date(iso), { dateStyle: "medium" });
+  const sentDays = new Map<string, string>();
+  const expiryDays = new Map<string, string>();
   const columns = [
     { label: t("email") },
     { label: t("role") },
@@ -312,31 +329,53 @@ export function InvitationsTab({
     { label: t("expires") },
     { label: t("actions"), hidden: true },
   ];
-  const rows: ListRow[] = members.invitations.map((invitation) => ({
-    key: invitation.id,
-    rowId: invitation.id,
-    cells: [
-      <span key="email" className={`${mono} text-xs`}>
-        {invitation.email}
-      </span>,
-      <span key="role" className={`${mono} text-[11.5px]`}>
-        {tRole(invitation.role)}
-      </span>,
-      <NotRecorded key="by" />,
-      <DateCell key="sent" iso={invitation.invitedAt} />,
-      invitation.expiresAt === null ? (
-        <span key="expires">{t("never")}</span>
-      ) : (
-        <DateCell key="expires" iso={invitation.expiresAt} />
-      ),
-      <InvitationControls
-        key="actions"
-        org={org}
-        invitationId={invitation.id}
-        allowed
-      />,
-    ],
-  }));
+  const rows: ListRow[] = members.invitations.map((invitation) => {
+    const sent = day(invitation.invitedAt);
+    sentDays.set(invitation.invitedAt, sent);
+    const expires: string | null =
+      invitation.expiresAt === null ? null : day(invitation.expiresAt);
+    const values: Record<string, string> = { sent };
+    if (expires !== null) values.expires = expires;
+    if (invitation.expiresAt !== null && expires !== null)
+      expiryDays.set(invitation.expiresAt, expires);
+    return {
+      key: invitation.id,
+      rowId: invitation.id,
+      values,
+      cells: [
+        <span key="email" className={`${mono} text-xs`}>
+          {invitation.email}
+        </span>,
+        <span key="role" className={`${mono} text-[11.5px]`}>
+          {tRole(invitation.role)}
+        </span>,
+        <NotRecorded key="by" />,
+        <DateCell key="sent" iso={invitation.invitedAt} />,
+        invitation.expiresAt === null ? (
+          <span key="expires">{t("never")}</span>
+        ) : (
+          <DateCell key="expires" iso={invitation.expiresAt} />
+        ),
+        <InvitationControls
+          key="actions"
+          org={org}
+          invitationId={invitation.id}
+          allowed
+        />,
+      ],
+    };
+  });
+  /** One option per day, earliest first, as the cells print them. */
+  const options = (days: ReadonlyMap<string, string>) => {
+    const seen = new Set<string>();
+    return [...days.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .flatMap(([, label]) => {
+        if (seen.has(label)) return [];
+        seen.add(label);
+        return [{ value: label, label }];
+      });
+  };
   return (
     <section aria-labelledby="org-invitations" className={panel}>
       <div className={panelHeader}>
@@ -347,6 +386,7 @@ export function InvitationsTab({
           org={org}
           pendingIds={members.invitations.map((i) => i.id)}
           allowed
+          twoFactorRequired={twoFactorRequired}
           after={routes.organization(org, "invitations")}
         />
       </div>
@@ -354,6 +394,14 @@ export function InvitationsTab({
         label={t("tableLabel")}
         columns={columns}
         rows={rows}
+        filters={[
+          { key: "sent", label: t("filters.sent"), options: options(sentDays) },
+          {
+            key: "expires",
+            label: t("filters.expires"),
+            options: options(expiryDays),
+          },
+        ]}
         empty={members.invitations.length === 0 ? t("empty") : t("noMatch")}
       />
     </section>

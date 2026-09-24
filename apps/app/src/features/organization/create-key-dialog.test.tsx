@@ -8,7 +8,6 @@
 // secret on screen, and nothing keeps one there once the key is listed.
 import {
   cleanup,
-  fireEvent,
   render,
   screen,
   waitFor,
@@ -33,7 +32,9 @@ vi.mock("./api-key-actions", () => ({
   rotateApiKey,
 }));
 
-const { CreateKeyDialog, KeyRowActions } = await import("./create-key-dialog");
+const { CreateKeyDialog, KeyRowActions, expiryDayOf } = await import(
+  "./create-key-dialog"
+);
 const { Receipts } = await import("./receipt");
 
 /**
@@ -113,30 +114,27 @@ afterEach(async () => {
 });
 
 describe("create", () => {
-  it("mints the key under the name and day given, and shows the secret once", async () => {
+  it("mints the key under the name and the expiry chosen, and shows the secret once", async () => {
     createApiKey.mockResolvedValue({ ok: true, value: minted });
     render(createDialog());
     const dialog = await openDialog("Create key", "create-api-key");
     await userEvent.type(within(dialog).getByLabelText("Name"), "CI runner");
-    fireEvent.change(
-      within(dialog).getByLabelText(
-        "Expires at the end of this day, UTC (optional)",
-      ),
-      { target: { value: "2027-03-01" } },
-    );
-    // The control carries no timezone, so the note says what will be stored.
+    const expires = within(dialog).getByLabelText("Expires");
+    expect(
+      within(expires)
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual(["90 days", "180 days", "1 year"]);
+    await userEvent.selectOptions(expires, "y1");
+    const day = expiryDayOf("y1", new Date());
+    // The note says what will be stored: the end of that day, UTC.
     expect(dialog).toHaveTextContent(
-      "The key stops working at 2027-03-01T23:59:59.999Z.",
+      `The key stops working at ${day}T23:59:59.999Z.`,
     );
     await userEvent.click(
       within(dialog).getByRole("button", { name: "Create it" }),
     );
-    expect(createApiKey).toHaveBeenCalledWith(
-      "acme",
-      WS,
-      "CI runner",
-      "2027-03-01",
-    );
+    expect(createApiKey).toHaveBeenCalledWith("acme", WS, "CI runner", day);
     const panel = await screen.findByTestId("api-key-secret");
     expect(within(panel).getByTestId("api-key-secret-value")).toHaveTextContent(
       SECRET,
@@ -165,17 +163,22 @@ describe("create", () => {
     expect(screen.queryByTestId("create-api-key")).toBeNull();
   });
 
-  it("says the day is read in UTC before one is picked", async () => {
+  it("opens on 90 days, and says when that key stops working", async () => {
     render(createDialog());
     const dialog = await openDialog("Create key", "create-api-key");
+    const expires = within(dialog).getByLabelText("Expires");
+    expect(expires).toHaveValue("d90");
+    expect(expires).toHaveAttribute("aria-describedby", "api-key-expires-note");
     expect(dialog).toHaveTextContent(
-      "The day is read in UTC, not your local time.",
+      `The key stops working at ${expiryDayOf("d90", new Date())}T23:59:59.999Z.`,
     );
-    expect(
-      within(dialog).getByLabelText(
-        "Expires at the end of this day, UTC (optional)",
-      ),
-    ).toHaveAttribute("aria-describedby", "api-key-expires-note");
+  });
+
+  it("counts the presets in UTC days from today, and a year as the same date a year on", () => {
+    const now = new Date("2026-09-24T23:30:00.000Z");
+    expect(expiryDayOf("d90", now)).toBe("2026-12-23");
+    expect(expiryDayOf("d180", now)).toBe("2027-03-23");
+    expect(expiryDayOf("y1", now)).toBe("2027-09-24");
   });
 
   it("drops the secret when the roster first lists the key, so a later roster cannot bring it back (negative)", async () => {
@@ -358,7 +361,10 @@ describe("rotate", () => {
     });
     renderRow();
     const dialog = await openDialog("Rotate", "rotate-api-key");
-    expect(dialog).toHaveTextContent("Rotate CI runner");
+    expect(
+      within(dialog).getByRole("heading", { name: "Rotate this key" }),
+    ).toBeInTheDocument();
+    expect(dialog).toHaveTextContent("CI runner");
     expect(dialog).toHaveTextContent(
       "Requests presenting the old key are refused from that moment",
     );
@@ -447,7 +453,10 @@ describe("revoke", () => {
     revokeApiKey.mockResolvedValue({ ok: true, value: { keyId: KEY } });
     renderRow();
     const dialog = await openDialog("Revoke", "revoke-api-key");
-    expect(dialog).toHaveTextContent("Revoke CI runner");
+    expect(
+      within(dialog).getByRole("heading", { name: "Revoke this key" }),
+    ).toBeInTheDocument();
+    expect(dialog).toHaveTextContent("CI runner");
     await userEvent.click(
       within(dialog).getByRole("button", { name: "Revoke" }),
     );

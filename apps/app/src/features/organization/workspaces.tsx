@@ -4,12 +4,14 @@
 // (`list_workspaces {includeArchived:true}`).
 //
 // `list_workspaces` records a workspace's name, slug, namespace and archival.
-// It records no main repository, production branch, linked repositories,
-// agent count or owner, and the governance mode lives in
-// `.oxagen/rules/governance.toml` on the main repository, which no contract
-// reads back. Those cells say "not recorded", and the Governance chip says the
-// mode is not recorded with the namespace beneath it (#3933 for the columns,
-// #3907 for the governance mode).
+// Main repo, Production branch and Linked repos come from `list_repositories`
+// and Agents from `list_agents`, read inside each workspace the viewer may
+// enter (`workspace-reads.ts`); a workspace they cannot enter, or an archived
+// one, says "not recorded" there. Nothing records a workspace's owner, and the
+// governance mode lives in `.oxagen/rules/governance.toml` on the main
+// repository, which no contract reads back: the Owner cell says "not
+// recorded", and the Governance chip says the mode is not recorded with the
+// namespace beneath it (#3933 for the owner, #3907 for the governance mode).
 //
 // Open goes to the workspace's Fleet. A workspace the viewer holds no
 // membership of cannot be opened (`requireViewer` answers not found), so its
@@ -27,6 +29,7 @@ import {
   panelTitle,
 } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
+import type { ActionResult } from "@/server/kernel";
 import { type ListRow, ListTable } from "./list-table";
 import { NotRecorded, note } from "./parts";
 import {
@@ -34,6 +37,94 @@ import {
   CreateWorkspace,
   EditWorkspace,
 } from "./workspace-actions";
+import type { WorkspaceFacts } from "./workspace-reads";
+
+/** What the tab learned inside a workspace, by slug; absent for one it did not read. */
+export type FactsBySlug = ReadonlyMap<string, ActionResult<WorkspaceFacts>>;
+
+/** A row's value for the Production branch filter; none when the branch is not known. */
+function branchValue(branch: string | undefined): Record<string, string> {
+  return branch === undefined ? {} : { branch };
+}
+
+/** The cells a workspace's facts fill: main repo, production branch, linked repos, agents. */
+function factCells(
+  facts: ActionResult<WorkspaceFacts> | undefined,
+  unread: string,
+  none: string,
+) {
+  if (facts === undefined) {
+    return {
+      cells: [
+        <NotRecorded key="main" />,
+        <NotRecorded key="branch" />,
+        <NotRecorded key="linked" />,
+        <NotRecorded key="agents" />,
+      ],
+      branch: undefined,
+    };
+  }
+  if (!facts.ok) {
+    const { reason } = facts;
+    const failed = (key: string) => (
+      <span
+        key={key}
+        data-facts-unread={reason}
+        className="text-[11.5px] text-dim"
+      >
+        {unread}
+      </span>
+    );
+    return {
+      cells: [
+        failed("main"),
+        failed("branch"),
+        failed("linked"),
+        failed("agents"),
+      ],
+      branch: undefined,
+    };
+  }
+  const main = facts.value.repositories.find((repo) => repo.role === "main");
+  const linked = facts.value.repositories.filter(
+    (repo) => repo.role === "linked",
+  );
+  return {
+    cells: [
+      main === undefined ? (
+        <span key="main" className="text-[11.5px] text-dim">
+          {none}
+        </span>
+      ) : (
+        <span key="main" className={`${mono} text-[11.5px]`}>
+          {main.fullName}
+        </span>
+      ),
+      main === undefined ? (
+        <span key="branch" className="text-[11.5px] text-dim">
+          {none}
+        </span>
+      ) : (
+        <span key="branch" className={`${mono} text-[11.5px]`}>
+          {main.defaultRef}
+        </span>
+      ),
+      linked.length === 0 ? (
+        <span key="linked" className="text-[11.5px] text-dim">
+          {none}
+        </span>
+      ) : (
+        <span key="linked" className={`${mono} text-[11.5px]`}>
+          {linked.map((repo) => repo.fullName).join(", ")}
+        </span>
+      ),
+      <span key="agents" className="tabular-nums">
+        {facts.value.agents}
+      </span>,
+    ],
+    branch: main?.defaultRef,
+  };
+}
 
 function WorkspaceCell({ workspace }: { workspace: Workspace }) {
   const t = useTranslations("organization.workspaces");
@@ -72,7 +163,15 @@ function GovernanceCell({ workspace }: { workspace: Workspace }) {
   );
 }
 
-function Actions({ org, workspace }: { org: string; workspace: Workspace }) {
+function Actions({
+  org,
+  workspace,
+  facts,
+}: {
+  org: string;
+  workspace: Workspace;
+  facts: ActionResult<WorkspaceFacts> | undefined;
+}) {
   const t = useTranslations("organization.workspaces");
   const live = workspace.archivedAt === null;
   return (
@@ -91,7 +190,11 @@ function Actions({ org, workspace }: { org: string; workspace: Workspace }) {
           `archive_workspace` promises. So it is offered neither control. */}
       {live ? (
         <>
-          <EditWorkspace org={org} workspace={workspace} />
+          <EditWorkspace
+            org={org}
+            workspace={workspace}
+            facts={facts?.ok === true ? facts.value : null}
+          />
           <ArchiveWorkspace org={org} workspace={workspace} />
         </>
       ) : null}
@@ -102,9 +205,15 @@ function Actions({ org, workspace }: { org: string; workspace: Workspace }) {
 export function WorkspacesTab({
   org,
   workspaces,
+  facts = new Map(),
+  enterable = [],
 }: {
   org: string;
   workspaces: WorkspaceList;
+  /** What was read inside each workspace the viewer may enter. */
+  facts?: FactsBySlug;
+  /** The live workspaces the viewer may enter, for Create a workspace. */
+  enterable?: readonly string[];
 }) {
   const t = useTranslations("organization.workspaces");
   const columns = [
@@ -117,32 +226,46 @@ export function WorkspacesTab({
     { label: t("columns.governance") },
     { label: t("columns.actions"), hidden: true },
   ];
-  const rows: ListRow[] = workspaces.workspaces.map((workspace) => ({
-    key: workspace.id,
-    rowId: workspace.id,
-    cells: [
-      <WorkspaceCell key="workspace" workspace={workspace} />,
-      <NotRecorded key="main" />,
-      <NotRecorded key="branch" />,
-      <NotRecorded key="linked" />,
-      <NotRecorded key="agents" />,
-      <NotRecorded key="owner" />,
-      <GovernanceCell key="governance" workspace={workspace} />,
-      <Actions key="actions" org={org} workspace={workspace} />,
-    ],
-  }));
+  const branches = new Set<string>();
+  const rows: ListRow[] = workspaces.workspaces.map((workspace) => {
+    const read =
+      workspace.archivedAt === null ? facts.get(workspace.slug) : undefined;
+    const known = factCells(read, t("factsUnread"), t("noLinked"));
+    if (known.branch !== undefined) branches.add(known.branch);
+    return {
+      key: workspace.id,
+      rowId: workspace.id,
+      values: branchValue(known.branch),
+      cells: [
+        <WorkspaceCell key="workspace" workspace={workspace} />,
+        ...known.cells,
+        <NotRecorded key="owner" />,
+        <GovernanceCell key="governance" workspace={workspace} />,
+        <Actions key="actions" org={org} workspace={workspace} facts={read} />,
+      ],
+    };
+  });
   return (
     <section aria-labelledby="org-workspaces" className={panel}>
       <div className={panelHeader}>
         <h2 id="org-workspaces" className={panelTitle}>
           {t("title")}
         </h2>
-        <CreateWorkspace org={org} />
+        <CreateWorkspace org={org} enterable={enterable} />
       </div>
       <ListTable
         label={t("tableLabel")}
         columns={columns}
         rows={rows}
+        filters={[
+          {
+            key: "branch",
+            label: t("filters.branch"),
+            options: [...branches]
+              .sort()
+              .map((branch) => ({ value: branch, label: branch })),
+          },
+        ]}
         empty={workspaces.workspaces.length === 0 ? t("empty") : t("noMatch")}
       />
       <div className={panelBody}>

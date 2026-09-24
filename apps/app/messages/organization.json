@@ -27,7 +27,6 @@
       "joined": "Joined",
       "actions": "Actions",
       "empty": "This organization has no members.",
-      "twoFactorPolicy": "two-factor policy not recorded",
       "tableLabel": "People",
       "workspaces": "Workspaces",
       "twoFactor": "Two-factor",
@@ -43,7 +42,6 @@
         "twoFactor": "Two-factor"
       },
       "member": {
-        "title": "Person",
         "email": "Email",
         "role": "Org role",
         "joined": "Joined",
@@ -74,7 +72,9 @@
         "passkey": "passkey",
         "passkeyTotp": "passkey + TOTP"
       },
-      "twoFactorUnrecorded": "No contract records a member's two-factor method yet, so this filter cannot narrow the list."
+      "twoFactorUnrecorded": "No contract records a member's two-factor method yet, so this filter cannot narrow the list.",
+      "twoFactorRequired": "two-factor required",
+      "twoFactorOptional": "two-factor optional"
     },
     "actions": {
       "readOnly": "An owner or an admin makes these changes.",
@@ -83,21 +83,23 @@
         "name": "Name",
         "description": "Description",
         "scope": "Scope",
-        "slug": "Slug",
-        "slugHint": "Lowercase letters, digits, and hyphens. It is the second segment of every URL in this workspace.",
         "mainRepo": "Main repository",
         "mainRepoHint": "owner/name on GitHub. This is where the workspace keeps .oxagen/, and it cannot change here later. The Oxagen GitHub App has to be installed on that owner and reachable from a GitHub account this organization has connected. Oxagen finds the installation from the owner.",
         "permissions": "Permissions",
         "roleNameHint": "Lowercase letters and digits, separated by a dot, a hyphen, or an underscore. It cannot change later.",
         "productionBranch": "Production branch",
-        "productionBranchHint": "No contract records the production branch yet, so it is shown and not changed here.",
-        "productionBranchCreateHint": "No contract takes a production branch yet. The workspace starts on the repository as GitHub reports it.",
+        "productionBranchHint": "The only branch whose commits update the code graph. A re-approval on the Repositories page moves it.",
+        "productionBranchCreateHint": "The only branch whose commits update the code graph. If GitHub’s default changes later you are prompted; the binding never moves on its own.",
         "retention": "Retention mode",
         "retentionHint": "content_exact keeps prompts and tool bodies in full. digest_only lowers the replay grade. No contract records the mode per workspace yet.",
-        "mainRepoFixed": "Changing main is an org-owner action with approval. list_workspaces does not return the main repository yet.",
+        "mainRepoFixed": "Changing main is an org-owner action with approval.",
         "namespace": "Namespace",
         "namespaceHint": "Immutable. It is in every agent key in this workspace.",
-        "namespaceCreateHint": "Derived from the slug when the workspace is created, 2 to 6 characters, and immutable. It is part of every agent key in the workspace. create_workspace takes no namespace yet (#3933)."
+        "namespaceCreateHint": "2 to 6 characters, immutable, and part of every agent key in the workspace. Oxagen derives it from the name when it creates the workspace, and Create a workspace takes none yet (#3933).",
+        "mainRepoSelectHint": "Required at creation. A workspace without a main repo cannot exist.",
+        "mainRepoChoose": "Choose a repository",
+        "branchDefault": "{branch} — GitHub’s default, suggested",
+        "branchPick": "Choose the repository first"
       },
       "createRole": {
         "open": "Create role",
@@ -132,7 +134,8 @@
         "facts": {
           "toolbelt": "Toolbelt limit",
           "budget": "Default budget",
-          "agents": "Agents"
+          "agents": "Agents",
+          "agentsCount": "{count} registered"
         }
       },
       "governance": {
@@ -140,9 +143,9 @@
         "about": "Written to .oxagen/rules/governance.toml on the main repository through a Context PR. It takes effect on merge. The mode decides who merges a Context PR in this workspace.",
         "unchanged": "Leave unchanged",
         "unchangedHint": "Nothing is read from GitHub and nothing is written. The workspace's Repositories page shows the mode in force.",
-        "solo": "Any workspace member merges, the author included.",
-        "team": "An org Owner or Admin, or a workspace Owner, other than the author merges.",
-        "regulated": "An org Owner or Admin other than the author merges, recorded as the accountable approver.",
+        "solo": "solo · The author may merge their own.",
+        "team": "team · A code-owner review is required.",
+        "regulated": "regulated · A named approver from a role must approve, and the promotion ledger is hash-chained.",
         "override": "Apply now, without review",
         "overrideHint": "Under team or regulated the change goes to a pull request for someone else to merge. You may commit it straight to the production branch instead. The skipped review is recorded against your name.",
         "done": {
@@ -158,7 +161,7 @@
       },
       "archiveWorkspace": {
         "open": "Archive",
-        "title": "Archive {name}",
+        "title": "Archive workspace",
         "body": "The workspace leaves the switcher. Its slug stays taken, and its runs and frames stay readable. Its API keys stop working while it is archived. None of them is revoked, so restoring the workspace brings them back.",
         "confirm": "Archive",
         "pending": "Archiving"
@@ -186,7 +189,7 @@
         "roleNotFound": "This organization has no role by that name. Nothing was changed.",
         "roleInUse": "Principals still hold this role. Reassign them, then delete it.",
         "systemRoleReadonly": "Built-in roles are read-only. Duplicate this one to change its permissions.",
-        "slugTaken": "That slug is taken in this organization. Pick another.",
+        "slugTaken": "A workspace in this organization already has that address. Pick another name.",
         "workspaceNotFound": "That workspace has left this organization. Reload the page.",
         "alreadyArchived": "This workspace is already archived.",
         "workspaceHasAgents": "Agents are still registered in this workspace. Deregister or move them, then archive it.",
@@ -228,20 +231,20 @@
       "keepInvitation": "Keep invitation",
       "invitedBy": "Invited by",
       "tableLabel": "Pending invitations",
-      "noMatch": "No invitation matches this search."
+      "noMatch": "No invitation matches this search.",
+      "filters": {
+        "sent": "Sent",
+        "expires": "Expires"
+      }
     },
     "invite": {
       "open": "Invite",
       "title": "Invite a person",
       "confirm": "Send the invitation",
       "pending": "Sending",
-      "body": "The invitation admits this person to the organization with the role you pick. It grants no workspace of its own.",
+      "body": "An invitation is the only way into the organization. It expires in seven days, and accepting it requires a verified email.",
       "email": "Email",
-      "emailHint": "The invitation is sent here, and the link expires in seven days.",
-      "role": "Role offered",
-      "roleHint": "The organization role they hold once they accept.",
-      "message": "Note (optional)",
-      "messageHint": "Sent with the invitation email.",
+      "role": "Role",
       "denied": "Inviting someone is an Owner and Admin action.",
       "close": "Done",
       "sent": {
@@ -255,7 +258,8 @@
       "failure": {
         "emailInvalid": "That is not an email address. Check the spelling and try again.",
         "roleNotInvitable": "That role is not one an invitation offers. Pick Member, Admin, or Owner."
-      }
+      },
+      "bodyTwoFactor": "An invitation is the only way into the organization. It expires in seven days, and accepting it requires a verified email and two-factor."
     },
     "apiKeys": {
       "lead": "A key acts as the person who created it, in this workspace: on the API, MCP and the CLI it can do what that person can do here, and no more.",
@@ -279,22 +283,26 @@
           "title": "Create an API key",
           "body": "The key acts as you. Oxagen shows the secret once and stores only its prefix and a hash, so a lost key is rotated, never recovered.",
           "name": "Name",
-          "expires": "Expires at the end of this day, UTC (optional)",
-          "expiresUtc": "Leave this empty for a key that does not expire. The day is read in UTC, not your local time.",
+          "expires": "Expires",
           "expiresAt": "The key stops working at {at}.",
           "confirm": "Create it",
-          "pending": "Creating"
+          "pending": "Creating",
+          "expiresOptions": {
+            "d90": "90 days",
+            "d180": "180 days",
+            "y1": "1 year"
+          }
         },
         "rotate": {
           "open": "Rotate",
-          "title": "Rotate {name}",
+          "title": "Rotate this key",
           "body": "This issues a replacement with the same expiry and ends this key in the same transaction. Requests presenting the old key are refused from that moment, so put the new one in place first. An expired key cannot be rotated, because the replacement would carry the expiry that ended it.",
           "confirm": "Rotate it",
           "pending": "Rotating"
         },
         "revoke": {
           "open": "Revoke",
-          "title": "Revoke {name}",
+          "title": "Revoke this key",
           "body": "Every request presenting this key is refused from this moment. The row stays in the record with the time it ended. Only a new key restores access.",
           "confirm": "Revoke",
           "pending": "Revoking"
@@ -353,12 +361,6 @@
         "all": "All",
         "allWithCount": "All ({ended} ended)"
       },
-      "pager": {
-        "label": "Pages of API keys",
-        "range": "{from}–{to} of {total}",
-        "previous": "Previous",
-        "next": "Next"
-      },
       "emptyFiltered": "Every key in this workspace has been revoked or has expired. Choose All to see {ended, plural, one {it} other {them}}.",
       "title": "API keys",
       "caption": "each key acts as the person who created it",
@@ -376,7 +378,8 @@
         "title": "Surfaces this reaches",
         "badge": "one agent tool contract",
         "body": "One agent tool contract drives the API, MCP, the CLI and these screens, so a key that can do something here can do exactly that much everywhere else. Parity is checked by the manifest gate."
-      }
+      },
+      "noMatch": "No key matches this search."
     },
     "roleCatalog": {
       "title": "Roles",
@@ -497,27 +500,14 @@
       "open": "Open",
       "archived": "archived",
       "note": "Changing which repository is main is an org-owner action with approval, recorded as a security event. A repository may be linked to more than one workspace, and it is main for at most one.",
-      "noMatch": "No workspace matches this search."
+      "noMatch": "No workspace matches this search.",
+      "factsUnread": "could not be read",
+      "noLinked": "none",
+      "filters": {
+        "branch": "Production branch"
+      }
     },
     "modelFunding": {
-      "explain": {
-        "platform": "Your organization runs on Oxagen's key. Add your own key below to pay your vendor directly.",
-        "byok": "Your key pays your vendor directly. Oxagen does not charge for these tokens."
-      },
-      "current": {
-        "title": "Current key",
-        "none": "No key stored.",
-        "provider": "Vendor",
-        "key": "Key",
-        "keyEnding": "Ends in {hint}",
-        "endpoint": "Endpoint",
-        "status": "Status",
-        "active": "In use",
-        "disabled": "Disabled. Turns run on Oxagen's key.",
-        "tested": "Last tested",
-        "at": "{when, date, medium}, {when, time, short}",
-        "never": "Not tested since it was saved"
-      },
       "tiers": {
         "balanced": "Balanced model",
         "fast": "Fast model",
@@ -547,22 +537,20 @@
         }
       },
       "form": {
-        "title": "Add your key",
-        "replaceTitle": "Replace your key",
-        "provider": "Vendor",
-        "key": "API key",
+        "key": "Your OpenRouter or vendor key",
+        "keyHint": "Oxagen calls the model with it once to check it works, then stores it encrypted. It is never returned to a screen and never read from the environment.",
         "show": "Show",
         "hide": "Hide",
+        "vendor": "Another vendor",
+        "provider": "Vendor",
         "baseUrl": "Endpoint URL",
         "baseUrlHint": "Must start with https and be reachable on the public internet.",
         "baseUrlPlaceholder": "https://api.together.xyz/v1",
         "models": "Models",
         "balancedHint": "Required. The assistant runs on this model.",
         "unmappedNote": "Any model you leave blank uses the balanced model.",
-        "test": "Test key",
-        "testing": "Testing",
-        "save": "Save key",
-        "saving": "Saving",
+        "save": "Test and save",
+        "saving": "Testing and saving",
         "saved": "Key saved. The next assistant turn uses it."
       },
       "verdict": {
@@ -573,7 +561,7 @@
         "noReason": "no reason given"
       },
       "remove": {
-        "label": "Remove key",
+        "label": "Remove the key",
         "confirm": "Remove the key? Your organization's next turn runs on Oxagen's key and is billed.",
         "yes": "Remove",
         "pending": "Removing",
@@ -593,22 +581,22 @@
         "title": "Funding source",
         "source": "Source",
         "sourceUnrecorded": "source not recorded",
-        "unknown": "Oxagen pays for this organization's model calls, on its minted key or on the shared key. No capability reads which one yet (#4005).",
+        "unknown": "Oxagen pays for this organization’s model calls, on its minted key or on the shared key. No capability reads which one yet (#4005), so no source is chosen here.",
         "preview": "Preview of {source}. The recorded source is {current}, and this page cannot switch it yet (#4005).",
         "note": "No call reads the environment. Keys and routes come from the model layer’s resolver, and a path that bypasses it is a defect.",
         "sources": {
           "platform_minted": {
-            "option": "platform_minted: one key minted for this organization on Oxagen’s OpenRouter account",
+            "option": "platform_minted — one key minted for this organization on Oxagen’s OpenRouter account",
             "summary": "One key minted for this organization on Oxagen’s OpenRouter account.",
             "about": "Oxagen owns, pays, rotates and revokes it. Its tokens are billed. The provider reports it on its own line, so the bill and the ledger can be compared."
           },
           "platform": {
-            "option": "platform: Oxagen’s shared account",
+            "option": "platform — Oxagen’s shared account",
             "summary": "Oxagen’s shared account.",
             "about": "One key for every customer. Its tokens are billed. The provider returns one total for every customer, so Oxagen’s meter is the only record of this organization’s share."
           },
           "customer_key": {
-            "option": "customer_key: your own OpenRouter or vendor key",
+            "option": "customer_key — your own OpenRouter or vendor key",
             "summary": "Your own OpenRouter or vendor key.",
             "about": "You own and pay for it. Oxagen stores it encrypted and never returns it. Your vendor bills these tokens and Oxagen charges nothing for them."
           }
@@ -638,7 +626,7 @@
         "minted": {
           "unrecorded": "No capability returns this organization’s minted key yet, so its facts are not recorded here (#4005).",
           "mint": {
-            "open": "Mint a key for {org}",
+            "open": "Mint a key",
             "title": "Mint a model key for {org}",
             "body": "Oxagen would call OpenRouter’s provisioning API, mint a key named for this organization with a spend cap set at the provider, and store it encrypted. Minting would be a governed action with your name on it. No capability mints a key from this page yet, so nothing is sent (#4005)."
           },
@@ -651,7 +639,10 @@
             "open": "Revoke",
             "title": "Revoke this key",
             "body": "Revoking would end the key at the provider at the next call, and the in-app agent would stop for everyone in {org}. No capability revokes the minted key yet, so nothing is sent (#4005)."
-          }
+          },
+          "noKey": "No capability reads whether a key is held for {org} yet (#4005). With no key the in-app agent cannot run, and nothing has been charged. Minting one is a governed action and puts your name on it.",
+          "heldTitle": "Minted key",
+          "noKeyTitle": "No key"
         },
         "change": {
           "open": "Change source",
@@ -659,7 +650,16 @@
           "current": "current",
           "reconciles": "reconciles per organization",
           "note": "Pick a source on the panel behind this dialog. It carries the key field and the lifecycle. On a customer key your vendor bills the tokens and Oxagen charges nothing for them. On the other two they are billed to this organization."
-        }
+        },
+        "choose": "Choose a source",
+        "reconciliation": {
+          "title": "Reconciliation",
+          "provider": "OpenRouter reports",
+          "ledger": "Our credit ledger",
+          "difference": "Difference",
+          "note": "Two independent numbers: the first is read off the provider’s usage report for this key, the second is summed from Oxagen’s own ledger. No capability reads either for this organization yet (#4005)."
+        },
+        "unknownPreview": "Preview of {source}. No capability reads which source pays for this organization yet (#4005)."
       },
       "routes": {
         "title": "Model routes",

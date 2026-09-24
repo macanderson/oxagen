@@ -1,12 +1,15 @@
 "use client";
-// One row of the API keys table, and one clock for it.
+// The two cells of an API keys row that turn on time: Expires, with the
+// key's state as a dot and a word, and the row's Rotate and Revoke.
 //
 // The page reads its keys once and the instant it read them travels with the
-// rows. Two things on a row turn on that instant — the status word and whether
-// Rotate is offered — and a page left open crosses an expiry without a reload,
-// so both are judged here against a clock that keeps running. Splitting them
-// gave a row that contradicted itself: Rotate withdrawn while the status still
-// said "live".
+// rows. Both cells turn on that instant, and a page left open crosses an
+// expiry without a reload, so both are judged against a clock that keeps
+// running. Each cell runs the clock from the same captured instant and the
+// same expiry, through the same `credentialState`, so the two cannot
+// disagree: Rotate is never withdrawn while the status still says "live".
+// The rest of the row is static and is drawn by the section
+// (`api-keys.tsx`), which hands every cell to the shared list table.
 //
 // The clock itself is `@/ui/expiry-clock`, shared with the agent credential
 // and host rows, which derive their own state from the same captured instant.
@@ -23,9 +26,8 @@ import type { SafePath } from "@/shared/safe-path";
 import { mono } from "@/ui/control-styles";
 import { Badge } from "@/ui/badge";
 import { useExpiryClock } from "@/ui/expiry-clock";
-import { cell, numericCell } from "@/ui/table";
 import { KeyRowActions } from "./create-key-dialog";
-import { DateCell, NotRecorded } from "./parts";
+import { DateCell } from "./parts";
 
 /** How close an expiry must be before the badge warns of it. */
 const EXPIRING_WITHIN_DAYS = 30;
@@ -88,19 +90,42 @@ function KeyExpiry({
   );
 }
 
-export function KeyRow({
+/** The Expires cell on its own running clock. */
+export function KeyExpiryCell({
+  apiKey,
+  now,
+}: {
+  apiKey: ApiKey;
+  /** The instant the keys were read; the clock starts there. */
+  now: number;
+}) {
+  const current = useExpiryClock(apiKey.expiresAt, now);
+  return (
+    <KeyExpiry
+      apiKey={apiKey}
+      state={credentialState(apiKey, current)}
+      current={current}
+    />
+  );
+}
+
+/**
+ * The row's controls on the same clock: Rotate is offered only where it would
+ * work (the key is live, the read said no service owns it, and the workspace
+ * is still in use), and a revoked key has none.
+ */
+export function KeyActionsCell({
   apiKey,
   org,
   ws,
   archived,
   now,
   listedIds,
-  here,
-  afterMint,
+  after,
 }: {
   apiKey: ApiKey;
   org: string;
-  /** The workspace the key belongs to, and the one a new key is minted in. */
+  /** The workspace the key belongs to. */
   ws: string;
   /**
    * Whether that workspace is archived. A rotation mints fresh secret material
@@ -110,72 +135,26 @@ export function KeyRow({
    * listed for, and the one that helps with a compromised key.
    */
   archived: boolean;
-  /** The instant the keys were read; this row's clock starts there. */
+  /** The instant the keys were read; the clock starts there. */
   now: number;
   listedIds: readonly string[];
-  /** This view — the same filter, the same page — where a revocation returns. */
-  here: SafePath;
-  /**
-   * The first page of this filter, where a rotation returns. A rotation mints
-   * a key and the roster is newest first, so the replacement is at the top of
-   * the roster and nowhere else; returning to a later page would answer a
-   * rotation with a screen that does not contain its result.
-   */
-  afterMint: SafePath;
+  /** This view, the same workspace and filter, where every write returns. */
+  after: SafePath;
 }) {
-  const t = useTranslations("organization.apiKeys");
   const current = useExpiryClock(apiKey.expiresAt, now);
   const state = credentialState(apiKey, current);
-  // Rotate is offered only where it would work: the key is live on this row's
-  // own clock, the read said no service owns it, and the workspace is still in
-  // use.
-  const mayRotate = state === "live" && apiKey.rotatable && !archived;
+  if (state === "revoked") return null;
   return (
-    <tr data-api-key={apiKey.id}>
-      <td className={cell}>
-        <div className="font-semibold text-foreground">{apiKey.name}</div>
-        <div className={`${mono} text-[11px] text-dim`}>
-          {t("masked", { prefix: apiKey.prefix })}
-        </div>
-      </td>
-      {/* Principal, Grants and Created by: list_api_keys returns none of
-          them, and Actions 30d below has no per-key count (#3934). */}
-      <td className={cell}>
-        <NotRecorded />
-      </td>
-      <td className={cell}>
-        <NotRecorded />
-      </td>
-      <td className={cell}>
-        <NotRecorded />
-      </td>
-      <td className={`${cell} ${mono} text-[11px] text-dim`}>
-        {apiKey.lastUsedAt === null ? (
-          t("neverUsed")
-        ) : (
-          <DateCell iso={apiKey.lastUsedAt} />
-        )}
-      </td>
-      <td className={numericCell}>
-        <NotRecorded />
-      </td>
-      <td className={cell}>
-        <KeyExpiry apiKey={apiKey} state={state} current={current} />
-      </td>
-      <td className={cell}>
-        {state === "revoked" ? null : (
-          <KeyRowActions
-            org={org}
-            ws={ws}
-            keyId={apiKey.id}
-            keyName={apiKey.name}
-            rotatable={mayRotate}
-            listedIds={listedIds}
-            after={here}
-            afterRotate={afterMint}
-          />
-        )}
-      </td>
-    </tr>
+    <KeyRowActions
+      org={org}
+      ws={ws}
+      keyId={apiKey.id}
+      keyName={apiKey.name}
+      keyPrefix={apiKey.prefix}
+      rotatable={state === "live" && apiKey.rotatable && !archived}
+      listedIds={listedIds}
+      after={after}
+      afterRotate={after}
+    />
   );
 }

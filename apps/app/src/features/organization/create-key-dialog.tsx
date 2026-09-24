@@ -129,6 +129,7 @@ function SecretPanel({ secret }: { secret: NewApiKey }) {
 function KeyWriteDialog({
   open: openLabel,
   title,
+  subtitle,
   confirm,
   pending: pendingLabel,
   testId,
@@ -140,6 +141,8 @@ function KeyWriteDialog({
 }: {
   open: string;
   title: string;
+  /** The key the write acts on, under the title. */
+  subtitle?: string;
   confirm: string;
   pending: string;
   testId: string;
@@ -250,6 +253,7 @@ function KeyWriteDialog({
         open={showing}
         onOpenChange={openChange}
         title={secret === null ? title : t("secret.title")}
+        subtitle={secret === null ? subtitle : undefined}
         testId={testId}
       >
         {secret === null ? (
@@ -275,6 +279,26 @@ function KeyWriteDialog({
   );
 }
 
+/** The design's expiry choices, as a number of days from today or one year on. */
+const EXPIRY_PRESETS = ["d90", "d180", "y1"] as const;
+type ExpiryPreset = (typeof EXPIRY_PRESETS)[number];
+
+/**
+ * The calendar day, in UTC, a preset lands on from `now`: 90 or 180 days on,
+ * or the same date a year on. The action takes a day and ends the key at the
+ * end of it in UTC (`shared/expiry-day.ts`), so this hands it the day.
+ *
+ * @internal Exported for its unit test.
+ */
+export function expiryDayOf(preset: ExpiryPreset, now: Date): string {
+  const day = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+  );
+  if (preset === "y1") day.setUTCFullYear(day.getUTCFullYear() + 1);
+  else day.setUTCDate(day.getUTCDate() + (preset === "d90" ? 90 : 180));
+  return day.toISOString().slice(0, 10);
+}
+
 export function CreateKeyDialog({
   org,
   ws,
@@ -290,11 +314,14 @@ export function CreateKeyDialog({
   const t = useTranslations("organization.apiKeys.actions.create");
   const tReceipt = useTranslations("organization.receipts");
   const [name, setName] = useState("");
-  const [expiresOn, setExpiresOn] = useState("");
-  // The control carries no timezone, so the note under it prints the instant
-  // the chosen day encodes. The action encodes with the same function, so the
-  // label and the stored value cannot drift (`shared/expiry-day.ts`).
-  const stored = expiresOn === "" ? null : endOfUtcDay(expiresOn);
+  const [preset, setPreset] = useState<ExpiryPreset>("d90");
+  // The day is taken when the person submits, so a dialog left open past
+  // midnight does not hand the action yesterday's arithmetic.
+  const expiresOn = () => expiryDayOf(preset, new Date());
+  // The note under the select prints the instant the chosen day encodes. The
+  // action encodes with the same function, so the note and the stored value
+  // cannot drift (`shared/expiry-day.ts`).
+  const stored = endOfUtcDay(expiresOn());
   return (
     <KeyWriteDialog
       open={t("open")}
@@ -302,11 +329,12 @@ export function CreateKeyDialog({
       confirm={t("confirm")}
       pending={t("pending")}
       testId="create-api-key"
-      write={() => createApiKey(org, ws, name, expiresOn)}
+      write={() => createApiKey(org, ws, name, expiresOn())}
       receipt={tReceipt("keyCreated", { name: name.trim() })}
       listedIds={listedIds}
       after={after}
     >
+      <p className="text-sm text-muted-foreground">{t("body")}</p>
       <label htmlFor="api-key-name" className="text-sm font-medium">
         {t("name")}
       </label>
@@ -321,20 +349,27 @@ export function CreateKeyDialog({
       <label htmlFor="api-key-expires" className="text-sm font-medium">
         {t("expires")}
       </label>
-      <input
+      <select
         id="api-key-expires"
-        type="date"
-        value={expiresOn}
+        value={preset}
         aria-describedby="api-key-expires-note"
         className={inputBase}
         onChange={(event) => {
-          setExpiresOn(event.currentTarget.value);
+          const { value } = event.currentTarget;
+          setPreset(EXPIRY_PRESETS.find((p) => p === value) ?? "d90");
         }}
-      />
-      <p id="api-key-expires-note" className="text-sm text-muted-foreground">
-        {stored === null ? t("expiresUtc") : t("expiresAt", { at: stored })}
-      </p>
-      <p className="text-sm text-muted-foreground">{t("body")}</p>
+      >
+        {EXPIRY_PRESETS.map((option) => (
+          <option key={option} value={option}>
+            {t(`expiresOptions.${option}`)}
+          </option>
+        ))}
+      </select>
+      {stored === null ? null : (
+        <p id="api-key-expires-note" className="text-sm text-muted-foreground">
+          {t("expiresAt", { at: stored })}
+        </p>
+      )}
     </KeyWriteDialog>
   );
 }
@@ -344,6 +379,7 @@ export function KeyRowActions({
   ws,
   keyId,
   keyName,
+  keyPrefix,
   rotatable,
   listedIds,
   after,
@@ -354,6 +390,8 @@ export function KeyRowActions({
   ws: string;
   keyId: string;
   keyName: string;
+  /** The masked key, printed under the dialog titles beside the name. */
+  keyPrefix?: string;
   /**
    * Whether Rotate is offered. The row decides it against its own clock and
    * what `list_api_keys` reported (`key-row.tsx`), so one place holds the rule
@@ -372,12 +410,15 @@ export function KeyRowActions({
 }) {
   const t = useTranslations("organization.apiKeys.actions");
   const tReceipt = useTranslations("organization.receipts");
+  const subtitle =
+    keyPrefix === undefined ? keyName : `${keyName} ${keyPrefix}…`;
   return (
     <div className="flex flex-wrap gap-2">
       {rotatable ? (
         <KeyWriteDialog
           open={t("rotate.open")}
-          title={t("rotate.title", { name: keyName })}
+          title={t("rotate.title")}
+          subtitle={subtitle}
           confirm={t("rotate.confirm")}
           pending={t("rotate.pending")}
           testId="rotate-api-key"
@@ -391,7 +432,8 @@ export function KeyRowActions({
       ) : null}
       <KeyWriteDialog
         open={t("revoke.open")}
-        title={t("revoke.title", { name: keyName })}
+        title={t("revoke.title")}
+        subtitle={subtitle}
         confirm={t("revoke.confirm")}
         pending={t("revoke.pending")}
         testId="revoke-api-key"

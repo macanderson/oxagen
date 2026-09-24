@@ -113,12 +113,38 @@ export async function deleteRole(
 export type WorkspaceDraft = { name: string; slug: string };
 
 /**
- * A new workspace's draft: its name and slug, and its main repository as the
- * one `owner/name` text the form collects. `create_workspace` requires the main
- * repository (MC spec §10.1, §17 M0: a workspace cannot exist without one), so
- * the rename draft above stays two fields and this one is three.
+ * A new workspace's draft: its name, and its main repository as the one
+ * `owner/name` text the form sends. `create_workspace` requires the main
+ * repository (MC spec §10.1, §17 M0: a workspace cannot exist without one).
+ *
+ * The design's form has no slug field, so the slug is made from the name
+ * (`slugFromName`) unless a caller names one.
  */
-export type NewWorkspaceDraft = WorkspaceDraft & { mainRepo: string };
+export type NewWorkspaceDraft = {
+  name: string;
+  mainRepo: string;
+  slug?: string;
+};
+
+/** The longest slug `create_workspace` takes (workspace-slug.ts). */
+const SLUG_MAX = 40;
+
+/**
+ * A workspace slug made from its name, in the one spelling the contract takes:
+ * lowercase letters and digits in groups joined by single hyphens, at most 40
+ * characters. Anything else in the name becomes a hyphen between groups. A
+ * name that yields a reserved or too-short slug is refused by the contract,
+ * and the refusal is named on the Name field.
+ */
+export function slugFromName(name: string): string {
+  return name
+    .normalize("NFKD")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, SLUG_MAX)
+    .replace(/-+$/, "");
+}
 
 /**
  * `owner/name`, as a person types it or pastes it from GitHub: surrounding
@@ -159,12 +185,17 @@ export async function createWorkspace(
       field: "mainRepo",
     };
   }
+  const named = draft.slug?.trim() ?? "";
   const result = await kernelWrite(ctx, workspaceCreate, {
     name: draft.name.trim(),
-    slug: draft.slug.trim(),
+    slug: named === "" ? slugFromName(draft.name) : named,
     mainRepo: { provider: "github", ...mainRepo },
   });
-  return result.ok ? { ok: true, value: { slug: result.value.slug } } : result;
+  if (result.ok) return { ok: true, value: { slug: result.value.slug } };
+  // The form has no slug field: a slug the name made is the name's to fix.
+  if (named === "" && "field" in result && result.field === "slug")
+    return { ...result, field: "name" };
+  return result;
 }
 
 /**

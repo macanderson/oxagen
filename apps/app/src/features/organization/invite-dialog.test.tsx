@@ -50,6 +50,7 @@ const answered = (id: string) => ({
 function renderDialog(
   pendingIds: readonly string[] = [PENDING],
   allowed = true,
+  twoFactorRequired = false,
 ) {
   return render(
     <IntlProvider>
@@ -57,14 +58,18 @@ function renderDialog(
         org="acme"
         pendingIds={pendingIds}
         allowed={allowed}
+        twoFactorRequired={twoFactorRequired}
         after={HERE}
       />
     </IntlProvider>,
   );
 }
 
-async function openForm(pendingIds: readonly string[] = [PENDING]) {
-  renderDialog(pendingIds);
+async function openForm(
+  pendingIds: readonly string[] = [PENDING],
+  twoFactorRequired = false,
+) {
+  renderDialog(pendingIds, true, twoFactorRequired);
   await userEvent.click(screen.getByRole("button", { name: "Invite" }));
   return screen.getByTestId("send-invitation");
 }
@@ -73,10 +78,7 @@ async function fillAndSend(email: string, role?: string) {
   const dialog = await openForm();
   await userEvent.type(within(dialog).getByLabelText("Email"), email);
   if (role !== undefined) {
-    await userEvent.selectOptions(
-      within(dialog).getByLabelText("Role offered"),
-      role,
-    );
+    await userEvent.selectOptions(within(dialog).getByLabelText("Role"), role);
   }
   await userEvent.click(
     within(dialog).getByRole("button", { name: "Send the invitation" }),
@@ -96,23 +98,24 @@ afterEach(async () => {
 });
 
 describe("the form", () => {
-  it("asks for an email, a role and an optional note, and for no workspace (negative)", async () => {
+  it("asks for an email and a role, the design's two fields, and for no workspace or note (negative)", async () => {
     const dialog = await openForm();
     expect(within(dialog).getByLabelText("Email")).toHaveAttribute(
       "type",
       "email",
     );
-    const role = within(dialog).getByLabelText("Role offered");
+    const role = within(dialog).getByLabelText("Role");
     expect(
       within(role)
         .getAllByRole("option")
         .map((o) => o.textContent),
     ).toEqual(["Member", "Admin", "Owner"]);
     expect(role).toHaveValue("member");
-    expect(within(dialog).getByLabelText("Note (optional)")).not.toBeRequired();
+    expect(within(dialog).queryByLabelText(/note/i)).toBeNull();
     expect(dialog).toHaveTextContent(
-      "The invitation admits this person to the organization with the role you pick. It grants no workspace of its own.",
+      "An invitation is the only way into the organization. It expires in seven days, and accepting it requires a verified email.",
     );
+    expect(dialog).not.toHaveTextContent("two-factor");
     expect(within(dialog).queryByLabelText(/workspace/i)).toBeNull();
     expect(
       within(dialog).queryByRole("combobox", { name: /workspace/i }),
@@ -125,8 +128,17 @@ describe("the form", () => {
   });
 });
 
+describe("the two-factor policy", () => {
+  it("says accepting asks for two-factor when the organization requires it", async () => {
+    const dialog = await openForm([PENDING], true);
+    expect(dialog).toHaveTextContent(
+      "An invitation is the only way into the organization. It expires in seven days, and accepting it requires a verified email and two-factor.",
+    );
+  });
+});
+
 describe("an invitation that was made", () => {
-  it("sends the email, the role and the note, and says who was invited", async () => {
+  it("sends the email and the role, and says who was invited", async () => {
     sendInvitation.mockResolvedValue(answered(FRESH));
     const dialog = await openForm();
     await userEvent.type(
@@ -134,12 +146,8 @@ describe("an invitation that was made", () => {
       "dana.reyes@acme.example",
     );
     await userEvent.selectOptions(
-      within(dialog).getByLabelText("Role offered"),
+      within(dialog).getByLabelText("Role"),
       "admin",
-    );
-    await userEvent.type(
-      within(dialog).getByLabelText("Note (optional)"),
-      "Joining the platform team.",
     );
     await userEvent.click(
       within(dialog).getByRole("button", { name: "Send the invitation" }),
@@ -147,7 +155,7 @@ describe("an invitation that was made", () => {
     expect(sendInvitation).toHaveBeenCalledWith("acme", {
       email: "dana.reyes@acme.example",
       role: "admin",
-      message: "Joining the platform team.",
+      message: "",
     });
     const panel = await screen.findByTestId("invitation-sent");
     expect(panel).toHaveTextContent("Invitation sent");
@@ -329,8 +337,7 @@ describe("the design's labels, the receipt and the phone", () => {
       const dialog = await openForm();
       const inputs = [
         within(dialog).getByLabelText("Email"),
-        within(dialog).getByLabelText("Role offered"),
-        within(dialog).getByLabelText("Note (optional)"),
+        within(dialog).getByLabelText("Role"),
       ];
       for (const input of inputs) {
         expect(getComputedStyle(input).fontSize).toBe("16px");

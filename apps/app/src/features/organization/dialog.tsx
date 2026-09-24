@@ -16,6 +16,8 @@ import { recordReceipt } from "./receipt";
 export type DialogCopy = {
   open: string;
   title: string;
+  /** A line under the title: the record the write acts on. */
+  subtitle?: string;
   confirm: string;
   pending: string;
   /** The receipt line once the write answered; "Saved. Recorded in the audit record." when absent. */
@@ -131,6 +133,7 @@ export function WriteDialog<O>({
         open={open}
         onOpenChange={openChange}
         title={copy.title}
+        subtitle={copy.subtitle}
         testId={testId}
         wide={wide}
       >

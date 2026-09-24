@@ -5,11 +5,15 @@
 // are the frame's.
 //
 // Funding source. `get_model_credential` reports a customer key (ADR-053), and
-// a stored, active one makes the source customer_key, with the key form that
+// a stored, active one makes the source customer_key, with the key field that
 // tests, saves and removes it. Without one Oxagen pays, on the organization's
 // minted OpenRouter key or the shared key (ADR-131), and no capability reads
-// which (#4005): the minted key's facts say "not recorded", and Mint a key,
-// Rotate, Revoke and the source switch are stubs that say what they would do.
+// which (#4005), so no source is chosen until the person picks one to look
+// at. platform_minted draws the design's two states apart, a key held (its
+// facts, Rotate, Revoke and the Reconciliation block) and no key (the note
+// and Mint a key), because nothing reads which of the two is true: every fact
+// says "not recorded", and Mint a key, Rotate, Revoke and the source switch
+// are stubs that say what they would do.
 //
 // Model routes. §4.5's tiers are fixed (complex, light, embed, rerank), and
 // nothing stores a route, a fallback, or a tier's use and cost per
@@ -150,8 +154,52 @@ function CustomerKey({
   );
 }
 
-/** platform_minted: the minted key's facts, none of which a capability reads yet (#4005). */
+/**
+ * platform_minted: the design's two states of the minted key, each under its
+ * own heading, because no capability reads whether a key is held (#4005).
+ */
 function MintedKey({ orgName }: { orgName: string }) {
+  const t = useTranslations("organization.modelFunding.funding");
+  const heading =
+    "text-[10.5px] font-semibold uppercase tracking-[0.09em] text-dim";
+  return (
+    <div className="flex flex-col gap-4" data-issue="4005">
+      <p className="text-[12px] text-dim">{t("minted.unrecorded")}</p>
+      <section aria-labelledby="funding-minted-held" data-key-state="held">
+        <h3 id="funding-minted-held" className={`${heading} mb-2`}>
+          {t("minted.heldTitle")}
+        </h3>
+        <HeldKey orgName={orgName} />
+      </section>
+      <section
+        aria-labelledby="funding-minted-none"
+        data-key-state="none"
+        className="border-t border-border pt-3"
+      >
+        <h3 id="funding-minted-none" className={`${heading} mb-2`}>
+          {t("minted.noKeyTitle")}
+        </h3>
+        <p className={note}>{t("minted.noKey", { org: orgName })}</p>
+        <div className="mt-3">
+          <StubDialog
+            open={t("minted.mint.open")}
+            title={t("minted.mint.title", { org: orgName })}
+            body={t("minted.mint.body")}
+            testId="funding-mint-key"
+          />
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/**
+ * The held key's facts, Rotate and Revoke, then Reconciliation: what the
+ * provider reports on this key beside what Oxagen's ledger debited. None of it
+ * is read yet (#4005), so every row says "not recorded" and the Difference is
+ * never computed from nothing.
+ */
+function HeldKey({ orgName }: { orgName: string }) {
   const t = useTranslations("organization.modelFunding.funding");
   const rows = [
     "secret",
@@ -163,7 +211,7 @@ function MintedKey({ orgName }: { orgName: string }) {
     "engine",
   ] as const;
   return (
-    <div className="flex flex-col gap-3" data-issue="4005">
+    <div className="flex flex-col gap-3">
       <dl className={facts}>
         {rows.map((row) => (
           <div key={row} className="contents">
@@ -174,14 +222,7 @@ function MintedKey({ orgName }: { orgName: string }) {
           </div>
         ))}
       </dl>
-      <p className="text-[12px] text-dim">{t("minted.unrecorded")}</p>
       <div className="flex flex-wrap gap-2">
-        <StubDialog
-          open={t("minted.mint.open", { org: orgName })}
-          title={t("minted.mint.title", { org: orgName })}
-          body={t("minted.mint.body")}
-          testId="funding-mint-key"
-        />
         <StubDialog
           open={t("minted.rotate.open")}
           title={t("minted.rotate.title")}
@@ -195,7 +236,42 @@ function MintedKey({ orgName }: { orgName: string }) {
           testId="funding-revoke-key"
         />
       </div>
+      <Reconciliation />
     </div>
+  );
+}
+
+function Reconciliation() {
+  const t = useTranslations("organization.modelFunding.funding.reconciliation");
+  return (
+    <section
+      aria-labelledby="funding-reconciliation"
+      data-reconciliation=""
+      data-issue="4005"
+      className="border-t border-border pt-3"
+    >
+      <h4
+        id="funding-reconciliation"
+        className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.09em] text-dim"
+      >
+        {t("title")}
+      </h4>
+      <dl className={facts}>
+        <dt className={term}>{t("provider")}</dt>
+        <dd>
+          <NotRecorded />
+        </dd>
+        <dt className={term}>{t("ledger")}</dt>
+        <dd>
+          <NotRecorded />
+        </dd>
+        <dt className={term}>{t("difference")}</dt>
+        <dd>
+          <NotRecorded />
+        </dd>
+      </dl>
+      <p className={`${note} mt-2.5`}>{t("note")}</p>
+    </section>
   );
 }
 
