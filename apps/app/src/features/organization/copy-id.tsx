@@ -18,7 +18,7 @@ import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { mono } from "@/ui/control-styles";
 
-/** How long "Copied" stays beside an id, in milliseconds. */
+/** @internal How long "Copied" stays beside an id, in milliseconds; the test advances its timers by it. */
 export const COPIED_MS = 3000;
 
 export function CopyId({
