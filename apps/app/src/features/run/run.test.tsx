@@ -2352,14 +2352,14 @@ describe("what the session recorded", () => {
         runWork({
           subagents: [
             {
-              id: "a1b2c3d4e5f6",
+              agentRef: "a1b2c3d4e5f6",
               type: "Explore",
               firstSeq: "3",
               lastSeq: "9",
               stopped: true,
             },
             {
-              id: "f6e5d4c3b2a1",
+              agentRef: "f6e5d4c3b2a1",
               type: null,
               firstSeq: "10",
               lastSeq: "12",
