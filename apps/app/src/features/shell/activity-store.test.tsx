@@ -7,14 +7,20 @@ import { act, cleanup, render, renderHook } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, describe, expect, it } from "vitest";
 import { readOk } from "@/data/read";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import {
   useWorkspaceActivity,
   type WorkspaceActivity,
   WorkspaceActivitySync,
 } from "./activity-store";
 
-afterEach(() => {
-  cleanup();
+afterEach(async () => {
+  // INV-26: every test ends in a state of its section; axe checks it.
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
 });
 
 function activity(slug: string, unread: number): WorkspaceActivity {

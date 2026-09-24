@@ -7,6 +7,7 @@
 import { act, cleanup, render, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readError, readOk } from "@/data/read";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { WorkspaceActivitySync } from "./activity-store";
 import { approvalItem, shellData, shellWorkspace } from "./shell.builders";
 import { orgWaiting, useShellCounts } from "./use-activity";
@@ -18,8 +19,13 @@ beforeEach(() => {
   nav.pathname = "/acme/core-platform";
 });
 
-afterEach(() => {
-  cleanup();
+afterEach(async () => {
+  // INV-26: every test ends in a state of its section; axe checks it.
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
 });
 
 const denied = {
