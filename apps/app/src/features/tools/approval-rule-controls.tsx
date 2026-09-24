@@ -51,7 +51,7 @@ const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const;
 const MINUTE_MS = 60_000;
 
 /** The tab every one of these writes reloads. */
-const tab = (at: ToolsAt) => toolsLink(at, { tab: "autoapprovals" });
+const tab = (at: ToolsAt) => toolsLink(at, { tab: "policy" });
 
 /** A rule's ceilings as the lines the dialog edits, one `measure = value` each. */
 function ceilingLines(rule: ApprovalRule | null): string {

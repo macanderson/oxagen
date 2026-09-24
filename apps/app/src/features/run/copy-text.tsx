@@ -1,6 +1,7 @@
 "use client";
 // An identifier set in mono with a button that copies it: the machine the run
-// was recorded on, in the header's checkout strip. The clipboard can refuse
+// was recorded on and the checkout's local directory, in the header's
+// checkout strip. The clipboard can refuse
 // (an insecure origin, a denied permission), and the refusal is said beside
 // the value rather than swallowed.
 import { useTranslations } from "next-intl";

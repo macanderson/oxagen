@@ -8,6 +8,7 @@
 // `set_kill_switch` an org Owner or Admin, and the three auto-approval writes
 // an org Owner or Admin. A refusal comes back as `denied` with nothing
 // changed, and the page names it where the person acted.
+import { agentMcpDelete } from "@oxagen/oxagen/contracts/agent.mcp.delete";
 import { agentMcpRegister } from "@oxagen/oxagen/contracts/agent.mcp.register";
 import { approvalRuleDelete } from "@oxagen/oxagen/contracts/approval_rule.delete";
 import { approvalRuleEnabledSet } from "@oxagen/oxagen/contracts/approval_rule.enabled.set";
@@ -624,5 +625,27 @@ export async function registerServer(
           discoveredTools: result.value.discoveredTools,
         },
       }
+    : result;
+}
+
+/**
+ * Removes a provider: `delete_mcp_server` soft-deletes the server row and
+ * disables it, so its tools stop registering at once, while the tool-descriptor
+ * snapshots stay for replay. The handler asserts an org Owner or Admin (or a
+ * workspace Owner) itself and records the change, so there is no second gate
+ * here. An id that names no live provider answers `deleted: false`, and the
+ * dialog says nothing was removed rather than claiming it was.
+ */
+export async function removeProvider(
+  org: string,
+  ws: string,
+  serverId: string,
+): Promise<ActionResult<{ deleted: boolean }>> {
+  const ctx = await requireViewer(org, ws);
+  const result = await kernelWrite(ctx, agentMcpDelete, {
+    mcpServerId: serverId.trim(),
+  });
+  return result.ok
+    ? { ok: true, value: { deleted: result.value.deleted } }
     : result;
 }
