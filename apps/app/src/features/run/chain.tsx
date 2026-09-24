@@ -38,9 +38,10 @@ type Seal = RunChain["seals"][number];
 /**
  * `table.narrow`: a table inside a half-width panel keeps the list table's
  * rows and header but drops its minimum width, so its columns wrap rather
- * than scroll.
+ * than scroll. A cell that cannot wrap (the countersigned pill) still fits:
+ * the wrapper scrolls it into reach instead of the panel clipping it.
  */
-const narrowTable = "[&_table]:min-w-0";
+const narrowTable = "overflow-x-auto [&_table]:min-w-0";
 
 /** A chain head in a narrow column: its first 8 hex digits. The whole head is the cell's title. */
 function shortDigest(digest: string) {

@@ -11,8 +11,10 @@ import { releaseTranscript } from "./transcript.builders";
 import {
   buildFeed,
   buildTranscript,
+  decisionSubject,
   entryKey,
   type FeedRow,
+  isOperatorPrompt,
   stepDigest,
   stepTool,
 } from "./transcript-model";
@@ -1226,5 +1228,68 @@ describe("buildFeed, the turn's frames", () => {
     expect(error?.kind === "event" && error.name).toBe("error");
     expect(gate?.kind === "event" && gate.name).toBe("create_tag");
     expect(gate?.kind === "event" && gate.gates[0]?.decision).toBe("deny");
+  });
+});
+
+describe("decisionSubject", () => {
+  it("names the call a gate frame decided on", () => {
+    expect(
+      decisionSubject(
+        transcriptEntry({
+          type: "policy_decision",
+          kind: "frame",
+          label: "deny Bash",
+        }),
+      ),
+    ).toBe("Bash");
+  });
+
+  it("names a tool call entry by its tool, whatever frame opened it", () => {
+    expect(
+      decisionSubject(
+        transcriptEntry({ kind: "tool_call", label: "create_tag v4.11.0" }),
+      ),
+    ).toBe("create_tag");
+  });
+
+  it("names no call for a gate that recorded only its decision, or a model call (negative)", () => {
+    expect(
+      decisionSubject(
+        transcriptEntry({
+          type: "policy_decision",
+          kind: "frame",
+          label: "policy deny",
+        }),
+      ),
+    ).toBeNull();
+    expect(decisionSubject(transcriptEntry())).toBeNull();
+  });
+});
+
+describe("isOperatorPrompt", () => {
+  it("reads a turn_start on the run's own chain as the operator prompting", () => {
+    expect(
+      isOperatorPrompt(transcriptEntry({ type: "turn_start", kind: "frame" })),
+    ).toBe(true);
+  });
+
+  it("reads neither a subagent's turn nor a model request as the operator (negative)", () => {
+    expect(
+      isOperatorPrompt(
+        transcriptEntry({
+          type: "turn_start",
+          kind: "frame",
+          subagent: {
+            chainRef: "0192d4a8-7c1e-7a00-8000-0000000000c1",
+            type: "Explore",
+          },
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      isOperatorPrompt(
+        transcriptEntry({ type: "model.request", kinds: ["prompt"] }),
+      ),
+    ).toBe(false);
   });
 });

@@ -27,16 +27,19 @@ export function FrameLink({
   seq,
   chainRef,
   place,
+  label = seq,
 }: {
   seq: string;
   /** Set for a subagent's frame, which the player cannot open by seq. */
   chainRef: string | undefined;
   place: Place;
+  /** The link's words where a bare seq would not say it is a frame. */
+  label?: string;
 }) {
   // The player reads the run's own chain. A subagent's frame shares its seq
   // with a different frame there, so it is named and not linked.
   if (chainRef !== undefined)
-    return <span className={`${mono} text-muted-foreground`}>{seq}</span>;
+    return <span className={`${mono} text-muted-foreground`}>{label}</span>;
   return (
     <SafeLink
       to={routes.run(place.org, place.ws, place.runId, {
@@ -45,7 +48,7 @@ export function FrameLink({
       })}
       className={`${mono} text-muted-foreground hover:text-foreground`}
     >
-      {seq}
+      {label}
     </SafeLink>
   );
 }
@@ -74,6 +77,10 @@ function Unrecorded() {
 
 function row(entry: TranscriptEntry, place: Place): ListRow {
   const decision = entry.decision;
+  // A gate frame that names no call (`policy deny`) says what was decided and
+  // not about what, so the cell says the call is not recorded rather than
+  // printing the frame's label as if it were one.
+  const call = decisionSubject(entry);
   return {
     key: entryKey(entry),
     data: { "data-testid": "run-policy-decision" },
@@ -87,9 +94,11 @@ function row(entry: TranscriptEntry, place: Place): ListRow {
         place={place}
       />,
       <span key="call" className="flex min-w-0 flex-col">
-        <span className={`${mono} text-foreground`}>
-          {decisionSubject(entry) ?? entry.label}
-        </span>
+        {call === null ? (
+          <NoValue />
+        ) : (
+          <span className={`${mono} text-foreground`}>{call}</span>
+        )}
         <span className={`${mono} text-[11px] text-dim`}>
           {decision?.type ?? entry.type}
         </span>

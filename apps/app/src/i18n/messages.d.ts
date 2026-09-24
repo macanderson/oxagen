@@ -5025,6 +5025,7 @@ type Messages = {
         headroom: string;
         digest: string;
         assembledAt: string;
+        assembledFrame: string;
         note: string;
       };
     };

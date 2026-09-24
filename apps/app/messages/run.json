@@ -1086,6 +1086,7 @@
         "headroom": "Headroom left",
         "digest": "Composition digest",
         "assembledAt": "Assembled at",
+        "assembledFrame": "{type} · fr {seq}",
         "note": "Retrieval is not recorded candidate by candidate yet, so these figures are not shown."
       }
     },

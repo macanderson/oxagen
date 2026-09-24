@@ -447,15 +447,19 @@ function policySubject(frame: TranscriptEntry): string | null {
  * The call a frame's decision was made on, for the Policy tab to name beside
  * the decision.
  *
- * A gate frame names the call in its label. A tool frame that carries a
- * folded decision *is* the call, so its own name is the subject. Anything
+ * A gate frame names the call in its label. A tool call entry, or a tool
+ * frame that carries a folded decision, *is* the call, so its own name is the
+ * subject. Anything
  * else answers null, and the surface says what was decided without claiming
  * a subject it does not have.
  */
 export function decisionSubject(frame: TranscriptEntry): string | null {
   if (TOOL_GATE.has(frame.type)) return policySubject(frame);
-  if (!TOOL_CLOSE.has(frame.type) && frame.type !== "tool_requested")
-    return null;
+  const call =
+    frame.kind === "tool_call" ||
+    TOOL_CLOSE.has(frame.type) ||
+    frame.type === "tool_requested";
+  if (!call) return null;
   const name = toolName(frame.label);
   return name === frame.type ? null : name;
 }

@@ -642,6 +642,10 @@ function RetrievalStats({
                 seq={assembled.seq}
                 chainRef={undefined}
                 place={place}
+                label={t("assembledFrame", {
+                  type: assembled.type,
+                  seq: assembled.seq,
+                })}
               />
             </Fact>
           )}

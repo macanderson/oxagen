@@ -306,7 +306,11 @@ describe("ContextTab", () => {
       expect(stats.getByText(label).nextElementSibling).toHaveTextContent(
         "not recorded",
       );
-    expect(stats.getByRole("link", { name: "2" })).toBeTruthy();
+    // The frame is named by its type and seq, not a bare number, and opens
+    // in the player.
+    expect(
+      stats.getByRole("link", { name: "context.assembled · fr 2" }),
+    ).toHaveAttribute("href", expect.stringContaining("tab=actions&body=2"));
   });
 
   it("says the run recorded no recall when no frame answers the recall chip", async () => {
