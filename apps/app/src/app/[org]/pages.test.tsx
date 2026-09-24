@@ -48,6 +48,7 @@ const {
   SkillsLoading,
   Tools,
   ToolsLoading,
+  Runtimes,
   members,
   workspaces,
   apiKeys,
@@ -109,6 +110,9 @@ const {
       <p data-testid="tools-body" data-tab={props.tab} />
     )),
     ToolsLoading: vi.fn(() => null),
+    // Runtimes draws its own header (its error and access-denied states
+    // replace the body with the header included), so the stand-in draws it.
+    Runtimes: vi.fn((_props: Record<string, unknown>) => <h1>Runtimes</h1>),
     members,
     workspaces,
     apiKeys,
@@ -133,6 +137,11 @@ vi.mock("@/server/session", () => ({
 }));
 vi.mock("@/features/fleet", () => ({ Fleet }));
 vi.mock("@/features/run", () => ({ Run }));
+vi.mock("@/features/runtimes", () => ({
+  Runtimes,
+  Runtime: () => null,
+  RuntimesLoading: () => null,
+}));
 vi.mock("@/features/agents", () => ({
   Agents,
   AgentsLoading: () => null,
@@ -244,6 +253,7 @@ const AGENT_SOURCE: Load = () => import("./[ws]/agents/[agent]/source/page");
 /** The agent page with its tab as a path segment; its params carry `tab`. */
 const AGENT_TAB = () => import("./[ws]/agents/[agent]/[tab]/page");
 const SPEND: Load = () => import("./[ws]/spend/[[...tab]]/page");
+const RUNTIMES: Load = () => import("./[ws]/runtimes/page");
 
 const RUN: Load = () => import("./[ws]/runs/[run]/page");
 const API_KEYS: Load = () => import("./api-keys/page");
@@ -496,6 +506,27 @@ describe("the Spend page", () => {
       ),
     ).rejects.toThrow("NEXT_NOT_FOUND");
     expect(requireViewer).not.toHaveBeenCalled();
+  });
+});
+
+describe("the Runtimes page", () => {
+  it("resolves the workspace viewer, names the page once and hands Runtimes the viewer, the data source, the slugs and the signed-in name", async () => {
+    const viewer = { orgSlug: "acme", wsSlug: "core-platform" };
+    requireViewer.mockResolvedValue(viewer);
+    await expectPageTitle(
+      await RUNTIMES(),
+      routeProps(SEGMENTS),
+      title("runtimes"),
+    );
+    expect(requireViewer).toHaveBeenCalledWith(...WS);
+    expect(Runtimes).toHaveBeenCalledOnce();
+    expect(Runtimes.mock.calls[0]?.[0]).toEqual({
+      ctx: viewer,
+      source,
+      org: "acme",
+      ws: "core-platform",
+      viewerName: "Marcus Bell",
+    });
   });
 });
 
@@ -978,6 +1009,7 @@ describe("a person requireViewer refuses", () => {
     ["agent", AGENT] as const,
     ["agentSource", AGENT_SOURCE] as const,
     ["spend", SPEND] as const,
+    ["runtimes", RUNTIMES] as const,
     ["run", RUN] as const,
     ["people", () => import("./page")] as const,
     ["roles", () => import("./roles/page")] as const,

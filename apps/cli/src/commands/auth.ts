@@ -126,7 +126,9 @@ export async function validatePlatformToken(
   // below names the policy rather than guessing at one.
   if (res.status === 403) {
     const detail = await res.text?.().catch(() => "");
-    return detail ? { kind: "forbidden", detail: detail.trim() } : { kind: "forbidden" };
+    return detail
+      ? { kind: "forbidden", detail: detail.trim() }
+      : { kind: "forbidden" };
   }
   return { kind: "unexpected", status: res.status };
 }

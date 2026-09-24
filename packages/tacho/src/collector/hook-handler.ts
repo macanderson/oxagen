@@ -1092,7 +1092,12 @@ async function routeHook(
 }
 
 /** The tools that write a file named by an absolute path in their input. */
-const FILE_WRITING_TOOLS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
+const FILE_WRITING_TOOLS = new Set([
+  "Edit",
+  "Write",
+  "MultiEdit",
+  "NotebookEdit",
+]);
 
 /**
  * The directory of the file a write tool call names, when it names one by

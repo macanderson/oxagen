@@ -4,7 +4,8 @@
       "home": "Oxagen home"
     },
     "dialog": {
-      "close": "Close"
+      "close": "Close",
+      "dismiss": "Close {title}"
     },
     "record": {
       "kinds": {
@@ -119,6 +120,29 @@
       "name": "Source name",
       "hint": "Enter to apply. Escape to cancel. This updates the name in the source.",
       "invalid": "Use a valid lowercase name with hyphens, and check that the source can be read."
+    },
+    "pageState": {
+      "loading": "Loading this page",
+      "error": {
+        "title": "This page could not be loaded",
+        "titleNamed": "{page} could not be loaded",
+        "body": "The control plane answered <code>{answer}</code>. Nothing was changed. Runs kept recording while this page was down. Frames are written by the collector on each host, not by Oxagen.",
+        "retry": "Try again",
+        "incident": "Open an incident",
+        "trace": "trace {id}",
+        "incidentNotBacked": "Oxagen cannot open an incident from this page yet."
+      },
+      "denied": {
+        "body": "Your roles on <b>{org}</b> do not include <code>{permission}</code>. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+        "request": "Request access",
+        "back": "Back to Fleet",
+        "requestNotBacked": "Oxagen cannot send a request for a role yet.",
+        "signedIn": "Signed in as",
+        "needed": "Needed",
+        "decidedBy": "Decided by",
+        "decidedByValue": "<code>{policy}</code> · deny wins over every allow",
+        "policyNotRecorded": "The refusal does not record which policy decided it."
+      }
     },
     "list": {
       "search": "Search this list",
