@@ -2,41 +2,86 @@
   "record": {
     "loading": "Loading the record",
     "header": {
-      "breadcrumbs": "Breadcrumbs",
       "steering": "Steering",
-      "record": "Record",
-      "published": "Published",
-      "archived": "Archived",
-      "pendingBranch": "Open on {branch}",
-      "inForce": "This {kind} is in force because the pull request that added its file merged. It stops being in force the same way.",
-      "inForceUnclassified": "This record is in force because the pull request that added its file merged. It stops being in force the same way."
+      "record": "record",
+      "published": "published",
+      "archived": "archived",
+      "forceTitle": "steering force",
+      "effectTitle": "constraint effect",
+      "kindLine": {
+        "rule": "A directive that steers behaviour",
+        "constraint": "A hard boundary: require or forbid",
+        "procedure": "Steps, in order",
+        "fact": "A checkable claim about the world",
+        "memory": "A durable recollection",
+        "preference": "Soft and often unfalsifiable"
+      },
+      "unclassifiedLine": "A record with no kind",
+      "inForce": "{kindLine}. It is in force because <code>{commit}</code> merged, and it stops being in force the same way.",
+      "inForceNoCommit": "{kindLine}. It is in force because the commit that published it merged, and it stops being in force the same way.",
+      "discard": "Discard",
+      "archive": "Archive",
+      "propose": "Propose a change"
     },
     "editor": {
-      "modified": "Modified",
-      "unchanged": "Matches what is in force",
-      "stat": "+{added} / -{removed}",
-      "discard": "Discard",
-      "propose": "Propose a change",
-      "readOnly": "Your role can read this record and not change it. An org Owner or Admin, or a workspace Owner or Member, can propose a change.",
-      "pending": "A change is already open on {branch}. Merge or close it before you propose another.",
+      "path": "{path} · statement",
+      "modified": "modified",
+      "unchanged": "unchanged",
+      "unsaved": "unsaved changes",
+      "tokensNotRecorded": "bundle tokens not recorded",
+      "find": "Find  ⌘F",
+      "findLabel": "Find in file",
+      "matchOf": "{index} of {count}",
       "caret": "Ln {line}, Col {col}",
-      "counts": "{lines} lines, {characters} characters",
-      "tokenCost": "Token cost in the compiled bundle: not recorded"
+      "selected": "({count} selected)",
+      "grammar": "Markdown",
+      "counts": "{lines, plural, one {# line} other {# lines}} · {characters} chars",
+      "lineEnding": "LF",
+      "encoding": "UTF-8",
+      "keys": "Tab indent · ⇧Tab outdent · ⌘F find",
+      "note": "This is the statement and nothing else. The lineage, the force, the scope and the effect are the rest of the file, and each one is changed the same way: a pull request against {repository}.",
+      "noteNoRepository": "This is the statement and nothing else. The lineage, the force, the scope and the effect are the rest of the file, and each one is changed the same way: a pull request against the main repo."
     },
     "propose": {
-      "title": "Propose a change",
-      "diff": "{added} lines added, {removed} lines removed.",
-      "diffLabel": "The statement in force, then the statement you propose",
-      "rationale": "Why",
-      "rationaleHint": "One or two sentences for the pull request body. Leave it blank and Oxagen writes that the statement was revised in place.",
-      "checksLabel": "Checks",
-      "checksLead": "The pull request runs the six publication checks against your wording:",
+      "title": "Propose a change to this record",
+      "lead": "A published record is changed the way it was published: a branch, a pull request, the same six checks, and a merge. Nothing here edits what is in force.",
+      "cancel": "Cancel",
       "submit": "Open the pull request",
       "pending": "Opening",
-      "done": "Pull request #{number} is open.",
-      "doneNoPr": "The proposal is raised. Its pull request is not open yet.",
-      "notInForce": "Nothing changed here. The record in force moves when someone merges that pull request.",
-      "reload": "Reload the record",
+      "pendingOpen": "Branch <code>{branch}</code> is waiting on its checks. Land or close that one first, so two changes are never proposed over the same file.",
+      "readOnly": "Your role can read this record and not change it. An org Owner or Admin, or a workspace Owner or Member, can propose a change.",
+      "statLabel": "{added} lines added, {removed} lines removed",
+      "nothingChanged": "Nothing changed yet.",
+      "checksLabel": "What the checks will assert",
+      "checks": {
+        "schema": {
+          "name": "Schema",
+          "what": "<code>context-record/v0.1</code> still valid after the edit"
+        },
+        "lineage": {
+          "name": "Lineage",
+          "what": "<code>{lineage}</code> keeps its lineage. An amended record is the same record, not a new one"
+        },
+        "hash": {
+          "name": "record_hash recomputation",
+          "what": "recomputed over the new bytes · the old hash stays on every run that carried it"
+        },
+        "secret": {
+          "name": "Secret and PII scan",
+          "what": "the new statement is scanned"
+        },
+        "conflict": {
+          "name": "Conflict against active records",
+          "what": "re-run in full, because the words changed"
+        },
+        "effect": {
+          "name": "constraint_effect",
+          "what": "unchanged · <code>{effect}</code>",
+          "absent": "absent"
+        }
+      },
+      "done": "{repository}#{number} opened. {lineage} changes when it merges; until then every run still gets the words that are in force now.",
+      "doneNoPr": "The proposal is raised. {lineage} changes when its pull request merges; until then every run still gets the words that are in force now.",
       "status": {
         "proposed": "The proposal is raised and its pull request has not opened yet.",
         "pr_open": "The pull request is open. Its checks have not run yet.",
@@ -47,113 +92,147 @@
         "rejected": "Someone closed the proposal."
       }
     },
+    "archive": {
+      "title": "Archive {lineage}?",
+      "body": "Archiving is a pull request that sets <code>status = \"archived\"</code> on <code>{path}</code>. The file stays, the lineage stays, and the record stops compiling into the bundle when it merges. It is in force until then.",
+      "gate": "This record carries <code>{effect}</code>. Any gate compiled from it goes with it, and what it refused today is allowed once this merges.",
+      "kept": "Nothing is deleted. Every run this record steered keeps naming its hash, and a later record may supersede it instead.",
+      "keep": "Keep it in force",
+      "submit": "Open the pull request",
+      "notRecorded": "Oxagen cannot open this pull request yet: no capability writes an archived status to a record file. Until one does, open it by hand on <code>{repository}</code>.",
+      "notRecordedNoRepo": "Oxagen cannot open this pull request yet: no capability writes an archived status to a record file. Until one does, open it by hand on the main repo.",
+      "archivedTitle": "{lineage} is already archived",
+      "archivedBody": "It is out of force and kept. Every run it steered still names its hash.",
+      "pendingTitle": "{lineage} already has a pull request open",
+      "pendingBody": "Branch <code>{branch}</code> is waiting on its checks. Land or close that one first, so two changes are never proposed over the same file."
+    },
     "lineage": {
       "title": "Lineage",
-      "lineageTerm": "Lineage",
-      "pathTerm": "File",
-      "pathUnknown": "Not recorded",
-      "backingTerm": "Read from",
-      "backing": {
-        "file": "The file on the production branch",
-        "registry": "The registry mirror, because the repository holds no file"
-      },
-      "commitTerm": "Published by",
-      "commitUnknown": "Not recorded. Oxagen read the record but could not reach its commit history.",
-      "authorTerm": "Author",
-      "author": "{name} ({login})",
-      "committedTerm": "Committed",
-      "summaryTerm": "Commit message",
-      "versionTerm": "Version",
-      "effectTerm": "Effect",
-      "effect": "{rendered} runs rendered it, {cited} cited it",
-      "effectUnknown": "Not recorded. This workspace has no context-use rollup yet.",
-      "schemaTerm": "Schema"
+      "badge": "the graph remembers everything; git decides what is in force",
+      "lineage": "Lineage",
+      "file": "File",
+      "fileOn": "<code>{path}</code> on {repository}",
+      "fileAlone": "<code>{path}</code>",
+      "publishedBy": "Published by",
+      "publishedValue": "<code>{commit}</code> on {date}",
+      "publishedNotRecorded": "not recorded. Oxagen read the record but could not reach its commit history.",
+      "effect": "Effect",
+      "effectLine": "rendered {rendered} · cited {cited} · violated not recorded",
+      "neverRendered": "never rendered",
+      "effectNotRecorded": "not recorded. This workspace has no context-use rollup yet.",
+      "schema": "Schema"
     },
     "related": {
-      "title": "Other records of this kind",
+      "title": "Related records",
       "unclassified": "This record carries no kind, so Oxagen has nothing to compare it with.",
-      "only": "This is the only {kind} in force in this workspace.",
-      "open": "Open"
+      "only": "None. This is the only {kind} in {workspace}.",
+      "open": "Open",
+      "search": "Search records",
+      "sort": "Sort",
+      "sorts": {
+        "shown": "Shown order",
+        "az": "Statement A–Z",
+        "za": "Statement Z–A"
+      },
+      "rows": "Rows",
+      "nothing": "Nothing matches.",
+      "range": "{from}–{to} of {total}",
+      "previous": "Previous page",
+      "next": "Next page"
     },
     "meters": {
       "label": "Effect over the runs Oxagen indexed",
-      "notRecorded": "Effect is not recorded. This workspace has no context-use rollup yet, so Oxagen shows no count rather than a zero that would read as every run ignoring the record.",
-      "rendered": "Runs that rendered it",
+      "rendered": "Runs it was rendered into",
       "cited": "Runs that cited it",
-      "uncounted": "Not counted"
+      "of": "{value} <dim>of {total}</dim>",
+      "notRecorded": "not recorded",
+      "rollupNotRecorded": "Effect is not recorded. This workspace has no context-use rollup yet, so Oxagen shows no count rather than a zero that would read as every run ignoring the record.",
+      "thirdNotRecorded": "The third count is not recorded yet. No store counts the runs that went against a record."
     },
     "kindPanel": {
-      "never": "What it can never do",
+      "deliverEyebrow": "How it reaches a run",
+      "never": "What it can never do.",
+      "deliver": {
+        "rule": "Compiled into the steering block of the policy bundle. <code>must</code> and <code>should</code> sit in the stable prefix every turn; <code>may</code> and <code>info</code> are selected by relevance.",
+        "constraint": "Compiled into the stable prefix at whatever force it carries, and asserted by the checks against every other published record on the same subject.",
+        "procedure": "Compiled like a rule, and rendered as an ordered list so a model cannot silently reorder it.",
+        "fact": "Delivered as a <code>fact</code> context frame with provenance to this record and its commit, <code>valid_from</code> set to the merge time.",
+        "memory": "Delivered as a <code>memory</code> context frame, selected by relevance, never pinned into the prefix.",
+        "preference": "Delivered at <code>may</code> or <code>info</code>, selected by relevance and dropped first when the window is tight."
+      },
+      "neverDo": {
+        "rule": "It cannot grant authority, and it cannot make a denied call allowed.",
+        "constraint": "It can narrow what is allowed. It can never widen it: a <code>require</code> does not create the permission it requires.",
+        "procedure": "A step is not an authority. Naming a governed action in a step does not put it on a belt.",
+        "fact": "It steers nothing by itself. A fact that needs to change behaviour is a rule that cites it.",
+        "memory": "It never forbids anything, and it is never evidence on its own. It is why a retry is not a regression, not proof that it was not.",
+        "preference": "It never blocks a call, and a run that ignored it is not a failing run."
+      },
       "unclassified": {
-        "title": "This record carries no kind",
+        "title": "Kind",
         "body": "The file records no kind, so Oxagen cannot say how this record is selected or what it does. Republish it through a pull request that states its kind, force and scope."
       },
       "rule": {
-        "title": "Rule",
-        "lead": "A rule steers how an agent words and shapes its work. It is compiled into the bundle an agent reads before it acts.",
-        "placementTerm": "How it is selected",
+        "whereEyebrow": "Where it sits",
+        "force": "Force",
+        "forceUnknown": "not recorded. The file states no force.",
         "placement": {
-          "prefix": "Pinned to a stable prefix, so every run reads it",
-          "relevance": "Selected by relevance, so a run reads it when it is relevant"
+          "prefix": "the stable prefix, every turn in scope",
+          "relevance": "selected by relevance"
         },
-        "placementUnknown": "Not recorded. The file states no force.",
-        "shareTerm": "Share of the bundle",
-        "shareNotRecorded": "Not recorded. The bundle's token budget is held per compiled version and no read on this page carries it.",
-        "departure": "Runs that went against it",
-        "never": "A rule cannot stop a call. It changes what an agent reads, not what an agent is allowed to do."
+        "effect": "Effect",
+        "bundle": "Bundle",
+        "bundleNotRecorded": "not recorded. The record's share of the compiled bundle is not read on this page yet.",
+        "bundleVersion": "<code>v{version}</code> · this record's tokens are not recorded yet",
+        "third": "Runs that went against it"
       },
       "constraint": {
-        "title": "Constraint",
-        "boundary": "Boundary",
-        "effect": {
-          "require": "Require",
-          "forbid": "Forbid"
+        "effectUnknownWord": "effect",
+        "boundary": {
+          "require": "A run that has not done this cannot proceed past the point that needs it. The check is on the run, not on the call.",
+          "forbidNoGrant": "This record carries no enforcement grant, so it compiles to text. The agent reads the boundary in its stable prefix. Nothing refuses a call because of it until a grant compiles a gate.",
+          "unknown": "This workspace holds no require or forbid effect for this record, so it compiles to text and nothing refuses a call because of it."
         },
-        "effectUnknown": "Not recorded. This workspace holds no require or forbid effect for this record.",
-        "dispatch": "A call routed through Oxagen that crosses this boundary is denied before dispatch, with this record cited as the reason.",
-        "grant": "That holds only where the record carries an enforcement grant. The grant compiles a gate, which Steering lists under Policy with its gate notice. A record with no grant compiles to text, and nothing refuses a call because of it.",
-        "conflict": "Every merge re-runs the conflict check across all published records, so a forbid and a require on the same subject can never both be in force.",
-        "departure": "Calls that crossed it",
-        "never": "A constraint cannot reach a call that does not route through Oxagen, and it cannot grant anyone permission to do anything."
+        "conflictsEyebrow": "Conflicts",
+        "conflicts": "Every merge re-runs the conflict check across all {count} published records. A <code>forbid</code> that contradicts an active <code>require</code> on the same subject fails the check, so the two can never both be in force.",
+        "conflictsNoCount": "Every merge re-runs the conflict check across every published record. A <code>forbid</code> that contradicts an active <code>require</code> on the same subject fails the check, so the two can never both be in force.",
+        "third": "Runs that crossed it"
       },
       "procedure": {
-        "title": "Procedure",
-        "lead": "The order is the record. A run that did every step in another order did not follow this procedure.",
+        "stepsEyebrow": "Steps in order",
         "noSteps": "The statement records no steps.",
-        "never": "A procedure cannot make an agent run it. It states the order; nothing refuses a run that departs from it."
+        "order": "The order is the record. A run that did these in a different order did not follow this procedure, even if every step happened."
       },
       "fact": {
-        "title": "Fact",
-        "lead": "A fact is a claim about this workspace that an agent may rely on.",
-        "falsifiesTerm": "What would falsify it",
-        "falsifies": "Any run that finds the claim untrue. Archive it with a pull request when that happens.",
-        "validFromTerm": "Valid from",
-        "validFromUnknown": "Not recorded.",
-        "readTerm": "Read without contradiction",
-        "read": "{runs, plural, =0 {No runs yet} one {# run} other {# runs}}",
-        "readNotRecorded": "Not recorded.",
-        "never": "A fact steers nothing by itself. It tells an agent what is true; a rule or a constraint decides what to do about it."
+        "claimEyebrow": "Claim and check",
+        "falsifiable": "Falsifiable by",
+        "falsifiableNotRecorded": "not recorded. The file names no check that would falsify it.",
+        "validFrom": "valid_from",
+        "validFromNotRecorded": "not recorded.",
+        "validFromValue": "{date}, the merge time of <code>{commit}</code>",
+        "lastConfirmed": "Last confirmed",
+        "lastConfirmedNotRecorded": "not recorded.",
+        "lastConfirmedValue": "{runs} runs read it. Contradictions are not recorded yet.",
+        "steers": "Steers",
+        "steersValue": "nothing by itself",
+        "note": "A fact that needs to change behaviour is a rule that cites it. Keeping the two apart is what lets a fact go stale without silently turning off a rule."
       },
       "memory": {
-        "title": "Memory",
-        "lead": "A memory is one episode: something that happened, kept because it explains a decision.",
-        "whenTerm": "When it happened",
-        "whenUnknown": "Not recorded.",
-        "selectionTerm": "How it is selected",
-        "selection": "By relevance, and never pinned.",
-        "decayTerm": "Decay",
-        "decay": "Nothing decays automatically. A memory that stops being true is archived by a pull request.",
-        "recalledTerm": "Recalled",
-        "recalled": "{runs, plural, =0 {No runs yet} one {# run} other {# runs}}",
-        "recalledNotRecorded": "Not recorded.",
-        "never": "A memory cannot decide anything. It explains what happened once; it does not say what to do next time."
+        "whenEyebrow": "When it happened",
+        "recorded": "Recorded",
+        "recordedNotRecorded": "not recorded.",
+        "explains": "Explains",
+        "explainsNotRecorded": "not recorded. The file carries the statement and no separate explanation.",
+        "selection": "Selection",
+        "selectionValue": "by relevance, never pinned",
+        "selectionShare": "by relevance, never pinned: {cited} of {rendered} runs that carried it actually used it",
+        "decay": "Decay",
+        "decayValue": "none automatic. A memory that stops being true is archived by a pull request, like everything else."
       },
       "preference": {
-        "title": "Preference",
-        "lead": "A preference is a taste: how this workspace likes work done when nothing requires otherwise.",
-        "notFollowed": "Nothing here blocks a call. Not following a preference is not a failure, so Oxagen reads the third count as not followed rather than violated.",
-        "departure": "Runs that did not follow it",
-        "never": "A preference cannot override a rule or a constraint. Where they disagree, the stronger record wins."
+        "softEyebrow": "Recorded as soft",
+        "soft": "Nothing here blocks a call. \"Violated\" on a preference reads as <strong>not followed</strong>, and a run that did not follow it is not a failing run, which is why the counter below is grey and not red.",
+        "third": "Runs that departed from it"
       }
     },
     "failure": {
@@ -177,10 +256,16 @@
       "sectionError": "{section} could not be loaded: {code}.",
       "denied": {
         "title": "You cannot see this record",
-        "body": "Reading a steering record needs the steering read permission on this workspace. An org Owner can grant it, and the grant is itself recorded in the audit log.",
-        "needed": "Needed:",
-        "decidedBy": "Deny wins over every allow, so a single deny on your roles is enough to refuse this.",
-        "back": "Back to Steering"
+        "body": "Your roles on <strong>{org}</strong> do not include <code>{needed}</code>. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+        "needed": "{permission} on {ws}",
+        "request": "Request access",
+        "requestNotRecorded": "Requesting access from this page is not recorded yet. Ask an organization owner for {needed}.",
+        "back": "Back to Fleet",
+        "signedInTerm": "Signed in as",
+        "signedIn": "{name} · <code>{role}</code>",
+        "neededTerm": "Needed",
+        "decidedByTerm": "Decided by",
+        "decidedBy": "the organization's policy · deny wins over every allow"
       },
       "pending": {
         "title": "This record is waiting for approval",
@@ -188,10 +273,11 @@
       },
       "error": {
         "title": "This record could not be loaded",
-        "body": "The read did not answer. Retry, and report the code below if it repeats.",
+        "body": "The control plane answered <mono>{status} {code}</mono>. Nothing was changed. Runs kept recording while this page was down. Frames are written by the collector on each host, not by Oxagen.",
         "retry": "Try again",
-        "code": "{status} {code}",
-        "readAt": "Read at {at}"
+        "incident": "Open an incident",
+        "incidentNotRecorded": "Opening an incident from this page is not recorded yet. Report the code and the time below.",
+        "trace": "trace not recorded · {at}"
       }
     }
   }

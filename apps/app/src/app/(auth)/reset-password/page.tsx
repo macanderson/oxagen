@@ -1,11 +1,9 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
 import { ResetPasswordForm } from "@/features/auth";
 import { firstParam } from "@/shared/safe-path";
-import { AuthColumn, AuthFooter, AuthSkeleton } from "@/ui/auth-shell";
-import { linkText } from "@/ui/control-styles";
+import { AuthColumn, AuthSkeleton } from "@/ui/auth-shell";
 import { PageHeader } from "@/ui/page-header";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -36,19 +34,20 @@ async function Reset({
     getTranslations("auth"),
     getTranslations("pages"),
   ]);
+  // The page is reached from the emailed link only, so it carries no footer
+  // link. The lead cannot name the address until the token is readable (#3887).
   return (
     <AuthColumn>
-      <PageHeader
-        eyebrow={t("reset.eyebrow")}
-        title={pages("resetPassword")}
-        description={t("reset.lead")}
+      <ResetPasswordForm
+        token={token}
+        header={
+          <PageHeader
+            eyebrow={t("reset.eyebrow")}
+            title={pages("resetPassword")}
+            description={t("reset.lead")}
+          />
+        }
       />
-      <ResetPasswordForm token={token} />
-      <AuthFooter>
-        <Link href="/login" className={linkText}>
-          {t("reset.back")}
-        </Link>
-      </AuthFooter>
     </AuthColumn>
   );
 }

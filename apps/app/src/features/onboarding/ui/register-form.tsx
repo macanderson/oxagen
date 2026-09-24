@@ -1,81 +1,118 @@
 "use client";
-// Step 1 of Register an agent: reserve the slug, name the identity and pick the
-// harness that decides how it is wrapped. `register_agent` mints the identity,
-// its delegated principal and one long-lived credential, which is shown here
-// once and is never recoverable.
-import { HarnessIcon } from "@/ui/harness-icon";
+// Step 1 of Register an agent (register-name spec): reserve the agent key. The
+// card is the design's two-by-two grid, Slug, Workspace, Harness and Model
+// tier, then the note, then Cancel and Continue (gold). The key in the hint and
+// in the note rewrites on every keystroke from the namespaces the workspace
+// read carries, so it is the key `register_agent` will mint, not a guess.
+//
+// Continue is the one write: `register_agent` reserves the slug by minting the
+// identity and its principal. The credential that call returns is not shown
+// here; the SDK path on the wrap step issues its own, so no secret sits on a
+// screen the operator may walk away from. A key already reserved (the operator
+// came back with Back or the rail) is shown read-only, and Continue only moves
+// on, because the key is immutable.
+//
+// Model tier has no store: `register_agent` takes no tier and the frames
+// record the model each call used. The select says so rather than sending a
+// value nothing keeps.
 import { useTranslations } from "next-intl";
-import { type SyntheticEvent, useState } from "react";
+import { type ReactNode, type SyntheticEvent, useId, useState } from "react";
 import type { SafePath } from "@/shared/safe-path";
-import { buttonPrimary, mono } from "@/ui/control-styles";
-import { Field } from "@/ui/field";
-import { FormAlert, OutcomePanel, SubmitButton } from "@/ui/form-feedback";
-import { SafeLink } from "@/ui/navigation";
+import { buttonPrimary, inputBase, mono, panel } from "@/ui/control-styles";
+import { FormAlert } from "@/ui/form-feedback";
+import { SafeLink, useNavigate } from "@/ui/navigation";
+import { registerAgent } from "../actions";
 import {
   AgentForm as Schema,
-  type AgentField,
   type AgentFormErrorKey,
-  type AgentFormValues,
-  HARNESSES,
   agentFieldErrors,
+  agentKeyOf,
+  HARNESSES,
+  type Harness,
+  MODEL_TIERS,
+  nameFromSlug,
 } from "../agent-form";
 import { UNANSWERED, useOnboardingFailure } from "../failure";
-import { registerAgent } from "../actions";
-import { useFormatter } from "@/ui/formatter";
+import type { RegisterPlace } from "../register-actions";
+import { CancelRegistration } from "./cancel-registration";
 
-type FieldErrors = Partial<Record<AgentField, AgentFormErrorKey>>;
-type Registered = {
-  name: string;
-  secret: string;
-  expiresAt: string;
-  to: SafePath;
-};
+/** An input or select at 16px on a phone, so iOS does not zoom on focus. */
+const control = `${inputBase} min-h-10 max-md:min-h-11 max-md:text-base`;
+const label = "text-[12.5px] font-semibold text-foreground";
+const hint = "text-xs text-muted-foreground";
 
-export function RegisterAgentForm({ org, ws }: { org: string; ws: string }) {
-  const t = useTranslations("onboarding");
-  const harnessLabel = useTranslations("agents.harness");
-  const format = useFormatter();
+export type ReservedAgent = { id: string; slug: string; harness: Harness };
+
+export function RegisterAgentForm({
+  org,
+  ws,
+  workspace,
+  place,
+  reserved,
+  wrap,
+  fleet,
+}: {
+  org: string;
+  ws: string;
+  /** The workspace's display name. */
+  workspace: string;
+  place: RegisterPlace;
+  /** The key this registration already reserved, or null before Continue. */
+  reserved: ReservedAgent | null;
+  /** The wrap step for the reserved identity; null before one exists. */
+  wrap: SafePath | null;
+  fleet: SafePath;
+}) {
+  const t = useTranslations("onboarding.register.name");
+  const errorsT = useTranslations("onboarding.errors");
   const failureText = useOnboardingFailure();
-  const [values, setValues] = useState<AgentFormValues>({
-    slug: "",
-    name: "",
-    description: "",
-    harness: "claude-code",
-  });
-  const [errors, setErrors] = useState<FieldErrors>({});
+  const navigate = useNavigate();
+  const baseId = useId();
+  const [slug, setSlug] = useState(reserved?.slug ?? "");
+  const [harness, setHarness] = useState<Harness>(
+    reserved?.harness ?? "claude-code",
+  );
+  const [slugError, setSlugError] = useState<AgentFormErrorKey | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [done, setDone] = useState<Registered | null>(null);
-
-  function update(field: AgentField, value: string) {
-    setValues((prev) => ({ ...prev, [field]: value }));
-  }
+  const key = agentKeyOf(place.keyPrefix, slug);
+  const keyText = (chunks: ReactNode) => (
+    <span data-testid="register-key" className={mono}>
+      {chunks}
+    </span>
+  );
 
   async function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pending) return;
-    setFailure(null);
-    const parsed = Schema.safeParse(values);
-    if (!parsed.success) {
-      setErrors(agentFieldErrors(parsed.error.issues));
+    if (reserved !== null && wrap !== null) {
+      navigate.push(wrap);
       return;
     }
-    setErrors({});
+    setFailure(null);
+    const values = {
+      slug: slug.trim(),
+      name: nameFromSlug(slug),
+      description: "",
+      harness,
+    };
+    const parsed = Schema.safeParse(values);
+    if (!parsed.success) {
+      setSlugError(agentFieldErrors(parsed.error.issues).slug ?? null);
+      return;
+    }
+    setSlugError(null);
     setPending(true);
     try {
       const result = await registerAgent(org, ws, values);
       if (result.ok) {
-        setDone({
-          name: values.name.trim(),
-          secret: result.value.secret,
-          expiresAt: result.value.expiresAt,
-          to: result.value.to,
-        });
+        navigate.push(result.value.to);
         return;
       }
-      if (result.reason === "invalid" && result.field !== undefined) {
-        setErrors(
-          agentFieldErrors([{ path: [result.field], message: result.code }]),
+      if (result.reason === "invalid" && result.field === "slug") {
+        setSlugError(
+          agentFieldErrors([{ path: ["slug"], message: result.code }]).slug ??
+            null,
         );
         return;
       }
@@ -87,124 +124,165 @@ export function RegisterAgentForm({ org, ws }: { org: string; ws: string }) {
     }
   }
 
-  if (done !== null) {
-    return (
-      <OutcomePanel
-        tone="ok"
-        testId="agent-registered"
-        title={t("register.name.registered.title", { name: done.name })}
-        actions={
-          <SafeLink to={done.to} className={buttonPrimary}>
-            {t("register.name.registered.continue")}
-          </SafeLink>
-        }
-      >
-        <p>{t("register.name.registered.body")}</p>
-        <code
-          data-testid="agent-credential"
-          className={`${mono} mt-2 block break-all rounded-md bg-muted px-2 py-1`}
-        >
-          {done.secret}
-        </code>
-        <p className="pt-2 text-xs">
-          {t("register.name.registered.expires", {
-            at: format.dateTime(new Date(done.expiresAt), {
-              dateStyle: "medium",
-            }),
-          })}
-        </p>
-      </OutcomePanel>
-    );
-  }
-
-  const message = (field: AgentField) => {
-    const key = errors[field];
-    return key ? t(`errors.${key}`) : undefined;
-  };
-  const bind = (field: AgentField) => ({
-    name: field,
-    value: values[field],
-    onChange: (e: { target: { value: string } }) => {
-      update(field, e.target.value);
-    },
-    error: message(field),
-  });
+  const slugId = `${baseId}-slug`;
+  const workspaceId = `${baseId}-workspace`;
+  const harnessId = `${baseId}-harness`;
+  const tierId = `${baseId}-tier`;
+  const locked = reserved !== null;
 
   return (
     <form
       noValidate
-      aria-label={t("register.name.title")}
+      aria-label={t("title")}
       onSubmit={(e) => void onSubmit(e)}
       className="flex min-w-0 flex-col gap-4"
     >
-      {failure === null ? null : (
-        <FormAlert testId="register-failure">{failure}</FormAlert>
-      )}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field
-          id="agent-slug"
-          type="text"
-          spellCheck={false}
-          className="font-mono"
-          label={t("register.name.slug")}
-          hint={t("register.name.slugHint", { slug: values.slug || "…" })}
-          {...bind("slug")}
-        />
-        <Field
-          id="agent-name"
-          type="text"
-          label={t("register.name.agentName")}
-          hint={t("register.name.agentNameHint")}
-          {...bind("name")}
-        />
-      </div>
-      <div className="flex min-w-0 flex-col gap-1.5">
-        <label
-          htmlFor="agent-harness"
-          className="text-sm font-medium text-foreground"
-        >
-          {t("register.name.harness")}
-        </label>
-        <div className="flex items-center gap-2">
-          <HarnessIcon harness={values.harness} />
-          <select
-            id="agent-harness"
-            name="harness"
-            value={values.harness}
-            onChange={(e) => {
-              update("harness", e.target.value);
-            }}
-            aria-describedby="agent-harness-hint"
-            className="block w-full min-w-0 rounded-md border border-input-border bg-input-bg px-3 py-2.5 text-sm text-input-fg"
-          >
-            {HARNESSES.map((harness) => (
-              <option key={harness} value={harness}>
-                {harnessLabel(harness)}
-              </option>
-            ))}
-          </select>
+      <div className={`${panel} flex flex-col gap-4 p-[18px]`}>
+        {failure === null ? null : (
+          <FormAlert testId="register-failure">{failure}</FormAlert>
+        )}
+        <div className="grid gap-x-4 gap-y-5 md:grid-cols-2">
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <label htmlFor={slugId} className={label}>
+              {t("slug")}
+            </label>
+            <input
+              id={slugId}
+              name="slug"
+              type="text"
+              spellCheck={false}
+              autoComplete="off"
+              readOnly={locked}
+              value={slug}
+              onChange={(e) => {
+                setSlug(e.target.value);
+              }}
+              aria-invalid={slugError === null ? undefined : true}
+              aria-describedby={`${slugId}-hint${slugError === null ? "" : ` ${slugId}-error`}`}
+              className={control}
+            />
+            {slugError === null ? null : (
+              <p id={`${slugId}-error`} className="text-sm text-error-ink">
+                {errorsT(slugError)}
+              </p>
+            )}
+            <p id={`${slugId}-hint`} className={hint}>
+              {t.rich("slugHint", { key, mono: keyText })}
+            </p>
+          </div>
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <label htmlFor={workspaceId} className={label}>
+              {t("workspace")}
+            </label>
+            <input
+              id={workspaceId}
+              type="text"
+              readOnly
+              value={t("workspaceValue", {
+                workspace,
+                repository: place.repository ?? t("noRepository"),
+              })}
+              aria-describedby={`${workspaceId}-hint`}
+              className={`${control} bg-hl text-muted-foreground`}
+            />
+            <p id={`${workspaceId}-hint`} className={hint}>
+              {t.rich("workspaceHint", {
+                code: (chunks) => <span className={mono}>{chunks}</span>,
+              })}
+            </p>
+          </div>
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <label htmlFor={harnessId} className={label}>
+              {t("harness")}
+            </label>
+            <select
+              id={harnessId}
+              name="harness"
+              value={harness}
+              disabled={locked}
+              onChange={(e) => {
+                const next = HARNESSES.find((h) => h === e.target.value);
+                if (next !== undefined) setHarness(next);
+              }}
+              aria-describedby={`${harnessId}-hint`}
+              className={control}
+            >
+              {HARNESSES.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+            <p id={`${harnessId}-hint`} className={hint}>
+              {t("harnessHint")}
+            </p>
+          </div>
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <label htmlFor={tierId} className={label}>
+              {t("tier")}
+            </label>
+            <select
+              id={tierId}
+              name="tier"
+              disabled
+              defaultValue={MODEL_TIERS[0]}
+              aria-describedby={`${tierId}-hint ${tierId}-unsent`}
+              className={control}
+            >
+              {MODEL_TIERS.map((tier) => (
+                <option key={tier} value={tier}>
+                  {tier}
+                </option>
+              ))}
+            </select>
+            <p id={`${tierId}-hint`} className={hint}>
+              {t("tierHint")}
+            </p>
+            {/* Not backed until #3900 lands. */}
+            <p
+              id={`${tierId}-unsent`}
+              data-testid="not-backed"
+              data-element="model-tier"
+              className={hint}
+            >
+              {t("tierNotSent")}
+            </p>
+          </div>
         </div>
-        <p id="agent-harness-hint" className="text-xs text-muted-foreground">
-          {t("register.name.harnessHint")}
+        <p
+          data-testid="register-note"
+          className="border-l-2 border-gold py-0.5 pl-3.5 text-[13px] text-foreground"
+        >
+          {locked
+            ? t.rich("reserved", { key, mono: keyText })
+            : t.rich("note", { key, mono: keyText })}
         </p>
       </div>
-      <Field
-        id="agent-description"
-        type="text"
-        label={t("register.name.description")}
-        hint={t("register.name.descriptionHint")}
-        {...bind("description")}
-      />
-      <p className="max-w-prose text-xs text-muted-foreground">
-        {t("register.name.note")}
-      </p>
-      <div className="flex justify-end">
-        <SubmitButton
-          pending={pending}
-          label={t("register.name.submit")}
-          pendingLabel={t("register.name.pending")}
-          fullWidth={false}
+      <div className="flex flex-col gap-2 md:flex-row md:items-center">
+        <CancelRegistration
+          org={org}
+          ws={ws}
+          agentId={reserved?.id ?? null}
+          fleet={fleet}
+          testId="register-cancel"
+          className="max-md:w-full"
         />
+        <span className="flex max-md:w-full md:ml-auto">
+          {locked && wrap !== null ? (
+            <SafeLink to={wrap} className={`${buttonPrimary} max-md:w-full`}>
+              {t("continue")}
+            </SafeLink>
+          ) : (
+            <button
+              type="submit"
+              disabled={pending}
+              aria-busy={pending || undefined}
+              className={`${buttonPrimary} max-md:w-full`}
+            >
+              {pending ? t("pending") : t("continue")}
+            </button>
+          )}
+        </span>
       </div>
     </form>
   );

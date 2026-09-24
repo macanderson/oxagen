@@ -32,6 +32,7 @@ const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const {
   dismissFindingAction,
+  exportCostCenterStatementAction,
   exportStatementAction,
   recordFindingFixAction,
   setBudgetAction,
@@ -418,5 +419,57 @@ describe("setGatewayPolicyAction", () => {
         workspaceId: ctx.workspaceId,
       }),
     );
+  });
+});
+
+describe("exportCostCenterStatementAction", () => {
+  it("refuses a value that is not a month, building nothing (negative)", async () => {
+    expect(await exportCostCenterStatementAction(at, "September")).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "monthInvalid",
+      field: "month",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("builds the organization's statement in the organization viewer's context, and answers its CSV and file name", async () => {
+    invoke.mockResolvedValue({
+      month: "2026-09",
+      filename: "chargeback-2026-09.csv",
+      mediaType: "text/csv",
+      content: "level,cost_center\n",
+      lines: [],
+      total: { runs: 0, unpricedRuns: 0, cost: null },
+    });
+    expect(await exportCostCenterStatementAction(at, "2026-09")).toEqual({
+      ok: true,
+      value: {
+        filename: "chargeback-2026-09.csv",
+        content: "level,cost_center\n",
+      },
+    });
+    // Organization-wide: the viewer is resolved for the organization alone.
+    expect(requireViewer).toHaveBeenCalledWith("acme");
+    expect(invoke).toHaveBeenCalledWith(
+      "export_cost_center_statement",
+      { month: "2026-09", format: "csv" },
+      expect.anything(),
+    );
+  });
+
+  it("returns a kernel denial as denied (negative)", async () => {
+    invoke.mockRejectedValue(
+      new kernel.CapabilityError(
+        "export_cost_center_statement",
+        "authz_denied",
+        "denied",
+      ),
+    );
+    expect(await exportCostCenterStatementAction(at, "2026-09")).toEqual({
+      ok: false,
+      reason: "denied",
+      code: "authz_denied",
+    });
   });
 });
