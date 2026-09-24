@@ -1,13 +1,13 @@
 // The Organization pages' public surface. Routes import from here; nothing
 // else reaches into the folder.
-export { ApiKeys, chooseWorkspace } from "./api-keys";
+export { chooseWorkspace } from "./api-keys";
 export { parseApiKeysView } from "./api-keys-view";
-export { CostCenters } from "./cost-centers";
-export { ModelFunding } from "./model-funding";
-export { People } from "./people";
-export { Roles } from "./roles";
+export {
+  Organization,
+  OrganizationApiKeys,
+  OrganizationModelFunding,
+  OrganizationRoles,
+  parseOrganizationTab,
+} from "./organization";
+export { OrganizationSkeleton } from "./states";
 export { Sso } from "./sso";
-export { Workspaces } from "./workspaces";
-
-export { OrganizationTabs } from "./tabs";
-export { OrganizationHeader } from "./header";

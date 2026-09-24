@@ -26,6 +26,7 @@
 // text, so its card cell has no label.
 import { useTranslations } from "next-intl";
 import { type ReactNode, useCallback, useId, useRef, useState } from "react";
+import { pageList, pagerButton } from "@/ui/page-list";
 import { cell, headCell, numericCell } from "@/ui/table";
 
 export type ListColumn = {
@@ -139,30 +140,8 @@ function compare(a: string, b: string, numeric: boolean): number {
   });
 }
 
-/**
- * The page numbers the pager shows, one-based, with an ellipsis on either side
- * past seven pages: the design's `ltPager`. Exported so a list with its own
- * pager (Agents) windows its buttons by the same rule.
- */
-export function pageList(
-  page: number,
-  pages: number,
-): (number | "gap-before" | "gap-after")[] {
-  if (pages <= 7) return Array.from({ length: pages }, (_, i) => i + 1);
-  const lo = Math.max(2, page - 1);
-  const hi = Math.min(pages - 1, page + 1);
-  const out: (number | "gap-before" | "gap-after")[] = [1];
-  if (lo > 2) out.push("gap-before");
-  for (let p = lo; p <= hi; p++) out.push(p);
-  if (hi < pages - 1) out.push("gap-after");
-  out.push(pages);
-  return out;
-}
-
-const pagerButton =
-  "inline-flex min-h-7 min-w-7 items-center justify-center rounded-[7px] border border-button-default-border bg-button-default-bg px-2 py-0.5 text-[12px] tabular-nums text-button-default-fg hover:bg-button-default-hover-bg disabled:cursor-default disabled:opacity-40 aria-[current=page]:border-gold aria-[current=page]:text-accent-text max-md:min-h-11 max-md:min-w-11";
-
-const controlSelect =
+/** The mockup's `.lt select`: the Rows select, the column filters, and any filter a caller draws beside them. */
+export const listSelect =
   "rounded-lg border border-input-border bg-input-bg px-2 py-[5px] text-[12px] text-input-fg focus-visible:border-input-border-focus focus-visible:outline-none max-md:text-base";
 
 /** What each row in a body renders, by the row's key, whitespace collapsed. */
@@ -186,15 +165,26 @@ export function ListTable({
   label,
   columns,
   rows,
+  filters,
+  empty,
 }: {
   /** The table's accessible name, already translated. */
   label: string;
   columns: readonly ListColumn[];
   rows: readonly ListRow[];
+  /**
+   * The list's own select filters (the mockup's "All · Status"), drawn between
+   * the search box and Rows. The caller owns their state and hands in only the
+   * rows they keep, and they replace the filters the design's rule would
+   * offer, so a list never shows two filters over one column.
+   */
+  filters?: ReactNode;
+  /** What the table says when no row shows; "No rows match" by default. */
+  empty?: string;
 }) {
   const t = useTranslations("ui.listTable");
   const [query, setQuery] = useState("");
-  const [filters, setFilters] = useState<Readonly<Record<number, string>>>({});
+  const [chosen, setChosen] = useState<Readonly<Record<number, string>>>({});
   const [sort, setSort] = useState<Sort>(null);
   const [per, setPer] = useState<number>(DEFAULT_PER);
   const [page, setPage] = useState(1);
@@ -222,13 +212,16 @@ export function ListTable({
   );
 
   const textOf = (key: string) => texts.get(key) ?? [];
-  const facets = facetsOf(
-    columns,
-    rows.flatMap((row) => {
-      const text = texts.get(row.key);
-      return text === undefined ? [] : [text];
-    }),
-  );
+  const facets =
+    filters === undefined
+      ? facetsOf(
+          columns,
+          rows.flatMap((row) => {
+            const text = texts.get(row.key);
+            return text === undefined ? [] : [text];
+          }),
+        )
+      : [];
   const q = query.trim().toLowerCase();
   // A row that arrived after the last measure has no text yet: it stays in.
   let order = rows.filter((row) => {
@@ -236,8 +229,8 @@ export function ListTable({
     if (text === undefined) return true;
     if (q !== "" && !text.join(" ").toLowerCase().includes(q)) return false;
     return facets.every(({ column }) => {
-      const chosen = filters[column] ?? "";
-      return chosen === "" || text[column] === chosen;
+      const want = chosen[column] ?? "";
+      return want === "" || text[column] === want;
     });
   });
   if (sort !== null) {
@@ -321,20 +314,21 @@ export function ListTable({
           data-touch-target=""
           className="min-w-[140px] flex-[1_1_200px] rounded-lg border border-input-border bg-input-bg px-2.5 py-1.5 text-[12.5px] text-input-fg placeholder:text-dim focus-visible:border-input-border-focus focus-visible:outline-none max-md:basis-full max-md:text-base"
         />
+        {filters}
         {facets.map(({ column, values }) => {
           const name = columns[column]?.label ?? "";
           return (
             <select
               key={name}
               aria-label={t("facetLabel", { column: name })}
-              value={filters[column] ?? ""}
+              value={chosen[column] ?? ""}
               onChange={(event) => {
                 const value = event.currentTarget.value;
-                setFilters((was) => ({ ...was, [column]: value }));
+                setChosen((was) => ({ ...was, [column]: value }));
                 setPage(1);
               }}
               data-touch-target=""
-              className={`${controlSelect} max-w-[220px]`}
+              className={`${listSelect} max-w-[220px]`}
             >
               <option value="">{t("facetAll", { column: name })}</option>
               {values.map((value) => (
@@ -354,7 +348,7 @@ export function ListTable({
               setPage(1);
             }}
             data-touch-target=""
-            className={controlSelect}
+            className={listSelect}
           >
             {LIST_PAGE_SIZES.map((n) => (
               <option key={n} value={n}>
@@ -421,7 +415,7 @@ export function ListTable({
                   colSpan={columns.length}
                   className="px-3 py-[18px] text-center text-dim"
                 >
-                  {t("noMatch")}
+                  {empty ?? t("noMatch")}
                 </td>
               </tr>
             ) : null}

@@ -48,6 +48,13 @@ export interface FrameIdentity {
   toolStatus: string | null;
   model: string | null;
   policy: string | null;
+  /**
+   * Who made the decision the frame records, in the envelope's
+   * `policy_source` words: `bundle` and `kernel` are Oxagen policy, `human`
+   * is an operator, `harness` and `managed_settings` are the agent's own
+   * harness checking itself. Absent or null where the frame names none.
+   */
+  policySource?: string | null;
   verdict: string | null;
   contextRows: number | null;
   /**
@@ -599,7 +606,14 @@ export function tachoFrame(stored: TachoFrameRowLike): RunFrame {
           : row.provider
             ? `${row.provider}/${model}`
             : model,
-      policy: blank(row.policyDecision),
+      // An operator command records the command as its decision: the host's
+      // allow or deny is how it applied a pause, not what the person chose.
+      policy:
+        row.kind === COMMAND_APPLIED
+          ? (blank(row.attrs?.["command.name"] ?? "") ??
+            blank(row.policyDecision))
+          : blank(row.policyDecision),
+      policySource: field(payload, "policy_source"),
       verdict: null,
       contextRows: null,
       // The producer's tool_use_id: foldSteps keys pending requests on it so
@@ -694,9 +708,16 @@ export type TranscriptEntryKind =
 // list. Re-exported here so a caller over frames has one import site.
 export { isTranscriptKind, TRANSCRIPT_KINDS, type TranscriptKind };
 
-/** Frames that record a decision a rule or a person made about a call. */
+/** An operator's command as the host applied it. */
+const COMMAND_APPLIED = "oxagen:command_applied";
+
+/**
+ * Frames that record a decision a rule or a person made about a call, or an
+ * operator's command to the run (`oxagen:command_applied`).
+ */
 const POLICY_TYPES: ReadonlySet<string> = new Set([
   "tool.approval_recorded",
+  COMMAND_APPLIED,
   "policy_decision",
   "approval_request",
   "approval_decision",
@@ -790,9 +811,15 @@ export interface TranscriptDecision {
   seq: string;
   /** The subagent chain the decision was recorded on; absent on the run's own. */
   sessionUuid?: string;
-  /** The recorded word: `allow`, `deny`, `route`, or whatever the rule wrote. */
+  /**
+   * The recorded word: `allow`, `deny`, `route`, or whatever the rule wrote.
+   * An operator command records the command: `pause`, `resume`, `cancel` or
+   * `steer`.
+   */
   decision: string;
   type: string;
+  /** Who decided, in `FrameIdentity.policySource`'s words; null when unrecorded. */
+  source: string | null;
   at: Date;
 }
 
@@ -879,6 +906,16 @@ function addCost(sum: number | null, cost: number | null): number | null {
   return (sum ?? 0) + cost;
 }
 
+/**
+ * The decision `frame` records about the call a folded entry holds. An
+ * operator command is about the run, not about any one call, so folding it
+ * into a step or a turn does not make it that entry's decision: it keeps its
+ * own entry at the `everything` zoom, which the Policies tab reads.
+ */
+function callDecisionOf(frame: RunFrame): TranscriptDecision | null {
+  return frame.type === COMMAND_APPLIED ? null : decisionOf(frame);
+}
+
 function decisionOf(frame: RunFrame): TranscriptDecision | null {
   if (!POLICY_TYPES.has(frame.type)) return null;
   return {
@@ -888,6 +925,7 @@ function decisionOf(frame: RunFrame): TranscriptDecision | null {
       : { sessionUuid: frame.chain.sessionUuid }),
     decision: frame.identity.policy ?? frame.type,
     type: frame.type,
+    source: frame.identity.policySource ?? null,
     at: frame.observedAt,
   };
 }
@@ -938,7 +976,7 @@ function absorb(current: TranscriptFold, frame: RunFrame): void {
       current.response = frame;
     }
   }
-  const decision = decisionOf(frame);
+  const decision = callDecisionOf(frame);
   if (decision !== null) current.decision = decision;
 }
 
@@ -957,7 +995,7 @@ function absorbPending(current: TranscriptFold, frame: RunFrame): void {
   current.frames += 1;
   current.costMicros = addCost(current.costMicros, frame.costMicros);
   current.usage = addFrameUsage(current.usage, frame.usage);
-  const decision = decisionOf(frame);
+  const decision = callDecisionOf(frame);
   if (decision !== null) current.decision = decision;
 }
 
@@ -1101,6 +1139,7 @@ function foldSteps(frames: readonly RunFrame[]): TranscriptFold[] {
     }
     if (
       (POLICY_TYPES.has(frame.type) || frame.type === "harness_permission") &&
+      frame.type !== COMMAND_APPLIED &&
       holdPolicyForNext(current)
     ) {
       pendingPolicy.push(frame);

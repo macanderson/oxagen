@@ -431,6 +431,73 @@ describe("transcript fold", () => {
     expect(folded[1]?.decision?.decision).toBe("deny");
   });
 
+  // An operator's pause, resume, cancel or steer is a decision the Policies
+  // tab lists, with the command as its word and the operator as its source
+  // (#4023). It is about the run, so it never becomes the decision of the
+  // call a step fold holds.
+  describe("an operator command", () => {
+    const applied = (seq: number, command: string) =>
+      tachoFrame(
+        tachoRow(seq, "oxagen:command_applied", {
+          policyDecision: command === "resume" ? "allow" : "deny",
+          attrs: { "command.id": `tcm_${seq}`, "command.name": command },
+          body: JSON.stringify({
+            policy_decision: command === "resume" ? "allow" : "deny",
+            policy_source: "human",
+            policy_reason_code: `${command}_applied`,
+          }),
+        }),
+      );
+
+    it("reads as a policy frame whose decision is the command, by the operator", () => {
+      const frame = applied(3, "pause");
+      expect(frame.stage).toBe("policy");
+      expect(frame.summary).toBe("operator pause");
+      expect(frame.identity.policy).toBe("pause");
+      expect(frame.identity.policySource).toBe("human");
+      expect(frameKinds(frame)).toContain("policy");
+      const [entry] = foldTranscript([frame], "everything");
+      expect(entry?.kind).toBe("policy");
+      expect(entry?.decision).toMatchObject({
+        seq: "3",
+        decision: "pause",
+        type: "oxagen:command_applied",
+        source: "human",
+      });
+    });
+
+    it("records who decided a policy frame from its body", () => {
+      const frame = tachoFrame(
+        tachoRow(1, "policy_decision", {
+          policyDecision: "allow",
+          body: JSON.stringify({
+            policy_decision: "allow",
+            policy_source: "harness",
+          }),
+        }),
+      );
+      expect(foldTranscript([frame], "everything")[0]?.decision?.source).toBe(
+        "harness",
+      );
+    });
+
+    it("does not become the decision of the step it folds into", () => {
+      const folded = foldTranscript(
+        [
+          tachoFrame(tachoRow(0, "tool_requested", { toolName: "Read" })),
+          applied(1, "steer"),
+          tachoFrame(
+            tachoRow(2, "tool_call", { toolName: "Read", toolStatus: "ok" }),
+          ),
+        ],
+        "steps",
+      );
+      expect(folded).toHaveLength(1);
+      expect(folded[0]?.decision).toBeNull();
+      expect(folded[0]?.frames).toBe(3);
+    });
+  });
+
   it("turns opens at turn_start and sums the turn's cost records", () => {
     const folded = foldTranscript(frames, "turns");
     expect(

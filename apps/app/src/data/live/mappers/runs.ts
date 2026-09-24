@@ -70,6 +70,8 @@ export function toRunRow(
     replayGrade: run.replayGrade,
     verdict: run.verdict,
     enforcementTier: run.enforcementTier,
+    commandBlock: run.commandBlock ?? null,
+    steerBlock: run.steerBlock ?? null,
     ingressRevoked: run.ingressRevoked ?? false,
     ingressPaused: run.ingressPaused ?? false,
     completenessGaps: run.completenessGaps,

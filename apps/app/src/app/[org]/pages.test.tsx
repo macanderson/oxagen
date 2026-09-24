@@ -13,13 +13,14 @@
 // theirs, with the tab and the chips the URL names, to the Tools feature
 // (#2958); Billing hands
 // its viewer, the data source, the checkout outcome and the invoices cursor to
-// the Billing feature (WL-38); People renders its sections from org.members and
-// API keys its table from org.apiKeys; Run hands its viewer, the data source, the
+// the Billing feature (WL-38); Organization, Roles and API keys hand their
+// viewer, the data source and the tab or the keys' workspace to the
+// Organization feature (pages/organization.md); Run hands its viewer, the data source, the
 // run id and the tab, zoom and frames cursor the URL carries to the Run feature
 // (WL-35).
 import { screen } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { translator } from "@/test/intl";
 import {
   expectPageTitle,
@@ -40,23 +41,20 @@ const {
   AgentSource,
   Steering,
   Spend,
-  Roles,
-  Workspaces,
-  CostCenters,
+  Organization,
+  OrganizationRoles,
+  OrganizationApiKeys,
+  OrganizationModelFunding,
   OnboardingGate,
   Skills,
   SkillsLoading,
   Tools,
   ToolsLoading,
   Runtimes,
-  members,
   workspaces,
-  apiKeys,
   source,
 } = vi.hoisted(() => {
-  const members = vi.fn();
   const workspaces = vi.fn();
-  const apiKeys = vi.fn();
   return {
     requireViewer: vi.fn<(org: string, ws?: string) => Promise<unknown>>(),
     Audit: vi.fn((_props: Record<string, unknown>) => null),
@@ -95,9 +93,10 @@ const {
     Run: vi.fn((_props: Record<string, unknown>) => (
       <p data-testid="run-body" />
     )),
-    Roles: vi.fn((_props: Record<string, unknown>) => null),
-    Workspaces: vi.fn((_props: Record<string, unknown>) => null),
-    CostCenters: vi.fn((_props: Record<string, unknown>) => null),
+    Organization: vi.fn((_props: Record<string, unknown>) => null),
+    OrganizationRoles: vi.fn((_props: Record<string, unknown>) => null),
+    OrganizationApiKeys: vi.fn((_props: Record<string, unknown>) => null),
+    OrganizationModelFunding: vi.fn((_props: Record<string, unknown>) => null),
     // The gate's own states are its component test; here it only has to render.
     OnboardingGate: vi.fn((_props: Record<string, unknown>) => (
       <p data-testid="onboarding-gate" />
@@ -113,10 +112,8 @@ const {
     // Runtimes draws its own header (its error and access-denied states
     // replace the body with the header included), so the stand-in draws it.
     Runtimes: vi.fn((_props: Record<string, unknown>) => <h1>Runtimes</h1>),
-    members,
     workspaces,
-    apiKeys,
-    source: { org: { members, workspaces, apiKeys } },
+    source: { org: { workspaces } },
   };
 });
 // `WsCtx.is` is how the API keys section tells a workspace scope from an
@@ -128,7 +125,15 @@ vi.mock("@/server/viewer", () => ({
     is: (x: unknown) => typeof x === "object" && x !== null && "wsSlug" in x,
   },
 }));
-vi.mock("@/features/audit", () => ({ Audit, AuditSkeleton: () => null }));
+vi.mock("@/features/audit", async (actual) => ({
+  Audit,
+  AuditSkeleton: () => null,
+  AuditHeaderAction: ({ org }: { org: string }) => (
+    <p data-testid="audit-header-action">{org}</p>
+  ),
+  AuditRetentionLine: () => <p data-testid="audit-retention-line" />,
+  auditTabOf: (await actual<typeof import("@/features/audit")>()).auditTabOf,
+}));
 vi.mock("@/features/billing", () => ({ Billing }));
 // Billing names the signed-in person on its denied state; the session is Better
 // Auth's, so the stub answers with the name alone.
@@ -163,13 +168,15 @@ vi.mock("@/features/spend", async () => ({
   parseSpendView: (await import("@/features/spend/view")).parseSpendView,
   Spend,
 }));
-// People stays real, so the organization page still renders a roster; the two
-// sections the #2964 lane adds are stubbed to show what each route hands them.
+// The three Organization bodies are stubbed to show what each route hands
+// them; the frame, the tabs and the states have their own tests
+// (features/organization/frame.test.tsx).
 vi.mock("@/features/organization", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/features/organization")>()),
-  Roles,
-  Workspaces,
-  CostCenters,
+  Organization,
+  OrganizationRoles,
+  OrganizationApiKeys,
+  OrganizationModelFunding,
 }));
 vi.mock("@/features/onboarding", () => ({ OnboardingGate }));
 vi.mock("@/features/skills", () => ({ Skills, SkillsLoading }));
@@ -223,7 +230,6 @@ beforeEach(() => {
   requireViewer.mockReset();
   requireViewer.mockResolvedValue({});
   workspaces.mockReset();
-  apiKeys.mockReset();
 });
 
 /** Every segment a page under /[org] can have; each page reads the ones in its path. */
@@ -260,6 +266,7 @@ const API_KEYS: Load = () => import("./api-keys/page");
 
 const BILLING: Load = () => import("./billing/page");
 const AUDIT: Load = () => import("./audit/page");
+const AUDIT_TAB = () => import("./audit/[tab]/page");
 
 describe("the Tools page", () => {
   it("resolves the workspace viewer and hands the viewer, the data source, the tab the path names and the query to Tools", async () => {
@@ -328,10 +335,10 @@ describe("the Tools page", () => {
 });
 
 describe("the Audit page", () => {
-  it("resolves the organization viewer, names the page once and hands the viewer, the data source and the filters the URL carries to Audit", async () => {
+  it("resolves the organization viewer, names the page once with its gold action and hands the viewer, the data source, the Events tab and the filters the URL carries to Audit", async () => {
     const ctx = { orgSlug: "acme" };
     requireViewer.mockResolvedValue(ctx);
-    await expectPageTitle(
+    const page = await expectPageTitle(
       await AUDIT(),
       routeProps(SEGMENTS, { outcome: "deny", offset: "50" }),
       title("audit"),
@@ -341,10 +348,45 @@ describe("the Audit page", () => {
     expect(Audit.mock.calls[0]?.[0]).toEqual({
       ctx,
       source,
+      tab: "events",
       searchParams: { outcome: "deny", offset: "50" },
     });
+    expect(page).toHaveTextContent(
+      "What happened, who allowed it, under what authority, and what it cost.",
+    );
+    expect(screen.getByTestId("audit-retention-line")).toBeInTheDocument();
+    expect(screen.getByTestId("audit-header-action")).toHaveTextContent("acme");
     // Audit has a page, so it has no UNRECORDED row (§3.6).
     expect(screen.queryByTestId("not-recorded")).toBeNull();
+  });
+
+  it("opens another tab from its segment, under the same header, with the query it carries", async () => {
+    const ctx = { orgSlug: "acme" };
+    requireViewer.mockResolvedValue(ctx);
+    await expectPageTitle(
+      await AUDIT_TAB(),
+      routeProps(
+        { ...SEGMENTS, tab: "exports" },
+        { export: "3f1c2b7a-9d4e-4c1b-8a2f-5e6d7c8b9a01" },
+      ),
+      title("audit"),
+    );
+    expect(requireViewer).toHaveBeenCalledWith(...ORG);
+    expect(Audit.mock.calls.at(-1)?.[0]).toEqual({
+      ctx,
+      source,
+      tab: "exports",
+      searchParams: { export: "3f1c2b7a-9d4e-4c1b-8a2f-5e6d7c8b9a01" },
+    });
+  });
+
+  it("answers a segment that names no tab with a 404 (negative)", async () => {
+    requireViewer.mockResolvedValue({ orgSlug: "acme" });
+    const page = await AUDIT_TAB();
+    await expect(
+      page.default(routeProps({ ...SEGMENTS, tab: "events" })),
+    ).rejects.toThrow("NOT_FOUND");
+    expect(Audit).not.toHaveBeenCalled();
   });
 });
 
@@ -807,73 +849,81 @@ describe("the Run page", () => {
   });
 });
 
-// People renders for real, so this page pulls the whole organization feature
-// graph and is the slowest in this file. Two separate things outran the
-// default 5 s budget, and both are handled here.
-//
-// The cold import, under coverage instrumentation, outran it on its own, and
-// the render that timed out went on to call Workspaces during the next test
-// and counted a second call there. So the import is hoisted and awaited once,
-// under a hook budget of its own.
-//
-// The first real render of the roster then outran 5 s as well on a loaded
-// runner (three failed main runs on 2026-09-18), which the hook budget does
-// not cover because it happens inside the tests. So the describe carries a
-// budget too.
-describe("Organization › People", { timeout: 30_000 }, () => {
-  const people = import("./page");
-  beforeAll(async () => {
-    await people;
-  }, 60_000);
+/**
+ * The three Organization routes name themselves in the document title only:
+ * the h1 is the organization's name, which the body draws once the frame has
+ * checked the viewer may read it (pages/organization.md), so a stubbed body
+ * leaves the route with no h1 of its own.
+ */
+async function expectOrganizationRoute<P extends object>(
+  page: PageModule<P>,
+  props: RouteProps<P>,
+  name: string,
+) {
+  const metadata = await page.generateMetadata(props);
+  expect(metadata.title).toBe(name);
+  const container = await renderPage(await page.default(props));
+  expect(container.querySelectorAll("h1")).toHaveLength(0);
+  expect(container.querySelector("main#main")).not.toBeNull();
+}
+
+describe("Organization", () => {
   beforeEach(() => {
-    Workspaces.mockClear();
+    Organization.mockClear();
   });
 
-  it("resolves the organization viewer, names the page once and renders the roster org.members read for that viewer", async () => {
-    const ctx = { orgSlug: "acme", orgName: "Acme Robotics", orgRole: "owner" };
+  it("resolves the organization viewer, names the page once and hands the viewer, the data source and People to the body", async () => {
+    const ctx = { orgSlug: "acme", orgRole: "owner" };
     requireViewer.mockResolvedValue(ctx);
-    members.mockResolvedValue({
-      ok: true,
-      value: {
-        members: [
-          {
-            id: "usr_7k2m9q4x8r1t5v3w6y0z2a",
-            name: "Marcus Bell",
-            email: "marcus.bell@acme.example",
-            role: "owner",
-            joinedAt: "2026-03-02T09:15:00.000Z",
-          },
-        ],
-        invitations: [],
-      },
-    });
-    await expectPageTitle(
-      await people,
+    await expectOrganizationRoute(
+      await import("./page"),
       routeProps(SEGMENTS),
       title("people"),
-      "Acme Robotics",
     );
     expect(requireViewer).toHaveBeenCalledWith(...ORG);
-    expect(members).toHaveBeenCalledWith(ctx);
-    expect(screen.getByRole("main")).toHaveTextContent("Marcus Bell");
-    expect(screen.queryByTestId("not-recorded")).toBeNull();
+    expect(Organization.mock.calls[0]?.[0]).toEqual({
+      ctx,
+      source,
+      tab: "people",
+    });
   });
 
-  it("renders the Workspaces section of the same page from the same viewer and data source (#2964)", async () => {
-    const ctx = { orgSlug: "acme", orgName: "Acme Robotics", orgRole: "owner" };
-    requireViewer.mockResolvedValue(ctx);
-    members.mockResolvedValue({
-      ok: true,
-      value: { members: [], invitations: [] },
-    });
-    await expectPageTitle(
-      await people,
+  it("hands the tab the URL names, and People for one it does not (negative)", async () => {
+    requireViewer.mockResolvedValue({ orgSlug: "acme", orgRole: "owner" });
+    await expectOrganizationRoute(
+      await import("./page"),
       routeProps(SEGMENTS, { tab: "workspaces" }),
       title("people"),
-      "Acme Robotics",
     );
-    expect(Workspaces).toHaveBeenCalledOnce();
-    expect(Workspaces.mock.calls[0]?.[0]).toEqual({ ctx, source });
+    expect(Organization.mock.calls[0]?.[0]).toMatchObject({
+      tab: "workspaces",
+    });
+    Organization.mockClear();
+    await expectOrganizationRoute(
+      await import("./page"),
+      routeProps(SEGMENTS, { tab: "nonsense" }),
+      title("people"),
+    );
+    expect(Organization.mock.calls[0]?.[0]).toMatchObject({ tab: "people" });
+  });
+});
+
+describe("Organization › Model funding", () => {
+  it("resolves the organization viewer, names the page once and hands the viewer and the data source to Model funding", async () => {
+    const ctx = { orgSlug: "acme", orgName: "Acme Robotics", orgRole: "owner" };
+    requireViewer.mockResolvedValue(ctx);
+    OrganizationModelFunding.mockClear();
+    await expectOrganizationRoute(
+      await import("./model-funding/page"),
+      routeProps(SEGMENTS),
+      title("modelFunding"),
+    );
+    expect(requireViewer).toHaveBeenCalledWith(...ORG);
+    expect(OrganizationModelFunding).toHaveBeenCalledOnce();
+    expect(OrganizationModelFunding.mock.calls[0]?.[0]).toEqual({
+      ctx,
+      source,
+    });
   });
 });
 
@@ -881,16 +931,14 @@ describe("Organization › Roles", () => {
   it("resolves the organization viewer, names the page once and hands the viewer and the data source to Roles", async () => {
     const ctx = { orgSlug: "acme", orgName: "Acme Robotics", orgRole: "owner" };
     requireViewer.mockResolvedValue(ctx);
-    await expectPageTitle(
+    await expectOrganizationRoute(
       await import("./roles/page"),
       routeProps(SEGMENTS),
       title("roles"),
-      "Acme Robotics",
     );
     expect(requireViewer).toHaveBeenCalledWith(...ORG);
-    expect(Roles).toHaveBeenCalledOnce();
-    expect(Roles.mock.calls[0]?.[0]).toEqual({ ctx, source });
-    expect(screen.queryByTestId("not-recorded")).toBeNull();
+    expect(OrganizationRoles).toHaveBeenCalledOnce();
+    expect(OrganizationRoles.mock.calls[0]?.[0]).toEqual({ ctx, source });
   });
 });
 
@@ -902,6 +950,7 @@ describe("Organization › Roles", () => {
 const wsRow = (slug: string, name: string) => ({
   id: `wrk_${slug}`,
   slug,
+  namespace: slug,
   name,
   role: "Owner",
   archivedAt: null,
@@ -910,21 +959,20 @@ const wsRow = (slug: string, name: string) => ({
 
 describe("Organization › API keys", () => {
   beforeEach(() => {
+    OrganizationApiKeys.mockClear();
     workspaces.mockResolvedValue({
       ok: true,
       value: { workspaces: [wsRow("core-platform", "Core platform")] },
     });
   });
 
-  it("resolves the workspace the URL names and renders the keys org.apiKeys read in it", async () => {
+  it("resolves the workspace the URL names and hands its viewer to the keys", async () => {
     // A key names a workspace (ADR-073): the page resolves one before it reads.
-    const ctx = {
-      orgSlug: "acme",
-      orgName: "Acme Robotics",
-      orgRole: "owner",
-      wsSlug: "core-platform",
-    };
-    requireViewer.mockResolvedValue(ctx);
+    const orgCtx = { orgSlug: "acme", orgRole: "owner" };
+    const wsCtx = { ...orgCtx, wsSlug: "growth" };
+    requireViewer.mockImplementation((_org, ws) =>
+      Promise.resolve(ws === undefined ? orgCtx : wsCtx),
+    );
     workspaces.mockResolvedValue({
       ok: true,
       value: {
@@ -934,33 +982,19 @@ describe("Organization › API keys", () => {
         ],
       },
     });
-    apiKeys.mockResolvedValue({
-      ok: true,
-      value: [
-        {
-          id: "aky_7k2m9q4x8r1t5v3w6y0z2a",
-          name: "CI runner",
-          prefix: "ox_liveliveli",
-          createdAt: "2026-09-13T10:00:00.000Z",
-          lastUsedAt: null,
-          expiresAt: null,
-          revokedAt: null,
-          rotatable: true,
-        },
-      ],
-    });
-    await expectPageTitle(
+    await expectOrganizationRoute(
       await API_KEYS(),
       routeProps(SEGMENTS, { workspace: "growth" }),
       title("apiKeys"),
-      "Acme Robotics",
     );
     expect(requireViewer).toHaveBeenCalledWith(...ORG);
     expect(requireViewer).toHaveBeenCalledWith("acme", "growth");
     expect(workspaces).toHaveBeenCalledOnce();
-    expect(apiKeys).toHaveBeenCalledWith(ctx);
-    expect(screen.getByRole("main")).toHaveTextContent("ox_liveliveli");
-    expect(screen.queryByTestId("not-recorded")).toBeNull();
+    expect(OrganizationApiKeys.mock.calls[0]?.[0]).toMatchObject({
+      ctx: orgCtx,
+      keysCtx: wsCtx,
+      source,
+    });
   });
 
   it("falls back to the first workspace the viewer may enter when the URL names none", async () => {
@@ -970,31 +1004,28 @@ describe("Organization › API keys", () => {
       orgRole: "owner",
       wsSlug: "core-platform",
     });
-    apiKeys.mockResolvedValue({ ok: true, value: [] });
-    await expectPageTitle(
+    await expectOrganizationRoute(
       await API_KEYS(),
       routeProps(SEGMENTS),
       title("apiKeys"),
-      "Acme Robotics",
     );
     expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
   });
 
-  it("resolves no workspace and reads no key when the viewer may enter none (negative)", async () => {
-    requireViewer.mockResolvedValue({
-      orgSlug: "acme",
-      orgName: "Acme Robotics",
-      orgRole: "owner",
-    });
+  it("resolves no workspace when the viewer may enter none, and hands the org viewer for both (negative)", async () => {
+    const orgCtx = { orgSlug: "acme", orgRole: "owner" };
+    requireViewer.mockResolvedValue(orgCtx);
     workspaces.mockResolvedValue({ ok: true, value: { workspaces: [] } });
-    await expectPageTitle(
+    await expectOrganizationRoute(
       await API_KEYS(),
       routeProps(SEGMENTS),
       title("apiKeys"),
-      "Acme Robotics",
     );
     expect(requireViewer).toHaveBeenCalledExactlyOnceWith(...ORG);
-    expect(apiKeys).not.toHaveBeenCalled();
+    expect(OrganizationApiKeys.mock.calls[0]?.[0]).toMatchObject({
+      ctx: orgCtx,
+      keysCtx: orgCtx,
+    });
   });
 });
 
@@ -1014,6 +1045,7 @@ describe("a person requireViewer refuses", () => {
     ["people", () => import("./page")] as const,
     ["roles", () => import("./roles/page")] as const,
     ["apiKeys", API_KEYS] as const,
+    ["modelFunding", () => import("./model-funding/page")] as const,
   ])("pages.%s renders nothing (negative)", async (_key, load) => {
     requireViewer.mockRejectedValue(new Error("NEXT_NOT_FOUND"));
     await expect(
