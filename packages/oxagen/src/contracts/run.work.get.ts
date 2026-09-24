@@ -85,6 +85,21 @@ export const runWorkPrSchema = z
   })
   .strict();
 
+/**
+ * One subagent the session started, from its `subagent_start` and
+ * `subagent_stop` hook frames. `type` is the agent type the harness named;
+ * `stopped` is false while no stop frame has been recorded.
+ */
+export const runSubagentSchema = z
+  .object({
+    id: z.string(),
+    type: z.string().nullable(),
+    firstSeq: z.string(),
+    lastSeq: z.string(),
+    stopped: z.boolean(),
+  })
+  .strict();
+
 export const runWorkGet = registerCapability({
   name: "get_run_work",
   domain: "run",
@@ -110,6 +125,8 @@ export const runWorkGet = registerCapability({
       checkouts: z.array(runCheckoutSchema),
       diffs: z.array(runCapturedDiffSchema),
       pullRequests: z.array(runWorkPrSchema),
+      /** The subagents the session started; empty for a ledger run. */
+      subagents: z.array(runSubagentSchema),
       complete: z.boolean(),
       warnings: z.array(z.string()),
     })
@@ -120,4 +137,5 @@ export type RunRepository = z.output<typeof runRepositorySchema>;
 export type RunCheckout = z.output<typeof runCheckoutSchema>;
 export type RunCapturedDiff = z.output<typeof runCapturedDiffSchema>;
 export type RunWorkPr = z.output<typeof runWorkPrSchema>;
+export type RunSubagent = z.output<typeof runSubagentSchema>;
 export type RunWorkGetOutput = z.output<typeof runWorkGet.output>;

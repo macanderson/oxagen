@@ -64,6 +64,8 @@ A row is a `read` node when its writes, edits and deletes are all zero, and a du
 
 The state is git's `observed_status` where a reconciliation recorded one, because that word states a condition. Where it recorded none, the state comes from the counters. It is never a word git did not say.
 
+Each `oxagen:pr_link` frame the harness sealed adds a pull request node. The node names the PR number, sits in the repository the frame's `pr_repository` attribute names, and carries the frame's `pr_url` as its note. Two frames with the same URL make one node, at the first frame's sequence.
+
 ## Reading a ledger run
 
 An `arun_…` run reads its `change.recorded` and `provider_publish.*` receipts.
