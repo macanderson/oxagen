@@ -1680,6 +1680,7 @@ type Messages = {
       signInLead: string;
       wrongAccountBodyNoInviter: string;
       failedClosed: string;
+      logInInstead: string;
     };
     cli: {
       title: string;
@@ -5751,7 +5752,12 @@ type Messages = {
       reference: string;
       relation: string;
       task: string;
+      closedBy: string;
+      pullRequests: string;
       empty: string;
+      emptyUnread: string;
+      loading: string;
+      closingUnread: string;
       note: string;
     };
     policy: {
@@ -6070,6 +6076,16 @@ type Messages = {
         workspace: string;
         organization: string;
       };
+      waiting: string;
+      open: string;
+      foot: {
+        connected: string;
+        offline: string;
+        reachable: string;
+        notBacked: string;
+      };
+      countNotRecorded: string;
+      countNotRecordedShort: string;
     };
     nav: {
       fleet: string;
@@ -6093,6 +6109,14 @@ type Messages = {
       current: string;
       denied: string;
       unavailable: string;
+      searchOrgs: string;
+      noMatch: string;
+      orgNote: string;
+      orgMetaNotBacked: string;
+      wsMetaNotBacked: string;
+      createWorkspace: string;
+      orgTileNotBacked: string;
+      wsTileNotBacked: string;
     };
     topbar: {
       label: string;
@@ -6101,6 +6125,11 @@ type Messages = {
       search: string;
       searchShortcut: string;
       userMenu: string;
+      notifications: string;
+      notificationsUnread: string;
+      unread: string;
+      approvals: string;
+      approvalsWaiting: string;
     };
     userMenu: {
       profile: string;
@@ -6108,7 +6137,6 @@ type Messages = {
       security: string;
       privacy: string;
       switchTheme: string;
-      themeNow: string;
       signOut: string;
       signingOut: string;
       signOutFailed: string;
@@ -6129,6 +6157,63 @@ type Messages = {
         open: string;
         escape: string;
         close: string;
+        governed: string;
+        orgOnly: string;
+      };
+      groups: {
+        go: {
+          label: string;
+        };
+        assistant: {
+          label: string;
+          note: string;
+        };
+        create: {
+          label: string;
+          note: string;
+        };
+        runs: {
+          label: string;
+        };
+        agents: {
+          label: string;
+        };
+        approvals: {
+          label: string;
+        };
+        actions: {
+          label: string;
+          note: string;
+        };
+        tools: {
+          label: string;
+          note: string;
+        };
+      };
+      shortcut: string;
+      assistant: {
+        open: string;
+        askTampered: string;
+        askTamperedDraft: string;
+        askCost: string;
+        askCostDraft: string;
+        mintKey: string;
+      };
+      actions: {
+        pauseAll: string;
+        pauseAllNotBacked: string;
+        steer: string;
+        register: string;
+        grant: string;
+        role: string;
+        killSwitch: string;
+        export: string;
+        exportDetail: string;
+        apiKey: string;
+      };
+      search: {
+        failed: string;
+        toolsNotBacked: string;
       };
     };
     mobileNav: {
@@ -6141,10 +6226,26 @@ type Messages = {
       };
       more: string;
       waiting: string;
+      incidents: string;
+      tileWaiting: string;
+      sub: {
+        steering: string;
+        runtimes: string;
+        repositories: string;
+        organization: string;
+        billing: string;
+        audit: string;
+      };
+      assistant: string;
+      assistantSub: string;
+      search: string;
+      searchSub: string;
+      notifications: string;
+      notificationsSub: string;
+      account: string;
     };
     drawer: {
       title: string;
-      close: string;
     };
     account: {
       title: string;
@@ -6251,7 +6352,7 @@ type Messages = {
     assistant: {
       label: string;
       launcher: string;
-      launcherHint: string;
+      launcherNotBacked: string;
       close: string;
       thinking: string;
       recordedAs: string;
@@ -6319,24 +6420,57 @@ type Messages = {
       failed: string;
       photoPlaceholder: string;
     };
-    activity: {
-      notifications: string;
-      approvals: string;
-      unread: string;
-      loading: string;
-      refresh: string;
-      failed: string;
-      allApprovals: string;
+    approvals: {
+      title: string;
+      waiting: string;
+      close: string;
+      waitingOnYou: string;
+      resolvedToday: string;
+      openApproval: string;
+      expired: string;
+      resolution: {
+        approved: string;
+        denied: string;
+        expired: string;
+      };
+      all: string;
+      gone: string;
       empty: string;
-      partial: string;
-      resolved: string;
-      resolvedTitle: string;
-      noWorkspaces: string;
-      noNotifications: string;
-      open: string;
-      markRead: string;
-      archive: string;
-      notificationsPartial: string;
+      emptyDetail: string;
+      rowNotBacked: string;
+      truncated: string;
+      note: string;
+      interjectionNotBacked: string;
+      resolvedCard: {
+        chain: string;
+        who: string;
+        agent: string;
+        action: string;
+        rule: string;
+        resolution: string;
+        resolvedAt: string;
+        resolvedBy: string;
+        notRecorded: string;
+        openRun: string;
+      };
+    };
+    notifications: {
+      title: string;
+      footer: string;
+      markAll: string;
+      markDenied: string;
+      markFailed: string;
+      empty: string;
+      noWorkspace: string;
+      unread: string;
+      footerUnknown: string;
+      marked: string;
+      markedLeft: string;
+    };
+    denied: {
+      workspace: string;
+      permission: string;
+      unnamed: string;
     };
   };
   skills: {
@@ -8712,6 +8846,7 @@ type Messages = {
     };
     dialog: {
       close: string;
+      dismiss: string;
     };
     record: {
       kinds: {
@@ -8827,6 +8962,29 @@ type Messages = {
       hint: string;
       invalid: string;
     };
+    pageState: {
+      loading: string;
+      error: {
+        title: string;
+        titleNamed: string;
+        body: string;
+        retry: string;
+        incident: string;
+        trace: string;
+        incidentNotBacked: string;
+      };
+      denied: {
+        body: string;
+        request: string;
+        back: string;
+        requestNotBacked: string;
+        signedIn: string;
+        needed: string;
+        decidedBy: string;
+        decidedByValue: string;
+        policyNotRecorded: string;
+      };
+    };
     list: {
       search: string;
       filterBy: string;
@@ -8853,6 +9011,25 @@ type Messages = {
       previous: string;
       next: string;
       pages: string;
+    };
+    desktopDownloads: {
+      title: string;
+      lead: string;
+      platforms: {
+        macos: string;
+        windows: string;
+        linux: string;
+      };
+      installers: {
+        macAppleSilicon: string;
+        macIntel: string;
+        windowsExe: string;
+        windowsMsi: string;
+        linuxDeb: string;
+        linuxRpm: string;
+        linuxAppImage: string;
+      };
+      all: string;
     };
   };
 };

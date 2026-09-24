@@ -33,7 +33,9 @@ const CONTEXT: ClaudeCodeContext = {
 
 const SESSION = "340ed354-6344-4727-9f8b-1e40b5e12aa7";
 
-function harness(bundleOverrides: Partial<Omit<PolicyBundle, "signature">> = {}) {
+function harness(
+  bundleOverrides: Partial<Omit<PolicyBundle, "signature">> = {},
+) {
   const bundle = bundleSigner().sign(unsignedBundle(bundleOverrides));
   let clock = Date.parse("2026-09-10T10:00:00.000Z");
   const now = () => (clock += 1000);
@@ -158,9 +160,7 @@ describe("steer delivery to an agent working on its own", () => {
         additionalContext: "Use the staging database.",
       },
     });
-    const frame = first.events.find(
-      (e) => e.kind === "oxagen:command_applied",
-    );
+    const frame = first.events.find((e) => e.kind === "oxagen:command_applied");
     expect(frame?.attrs?.["command.id"]).toBe("cmd_s");
     expect(h.acks).toEqual([
       expect.objectContaining({
@@ -211,12 +211,9 @@ describe("steer delivery to an agent working on its own", () => {
       h.deps,
     );
     expect(sub.response).toEqual({});
-    const replayed = await handleHookEvent(
-      hook("Stop"),
-      {},
-      h.deps,
-      { receivedAt: "2026-09-10T09:59:00.000Z" },
-    );
+    const replayed = await handleHookEvent(hook("Stop"), {}, h.deps, {
+      receivedAt: "2026-09-10T09:59:00.000Z",
+    });
     expect(replayed.response).toEqual({});
     expect(record.control.messages).toHaveLength(1);
     expect(h.acks).toEqual([]);
@@ -277,7 +274,10 @@ describe("resume", () => {
     const refused = await handleHookEvent(hook("PreToolUse", READ), {}, h.deps);
     expect(refused.evaluation?.reason_code).toBe("session_paused");
     expect(record.control.pauseEffect).toBe("refused");
-    const resumed = await control(h, record, { id: "cmd_r", command: "resume" });
+    const resumed = await control(h, record, {
+      id: "cmd_r",
+      command: "resume",
+    });
     expect(resumed.acknowledgements[0]).toMatchObject({
       command_id: "cmd_r",
       status: "applied",
@@ -306,7 +306,10 @@ describe("resume", () => {
     const stop = await handleHookEvent(hook("Stop"), {}, h.deps);
     expect(stop.response).toEqual({});
     expect(record.control.pauseEffect).toBe("stopped");
-    const resumed = await control(h, record, { id: "cmd_r", command: "resume" });
+    const resumed = await control(h, record, {
+      id: "cmd_r",
+      command: "resume",
+    });
     expect(resumed.acknowledgements[0]?.detail).toMatch(/idle/);
     expect(record.control.resumeOwed).toBeUndefined();
   });
@@ -330,7 +333,9 @@ describe("resume", () => {
     const record = await started(h);
     record.control.pauseEffect = "refused";
     record.control.resumeOwed = "cmd_r";
-    const state = JSON.parse(JSON.stringify(h.registry.state())) as RegistryState;
+    const state = JSON.parse(
+      JSON.stringify(h.registry.state()),
+    ) as RegistryState;
     const restored = new SessionRegistry({
       context: CONTEXT,
       scope: TEST_ENROLLMENT,
@@ -393,7 +398,11 @@ describe("an idle session the sweep closes", () => {
     const h = harness();
     const record = await started(h);
     const lastSeen = record.lastSeenAt;
-    const sealed = h.registry.sweep(() => true, 60_000, () => false);
+    const sealed = h.registry.sweep(
+      () => true,
+      60_000,
+      () => false,
+    );
     expect(sealed).toEqual([]);
     for (let i = 0; i < 120; i += 1) h.now();
     const swept = h.registry.sweep(() => true, 60_000);

@@ -300,6 +300,66 @@
                 "branch"
               ]
             },
+            "closingIssues": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "issues": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "owner": {
+                            "type": "string"
+                          },
+                          "repo": {
+                            "type": "string"
+                          },
+                          "number": {
+                            "type": "integer"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string",
+                            "format": "uri"
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "open",
+                              "closed"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "owner",
+                          "repo",
+                          "number",
+                          "title",
+                          "url",
+                          "state"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "complete": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "issues",
+                    "complete"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "checkoutIds": {
               "type": "array",
               "items": {
@@ -572,6 +632,7 @@
             "headSha",
             "headRef",
             "association",
+            "closingIssues",
             "checkoutIds",
             "observedAt",
             "current",

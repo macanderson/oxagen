@@ -587,6 +587,7 @@ describe("header", () => {
             headSha: null,
             headRef: "release/3.2",
             association: "recorded",
+            closingIssues: null,
             checkoutRefs: [],
             observedAt: "2026-09-23T10:00:00.000Z",
             current: true,
@@ -1085,8 +1086,8 @@ describe("transcript", () => {
       expect.stringContaining("turn 2"),
     ]);
     expect(turns[1]).toHaveTextContent("done");
-    expect(turns[1]).toHaveTextContent("4 steps");
-    expect(turns[1]).toHaveTextContent("steps 1 to 4");
+    expect(turns[1]).toHaveTextContent("2 steps");
+    expect(turns[1]).toHaveTextContent("steps 1 to 2");
     // What was asked sits above the turn it opened, outside the disclosure,
     // so a collapsed turn still shows it.
     const asked = screen.getByTestId("transcript-you");
@@ -1101,14 +1102,23 @@ describe("transcript", () => {
       .getAllByTestId("transcript-step")
       .map((step) => step.getAttribute("data-node"));
     // A step with nothing to read (a context assembly with no body, a model
-    // call the recorder kept only a digest of) draws no row; the Frames tab
-    // still has it. What is left is what the run did.
-    expect(nodes).toEqual(["control", "model", "tool", "control", "deny"]);
-    // The steps are numbered over the rows drawn: the run start and the
-    // digest-only model call have no row, and leave no gap in the count.
+    // call the recorder kept only a digest of) draws no row, and neither does
+    // the turn_start or turn_end whose text is already the prompt above the
+    // turn and the reply inside it. The Frames tab still has every one. What
+    // is left is what the run did.
+    expect(nodes).toEqual(["model", "tool", "deny"]);
+    expect(turns[1]).not.toHaveTextContent(
+      "Cut the 2026.9.2 release candidate.",
+    );
+    expect(
+      screen.getAllByText(/Both failures predate the release scope/),
+    ).toHaveLength(1);
+    // The steps are numbered over the rows drawn: the run start, the
+    // digest-only model call and the turn text above have no row, and
+    // leave no gap in the count.
     expect(
       screen.getAllByTestId("step-number").map((n) => n.textContent),
-    ).toEqual(["1", "2", "3", "4", "5"]);
+    ).toEqual(["1", "2", "3"]);
     await expectNoAxe(container);
   });
 
@@ -1193,9 +1203,10 @@ describe("transcript", () => {
       { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
       { tab: "transcript", zoom: "everything" },
     );
-    // Nine frames across the steps that have something to read; the frames
-    // of the steps with nothing to read are the Frames tab's.
-    expect(screen.getAllByTestId("transcript-frame")).toHaveLength(9);
+    // Seven frames across the steps that have something to read; the frames
+    // of the steps with nothing to read, and of the turn_start and turn_end
+    // the prompt and reply already show, are the Frames tab's.
+    expect(screen.getAllByTestId("transcript-frame")).toHaveLength(7);
     expect(screen.getByText('{"open":34}')).toBeTruthy();
     // The digest-only model call has no row, so nothing says it has no body.
     expect(screen.queryByText(/kept a digest and no body/)).toBeNull();
@@ -2300,7 +2311,13 @@ describe("issues", () => {
       },
       { tab: "issues" },
     );
-    expect(screen.getByText("This run names no issue.")).toBeTruthy();
+    // The default work read lists no pull requests, so the run's own pull
+    // requests were read and close nothing (#4024).
+    expect(
+      screen.getByText(
+        "This run names no issue, and no pull request it opened closes one.",
+      ),
+    ).toBeTruthy();
     expect(screen.getByTestId("run-tab-count-issues")).toHaveTextContent("0");
   });
 });

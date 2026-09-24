@@ -7,6 +7,10 @@
 // color:var(--fg); border-bottom-color:var(--gold) }` (engine.css, ADR-132):
 // the current tab is underlined in the gold, and a count after a label is
 // mono and dim.
+//
+// On a phone the row scrolls sideways and snaps each tab to its start
+// (`#viewport.phone .tabs{scroll-snap-type:x proximity}`): src/ui/phone.css
+// keys on `data-tab-row` and `data-tab`.
 import type { ReactNode } from "react";
 import type { SafePath } from "@/shared/safe-path";
 import { SafeLink } from "./navigation";
@@ -34,11 +38,12 @@ export function RouteTabs({
   return (
     <nav
       aria-label={label}
+      data-tab-row=""
       className="min-w-0 overflow-x-auto border-b border-border"
     >
       <ul className="flex w-max min-w-full gap-0.5">
         {tabs.map((tab) => (
-          <li key={tab.to}>
+          <li key={tab.to} data-tab="">
             <SafeLink
               to={tab.to}
               aria-current={tab.current ? "page" : undefined}

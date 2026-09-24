@@ -19,8 +19,16 @@ function MintedToken({ minted }: { minted: MintedScimToken }) {
   return (
     <div className="flex flex-col gap-3" data-testid="scim-token-minted">
       <p className="text-sm font-medium text-foreground">{t("once")}</p>
-      <CopyValue label={t("tokenLabel")} value={minted.token} testId="scim-token-value" />
-      <CopyValue label={t("baseUrl")} value={minted.baseUrl} testId="scim-token-base-url" />
+      <CopyValue
+        label={t("tokenLabel")}
+        value={minted.token}
+        testId="scim-token-value"
+      />
+      <CopyValue
+        label={t("baseUrl")}
+        value={minted.baseUrl}
+        testId="scim-token-base-url"
+      />
     </div>
   );
 }

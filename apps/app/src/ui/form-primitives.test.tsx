@@ -136,4 +136,27 @@ describe("form feedback", () => {
       screen.getByRole("region", { name: "Invitation closed" }),
     ).toHaveTextContent("It was revoked.");
   });
+
+  it("a panel rendered on load is no status region and leaves focus where it was (negative)", () => {
+    render(
+      <OutcomePanel tone="deny" title="Invitation closed" testId="outcome">
+        It was revoked.
+      </OutcomePanel>,
+    );
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it("a panel that replaced a submitted form is a status region and its heading takes focus", () => {
+    render(
+      <OutcomePanel tone="ok" title="Reset link sent" testId="sent" announce>
+        A reset link is on its way.
+      </OutcomePanel>,
+    );
+    const status = screen.getByRole("status", { name: "Reset link sent" });
+    expect(status).toHaveTextContent("A reset link is on its way.");
+    const heading = screen.getByRole("heading", { name: "Reset link sent" });
+    expect(heading).toHaveFocus();
+    expect(heading).toHaveAttribute("tabindex", "-1");
+  });
 });

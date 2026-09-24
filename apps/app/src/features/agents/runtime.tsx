@@ -19,6 +19,7 @@ import type { EnforcementTier, RunRow } from "@/data/contracts/runs";
 import { routes, type SafePath } from "@/shared/safe-path";
 import { Badge } from "@/ui/badge";
 import { buttonSecondary, mono } from "@/ui/control-styles";
+import { DesktopDownloads } from "@/ui/desktop-downloads";
 import { EnforcementTierBadge } from "@/ui/enforcement-tier";
 import { formatCount } from "@/ui/money-format";
 import { OutcomePanel } from "@/ui/form-feedback";
@@ -374,6 +375,10 @@ export function RuntimeSection({
         >
           {t("empty.body")}
         </OutcomePanel>
+        {/* Enrolling runs `oxagen agent enroll` on the host, and the app is
+            what puts that CLI on its PATH. A retired identity cannot be
+            enrolled, so it gets no installers. */}
+        {retired ? null : <DesktopDownloads />}
         {detail.hosts.map((host, index) => (
           <HostPanel
             key={host.hostEnrollmentId}
