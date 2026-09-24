@@ -46,12 +46,21 @@ const label = "text-[12px] font-semibold text-muted-foreground";
 const hint = "text-xs text-muted-foreground";
 
 /** The editor's opening state for one door. */
-function initial(mode: EditorMode, role: Role | undefined, suffix: string) {
+function initial(
+  mode: EditorMode,
+  role: Role | undefined,
+  suffix: string,
+): {
+  name: string;
+  description: string;
+  scope: Role["scope"];
+  permissions: Set<string>;
+} {
   if (mode === "create" || role === undefined) {
     return {
       name: "",
       description: "",
-      scope: "workspace" as Role["scope"],
+      scope: "workspace",
       permissions: new Set<string>(),
     };
   }

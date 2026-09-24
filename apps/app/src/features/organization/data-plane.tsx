@@ -15,7 +15,7 @@
 // the only writer of a workspace id, and the startup guard in
 // apps/app/instrumentation.ts that refuses a superuser or BYPASSRLS role.
 import { useTranslations } from "next-intl";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import type { DataPlane, WorkspaceList } from "@/data/contracts/org";
 import type { Read } from "@/data/read";
 import { Badge } from "@/ui/badge";
@@ -144,7 +144,9 @@ function useDetails(plane: DataPlane): Record<PlaneMode, ReactNode> {
               plane.host === null ? (
                 nr
               ) : (
-                <span className={mono}>{plane.host}</span>
+                <span key="postgresHost" className={mono}>
+                  {plane.host}
+                </span>
               ),
             ],
             [
@@ -152,7 +154,7 @@ function useDetails(plane: DataPlane): Record<PlaneMode, ReactNode> {
               plane.database === null ? (
                 nr
               ) : (
-                <span className={mono}>
+                <span key="postgresDatabase" className={mono}>
                   {plane.database}
                   {plane.schemaVersion === null
                     ? null
@@ -273,10 +275,10 @@ function Isolation({
             [t("rows"), t("rowsValue")],
             [
               t("workspaceScoping"),
-              <>
+              <Fragment key="workspaceScoping">
                 {t("workspaceScopingValue")}{" "}
                 <span className={`${mono} text-dim`}>({slugs})</span>
-              </>,
+              </Fragment>,
             ],
             [t("crossTenant"), t("crossTenantValue")],
             [t("platformCatalogs"), t("platformCatalogsValue")],

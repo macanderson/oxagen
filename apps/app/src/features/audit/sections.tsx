@@ -14,7 +14,7 @@
 // (packages/tacho/src/evidence/redaction.ts, frame-body.ts), and the note says
 // only what that code does.
 import "server-only";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type { AuditBundle, AuditRetention } from "@/data/contracts/audit";
 import type { Read } from "@/data/read";
@@ -35,6 +35,7 @@ import {
   statValue,
 } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
+import { formatByteSize, formatCount } from "@/ui/money-format";
 import { Money } from "@/ui/money";
 import { DownloadLink } from "@/ui/navigation";
 import { BundleRefresh } from "./bundle-refresh";
@@ -423,7 +424,7 @@ export function RetentionTab({
   retention: Read<AuditRetention>;
 }) {
   const t = useTranslations("audit.retention");
-  const format = useFormatter();
+  const locale = useLocale();
   const windowOf = useRetentionWindow();
   const policy = retention.ok ? retention.value : null;
   const body = policy === null ? null : windowOf(policy.bodyRetentionDays);
@@ -436,8 +437,8 @@ export function RetentionTab({
     policy === null || stored === null || rate === null ? null : (
       <>
         {t("coldValue", {
-          gb: format.number(stored, { maximumFractionDigits: 2 }),
-          months: format.number(policy.includedMonths),
+          size: formatByteSize(stored * 1_000_000_000, locale),
+          months: formatCount(policy.includedMonths, locale),
         })}{" "}
         · <Money value={rate} precision="exact" /> {t("coldRate")}
       </>

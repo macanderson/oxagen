@@ -157,15 +157,13 @@ export function ListTable({
         <Table label={label} columns={columns}>
           {shown.map((row) => (
             <tr key={row.key} data-row={row.rowId}>
-              {row.cells.map((content, index) => (
+              {columns.map((column, index) => (
                 <td
                   // A row's cells are positional, so the column names the cell.
-                  key={columns[index]?.label ?? String(index)}
-                  className={
-                    columns[index]?.numeric === true ? numericCell : cell
-                  }
+                  key={column.label}
+                  className={column.numeric === true ? numericCell : cell}
                 >
-                  {content}
+                  {row.cells[index]}
                 </td>
               ))}
             </tr>

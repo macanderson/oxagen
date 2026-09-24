@@ -54,7 +54,9 @@ function DialogButton({
       <button
         type="button"
         data-opens={testId}
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setOpen(true);
+        }}
         className={primary ? buttonPrimary : buttonSecondary}
       >
         {label}
@@ -69,7 +71,9 @@ function DialogButton({
         closeLabel={t("cancel")}
       >
         {typeof children === "function"
-          ? children(() => setOpen(false))
+          ? children(() => {
+              setOpen(false);
+            })
           : children}
       </SheetDialog>
     </>
@@ -134,10 +138,10 @@ const BUNDLE_FORM = "audit-bundle-form";
 export function BundleDialog({ org, gap }: { org: string; gap: Gap }) {
   const t = useTranslations("audit.bundle");
   const navigate = useNavigate();
-  const fields = useId();
+  const fieldsId = useId();
   const [pending, start] = useTransition();
   const [failure, setFailure] = useState<string | null>(null);
-  const submit = (close: () => void) => () =>
+  const submit = (close: () => void) => () => {
     start(async () => {
       setFailure(null);
       const result = await buildBundle(org);
@@ -156,6 +160,7 @@ export function BundleDialog({ org, gap }: { org: string; gap: Gap }) {
             : t("failed", { code: result.code }),
       );
     });
+  };
   return (
     <DialogButton
       primary
@@ -190,7 +195,7 @@ export function BundleDialog({ org, gap }: { org: string; gap: Gap }) {
           </label>
           <fieldset
             disabled
-            aria-describedby={fields}
+            aria-describedby={fieldsId}
             className="flex flex-col gap-3"
           >
             <span className="grid grid-cols-2 gap-3">
@@ -211,7 +216,7 @@ export function BundleDialog({ org, gap }: { org: string; gap: Gap }) {
                 <option value="json">{t("formatJson")}</option>
               </select>
             </label>
-            <p id={fields} className="text-xs text-muted-foreground">
+            <p id={fieldsId} className="text-xs text-muted-foreground">
               {t("fieldsNotRecorded")}
             </p>
           </fieldset>
@@ -220,7 +225,11 @@ export function BundleDialog({ org, gap }: { org: string; gap: Gap }) {
               c: (chunks) => <span className={mono}>{chunks}</span>,
             })}
           </Callout>
-          <Missing id={`${fields}-bundle`} gap={gap} text={t("notRecorded")} />
+          <Missing
+            id={`${fieldsId}-bundle`}
+            gap={gap}
+            text={t("notRecorded")}
+          />
           {failure === null ? null : (
             <FormAlert testId="audit-bundle-failure">{failure}</FormAlert>
           )}
@@ -256,17 +265,17 @@ export function CsvDialog({ href }: { href: SafePath }) {
 /** `incident`: Open an incident, from the Incidents panel and the error state. */
 export function IncidentDialog({ gap }: { gap: Gap }) {
   const t = useTranslations("audit.incident");
-  const note = useId();
+  const noteId = useId();
   return (
     <DialogButton
       label={t("title")}
       testId="audit-incident"
       title={t("title")}
-      footer={<DisabledSubmit label={t("submit")} describedBy={note} />}
+      footer={<DisabledSubmit label={t("submit")} describedBy={noteId} />}
     >
       <fieldset
         disabled
-        aria-describedby={note}
+        aria-describedby={noteId}
         className="flex flex-col gap-3"
       >
         <label className={field}>
@@ -285,7 +294,7 @@ export function IncidentDialog({ gap }: { gap: Gap }) {
           <span className={label}>{t("attach")}</span>
           <span className="text-muted-foreground">{t("attachNone")}</span>
         </span>
-        <Missing id={note} gap={gap} text={t("notRecorded")} />
+        <Missing id={noteId} gap={gap} text={t("notRecorded")} />
       </fieldset>
     </DialogButton>
   );
@@ -296,7 +305,7 @@ export function RotateDialog({ gap }: { gap: Gap }) {
   const t = useTranslations("audit.rotate");
   const keys = useTranslations("audit.keys");
   const recorded = useTranslations("audit");
-  const note = useId();
+  const noteId = useId();
   const fact = "text-muted-foreground";
   return (
     <DialogButton
@@ -304,7 +313,7 @@ export function RotateDialog({ gap }: { gap: Gap }) {
       testId="audit-rotatekek"
       title={t("title")}
       subtitle={t("subtitle")}
-      footer={<DisabledSubmit label={t("submit")} describedBy={note} />}
+      footer={<DisabledSubmit label={t("submit")} describedBy={noteId} />}
     >
       <dl className="mb-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[13px]">
         <dt className={fact}>{t("facts.generation")}</dt>
@@ -326,7 +335,7 @@ export function RotateDialog({ gap }: { gap: Gap }) {
           })}
         </dd>
       </dl>
-      <Missing id={note} gap={gap} text={t("notRecorded")} />
+      <Missing id={noteId} gap={gap} text={t("notRecorded")} />
     </DialogButton>
   );
 }
@@ -347,18 +356,18 @@ export function PolicyDialog({
   const t = useTranslations("audit.policy");
   const retention = useTranslations("audit.retention");
   const recorded = useTranslations("audit");
-  const note = useId();
+  const noteId = useId();
   return (
     <DialogButton
       label={retention("edit")}
       testId="audit-retention"
       title={t("title")}
       subtitle={t("subtitle")}
-      footer={<DisabledSubmit label={t("submit")} describedBy={note} />}
+      footer={<DisabledSubmit label={t("submit")} describedBy={noteId} />}
     >
       <fieldset
         disabled
-        aria-describedby={note}
+        aria-describedby={noteId}
         className="flex flex-col gap-3"
       >
         <label className={field}>
@@ -374,7 +383,7 @@ export function PolicyDialog({
           </select>
         </label>
         <Callout>{t("callout")}</Callout>
-        <Missing id={note} gap={gap} text={t("notRecorded")} />
+        <Missing id={noteId} gap={gap} text={t("notRecorded")} />
       </fieldset>
     </DialogButton>
   );
@@ -390,18 +399,18 @@ export function RequestAccessDialog({
 }) {
   const t = useTranslations("audit.request");
   const denied = useTranslations("audit.denied");
-  const note = useId();
+  const noteId = useId();
   return (
     <DialogButton
       primary
       label={denied("request")}
       testId="audit-request-access"
       title={t("title")}
-      footer={<DisabledSubmit label={t("submit")} describedBy={note} />}
+      footer={<DisabledSubmit label={t("submit")} describedBy={noteId} />}
     >
       <fieldset
         disabled
-        aria-describedby={note}
+        aria-describedby={noteId}
         className="flex flex-col gap-3"
       >
         <label className={field}>
@@ -412,7 +421,7 @@ export function RequestAccessDialog({
           <span className={label}>{t("why")}</span>
           <textarea rows={3} className={control} />
         </label>
-        <Missing id={note} gap={gap} text={t("notRecorded")} />
+        <Missing id={noteId} gap={gap} text={t("notRecorded")} />
       </fieldset>
     </DialogButton>
   );

@@ -13,8 +13,12 @@ const EVERY_MS = 5_000;
 export function BundleRefresh() {
   const navigate = useNavigate();
   useEffect(() => {
-    const timer = setInterval(() => navigate.refresh(), EVERY_MS);
-    return () => clearInterval(timer);
+    const timer = setInterval(() => {
+      navigate.refresh();
+    }, EVERY_MS);
+    return () => {
+      clearInterval(timer);
+    };
   }, [navigate]);
   return null;
 }

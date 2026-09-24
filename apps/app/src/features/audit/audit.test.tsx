@@ -26,6 +26,7 @@ import type { MemberList, WorkspaceList } from "@/data/contracts/org";
 import type { DataSource } from "@/data/ports";
 import { type Read, readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
+import { nth } from "@/test/nth";
 import { IntlProvider } from "@/test/intl";
 
 const { getAuthUser, buildBundle, push, refresh } = vi.hoisted(() => ({
@@ -210,10 +211,10 @@ type Reads = {
 
 /** Answers each of the page's audit reads by what it asked for. */
 function answer(reads: Reads) {
-  events.mockImplementation(async (_ctx, q) => {
-    if (q.limit === 200) return reads.window ?? recordOf([]);
-    if (q.limit === 1) return reads.any ?? recordOf([]);
-    return reads.page ?? reads.window ?? recordOf([]);
+  events.mockImplementation((_ctx, q) => {
+    if (q.limit === 200) return Promise.resolve(reads.window ?? recordOf([]));
+    if (q.limit === 1) return Promise.resolve(reads.any ?? recordOf([]));
+    return Promise.resolve(reads.page ?? reads.window ?? recordOf([]));
   });
 }
 
@@ -228,12 +229,12 @@ async function renderAudit(
   return render(<IntlProvider>{element}</IntlProvider>);
 }
 
-/** The table row whose Event cell reads `eventType`. */
-function rowOf(eventType: string): HTMLElement {
-  const found = within(screen.getByRole("table"))
-    .getByText(eventType)
-    .closest("tr");
-  if (found === null) throw new Error(`no row for ${eventType}`);
+/** The section a heading titles. */
+function sectionOf(heading: string): HTMLElement {
+  const found = screen
+    .getByRole("heading", { name: heading })
+    .closest("section");
+  if (found === null) throw new Error(`no section for ${heading}`);
   return found;
 }
 
@@ -242,7 +243,7 @@ function tiles(): string[][] {
   const strip = screen.getAllByRole("definition").at(0)?.closest("dl");
   if (!strip) throw new Error("no tile strip");
   return [...strip.children].map((tile) =>
-    [...tile.children].map((part) => part.textContent ?? ""),
+    [...tile.children].map((part) => part.textContent),
   );
 }
 
@@ -414,33 +415,31 @@ describe("Events", () => {
       "Severity",
       "Reference",
     ]);
-    const [first, second] = within(table).getAllByRole("row").slice(1);
+    const rows = within(table).getAllByRole("row").slice(1);
+    const first = nth(rows, 0, "a first event row");
+    const second = nth(rows, 1, "a second event row");
     expect(first).toHaveTextContent("Ada Lovelace");
     expect(first).toHaveTextContent("kind not recorded");
     expect(first).toHaveTextContent("purchase_gau_bucket");
     expect(first).toHaveTextContent("req_01K5ABCDE");
-    expect(first?.querySelector("time")).toHaveAttribute(
+    expect(first.querySelector("time")).toHaveAttribute(
       "datetime",
       "2026-09-15T10:04:31.221Z",
     );
     // The result survives greyscale: a dot and a word.
-    const outcome = first?.querySelector("[data-outcome]");
+    const outcome = first.querySelector("[data-outcome]");
     expect(outcome).toHaveAttribute("data-outcome", "deny");
     expect(outcome).toHaveTextContent("denied");
     // A former member is printed by public id; a missing request says so.
     expect(second).toHaveTextContent(GONE);
-    expect(
-      within(second as HTMLElement).getAllByText("not recorded").length,
-    ).toBe(2);
+    expect(within(second).getAllByText("not recorded").length).toBe(2);
   });
 
   it("carries the panel's heading, caption, store badge and the note verbatim", async () => {
     answer({ window: recordOf([denied]) });
     await renderAudit();
 
-    const panel = screen
-      .getByRole("heading", { name: "Control-plane events" })
-      .closest("section") as HTMLElement;
+    const panel = sectionOf("Control-plane events");
     expect(panel).toHaveTextContent(
       "admin actions, IAM changes, repo bindings, plane changes, key rotations",
     );
@@ -467,9 +466,13 @@ describe("Events", () => {
       "Services",
       "Ada Lovelace",
     ]);
-    expect(
-      options.map((option) => (option as HTMLOptionElement).disabled),
-    ).toEqual([false, true, true, true, false]);
+    expect(options.map((option) => option.matches(":disabled"))).toEqual([
+      false,
+      true,
+      true,
+      true,
+      false,
+    ]);
     expect(actor).toHaveAccessibleDescription(
       "An audit event records no actor kind yet, so Humans, Agents and Services cannot be picked.",
     );
@@ -662,7 +665,7 @@ describe("tabs", () => {
     expect(screen.getByRole("button", { name: "Search" })).toBeDisabled();
     const chips = within(screen.getByRole("list", { name: "Examples" }))
       .getAllByRole("button")
-      .map((chip) => [chip.textContent, (chip as HTMLButtonElement).disabled]);
+      .map((chip) => [chip.textContent, chip.matches(":disabled")]);
     expect(chips).toEqual([
       ["stripe", true],
       ["harness", true],
@@ -761,9 +764,7 @@ describe("tabs", () => {
     answer({ window: recordOf([event()]) });
     await renderAudit({}, { tab: "retention" });
 
-    const policy = screen
-      .getByRole("heading", { name: "Retention" })
-      .closest("section") as HTMLElement;
+    const policy = sectionOf("Retention");
     expect(policy).toHaveTextContent("organization policy");
     const fields = [...policy.querySelectorAll("dt")].map((dt) => [
       dt.textContent,
@@ -792,13 +793,9 @@ describe("tabs", () => {
     );
     await renderAudit({}, { tab: "retention" });
     const values = () =>
-      [
-        ...(
-          screen
-            .getByRole("heading", { name: "Retention" })
-            .closest("section") as HTMLElement
-        ).querySelectorAll("dd"),
-      ].map((dd) => dd.textContent);
+      [...sectionOf("Retention").querySelectorAll("dd")].map(
+        (dd) => dd.textContent,
+      );
     expect(values()).toEqual(Array(5).fill("not recorded"));
     cleanup();
 
@@ -817,9 +814,7 @@ describe("tabs", () => {
     answer({ window: recordOf([event()]) });
     await renderAudit({}, { tab: "retention" });
 
-    const redaction = screen
-      .getByRole("heading", { name: "Redaction" })
-      .closest("section") as HTMLElement;
+    const redaction = sectionOf("Redaction");
     expect(redaction).toHaveTextContent("before write");
     expect(redaction).toHaveTextContent(
       "The collector redacts credential shapes before a frame body is written.",
@@ -841,7 +836,7 @@ describe("tabs", () => {
       const go = within(dialog).getByRole("button", { name: submit });
       expect(go).toBeDisabled();
       expect(go).toHaveAccessibleDescription(
-        within(dialog).getByTestId("audit-not-recorded").textContent ?? "",
+        within(dialog).getByTestId("audit-not-recorded").textContent,
       );
       expect(
         within(dialog).getByRole("button", { name: "Cancel" }),
@@ -1132,11 +1127,11 @@ describe("the header's gold action", () => {
     fireEvent.click(
       within(dialog).getByRole("button", { name: "Build bundle" }),
     );
-    await vi.waitFor(() =>
+    await vi.waitFor(() => {
       expect(push).toHaveBeenCalledWith(
         `/acme/audit/exports?export=${EXPORT_ID}`,
-      ),
-    );
+      );
+    });
     expect(buildBundle).toHaveBeenCalledWith("acme");
   });
 

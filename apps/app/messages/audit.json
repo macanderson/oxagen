@@ -215,7 +215,7 @@
       "replay": "Replay of a compacted run",
       "optDown": "Workspace opt-down",
       "cold": "Cold storage cost",
-      "coldValue": "{gb} GB held past the included {months} months",
+      "coldValue": "{size} held past the included {months} months",
       "coldRate": "per GB-month"
     },
     "policy": {

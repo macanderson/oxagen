@@ -26,7 +26,7 @@
 // Every read here is a noBillingGate kernel read through the audit and org
 // ports, gated in its handler (org Owner or Admin, INV-29).
 import "server-only";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import {
   AUDIT_TILE_LIMIT,
   type AuditBundle,
@@ -41,7 +41,7 @@ import type { OrgCtx } from "@/server/viewer";
 import { firstParam, routes, type SafePath } from "@/shared/safe-path";
 import { panel, statStrip, statTile } from "@/ui/control-styles";
 import { RouteTabs } from "@/ui/route-tabs";
-import { useFormatter } from "@/ui/formatter";
+import { formatCount } from "@/ui/money-format";
 import {
   type AuditActor,
   type AuditWindowRows,
@@ -154,7 +154,7 @@ async function readAudit(
         events: windowRead.value.events,
         complete: !windowRead.value.hasMore,
       },
-      page: pageRead !== null && pageRead.ok ? pageRead.value : null,
+      page: pageRead === null ? null : pageRead.value,
       actors: members.ok
         ? members.value.members.map((member) => ({
             id: member.id,
@@ -275,7 +275,7 @@ function AuditBody({
 }) {
   const t = useTranslations("audit.tabs");
   const tiles = useTranslations("audit.tiles");
-  const format = useFormatter();
+  const locale = useLocale();
   const org = ctx.orgSlug;
   if (loaded.kind === "failed") {
     return (
@@ -294,8 +294,10 @@ function AuditBody({
   }
   if (loaded.kind === "empty") return <AuditEmpty org={org} />;
   const events = loaded.window.complete
-    ? format.number(loaded.window.events.length)
-    : tiles("atLeast", { count: format.number(loaded.window.events.length) });
+    ? formatCount(loaded.window.events.length, locale)
+    : tiles("atLeast", {
+        count: formatCount(loaded.window.events.length, locale),
+      });
   return (
     <div className="flex flex-col gap-3.5">
       <RouteTabs

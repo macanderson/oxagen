@@ -20,7 +20,7 @@
 // (WL-35).
 import { screen } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { translator } from "@/test/intl";
 import {
   expectPageTitle,
@@ -312,9 +312,9 @@ describe("the Audit page", () => {
 
   it("answers a segment that names no tab with a 404 (negative)", async () => {
     requireViewer.mockResolvedValue({ orgSlug: "acme" });
-    const module = await AUDIT_TAB();
+    const page = await AUDIT_TAB();
     await expect(
-      module.default(routeProps({ ...SEGMENTS, tab: "events" })),
+      page.default(routeProps({ ...SEGMENTS, tab: "events" })),
     ).rejects.toThrow("NOT_FOUND");
     expect(Audit).not.toHaveBeenCalled();
   });

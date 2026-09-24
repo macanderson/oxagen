@@ -8,6 +8,7 @@ import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrgRole } from "@/server/viewer";
+import { routes } from "@/shared/safe-path";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider, translator } from "@/test/intl";
 import {
@@ -94,7 +95,7 @@ async function renderFrame(
           ctx,
           source,
           current: "people",
-          retry: "/acme" as never,
+          retry: routes.people("acme"),
           children: body,
         })
       }

@@ -17,7 +17,7 @@
 // narrows the read, and the select shows that person so the filter it applied
 // is visible and can be cleared.
 import "server-only";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import {
   AUDIT_RANGES,
@@ -43,6 +43,7 @@ import {
   statValue,
 } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
+import { formatCount } from "@/ui/money-format";
 import { SafeForm, SafeLink } from "@/ui/navigation";
 import { cell, Table } from "@/ui/table";
 import { CsvDialog } from "./dialogs";
@@ -62,8 +63,7 @@ export type AuditWindowRows = {
 /** How many rows a count covers: exact when the read held the window, a lower bound when it did not. */
 function Count({ n, complete }: { n: number; complete: boolean }) {
   const t = useTranslations("audit.tiles");
-  const format = useFormatter();
-  const value = format.number(n);
+  const value = formatCount(n, useLocale());
   return <>{complete ? value : t("atLeast", { count: value })}</>;
 }
 
