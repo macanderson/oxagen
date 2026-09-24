@@ -98,6 +98,14 @@ describe("registerRail", () => {
     ]);
   });
 
+  it("opens no later step even when the identity exists (negative)", () => {
+    expect(registerRail("name", place, "agt_1")).toEqual([
+      { step: "name", state: "current", to: null },
+      { step: "wrap", state: "todo", to: null },
+      { step: "run", state: "todo", to: null },
+    ]);
+  });
+
   it("keeps the name step open on the first step's own address", () => {
     const rail = registerRail("wrap", place, null);
     expect(rail[0]?.to).toBe("/acme/core-platform/register/name");

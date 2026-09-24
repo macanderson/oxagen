@@ -195,5 +195,16 @@ export function toSsoSettings(
     })),
     policy: { ssoRequired: out.policy.ssoRequired },
     entitled: out.entitled,
+    scim: {
+      baseUrl: out.scim.baseUrl,
+      token:
+        out.scim.token === null
+          ? null
+          : {
+              prefix: out.scim.token.tokenPrefix,
+              createdAt: out.scim.token.createdAt,
+              lastUsedAt: out.scim.token.lastUsedAt,
+            },
+    },
   };
 }

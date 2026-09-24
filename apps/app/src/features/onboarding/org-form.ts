@@ -1,10 +1,12 @@
-// The organization form: name the organization, its address and the first
-// workspace. Issues carry keys under `onboarding.errors.*`. An address is
-// lowercase letters, digits and hyphens; the `create_org` contract owns the
-// reserved org and workspace slug sets and derives the immutable namespace
-// from the address.
+// The organization form (onboarding step 1): name the organization, its
+// namespace and the first workspace. The address is derived from the name and
+// the workspace's address from its name, so neither is typed. Issues carry
+// keys under `onboarding.errors.*`. The `create_org` contract owns the
+// reserved org and workspace slug sets and the namespace's shape, and stores a
+// chosen namespace verbatim.
 import { z } from "zod";
 import {
+  ORG_NAMESPACE_PATTERN,
   RESERVED_ORG_SLUGS,
   RESERVED_WORKSPACE_SLUGS,
   WORKSPACE_SLUG_PATTERN,
@@ -24,11 +26,23 @@ export function toSlug(input: string, max = 40): string {
     .replace(/-+$/g, "");
 }
 
+/** The namespace a name suggests: its letters and digits, at most six. */
+export function toNamespace(input: string): string {
+  return input
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "")
+    .slice(0, 6);
+}
+
 const ORG_FORM_ERROR_KEYS = [
   "orgNameRequired",
   "orgNameTooLong",
   "slugInvalid",
   "slugReserved",
+  "namespaceInvalid",
+  "namespaceTaken",
   "workspaceNameRequired",
   "workspaceNameTooLong",
   "workspaceSlugInvalid",
@@ -54,6 +68,10 @@ export const OrganizationForm = z.object({
   slug: slug("slugInvalid").refine((s) => !RESERVED_ORG_SLUGS.has(s), {
     error: "slugReserved",
   }),
+  namespace: z
+    .string()
+    .trim()
+    .regex(ORG_NAMESPACE_PATTERN, { error: "namespaceInvalid" }),
   workspaceName: z
     .string()
     .trim()

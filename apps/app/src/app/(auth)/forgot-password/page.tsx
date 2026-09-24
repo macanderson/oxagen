@@ -18,17 +18,22 @@ export default async function ForgotPasswordPage() {
   ]);
   return (
     <AuthColumn>
-      <PageHeader
-        eyebrow={t("forgot.eyebrow")}
-        title={pages("forgotPassword")}
-        description={t("forgot.lead")}
+      <ForgotPasswordForm
+        header={
+          <PageHeader
+            eyebrow={t("forgot.eyebrow")}
+            title={pages("forgotPassword")}
+            description={t("forgot.lead")}
+          />
+        }
+        footer={
+          <AuthFooter>
+            <Link href="/login" className={linkText}>
+              {t("forgot.back")}
+            </Link>
+          </AuthFooter>
+        }
       />
-      <ForgotPasswordForm />
-      <AuthFooter>
-        <Link href="/login" className={linkText}>
-          {t("forgot.back")}
-        </Link>
-      </AuthFooter>
     </AuthColumn>
   );
 }

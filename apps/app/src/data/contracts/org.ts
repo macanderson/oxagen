@@ -249,6 +249,22 @@ export const SsoProvider = z.object({
 export type SsoProvider = z.infer<typeof SsoProvider>;
 
 /**
+ * The organization's SCIM endpoint and its live token (#3734), described by
+ * the token's first characters. The token itself reaches the page only in the
+ * answer to minting or rotating it.
+ */
+const ScimSettings = z.object({
+  baseUrl: z.string(),
+  token: z
+    .object({
+      prefix: z.string(),
+      createdAt: z.string(),
+      lastUsedAt: z.string().nullable(),
+    })
+    .nullable(),
+});
+
+/**
  * The organisation's single sign-on: its providers, whether members other
  * than Owners must sign in through one of them, and whether the plan includes
  * SSO. Only the Enterprise plan does; without it the page lists providers so
@@ -258,5 +274,6 @@ export const SsoSettings = z.object({
   providers: z.array(SsoProvider),
   policy: z.object({ ssoRequired: z.boolean() }),
   entitled: z.boolean(),
+  scim: ScimSettings,
 });
 export type SsoSettings = z.infer<typeof SsoSettings>;
