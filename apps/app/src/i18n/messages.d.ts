@@ -6810,8 +6810,6 @@ type Messages = {
       };
       dialog: {
         openHeader: string;
-        openDeny: string;
-        openAllow: string;
         titleDeny: string;
         titleAllow: string;
         kind: string;

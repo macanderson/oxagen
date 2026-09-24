@@ -362,8 +362,6 @@
       },
       "dialog": {
         "openHeader": "Flip a kill switch",
-        "openDeny": "Deny now",
-        "openAllow": "Allow again",
         "titleDeny": "Flip this switch on",
         "titleAllow": "Clear this switch",
         "kind": "Level",
