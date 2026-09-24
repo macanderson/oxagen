@@ -1,8 +1,10 @@
 // audit-exempt: read-only — answers one run's cost rollup row; mutates nothing. The kernel capability.invoke_* audit covers access.
 //
 // `get_run_cost` (ADR-060): the run's `cost.run_totals` row as the Run page's
-// cost strip and Cost tab read it. `rollup: null` until the rollup job has
-// rebuilt the run from its frames after its seal.
+// cost strip and Cost tab read it. The row is rebuilt while the run records
+// frames and again at its seal; one built from an open run answers
+// `isEstimate: true` (#3980). `rollup: null` until the rollup job has built
+// the row at all.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
   runCostGet,
@@ -48,6 +50,7 @@ export function createRunCostHandler(
         byTool: row.breakdown.tools,
         priceEntryIds: row.priceEntryIds,
         rolledUpAt: row.rolledUpAt.toISOString(),
+        isEstimate: row.sealedAt === null,
       },
     };
   };

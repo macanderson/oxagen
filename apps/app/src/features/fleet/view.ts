@@ -89,6 +89,8 @@ export type SpendShown = {
   unbased: number;
   /** Rows with no cost recorded, left out of `total`. */
   unpriced: number;
+  /** Priced rows whose cost is a running estimate, counted in `total`. */
+  estimated: number;
   /** True when the priced rows carry more than one currency. */
   mixedCurrency: boolean;
 };
@@ -109,6 +111,9 @@ export function spendShown(rows: readonly ListedRun[]): SpendShown {
     bases,
     unbased,
     unpriced: rows.length - costs.length,
+    estimated: rows.filter(
+      ({ run }) => run.cost !== null && run.costIsEstimate === true,
+    ).length,
     mixedCurrency: costs.length > 0 && total === null,
   };
 }

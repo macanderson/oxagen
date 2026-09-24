@@ -1,6 +1,6 @@
 # get_spend
 
-The Spend page's rollup at one level (Mission Control spec §12.7, §12.9; ADR-060). Reads `cost.daily_totals` for the active workspace over an inclusive day range, grouped by operator, agent, model, tool, task, or cost center, and answers one row per group plus the period's total over every run: the month strip. The rows are a derived index rebuilt from frames by the rollup jobs (`cost.run-rollup` after each seal, `cost.daily-rollup` nightly); nothing here reads ClickHouse.
+The Spend page's rollup at one level (Mission Control spec §12.7, §12.9; ADR-060). Reads `cost.daily_totals` for the active workspace over an inclusive day range, grouped by operator, agent, model, tool, task, or cost center, and answers one row per group plus the period's total over every run: the month strip. The rows are a derived index rebuilt from frames by the rollup jobs (`cost.run-progress` while a run records frames, `cost.run-rollup` after each seal, `cost.daily-rollup` nightly); nothing here reads ClickHouse. A run still open is in every figure at its running estimate, and `estimatedRuns` says how many of the period's runs that is (ADR-159).
 
 ## Mode
 
@@ -28,6 +28,7 @@ The Spend page's rollup at one level (Mission Control spec §12.7, §12.9; ADR-0
 | `period` | object | the range as asked |
 | `groupBy` | enum | the level as asked |
 | `total` | figure | the period over every run in the workspace (below) |
+| `estimatedRuns` | integer, optional | the period's runs that were still open when their row was last rebuilt; their cost is in the figures as a running estimate |
 | `rows` | row[] | one per group; largest spend first, groups with no cost after those with one, then by key |
 
 A figure:

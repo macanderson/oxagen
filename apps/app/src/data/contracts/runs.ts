@@ -183,6 +183,11 @@ export const RunRow = z.object({
   steps: z.number().int().nonnegative(),
   frames: z.number().int().nonnegative(),
   cost: Cost.nullable(),
+  /**
+   * True while `cost` is a running estimate: the run is open, or its rollup
+   * predates the seal. The page labels such a figure an estimate.
+   */
+  costIsEstimate: z.boolean().optional(),
   reportedCost: Cost.nullable().optional(),
   model: RunModel.nullable(),
   machine: RunMachine.nullable(),
@@ -214,6 +219,12 @@ export const RunRow = z.object({
   canSummarize: z.boolean(),
   startedAt: z.iso.datetime({ offset: true }),
   sealedAt: z.iso.datetime({ offset: true }).nullable(),
+  /**
+   * What sealed the run: `agent_stop`, its host's own end, or `idle_timeout`,
+   * Oxagen closing a run that sent nothing for 12 hours. Null while open and
+   * for a ledger run.
+   */
+  sealSource: z.enum(["agent_stop", "idle_timeout"]).nullable().optional(),
 });
 export type RunRow = z.infer<typeof RunRow>;
 

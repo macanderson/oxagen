@@ -148,10 +148,12 @@ const RunCostRollup = z.object({
   priceEntryIds: z.array(z.string()),
   /** When the row was last rebuilt from the frames. */
   rolledUpAt: z.iso.datetime({ offset: true }),
+  /** True when the row was built while the run was open: every figure is an estimate. */
+  isEstimate: z.boolean().optional(),
 });
 export type RunCostRollup = z.infer<typeof RunCostRollup>;
 
-/** `get_run_cost`: null until the rollup has rebuilt the run after its seal. */
+/** `get_run_cost`: null until the rollup has priced any of the run's frames. */
 export const RunCost = z.object({ rollup: RunCostRollup.nullable() });
 export type RunCost = z.infer<typeof RunCost>;
 

@@ -219,6 +219,34 @@ function rowOf(key: string): HTMLElement {
   return found;
 }
 
+describe("Spend › open runs (#3980)", () => {
+  it("says the figures include estimates while runs in the period are still open", async () => {
+    byGroup.mockResolvedValue(
+      readOk({ period: PERIOD, total: figure(), rows: [], estimatedRuns: 2 }),
+    );
+    await renderSpend({ tab: "operator" });
+    const coverage = screen
+      .getByText("Cost data", { selector: "dt" })
+      .closest("div");
+    expect(coverage).toHaveTextContent("Includes estimates");
+    expect(coverage).toHaveTextContent(
+      "2 runs are still open. Their cost covers the calls so far and is final when they seal.",
+    );
+  });
+
+  it("reads Available once every run in the period has sealed (negative)", async () => {
+    byGroup.mockResolvedValue(
+      readOk({ period: PERIOD, total: figure(), rows: [], estimatedRuns: 0 }),
+    );
+    await renderSpend({ tab: "operator" });
+    const coverage = screen
+      .getByText("Cost data", { selector: "dt" })
+      .closest("div");
+    expect(coverage).toHaveTextContent("Available");
+    expect(coverage).not.toHaveTextContent("estimate");
+  });
+});
+
 describe("Spend › By operator", () => {
   it("prints the month's total with its basis, omits outcome scores, and opens each operator's drill", async () => {
     byGroup.mockResolvedValue(

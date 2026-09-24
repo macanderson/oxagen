@@ -484,6 +484,31 @@ function regressesToIncomplete() {
   )`;
 }
 
+/**
+ * Refuses an upsert that would replace a sealed run's row with one built
+ * while the run was still open and from no more frames than the row counts.
+ *
+ * A run is rolled up as it goes (`cost.run-progress`, on
+ * `cost/run.progressed`) and again at its seal (`cost.run-rollup`). The two
+ * are separate functions with separate concurrency keys, so a progress
+ * rebuild that read the run and its frames just before the `agent_stop`
+ * landed can write after the seal's rebuild already did. Its record says
+ * `sealed_at` null and counts fewer frames, and applied it would put the
+ * finished run back to an estimate with nothing left to correct it.
+ *
+ * The frame count is what tells that stale read from a run that really is
+ * open again. The control plane's idle close is withdrawn by the next frame
+ * the session sends (#3980), and the rebuild that follows reads the run open
+ * with more frames than its sealed row: that one is applied.
+ */
+function reopensSealed() {
+  return sql`(
+    ${totals.sealedAt} IS NOT NULL
+    AND excluded.sealed_at IS NULL
+    AND excluded.model_calls + excluded.tool_calls <= ${totals.modelCalls} + ${totals.toolCalls}
+  )`;
+}
+
 /** Exported only for the write-guard's own pg-integration test. */
 export async function upsertRunTotals(
   record: RunTotalsRecord,
@@ -548,7 +573,7 @@ export async function upsertRunTotals(
           ...values,
           costCenter: sql`coalesce(${totals.costCenter}, excluded.cost_center)`,
         },
-        setWhere: sql`NOT ${regressesToIncomplete()}`,
+        setWhere: sql`NOT ${regressesToIncomplete()} AND NOT ${reopensSealed()}`,
       }),
   );
 }
@@ -690,6 +715,15 @@ async function replaceDailyTotals(
   rolledUpAt: Date,
 ): Promise<void> {
   await withSystemDb(async (tx) => {
+    // One rebuild of a workspace-day at a time. Two concurrent rebuilds each
+    // delete the rows the other has not committed yet and then both insert,
+    // and the second insert fails on `daily_totals_group_idx`. A seal and an
+    // open run's progress rollup in the same workspace-day are that pair, and
+    // progress rollups make it the common case rather than a rare one. The
+    // lock is released at commit.
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${`cost.daily_totals:${args.workspaceId}:${args.day}`}, 0))`,
+    );
     await tx
       .delete(daily)
       .where(
@@ -750,9 +784,12 @@ export async function rebuildDailyTotals(
 // ── Sweeps ────────────────────────────────────────────────────────────────────
 
 /**
- * Sealed runs with no row, or a row older than their seal: what the nightly
- * job rolls up so a seal whose event was lost is still counted. Root tacho
- * sessions and V2 ledger runs, oldest seal first, at most `limit`.
+ * Sealed runs with no row, a row older than their seal, or a row built while
+ * the run was open: what the nightly job rolls up so a seal whose event was
+ * lost is still counted. The third case is the running estimate
+ * `cost.run-progress` writes (#3980), whose `rolled_up_at` can postdate a
+ * seal the control plane's idle close dates later than the run's last frame.
+ * Root tacho sessions and V2 ledger runs, oldest seal first, at most `limit`.
  */
 export async function listRunsAwaitingRollup(args: {
   limit: number;
@@ -769,6 +806,7 @@ export async function listRunsAwaitingRollup(args: {
           or(
             isNull(totals.id),
             sql`${totals.rolledUpAt} < ${sessions.sealedAt}`,
+            isNull(totals.sealedAt),
           ),
         ),
       )
@@ -783,13 +821,14 @@ export async function listRunsAwaitingRollup(args: {
       .innerJoin(seals, eq(seals.runId, runs.id))
       .leftJoin(totals, eq(totals.runId, runs.publicId))
       .where(eq(runs.specVersion, 2))
-      // run_id is unique on run_totals, so the joined rolled_up_at is one
-      // value per run and may sit in the GROUP BY.
-      .groupBy(runs.publicId, totals.rolledUpAt)
+      // run_id is unique on run_totals, so the joined rolled_up_at and
+      // sealed_at are one value per run and may sit in the GROUP BY.
+      .groupBy(runs.publicId, totals.rolledUpAt, totals.sealedAt)
       .having(
         or(
           isNull(totals.rolledUpAt),
           sql`max(${seals.sealedAt}) > ${totals.rolledUpAt}`,
+          isNull(totals.sealedAt),
         ),
       )
       .orderBy(sql`max(${seals.sealedAt})`)

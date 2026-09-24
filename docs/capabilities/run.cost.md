@@ -1,6 +1,6 @@
 # get_run_cost
 
-The Run page's cost strip and Cost tab (Mission Control spec §12.6, §12.7; ADR-060): one run's `cost.run_totals` row, rebuilt from the run's model-call and tool-call frames by `cost.run-rollup` after its seal.
+The Run page's cost strip and Cost tab (Mission Control spec §12.6, §12.7; ADR-060): one run's `cost.run_totals` row, rebuilt from the run's model-call and tool-call frames. `cost.run-progress` rebuilds it while the run records frames, at most two minutes behind the latest batch, and `cost.run-rollup` rebuilds it again at the seal (ADR-159). A row built while the run was open answers `isEstimate: true`.
 
 ## Mode
 
@@ -25,7 +25,7 @@ The Run page's cost strip and Cost tab (Mission Control spec §12.6, §12.7; ADR
 | Field | Type | Description |
 |---|---|---|
 | `runId` | string | as asked |
-| `rollup` | object or null | null until the rollup has rebuilt the run, or for an id with no row in the caller's workspace |
+| `rollup` | object or null | null until the rollup has built a row for the run, or for an id with no row in the caller's workspace |
 
 The rollup:
 
@@ -42,7 +42,8 @@ The rollup:
 | `byTool` | object[] | `{ name, calls }` |
 | `priceEntryIds` | string[] | the `cost.price_entries` rows the frames were priced with (spec §12.2) |
 | `rolledUpAt` | string | RFC 3339; when the row was last rebuilt |
+| `isEstimate` | boolean | true when the row was rebuilt while the run was open: every figure covers the frames recorded so far, and the run may add more. False once the rollup has rebuilt the sealed run |
 
 ## Honesty
 
-A run with no row answers `rollup: null` and a page renders that slice as not recorded; a row whose frames priced nothing answers `cost: null`. Neither is a zero. The read names `org_id` and `workspace_id` beside RLS, so another workspace's run answers `rollup: null` as well.
+A run with no row answers `rollup: null` and a page renders that slice as not recorded; a row whose frames priced nothing answers `cost: null`. Neither is a zero. A figure with `isEstimate: true` is labelled an estimate wherever it renders. The read names `org_id` and `workspace_id` beside RLS, so another workspace's run answers `rollup: null` as well.

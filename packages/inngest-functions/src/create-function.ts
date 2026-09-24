@@ -222,6 +222,10 @@ function buildInngestConfig(
     // Inngest-native shape: { maxSize, timeout, key? }.
     inngestConfig.batchEvents = config.batchEvents;
   }
+  if (config.debounce) {
+    // Inngest-native shape: { period, key?, timeout? }.
+    inngestConfig.debounce = config.debounce;
+  }
   return inngestConfig;
 }
 

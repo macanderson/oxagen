@@ -22,6 +22,8 @@ import {
   ledgerRunStatus,
   tachoRunOutcome,
   tachoRunStatus,
+  costIsEstimate,
+  recordedSealSource,
 } from "./run.list";
 import {
   ctx,
@@ -1167,5 +1169,49 @@ describe("run outcome", () => {
     // The status read guessed `sealed` here, which said the record was
     // complete when the row said nothing of the kind.
     expect(() => tachoRunStatus("abandoned")).toThrow(RangeError);
+  });
+});
+
+describe("an open run's cost and what sealed a run (#3980)", () => {
+  const cost = {
+    costMicros: 900n,
+    currency: "USD",
+    costBasis: "client_attested" as const,
+  };
+  const sealed = at("2026-09-11T10:05:00.000Z");
+
+  it("reads a priced open run as an estimate", () => {
+    expect(costIsEstimate(null, { cost, verdict: null, sealedAt: null })).toBe(
+      true,
+    );
+  });
+
+  it("reads a sealed run whose row predates the seal as an estimate", () => {
+    expect(
+      costIsEstimate(sealed, { cost, verdict: null, sealedAt: null }),
+    ).toBe(true);
+  });
+
+  it("reads a sealed run rolled up after its seal as final", () => {
+    expect(
+      costIsEstimate(sealed, { cost, verdict: null, sealedAt: sealed }),
+    ).toBe(false);
+  });
+
+  it("calls no cost an estimate (negative)", () => {
+    expect(costIsEstimate(null, undefined)).toBe(false);
+    expect(costIsEstimate(null, { cost: null, verdict: null })).toBe(false);
+  });
+
+  it("names the idle close, and reads every other seal as the host's own", () => {
+    expect(recordedSealSource(sealed, "idle_timeout")).toBe("idle_timeout");
+    expect(recordedSealSource(sealed, "agent_stop")).toBe("agent_stop");
+    // Sealed before the column existed: only an agent_stop sealed then.
+    expect(recordedSealSource(sealed, null)).toBe("agent_stop");
+    expect(recordedSealSource(null, "idle_timeout")).toBeNull();
+  });
+
+  it("refuses a seal source outside the CHECK (negative)", () => {
+    expect(() => recordedSealSource(sealed, "guessed")).toThrow(RangeError);
   });
 });

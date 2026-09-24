@@ -1774,8 +1774,83 @@ describe("the work", () => {
     });
     expect(screen.queryByTestId("run-spend")).toBeNull();
     expect(
-      screen.getByText("No cost rollup yet. It is built after the run seals."),
+      screen.getByText(
+        "No cost rollup yet. It is built within two minutes of the run's first recorded call.",
+      ),
     ).toBeTruthy();
+  });
+});
+
+describe("an open run's cost and the idle close (#3980)", () => {
+  const estimate = () => {
+    const { rollup } = runCost();
+    if (rollup === null) throw new Error("runCost() builds a rollup");
+    return runCost({ rollup: { ...rollup, isEstimate: true } });
+  };
+
+  it("labels a rollup built from an open run as an estimate", async () => {
+    await renderRun({
+      detail: ok(runDetail({ run: runRow({ sealedAt: null }) })),
+      transcript: ok(runTranscript()),
+      cost: ok(estimate()),
+    });
+    const stats = within(screen.getByTestId("run-stats"));
+    expect(stats.getByText("$4.13")).toBeTruthy();
+    expect(
+      stats.getByText(
+        "Estimate from the calls so far. Final when the run seals.",
+      ),
+    ).toBeTruthy();
+    expect(stats.queryByText(/Finalized rollup/)).toBeNull();
+    expect(screen.getByTestId("run-spend-estimate")).toHaveTextContent(
+      "Estimate while the run is open",
+    );
+  });
+
+  it("says above the Cost tab's figures that they are an estimate", async () => {
+    await renderRun(
+      {
+        detail: ok(runDetail({ run: runRow({ sealedAt: null }) })),
+        transcript: ok(runTranscript()),
+        cost: ok(estimate()),
+      },
+      { tab: "cost" },
+    );
+    expect(screen.getByTestId("cost-estimate")).toHaveTextContent(
+      "They are final once the run seals.",
+    );
+  });
+
+  it("says nothing of an estimate once the rollup priced the sealed run (negative)", async () => {
+    await renderRun(
+      {
+        detail: ok(runDetail()),
+        transcript: ok(runTranscript()),
+        cost: ok(runCost()),
+      },
+      { tab: "cost" },
+    );
+    expect(screen.queryByTestId("cost-estimate")).toBeNull();
+    expect(screen.queryByTestId("run-spend-estimate")).toBeNull();
+  });
+
+  it("names a run Oxagen closed for silence, with no end it can claim", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            outcome: "unknown",
+            sealSource: "idle_timeout",
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-closed-idle")).toHaveTextContent(
+      "no event for 12 hours",
+    );
+    const stats = within(screen.getByTestId("run-stats"));
+    expect(stats.getByText("no end recorded")).toBeTruthy();
   });
 });
 

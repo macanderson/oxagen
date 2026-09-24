@@ -100,7 +100,11 @@ async function body(
       if (!findings.ok) return <SpendReadFailure read={findings} />;
       return (
         <>
-          <SpendStrip total={report.value.total} period={period} />
+          <SpendStrip
+            total={report.value.total}
+            estimatedRuns={report.value.estimatedRuns}
+            period={period}
+          />
           <FindingsSection findings={findings.value} at={at} />
         </>
       );
@@ -114,7 +118,11 @@ async function body(
       if (!report.ok) return <SpendReadFailure read={report} />;
       return (
         <>
-          <SpendStrip total={report.value.total} period={period} />
+          <SpendStrip
+            total={report.value.total}
+            estimatedRuns={report.value.estimatedRuns}
+            period={period}
+          />
           {isEmpty(report.value) ? (
             <SpendEmpty at={at} />
           ) : (
@@ -128,7 +136,11 @@ async function body(
       if (!report.ok) return <SpendReadFailure read={report} />;
       return (
         <>
-          <SpendStrip total={report.value.total} period={period} />
+          <SpendStrip
+            total={report.value.total}
+            estimatedRuns={report.value.estimatedRuns}
+            period={period}
+          />
           {isEmpty(report.value) ? (
             <SpendEmpty at={at} />
           ) : (
@@ -142,7 +154,11 @@ async function body(
       if (!report.ok) return <SpendReadFailure read={report} />;
       return (
         <>
-          <SpendStrip total={report.value.total} period={period} />
+          <SpendStrip
+            total={report.value.total}
+            estimatedRuns={report.value.estimatedRuns}
+            period={period}
+          />
           {isEmpty(report.value) ? (
             <SpendEmpty at={at} />
           ) : (
@@ -160,7 +176,11 @@ async function body(
       if (!waste.ok) return <SpendReadFailure read={waste} />;
       return (
         <>
-          <SpendStrip total={report.value.total} period={period} />
+          <SpendStrip
+            total={report.value.total}
+            estimatedRuns={report.value.estimatedRuns}
+            period={period}
+          />
           <WasteSection waste={waste.value} at={at} />
         </>
       );
@@ -175,7 +195,11 @@ async function body(
       if (!budgets.ok) return <SpendReadFailure read={budgets} />;
       return (
         <>
-          <SpendStrip total={report.value.total} period={period} />
+          <SpendStrip
+            total={report.value.total}
+            estimatedRuns={report.value.estimatedRuns}
+            period={period}
+          />
           <BudgetsTable budgets={budgets.value} />
           {/* The gateway policy renders its own refusal rather than blanking
               the tab: the spend ceilings above are a separate question and a

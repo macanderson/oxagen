@@ -161,6 +161,7 @@ export function toRunCost(out: RunCostOutput): z.input<typeof RunCost> {
             })),
             priceEntryIds: rollup.priceEntryIds,
             rolledUpAt: rollup.rolledUpAt,
+            isEstimate: rollup.isEstimate,
           },
   };
 }

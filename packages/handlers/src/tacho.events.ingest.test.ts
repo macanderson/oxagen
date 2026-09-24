@@ -4325,3 +4325,171 @@ describe("observed metering from the model proxy", () => {
     ).toEqual([0]);
   });
 });
+
+/**
+ * A run's cost as it goes, and the control plane's idle close (#3980).
+ *
+ * The close itself is written by `tacho.session-idle-close` in
+ * `@oxagen/inngest-functions`; these cases put a row in the state that job
+ * leaves and check what ingest does with the session's next batch.
+ */
+describe("running cost and the idle close", () => {
+  const RUN_ID = "tse_fake0000000000000001";
+
+  /** Every event name sent, flattened across single and batched sends. */
+  function sentNames(): string[] {
+    return mocks.sendEvent.mock.calls.flatMap(([sent]) =>
+      (Array.isArray(sent) ? sent : [sent]).map(
+        (event: { name: string }) => event.name,
+      ),
+    );
+  }
+
+  /** The columns `idleCloseColumns` writes, on the fake's row. */
+  function closeForIdleness(db: FakeDb): void {
+    const row = db.sessions.get(SESSION)!;
+    Object.assign(row, {
+      sealedAt: new Date("2026-09-09T00:00:00.000Z"),
+      sealSource: "idle_timeout",
+      outcome: "unknown",
+      endedAt: new Date("2026-09-08T10:06:03.000Z"),
+      finalHash: row["lastHash"],
+      unobservedTail: true,
+      completenessGaps: ["unobserved_tail"],
+      replayGrade: "inspect",
+    });
+  }
+
+  it("asks for a running rollup of an open run that recorded a model call", async () => {
+    const db = fakeDb();
+    wire(db);
+    // Everything but the `agent_stop`: the run is still open.
+    await tachoEventsIngestHandler(batch(session().slice(0, -1)), CONTEXT);
+    expect(mocks.sendEvent).toHaveBeenCalledWith([
+      {
+        name: "cost/run.progressed",
+        data: {
+          runId: RUN_ID,
+          orgId: CONTEXT.orgId,
+          workspaceId: CONTEXT.workspaceId,
+        },
+      },
+    ]);
+    expect(sentNames()).not.toContain("cost/run.sealed");
+    // After the append, for the reason the seal event is.
+    expect(mocks.insertTachoEvents.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.sendEvent.mock.invocationCallOrder[0] as number,
+    );
+  });
+
+  it("sends nothing for a batch with no model or tool frame", async () => {
+    const db = fakeDb();
+    wire(db);
+    await tachoEventsIngestHandler(batch(session().slice(0, 2)), CONTEXT);
+    expect(mocks.sendEvent).not.toHaveBeenCalled();
+  });
+
+  it("leaves a batch that seals the run to the seal event alone", async () => {
+    const db = fakeDb();
+    wire(db);
+    await tachoEventsIngestHandler(batch(session()), CONTEXT);
+    expect(sentNames()).toEqual(["cost/run.sealed"]);
+    expect(db.sessions.get(SESSION)).toMatchObject({
+      outcome: "completed",
+      sealSource: "agent_stop",
+    });
+  });
+
+  it("still survives a progress dispatch that fails", async () => {
+    const db = fakeDb();
+    wire(db);
+    mocks.sendEvent.mockRejectedValueOnce(new Error("inngest down"));
+    const out = await tachoEventsIngestHandler(
+      batch(session().slice(0, -1)),
+      CONTEXT,
+    );
+    expect(out.accepted).toBe(session().length - 1);
+  });
+
+  it("reopens an idle-closed session when it reports again", async () => {
+    const db = fakeDb();
+    wire(db);
+    const events = session();
+    await tachoEventsIngestHandler(batch(events.slice(0, 3)), CONTEXT);
+    closeForIdleness(db);
+    mocks.sendEvent.mockClear();
+
+    // The harness was alive all along: a tool call, no stop.
+    await tachoEventsIngestHandler(batch(events.slice(3, -1)), CONTEXT);
+
+    expect(db.sessions.get(SESSION)).toMatchObject({
+      sealedAt: null,
+      sealSource: null,
+      outcome: "running",
+      endedAt: null,
+      finalHash: null,
+      unobservedTail: false,
+      completenessGaps: [],
+      replayGrade: null,
+    });
+    // Open again, so its cost is an estimate again and is rolled up as one.
+    expect(sentNames()).toEqual(["cost/run.progressed"]);
+  });
+
+  it("replaces an idle close with the host's own seal", async () => {
+    const db = fakeDb();
+    wire(db);
+    const events = session();
+    await tachoEventsIngestHandler(batch(events.slice(0, 3)), CONTEXT);
+    closeForIdleness(db);
+    mocks.sendEvent.mockClear();
+
+    // The daemon comes back and ships the rest, `agent_stop` included.
+    await tachoEventsIngestHandler(batch(events.slice(3)), CONTEXT);
+
+    const row = db.sessions.get(SESSION)!;
+    expect(row).toMatchObject({
+      outcome: "completed",
+      sealSource: "agent_stop",
+      finalHash: events.at(-1)!.hash,
+      unobservedTail: false,
+    });
+    expect(row["sealedAt"]).not.toEqual(new Date("2026-09-09T00:00:00.000Z"));
+    expect(sentNames()).toEqual(["cost/run.sealed"]);
+  });
+
+  it("keeps a host's seal final when frames arrive after it", async () => {
+    const db = fakeDb();
+    wire(db);
+    const events = session();
+    await tachoEventsIngestHandler(batch(events), CONTEXT);
+    const sealedAt = db.sessions.get(SESSION)!["sealedAt"];
+    mocks.sendEvent.mockClear();
+
+    // A harness that carried on after the daemon's sweep sealed it.
+    const last = events.at(-1)!;
+    const late = sealEvent(
+      unsealed(
+        "llm_call",
+        {
+          model: "claude-haiku-4-5-20251001",
+          input_tokens: 4,
+          output_tokens: 2,
+          cost_usd_micros: 300,
+        },
+        "otel_log",
+      ),
+      { seq: last.seq + 1, prevHash: last.hash as ChainCursor["prevHash"] },
+    ).event;
+    await tachoEventsIngestHandler(batch([late]), CONTEXT);
+
+    expect(db.sessions.get(SESSION)).toMatchObject({
+      sealedAt,
+      sealSource: "agent_stop",
+      outcome: "completed",
+    });
+    // The late frame's cost is still counted: the sealed run is rolled up
+    // again, as the final figure it is.
+    expect(sentNames()).toEqual(["cost/run.progressed"]);
+  });
+});

@@ -337,6 +337,27 @@ describe("summary tiles", () => {
       expect(part).toHaveAttribute("data-gap", "G3");
   });
 
+  it("marks an open run's cost as an estimate, in its cell and in Spend shown (#3980)", async () => {
+    await renderFleet({
+      runs: runPage([
+        runRow({
+          id: "tse_open",
+          source: "tacho",
+          status: "live",
+          cost: usd("4130000"),
+          costIsEstimate: true,
+        }),
+        runRow({ id: "arun_done", cost: usd("2870000") }),
+      ]),
+      approvals: NO_APPROVALS,
+    });
+    expect(screen.getAllByTestId("row-cost-estimate")).toHaveLength(1);
+    expect(tile("Spend shown")).toHaveTextContent("$7.00");
+    expect(screen.getByTestId("spend-basis")).toHaveTextContent(
+      "gateway_observed · USD · includes 1 estimate",
+    );
+  });
+
   it("opens the approvals drawer from the waiting tile, with the oldest wait off the live clock", async () => {
     const opened = vi.fn();
     window.addEventListener("oxagen:open-approvals", opened);

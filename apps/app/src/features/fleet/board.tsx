@@ -203,6 +203,9 @@ function Tiles({
   const spendNote = [
     basisWords.length === 0 ? t("spend.noBasis") : basisWords.join(" + "),
     ...(spend.total === null ? [] : [spend.total.currency]),
+    ...(spend.estimated > 0
+      ? [t("spend.estimated", { count: spend.estimated })]
+      : []),
     ...(spend.unpriced > 0
       ? [t("spend.unpriced", { count: spend.unpriced })]
       : []),
@@ -734,7 +737,11 @@ function RunRowView({
           <>
             <Money value={run.cost} />
             <span className="block text-[10px] text-muted-foreground">
-              {run.cost.basis ?? t("basisNotRecorded")}
+              {run.costIsEstimate === true ? (
+                <span data-testid="row-cost-estimate">{t("estimate")}</span>
+              ) : (
+                (run.cost.basis ?? t("basisNotRecorded"))
+              )}
             </span>
           </>
         )}

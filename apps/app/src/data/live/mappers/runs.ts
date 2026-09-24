@@ -39,6 +39,10 @@ export function toRunRow(
             ...moneyFromMicros(run.cost.micros, run.cost.currency),
             basis: run.cost.basis,
           },
+    // A server that predates the field says nothing, and an open run's cost
+    // is then the estimate it has always been.
+    costIsEstimate:
+      run.costIsEstimate ?? (run.cost !== null && run.sealedAt === null),
     // The capability records the vendor slug under `id`; the view model calls
     // it `slug`, because INV-11 reserves `id` for a PublicId.
     model:
@@ -71,6 +75,7 @@ export function toRunRow(
     canSummarize: run.canSummarize,
     startedAt: run.startedAt,
     sealedAt: run.sealedAt,
+    sealSource: run.sealSource ?? null,
   };
 }
 

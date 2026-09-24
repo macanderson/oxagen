@@ -3,7 +3,13 @@
 // recorded"; nothing prints a zero it was not given (ARCHITECTURE.md INV-09,
 // INV-10). Money goes through <Money>, counts and ratios through
 // src/ui/money-format.ts.
-import { statNote, statStrip, statTerm, statTile, statValue } from "@/ui/control-styles";
+import {
+  statNote,
+  statStrip,
+  statTerm,
+  statTile,
+  statValue,
+} from "@/ui/control-styles";
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type { Cost, Money as MoneyValue } from "@/data/contracts/money";
@@ -121,24 +127,19 @@ export function TileStrip({
   children: ReactNode;
   embedded?: boolean;
 }) {
-  return (
-    <dl
-      className={
-        embedded ? "contents" : statStrip
-      }
-    >
-      {children}
-    </dl>
-  );
+  return <dl className={embedded ? "contents" : statStrip}>{children}</dl>;
 }
 
 /** Recorded spend and workload, without outcome or operator scores. */
 export function SpendStrip({
   total,
   period,
+  estimatedRuns = 0,
 }: {
   total: SpendFigure;
   period: DayRange;
+  /** Open runs whose cost is in `total` as a running estimate. */
+  estimatedRuns?: number;
 }) {
   const t = useTranslations("spend");
   return (
@@ -152,8 +153,19 @@ export function SpendStrip({
       <Tile term={t("strip.calls")} note={t("strip.callsNote")}>
         <CountFigure count={total.calls} />
       </Tile>
-      <Tile term={t("strip.coverage")} note={t("strip.coverageNote")}>
-        {total.cost === null ? t("strip.missing") : t("strip.available")}
+      <Tile
+        term={t("strip.coverage")}
+        note={
+          estimatedRuns > 0
+            ? t("strip.estimatedNote", { count: estimatedRuns })
+            : t("strip.coverageNote")
+        }
+      >
+        {total.cost === null
+          ? t("strip.missing")
+          : estimatedRuns > 0
+            ? t("strip.estimated")
+            : t("strip.available")}
       </Tile>
     </TileStrip>
   );

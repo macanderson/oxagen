@@ -180,3 +180,30 @@ describe("groupRows and compareRows", () => {
     expect(rows[0]?.provider).toBe("anthropic");
   });
 });
+
+describe("get_spend open runs (#3980)", () => {
+  it("counts the period's runs whose cost is still a running estimate", async () => {
+    const h = harness({
+      runs: [
+        pricedRun(1_000n),
+        pricedRun(400n, { sealedAt: null }),
+        run({ sealedAt: null }),
+      ],
+    });
+    const out = await h.handler({ period: PERIOD, groupBy: "agent" }, ctx());
+    expect(out.estimatedRuns).toBe(2);
+    // The open run's cost is in the total, as the estimate it is.
+    expect(out.total.cost).toEqual({
+      micros: "1400",
+      currency: "USD",
+      basis: "client_attested",
+    });
+    expect(() => spendGet.output.parse(out)).not.toThrow();
+  });
+
+  it("counts none when every run has sealed", async () => {
+    const h = harness({ runs: [pricedRun(10n)] });
+    const out = await h.handler({ period: PERIOD, groupBy: "agent" }, ctx());
+    expect(out.estimatedRuns).toBe(0);
+  });
+});

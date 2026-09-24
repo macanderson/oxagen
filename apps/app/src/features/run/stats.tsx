@@ -114,8 +114,16 @@ export function StatRow({
         .length
     : null;
   const runCost = rollup?.cost ?? run.cost;
-  // A finalized rollup wins. Otherwise the agent-reported cost is provisional.
+  // The rollup's figure wins over the agent's own report. It is an estimate
+  // while the rollup was built from an open run, and final once it priced the
+  // sealed one. With no rollup yet, the agent's report stands in as an
+  // estimate of its own.
   const displayedCost = runCost ?? run.reportedCost ?? null;
+  const costIsEstimate =
+    rollup === null ? run.costIsEstimate === true : rollup.isEstimate === true;
+  // A run Oxagen closed for silence has no recorded end: the seal is when the
+  // close ran, 12 hours after the last event.
+  const endUnrecorded = run.sealSource === "idle_timeout";
   const missingRollup = cost.ok && rollup === null ? t("noRollup") : undefined;
   return (
     <section
@@ -158,9 +166,11 @@ export function StatRow({
             <span className={mono}>
               {runCost === null
                 ? tr("costReportedProvisional")
-                : tr("costFinalized", {
-                    basis: runCost.basis ?? tc("basisNotRecorded"),
-                  })}
+                : costIsEstimate
+                  ? tr("costEstimate")
+                  : tr("costFinalized", {
+                      basis: runCost.basis ?? tc("basisNotRecorded"),
+                    })}
             </span>
           )
         }
@@ -173,14 +183,21 @@ export function StatRow({
       >
         {waste === null ? <NoValue /> : <Money value={waste} />}
       </Stat>
-      <Stat label={t("wallClock")}>
-        {run.sealedAt === null
-          ? t("running")
-          : formatDuration(
-              new Date(run.sealedAt).getTime() -
-                new Date(run.startedAt).getTime(),
-              locale,
-            )}
+      <Stat
+        label={t("wallClock")}
+        note={endUnrecorded ? t("noEnd") : undefined}
+      >
+        {run.sealedAt === null ? (
+          t("running")
+        ) : endUnrecorded ? (
+          <NoValue />
+        ) : (
+          formatDuration(
+            new Date(run.sealedAt).getTime() -
+              new Date(run.startedAt).getTime(),
+            locale,
+          )
+        )}
       </Stat>
       <Stat label={t("cacheHit")} note={missingRollup}>
         {rollup?.cacheHitRate == null ? (

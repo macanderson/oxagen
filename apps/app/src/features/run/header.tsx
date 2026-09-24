@@ -209,7 +209,7 @@ function Checkout({
   );
 }
 
-/** "<task> · started <t> by <operator> · sealed <t>". */
+/** "<task> · started <t> by <operator> · sealed <t>", or "closed <t> (why)". */
 function When({ run }: { run: RunRow }) {
   const t = useTranslations("run.header");
   const tr = useTranslations("run");
@@ -262,6 +262,14 @@ function When({ run }: { run: RunRow }) {
       <span aria-hidden="true">·</span>
       {run.sealedAt === null ? (
         <span>{t("running")}</span>
+      ) : run.sealSource === "idle_timeout" ? (
+        // Oxagen closed it for silence; the host never said it ended, and its
+        // next event reopens it.
+        <span data-testid="run-closed-idle">
+          {t("closedIdle")}{" "}
+          <time dateTime={run.sealedAt}>{when(run.sealedAt)}</time> (
+          {t("closedIdleWhy")})
+        </span>
       ) : (
         <span>
           {t("sealed")}{" "}

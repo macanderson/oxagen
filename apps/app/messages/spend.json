@@ -134,7 +134,9 @@
       "coverage": "Cost data",
       "coverageNote": "Recorded amounts can exclude unpriced calls. Check Pricing for gaps.",
       "missing": "Missing",
-      "available": "Available"
+      "available": "Available",
+      "estimated": "Includes estimates",
+      "estimatedNote": "{count, plural, one {# run is still open. Its cost covers the calls so far and is final when it seals.} other {# runs are still open. Their cost covers the calls so far and is final when they seal.}}"
     },
     "columns": {
       "provider": "Provider",

@@ -374,6 +374,47 @@ describe.skipIf(!enabled)(
       expect(row?.modelCalls).toBe(3);
     });
 
+    // An open run is rolled up as it goes, and a progress rebuild that read
+    // the run before its `agent_stop` landed can write after the seal's
+    // rebuild did (#3980).
+    it("refuses an open run's stale rebuild over its sealed row", async () => {
+      const id = runId("sealrace");
+      await upsertRunTotals({ ...priced, runId: id }, new Date());
+      await upsertRunTotals(
+        { ...priced, runId: id, sealedAt: null, modelCalls: 1, steps: 1 },
+        new Date(),
+      );
+      const [row] = await withSystemDb((tx) =>
+        tx.select().from(totals).where(eq(totals.runId, id)).limit(1),
+      );
+      expect(row?.sealedAt).toEqual(new Date("2001-06-01T00:05:00.000Z"));
+      expect(row?.modelCalls).toBe(2);
+    });
+
+    it("applies an open rebuild with more frames over a sealed row: the run reopened", async () => {
+      const id = runId("reopened");
+      await upsertRunTotals({ ...priced, runId: id }, new Date());
+      // The control plane's idle close was withdrawn by the session's next
+      // frame, and the rebuild that followed counts it.
+      await upsertRunTotals(
+        {
+          ...priced,
+          runId: id,
+          sealedAt: null,
+          modelCalls: 3,
+          steps: 3,
+          costMicros: 6000n,
+        },
+        new Date(),
+      );
+      const [row] = await withSystemDb((tx) =>
+        tx.select().from(totals).where(eq(totals.runId, id)).limit(1),
+      );
+      expect(row?.sealedAt).toBeNull();
+      expect(row?.modelCalls).toBe(3);
+      expect(row?.costMicros).toBe(6000n);
+    });
+
     it("keeps a run's first cost center on a later rebuild and fills a null (ADR-142)", async () => {
       const read = async (id: string) =>
         (

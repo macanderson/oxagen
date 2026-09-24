@@ -154,7 +154,19 @@ export function SpendByArea({ read }: { read: Read<RunCost> }) {
     );
   }
   return (
-    <Panel title={t("spend")}>
+    <Panel
+      title={t("spend")}
+      aside={
+        rollup.isEstimate === true ? (
+          <span
+            data-testid="run-spend-estimate"
+            className="text-xs text-muted-foreground"
+          >
+            {t("estimate")}
+          </span>
+        ) : undefined
+      }
+    >
       <ul
         data-testid="run-spend"
         className="flex flex-col divide-y divide-border text-sm"

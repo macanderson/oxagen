@@ -113,6 +113,7 @@ describe("tile figures", () => {
       bases: [],
       unbased: 0,
       unpriced: 1,
+      estimated: 0,
       mixedCurrency: false,
     });
   });
@@ -133,6 +134,28 @@ describe("tile figures", () => {
     expect(spend.total).toBeNull();
     expect(spend.mixedCurrency).toBe(true);
     expect(spend.unbased).toBe(2);
+  });
+
+  it("counts the priced rows whose cost is a running estimate, and keeps them in the total (#3980)", () => {
+    const spend = spendShown(
+      listRuns(
+        [
+          runRow({
+            id: "arun_open",
+            status: "live",
+            cost: usd("1000000"),
+            costIsEstimate: true,
+          }),
+          runRow({ id: "arun_done", cost: usd("2000000") }),
+          // No cost is no estimate either.
+          runRow({ id: "arun_none", cost: null, costIsEstimate: true }),
+        ],
+        new Set(),
+      ),
+    );
+    expect(spend.estimated).toBe(1);
+    expect(spend.total).toMatchObject({ micros: "3000000", currency: "USD" });
+    expect(spend.unpriced).toBe(1);
   });
 
   it("finds the oldest pending approval and its window", () => {

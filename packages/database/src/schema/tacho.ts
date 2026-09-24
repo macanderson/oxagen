@@ -72,6 +72,23 @@ export const TACHO_SESSION_OUTCOMES = [
   "crashed",
   "unknown",
 ] as const;
+/**
+ * What sealed a session. `agent_stop` is the host's own end, a seal that is
+ * final. `idle_timeout` is the control plane closing a session that sent no
+ * event for `TACHO_IDLE_CLOSE_AFTER_MS`: a later event reopens it and a later
+ * `agent_stop` replaces it. Null on an open session, and on a session sealed
+ * before the column existed, which reads as `agent_stop`.
+ */
+export const TACHO_SEAL_SOURCES = ["agent_stop", "idle_timeout"] as const;
+export type TachoSealSource = (typeof TACHO_SEAL_SOURCES)[number];
+/**
+ * How long a session may send nothing before the control plane closes it:
+ * twelve hours, twice the host daemon's own idle sweep, so a daemon that is
+ * running decides first with better facts (the harness's process, its last
+ * hook). What reaches this limit is a harness whose process stayed alive, or
+ * a host that stopped reporting.
+ */
+export const TACHO_IDLE_CLOSE_AFTER_MS = 12 * 60 * 60 * 1000;
 export const TACHO_ENFORCEMENT_TIERS = [
   "contained",
   "gateway",
@@ -371,6 +388,8 @@ export const tachoSessions = tachoSchema.table(
     lastEventAt: ts("last_event_at").notNull(),
     endedAt: ts("ended_at"),
     sealedAt: ts("sealed_at"),
+    /** Who sealed it: see `TACHO_SEAL_SOURCES`. */
+    sealSource: text("seal_source"),
     // Place
     cwd: text("cwd"),
     projectDir: text("project_dir"),
@@ -586,6 +605,13 @@ export const tachoSessions = tachoSchema.table(
       "tacho_sessions_tier_check",
       sql`${t.enforcementTier} IN (${sql.raw(inList(TACHO_ENFORCEMENT_TIERS))})`,
     ),
+    sealSourceCheck: check(
+      "tacho_sessions_seal_source_check",
+      sql`${t.sealSource} IS NULL OR ${t.sealSource} IN (${sql.raw(inList(TACHO_SEAL_SOURCES))})`,
+    ),
+    openLastEventIdx: index("tacho_sessions_open_last_event_idx")
+      .on(t.lastEventAt)
+      .where(sql`${t.sealedAt} IS NULL`),
     hashCheck: check(
       "tacho_sessions_hash_check",
       sql`(${t.lastHash} IS NULL OR ${t.lastHash} ~ '^sha256:[0-9a-f]{64}$') AND (${t.finalHash} IS NULL OR ${t.finalHash} ~ '^sha256:[0-9a-f]{64}$')`,
