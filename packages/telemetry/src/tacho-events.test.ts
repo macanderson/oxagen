@@ -26,6 +26,7 @@ vi.mock("./tenant", () => ({
 
 import {
   insertTachoEvents,
+  selectAgentDaySpend,
   selectTachoEventRecords,
   selectTachoEvents,
   selectTachoStoredFrames,
@@ -205,6 +206,7 @@ describe("selectTachoEvents", () => {
         turnSeq: 2,
         ttftMs: null,
         apiDurationMs: null,
+        effort: "",
       },
     ]);
     const [call] = chSelect.mock.calls[0] ?? [];
@@ -239,6 +241,18 @@ describe("selectTachoEvents", () => {
     ]);
     expect(chSelect.mock.calls[0]?.[0]?.query).toContain("ttft_ms");
     expect(chSelect.mock.calls[0]?.[0]?.query).toContain("api_duration_ms");
+  });
+  it("reads the effort a model call ran at, and an empty string where none was recorded", async () => {
+    chSelect.mockResolvedValueOnce({
+      data: [{ seq: "1", effort: "high" }, { seq: "2", effort: "" }, { seq: "3" }],
+    });
+    const rows = await selectTachoEvents({
+      sessionUuid: SESSION,
+      afterSeq: 0,
+      limit: 10,
+    });
+    expect(rows.map(({ effort }) => effort)).toEqual(["high", "", ""]);
+    expect(chSelect.mock.calls.at(-1)?.[0]?.query).toContain("effort");
   });
 });
 
@@ -378,5 +392,58 @@ describe("selectTachoEventRecords", () => {
       afterSeq: -1,
       limit: 500,
     });
+  });
+});
+
+describe("selectAgentDaySpend (ADR-160)", () => {
+  it("sums the proxy's priced calls per host by the frame's own UTC day", async () => {
+    chSelect.mockResolvedValueOnce({
+      data: [
+        { host_enrollment_id: "tch_a", micros: "11100" },
+        { host_enrollment_id: "tch_b", micros: 2500 },
+        { host_enrollment_id: "tch_c", micros: "0" },
+      ],
+    });
+    const spend = await selectAgentDaySpend({
+      day: "2026-09-24",
+      hostEnrollmentIds: ["tch_a", "tch_b", "tch_c"],
+    });
+    expect([...spend]).toEqual([
+      ["tch_a", 11_100],
+      ["tch_b", 2_500],
+    ]);
+    const [call] = chSelect.mock.calls[0] ?? [];
+    // The frame's timestamp decides the day, never when it was received.
+    expect(call?.query).toContain(
+      "ts >= toDateTime64({start:String}, 3, 'UTC')",
+    );
+    expect(call?.query).not.toContain("received_at");
+    for (const predicate of [
+      "kind = 'llm_call'",
+      "source = 'collector'",
+      "fidelity = 'proxy'",
+      "attrs[{meteringAttr:String}] = {metered:String}",
+      "cost_usd_micros IS NOT NULL",
+      "host_enrollment_id IN {hosts:Array(String)}",
+      "ts < toDateTime64({start:String}, 3, 'UTC') + INTERVAL 1 DAY",
+      "FROM tacho_events FINAL",
+      "GROUP BY host_enrollment_id",
+    ])
+      expect(call?.query).toContain(predicate);
+    expect(call?.params).toMatchObject({
+      hosts: ["tch_a", "tch_b", "tch_c"],
+      meteringAttr: "oxagen.metering",
+      metered: "observed",
+      start: "2026-09-24 00:00:00.000",
+    });
+  });
+
+  it("asks nothing of ClickHouse for an agent with no hosts (negative)", async () => {
+    const spend = await selectAgentDaySpend({
+      day: "2026-09-24",
+      hostEnrollmentIds: [],
+    });
+    expect(spend.size).toBe(0);
+    expect(chSelect).not.toHaveBeenCalled();
   });
 });

@@ -1,13 +1,14 @@
-// Which Tools view a request asks for (#2958): a tab, a category chip on
-// Registry, the labels/API-names toggle and a cursor, all from the query
-// string. A tab is a query rather than a route (ARCHITECTURE.md §1.2: this
-// lane adds no route), and a value the page does not know falls back to the
-// default rather than failing the page.
+// Which Tools view a request asks for: a tab, a category chip on the Tools
+// tab, the labels/API-names toggle and a cursor. The tab is a path segment
+// (`/tools/providers`), as the rev1 route names it (mockup `tools.md`), and the
+// rest are query values. A tab id that is no longer served falls back to Tools,
+// so an old link never renders an empty page:
 //
-// Five of the mockup's six tabs are backed today: the three #2958's
-// capabilities back, the Mandates ledger #2957 brought, and Auto-approvals
-// over the ADR-070 rule set. Policy is still its own lane; it adds its name to
-// TOOLS_TABS and its case to the body, and nothing else here moves.
+//   - `/tools/servers` is the Providers tab's name before rev1 and lands there;
+//   - the query tabs this page had before its tabs became segments
+//     (`?tab=registry|connections|switches|mandates|autoapprovals`) land on the
+//     tab that absorbed each one. Auto-approval rules and the mandates ledger
+//     live on Policy, beside the policy versions they are decided with.
 import type {
   KillSwitch,
   KillSwitchKind,
@@ -16,13 +17,48 @@ import type {
 import { firstParam, routes, type SafePath } from "@/shared/safe-path";
 
 export const TOOLS_TABS = [
-  "registry",
-  "connections",
+  "tools",
+  "toolbelts",
+  "providers",
+  "policy",
   "switches",
-  "mandates",
-  "autoapprovals",
 ] as const;
 export type ToolsTab = (typeof TOOLS_TABS)[number];
+
+/** Every retired tab id, with the tab that absorbed it. */
+const TAB_ALIASES: Readonly<Record<string, ToolsTab>> = {
+  servers: "providers",
+  registry: "tools",
+  connections: "providers",
+  mandates: "policy",
+  autoapprovals: "policy",
+};
+
+/**
+ * A tab id as the tab it names now: a current id, an alias, or Tools.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
+export function toolsTabOf(raw: string | undefined): ToolsTab {
+  if (raw === undefined) return "tools";
+  return TOOLS_TABS.find((tab) => tab === raw) ?? TAB_ALIASES[raw] ?? "tools";
+}
+
+/**
+ * The tab a request names: the path segment when there is one, otherwise the
+ * `?tab=` a link written before rev1 carries. Null when the path goes deeper
+ * than one segment, which names no page.
+ */
+export function parseToolsTab(
+  segments: readonly string[] | undefined,
+  legacyTab: string | undefined,
+): ToolsTab | null {
+  if (segments === undefined || segments.length === 0) {
+    return toolsTabOf(legacyTab);
+  }
+  if (segments.length > 1) return null;
+  return toolsTabOf(segments[0]);
+}
 
 /** How a tool version is named in the tables: its human label, or its API name. */
 const TOOL_NAME_STYLES = ["labels", "api"] as const;
@@ -30,7 +66,7 @@ export type ToolNameStyle = (typeof TOOL_NAME_STYLES)[number];
 
 export type ToolsView = {
   tab: ToolsTab;
-  /** Only on Registry: the consequence tag the chips filter by. */
+  /** Only on the Tools tab: the consequence tag the chips filter by. */
   category: string | null;
   names: ToolNameStyle;
   /** The `nextCursor` of an earlier page of the tab's own list. */
@@ -47,18 +83,14 @@ const CURSOR = /^[\w.:=+/-]{1,512}$/;
 
 type Params = Readonly<Record<string, string | string[] | undefined>>;
 
-export function parseToolsView(params: Params): ToolsView {
-  const rawTab = firstParam(params.tab);
-  const tab = TOOLS_TABS.find((t) => t === rawTab) ?? "registry";
+export function parseToolsView(tab: ToolsTab, params: Params): ToolsView {
   const rawCategory = firstParam(params.category);
   const rawNames = firstParam(params.names);
   const rawCursor = firstParam(params.cursor);
   return {
     tab,
     category:
-      tab === "registry" &&
-      rawCategory !== undefined &&
-      CATEGORY.test(rawCategory)
+      tab === "tools" && rawCategory !== undefined && CATEGORY.test(rawCategory)
         ? rawCategory
         : null,
     names: TOOL_NAME_STYLES.find((n) => n === rawNames) ?? "labels",
@@ -67,7 +99,7 @@ export function parseToolsView(params: Params): ToolsView {
   };
 }
 
-/** The route for a view; the defaults (Registry, every category, labels, page one) are left off. */
+/** The route for a view; the defaults (Tools, every category, labels, page one) are left off. */
 export function toolsLink(
   at: ToolsAt,
   to: {
@@ -78,7 +110,7 @@ export function toolsLink(
   },
 ): SafePath {
   return routes.tools(at.org, at.ws, {
-    tab: to.tab === "registry" ? undefined : to.tab,
+    tab: to.tab === "tools" ? undefined : to.tab,
     category: to.category ?? undefined,
     names: to.names === "api" ? "api" : undefined,
     cursor: to.cursor ?? undefined,

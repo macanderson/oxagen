@@ -276,9 +276,20 @@ export const transcriptDecisionSchema = z
     seq: z.string().regex(/^\d+$/),
     /** The subagent chain the decision was recorded on; absent on the run's own. */
     sessionUuid: z.string().uuid().optional(),
-    /** The recorded word: `allow`, `deny`, `route`, or whatever the rule wrote. */
+    /**
+     * The recorded word: `allow`, `deny`, `route`, or whatever the rule
+     * wrote. An operator command (`oxagen:command_applied`) records the
+     * command: `pause`, `resume`, `cancel` or `steer`.
+     */
     decision: z.string(),
     type: z.string(),
+    /**
+     * Who decided, in the envelope's `policy_source` words: `bundle` and
+     * `kernel` are Oxagen policy, `human` is an operator, `harness` and
+     * `managed_settings` are the agent's harness checking itself. Null when
+     * the frame names none.
+     */
+    source: z.string().nullable().optional(),
     /** RFC 3339. */
     at: z.string().datetime(),
   })
@@ -315,6 +326,12 @@ export const transcriptEntrySchema = z
         id: z.string().nullable(),
         /** The subagent's type (`Explore`, `general-purpose`); null when none was recorded. */
         type: z.string().nullable(),
+        /**
+         * The parent's tool call that spawned the subagent (the Task or Agent
+         * call's `tool_use_id`), so a client nests the subagent under it.
+         * Null when none was recorded.
+         */
+        spawnCallId: z.string().nullable().optional(),
       })
       .strict()
       .optional(),
@@ -339,6 +356,17 @@ export const transcriptEntrySchema = z
      * result under the request that made it.
      */
     callId: z.string().nullable(),
+    /**
+     * What the opening frame's tool call acts on, as the gate recorded it: the
+     * command, path or URL, capped at 400 characters. Null when the frame
+     * names none.
+     */
+    target: z.string().nullable().optional(),
+    /**
+     * The reasoning effort the model call ran at (`low`, `medium`, `high`),
+     * as the harness recorded it. Null when none was recorded.
+     */
+    effort: z.string().max(32).nullable().optional(),
     usage: transcriptUsageSchema.nullable().optional(),
     /** The chips this entry answers to, from the frames it folds. */
     kinds: z.array(transcriptKindSchema),

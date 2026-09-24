@@ -201,6 +201,16 @@ export interface DurableFunctionConfig {
    * every event but the first.
    */
   batchEvents?: { maxSize: number; timeout: string; key?: string };
+  /**
+   * Collapse a burst of trigger events into one run. The provider waits
+   * `period` (e.g. "30s") after the latest matching event before it runs the
+   * handler, with that latest event as `ctx.event`; each new event restarts
+   * the wait. `timeout` caps the total wait, so a steady stream of events
+   * still runs the handler at least that often. `key` debounces per key
+   * value; without it every event of the function shares one wait. Provider
+   * dialect — see the note at the top of this file.
+   */
+  debounce?: { period: string; key?: string; timeout?: string };
 }
 
 // ─── Function Trigger ────────────────────────────────────────────────────────

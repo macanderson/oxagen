@@ -243,9 +243,9 @@ user-requested tradeoffs, not drift.
 
 ## 7. Known follow-ups
 
-- `oxagen-platform/docs/ops/aws-deployment-plan.md` describes an
-  architecture that was never built and should be corrected or retired so
-  it stops reading as the current plan.
+- Done 2026-09-23 (#3895): `docs/ops/aws-deployment-plan.md`, which
+  described an architecture that was never built, is deleted. Git history
+  keeps it.
 - `tools/install-node-scripts.sh` and `tools/node/deploy-service.sh` are
   done (#2649). Both take the new account's node and bucket by default. The
   old account's values survive in each as a documented fallback, so a node

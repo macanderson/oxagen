@@ -8,7 +8,7 @@
  */
 
 import * as React from "react";
-import { GithubIcon } from "lucide-react";
+import { GithubIcon } from "@/components/brand/github-icon";
 import { workspace } from "@/lib/routes";
 
 export interface GitHubInstallGateProps {

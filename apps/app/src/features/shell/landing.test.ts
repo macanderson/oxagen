@@ -31,8 +31,14 @@ const ctx = unsafeMint(PretenantCtx, { userId: "usr_marcusbell" });
 const orgs = vi.fn();
 const workspaces = vi.fn();
 const source = {
+  runtimes: { list: vi.fn(), agents: vi.fn() },
   pretenant: { orgs, workspaces },
-  shell: { context: vi.fn(), preferences: vi.fn() },
+  shell: {
+    context: vi.fn(),
+    preferences: vi.fn(),
+    counts: vi.fn(),
+    notifications: vi.fn(),
+  },
   billing: {
     plan: vi.fn(),
     usageCredits: vi.fn(),
@@ -52,7 +58,7 @@ const source = {
     work: vi.fn(),
     outcomesSettings: vi.fn(),
   },
-  approvals: { pending: vi.fn(), resolved: vi.fn() },
+  approvals: { pending: vi.fn(), resolved: vi.fn(), resolvedSince: vi.fn() },
   agents: {
     list: vi.fn(),
     get: vi.fn(),
@@ -79,10 +85,17 @@ const source = {
     apiKeys: vi.fn(),
     costCenters: vi.fn(),
     modelCredential: vi.fn(),
+    dataPlane: vi.fn(),
+    workspaceFacts: vi.fn(),
     sso: vi.fn(),
   },
   mandates: { list: vi.fn(), get: vi.fn() },
-  audit: { events: vi.fn(), exportEvents: vi.fn() },
+  audit: {
+    events: vi.fn(),
+    exportEvents: vi.fn(),
+    retention: vi.fn(),
+    bundle: vi.fn(),
+  },
   skills: { inventory: vi.fn(), configuration: vi.fn() },
   steering: {
     records: vi.fn(),
@@ -90,7 +103,10 @@ const source = {
     proposals: vi.fn(),
     contextPr: vi.fn(),
     freshness: vi.fn(),
+    hub: vi.fn(),
     deliveries: vi.fn(),
+    memories: vi.fn(),
+    tree: vi.fn(),
   },
   tools: {
     versions: vi.fn(),

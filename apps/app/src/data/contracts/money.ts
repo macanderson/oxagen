@@ -82,6 +82,20 @@ export function sumMoney(values: readonly Money[]): Money | null {
   return { micros: total.toString(), currency: first.currency };
 }
 
+/**
+ * `value` divided by a whole `count` (spend per call, per run, per day),
+ * truncated toward zero at the micro, or null when there is nothing to divide
+ * by. The division is BigInt, so the average stays exact at any magnitude.
+ */
+export function divMicros(value: Money, count: number): Money | null {
+  if (!Number.isSafeInteger(count)) throw new InvalidQuantityError(count);
+  if (count <= 0) return null;
+  return {
+    micros: (toBigInt(value.micros) / BigInt(count)).toString(),
+    currency: value.currency,
+  };
+}
+
 /** Micros in one cent. */
 const MICROS_PER_CENT = BigInt(10_000);
 
@@ -107,6 +121,32 @@ export function roundToCentsHalfEven(value: Money): Money {
   };
 }
 
+/**
+ * The largest of `values`, or null when there is none or they carry more than
+ * one currency: the peak of a series of days is only a figure within one.
+ */
+export function maxMoney(values: readonly Money[]): Money | null {
+  const [first] = values;
+  if (first === undefined) return null;
+  let peak = first;
+  for (const value of values) {
+    if (value.currency !== first.currency) return null;
+    if (toBigInt(value.micros) > toBigInt(peak.micros)) peak = value;
+  }
+  return { micros: toBigInt(peak.micros).toString(), currency: peak.currency };
+}
+
+/**
+ * Orders two values of one currency largest first, for a ranked list: a
+ * negative number when `a` is the larger. Values in different currencies
+ * compare equal, since neither is larger in any unit a person was charged.
+ */
+export function byMicrosDescending(a: Money, b: Money): number {
+  if (a.currency !== b.currency) return 0;
+  const diff = toBigInt(b.micros) - toBigInt(a.micros);
+  return diff > BigInt(0) ? 1 : diff < BigInt(0) ? -1 : 0;
+}
+
 /** The precision `ratioOfMicros` divides at: a ratio carries six decimal places. */
 const RATIO_SCALE = 1_000_000;
 
@@ -124,6 +164,20 @@ export function ratioOfMicros(part: Money, whole: Money): number | null {
   if (divisor === BigInt(0)) return null;
   const scaled = (toBigInt(part.micros) * BigInt(RATIO_SCALE)) / divisor;
   return Number(scaled) / RATIO_SCALE;
+}
+
+/**
+ * Orders two amounts by their micros, for a column a person sorts by cost.
+ * Negative when `a` is smaller, positive when larger, zero when equal. The
+ * comparison is exact on the digit strings through BigInt, so two costs a
+ * float would round together still sort apart (INV-09). Amounts in different
+ * currencies have no order between them, so they sort by currency code.
+ */
+export function compareMicros(a: Money, b: Money): number {
+  if (a.currency !== b.currency) return a.currency.localeCompare(b.currency);
+  const x = toBigInt(a.micros);
+  const y = toBigInt(b.micros);
+  return x === y ? 0 : x < y ? -1 : 1;
 }
 
 /**

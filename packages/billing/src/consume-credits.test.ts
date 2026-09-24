@@ -36,12 +36,15 @@ const state: {
    * carry, one bucket per `credit_ledger.reason`.
    */
   carryByReason: Record<string, number>;
+  /** Whether org_billing_settings holds a row for the org (settlement reads it). */
+  hasSettingsRow: boolean;
 } = {
   lots: [],
   ledgerInserts: [],
   lotUpdateIds: [],
   balanceUpdateCount: 0,
   carryByReason: {},
+  hasSettingsRow: true,
 };
 
 /** The micro-credits banked against one reason, as the column stores them. */
@@ -71,10 +74,18 @@ const SCHEMA = {
 
 function makeTx() {
   return {
-    // SELECT … FROM credit_lots … FOR UPDATE
+    // SELECT … FROM credit_lots … FOR UPDATE, or the settlement's
+    // SELECT … FROM org_billing_settings … FOR UPDATE.
     select: vi.fn(() => ({
-      from: vi.fn(() => ({
+      from: vi.fn((table: unknown) => ({
         where: vi.fn(() => ({
+          // settleOwedCredits: the settings row, locked. No row when the org
+          // has never carried anything.
+          for: vi.fn(async () =>
+            table === SCHEMA.orgBillingSettings && state.hasSettingsRow
+              ? [{ carryByReason: { ...state.carryByReason } }]
+              : [],
+          ),
           orderBy: vi.fn(() => ({
             for: vi.fn(async () =>
               state.lots.map((l) => ({
@@ -169,7 +180,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
 
-const { consumeCredits } = await import("./credits");
+const { consumeCredits, settleOwedCredits } = await import("./credits");
 const { microCreditsForCostUsd } = await import("./metering");
 const { providerCostUsd } = await import("./pricing");
 
@@ -581,5 +592,182 @@ describe("consumeCredits — carry is partitioned by reason", () => {
     expect(byReason("consume_assistant_tokens")).toBe(-1n);
     expect(carryFor("consume_embedding")).toBe(0n);
     expect(carryFor("consume_assistant_tokens")).toBe(0n);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A shortfall kept as a debt (carryShortfall), and the grant that settles it
+// ---------------------------------------------------------------------------
+
+describe("consumeCredits — an assistant shortfall is owed, not forgiven", () => {
+  const PERSON = "0199a7e2-6f00-7000-8000-000000000001";
+
+  beforeEach(() => {
+    state.lots = [];
+    state.ledgerInserts = [];
+    state.lotUpdateIds = [];
+    state.balanceUpdateCount = 0;
+    state.carryByReason = {};
+    state.hasSettingsRow = true;
+  });
+
+  // The defect: a turn that cost 20.5 credits against a balance of 5 was
+  // debited 5 and the other 15 were dropped, because the lots cannot go below
+  // zero and nothing remembered the rest.
+  it("banks what the balance could not cover beside the fraction", async () => {
+    state.lots = [makeLot("lot-1", 5n)];
+
+    const r = await consumeCredits({
+      orgId: "org-1",
+      requestedMicroCents: 20_500_000n,
+      reason: "consume_assistant_tokens",
+      carryShortfall: true,
+    });
+
+    expect(r.chargedCents).toBe(5n);
+    expect(r.shortfallCents).toBe(15n);
+    expect(r.owedCents).toBe(15n);
+    expect(carryFor("consume_assistant_tokens")).toBe(15_500_000n);
+    // Still no overdraft: the ledger shows what the lots held and no more.
+    expect(state.ledgerInserts).toHaveLength(1);
+    expect(state.ledgerInserts[0]!.deltaCents).toBe(-5n);
+  });
+
+  it("still drops the shortfall for a caller that does not carry it", async () => {
+    state.lots = [makeLot("lot-1", 5n)];
+
+    const r = await consumeCredits({
+      orgId: "org-1",
+      requestedMicroCents: 20_500_000n,
+      reason: "consume_embedding",
+    });
+
+    expect(r.shortfallCents).toBe(15n);
+    expect(r.owedCents).toBe(0n);
+    expect(carryFor("consume_embedding")).toBe(500_000n);
+  });
+
+  it("collects the debt first on the next charge, in a row of its own", async () => {
+    state.carryByReason = { consume_assistant_tokens: 15_500_000 };
+    state.lots = [makeLot("lot-1", 100n)];
+
+    const r = await consumeCredits({
+      orgId: "org-1",
+      requestedMicroCents: 2_000_000n,
+      reason: "consume_assistant_tokens",
+      referenceType: "token_usage",
+      referenceId: "0199a7e2-6f00-7000-8000-0000000000aa",
+      createdById: PERSON,
+      carryShortfall: true,
+    });
+
+    // 15 owed + 2.5 of new cost = 17 whole credits, 0.5 carried.
+    expect(r.priorOwedCents).toBe(15n);
+    expect(r.chargedCents).toBe(17n);
+    expect(r.owedCents).toBe(0n);
+    expect(carryFor("consume_assistant_tokens")).toBe(500_000n);
+    // The debt names nobody: the bucket does not record who ran it up, and
+    // this call's person did not.
+    expect(state.ledgerInserts).toEqual([
+      expect.objectContaining({
+        deltaCents: -15n,
+        reason: "consume_assistant_tokens",
+        referenceType: "credit_debt",
+        createdById: null,
+      }),
+      expect.objectContaining({
+        deltaCents: -2n,
+        reason: "consume_assistant_tokens",
+        referenceType: "token_usage",
+        createdById: PERSON,
+      }),
+    ]);
+  });
+
+  it("writes the acting person to created_by_id on a consume row", async () => {
+    state.lots = [makeLot("lot-1", 100n)];
+    await consumeCredits({
+      orgId: "org-1",
+      requestedMicroCents: 3_000_000n,
+      reason: "consume_assistant_tokens",
+      createdById: PERSON,
+      carryShortfall: true,
+    });
+    expect(state.ledgerInserts[0]!.createdById).toBe(PERSON);
+  });
+
+  it("names nobody on a consume row when no person is given", async () => {
+    state.lots = [makeLot("lot-1", 100n)];
+    await consumeCredits({
+      orgId: "org-1",
+      requestedCents: 3n,
+      reason: "consume_execution",
+    });
+    expect(state.ledgerInserts[0]!.createdById).toBeNull();
+  });
+});
+
+describe("settleOwedCredits — a grant pays what the org owes", () => {
+  beforeEach(() => {
+    state.lots = [];
+    state.ledgerInserts = [];
+    state.lotUpdateIds = [];
+    state.balanceUpdateCount = 0;
+    state.carryByReason = {};
+    state.hasSettingsRow = true;
+  });
+
+  const tx = () =>
+    makeTx() as unknown as Parameters<typeof settleOwedCredits>[0];
+
+  it("collects the debt from the new credits and keeps the fraction", async () => {
+    state.carryByReason = {
+      consume_assistant_tokens: 15_500_000,
+      consume_embedding: 400_000,
+    };
+    state.lots = [makeLot("lot-new", 500n)];
+
+    const collected = await settleOwedCredits(tx(), "org-1");
+
+    expect(collected).toBe(15n);
+    expect(state.ledgerInserts).toEqual([
+      expect.objectContaining({
+        deltaCents: -15n,
+        reason: "consume_assistant_tokens",
+        referenceType: "credit_debt",
+      }),
+    ]);
+    expect(state.lotUpdateIds).toEqual(["lot-new"]);
+    expect(carryFor("consume_assistant_tokens")).toBe(500_000n);
+    // A fraction is not owed yet; it stays where it was.
+    expect(carryFor("consume_embedding")).toBe(400_000n);
+  });
+
+  it("pays part of the debt when the grant is smaller, and the rest stays owed", async () => {
+    state.carryByReason = { consume_assistant_tokens: 15_000_000 };
+    state.lots = [makeLot("lot-new", 10n)];
+
+    const collected = await settleOwedCredits(tx(), "org-1");
+
+    expect(collected).toBe(10n);
+    expect(state.ledgerInserts[0]!.deltaCents).toBe(-10n);
+    expect(carryFor("consume_assistant_tokens")).toBe(5_000_000n);
+  });
+
+  it("writes nothing when the org owes nothing", async () => {
+    state.carryByReason = { consume_assistant_tokens: 900_000 };
+    state.lots = [makeLot("lot-new", 10n)];
+
+    expect(await settleOwedCredits(tx(), "org-1")).toBe(0n);
+    expect(state.ledgerInserts).toHaveLength(0);
+    expect(state.lotUpdateIds).toHaveLength(0);
+  });
+
+  it("writes nothing for an org with no settings row", async () => {
+    state.hasSettingsRow = false;
+    state.lots = [makeLot("lot-new", 10n)];
+
+    expect(await settleOwedCredits(tx(), "org-1")).toBe(0n);
+    expect(state.ledgerInserts).toHaveLength(0);
   });
 });

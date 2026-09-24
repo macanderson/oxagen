@@ -13,6 +13,7 @@ import { type ReactNode, useId, useMemo, useState } from "react";
 import type { AgentDetail } from "@/data/contracts/agents";
 import { isEffective, type MandateList } from "@/data/contracts/mandates";
 import { diffStat } from "@/shared/line-diff";
+import { parsePullRequestUrl } from "@/shared/pull-request-url";
 import type { SafePath } from "@/shared/safe-path";
 import {
   tomlLiteral,
@@ -34,7 +35,9 @@ import {
   mono,
 } from "@/ui/control-styles";
 import { FormAlert } from "@/ui/form-feedback";
-import { SafeLink } from "@/ui/navigation";
+import { PullRequestLink, SafeLink } from "@/ui/navigation";
+import { useDefinitionDraft } from "./draft-store";
+import { repositoryOf } from "./definition-repo";
 import { Facts, Instant, Panel } from "./parts";
 import { CommitDialog } from "./source-editor";
 
@@ -81,8 +84,8 @@ function parseUsdMicros(text: string): number | null {
 }
 
 /**
- * The draft with `budget.per_run_micros` set to `next` and every other budget
- * key kept. The file may spell the table three ways, and the patcher works on
+ * The draft with `budget.<key>` set to `next` (`per_run_micros` or
+ * `per_day_micros`) and every other budget key kept. The file may spell the table three ways, and the patcher works on
  * lines, so the spelling decides which line is rewritten: a `[budget]` table
  * gets its own key line, a dotted root key is replaced on its line, and an
  * inline table (or no budget at all) is rewritten at the root with `siblings`
@@ -93,23 +96,33 @@ function parseUsdMicros(text: string): number | null {
  * bodies: a regex over the whole source once took a `[budget]` line inside
  * the instructions for a header and appended a second table.
  */
-function setPerRunMicros(
+function setBudgetMicros(
   current: string,
   siblings: TomlTable | null,
+  key: BudgetKey,
   next: number,
 ): string {
   const literal = tomlLiteral(next);
   const form = tomlTableForm(current, "budget");
-  if (form === "header")
-    return tomlSet(current, "budget", "per_run_micros", literal);
+  if (form === "header") return tomlSet(current, "budget", key, literal);
   if (form === "dotted")
-    return tomlSet(current, null, "budget.per_run_micros", literal);
+    return tomlSet(current, null, `budget.${key}`, literal);
   return tomlSet(
     current,
     null,
     "budget",
-    tomlLiteral({ ...(siblings ?? {}), per_run_micros: next }),
+    tomlLiteral({ ...(siblings ?? {}), [key]: next }),
   );
+}
+
+type BudgetKey = "per_run_micros" | "per_day_micros";
+
+/** A budget key's stored micros, or null when it is absent or not a whole non-negative number. */
+function budgetMicros(budget: TomlTable | null, key: BudgetKey): number | null {
+  const value = budget === null ? undefined : tomlGet(budget, key);
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+    ? value
+    : null;
 }
 
 /** The draft's document: what parses, or the empty table with the line that stopped the parse. */
@@ -235,7 +248,9 @@ export function DefinitionForm({
   const t = useTranslations("agents.detail.definition");
   const ts = useTranslations("agents.source");
   const id = useId();
-  const [draft, setDraft] = useState(base);
+  // The one draft of this file, shared with the source editor so an edit on
+  // either survives moving between them (draft-store.ts).
+  const [draft, setDraft] = useDefinitionDraft(identity.slug, base);
   const [committing, setCommitting] = useState(false);
   const { doc, error } = useMemo(() => readDraft(draft), [draft]);
   const stat = useMemo(() => diffStat(base, draft), [base, draft]);
@@ -262,13 +277,10 @@ export function DefinitionForm({
   const field = (key: string) => `${id}-${key}`;
 
   const budget = table(tomlGet(doc, "budget"));
-  const micros =
-    budget === null ? undefined : tomlGet(budget, "per_run_micros");
-  const perRunMicros =
-    typeof micros === "number" && Number.isSafeInteger(micros) && micros >= 0
-      ? micros
-      : null;
+  const perRunMicros = budgetMicros(budget, "per_run_micros");
   const perRunUsd = perRunMicros === null ? "" : usdInputValue(perRunMicros);
+  const perDayMicros = budgetMicros(budget, "per_day_micros");
+  const perDayUsd = perDayMicros === null ? "" : usdInputValue(perDayMicros);
   const tier = text(tomlGet(doc, "model_tier"));
   const tiers: readonly string[] =
     tier === "" || MODEL_TIERS.some((known) => known === tier)
@@ -296,6 +308,8 @@ export function DefinitionForm({
     set(null, "side_effects", [...next]);
   }
 
+  const pullRequest =
+    definition === null ? null : parsePullRequestUrl(definition.pullRequestUrl);
   const bar =
     error !== null ? (
       <FormAlert testId="definition-unparsed">
@@ -360,7 +374,26 @@ export function DefinitionForm({
           </button>
         </span>
       </div>
-    ) : null;
+    ) : definition === null ? null : (
+      <div
+        role="status"
+        data-testid="definition-pending"
+        className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-banner px-4 py-3 text-sm"
+      >
+        <b>{t("bar.onBranch", { branch: definition.branch })}</b>
+        <span className="text-muted-foreground">
+          {t("bar.pending", { commit: definition.commitSha.slice(0, 7) })}
+        </span>
+        {pullRequest === null ? null : (
+          <PullRequestLink
+            to={pullRequest}
+            className={`${mono} text-xs underline-offset-4 hover:underline`}
+          >
+            {t("bar.pullRequest")}
+          </PullRequestLink>
+        )}
+      </div>
+    );
 
   return (
     <div className="flex flex-col gap-4">
@@ -374,7 +407,11 @@ export function DefinitionForm({
           <Panel
             id="definition-identity"
             title={t("identity.title")}
-            lead={t("identity.aside")}
+            aside={
+              <span className={`${mono} text-[11px] text-dim`}>
+                {t("identity.aside")}
+              </span>
+            }
           >
             <div className="grid gap-3 sm:grid-cols-2">
               <Labelled id={field("schema")} label={t("identity.schema")}>
@@ -476,7 +513,33 @@ export function DefinitionForm({
                     const next = parseUsdMicros(event.target.value);
                     if (next === null || next === perRunMicros) return;
                     setDraft((current) =>
-                      setPerRunMicros(current, budget, next),
+                      setBudgetMicros(current, budget, "per_run_micros", next),
+                    );
+                  }}
+                />
+              </Labelled>
+              <Labelled
+                id={field("budget-day")}
+                label={t("model.budgetDay")}
+                hint={t("model.budgetDayHint", {
+                  micros: perDayMicros === null ? "…" : String(perDayMicros),
+                })}
+              >
+                <input
+                  id={field("budget-day")}
+                  type="number"
+                  step="any"
+                  min="0"
+                  inputMode="decimal"
+                  key={`budget-day:${perDayUsd}`}
+                  defaultValue={perDayUsd}
+                  className={`${inputBase} ${mono}`}
+                  onBlur={(event) => {
+                    if (event.target.value === perDayUsd) return;
+                    const next = parseUsdMicros(event.target.value);
+                    if (next === null || next === perDayMicros) return;
+                    setDraft((current) =>
+                      setBudgetMicros(current, budget, "per_day_micros", next),
                     );
                   }}
                 />
@@ -487,7 +550,11 @@ export function DefinitionForm({
           <Panel
             id="definition-tools"
             title={t("tools.title")}
-            lead={t("tools.aside")}
+            aside={
+              <span className={`${mono} text-[11px] text-dim`}>
+                {t("tools.aside")}
+              </span>
+            }
           >
             <Labelled
               id={field("tools")}
@@ -570,7 +637,11 @@ export function DefinitionForm({
           <Panel
             id="definition-instructions"
             title={t("instructions.title")}
-            lead={t("instructions.aside")}
+            aside={
+              <span className={`${mono} text-[11px] text-dim`}>
+                {t("instructions.aside")}
+              </span>
+            }
           >
             <Labelled
               id={field("body")}
@@ -667,6 +738,19 @@ export function DefinitionForm({
               <Facts
                 rows={[
                   {
+                    term: t("source.repository"),
+                    value:
+                      repositoryOf(definition.pullRequestUrl) === null ? (
+                        <span className="text-muted-foreground">
+                          {t("source.repositoryUnknown")}
+                        </span>
+                      ) : (
+                        <span className={mono}>
+                          {repositoryOf(definition.pullRequestUrl)}
+                        </span>
+                      ),
+                  },
+                  {
                     term: t("source.branch"),
                     value: <span className={mono}>{definition.branch}</span>,
                   },
@@ -735,8 +819,8 @@ export function DefinitionForm({
         agentId={identity.id}
         path={path}
         branch={branch}
+        base={base}
         draft={draft}
-        stat={stat}
         after={after}
       />
     </div>

@@ -4,7 +4,7 @@
     "description": "Workforce management for autonomous agents: govern, ground, explain, meter and rate every run."
   },
   "pages": {
-    "login": "Log in",
+    "login": "Log in to Oxagen",
     "signup": "Govern the agents you already run.",
     "verify": "Check your email",
     "twoFactor": "Two-factor authentication",
@@ -13,10 +13,12 @@
     "invitation": "Join {org} on Oxagen",
     "invitationNotFound": "This invitation link does not work",
     "newOrganization": "Name your organization",
+    "welcomeWrap": "Wrap an agent",
+    "welcomeRun": "Start a run",
+    "installer": "Oxagen Agent Installer",
     "register": "Register an agent",
     "cliAuthorize": "Authorize the Oxagen CLI",
     "cliComplete": "The Oxagen CLI is signed in",
-    "workspaceEyebrow": "Workspace {workspace}",
     "fleet": "Fleet",
     "run": "Run",
     "agents": "Agents",
@@ -34,7 +36,7 @@
     "apiKeys": "API keys",
     "billing": "Billing",
     "audit": "Audit",
-    "modelFunding": "Model funding",
+    "modelFunding": "Model funding and routes",
     "sso": "Single sign-on",
     "organizationEyebrow": "Organization {organization}"
   },

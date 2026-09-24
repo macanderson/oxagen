@@ -89,9 +89,7 @@ describe("the daemon's last-resort handlers", () => {
     });
     failing.target.emit("uncaughtException", new Error("boom"));
     await vi.waitFor(() => expect(failing.exits).toEqual([1]));
-    expect(failing.log.join("\n")).toContain(
-      "tachod: stop failed: Error: disk full",
-    );
+    expect(failing.log.join("")).toContain("tachod: stop failed: disk full");
   });
 
   it("removes its handlers when disposed", () => {

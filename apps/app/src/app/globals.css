@@ -115,8 +115,14 @@
     --button-default-active-bg: var(--hl);
     /* `.tab[aria-selected] { border-bottom-color: var(--gold) }` */
     --tab-border-active: var(--gold);
-    /* `.navitem { color: var(--muted) }`; current and hover take the ink. */
-    --sidebar-nav-link-fg: var(--muted);
+    /* `.navitem { color: var(--muted) }`; current and hover take the ink.
+       On paper the sidebar is `--void` (#F4F4F5), where the mock's muted
+       (#71717A) reads 4.40:1 and its dim (#A1A1AA) 2.33:1, both under the
+       4.5:1 floor (audit-prompt check 26). The nav links, the section labels
+       and the counts take stone-700 (#52525B, 7.0:1) there instead; on ink
+       they keep the muted grey, which clears the floor. */
+    --sidebar-nav-link-fg: var(--_stone-700);
+    --sidebar-nav-label-fg: var(--_stone-700);
     --shadow:
       0 1px 0 rgba(255, 255, 255, 0.7), 0 18px 44px rgba(9, 9, 11, 0.08);
     --shadow-sm: 0 1px 2px rgba(9, 9, 11, 0.06);
@@ -143,6 +149,8 @@
   }
 
   .dark {
+    --sidebar-nav-link-fg: var(--muted);
+    --sidebar-nav-label-fg: var(--muted-foreground);
     --void: var(--ox-void);
     --rule: var(--ox-rule);
     --tx-surface: var(--void);
@@ -176,6 +184,8 @@
   /* Match explicit dark mode before the theme script runs. */
   @media (prefers-color-scheme: dark) {
     :root:not(.light):not(.dark) {
+      --sidebar-nav-link-fg: var(--muted);
+      --sidebar-nav-label-fg: var(--muted-foreground);
       --void: var(--ox-void);
       --rule: var(--ox-rule);
       --tx-surface: var(--void);

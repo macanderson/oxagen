@@ -206,12 +206,64 @@
       "entitled": {
         "type": "boolean",
         "description": "Whether the organisation's plan includes SSO. Only the Enterprise plan does."
+      },
+      "scim": {
+        "type": "object",
+        "properties": {
+          "baseUrl": {
+            "type": "string",
+            "description": "The SCIM 2.0 base URL to enter in the identity provider"
+          },
+          "token": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "tokenPrefix": {
+                    "type": "string",
+                    "description": "The token's first characters, to tell one token from the next"
+                  },
+                  "createdAt": {
+                    "type": "string",
+                    "description": "ISO timestamp the token was minted"
+                  },
+                  "lastUsedAt": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "tokenPrefix",
+                  "createdAt",
+                  "lastUsedAt"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "baseUrl",
+          "token"
+        ],
+        "additionalProperties": false,
+        "description": "The SCIM 2.0 endpoint and the live SCIM token's prefix and dates. The token itself is never returned."
       }
     },
     "required": [
       "providers",
       "policy",
-      "entitled"
+      "entitled",
+      "scim"
     ],
     "additionalProperties": false
   }

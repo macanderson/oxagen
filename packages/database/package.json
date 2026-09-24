@@ -15,8 +15,10 @@
     "./data-plane": "./src/data-plane-resolver.ts",
     "./model-credential": "./src/model-credential-resolver.ts",
     "./sso-secrets": "./src/sso-secrets.ts",
+    "./sso-reseal": "./src/sso-reseal.ts",
     "./assistant-model-key": "./src/assistant-model-key.ts",
-    "./model-credential-shape": "./src/model-credential-shape.ts"
+    "./model-credential-shape": "./src/model-credential-shape.ts",
+    "./member-lifecycle": "./src/member-lifecycle.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -41,14 +43,14 @@
     "@oxagen/run-evidence": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "@oxagen/tenancy": "workspace:*",
-    "drizzle-orm": "0.45.2",
-    "pino": "9.14.0",
+    "drizzle-orm": "0.45.3",
+    "pino": "10.3.1",
     "postgres": "3.4.9"
   },
   "devDependencies": {
-    "@types/pg": "8.20.0",
+    "@types/pg": "8.23.1",
     "@vitest/coverage-v8": "2.1.9",
-    "drizzle-kit": "0.31.10",
+    "drizzle-kit": "0.31.11",
     "typescript": "6.0.3",
     "vitest": "2.1.9"
   }

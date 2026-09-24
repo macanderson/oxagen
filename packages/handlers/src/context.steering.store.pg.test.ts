@@ -7,6 +7,7 @@
 // red. Every row it writes is removed in afterAll.
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { closeDatabase, schema, withSystemDb } from "@oxagen/database";
+import { contextRecordLabel } from "@oxagen/oxagen/context-record-label";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { asc, eq, inArray, sql } from "drizzle-orm";
 import {
@@ -212,6 +213,7 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
             baseRef: "main",
             branch: `context/${lineage}.${suffix}`,
             path: `.oxagen/rules/${lineage}.${suffix}.toml`,
+            provider: "github",
             prNumber: 900,
             prUrl: "https://github.com/a-intel/platform/pull/900",
             headSha: "dee9001",
@@ -258,6 +260,7 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
           baseRef: "main",
           branch: `context/${lineage}`,
           path: `.oxagen/rules/${lineage}.toml`,
+          provider: "github",
           prNumber: 519,
           prUrl: "https://github.com/a-intel/platform/pull/519",
           headSha: "abc1234",
@@ -360,6 +363,7 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
           baseRef: "main",
           branch: `context/${lineage}`,
           path: `.oxagen/rules/${lineage}.toml`,
+          provider: "github",
           prNumber: 520,
           prUrl: "https://github.com/a-intel/platform/pull/520",
           headSha: "def5678",
@@ -428,11 +432,12 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
   it("keeps a record's label when a later proposal gives only a title, and changes it when one gives a label", async () => {
     const where = { orgId, workspaceId: labelWorkspace };
     const labelLineage = `ctx.g3771.${tag}`;
-    const mergeWith = async (over: Partial<ProposalRow>, n: number) => {
-      const proposal = await proposeIn(where, {
-        lineageId: labelLineage,
-        ...over,
-      });
+    const mergeWith = async (
+      over: Partial<ProposalRow>,
+      n: number,
+      lineageId = labelLineage,
+    ) => {
+      const proposal = await proposeIn(where, { lineageId, ...over });
       const opened = await runInTenantScope(where, () =>
         store.updateProposal(
           proposal.id,
@@ -440,8 +445,9 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
             status: "checks_passed",
             repository: "a-intel/platform",
             baseRef: "main",
-            branch: `context/${labelLineage}`,
-            path: `.oxagen/rules/${labelLineage}.toml`,
+            branch: `context/${lineageId}`,
+            path: `.oxagen/rules/${lineageId}.toml`,
+            provider: "github",
             prNumber: 600 + n,
             prUrl: `https://github.com/a-intel/platform/pull/${600 + n}`,
             headSha: `abc${n}`,
@@ -465,7 +471,7 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
         }),
       );
       return (await runInTenantScope(where, () =>
-        store.findRecord(where, labelLineage),
+        store.findRecord(where, lineageId),
       ))!.record;
     };
 
@@ -479,6 +485,14 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
     expect(
       await mergeWith({ label: "Read the changelog once" }, 3),
     ).toMatchObject({ label: "Read the changelog once" });
+    // A blank title stored before the schema trimmed it names the record
+    // from its lineage, so the label check cannot refuse the merge.
+    expect(
+      await mergeWith({ title: "   " }, 4, `${labelLineage}.blank`),
+    ).toMatchObject({
+      title: "Do not re-read CHANGELOG.md more than once in a run.",
+      label: contextRecordLabel(`${labelLineage}.blank`),
+    });
   });
 
   it("keeps one open PR per lineage through the partial unique index", async () => {

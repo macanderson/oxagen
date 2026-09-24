@@ -2,8 +2,9 @@
  * A queued operator message is sealed `command_applied` and acknowledged
  * `applied` only when the agent reads it whole. Claude Code keeps 10,000
  * characters of a hook's `additionalContext`, so one answer carries at most
- * 9,500, prefix included, and what does not fit waits for the next prompt.
- * A spool replay answers nobody, so it drains nothing.
+ * 9,500, prefix included, and what does not fit waits for the next boundary.
+ * A spool replay answers nobody, and neither does a hook the daemon deferred
+ * after answering it, so neither drains anything.
  */
 import { describe, expect, it } from "vitest";
 import { verifyChain } from "../chain";
@@ -19,6 +20,7 @@ import {
   handleHookEvent,
   type HookReplay,
   type PolicyView,
+  RESUMED_TEXT,
 } from "./hook-handler";
 import { type QueuedPrompt, SessionRegistry } from "./registry";
 
@@ -173,6 +175,68 @@ describe("the additionalContext budget", () => {
     ]);
   });
 
+  it("keeps a mid-turn answer under the cap with room for a resume's continuation", async () => {
+    const h = harness();
+    const record = await opened(h);
+    record.control.resumeOwed = "cmd_resume";
+    record.control.messages.push(
+      message("cmd_fill", "f".repeat(ADDITIONAL_CONTEXT_MAX_CHARS - 10)),
+    );
+    const tool = {
+      session_id: SESSION,
+      hook_event_name: "PostToolUse",
+      tool_name: "Read",
+      tool_input: { file_path: "/repo/README.md" },
+      tool_use_id: "toolu_read",
+    };
+    const first = await handleHookEvent(tool, {}, h.deps);
+    // The steer would push the answer past the cap beside the continuation,
+    // so the continuation goes now and the steer at the next boundary.
+    expect(contextOf(first.response)).toBe(RESUMED_TEXT);
+    expect(record.control.messages.map((m) => m.id)).toEqual(["cmd_fill"]);
+    const second = await handleHookEvent(
+      { ...tool, tool_use_id: "toolu_read_2" },
+      {},
+      h.deps,
+    );
+    expect(contextOf(second.response)).toBe(
+      "f".repeat(ADDITIONAL_CONTEXT_MAX_CHARS - 10),
+    );
+    expect(h.acks.map((a) => `${a.command_id}:${a.status}`)).toEqual([
+      "cmd_fill:applied",
+    ]);
+  });
+
+  it("counts an interrupt's lead against the cap, its space included", async () => {
+    const h = harness();
+    const record = await opened(h);
+    record.control.resumeOwed = "cmd_resume";
+    const lead = "Your Oxagen operator interrupted this step. ";
+    // One character more than fits beside the lead and the continuation.
+    const text = "i".repeat(
+      ADDITIONAL_CONTEXT_MAX_CHARS - lead.length - RESUMED_TEXT.length - 1,
+    );
+    record.control.messages.push({
+      ...message("cmd_interrupt", text),
+      requestedMode: "interrupt",
+      deliveryMode: "interrupt",
+    });
+    const call = await handleHookEvent(
+      {
+        session_id: SESSION,
+        hook_event_name: "PreToolUse",
+        tool_name: "Read",
+        tool_input: { file_path: "/repo/README.md" },
+        tool_use_id: "toolu_read",
+      },
+      {},
+      h.deps,
+    );
+    expect(call.evaluation?.reason).toBe(`${lead}${RESUMED_TEXT}`);
+    expect(record.control.messages.map((m) => m.id)).toEqual(["cmd_interrupt"]);
+    expect(h.acks).toEqual([]);
+  });
+
   it("fails a message no hook answer could carry, rather than let it hold up the queue", async () => {
     const h = harness();
     const record = await opened(h);
@@ -235,7 +299,9 @@ describe("a replayed hook", () => {
     );
   });
 
-  it("still drains at a hook the daemon received live and deferred", async () => {
+  it("drains nothing at a hook the daemon deferred, whose answer already went out", async () => {
+    // The daemon defers a hook (a SessionEnd waiting for its git read) after
+    // it has answered the harness, so nobody reads this answer either.
     const h = harness();
     const record = await opened(h);
     record.control.messages.push(message("cmd_1", "Wrap up and stop."));
@@ -243,9 +309,8 @@ describe("a replayed hook", () => {
       ...spooled,
       deferred: true,
     });
-    expect(contextOf(deferred.response)).toBe("Wrap up and stop.");
-    expect(h.acks.map((a) => `${a.command_id}:${a.status}`)).toEqual([
-      "cmd_1:applied",
-    ]);
+    expect(contextOf(deferred.response)).toBeUndefined();
+    expect(h.acks).toEqual([]);
+    expect(record.control.messages.map((m) => m.id)).toEqual(["cmd_1"]);
   });
 });

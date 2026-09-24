@@ -6,10 +6,10 @@
 - Date: 2026-08-31
 - Owner: Oxagen
 - Companion documents: [trace-model.md](trace-model.md),
-  [approval-tokens.md](approval-tokens.md), [trust-scoring.md](trust-scoring.md),
-  [insurer-api.md](insurer-api.md), [threat-model.md](threat-model.md)
-- Decision records: [ADR 0003](adr-0003-tacho-capability-tokens-biscuit.md)
-  (token format), [ADR 0004](adr-0004-tacho-policy-engine-cedar.md)
+  [approval-tokens.md](https://github.com/macanderson/oxagen-roadmap/blob/main/docs/oxagen/specs/tacho/design/approval-tokens.md), [trust-scoring.md](https://github.com/macanderson/oxagen-roadmap/blob/main/docs/oxagen/specs/tacho/design/trust-scoring.md),
+  [insurer-api.md](https://github.com/macanderson/oxagen-roadmap/blob/main/docs/oxagen/specs/tacho/design/insurer-api.md), [threat-model.md](threat-model.md)
+- Decision records: [ADR 0003](https://github.com/macanderson/oxagen-roadmap/blob/main/docs/oxagen/specs/tacho/design/adr-0003-tacho-capability-tokens-biscuit.md)
+  (token format), [ADR 0004](https://github.com/macanderson/oxagen-roadmap/blob/main/docs/oxagen/specs/tacho/design/adr-0004-tacho-policy-engine-cedar.md)
   (policy engine), [ADR 0005](adr-0005-tacho-trace-anchoring-and-cgp-export.md)
   (trace anchoring and CGP export)
 
@@ -165,7 +165,7 @@ proxy, optionally with eBPF/`LD_PRELOAD` file monitoring. Events are coarser
 trust-scoring service weighs proxy-only fleets lower. In high-assurance
 deployments the same proxy runs *alongside* style (a) as independent
 corroboration of the SDK's self-reported egress (see
-[trust-scoring.md](trust-scoring.md), anti-gaming).
+[trust-scoring.md](https://github.com/macanderson/oxagen-roadmap/blob/main/docs/oxagen/specs/tacho/design/trust-scoring.md), anti-gaming).
 
 ### Failure semantics (normative, stated in every SDK's docs)
 

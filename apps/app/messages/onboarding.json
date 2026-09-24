@@ -9,29 +9,263 @@
       "workspaceNameTooLong": "Use at most 80 characters.",
       "workspaceSlugInvalid": "Use 2–40 lowercase letters, digits and hyphens.",
       "workspaceSlugReserved": "That address is used by an organization page. Pick another.",
-      "slugTaken": "That address belongs to another organization. Pick a different one.",
+      "slugTaken": "That address belongs to another organization. Change the organization name to change the address.",
       "agentSlugInvalid": "Use up to 18 lowercase letters, digits and hyphens, starting and ending with a letter or digit.",
       "agentNameRequired": "Enter a name for the agent.",
       "agentNameTooLong": "Use at most 128 characters.",
       "agentDescriptionTooLong": "Use at most 1024 characters.",
       "agentHarnessInvalid": "Pick one of the harnesses Oxagen wraps.",
       "failed": "The organization could not be created. Nothing was saved; try again.",
-      "denied": "This account may not create an organization."
+      "namespaceInvalid": "Use 2–6 lowercase letters or digits."
     },
     "organization": {
-      "eyebrow": "Create your organization",
+      "eyebrow": "Step 1 of 3",
       "title": "Name your organization",
       "lead": "The organization is the tenant: it owns its own graph database, its own encryption key, its billing account, and the namespace that appears in every agent key.",
       "name": "Organization name",
-      "slug": "Address",
-      "slugHint": "Oxagen lives at /{slug}. You can change the address later.",
+      "address": "Address",
+      "addressValue": "oxagen.com/{slug}",
+      "addressHint": "Derived from the name. You can change it later.",
+      "namespace": "Namespace",
+      "namespaceHint": "2–6 characters, <b>immutable</b>. Every agent key starts with it: <k>{namespace}.'<'workspace'>'.'<'agent'>'</k>",
       "workspaceTitle": "First workspace",
       "workspaceName": "Workspace name",
-      "workspaceSlug": "Workspace address",
-      "workspaceHint": "A workspace is a governance partition: one main repo, one ontology, one steering set, its own agents, tool grants and budgets.",
-      "creates": "Creates the organization {name} and its first workspace.",
-      "submit": "Create organization",
-      "pending": "Creating…"
+      "governance": "Governance mode",
+      "governanceModes": {
+        "solo": "solo",
+        "team": "team",
+        "regulated": "regulated"
+      },
+      "governanceNotBacked": "The governance mode is not recorded yet. The workspace has no column for it, so the choice is not saved.",
+      "workspaceHint": "A workspace is a governance partition: one main repo, one steering set, its own agents, tool grants and budgets.",
+      "creates": "Creates <ns>org_{namespace}</ns> and its graph database.",
+      "cancel": "Cancel",
+      "submit": "Continue",
+      "pending": "Creating…",
+      "namespaceTaken": "<b>That namespace is taken.</b> <ns>{namespace}</ns> belongs to another organization. Pick a different 2–6 character namespace."
+    },
+    "welcome": {
+      "shell": {
+        "cancel": "Cancel",
+        "railLabel": "Onboarding",
+        "steps": {
+          "organization": "Name the organization",
+          "wrap": "Wrap an agent",
+          "run": "Start a run"
+        },
+        "state": {
+          "done": "done",
+          "current": "current step",
+          "todo": "not reached"
+        },
+        "caption": "The operator console does not open until an agent has talked to Oxagen. That first frame is also the installer’s smoke test, so there is one path, not two.",
+        "loading": "Loading this step"
+      },
+      "denied": {
+        "title": "You cannot see onboarding",
+        "body": "Your roles on <b>{org}</b> do not include <code>{permission}</code>. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+        "bodyNoOrg": "Your account does not hold <code>{permission}</code>. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+        "requestAccess": "Request access",
+        "backToFleet": "Back to Fleet",
+        "signedIn": "Signed in as",
+        "needed": "Needed",
+        "decidedBy": "Decided by",
+        "decidedByValue": "the organization role check · deny wins over every allow",
+        "dialogTitle": "Request access",
+        "dialogBody": "A request would ask an organization owner to grant {permission}, and the grant would land in the audit record with your name on it.",
+        "dialogNotBacked": "Access requests are not recorded yet: no capability lets a person ask for a role, so nothing is sent. Ask an organization owner directly.",
+        "close": "Close"
+      },
+      "wrap": {
+        "eyebrow": "Step 2 of 3",
+        "title": "Wrap an agent",
+        "lead": "The installer carries a one-time enrollment token for <k>{key}</k>, so nothing is copied or pasted.",
+        "leadNoKey": "The installer carries a one-time enrollment token for the agent, so nothing is copied or pasted.",
+        "tabsLabel": "How to wrap the agent",
+        "tabs": {
+          "cc": {
+            "name": "Claude Code",
+            "sub": "one click · harness"
+          },
+          "codex": {
+            "name": "Codex CLI",
+            "sub": "one click · harness"
+          },
+          "sdk": {
+            "name": "SDK agent",
+            "sub": "five lines · harness"
+          }
+        },
+        "recommended": "recommended",
+        "ccBody": "The installer writes the hooks, installs the <mono>oxagend</mono> collector and the <mono>oxagen-hook</mono> binary, registers them to start at login, and enrolls this host with an Ed25519 device key. Nothing is copied or pasted: the one-time enrollment token is embedded in the download.",
+        "ccTier": "The tier is computed per run from what was actually routed, never from what the adapter can do on paper. Hooks deliver steering and can refuse at four events, client-attested and fail-open. No report can render a stronger word than the tier allows.",
+        "codexBody": "The same installer, with the Codex profile. It writes <mono>~/.codex/config.toml</mono>: the Oxagen MCP server, the notify hook to the collector, and the approval policy routed through Oxagen.",
+        "codexTier": "Which of the two the native tools earn depends on the harness version. On versions that do not expose an approval hook the agent is recorded only, and the run says so.",
+        "sdkBody": "Five lines in your own process. <mono>oxagen.agent.wrap({})</mono> installs a frame emitter, the checkpoint gate before each turn, and the Oxagen MCP endpoint as the agent’s tool server. Works with the OpenAI Agents SDK, the Claude Agent SDK, Stella, and any custom loop.",
+        "ladder": {
+          "thisAgent": "This agent",
+          "next": "Next rung",
+          "top": "Top rung",
+          "orObserve": "or observe"
+        },
+        "download": "Download",
+        "osLabel": "Operating system",
+        "os": {
+          "macos": "macOS",
+          "windows": "Windows",
+          "linux": "Linux"
+        },
+        "downloadFor": "Download for {os}",
+        "downloadNotBacked": "No signed installer is published for {os} yet, so there is nothing to download. Run the command below instead; it enrolls this host the same way.",
+        "packageNotBacked": "Package name, size and checksum are not recorded: no signed package is published.",
+        "profile": "profile: codex-cli",
+        "tokenEmbedded": "one-time enrollment token embedded",
+        "tokenExpires": "expires in {minutes} min · single use",
+        "tokenMinting": "Issuing a one-time token…",
+        "tokenAgain": "Issue another token",
+        "orRun": "or run",
+        "credential": "Agent credential",
+        "credentialIssued": "issued once to the operator",
+        "credentialFacts": "hashed at rest · purpose-locked · revocable",
+        "credentialNone": "No live credential is recorded for this agent.",
+        "credentialBody": "Set it as <mono>OXAGEN_AGENT_TOKEN</mono>. Oxagen mints short-lived run tokens from it at run start. Revoking the credential kills every run token at the next call.",
+        "langLabel": "Language",
+        "lang": {
+          "ts": "TypeScript",
+          "py": "Python",
+          "go": "Go"
+        },
+        "copy": "Copy the five lines",
+        "copied": "Five lines copied.",
+        "copyFailed": "The browser refused the clipboard. Select the lines and copy them by hand.",
+        "cancel": "Cancel",
+        "back": "Back",
+        "caption": "Nothing completes until a frame arrives.",
+        "continue": "I have already installed it — continue",
+        "advancing": "Moving on…",
+        "noAgentTitle": "No agent to wrap yet",
+        "noAgentBody": "The gate does not name a first agent, and this workspace has no Claude Code, Codex, Cursor or Stella agent registered. An enrollment token is minted for a registered agent, so register one first.",
+        "noAgentAction": "Register an agent",
+        "credentialValue": "{prefix}••••"
+      },
+      "run": {
+        "eyebrow": "Step 3 of 3",
+        "title": "Start a run",
+        "lead": "The operator console opens the moment the first frame from <k>{key}</k> reaches Oxagen, and lands you on Fleet looking at your own run.",
+        "leadNoKey": "The operator console opens the moment the agent’s first frame reaches Oxagen, and lands you on Fleet looking at your own run.",
+        "waitingTitle": "Waiting for the first frame",
+        "polling": "polling · 1s",
+        "hostChip": "host enrolled",
+        "noHostChip": "no host enrolled",
+        "log": {
+          "enrolled": "host enrolled · enrollment {id}",
+          "heartbeat": "collector reporting · last heartbeat",
+          "hooksOk": "hooks written · the collector checked them",
+          "hooksMissing": "hooks missing · the collector found none",
+          "notBacked": "The collector’s install steps are not recorded one by one yet; the lines above are the ones Oxagen holds.",
+          "waiting": "waiting…"
+        },
+        "start": "Start {harness} in any repository on the enrolled host. The installer already ran a one-turn smoke session; if it is still in flight this flips on its own.",
+        "startNoHost": "Run the installer or the enroll command from the wrap step on the machine the agent runs on. Nothing has enrolled for this agent yet.",
+        "connected": "connected",
+        "receivedTitle": "First frame received",
+        "framesNotRecorded": "The run’s frames are not readable yet.",
+        "replayGrade": "replay grade: {grade}",
+        "chainIntact": "chain intact",
+        "tierBody": "The tier is computed from what was actually routed, not from what the adapter can do on paper. This run recorded <b>{tier}</b>.",
+        "tierBodyHarness": "The tier is computed from what was actually routed, not from what the adapter can do on paper. The hooks answered, so this run is <b>harness</b>: delivered, recorded, client-attested, fail-open.",
+        "cancel": "Cancel",
+        "back": "Back",
+        "openInstaller": "Open the installer",
+        "noDone": "There is no Done button — the frame is the completion.",
+        "opening": "Opening automatically in {n}…",
+        "openOxagen": "Open Oxagen",
+        "errorTitle": "The collector cannot reach Oxagen",
+        "errorBody": "The host enrolled at {at}, but no heartbeat from its collector has reached Oxagen for {seconds} seconds. No frame has arrived, so the operator console stays closed.",
+        "errorFix": "Check that outbound 443 to <mono>api.oxagen.sh</mono> is allowed on the host, then start the agent again.",
+        "errorRequest": "host enrollment {id}",
+        "checkAgain": "Check again",
+        "checkedAgain": "Checked again. Still no heartbeat from the host.",
+        "repo": {
+          "detectedTitle": "Repository detected",
+          "reported": "reported by the installer",
+          "remote": "git@github.com:{repository}.git",
+          "remoteBody": "Read from the git remote of the directory the installer ran in.",
+          "bind": "Bind {repository} as the main repo",
+          "binding": "Binding…",
+          "bindBody": "Binding uses the workspace’s GitHub App installation on <mono>{repository}</mono>: repo binding, Context PRs, checks, merge handling and the code graph.",
+          "skip": "Skip for now",
+          "skipBody": "— {workspace} stays <b>provisional for {days} days</b>. Runs record and spend counts, but steering, context records and agent definitions stay off until a main repo is bound.",
+          "boundTitle": "Main repo",
+          "bound": "bound",
+          "branch": "production branch: {branch}",
+          "appInstalled": "GitHub App installed",
+          "boundBody": "Steering, context records and agent definitions will live in <mono>{repository}</mono> under <mono>.oxagen/</mono>, published through Context PRs.",
+          "boundToast": "GitHub App installed on {repository}. Main repo bound — Context PRs, checks and the code graph are on.",
+          "skippedTitle": "No main repo bound",
+          "provisional": "provisional",
+          "skippedBody": "<b>{workspace} is provisional until {until}</b> ({days} days). Runs record and spend counts. Steering, context records, and agent definitions stay off until a main repo is bound.",
+          "bindNow": "Bind {repository} now",
+          "noneTitle": "No repository detected",
+          "noneBody": "The enrolling host reported no GitHub remote. <b>{workspace} is provisional until {until}</b>. Bind a main repo from Repositories when one exists."
+        }
+      },
+      "installer": {
+        "title": "Oxagen Agent Installer",
+        "screenLabel": "Installer screen",
+        "screens": {
+          "download": "Download",
+          "installing": "Installing",
+          "connected": "Connected"
+        },
+        "downloadTitle": "Install the Oxagen agent",
+        "downloadBody": "One signed package installs the collector, the hook binary and a login item, then enrolls this host to <b>{org} / {workspace}</b>. The one-time enrollment token is embedded, so there is nothing to paste.",
+        "facts": {
+          "package": "Package",
+          "size": "Size",
+          "signature": "Signature",
+          "checksum": "Checksum",
+          "token": "Token"
+        },
+        "notPublished": "not published yet",
+        "tokenOnWrap": "embedded at download; shown once on the wrap step",
+        "install": "Install",
+        "cancel": "Cancel",
+        "userOnly": "Installs to your user account only. No sudo, no kernel extension, and nothing leaves the host except frames.",
+        "installingTitle": "Installing",
+        "stepOf": "Step {n} of {total}",
+        "progress": "Installer progress",
+        "steps": {
+          "collector": "Install the oxagend collector to /usr/local/bin",
+          "hook": "Install the oxagen-hook binary",
+          "login": "Register a login item (launchd: com.oxagen.oxagend)",
+          "hooks": "Write Claude Code hooks to ~/.claude/settings.json",
+          "policy": "Fetch the signed policy bundle and cache it",
+          "mcp": "Register the Oxagen MCP endpoint as a tool server",
+          "enroll": "Enroll this host with an Ed25519 device key",
+          "smoke": "Run a one-turn smoke session"
+        },
+        "stepState": {
+          "done": "done",
+          "now": "in progress",
+          "pending": "pending"
+        },
+        "connected": "connected",
+        "connectedTitle": "Connected to {org}",
+        "connectedBody": "The smoke session produced its first frame and Oxagen countersigned it. <k>{key}</k> is wrapped.",
+        "connectedBodyNoKey": "The smoke session produced its first frame and Oxagen countersigned it.",
+        "frameBody": "run {run} · countersigned on ingest",
+        "notConnectedTitle": "Not connected yet",
+        "notConnectedBody": "No frame from this workspace has reached Oxagen yet. This screen reads the record, so it shows Connected only once the first frame lands.",
+        "rollback": "Roll back at any time. This removes the hooks, the login item and the base URL, and restores your previous settings file:",
+        "rollbackCommand": "tacho unenroll",
+        "backToOxagen": "Back to Oxagen",
+        "unlocking": "The operator console is already unlocking in your browser.",
+        "rejectedTitle": "Enrollment token rejected",
+        "rejectedBody": "The token <mono>{token}</mono> has already been used, at {at} by host <mono>{host}</mono>. Enrollment tokens are single use.",
+        "rejectedNext": "Nothing was installed. Generate a fresh token from the wrap step and run the installer again.",
+        "backToWrap": "Back to wrap an agent"
+      }
     },
     "gate": {
       "title": "Finish setting up this workspace",
@@ -54,7 +288,7 @@
       },
       "provisional": {
         "badge": "provisional",
-        "title": "{workspace} is provisional until {until}",
+        "title": "{workspace} is provisional until {until}.",
         "body": "Runs record and spend counts. Steering, context records and agent definitions stay off until a main repo is bound, because there is nowhere to publish them to.",
         "detected": "Bind {repository}",
         "binding": "Binding…",
@@ -62,9 +296,10 @@
       },
       "firstRun": {
         "badge": "first run",
-        "title": "The first frame arrived",
-        "body": "This workspace recorded <run></run> when the gate opened. The tiles below read off the runs it has kept since.",
-        "open": "Open the first run"
+        "title": "One run so far.",
+        "body": "This workspace has recorded the installer’s smoke session, <run></run> from <agent></agent>, and nothing else. The tiles below read off that run.",
+        "dismiss": "Show the seeded fleet",
+        "agentNotRecorded": "an agent not recorded"
       }
     },
     "register": {
@@ -80,90 +315,160 @@
         "current": "current step",
         "todo": "not started"
       },
-      "caption": "Registration completes when the agent has talked to Oxagen. That first frame is also the installer's smoke test, so one path covers both.",
+      "caption": "Registration does not complete until the agent has talked to Oxagen. That first frame is also the installer's smoke test, so there is one path, not two. Cancel at any time.",
+      "cancel": "Cancel",
+      "cancelling": "Cancelling…",
+      "back": "Back",
+      "loading": "Loading the step",
       "noAgent": {
         "title": "No agent to wrap yet",
         "body": "This step works on the identity the first step mints. Start from Name the agent.",
         "start": "Name the agent"
       },
+      "denied": {
+        "title": "You cannot see agent registration",
+        "body": "Your roles on <b>{org}</b> do not include <code>{permission}</code>. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+        "permission": "agent.register on {ws}",
+        "request": "Request access",
+        "back": "Back to Fleet",
+        "signedIn": "Signed in as",
+        "needed": "Needed",
+        "decidedBy": "Decided by",
+        "decidedByValue": "register_agent · organization owner or admin",
+        "dialogTitle": "Request access",
+        "dialogBody": "Oxagen cannot send an access request from this page yet. Ask an organization owner to grant {permission}. The grant lands in the audit record."
+      },
       "name": {
         "title": "Name the agent",
-        "lead": "The slug is reserved now and is immutable. The agent itself exists once its first frame reaches Oxagen.",
+        "lead": "The key is reserved now and is immutable.",
         "slug": "Slug",
-        "slugHint": "The last segment of the agent key becomes {slug}.",
-        "agentName": "Display name",
-        "agentNameHint": "What the fleet lists this identity as.",
+        "slugHint": "The agent key becomes <mono>{key}</mono>.",
+        "workspace": "Workspace",
+        "workspaceValue": "{workspace} · {repository}",
+        "noRepository": "no main repository",
+        "workspaceHint": "Its definition file lands in <code>.oxagen/agents/</code> in the main repo.",
         "harness": "Harness",
-        "harnessHint": "Decides how the agent is wrapped on the next step. It is recorded on the identity and does not change afterwards.",
-        "description": "Description",
-        "descriptionHint": "Optional. What this agent is for.",
-        "note": "Continuing mints the identity, its delegated principal and one long-lived credential shown once. The definition file is committed separately, and the first frame is what puts the agent on Fleet.",
-        "submit": "Continue",
-        "pending": "Registering…",
-        "registered": {
-          "title": "{name} is registered",
-          "body": "This credential is shown once and is never recoverable. Set it as OXAGEN_AGENT_TOKEN wherever the agent runs.",
-          "expires": "Expires {at}",
-          "continue": "Continue to wrap"
-        }
+        "harnessHint": "Picks the installer on the next step.",
+        "tier": "Model tier",
+        "tierHint": "The harness calls the model with its own key. The tier is recorded on every frame.",
+        "tierNotSent": "Oxagen stores no model tier at registration yet, so this choice is not sent.",
+        "note": "Continue reserves <mono>{key}</mono> by registering its identity. The definition file is committed in a separate pull request.",
+        "reserved": "<mono>{key}</mono> is reserved. Continue opens the wrap step.",
+        "continue": "Continue",
+        "pending": "Reserving…"
       },
       "wrap": {
         "title": "Wrap the agent",
-        "lead": "A wrapped agent routes through at least one gateway seam: the model proxy, the tool gateway, or both. The enforcement tier is computed per run from what was actually routed.",
-        "agentKey": "Agent key",
-        "harness": "Harness",
-        "notRecorded": "not recorded",
-        "host": {
-          "title": "Enrol this machine",
-          "body": "The token below is what a machine presents to become this agent's host. Presenting it mints the host's scoped key, the signed enrollment the collector verifies offline, and the initial policy bundle.",
-          "mint": "Mint the one-time token",
-          "pending": "Minting…",
-          "again": "Mint another token"
+        "lead": "The enrollment token for <mono>{key}</mono> is single use, so the machine that presents it becomes this agent's host.",
+        "tabsLabel": "How to wrap the agent",
+        "tabs": {
+          "claude-code": {
+            "name": "Claude Code",
+            "sub": "one command · harness"
+          },
+          "codex": {
+            "name": "Codex CLI",
+            "sub": "one command · harness"
+          },
+          "cursor": {
+            "name": "Cursor",
+            "sub": "one command · harness"
+          },
+          "sdk": {
+            "name": "SDK agent",
+            "sub": "your process · harness"
+          }
+        },
+        "recommended": "recommended",
+        "body": {
+          "claude-code": "Enrolling writes the Claude Code hooks and enrolls this host with its own device key. The hooks report every session to Oxagen through the <code>tachod</code> collector.",
+          "codex": "The same enrollment, with the Codex profile. It writes <code>~/.codex/config.toml</code>: the Oxagen MCP server, the notify hook to the collector, and the approval policy routed through Oxagen.",
+          "cursor": "The same enrollment, with the Cursor profile. It writes <code>~/.cursor/hooks.json</code>, which the IDE and <code>cursor-agent</code> both read. Cursor has no ask step, so a policy that asks is answered deny with the reason.",
+          "sdk": "Your own process calls Oxagen with the agent credential: the frames it sends, the checkpoint before each turn, and the Oxagen MCP endpoint as the agent's tool server. Works with the OpenAI Agents SDK, the Claude Agent SDK, Stella, and any custom loop."
+        },
+        "ladder": {
+          "thisAgent": "This agent",
+          "nextRung": "Next rung",
+          "topRung": "Top rung",
+          "orObserve": "or observe"
+        },
+        "tierNote": "The tier is computed per run from what was actually routed, never from what the adapter can do on paper. Hooks deliver steering and can refuse at four events, client-attested and fail-open. No report can render a stronger word than the tier allows.",
+        "codexNote": "Which of the two the native tools earn depends on the harness version. On versions that do not expose an approval hook the agent is recorded only, and the run says so.",
+        "cursorNote": "Cursor's model calls do not pass through the Oxagen gateway, so its spend is not metered.",
+        "download": {
+          "eyebrow": "Download",
+          "osLabel": "Operating system",
+          "os": {
+            "macos": "macOS",
+            "windows": "Windows",
+            "linux": "Linux"
+          },
+          "button": "Download for {os}",
+          "notPublished": "Signed installers with the token embedded are not published yet. Issue the token and run the command below."
         },
         "token": {
-          "label": "One-time enrollment token",
-          "once": "Shown once, single use, and consumed the first time it is presented.",
-          "expires": "Expires {at}",
-          "command": "Run this on the machine the agent works from:"
+          "label": "one-time enrollment token",
+          "issue": "Issue the token",
+          "issuing": "Issuing…",
+          "expires": "expires {at} · single use",
+          "orRun": "or run"
         },
-        "back": "Back",
+        "credential": {
+          "eyebrow": "Agent credential",
+          "label": "issued once to the operator",
+          "none": "no live credential",
+          "facts": "hashed at rest · purpose-locked · revocable",
+          "use": "Set it as <code>OXAGEN_AGENT_TOKEN</code>. Oxagen mints short-lived run tokens from it at run start. Revoking the credential kills every run token at the next call.",
+          "issue": "Issue a new credential",
+          "issuing": "Issuing…",
+          "issueNote": "Issuing a new credential retires the one before it.",
+          "sdkNotPublished": "The Oxagen SDK and its five-line wrap are not published yet, so there is nothing to install or copy."
+        },
+        "caption": "Nothing completes until a frame arrives.",
         "continue": "I have already installed it",
-        "advancing": "Saving…",
-        "unavailable": {
-          "title": "Wrapping is not available for this harness",
-          "body": "This agent identity is registered, but its harness has no supported wrapping adapter here. Choose Claude Code, Codex, Cursor, or Stella to enrol a host and record its first run."
-        }
+        "advancing": "Saving…"
       },
       "run": {
         "title": "Wait for the first frame",
-        "lead": "The agent appears on Fleet when its first frame reaches Oxagen. Nothing here completes on a timer.",
+        "lead": "Registration completes the moment the first frame from <mono>{key}</mono> reaches Oxagen and lands you on Fleet looking at its run.",
         "waiting": {
           "title": "Waiting for the first frame",
-          "body": "Start the agent on the machine that enrolled. This page waits on the record itself, one call at a time, and re-reads while a host is enrolled.",
-          "again": "Check again",
-          "checking": "Checking…"
+          "polling": "polling",
+          "host": "host {hostname}",
+          "noHost": "no host yet",
+          "line": "waiting…",
+          "start": "Start {harness} in any repository on <host>{hostname}</host>. This card flips on its own when the first frame lands.",
+          "none": "No host has enrolled for this agent. The token from the previous step is what enrols one."
         },
-        "host": {
-          "enrolled": "Host enrolled {at}",
-          "none": "No host has enrolled for this agent. The token from the previous step is what enrols one.",
-          "heartbeat": "Collector last reported {at}",
-          "noHeartbeat": "The collector has not reported yet.",
-          "hooksOk": "Hooks written and checked.",
-          "hooksMissing": "The collector reports the harness hooks are missing. Calls it does not route are recorded, not governed.",
-          "hooksUnreported": "The collector has not reported the hooks yet."
+        "log": {
+          "enrolled": "host enrolled · device key {fingerprint}",
+          "enrolledNoKey": "host enrolled",
+          "collector": "collector reported · version {version}",
+          "collectorNoVersion": "collector reported",
+          "hooksOk": "hooks written · {file}",
+          "hooksOkNoFile": "hooks written",
+          "hooksMissing": "hooks missing · calls they do not route are recorded, not governed",
+          "bundle": "signed policy bundle fetched · v{version}",
+          "notRecorded": "The collector's own log is not recorded yet, so only the lines Oxagen holds are shown."
         },
+        "caption": "There is no Done button. The frame is the completion.",
+        "again": "Check again",
+        "checking": "Checking…",
         "received": {
+          "connected": "connected",
           "title": "First frame received",
-          "body": "<run></run> is recorded and the agent is on Fleet. Its enforcement tier is computed from what was actually routed.",
-          "at": "Received {at}",
+          "framesUnread": "Its frames",
+          "routed": "The tier is computed from what was actually routed, not from what the adapter can do on paper.",
+          "harness": "The hooks answered, so this run is <b>harness</b>: delivered, recorded, client-attested, fail-open.",
+          "grade": "replay grade: {grade}",
+          "chainIntact": "chain intact",
+          "chainGaps": "{count, plural, one {# frame missing} other {# frames missing}}",
+          "auto": "Opening automatically…",
+          "autoIn": "Opening automatically in {n}…",
           "open": "Open in Fleet"
         },
-        "repository": {
-          "title": "Repository detected",
-          "body": "Read from the git remote of the directory the installer ran in. Binding it as the main repo needs the Oxagen GitHub App installed on its owner, which Workspace settings walks you through. The binding is what turns on Context PRs, checks, merge handling and the code graph.",
-          "bind": "Bind {repository} as the main repo",
-          "binding": "Binding…",
-          "skip": "Skipping leaves {workspace} provisional until {until}. Runs record and spend counts, and steering, context records and agent definitions stay off until a main repo is bound."
+        "error": {
+          "title": "The first frame cannot be read"
         }
       },
       "failure": {

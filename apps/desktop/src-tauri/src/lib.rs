@@ -130,18 +130,30 @@ fn host_view(host: &Value) -> Value {
     Value::Object(out)
 }
 
+/// An HTTP agent whose whole request, connect to last body byte, is bounded
+/// by `timeout`. A 4xx or 5xx comes back as a response rather than an error,
+/// so the caller can read the body the server sent with it.
+fn http_agent(timeout: Duration) -> ureq::Agent {
+    ureq::Agent::config_builder()
+        .timeout_global(Some(timeout))
+        .http_status_as_error(false)
+        .build()
+        .into()
+}
+
 /// The daemon's `/status` on the loopback port with the per-install bearer.
 fn daemon_status(host: &Value) -> Option<Value> {
     let port = host.get("port")?.as_u64()?;
     let token = host.get("local_token")?.as_str()?;
-    let agent = ureq::AgentBuilder::new().timeout(Duration::from_millis(1500)).build();
-    agent
+    let mut res = http_agent(Duration::from_millis(1500))
         .get(&format!("http://127.0.0.1:{port}/status"))
-        .set("Authorization", &format!("Bearer {token}"))
+        .header("Authorization", &format!("Bearer {token}"))
         .call()
-        .ok()?
-        .into_json::<Value>()
-        .ok()
+        .ok()?;
+    if !res.status().is_success() {
+        return None;
+    }
+    res.body_mut().read_json::<Value>().ok()
 }
 
 #[derive(Serialize)]
@@ -220,11 +232,11 @@ fn desktop_state(app: tauri::AppHandle, install_state: tauri::State<CliInstallSt
 }
 
 /// The only control-plane routes the webview may reach, by exact match. A
-/// prefix check on the raw string is not a route check: `ureq` parses the
-/// URL with the `url` crate, which resolves `..` and `%2e%2e` segments
-/// before the request line is built, so `/v1/user/../../v1/<org>/...` would
-/// have passed `starts_with("/v1/user/")` and reached an org-scoped route
-/// with the session token.
+/// prefix check on the raw string is not a route check: an HTTP client or
+/// proxy may resolve `..` and `%2e%2e` segments before the request reaches
+/// the server (ureq 2 did, through the `url` crate), so
+/// `/v1/user/../../v1/<org>/...` would have passed `starts_with("/v1/user/")`
+/// and reached an org-scoped route with the session token.
 const USER_ROUTES: [&str; 2] = ["/v1/user/organizations", "/v1/user/workspaces"];
 
 fn is_user_route(path: &str) -> bool {
@@ -243,20 +255,22 @@ fn api_post(path: String, body: Value) -> Result<Value, String> {
     }
     let (config, token) = cli_config();
     let token = token.ok_or_else(|| "not signed in".to_string())?;
-    let agent = ureq::AgentBuilder::new().timeout(Duration::from_secs(15)).build();
-    let response = agent
+    let mut res = http_agent(Duration::from_secs(15))
         .post(&format!("{}{}", config.api_url, path))
-        .set("Authorization", &format!("Bearer {token}"))
-        .set("User-Agent", "oxagen-desktop")
-        .send_json(body);
-    match response {
-        Ok(res) => res.into_json::<Value>().map_err(|e| e.to_string()),
-        Err(ureq::Error::Status(code, res)) => {
-            let text = res.into_string().unwrap_or_default();
-            Err(format!("{code}: {}", text.chars().take(300).collect::<String>()))
-        }
-        Err(e) => Err(e.to_string()),
+        .header("Authorization", &format!("Bearer {token}"))
+        .header("User-Agent", "oxagen-desktop")
+        .send_json(body)
+        .map_err(|e| e.to_string())?;
+    let status = res.status();
+    if status.is_success() {
+        return res.body_mut().read_json::<Value>().map_err(|e| e.to_string());
     }
+    let text = res.body_mut().read_to_string().unwrap_or_default();
+    Err(format!(
+        "{}: {}",
+        status.as_u16(),
+        text.chars().take(300).collect::<String>()
+    ))
 }
 
 /// "Uninstall": everything the app put on this machine that `tacho unenroll`

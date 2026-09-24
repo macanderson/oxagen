@@ -15,9 +15,19 @@ payloads translated by `cursor-adapter.ts` and `stella-adapter.ts`. A custom
 agent wraps itself through `tacho.wrap(...)`. Claude Desktop is connected
 rather than wrapped (ADR-078).
 
-`plan.md` sequences the build. `design/` holds the product design (trace model,
-approval tokens, trust scoring, threat model, insurer API) and its three
-decision records, `adr-0003` through `adr-0005`.
+`backfill.md` (Proposed, 2026-09-23) turns Claude Code transcripts from before
+enrollment into reconstructed runs, under the decisions in ADR-161. It holds the
+record-to-frame mapping, the `tacho backfill` command, and the plan for the
+other three harnesses.
+
+`design/` holds the product design that is built or adopted by `spec.md`: the
+overview, the trace model, the threat model, and `adr-0005` (trace anchoring and
+CGP export). The build plan (`plan.md`, with its recorded hook latency figures)
+and the designs for work not yet built (approval tokens, trust scoring, the
+insurer API, `adr-0003` Biscuit tokens, `adr-0004` the Cedar policy engine, and
+the SDK examples) moved to the roadmap repository on 2026-09-23 (#3895). They are
+at `docs/oxagen/specs/tacho/` in https://github.com/macanderson/oxagen-roadmap,
+and this directory cites them as `oxagen-roadmap:docs/oxagen/specs/tacho/<file>`.
 
 ## The names that are still moving
 
@@ -36,27 +46,21 @@ exists:
 | the `tacho` Postgres schema | The schema, not one table. `tacho.ts` declares 10 tables on it and the migrations create `"tacho"."sessions"`, `"tacho"."hosts"` and the rest, so the word qualifies all 10. `tacho_sessions_runtime_check` is a constraint name, and no `tacho_sessions` table exists. | None. Drafts through 2026-09-19 gave it a phase 6; `_schemas.ts:36` is a compile-time `pgSchema("tacho")` so both names cannot resolve at once, `ON CONFLICT` on the ingest path rules out a view-based bridge, and no customer reaches a schema name. ADR-112 has the ledger. |
 | `@oxagen/tacho`, and the seven registered capability names carrying the word | A package name, and the capability names `create_tacho_enrollment`, `revoke_tacho_enrollment`, `ingest_tacho_events`, `get_tacho_bundle`, `list_tacho_hosts`, `list_tacho_sessions` and `get_tacho_session`. `list_tacho_hosts` is the only one on MCP; the other six declare `surfaces: ["api"]`. | None. ADR-112 decision 1 keeps them, and ADR-025 retired the dotted form with no alias fallback, so a rename breaks every caller at once. |
 
-## The Stella-side seam corpus (copied)
+## The Stella-side seam corpus
 
-The remaining files in this directory are copied verbatim from
-`macanderson/stella` at commit `0cb26c5e0835aa79e70674d723575871c5ca52fd`
-(`docs/spec/*`) on 2026-09-07. Stella is the reference implementation of the
-Context Graph Protocol and of the trace vocabulary `spec.md` §6 ingests; these
-documents define the seam Stella already speaks. They are copied, not linked,
-so both sides of the contract are versioned in the repository that implements
-the Oxagen half. When Stella revises one, re-copy and bump the commit above.
+Until 2026-09-23 this directory carried verbatim copies of Stella's
+`docs/spec/*` from `macanderson/stella` at commit
+`0cb26c5e0835aa79e70674d723575871c5ca52fd`. None of them describes something
+Oxagen builds today, so they left this repository (#3895):
 
-| File | What it defines | `spec.md` consumer |
-|---|---|---|
-| `oxagen-trace-drain.md` | Full-fidelity egress: `AgentEvent` journal to content-bearing drain to Oxagen's three storage planes, column-level mapping | §6 evidence contract, `ingest_run_evidence` |
-| `session-telemetry-receipts-spec.md` | Per-session receipts: what was sent to the model, tool-call preimages, digests | evidence manifests, replay grade |
-| `enterprise-authority-telemetry.md` | Authority model (managed ceiling ∩ repo trust ∩ session grant), content-free rollup, signed enrollment | §5 enrollment, IAM delegation ceiling |
-| `witness-protocol.md` | The flip oracle (fail to pass of the same normalized command), tamper exclusion, deterministic-first ladder | the trace-level pass/fail stamp |
-| `verification-gate.md` | `Completed` vs failed, aborted, or indeterminate | outcome on execution records; trust input |
-| `step-grading-and-productive-ratio.md` | Per-step grading and the productive ratio | `design/trust-scoring.md` |
-| `wrapper-socket.md` | The plugin socket a turn-loop wrapper plugs into | `design/examples/rust-stella.md` |
-| `agent-monitor-protocol.md` | One JSON line per detection from any run watcher to any supervisor | fleet monitor ingress |
-| `serve-observability.md` | What `stella serve` exposes for observation | §7 control contract (reverse-RPC tier) |
+- The six that define a seam Oxagen plans to meet (`oxagen-trace-drain.md`,
+  `session-telemetry-receipts-spec.md`, `enterprise-authority-telemetry.md`,
+  `witness-protocol.md`, `step-grading-and-productive-ratio.md`, and
+  `agent-monitor-protocol.md`) are at
+  `oxagen-roadmap:docs/oxagen/specs/tacho/`.
+- The three that describe Stella internals (`verification-gate.md`,
+  `wrapper-socket.md`, and `serve-observability.md`) were deleted. Read them in
+  `macanderson/stella` under `docs/spec/`.
 
 Oxagen's ledger side of this seam is `docs/specs/run-evidence-ingress/spec.md`
 (Approved) and `@oxagen/run-ledger`. The excision that made the wrapper the

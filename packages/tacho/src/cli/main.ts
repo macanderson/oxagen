@@ -182,7 +182,7 @@ export function buildTachoProgram(): Command {
         },
         asUser,
       );
-      if (!result.ok) {
+      if (!result.ok || result.shipping?.healthy === false) {
         process.exitCode = 1;
         return;
       }
@@ -291,7 +291,10 @@ export function buildTachoProgram(): Command {
         { ...(opts.json !== undefined ? { json: opts.json } : {}) },
         deps,
       );
-      if (!report.enrolled) process.exitCode = 1;
+      // A host whose events are not reaching Oxagen is not working, whatever
+      // else is installed, so a script or the installer can gate on this.
+      if (!report.enrolled || report.shipping?.healthy === false)
+        process.exitCode = 1;
     });
 
   program

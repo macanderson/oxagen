@@ -1,5 +1,5 @@
 {
-  "generatedCount": 372,
+  "generatedCount": 382,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -120,6 +120,16 @@
     },
     {
       "name": "attach_github_installation",
+      "domain": "repository",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "attach_gitlab_project",
       "domain": "repository",
       "surfaces": [
         "api"
@@ -378,6 +388,14 @@
       "consumes": []
     },
     {
+      "name": "create_prepaid_invoice",
+      "domain": "billing",
+      "surfaces": [],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "create_role",
       "domain": "iam",
       "surfaces": [
@@ -406,6 +424,16 @@
         "api",
         "mcp",
         "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "create_scim_token",
+      "domain": "org",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -793,11 +821,31 @@
       "consumes": []
     },
     {
+      "name": "execute_scim_request",
+      "domain": "org",
+      "surfaces": [],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "export_audit_events",
       "domain": "audit",
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "export_billing_statement",
+      "domain": "billing",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
       ],
       "component": null,
       "produces": [],
@@ -978,6 +1026,18 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_billing_statement",
+      "domain": "billing",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
       ],
       "component": null,
       "produces": [],
@@ -2428,6 +2488,17 @@
       "consumes": []
     },
     {
+      "name": "list_prepaid_orders",
+      "domain": "billing",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_price_entries",
       "domain": "cost",
       "surfaces": [
@@ -3291,6 +3362,17 @@
       "consumes": []
     },
     {
+      "name": "revoke_scim_token",
+      "domain": "org",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "revoke_tacho_enrollment",
       "domain": "tacho",
       "surfaces": [
@@ -3317,6 +3399,16 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "rotate_scim_token",
+      "domain": "org",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -3487,6 +3579,14 @@
         "mcp",
         "agent"
       ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "set_contract_terms",
+      "domain": "billing",
+      "surfaces": [],
       "component": null,
       "produces": [],
       "consumes": []

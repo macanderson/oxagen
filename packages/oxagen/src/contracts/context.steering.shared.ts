@@ -2,6 +2,7 @@
 // (ADR-061; MC spec §9, §10). Not a capability: exported through the barrel so
 // the contracts file-coverage guard sees it, like spend.shared.ts.
 import { z } from "zod";
+import { CONTEXT_RECORD_LINEAGE } from "../context-record-label";
 
 /** The six kinds of context-record/v0.1, Stella's file surface (spec §10.2). */
 export const recordKindSchema = z.enum([
@@ -63,6 +64,13 @@ export const proposalStatusSchema = z.enum([
   "rejected",
 ]);
 export type ProposalStatus = z.infer<typeof proposalStatusSchema>;
+
+/**
+ * The repository hosts steering publishes through (#3762). A Context PR on
+ * GitLab is a merge request; its number is the merge request's IID.
+ */
+export const repositoryProviderSchema = z.enum(["github", "gitlab"]);
+export type RepositoryProvider = z.infer<typeof repositoryProviderSchema>;
 
 export const governanceModeSchema = z.enum(["solo", "team", "regulated"]);
 export type GovernanceMode = z.infer<typeof governanceModeSchema>;
@@ -130,7 +138,7 @@ export const lineageIdSchema = z
   .min(1)
   .max(200)
   .regex(
-    /^[a-z0-9][a-z0-9.-]*[a-z0-9]$/,
+    CONTEXT_RECORD_LINEAGE,
     "a lineage id is lowercase letters, digits, dots and hyphens (e.g. ctx.release.notes-format)",
   );
 
@@ -140,8 +148,16 @@ export const proposedRecordSchema = z
     lineageId: lineageIdSchema.describe(
       "The lineage this proposal is about; the file stem under .oxagen/rules/",
     ),
-    title: z.string().min(1).max(200).optional(),
-    label: z.string().trim().min(1).max(200).optional(),
+    title: z.string().trim().min(1).max(200).optional(),
+    label: z
+      .string()
+      .trim()
+      .min(1)
+      .max(200)
+      .optional()
+      .describe(
+        "Display name only. Omit it to keep the current label; changing it never creates a version.",
+      ),
     kind: recordKindSchema,
     force: recordForceSchema,
     /** Required on a constraint, refused on every other kind. */
@@ -212,6 +228,8 @@ export const proposalViewSchema = z
       .object({
         number: z.number().int().positive(),
         url: z.string(),
+        /** Which host issued `number`: a pull request or a merge request IID. */
+        provider: repositoryProviderSchema,
         repository: z.string(),
         branch: z.string(),
       })

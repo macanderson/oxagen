@@ -98,6 +98,9 @@ function readRateLimitHint(
   return Object.keys(hint).length > 0 ? hint : undefined;
 }
 
+/** How long a host waits for one ingest batch before it retries it. */
+export const TACHO_INGEST_TIMEOUT_MS = 60_000;
+
 export class ControlError extends Error {
   readonly status: number;
   readonly body: string;
@@ -136,6 +139,13 @@ export interface ControlClientOptions {
   hostEnrollmentId: string;
   fetch?: FetchLike;
   timeoutMs?: number;
+  /**
+   * The bound on an ingest call alone, longer than `timeoutMs`. The route
+   * writes every body in the batch before it answers, and bounds each write
+   * at 30 seconds itself, so a host that gave up at 15 abandoned batches the
+   * server went on to commit, then sent them again behind its backoff.
+   */
+  ingestTimeoutMs?: number;
   userAgent?: string;
   /**
    * Called after every response that carried rate-limit headers, success or
@@ -173,11 +183,16 @@ export function createControlClient(
   const fetchImpl: FetchLike =
     options.fetch ?? ((input, init) => fetch(input, init) as never);
   const timeoutMs = options.timeoutMs ?? 15_000;
+  const ingestTimeoutMs = options.ingestTimeoutMs ?? TACHO_INGEST_TIMEOUT_MS;
   const nowMs = options.now ?? Date.now;
 
-  async function post(url: string, body: unknown): Promise<unknown> {
+  async function post(
+    url: string,
+    body: unknown,
+    boundMs: number = timeoutMs,
+  ): Promise<unknown> {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const timer = setTimeout(() => controller.abort(), boundMs);
     let response: Awaited<ReturnType<FetchLike>>;
     let text: string;
     try {
@@ -226,13 +241,17 @@ export function createControlClient(
   return {
     ingest: async (events, daemon, bodies) =>
       ingestResponseSchema.parse(
-        await post(options.endpoints.ingest, {
-          schema: TACHO_BATCH_SCHEMA,
-          host_enrollment_id: options.hostEnrollmentId,
-          events,
-          ...(bodies !== undefined && bodies.length > 0 ? { bodies } : {}),
-          ...(daemon !== undefined ? { daemon } : {}),
-        }),
+        await post(
+          options.endpoints.ingest,
+          {
+            schema: TACHO_BATCH_SCHEMA,
+            host_enrollment_id: options.hostEnrollmentId,
+            events,
+            ...(bodies !== undefined && bodies.length > 0 ? { bodies } : {}),
+            ...(daemon !== undefined ? { daemon } : {}),
+          },
+          ingestTimeoutMs,
+        ),
       ),
     bundle: async (etag) =>
       bundleResponseSchema.parse(

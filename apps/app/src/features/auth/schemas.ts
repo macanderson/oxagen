@@ -4,9 +4,35 @@
 // server action (a crafted POST cannot skip it).
 import { z } from "zod";
 
-/** Better Auth's own bounds (packages/auth/src/auth.ts minPasswordLength, reset action max). */
-export const PASSWORD_MIN = 8;
+/**
+ * The password policy the sign-up and reset screens list and tick (mockups
+ * `obPwBits`): at least 12 characters, one symbol, one digit. Better Auth's own
+ * floor (packages/auth/src/auth.ts minPasswordLength) is lower, so a direct API
+ * call still meets only that floor until the server enforces the same policy
+ * (#3888).
+ */
+const PASSWORD_MIN = 12;
 const PASSWORD_MAX = 128;
+const HAS_SYMBOL = /[^A-Za-z0-9]/;
+const HAS_DIGIT = /[0-9]/;
+
+/** The three requirements in the order the screens list them, each true once the value meets it. */
+export function passwordRequirements(value: string): {
+  length: boolean;
+  symbol: boolean;
+  digit: boolean;
+} {
+  return {
+    length: value.length >= PASSWORD_MIN,
+    symbol: HAS_SYMBOL.test(value),
+    digit: HAS_DIGIT.test(value),
+  };
+}
+
+/** How many of the meter's four segments are lit: one per four characters (mockups `obPwBits`). */
+export function passwordMeterScore(value: string): number {
+  return Math.min(4, Math.floor(value.length / 4));
+}
 
 /** The catalog keys under `auth.errors.*` a schema issue may carry. */
 const AUTH_ERROR_KEYS = [
@@ -15,6 +41,8 @@ const AUTH_ERROR_KEYS = [
   "passwordRequired",
   "passwordTooShort",
   "passwordTooLong",
+  "passwordNeedsSymbol",
+  "passwordNeedsDigit",
   "passwordsDiffer",
   "nameRequired",
   "nameTooLong",
@@ -35,7 +63,9 @@ const newPassword = z
   .string()
   .min(1, { error: "passwordRequired" })
   .min(PASSWORD_MIN, { error: "passwordTooShort" })
-  .max(PASSWORD_MAX, { error: "passwordTooLong" });
+  .max(PASSWORD_MAX, { error: "passwordTooLong" })
+  .regex(HAS_SYMBOL, { error: "passwordNeedsSymbol" })
+  .regex(HAS_DIGIT, { error: "passwordNeedsDigit" });
 
 export const LoginSchema = z.object({
   email,

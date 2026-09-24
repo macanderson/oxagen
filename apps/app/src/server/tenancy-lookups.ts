@@ -10,10 +10,12 @@
 // deliberately. Tables read (INV-05): org.organizations, org.org_slug_history,
 // org.org_users, org.invitations, workspace.workspaces,
 // workspace.workspace_slug_history, workspace.workspace_users, auth.users
-// (columns id and two_factor_enabled), security.org_security_policy,
-// auth.sso_providers (provider_id, keyed by organization_id).
+// (columns id, two_factor_enabled, and display_name for an inviter), security.org_security_policy,
+// auth.sso_providers (provider_id, keyed by organization_id), and
+// billing.plans (slug and included_gau_per_month: the Free plan's published
+// allowance, which the sign-up page states to a visitor with no session).
 import "server-only";
-import { canAccessSSO, resolveOrgTier } from "@oxagen/billing";
+import { canAccessSSO, FREE_PLAN_SLUG, resolveOrgTier } from "@oxagen/billing";
 import { schema, withSystemDb } from "@oxagen/database";
 import { and, desc, eq } from "drizzle-orm";
 import type { MfaPolicy } from "./mfa-gate";
@@ -51,6 +53,13 @@ export type InvitationRecord = {
   status: string;
   invitedAt: Date;
   expiresAt: Date | null;
+  /**
+   * Who sent it: the inviter's display name and their stored organization role
+   * (Title-cased), each null when the inviter has no name, has left the
+   * organization, or is gone. The invitation email already names them.
+   */
+  inviterName: string | null;
+  inviterRole: string | null;
 };
 
 export type SystemLookups = {
@@ -91,6 +100,12 @@ export type SystemLookups = {
   readonly invitationByToken: (
     token: string,
   ) => Promise<InvitationRecord | null>;
+  /**
+   * The governed actions the Free plan includes each month, the plan a new
+   * organization starts on (`billing.plans`, `included_gau_per_month`), or
+   * null when the plan row is not seeded.
+   */
+  readonly freePlanIncludedGau: () => Promise<number | null>;
 };
 
 function toOrg(row: typeof schema.organizations.$inferSelect): OrgRecord {
@@ -118,6 +133,38 @@ async function orgById(orgId: string): Promise<OrgRecord | null> {
       .limit(1),
   );
   return rows[0] ? toOrg(rows[0]) : null;
+}
+
+/** The inviter's display name and their current role in the invitation's organization. */
+async function invitationInviter(
+  orgId: string,
+  userId: string,
+): Promise<{ name: string | null; role: string | null }> {
+  // tenancy: pre-scope read of one auth.users row, filtered by the inviter's userId stored on the invitation; only the display name leaves.
+  const users = await withSystemDb((tx) =>
+    tx
+      .select({ displayName: schema.users.displayName })
+      .from(schema.users)
+      .where(eq(schema.users.id, userId))
+      .limit(1),
+  );
+  const stored = users[0]?.displayName?.trim();
+  const name = stored ? stored : null;
+  if (name === null) return { name: null, role: null };
+  // tenancy: pre-scope membership read filtered by the invitation's orgId and the inviter's userId; only the role leaves.
+  const memberships = await withSystemDb((tx) =>
+    tx
+      .select({ role: schema.orgUsers.role })
+      .from(schema.orgUsers)
+      .where(
+        and(
+          eq(schema.orgUsers.orgId, orgId),
+          eq(schema.orgUsers.userId, userId),
+        ),
+      )
+      .limit(1),
+  );
+  return { name, role: memberships[0]?.role ?? null };
 }
 
 /**
@@ -318,6 +365,7 @@ export const systemLookups: SystemLookups = {
   },
 
   async invitationByToken(token) {
+    // tenancy: pre-scope read filtered by the unguessable invitation token before any orgId is known; the token is the credential.
     const rows = await withSystemDb((tx) =>
       tx
         .select({
@@ -328,6 +376,7 @@ export const systemLookups: SystemLookups = {
           status: schema.invitations.status,
           createdAt: schema.invitations.createdAt,
           expiresAt: schema.invitations.expiresAt,
+          invitedByUserId: schema.invitations.invitedByUserId,
         })
         .from(schema.invitations)
         .where(eq(schema.invitations.publicId, token))
@@ -337,6 +386,10 @@ export const systemLookups: SystemLookups = {
     if (!invitation) return null;
     const org = await orgById(invitation.orgId);
     if (!org) return null;
+    const inviter = await invitationInviter(
+      invitation.orgId,
+      invitation.invitedByUserId,
+    );
     return {
       invitationId: invitation.id,
       orgId: invitation.orgId,
@@ -347,6 +400,21 @@ export const systemLookups: SystemLookups = {
       status: invitation.status,
       invitedAt: invitation.createdAt,
       expiresAt: invitation.expiresAt,
+      inviterName: inviter.name,
+      inviterRole: inviter.role,
     };
+  },
+
+  async freePlanIncludedGau() {
+    // tenancy: global read of billing.plans, the published plan terms, which
+    // carry no org_id. The query is filtered by the Free plan's slug alone.
+    const rows = await withSystemDb((tx) =>
+      tx
+        .select({ included: schema.plans.includedGauPerMonth })
+        .from(schema.plans)
+        .where(eq(schema.plans.slug, FREE_PLAN_SLUG))
+        .limit(1),
+    );
+    return rows[0]?.included ?? null;
   },
 };

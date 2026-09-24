@@ -133,8 +133,21 @@ export function toRunFrameBody(
 }
 
 export function toRunCost(out: RunCostOutput): z.input<typeof RunCost> {
-  const { rollup } = out;
+  const { rollup, provisional } = out;
   return {
+    provisional:
+      provisional === undefined || provisional === null
+        ? null
+        : {
+            byModel: provisional.byModel.map((row) => ({
+              model: row.model,
+              provider: row.provider,
+              calls: row.calls,
+              cost: toCost(row.cost),
+            })),
+            toolCalls: provisional.toolCalls,
+            asOf: provisional.asOf,
+          },
     rollup:
       rollup === null
         ? null
@@ -161,6 +174,7 @@ export function toRunCost(out: RunCostOutput): z.input<typeof RunCost> {
             })),
             priceEntryIds: rollup.priceEntryIds,
             rolledUpAt: rollup.rolledUpAt,
+            isEstimate: rollup.isEstimate,
           },
   };
 }
@@ -253,6 +267,7 @@ export function toRunTranscript(
             subagent: {
               chainRef: entry.subagent.sessionUuid,
               type: entry.subagent.type,
+              spawnKey: entry.subagent.spawnCallId ?? null,
             },
           }),
       at: entry.at,
@@ -261,6 +276,8 @@ export function toRunTranscript(
       type: entry.type,
       label: entry.label,
       callKey: entry.callId,
+      target: entry.target ?? null,
+      effort: entry.effort ?? null,
       usage: entry.usage ?? null,
       kinds: entry.kinds,
       request: toTranscriptBody(entry.request),

@@ -171,13 +171,26 @@ describe("a re-enroll whose daemon does not come back", () => {
     const rig = await brokeredRig();
     const d: CliDeps = { ...rig.deps, daemonGet: async () => undefined };
     const result = await enroll({}, d);
-    expect(result.ok).toBe(false);
+    // `tacho enroll` exits 1 on a host that is not reporting (`main.ts`).
+    expect(result.shipping).toMatchObject({ healthy: false });
+    expect(result.shipping?.detail).toContain("tachod did not answer");
     expect(result.host?.host_enrollment_id).toBe(TEST_ENROLLMENT);
     expectDisarmed(rig);
     expect(result.warnings.join("\n")).toContain(
       "the model base URL was taken out of",
     );
-    expect(rig.errors.at(-1)).toContain("tachod is not running");
+    expect(rig.errors.at(-1)).toContain("it is not reporting");
+  });
+
+  it("fails a reassign whose new daemon never answers", async () => {
+    const rig = await brokeredRig();
+    const d: CliDeps = { ...rig.deps, daemonGet: async () => undefined };
+    const result = await reassign({ workspace: "edge" }, d);
+    expect(result.ok).toBe(false);
+    expect(result.to?.workspace).toBe("edge");
+    expectDisarmed(rig);
+    expect(rig.errors.at(-1)).toContain("it is not reporting");
+    expect(rig.lines.join("\n")).not.toContain("Reassigned");
   });
 
   it("disarms a healthy daemon whose proxy is not listening, and still succeeds", async () => {

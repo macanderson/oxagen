@@ -52,6 +52,28 @@ export const runPrDiffFileSchema = z
     patch: z.string().nullable(),
   })
   .strict();
+/**
+ * The issues a pull request closes on merge, as GitHub records them (closing
+ * keywords and sidebar links). Null when they could not be read, so an unread
+ * list never reads as "closes nothing".
+ */
+const runPrClosingIssuesSchema = z
+  .object({
+    issues: z.array(
+      z
+        .object({
+          owner: z.string(),
+          repo: z.string(),
+          number: z.number().int(),
+          title: z.string(),
+          url: z.string().url(),
+          state: z.enum(["open", "closed"]),
+        })
+        .strict(),
+    ),
+    complete: z.boolean(),
+  })
+  .strict();
 export const runWorkPrSchema = z
   .object({
     repository: runRepositorySchema,
@@ -62,6 +84,7 @@ export const runWorkPrSchema = z
     headSha: z.string().nullable(),
     headRef: z.string(),
     association: z.enum(["recorded", "head_commit", "branch"]),
+    closingIssues: runPrClosingIssuesSchema.nullable(),
     checkoutIds: z.array(z.string()),
     observedAt: z.string(),
     current: z.boolean(),
@@ -82,6 +105,21 @@ export const runWorkPrSchema = z
         limitations: z.array(z.string()),
       })
       .nullable(),
+  })
+  .strict();
+
+/**
+ * One subagent the session started, from its `subagent_start` and
+ * `subagent_stop` hook frames. `type` is the agent type the harness named;
+ * `stopped` is false while no stop frame has been recorded.
+ */
+export const runSubagentSchema = z
+  .object({
+    id: z.string(),
+    type: z.string().nullable(),
+    firstSeq: z.string(),
+    lastSeq: z.string(),
+    stopped: z.boolean(),
   })
   .strict();
 
@@ -110,6 +148,8 @@ export const runWorkGet = registerCapability({
       checkouts: z.array(runCheckoutSchema),
       diffs: z.array(runCapturedDiffSchema),
       pullRequests: z.array(runWorkPrSchema),
+      /** The subagents the session started; empty for a ledger run. */
+      subagents: z.array(runSubagentSchema),
       complete: z.boolean(),
       warnings: z.array(z.string()),
     })
@@ -120,4 +160,5 @@ export type RunRepository = z.output<typeof runRepositorySchema>;
 export type RunCheckout = z.output<typeof runCheckoutSchema>;
 export type RunCapturedDiff = z.output<typeof runCapturedDiffSchema>;
 export type RunWorkPr = z.output<typeof runWorkPrSchema>;
+export type RunSubagent = z.output<typeof runSubagentSchema>;
 export type RunWorkGetOutput = z.output<typeof runWorkGet.output>;

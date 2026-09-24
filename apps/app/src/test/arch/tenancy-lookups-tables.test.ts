@@ -22,11 +22,14 @@ const TABLES: Readonly<Record<string, readonly string[] | null>> = {
   orgUsers: null,
   workspaceUsers: null,
   orgSecurityPolicy: null,
-  users: ["id", "twoFactorEnabled"],
+  users: ["id", "twoFactorEnabled", "displayName"],
   invitations: null,
   // The require-SSO gate needs an organization's verified provider ids and
   // nothing else; oidcConfig and samlConfig hold sealed secrets (ADR-145).
   ssoProviderTable: ["providerId", "organizationId", "domainVerified"],
+  // The sign-up page states the Free plan's included allowance to a visitor
+  // with no session. The published terms belong to no tenant.
+  plans: ["slug", "includedGauPerMonth"],
 };
 
 const DATABASE_EXPORTS: readonly string[] = ["schema", "withSystemDb"];

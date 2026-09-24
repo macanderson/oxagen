@@ -381,6 +381,7 @@ describe("launchd with the label disabled in Login Items", () => {
   it("enables the label before bootstrap and ignores a failed enable", () => {
     const home = scratch();
     const calls: string[] = [];
+    let loaded = false;
     const manager = serviceManagerFor({
       platform: "darwin",
       home,
@@ -388,9 +389,12 @@ describe("launchd with the label disabled in Login Items", () => {
       sleep: () => undefined,
       exec: (command, args) => {
         calls.push([command, ...args].join(" "));
-        return args[0] === "enable"
-          ? { status: 1, stdout: "", stderr: "not permitted" }
-          : ok;
+        if (args[0] === "enable")
+          return { status: 1, stdout: "", stderr: "not permitted" };
+        if (args[0] === "bootstrap") loaded = true;
+        if (args[0] === "print")
+          return loaded ? ok : { ...ok, status: 113, stderr: "not found" };
+        return ok;
       },
     });
     manager.install(LINUX_SPEC);
@@ -410,7 +414,9 @@ describe("launchd with the label disabled in Login Items", () => {
       exec: (_command, args) =>
         args[0] === "bootstrap"
           ? { status: 5, stdout: "", stderr: "Bootstrap failed: 5" }
-          : ok,
+          : args[0] === "print"
+            ? { ...ok, status: 113, stderr: "not found" }
+            : ok,
     });
     expect(() => manager.install(LINUX_SPEC)).toThrow(
       /Bootstrap failed: 5.*launchctl print-disabled gui\/501/,

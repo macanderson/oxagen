@@ -59,9 +59,16 @@ insertValuesMock.mockReturnValue({
 
 const findFirstMock = vi.fn();
 
+// `.select().from().where().limit()`: the assistant-cap read.
+const selectLimitMock = vi.fn();
+const selectWhereMock = vi.fn().mockReturnValue({ limit: selectLimitMock });
+const selectFromMock = vi.fn().mockReturnValue({ where: selectWhereMock });
+const selectMock = vi.fn().mockReturnValue({ from: selectFromMock });
+
 const dbMocks = {
   insert: insertMock,
   update: updateMock,
+  select: selectMock,
   query: {
     orgBillingSettings: { findFirst: findFirstMock },
   },
@@ -92,7 +99,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 const {
   DEFAULT_ASSISTANT_SPEND_CAP_CENTS,
   getOrgBillingSettings,
+  readAssistantSpendCap,
   readOrgBillingSettings,
+  setAssistantSpendCap,
   setAutoTopup,
   setOrgBillingTerms,
   updateAssistantSpendCap,
@@ -738,4 +747,76 @@ describe("the Free-tier auto top-up default", () => {
     expect(settings.approvedForInvoiceBilling).toBe(false);
     expect(insertMock).not.toHaveBeenCalled();
   });
+});
+
+// ---------------------------------------------------------------------------
+// The assistant spend cap on a system transaction (the platform operator's
+// two paths: set_org_billing_terms and a prepaid order's credits grant)
+// ---------------------------------------------------------------------------
+
+describe("readAssistantSpendCap / setAssistantSpendCap", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    insertValuesMock.mockReturnValue({
+      onConflictDoNothing: insertOnConflictDoNothingMock,
+      onConflictDoUpdate: onConflictDoUpdateMock,
+    });
+    onConflictDoUpdateMock.mockReturnValue({ returning: upsertReturningMock });
+    selectWhereMock.mockReturnValue({ limit: selectLimitMock });
+    selectFromMock.mockReturnValue({ where: selectWhereMock });
+    selectMock.mockReturnValue({ from: selectFromMock });
+  });
+
+  it("reads the stored cap on withSystemDb, and the column default for an org with no row", async () => {
+    selectLimitMock.mockResolvedValueOnce([{ capCents: 600_000n }]);
+    expect(await readAssistantSpendCap("org-001")).toBe(600_000);
+
+    selectLimitMock.mockResolvedValueOnce([{ capCents: null }]);
+    expect(await readAssistantSpendCap("org-001")).toBeNull();
+
+    selectLimitMock.mockResolvedValueOnce([]);
+    expect(await readAssistantSpendCap("org-001")).toBe(
+      DEFAULT_ASSISTANT_SPEND_CAP_CENTS,
+    );
+    expect(withSystemDb).toHaveBeenCalledTimes(3);
+    expect(withTenantDb).not.toHaveBeenCalled();
+    expect(insertMock).not.toHaveBeenCalled();
+  });
+
+  it("upserts the cap keyed on org_id, setting only the cap, and returns what was stored", async () => {
+    upsertReturningMock.mockResolvedValue([{ capCents: 600_000n }]);
+
+    expect(await setAssistantSpendCap("org-001", 600_000)).toBe(600_000);
+
+    expect(insertValuesMock).toHaveBeenCalledWith({
+      orgId: "org-001",
+      assistantSpendCapCents: 600_000n,
+    });
+    expect(onConflictDoUpdateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ target: schema.orgBillingSettings.orgId }),
+    );
+    expect(upsertSetColumns()).toEqual(["assistantSpendCapCents", "updatedAt"]);
+    expect(withSystemDb).toHaveBeenCalledOnce();
+    expect(withTenantDb).not.toHaveBeenCalled();
+  });
+
+  it("removes the cap with null", async () => {
+    upsertReturningMock.mockResolvedValue([{ capCents: null }]);
+
+    expect(await setAssistantSpendCap("org-001", null)).toBeNull();
+    expect(insertValuesMock).toHaveBeenCalledWith({
+      orgId: "org-001",
+      assistantSpendCapCents: null,
+    });
+  });
+
+  it.each([-1, 2.5, Number.MAX_SAFE_INTEGER + 1])(
+    "refuses a cap of %s before any write",
+    async (cap) => {
+      await expect(setAssistantSpendCap("org-001", cap)).rejects.toThrow(
+        /non-negative integer or null/,
+      );
+      expect(insertMock).not.toHaveBeenCalled();
+    },
+  );
 });

@@ -25,8 +25,10 @@ export interface WorkPrDeps {
       GitHubClient,
       | "listPullRequests"
       | "getPullRequest"
+      | "listClosingIssues"
       | "listCiChecks"
       | "listPullRequestFiles"
+      | "getRepoInfo"
     >
   >;
   now: () => string;
@@ -82,6 +84,7 @@ export async function readWorkPullRequests(
     });
   }
   const seenBranches = new Map<string, string[]>();
+  const defaultBranches = new Map<string, string>();
   let discoveries = 0;
   for (const { checkout, recorded: receipt } of targets) {
     const repo = repositories.find(
@@ -113,6 +116,24 @@ export async function readWorkPullRequests(
     seenBranches.set(discoveryKey, discovered);
     try {
       const gh = await deps.client(scope, repo);
+      // Every PR opened from a repository's default branch has that branch as
+      // its head, so a checkout on `main` matched whatever PR anyone ever
+      // opened from `main`, and a session started today showed one from July.
+      // A checkout on the default branch or a detached HEAD names no work of
+      // its own. Only a recorded receipt links a PR to it.
+      if (!receipt && checkout.branch) {
+        let defaultBranch = defaultBranches.get(repo.url);
+        if (defaultBranch === undefined) {
+          defaultBranch = (
+            await gh.getRepoInfo({ owner: repo.owner, repo: repo.name })
+          ).defaultBranch;
+          defaultBranches.set(repo.url, defaultBranch);
+        }
+        if (checkout.branch === defaultBranch || checkout.branch === "HEAD") {
+          warnings.add("default_branch_not_linked");
+          continue;
+        }
+      }
       const prs = receipt
         ? [{ number: receipt.number }]
         : await gh.listPullRequests({
@@ -142,6 +163,16 @@ export async function readWorkPullRequests(
           number: listed.number,
         };
         const pr = await gh.getPullRequest(input);
+        // What the PR closes is GitHub's own record of it, so it can name the
+        // run's task without anything guessed from a branch or a title. A
+        // failed read is null and a warning, never an empty list.
+        let closingIssues: RunWorkPr["closingIssues"] = null;
+        try {
+          closingIssues = await gh.listClosingIssues(input);
+          if (!closingIssues.complete) warnings.add("closing_issue_limit");
+        } catch {
+          warnings.add("closing_issues_read_failed");
+        }
         let ci: RunWorkPr["ci"] = null;
         let diff: RunWorkPr["diff"] = null;
         let current = false;
@@ -224,6 +255,7 @@ export async function readWorkPullRequests(
             : checkout.headSha === pr.headSha
               ? "head_commit"
               : "branch",
+          closingIssues,
           checkoutIds: checkout.id ? [checkout.id] : [],
           observedAt: deps.now(),
           current,

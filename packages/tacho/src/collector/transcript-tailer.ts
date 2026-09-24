@@ -283,23 +283,31 @@ export class TranscriptTailer {
   }
 
   /**
-   * A resume reopens a sealed session, and its drained cursor with it: the
+   * A resume reopens a sealed session, and its cursor with it: the
    * transcript is read again from where the cursor stopped. Left drained,
-   * every model call the resumed session made was lost. Only the read
-   * position carries over, nothing the sealed session left on the cursor.
-   * A cursor that never read its file (the one `tick` makes for a sealed
-   * session it holds none for) does not know where the recorded part ends,
-   * so it stays final rather than feed the whole transcript a second time.
+   * every model call the resumed session made was lost. A cursor still in
+   * its quiet grace kept the sealed session's `sealedQuietSinceMs`, and the
+   * next seal drained it with no grace at all. Only the read position
+   * carries over, nothing the sealed session left on the cursor.
+   * A drained cursor that never read its file (the one `tick` makes for a
+   * sealed session it holds none for) does not know where the recorded part
+   * ends, so it stays final rather than feed the whole transcript a second
+   * time.
    */
   private reopenIfResumed(session: TailedSession): void {
     if (session.sealed) return;
     const key = this.cursorKey(session);
     const cursor = this.cursors.get(key) ?? this.adoptLegacy(session, key);
-    if (cursor?.drained !== true || cursor.ino === undefined) return;
+    if (cursor === undefined) return;
+    const reopens =
+      cursor.drained === true
+        ? cursor.ino !== undefined
+        : cursor.sealedQuietSinceMs !== undefined;
+    if (!reopens) return;
     this.cursors.set(key, {
       path: cursor.path,
       offset: cursor.offset,
-      ino: cursor.ino,
+      ...(cursor.ino !== undefined ? { ino: cursor.ino } : {}),
       ...(cursor.head !== undefined ? { head: cursor.head } : {}),
       subagents: cursor.subagents,
     });

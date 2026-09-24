@@ -130,8 +130,9 @@ export function mapMandateToBundlePermissions(input: {
 /**
  * The agent-definition `budget` table an agent's active version config
  * carries. `perRunMicros` is this mandate's session budget (one tacho host
- * session is one run of the wrapped harness). `perDayMicros` is read so the
- * figure is not lost, and signs nothing: see `deriveBundleBudget`.
+ * session is one run of the wrapped harness). `perDayMicros` is the agent's
+ * ceiling for one UTC day (ADR-160), signed only to a host that enforces it:
+ * see `deriveBundleBudget`.
  */
 export interface AgentBudgetDoc {
   perRunMicros?: number;
@@ -177,26 +178,35 @@ function microsToUsd(micros: number): number {
 
 /**
  * `budget.mode` is `"enforced"` only when the agent's own definition
- * declares a per-run figure; otherwise `"observed"`, with no limit fields at
- * all. No default limit is invented for a mandate that named none: that
- * would be a ceiling nobody set, enforced anyway.
+ * declares a ceiling the host will enforce; otherwise `"observed"`, with no
+ * limit fields at all. No default limit is invented for a mandate that named
+ * none: that would be a ceiling nobody set, enforced anyway.
  *
- * `per_day_micros` is never signed as `daily_limit_usd` (#3728). The loopback
- * proxy refuses against `session_limit_usd` only (`refusalFor`,
- * `packages/tacho/src/collector/model-proxy.ts`), and its pricing path is
- * session-scoped by construction. A signed daily ceiling would be delivered,
- * validated, and refuse nothing, and a mandate carrying only that ceiling
- * would read `"enforced"` while enforcing nothing. Signing it again waits on
- * a day-scoped counter seeded by the control plane and a decision about what
- * a day is for a host asleep across midnight or in another timezone.
+ * `per_day_micros` is signed as `daily_limit_usd` only when `enforcesDaily`
+ * says the host advertised `BUNDLE_FEATURE_DAILY_BUDGET` (ADR-160). An older
+ * host parses the field and refuses nothing against it, so signing it there
+ * would deliver a ceiling that holds nowhere and, for a mandate carrying only
+ * that ceiling, read `"enforced"` while enforcing nothing (#3728).
  */
 export function deriveBundleBudget(
   doc: AgentBudgetDoc | undefined,
+  options: { enforcesDaily?: boolean } = {},
 ): PolicyBundle["budget"] {
   const sessionUsd =
     doc?.perRunMicros !== undefined && doc.perRunMicros > 0
       ? microsToUsd(doc.perRunMicros)
       : undefined;
-  if (sessionUsd === undefined) return { mode: "observed" };
-  return { mode: "enforced", session_limit_usd: sessionUsd };
+  const dailyUsd =
+    options.enforcesDaily === true &&
+    doc?.perDayMicros !== undefined &&
+    doc.perDayMicros > 0
+      ? microsToUsd(doc.perDayMicros)
+      : undefined;
+  if (sessionUsd === undefined && dailyUsd === undefined)
+    return { mode: "observed" };
+  return {
+    mode: "enforced",
+    ...(sessionUsd !== undefined ? { session_limit_usd: sessionUsd } : {}),
+    ...(dailyUsd !== undefined ? { daily_limit_usd: dailyUsd } : {}),
+  };
 }

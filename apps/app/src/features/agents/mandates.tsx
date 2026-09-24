@@ -69,12 +69,75 @@ import { routes } from "@/shared/safe-path";
 import { linkText, mono, panel } from "@/ui/control-styles";
 import { MandateAuthorityList } from "@/ui/mandate-authority";
 import { MandateScope } from "@/ui/mandate-scope";
+import { Badge } from "@/ui/badge";
 import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
 import { RequestMandate } from "./mandate-request";
 import { useFormatter } from "@/ui/formatter";
 
-type Place = { org: string; ws: string; agentId: string; agentSlug: string };
+type Place = {
+  org: string;
+  ws: string;
+  agentId: string;
+  agentSlug: string;
+  /** Named in the denial chain's mandate lookup; null when the store records none. */
+  agentKey: string | null;
+};
+
+/**
+ * The four steps a financial call from an agent with no mandate takes (spec
+ * pages/agent.md, "No mandate"): the call, its financial class, the lookup
+ * that finds nothing, and the decision. It describes the pipeline, so it
+ * names no amount and no tool the record does not hold.
+ */
+function DenialChain({ agentKey }: { agentKey: string | null }) {
+  const t = useTranslations("agents.mandates.chain");
+  const steps = [
+    { key: "call", body: t("callValue") },
+    { key: "financial", body: t("financialValue") },
+    {
+      key: "lookup",
+      body: t("lookupValue", { agent: agentKey ?? t("thisAgent") }),
+    },
+    { key: "decision", body: t("decisionValue") },
+  ] as const;
+  return (
+    <ol
+      aria-label={t("label")}
+      data-testid="denial-chain"
+      className="flex flex-col gap-2"
+    >
+      {steps.map((step, index) => (
+        <li
+          key={step.key}
+          className="flex gap-3 rounded-lg border border-border bg-hl px-3 py-2"
+        >
+          <span
+            aria-hidden="true"
+            className="grid size-5 shrink-0 place-items-center rounded-full border border-border text-[11px] text-dim"
+          >
+            {index + 1}
+          </span>
+          <span className="flex min-w-0 flex-col">
+            <span className="text-[10.5px] font-semibold uppercase tracking-[0.09em] text-dim">
+              {t(step.key)}
+            </span>
+            <span className="text-[13px]">
+              {step.key === "decision" ? (
+                <>
+                  <Badge tone="denied">{t("denied")}</Badge>{" "}
+                  <span className={mono}>{t("noMandate")}</span> {step.body}
+                </>
+              ) : (
+                step.body
+              )}
+            </span>
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+}
 
 const COLUMNS = [
   "mandate",
@@ -138,6 +201,17 @@ export function MandatesSection({
             {t("lead")}
           </p>
         </div>
+        {read.ok && blindSpot === null ? (
+          effective.length === 0 ? (
+            <Badge tone="proven" data-testid="mandate-badge">
+              {t("cannotMove")}
+            </Badge>
+          ) : (
+            <Badge tone="approval" data-testid="mandate-badge">
+              {t("active", { count: effective.length })}
+            </Badge>
+          )
+        ) : null}
         {retired ? (
           <p
             data-state="retired"
@@ -184,6 +258,9 @@ export function MandatesSection({
                 <p className="text-xs text-muted-foreground">
                   {blindSpot === null ? t("noneDetail") : t("noneListedDetail")}
                 </p>
+                {blindSpot === null ? (
+                  <DenialChain agentKey={place.agentKey} />
+                ) : null}
               </div>
             )}
             {held.length === 0 ? null : (

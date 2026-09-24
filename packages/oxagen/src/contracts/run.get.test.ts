@@ -58,6 +58,7 @@ describe("get_run contract", () => {
       // from a field the shape never had.
       operatorKind: "human",
       operatorName: "Marcus Bell",
+      operatorAttribution: "initiator",
       status: "live",
       outcome: "running",
       turns: null,
@@ -69,6 +70,7 @@ describe("get_run contract", () => {
       taskRef: "fix the flaky test",
       startedAt: "2026-09-08T10:06:03.000Z",
       sealedAt: null,
+      endedAt: null,
       replayGrade: null,
       verdict: null,
       enforcementTier: "harness",

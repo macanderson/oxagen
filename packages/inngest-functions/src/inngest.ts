@@ -1,6 +1,7 @@
 import { Inngest, EventSchemas } from "inngest";
 import { requireEnv, normalizeEnv } from "@oxagen/config/env";
 import { z } from "zod";
+import { INNGEST_APP_ID } from "./app-id";
 
 // Inngest event registry: the intended catalogue of every event the runner
 // sends or triggers on.
@@ -222,7 +223,7 @@ function getInngest(): ConcreteInngestClient {
   if (!_inngest) {
     const env = resolveInngestEnv();
     _inngest = new Inngest({
-      id: "oxagen-runner",
+      id: INNGEST_APP_ID,
       eventKey: env.INNGEST_EVENT_KEY,
       schemas: new EventSchemas().fromRecord<Events>(),
     }) as ConcreteInngestClient;

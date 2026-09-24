@@ -1,20 +1,38 @@
 "use client";
-// Log in (mockup `obLogin` @ mc-baseline-w1). Validates in the browser, then
-// signs in through Better Auth. The destination is the sanitised `next` the
-// page passed down, and the SSO entry above the password form sends a single
-// sign-on to the same place.
+// Log in (mockup `obLogin`). The page hands over its header and footer so the
+// suspended state can replace all three with one full card, the way the design
+// does (who suspended the account, and when, is not recorded yet: #3885).
+// Validates in the browser, then signs in through Better Auth. The
+// destination is the sanitised `next` the page passed down, and the SSO entry
+// under the card sends a single sign-on to the same place.
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { type SyntheticEvent, useState } from "react";
+import {
+  type ReactNode,
+  type SyntheticEvent,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import type { AuthOutcomeKey } from "./auth-errors";
-import { liveSignIn, rememberPendingNext } from "./auth-client";
+import {
+  liveSignIn,
+  rememberPendingEmail,
+  rememberPendingNext,
+  rememberSignedIn,
+  takeNotice,
+  takeSignedIn,
+} from "./auth-client";
 import { routes, type SafePath } from "@/shared/safe-path";
 import { useNavigate } from "@/ui/navigation";
 import { type FieldErrors, LoginSchema, fieldErrors } from "./schemas";
 import { Field, PasswordField } from "@/ui/field";
-import { FormAlert, SubmitButton } from "@/ui/form-feedback";
-import { linkText, panel } from "@/ui/control-styles";
+import { OutcomePanel, SubmitButton } from "@/ui/form-feedback";
+import { linkText, mono } from "@/ui/control-styles";
+import { ToastStack, useToasts } from "@/ui/toast";
 import { formText } from "./form-text";
+import { AuthAlert, AuthPanel } from "./ui/auth-card";
+import { OAuthButtons } from "./ui/oauth-buttons";
 import { SsoSignIn } from "./ui/sso-sign-in";
 
 export type LoginFormProps = {
@@ -25,6 +43,10 @@ export type LoginFormProps = {
    * organization requires SSO.
    */
   ssoRequired?: boolean;
+  /** The page's header; the suspended state replaces it. */
+  header?: ReactNode;
+  /** The page's footer; the suspended state replaces it. */
+  footer?: ReactNode;
 };
 
 /** Outcomes that belong to the SSO entry rather than the password form. */
@@ -38,6 +60,8 @@ export function LoginForm({
   next,
   initialOutcome = null,
   ssoRequired = false,
+  header = null,
+  footer = null,
 }: LoginFormProps) {
   const t = useTranslations("auth");
   const navigate = useNavigate();
@@ -50,6 +74,22 @@ export function LoginForm({
     initialSso === null ? initialOutcome : null,
   );
   const [pending, setPending] = useState(false);
+  const [email, setEmail] = useState("");
+  const { toasts, toast } = useToasts();
+
+  // A notice another screen left (a password just set) shows once as a toast,
+  // after hydration, the way the design's `toast()` does (reset-password.md,
+  // Functionality). The ref keeps a development double-run from taking it
+  // twice. A signed-in mark found here belongs to a sign-in that came back
+  // failed (a provider round-trip lands on /login?error=), so it is dropped.
+  const tookRef = useRef(false);
+  useEffect(() => {
+    if (tookRef.current) return;
+    tookRef.current = true;
+    if (takeNotice() === "passwordSet")
+      toast(t("login.passwordSet"), "allowed");
+    takeSignedIn();
+  }, [t, toast]);
 
   async function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -67,9 +107,11 @@ export function LoginForm({
       return;
     }
     setErrors({});
+    setEmail(parsed.data.email);
     setPending(true);
     try {
       rememberPendingNext(next);
+      rememberPendingEmail(parsed.data.email);
       const result = await liveSignIn(parsed.data);
       if (!result.ok) {
         if (result.outcome === "emailNotVerified") {
@@ -79,7 +121,13 @@ export function LoginForm({
         setOutcome(result.outcome);
         return;
       }
-      navigate.replace(result.twoFactor ? routes.twoFactor(next) : next);
+      if (result.twoFactor) {
+        navigate.replace(routes.twoFactor(next));
+        return;
+      }
+      // The destination shows "Signed in as …" once (SignedInToast).
+      rememberSignedIn();
+      navigate.replace(next);
     } catch {
       setOutcome("unavailable");
     } finally {
@@ -87,68 +135,108 @@ export function LoginForm({
     }
   }
 
+  if (outcome === "suspended") {
+    return (
+      <OutcomePanel
+        tone="deny"
+        testId="login-suspended"
+        title={t("login.suspendedTitle")}
+        // A submit replaced the form (the address is set then); a suspension
+        // carried in on the query opens on this card and keeps focus put.
+        announce={email !== ""}
+      >
+        {email
+          ? t.rich("login.suspendedBody", {
+              email,
+              mono: (chunks) => <span className={mono}>{chunks}</span>,
+            })
+          : t("login.suspendedBodyNoEmail")}
+      </OutcomePanel>
+    );
+  }
+
   // A password refused because the organization requires SSO opens the SSO
   // entry too; the key remounts it so it starts open.
   const ssoOpen = ssoRequired || outcome === "ssoRequired";
+  const credentialsWrong = outcome === "wrongCredentials";
+
+  // Single sign-on is not in the design's card, which runs Google, GitHub,
+  // the rule, then the password form. It sits under the card, or above it when
+  // the organization requires it or the password was refused for it, so the
+  // way in that works is the first thing on the screen.
+  const sso = (
+    <SsoSignIn
+      key={ssoOpen ? "open" : "closed"}
+      callbackURL={next}
+      required={ssoRequired}
+      initialOutcome={initialSso}
+      startOpen={ssoOpen}
+    />
+  );
 
   return (
-    <div className="flex flex-col gap-4">
-      <SsoSignIn
-        key={ssoOpen ? "open" : "closed"}
-        callbackURL={next}
-        required={ssoRequired}
-        initialOutcome={initialSso}
-        startOpen={ssoOpen}
-      />
-      <form
-        noValidate
-        aria-label={t("login.title")}
-        onSubmit={(e) => void onSubmit(e)}
-        className={`${panel} flex flex-col gap-4 p-5 sm:p-6`}
-      >
+    <>
+      {header}
+      {ssoOpen ? sso : null}
+      <AuthPanel testId="login-card">
         {outcome ? (
-          <FormAlert testId="login-outcome">
-            {t(`outcomes.${outcome}`)}
-          </FormAlert>
-        ) : null}
-        <Field
-          id="login-email"
-          name="email"
-          type="email"
-          autoComplete="username"
-          inputMode="email"
-          label={t("fields.email")}
-          error={errors.email ? t(`errors.${errors.email}`) : undefined}
-        />
-        <PasswordField
-          id="login-password"
-          name="password"
-          autoComplete="current-password"
-          label={t("fields.password")}
-          showLabel={t("fields.showPassword")}
-          hideLabel={t("fields.hidePassword")}
-          labelAside={
-            <Link href="/forgot-password" className={`${linkText} text-xs`}>
-              {t("login.forgot")}
-            </Link>
-          }
-          error={errors.password ? t(`errors.${errors.password}`) : undefined}
-        />
-        <label className="flex items-start gap-2.5 text-sm text-foreground">
-          <input
-            type="checkbox"
-            name="rememberMe"
-            defaultChecked
-            className="mt-0.5 size-4 accent-primary"
+          <AuthAlert
+            testId="login-outcome"
+            message={t(`outcomes.${outcome}`)}
           />
-          <span>{t("fields.rememberMe")}</span>
-        </label>
-        <SubmitButton
-          pending={pending}
-          label={t("login.submit")}
-          pendingLabel={t("login.pending")}
-        />
-      </form>
-    </div>
+        ) : null}
+        <OAuthButtons callbackURL={next} announceSignIn />
+        <form
+          noValidate
+          aria-label={t("login.title")}
+          onSubmit={(e) => void onSubmit(e)}
+          className="flex flex-col gap-3.5"
+        >
+          <Field
+            id="login-email"
+            name="email"
+            type="email"
+            autoComplete="username"
+            inputMode="email"
+            label={t("fields.email")}
+            error={errors.email ? t(`errors.${errors.email}`) : undefined}
+            aria-invalid={
+              errors.email !== undefined || credentialsWrong ? true : undefined
+            }
+          />
+          <PasswordField
+            id="login-password"
+            name="password"
+            autoComplete="current-password"
+            label={t("fields.password")}
+            showLabel={t("fields.showPassword")}
+            hideLabel={t("fields.hidePassword")}
+            labelAside={
+              <Link href="/forgot-password" className={`${linkText} text-xs`}>
+                {t("login.forgot")}
+              </Link>
+            }
+            error={errors.password ? t(`errors.${errors.password}`) : undefined}
+          />
+          <label className="flex cursor-pointer items-start gap-[9px] text-[13px] text-foreground">
+            <input
+              type="checkbox"
+              name="rememberMe"
+              defaultChecked
+              className="mt-0.5 size-4 accent-primary"
+            />
+            <span>{t("fields.rememberMe")}</span>
+          </label>
+          <SubmitButton
+            pending={pending}
+            label={t("login.submit")}
+            pendingLabel={t("login.pending")}
+          />
+        </form>
+      </AuthPanel>
+      {ssoOpen ? null : sso}
+      {footer}
+      <ToastStack toasts={toasts} testId="login-toasts" />
+    </>
   );
 }

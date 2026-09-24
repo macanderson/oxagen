@@ -1169,15 +1169,16 @@ describe("the in-code card alone, with no catalog response", () => {
       "claude-opus-4.8",
       "anthropic/claude-opus-4.8",
     ]);
-    // Neither a single-segment release nor an already-dotted one derives.
+    // A single-segment release derives nothing.
     expect(aliasesOf.get("claude-opus-4")).toEqual([]);
     expect(aliasesOf.get("gpt-5")).toEqual([]);
-    expect(aliasesOf.get("gpt-5.2")).toEqual([]);
-    expect(aliasesOf.get("gpt-5.5")).toEqual([]);
     expect(aliasesOf.get("grok-4")).toEqual([]);
-    expect(aliasesOf.get("grok-4.3")).toEqual([]);
     expect(aliasesOf.get("glm")).toEqual([]);
-    expect(aliasesOf.get("glm-5.2")).toEqual([]);
+    // A dotted release gains only its hyphenated spelling, never the family.
+    expect(aliasesOf.get("gpt-5.2")).toEqual(["gpt-5-2", "openai/gpt-5-2"]);
+    expect(aliasesOf.get("gpt-5.5")).toEqual(["gpt-5-5", "openai/gpt-5-5"]);
+    expect(aliasesOf.get("grok-4.3")).toEqual(["grok-4-3", "xai/grok-4-3"]);
+    expect(aliasesOf.get("glm-5.2")).toEqual(["glm-5-2", "zai/glm-5-2"]);
     // A word tail is not a release number.
     expect(aliasesOf.get("gpt-5-mini")).toEqual([]);
     expect(aliasesOf.get("gpt-4o-mini")).toEqual([]);
@@ -1206,8 +1207,7 @@ describe("the in-code card alone, with no catalog response", () => {
       ["grok-4.5", "grok-4.5", 2.0],
       ["glm", "glm", 0.95],
       ["glm-5.2", "glm-5.2", 1.4],
-      // Opus 4 keeps the original rate and Opus 4.8 lists at a third of it,
-      // so a frame priced by the family row would read three times too high.
+      // Legacy Opus 4 keeps $15. Opus 4.8 is $5 (#3944).
       ["claude-opus-4", "claude-opus-4", 15.0],
       ["claude-opus-4-8", "claude-opus-4-8", 5.0],
       ["claude-opus-4.8", "claude-opus-4-8", 5.0],
@@ -1217,5 +1217,93 @@ describe("the in-code card alone, with no catalog response", () => {
       expect(entry?.model, modelId).toBe(expectedRow);
       expect(entry?.microsPerMillion, modelId).toBe(usdPerMillionToMicros(usd));
     }
+  });
+});
+
+// Opus 5.5 run costs came back `estimated` or blank. Claude Code reports the
+// model as `claude-opus-5-5`; OpenRouter publishes `anthropic/claude-opus-5.5`
+// and models.dev's `anthropic` provider publishes `claude-opus-5-5`. The
+// OpenRouter row carried only the dotted spelling and claimed it first, so the
+// merge dropped the models.dev row as a duplicate and no row priced the
+// hyphenated id. The catalog rows below are the published shapes as of
+// 2026-09-23 (issue #4024).
+describe("a dotted catalog id prices its hyphenated spelling", () => {
+  const ORG = "00000000-0000-4000-8000-000000000001";
+  const AT = new Date("2026-09-22T12:00:00.000Z");
+
+  function book(): PriceEntry[] {
+    const openRouter = parseOpenRouterCatalog({
+      data: [
+        {
+          id: "anthropic/claude-opus-5.5",
+          canonical_slug: "anthropic/claude-opus-5.5-20260921",
+          pricing: {
+            prompt: "0.000004",
+            completion: "0.00002",
+            input_cache_read: "0.0000002",
+            input_cache_write: "0.000005",
+          },
+        },
+      ],
+    });
+    const modelsDev = parseModelsDevCatalog({
+      anthropic: {
+        id: "anthropic",
+        models: {
+          "claude-opus-5-5": {
+            id: "claude-opus-5-5",
+            cost: { input: 4, output: 20, cache_read: 0.2, cache_write: 5 },
+          },
+        },
+      },
+    });
+    const merged = mergePublishedPrices([
+      inCodeCardPrices(),
+      openRouter,
+      modelsDev,
+    ]);
+    return seedsFromPublishedPrices(merged.prices, FROM).map((s, i) => ({
+      ...s,
+      id: `e-${i}`,
+      orgId: null,
+      source: "list" as const,
+    }));
+  }
+
+  it("prices every token class of claude-opus-5-5", () => {
+    const entries = book();
+    const expected = {
+      input_uncached: 4,
+      cache_read: 0.2,
+      cache_write_5m: 5,
+      cache_write_1h: 8,
+      output: 20,
+      reasoning: 20,
+    } as const;
+    for (const [tokenClass, usd] of Object.entries(expected)) {
+      const entry = resolvePriceEntry(entries, {
+        orgId: ORG,
+        modelId: "claude-opus-5-5",
+        tokenClass: tokenClass as keyof typeof expected,
+        at: AT,
+      });
+      expect(entry?.microsPerMillion, tokenClass).toBe(
+        usdPerMillionToMicros(usd),
+      );
+    }
+  });
+
+  it("gives the dotted catalog row the hyphenated alias", () => {
+    const [row] = parseOpenRouterCatalog({
+      data: [
+        {
+          id: "anthropic/claude-opus-5.5",
+          pricing: { prompt: "0.000004", completion: "0.00002" },
+        },
+      ],
+    });
+    expect(row?.aliases).toEqual(
+      expect.arrayContaining(["claude-opus-5-5", "anthropic/claude-opus-5-5"]),
+    );
   });
 });

@@ -15,7 +15,8 @@
       "next": "Pick a kind",
       "name": "Name",
       "slug": "Slug",
-      "slugHint": "The slug identifies this record and its file. You can edit it before publishing."
+      "slugHint": "The slug identifies this record and its file. You can edit it before publishing.",
+      "slugInvalid": "The slug needs at least two letters or digits from a to z or 0 to 9. Type a slug here if the name has none."
     },
     "kind": {
       "title": "What kind is it?",
@@ -205,6 +206,8 @@
       "governanceUnreadable": "The main repository’s .oxagen/rules/governance.toml could not be read, so Oxagen cannot tell who may merge. Fix it on the production branch, then try again.",
       "repositoryMissing": "This workspace has no main repository yet. Bind one in Workspace settings.",
       "githubRefused": "GitHub refused the write. Check the GitHub App’s access to the repository and try again.",
+      "gitlabRefused": "GitLab refused the write. Nothing was published. Check that the project access token still has the api scope and the Developer role, then try again.",
+      "gitlabCredentialRejected": "GitLab no longer accepts the project access token stored for this project. Nothing was changed. Connect the project again with a new token.",
       "baseMoved": "The production branch moved while the pull request was opening. Try again.",
       "proposalMoved": "Another change moved this proposal first. Open it on Context PRs to see where it stands.",
       "unanswered": "Oxagen did not answer. Try again.",

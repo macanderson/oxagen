@@ -251,14 +251,37 @@ describe("canonicalJson", () => {
     ["NaN", Number.NaN],
     ["Infinity", Number.POSITIVE_INFINITY],
     ["-Infinity", Number.NEGATIVE_INFINITY],
-    ["a float", 1.5],
-    ["an unsafe integer", Number.MAX_SAFE_INTEGER + 2],
   ])(
     "rejects %s rather than silently diverging the digest",
     (_label, value) => {
       expect(() => canonicalJson({ n: value })).toThrow(CanonicalJsonError);
     },
   );
+
+  // RFC 8785 section 3.2.2.3 writes a number the way ECMAScript's
+  // Number-to-String does. These vectors come from the RFC's appendix and
+  // from the contract default that used to be refused.
+  it.each([
+    ["a tenth", 0.1, "0.1"],
+    ["a half", 1.5, "1.5"],
+    ["negative zero", -0, "0"],
+    ["a large exponent", 1e21, "1e+21"],
+    ["the largest integer below the exponent form", 1e20, "100000000000000000000"],
+    ["a small exponent", 1e-7, "1e-7"],
+    ["the smallest non-exponent fraction", 0.000001, "0.000001"],
+    ["an unsafe integer", Number.MAX_SAFE_INTEGER + 2, "9007199254740992"],
+    ["the largest double", Number.MAX_VALUE, "1.7976931348623157e+308"],
+    ["the smallest subnormal", Number.MIN_VALUE, "5e-324"],
+    ["a repeating fraction", 1 / 3, "0.3333333333333333"],
+  ])("serializes %s as RFC 8785 requires", (_label, value, expected) => {
+    expect(canonicalJson(value)).toBe(expected);
+  });
+
+  it("canonicalizes a memory policy whose recall threshold defaults to 0.1", () => {
+    expect(canonicalJson({ recallThreshold: { default: 0.1, max: 1 } })).toBe(
+      '{"recallThreshold":{"default":0.1,"max":1}}',
+    );
+  });
 
   it("rejects undefined inside an array, where JSON.stringify would coerce to null", () => {
     expect(() => canonicalJson([1, undefined, 2])).toThrow(CanonicalJsonError);

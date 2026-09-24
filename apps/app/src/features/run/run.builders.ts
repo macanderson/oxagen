@@ -20,6 +20,7 @@ import type {
   ResolvedApprovalItem,
 } from "@/data/contracts/approvals";
 import type { MandateList } from "@/data/contracts/mandates";
+import type { RunWork as RunWorkView } from "@/data/contracts/run-work";
 import type { RunRow } from "@/data/contracts/runs";
 import type { DataSource } from "@/data/ports";
 import type { AgentDetail } from "@/data/contracts/agents";
@@ -556,6 +557,12 @@ type RunReads = {
    * drew on none must not reach.
    */
   mandates?: Read<MandateList>;
+  /**
+   * get_run_work, read with the page for the header's checkout and subagent
+   * strips and the Changes panel. A test that says nothing about it gets a
+   * run that recorded no checkout and no subagent.
+   */
+  work?: Read<RunWorkView>;
 };
 
 /** The agent read a test left out: refused, so nothing about the agent is invented. */
@@ -605,7 +612,12 @@ export function runSource(reads: RunReads) {
   const source: DataSource = {
     runtimes: { list: refuse, agents: refuse },
     pretenant: { orgs: refuse, workspaces: refuse },
-    shell: { context: refuse, preferences: refuse },
+    shell: {
+      context: refuse,
+      preferences: refuse,
+      counts: refuse,
+      notifications: refuse,
+    },
     runs: {
       list: refuse,
       outcomesSettings: () =>
@@ -619,15 +631,16 @@ export function runSource(reads: RunReads) {
         ),
       work: (_ctx, runId) =>
         Promise.resolve(
-          readOk({
-            runId,
-            machine: null,
-            checkouts: [],
-            diffs: [],
-            pullRequests: [],
-            complete: false,
-            warnings: ["checkout_context_not_recorded"],
-          }),
+          reads.work ??
+            readOk({
+              runId,
+              machine: null,
+              checkouts: [],
+              diffs: [],
+              pullRequests: [],
+              complete: false,
+              warnings: ["checkout_context_not_recorded"],
+            }),
         ),
       get: answer("get", reads.detail),
       frameBody: answer("frameBody", reads.frameBody),
@@ -655,6 +668,7 @@ export function runSource(reads: RunReads) {
         "resolvedApprovals",
         reads.resolvedApprovals ?? readOk([]),
       ),
+      resolvedSince: refuse,
     },
     agents: {
       list: refuse,
@@ -690,10 +704,17 @@ export function runSource(reads: RunReads) {
       apiKeys: refuse,
       costCenters: refuse,
       modelCredential: refuse,
+      dataPlane: refuse,
+      workspaceFacts: refuse,
       sso: refuse,
     },
     mandates: { list: answer("mandates", reads.mandates), get: refuse },
-    audit: { events: refuse, exportEvents: refuse },
+    audit: {
+      events: refuse,
+      exportEvents: refuse,
+      retention: refuse,
+      bundle: refuse,
+    },
     skills: { inventory: refuse, configuration: refuse },
     steering: {
       records: refuse,
@@ -701,7 +722,10 @@ export function runSource(reads: RunReads) {
       proposals: refuse,
       contextPr: refuse,
       freshness: refuse,
+      hub: refuse,
       deliveries: refuse,
+      memories: refuse,
+      tree: refuse,
     },
     tools: {
       versions: refuse,

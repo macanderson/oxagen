@@ -1,7 +1,8 @@
 /**
  * Codex spills a hook's `additionalContext` past about 2,500 tokens to a
- * file unless the handler sets `additionalContextLimit`. The two handlers
- * that answer with text set it high enough for the 9,500 characters the
+ * file unless the handler sets `additionalContextLimit`. The three handlers
+ * that answer with text (SessionStart, UserPromptSubmit and PostToolUse, where
+ * a steer lands mid-turn) set it high enough for the 9,500 characters the
  * daemon delivers at most; no other handler carries it, since Codex warns
  * about the key on an event that cannot produce context.
  */
@@ -22,11 +23,15 @@ const CONFIG = {
 };
 
 describe("the Codex additionalContext limit", () => {
-  it("is set on the SessionStart and UserPromptSubmit handlers only", () => {
+  it("is set on the handlers that answer with text only", () => {
     const entries = codexHookEntries(CONFIG);
     for (const event of CODEX_HOOK_EVENTS) {
       const hook = entries[event][0]?.hooks[0];
-      if (event === "SessionStart" || event === "UserPromptSubmit") {
+      if (
+        event === "SessionStart" ||
+        event === "UserPromptSubmit" ||
+        event === "PostToolUse"
+      ) {
         expect(hook).toMatchObject({
           type: "command",
           additionalContextLimit: 10_000,
@@ -42,7 +47,7 @@ describe("the Codex additionalContext limit", () => {
   it("rewrites an install from before the limit, and is idempotent after", () => {
     const merged = mergeCodexHooks(undefined, CONFIG).settings;
     const older = JSON.parse(JSON.stringify(merged)) as typeof merged;
-    for (const event of ["SessionStart", "UserPromptSubmit"]) {
+    for (const event of ["SessionStart", "UserPromptSubmit", "PostToolUse"]) {
       delete older.hooks![event]![0]!.hooks[0]!["additionalContextLimit"];
     }
     const upgraded = mergeCodexHooks(older, CONFIG);

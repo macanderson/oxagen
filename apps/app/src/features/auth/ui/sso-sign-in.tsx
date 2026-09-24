@@ -8,7 +8,8 @@
 //
 // `required` is set when requireViewer sent the person here because their
 // organization requires SSO and the session was not an SSO one: the entry
-// starts open under a notice saying why.
+// starts open under a notice saying why. LoginForm places the entry under the
+// card, or above it when it starts open.
 import { KeyRound } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useId, useState } from "react";
@@ -17,7 +18,7 @@ import { buttonSecondary, panel } from "@/ui/control-styles";
 import { Field } from "@/ui/field";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import type { AuthOutcomeKey } from "../auth-errors";
-import { liveSignInSso } from "../auth-client";
+import { liveSignInSso, rememberSignedIn, takeSignedIn } from "../auth-client";
 import { formText } from "../form-text";
 import { type FieldErrors, fieldErrors, SsoSignInSchema } from "../schemas";
 
@@ -61,18 +62,24 @@ export function SsoSignIn({
     }
     setErrors({});
     setPending(true);
+    // The destination shows "Signed in as …" once; a start that fails here
+    // drops the mark, and an identity-provider failure lands on /login, which
+    // drops it too.
+    rememberSignedIn();
     try {
       const result = await liveSignInSso({
         email: parsed.data.email,
         callbackURL,
       });
       if (!result.ok) {
+        takeSignedIn();
         setOutcome(result.outcome);
         setPending(false);
       }
       // On success Better Auth's client is already navigating to the identity
       // provider, so the button stays pending until the page unloads.
     } catch {
+      takeSignedIn();
       setOutcome("unavailable");
       setPending(false);
     }

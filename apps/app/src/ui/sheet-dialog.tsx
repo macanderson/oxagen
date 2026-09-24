@@ -2,8 +2,11 @@
 // A dialog (ARCHITECTURE.md §1.2, the phone shell): a centred modal on a wide
 // screen and, below the md breakpoint, a sheet risen from the bottom edge with
 // a drag handle, over a scrim, closed by a full-width footer button
-// (src/ui/phone.css keys on the data attributes set here).
+// (src/ui/phone.css keys on the data attributes set here). The header carries
+// the mockup's ✕ (`.dlg-h .iconbtn.x`) as well, named for the dialog it
+// closes, and it follows `dismissible` like the footer's Close.
 import { Dialog } from "@base-ui/react/dialog";
+import { X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { createContext, type ReactNode, use, useState } from "react";
 import { createPortal } from "react-dom";
@@ -39,7 +42,9 @@ export function SheetDialog({
   subtitle,
   tabs,
   footer,
+  footerNote,
   closeLabel,
+  headerClose = false,
   wide = false,
   side = false,
   dismissible = true,
@@ -56,8 +61,22 @@ export function SheetDialog({
   tabs?: ReactNode;
   /** Actions drawn before the Close button; the primary action goes here. */
   footer?: ReactNode;
+  /**
+   * A line at the start of the footer, before Close and the primary action:
+   * what the action will record or whom it reaches (the mockup's footer
+   * `<span class="grow">`). On a phone it takes a line of its own above the
+   * buttons (src/ui/phone.css).
+   */
+  footerNote?: ReactNode;
   /** What the dismiss button says when "Close" is not the word, such as "Cancel" beside a Save. */
   closeLabel?: string;
+  /**
+   * Every dialog carries the mockup's header ✕ (`.dlg-h .iconbtn.x`). By
+   * default it is named "Close {title}", because the footer's button is
+   * "Close" too. A dialog whose footer reads "Cancel" sets this, and the ✕
+   * takes the mockup's own name, "Close", so no two controls share a name.
+   */
+  headerClose?: boolean;
   /** The mockup's dialog width (600px) for editors that need two columns. */
   wide?: boolean;
   /** Organization activity opens beside the page on desktop. */
@@ -79,23 +98,40 @@ export function SheetDialog({
           data-scrim=""
           className="fixed inset-0 z-50 bg-overlay-scrim"
         />
+        {/* Base UI marks the popup role=dialog but never aria-modal. The
+            backdrop makes everything behind it inert, so the dialog is
+            modal and says so to assistive technology. */}
         <Dialog.Popup
+          aria-modal="true"
           data-sheet=""
           data-testid={testId}
           className={`fixed z-50 flex flex-col overflow-hidden border border-dialog-border bg-dialog-bg text-dialog-fg shadow-2xl ${side ? "inset-y-0 right-0 w-full max-w-lg" : `left-1/2 top-[12vh] max-h-[76dvh] w-[calc(100%-1.5rem)] -translate-x-1/2 rounded-xl ${wide ? "max-w-[600px]" : "max-w-md"}`}`}
         >
           <SheetHandle />
           <div
-            className={`border-b border-border px-4 pt-4 ${tabs ? "pb-0" : "pb-3"}`}
+            data-sheet-header=""
+            className={`flex items-start gap-3 border-b border-border px-4 pt-4 ${tabs ? "pb-0" : "pb-3"}`}
           >
-            <Dialog.Title className="text-base font-semibold">
-              {title}
-            </Dialog.Title>
-            {subtitle ? (
-              <Dialog.Description className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
-                {subtitle}
-              </Dialog.Description>
-            ) : null}
+            <div className="min-w-0 flex-1">
+              <Dialog.Title className="text-base font-semibold">
+                {title}
+              </Dialog.Title>
+              {subtitle ? (
+                <Dialog.Description className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
+                  {subtitle}
+                </Dialog.Description>
+              ) : null}
+            </div>
+            <Dialog.Close
+              disabled={!dismissible}
+              data-touch-target=""
+              data-dialog-dismiss=""
+              data-header-close=""
+              aria-label={headerClose ? t("close") : t("dismiss", { title })}
+              className="grid size-8 flex-none place-items-center rounded-lg border border-border bg-card text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50"
+            >
+              <X aria-hidden="true" className="size-3.5" />
+            </Dialog.Close>
           </div>
           {tabs ? <div className="px-4">{tabs}</div> : null}
           <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-3">
@@ -106,8 +142,16 @@ export function SheetDialog({
               sits under the thumb (src/ui/phone.css). */}
           <div
             data-sheet-footer=""
-            className="flex flex-wrap justify-end gap-2 border-t border-border px-4 py-3"
+            className="flex flex-wrap items-center justify-end gap-2 border-t border-border px-4 py-3"
           >
+            {footerNote === undefined ? null : (
+              <span
+                data-footer-note=""
+                className="min-w-0 grow text-[12.5px] text-muted-foreground"
+              >
+                {footerNote}
+              </span>
+            )}
             <Dialog.Close
               disabled={!dismissible}
               data-touch-target=""

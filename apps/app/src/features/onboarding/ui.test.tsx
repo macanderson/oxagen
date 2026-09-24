@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
-// The three islands of Register an agent, driven the way an operator drives
-// them: the name form's refusal and its credential shown once, the wrap step's
-// token mint and its continue, and the run step's re-read and repository bind.
-// Every write is answered ok and refused, so each refusal path renders its
-// sentence and changes nothing.
-import { act, cleanup, render, screen } from "@testing-library/react";
+// The client islands of Register an agent, driven the way an operator drives
+// them: the name form's live key, its refusal and its one write; the wrap
+// step's harness, OS and SDK tabs, the token and credential it issues, and its
+// continue; the run step's countdown to Fleet; Cancel before and after the
+// identity exists; and the Request access dialog. Every write is answered ok
+// and refused, so each refusal path renders its sentence and changes nothing.
+import { act, cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -17,13 +18,15 @@ const {
   registerAgent,
   issueEnrollmentToken,
   advanceOnboarding,
-  bindMainRepository,
+  cancelRegistration,
+  issueAgentCredential,
 } = vi.hoisted(() => ({
   router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
   registerAgent: vi.fn(),
   issueEnrollmentToken: vi.fn(),
   advanceOnboarding: vi.fn(),
-  bindMainRepository: vi.fn(),
+  cancelRegistration: vi.fn(),
+  issueAgentCredential: vi.fn(),
 }));
 vi.mock("next/link", () => ({
   default: ({ children, ...rest }: { children: ReactNode; href: string }) => (
@@ -35,20 +38,28 @@ vi.mock("./actions", () => ({
   registerAgent,
   issueEnrollmentToken,
   advanceOnboarding,
-  bindMainRepository,
+  bindMainRepository: vi.fn(),
+}));
+vi.mock("./register-actions", () => ({
+  cancelRegistration,
+  issueAgentCredential,
+  readRegisterPlace: vi.fn(),
 }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 
 const { RegisterAgentForm } = await import("./ui/register-form");
 const { WrapAgent } = await import("./ui/wrap-agent");
-const { FirstFrameStep } = await import("./ui/first-frame");
+const { OpenInFleet } = await import("./ui/first-frame");
+const { CancelRegistration } = await import("./ui/cancel-registration");
+const { RequestAccess } = await import("./ui/request-access");
 
 const ORG = "acme";
 const WS = "core-platform";
-const HERE = routes.register(ORG, WS, "run", { agent: "agt_releasebot" });
+const FLEET = routes.fleet(ORG, WS);
 const NEXT = routes.register(ORG, WS, "run", { agent: "agt_releasebot" });
-const BACK = routes.register(ORG, WS, "name");
+const BACK = routes.register(ORG, WS, "name", { agent: "agt_releasebot" });
+const PLACE = { keyPrefix: "a-intel.core", repository: "a-intel/platform" };
 
 const DENIED = {
   ok: false,
@@ -56,17 +67,35 @@ const DENIED = {
   code: "org_role_required",
 } as const;
 
-function renderForm() {
+function renderForm(
+  reserved: {
+    id: string;
+    slug: string;
+    harness: "claude-code" | "codex";
+  } | null = null,
+) {
   render(
     <IntlProvider>
-      <RegisterAgentForm org={ORG} ws={WS} />
+      <RegisterAgentForm
+        org={ORG}
+        ws={WS}
+        workspace="Core platform"
+        place={PLACE}
+        reserved={reserved}
+        wrap={
+          reserved === null
+            ? null
+            : routes.register(ORG, WS, "wrap", { agent: reserved.id })
+        }
+        fleet={FLEET}
+      />
     </IntlProvider>,
   );
 }
 
 function renderWrap(
-  gated: boolean,
-  harness: "claude-code" | "claude-agent-sdk" | "custom" | "stella",
+  harness: "claude-code" | "codex" | "cursor" | "stella" | "custom",
+  gated = false,
 ) {
   render(
     <IntlProvider>
@@ -75,49 +104,11 @@ function renderWrap(
         ws={WS}
         agentId="agt_releasebot"
         harness={harness}
+        credentialPrefix="oxa_ag_7f"
         gated={gated}
         back={BACK}
         next={NEXT}
-      />
-    </IntlProvider>,
-  );
-}
-
-function renderRun(
-  repository: { owner: string; name: string } | null,
-  host: { hostEnrollmentId: string } | null = null,
-) {
-  render(
-    <IntlProvider>
-      <FirstFrameStep
-        pollRevision="initial-read"
-        org={ORG}
-        ws={WS}
-        workspace="Core platform"
-        agentKey="acme.core.release-bot"
-        host={
-          host === null
-            ? null
-            : {
-                hostEnrollmentId: host.hostEnrollmentId,
-                enrolledAt: "2026-09-15T14:00:00.000Z",
-                lastHeartbeatAt: null,
-                hooksOk: null,
-              }
-        }
-        here={HERE}
-        repository={
-          repository === null
-            ? null
-            : {
-                provider: "github",
-                owner: repository.owner,
-                name: repository.name,
-              }
-        }
-        provisionalUntil={
-          repository === null ? null : "2026-09-29T00:00:00.000Z"
-        }
+        fleet={FLEET}
       />
     </IntlProvider>,
   );
@@ -127,6 +118,11 @@ beforeEach(() => {
   router.push.mockClear();
   router.replace.mockClear();
   router.refresh.mockClear();
+  registerAgent.mockReset();
+  issueEnrollmentToken.mockReset();
+  advanceOnboarding.mockReset();
+  cancelRegistration.mockReset();
+  issueAgentCredential.mockReset();
 });
 
 afterEach(async () => {
@@ -135,114 +131,354 @@ afterEach(async () => {
   cleanup();
 });
 
-describe("the name form", () => {
+describe("the name step", () => {
+  it("draws the four fields in the design's order with the hints verbatim", () => {
+    renderForm();
+    const labels = ["Slug", "Workspace", "Harness", "Model tier"];
+    for (const label of labels)
+      expect(screen.getByLabelText(label)).toBeInTheDocument();
+    expect(screen.getByLabelText("Workspace")).toHaveValue(
+      "Core platform · a-intel/platform",
+    );
+    expect(screen.getByLabelText("Workspace")).toHaveAttribute("readonly");
+    expect(screen.getByText(/Its definition file lands in/)).toHaveTextContent(
+      "Its definition file lands in .oxagen/agents/ in the main repo.",
+    );
+    expect(
+      screen.getByText(
+        "The harness calls the model with its own key. The tier is recorded on every frame.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByLabelText("Harness"))
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual([
+      "claude-code",
+      "codex",
+      "cursor",
+      "stella",
+      "claude-agent-sdk",
+      "custom",
+    ]);
+    expect(
+      within(screen.getByLabelText("Model tier"))
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual(["complex", "light"]);
+  });
+
+  it("says the model tier is not sent rather than sending it (NotBacked)", () => {
+    renderForm();
+    expect(screen.getByLabelText("Model tier")).toBeDisabled();
+    expect(screen.getByLabelText("Model tier")).toHaveAccessibleDescription(
+      /Oxagen stores no model tier at registration yet/,
+    );
+  });
+
+  it("rewrites the key in the hint and the note on every keystroke", async () => {
+    const user = userEvent.setup();
+    renderForm();
+    expect(
+      screen.getAllByTestId("register-key").map((k) => k.textContent),
+    ).toEqual(["a-intel.core.agent", "a-intel.core.agent"]);
+    await user.type(screen.getByLabelText("Slug"), "Perf Watch");
+    expect(
+      screen.getAllByTestId("register-key").map((k) => k.textContent),
+    ).toEqual(["a-intel.core.perf-watch", "a-intel.core.perf-watch"]);
+    expect(screen.getByTestId("register-note")).toHaveTextContent(
+      "Continue reserves a-intel.core.perf-watch by registering its identity.",
+    );
+  });
+
   it("refuses a slug the contract would refuse without calling the write (negative)", async () => {
     const user = userEvent.setup();
     renderForm();
-    await user.type(screen.getByLabelText("Slug"), "Release Bot");
-    await user.type(screen.getByLabelText("Display name"), "Release bot");
+    await user.type(screen.getByLabelText("Slug"), "Perf Watch");
     await user.click(screen.getByRole("button", { name: "Continue" }));
     expect(registerAgent).not.toHaveBeenCalled();
-    expect(
-      screen.getByText(/Use up to 18 lowercase letters/),
-    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Slug")).toHaveAttribute(
+      "aria-invalid",
+      "true",
+    );
   });
 
-  it("registers the agent and shows the credential once, with the wrap step to continue to", async () => {
+  it("reserves the key with the slug in words as the name and opens the wrap step", async () => {
+    const user = userEvent.setup();
+    const to = routes.register(ORG, WS, "wrap", { agent: "agt_perfwatch" });
     registerAgent.mockResolvedValue({
       ok: true,
       value: {
-        agentId: "agt_releasebot",
-        agentKey: "acme.core.release-bot",
-        secret: "oxa_ag_s3cr3t",
-        expiresAt: "2027-03-14T00:00:00.000Z",
-        to: NEXT,
+        agentId: "agt_perfwatch",
+        agentKey: "a-intel.core.perf-watch",
+        to,
       },
     });
-    const user = userEvent.setup();
     renderForm();
-    await user.type(screen.getByLabelText("Slug"), "release-bot");
-    await user.type(screen.getByLabelText("Display name"), "Release bot");
+    await user.type(screen.getByLabelText("Slug"), "perf-watch");
+    await user.selectOptions(screen.getByLabelText("Harness"), "codex");
     await user.click(screen.getByRole("button", { name: "Continue" }));
     expect(registerAgent).toHaveBeenCalledWith(ORG, WS, {
-      slug: "release-bot",
-      name: "Release bot",
+      slug: "perf-watch",
+      name: "Perf watch",
       description: "",
-      harness: "claude-code",
+      harness: "codex",
     });
-    expect(screen.getByTestId("agent-credential")).toHaveTextContent(
-      "oxa_ag_s3cr3t",
-    );
-    expect(
-      screen.getByRole("link", { name: "Continue to wrap" }),
-    ).toBeInTheDocument();
+    expect(router.push).toHaveBeenCalledWith(to);
   });
 
-  it("names a refusal and keeps the form (negative)", async () => {
-    registerAgent.mockResolvedValue(DENIED);
+  it("names a refusal and stays on the step (negative)", async () => {
     const user = userEvent.setup();
+    registerAgent.mockResolvedValue({
+      ok: false,
+      reason: "conflict",
+      code: "slug_taken",
+    });
     renderForm();
-    await user.type(screen.getByLabelText("Slug"), "release-bot");
-    await user.type(screen.getByLabelText("Display name"), "Release bot");
+    await user.type(screen.getByLabelText("Slug"), "perf-watch");
     await user.click(screen.getByRole("button", { name: "Continue" }));
     expect(screen.getByTestId("register-failure")).toHaveTextContent(
-      "This account may not register agents here",
+      "An agent in this workspace already holds that slug. Pick another.",
     );
-    expect(screen.queryByTestId("agent-credential")).toBeNull();
+    expect(router.push).not.toHaveBeenCalled();
+  });
+
+  it("shows a reserved key read-only and moves on without a second write", () => {
+    renderForm({ id: "agt_perfwatch", slug: "perf-watch", harness: "codex" });
+    expect(screen.getByLabelText("Slug")).toHaveAttribute("readonly");
+    expect(screen.getByLabelText("Harness")).toBeDisabled();
+    expect(screen.getByRole("link", { name: "Continue" })).toHaveAttribute(
+      "href",
+      "/acme/core-platform/register/wrap?agent=agt_perfwatch",
+    );
+    expect(screen.getByTestId("register-note")).toHaveTextContent(
+      "a-intel.core.perf-watch is reserved. Continue opens the wrap step.",
+    );
+  });
+
+  it("carries exactly one gold action, Continue, beside Cancel", () => {
+    renderForm();
+    expect(screen.getByTestId("register-cancel")).toHaveAttribute(
+      "href",
+      FLEET,
+    );
+    expect(
+      screen.getByRole("button", { name: "Continue" }).className,
+    ).toContain("bg-button-primary-bg");
+    expect(
+      document.querySelectorAll('[class*="bg-button-primary-bg"]'),
+    ).toHaveLength(1);
   });
 });
 
 describe("the wrap step", () => {
-  it("mints the one-time token and prints it with the command that uses it", async () => {
+  it("draws the four harness tabs with their sub-lines and opens on the recorded harness", () => {
+    renderWrap("codex");
+    const tabs = within(
+      screen.getByRole("tablist", { name: "How to wrap the agent" }),
+    ).getAllByRole("tab");
+    expect(tabs.map((tab) => tab.textContent)).toEqual([
+      "Claude Codeone command · harness",
+      "Codex CLIone command · harness",
+      "Cursorone command · harness",
+      "SDK agentyour process · harness",
+    ]);
+    expect(screen.getByRole("tab", { name: /Codex CLI/ })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByRole("tabpanel")).toHaveAttribute("data-tab", "codex");
+    expect(screen.getByText("or observe")).toBeInTheDocument();
+  });
+
+  it.each([
+    ["stella", "sdk"],
+    ["custom", "sdk"],
+    ["cursor", "cursor"],
+    ["claude-code", "claude-code"],
+  ] as const)("opens %s on the %s tab", (harness, tab) => {
+    renderWrap(harness);
+    expect(screen.getByRole("tabpanel")).toHaveAttribute("data-tab", tab);
+  });
+
+  it("shows the tier ladder with the recorded words and recommends Claude Code", () => {
+    renderWrap("claude-code");
+    const ladder = screen.getByTestId("tier-ladder");
+    expect(
+      [...ladder.querySelectorAll("[data-tier]")].map((b) => b.textContent),
+    ).toEqual(["harness", "gateway", "contained"]);
+    expect(within(ladder).getByText("This agent")).toBeInTheDocument();
+    expect(within(ladder).getByText("Next rung")).toBeInTheDocument();
+    expect(within(ladder).getByText("Top rung")).toBeInTheDocument();
+    expect(screen.getByText("recommended")).toBeInTheDocument();
+    expect(screen.queryByText("or observe")).not.toBeInTheDocument();
+  });
+
+  it("switches the panel with the arrow keys", async () => {
+    const user = userEvent.setup();
+    renderWrap("claude-code");
+    screen.getByRole("tab", { name: /Claude Code/ }).focus();
+    await user.keyboard("{ArrowRight}");
+    expect(screen.getByRole("tabpanel")).toHaveAttribute("data-tab", "codex");
+    await user.keyboard("{ArrowLeft}{ArrowLeft}");
+    expect(screen.getByRole("tabpanel")).toHaveAttribute("data-tab", "sdk");
+  });
+
+  it("draws Download for the chosen OS disabled, and says installers are not published (NotBacked)", async () => {
+    const user = userEvent.setup();
+    renderWrap("claude-code");
+    const os = screen.getByRole("tablist", { name: "Operating system" });
+    expect(
+      within(os)
+        .getAllByRole("tab")
+        .map((tab) => tab.textContent),
+    ).toEqual(["macOS", "Windows", "Linux"]);
+    expect(screen.getByTestId("download-installer")).toHaveTextContent(
+      "Download for macOS",
+    );
+    await user.click(within(os).getByRole("tab", { name: "Linux" }));
+    expect(screen.getByTestId("download-installer")).toHaveTextContent(
+      "Download for Linux",
+    );
+    expect(screen.getByTestId("download-installer")).toBeDisabled();
+    expect(
+      screen.getByTestId("download-installer"),
+    ).toHaveAccessibleDescription(
+      /Signed installers with the token embedded are not published yet/,
+    );
+  });
+
+  it("issues the one-time token and prints it with the command that presents it", async () => {
+    const user = userEvent.setup();
     issueEnrollmentToken.mockResolvedValue({
       ok: true,
       value: {
-        token: "oxe_1time_7qk4m2nv9xr3t8zpabcdefghjk",
-        expiresAt: "2026-09-15T14:30:00.000Z",
-        agentKey: "acme.core.release-bot",
+        token: "oxe_1time_7QK4M2NV9XR3T8ZP",
+        expiresAt: "2026-09-23T14:31:00.000Z",
+        agentKey: "a-intel.core.perf-watch",
         enrollCommand:
-          "oxagen agent enroll --token oxe_1time_7qk4m2nv9xr3t8zpabcdefghjk",
+          "oxagen agent enroll --token oxe_1time_7QK4M2NV9XR3T8ZP --harness claude-code",
       },
     });
-    const user = userEvent.setup();
-    renderWrap(true, "claude-code");
-    await user.click(
-      screen.getByRole("button", { name: "Mint the one-time token" }),
+    renderWrap("claude-code");
+    // Step one is installing the app, which puts the CLI the command runs on
+    // PATH, so its links come before the token control.
+    const downloads = screen.getByTestId("desktop-downloads");
+    expect(
+      screen.getByRole("link", { name: "Apple silicon (.dmg)" }),
+    ).toHaveAttribute(
+      "href",
+      "https://downloads.oxagen.sh/latest/Oxagen_aarch64.dmg",
     );
+    expect(
+      downloads.compareDocumentPosition(
+        screen.getByRole("button", { name: "Issue the token" }),
+      ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Issue the token" }));
     expect(issueEnrollmentToken).toHaveBeenCalledWith(
       ORG,
       WS,
       "agt_releasebot",
     );
     expect(screen.getByTestId("enrollment-token-value")).toHaveTextContent(
-      "oxe_1time_7qk4m2nv9xr3t8zpabcdefghjk",
+      "oxe_1time_7QK4M2NV9XR3T8ZP",
     );
     expect(screen.getByTestId("enrollment-token")).toHaveTextContent(
-      "oxagen agent enroll --token",
+      /expires .* · single use/,
     );
-    expect(
-      screen.getByRole("button", { name: "Mint another token" }),
-    ).toBeInTheDocument();
+    expect(screen.getByTestId("enroll-command")).toHaveTextContent(
+      "oxagen agent enroll --token oxe_1time_7QK4M2NV9XR3T8ZP --harness claude-code",
+    );
   });
 
-  it("names a refused mint and prints no token (negative)", async () => {
-    issueEnrollmentToken.mockResolvedValue(DENIED);
+  it("names a refused token and prints none (negative)", async () => {
     const user = userEvent.setup();
-    renderWrap(true, "claude-code");
-    await user.click(
-      screen.getByRole("button", { name: "Mint the one-time token" }),
+    issueEnrollmentToken.mockResolvedValue(DENIED);
+    renderWrap("claude-code");
+    await user.click(screen.getByRole("button", { name: "Issue the token" }));
+    expect(screen.getByTestId("wrap-failure")).toHaveTextContent(
+      "This account may not register agents here.",
     );
-    expect(screen.getByTestId("wrap-failure")).toBeInTheDocument();
-    expect(screen.queryByTestId("enrollment-token")).toBeNull();
+    expect(
+      screen.queryByTestId("enrollment-token-value"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows the SDK credential by prefix, issues a new one once, and says the SDK is not published (NotBacked)", async () => {
+    const user = userEvent.setup();
+    issueAgentCredential.mockResolvedValue({
+      ok: true,
+      value: {
+        secret: "oxa_live_s3cr3t3f7a",
+        expiresAt: "2027-03-14T00:00:00.000Z",
+      },
+    });
+    renderWrap("custom");
+    expect(screen.getByTestId("agent-credential")).toHaveTextContent(
+      "issued once to the operator",
+    );
+    expect(screen.getByTestId("agent-credential")).toHaveTextContent(
+      "oxa_ag_7f••••••••••••",
+    );
+    expect(screen.getByTestId("agent-credential")).toHaveTextContent(
+      "hashed at rest · purpose-locked · revocable",
+    );
+    expect(
+      screen.getByText(
+        /The Oxagen SDK and its five-line wrap are not published yet/,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("download-installer")).not.toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: "Issue a new credential" }),
+    );
+    expect(issueAgentCredential).toHaveBeenCalledWith(
+      ORG,
+      WS,
+      "agt_releasebot",
+    );
+    expect(screen.getByTestId("agent-credential")).toHaveTextContent(
+      "oxa_live_s3cr3t3f7a",
+    );
+    expect(
+      screen.queryByRole("button", { name: "Issue a new credential" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("names a refused credential and shows no secret (negative)", async () => {
+    const user = userEvent.setup();
+    issueAgentCredential.mockResolvedValue(DENIED);
+    renderWrap("custom");
+    await user.click(
+      screen.getByRole("button", { name: "Issue a new credential" }),
+    );
+    expect(screen.getByTestId("credential-failure")).toBeInTheDocument();
+  });
+
+  it("draws the footer in order with the caption, and the continue button is not gold", () => {
+    renderWrap("claude-code");
+    expect(screen.getByTestId("register-cancel")).toHaveTextContent("Cancel");
+    expect(screen.getByRole("link", { name: "Back" })).toHaveAttribute(
+      "href",
+      BACK,
+    );
+    expect(
+      screen.getByText("Nothing completes until a frame arrives."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "I have already installed it" })
+        .className,
+    ).not.toContain("bg-button-primary-bg");
   });
 
   it("moves the gate's step, then opens the run step", async () => {
+    const user = userEvent.setup();
     advanceOnboarding.mockResolvedValue({
       ok: true,
-      value: { step: "run", changedAt: "2026-09-15T14:00:00.000Z" },
+      value: { step: "run", changedAt: "2026-09-23T14:02:00.000Z" },
     });
-    const user = userEvent.setup();
-    renderWrap(true, "claude-code");
+    renderWrap("claude-code", true);
     await user.click(
       screen.getByRole("button", { name: "I have already installed it" }),
     );
@@ -250,9 +486,9 @@ describe("the wrap step", () => {
     expect(router.push).toHaveBeenCalledWith(NEXT);
   });
 
-  it("moves no gate for a workspace that carries none (negative)", async () => {
+  it("moves no gate for a workspace that carries none", async () => {
     const user = userEvent.setup();
-    renderWrap(false, "claude-code");
+    renderWrap("claude-code", false);
     await user.click(
       screen.getByRole("button", { name: "I have already installed it" }),
     );
@@ -261,136 +497,126 @@ describe("the wrap step", () => {
   });
 
   it("stays on the step when the gate refuses the move (negative)", async () => {
+    const user = userEvent.setup();
     advanceOnboarding.mockResolvedValue({
       ok: false,
       reason: "conflict",
-      code: "first_frame_required",
+      code: "already_unlocked",
     });
-    const user = userEvent.setup();
-    renderWrap(true, "claude-code");
+    renderWrap("claude-code", true);
     await user.click(
       screen.getByRole("button", { name: "I have already installed it" }),
     );
     expect(screen.getByTestId("advance-failure")).toHaveTextContent(
-      "The run step completes when the first frame arrives",
+      "The gate is already open.",
     );
     expect(router.push).not.toHaveBeenCalled();
   });
 });
 
-describe("the run step", () => {
-  it("checks before enrollment and schedules again after an unchanged server answer", async () => {
+describe("the received card's footer", () => {
+  it("counts six seconds down in #regAuto and then opens Fleet", () => {
     vi.useFakeTimers();
-    const props = {
-      org: ORG,
-      ws: WS,
-      workspace: "Core platform",
-      agentKey: "acme.core.release-bot",
-      host: null,
-      here: HERE,
-      repository: null,
-      provisionalUntil: null,
-    };
-    const view = (revision: string) => (
+    render(
       <IntlProvider>
-        <FirstFrameStep {...props} pollRevision={revision} />
-      </IntlProvider>
+        <OpenInFleet fleet={FLEET}>
+          <span>Cancel</span>
+        </OpenInFleet>
+      </IntlProvider>,
     );
-    const mounted = render(view("first"));
-    expect(router.refresh).not.toHaveBeenCalled();
-    await act(() => vi.advanceTimersByTimeAsync(2_000));
-    expect(router.refresh).toHaveBeenCalledTimes(1);
-    mounted.rerender(view("first"));
-    await act(() => vi.advanceTimersByTimeAsync(20_000));
-    expect(router.refresh).toHaveBeenCalledTimes(1);
-    mounted.rerender(view("second"));
-    await act(() => vi.advanceTimersByTimeAsync(2_000));
-    expect(router.refresh).toHaveBeenCalledTimes(2);
-    mounted.rerender(view("third"));
-    mounted.unmount();
-    await act(() => vi.advanceTimersByTimeAsync(2_000));
-    expect(router.refresh).toHaveBeenCalledTimes(2);
-    vi.useRealTimers();
+    const auto = document.getElementById("regAuto");
+    expect(auto).toHaveTextContent("Opening automatically…");
+    act(() => {
+      vi.advanceTimersByTime(1_000);
+    });
+    expect(auto).toHaveTextContent("Opening automatically in 5…");
+    expect(router.push).not.toHaveBeenCalled();
+    // One second per act: each tick schedules the next once React re-renders.
+    for (let second = 0; second < 5; second += 1) {
+      act(() => {
+        vi.advanceTimersByTime(1_000);
+      });
+    }
+    expect(router.push).toHaveBeenCalledWith(FLEET);
   });
 
-  it("re-reads immediately when asked", async () => {
-    const user = userEvent.setup();
-    renderRun(null, { hostEnrollmentId: "hen_1" });
-    await user.click(screen.getByRole("button", { name: "Check again" }));
-    expect(router.refresh).toHaveBeenCalledTimes(1);
-    expect(router.replace).not.toHaveBeenCalled();
-  });
-
-  it("binds the detected repository and re-reads the step", async () => {
-    bindMainRepository.mockResolvedValue({
-      ok: true,
-      value: {
-        fullName: "acme/platform",
-        defaultRef: "main",
-        boundAt: "2026-09-15T14:10:00.000Z",
-        provisionalClosed: true,
-      },
-    });
-    const user = userEvent.setup();
-    renderRun({ owner: "acme", name: "platform" });
-    await user.click(
-      screen.getByRole("button", {
-        name: "Bind acme/platform as the main repo",
-      }),
+  it("opens Fleet at once from Open in Fleet, the one gold action", () => {
+    render(
+      <IntlProvider>
+        <OpenInFleet fleet={FLEET}>
+          <span>Cancel</span>
+        </OpenInFleet>
+      </IntlProvider>,
     );
-    expect(bindMainRepository).toHaveBeenCalledWith(ORG, WS, {
-      owner: "acme",
-      name: "platform",
+    const open = screen.getByRole("button", { name: "Open in Fleet" });
+    expect(open.className).toContain("bg-button-primary-bg");
+    act(() => {
+      open.click();
     });
-    expect(router.replace).toHaveBeenCalledWith(HERE);
-  });
-
-  it("names a refused bind and leaves the workspace provisional (negative)", async () => {
-    bindMainRepository.mockResolvedValue({
-      ok: false,
-      reason: "conflict",
-      code: "github_not_connected",
-    });
-    const user = userEvent.setup();
-    renderRun({ owner: "acme", name: "platform" });
-    await user.click(
-      screen.getByRole("button", {
-        name: "Bind acme/platform as the main repo",
-      }),
-    );
-    expect(screen.getByTestId("bind-failure")).toHaveTextContent(
-      "No GitHub App installation reaches this workspace",
-    );
-    expect(router.replace).not.toHaveBeenCalled();
+    expect(router.push).toHaveBeenCalledWith(FLEET);
   });
 });
 
-describe("supported wrapping paths", () => {
-  it.each(["claude-agent-sdk", "custom"] as const)(
-    "keeps %s on an honest unavailable step",
-    async (harness) => {
-      renderWrap(true, harness);
-      expect(screen.getByTestId("wrap-unavailable")).toHaveTextContent(
-        "Wrapping is not available for this harness",
-      );
-      expect(
-        screen.queryByRole("button", { name: "I have already installed it" }),
-      ).toBeNull();
-      expect(
-        screen.queryByRole("button", { name: "Mint the one-time token" }),
-      ).toBeNull();
-      expect(document.body.textContent).not.toContain("@oxagen/sdk");
-      expect(document.body.textContent).not.toContain("oxagen.agent.wrap");
-      expect(advanceOnboarding).not.toHaveBeenCalled();
-      expect(router.push).not.toHaveBeenCalled();
-      await expectNoAxe(document.body);
-    },
-  );
-  it("offers Stella the existing host enrollment path", () => {
-    renderWrap(true, "stella");
+describe("Cancel", () => {
+  function renderCancel(agentId: string | null) {
+    render(
+      <IntlProvider>
+        <CancelRegistration
+          org={ORG}
+          ws={WS}
+          agentId={agentId}
+          fleet={FLEET}
+          testId="register-cancel"
+        />
+      </IntlProvider>,
+    );
+  }
+
+  it("is a link back to Fleet before the identity exists, and writes nothing", () => {
+    renderCancel(null);
+    expect(screen.getByTestId("register-cancel")).toHaveAttribute(
+      "href",
+      FLEET,
+    );
+    expect(cancelRegistration).not.toHaveBeenCalled();
+  });
+
+  it("retires the identity and opens Fleet once it exists", async () => {
+    const user = userEvent.setup();
+    cancelRegistration.mockResolvedValue({ ok: true, value: { to: FLEET } });
+    renderCancel("agt_releasebot");
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(cancelRegistration).toHaveBeenCalledWith(ORG, WS, "agt_releasebot");
+    expect(router.push).toHaveBeenCalledWith(FLEET);
+  });
+
+  it("names a refused cancel and stays on the step (negative)", async () => {
+    const user = userEvent.setup();
+    cancelRegistration.mockResolvedValue(DENIED);
+    renderCancel("agt_releasebot");
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "This account may not register agents here.",
+    );
+    expect(router.push).not.toHaveBeenCalled();
+  });
+});
+
+describe("Request access", () => {
+  it("opens the request-access dialog, which says what is not backed and who can grant it", async () => {
+    const user = userEvent.setup();
+    render(
+      <IntlProvider>
+        <RequestAccess permission="agent.register on core-platform" />
+      </IntlProvider>,
+    );
+    await user.click(screen.getByRole("button", { name: "Request access" }));
+    const dialog = screen.getByRole("dialog", { name: "Request access" });
+    expect(dialog).toHaveTextContent(
+      "Oxagen cannot send an access request from this page yet. Ask an organization owner to grant agent.register on core-platform.",
+    );
     expect(
-      screen.getByRole("button", { name: "Mint the one-time token" }),
+      within(dialog).getByRole("button", { name: "Close" }),
     ).toBeInTheDocument();
-    expect(screen.queryByTestId("wrap-unavailable")).toBeNull();
   });
 });

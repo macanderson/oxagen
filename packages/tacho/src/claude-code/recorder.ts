@@ -29,7 +29,6 @@ import {
   type DraftContent,
   type FrameBody,
   prepareContent,
-  textContent,
 } from "../evidence/frame-body";
 import { newEventId, sessionUuid } from "../ids";
 import {
@@ -90,6 +89,13 @@ interface SightingAttrs {
 
 /** What a row no ledger judges takes part in: nothing. */
 const NO_SIGHTING: SightingAttrs = { attrs: {}, commit: () => {} };
+
+/**
+ * The attr a transcript `user` record carries when its text is the open
+ * turn's prompt, which the turn's `turn_start` already sealed as a body. Its
+ * value names the frame that holds the text.
+ */
+export const PROMPT_DUPLICATE_OF_ATTR = "oxagen.prompt_duplicate_of";
 
 /**
  * The attr on a frame sealed on a chain that has already sealed its
@@ -164,6 +170,8 @@ export interface RecorderState {
   turnSeq: number;
   turnOpen: boolean;
   promptId?: string;
+  /** The latest turn's `prompt_digest`; see `SessionRecorder.promptDigest`. */
+  promptDigest?: string;
   started: boolean;
   stopped: boolean;
   context: Context;
@@ -217,6 +225,7 @@ export interface ChainMark {
   turnSeq: number;
   turnOpen: boolean;
   promptId: string | undefined;
+  promptDigest: string | undefined;
   started: boolean;
   stopped: boolean;
   /** The open turn's reply at mark time; see `RecorderState.turnReply`. */
@@ -389,6 +398,15 @@ export class SessionRecorder {
   private turnOpen = false;
   private promptId: string | undefined;
   /**
+   * The `prompt_digest` of the latest `turn_start`, until the transcript's
+   * copy of that prompt arrives. Claude Code reports each prompt
+   * twice: the `UserPromptSubmit` hook, sealed as `turn_start` with the text
+   * as its body, and the `user` record it writes to the transcript. The
+   * transcript copy matching this digest seals its facts without the text, so
+   * the WAL holds one copy of the prompt and the run page draws it once.
+   */
+  private promptDigest: string | undefined;
+  /**
    * The agent's last message in the open turn, as a harness that reports it
    * separately from the turn's end handed it over (Cursor's
    * `afterAgentResponse`). The turn's `turn_end` carries it when the stop
@@ -411,6 +429,12 @@ export class SessionRecorder {
    * and persists them.
    */
   private familyRoot: SessionRecorder | undefined;
+  /**
+   * Where this chain stood when the recorder was built. A caller whose
+   * failed call created the session has no mark of its own to roll back to,
+   * so it rolls back to this one. See `rollbackToBirth`.
+   */
+  private readonly birth: ChainMark;
 
   constructor(options: RecorderOptions) {
     this.options = options;
@@ -444,6 +468,7 @@ export class SessionRecorder {
     this.harnessVersion = options.context.agent.harness_version;
     if (options.context.host) this.host = { ...options.context.host };
     if (options.restore) this.restore(options.restore);
+    this.birth = this.markChain();
   }
 
   private restore(state: RecorderState): void {
@@ -451,6 +476,7 @@ export class SessionRecorder {
     this.turnSeq = state.turnSeq;
     this.turnOpen = state.turnOpen;
     this.promptId = state.promptId;
+    this.promptDigest = state.promptDigest;
     this.started = state.started;
     this.stopped = state.stopped;
     // Clamped on restore too, not only on the way in: a state file a
@@ -561,6 +587,9 @@ export class SessionRecorder {
       turnSeq: this.turnSeq,
       turnOpen: this.turnOpen,
       ...(this.promptId !== undefined ? { promptId: this.promptId } : {}),
+      ...(this.promptDigest !== undefined
+        ? { promptDigest: this.promptDigest }
+        : {}),
       started: this.started,
       stopped: this.stopped,
       context: { ...this.context },
@@ -611,6 +640,7 @@ export class SessionRecorder {
       turnSeq: this.turnSeq,
       turnOpen: this.turnOpen,
       promptId: this.promptId,
+      promptDigest: this.promptDigest,
       started: this.started,
       stopped: this.stopped,
       turnReply: this.turnReply,
@@ -667,11 +697,23 @@ export class SessionRecorder {
     this.turnSeq = mark.turnSeq;
     this.turnOpen = mark.turnOpen;
     this.promptId = mark.promptId;
+    this.promptDigest = mark.promptDigest;
     this.turnReply = mark.turnReply;
     this.started = mark.started;
     this.stopped = mark.stopped;
     this.llmCalls = new LlmCallLedger(mark.llmCalls);
     this.toolCalls = new ToolCallLedger(mark.toolCalls);
+  }
+
+  /**
+   * Undo everything this chain sealed since the recorder was built. For a
+   * session that a failed call created: the caller marked every chain before
+   * the call, and this one did not exist yet. Left alone, its genesis event
+   * keeps seq 0 without ever reaching the WAL, and the retry seals a resume
+   * at seq 1 on a chain whose first event nothing holds.
+   */
+  rollbackToBirth(): void {
+    this.rollbackChain(this.birth);
   }
 
   /**
@@ -777,6 +819,39 @@ export class SessionRecorder {
     sighting.commit();
     if (kind === "agent_stop") this.stopped = true;
     return event;
+  }
+
+  /**
+   * Seal a collector event on the chain a hook's subagent identity names, the
+   * same chain `ingestHook` routes that hook to. A subagent's `PreToolUse`
+   * decision sealed on the root chain left its `tool_requested` on the
+   * subagent chain with no decision beside it, and the root chain holding a
+   * decision for a call it never recorded.
+   *
+   * Opening the subagent chain here seals its genesis first, so the genesis
+   * is returned ahead of the event and the later `ingestHook` does not
+   * return it a second time. `spawnToolUseId` is the id `ingestHook` would
+   * take from the same payload, so the chain opens identically either way.
+   */
+  sealCollectorEventOn(
+    subagent: { subagent_id: string; subagent_type?: string } | undefined,
+    spawnToolUseId: string | undefined,
+    kind: TachoKind,
+    body: Record<string, unknown>,
+    fields: Parameters<SessionRecorder["sealCollectorEvent"]>[2] = {},
+  ): TachoEvent[] {
+    if (subagent === undefined || this.options.parent !== undefined)
+      return [this.sealCollectorEvent(kind, body, fields)];
+    const child = this.child(
+      subagent.subagent_id,
+      subagent.subagent_type,
+      spawnToolUseId,
+      fields.ts,
+    );
+    return [
+      ...this.pendingChildGenesis.splice(0),
+      child.sealCollectorEvent(kind, body, fields),
+    ];
   }
 
   get hasStarted(): boolean {
@@ -1304,6 +1379,10 @@ export class SessionRecorder {
       this.turnSeq += 1;
       this.turnOpen = true;
       this.promptId = draft.turn?.prompt_id;
+      this.promptDigest =
+        typeof body["prompt_digest"] === "string"
+          ? body["prompt_digest"]
+          : undefined;
     }
     if (
       draft.kind === "oxagen:message" &&
@@ -1660,13 +1739,12 @@ export class SessionRecorder {
       line,
       this.now(),
     );
-    // The title is taken by `sealSessionTitle`, which knows which one wins.
+    // The title is kept once its frame seals; see `sessionTitleSighting`.
     const { session_title: _title, ...facts } = totals;
     Object.assign(this.totals, facts);
     if (totals.permission_mode !== undefined)
       this.absorbContext({ permission_mode: totals.permission_mode });
-    const out: TachoEvent[] =
-      title !== undefined ? this.sealSessionTitle(title) : [];
+    const out: TachoEvent[] = [];
     for (const draft of drafts) {
       this.absorbContext(draft.context);
       let body = draft.body;
@@ -1679,12 +1757,15 @@ export class SessionRecorder {
                 "transcript",
                 draft.content !== undefined,
               )
-            : NO_SIGHTING;
+            : draft.kind === "oxagen:session_title" && title !== undefined
+              ? this.sessionTitleSighting(title)
+              : NO_SIGHTING;
       let duplicate = sighting.attrs;
-      // A tool call the chain already holds seals nothing. A model call the
-      // chain already holds is a later content block of one message: its text
-      // still ships as a body, its usage does not count again.
-      if (duplicate === undefined && draft.kind === "tool_call") {
+      // A tool call the chain already holds seals nothing, and neither does a
+      // title that renames nothing. A model call the chain already holds is a
+      // later content block of one message: its text still ships as a body,
+      // its usage does not count again.
+      if (duplicate === undefined && draft.kind !== "llm_call") {
         sighting.commit();
         continue;
       }
@@ -1692,12 +1773,23 @@ export class SessionRecorder {
         body = withoutUsage(body);
         duplicate = { [LLM_CALL_DUPLICATE_OF_ATTR]: "transcript" };
       }
+      let content = draft.content;
+      if (this.isSealedPrompt(draft.kind, body)) {
+        // The turn's `turn_start` holds this text already. The record's own
+        // facts (its uuid, source and origin) still belong on the chain.
+        content = undefined;
+        duplicate = { ...duplicate, [PROMPT_DUPLICATE_OF_ATTR]: "turn_start" };
+        this.promptDigest = undefined;
+      }
       out.push(
         this.seal(draft.kind, body, {
           ts: draft.ts,
           source: "transcript",
           attrs: { ...draft.attrs, ...duplicate },
-          ...(draft.content !== undefined ? { content: draft.content } : {}),
+          ...(content !== undefined ? { content } : {}),
+          ...(draft.hook_source_kind !== undefined
+            ? { hook_source_kind: draft.hook_source_kind }
+            : {}),
           raw_source_digest: draft.raw_source_digest,
           turn: draft.turn ?? {},
         }),
@@ -1709,33 +1801,29 @@ export class SessionRecorder {
   }
 
   /**
-   * Seal the session's title each time it changes. Claude Code generates one
-   * (`ai-title`) and rewrites it as the session goes; a name the person gives
-   * the session (`custom-title`) outranks it. The text is the frame's
-   * content, never a body member, so retention and redaction apply to it as
-   * they do to any text the harness wrote.
+   * Whether a transcript title renames the session. Claude Code generates one
+   * (`ai-title`) and rewrites it as the session goes, often to the name it
+   * already has; a name the person gives the session (`custom-title`)
+   * outranks it. A title that renames nothing seals no frame, and the one
+   * that does is kept once its `oxagen:session_title` frame has sealed.
    */
-  private sealSessionTitle(title: {
+  private sessionTitleSighting(title: {
     text: string;
     source: SessionTitleSource;
-  }): TachoEvent[] {
+  }): SightingAttrs {
     const current = this.totals.session_title_source;
-    if (title.source === "ai-title" && current === "custom-title") return [];
-    if (title.text === this.totals.session_title && title.source === current)
-      return [];
-    const event = this.seal(
-      "oxagen:notification",
-      { notification_type: "session_title" },
-      {
-        ts: this.now(),
-        source: "transcript",
-        hook_source_kind: title.source,
-        content: textContent(title.text),
+    if (
+      (title.source === "ai-title" && current === "custom-title") ||
+      (title.text === this.totals.session_title && title.source === current)
+    )
+      return { attrs: undefined, commit: () => {} };
+    return {
+      attrs: {},
+      commit: () => {
+        this.totals.session_title = title.text;
+        this.totals.session_title_source = title.source;
       },
-    );
-    this.totals.session_title = title.text;
-    this.totals.session_title_source = title.source;
-    return [event];
+    };
   }
 
   /**
@@ -1767,6 +1855,22 @@ export class SessionRecorder {
     );
     this.turnOpen = false;
     return [event];
+  }
+
+  /**
+   * A transcript `user` record whose text the latest `turn_start` holds. The
+   * turn may already be closed: the tailer can read the record after a short
+   * turn's `Stop`, and it is the same prompt either way.
+   */
+  private isSealedPrompt(
+    kind: TachoKind,
+    body: Record<string, unknown>,
+  ): boolean {
+    return (
+      kind === "oxagen:message" &&
+      this.promptDigest !== undefined &&
+      body["prompt_digest"] === this.promptDigest
+    );
   }
 
   /** Ingest one record of the `-p` JSON stream (`system.init`, `result`, ...). */

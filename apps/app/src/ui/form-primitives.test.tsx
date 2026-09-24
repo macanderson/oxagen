@@ -38,7 +38,7 @@ describe("Field", () => {
     expect(input).not.toHaveAttribute("aria-describedby");
   });
 
-  it("toggles a password between hidden and shown, announcing the state", async () => {
+  it("toggles a password between hidden and shown, the word alone naming the state", async () => {
     const user = userEvent.setup();
     render(
       <PasswordField
@@ -52,12 +52,15 @@ describe("Field", () => {
     const input = screen.getByLabelText("Password");
     expect(input).toHaveAttribute("type", "password");
     const toggle = screen.getByRole("button", { name: "Show" });
-    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    // The label is the state, so no aria-pressed announces it a second time,
+    // and the design draws no eye beside the word.
+    expect(toggle).not.toHaveAttribute("aria-pressed");
+    expect(toggle.querySelector("svg")).toBeNull();
+    expect(toggle).toHaveAttribute("aria-controls", "password");
     await user.click(toggle);
     expect(input).toHaveAttribute("type", "text");
-    expect(screen.getByRole("button", { name: "Hide" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
+    expect(screen.getByRole("button", { name: "Hide" })).toHaveTextContent(
+      /^Hide$/,
     );
   });
 });
@@ -132,5 +135,28 @@ describe("form feedback", () => {
     expect(
       screen.getByRole("region", { name: "Invitation closed" }),
     ).toHaveTextContent("It was revoked.");
+  });
+
+  it("a panel rendered on load is no status region and leaves focus where it was (negative)", () => {
+    render(
+      <OutcomePanel tone="deny" title="Invitation closed" testId="outcome">
+        It was revoked.
+      </OutcomePanel>,
+    );
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it("a panel that replaced a submitted form is a status region and its heading takes focus", () => {
+    render(
+      <OutcomePanel tone="ok" title="Reset link sent" testId="sent" announce>
+        A reset link is on its way.
+      </OutcomePanel>,
+    );
+    const status = screen.getByRole("status", { name: "Reset link sent" });
+    expect(status).toHaveTextContent("A reset link is on its way.");
+    const heading = screen.getByRole("heading", { name: "Reset link sent" });
+    expect(heading).toHaveFocus();
+    expect(heading).toHaveAttribute("tabindex", "-1");
   });
 });

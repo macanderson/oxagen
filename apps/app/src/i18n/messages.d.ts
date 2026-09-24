@@ -16,10 +16,12 @@ type Messages = {
     invitation: string;
     invitationNotFound: string;
     newOrganization: string;
+    welcomeWrap: string;
+    welcomeRun: string;
+    installer: string;
     register: string;
     cliAuthorize: string;
     cliComplete: string;
-    workspaceEyebrow: string;
     fleet: string;
     run: string;
     agents: string;
@@ -154,6 +156,8 @@ type Messages = {
         notEnrolledWhy: string;
         observeWhy: string;
         healthyWhy: string;
+        retiredWhy: string;
+        suspendedWhy: string;
       };
       controls: {
         search: string;
@@ -262,7 +266,21 @@ type Messages = {
       };
     };
     detail: {
-      header: string;
+      header: {
+        label: string;
+        eyebrow: string;
+        tierNotRecorded: string;
+        fromRun: string;
+        replay: string;
+        replayNotRecorded: string;
+        operator: string;
+        operatorNotRecorded: string;
+        avatar: {
+          open: string;
+          title: string;
+          body: string;
+        };
+      };
       tabs: {
         label: string;
         identity: string;
@@ -275,35 +293,96 @@ type Messages = {
         activity: string;
       };
       identity: {
-        title: string;
-        lead: string;
-        agentKey: string;
-        principal: string;
-        harness: string;
-        operator: string;
-        status: string;
-        registered: string;
-        firstFrame: string;
-        noFrame: string;
-        costCenter: string;
-        inherited: string;
+        facts: {
+          title: string;
+          lead: string;
+          agentKey: string;
+          principal: string;
+          principalSub: string;
+          kind: string;
+          kindValue: string;
+          harness: string;
+          modelTier: string;
+          modelTierSub: string;
+          operator: string;
+          operatorSub: string;
+          lifecycle: string;
+          lifecycleSub: string;
+          firstFrame: string;
+          noFrame: string;
+          costCenter: string;
+          inherited: string;
+        };
+        credentials: {
+          title: string;
+          lead: string;
+          none: string;
+          apiKey: string;
+          oauthToken: string;
+          cloudRole: string;
+          githubToken: string;
+          runToken: string;
+          runTokenValue: string;
+          body: string;
+          connections: string;
+        };
+        runCredential: {
+          title: string;
+          lead: string;
+          empty: string;
+          key: string;
+          keySub: string;
+          state: {
+            live: string;
+            expired: string;
+            revoked: string;
+          };
+          purposeLock: string;
+          issued: string;
+          issuedTo: string;
+          lastUsed: string;
+          never: string;
+          expires: string;
+          noExpiry: string;
+          runTokens: string;
+          runTokensSub: string;
+          deviceKey: string;
+          deviceKeySub: string;
+          notEnrolled: string;
+          change: {
+            open: string;
+            title: string;
+            body: string;
+          };
+          revoke: {
+            open: string;
+            title: string;
+            body: string;
+          };
+        };
+        trust: {
+          title: string;
+          lead: string;
+          human: string;
+          humanSub: string;
+          workspace: string;
+          workspaceSub: string;
+          runtime: string;
+          notEnrolled: string;
+          runtimeSub: string;
+          runtimeNoneSub: string;
+          delegation: string;
+          delegationValue: string;
+          delegationSub: string;
+          replay: string;
+          replaySub: string;
+          tamper: string;
+          tamperValue: string;
+          readThem: string;
+          permissions: string;
+        };
       };
       roles: {
-        title: string;
-        lead: string;
-        empty: string;
-        columns: {
-          role: string;
-          scope: string;
-          assigned: string;
-          expires: string;
-          actions: string;
-        };
-        scope: {
-          org: string;
-          workspace: string;
-        };
-        standing: string;
         assign: {
           open: string;
           title: string;
@@ -338,72 +417,108 @@ type Messages = {
           pending: string;
         };
       };
-      credentials: {
-        title: string;
-        lead: string;
-        empty: string;
-        columns: {
-          key: string;
-          issued: string;
-          lastUsed: string;
-          expires: string;
-          state: string;
-        };
-        never: string;
-        noExpiry: string;
-        active: string;
-        expired: string;
-        revoked: string;
-      };
       toolbelt: {
         title: string;
         computation: {
           title: string;
-          computedAt: string;
+          lead: string;
+          denyGen: string;
+          wire: string;
+          grants: string;
+          grantsValue: string;
           ceiling: string;
           ceilingValue: {
             caller: string;
             sentinel: string;
           };
-          roleGrants: string;
-          denyGeneration: string;
-          denyGenerationValue: string;
-          killSwitches: string;
+          policy: string;
+          switches: string;
+          switchesValue: string;
+          belt: string;
+          beltValue: string;
+          body: string;
+          computedAt: string;
         };
-        presentation: {
+        model: {
           title: string;
-          mode: {
-            full: string;
+          over: string;
+          under: string;
+          toggle: string;
+          searchable: string;
+          full: string;
+          searchableLead: string;
+          searchableBody: string;
+          fullLead: string;
+          fullBody: string;
+          block: {
             searchable: string;
+            full: string;
+            noSchema: string;
           };
-          sent: {
-            definitions: string;
-            meta_tools: string;
-          };
-          limit: string;
+          trailer: string;
         };
-        tools: {
+        search: {
           title: string;
+          lead: string;
+          label: string;
+          placeholder: string;
+          run: string;
+          try: string;
+          noCategory: string;
+          matched: string;
+          zero: string;
+          nothing: string;
+          outside: string;
+          never: string;
+          call: string;
+        };
+        rules: {
+          title: string;
+          lead: string;
+          layout: string;
+          byCategory: string;
+          flat: string;
+          shown: string;
           empty: string;
+          chips: string;
+          all: string;
+          high: string;
+          approvalCount: string;
+          groupCount: string;
           columns: {
             tool: string;
             category: string;
-            risk: string;
             decision: string;
-            rule: string;
-            access: string;
-          };
-          risk: {
-            low: string;
-            medium: string;
-            high: string;
+            hazard: string;
+            egress: string;
+            financial: string;
+            digest: string;
           };
           decision: {
             allow: string;
             require_approval: string;
           };
-          readOnly: string;
-          writes: string;
+          hazard: string;
+          rule: string;
+          categories: {
+            open: string;
+            title: string;
+            body: string;
+            none: string;
+            axes: string;
+          };
+        };
+        off: {
+          title: string;
+          lead: string;
+          badge: string;
+          empty: string;
+          columns: {
+            tool: string;
+            reason: string;
+          };
+        };
+        tools: {
           schema: {
             title: string;
             none: string;
@@ -419,43 +534,8 @@ type Messages = {
             truncated: string;
           };
         };
-        cannotSee: {
-          title: string;
-          empty: string;
-          columns: {
-            tool: string;
-            rule: string;
-          };
-        };
       };
       enrollment: {
-        title: string;
-        lead: string;
-        columns: {
-          host: string;
-          status: string;
-          mode: string;
-          collector: string;
-          hooks: string;
-          bundle: string;
-          deviceKey: string;
-          lastSeen: string;
-          actions: string;
-        };
-        hooks: {
-          ok: string;
-          missing: string;
-          unreported: string;
-        };
-        bundleVersion: string;
-        never: string;
-        revoked: string;
-        expired: string;
-        empty: {
-          title: string;
-          body: string;
-          command: string;
-        };
         enroll: {
           open: string;
           title: string;
@@ -484,14 +564,7 @@ type Messages = {
       };
       incidents: {
         title: string;
-        empty: string;
-        columns: {
-          kind: string;
-          severity: string;
-          detected: string;
-          session: string;
-          state: string;
-        };
+        tamper: string;
         severity: {
           notice: string;
           warning: string;
@@ -504,9 +577,23 @@ type Messages = {
         };
         open: string;
         resolved: string;
+        happened: string;
+        stopped: string;
+        owner: string;
+        closed: string;
+        incident: string;
+        audit: string;
         pager: string;
         first: string;
         next: string;
+        empty: {
+          title: string;
+          lead: string;
+          badge: string;
+          body: string;
+          register: string;
+        };
+        note: string;
       };
       definition: {
         openEditor: string;
@@ -518,6 +605,9 @@ type Messages = {
           againstSeed: string;
           discard: string;
           save: string;
+          onBranch: string;
+          pending: string;
+          pullRequest: string;
         };
         identity: {
           title: string;
@@ -535,6 +625,8 @@ type Messages = {
           tierHint: string;
           budget: string;
           budgetHint: string;
+          budgetDay: string;
+          budgetDayHint: string;
         };
         tools: {
           title: string;
@@ -577,6 +669,8 @@ type Messages = {
           digest: string;
           pullRequest: string;
           committed: string;
+          repository: string;
+          repositoryUnknown: string;
         };
         changing: {
           title: string;
@@ -642,20 +736,397 @@ type Messages = {
         pending: string;
       };
       overview: {
-        title: string;
-        lead: string;
-        principal: string;
-        operator: string;
-        hosts: string;
-        roles: string;
-        definition: string;
-        unavailable: string;
-        composition: string;
+        basisNotRecorded: string;
+        tokens: {
+          title: string;
+          none: string;
+          badge: string;
+          costNotRecorded: string;
+          classes: {
+            conversation: string;
+            toolResults: string;
+            contextFrames: string;
+            toolDefinitions: string;
+            steering: string;
+            system: string;
+            output: string;
+            reasoning: string;
+          };
+          inputSplit: string;
+          cacheRate: string;
+          cacheRateValue: string;
+          perRun: string;
+          tok: string;
+          perCall: string;
+          perCallValue: string;
+          basis: string;
+          basisValue: {
+            gateway_observed: string;
+            client_attested: string;
+            mixed: string;
+            estimated: string;
+            none: string;
+          };
+        };
+        coaching: {
+          title: string;
+          badge: string;
+          notBacked: string;
+          all: string;
+        };
+        composition: {
+          title: string;
+          lead: string;
+          health: {
+            tamper: string;
+            notEnrolled: string;
+            observe: string;
+            healthy: string;
+            noFrame: string;
+          };
+          open: string;
+          identity: string;
+          identitySub: string;
+          steering: string;
+          steeringItems: string;
+          steeringSub: string;
+          steeringNone: string;
+          steeringNoneSub: string;
+          toolbelt: string;
+          toolbeltNotBacked: string;
+          toolbeltSub: string;
+          toolbeltUnread: string;
+          runtime: string;
+          runtimeNone: string;
+          runtimeSub: string;
+          owner: string;
+          ownerSub: string;
+          permissions: string;
+          roles: string;
+          mandates: string;
+          mandatesUnread: string;
+          permissionsSub: string;
+        };
+        last30: {
+          title: string;
+          lead: string;
+          open: string;
+          runs: string;
+          runsNone: string;
+          lastAt: string;
+          spend: string;
+          tokens: string;
+          cacheRate: string;
+          cacheNotRecorded: string;
+          tamper: string;
+          health: {
+            tamper: string;
+            notEnrolled: string;
+            observe: string;
+            healthy: string;
+            noFrame: string;
+          };
+          note: string;
+        };
+        definition: {
+          title: string;
+          lead: string;
+          open: string;
+          path: string;
+          repo: string;
+          repoAt: string;
+          uncommitted: string;
+          commit: string;
+          generated: string;
+          generatedSub: string;
+          generatedNone: string;
+        };
       };
       steering: {
-        title: string;
-        lead: string;
-        open: string;
+        library: string;
+        empty: {
+          title: string;
+          body: string;
+        };
+        observe: {
+          lead: string;
+          body: string;
+        };
+        prefix: {
+          label: string;
+          sub: string;
+          notBacked: string;
+        };
+        volatile: {
+          label: string;
+          sub: string;
+          value: string;
+          note: string;
+        };
+        reaches: {
+          title: string;
+          lead: string;
+          assigned: string;
+          compiler: {
+            open: string;
+            title: string;
+            body: string;
+          };
+          columns: {
+            item: string;
+            kind: string;
+            force: string;
+            scope: string;
+            body: string;
+            source: string;
+            lands: string;
+            cost: string;
+          };
+          notBacked: string;
+          note: string;
+        };
+        cut: {
+          title: string;
+          badge: string;
+          columns: {
+            item: string;
+            kind: string;
+            force: string;
+            cost: string;
+            because: string;
+            why: string;
+          };
+          notBacked: string;
+        };
+      };
+      runtime: {
+        empty: {
+          title: string;
+          body: string;
+          wrap: string;
+        };
+        host: {
+          title: string;
+          lead: string;
+          open: {
+            label: string;
+            title: string;
+            body: string;
+          };
+          runtime: string;
+          runtimeSub: string;
+          harness: string;
+          harnessSub: string;
+          deviceKey: string;
+          deviceKeySub: string;
+          collector: string;
+          lastSeen: string;
+          neverSeen: string;
+          hookBinary: string;
+          hooks: string;
+          hooksValue: {
+            ok: string;
+            missing: string;
+            unreported: string;
+          };
+          proxy: string;
+          proxyRouted: string;
+          proxyRoutedSub: string;
+          proxyNot: string;
+          proxyNotSub: string;
+          mcp: string;
+          bundle: string;
+          bundleValue: string;
+          settings: string;
+          tier: string;
+          tierSub: string;
+          firstFrame: string;
+          noFrame: string;
+          checkpoint: string;
+          expires: string;
+          revoked: string;
+        };
+        tier: {
+          title: string;
+          lead: string;
+          all: {
+            label: string;
+            title: string;
+            body: string;
+          };
+          ladder: string;
+          thisAgent: string;
+          noRun: string;
+          rungs: {
+            observe: string;
+            harness: string;
+            gateway: string;
+            contained: string;
+          };
+          rows: {
+            model: {
+              label: string;
+              observe: string;
+              harness: string;
+              gateway: string;
+              contained: string;
+            };
+            mcp: {
+              label: string;
+              observe: string;
+              harness: string;
+              gateway: string;
+              contained: string;
+            };
+            native: {
+              label: string;
+              observe: string;
+              harness: string;
+              gateway: string;
+              contained: string;
+            };
+            budgets: {
+              label: string;
+              observe: string;
+              harness: string;
+              gateway: string;
+              contained: string;
+            };
+            steering: {
+              label: string;
+              observe: string;
+              harness: string;
+              gateway: string;
+              contained: string;
+            };
+            credentials: string;
+          };
+          none: string;
+          note: string;
+        };
+        rollback: {
+          title: string;
+          lead: string;
+          command: string;
+          note: string;
+          smoke: {
+            label: string;
+            title: string;
+            body: string;
+          };
+        };
+      };
+      permissions: {
+        roles: {
+          title: string;
+          lead: string;
+          wire: string;
+          operator: string;
+          belt: string;
+          beltUnread: string;
+          beltSub: string;
+          none: string;
+          noneValue: string;
+          scope: string;
+          expires: string;
+          resourceScope: string;
+          spendCeiling: string;
+          perRunSub: string;
+          perDaySub: string;
+          moveMoney: string;
+          no: string;
+          noValue: string;
+          mandates: string;
+          mandatesValue: string;
+          note: string;
+        };
+        budgets: {
+          title: string;
+          lead: string;
+          set: string;
+          perRun: string;
+          perRunNone: string;
+          highest: string;
+          basis: string;
+          basisNone: string;
+          perDay: string;
+          perDayNote: string;
+          perDayNone: string;
+          mode: string;
+          modeValue: string;
+          breach: string;
+          breachValue: string;
+          ceiling: string;
+          ceilingValue: {
+            caller: string;
+            sentinel: string;
+          };
+        };
+      };
+      activity: {
+        runs: {
+          title: string;
+          shown: string;
+          empty: string;
+          emptyNoRollup: string;
+          audit: string;
+          columns: {
+            run: string;
+            status: string;
+            tokens: string;
+            cost: string;
+            frames: string;
+            started: string;
+          };
+        };
+        accounting: {
+          title: string;
+          lead: string;
+          window: string;
+          none: string;
+          columns: {
+            class: string;
+            tokens: string;
+            rate: string;
+            cost: string;
+          };
+          classes: {
+            inputUncached: string;
+            cacheWrite: string;
+            cacheRead: string;
+            output: string;
+            reasoning: string;
+            toolDefinitions: string;
+          };
+          countedAsInput: string;
+          note: string;
+          noteNoCache: string;
+          notBacked: string;
+        };
+        last30: {
+          title: string;
+          lead: string;
+          spend: string;
+          runs: string;
+          spendLabel: string;
+          basis: string;
+          basisNone: string;
+          productive: string;
+          productiveSub: string;
+          tokens: string;
+          tokensValue: string;
+          findings: string;
+          noFinding: string;
+          atStake: string;
+          evidence: string;
+          fix: string;
+          kinds: {
+            cache_writes_never_read: string;
+            duplicate_tool_calls: string;
+            repeated_shell_commands: string;
+            unpaged_results: string;
+          };
+        };
       };
     };
     actions: {
@@ -692,6 +1163,8 @@ type Messages = {
         ends: string;
         endsValue: string;
         endsUnknown: string;
+        inFlight: string;
+        inFlightUnrecorded: string;
         understand: string;
         understandHint: string;
         confirm: string;
@@ -746,7 +1219,6 @@ type Messages = {
     };
     source: {
       facts: string;
-      loading: string;
       branchAt: string;
       uncommitted: string;
       truth: string;
@@ -756,7 +1228,6 @@ type Messages = {
       save: string;
       modified: string;
       unchanged: string;
-      identityLocked: string;
       identityMismatch: string;
       stat: string;
       parse: {
@@ -775,11 +1246,17 @@ type Messages = {
       };
       commit: {
         title: string;
-        diff: string;
+        cancel: string;
+        diffLabel: string;
         branch: string;
         branchHint: string;
-        message: string;
-        messageHint: string;
+        newBranch: string;
+        newBranchName: string;
+        summary: string;
+        summaryHint: string;
+        description: string;
+        pullRequestBox: string;
+        pullRequestHint: string;
         submit: string;
         pending: string;
         done: string;
@@ -790,6 +1267,19 @@ type Messages = {
           source: string;
         };
       };
+      eyebrow: string;
+      noRepository: string;
+      find: {
+        placeholder: string;
+        label: string;
+        of: string;
+      };
+      position: string;
+      spaces: string;
+      keys: string;
+      format: string;
+      lineEndings: string;
+      encoding: string;
     };
     mandates: {
       title: string;
@@ -855,6 +1345,66 @@ type Messages = {
       retired: string;
       noneEffectiveUpcoming: string;
       startsOn: string;
+      cannotMove: string;
+      active: string;
+      chain: {
+        label: string;
+        call: string;
+        callValue: string;
+        financial: string;
+        financialValue: string;
+        lookup: string;
+        lookupValue: string;
+        thisAgent: string;
+        decision: string;
+        decisionValue: string;
+        denied: string;
+        noMandate: string;
+      };
+    };
+    states: {
+      loading: string;
+      agent: {
+        denied: string;
+        error: string;
+      };
+      source: {
+        denied: string;
+        error: string;
+      };
+      needed: string;
+      denied: {
+        body: string;
+      };
+      signedInAs: string;
+      signedInValue: string;
+      neededLabel: string;
+      decidedBy: string;
+      decidedByValue: string;
+      requestAccess: {
+        open: string;
+        title: string;
+        body: string;
+      };
+      backToFleet: string;
+      pending: {
+        title: string;
+        body: string;
+      };
+      tryAgain: string;
+      openIncident: {
+        open: string;
+        title: string;
+        body: string;
+      };
+      error: {
+        body: string;
+        trace: string;
+      };
+      empty: {
+        title: string;
+        body: string;
+      };
     };
     tier: {
       contained: string;
@@ -866,21 +1416,79 @@ type Messages = {
   audit: {
     eyebrow: string;
     description: string;
+    retentionLine: string;
     loading: string;
+    notRecorded: string;
+    tabs: {
+      label: string;
+      events: string;
+      incidents: string;
+      receipts: string;
+      exports: string;
+      keys: string;
+      retention: string;
+    };
+    tiles: {
+      label: string;
+      events48h: string;
+      events7d: string;
+      events30d: string;
+      eventsDays: string;
+      eventsNote: string;
+      atLeast: string;
+      denied: string;
+      deniedNote: string;
+      service: string;
+      serviceNote: string;
+      agent: string;
+    };
     events: {
       title: string;
+      caption: string;
+      store: string;
+      filters: string;
+      actor: string;
+      anyActor: string;
+      range: string;
+      ranges: {
+        "48h": string;
+        "7d": string;
+        "30d": string;
+      };
+      search: string;
+      searchPlaceholder: string;
+      searchNotRecorded: string;
+      result: string;
+      anyResult: string;
+      severity: string;
+      anySeverity: string;
+      severities: {
+        critical: string;
+        info: string;
+        warning: string;
+      };
+      severityNotRecorded: string;
+      rows: string;
+      apply: string;
       when: string;
       event: string;
-      actor: string;
       what: string;
-      result: string;
-      more: string;
-      workspace: string;
-      ip: string;
-      request: string;
-      userAgent: string;
+      reference: string;
+      kindNotRecorded: string;
       detail: string;
-      notRecorded: string;
+      none: string;
+      note: string;
+      shown: string;
+      shownOpen: string;
+      pager: string;
+      previous: string;
+      next: string;
+      actorKinds: {
+        human: string;
+        agent: string;
+        service: string;
+      };
+      actorKindNotRecorded: string;
     };
     outcomes: {
       allow: string;
@@ -888,71 +1496,205 @@ type Messages = {
       error: string;
       success: string;
     };
-    filters: {
-      label: string;
-      eventType: string;
-      anyEventType: string;
-      outcome: string;
-      anyOutcome: string;
-      actor: string;
-      anyActor: string;
-      capability: string;
+    csv: {
+      open: string;
+      title: string;
+      subtitle: string;
+      body: string;
+      download: string;
+    };
+    bundle: {
+      open: string;
+      title: string;
+      subtitle: string;
+      scope: string;
+      scopeOrg: string;
       from: string;
       to: string;
-      apply: string;
+      format: string;
+      formatZip: string;
+      formatBundle: string;
+      formatCsv: string;
+      formatJson: string;
+      fieldsNotRecorded: string;
+      callout: string;
+      notRecorded: string;
+      build: string;
+      building: string;
+      denied: string;
+      pending: string;
+      failed: string;
+    };
+    incidents: {
+      open: string;
+      critical: string;
+      median: string;
+      money: string;
+      title: string;
+      caption: string;
+      notRecorded: string;
+    };
+    incident: {
+      title: string;
+      subject: string;
+      severity: string;
+      severities: {
+        critical: string;
+        warning: string;
+        info: string;
+      };
+      attach: string;
+      attachNone: string;
+      notRecorded: string;
+      submit: string;
+    };
+    receipts: {
+      title: string;
+      caption: string;
+      search: string;
+      searchPlaceholder: string;
+      submit: string;
+      examples: string;
+      chips: {
+        stripe: string;
+        harness: string;
+        observe: string;
+        deny: string;
+        agentKey: string;
+        effect: string;
+      };
       clear: string;
+      notRecorded: string;
     };
-    export: {
-      csv: string;
-      ndjson: string;
+    exports: {
+      callout: string;
+      notRecorded: string;
+      card: string;
+      states: {
+        queued: string;
+        processing: string;
+        ready: string;
+        failed: string;
+      };
+      verify: string;
+      download: string;
+      verifyNotRecorded: string;
+      exportId: string;
+      range: string;
+      contents: string;
+      contentsOrg: string;
+      size: string;
+      created: string;
+      completed: string;
+      signature: string;
+      keyIds: string;
+      unread: string;
+      verifier: string;
+      verifierNotRecorded: string;
+      outbound: string;
+      outboundNotRecorded: string;
     };
-    pager: {
-      label: string;
-      newer: string;
-      older: string;
-      end: string;
+    keys: {
+      title: string;
+      rotate: string;
+      notRecorded: string;
+    };
+    rotate: {
+      title: string;
+      subtitle: string;
+      facts: {
+        generation: string;
+        effect: string;
+        effectValue: string;
+        old: string;
+        oldValue: string;
+        rewrap: string;
+        rewrapValue: string;
+        receipts: string;
+        receiptsValue: string;
+        recorded: string;
+        recordedValue: string;
+      };
+      notRecorded: string;
+      submit: string;
+    };
+    retention: {
+      title: string;
+      edit: string;
+      notRecorded: string;
+      tiers: string;
+      tiersNotRecorded: string;
+      redaction: string;
+      redactionCaption: string;
+      redactionNote: string;
+      store: string;
+      body: string;
+      bodyValue: string;
+      hot: string;
+      replay: string;
+      optDown: string;
+      cold: string;
+      coldValue: string;
+      coldRate: string;
+    };
+    policy: {
+      title: string;
+      subtitle: string;
+      body: string;
+      hot: string;
+      callout: string;
+      notRecorded: string;
+      submit: string;
     };
     empty: {
       title: string;
       body: string;
       action: string;
     };
-    filteredEmpty: {
-      title: string;
-      body: string;
-    };
     error: {
       title: string;
       body: string;
-      code: string;
       retry: string;
+      trace: string;
     };
     denied: {
       title: string;
       body: string;
+      request: string;
+      back: string;
+      open: string;
+      signedIn: string;
+      needed: string;
+      decidedBy: string;
+      signedInAs: string;
+    };
+    request: {
+      title: string;
+      role: string;
+      why: string;
+      callout: string;
+      notRecorded: string;
+      submit: string;
     };
     pending: {
       title: string;
       body: string;
     };
-    roles: {
-      owner: string;
-      admin: string;
-      member: string;
-      billing: string;
-      compliance: string;
-      viewer: string;
-    };
+    retentionYears: string;
+    retentionDays: string;
+    cancel: string;
+    unread: string;
   };
   auth: {
     shell: {
-      brand: string;
       tags: {
-        free: string;
+        allowance: string;
         markup: string;
         evidence: string;
       };
+      tagsLabel: string;
     };
+    signedIn: string;
     fields: {
       name: string;
       email: string;
@@ -964,7 +1706,15 @@ type Messages = {
       rememberMe: string;
       showPassword: string;
       hidePassword: string;
-      passwordHint: string;
+      digit: string;
+      requirements: {
+        label: string;
+        length: string;
+        symbol: string;
+        digit: string;
+        met: string;
+        unmet: string;
+      };
     };
     errors: {
       emailRequired: string;
@@ -978,6 +1728,8 @@ type Messages = {
       codeInvalid: string;
       backupCodeInvalid: string;
       tokenMissing: string;
+      passwordNeedsSymbol: string;
+      passwordNeedsDigit: string;
     };
     outcomes: {
       wrongCredentials: string;
@@ -1010,13 +1762,18 @@ type Messages = {
     login: {
       eyebrow: string;
       title: string;
-      lead: string;
       forgot: string;
       submit: string;
       pending: string;
       newHere: string;
       createAccount: string;
       haveInvite: string;
+      acceptIt: string;
+      acceptHint: string;
+      passwordSet: string;
+      suspendedTitle: string;
+      suspendedBody: string;
+      suspendedBodyNoEmail: string;
     };
     signup: {
       eyebrow: string;
@@ -1032,12 +1789,12 @@ type Messages = {
       lead: string;
       leadNoEmail: string;
       expired: string;
-      resendTitle: string;
+      notArrived: string;
       resend: string;
       resendPending: string;
       resent: string;
       wrongAddress: string;
-      startOver: string;
+      changeIt: string;
     };
     twoFactor: {
       eyebrow: string;
@@ -1049,6 +1806,8 @@ type Messages = {
       useBackup: string;
       useTotp: string;
       back: string;
+      leadNoEmail: string;
+      expires: string;
     };
     forgot: {
       eyebrow: string;
@@ -1058,8 +1817,8 @@ type Messages = {
       pending: string;
       sentTitle: string;
       sentBody: string;
-      again: string;
       back: string;
+      failed: string;
     };
     reset: {
       eyebrow: string;
@@ -1067,23 +1826,16 @@ type Messages = {
       lead: string;
       submit: string;
       pending: string;
-      doneTitle: string;
-      doneBody: string;
-      logIn: string;
       expiredTitle: string;
       expiredBody: string;
       requestNew: string;
-      back: string;
     };
     invite: {
       eyebrow: string;
-      invited: string;
       invitedOn: string;
       organization: string;
       role: string;
-      sentTo: string;
       expires: string;
-      never: string;
       roles: {
         owner: string;
         admin: string;
@@ -1097,7 +1849,6 @@ type Messages = {
       decline: string;
       declining: string;
       declined: string;
-      signInLead: string;
       logIn: string;
       signUp: string;
       signedInAs: string;
@@ -1113,9 +1864,14 @@ type Messages = {
         revoked: string;
         expired: string;
       };
-      closedTitle: string;
       failed: string;
       denied: string;
+      invitedOnNoRole: string;
+      never: string;
+      signInLead: string;
+      wrongAccountBodyNoInviter: string;
+      failedClosed: string;
+      logInInstead: string;
     };
     cli: {
       title: string;
@@ -1253,6 +2009,51 @@ type Messages = {
       pager: string;
       older: string;
       newest: string;
+    };
+    statements: {
+      title: string;
+      intro: string;
+      roleRequired: string;
+      period: string;
+      kinds: {
+        week: string;
+        month: string;
+        quarter: string;
+        year: string;
+        custom: string;
+      };
+      anchor: string;
+      anchorHint: {
+        week: string;
+        month: string;
+        quarter: string;
+        year: string;
+      };
+      firstDay: string;
+      lastDay: string;
+      customHint: string;
+      download: {
+        csv: string;
+        html: string;
+      };
+      preparing: {
+        csv: string;
+        html: string;
+      };
+      progress: string;
+      saved: string;
+      partial: string;
+      errors: {
+        dayInvalid: string;
+        future: string;
+        rangeTooShort: string;
+        rangeTooLong: string;
+      };
+      failure: {
+        denied: string;
+        invalid: string;
+        unavailable: string;
+      };
     };
     priceList: {
       title: string;
@@ -1627,6 +2428,8 @@ type Messages = {
         orgRoleRequired: string;
         noRepository: string;
         githubRefused: string;
+        gitlabRefused: string;
+        gitlabCredentialRejected: string;
         unanswered: string;
         refused: string;
         invalid: string;
@@ -1805,6 +2608,8 @@ type Messages = {
       orgRoleRequired: string;
       noRepository: string;
       githubRefused: string;
+      gitlabRefused: string;
+      gitlabCredentialRejected: string;
       unanswered: string;
       refused: string;
       invalid: string;
@@ -1828,6 +2633,7 @@ type Messages = {
       name: string;
       slug: string;
       slugHint: string;
+      slugInvalid: string;
     };
     kind: {
       title: string;
@@ -2017,6 +2823,8 @@ type Messages = {
       governanceUnreadable: string;
       repositoryMissing: string;
       githubRefused: string;
+      gitlabRefused: string;
+      gitlabCredentialRejected: string;
       baseMoved: string;
       proposalMoved: string;
       unanswered: string;
@@ -2026,23 +2834,76 @@ type Messages = {
     };
   };
   fleet: {
+    subtitle: string;
     loading: string;
     actions: {
+      steer: string;
       register: string;
+    };
+    steer: {
+      title: string;
+      agents: string;
+      all: string;
+      none: string;
+      pick: string;
+      inFlight: string;
+      inFlightNoTurn: string;
+      idle: string;
+      idleSub: string;
+      hint: string;
+      noAgents: string;
+      agentsUnread: string;
+      keyless: string;
+      stopped: string;
+      text: string;
+      delivery: string;
+      boundary: string;
+      boundaryBody: string;
+      interrupt: string;
+      interruptUnavailable: string;
+      interruptHint: string;
+      recorded: string;
+      note: string;
+      footer: string;
+      send: string;
+      sending: string;
+      cancel: string;
+      queued: string;
+      refused: string;
     };
     stats: {
       label: string;
       live: {
         title: string;
         basis: string;
+        basisUnread: string;
       };
       waiting: {
         title: string;
+        open: string;
         oldest: string;
         none: string;
+        drawer: string;
         more: string;
         moreBasis: string;
-        open: string;
+        window: string;
+        windowSeconds: string;
+        interjections: string;
+        unread: string;
+      };
+      spend: {
+        title: string;
+        noBasis: string;
+        unbased: string;
+        unpriced: string;
+        estimated: string;
+        notRecorded: string;
+        mixed: string;
+      };
+      tokens: {
+        title: string;
+        notRecorded: string;
+        noCache: string;
       };
     };
     approvals: {
@@ -2118,53 +2979,131 @@ type Messages = {
     };
     runs: {
       title: string;
+      chipsLabel: string;
+      chips: {
+        all: string;
+        live: string;
+        parked: string;
+        sealed: string;
+      };
+      search: string;
+      facetAll: string;
+      facetLabel: string;
+      rows: string;
+      rowsAll: string;
+      sortBy: string;
+      tokensUnsorted: string;
       columns: {
         run: string;
         agent: string;
         operator: string;
         status: string;
         tier: string;
+        replay: string;
+        tokens: string;
         cost: string;
         frames: string;
         started: string;
-        controls: string;
       };
+      parked: string;
       notRecorded: string;
       basisNotRecorded: string;
-      unpriced: string;
-      unpricedLink: string;
+      estimate: string;
       source: {
         ledger: string;
         tacho: string;
-      };
-      older: string;
-      newest: string;
-      pager: string;
-      empty: {
-        title: string;
-        body: string;
-        enroll: string;
-        command: string;
-      };
-      controls: {
-        group: string;
-        action: string;
-        verbs: {
-          pause: string;
-          resume: string;
-          cancel: string;
-        };
-        sending: string;
-        queued: string;
-        reread: string;
-        unavailable: string;
       };
       operatorKind: {
         human: string;
         agent: string;
         service: string;
       };
-      rowsShown: string;
+      noMatch: string;
+      pager: {
+        label: string;
+        range: string;
+        rangeMore: string;
+        none: string;
+        previous: string;
+        next: string;
+        page: string;
+        older: string;
+        newest: string;
+      };
+      pause: string;
+      resolve: string;
+      export: string;
+      rowAction: string;
+      exportQueued: string;
+      exportFailed: string;
+    };
+    pause: {
+      title: string;
+      body: string;
+      run: string;
+      position: string;
+      positionValue: string;
+      positionNoTurn: string;
+      recordedAs: string;
+      recordedValue: string;
+      reason: string;
+      note: string;
+      footer: string;
+      confirm: string;
+      pending: string;
+      cancel: string;
+      queued: string;
+    };
+    empty: {
+      title: string;
+      body: string;
+      register: string;
+      agents: string;
+    };
+    error: {
+      title: string;
+      body: string;
+      retry: string;
+      incident: string;
+      trace: string;
+    };
+    denied: {
+      title: string;
+      body: string;
+      back: string;
+      signedIn: string;
+      signedInValue: string;
+      needed: string;
+      neededValue: string;
+      decidedBy: string;
+      decidedByValue: string;
+    };
+    pending: {
+      title: string;
+      body: string;
+    };
+    requestAccess: {
+      title: string;
+      role: string;
+      why: string;
+      note: string;
+      send: string;
+      cancel: string;
+      unbacked: string;
+    };
+    incident: {
+      title: string;
+      subject: string;
+      severity: string;
+      severities: {
+        critical: string;
+        warning: string;
+        info: string;
+      };
+      attach: string;
+      raise: string;
+      cancel: string;
+      unbacked: string;
     };
   };
   mandate: {
@@ -2375,22 +3314,256 @@ type Messages = {
       agentDescriptionTooLong: string;
       agentHarnessInvalid: string;
       failed: string;
-      denied: string;
+      namespaceInvalid: string;
     };
     organization: {
       eyebrow: string;
       title: string;
       lead: string;
       name: string;
-      slug: string;
-      slugHint: string;
+      address: string;
+      addressValue: string;
+      addressHint: string;
+      namespace: string;
+      namespaceHint: string;
       workspaceTitle: string;
       workspaceName: string;
-      workspaceSlug: string;
+      governance: string;
+      governanceModes: {
+        solo: string;
+        team: string;
+        regulated: string;
+      };
+      governanceNotBacked: string;
       workspaceHint: string;
       creates: string;
+      cancel: string;
       submit: string;
       pending: string;
+      namespaceTaken: string;
+    };
+    welcome: {
+      shell: {
+        cancel: string;
+        railLabel: string;
+        steps: {
+          organization: string;
+          wrap: string;
+          run: string;
+        };
+        state: {
+          done: string;
+          current: string;
+          todo: string;
+        };
+        caption: string;
+        loading: string;
+      };
+      denied: {
+        title: string;
+        body: string;
+        bodyNoOrg: string;
+        requestAccess: string;
+        backToFleet: string;
+        signedIn: string;
+        needed: string;
+        decidedBy: string;
+        decidedByValue: string;
+        dialogTitle: string;
+        dialogBody: string;
+        dialogNotBacked: string;
+        close: string;
+      };
+      wrap: {
+        eyebrow: string;
+        title: string;
+        lead: string;
+        leadNoKey: string;
+        tabsLabel: string;
+        tabs: {
+          cc: {
+            name: string;
+            sub: string;
+          };
+          codex: {
+            name: string;
+            sub: string;
+          };
+          sdk: {
+            name: string;
+            sub: string;
+          };
+        };
+        recommended: string;
+        ccBody: string;
+        ccTier: string;
+        codexBody: string;
+        codexTier: string;
+        sdkBody: string;
+        ladder: {
+          thisAgent: string;
+          next: string;
+          top: string;
+          orObserve: string;
+        };
+        download: string;
+        osLabel: string;
+        os: {
+          macos: string;
+          windows: string;
+          linux: string;
+        };
+        downloadFor: string;
+        downloadNotBacked: string;
+        packageNotBacked: string;
+        profile: string;
+        tokenEmbedded: string;
+        tokenExpires: string;
+        tokenMinting: string;
+        tokenAgain: string;
+        orRun: string;
+        credential: string;
+        credentialIssued: string;
+        credentialFacts: string;
+        credentialNone: string;
+        credentialBody: string;
+        langLabel: string;
+        lang: {
+          ts: string;
+          py: string;
+          go: string;
+        };
+        copy: string;
+        copied: string;
+        copyFailed: string;
+        cancel: string;
+        back: string;
+        caption: string;
+        continue: string;
+        advancing: string;
+        noAgentTitle: string;
+        noAgentBody: string;
+        noAgentAction: string;
+        credentialValue: string;
+      };
+      run: {
+        eyebrow: string;
+        title: string;
+        lead: string;
+        leadNoKey: string;
+        waitingTitle: string;
+        polling: string;
+        hostChip: string;
+        noHostChip: string;
+        log: {
+          enrolled: string;
+          heartbeat: string;
+          hooksOk: string;
+          hooksMissing: string;
+          notBacked: string;
+          waiting: string;
+        };
+        start: string;
+        startNoHost: string;
+        connected: string;
+        receivedTitle: string;
+        framesNotRecorded: string;
+        replayGrade: string;
+        chainIntact: string;
+        tierBody: string;
+        tierBodyHarness: string;
+        cancel: string;
+        back: string;
+        openInstaller: string;
+        noDone: string;
+        opening: string;
+        openOxagen: string;
+        errorTitle: string;
+        errorBody: string;
+        errorFix: string;
+        errorRequest: string;
+        checkAgain: string;
+        checkedAgain: string;
+        repo: {
+          detectedTitle: string;
+          reported: string;
+          remote: string;
+          remoteBody: string;
+          bind: string;
+          binding: string;
+          bindBody: string;
+          skip: string;
+          skipBody: string;
+          boundTitle: string;
+          bound: string;
+          branch: string;
+          appInstalled: string;
+          boundBody: string;
+          boundToast: string;
+          skippedTitle: string;
+          provisional: string;
+          skippedBody: string;
+          bindNow: string;
+          noneTitle: string;
+          noneBody: string;
+        };
+      };
+      installer: {
+        title: string;
+        screenLabel: string;
+        screens: {
+          download: string;
+          installing: string;
+          connected: string;
+        };
+        downloadTitle: string;
+        downloadBody: string;
+        facts: {
+          package: string;
+          size: string;
+          signature: string;
+          checksum: string;
+          token: string;
+        };
+        notPublished: string;
+        tokenOnWrap: string;
+        install: string;
+        cancel: string;
+        userOnly: string;
+        installingTitle: string;
+        stepOf: string;
+        progress: string;
+        steps: {
+          collector: string;
+          hook: string;
+          login: string;
+          hooks: string;
+          policy: string;
+          mcp: string;
+          enroll: string;
+          smoke: string;
+        };
+        stepState: {
+          done: string;
+          now: string;
+          pending: string;
+        };
+        connected: string;
+        connectedTitle: string;
+        connectedBody: string;
+        connectedBodyNoKey: string;
+        frameBody: string;
+        notConnectedTitle: string;
+        notConnectedBody: string;
+        rollback: string;
+        rollbackCommand: string;
+        backToOxagen: string;
+        unlocking: string;
+        rejectedTitle: string;
+        rejectedBody: string;
+        rejectedNext: string;
+        backToWrap: string;
+      };
     };
     gate: {
       title: string;
@@ -2423,7 +3596,8 @@ type Messages = {
         badge: string;
         title: string;
         body: string;
-        open: string;
+        dismiss: string;
+        agentNotRecorded: string;
       };
     };
     register: {
@@ -2440,89 +3614,159 @@ type Messages = {
         todo: string;
       };
       caption: string;
+      cancel: string;
+      cancelling: string;
+      back: string;
+      loading: string;
       noAgent: {
         title: string;
         body: string;
         start: string;
+      };
+      denied: {
+        title: string;
+        body: string;
+        permission: string;
+        request: string;
+        back: string;
+        signedIn: string;
+        needed: string;
+        decidedBy: string;
+        decidedByValue: string;
+        dialogTitle: string;
+        dialogBody: string;
       };
       name: {
         title: string;
         lead: string;
         slug: string;
         slugHint: string;
-        agentName: string;
-        agentNameHint: string;
+        workspace: string;
+        workspaceValue: string;
+        noRepository: string;
+        workspaceHint: string;
         harness: string;
         harnessHint: string;
-        description: string;
-        descriptionHint: string;
+        tier: string;
+        tierHint: string;
+        tierNotSent: string;
         note: string;
-        submit: string;
+        reserved: string;
+        continue: string;
         pending: string;
-        registered: {
-          title: string;
-          body: string;
-          expires: string;
-          continue: string;
-        };
       };
       wrap: {
         title: string;
         lead: string;
-        agentKey: string;
-        harness: string;
-        notRecorded: string;
-        host: {
-          title: string;
-          body: string;
-          mint: string;
-          pending: string;
-          again: string;
+        tabsLabel: string;
+        tabs: {
+          "claude-code": {
+            name: string;
+            sub: string;
+          };
+          codex: {
+            name: string;
+            sub: string;
+          };
+          cursor: {
+            name: string;
+            sub: string;
+          };
+          sdk: {
+            name: string;
+            sub: string;
+          };
+        };
+        recommended: string;
+        body: {
+          "claude-code": string;
+          codex: string;
+          cursor: string;
+          sdk: string;
+        };
+        ladder: {
+          thisAgent: string;
+          nextRung: string;
+          topRung: string;
+          orObserve: string;
+        };
+        tierNote: string;
+        codexNote: string;
+        cursorNote: string;
+        download: {
+          eyebrow: string;
+          osLabel: string;
+          os: {
+            macos: string;
+            windows: string;
+            linux: string;
+          };
+          button: string;
+          notPublished: string;
         };
         token: {
           label: string;
-          once: string;
+          issue: string;
+          issuing: string;
           expires: string;
-          command: string;
+          orRun: string;
         };
-        back: string;
+        credential: {
+          eyebrow: string;
+          label: string;
+          none: string;
+          facts: string;
+          use: string;
+          issue: string;
+          issuing: string;
+          issueNote: string;
+          sdkNotPublished: string;
+        };
+        caption: string;
         continue: string;
         advancing: string;
-        unavailable: {
-          title: string;
-          body: string;
-        };
       };
       run: {
         title: string;
         lead: string;
         waiting: {
           title: string;
-          body: string;
-          again: string;
-          checking: string;
-        };
-        host: {
-          enrolled: string;
+          polling: string;
+          host: string;
+          noHost: string;
+          line: string;
+          start: string;
           none: string;
-          heartbeat: string;
-          noHeartbeat: string;
-          hooksOk: string;
-          hooksMissing: string;
-          hooksUnreported: string;
         };
+        log: {
+          enrolled: string;
+          enrolledNoKey: string;
+          collector: string;
+          collectorNoVersion: string;
+          hooksOk: string;
+          hooksOkNoFile: string;
+          hooksMissing: string;
+          bundle: string;
+          notRecorded: string;
+        };
+        caption: string;
+        again: string;
+        checking: string;
         received: {
+          connected: string;
           title: string;
-          body: string;
-          at: string;
+          framesUnread: string;
+          routed: string;
+          harness: string;
+          grade: string;
+          chainIntact: string;
+          chainGaps: string;
+          auto: string;
+          autoIn: string;
           open: string;
         };
-        repository: {
+        error: {
           title: string;
-          body: string;
-          bind: string;
-          binding: string;
-          skip: string;
         };
       };
       failure: {
@@ -2550,10 +3794,11 @@ type Messages = {
       roles: string;
       apiKeys: string;
       modelFunding: string;
+      sso: string;
       invitations: string;
       workspaces: string;
+      dataPlane: string;
       costCenters: string;
-      sso: string;
     };
     roles: {
       owner: string;
@@ -2567,42 +3812,78 @@ type Messages = {
       title: string;
       person: string;
       role: string;
-      joined: string;
       actions: string;
       empty: string;
+      tableLabel: string;
+      workspaces: string;
+      twoFactor: string;
+      lastSeen: string;
+      status: string;
+      statusActive: string;
+      statusInvited: string;
+      note: string;
+      open: string;
+      noMatch: string;
+      filters: {
+        status: string;
+        twoFactor: string;
+      };
+      member: {
+        email: string;
+        role: string;
+        joined: string;
+        twoFactor: string;
+        lastSeen: string;
+        id: string;
+        perWorkspace: string;
+        workspace: string;
+        workspaceRole: string;
+        agents: string;
+        mandates: string;
+        granted: string;
+        heldByAgents: string;
+      };
+      inUse: {
+        title: string;
+        manage: string;
+        tableLabel: string;
+        role: string;
+        holders: string;
+        description: string;
+        noDescription: string;
+        footer: string;
+      };
+      twoFactorMethods: {
+        totp: string;
+        hardware: string;
+        passkey: string;
+        passkeyTotp: string;
+      };
+      twoFactorUnrecorded: string;
+      twoFactorRequired: string;
+      twoFactorOptional: string;
     };
     actions: {
+      cancel: string;
       readOnly: string;
       denied: string;
       fields: {
         name: string;
-        description: string;
-        scope: string;
-        slug: string;
-        slugHint: string;
         mainRepo: string;
         mainRepoHint: string;
-        permissions: string;
-        roleNameHint: string;
-      };
-      createRole: {
-        open: string;
-        title: string;
-        confirm: string;
-        pending: string;
-      };
-      editRole: {
-        open: string;
-        title: string;
-        confirm: string;
-        pending: string;
-      };
-      deleteRole: {
-        open: string;
-        title: string;
-        body: string;
-        confirm: string;
-        pending: string;
+        productionBranch: string;
+        productionBranchHint: string;
+        productionBranchCreateHint: string;
+        retention: string;
+        retentionHint: string;
+        mainRepoFixed: string;
+        namespace: string;
+        namespaceHint: string;
+        namespaceCreateHint: string;
+        mainRepoSelectHint: string;
+        mainRepoChoose: string;
+        branchDefault: string;
+        branchPick: string;
       };
       createWorkspace: {
         open: string;
@@ -2615,12 +3896,17 @@ type Messages = {
         title: string;
         confirm: string;
         pending: string;
+        facts: {
+          toolbelt: string;
+          budget: string;
+          agents: string;
+          agentsCount: string;
+        };
       };
       governance: {
         heading: string;
         about: string;
         unchanged: string;
-        unchangedHint: string;
         solo: string;
         team: string;
         regulated: string;
@@ -2635,18 +3921,23 @@ type Messages = {
           refused: string;
           close: string;
         };
+        createHint: string;
       };
       archiveWorkspace: {
         open: string;
         title: string;
         body: string;
+        agents: string;
+        noAgents: string;
+        agentsUnread: string;
         confirm: string;
         pending: string;
       };
       role: {
         open: string;
         title: string;
-        body: string;
+        person: string;
+        note: string;
         label: string;
         confirm: string;
         pending: string;
@@ -2655,6 +3946,7 @@ type Messages = {
         open: string;
         title: string;
         body: string;
+        note: string;
         confirm: string;
         pending: string;
       };
@@ -2685,6 +3977,9 @@ type Messages = {
         repositoryLinkedElsewhere: string;
         repositoryUnparsable: string;
         ssoProviderNotFound: string;
+        ssoRequiresEnterprise: string;
+        scimTokenExists: string;
+        scimTokenChanged: string;
       };
     };
     invitations: {
@@ -2704,21 +3999,25 @@ type Messages = {
       deliveryFailed: string;
       confirmTitle: string;
       confirmBody: string;
+      confirmNote: string;
       confirmRevoke: string;
-      keepInvitation: string;
+      invitedBy: string;
+      tableLabel: string;
+      noMatch: string;
+      filters: {
+        sent: string;
+        expires: string;
+      };
     };
     invite: {
+      cancel: string;
       open: string;
       title: string;
       confirm: string;
       pending: string;
       body: string;
       email: string;
-      emailHint: string;
       role: string;
-      roleHint: string;
-      message: string;
-      messageHint: string;
       denied: string;
       close: string;
       sent: {
@@ -2733,18 +4032,19 @@ type Messages = {
         emailInvalid: string;
         roleNotInvitable: string;
       };
+      bodyTwoFactor: string;
     };
     apiKeys: {
-      lead: string;
       tableLabel: string;
       columns: {
         name: string;
-        prefix: string;
-        created: string;
         lastUsed: string;
         expires: string;
-        status: string;
         actions: string;
+        principal: string;
+        grants: string;
+        createdBy: string;
+        actions30d: string;
       };
       actions: {
         create: {
@@ -2753,10 +4053,14 @@ type Messages = {
           body: string;
           name: string;
           expires: string;
-          expiresUtc: string;
           expiresAt: string;
           confirm: string;
           pending: string;
+          expiresOptions: {
+            d90: string;
+            d180: string;
+            y1: string;
+          };
         };
         rotate: {
           open: string;
@@ -2791,11 +4095,6 @@ type Messages = {
           workspaceArchived: string;
         };
       };
-      status: {
-        live: string;
-        expired: string;
-        revoked: string;
-      };
       workspace: {
         label: string;
         archived: string;
@@ -2826,29 +4125,28 @@ type Messages = {
         all: string;
         allWithCount: string;
       };
-      pager: {
-        label: string;
-        range: string;
-        previous: string;
-        next: string;
-      };
       emptyFiltered: string;
-    };
-    denied: {
       title: string;
-      body: string;
-    };
-    pending: {
-      title: string;
-      body: string;
-    };
-    error: {
-      title: string;
-      body: string;
+      caption: string;
+      badge: string;
+      note: string;
+      masked: string;
+      state: {
+        active: string;
+        expiring: string;
+        neverUsed: string;
+        expired: string;
+        revoked: string;
+      };
+      surfaces: {
+        title: string;
+        badge: string;
+        body: string;
+      };
+      noMatch: string;
     };
     roleCatalog: {
       title: string;
-      lead: string;
       enforcement: {
         enforced: string;
         recorded: string;
@@ -2874,15 +4172,65 @@ type Messages = {
       origin: {
         builtIn: string;
         createdBy: string;
-        custom: string;
+        createdAt: string;
       };
       noPermissions: string;
       empty: string;
-      catalog: {
+      badge: string;
+      heldBy: {
+        people: string;
+        agents: string;
+        nobody: string;
+      };
+      more: string;
+      view: string;
+      edit: string;
+      duplicate: string;
+      delete: string;
+      deleteBuiltIn: string;
+      deleteHeld: string;
+      note: string;
+      filters: {
+        kind: string;
+        scope: string;
+        origin: string;
+      };
+      noMatch: string;
+      editor: {
+        createTitle: string;
+        editTitle: string;
+        viewTitle: string;
+        name: string;
+        nameNewHint: string;
+        nameHint: string;
+        description: string;
+        descriptionFixed: string;
+        kind: string;
+        kindHint: string;
+        scope: string;
+        scopeHint: string;
+        permissions: string;
+        selected: string;
+        readOnly: string;
+        holders: string;
+        governed: string;
+        create: string;
+        save: string;
+        saving: string;
+        creating: string;
+        duplicateAsCustom: string;
+        cancel: string;
+        close: string;
+        copySuffix: string;
+      };
+      del: {
         title: string;
-        open: string;
-        lead: string;
-        covers: string;
+        body: string;
+        held: string;
+        free: string;
+        confirm: string;
+        pending: string;
+        cancel: string;
       };
     };
     workspaces: {
@@ -2890,38 +4238,31 @@ type Messages = {
       tableLabel: string;
       columns: {
         workspace: string;
-        role: string;
-        status: string;
+        mainRepo: string;
+        productionBranch: string;
+        linkedRepos: string;
+        agents: string;
+        owner: string;
+        governance: string;
         actions: string;
       };
-      status: {
-        live: string;
-        archived: string;
-      };
-      noRole: string;
       empty: string;
+      governanceNotRecorded: string;
+      retentionNotRecorded: string;
+      namespace: string;
+      open: string;
+      archived: string;
+      note: string;
+      noMatch: string;
+      factsUnread: string;
+      factsNoMembership: string;
+      factsArchived: string;
+      noLinked: string;
+      filters: {
+        branch: string;
+      };
     };
     modelFunding: {
-      title: string;
-      intro: string;
-      explain: {
-        platform: string;
-        byok: string;
-      };
-      current: {
-        title: string;
-        none: string;
-        provider: string;
-        key: string;
-        keyEnding: string;
-        endpoint: string;
-        status: string;
-        active: string;
-        disabled: string;
-        tested: string;
-        at: string;
-        never: string;
-      };
       tiers: {
         balanced: string;
         fast: string;
@@ -2951,20 +4292,19 @@ type Messages = {
         };
       };
       form: {
-        title: string;
-        replaceTitle: string;
-        provider: string;
         key: string;
+        keyPlaceholder: string;
+        keyHint: string;
         show: string;
         hide: string;
+        vendor: string;
+        provider: string;
         baseUrl: string;
         baseUrlHint: string;
         baseUrlPlaceholder: string;
         models: string;
         balancedHint: string;
         unmappedNote: string;
-        test: string;
-        testing: string;
         save: string;
         saving: string;
         saved: string;
@@ -2983,10 +4323,6 @@ type Messages = {
         pending: string;
         cancel: string;
       };
-      denied: {
-        title: string;
-        body: string;
-      };
       failure: {
         denied: string;
         keyRequired: string;
@@ -2996,6 +4332,119 @@ type Messages = {
         refused: string;
         pendingApproval: string;
         unavailable: string;
+      };
+      funding: {
+        title: string;
+        source: string;
+        sourceUnrecorded: string;
+        unknown: string;
+        preview: string;
+        note: string;
+        sources: {
+          platform_minted: {
+            option: string;
+            summary: string;
+            about: string;
+          };
+          platform: {
+            option: string;
+            summary: string;
+            about: string;
+          };
+          customer_key: {
+            option: string;
+            summary: string;
+            about: string;
+          };
+        };
+        facts: {
+          key: string;
+          billing: string;
+          storage: string;
+          engine: string;
+          secret: string;
+          provisionedId: string;
+          accountName: string;
+          minted: string;
+          cap: string;
+          reads: string;
+        };
+        customer: {
+          keyHint: string;
+          keyNone: string;
+          billing: string;
+          storage: string;
+        };
+        shared: {
+          key: string;
+          billing: string;
+        };
+        minted: {
+          unrecorded: string;
+          mint: {
+            open: string;
+            title: string;
+            body: string;
+          };
+          rotate: {
+            open: string;
+            title: string;
+            body: string;
+          };
+          revoke: {
+            open: string;
+            title: string;
+            body: string;
+          };
+          noKey: string;
+          heldTitle: string;
+          noKeyTitle: string;
+        };
+        change: {
+          open: string;
+          title: string;
+          current: string;
+          reconciles: string;
+          note: string;
+        };
+        choose: string;
+        reconciliation: {
+          title: string;
+          provider: string;
+          ledger: string;
+          difference: string;
+          note: string;
+        };
+        unknownPreview: string;
+      };
+      routes: {
+        title: string;
+        caption: string;
+        harnesses: string;
+        columns: {
+          tier: string;
+          provider: string;
+          route: string;
+          fallback: string;
+          use: string;
+          cost: string;
+          edit: string;
+        };
+        tiers: {
+          complex: string;
+          light: string;
+          embed: string;
+          rerank: string;
+        };
+        total: string;
+        basis: string;
+        currency: string;
+        unrecorded: string;
+        edit: {
+          open: string;
+          title: string;
+          body: string;
+        };
       };
     };
     sso: {
@@ -3125,11 +4574,34 @@ type Messages = {
         pendingApproval: string;
         unavailable: string;
         requiresEnterprise: string;
+        scimTokenExists: string;
+      };
+      scim: {
+        title: string;
+        lead: string;
+        baseUrl: string;
+        tokenLabel: string;
+        none: string;
+        live: string;
+        lastUsed: string;
+        neverUsed: string;
+        generate: string;
+        rotate: string;
+        revoke: string;
+        pending: string;
+        once: string;
+        rotateTitle: string;
+        rotateBody: string;
+        revokeTitle: string;
+        revokeBody: string;
+        cancel: string;
+        readOnly: string;
       };
     };
     ssoGroups: {
       title: string;
       lead: string;
+      rules: string;
       noProviders: string;
       openSso: string;
       provider: string;
@@ -3158,6 +4630,7 @@ type Messages = {
         groupRequired: string;
         groupDuplicate: string;
       };
+      ssoSettings: string;
     };
     costCenters: {
       title: string;
@@ -3202,49 +4675,247 @@ type Messages = {
         hint: string;
       };
     };
-    header: {
+    page: {
       eyebrow: string;
       description: string;
+    };
+    list: {
+      all: string;
+    };
+    notRecorded: string;
+    states: {
+      loading: string;
+      empty: {
+        title: string;
+        body: string;
+      };
+      error: {
+        title: string;
+        answered: string;
+        body: string;
+        retry: string;
+        trace: string;
+        traceNotRecorded: string;
+      };
+      denied: {
+        title: string;
+        bodyBefore: string;
+        bodyAfter: string;
+        needed: string;
+        grant: string;
+        back: string;
+        signedIn: string;
+        neededLabel: string;
+        decidedBy: string;
+        decider: string;
+      };
+      stub: {
+        requestAccess: {
+          open: string;
+          title: string;
+          body: string;
+        };
+        incident: {
+          open: string;
+          title: string;
+          body: string;
+        };
+      };
+    };
+    dataPlane: {
+      title: string;
+      on: string;
+      modeWords: {
+        shared: string;
+        dedicated: string;
+      };
+      modesLabel: string;
+      modes: {
+        shared: string;
+        dedicated: string;
+        firewall: string;
+      };
+      current: string;
+      preview: string;
+      about: {
+        shared: string;
+        dedicated: string;
+        firewall: string;
+      };
+      facts: {
+        binding: string;
+        postgres: string;
+        objectStorage: string;
+        kek: string;
+        attester: string;
+        gateway: string;
+        resolver: string;
+        deployment: string;
+        bundleVersion: string;
+        bundleSignature: string;
+        containers: string;
+        airGapped: string;
+        licence: string;
+        nextBundle: string;
+        tenantPostgres: string;
+        identityPostgres: string;
+      };
+      status: {
+        active: string;
+        degraded: string;
+        disabled: string;
+      };
+      sharedPostgres: string;
+      verified: string;
+      rotated: string;
+      neverVerified: string;
+      schema: string;
+      requestChange: string;
+      rotateKeys: string;
+      retention: {
+        title: string;
+        frameBodies: string;
+        runLedger: string;
+        frameRows: string;
+        controlPlaneAudit: string;
+        digestOnly: string;
+        note: string;
+      };
+      isolation: {
+        title: string;
+        badge: string;
+        rows: string;
+        workspaceScoping: string;
+        crossTenant: string;
+        platformCatalogs: string;
+        startupGuard: string;
+        rowsValue: string;
+        workspaceScopingValue: string;
+        crossTenantValue: string;
+        platformCatalogsValue: string;
+        startupGuardValue: string;
+      };
+      stub: {
+        plane: {
+          title: string;
+          body: string;
+        };
+        rotate: {
+          title: string;
+          body: string;
+        };
+      };
+      identityShared: string;
+      outbound: {
+        title: string;
+        destination: string;
+        why: string;
+        state: string;
+      };
+    };
+    receipts: {
+      saved: string;
+      roleChanged: string;
+      memberRemoved: string;
+      invited: string;
+      invitationResent: string;
+      invitationRevoked: string;
+      roleCreated: string;
+      roleSaved: string;
+      roleDeleted: string;
+      keyCreated: string;
+      keyRotated: string;
+      keyRevoked: string;
+      workspaceCreated: string;
+      workspaceSaved: string;
+      workspaceArchived: string;
+      modelKeySaved: string;
+      modelKeyRemoved: string;
     };
   };
   record: {
     loading: string;
     header: {
-      breadcrumbs: string;
       steering: string;
       record: string;
       published: string;
       archived: string;
-      pendingBranch: string;
+      forceTitle: string;
+      effectTitle: string;
+      kindLine: {
+        rule: string;
+        constraint: string;
+        procedure: string;
+        fact: string;
+        memory: string;
+        preference: string;
+      };
+      unclassifiedLine: string;
       inForce: string;
-      inForceUnclassified: string;
+      inForceNoCommit: string;
+      discard: string;
+      archive: string;
+      propose: string;
     };
     editor: {
+      path: string;
       modified: string;
       unchanged: string;
-      stat: string;
-      discard: string;
-      propose: string;
-      readOnly: string;
-      pending: string;
+      unsaved: string;
+      tokensNotRecorded: string;
+      find: string;
+      findLabel: string;
+      matchOf: string;
       caret: string;
+      selected: string;
+      grammar: string;
       counts: string;
-      tokenCost: string;
+      lineEnding: string;
+      encoding: string;
+      keys: string;
+      note: string;
+      noteNoRepository: string;
     };
     propose: {
       title: string;
-      diff: string;
-      diffLabel: string;
-      rationale: string;
-      rationaleHint: string;
-      checksLabel: string;
-      checksLead: string;
+      lead: string;
+      cancel: string;
       submit: string;
       pending: string;
+      pendingOpen: string;
+      readOnly: string;
+      statLabel: string;
+      nothingChanged: string;
+      checksLabel: string;
+      checks: {
+        schema: {
+          name: string;
+          what: string;
+        };
+        lineage: {
+          name: string;
+          what: string;
+        };
+        hash: {
+          name: string;
+          what: string;
+        };
+        secret: {
+          name: string;
+          what: string;
+        };
+        conflict: {
+          name: string;
+          what: string;
+        };
+        effect: {
+          name: string;
+          what: string;
+          absent: string;
+        };
+      };
       done: string;
       doneNoPr: string;
-      notInForce: string;
-      reload: string;
       status: {
         proposed: string;
         pr_open: string;
@@ -3255,113 +4926,147 @@ type Messages = {
         rejected: string;
       };
     };
+    archive: {
+      title: string;
+      body: string;
+      gate: string;
+      kept: string;
+      keep: string;
+      submit: string;
+      notRecorded: string;
+      notRecordedNoRepo: string;
+      archivedTitle: string;
+      archivedBody: string;
+      pendingTitle: string;
+      pendingBody: string;
+    };
     lineage: {
       title: string;
-      lineageTerm: string;
-      pathTerm: string;
-      pathUnknown: string;
-      backingTerm: string;
-      backing: {
-        file: string;
-        registry: string;
-      };
-      commitTerm: string;
-      commitUnknown: string;
-      authorTerm: string;
-      author: string;
-      committedTerm: string;
-      summaryTerm: string;
-      versionTerm: string;
-      effectTerm: string;
+      badge: string;
+      lineage: string;
+      file: string;
+      fileOn: string;
+      fileAlone: string;
+      publishedBy: string;
+      publishedValue: string;
+      publishedNotRecorded: string;
       effect: string;
-      effectUnknown: string;
-      schemaTerm: string;
+      effectLine: string;
+      neverRendered: string;
+      effectNotRecorded: string;
+      schema: string;
     };
     related: {
       title: string;
       unclassified: string;
       only: string;
       open: string;
+      search: string;
+      sort: string;
+      sorts: {
+        shown: string;
+        az: string;
+        za: string;
+      };
+      rows: string;
+      nothing: string;
+      range: string;
+      previous: string;
+      next: string;
     };
     meters: {
       label: string;
-      notRecorded: string;
       rendered: string;
       cited: string;
-      uncounted: string;
+      of: string;
+      notRecorded: string;
+      rollupNotRecorded: string;
+      thirdNotRecorded: string;
     };
     kindPanel: {
+      deliverEyebrow: string;
       never: string;
+      deliver: {
+        rule: string;
+        constraint: string;
+        procedure: string;
+        fact: string;
+        memory: string;
+        preference: string;
+      };
+      neverDo: {
+        rule: string;
+        constraint: string;
+        procedure: string;
+        fact: string;
+        memory: string;
+        preference: string;
+      };
       unclassified: {
         title: string;
         body: string;
       };
       rule: {
-        title: string;
-        lead: string;
-        placementTerm: string;
+        whereEyebrow: string;
+        force: string;
+        forceUnknown: string;
         placement: {
           prefix: string;
           relevance: string;
         };
-        placementUnknown: string;
-        shareTerm: string;
-        shareNotRecorded: string;
-        departure: string;
-        never: string;
+        effect: string;
+        bundle: string;
+        bundleNotRecorded: string;
+        bundleVersion: string;
+        third: string;
       };
       constraint: {
-        title: string;
-        boundary: string;
-        effect: {
+        effectUnknownWord: string;
+        boundary: {
           require: string;
-          forbid: string;
+          forbidNoGrant: string;
+          unknown: string;
         };
-        effectUnknown: string;
-        dispatch: string;
-        grant: string;
-        conflict: string;
-        departure: string;
-        never: string;
+        conflictsEyebrow: string;
+        conflicts: string;
+        conflictsNoCount: string;
+        third: string;
       };
       procedure: {
-        title: string;
-        lead: string;
+        stepsEyebrow: string;
         noSteps: string;
-        never: string;
+        order: string;
       };
       fact: {
-        title: string;
-        lead: string;
-        falsifiesTerm: string;
-        falsifies: string;
-        validFromTerm: string;
-        validFromUnknown: string;
-        readTerm: string;
-        read: string;
-        readNotRecorded: string;
-        never: string;
+        claimEyebrow: string;
+        falsifiable: string;
+        falsifiableNotRecorded: string;
+        validFrom: string;
+        validFromNotRecorded: string;
+        validFromValue: string;
+        lastConfirmed: string;
+        lastConfirmedNotRecorded: string;
+        lastConfirmedValue: string;
+        steers: string;
+        steersValue: string;
+        note: string;
       };
       memory: {
-        title: string;
-        lead: string;
-        whenTerm: string;
-        whenUnknown: string;
-        selectionTerm: string;
+        whenEyebrow: string;
+        recorded: string;
+        recordedNotRecorded: string;
+        explains: string;
+        explainsNotRecorded: string;
         selection: string;
-        decayTerm: string;
+        selectionValue: string;
+        selectionShare: string;
         decay: string;
-        recalledTerm: string;
-        recalled: string;
-        recalledNotRecorded: string;
-        never: string;
+        decayValue: string;
       };
       preference: {
-        title: string;
-        lead: string;
-        notFollowed: string;
-        departure: string;
-        never: string;
+        softEyebrow: string;
+        soft: string;
+        third: string;
       };
     };
     failure: {
@@ -3374,6 +5079,8 @@ type Messages = {
       repositoryMissing: string;
       governanceUnreadable: string;
       githubRefused: string;
+      gitlabRefused: string;
+      gitlabCredentialRejected: string;
       refused: string;
       invalid: string;
       pendingApproval: string;
@@ -3385,8 +5092,14 @@ type Messages = {
         title: string;
         body: string;
         needed: string;
-        decidedBy: string;
+        request: string;
+        requestNotRecorded: string;
         back: string;
+        signedInTerm: string;
+        signedIn: string;
+        neededTerm: string;
+        decidedByTerm: string;
+        decidedBy: string;
       };
       pending: {
         title: string;
@@ -3396,8 +5109,9 @@ type Messages = {
         title: string;
         body: string;
         retry: string;
-        code: string;
-        readAt: string;
+        incident: string;
+        incidentNotRecorded: string;
+        trace: string;
       };
     };
   };
@@ -3459,6 +5173,20 @@ type Messages = {
         attaching: string;
         none: string;
       };
+      gitlab: {
+        heading: string;
+        body: string;
+        reconnectHeading: string;
+        reconnectBody: string;
+        pathLabel: string;
+        pathHint: string;
+        tokenLabel: string;
+        selfManaged: string;
+        submit: string;
+        submitting: string;
+        webhookRefused: string;
+        open: string;
+      };
     };
     failure: {
       denied: string;
@@ -3487,10 +5215,14 @@ type Messages = {
       secretFound: string;
       authorityDeclared: string;
       githubRefused: string;
+      gitlabRefused: string;
+      gitlabCredentialRejected: string;
+      gitlabNotConnected: string;
+      repositoryHostUnsupported: string;
     };
     page: {
       title: string;
-      eyebrow: string;
+      subtitle: string;
       addOxagen: string;
       loading: string;
       tabs: {
@@ -3498,67 +5230,49 @@ type Messages = {
         repositories: string;
         workingCopies: string;
         changes: string;
-        changesOpen: string;
         configuration: string;
       };
-      ungoverned: string;
-      linking: {
-        title: string;
-        branch: string;
-        events: string;
-        issues: string;
-        graph: string;
-      };
-      setup: string;
-      connectDirectory: string;
       error: {
         title: string;
         body: string;
         retry: string;
+        incident: string;
+        incidentNotRecorded: string;
+        trace: string;
       };
       denied: {
         title: string;
         body: string;
-        signedIn: string;
-        roles: string;
         needed: string;
-        ask: string;
+        request: string;
+        requestNotRecorded: string;
         back: string;
+        signedInTerm: string;
+        signedIn: string;
+        neededTerm: string;
+        decidedByTerm: string;
+        decidedBy: string;
       };
       empty: {
         title: string;
         body: string;
       };
     };
-    permissions: {
+    repos: {
+      bannerBadge: string;
+      bannerLead: string;
+      bannerBody: string;
+      addOxagenShort: string;
       title: string;
+      subtitle: string;
       label: string;
-      columns: {
-        permission: string;
-        access: string;
-      };
-      names: {
-        contents: string;
-        pullRequests: string;
-        checks: string;
-        metadata: string;
-        issues: string;
-      };
-      access: {
-        readWrite: string;
-        write: string;
-        read: string;
-      };
-      cannotHeading: string;
-      cannot: {
-        productionBranch: string;
-        merge: string;
-        secrets: string;
-        authority: string;
-      };
-    };
-    table: {
-      label: string;
+      search: string;
+      all: string;
+      rows: string;
+      range: string;
+      previous: string;
+      next: string;
+      nothing: string;
       columns: {
         repository: string;
         role: string;
@@ -3568,78 +5282,23 @@ type Messages = {
         symbols: string;
         action: string;
       };
-      onlyMain: string;
-      openOnGitHub: string;
-      retired: string;
-      roleMain: string;
-      roleLinked: string;
-      events: {
-        installed: string;
-        suspended: string;
-        uninstalled: string;
-        paused: string;
-        retired: string;
-        unknown: string;
+      roles: {
+        main: string;
+        linked: string;
+        available: string;
       };
-      symbolsNotRecorded: string;
-      details: string;
-      unlink: string;
-      unlinkConfirm: string;
-      unlinkYes: string;
-      unlinkNo: string;
-      unlinking: string;
+      open: string;
+      visibility: {
+        private: string;
+        public: string;
+      };
       tree: {
+        governed: string;
+        absent: string;
         reading: string;
         unread: string;
         branchMissing: string;
-        governed: string;
-        absent: string;
-      };
-      reachable: {
-        heading: string;
-        about: string;
-        label: string;
-        columns: {
-          repository: string;
-          role: string;
-          defaultBranch: string;
-          action: string;
-        };
-        notLinked: string;
-        link: string;
-        linking: string;
-        truncated: string;
-      };
-      link: {
-        heading: string;
-        label: string;
-        hint: string;
-        placeholder: string;
-        unparsable: string;
-        submit: string;
-        pending: string;
-      };
-    };
-    dialog: {
-      title: string;
-      roleMain: string;
-      roleLinked: string;
-      seeChanges: string;
-      addOxagen: string;
-      loading: string;
-      facts: {
-        productionBranch: string;
-        branchMissing: string;
-        head: string;
-        githubDefault: string;
-        suggestion: string;
-        oxagen: string;
-        atCommit: string;
-        events: string;
-        codeGraph: string;
-        drift: string;
-        workingCopies: string;
-        issues: string;
+        files: string;
       };
       events: {
         installed: string;
@@ -3649,12 +5308,51 @@ type Messages = {
         retired: string;
         unknown: string;
       };
+      deliveries: string;
       notRecorded: string;
-      issuesNotRecorded: string;
+      none: string;
+      nothingWaiting: string;
+      retired: string;
+      reachableUnread: string;
+      truncated: string;
+      note: string;
+    };
+    dialog: {
+      subtitle: {
+        main: string;
+        linked: string;
+        available: string;
+      };
+      facts: {
+        productionBranch: string;
+        at: string;
+        branchMissing: string;
+        visibility: string;
+        oxagen: string;
+        filesAt: string;
+        issues: string;
+        events: string;
+        codeGraph: string;
+        dataLayer: string;
+        workingCopies: string;
+      };
+      notRecorded: string;
+      notIndexed: string;
+      recordsHere: string;
+      recordsMain: string;
+      recordsLinked: string;
+      noTreeLead: string;
+      noTreeAvailable: string;
+      noTreeLinked: string;
       initOpen: string;
       initOpenLink: string;
-      ungovernedLinked: string;
-      ungovernedMain: string;
+      retiredLead: string;
+      unlink: string;
+      link: string;
+      linking: string;
+      linked: string;
+      seeChanges: string;
+      addOxagen: string;
       branch: {
         heading: string;
         about: string;
@@ -3668,86 +5366,84 @@ type Messages = {
         pending: string;
       };
     };
-    wizard: {
+    unlink: {
       title: string;
-      cancel: string;
-      back: string;
-      next: string;
-      open: string;
-      opening: string;
-      stepsLabel: string;
-      steps: {
-        repository: string;
-        branch: string;
-        permissions: string;
-        review: string;
-        pullRequest: string;
-      };
-      repository: {
-        heading: string;
-        about: string;
-        empty: string;
-        none: string;
-        main: string;
-        linked: string;
-      };
-      branch: {
-        heading: string;
-        production: string;
-        suggestion: string;
-        same: string;
-      };
-      mode: {
-        heading: string;
-        about: string;
-        solo: string;
-        team: string;
-        regulated: string;
-      };
-      review: {
-        about: string;
-      };
-      pullRequest: {
-        heading: string;
-        about: string;
-        gitignore: string;
-      };
-      opened: {
-        opened: string;
-        reused: string;
-        merge: string;
-        link: string;
-      };
+      body: string;
+      governed: string;
+      copies: string;
+      keep: string;
+      submit: string;
+      pending: string;
+      done: string;
     };
-    workingCopies: {
-      behindNote: string;
+    copies: {
+      title: string;
+      subtitle: string;
+      connect: string;
       notRecorded: string;
-      twoFiles: {
-        title: string;
-        toml: string;
-        json: string;
-        gitignore: string;
-      };
+      filesTitle: string;
+      filesToml: string;
+      filesJson: string;
+      filesNote: string;
+      syncTitle: string;
       sync: {
-        title: string;
         init: string;
+        pull: string;
         status: string;
         propose: string;
-        pull: string;
-        merge: string;
       };
-      connect: {
-        title: string;
-        about: string;
-        reads: string;
-        pairing: string;
-        grantsNothing: string;
+      syncNote: string;
+      stale: string;
+      label: string;
+      columns: {
+        directory: string;
+        repository: string;
+        branch: string;
+        oxagen: string;
+        symlinks: string;
+        bundle: string;
+        lastSeen: string;
       };
     };
+    linkdir: {
+      title: string;
+      subtitle: string;
+      lead: string;
+      commandLabel: string;
+      pairing: string;
+      pairingHint: string;
+      whatLabel: string;
+      writes: {
+        writes: {
+          name: string;
+          what: string;
+        };
+        links: {
+          name: string;
+          what: string;
+        };
+        noWrite: {
+          name: string;
+          what: string;
+        };
+        noRead: {
+          name: string;
+          what: string;
+        };
+      };
+      grants: string;
+      copy: string;
+      copied: string;
+      copyFailed: string;
+    };
     changes: {
+      title: string;
+      subtitle: string;
+      label: string;
       loading: string;
       empty: string;
-      label: string;
+      otherKinds: string;
+      search: string;
       columns: {
         change: string;
         kind: string;
@@ -3757,7 +5453,15 @@ type Messages = {
         checks: string;
         opened: string;
       };
+      filters: {
+        state: string;
+        kind: string;
+        openedBy: string;
+      };
       kinds: {
+        context_record: string;
+      };
+      kindPaths: {
         context_record: string;
       };
       states: {
@@ -3768,25 +5472,112 @@ type Messages = {
         merged: string;
         rejected: string;
       };
-      checksPending: string;
-      otherKinds: string;
-      whoOpens: {
-        title: string;
-        promoter: string;
-        reconciler: string;
+      openedBy: {
         person: string;
-        drift: string;
+        other: string;
       };
+      open: string;
+      ci: {
+        queued: string;
+        count: string;
+      };
+      note: string;
+      autoTitle: string;
+      auto: {
+        promoter: {
+          name: string;
+          what: string;
+        };
+        reconciler: {
+          name: string;
+          what: string;
+        };
+        person: {
+          name: string;
+          what: string;
+        };
+      };
+      drift: string;
     };
-    configuration: {
+    change: {
+      back: string;
+      loading: string;
+      facts: {
+        kind: string;
+        pullRequest: string;
+        branch: string;
+        openedBy: string;
+        why: string;
+      };
+      branchValue: string;
+      whyNotRecorded: string;
+      filesTitle: string;
+      checksTitle: string;
+      checksLabel: string;
+      checkColumns: {
+        check: string;
+        result: string;
+        what: string;
+      };
+      results: {
+        passed: string;
+        failed: string;
+        running: string;
+        pending: string;
+      };
+      stopped: string;
+      mergeTitle: string;
+      merge: {
+        squash: string;
+        deleteBranch: string;
+        reindex: string;
+        ledger: string;
+        audit: string;
+      };
+      mergeButton: string;
+      merging: string;
+      closeButton: string;
+      governance: string;
+      governanceUnread: string;
+      waiting: string;
+      merged: string;
+      mergedDone: string;
+      closed: string;
+      didNotRun: string;
+      notReported: string;
+    };
+    closepr: {
+      title: string;
+      subtitle: string;
+      lead: string;
+      closedBy: string;
+      addedVia: string;
+      notPosted: string;
+      note: string;
+      cancel: string;
+      submit: string;
+      pending: string;
+    };
+    config: {
+      on: string;
+      notIndexed: string;
       noMain: string;
       loading: string;
-      branchMissing: string;
-      readAt: string;
-      workspaceTomlMissing: string;
-      drift: {
-        title: string;
-        notRecorded: string;
+      workspaceMissing: string;
+      driftTitle: string;
+      driftSubtitle: string;
+      driftNotRecorded: string;
+      driftColumns: {
+        declared: string;
+        file: string;
+        live: string;
+        right: string;
+      };
+      governanceMissing: string;
+      modes: {
+        solo: string;
+        team: string;
+        regulated: string;
       };
       mode: {
         solo: string;
@@ -3795,16 +5586,150 @@ type Messages = {
         absent: string;
         invalid: string;
       };
-      modeRead: string;
-      modes: {
-        solo: string;
-        team: string;
-        regulated: string;
+      modeNote: string;
+      treeTitle: string;
+      treeEmpty: string;
+      treeJson: string;
+      treeNote: string;
+      driftPr: string;
+    };
+    wizard: {
+      title: string;
+      titleFor: string;
+      subtitle: string;
+      cancel: string;
+      back: string;
+      next: string;
+      open: string;
+      opening: string;
+      needs: string;
+      stepsLabel: string;
+      steps: {
+        repository: string;
+        branch: string;
+        permissions: string;
+        review: string;
+        pullRequest: string;
       };
-      tree: {
-        title: string;
+      repository: {
+        lead: string;
+        label: string;
+        option: string;
+        hint: string;
         empty: string;
-        stella: string;
+        noMain: string;
+        roleLabel: string;
+        main: {
+          title: string;
+          about: string;
+        };
+        linked: {
+          title: string;
+          about: string;
+        };
+        noteLinked: string;
+        noteMain: string;
+        moveMain: string;
+      };
+      branch: {
+        lead: string;
+        label: string;
+        hint: string;
+        modeLabel: string;
+        modeHint: string;
+        modes: {
+          solo: string;
+          team: string;
+          regulated: string;
+        };
+        empty: string;
+      };
+      permissions: {
+        lead: string;
+        label: string;
+        columns: {
+          permission: string;
+          level: string;
+          for: string;
+        };
+        rows: {
+          contents: {
+            name: string;
+            level: string;
+            for: string;
+          };
+          pullRequests: {
+            name: string;
+            level: string;
+            for: string;
+          };
+          checks: {
+            name: string;
+            level: string;
+            for: string;
+          };
+          metadata: {
+            name: string;
+            level: string;
+            for: string;
+          };
+          issues: {
+            name: string;
+            level: string;
+            for: string;
+          };
+        };
+        cannotLabel: string;
+        cannot: {
+          push: {
+            name: string;
+            what: string;
+          };
+          merge: {
+            name: string;
+            what: string;
+          };
+          secret: {
+            name: string;
+            what: string;
+          };
+          authority: {
+            name: string;
+            what: string;
+          };
+        };
+      };
+      review: {
+        lead: string;
+        note: string;
+      };
+      pullRequest: {
+        lead: string;
+        files: {
+          workspaceToml: {
+            main: string;
+            linked: string;
+          };
+          governanceToml: string;
+          rules: string;
+          proposals: string;
+          agents: string;
+          gitignore: string;
+        };
+        checksLabel: string;
+        checks: {
+          schema: string;
+          layout: string;
+          governance: string;
+          secret_pii_scan: string;
+          no_authority: string;
+        };
+      };
+      opened: {
+        opened: string;
+        reused: string;
+        merge: string;
+        link: string;
       };
     };
   };
@@ -3815,6 +5740,8 @@ type Messages = {
       description: string;
     };
     noSummary: string;
+    summaryOff: string;
+    summaryFailed: string;
     source: {
       ledger: string;
       tacho: string;
@@ -3854,12 +5781,6 @@ type Messages = {
     };
     transcript: {
       title: string;
-      zoomLabel: string;
-      zoom: {
-        turns: string;
-        steps: string;
-        everything: string;
-      };
       digestOnly: string;
       noBody: string;
       truncated: string;
@@ -3877,7 +5798,7 @@ type Messages = {
       frameCount: string;
       repeats: string;
       reply: string;
-      seqSpan: string;
+      stepSpan: string;
       ms: string;
       live: string;
       goLive: string;
@@ -3885,10 +5806,12 @@ type Messages = {
         sealed: string;
         halted: string;
       };
+      rewind: string;
       back: string;
       play: string;
       pause: string;
       forward: string;
+      toEnd: string;
       scrub: string;
       position: string;
       of: string;
@@ -3908,14 +5831,28 @@ type Messages = {
       chip: {
         prompt: string;
         responses: string;
+        thinking: string;
         tools: string;
-        policy: string;
         recall: string;
         usage: string;
+        seal: string;
         errors: string;
       };
-      chipsClear: string;
+      chipsAll: string;
+      chipsNone: string;
+      chipCount: string;
+      chipCountFloor: string;
+      errorsTitle: string;
       emptyFiltered: string;
+      searchLabel: string;
+      searchPlaceholder: string;
+      searchCount: string;
+      searchEmpty: string;
+      expandThinking: string;
+      collapseThinking: string;
+      effort: string;
+      thinkingTokens: string;
+      thinkingUnkept: string;
       more: string;
       readingMore: string;
       loadedMore: string;
@@ -3943,6 +5880,7 @@ type Messages = {
         plan: string;
         input: string;
         reply: string;
+        thinking: string;
       };
     };
     frames: {
@@ -3983,6 +5921,7 @@ type Messages = {
     cost: {
       title: string;
       notRolledUp: string;
+      estimate: string;
       total: string;
       basisNotRecorded: string;
       cacheHitRate: string;
@@ -4062,7 +6001,10 @@ type Messages = {
         runNotFound: string;
         noConnectionPoint: string;
         runSealed: string;
-        observeTier: string;
+        noHost: string;
+        hostRevoked: string;
+        hostOffline: string;
+        noPromptCarrier: string;
         runNotSealed: string;
         digestOnly: string;
         steerText: string;
@@ -4080,7 +6022,15 @@ type Messages = {
         commandReason: string;
         rowCommand: string;
       };
-      observeReason: string;
+      blocked: {
+        runSealed: string;
+        noHost: string;
+        hostRevoked: string;
+        hostOffline: string;
+      };
+      steerBlocked: {
+        noPromptCarrier: string;
+      };
       delivery: {
         legend: string;
         nextStep: {
@@ -4320,6 +6270,7 @@ type Messages = {
       };
     };
     costReportedProvisional: string;
+    costEstimate: string;
     costFinalized: string;
     tokenUsage: {
       title: string;
@@ -4338,17 +6289,46 @@ type Messages = {
       rig: string;
       versionNotCaptured: string;
       harnessVersion: string;
-      effortNotCaptured: string;
+      effort: string;
+      effortNotRecorded: string;
+      thinkingOn: string;
+      thinkingOff: string;
+      permissionMode: string;
+      permissionModeNotRecorded: string;
       checkout: string;
-      repoNotCaptured: string;
+      repoNotRecorded: string;
+      branchNotRecorded: string;
+      moreCheckouts: string;
+      workLoading: string;
+      workUnread: string;
       noPullRequest: string;
-      pathNotCaptured: string;
-      derived: string;
+      pathNotRecorded: string;
       noMachine: string;
+      subagents: string;
+      noSubagents: string;
+      subagentsUnread: string;
+      subagentTypeNotRecorded: string;
+      subagentNoStop: string;
+      subagentRunning: string;
+      moreSubagents: string;
+      usage: string;
+      tokensInput: string;
+      tokensOutput: string;
+      tokensCacheRead: string;
+      tokensCacheWrite: string;
+      tokensNotRecorded: string;
+      costNotRecorded: string;
+      costReported: string;
+      costEstimate: string;
       started: string;
       sealed: string;
+      closedIdle: string;
+      closedIdleWhy: string;
       running: string;
+      sealNotRecorded: string;
+      ended: string;
       by: string;
+      enrolledBy: string;
       paused: string;
       copy: string;
       copyLabel: string;
@@ -4373,9 +6353,11 @@ type Messages = {
       wallClock: string;
       cacheHit: string;
       tokensNote: string;
+      tokensProvisional: string;
       promptsCut: string;
       wastedNote: string;
       running: string;
+      noEnd: string;
       noRollup: string;
     };
     issues: {
@@ -4383,7 +6365,12 @@ type Messages = {
       reference: string;
       relation: string;
       task: string;
+      closedBy: string;
+      pullRequests: string;
       empty: string;
+      emptyUnread: string;
+      loading: string;
+      closingUnread: string;
       note: string;
     };
     policy: {
@@ -4392,7 +6379,18 @@ type Messages = {
       call: string;
       outcome: string;
       type: string;
+      decidedBy: string;
+      by: {
+        oxagen: string;
+        operator: string;
+        harness: string;
+        managedSettings: string;
+        unrecorded: string;
+      };
       empty: string;
+      onlyChecks: string;
+      checks: string;
+      checksTitle: string;
       cut: string;
       at: string;
     };
@@ -4418,6 +6416,8 @@ type Messages = {
       spend: string;
       toolCalls: string;
       noSpend: string;
+      estimate: string;
+      spendProvisional: string;
       callCount: string;
     };
     workCi: {
@@ -4538,6 +6538,7 @@ type Messages = {
       collector: string;
       gaps: string;
       hookCount: string;
+      hookCountAll: string;
       note: string;
     };
     modelSurface: {
@@ -4563,6 +6564,8 @@ type Messages = {
       "claude-agent-sdk": string;
       custom: string;
       none: string;
+      atEnrollment: string;
+      versionUnrecorded: string;
     };
     ladder: {
       title: string;
@@ -4638,6 +6641,7 @@ type Messages = {
       collectorGaps: string;
       hookEnforce: string;
       hookObserve: string;
+      hooksFive: string;
       modelLoopback: string;
       modelMixed: string;
       modelDirect: string;
@@ -4662,6 +6666,10 @@ type Messages = {
         smoke: string;
         unenroll: string;
       };
+      settings: {
+        managed: string;
+        user: string;
+      };
     };
     unenroll: {
       title: string;
@@ -4679,6 +6687,9 @@ type Messages = {
         unavailable: string;
       };
     };
+    os: {
+      unreported: string;
+    };
   };
   shell: {
     skipToContent: string;
@@ -4690,6 +6701,16 @@ type Messages = {
         workspace: string;
         organization: string;
       };
+      waiting: string;
+      open: string;
+      foot: {
+        connected: string;
+        offline: string;
+        reachable: string;
+        notBacked: string;
+      };
+      countNotRecorded: string;
+      countNotRecordedShort: string;
     };
     nav: {
       fleet: string;
@@ -4713,6 +6734,14 @@ type Messages = {
       current: string;
       denied: string;
       unavailable: string;
+      searchOrgs: string;
+      noMatch: string;
+      orgNote: string;
+      orgMetaNotBacked: string;
+      wsMetaNotBacked: string;
+      createWorkspace: string;
+      orgTileNotBacked: string;
+      wsTileNotBacked: string;
     };
     topbar: {
       label: string;
@@ -4721,6 +6750,11 @@ type Messages = {
       search: string;
       searchShortcut: string;
       userMenu: string;
+      notifications: string;
+      notificationsUnread: string;
+      unread: string;
+      approvals: string;
+      approvalsWaiting: string;
     };
     userMenu: {
       profile: string;
@@ -4728,7 +6762,6 @@ type Messages = {
       security: string;
       privacy: string;
       switchTheme: string;
-      themeNow: string;
       signOut: string;
       signingOut: string;
       signOutFailed: string;
@@ -4749,6 +6782,63 @@ type Messages = {
         open: string;
         escape: string;
         close: string;
+        governed: string;
+        orgOnly: string;
+      };
+      groups: {
+        go: {
+          label: string;
+        };
+        assistant: {
+          label: string;
+          note: string;
+        };
+        create: {
+          label: string;
+          note: string;
+        };
+        runs: {
+          label: string;
+        };
+        agents: {
+          label: string;
+        };
+        approvals: {
+          label: string;
+        };
+        actions: {
+          label: string;
+          note: string;
+        };
+        tools: {
+          label: string;
+          note: string;
+        };
+      };
+      shortcut: string;
+      assistant: {
+        open: string;
+        askTampered: string;
+        askTamperedDraft: string;
+        askCost: string;
+        askCostDraft: string;
+        mintKey: string;
+      };
+      actions: {
+        pauseAll: string;
+        pauseAllNotBacked: string;
+        steer: string;
+        register: string;
+        grant: string;
+        role: string;
+        killSwitch: string;
+        export: string;
+        exportDetail: string;
+        apiKey: string;
+      };
+      search: {
+        failed: string;
+        toolsNotBacked: string;
       };
     };
     mobileNav: {
@@ -4761,10 +6851,26 @@ type Messages = {
       };
       more: string;
       waiting: string;
+      incidents: string;
+      tileWaiting: string;
+      sub: {
+        steering: string;
+        runtimes: string;
+        repositories: string;
+        organization: string;
+        billing: string;
+        audit: string;
+      };
+      assistant: string;
+      assistantSub: string;
+      search: string;
+      searchSub: string;
+      notifications: string;
+      notificationsSub: string;
+      account: string;
     };
     drawer: {
       title: string;
-      close: string;
     };
     account: {
       title: string;
@@ -4871,7 +6977,7 @@ type Messages = {
     assistant: {
       label: string;
       launcher: string;
-      launcherHint: string;
+      launcherNotBacked: string;
       close: string;
       thinking: string;
       recordedAs: string;
@@ -4891,9 +6997,19 @@ type Messages = {
         denied: string;
         invalid: string;
         exhausted: string;
+        noCredit: string;
+        noCreditLink: string;
+        spendCap: string;
+        spendCapLink: string;
+        keyLimit: string;
         parked: string;
+        engine: string;
+        unrecorded: string;
+        aborted: string;
+        model: string;
         unavailable: string;
       };
+      retry: string;
     };
     avatar: {
       title: string;
@@ -4939,24 +7055,57 @@ type Messages = {
       failed: string;
       photoPlaceholder: string;
     };
-    activity: {
-      notifications: string;
-      approvals: string;
-      unread: string;
-      loading: string;
-      refresh: string;
-      failed: string;
-      allApprovals: string;
+    approvals: {
+      title: string;
+      waiting: string;
+      close: string;
+      waitingOnYou: string;
+      resolvedToday: string;
+      openApproval: string;
+      expired: string;
+      resolution: {
+        approved: string;
+        denied: string;
+        expired: string;
+      };
+      all: string;
+      gone: string;
       empty: string;
-      partial: string;
-      resolved: string;
-      resolvedTitle: string;
-      noWorkspaces: string;
-      noNotifications: string;
-      open: string;
-      markRead: string;
-      archive: string;
-      notificationsPartial: string;
+      emptyDetail: string;
+      rowNotBacked: string;
+      truncated: string;
+      note: string;
+      interjectionNotBacked: string;
+      resolvedCard: {
+        chain: string;
+        who: string;
+        agent: string;
+        action: string;
+        rule: string;
+        resolution: string;
+        resolvedAt: string;
+        resolvedBy: string;
+        notRecorded: string;
+        openRun: string;
+      };
+    };
+    notifications: {
+      title: string;
+      footer: string;
+      markAll: string;
+      markDenied: string;
+      markFailed: string;
+      empty: string;
+      noWorkspace: string;
+      unread: string;
+      footerUnknown: string;
+      marked: string;
+      markedLeft: string;
+    };
+    denied: {
+      workspace: string;
+      permission: string;
+      unnamed: string;
     };
   };
   skills: {
@@ -5062,7 +7211,6 @@ type Messages = {
     };
   };
   spend: {
-    period: string;
     notRecorded: string;
     basisNotRecorded: string;
     basis: {
@@ -5074,42 +7222,37 @@ type Messages = {
     tabs: {
       label: string;
       findings: string;
+      tokens: string;
+      coaching: string;
       operator: string;
       agent: string;
+      model: string;
       tool: string;
-      task: string;
-      cost_center: string;
       waste: string;
       budgets: string;
+      task: string;
+      cost_center: string;
       pricing: string;
-      model: string;
-      tokens: string;
     };
     actions: {
       exportReport: string;
       setBudget: string;
     };
     findings: {
-      eyebrow: string;
-      heroTitle: string;
-      saving: string;
-      savingNote: string;
-      share: string;
-      shareNote: string;
-      annualised: string;
-      annualisedNote: string;
-      spend: string;
-      spendNote: string;
       strip: {
         label: string;
         tail: string;
       };
-      facts: string;
+      facts: {
+        findings: string;
+        operators: string;
+        high: string;
+        medium: string;
+        evidence: string;
+      };
       note: string;
-      list: string;
       emptyTitle: string;
       empty: string;
-      rank: string;
       kind: {
         cache_writes_never_read: string;
         duplicate_tool_calls: string;
@@ -5126,15 +7269,8 @@ type Messages = {
         high: string;
         medium: string;
       };
-      why: string;
-      fixLabel: string;
-      cites: string;
-      shareOfIdentified: string;
-      shareUnknown: string;
       evidence: {
         open: string;
-        eyebrow: string;
-        back: string;
         atStake: string;
         atStakeNote: string;
         confidence: string;
@@ -5143,7 +7279,6 @@ type Messages = {
         coveredNote: string;
         tokens: string;
         tokensValue: string;
-        tokensNote: string;
         measured: string;
         counterfactual: string;
         runs: string;
@@ -5155,6 +7290,9 @@ type Messages = {
           counterfactual: string;
         };
         note: string;
+        title: string;
+        window: string;
+        to: string;
       };
       fix: {
         open: string;
@@ -5186,46 +7324,96 @@ type Messages = {
         codeDraft: string;
       };
       costData: string;
-    };
-    strip: {
-      spend: string;
-      runs: string;
-      runsNote: string;
-      calls: string;
-      callsNote: string;
-      coverage: string;
-      coverageNote: string;
-      missing: string;
-      available: string;
+      hero: string;
+      heroShare: string;
+      heroWindow: string;
+      heroYearStart: string;
+      heroYearEnd: string;
+      attributionMissing: string;
+      evidenceLine: string;
+      atStake: string;
+      atStakeUnknown: string;
+      list: string;
+      filters: {
+        label: string;
+        level: string;
+        confidence: string;
+        sort: string;
+        rows: string;
+        all: string;
+        sorts: {
+          rank: string;
+          savingDesc: string;
+          savingAsc: string;
+          kind: string;
+        };
+        none: string;
+      };
+      pager: {
+        label: string;
+        range: string;
+        previous: string;
+        next: string;
+      };
     };
     columns: {
-      provider: string;
+      operator: string;
+      role: string;
+      agents: string;
       runs: string;
-      calls: string;
       spend: string;
+      tokens: string;
+      cacheHit: string;
+      savings: string;
+      budgetPosition: string;
+      agent: string;
+      perRun: string;
+      trend: string;
+      model: string;
+      providerKey: string;
+      modelCalls: string;
+      cacheHitRate: string;
+      basis: string;
+      tool: string;
+      server: string;
+      calls: string;
+      cumulative: string;
       share: string;
+      perCall: string;
+      perRunMoney: string;
+      frames: string;
+      noFinding: string;
+      findings: string;
+      shareOfSpend: string;
     };
     groups: {
       operator: {
         unnamed: string;
         title: string;
-        key: string;
         empty: string;
+        note: string;
+        budgetMissing: string;
       };
       agent: {
         title: string;
-        key: string;
         empty: string;
+        note: string;
+        trendMissing: string;
       };
       model: {
         title: string;
-        key: string;
-        empty: string;
+        note: string;
+        routes: string;
+        footer: string;
+        keyMissing: string;
+        total: string;
+        totalNote: string;
       };
       tool: {
         title: string;
-        key: string;
         empty: string;
+        note: string;
+        framesMissing: string;
       };
       task: {
         title: string;
@@ -5243,16 +7431,37 @@ type Messages = {
     };
     waste: {
       wasted: string;
+      currency: string;
       share: string;
+      shareNote: string;
       runsWithWaste: string;
+      runsNote: string;
       largestCause: string;
+      largestNote: string;
       noCause: string;
       byCause: string;
-      none: string;
-      proof: string;
+      causeRuns: string;
       cause: {
         cache_write_never_read: string;
       };
+      why: {
+        cache_write_never_read: string;
+      };
+      designCause: {
+        cacheMisses: string;
+        correctivePrompts: string;
+        retryLoops: string;
+        contextBloat: string;
+        idleWhileParked: string;
+        haltedEarly: string;
+      };
+      causesMissing: string;
+      runs: string;
+      note: string;
+      runAmountMissing: string;
+      none: string;
+      openRun: string;
+      showFrames: string;
     };
     budgets: {
       title: string;
@@ -5260,7 +7469,6 @@ type Messages = {
       scopeColumn: string;
       periodColumn: string;
       limitColumn: string;
-      spentColumn: string;
       positionColumn: string;
       scope: {
         org: string;
@@ -5278,6 +7486,12 @@ type Messages = {
         threshold_95: string;
         exceeded: string;
       };
+      usedColumn: string;
+      modeColumn: string;
+      hard: string;
+      positionLabel: string;
+      note: string;
+      scopesMissing: string;
     };
     pricing: {
       class: {
@@ -5405,39 +7619,60 @@ type Messages = {
       };
     };
     drill: {
-      title: {
+      kind: {
         operator: string;
         agent: string;
         tool: string;
       };
-      back: string;
-      perCall: string;
-      perRun: string;
-      share: string;
+      crumbLabel: string;
+      crumb: string;
+      counts: string;
+      openAgent: string;
+      export: string;
+      exportTitle: string;
+      exportBody: string;
+      savings: string;
+      noSaving: string;
+      findingsFailed: string;
+      direct: string;
+      attributedMissing: string;
+      tiles: {
+        spend: string;
+        tokens: string;
+        cacheHit: string;
+        observed: string;
+        wasted: string;
+        productive: string;
+        runs: string;
+        modelCalls: string;
+        budget: string;
+        agentBudget: string;
+        trend: string;
+        toolDefinitions: string;
+        perRun: string;
+        calls: string;
+        perCall: string;
+        avgPerRun: string;
+        resultBody: string;
+        repeatCalls: string;
+        retries: string;
+      };
       byDay: string;
-      day: string;
-      tools: string;
+      peak: string;
+      on: string;
+      average: string;
+      sparkline: string;
+      cross: {
+        tool: string;
+        agent: string;
+        operator: string;
+        model: string;
+      };
+      crossMissing: string;
       toolsEmpty: string;
-    };
-    failure: {
-      denied: {
-        title: string;
-        body: string;
-      };
-      pending: {
-        title: string;
-        body: string;
-      };
-      error: {
-        title: string;
-        body: string;
-        code: string;
-      };
-    };
-    empty: {
-      title: string;
-      body: string;
-      back: string;
+      findings: string;
+      noFindings: string;
+      share: string;
     };
     budgetDialog: {
       title: string;
@@ -5530,32 +7765,500 @@ type Messages = {
       mode: string;
     };
     tokens: {
-      title: string;
-      note: string;
-      class: string;
-      count: string;
-      share: string;
-      input_uncached: string;
-      cache_read: string;
-      cache_write: string;
-      output: string;
-      reasoning: string;
-      total: string;
+      byClass: string;
+      classTotal: string;
       cacheHit: string;
-      cacheNote: string;
-      byModel: string;
-      model: string;
-      basis: string;
+      cacheHitNote: string;
+      cacheWriteShare: string;
+      effectiveInput: string;
+      unmapped: string;
+      costByClassMissing: string;
+      unmappedMissing: string;
+      columns: {
+        class: string;
+        tokens: string;
+        share: string;
+        cost: string;
+        agent: string;
+        runs: string;
+        perRun: string;
+        cacheHit: string;
+        toolDefs: string;
+        context: string;
+        toolResults: string;
+        reasoning: string;
+        basis: string;
+      };
+      composition: string;
+      compositionMissing: string;
+      parts: {
+        conversation: string;
+        toolResults: string;
+        contextFrames: string;
+        toolDefinitions: string;
+        steering: string;
+        system: string;
+        output: string;
+        reasoning: string;
+      };
+      byHarness: string;
+      harnessMissing: string;
+      byAgent: string;
+      agentNote: string;
+    };
+    notBacked: {
+      lead: string;
+    };
+    header: {
+      description: string;
+    };
+    summary: {
+      label: string;
+      spend: string;
+      currency: string;
+      tokens: string;
+      cache: string;
+      cacheNotRecorded: string;
+      observed: string;
+      observedNote: string;
+      wasted: string;
+      wastedShare: string;
+      estimated: string;
+    };
+    states: {
+      loading: string;
+      empty: {
+        title: string;
+        body: string;
+        back: string;
+      };
+      denied: {
+        title: string;
+        needed: string;
+        body: string;
+        bodyEnd: string;
+        request: string;
+        requestTitle: string;
+        requestBody: string;
+        back: string;
+        signedInAs: string;
+        roles: string;
+        neededLabel: string;
+        decidedByLabel: string;
+        decidedBy: string;
+      };
+      pending: {
+        title: string;
+        body: string;
+      };
+      error: {
+        title: string;
+        bodyStart: string;
+        bodyEnd: string;
+        retry: string;
+        incident: string;
+        incidentTitle: string;
+        incidentBody: string;
+        trace: string;
+      };
+      section: {
+        denied: string;
+        error: string;
+      };
+    };
+    coaching: {
+      title: string;
+      notBacked: string;
+      agents: string;
+      operators: string;
+      agentSignals: {
+        narrowBelt: string;
+        stablePrefix: string;
+        pageResults: string;
+        contextBudget: string;
+        lightModel: string;
+        retryStorms: string;
+        oneTurnCache: string;
+      };
+      operatorSignals: {
+        grants: string;
+        reRead: string;
+        onePrompt: string;
+        publishSteering: string;
+        resizeBudget: string;
+        selfReported: string;
+      };
+    };
+    toolChart: {
+      metric: {
+        cumulative: string;
+        perRun: string;
+        perCall: string;
+      };
+      switcher: string;
+      label: string;
+      empty: string;
+      footer: string;
     };
   };
   steering: {
     tabs: {
       label: string;
-      proposals: string;
-      settings: string;
       library: string;
-      freshness: string;
-      deliveries: string;
+      assignments: string;
+      gates: string;
+      proposals: string;
+      compiler: string;
+      candidates: string;
+      prs: string;
+      segments: string;
+    };
+    hub: {
+      description: string;
+    };
+    shelves: {
+      label: string;
+      all: string;
+      records: string;
+      instructions: string;
+      skills: string;
+      memory: string;
+      ontology: string;
+      notRecorded: string;
+    };
+    governance: {
+      chip: string;
+      chipTitle: string;
+      absentTitle: string;
+      invalidTitle: string;
+      unboundTitle: string;
+      unreadTitle: string;
+      shown: {
+        invalid: string;
+        unbound: string;
+        unread: string;
+      };
+      title: string;
+      subtitle: string;
+      mainRepository: string;
+      pick: string;
+      now: string;
+      modes: {
+        solo: {
+          summary: string;
+          hint: string;
+        };
+        team: {
+          summary: string;
+          hint: string;
+        };
+        regulated: {
+          summary: string;
+          hint: string;
+        };
+      };
+      tomlHeader: string;
+      note: string;
+      cancel: string;
+      close: string;
+      submit: string;
+      pending: string;
+      commit: string;
+      commitPending: string;
+      proposed: string;
+      applied: string;
+      unchanged: string;
+      openPr: string;
+      failure: {
+        denied: string;
+        noRepository: string;
+        refused: string;
+        pendingApproval: string;
+        unavailable: string;
+      };
+      lowering: string;
+    };
+    library: {
+      items: string;
+      itemsNote: string;
+      byKind: string;
+      byKindNote: string;
+      compiledSize: string;
+      compiledSizeNote: string;
+      grants: string;
+      grantsNote: string;
+      notRecorded: string;
+      kindRecord: string;
+      lead: string;
+      planes: string;
+      title: string;
+      receives: string;
+      columns: {
+        item: string;
+        kind: string;
+        force: string;
+        scope: string;
+        compiles: string;
+        tokens: string;
+        source: string;
+      };
+      compilesNotRecorded: string;
+      compilesTitle: string;
+      tokensTitle: string;
+      scopeTargetTitle: string;
+      sourceNone: string;
+      gap: string;
+      truncated: string;
+    };
+    state: {
+      loading: string;
+      empty: {
+        title: string;
+        body: string;
+        repository: string;
+      };
+      error: {
+        title: string;
+        answered: string;
+        body: string;
+        retry: string;
+        incident: string;
+        incidentNote: string;
+        trace: string;
+      };
+      denied: {
+        title: string;
+        body: string;
+        request: string;
+        requestNote: string;
+        back: string;
+        signedIn: string;
+        signedInValue: string;
+        signedInNamed: string;
+        needed: string;
+        neededValue: string;
+        decidedBy: string;
+        decidedByValue: string;
+      };
+      pending: {
+        title: string;
+        body: string;
+      };
+    };
+    bodies: {
+      notBacked: string;
+      issue: string;
+      assignments: {
+        what: string;
+        lead: string;
+        receivesTitle: string;
+        agentsBadge: string;
+        openLibrary: string;
+        openCompiler: string;
+        columns: {
+          agent: string;
+          repository: string;
+          delivery: string;
+          gates: string;
+          prefix: string;
+          volatile: string;
+          cut: string;
+          skills: string;
+          perRun: string;
+          action: string;
+        };
+        truncated: string;
+        panelNote: string;
+        scopeTitle: string;
+        itemsBadge: string;
+        scopeColumns: {
+          scope: string;
+          items: string;
+          reaches: string;
+        };
+        reaches: {
+          org: string;
+          workspace: string;
+          repository: string;
+          agent: string;
+        };
+        scopeWhat: string;
+        closing: string;
+        empty: {
+          title: string;
+          body: string;
+          action: string;
+        };
+      };
+      gates: {
+        what: string;
+        textTitle: string;
+        textBody: string;
+        gateTitle: string;
+        gateBody: string;
+        noticesTitle: string;
+        closing: string;
+        tiers: string;
+        editSwitches: string;
+        outcomes: {
+          killSwitch: string;
+        };
+        kinds: {
+          killSwitch: string;
+        };
+        applies: {
+          class: string;
+          org: string;
+          workspace: string;
+          tool_server: string;
+          tool_version: string;
+          connection: string;
+          agent: string;
+          operator: string;
+        };
+        noSwitch: string;
+        columns: {
+          gate: string;
+          outcome: string;
+          applies: string;
+          notice: string;
+          cost: string;
+          edit: string;
+        };
+        truncated: string;
+      };
+      compiler: {
+        what: string;
+        empty: {
+          title: string;
+          body: string;
+        };
+        agent: string;
+        prompt: string;
+        placeholder: string;
+        noAgent: string;
+        option: string;
+        hint: string;
+        chips: string;
+        prefixMeter: string;
+        volatileMeter: string;
+        parts: {
+          prefix: {
+            title: string;
+            tally: string;
+            sub: string;
+          };
+          volatile: {
+            title: string;
+            tally: string;
+            sub: string;
+          };
+          skills: {
+            title: string;
+            tally: string;
+            sub: string;
+          };
+        };
+        cutsTitle: string;
+        cutsBadge: string;
+        closing: string;
+      };
+      memory: {
+        empty: {
+          title: string;
+          body: string;
+        };
+        gapTitle: string;
+        notRecorded: string;
+        tiles: {
+          memories: string;
+          memoriesNote: string;
+          sources: string;
+          sourcesNote: string;
+          recalled: string;
+          recalledNote: string;
+          byClass: string;
+          byClassNote: string;
+        };
+        lead: string;
+        forgotten: string;
+        title: string;
+        columns: {
+          memory: string;
+          class: string;
+          force: string;
+          scope: string;
+          lastRecalled: string;
+          tokens: string;
+          assembler: string;
+        };
+        open: string;
+        provenance: string;
+        tokensTitle: string;
+        tokens: string;
+        compiler: string;
+        compilerNote: string;
+        truncated: string;
+        dialog: {
+          subtitle: string;
+          forget: string;
+          promote: string;
+          class: string;
+          forceNotRecorded: string;
+          scope: string;
+          origin: string;
+          recalled: string;
+          cost: string;
+          costValue: string;
+          since: string;
+          position: string;
+        };
+        forget: {
+          title: string;
+          keep: string;
+          pending: string;
+          confirm: string;
+          body: string;
+          other: string;
+        };
+      };
+      ontology: {
+        lead: string;
+        repository: string;
+        title: string;
+        columns: {
+          term: string;
+          kind: string;
+          definition: string;
+          force: string;
+          about: string;
+          tokens: string;
+          file: string;
+        };
+        notBacked: string;
+        index: {
+          title: string;
+          today: {
+            term: string;
+            body: string;
+          };
+          later: {
+            term: string;
+            body: string;
+          };
+          notHere: {
+            term: string;
+            body: string;
+          };
+        };
+      };
+      instructions: {
+        what: string;
+      };
+      skillSource: {
+        pending: string;
+      };
+      notRecorded: string;
     };
     failure: {
       denied: string;
@@ -5592,19 +8295,74 @@ type Messages = {
     };
     records: {
       title: string;
-      lead: string;
       filter: string;
       all: string;
-      emptyTitle: string;
-      empty: string;
       emptyKind: string;
       open: string;
-      authority: string;
-      facts: {
-        version: string;
-        commit: string;
-        path: string;
-        published: string;
+      sort: string;
+      sorts: {
+        shown: string;
+        asc: string;
+        desc: string;
+      };
+      forceTitle: string;
+      effectTitle: string;
+      tokensTitle: string;
+      tokens: string;
+      compilesTitle: string;
+      compilesNotRecorded: string;
+      newTitle: string;
+      new: string;
+      published: string;
+      openLabel: string;
+      effectLineTitle: string;
+      effectNotRecorded: string;
+      truncated: string;
+      note: string;
+      disk: {
+        title: string;
+        failed: string;
+        unbound: string;
+        absent: string;
+        at: string;
+        noHead: string;
+        note: string;
+        comments: {
+          workspace: string;
+          governance: string;
+          promotions: string;
+          skills: string;
+          ontology: string;
+          proposals: string;
+          agents: string;
+        };
+      };
+      injection: {
+        title: string;
+        badge: string;
+        lead: string;
+        points: {
+          "1": {
+            head: string;
+            body: string;
+          };
+          "2": {
+            head: string;
+            body: string;
+          };
+          "3": {
+            head: string;
+            body: string;
+          };
+          "4": {
+            head: string;
+            body: string;
+          };
+          "5": {
+            head: string;
+            body: string;
+          };
+        };
       };
     };
     proposals: {
@@ -5725,6 +8483,9 @@ type Messages = {
         headMoved: string;
         baseMoved: string;
         githubRefused: string;
+        gitlabRefused: string;
+        gitlabCredentialRejected: string;
+        repositoryHostChanged: string;
         mergeTimeUnknown: string;
         refused: string;
         invalid: string;
@@ -5736,20 +8497,6 @@ type Messages = {
       skill: string;
       record: string;
     };
-    library: {
-      label: string;
-      all: string;
-      records: string;
-      skills: string;
-      memory: string;
-    };
-    proposalSections: {
-      label: string;
-      candidates: string;
-      prs: string;
-    };
-    description: string;
-    governance: string;
     deliveries: {
       title: string;
       lead: string;
@@ -5791,13 +8538,14 @@ type Messages = {
     };
     tabs: {
       label: string;
-      registry: string;
-      connections: string;
+      tools: string;
+      toolbelts: string;
+      providers: string;
+      policy: string;
       switches: string;
-      mandates: string;
+      atLeast: string;
       switchesOn: string;
       switchesOnAtLeast: string;
-      autoapprovals: string;
     };
     gate: {
       open: string;
@@ -5807,7 +8555,6 @@ type Messages = {
     };
     registry: {
       title: string;
-      lead: string;
       categories: string;
       allCategories: string;
       categoriesNote: string;
@@ -5818,12 +8565,9 @@ type Messages = {
       noTags: string;
       emptyCategory: string;
       gateNote: string;
-      empty: {
-        title: string;
-        body: string;
-      };
       columns: {
         version: string;
+        provider: string;
         category: string;
         hazard: string;
         gate: string;
@@ -5831,6 +8575,8 @@ type Messages = {
         financial: string;
         origin: string;
         digest: string;
+        toolbelts: string;
+        agents: string;
         calls: string;
       };
       names: {
@@ -5854,12 +8600,36 @@ type Messages = {
         org_tenant: string;
         third_party: string;
       };
-      financial: {
-        yes: string;
-      };
       origin: {
         declared: string;
         imported: string;
+      };
+      caption: string;
+      emptyRegistry: string;
+      observedNotBacked: string;
+      shown: string;
+      shownOf: string;
+      declaredSource: {
+        builtin: string;
+        custom: string;
+        mcp: string;
+        foundry: string;
+      };
+      categoriesDialog: {
+        open: string;
+        title: string;
+        lead: string;
+        tags: {
+          moves_money: string;
+          destroys_data: string;
+          alters_production: string;
+          communicates_externally: string;
+          changes_access: string;
+          changes_entitlement: string;
+        };
+        decides: string;
+        note: string;
+        close: string;
       };
     };
     tool: {
@@ -5905,19 +8675,53 @@ type Messages = {
     };
     import: {
       open: string;
+      openAdd: string;
       title: string;
-      body: string;
-      serverId: string;
+      subtitle: string;
+      reviewTitle: string;
+      reviewSubtitle: string;
+      classifyTitle: string;
+      steps: {
+        label: string;
+        s1: string;
+        s2: string;
+        s3: string;
+      };
+      provider: string;
+      newProvider: string;
+      name: string;
+      nameHint: string;
+      endpoint: string;
+      endpointHint: string;
+      wire: string;
+      wireHint: string;
+      auth: string;
+      authStrategies: {
+        none: string;
+        bearer: string;
+        header: string;
+      };
+      authConfig: string;
+      authConfigHint: string;
+      authConfigPlaceholder: string;
+      connectNote: string;
+      connect: string;
+      pending: string;
+      back: string;
+      classify: string;
+      cancel: string;
       tools: string;
       toolsHint: string;
-      confirm: string;
-      pending: string;
+      nothingListed: string;
+      listed: string;
+      selected: string;
+      allPins: string;
+      grantsNothingTitle: string;
+      grantsNothing: string;
+      importAll: string;
+      importCount: string;
+      importing: string;
       done: string;
-      serverIdPlaceholder: string;
-      serverPick: string;
-      serverPickHint: string;
-      serverFallbackHint: string;
-      serverNone: string;
     };
     connections: {
       title: string;
@@ -5931,8 +8735,8 @@ type Messages = {
       };
       columns: {
         grant: string;
-        server: string;
-        run: string;
+        toolVersion: string;
+        agentRun: string;
         connection: string;
         scope: string;
         ttl: string;
@@ -6042,14 +8846,11 @@ type Messages = {
         pending: string;
         done: string;
       };
+      fromProvider: string;
     };
     switches: {
-      title: string;
-      lead: string;
-      generation: string;
       classHeading: string;
       scopedHeading: string;
-      empty: string;
       truncated: string;
       allowing: string;
       denying: string;
@@ -6084,8 +8885,6 @@ type Messages = {
       };
       dialog: {
         openHeader: string;
-        openDeny: string;
-        openAllow: string;
         titleDeny: string;
         titleAllow: string;
         kind: string;
@@ -6118,8 +8917,56 @@ type Messages = {
         confirmAllow: string;
         pending: string;
         unchanged: string;
+        allowing: string;
+        denying: string;
+        toggleDeny: string;
+        toggleAllow: string;
       };
-      noNames: string;
+      generationBadge: string;
+      classTitle: string;
+      reach: {
+        class: string;
+        org: string;
+        workspace: string;
+        tool_server: string;
+        tool_version: string;
+        connection: string;
+        agent: string;
+        operator: string;
+      };
+      unbacked: {
+        irreversible: string;
+        egress: string;
+        note: string;
+      };
+      edit: {
+        open: string;
+        title: string;
+        reason: string;
+        note: string;
+        confirm: string;
+      };
+      remove: {
+        open: string;
+        title: string;
+        note: string;
+        refused: string;
+        confirm: string;
+      };
+      create: {
+        open: string;
+        title: string;
+        scope: string;
+        scopes: {
+          agent: string;
+          device: string;
+          operator: string;
+        };
+        target: string;
+        why: string;
+        note: string;
+        confirm: string;
+      };
     };
     failure: {
       back: string;
@@ -6293,21 +9140,6 @@ type Messages = {
         title: string;
         body: string;
       };
-      tiles: {
-        label: string;
-        on: {
-          title: string;
-          basis: string;
-        };
-        released: {
-          title: string;
-          basis: string;
-        };
-        held: {
-          title: string;
-          basis: string;
-        };
-      };
       columns: {
         rule: string;
         appliesTo: string;
@@ -6385,56 +9217,263 @@ type Messages = {
         tool_scope_changed: string;
       };
     };
-    servers: {
+    notBacked: string;
+    header: {
+      newTool: string;
+      wizard: {
+        title: string;
+        subtitle: string;
+        note: string;
+        confirm: string;
+        steps: {
+          describe: string;
+          recommend: string;
+          manifest: string;
+          code: string;
+          pr: string;
+        };
+      };
+    };
+    empty: {
       title: string;
-      lead: string;
-      empty: {
+      body: string;
+    };
+    state: {
+      back: string;
+      denied: {
+        title: string;
+        body: string;
+        request: string;
+        signedIn: string;
+        needed: string;
+        neededValue: string;
+        decidedBy: string;
+        decidedByValue: string;
+      };
+      requestAccess: {
+        title: string;
+        role: string;
+        rolePlaceholder: string;
+        why: string;
+        note: string;
+        confirm: string;
+      };
+      pending: {
         title: string;
         body: string;
       };
-      columns: {
-        server: string;
-        transport: string;
-        endpoint: string;
-        health: string;
-        checked: string;
-        tools: string;
+      error: {
+        title: string;
+        body: string;
+        retry: string;
+        incident: string;
       };
+      incident: {
+        title: string;
+        subject: string;
+        subjectPlaceholder: string;
+        severity: string;
+        severities: {
+          critical: string;
+          warning: string;
+          info: string;
+        };
+        note: string;
+        confirm: string;
+      };
+    };
+    providers: {
+      title: string;
+      caption: string;
+      captionPartial: string;
+      empty: string;
+      columns: {
+        provider: string;
+        transport: string;
+        tools: string;
+        toolbelts: string;
+        agents: string;
+        health: string;
+        connection: string;
+        authorization: string;
+        lastImport: string;
+        actions: string;
+      };
+      transportNote: string;
+      attentionNotBacked: string;
+      open: string;
+      openNamed: string;
+      wireLine: string;
+      atLeast: string;
+      pinned: string;
       health: {
         healthy: string;
         degraded: string;
         unreachable: string;
         unknown: string;
       };
-      transport: {
-        "streamable-http": string;
-        sse: string;
-        stdio: string;
-      };
-      unknownNote: string;
-      register: {
+      remove: {
         open: string;
         title: string;
-        body: string;
-        name: string;
-        nameHint: string;
-        transport: string;
-        transportHint: string;
-        endpoint: string;
-        endpointHint: string;
-        authStrategy: string;
-        authConfig: string;
-        authConfigHint: string;
-        authConfigPlaceholder: string;
+        cancel: string;
         confirm: string;
         pending: string;
+        stops: string;
+        kept: string;
+        switchNote: string;
+        notFound: string;
+      };
+      reimport: {
+        open: string;
+        pending: string;
         done: string;
-        doneHealth: {
-          healthy: string;
+      };
+      edit: {
+        open: string;
+        title: string;
+        endpoint: string;
+        transport: string;
+        wire: string;
+        connection: string;
+        hint: string;
+        note: string;
+        confirm: string;
+      };
+      oauth: {
+        open: string;
+        title: string;
+        clientId: string;
+        clientSecret: string;
+        authUrl: string;
+        scopes: string;
+        redirect: string;
+        redirectHint: string;
+        refusal: string;
+        note: string;
+        confirm: string;
+      };
+      drill: {
+        subtitle: string;
+        healthWarning: {
           degraded: string;
           unreachable: string;
         };
+        facts: {
+          system: string;
+          transport: string;
+          registryName: string;
+          schemas: string;
+          versions: string;
+          toolbelts: string;
+          agents: string;
+          lastImport: string;
+          lastCheck: string;
+        };
+        transportLine: string;
+        schemas: string;
+        atLeast: string;
+        authTitle: string;
+        authNotBacked: string;
+        keyInstead: string;
+        keyTitle: string;
+        keyNote: string;
+        keyConfirm: string;
+        toolsTitle: string;
+        noTools: string;
+        partial: string;
+        columns: {
+          version: string;
+          hazard: string;
+          gate: string;
+          agents: string;
+          calls: string;
+        };
+        transportMcp: string;
       };
+      transportMcp: string;
+    };
+    toolbelts: {
+      title: string;
+      caption: string;
+      notBacked: string;
+      note: string;
+      new: {
+        open: string;
+        title: string;
+        name: string;
+        purpose: string;
+        owner: string;
+        ownerHint: string;
+        note: string;
+        confirm: string;
+      };
+      assignments: {
+        title: string;
+        caption: string;
+        notBacked: string;
+        agents: string;
+      };
+    };
+    policy: {
+      versions: {
+        title: string;
+        notBacked: string;
+        note: string;
+        draft: {
+          open: string;
+          title: string;
+          basedOn: string;
+          whatChanged: string;
+          note: string;
+          confirm: string;
+        };
+      };
+      where: {
+        title: string;
+        caption: string;
+        terms: {
+          store: string;
+          regulated: string;
+          compiledFrom: string;
+          readBy: string;
+          writes: string;
+        };
+        values: {
+          store: string;
+          regulated: string;
+          compiledFrom: string;
+          readBy: string;
+          writes: string;
+        };
+      };
+      conditions: {
+        title: string;
+        items: {
+          toolVersion: string;
+          risk: string;
+          sideEffect: string;
+          egress: string;
+          financialClass: string;
+          amountByPath: string;
+          counterparty: string;
+          repository: string;
+          pathPrefix: string;
+          recipientDomain: string;
+          taint: string;
+          timeWindow: string;
+          rate: string;
+          sequence: string;
+          operatorRole: string;
+          enforcementTier: string;
+          budgetPosition: string;
+          mandatePosition: string;
+        };
+      };
+      sequence: {
+        title: string;
+        plain: string;
+      };
+      versionsTable: string;
     };
   };
   ui: {
@@ -6443,6 +9482,7 @@ type Messages = {
     };
     dialog: {
       close: string;
+      dismiss: string;
     };
     record: {
       kinds: {
@@ -6479,6 +9519,8 @@ type Messages = {
     };
     runStatus: {
       live: string;
+      sealed: string;
+      halted: string;
       running: string;
       completed: string;
       failed: string;
@@ -6556,8 +9598,47 @@ type Messages = {
       hint: string;
       invalid: string;
     };
+    pageState: {
+      loading: string;
+      error: {
+        title: string;
+        titleNamed: string;
+        body: string;
+        retry: string;
+        incident: string;
+        trace: string;
+        incidentNotBacked: string;
+      };
+      denied: {
+        body: string;
+        request: string;
+        back: string;
+        requestNotBacked: string;
+        signedIn: string;
+        needed: string;
+        decidedBy: string;
+        decidedByValue: string;
+        policyNotRecorded: string;
+      };
+    };
+    list: {
+      search: string;
+      filterBy: string;
+      all: string;
+      rows: string;
+      allRows: string;
+      noMatch: string;
+      pager: string;
+      range: string;
+      rangeEmpty: string;
+      previous: string;
+      next: string;
+      page: string;
+    };
     listTable: {
       search: string;
+      facetAll: string;
+      facetLabel: string;
       rows: string;
       all: string;
       noMatch: string;
@@ -6566,6 +9647,25 @@ type Messages = {
       previous: string;
       next: string;
       pages: string;
+    };
+    desktopDownloads: {
+      title: string;
+      lead: string;
+      platforms: {
+        macos: string;
+        windows: string;
+        linux: string;
+      };
+      installers: {
+        macAppleSilicon: string;
+        macIntel: string;
+        windowsExe: string;
+        windowsMsi: string;
+        linuxDeb: string;
+        linuxRpm: string;
+        linuxAppImage: string;
+      };
+      all: string;
     };
   };
 };

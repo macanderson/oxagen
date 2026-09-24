@@ -63,6 +63,12 @@ export function createDismissProposalHandler(
         !(await deps.store.findOpenPrOnLineage(scope, row.lineageId, row.id)))
     ) {
       const repo = await deps.github.resolveRepository(scope);
+      // A PR opened on another host than the one the workspace now binds is
+      // left alone there: its number means nothing on this host, and closing
+      // by it would close an unrelated pull request or merge request. The
+      // proposal is still rejected here.
+      const sameHost =
+        row.prNumber === null || (row.provider ?? "github") === repo.provider;
       const found =
         row.prNumber === null
           ? await deps.github.findOpenPullRequest(repo, {
@@ -70,7 +76,7 @@ export function createDismissProposalHandler(
               base: repo.defaultBranch,
             })
           : null;
-      if (!found || bodyNamesProposal(found.body, row.publicId)) {
+      if (sameHost && (!found || bodyNamesProposal(found.body, row.publicId))) {
         const prNumber = row.prNumber ?? found?.number ?? null;
         if (prNumber !== null)
           await deps.github.closePullRequest(repo, prNumber);

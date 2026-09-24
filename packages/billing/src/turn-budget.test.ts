@@ -195,7 +195,7 @@ describe("turnCostUsd", () => {
 });
 
 describe("createTurnBudgetGuard", () => {
-  const million = { outputTokens: 1_000_000 }; // $75 on opus
+  const million = { outputTokens: 1_000_000 }; // $75 on legacy Opus 4.1
 
   it("returns undefined when the budget is off", () => {
     expect(

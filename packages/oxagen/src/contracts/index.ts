@@ -98,6 +98,7 @@ import { repositoryInitPrOpen } from "./repository.init_pr.open";
 import { repositoryInstallationList } from "./repository.installation.list";
 import { repositoryInstallationCandidates } from "./repository.installation.candidates";
 import { repositoryInstallationAttach } from "./repository.installation.attach";
+import { repositoryGitlabAttach } from "./repository.gitlab.attach";
 import { runList } from "./run.list";
 import { runCostGet } from "./run.cost";
 import { runWorkGet } from "./run.work.get";
@@ -184,7 +185,12 @@ import { billingEvidenceRetention } from "./billing.evidence_retention";
 import { billingGauBucketGet } from "./billing.gau_bucket.get";
 import { billingGauBucketPurchase } from "./billing.gau_bucket.purchase";
 import { billingInvoiceList } from "./billing.invoice.list";
+import { billingStatementGet } from "./billing.statement.get";
+import { billingStatementExport } from "./billing.statement.export";
 import { billingOrgTermsSet } from "./billing.org_terms.set";
+import { billingContractTermsSet } from "./billing.contract_terms.set";
+import { billingPrepaidInvoiceCreate } from "./billing.prepaid_invoice.create";
+import { billingPrepaidOrderList } from "./billing.prepaid_order.list";
 import { billingSubscriptionRead } from "./billing.subscription.read";
 import { billingSubscriptionUpgradeStart } from "./billing.subscription_upgrade.start";
 import { billingUsageBreakdown } from "./billing.usage.breakdown";
@@ -333,6 +339,10 @@ import { orgSsoList } from "./org.sso.list";
 import { orgSsoPolicySet } from "./org.sso.policy.set";
 import { orgSsoUpdate } from "./org.sso.update";
 import { orgSsoVerifyDomain } from "./org.sso.verify_domain";
+import { orgScimTokenCreate } from "./org.scim_token.create";
+import { orgScimTokenRevoke } from "./org.scim_token.revoke";
+import { orgScimTokenRotate } from "./org.scim_token.rotate";
+import { scimRequest } from "./scim.request";
 import { orgSettingsRead } from "./org.settings.read";
 import { orgSettingsWrite } from "./org.settings.write";
 import { workspaceSettingsRead } from "./workspace.settings.read";
@@ -594,6 +604,12 @@ export {
   ssoProviderIdSchema,
   ssoProviderViewSchema,
 } from "./org.sso.shared";
+export {
+  scimTokenMintedSchema,
+  scimTokenViewSchema,
+  scimViewSchema,
+} from "./org.scim_token.shared";
+export type { ScimTokenView, ScimView } from "./org.scim_token.shared";
 export type {
   SsoGroupRole,
   SsoMappableRole,
@@ -709,6 +725,7 @@ export {
   repositoryInstallationList,
   repositoryInstallationCandidates,
   repositoryInstallationAttach,
+  repositoryGitlabAttach,
   runList,
   runGet,
   runFrameBodyGet,
@@ -769,7 +786,12 @@ export {
   billingGauBucketGet,
   billingGauBucketPurchase,
   billingInvoiceList,
+  billingStatementGet,
+  billingStatementExport,
   billingOrgTermsSet,
+  billingContractTermsSet,
+  billingPrepaidInvoiceCreate,
+  billingPrepaidOrderList,
   billingSubscriptionRead,
   billingSubscriptionUpgradeStart,
   billingUsageBreakdown,
@@ -918,6 +940,10 @@ export {
   orgSsoPolicySet,
   orgSsoUpdate,
   orgSsoVerifyDomain,
+  orgScimTokenCreate,
+  orgScimTokenRevoke,
+  orgScimTokenRotate,
+  scimRequest,
   orgSettingsRead,
   orgSettingsWrite,
   workspaceSettingsRead,
@@ -1094,6 +1120,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   repositoryInstallationList,
   repositoryInstallationCandidates,
   repositoryInstallationAttach,
+  repositoryGitlabAttach,
   runList,
   runGet,
   runFrameBodyGet,
@@ -1154,7 +1181,12 @@ export const contracts: readonly CapabilityDeclaration[] = [
   billingGauBucketGet,
   billingGauBucketPurchase,
   billingInvoiceList,
+  billingStatementGet,
+  billingStatementExport,
   billingOrgTermsSet,
+  billingContractTermsSet,
+  billingPrepaidInvoiceCreate,
+  billingPrepaidOrderList,
   billingSubscriptionRead,
   billingSubscriptionUpgradeStart,
   billingUsageBreakdown,
@@ -1304,6 +1336,10 @@ export const contracts: readonly CapabilityDeclaration[] = [
   orgSsoPolicySet,
   orgSsoUpdate,
   orgSsoVerifyDomain,
+  orgScimTokenCreate,
+  orgScimTokenRevoke,
+  orgScimTokenRotate,
+  scimRequest,
   orgSettingsRead,
   orgSettingsWrite,
   workspaceSettingsRead,

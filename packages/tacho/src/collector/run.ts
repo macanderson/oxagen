@@ -9,15 +9,53 @@ import { tachoPaths } from "../host/paths";
 import { formatDaemonPid, parseDaemonPid } from "../host/process-scan";
 import { startDaemon } from "./daemon";
 
-/** How long a crash waits for the daemon to stop before it exits anyway. */
-const CRASH_STOP_TIMEOUT_MS = 10_000;
+/**
+ * How long the daemon waits for `stop()` after SIGTERM or SIGINT before it
+ * exits anyway. `stop()` awaits the git reconciliation lane, which can run
+ * for minutes. A re-enroll boots the old daemon out of launchd and waits for
+ * it to go before it loads the new one, so a slow stop there holds up the
+ * enroll, and launchd's and systemd's own kill timeouts are 10 s
+ * (`host/service.ts`). `stop()` persists `state.json` before that wait, so
+ * exiting early loses the final seal of the host chain and nothing else.
+ */
+export const STOP_GRACE_MS = 5_000;
+
+/**
+ * Run `stop` and exit: 0 when it finishes, 1 when it fails or when it has
+ * not finished within `graceMs`. Ports are injected so a test can drive it.
+ */
+export function stopWithin(
+  stop: () => Promise<void>,
+  graceMs: number,
+  exit: (code: number) => void,
+  log: (line: string) => void,
+): void {
+  const timer = setTimeout(() => {
+    log(`tachod: stop did not finish within ${graceMs} ms, exiting\n`);
+    exit(1);
+  }, graceMs);
+  stop()
+    .then(() => {
+      clearTimeout(timer);
+      exit(0);
+    })
+    .catch((error) => {
+      clearTimeout(timer);
+      log(
+        `tachod: stop failed: ${error instanceof Error ? error.message : String(error)}\n`,
+      );
+      exit(1);
+    });
+}
 
 export interface ProcessGuardOptions {
   /** Stop the daemon: persist its state and close its listeners. */
   stop: () => Promise<void>;
   /** End the process with this code. */
   exit: (code: number) => void;
+  /** Write one line; each line ends in a newline, as `stopWithin`'s do. */
   log: (line: string) => void;
+  /** `STOP_GRACE_MS` unless a test says. */
   stopTimeoutMs?: number;
   /** Where the handlers are registered; the process unless a test says. */
   target?: Pick<NodeJS.EventEmitter, "on" | "off">;
@@ -37,35 +75,28 @@ function describeError(value: unknown): string {
  * refused until the service manager restarts it. An unhandled rejection is
  * logged and the process keeps serving. An uncaught exception leaves the
  * process in a state nothing vouches for, so it is logged, the daemon gets
- * a bounded chance to stop cleanly, and the process exits 1 for the service
- * manager to start a fresh one. Returns a function that removes both.
+ * the same bounded stop a SIGTERM gets (`stopWithin`), and the process
+ * exits 1 for the service manager to start a fresh one. Returns a function
+ * that removes both.
  */
 export function guardDaemonProcess(options: ProcessGuardOptions): () => void {
   const target = options.target ?? process;
   let crashing = false;
   const onRejection = (reason: unknown) => {
-    options.log(`tachod: unhandled rejection: ${describeError(reason)}`);
+    options.log(`tachod: unhandled rejection: ${describeError(reason)}\n`);
   };
   const onException = (error: unknown) => {
-    options.log(`tachod: uncaught exception: ${describeError(error)}`);
+    options.log(`tachod: uncaught exception: ${describeError(error)}\n`);
     if (crashing) return;
     crashing = true;
-    let timer: NodeJS.Timeout | undefined;
-    const timeout = new Promise<void>((resolve) => {
-      timer = setTimeout(
-        resolve,
-        options.stopTimeoutMs ?? CRASH_STOP_TIMEOUT_MS,
-      );
-    });
-    const stopped = Promise.resolve()
-      .then(() => options.stop())
-      .catch((stopError: unknown) => {
-        options.log(`tachod: stop failed: ${describeError(stopError)}`);
-      });
-    void Promise.race([stopped, timeout]).then(() => {
-      clearTimeout(timer);
-      options.exit(1);
-    });
+    stopWithin(
+      // A stop that throws synchronously counts as a failed stop, so this
+      // handler never throws itself.
+      () => Promise.resolve().then(() => options.stop()),
+      options.stopTimeoutMs ?? STOP_GRACE_MS,
+      () => options.exit(1),
+      options.log,
+    );
   };
   target.on("unhandledRejection", onRejection);
   target.on("uncaughtException", onException);
@@ -115,25 +146,17 @@ export async function runDaemonProcess(): Promise<void> {
     releaseDaemonPid(paths.pid);
     process.exit(code);
   };
-  guardDaemonProcess({
-    stop: stopOnce,
-    exit,
-    log: (line) => process.stderr.write(`${line}\n`),
-  });
+  const log = (line: string) => {
+    process.stderr.write(line);
+  };
+  guardDaemonProcess({ stop: stopOnce, exit, log });
   const daemon = await startDaemon({ paths });
   stopDaemon = () => daemon.stop();
   writeDaemonPid(paths.pid);
   const stop = (signal: string) => {
     if (stopping !== undefined) return;
     process.stderr.write(`tachod: ${signal}, stopping\n`);
-    stopOnce()
-      .then(() => exit(0))
-      .catch((error) => {
-        process.stderr.write(
-          `tachod: stop failed: ${error instanceof Error ? error.message : String(error)}\n`,
-        );
-        exit(1);
-      });
+    stopWithin(stopOnce, STOP_GRACE_MS, exit, log);
   };
   process.on("SIGTERM", () => stop("SIGTERM"));
   process.on("SIGINT", () => stop("SIGINT"));

@@ -153,17 +153,57 @@ const RunMachine = z.object({
 });
 
 /**
- * Can a direct command reach this run? An `observe`-tier session only records
- * what an agent did and gives Oxagen no connection point, so a queued pause,
- * resume, steer or cancel would have nothing to travel down (#3285).
+ * Why a pause, resume, steer or cancel cannot reach a wrapped run, mirrored
+ * from `list_runs`' `commandBlock` (ADR-163). The enforcement tier is not
+ * among them: an `observe`-tier run whose host is polling takes commands.
+ */
+const CommandBlock = z.enum([
+  "run_sealed",
+  "no_host",
+  "host_revoked",
+  "host_offline",
+]);
+
+/**
+ * Why a run refuses commands. The schema stays module-local, since `RunRow`
+ * composes it in this file; the type is exported because the Run controls, a
+ * Fleet row's pause and the shared block copy each name one of its members.
+ */
+export type CommandBlock = z.infer<typeof CommandBlock>;
+
+/**
+ * Why a steer cannot reach a run that takes the other commands, mirrored from
+ * `list_runs`' `steerBlock` (ADR-163): the harness reads steering text only
+ * when a session starts.
+ */
+export const SteerBlock = z.enum(["no_prompt_carrier"]);
+export type SteerBlock = z.infer<typeof SteerBlock>;
+
+/**
+ * Why a direct command cannot reach this run, or null when it can.
+ *
+ * The control plane answers it on the row from the same rule
+ * `dispatch_command` refuses on, so a page never offers a control the handler
+ * refuses (#3285, ADR-163). A row that carries no answer is read as
+ * reachable, and the handler's refusal names the reason if it is not.
  *
  * Every surface that offers a run control answers from here: the Run page's
  * controls and the Fleet row controls. One rule, so a row cannot offer what
  * its run page refuses.
  */
-export function acceptsCommands(tier: EnforcementTier): boolean {
-  return tier !== "observe";
+export function commandBlockOf(run: {
+  commandBlock?: CommandBlock | null;
+}): CommandBlock | null {
+  return run.commandBlock ?? null;
 }
+
+/** Token totals by kind, as the recorder counted them. */
+const RunTokens = z.object({
+  input: z.number().int().nonnegative(),
+  output: z.number().int().nonnegative(),
+  cacheRead: z.number().int().nonnegative(),
+  cacheWrite: z.number().int().nonnegative(),
+});
 
 export const RunRow = z.object({
   id: PublicId,
@@ -183,8 +223,21 @@ export const RunRow = z.object({
   steps: z.number().int().nonnegative(),
   frames: z.number().int().nonnegative(),
   cost: Cost.nullable(),
+  /**
+   * True while `cost` is a running estimate: the run is open, or its rollup
+   * predates the seal. The page labels such a figure an estimate.
+   */
+  costIsEstimate: z.boolean().optional(),
   reportedCost: Cost.nullable().optional(),
   model: RunModel.nullable(),
+  /** The effort level the harness reported; null when it reported none. */
+  effort: z.string().min(1).nullable().optional(),
+  /** Whether always-on thinking was enabled; null when no frame recorded it. */
+  thinking: z.boolean().nullable().optional(),
+  /** The permission mode the session ended in; null when none was recorded. */
+  permissionMode: z.string().min(1).nullable().optional(),
+  /** Token totals from the session's counted model calls; null when none were recorded. */
+  reportedTokens: RunTokens.nullable().optional(),
   machine: RunMachine.nullable(),
   harness: z
     .object({
@@ -197,11 +250,17 @@ export const RunRow = z.object({
   taskRef: z.string().nullable(),
   /** The generated name; null until `summarize_run` wrote one. */
   enrichmentEnabled: z.boolean().optional(),
+  /** Why the last automatic name and summary failed; absent once one exists. */
+  enrichmentError: z.string().optional(),
   name: z.string().min(1).nullable(),
   summary: RunSummary.nullable(),
   replayGrade: ReplayGrade.nullable(),
   verdict: ProofVerdict.nullable(),
   enforcementTier: EnforcementTier,
+  /** Why a command cannot reach this run; null or absent when it can. */
+  commandBlock: CommandBlock.nullable().optional(),
+  /** Why a steer cannot reach this run; null or absent when it can. */
+  steerBlock: SteerBlock.nullable().optional(),
   ingressRevoked: z.boolean().optional(),
   ingressPaused: z.boolean().optional(),
   /** Empty while the run is live, or where the seal recorded none. */
@@ -213,7 +272,24 @@ export const RunRow = z.object({
    */
   canSummarize: z.boolean(),
   startedAt: z.iso.datetime({ offset: true }),
+  /** When the server recorded the seal; receipt time, so never a wall-clock end. */
   sealedAt: z.iso.datetime({ offset: true }).nullable(),
+  /**
+   * What sealed the run: `agent_stop`, its host's own end, or `idle_timeout`,
+   * Oxagen closing a run that sent nothing for 12 hours. Null while open and
+   * for a ledger run.
+   */
+  sealSource: z.enum(["agent_stop", "idle_timeout"]).nullable().optional(),
+  /** When the run stopped, by the recorder's clock; the end of a wall clock. */
+  endedAt: z.iso.datetime({ offset: true }).nullable().optional(),
+  /**
+   * `host_enroller` when the operator is the person who enrolled the machine
+   * a wrapped session ran on, which a page labels "enrolled by".
+   */
+  operatorAttribution: z
+    .enum(["initiator", "host_enroller"])
+    .nullable()
+    .optional(),
 });
 export type RunRow = z.infer<typeof RunRow>;
 

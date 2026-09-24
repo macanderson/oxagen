@@ -9,6 +9,8 @@ Related: ADR-006, ADR-042, ADR-101, `packages/auth/src/sso/`,
 `packages/oxagen/src/contracts/org.sso.shared.ts`,
 `packages/handlers/src/lib/sso.ts`, `apps/app/src/server/sso-gate.ts`,
 `packages/database/atlas/migrations/20260922220000_enterprise_sso.sql`,
+`packages/database/src/member-lifecycle.ts`,
+`packages/handlers/src/lib/scim/`, `apps/api/src/routes/scim.ts`,
 `docs/guides/sso.md`
 
 ## Context
@@ -21,7 +23,7 @@ role. Removing someone from the IdP removes their access.
 
 Before this change Oxagen had email and password, Google and GitHub sign-in,
 and TOTP two-factor, all on Better Auth 1.6.11 (ADR-006). The docs said SSO
-was not available, and `docs/mission-control/GAP-INVENTORY.md` listed it as
+was not available, and `oxagen-roadmap:docs/oxagen/mission-control/GAP-INVENTORY.md` listed it as
 cut.
 
 Better Auth ships `@better-auth/sso` at the same version. It handles OIDC and
@@ -76,7 +78,19 @@ secret, SAML private keys, and their passphrases. Each becomes an
 `enc:v1:<keyId>:<envelope>` token: AES-256-GCM under a fresh data key wrapped
 by the master key in `AUTH_TOKEN_ENCRYPTION_KEY`, the same envelope model
 credentials and plugin credentials use. `withSsoSecrets` wraps the Better Auth
-adapter and opens the tokens when the plugin reads a row.
+adapter and opens the tokens when the plugin reads one row. A listing opens
+nothing: it returns each row with its secrets removed. A before hook on
+`/sign-in/sso` names the most specific verified provider for the email's
+domain, so a sign-in opens only that provider's secrets.
+
+The key id in each token selects the key that opens it. The current key is
+`AUTH_TOKEN_ENCRYPTION_KEY` under the id in `SSO_SECRET_KEY_ID`, which
+defaults to `sso_v1`. Retired keys stay readable through
+`SSO_SECRET_PREVIOUS_KEYS`, a comma-separated list of `<keyId>=<base64 key>`.
+The Inngest function `auth/sso-reseal-daily` moves every token onto the
+current key once a day, and `auth/sso-reseal-requested` does the same when an
+operator sends the `auth/sso-secrets.reseal.requested` event. A retired key can
+leave the list once a run reports no failures.
 
 The issuer, endpoints, client ID, and IdP certificate stay readable, because
 someone debugging a sign-in needs them and none of them is secret. A read
@@ -165,7 +179,17 @@ set on the server and never by a client. The app's gate admits a non-Owner
 member of a require-SSO organization only with a session that one of that
 organization's providers created.
 
-Owners are exempt in both places. They are the break-glass account: an IdP
+An API key has no session, so `resolveApiKey`
+(`packages/auth/src/resolvers/api-key.ts`), which turns a raw key into a scope
+for the API, the MCP server, and every other surface, checks the person who
+created the key instead. In a require-SSO organization on Enterprise, a key
+authenticates only while its creator is a member and has signed in at least
+once through one of the organization's verified providers, which leaves an
+`auth.accounts` row naming that provider. Any other key is refused as
+`sso_required`: the API answers 403 and the MCP server refuses the call. A key
+with no creator was minted by the system and is not checked.
+
+Owners are exempt in all three places. They are the break-glass account: an IdP
 outage or a broken certificate must not lock every administrator out of the
 switch that would fix it.
 
@@ -205,14 +229,80 @@ and no other. The plan is read the way the role editor reads it:
 reversible and a deletion is not. Keeping the rows costs nothing while sign-in
 ignores them.
 
-### SCIM is deferred
+### SCIM provisions and deprovisions people (added 2026-09-23, #3734)
 
-SCIM 2.0 provisioning and deprovisioning is not part of this change. It needs
-its own endpoints, a bearer token per organization, session and API key
-revocation, and an IdP rig to test Okta and Entra ID pushes against. Until it
-lands, removing someone from the IdP blocks their next SSO sign-in but does not
-end a session they hold or revoke their API keys. Issue #3734 carries the
-handoff.
+SCIM 2.0 shipped after the rest of this record, and this section records how.
+
+**One organization per token.** An Owner or Admin mints the token on the
+Single sign-on page (`create_scim_token`, `rotate_scim_token`,
+`revoke_scim_token`). `org.scim_tokens` keeps only its SHA-256 and a lookup
+prefix, the way `auth.api_keys` keeps a key, because the server compares a
+presented token and never reads one back. One live token per organization,
+held by a partial unique index. The token names the organization, and no path,
+query or body field can name another.
+
+**The route authenticates, the kernel runs the request.**
+`apps/api/src/routes/scim.ts`, proxied from `https://app.oxagen.sh/api/scim/v2`,
+resolves the token and invokes `execute_scim_request` with no user and no API
+key. That capability declares no surface, like `authorize_cli`, and its handler
+re-reads the token inside the call. Every SCIM request is one `invoke()`, so
+the kernel's IAM check and audit row cover it. The protocol lives in
+`packages/handlers/src/lib/scim/` over a storage port, which is what lets the
+tests replay Okta and Entra ID payloads without a database.
+
+**Rejected: `@better-auth/scim`.** Its endpoints assume the organization plugin
+the same way the provider endpoints above do, and they would write membership
+outside the kernel.
+
+**Rejected: a SCIM token as an `auth.api_keys` row.** API keys are bound to a
+workspace and attributed to a person. A deprovision revokes every key its
+subject created, so the organization's provisioning would stop the day the
+admin who set it up left.
+
+**Groups decide roles, users do not.** Creating or updating a user grants
+nothing. A group change recomputes the role of each person it touches through
+`org.sso_group_roles`, matched on the group's display name or external ID,
+across every provider of the organization, because the token belongs to the
+organization and not to one provider. The rule is the sign-in rule: highest
+mapped role wins, no mapped group removes the membership, and an Owner is never
+changed.
+
+**One removal transaction.** `removeOrgMemberInTx`
+(`packages/database/src/member-lifecycle.ts`) is what `remove_org_member`, a
+sign-in no group admits, a SCIM group change that leaves no mapped group, and a
+SCIM deprovision all run. It removes role assignments at every scope, the
+membership and workspace memberships, every key the person created in the
+organization with each Tacho host revoked through `revokeHostEnrollment` and
+each unused enrollment token expired, and, for a deprovision, every session.
+Its audit rows are written in the same transaction. A SCIM deprovision refuses
+an Owner before any write.
+
+**A deprovision ends sessions only for an identity the organization owns.**
+`auth.sessions` has no organization column, so ending the person's sessions
+signs them out of every organization. The identity provider owns identities on
+the organization's verified domains, so its removal ends those. A member on
+another domain, such as a contractor invited on a personal address, keeps
+their sessions elsewhere. A manual removal and a sign-in no group admits leave
+sessions alone for the same reason.
+
+**The shared account moves only for an identity the organization owns.** An
+Oxagen account belongs to every organization its person joined. SCIM changes
+its email only when the current email is on one of the organization's verified
+domains and the person is not an Owner, and changes its display name only for
+such an identity. Anything else would let a SCIM token holder move another
+organization's member, or an Owner, to an address they control and take the
+account over (the round-one security review of this change). Linking an
+existing account that never verified its email drops the password and the
+sessions that registration left, as `account-linking.ts` does for a trusted
+social sign-in.
+
+**A deprovisioned person stays out.** The removal suspends the person's
+principal with a `scim_deprovisioned_at` marker, and a later SSO sign-in with
+a mapped group is refused (`sso.sign_in` reason `scim_deprovisioned`). Only a
+SCIM reactivation admits them again.
+
+Live verification against an Okta and an Entra ID tenant is still owed and is
+tracked on #3734.
 
 ## Consequences
 
@@ -234,5 +324,8 @@ handoff.
   resolves to a private address at connect time still passes. Closing that
   window needs a pinned-IP dialer, which every outbound guard in the repository
   shares.
-- Deprovisioning stays a manual step on the Organization and API keys pages
-  until SCIM ships.
+- An identity provider deprovisions a person over SCIM. The API key they held
+  answers `401` and their browser is signed out on its next request.
+- A machine key is revoked with the person who created it. An organization
+  that needs an agent or a host to outlive its creator re-registers it under
+  someone who is staying before the deprovision.

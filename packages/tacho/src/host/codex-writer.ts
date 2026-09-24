@@ -24,6 +24,7 @@ import {
   COMMAND_HOOK_TIMEOUTS_S,
   commandHookEntry,
   documentShapeProblem,
+  type HookEntry,
   type HookGroup,
   type HookInstallConfig,
   isTachoGroup,
@@ -64,14 +65,22 @@ const TELEMETRY_TIMEOUT_S = 5;
 export const CODEX_ADDITIONAL_CONTEXT_LIMIT = 10_000;
 
 /**
- * The events whose answer carries `additionalContext`. Codex reports a
- * configuration warning for the limit on an event that cannot produce
- * context, so no other entry has it.
+ * The events whose answer carries `additionalContext`: the two that open a
+ * turn, and `PostToolUse`, where the daemon delivers a steer mid-turn. Codex
+ * reports a configuration warning for the limit on an event that cannot
+ * produce context, so no other entry has it.
  */
 const CONTEXT_EVENTS: ReadonlySet<string> = new Set([
   "SessionStart",
   "UserPromptSubmit",
+  "PostToolUse",
 ]);
+
+function withContextLimit(event: string, entry: HookEntry): HookEntry {
+  return CONTEXT_EVENTS.has(event)
+    ? { ...entry, additionalContextLimit: CODEX_ADDITIONAL_CONTEXT_LIMIT }
+    : entry;
+}
 
 /** The hook groups Tacho installs into `hooks.json`, by event. */
 export function codexHookEntries(
@@ -84,23 +93,11 @@ export function codexHookEntries(
       COMMAND_HOOK_TIMEOUTS_S[event],
       "codex",
     );
-    out[event] = [
-      {
-        hooks: [
-          CONTEXT_EVENTS.has(event)
-            ? {
-                ...entry,
-                additionalContextLimit: CODEX_ADDITIONAL_CONTEXT_LIMIT,
-              }
-            : entry,
-        ],
-      },
-    ];
+    out[event] = [{ hooks: [withContextLimit(event, entry)] }];
   }
   for (const event of CODEX_TELEMETRY_EVENTS) {
-    out[event] = [
-      { hooks: [commandHookEntry(config, TELEMETRY_TIMEOUT_S, "codex")] },
-    ];
+    const entry = commandHookEntry(config, TELEMETRY_TIMEOUT_S, "codex");
+    out[event] = [{ hooks: [withContextLimit(event, entry)] }];
   }
   return out;
 }

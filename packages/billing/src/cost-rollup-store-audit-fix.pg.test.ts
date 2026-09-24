@@ -71,6 +71,9 @@ describe.skipIf(!enabled)("listRunsAwaitingRollup against Postgres", () => {
     costMicros: null,
     costBasis: null,
     breakdown: { models: [], tools: [] },
+    // Every row here was built after its run's 00:10 seal. A row built while
+    // the run was open is listed on that ground alone.
+    sealedAt: at("00:10"),
     rolledUpAt: at(hhmm),
   });
 

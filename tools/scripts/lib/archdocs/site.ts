@@ -124,7 +124,7 @@ function overview(m: Model): Section {
     {
       id: "mcpc",
       label: "MCP client",
-      sub: "Claude · Cursor · agents",
+      sub: "Claude Desktop · any MCP client",
       col: 0,
       row: 2,
       kind: "actor",
@@ -132,7 +132,7 @@ function overview(m: Model): Section {
     {
       id: "agents",
       label: "External agents",
-      sub: "Stella · tacho-wrapped harnesses",
+      sub: "Claude Code · Codex · Cursor · Stella",
       col: 0,
       row: 3,
       kind: "actor",
@@ -202,7 +202,7 @@ function overview(m: Model): Section {
     {
       id: "blob",
       label: "Blob",
-      sub: "avatars · attachments · evidence",
+      sub: "avatars · evidence · generated assets",
       col: 3,
       row: 3,
       kind: "store",
@@ -234,7 +234,7 @@ function overview(m: Model): Section {
       label: "/v1/tacho · /v1/telemetry",
       route: "h",
     },
-    { from: "app", to: "api", label: "session cookie", route: "v" },
+    { from: "app", to: "kernel", label: "invoke() in process" },
     { from: "api", to: "kernel", label: "invoke()" },
     { from: "mcp", to: "kernel", label: "invoke()", route: "h" },
     { from: "kernel", to: "stella", label: "governed turn", route: "v" },
@@ -262,7 +262,7 @@ function overview(m: Model): Section {
         rowspan: 4,
       },
     ],
-    "System context: every client surface reaches the stores only through the capability kernel.",
+    "System context: every client surface calls the capability kernel through invoke().",
     { cellW: 158 },
   );
   const counts: [string, number, string][] = [
@@ -287,15 +287,16 @@ function overview(m: Model): Section {
   return {
     id: "overview",
     title: "Overview",
-    lede: "Oxagen governs agents; it does not run them. Every client surface resolves to one capability kernel, and the kernel is the only path to the stores.",
+    lede: "Oxagen governs agents; it does not run them. Every client surface calls one capability kernel through invoke(), and the kernel is the normal path to the stores.",
     body:
       tiles +
       figure(
         "system-context",
         "System context",
-        "Every client surface reaches the stores only through the capability kernel; stella-serve, Stripe and Inngest sit outside it.",
+        "Client surfaces reach the stores through the capability kernel. The exceptions are inbound webhooks (Stripe, GitHub, connectors), usage telemetry intake, CLI token exchange and the app's pre-tenant lookups. stella-serve, Stripe and Inngest sit outside the kernel.",
         svg,
         [
+          "The web app and the MCP server each bootstrap the kernel and call <code>invoke()</code> in their own process. Only the CLI, wrapped agents and HTTP clients reach it through <code>apps/api</code>.",
           "Counts on this page are read from the tree at build time (package manifests, the storage manifest, the capability manifest, route and function sources). If a number here disagrees with the code, the atlas is stale: run <code>pnpm docs:architecture</code>.",
         ],
       ),
@@ -380,8 +381,8 @@ function deploy(m: Model): Section {
         j.name && j.name !== j.id
           ? j.name.replace(/\$\{\{[^}]*\}\}/g, "…")
           : undefined,
-      kind: j.id.startsWith("deploy") ? "app" : "pkg",
-      accent: j.id.startsWith("deploy"),
+      kind: /deploy/.test(j.id) ? "app" : "pkg",
+      accent: /deploy/.test(j.id),
     }));
     const edges: DagEdge[] = [];
     for (const j of pipeline.jobs)
@@ -390,14 +391,15 @@ function deploy(m: Model): Section {
     ci = figure(
       "ci-jobs",
       `CI job graph (${esc(pipeline.name)})`,
-      "Deploy jobs run only after checks and test pass, and only on a push to main; the other jobs gate pull requests in parallel.",
+      "Pull requests and the merge queue run preflight, then checks, test, e2e, rls-integration and rds-compatibility, with atlas-validate alongside. On a push to main, staging waits on all six, migration-gate waits on staging and applies pending migrations, deploy-web waits on checks, test and staging, and deploy-node also waits on migration-gate.",
       renderDag(nodes, edges, {
         label: "CI job dependency graph",
         nodeGapY: 60,
         minNodeW: 120,
       }),
       [
-        "Deploys refuse to ship a commit that is no longer the tip of <code>main</code>, so a superseded queued run stays green without publishing.",
+        "<code>deploy-web</code> and <code>deploy-node</code> refuse to ship a commit that is no longer the tip of <code>main</code>, so a superseded queued run stays green without publishing.",
+        "<code>manual-app-deploy</code> runs only on a manual dispatch. It is the break-glass path and does not wait on <code>migration-gate</code>.",
       ],
     );
   }
@@ -418,7 +420,7 @@ function deploy(m: Model): Section {
   return {
     id: "deploy",
     title: "Deployment",
-    lede: "One AWS account, OpenTofu stacks under infra/stacks-new, a single application node behind an ALB, Aurora for Postgres, and GitHub Actions deploying over OIDC.",
+    lede: "One AWS account managed by OpenTofu stacks under infra/stacks-new. Production runs on one application node behind an ALB, with Aurora for Postgres. Staging is a separate copy of that shape under staging.oxagen.sh. GitHub Actions deploys over OIDC.",
     body:
       flowsIn("deploy") +
       `<h3>Caddy host routing on the node</h3><p>Read from <code>infra/tools/caddy/Caddyfile.alb</code>.</p>` +
@@ -426,7 +428,7 @@ function deploy(m: Model): Section {
       ci +
       `<h3>Workflows</h3>` +
       table(["File", "Name", "Triggers", "Jobs"], wfRows, { id: "wf-table" }) +
-      `<h3>Local development stack</h3><p>Services from <code>docker-compose.dev.yml</code>; Postgres listens on 5433 to avoid colliding with other checkouts.</p>` +
+      `<h3>Local development stack</h3><p>Services from <code>docker-compose.dev.yml</code>; Postgres is published on host port 5433 so it does not collide with another Postgres on 5432. stella-serve is published on 4300, the port app and api call.</p>` +
       table(["Service", "Image"], composeRows),
   };
 }
@@ -458,7 +460,7 @@ function request(m: Model): Section {
   return {
     id: "request",
     title: "Request path",
-    lede: "Identity → tenant scope → capability → row-level security. Nothing reaches a table without the three GUCs set, and nothing reaches a handler without passing the kernel's gates.",
+    lede: "Identity → tenant scope → capability → row-level security. Nothing reaches a tenant table without the four GUCs set, except through the audited withSystemDb bypass, and nothing reaches a handler without passing the kernel's gates.",
     body:
       flowsIn("request") +
       `<h3>Auth tiers in apps/api</h3><p>Middleware registered per sub-router in <code>apps/api/src/app.ts</code>, in the order Hono runs it.</p>` +
@@ -619,7 +621,7 @@ function knowledge(m: Model): Section {
     lede: "Connectors dual-write: Postgres holds the cursor and health, Neo4j holds entities, embeddings and relationships, ClickHouse observes. The ontology is tenant data in the schema registry.",
     body:
       flowsIn("knowledge") +
-      `<h3 id="neo4j">Neo4j labels</h3><p>From <code>packages/ontology/src/schema.cypher</code> via the storage manifest. Relationship types are not static: each tenant declares them in <code>schema_registry.relationship_types</code>; the only hard-coded fallback is <code>RELATED_TO</code>.</p>` +
+      `<h3 id="neo4j">Neo4j labels</h3><p>From <code>packages/ontology/src/schema.cypher</code> via the storage manifest. Relationship types are not static: each workspace declares them in a versioned schema in <code>schema_registry.relationship_types</code>. <code>RELATED_TO</code> is the fallback when a supplied type cannot be sanitised, and ingestion writes <code>ALIAS_OF</code> for deduplicated entities.</p>` +
       table(
         [
           "Label",
@@ -762,7 +764,7 @@ function datastores(m: Model): Section {
       figure(
         "pg-schemas",
         "Postgres schemas",
-        "Twenty pgSchema namespaces; an arrow's number is how many declared or logical references cross from one schema into another.",
+        `${m.pgSchemas.length} pgSchema namespaces; an arrow's number is how many declared or logical references cross from one schema into another.`,
         schemaSvg,
         [
           "Tenancy columns come from mixins (<code>orgScopeMixin</code>, <code>auditMixin</code>, <code>softDeleteMixin</code>), so they are not literal in the table bodies but are present in every drawn card.",
@@ -824,7 +826,7 @@ function jobs(m: Model): Section {
   return {
     id: "jobs",
     title: "Background jobs",
-    lede: `${m.inngest.length} Inngest functions served at /api/inngest on apps/api. Trigger events are parsed with the same scanner the gate uses to prove every event has a sender.`,
+    lede: `${m.inngest.length} Inngest functions served at /api/inngest on apps/api, read from the functions array that registers them. Trigger events are parsed with the scanner the gate uses to prove every event has a sender, and event constants are resolved from their declarations.`,
     body:
       figure(
         "inngest-graph",
@@ -832,7 +834,7 @@ function jobs(m: Model): Section {
         "Cron-driven functions are highlighted; everything else starts from an event some code path sends. Read left to right.",
         svg,
         [
-          "Functions are declared through a local <code>createFunction</code> adapter that can return an on-failure companion, which is why some exports destructure two functions.",
+          "Functions are declared through a local <code>createFunction</code> adapter that can return an on-failure companion, which is why some exports destructure two functions. The companions are served too and are not drawn.",
         ],
       ) +
       `<h3>Functions</h3>` +
@@ -898,7 +900,7 @@ function decisions(m: Model): Section {
   return {
     id: "decisions",
     title: "Decisions",
-    lede: "The architecture decision records, grouped by the epic that produced them.",
+    lede: "The architecture decision records. ADR-001 to ADR-016 are grouped by the epic that produced them. Later records are listed under Unfiled until the index files them.",
     body,
   };
 }
@@ -939,16 +941,16 @@ function about(m: Model, refCount: number): Section {
     body:
       `<h3>Inputs</h3><ul class="notes">` +
       [
-        "<code>apps/*/package.json</code>, <code>packages/*/package.json</code>, <code>tools/*/package.json</code> — the workspace graph.",
-        `<code>packages/database/storage-manifest.json</code> — the ADR-031 platform storage ontology (content hash <code>${esc(m.manifest.contentHash.slice(0, 16))}…</code>), kept byte-stable by <code>pnpm schema:manifest:check</code>.`,
-        "<code>packages/database/src/relations.ts</code>, <code>schema/_schemas.ts</code>, <code>tenant-policy.manifest.ts</code> — logical edges, schema namespaces, RLS classes.",
-        "<code>packages/telemetry/src/schema.sql</code> + <code>migrations/*.sql</code> — ClickHouse, replayed in order.",
-        "<code>packages/ontology/src/schema.cypher</code> — Neo4j vector indexes (labels arrive via the manifest).",
-        "<code>packages/oxagen/capabilities.manifest.json</code> and <code>packages/handlers/src/register.ts</code> — contracts and handler bindings.",
-        "<code>apps/api/src/app.ts</code> + <code>routes/**</code> — mounted routes, tiers, middleware chains.",
-        "<code>apps/mcp/src/tools</code>, <code>apps/cli/src/program.ts</code> — the other two surfaces.",
-        "<code>packages/inngest-functions/src/functions/*.ts</code> — scanned with the exported helpers of <code>check-inngest-senders.ts</code>.",
-        "<code>packages/config/src/registry.ts</code> — <code>ENV_REGISTRY</code>, imported directly.",
+        "<code>apps/*/package.json</code>, <code>packages/*/package.json</code>, <code>tools/*/package.json</code>: the workspace graph.",
+        `<code>packages/database/storage-manifest.json</code>: the ADR-031 platform storage ontology (content hash <code>${esc(m.manifest.contentHash.slice(0, 16))}…</code>), kept byte-stable by <code>pnpm schema:manifest:check</code>.`,
+        "<code>packages/database/src/relations.ts</code>, <code>schema/_schemas.ts</code>, <code>tenant-policy.manifest.ts</code>: logical edges, schema namespaces, RLS classes.",
+        "<code>packages/telemetry/src/schema.sql</code> + <code>migrations/*.sql</code>: ClickHouse, replayed in order.",
+        "<code>packages/ontology/src/schema.cypher</code>: Neo4j vector indexes (labels arrive via the manifest).",
+        "<code>packages/oxagen/capabilities.manifest.json</code> and <code>packages/handlers/src/register.ts</code>: contracts and handler bindings.",
+        "<code>apps/api/src/app.ts</code> + <code>routes/**</code>: mounted routes, tiers, middleware chains.",
+        "<code>apps/mcp/src/tools</code>, <code>apps/cli/src/program.ts</code>: the other two surfaces.",
+        "<code>packages/inngest-functions/src/functions.ts</code> and <code>functions/*.ts</code>: the served array, each declaration scanned with the exported helpers of <code>check-inngest-senders.ts</code>.",
+        "<code>packages/config/src/registry.ts</code>: <code>ENV_REGISTRY</code>, imported directly.",
         "<code>.github/workflows/*.yml</code>, <code>docs/adr/*.md</code>, <code>infra/tools/caddy/Caddyfile.alb</code>, <code>docker-compose.dev.yml</code>.",
       ]
         .map((s) => `<li>${s}</li>`)
@@ -982,13 +984,13 @@ export function renderSite(m: Model): SitePage {
     {
       id: "agent",
       title: "The governed turn",
-      lede: "The one agent loop in this repo is a governed, metered Q&A turn over the fleet record and the knowledge graph. It runs models on stella-serve and tools through invoke().",
+      lede: "The repo's one agent loop is runGovernedTurn on stella-serve. Its main caller is the in-app assistant, a governed, metered Q&A turn over the fleet record and the knowledge graph. Run enrichment also calls it for a one-step, tool-less account of a recorded run. Every completion and tool call comes back to Oxagen to answer.",
       body: flowsIn("agent"),
     },
     {
       id: "evidence",
       title: "Evidence ledger and wrapped agents",
-      lede: "Execution evidence arrives from agents Oxagen does not run. The ledger stamps, seals and grades it; it never re-runs anything (ADR-043).",
+      lede: "Execution evidence arrives from agents that run outside Oxagen, and from the in-app assistant's own turns. The ledger stamps, seals and grades it. It never re-runs anything (ADR-043).",
       body: flowsIn("evidence"),
     },
     {
@@ -1023,7 +1025,7 @@ export function renderSite(m: Model): SitePage {
   const body = `<div class="shell">
 <nav class="rail" aria-label="Sections"><div class="brand"><span class="mark" aria-hidden="true"></span><span>Oxagen</span><small>architecture atlas</small></div>${nav}<div class="railfoot">Generated from the tree · <a href="#about">how</a></div></nav>
 <main>
-<header class="hero"><p class="eyebrow">Internal engineering docs</p><h1>Oxagen Architecture Atlas</h1><p class="herosub">What the monorepo is made of and how a request, a run, a credit and a record move through it. Every figure is either generated from a manifest or cites the source it depicts.</p></header>
+<header class="hero"><p class="eyebrow">Internal engineering docs</p><h1>Oxagen Architecture Atlas</h1><p class="herosub">What the monorepo is made of and how a request, a run, a governed action and a record move through it. Every figure is either generated from a manifest or cites the source it depicts.</p></header>
 ${main}
 </main>
 </div>

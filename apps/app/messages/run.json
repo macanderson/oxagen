@@ -3,9 +3,11 @@
     "notRecorded": "not recorded",
     "enrichment": {
       "label": "Automatic run names and summaries",
-      "description": "Stella reads captured turns and uses organization credits. Applies to this workspace. Turning this off shows run IDs; recorded repositories, files, outputs, and harness facts remain available."
+      "description": "Stella reads captured turns and uses organization credits. Applies to this workspace. Turning this off stops generated names and summaries. Harness titles, recorded repositories, files, outputs, and harness facts remain available."
     },
     "noSummary": "No summary yet. Open the transcript to review recorded prompts, model calls, and tools.",
+    "summaryOff": "Automatic summaries are off for this workspace. Open the transcript to review recorded prompts, model calls, and tools.",
+    "summaryFailed": "The last automatic summary failed ({reason}).",
     "source": {
       "ledger": "recorded in the evidence ledger",
       "tacho": "recorded by a wrapped agent"
@@ -45,12 +47,6 @@
     },
     "transcript": {
       "title": "Transcript",
-      "zoomLabel": "Zoom level",
-      "zoom": {
-        "turns": "Turns",
-        "steps": "Steps",
-        "everything": "Everything"
-      },
       "digestOnly": "The recorder kept a digest and no body, so there is nothing to read here.",
       "noBody": "No body was retained for this entry, or the bytes are not text.",
       "truncated": "Cut at the length one entry carries.",
@@ -68,7 +64,7 @@
       "frameCount": "{count, plural, one {# frame} other {# frames}}",
       "repeats": "×{count}",
       "reply": "Reply",
-      "seqSpan": "seq {from} to {to}",
+      "stepSpan": "steps {from} to {to}",
       "ms": "{ms} ms",
       "live": "live",
       "goLive": "go live",
@@ -76,15 +72,17 @@
         "sealed": "sealed",
         "halted": "halted"
       },
+      "rewind": "Rewind to the first frame",
       "back": "Step back",
       "play": "Play",
       "pause": "Pause playback",
       "forward": "Step forward",
+      "toEnd": "Go to the last frame",
       "scrub": "Scrub to frame",
-      "position": "seq {seq}",
-      "of": "/ {seq}",
+      "position": "frame {n}",
+      "of": "/ {n}",
       "speedLabel": "Playback speed",
-      "speed": "×{speed}",
+      "speed": "{speed}×",
       "transportNote": "The transport moves the viewer, never the run. Idle longer than 2 seconds is compressed, and the true elapsed time is shown beside the position.",
       "frameHead": "seq {seq} · +{time} · {fidelity}",
       "subagent": "subagent",
@@ -99,14 +97,28 @@
       "chip": {
         "prompt": "Prompt",
         "responses": "Responses",
+        "thinking": "Thinking",
         "tools": "Tools",
-        "policy": "Policy",
         "recall": "Recall",
         "usage": "Usage",
+        "seal": "Seal",
         "errors": "Errors"
       },
-      "chipsClear": "Clear the filter",
-      "emptyFiltered": "No entry in this run answers to the {count} chips you pressed. Clear the filter to read the whole run.",
+      "chipsAll": "all",
+      "chipsNone": "none",
+      "chipCount": "{count}",
+      "chipCountFloor": "{count}+",
+      "errorsTitle": "Show only failed calls",
+      "emptyFiltered": "Nothing in this run matches these filters. Choose all to read the whole run.",
+      "searchLabel": "Search the transcript",
+      "searchPlaceholder": "Search the transcript…",
+      "searchCount": "{shown} of {total} entries",
+      "searchEmpty": "Nothing matches this search.",
+      "expandThinking": "expand thinking",
+      "collapseThinking": "collapse thinking",
+      "effort": "effort {effort}",
+      "thinkingTokens": "{count} thinking tokens",
+      "thinkingUnkept": "The model spent {count} tokens thinking. The harness did not record what it thought.",
       "more": "Read more",
       "readingMore": "Reading",
       "loadedMore": "{count} entries read so far. More lie past this page.",
@@ -133,7 +145,8 @@
         "brief": "Brief",
         "plan": "Plan",
         "input": "Input",
-        "reply": "Reply"
+        "reply": "Reply",
+        "thinking": "Thinking"
       }
     },
     "frames": {
@@ -173,7 +186,8 @@
     },
     "cost": {
       "title": "Cost",
-      "notRolledUp": "The rollup has not rebuilt this run yet. It runs after a run seals, and until it has there is no figure to show. A zero here would be a measurement, and nothing has measured one.",
+      "notRolledUp": "The rollup has not priced this run yet. It prices a run as its calls are recorded, or once the run seals. A zero here would be a measurement, and nothing has measured one.",
+      "estimate": "Estimate. The run is still open, so these figures cover the calls recorded so far and grow as it adds more. They are final once the run seals.",
       "total": "Total",
       "basisNotRecorded": "basis not recorded",
       "cacheHitRate": "Cache hit rate",
@@ -253,7 +267,10 @@
         "runNotFound": "This run is not in this workspace.",
         "noConnectionPoint": "A ledger run has no connection point to carry a command.",
         "runSealed": "This run has ended, so nothing can receive the command.",
-        "observeTier": "An observe-tier run has no connection point, so the command was refused.",
+        "noHost": "This run names no enrolled host, so nothing can receive the command. Nothing was queued.",
+        "hostRevoked": "This run's host was revoked and no longer collects commands. Nothing was queued.",
+        "hostOffline": "This run's host has not checked for commands in the last five minutes, so nothing would read this one. Nothing was queued.",
+        "noPromptCarrier": "This agent reads steering text only when a session starts, so this run would never see it. Pause, resume and cancel still reach it. Nothing was queued.",
         "runNotSealed": "This run is still live. Both of these need a complete record, so they run after the seal.",
         "digestOnly": "This recording kept digests and no bodies, so there is nothing for a model to read.",
         "steerText": "Steering text is required, and it has a length limit.",
@@ -271,7 +288,15 @@
         "commandReason": "Keep the reason to {max} characters or fewer. Nothing was queued.",
         "rowCommand": "A run's row sends a pause, a resume or a cancel. Nothing was queued."
       },
-      "observeReason": "This run was observed from the side. Oxagen was never in the path of its calls, so there is no connection point to pause, steer or cancel.",
+      "blocked": {
+        "runSealed": "This run has ended, so there is nothing to pause, steer or cancel.",
+        "noHost": "This run names no enrolled host. Commands reach a run through its host, so there is nothing to pause, steer or cancel.",
+        "hostRevoked": "This run's host was revoked. A revoked host no longer collects commands, so there is nothing to pause, steer or cancel.",
+        "hostOffline": "This run's host has not checked for commands in the last five minutes. It may have stopped or lost its connection, so a command would go unread. The controls come back when the host checks in."
+      },
+      "steerBlocked": {
+        "noPromptCarrier": "This agent reads steering text only when a session starts, so a steer cannot reach this run. Pause, resume and cancel still can."
+      },
       "delivery": {
         "legend": "When the agent sees it",
         "nextStep": {
@@ -280,7 +305,7 @@
         },
         "interrupt": {
           "label": "Interrupt the step in flight",
-          "help": "The step running now is cut short so your text lands sooner. A connection point that cannot interrupt carries it at the next model call and records that it did."
+          "help": "The step running now is cut short so your text lands sooner. A connection point that cannot interrupt carries it at the next model call, or at the end of the turn when it cannot reach a model call, and records which."
         },
         "turnBoundary": {
           "label": "At the end of the turn",
@@ -510,7 +535,8 @@
         "withheld": "withheld"
       }
     },
-    "costReportedProvisional": "Agent reported. Provisional until finalized.",
+    "costReportedProvisional": "Estimate reported by the agent. Final when the run seals.",
+    "costEstimate": "Estimate from the calls so far. Final when the run seals.",
     "costFinalized": "Finalized rollup ({basis})",
     "tokenUsage": {
       "title": "Reported tokens",
@@ -529,17 +555,46 @@
       "rig": "Rig",
       "versionNotCaptured": "version not captured",
       "harnessVersion": "version {version}",
-      "effortNotCaptured": "effort not captured",
+      "effort": "effort {value}",
+      "effortNotRecorded": "effort not recorded",
+      "thinkingOn": "thinking on",
+      "thinkingOff": "thinking off",
+      "permissionMode": "mode {value}",
+      "permissionModeNotRecorded": "mode not recorded",
       "checkout": "Checkout",
-      "repoNotCaptured": "repository and branch not captured",
+      "repoNotRecorded": "repository not recorded",
+      "branchNotRecorded": "branch not recorded",
+      "moreCheckouts": "{count, plural, one {# more checkout} other {# more checkouts}}",
+      "workLoading": "reading the recorded checkout",
+      "workUnread": "checkout not read",
       "noPullRequest": "no pull request",
-      "pathNotCaptured": "path not captured",
-      "derived": "derived",
+      "pathNotRecorded": "path not recorded",
       "noMachine": "machine not recorded",
+      "subagents": "Subagents",
+      "noSubagents": "no subagents recorded",
+      "subagentsUnread": "subagents not read",
+      "subagentTypeNotRecorded": "type not recorded",
+      "subagentNoStop": "no stop recorded",
+      "subagentRunning": "running",
+      "moreSubagents": "{count} more",
+      "usage": "Usage",
+      "tokensInput": "{count} input",
+      "tokensOutput": "{count} output",
+      "tokensCacheRead": "{count} cache read",
+      "tokensCacheWrite": "{count} cache write",
+      "tokensNotRecorded": "tokens not recorded",
+      "costNotRecorded": "cost not recorded",
+      "costReported": "agent reported",
+      "costEstimate": "estimate",
       "started": "started",
       "sealed": "sealed",
+      "closedIdle": "closed",
+      "closedIdleWhy": "no event for 12 hours",
       "running": "still running",
+      "sealNotRecorded": "ended with no seal recorded",
+      "ended": "ended",
       "by": "by",
+      "enrolledBy": "enrolled by",
       "paused": "Ingress is paused. The agent takes no new step until you resume it.",
       "copy": "Copy",
       "copyLabel": "Copy {text}",
@@ -564,9 +619,11 @@
       "wallClock": "Wall clock",
       "cacheHit": "Cache hit",
       "tokensNote": "{output} output",
+      "tokensProvisional": "provisional until the rollup",
       "promptsCut": "at least this many",
       "wastedNote": "derived from the productive share",
       "running": "still running",
+      "noEnd": "no end recorded",
       "noRollup": "no rollup yet"
     },
     "issues": {
@@ -574,8 +631,13 @@
       "reference": "Reference",
       "relation": "Relation",
       "task": "Task the run was started on",
-      "empty": "This run names no issue.",
-      "note": "The record keeps one task reference per run. Links to other issues are not captured."
+      "closedBy": "Pull request #{number} closes it",
+      "pullRequests": "Pull requests",
+      "empty": "This run names no issue, and no pull request it opened closes one.",
+      "emptyUnread": "This run names no issue. GitHub did not return the issues its pull requests close.",
+      "loading": "Reading the run's pull requests.",
+      "closingUnread": "GitHub did not return every issue the run's pull requests close, so this list may be short.",
+      "note": "The task reference comes from the run's dispatch. The other issues come from GitHub's record of what each pull request the run opened closes."
     },
     "policy": {
       "title": "Policy decisions",
@@ -583,7 +645,18 @@
       "call": "Call",
       "outcome": "Outcome",
       "type": "Decision type",
+      "decidedBy": "Decided by",
+      "by": {
+        "oxagen": "Oxagen policy",
+        "operator": "Operator",
+        "harness": "Agent harness",
+        "managedSettings": "Managed settings",
+        "unrecorded": "Not recorded"
+      },
       "empty": "No policy decision was recorded on this run.",
+      "onlyChecks": "Neither Oxagen policy nor an operator made a decision on this run. The agent harness's own checks are listed below.",
+      "checks": "{count, plural, one {# harness check} other {# harness checks}}",
+      "checksTitle": "Harness checks",
       "cut": "The transcript read stopped short, so later decisions are missing here.",
       "at": "Into the run"
     },
@@ -608,7 +681,9 @@
       "more": "{count} more in the outputs",
       "spend": "Spend by area",
       "toolCalls": "Tool calls",
-      "noSpend": "No cost rollup yet. It is built after the run seals.",
+      "noSpend": "No cost rollup yet. It is built as the run records calls, or once it seals.",
+      "estimate": "Estimate while the run is open",
+      "spendProvisional": "Provisional until the rollup. Priced from the cost each call reported.",
       "callCount": "{count, plural, one {# call} other {# calls}}"
     },
     "workCi": {

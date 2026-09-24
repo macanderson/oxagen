@@ -4,8 +4,16 @@
 // the page (INV-11).
 import type { auditEventsExport } from "@oxagen/oxagen/contracts/audit.events.export";
 import type { auditLogQuery } from "@oxagen/oxagen/contracts/audit.log.query";
+import type { billingEvidenceRetention } from "@oxagen/oxagen/contracts/billing.evidence_retention";
+import type { privacyDataExportStatus } from "@oxagen/oxagen/contracts/privacy.data.export.status";
 import type { z } from "zod";
-import type { AuditExport, AuditPage } from "@/data/contracts/audit";
+import type {
+  AuditBundle,
+  AuditExport,
+  AuditPage,
+  AuditRetention,
+} from "@/data/contracts/audit";
+import { microsFromDecimal } from "@/data/contracts/money";
 import type { ContractOutput } from "@/server/kernel";
 
 export function toAuditPage(
@@ -39,5 +47,36 @@ export function toAuditExport(
     signature: out.signature,
     algorithm: out.algorithm,
     rowCount: out.rowCount,
+  };
+}
+
+/**
+ * The rate arrives as a float of US dollars; it becomes micros through the
+ * one decimal parser (money.ts), so no figure passes through float arithmetic.
+ * A rate that parser refuses (an exponent, more than six decimals) is left
+ * null rather than rounded, and the page says it is not recorded.
+ */
+export function toAuditRetention(
+  out: ContractOutput<typeof billingEvidenceRetention>,
+): z.input<typeof AuditRetention> {
+  const micros = microsFromDecimal(String(out.usdPerGbMonth));
+  return {
+    includedMonths: out.includedMonths,
+    bodyRetentionDays: out.effectiveRetentionDays,
+    rate: micros === null ? null : { micros, currency: "USD" },
+    storedGbBeyondIncluded: out.storedGbMeasured
+      ? out.storedGbBeyondIncluded
+      : null,
+  };
+}
+
+export function toAuditBundle(
+  out: ContractOutput<typeof privacyDataExportStatus>,
+): z.input<typeof AuditBundle> {
+  return {
+    exportRef: out.exportId,
+    status: out.status,
+    ready: out.ready,
+    completedAt: out.completedAt,
   };
 }

@@ -221,6 +221,8 @@ describe("ask_assistant — the same gates on both adapters", () => {
     ["engine_unavailable", 503],
     ["assistant_run_not_recorded", 503],
     ["engine_aborted", 409],
+    ["model_call_failed", 502],
+    ["assistant_model_key_limit", 402],
   ] as const)(
     "POST /assistant/ask answers the turn failure %s with %i and its code, never a 500",
     async (code, status) => {
@@ -340,6 +342,20 @@ describe("POST chat/stream — the turn on the wire", () => {
         code: "assistant_run_not_recorded",
       }),
       "assistant_run_not_recorded",
+    ],
+    [
+      "a model call the provider refused",
+      Object.assign(new Error("the model provider answered 401"), {
+        code: "model_call_failed",
+      }),
+      "model_call_failed",
+    ],
+    [
+      "the minted key's spend ceiling",
+      Object.assign(new Error("Model spend refused"), {
+        code: "assistant_model_key_limit",
+      }),
+      "assistant_model_key_limit",
     ],
     [
       "an unknown conversation",

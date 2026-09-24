@@ -36,7 +36,7 @@ const { MergeContextPr, ProposalWrites } = await import("./write-controls");
 const { useActionFailure } = await import("./action-failure");
 
 const TARGET = { org: "acme", ws: "core-platform", proposalId: "prp_01k5ru4a" };
-const PRS = "/acme/core-platform/steering?tab=prs&proposal=prp_01k5ru4a";
+const PRS = "/acme/core-platform/steering/proposals/prs?proposal=prp_01k5ru4a";
 
 const intl = ({ children }: { children: ReactNode }) => (
   <IntlProvider>{children}</IntlProvider>
@@ -283,7 +283,7 @@ describe("the sentence for each refusal", () => {
     ],
     [
       { reason: "not_found", code: "workspace_repository_missing" },
-      "This workspace has no connected GitHub repository",
+      "This workspace has no connected repository",
     ],
     [
       { reason: "conflict", code: "checks_not_passed" },

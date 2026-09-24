@@ -1,6 +1,6 @@
 /**
  * group-neighbors.ts — pure grouping helper for the node-detail Neighbors
- * section (spec: docs/web-app-2.0/workspace/knowledge/graph/node/spec.md).
+ * section (spec: docs/web-app-2.0/workspace/knowledge/graph/node/spec.md, removed 2026-09-23; git history keeps it).
  *
  * ontology.neighbors (get_ontology_neighbors) returns a flat list of adjacent
  * nodes; the UI wants them grouped by relationship "shape" — the relationship

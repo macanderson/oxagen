@@ -4,8 +4,12 @@
 // shifting.
 import { describe, expect, it } from "vitest";
 import {
+  byMicrosDescending,
+  compareMicros,
   Cost,
+  divMicros,
   isCurrencyCode,
+  maxMoney,
   Money,
   microsFromDecimal,
   sumExceeds,
@@ -76,6 +80,29 @@ describe("ratioOfMicros", () => {
     expect(() => ratioOfMicros(usd("1.5"), usd("3000000"))).toThrow(
       "micros must be an integer string",
     );
+  });
+});
+
+describe("compareMicros", () => {
+  const usd = (micros: string) => ({ micros, currency: "USD" });
+
+  it("orders amounts by their micros", () => {
+    expect(compareMicros(usd("5"), usd("12"))).toBe(-1);
+    expect(compareMicros(usd("12"), usd("5"))).toBe(1);
+    expect(compareMicros(usd("7"), usd("7"))).toBe(0);
+  });
+
+  it("stays exact past the range a float holds", () => {
+    // 2^53 + 1 and 2^53 are the same float; as BigInt they differ.
+    expect(
+      compareMicros(usd("9007199254740993"), usd("9007199254740992")),
+    ).toBe(1);
+  });
+
+  it("orders different currencies by code, not by amount", () => {
+    expect(
+      compareMicros({ micros: "1", currency: "EUR" }, usd("999")),
+    ).toBeLessThan(0);
   });
 });
 
@@ -281,6 +308,49 @@ describe("sumExceeds", () => {
 
   it("refuses a figure that is not an integer string (negative)", () => {
     expect(() => sumExceeds("1.5", "0", "5")).toThrow();
+  });
+});
+
+describe("divMicros", () => {
+  it("divides exactly at a magnitude a float cannot hold, truncating at the micro", () => {
+    expect(divMicros(usd("90071992547409930"), 10)).toEqual(
+      usd("9007199254740993"),
+    );
+    expect(divMicros(usd("10"), 3)).toEqual(usd("3"));
+  });
+
+  it("answers null for nothing to divide by and refuses a fraction", () => {
+    expect(divMicros(usd("10"), 0)).toBeNull();
+    expect(divMicros(usd("10"), -2)).toBeNull();
+    expect(() => divMicros(usd("10"), 1.5)).toThrow();
+  });
+});
+
+describe("maxMoney", () => {
+  it("answers the largest value in canonical form", () => {
+    expect(maxMoney([usd("3"), usd("0012"), usd("7")])).toEqual(usd("12"));
+  });
+
+  it("answers null for no values or mixed currencies", () => {
+    expect(maxMoney([])).toBeNull();
+    expect(maxMoney([usd("3"), { micros: "4", currency: "EUR" }])).toBeNull();
+  });
+});
+
+describe("byMicrosDescending", () => {
+  it("ranks the larger value first, exactly past a float's reach", () => {
+    const values = [usd("9007199254740993"), usd("9007199254740995"), usd("1")];
+    expect([...values].sort(byMicrosDescending)).toEqual([
+      usd("9007199254740995"),
+      usd("9007199254740993"),
+      usd("1"),
+    ]);
+  });
+
+  it("leaves values in different currencies unordered", () => {
+    expect(byMicrosDescending(usd("1"), { micros: "2", currency: "EUR" })).toBe(
+      0,
+    );
   });
 });
 

@@ -1,9 +1,11 @@
 // The Cost tab (#2962; spec §12.6, §12.7 "Run" row; ADR-060): the run's
 // `cost.run_totals` row, with the per-model and per-tool breakdown under it.
 //
-// The rollup is rebuilt from the frames after a run seals, so it is null until
-// that has happened. The tab says that in words rather than printing zeros: a
-// zero is a figure the rollup measured, and "not yet rolled up" is not.
+// The rollup is rebuilt from the frames while the run records them and again
+// when it seals (#3980). A rollup built from an open run is an estimate, and
+// the tab says so above its figures. Before the first rollup the tab says that
+// in words rather than printing zeros: a zero is a figure the rollup measured,
+// and "not yet rolled up" is not.
 //
 // Every money figure carries the basis that says who observed it (INV-10), and
 // the price entries the frames were priced with are named, so a figure can be
@@ -65,6 +67,14 @@ function Rollup({ rollup }: { rollup: RunCostRollup }) {
     value === null ? <NoValue /> : formatCount(value, locale);
   return (
     <div className="flex flex-col gap-5">
+      {rollup.isEstimate === true ? (
+        <p
+          data-testid="cost-estimate"
+          className="max-w-prose text-sm text-muted-foreground"
+        >
+          {t("estimate")}
+        </p>
+      ) : null}
       <Facts>
         <Fact label={t("total")}>
           {rollup.cost === null ? (

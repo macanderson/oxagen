@@ -74,6 +74,37 @@ const AGENT_SECTION_ALIASES: Readonly<Record<string, string>> = {
   runs: "activity",
 };
 
+/** The Organization tabs that live on `/{org}` as a `?tab=` value. */
+export type OrganizationQueryTab =
+  | "people"
+  | "invitations"
+  | "workspaces"
+  | "dataPlane"
+  | "costCenters";
+
+/**
+ * The path segments each Steering tab or shelf id lands on, old ids included
+ * (roadmap pages/steering.md, "Old URLs still land").
+ */
+const STEERING_SEGMENTS: Readonly<Record<string, readonly string[]>> = {
+  library: ["library"],
+  records: ["records"],
+  instructions: ["instructions"],
+  skills: ["skills"],
+  memory: ["memory"],
+  ontology: ["ontology"],
+  assignments: ["assignments"],
+  deliveries: ["assignments"],
+  gates: ["gates"],
+  policy: ["gates"],
+  settings: ["gates"],
+  freshness: ["gates"],
+  proposals: ["proposals"],
+  prs: ["proposals", "prs"],
+  compiler: ["compiler"],
+  preview: ["compiler"],
+};
+
 /** Every route the app navigates to; each builder returns a SafePath. */
 export const routes = {
   root: (): SafePath => ROOT,
@@ -93,8 +124,9 @@ export const routes = {
   /** Where requireViewer sends a member whose organization requires SSO and whose session is not one (sso-gate.ts); outside `[org]`, so it cannot loop. */
   ssoRequired: (next?: SafePath): SafePath =>
     withQuery(mint("/login"), { next: nextParam(next), sso: "required" }),
-  signup: (next?: SafePath): SafePath =>
-    withQuery(mint("/signup"), { next: nextParam(next) }),
+  /** `email` returns an address to the sign-up form, editable (Verify email's Change it). */
+  signup: (next?: SafePath, q?: { email?: string }): SafePath =>
+    withQuery(mint("/signup"), { next: nextParam(next), email: q?.email }),
   verify: (q: { email: string; next?: SafePath }): SafePath =>
     withQuery(mint("/verify"), { email: q.email, next: nextParam(q.next) }),
   twoFactor: (next?: SafePath): SafePath =>
@@ -105,15 +137,29 @@ export const routes = {
   resetPassword: (): SafePath => mint("/reset-password"),
   newOrganization: (next?: SafePath): SafePath =>
     withQuery(mint("/new-organization"), { next: nextParam(next) }),
+  /**
+   * The onboarding gate's later steps and the installer's screens, outside the
+   * app shell (`(onboarding)/welcome/[org]/[ws]/[step]`). `agent` is the
+   * identity the steps enrol, carried so a reload lands on the same one.
+   */
+  welcome: (
+    org: string,
+    ws: string,
+    step: "wrap" | "run" | "installer",
+    q?: { agent?: string },
+  ): SafePath =>
+    withQuery(pathOf("welcome", org, ws, step), { agent: q?.agent }),
   invite: (token: string): SafePath => pathOf("invite", token),
   cliAuthorize: (query: Readonly<Record<string, string>>): SafePath =>
     withQuery(mint("/cli/authorize"), query),
   /** Organization › People is the organization's root. */
   people: (org: string): SafePath => pathOf(org),
-  organization: (
-    org: string,
-    tab: "people" | "invitations" | "workspaces" | "costCenters",
-  ): SafePath =>
+  /**
+   * A tab of the Organization page that has no route of its own: People (the
+   * root), Invitations, Workspaces, Data plane and Cost centers. The tab is a
+   * query value on `/{org}`, left off for People.
+   */
+  organization: (org: string, tab: OrganizationQueryTab): SafePath =>
     withQuery(pathOf(org), { tab: tab === "people" ? undefined : tab }),
   /** Organization › Roles: the roles and the permission catalogue (#2964). */
   roles: (org: string): SafePath => pathOf(org, "roles"),
@@ -127,16 +173,18 @@ export const routes = {
    */
   apiKeys: (
     org: string,
-    q?: { workspace?: string; show?: string; offset?: string },
+    q?: { workspace?: string; show?: string; rows?: string; offset?: string },
   ): SafePath =>
     withQuery(pathOf(org, "api-keys"), {
       workspace: q?.workspace,
       show: q?.show,
+      rows: q?.rows,
       offset: q?.offset,
     }),
   /**
-   * Organization › Model funding: whose key pays for the assistant's model
-   * calls (ADR-053 §2). Org-scoped — the key pays for every workspace.
+   * Organization › Model funding and routes: which key pays for Oxagen's own
+   * model calls (ADR-053, ADR-131) and the route each tier takes. Org-scoped:
+   * the key pays for every workspace.
    */
   modelFunding: (org: string): SafePath => pathOf(org, "model-funding"),
   /**
@@ -242,6 +290,15 @@ export const routes = {
     q: Readonly<Record<string, string | undefined>> = {},
   ): SafePath => withQuery(pathOf(org, "audit"), q),
   /**
+   * One of Audit's other tabs, each a URL segment under the page (§1.2). The
+   * query carries the export Build bundle queued, on Exports.
+   */
+  auditTab: (
+    org: string,
+    tab: "incidents" | "receipts" | "exports" | "keys" | "retention",
+    q: Readonly<Record<string, string | undefined>> = {},
+  ): SafePath => withQuery(pathOf(org, "audit", tab), q),
+  /**
    * The authenticated download of a queued data export. The archive is a
    * private object, so this route streams the bytes rather than the tab
    * linking at storage.
@@ -284,46 +341,55 @@ export const routes = {
       reads: q?.reads,
       spine: q?.spine,
     }),
-  /** Spend on one tab, with one key's drill or one finding's evidence open; a tab is a query, not a route (§1.2). */
+  /**
+   * Spend on one tab, with one key's drill or one finding's evidence open. The
+   * tab and the drill are path segments (`/spend/agent/<key>`), as the mockup's
+   * route names them, and the first tab is the bare path; a finding's evidence
+   * is a dialog over the Findings tab, so it is a query value.
+   */
   spend: (
     org: string,
     ws: string,
     view: { tab: string; drill?: string; finding?: string },
   ): SafePath =>
-    withQuery(pathOf(org, ws, "spend"), {
-      tab: view.tab,
-      drill: view.drill,
-      finding: view.finding,
-    }),
+    withQuery(
+      view.drill !== undefined
+        ? pathOf(org, ws, "spend", view.tab, view.drill)
+        : view.tab === "findings"
+          ? pathOf(org, ws, "spend")
+          : pathOf(org, ws, "spend", view.tab),
+      { finding: view.finding },
+    ),
   /**
-   * Skills, the Skills tab of Steering (MC spec §10.7); `cursor` opens a later
-   * page of the inventory. `/{org}/{ws}/skills` redirects here.
+   * Skills, the Skills shelf of the Steering library (roadmap pages/skills.md);
+   * `cursor` opens a later page of the inventory. `/{org}/{ws}/skills`
+   * redirects here.
    */
   skills: (org: string, ws: string, q?: { cursor: string }): SafePath =>
-    withQuery(pathOf(org, ws, "steering"), {
-      tab: "skills",
+    withQuery(pathOf(org, ws, "steering", "skills"), {
       cursor: q?.cursor,
     }),
   /**
-   * Tools; a tab, a category chip, the API-names toggle and a cursor are query
-   * values on the one route (#2958 adds no route, ARCHITECTURE.md §1.2).
+   * Tools; its tabs are path segments (`/tools/providers`), as the mockup's
+   * route names them, and the first tab is the bare path. A category chip, the
+   * API-names toggle and a cursor are query values.
    */
   tools: (
     org: string,
     ws: string,
     q: {
-      tab?: string;
+      tab?: "toolbelts" | "providers" | "policy" | "switches";
       category?: string;
       names?: string;
       cursor?: string;
     } = {},
   ): SafePath =>
-    withQuery(pathOf(org, ws, "tools"), {
-      tab: q.tab,
-      category: q.category,
-      names: q.names,
-      cursor: q.cursor,
-    }),
+    withQuery(
+      q.tab === undefined
+        ? pathOf(org, ws, "tools")
+        : pathOf(org, ws, "tools", q.tab),
+      { category: q.category, names: q.names, cursor: q.cursor },
+    ),
   /**
    * Repositories; its tabs are path segments (`/repositories/changes`), as the
    * mockup's route names them, and the first tab is the bare path.
@@ -332,23 +398,37 @@ export const routes = {
     org: string,
     ws: string,
     tab?: "working-copies" | "changes" | "configuration",
+    /** One change on the Changes tab, by its proposal id: the Context PR page. */
+    change?: string,
   ): SafePath =>
     tab === undefined
       ? pathOf(org, ws, "repositories")
-      : pathOf(org, ws, "repositories", tab),
+      : tab === "changes" && change !== undefined
+        ? pathOf(org, ws, "repositories", tab, change)
+        : pathOf(org, ws, "repositories", tab),
   /** Runtimes: the hosts agents run on (roadmap mockups/pages/runtimes.md). */
   runtimes: (org: string, ws: string): SafePath => pathOf(org, ws, "runtimes"),
   /** One runtime, addressed by its enrollment's public id (`tch_…`). */
   runtime: (org: string, ws: string, runtime: string): SafePath =>
     pathOf(org, ws, "runtimes", runtime),
-  /** Steering filters, a selected proposal, and a Skills inventory cursor. */
+  /**
+   * Steering (roadmap pages/steering.md): the five tabs and the Library
+   * shelves are path segments, `/steering/<tab>` or `/steering/<shelf>`, and
+   * the Context PRs segment of Proposals is `/steering/proposals/prs`. A tab
+   * id written before the rename still maps to where it lives now: `policy`,
+   * `settings` and `freshness` are Gates, `deliveries` is Assignments,
+   * `preview` is the Compiler and `prs` is the Context PRs segment. Filters, a
+   * page offset, a selected proposal and a Skills cursor stay query values.
+   */
   steering: (
     org: string,
     ws: string,
     q: {
       tab?: string;
-      shelf?: string;
-      section?: string;
+      /** The agent the Compiler assembles for; only with `tab: "compiler"`. */
+      agent?: string;
+      /** A skill whose source `/steering/skills/<skill>/source` opens; only with `tab: "skills"`. */
+      skill?: string;
       kind?: string;
       offset?: string;
       proposal?: string;
@@ -356,22 +436,22 @@ export const routes = {
       view?: string;
     } = {},
   ): SafePath => {
-    const canonical =
-      q.tab !== undefined &&
-      ["library", "proposals", "freshness", "deliveries"].includes(q.tab)
-        ? q.tab
-        : null;
-    const segments = canonical === null ? [] : [canonical];
-    if (q.tab === "library" && q.shelf && q.shelf !== "all")
-      segments.push(q.shelf);
+    const segments =
+      q.tab !== undefined && Object.hasOwn(STEERING_SEGMENTS, q.tab)
+        ? [...(STEERING_SEGMENTS[q.tab] ?? [])]
+        : [];
+    if (segments[0] === "compiler" && q.agent !== undefined) {
+      segments.push(q.agent);
+    }
+    if (segments[0] === "skills" && q.skill !== undefined) {
+      segments.push(q.skill, "source");
+    }
     return withQuery(pathOf(org, ws, "steering", ...segments), {
-      tab: canonical === null ? q.tab : undefined,
       kind: q.kind,
       offset: q.offset,
       proposal: q.proposal,
       cursor: q.cursor,
       view: q.view,
-      section: q.section,
     });
   },
   /**

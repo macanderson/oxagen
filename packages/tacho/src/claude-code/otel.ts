@@ -609,6 +609,12 @@ function logDraft(
         response !== undefined ? digestText(response) : undefined,
       );
     }
+    // Claude Code's own permission check, which runs on every tool call
+    // whether or not a person was asked. It is the harness's decision, not
+    // Oxagen's, so it is sealed as `harness_permission` rather than
+    // `policy_decision`: recorded as a policy decision, it put a second
+    // "allow" on every call beside the verdict Oxagen's bundle made, and the
+    // run's transcript and Policies tab read it as Oxagen's.
     case "tool_decision": {
       const decision = s(attrs, "decision");
       const body: Record<string, unknown> = {
@@ -630,7 +636,7 @@ function logDraft(
         policy_decision: decision === "reject" ? "deny" : "allow",
         policy_source: "harness",
       };
-      return base("policy_decision", body, [
+      return base("harness_permission", body, [
         "tool_name",
         "tool_use_id",
         "tool_source",
@@ -927,7 +933,7 @@ function spanDraft(span: OtlpSpan, resource: Attrs): OtelDraft | undefined {
       );
     case "tool.blocked_on_user":
       return base(
-        "policy_decision",
+        "harness_permission",
         {
           ...(n(attrs, "duration_ms") !== undefined
             ? { tool_blocked_on_user_ms: n(attrs, "duration_ms") }

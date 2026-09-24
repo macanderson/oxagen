@@ -504,6 +504,10 @@ describe("prepareAssistantTurn", () => {
     expect(
       captured.inserts.find((i) => i.table === schema.messages)!.values,
     ).toMatchObject({ createdById: "creator-1" });
+    // The turn's credit debits are attributed to the same person.
+    expect(mocks.runGovernedTurn.mock.calls[0]![0].telemetry).toMatchObject({
+      userId: "creator-1",
+    });
 
     setup({ apiKeyCreator: null });
     await expect(
@@ -620,11 +624,15 @@ describe("the prepared turn", () => {
       role: "user",
       content: "[memory]",
     });
+    // `userId` is the person who asked: every platform-paid debit of the turn
+    // is written to credit_ledger.created_by_id under it, so a statement can
+    // show assistant spend by operator. Before, the debits named nobody.
     expect(turnInput.telemetry).toEqual({
       orgId: "org-1",
       workspaceId: "ws-1",
       surface: "app",
       messageId: "msg-user",
+      userId: "user-1",
     });
 
     // The reply is persisted with the run it was recorded as, and the

@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { RATE_CARD, estimateCostUsd } from "./rate-card";
-import { providerCostUsd, isRateCardMiss, PROVIDER_RATE_CARD } from "./pricing";
+import { RATE_CARD, estimateCostUsd, rateFor } from "./rate-card";
+import {
+  providerCostUsd,
+  isRateCardMiss,
+  PROVIDER_RATE_CARD,
+  resolveRate,
+} from "./pricing";
 
 /**
  * The two rate cards, held together.
@@ -89,14 +94,48 @@ describe("rate-card parity: engine card vs billing card", () => {
   }
 });
 
+describe("rate-card parity: model ids as callers send them (#3944)", () => {
+  // The walk above prices each card family by its own name, so it cannot see a
+  // dated or dotted id that the engine's first-match order sends to a different
+  // row than billing's longest-prefix match does. Opus 4.1 was one: billing
+  // priced it at $15/$75 and the engine card at the $5/$25 family rate.
+  const IDS = [
+    "claude-opus-4-20250514",
+    "anthropic/claude-opus-4",
+    "claude-opus-4-1-20250805",
+    "anthropic/claude-opus-4.1",
+    "claude-opus-4-5-20251101",
+    "anthropic/claude-opus-4.8",
+    "claude-opus-5",
+    "anthropic/claude-opus-5.5",
+    "claude-fable-5",
+    "anthropic/claude-fable-5.1",
+    "claude-sonnet-5",
+    "claude-sonnet-4-6",
+    "claude-haiku-4-5-20251001",
+  ];
+
+  for (const id of IDS) {
+    it(`${id} resolves to the same rate in both cards`, () => {
+      const billing = resolveRate(id);
+      const engine = rateFor(id);
+      expect(engine).toEqual({
+        inputPer1M: billing.inputPer1M,
+        outputPer1M: billing.outputPer1M,
+        cachedInputPer1M: billing.cachedInputPer1M,
+        cacheWritePer1M: billing.cacheWritePer1M,
+      });
+    });
+  }
+});
+
 describe("rate-card parity: the prices #1412 measured", () => {
   // The exact table from the issue — what the engine's card says a 1M-in /
   // 1M-out call costs, against what billing charged for it before the rows
   // existed. Every row but the three controls was metered at the Sonnet
-  // fallback's $18.00.
+  // fallback's $18.00. The two Claude controls were then at $15/$75 and $3/$15;
+  // #3944 moved them to list price ($5/$25 and $2/$10).
   const MEASURED: ReadonlyArray<readonly [string, number]> = [
-    // The two Anthropic rows moved on 2026-09-23 to the list prices: Opus 4.8
-    // is $5/$25 and Sonnet 5 $2/$10.
     ["anthropic/claude-opus-4-8", 30.0],
     ["anthropic/claude-sonnet-5", 12.0],
     ["openai/gpt-4o", 12.5],

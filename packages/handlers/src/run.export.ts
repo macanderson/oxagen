@@ -62,7 +62,11 @@ export function createRunExportHandler(
     );
     const scope = runScope(ctx);
     const run = await resolveRun(deps, ctx, input.runId);
-    if (run.item.status === "live") {
+    // An idle close (ADR-159) is the control plane's inference, and the
+    // session's next frame undoes it. A bundle signed over it would attest a
+    // head, gaps and grade that a reopen or the host's own seal replaces, so
+    // it waits for a seal the host sent.
+    if (run.item.status === "live" || run.item.sealSource === "idle_timeout") {
       throw new HandlerError({ code: "conflict", reason: "run_not_sealed" });
     }
     const row = await deps.insertExport({

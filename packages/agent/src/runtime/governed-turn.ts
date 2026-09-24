@@ -110,6 +110,53 @@ export interface GovernedTurnAttachment {
   mediaType: string;
 }
 
+/**
+ * The model call this process made for the engine failed, and the turn ended
+ * on it. The engine only learns a classified error (`classifyProviderError`)
+ * and reports the failure back as an `error` event carrying text, so without
+ * this the turn's error part was a bare `Error` with no code. Every surface
+ * then showed its generic failure, and a revoked vendor key, an unknown model
+ * and a provider outage all read the same.
+ *
+ * `status` is the provider's HTTP status when it answered one. The message
+ * names the status and never the vendor's body, which can echo the request.
+ */
+export class ModelCallFailedError extends Error {
+  override readonly name = "ModelCallFailedError";
+  readonly code = "model_call_failed" as const;
+  constructor(
+    readonly status: number | null,
+    cause: unknown,
+  ) {
+    super(
+      status === null
+        ? "the model call failed before the provider answered"
+        : `the model provider answered ${String(status)}`,
+      { cause },
+    );
+  }
+}
+
+/**
+ * The error a failed model call ends the turn with. One that already carries
+ * a stable `code` (the minted key's spend ceiling, `assistant_model_key_limit`)
+ * is kept as it is, because a surface branches on that code; anything else is
+ * named by the provider's status.
+ */
+export function modelCallFailure(err: unknown): Error {
+  if (
+    err instanceof Error &&
+    typeof (err as { code?: unknown }).code === "string"
+  ) {
+    return err;
+  }
+  const status = (err as { statusCode?: unknown } | null)?.statusCode;
+  return new ModelCallFailedError(
+    typeof status === "number" ? status : null,
+    err,
+  );
+}
+
 /** Cumulative token usage for the turn, in the shape every surface meters on. */
 export interface GovernedTurnUsage {
   inputTokens: number;
@@ -590,6 +637,14 @@ export async function runGovernedTurn(
   const emit = (list: EnginePart[]): void => {
     for (const part of list) parts.push(part);
   };
+  // An error part after a failed model call is that failure, told by its code.
+  const withModelFailure = (list: EnginePart[]): EnginePart[] => {
+    const failure = modelFailure;
+    if (failure === null) return list;
+    return list.map((part) =>
+      part.type === "error" ? { type: "error", error: failure } : part,
+    );
+  };
   const ledger = input.ledger;
   // The seal is the last write of the turn. It runs after the engine's
   // outcome (or the failure that ended the turn) and before the result
@@ -610,13 +665,18 @@ export async function runGovernedTurn(
   // with the engine's aborted outcome, and the result promises reject with
   // this error: a turn that could not be recorded does not answer.
   let receiptError: { error: unknown } | null = null;
+  // The first model call that failed for a reason other than this turn's own
+  // cancel. The engine ends the turn on it and reports only its text, so the
+  // turn's error part is replaced with this one: it keeps a code a surface can
+  // name (`modelCallFailure`).
+  let modelFailure: Error | null = null;
   const settle = async (outcome: TurnOutcomeWire): Promise<void> => {
     await sealLedger(
       outcome.status === "completed"
         ? { status: "completed", text: outcome.text }
         : { status: "aborted", reason: outcome.reason },
     );
-    emit(mapper.finish(outcome, hostUsage));
+    emit(withModelFailure(mapper.finish(outcome, hostUsage)));
     parts.end();
     if (receiptError) {
       rejectText(receiptError.error);
@@ -706,12 +766,18 @@ export async function runGovernedTurn(
         try {
           result = await provider(request, context);
         } catch (err) {
+          // The turn's own abort, read directly: `driveTurn` aborts the
+          // request's `context.signal` only after its cancel grace period, so
+          // a caller that disconnects mid-call would otherwise read as a
+          // provider failure here.
+          const cancelled = turnAbort.signal.aborted || context.signal.aborted;
+          if (!cancelled) modelFailure ??= modelCallFailure(err);
           if (ledger) {
             await recorded(() =>
               ledger.modelCall({
                 ...receipt,
                 model: modelId,
-                outcome: context.signal.aborted ? "cancelled" : "failed",
+                outcome: cancelled ? "cancelled" : "failed",
               }),
             );
           }
@@ -787,7 +853,7 @@ export async function runGovernedTurn(
         }
         return execution.output;
       },
-      onEvent: (event) => emit(mapper.map(event)),
+      onEvent: (event) => emit(withModelFailure(mapper.map(event))),
     },
   })
     .then(async (result) => {

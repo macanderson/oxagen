@@ -427,6 +427,17 @@ export interface CapabilityContext {
    */
   messageId: string | null;
   /**
+   * The model's tool-call id, when this invocation answers a tool call the
+   * in-app agent's model made. Set by `materializeTools` on the context it
+   * hands the kernel for that one call; absent everywhere else.
+   *
+   * It is the name of the logical action, which is what makes it the billing
+   * ledger's dedup key (ADR-165): the same tool call re-executed after a
+   * retry is one governed action, not two. Never an identity and never
+   * trusted for anything but that key and the ledger row's attribution.
+   */
+  toolCallId?: string | null;
+  /**
    * Which run this capability call belongs to — the correlation key every
    * telemetry table means by `execution_step_id`.
    *

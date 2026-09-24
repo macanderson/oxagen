@@ -178,6 +178,7 @@ describe("the GitHub seam", () => {
     const { gh, resolveToken } = seam(fakeClient());
     const repo = await gh.resolveRepository(SCOPE);
     expect(repo).toEqual({
+      provider: "github",
       owner: "a-intel",
       repo: "platform",
       fullName: "a-intel/platform",
@@ -304,6 +305,7 @@ describe("the GitHub seam", () => {
     });
     const repo = await gh.resolveRepository(SCOPE);
     expect(repo).toEqual({
+      provider: "github",
       owner: "a-intel",
       repo: "platform",
       fullName: "a-intel/platform",
@@ -530,6 +532,7 @@ describe("the GitHub seam", () => {
     await expect(
       gh.readFile(
         {
+          provider: "github",
           owner: "o",
           repo: "r",
           fullName: "o/r",

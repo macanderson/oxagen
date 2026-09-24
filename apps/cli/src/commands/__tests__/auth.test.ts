@@ -158,6 +158,24 @@ describe("validatePlatformToken", () => {
     expect(result).toEqual({ kind: "forbidden" });
   });
 
+  it("keeps the server's reason when a policy refuses the key (Require SSO)", async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 403,
+      text: async () =>
+        "This organization requires single sign-on. The person who created this key must sign in through SSO.",
+    });
+    const result = await validatePlatformToken(
+      "tok_real",
+      "https://api.oxagen.sh",
+    );
+    expect(result).toEqual({
+      kind: "forbidden",
+      detail:
+        "This organization requires single sign-on. The person who created this key must sign in through SSO.",
+    });
+  });
+
   it("returns kind:unexpected for other non-ok statuses", async () => {
     mockFetch.mockResolvedValue({ ok: false, status: 500 });
     const result = await validatePlatformToken(

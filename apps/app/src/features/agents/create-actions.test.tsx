@@ -31,7 +31,8 @@ vi.mock("@/features/create", () => ({
 }));
 
 const { AgentsCreate } = await import("./create-actions");
-const { AgentKeyPrefix, keyPrefixOf } = await import("./key-prefix");
+const { AgentKeyPrefix } = await import("./key-prefix");
+const { keyPrefixOf } = await import("./key-prefix-of");
 const t = translator("agents.list.register");
 
 beforeEach(() => {
@@ -240,5 +241,59 @@ describe("Register an agent", () => {
       await within(dialog).findByTestId("register-agent-failure"),
     ).toBeInTheDocument();
     expect(within(dialog).queryByRole("link")).toBeNull();
+  });
+});
+
+describe("Register an agent while the dialog is open", () => {
+  const fill = (dialog: HTMLElement) => {
+    fireEvent.change(within(dialog).getByLabelText("Slug"), {
+      target: { value: "perf-watch" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("Harness"), {
+      target: { value: "codex" },
+    });
+  };
+
+  it("sends one proposal however often the form is submitted while it is pending (negative)", () => {
+    registerAgent.mockReturnValue(new Promise(() => undefined));
+    mount();
+    const dialog = openRegister();
+    fill(dialog);
+    const form = dialog.querySelector("form");
+    if (form === null) throw new Error("register form not drawn");
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    expect(registerAgent).toHaveBeenCalledTimes(1);
+  });
+
+  it("links no pull request whose URL is not GitHub's, and starts over once closed", async () => {
+    registerAgent.mockResolvedValue({
+      ok: true,
+      value: {
+        path: ".oxagen/agents/perf-watch.toml",
+        pullRequest: {
+          number: 7,
+          url: "https://git.example.com/acme/platform/merge_requests/7",
+        },
+      },
+    });
+    mount();
+    const dialog = openRegister();
+    fill(dialog);
+    fireEvent.click(within(dialog).getByRole("button", { name: t("confirm") }));
+    expect(
+      await within(dialog).findByText(
+        "Pull request #7 opened. The agent exists when it merges.",
+      ),
+    ).toBeInTheDocument();
+    expect(within(dialog).queryByRole("link")).toBeNull();
+    fireEvent.click(within(dialog).getByRole("button", { name: t("close") }));
+    const again = openRegister();
+    expect(within(again).getByLabelText("Slug")).toHaveValue("");
+    expect(
+      within(again).queryByText(
+        "Pull request #7 opened. The agent exists when it merges.",
+      ),
+    ).toBeNull();
   });
 });

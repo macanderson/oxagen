@@ -100,6 +100,7 @@ export class MemoryStore implements SteeringStore {
       updatedById: null,
       status: "proposed",
       governanceMode: null,
+      provider: null,
       repository: null,
       baseRef: null,
       branch: null,
@@ -362,12 +363,11 @@ export class MemoryStore implements SteeringStore {
         r.workspaceId === scope.workspaceId && r.slug === proposal.lineageId,
     );
     const classification = {
-      title: proposal.title ?? proposal.statement,
+      title: proposal.title?.trim() || proposal.statement,
       label:
         proposal.label ??
         existing?.label ??
-        proposal.title ??
-        contextRecordLabel(proposal.lineageId),
+        (proposal.title?.trim() || contextRecordLabel(proposal.lineageId)),
       status: "active",
       kind: proposal.kind,
       force: proposal.force,
@@ -487,6 +487,7 @@ export class MemoryStore implements SteeringStore {
 const pullUrl = (n: number) => `https://github.com/a-intel/platform/pull/${n}`;
 
 export const REPO: SteeringRepository = {
+  provider: "github",
   owner: "a-intel",
   repo: "platform",
   fullName: "a-intel/platform",

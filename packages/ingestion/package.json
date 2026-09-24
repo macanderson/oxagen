@@ -29,7 +29,7 @@
     "@oxagen/glob": "workspace:*",
     "@oxagen/ontology": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
-    "yaml": "2.9.0",
+    "yaml": "2.9.1",
     "zod": "3.25.76"
   },
   "devDependencies": {

@@ -205,9 +205,13 @@ async function reassignLocked(
     deps,
   );
   warnings.push(...result.warnings);
-  if (result.host !== undefined && !result.ok) {
-    // Enrolled in the new workspace, but a harness could not be hooked;
-    // `enroll` has already said which and why.
+  if (
+    result.host !== undefined &&
+    (!result.ok || result.shipping?.healthy === false)
+  ) {
+    // Enrolled in the new workspace, but a harness could not be hooked or
+    // the new daemon is not reporting; `enroll` has already said which and
+    // why. `tacho enroll` exits 1 on both (`main.ts`), and so does this.
     return {
       ok: false,
       from,

@@ -26,6 +26,7 @@ export function toRunRow(
     operatorId: run.operatorId,
     operatorKind: run.operatorKind,
     operatorName: run.operatorName,
+    operatorAttribution: run.operatorAttribution,
     status: run.status,
     reportedCost: run.reportedCost ?? null,
     outcome: run.outcome,
@@ -39,6 +40,10 @@ export function toRunRow(
             ...moneyFromMicros(run.cost.micros, run.cost.currency),
             basis: run.cost.basis,
           },
+    // A server that predates the field says nothing, and an open run's cost
+    // is then the estimate it has always been.
+    costIsEstimate:
+      run.costIsEstimate ?? (run.cost !== null && run.sealedAt === null),
     // The capability records the vendor slug under `id`; the view model calls
     // it `slug`, because INV-11 reserves `id` for a PublicId.
     model:
@@ -49,11 +54,16 @@ export function toRunRow(
             provider: run.model.provider,
             tier: run.model.tier,
           },
+    effort: run.effort ?? null,
+    thinking: run.thinking ?? null,
+    permissionMode: run.permissionMode ?? null,
+    reportedTokens: run.reportedTokens ?? null,
     machine: run.machine,
     harness: run.harness ?? null,
     taskRef: run.taskRef,
     name: run.name,
     enrichmentEnabled: run.enrichmentEnabled ?? true,
+    ...(run.enrichmentError ? { enrichmentError: run.enrichmentError } : {}),
     summary:
       run.summary === null
         ? null
@@ -65,12 +75,16 @@ export function toRunRow(
     replayGrade: run.replayGrade,
     verdict: run.verdict,
     enforcementTier: run.enforcementTier,
+    commandBlock: run.commandBlock ?? null,
+    steerBlock: run.steerBlock ?? null,
     ingressRevoked: run.ingressRevoked ?? false,
     ingressPaused: run.ingressPaused ?? false,
     completenessGaps: run.completenessGaps,
     canSummarize: run.canSummarize,
     startedAt: run.startedAt,
     sealedAt: run.sealedAt,
+    sealSource: run.sealSource ?? null,
+    endedAt: run.endedAt,
   };
 }
 

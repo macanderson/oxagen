@@ -117,6 +117,15 @@
       "writes": []
     },
     {
+      "domain": "repository",
+      "name": "attach_gitlab_project",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "attach_memory_evidence",
       "reads": [],
@@ -344,6 +353,13 @@
       "writes": []
     },
     {
+      "domain": "billing",
+      "name": "create_prepaid_invoice",
+      "reads": [],
+      "surfaces": [],
+      "writes": []
+    },
+    {
       "domain": "iam",
       "name": "create_role",
       "reads": [],
@@ -371,6 +387,15 @@
         "api",
         "cli",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "org",
+      "name": "create_scim_token",
+      "reads": [],
+      "surfaces": [
+        "api"
       ],
       "writes": []
     },
@@ -723,11 +748,29 @@
       "writes": []
     },
     {
+      "domain": "org",
+      "name": "execute_scim_request",
+      "reads": [],
+      "surfaces": [],
+      "writes": []
+    },
+    {
       "domain": "audit",
       "name": "export_audit_events",
       "reads": [],
       "surfaces": [
         "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "billing",
+      "name": "export_billing_statement",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
         "mcp"
       ],
       "writes": []
@@ -892,6 +935,17 @@
       "reads": [],
       "surfaces": [
         "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "billing",
+      "name": "get_billing_statement",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
         "mcp"
       ],
       "writes": []
@@ -2209,6 +2263,16 @@
       "writes": []
     },
     {
+      "domain": "billing",
+      "name": "list_prepaid_orders",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "cost",
       "name": "list_price_entries",
       "reads": [],
@@ -2997,6 +3061,16 @@
       "writes": []
     },
     {
+      "domain": "org",
+      "name": "revoke_scim_token",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "tacho",
       "name": "revoke_tacho_enrollment",
       "reads": [],
@@ -3022,6 +3096,15 @@
         "agent",
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "org",
+      "name": "rotate_scim_token",
+      "reads": [],
+      "surfaces": [
+        "api"
       ],
       "writes": []
     },
@@ -3174,6 +3257,13 @@
         "api",
         "mcp"
       ],
+      "writes": []
+    },
+    {
+      "domain": "billing",
+      "name": "set_contract_terms",
+      "reads": [],
+      "surfaces": [],
       "writes": []
     },
     {
@@ -3918,7 +4008,7 @@
       "writes": []
     }
   ],
-  "contentHash": "fd9ac67ab157cdcdc75ea1fb4f5f47f69a6481a7dba03037bc0b339b73383ff2",
+  "contentHash": "32ae84c83e3d70fee340c4615840693faba1ab10f0dfbf78bab2a86818fa1144",
   "domains": [
     {
       "name": "agent",
@@ -4009,12 +4099,14 @@
         "postgres:billing.credit_ledger",
         "postgres:billing.credit_lots",
         "postgres:billing.gau_buckets",
+        "postgres:billing.gau_ledger",
         "postgres:billing.gau_reversals",
         "postgres:billing.gau_settlements",
         "postgres:billing.invoices",
         "postgres:billing.org_billing_settings",
         "postgres:billing.payment_methods",
         "postgres:billing.plans",
+        "postgres:billing.prepaid_orders",
         "postgres:billing.spend_budgets",
         "postgres:billing.spend_counters",
         "postgres:billing.stripe_event_processing",
@@ -4206,6 +4298,9 @@
         "postgres:org.org_slug_history",
         "postgres:org.org_users",
         "postgres:org.organizations",
+        "postgres:org.scim_group_members",
+        "postgres:org.scim_groups",
+        "postgres:org.scim_tokens",
         "postgres:org.sso_group_roles"
       ]
     },
@@ -4372,7 +4467,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 144
+      "tableCount": 149
     },
     {
       "domains": [
@@ -7377,6 +7472,12 @@
           "type": "timestamp with time zone"
         },
         {
+          "name": "summary_error",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
           "name": "spec_version",
           "nullable": false,
           "primaryKey": false,
@@ -8433,6 +8534,12 @@
         },
         {
           "name": "governance_mode",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "provider",
           "nullable": true,
           "primaryKey": false,
           "type": "text"
@@ -10647,6 +10754,150 @@
           "type": "uuid"
         },
         {
+          "name": "bucket_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:billing.gau_buckets",
+          "type": "uuid"
+        },
+        {
+          "name": "idempotency_key",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "source",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "capability",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "tool_name",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "mcp_server",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "surface",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "harness",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "attributed_workspace_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "agent_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "principal_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "principal_kind",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "operator_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "run_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "session_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "tool_call_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "request_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "units",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "occurred_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "billed_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "billing",
+      "id": "postgres:billing.gau_ledger",
+      "name": "gau_ledger",
+      "rls": "org_only",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:org.organizations",
+          "type": "uuid"
+        },
+        {
           "name": "settlement_id",
           "nullable": true,
           "primaryKey": false,
@@ -11394,6 +11645,156 @@
       "name": "plans",
       "store": "postgres",
       "tenantScoped": false
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:org.organizations",
+          "type": "uuid"
+        },
+        {
+          "name": "agreement_ref",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "po_number",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "currency",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "licence_cents",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "licence_period_start",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "licence_period_end",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "gau_quantity",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "rate_per_gau_micros",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "credit_cents",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "grant_on",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "days_until_due",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "memo",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "stripe_invoice_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "granted_bucket_id",
+          "nullable": true,
+          "primaryKey": false,
+          "references": "postgres:billing.gau_buckets",
+          "type": "uuid"
+        },
+        {
+          "name": "units_granted_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "credits_granted_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "issued_by_request_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "paid_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "billing",
+      "id": "postgres:billing.prepaid_orders",
+      "name": "prepaid_orders",
+      "rls": "org_only",
+      "store": "postgres",
+      "tenantScoped": true
     },
     {
       "columns": [
@@ -17857,6 +18258,190 @@
     {
       "columns": [
         {
+          "name": "group_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:org.scim_groups",
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:org.organizations",
+          "type": "uuid"
+        },
+        {
+          "name": "user_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "org",
+      "id": "postgres:org.scim_group_members",
+      "name": "scim_group_members",
+      "rls": "org_only",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "updated_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:org.organizations",
+          "type": "uuid"
+        },
+        {
+          "name": "display_name",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "external_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        }
+      ],
+      "domain": "org",
+      "id": "postgres:org.scim_groups",
+      "name": "scim_groups",
+      "rls": "org_only",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "updated_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:org.organizations",
+          "type": "uuid"
+        },
+        {
+          "name": "token_prefix",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "token_hash",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "last_used_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "revoked_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "revoked_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        }
+      ],
+      "domain": "org",
+      "id": "postgres:org.scim_tokens",
+      "name": "scim_tokens",
+      "rls": "org_only",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
           "name": "id",
           "nullable": false,
           "primaryKey": true,
@@ -21257,6 +21842,12 @@
           "type": "timestamp with time zone"
         },
         {
+          "name": "seal_source",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
           "name": "cwd",
           "nullable": true,
           "primaryKey": false,
@@ -21948,6 +22539,24 @@
         },
         {
           "name": "summary_observed_revision",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "summary_error",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "harness_title",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "harness_title_at",
           "nullable": true,
           "primaryKey": false,
           "type": "timestamp with time zone"

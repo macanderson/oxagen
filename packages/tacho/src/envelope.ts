@@ -625,6 +625,10 @@ export const KIND_BODIES = {
   token_issued: body({ ...pick(...policyKeys) }),
   token_use: body({ ...pick(...toolKeys), ...pick(...policyKeys) }),
   token_denied: body({ ...pick(...toolKeys), ...pick(...policyKeys) }),
+  // The harness's own permission check on a tool call (Claude Code's OTel
+  // `tool_decision` and `tool.blocked_on_user`). It is not an Oxagen verdict,
+  // so it carries its own kind and never counts as a policy decision.
+  harness_permission: body({ ...pick(...toolKeys), ...pick(...policyKeys) }),
   // Subagents
   subagent_start: body({ ...pick(...subagentKeys), ...pick("tool_use_id") }),
   subagent_stop: body({
@@ -682,6 +686,13 @@ export const KIND_BODIES = {
     ...pick(...modelKeys),
   }),
   "oxagen:permission_mode_change": body({ ...pick(...lifecycleKeys) }),
+  /** The name Claude Code gives the session, sealed each time it changes. */
+  "oxagen:session_title": body({ ...pick("session_title") }),
+  /**
+   * A pull request the session opened, as the harness recorded it. The PR
+   * travels in `attrs` (`pr_number`, `pr_url`, `pr_repository`).
+   */
+  "oxagen:pr_link": body({}),
   "oxagen:queue": body({ ...pick(...lifecycleKeys), ...pick(...promptKeys) }),
   "oxagen:auth": body({ ...pick(...healthKeys) }),
   "oxagen:plugin_install": body({ ...pick(...healthKeys) }),

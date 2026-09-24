@@ -141,6 +141,9 @@ after the registered name separately when their contract uses a dotted stem.
 
 | Capability | Contract | Declared surfaces |
 | --- | --- | --- |
+| [create_prepaid_invoice](billing.prepaid_invoice.create.md) | [billing.prepaid_invoice.create.ts](../../packages/oxagen/src/contracts/billing.prepaid_invoice.create.ts) | none |
+| [export_billing_statement](billing.statement.export.md) | [billing.statement.export.ts](../../packages/oxagen/src/contracts/billing.statement.export.ts) | api, mcp, cli |
+| [get_billing_statement](billing.statement.get.md) | [billing.statement.get.ts](../../packages/oxagen/src/contracts/billing.statement.get.ts) | api, mcp, cli |
 | [get_contract_rate](billing.contract_rate.get.md) | [billing.contract_rate.get.ts](../../packages/oxagen/src/contracts/billing.contract_rate.get.ts) | api, mcp, agent |
 | [get_evidence_retention](billing.evidence_retention.md) | [billing.evidence_retention.ts](../../packages/oxagen/src/contracts/billing.evidence_retention.ts) | api, mcp, agent |
 | [get_gau_bucket](billing.gau_bucket.get.md) | [billing.gau_bucket.get.ts](../../packages/oxagen/src/contracts/billing.gau_bucket.get.ts) | api, mcp |
@@ -149,10 +152,12 @@ after the registered name separately when their contract uses a dotted stem.
 | [get_subscription](billing.subscription.read.md) | [billing.subscription.read.ts](../../packages/oxagen/src/contracts/billing.subscription.read.ts) | api, mcp, agent |
 | [get_usage_breakdown](billing.usage.breakdown.md) | [billing.usage.breakdown.ts](../../packages/oxagen/src/contracts/billing.usage.breakdown.ts) | api, mcp, agent |
 | [list_invoices](billing.invoice.list.md) | [billing.invoice.list.ts](../../packages/oxagen/src/contracts/billing.invoice.list.ts) | api, mcp |
+| [list_prepaid_orders](billing.prepaid_order.list.md) | [billing.prepaid_order.list.ts](../../packages/oxagen/src/contracts/billing.prepaid_order.list.ts) | api, mcp |
 | [preview_action_cost](billing.action_estimate.md) | [billing.action_estimate.ts](../../packages/oxagen/src/contracts/billing.action_estimate.ts) | api, mcp, agent |
 | [purchase_credits](billing.credits.purchase.md) | [billing.credits.purchase.ts](../../packages/oxagen/src/contracts/billing.credits.purchase.ts) | api, mcp, agent |
 | [purchase_gau_bucket](billing.gau_bucket.purchase.md) | [billing.gau_bucket.purchase.ts](../../packages/oxagen/src/contracts/billing.gau_bucket.purchase.ts) | api, mcp, agent |
 | [set_auto_topup](billing.auto_topup.set.md) | [billing.auto_topup.set.ts](../../packages/oxagen/src/contracts/billing.auto_topup.set.ts) | api, mcp |
+| [set_contract_terms](billing.contract_terms.set.md) | [billing.contract_terms.set.ts](../../packages/oxagen/src/contracts/billing.contract_terms.set.ts) | none |
 | [set_org_billing_terms](billing.org_terms.set.md) | [billing.org_terms.set.ts](../../packages/oxagen/src/contracts/billing.org_terms.set.ts) | none |
 | [set_spend_budget](billing.budget.set.md) | [billing.budget.set.ts](../../packages/oxagen/src/contracts/billing.budget.set.ts) | api, mcp, agent, cli |
 | [start_subscription_upgrade](billing.subscription_upgrade.start.md) | [billing.subscription_upgrade.start.ts](../../packages/oxagen/src/contracts/billing.subscription_upgrade.start.ts) | api, mcp, agent |
@@ -352,10 +357,12 @@ after the registered name separately when their contract uses a dotted stem.
 | [add_org_member](org.member.add.md) | [org.member.add.ts](../../packages/oxagen/src/contracts/org.member.add.ts) | api, mcp, agent |
 | [change_member_role](org.member_role.change.md) | [org.member_role.change.ts](../../packages/oxagen/src/contracts/org.member_role.change.ts) | api, mcp, agent |
 | [create_org](org.create.md) | [org.create.ts](../../packages/oxagen/src/contracts/org.create.ts) | api, mcp, agent |
+| [create_scim_token](create_scim_token.md) | [org.scim_token.create.ts](../../packages/oxagen/src/contracts/org.scim_token.create.ts) | api |
 | [create_sso_provider](create_sso_provider.md) | [org.sso.create.ts](../../packages/oxagen/src/contracts/org.sso.create.ts) | api, mcp |
 | [decline_member_invite](org.member_invite.decline.md) | [org.member_invite.decline.ts](../../packages/oxagen/src/contracts/org.member_invite.decline.ts) | api, mcp, agent |
 | [delete_model_credential](delete_model_credential.md) | [org.model_credential.delete.ts](../../packages/oxagen/src/contracts/org.model_credential.delete.ts) | api, mcp |
 | [delete_sso_provider](delete_sso_provider.md) | [org.sso.delete.ts](../../packages/oxagen/src/contracts/org.sso.delete.ts) | api, mcp |
+| [execute_scim_request](execute_scim_request.md) | [scim.request.ts](../../packages/oxagen/src/contracts/scim.request.ts) | none |
 | [get_data_plane](get_data_plane.md) | [org.data_plane.get.ts](../../packages/oxagen/src/contracts/org.data_plane.get.ts) | api, mcp |
 | [get_model_credential](get_model_credential.md) | [org.model_credential.get.ts](../../packages/oxagen/src/contracts/org.model_credential.get.ts) | api, mcp |
 | [get_org_settings](org.settings.read.md) | [org.settings.read.ts](../../packages/oxagen/src/contracts/org.settings.read.ts) | api, mcp, agent |
@@ -363,6 +370,8 @@ after the registered name separately when their contract uses a dotted stem.
 | [list_orgs](org.list.md) | [org.list.ts](../../packages/oxagen/src/contracts/org.list.ts) | api, mcp, agent |
 | [list_sso_providers](list_sso_providers.md) | [org.sso.list.ts](../../packages/oxagen/src/contracts/org.sso.list.ts) | api, mcp |
 | [remove_org_member](org.member.remove.md) | [org.member.remove.ts](../../packages/oxagen/src/contracts/org.member.remove.ts) | api, mcp, agent |
+| [revoke_scim_token](revoke_scim_token.md) | [org.scim_token.revoke.ts](../../packages/oxagen/src/contracts/org.scim_token.revoke.ts) | api, mcp |
+| [rotate_scim_token](rotate_scim_token.md) | [org.scim_token.rotate.ts](../../packages/oxagen/src/contracts/org.scim_token.rotate.ts) | api |
 | [set_data_plane](set_data_plane.md) | [org.data_plane.set.ts](../../packages/oxagen/src/contracts/org.data_plane.set.ts) | api, mcp |
 | [set_model_credential](set_model_credential.md) | [org.model_credential.set.ts](../../packages/oxagen/src/contracts/org.model_credential.set.ts) | api, mcp |
 | [set_sso_group_roles](set_sso_group_roles.md) | [org.sso.group_roles.set.ts](../../packages/oxagen/src/contracts/org.sso.group_roles.set.ts) | api, mcp |
@@ -430,6 +439,7 @@ after the registered name separately when their contract uses a dotted stem.
 | Capability | Contract | Declared surfaces |
 | --- | --- | --- |
 | [attach_github_installation](repository.installation.attach.md) | [repository.installation.attach.ts](../../packages/oxagen/src/contracts/repository.installation.attach.ts) | api |
+| [attach_gitlab_project](repository.gitlab.attach.md) | [repository.gitlab.attach.ts](../../packages/oxagen/src/contracts/repository.gitlab.attach.ts) | api |
 | [bind_main_repository](repository.main.bind.md) | [repository.main.bind.ts](../../packages/oxagen/src/contracts/repository.main.bind.ts) | api |
 | [get_main_repository](repository.main.get.md) | [repository.main.get.ts](../../packages/oxagen/src/contracts/repository.main.get.ts) | api, mcp |
 | [get_repository_tree](repository.tree.get.md) | [repository.tree.get.ts](../../packages/oxagen/src/contracts/repository.tree.get.ts) | api, mcp, cli |

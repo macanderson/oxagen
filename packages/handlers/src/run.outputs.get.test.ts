@@ -20,6 +20,7 @@ import {
   type RunOutputQueries,
   type SessionFileRow,
 } from "./lib/run-outputs";
+import { WORK_PR_LINK_CAP } from "./lib/run-work";
 import {
   createRunOutputsGetHandler,
   type RunOutputsGetDeps,
@@ -100,6 +101,9 @@ function harness(opts: {
   files?: StoredFile[];
   events?: ReturnType<typeof event>[];
   approvals?: RunApprovalRow[];
+  links?: Awaited<ReturnType<RunOutputsGetDeps["prLinks"]>>;
+  /** The PR-link read rejects, as a ClickHouse outage would. */
+  linksFail?: boolean;
 }) {
   const stores = memoryStores(
     [ledgerRun({ publicId: LEDGER_ID, runId: RUN_UUID })],
@@ -143,11 +147,89 @@ function harness(opts: {
     readWitnessFor: stores.readWitnessFor,
     tachoFrames: () => Promise.resolve([]),
     outputs,
+    prLinks: (sessionUuid) =>
+      opts.linksFail === true
+        ? Promise.reject(new Error("clickhouse unreachable"))
+        : Promise.resolve(
+            sessionUuid === SESSION_UUID ? (opts.links ?? []) : [],
+          ),
   };
   return createRunOutputsGetHandler(deps);
 }
 
 describe("get_run_outputs — a wrapped session", () => {
+  it("adds a PR node per harness PR link, in frame order", async () => {
+    const outputs = harness({
+      files: [
+        file({ path: "src/a.ts", writes: 1, lastSeq: 10 }),
+        file({ path: "src/b.ts", writes: 1, lastSeq: 30 }),
+      ],
+      links: [
+        {
+          url: "https://github.com/acme/app/pull/41",
+          number: "41",
+          repository: "acme/app",
+          seq: 20,
+          ts: "2026-09-23 10:00:00.000",
+        },
+        {
+          url: "not a url",
+          number: "9",
+          repository: "acme/app",
+          seq: 25,
+          ts: "2026-09-23 10:01:00.000",
+        },
+      ],
+    });
+
+    const out = await outputs({ runId: TACHO_ID }, ctx());
+
+    expect(out.nodes.map((n) => [n.seq, n.kind, n.name])).toEqual([
+      ["10", "file", "src/a.ts"],
+      ["20", "pr", "#41"],
+      ["30", "file", "src/b.ts"],
+    ]);
+    expect(out.nodes[1]).toMatchObject({
+      where: "acme/app",
+      state: "open",
+      note: "https://github.com/acme/app/pull/41",
+      observedAt: "2026-09-23T10:00:00.000Z",
+    });
+    expect(out.tally.artifacts).toBe(3);
+  });
+
+  it("draws the files without PRs, marked incomplete, when the PR links cannot be read", async () => {
+    const outputs = harness({
+      files: [file({ path: "src/a.ts", writes: 1, lastSeq: 10 })],
+      linksFail: true,
+    });
+
+    const out = await outputs({ runId: TACHO_ID }, ctx());
+
+    expect(out.nodes.map((n) => [n.kind, n.name])).toEqual([
+      ["file", "src/a.ts"],
+    ]);
+    expect(out.complete).toBe(false);
+  });
+
+  it("stops at the PR-link cap and says the spine is incomplete", async () => {
+    const links = Array.from({ length: WORK_PR_LINK_CAP + 1 }, (_, i) => ({
+      url: `https://github.com/acme/app/pull/${i + 1}`,
+      number: String(i + 1),
+      repository: "acme/app",
+      seq: i + 1,
+      ts: "2026-09-23 10:00:00.000",
+    }));
+    const outputs = harness({ links });
+
+    const out = await outputs({ runId: TACHO_ID }, ctx());
+
+    expect(out.nodes.filter((n) => n.kind === "pr")).toHaveLength(
+      WORK_PR_LINK_CAP,
+    );
+    expect(out.complete).toBe(false);
+  });
+
   it("splits reads from writes and counts them apart", async () => {
     const outputs = harness({
       files: [
@@ -252,6 +334,37 @@ describe("get_run_outputs — a wrapped session", () => {
       ["src/b.ts", null],
     ]);
     expect(out.tally.artifacts).toBe(2);
+  });
+
+  it("keeps a subagent's paths after the run's own PR nodes", async () => {
+    const outputs = harness({
+      files: [
+        file({ path: "src/a.ts", writes: 1, lastSeq: 10 }),
+        file({
+          sessionId: CHILD_ROW_ID,
+          path: "src/b.ts",
+          edits: 1,
+          lastSeq: 3,
+        }),
+      ],
+      links: [
+        {
+          url: "https://github.com/acme/app/pull/41",
+          number: "41",
+          repository: "acme/app",
+          seq: 20,
+          ts: "2026-09-23 10:00:00.000",
+        },
+      ],
+    });
+
+    const out = await outputs({ runId: TACHO_ID }, ctx());
+
+    expect(out.nodes.map((n) => [n.seq, n.kind, n.name])).toEqual([
+      ["10", "file", "src/a.ts"],
+      ["20", "pr", "#41"],
+      [null, "file", "src/b.ts"],
+    ]);
   });
 
   it("says a spine cut at its cap is a prefix", async () => {

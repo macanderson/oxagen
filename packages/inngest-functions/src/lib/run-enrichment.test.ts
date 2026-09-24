@@ -9,6 +9,8 @@ vi.mock("@oxagen/ai", () => ({
 vi.mock("@oxagen/billing", () => ({ evaluateTurnCreditGate: vi.fn() }));
 import {
   collectRunText,
+  enrichmentFailureReason,
+  fallbackRunTitle,
   runNarrativeTurn,
   ENRICHMENT_CHUNK_CHARS,
   uniqueRunName,
@@ -176,5 +178,124 @@ it("uses the same resolved funding for the selected model, credit gate and Stell
       credential: funding.modelKey,
       tools: {},
     }),
+  );
+});
+
+describe("the fallback title", () => {
+  it("names a run for the first sentence of its first prompt and its branch", () => {
+    expect(
+      fallbackRunTitle(
+        "Please repair authentication. The redirect loops after login.",
+        "fix/auth-redirect",
+      ),
+    ).toBe("Please repair authentication on fix/auth-redirect");
+  });
+  it("leaves out a branch that names no work", () => {
+    for (const branch of ["main", "master", "HEAD", " ", null])
+      expect(fallbackRunTitle("Why does CI fail?", branch)).toBe(
+        "Why does CI fail?",
+      );
+  });
+  it("reads the first line with words and drops markup", () => {
+    expect(
+      fallbackRunTitle(
+        "\n  <command-name>/review</command-name>\n\nsecond line",
+        null,
+      ),
+    ).toBe("/review");
+  });
+  it("cuts a long sentence at a word and keeps the whole title within 80 characters", () => {
+    const title = fallbackRunTitle(
+      `Refactor ${"the billing proration path ".repeat(6)}and the invoices`,
+      `feature/${"x".repeat(60)}`,
+    )!;
+    expect(title.length).toBeLessThanOrEqual(80);
+    expect(title).toMatch(
+      /^Refactor the billing proration path .*… on feature\//u,
+    );
+    expect(title.split(" on feature/")[0]!.length).toBeLessThanOrEqual(60);
+  });
+  it("gives no title for a prompt with no words", () => {
+    expect(fallbackRunTitle(" \n <br> \n", "fix/x")).toBeNull();
+  });
+});
+
+it("keeps the run's own first prompt and skips a subagent's", async () => {
+  const subagent = {
+    ...frame(1, "Search the repository for callers."),
+    type: "turn_start",
+    chain: {
+      sessionUuid: "child",
+      parentSessionUuid: "root",
+      subagentId: "a1",
+      subagentType: "Explore",
+      spawnToolUseId: "toolu_1",
+    },
+  };
+  const own = { ...frame(2, "Fix the flaky login test."), type: "turn_start" };
+  const texts = [
+    "",
+    "Search the repository for callers.",
+    "Fix the flaky login test.",
+  ];
+  const got = await collectRunText(
+    scope,
+    [frame(0, "tool output"), subagent, own],
+    async (_scope, ref) => ({
+      bytes: new TextEncoder().encode(
+        ref === "body-0" ? "tool output" : texts[Number(ref.slice(5))]!,
+      ),
+    }),
+  );
+  expect(got.firstPrompt).toBe("Fix the flaky login test.");
+});
+
+describe("the stored failure reason", () => {
+  it.each([
+    [
+      new Error("Run enrichment unavailable: insufficient_credits"),
+      "credit_refused:insufficient_credits",
+    ],
+    [
+      {
+        name: "GatewayError",
+        message: "Free tier users do not have access to this model",
+      },
+      "model_refused",
+    ],
+    [{ name: "ZodError", message: "[]" }, "invalid_account"],
+    [new SyntaxError("Unexpected token"), "invalid_account"],
+    [{ name: "TimeoutError", message: "The operation was aborted" }, "timeout"],
+    [new Error("Run enrichment was disabled"), "disabled"],
+    [new Error("Stella returned no run account"), "empty_account"],
+    [new Error("socket hang up"), "unknown"],
+    ["a bare string", "unknown"],
+  ])("classifies %o as %s", (error, reason) => {
+    expect(enrichmentFailureReason(error)).toBe(reason);
+  });
+});
+
+it("does not retry a credit refusal inside the job", async () => {
+  const { resolveModelFundingSource, selectModelFromFunding } = await import(
+    "@oxagen/ai"
+  );
+  const { evaluateTurnCreditGate } = await import("@oxagen/billing");
+  const { NonRetriableError } = await import("@oxagen/functions");
+  vi.clearAllMocks();
+  vi.mocked(resolveModelFundingSource).mockResolvedValue({
+    fundedBy: "platform",
+  } as never);
+  vi.mocked(selectModelFromFunding).mockReturnValue({
+    model: {} as never,
+    fundedBy: "platform",
+  });
+  vi.mocked(evaluateTurnCreditGate).mockResolvedValue({
+    ok: false,
+    code: "insufficient_credits",
+  } as never);
+  const call = runNarrativeTurn(scope, "summarize");
+  await expect(call).rejects.toBeInstanceOf(NonRetriableError);
+  await expect(call).rejects.toThrow(
+    "Run enrichment unavailable: insufficient_credits",
   );
 });

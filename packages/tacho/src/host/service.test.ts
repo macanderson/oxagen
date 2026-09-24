@@ -39,6 +39,57 @@ function fakeExec(answers: Record<string, ExecResult> = {}): {
   };
 }
 
+/**
+ * A launchd that behaves the way the real one does on a re-enroll: `print`
+ * answers 0 for a loaded label, `bootout` removes the label only after the
+ * old daemon exits (`lingerPolls` more `print` calls), and `bootstrap` loads
+ * it unless `bootstrapLoads` is false.
+ */
+function fakeLaunchd(
+  options: { lingerPolls?: number; bootstrapLoads?: boolean } = {},
+) {
+  const state = {
+    loaded: false,
+    calls: [] as string[],
+    sleeps: 0,
+    manager: undefined as unknown as ReturnType<typeof serviceManagerFor>,
+  };
+  // Polls left before a booted-out label actually goes; Infinity never.
+  let remaining = 0;
+  let draining = false;
+  const exec: Exec = (command, args) => {
+    state.calls.push([command, ...args].join(" "));
+    if (args[0] === "bootout" && state.loaded) {
+      remaining = options.lingerPolls ?? 0;
+      draining = remaining > 0;
+      if (!draining) state.loaded = false;
+    }
+    if (args[0] === "bootstrap" && (options.bootstrapLoads ?? true))
+      state.loaded = true;
+    if (args[0] === "print") {
+      if (draining && remaining > 0) remaining -= 1;
+      else if (draining) {
+        draining = false;
+        state.loaded = false;
+      }
+      return state.loaded
+        ? { status: 0, stdout: "state = running", stderr: "" }
+        : { status: 113, stdout: "", stderr: "Could not find service" };
+    }
+    return { status: 0, stdout: "", stderr: "" };
+  };
+  state.manager = serviceManagerFor({
+    platform: "darwin",
+    home: mkdtempSync(join(tmpdir(), "tacho-svc-")),
+    exec,
+    uid: 501,
+    sleep: () => {
+      state.sleeps += 1;
+    },
+  });
+  return state;
+}
+
 describe("service units", () => {
   it("renders a launchd plist with escaped values", () => {
     const plist = renderLaunchdPlist({
@@ -101,9 +152,11 @@ describe("service managers", () => {
     expect(existsSync(manager.unitPath)).toBe(true);
     expect(readFileSync(manager.unitPath, "utf8")).toContain("tachod.mjs");
     expect(calls).toEqual([
-      `launchctl enable gui/501/${SERVICE_LABEL}`,
       `launchctl bootout gui/501/${SERVICE_LABEL}`,
+      `launchctl print gui/501/${SERVICE_LABEL}`,
+      `launchctl enable gui/501/${SERVICE_LABEL}`,
       `launchctl bootstrap gui/501 ${manager.unitPath}`,
+      `launchctl print gui/501/${SERVICE_LABEL}`,
     ]);
     expect(manager.status()).toMatchObject({ installed: true, running: true });
     manager.uninstall();
@@ -114,6 +167,11 @@ describe("service managers", () => {
   it("surfaces a launchctl bootstrap failure", () => {
     const home = mkdtempSync(join(tmpdir(), "tacho-svc-"));
     const { exec } = fakeExec({
+      "launchctl print": {
+        status: 113,
+        stdout: "",
+        stderr: "Could not find service",
+      },
       "launchctl bootstrap": {
         status: 5,
         stdout: "",
@@ -130,6 +188,94 @@ describe("service managers", () => {
     expect(() => manager.install(SPEC)).toThrow(
       /bootstrap failed \(5\): Input\/output error/,
     );
+  });
+
+  it("renders a launchd exit timeout so a hung stop cannot outlast the bootout wait", () => {
+    expect(renderLaunchdPlist(SPEC)).toMatch(
+      /<key>ExitTimeOut<\/key>\n\s*<integer>\d+<\/integer>/,
+    );
+  });
+
+  // #4012: `bootout` only marks the label for removal. A `bootstrap` that
+  // lands before the old daemon exits is removed with it, leaving the plist
+  // on disk and no service in launchd.
+  it("waits for launchd to drop the old label before it bootstraps", () => {
+    const d = fakeLaunchd({ lingerPolls: 3 });
+    d.loaded = true;
+    d.manager.install(SPEC);
+    const target = `gui/501/${SERVICE_LABEL}`;
+    expect(d.calls).toEqual([
+      `launchctl bootout ${target}`,
+      `launchctl print ${target}`,
+      `launchctl print ${target}`,
+      `launchctl print ${target}`,
+      `launchctl print ${target}`,
+      `launchctl enable ${target}`,
+      `launchctl bootstrap gui/501 ${d.manager.unitPath}`,
+      `launchctl print ${target}`,
+    ]);
+    expect(d.sleeps).toBe(3);
+    expect(d.loaded).toBe(true);
+  });
+
+  it("refuses to bootstrap while the old label never goes", () => {
+    const d = fakeLaunchd({ lingerPolls: Number.POSITIVE_INFINITY });
+    d.loaded = true;
+    expect(() => d.manager.install(SPEC)).toThrow(/still loaded/);
+    expect(d.calls.some((call) => call.includes("bootstrap"))).toBe(false);
+  });
+
+  it("restarts with kickstart when the plist is unchanged and loaded", () => {
+    const d = fakeLaunchd();
+    d.manager.install(SPEC);
+    d.calls.length = 0;
+    d.manager.install(SPEC);
+    const target = `gui/501/${SERVICE_LABEL}`;
+    expect(d.calls).toEqual([
+      `launchctl print ${target}`,
+      `launchctl kickstart -k ${target}`,
+      `launchctl print ${target}`,
+    ]);
+  });
+
+  it("bootstraps an unchanged plist whose service launchd dropped", () => {
+    const d = fakeLaunchd();
+    d.manager.install(SPEC);
+    // The state the race left behind: the plist on disk, no service.
+    d.loaded = false;
+    d.calls.length = 0;
+    d.manager.install(SPEC);
+    expect(d.calls).toContain(
+      `launchctl bootstrap gui/501 ${d.manager.unitPath}`,
+    );
+    expect(d.calls.some((call) => call.includes("kickstart"))).toBe(false);
+    expect(d.loaded).toBe(true);
+  });
+
+  it("boots out a loaded service when the plist changed", () => {
+    const d = fakeLaunchd();
+    d.manager.install(SPEC);
+    d.calls.length = 0;
+    d.manager.install({ ...SPEC, env: { ...SPEC.env, EXTRA: "1" } });
+    expect(d.calls[0]).toBe(`launchctl bootout gui/501/${SERVICE_LABEL}`);
+    expect(d.calls.some((call) => call.includes("kickstart"))).toBe(false);
+    expect(readFileSync(d.manager.unitPath, "utf8")).toContain("EXTRA");
+  });
+
+  it("throws when bootstrap succeeds but launchd has no service", () => {
+    const d = fakeLaunchd({ bootstrapLoads: false });
+    expect(() => d.manager.install(SPEC)).toThrow(
+      /bootstrap reported success, but launchd has no/,
+    );
+    expect(existsSync(d.manager.unitPath)).toBe(true);
+  });
+
+  it("waits out a slow exit on uninstall before it deletes the plist", () => {
+    const d = fakeLaunchd({ lingerPolls: 8 });
+    d.manager.install(SPEC);
+    d.manager.uninstall();
+    expect(d.sleeps).toBe(8);
+    expect(existsSync(d.manager.unitPath)).toBe(false);
   });
 
   it("installs, reports, and removes a systemd user unit", () => {

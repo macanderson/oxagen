@@ -13,10 +13,10 @@ import {
   type RunFrame,
   stepKind,
   tachoFrame,
-  tachoStage,
   tachoTimestamp,
   turnOrdinals,
 } from "./run-frames";
+import { tachoStage } from "./tacho-kinds";
 import type { AttemptEventReadRecord } from "./run-store";
 
 function event(
@@ -431,6 +431,73 @@ describe("transcript fold", () => {
     expect(folded[1]?.decision?.decision).toBe("deny");
   });
 
+  // An operator's pause, resume, cancel or steer is a decision the Policies
+  // tab lists, with the command as its word and the operator as its source
+  // (#4023). It is about the run, so it never becomes the decision of the
+  // call a step fold holds.
+  describe("an operator command", () => {
+    const applied = (seq: number, command: string) =>
+      tachoFrame(
+        tachoRow(seq, "oxagen:command_applied", {
+          policyDecision: command === "resume" ? "allow" : "deny",
+          attrs: { "command.id": `tcm_${seq}`, "command.name": command },
+          body: JSON.stringify({
+            policy_decision: command === "resume" ? "allow" : "deny",
+            policy_source: "human",
+            policy_reason_code: `${command}_applied`,
+          }),
+        }),
+      );
+
+    it("reads as a policy frame whose decision is the command, by the operator", () => {
+      const frame = applied(3, "pause");
+      expect(frame.stage).toBe("policy");
+      expect(frame.summary).toBe("operator pause");
+      expect(frame.identity.policy).toBe("pause");
+      expect(frame.identity.policySource).toBe("human");
+      expect(frameKinds(frame)).toContain("policy");
+      const [entry] = foldTranscript([frame], "everything");
+      expect(entry?.kind).toBe("policy");
+      expect(entry?.decision).toMatchObject({
+        seq: "3",
+        decision: "pause",
+        type: "oxagen:command_applied",
+        source: "human",
+      });
+    });
+
+    it("records who decided a policy frame from its body", () => {
+      const frame = tachoFrame(
+        tachoRow(1, "policy_decision", {
+          policyDecision: "allow",
+          body: JSON.stringify({
+            policy_decision: "allow",
+            policy_source: "harness",
+          }),
+        }),
+      );
+      expect(foldTranscript([frame], "everything")[0]?.decision?.source).toBe(
+        "harness",
+      );
+    });
+
+    it("does not become the decision of the step it folds into", () => {
+      const folded = foldTranscript(
+        [
+          tachoFrame(tachoRow(0, "tool_requested", { toolName: "Read" })),
+          applied(1, "steer"),
+          tachoFrame(
+            tachoRow(2, "tool_call", { toolName: "Read", toolStatus: "ok" }),
+          ),
+        ],
+        "steps",
+      );
+      expect(folded).toHaveLength(1);
+      expect(folded[0]?.decision).toBeNull();
+      expect(folded[0]?.frames).toBe(3);
+    });
+  });
+
   it("turns opens at turn_start and sums the turn's cost records", () => {
     const folded = foldTranscript(frames, "turns");
     expect(
@@ -709,6 +776,60 @@ describe("frameKinds and filterFramesByKind", () => {
     expect(frameKinds(usage).sort()).toEqual(["responses", "usage"]);
     expect(frameKinds(policy)).toEqual(["policy"]);
     expect(frameKinds(recall)).toEqual(["recall"]);
+  });
+
+  it("counts the prompt an operator typed, once, and not a subagent's", () => {
+    const typed = tachoFrame(tachoRow(6, "turn_start", { turnSeq: 1 }));
+    const handed = tachoFrame(
+      tachoRow(7, "turn_start", {
+        sessionUuid: "sub",
+        rootSessionUuid: "root",
+      }),
+    );
+    // The transcript tailer's copy of the same prompt.
+    const copy = tachoFrame(
+      tachoRow(8, "oxagen:message", {
+        body: JSON.stringify({ prompt_digest: "sha256:ab", prompt_length: 3 }),
+      }),
+    );
+    expect(frameKinds(typed)).toEqual(["prompt"]);
+    expect(frameKinds(handed)).toEqual([]);
+    expect(frameKinds(copy)).toEqual([]);
+    expect(
+      filterFramesByKind([typed, handed, copy, tool], ["prompt"]).map(
+        (f) => f.seq,
+      ),
+    ).toEqual(["6"]);
+  });
+
+  it("answers thinking for a call that reasoned, and seal for the chain's own integrity frames", () => {
+    const reasoned = {
+      ...usage,
+      usage: {
+        inputUncached: null,
+        cacheRead: null,
+        cacheWrite: null,
+        output: 40,
+        reasoning: 12,
+      },
+    };
+    const plain = { ...usage, usage: { ...reasoned.usage, reasoning: 0 } };
+    const checkpoint = tachoFrame(tachoRow(9, "checkpoint"));
+    const gap = tachoFrame(tachoRow(10, "telemetry_gap"));
+    const terminated = ledgerFrame({
+      ...event(11, "terminal.attempt_terminated", {}),
+      stage: "terminal",
+    });
+    expect(frameKinds(reasoned).sort()).toEqual([
+      "responses",
+      "thinking",
+      "usage",
+    ]);
+    expect(frameKinds(plain)).not.toContain("thinking");
+    expect(frameKinds(checkpoint)).toEqual(["seal"]);
+    expect(frameKinds(gap)).toEqual(["seal"]);
+    expect(frameKinds(terminated)).toEqual(["seal"]);
+    expect(frameKinds(tool)).not.toContain("seal");
   });
 
   it("keeps everything for an empty selection, and only the chips pressed otherwise", () => {

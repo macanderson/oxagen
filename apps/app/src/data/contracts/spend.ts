@@ -82,6 +82,8 @@ const SpendRow = SpendFigure.extend({
 export const SpendReport = z.object({
   period: DayRange,
   total: SpendFigure,
+  /** Runs still open whose cost is in these figures as a running estimate. */
+  estimatedRuns: z.number().int().nonnegative().optional(),
   rows: z.array(SpendRow),
 });
 export type SpendReport = z.infer<typeof SpendReport>;

@@ -94,6 +94,7 @@ import {
   TACHO_METERING_ATTR,
   TACHO_METERING_OBSERVED,
   type CommandAcknowledgement,
+  type AgentDaySpend,
   type ControlEnvelope,
   type DaemonHealth,
   type ModelBaseUrlReport,
@@ -106,6 +107,7 @@ import {
   type GitFacts,
   type GitWorkingTreeChange,
   readGitFacts,
+  readGitRoot,
   readWorkingTreeChanges,
   worktreeReconciledBody,
 } from "./git-facts";
@@ -128,6 +130,7 @@ import {
 import { createGithubProxy } from "./github-proxy";
 import { pushCredentialBasis } from "./push-basis";
 import { issueRunToken } from "./credential-issuer";
+import { utcDay } from "./day-spend";
 import { type BeforeForward, createModelProxy } from "./model-proxy";
 import { createModelProxyListener } from "./model-proxy-listener";
 import {
@@ -136,6 +139,7 @@ import {
   type ModelUpstreams,
 } from "./model-routes";
 import {
+  forgetHookId,
   parseRegistryState,
   rememberBaseline,
   sessionMapKey,
@@ -629,6 +633,8 @@ async function initializeDaemon(
     return now() - (mandateConfirmedAt ?? issued) > expires - issued;
   }
   let lastControlAt: number | undefined;
+  /** The control plane's latest figures for the agent's UTC day (ADR-160). */
+  let recordedDaySpend: AgentDaySpend | undefined;
   let lastOtlpAt: number | undefined;
   let lastIngestAt: number | undefined;
   // When a command poll last succeeded. The poll's cadence gate reads it next
@@ -764,6 +770,20 @@ async function initializeDaemon(
   function rollbackEveryChain(
     marks: Array<{ session: SessionRecord; mark: ChainMark }>,
   ): void {
+    // A session the failed call created has no mark: it did not exist when
+    // the marks were taken. Its chain goes back to where it was born, or its
+    // unwritten genesis keeps seq 0 and the retry seals a resume after it.
+    // A session with a WAL file is left alone: the model proxy runs off the
+    // serial queue, and it may have opened and written that session while
+    // the failed call was awaiting.
+    const marked = new Set(marks.map(({ session }) => session));
+    const unmarked = registry.list().filter((session) => !marked.has(session));
+    if (unmarked.length > 0) {
+      const onDisk = new Set(wal.sessions());
+      for (const session of unmarked)
+        if (!onDisk.has(session.recorder.sessionUuid))
+          session.recorder.rollbackToBirth();
+    }
     for (const { session, mark } of [...marks].reverse())
       session.recorder.rollbackChain(mark);
   }
@@ -1175,6 +1195,12 @@ async function initializeDaemon(
 
   async function onControl(control: ControlEnvelope): Promise<void> {
     lastControlAt = now();
+    // Replaced on every envelope that carries one, and kept when one does
+    // not: a poll that omits the figure (no daily ceiling, or the store did
+    // not answer) says nothing new about the day. The proxy ignores a figure
+    // for any day but today.
+    if (control.agent_day_spend !== undefined)
+      recordedDaySpend = control.agent_day_spend;
     host = applyControlFacts(paths.hostFile, host, {
       host_status: control.host_status,
       deny_generation: control.deny_generation,
@@ -1718,6 +1744,8 @@ async function initializeDaemon(
        * discarded instead when the session has moved.
        */
       cwd: string;
+      /** The directory the read started from, before resolving its root. */
+      dir: string;
       ending?: HookEnvelope;
       // Absent for a repository with no commit yet, which has no HEAD to
       // describe but does have a worktree to reconcile.
@@ -1732,11 +1760,12 @@ async function initializeDaemon(
       if (want === undefined) continue;
       const session = registry.byUuid(harnessSessionId);
       const ending = pendingSessionEnds.get(harnessSessionId);
-      const cwd = session?.cwd;
+      // Where the agent last wrote, falling back to where it started.
+      const dir = session?.workDir ?? session?.cwd;
       if (
         session === undefined ||
         session.sealed ||
-        cwd === undefined ||
+        dir === undefined ||
         ending?.terminal !== undefined
       ) {
         if (ending !== undefined) {
@@ -1771,6 +1800,10 @@ async function initializeDaemon(
         continue;
       }
       if (due) lastReconcileAt.set(harnessSessionId, at);
+      // Every read runs at the worktree root, so an edit in a subdirectory and
+      // one at the top describe the same checkout, and the baseline is
+      // switched only when the work moves to another root.
+      const cwd = (await readGitRoot(execAsync, dir)) ?? dir;
       const facts = await gitFactsFor(cwd, want.force);
       // Undefined means `rev-parse HEAD` did not answer, which covers a
       // directory that is not a repository AND a repository whose first
@@ -1781,17 +1814,18 @@ async function initializeDaemon(
       // seals no frame. There is simply no git context to note for either.
       // The first read that answers in this worktree fixes the session's
       // baseline. Later reads measure from it rather than from a `HEAD`
-      // that the session's own commits keep moving. `ensure` clears the
-      // baseline when `cwd` changes, and `rememberBaseline` puts back the one
-      // the session holds for the repository it is in now, so a `cd` inside
-      // one repository keeps it and a move to another captures that tree's
-      // HEAD. A session that moved while the probe ran is not given this
-      // repository's HEAD.
-      if (facts?.head_sha !== undefined && session.cwd === cwd)
-        rememberBaseline(session, facts.repo_root ?? cwd, facts.head_sha);
+      // that the session's own commits keep moving. The baseline is held
+      // per repository root: `rememberBaseline` puts back the one the
+      // session holds for this root, so a `cd` inside one repository keeps
+      // it and a move to another root captures that tree's HEAD, or finds
+      // the one taken there before. A root with no baseline and no HEAD
+      // leaves none in force, so this read never diffs against a commit in
+      // another repository.
+      rememberBaseline(session, cwd, facts?.head_sha);
       if (facts === undefined && !due) continue;
       found.push({
         session,
+        dir,
         cwd,
         ending,
         facts,
@@ -1822,11 +1856,19 @@ async function initializeDaemon(
     }
     if (found.length === 0) return;
     await serial.run(async () => {
-      for (const { session, cwd, facts, changes, snapshot, ending } of found) {
+      for (const {
+        session,
+        cwd,
+        dir,
+        facts,
+        changes,
+        snapshot,
+        ending,
+      } of found) {
         if (session.sealed) continue;
         // The session moved while the probe ran, so this answer describes a
         // repository it is no longer in. A later turn reads the new one.
-        if (session.cwd !== cwd) {
+        if ((session.workDir ?? session.cwd) !== dir) {
           if (ending !== undefined)
             requestGitRead(session.recorder.sessionUuid, {
               force: true,
@@ -1834,8 +1876,14 @@ async function initializeDaemon(
             });
           continue;
         }
+        // The root rides with the git facts, so the run's checkout names the
+        // worktree the facts came from rather than the directory the session
+        // was started in.
         if (facts !== undefined)
-          session.recorder.noteContext(gitContextOf(facts));
+          session.recorder.noteContext({
+            ...gitContextOf(facts),
+            worktree_path: cwd,
+          });
         if (changes !== undefined)
           recordReconciliation(session, changes, snapshot);
         if (
@@ -2119,6 +2167,13 @@ async function initializeDaemon(
         record(outcome.events, outcome.bodies);
       } catch (error) {
         rollbackEveryChain(marks);
+        // The chain rollback does not reach the hook-id ledger, which lives
+        // on the session record. Left in place, the id would make the
+        // client's spool replay of this same hook look like a repeat, and
+        // the hook would be lost.
+        if (envelope.hook_id !== undefined && outcome.record !== undefined) {
+          forgetHookId(outcome.record, envelope.hook_id);
+        }
         throw error;
       }
     }
@@ -2500,6 +2555,35 @@ async function initializeDaemon(
       ...displacedUpstreams,
       ...options.modelUpstreams,
     }),
+    // A restart must not hand the agent's day back either (ADR-160). Only a
+    // session whose last frame is from `day` can hold a frame from it, so
+    // the rest of the week the WAL keeps is not parsed.
+    priorDaySpendMicros: (day) => {
+      const start = Date.parse(`${day}T00:00:00.000Z`);
+      let total = 0;
+      for (const session of wal.sessions()) {
+        const last = wal.lastEvent(session);
+        if (last !== undefined && Date.parse(last.ts) < start) continue;
+        for (const event of wal.read(session)) {
+          if (event.kind !== "llm_call") continue;
+          if (event.attrs[TACHO_METERING_ATTR] !== TACHO_METERING_OBSERVED)
+            continue;
+          if (utcDay(Date.parse(event.ts)) !== day) continue;
+          const cost = (event.body as { cost_usd_micros?: number })
+            .cost_usd_micros;
+          if (typeof cost === "number") total += cost;
+        }
+      }
+      return total;
+    },
+    recordedDaySpend: () =>
+      recordedDaySpend === undefined
+        ? undefined
+        : {
+            day: recordedDaySpend.day,
+            thisHostMicros: recordedDaySpend.this_host_usd_micros,
+            otherHostsMicros: recordedDaySpend.other_hosts_usd_micros,
+          },
     // A restart must not hand a session its budget back: what the chain
     // already holds is counted before the first call is admitted.
     priorSpendMicros: (sessionUuid) => {
@@ -2585,8 +2669,11 @@ async function initializeDaemon(
    * The real interrupt. A pause, cancel or kill already stops the session at
    * its next hook boundary; here it also cuts the model calls that are in
    * flight, and the proxy refuses new ones until the session is resumed. A
-   * steer delivered as `interrupt` cuts the current call so the steer lands
-   * at the next boundary instead of after the step finishes.
+   * steer delivered as `interrupt` cuts the current call as retryable: the
+   * harness retries it, and the next PreToolUse refuses the call it produces
+   * with the steer as the reason (`hook-handler.ts`), so the steer lands
+   * before that step runs. A refused cut would end the turn in StopFailure
+   * and the steer would never arrive.
    */
   function interruptModelCalls(commands: ControlEnvelope["commands"]): void {
     for (const command of commands) {
@@ -2607,6 +2694,7 @@ async function initializeDaemon(
         const cut = modelProxy.abortSession(
           target.recorder.sessionUuid,
           command.reason ?? `operator ${command.command}`,
+          command.command === "steer" ? "steer" : undefined,
         );
         if (cut > 0 && command.command === "steer") {
           // The frame that records the steer says the step was cut short.

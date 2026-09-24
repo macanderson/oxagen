@@ -349,6 +349,44 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
     });
   });
 
+  // Assistant debits carried no user, so a statement could not show whose
+  // turns spent the platform key. The person the turn answers now rides the
+  // charge to credit_ledger.created_by_id.
+  it("attributes a platform-funded charge to the person the turn answers", async () => {
+    const result = streamAgentReply({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+      messages: MESSAGES,
+      telemetry: {
+        ...TELEMETRY,
+        userId: "00000000-0000-4000-8000-0000000000ab",
+      },
+    }) as StreamResult;
+    await result._onFinish(USAGE_EVENT);
+
+    expect(mocks.chargeUsageCredits).toHaveBeenCalledWith(
+      expect.objectContaining({
+        createdById: "00000000-0000-4000-8000-0000000000ab",
+      }),
+    );
+  });
+
+  it("names nobody on the charge when no person drove the call", async () => {
+    const result = streamAgentReply({
+      fundedBy: "platform" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+      messages: MESSAGES,
+      telemetry: TELEMETRY,
+    }) as StreamResult;
+    await result._onFinish(USAGE_EVENT);
+
+    const charge = mocks.chargeUsageCredits.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
+    expect(charge).not.toHaveProperty("createdById");
+  });
+
   it("forwards prompt-cache reads (inputTokenDetails.cacheReadTokens) to telemetry and the meter", async () => {
     const result = streamAgentReply({
       fundedBy: "platform" as const,

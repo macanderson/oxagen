@@ -52,12 +52,18 @@ export const askAssistant = defineTool({
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,
   /**
-   * Deliberately unset. `add_conversation_attachment` declares
-   * `noBillingGate: true` because linking a file record burns no model tokens.
-   * A turn of the assistant burns plenty, so the looser value does not carry
-   * and the admission gate applies — this is exactly the case the gate exists
-   * for (carry rule 3: strictest wins).
+   * Set, as on the live contract (`contracts/assistant.ask.ts`, #2968
+   * decision 3): the turn is not a governed action, so it neither draws a
+   * governed action unit nor waits on the GAU admission gate. Its tokens are
+   * admitted and billed on the other meter. `evaluateTurnCreditGate` refuses a
+   * platform-funded turn before it starts when the usage credit balance or the
+   * monthly assistant cap is spent, and the chokepoint debits the tokens as
+   * `consume_assistant_tokens` (ADR-053 §3). Each tool call inside the turn is
+   * a governed action of its own (ADR-053 §1). An earlier draft left this
+   * unset under carry rule 3, which would have billed every turn a unit on
+   * top of its tokens.
    */
+  noBillingGate: true,
 
   absorbs: [
     "send_message",

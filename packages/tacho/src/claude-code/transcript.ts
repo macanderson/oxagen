@@ -17,6 +17,8 @@ export interface TranscriptDraft {
   context: Record<string, unknown>;
   turn?: { prompt_id?: string };
   is_sidechain?: boolean;
+  /** The record that named a session title: `ai-title` or `custom-title`. */
+  hook_source_kind?: SessionTitleSource;
   raw_source_digest: `sha256:${string}`;
   /**
    * The bytes the frame's `content.digest` will name: the assistant's text
@@ -195,6 +197,21 @@ export function normalizeTranscriptLine(
       ? { is_sidechain: b(record["isSidechain"]) }
       : {}),
     raw_source_digest: raw,
+  });
+  // One `oxagen:session_title` frame, whichever record named the title; the
+  // recorder seals it only when it renames the session.
+  const titled = (
+    text: string,
+    source: SessionTitleSource,
+  ): TranscriptNormalized => ({
+    drafts: [
+      {
+        ...draft("oxagen:session_title", { session_title: text }),
+        hook_source_kind: source,
+      },
+    ],
+    totals: { session_title: text },
+    title: { text, source },
   });
 
   switch (type) {
@@ -505,21 +522,43 @@ export function normalizeTranscriptLine(
       return { drafts: [], totals };
     }
     case "ai-title": {
-      const text = s(record["aiTitle"]);
-      return {
-        drafts: [],
-        totals: text !== undefined ? { session_title: text } : {},
-        ...(text !== undefined ? { title: { text, source: "ai-title" } } : {}),
-      };
+      // Claude Code names the session itself and rewrites the name as the
+      // work moves. The totals keep the last one for the session's end; the
+      // frame ships each one now, so a live run has a title while it runs.
+      const title = s(record["aiTitle"]);
+      if (title === undefined) return { drafts: [], totals: {} };
+      return titled(title, "ai-title");
     }
     case "custom-title": {
-      const text = s(record["customTitle"]);
+      // The name the person gave the session, which outranks Claude Code's.
+      const title = s(record["customTitle"]);
+      if (title === undefined) return { drafts: [], totals: {} };
+      return titled(title, "custom-title");
+    }
+    case "pr-link": {
+      // Claude Code writes this line when the session opens a pull request.
+      // It is the one record that ties a PR to a run with certainty; a PR
+      // found by branch name is a guess.
+      const url = s(record["prUrl"]);
+      const number = n(record["prNumber"]);
+      if (url === undefined || number === undefined)
+        return { drafts: [], totals: {} };
+      const repository = s(record["prRepository"]);
       return {
-        drafts: [],
-        totals: text !== undefined ? { session_title: text } : {},
-        ...(text !== undefined
-          ? { title: { text, source: "custom-title" } }
-          : {}),
+        drafts: [
+          draft(
+            "oxagen:pr_link",
+            {},
+            {
+              pr_number: String(number),
+              pr_url: url,
+              ...(repository !== undefined
+                ? { pr_repository: repository }
+                : {}),
+            },
+          ),
+        ],
+        totals: {},
       };
     }
     default:

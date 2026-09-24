@@ -18,6 +18,7 @@ import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
 import { steeringDeps, type SteeringDeps } from "./context.steering.deps";
 import {
   assertProductionBase,
+  assertSameHost,
   type SteeringRepository,
 } from "./context.steering.github";
 import {
@@ -81,6 +82,7 @@ export function createMergeContextPrHandler(
     }
 
     const repo = await deps.github.resolveRepository(scope);
+    assertSameHost(repo, row.provider, row.prUrl);
     const mode = parseGovernanceMode(
       await deps.github.readFile(repo, GOVERNANCE_PATH, repo.defaultBranch),
     );

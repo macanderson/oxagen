@@ -58,12 +58,6 @@ export interface GitFacts {
   branch?: string;
   dirty?: boolean;
   remote_digest?: Sha256Digest;
-  /**
-   * The worktree's top directory (`rev-parse --show-toplevel`). It names the
-   * repository a session's baseline belongs to, so two directories of one
-   * repository share one baseline. Local only: it is never sealed.
-   */
-  repo_root?: string;
 }
 
 export type GitChangeStatus = "added" | "modified" | "deleted" | "renamed";
@@ -172,8 +166,20 @@ function firstLine(value: string | undefined): string | undefined {
 }
 
 /**
- * Head, branch, dirtiness, the digested remote and the repository root for
- * one working directory.
+ * The top of the worktree that holds `dir`, or undefined when `dir` is in no
+ * repository. A linked worktree answers its own root, not the primary
+ * checkout's. The daemon reads every other git fact at this root, and keys a
+ * session's baseline by it.
+ */
+export async function readGitRoot(
+  exec: ExecAsync,
+  dir: string,
+): Promise<string | undefined> {
+  return firstLine(await git(exec, dir, ["rev-parse", "--show-toplevel"]));
+}
+
+/**
+ * Head, branch, dirtiness and the digested remote for one working directory.
  *
  * Undefined means this directory is not a repository Oxagen can read, which
  * is a fact in itself: the caller records no git context rather than
@@ -187,14 +193,13 @@ export async function readGitFacts(
   const head = firstLine(await git(exec, cwd, ["rev-parse", "HEAD"]));
   if (head === undefined) return undefined;
   const facts: GitFacts = { head_sha: head };
-  // `HEAD` gates the other four: a directory that cannot answer it is not a
-  // repository, and there is nothing to ask it. The four that follow answer
+  // `HEAD` gates the other three: a directory that cannot answer it is not a
+  // repository, and there is nothing to ask it. The three that follow answer
   // independent questions, so they are asked at once rather than in series.
-  const [branch, status, remote, root] = await Promise.all([
+  const [branch, status, remote] = await Promise.all([
     git(exec, cwd, ["rev-parse", "--abbrev-ref", "HEAD"]).then(firstLine),
     git(exec, cwd, ["status", "--porcelain"]),
     git(exec, cwd, ["remote", "get-url", "origin"]).then(firstLine),
-    git(exec, cwd, ["rev-parse", "--show-toplevel"]).then(firstLine),
   ]);
   // `HEAD` is what a detached checkout answers, and it names no branch.
   if (branch !== undefined && branch !== "HEAD") facts.branch = branch;
@@ -203,7 +208,6 @@ export async function readGitFacts(
   if (status !== undefined) facts.dirty = status.trim().length > 0;
   if (remote !== undefined)
     facts.remote_digest = digestBytes(canonicalRemote(remote));
-  if (root !== undefined) facts.repo_root = root;
   return facts;
 }
 

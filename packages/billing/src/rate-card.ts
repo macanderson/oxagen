@@ -81,11 +81,9 @@ export interface RateCardEntry {
  * exactly the fresh-input rate — and the parity test pins both halves.
  */
 export const RATE_CARD: RateCardEntry[] = [
-  // Anthropic rows follow the billing card release by release (checked
-  // 2026-09-23). A release priced differently from its family sorts before the
-  // family row, since the first matching prefix wins: Fable 5.1 reads its
-  // cache at $0.25, Opus 5.5 lists at $4/$20, and Opus 4 and 4.1 kept the
-  // original $15/$75 while Opus 4.5 onward list at $5/$25.
+  // Fable 5.1 and Opus 5.5 break from their family's price, so each gets a row
+  // for both the hyphenated and the dotted gateway spelling. Their cache reads
+  // (0.025x and 0.05x input) are the list prices, not typos.
   {
     family: "claude-fable-5-1",
     label: "Claude Fable 5.1",
@@ -98,13 +96,13 @@ export const RATE_CARD: RateCardEntry[] = [
     },
   },
   {
-    family: "claude-fable",
-    label: "Claude Fable",
+    family: "claude-fable-5.1",
+    label: "Claude Fable 5.1",
     vendor: "anthropic",
     rate: {
       inputPer1M: 10.0,
       outputPer1M: 50.0,
-      cachedInputPer1M: 1.0,
+      cachedInputPer1M: 0.25,
       cacheWritePer1M: 12.5,
     },
   },
@@ -120,19 +118,110 @@ export const RATE_CARD: RateCardEntry[] = [
     },
   },
   {
-    family: "claude-opus-4-1",
-    label: "Claude Opus 4.1",
+    family: "claude-opus-5.5",
+    label: "Claude Opus 5.5",
     vendor: "anthropic",
     rate: {
-      inputPer1M: 15.0,
-      outputPer1M: 75.0,
-      cachedInputPer1M: 1.5,
-      cacheWritePer1M: 18.75,
+      inputPer1M: 4.0,
+      outputPer1M: 20.0,
+      cachedInputPer1M: 0.2,
+      cacheWritePer1M: 5.0,
+    },
+  },
+  // Legacy Opus 4 and 4.1 list at $15/$75, three times Opus 4.5 and later.
+  // "claude-opus-4" prefixes every Opus 4.x id in both spellings, so the 4.5
+  // to 4.8 rows MUST sort before it, and it MUST sort before the "claude-opus"
+  // family row, which would otherwise price 4 and 4.1 at $5/$25.
+  {
+    family: "claude-opus-4-8",
+    label: "Claude Opus 4.8",
+    vendor: "anthropic",
+    rate: {
+      inputPer1M: 5.0,
+      outputPer1M: 25.0,
+      cachedInputPer1M: 0.5,
+      cacheWritePer1M: 6.25,
     },
   },
   {
-    // `claude-opus-4-0` and the dated `claude-opus-4-20250514`.
-    family: "claude-opus-4-0",
+    family: "claude-opus-4-7",
+    label: "Claude Opus 4.7",
+    vendor: "anthropic",
+    rate: {
+      inputPer1M: 5.0,
+      outputPer1M: 25.0,
+      cachedInputPer1M: 0.5,
+      cacheWritePer1M: 6.25,
+    },
+  },
+  {
+    family: "claude-opus-4-6",
+    label: "Claude Opus 4.6",
+    vendor: "anthropic",
+    rate: {
+      inputPer1M: 5.0,
+      outputPer1M: 25.0,
+      cachedInputPer1M: 0.5,
+      cacheWritePer1M: 6.25,
+    },
+  },
+  {
+    family: "claude-opus-4-5",
+    label: "Claude Opus 4.5",
+    vendor: "anthropic",
+    rate: {
+      inputPer1M: 5.0,
+      outputPer1M: 25.0,
+      cachedInputPer1M: 0.5,
+      cacheWritePer1M: 6.25,
+    },
+  },
+  {
+    family: "claude-opus-4.8",
+    label: "Claude Opus 4.8",
+    vendor: "anthropic",
+    rate: {
+      inputPer1M: 5.0,
+      outputPer1M: 25.0,
+      cachedInputPer1M: 0.5,
+      cacheWritePer1M: 6.25,
+    },
+  },
+  {
+    family: "claude-opus-4.7",
+    label: "Claude Opus 4.7",
+    vendor: "anthropic",
+    rate: {
+      inputPer1M: 5.0,
+      outputPer1M: 25.0,
+      cachedInputPer1M: 0.5,
+      cacheWritePer1M: 6.25,
+    },
+  },
+  {
+    family: "claude-opus-4.6",
+    label: "Claude Opus 4.6",
+    vendor: "anthropic",
+    rate: {
+      inputPer1M: 5.0,
+      outputPer1M: 25.0,
+      cachedInputPer1M: 0.5,
+      cacheWritePer1M: 6.25,
+    },
+  },
+  {
+    family: "claude-opus-4.5",
+    label: "Claude Opus 4.5",
+    vendor: "anthropic",
+    rate: {
+      inputPer1M: 5.0,
+      outputPer1M: 25.0,
+      cachedInputPer1M: 0.5,
+      cacheWritePer1M: 6.25,
+    },
+  },
+  {
+    family: "claude-opus-4",
     label: "Claude Opus 4",
     vendor: "anthropic",
     rate: {
@@ -143,14 +232,14 @@ export const RATE_CARD: RateCardEntry[] = [
     },
   },
   {
-    family: "claude-opus-4-2025",
-    label: "Claude Opus 4",
+    family: "claude-fable",
+    label: "Claude Fable",
     vendor: "anthropic",
     rate: {
-      inputPer1M: 15.0,
-      outputPer1M: 75.0,
-      cachedInputPer1M: 1.5,
-      cacheWritePer1M: 18.75,
+      inputPer1M: 10.0,
+      outputPer1M: 50.0,
+      cachedInputPer1M: 1.0,
+      cacheWritePer1M: 12.5,
     },
   },
   {
@@ -237,6 +326,19 @@ export const RATE_CARD: RateCardEntry[] = [
       inputPer1M: 1.75,
       outputPer1M: 14.0,
       cachedInputPer1M: 0.17,
+      cacheWritePer1M: 1.75,
+    },
+  },
+  // Codex's current model, at OpenAI's list price (developers.openai.com,
+  // 2026-09-23), so the CLI's estimate matches what billing charges.
+  {
+    family: "gpt-5.3-codex",
+    label: "GPT-5.3 Codex",
+    vendor: "openai",
+    rate: {
+      inputPer1M: 1.75,
+      outputPer1M: 14.0,
+      cachedInputPer1M: 0.175,
       cacheWritePer1M: 1.75,
     },
   },
@@ -496,18 +598,9 @@ export function familyOf(model: string): string {
   return model.split("/").pop() ?? model;
 }
 
-/**
- * The family spelled the way the card keys a Claude release: the gateway dots
- * it (`claude-opus-4.8`), the card hyphenates it. Left dotted, `claude-opus-4.1`
- * would miss its own row and price at the family rate.
- */
-function cardFamilyOf(model: string): string {
-  return familyOf(model).replace(/(claude-[a-z]+-\d+)\.(\d+)/, "$1-$2");
-}
-
 /** Resolve a gateway slug (e.g. "anthropic/claude-opus-4.8") to its token rate. */
 export function rateFor(model: string): ModelRate {
-  const family = cardFamilyOf(model);
+  const family = familyOf(model);
   for (const entry of RATE_CARD) {
     if (family.startsWith(entry.family)) return entry.rate;
   }
@@ -516,7 +609,7 @@ export function rateFor(model: string): ModelRate {
 
 /** The card entry that prices a slug, or undefined when it falls back. */
 export function entryFor(model: string): RateCardEntry | undefined {
-  const family = cardFamilyOf(model);
+  const family = familyOf(model);
   return RATE_CARD.find((e) => family.startsWith(e.family));
 }
 

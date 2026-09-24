@@ -16,7 +16,7 @@ import {
   TEST_ENROLLMENT,
   unsignedBundle,
 } from "../host/test-support";
-import { readGitFacts } from "./git-facts";
+import { readGitRoot } from "./git-facts";
 import { handleHookEvent, type PolicyView } from "./hook-handler";
 import {
   EXPIRED_ON_SEAL_DETAIL,
@@ -306,19 +306,38 @@ describe("session baselines", () => {
     expect(roots.at(-1)).toBe(`/r${MAX_SESSION_BASELINES + 3}`);
   });
 
-  it("reads the repository root with the other git facts", async () => {
+  it("follows the root a read resolves, and holds none where there is no commit", () => {
+    const record: Parameters<typeof rememberBaseline>[0] = {};
+    expect(rememberBaseline(record, "/repo", "aaa")).toBe("aaa");
+    expect(record.baselineRoot).toBe("/repo");
+    // A worktree with no commit yet has no baseline to measure from, and the
+    // first repository's must not stand in for one.
+    expect(rememberBaseline(record, "/worktrees/new", undefined)).toBe(
+      undefined,
+    );
+    expect(record.baselineCommit).toBeUndefined();
+    expect(record.baselineRoot).toBeUndefined();
+    expect(rememberBaseline(record, "/repo", "bbb")).toBe("aaa");
+    expect(record.baselineRoot).toBe("/repo");
+
+    // A baseline bound to its root before the map existed stays with that
+    // root when the work moves to another.
+    const older: Parameters<typeof rememberBaseline>[0] = {
+      baselineCommit: "old",
+      baselineRoot: "/a",
+    };
+    expect(rememberBaseline(older, "/b", "head")).toBe("head");
+    expect(rememberBaseline(older, "/a", "later")).toBe("old");
+  });
+
+  it("resolves the repository root a subdirectory is in", async () => {
     const exec: ExecAsync = async (_command, args) => {
       const joined = args.join(" ");
-      if (joined.endsWith("rev-parse HEAD"))
-        return { status: 0, stdout: `${"a".repeat(40)}\n`, stderr: "" };
       if (joined.endsWith("rev-parse --show-toplevel"))
         return { status: 0, stdout: "/repo\n", stderr: "" };
-      return { status: 0, stdout: "", stderr: "" };
+      return { status: 1, stdout: "", stderr: "" };
     };
-    expect(await readGitFacts(exec, "/repo/packages/foo")).toMatchObject({
-      head_sha: "a".repeat(40),
-      repo_root: "/repo",
-    });
+    expect(await readGitRoot(exec, "/repo/packages/foo")).toBe("/repo");
   });
 });
 
@@ -358,5 +377,20 @@ describe("messages queued on a session that seals", () => {
     expect(registry.takeExpiredOnSeal().map((ack) => ack.command_id)).toEqual([
       "cmd_2",
     ]);
+  });
+
+  it("drop a resume's continuation, so a reopened chain is not told it was just resumed", async () => {
+    const { registry, hook } = harness();
+    await hook(registry, "SessionStart", { source: "startup" });
+    const record = registry.get("sess-1");
+    if (record === undefined) throw new Error("no record");
+    record.control.resumeOwed = "cmd_resume";
+    await hook(registry, "SessionEnd", { reason: "other" });
+    expect(record.control.resumeOwed).toBeUndefined();
+    // The resume was acknowledged when it applied: nothing more is owed.
+    expect(registry.takeExpiredOnSeal()).toEqual([]);
+    await hook(registry, "SessionStart", { source: "resume" });
+    expect(record.sealed).toBe(false);
+    expect(record.control.resumeOwed).toBeUndefined();
   });
 });

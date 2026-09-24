@@ -39,21 +39,27 @@ A body the store cannot return reads as `text: null` on its half; the rest of th
 
 A step is one request and one response wherever the producer writes two — the write-ahead intention and the terminal receipt. They pair on the call id the receipt records (`tool_call_id`, `model_call_id`); a wrapped session's rows carry no call id, so its halves pair on adjacency within the step kind. A producer that appends a single terminal receipt for the whole exchange records it as the `response`, because its body is the result, and `request` is then null.
 
+A wrapped Claude Code session writes several frames for one tool call, all carrying the call's `tool_use_id` as `callId`: Oxagen's gate decision, the hook's request, the harness's own permission check, and the receipt. They are often not adjacent. The Run page gathers every frame with the same `callId` into one step, and reads the gate's recorded `target` as the step's command when the receipt kept no body.
+
+Claude Code's own permission check (`tool_decision` and `tool.blocked_on_user` in its OTel log) is recorded as `harness_permission`, not `policy_decision`. It runs on every call and is not a decision a rule made, so it answers to no chip. A row stored before this kind existed, as a `policy_decision` from `otel_log` or `otel_span` with `policy_source: harness`, reads as `harness_permission` too.
+
 ## Chips (`kinds`)
 
 | Chip | Frames it selects |
 |---|---|
-| `prompt` | the request half of a model call |
+| `prompt` | the request half of a model call, or the `turn_start` an operator typed to open a turn of a wrapped run. A subagent's `turn_start` and the `oxagen:message` copies of the same prompt are not counted, so each prompt counts once |
 | `responses` | the response half of a model call, or a single model receipt |
+| `thinking` | a model call whose usage records reasoning tokens. A wrapped session records them from Claude Code's `thinking_tokens`; a duplicate sighting of the same call carries no usage and is not counted |
 | `tools` | either half of a tool call |
-| `policy` | a decision a rule or a person made: allow, deny, route |
+| `policy` | a decision a rule or a person made: allow, deny, route, and an operator's pause, resume, cancel or steer as the host applied it (`oxagen:command_applied`) |
 | `recall` | what was pulled into the model's context |
 | `usage` | a frame that carried a cost record |
+| `seal` | a frame that records the chain's own integrity: a `checkpoint`, a `telemetry_gap`, or the ledger event that closes an attempt |
 | `errors` | a call whose recorded outcome is failed, denied, cancelled, error, timeout or refused |
 
 The filter selects frames and the fold runs over what is left, so a filtered transcript is the transcript of those frames. An empty selection keeps everything: no chip pressed is not the same as every chip pressed off.
 
-The Mission Control mockup also draws a `thinking` chip. Neither the ledger's event vocabulary nor a wrapped session's kinds records a reasoning segment in this revision, so there is no kind for it — a chip that can only ever answer "none" would be the placeholder §3.4 forbids. It arrives with the frame type that records reasoning content, not before.
+The run page mockup (`mockups/pages/run.md`) draws the same chips in the order `TRANSCRIPT_KINDS` lists them. `policy` is not among the mockup's chips; it stays a kind because the Policy tab reads it, and the app files it under the tools chip. The contract has no `none` kind. The app's `kinds=none` query hides every chip and reads nothing.
 
 ## Output
 
@@ -68,6 +74,9 @@ The Mission Control mockup also draws a `thinking` chip. Neither the ledger's ev
 | `entries[].type`, `label` | string | the opening frame's recorded type and its machine-derived label |
 | `entries[].callId` | string or null | the call the opening frame belongs to (`tool_call_id`, `model_call_id`, or a wrapped `toolUseId`); null when the producer recorded none. Clients that rebuild steps at `everything` pair halves on this value rather than on adjacency |
 | `entries[].kinds` | string[] | the chips this entry answers to |
+| `entries[].target` | string or null | what Oxagen's gate recorded the call acting on (`tool_target`: a command, a path, a pattern), cut at 400 characters; absent when the gate recorded none |
+| `entries[].effort` | string or null | the reasoning effort the model call ran at (`low`, `medium`, `high`), as the harness recorded it on `tacho_events.effort`; null when none was recorded |
+| `entries[].subagent` | object or absent | on an entry from a subagent chain: `{ sessionUuid, id, type }`, plus `spawnCallId`, the `tool_use_id` of the Task or Agent call that spawned it, so a client can nest the subagent's steps under that call |
 | `entries[].request` | object or null | what went out; null when the recording has only the terminal receipt |
 | `entries[].response` | object or null | what came back; null when only a write-ahead intention was recorded |
 | `entries[].{request,response}.seq`, `.type` | string | the frame that carried the half |
@@ -77,7 +86,7 @@ The Mission Control mockup also draws a `thinking` chip. Neither the ledger's ev
 | `entries[].{request,response}.text` | string or null | the body as UTF-8, cut at the zoom's cap (see below); null when no body was retained, the body is not text, the frame carried no content, the stored bytes do not hash to the recorded digest, or the half carries an `assembly` instead |
 | `entries[].{request,response}.truncated` | boolean | true when `text` was cut |
 | `entries[].{request,response}.assembly` | object or null | a recorded model stream folded into the message it was; null for every other half |
-| `entries[].decision` | object or null | `{ seq, decision, type, at }` — the decision folded into the entry |
+| `entries[].decision` | object or null | `{ seq, decision, type, source, at }`, the decision folded into the entry. An operator command records the command as `decision`. `source` is who decided, in the envelope's `policy_source` words: `bundle` or `kernel` for Oxagen policy, `human` for an operator, `harness` or `managed_settings` for the agent's own harness; null when the frame names none. At the `steps` and `turns` zooms an operator command is not the decision of the step it folds into, because it is about the run and not about that call |
 | `entries[].frames` | integer | frames folded, the opening frame included |
 | `entries[].turn` | integer or null | the turn the opening frame belongs to, 1-based, the same at every zoom and under every chip filter. A recording with `turn_start` frames counts them, and a frame before the first one is in no turn (null). A recording without them starts a new turn wherever the turn index changes, and every frame is in one. A client groups `everything` entries into turns by this value |
 | `entries[].cost` | `{ micros, currency, basis }` or null | the folded frames' cost records summed; null when none carried one. Ledger frames carry no cost record; spend is metered per run |

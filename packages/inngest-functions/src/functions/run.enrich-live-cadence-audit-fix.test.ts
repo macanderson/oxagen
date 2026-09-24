@@ -38,13 +38,15 @@ describe("dueForEnrichment for a live run", () => {
     // observed, or observed 30 minutes ago.
     expect(sql).toMatch(
       new RegExp(
-        String.raw`\) and \(${esc(s)}\."outcome" <> \$3 or ${esc(s)}\."name" is null or ${esc(s)}\."summary_observed_at" is null or ${esc(s)}\."summary_observed_at" < \$4\)\)$`,
+        String.raw`\) and \(${esc(s)}\."outcome" <> \$4 or ${esc(s)}\."name" is null or ${esc(s)}\."summary_observed_at" is null or ${esc(s)}\."summary_observed_at" < \$5\)\)$`,
       ),
     );
-    expect(params[2]).toBe("running");
-    expect(params[3]).toBe("2026-09-23T11:30:00.000Z");
-    // The five-minute retry for partial evidence keeps its own bound.
+    expect(params[3]).toBe("running");
+    expect(params[4]).toBe("2026-09-23T11:30:00.000Z");
+    // The five-minute retry for partial evidence and the retry after a
+    // failure keep their own bounds.
     expect(params[1]).toBe("2026-09-23T11:55:00.000Z");
+    expect(params[2]).toBe("2026-09-23T11:30:00.000Z");
   });
 
   it("treats a pending or running ledger run as live", () => {
@@ -52,10 +54,10 @@ describe("dueForEnrichment for a live run", () => {
     const r = '"agent"."agent_runs"';
     expect(sql).toMatch(
       new RegExp(
-        String.raw`\) and \(${esc(r)}\."status" not in \(\$3, \$4\) or ${esc(r)}\."name" is null or ${esc(r)}\."summary_observed_at" is null or ${esc(r)}\."summary_observed_at" < \$5\)\)$`,
+        String.raw`\) and \(${esc(r)}\."status" not in \(\$4, \$5\) or ${esc(r)}\."name" is null or ${esc(r)}\."summary_observed_at" is null or ${esc(r)}\."summary_observed_at" < \$6\)\)$`,
       ),
     );
-    expect(params.slice(2)).toEqual([
+    expect(params.slice(3)).toEqual([
       "pending",
       "running",
       "2026-09-23T11:30:00.000Z",

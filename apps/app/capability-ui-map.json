@@ -60,6 +60,15 @@
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session-mc-repositories-page"
     },
+    "attach_gitlab_project": {
+      "route": "/[org]/[ws]/repositories",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "Repositories › main repository: “Connect and bind” in the GitLab project form, and the same form repairing a GitLab binding whose token was revoked (features/repositories/main-repository.tsx, features/repositories/actions.ts)",
+      "testid": "workspace-gitlab-connect",
+      "proof": "apps/app/src/features/repositories/main-repository.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_012RZnK27nmESrihQgUhwwFk"
+    },
     "authorize_cli": {
       "route": "/cli/authorize",
       "page": "apps/app/src/app/cli/authorize/page.tsx",
@@ -109,13 +118,13 @@
       "verifiedBy": "session-20daa43b-cutover"
     },
     "create_connection": {
-      "route": "/[org]/[ws]/tools?tab=connections",
-      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "Tools \u203a Connections: \u201cAdd a connection\u201d opens the dialog that invokes create_connection (features/tools/add-connection.tsx, features/tools/actions.ts)",
+      "route": "/[org]/[ws]/tools/providers",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Providers › Connections: “Add a connection” opens the dialog that invokes create_connection (features/tools/add-connection.tsx, features/tools/actions.ts)",
       "testid": "connection-add-open",
       "proof": "apps/app/src/features/tools/connections.test.tsx",
-      "verifiedAt": "2026-09-20",
-      "verifiedBy": "session-mc2-connections"
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
     "create_enrollment_token": {
       "route": "/[org]/[ws]/register/[step]",
@@ -177,12 +186,12 @@
       "verifiedBy": "session-20daa43b-cutover"
     },
     "delete_approval_rule": {
-      "route": "/[org]/[ws]/tools?tab=autoapprovals",
-      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "Tools \u203a Auto-approvals \u203a Delete on a row (features/tools/approval-rule-controls.tsx RuleDelete, deleteApprovalRule in features/tools/actions.ts)",
+      "route": "/[org]/[ws]/tools/policy",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Policy › Auto-approval rules › Delete on a row (features/tools/approval-rule-controls.tsx RuleDelete, deleteApprovalRule in features/tools/actions.ts)",
       "proof": "apps/app/src/features/tools/approval-rule-controls.test.tsx",
-      "verifiedAt": "2026-09-19",
-      "verifiedBy": "session-tools-gaps"
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
     "delete_model_credential": {
       "route": "/[org]/model-funding",
@@ -210,7 +219,7 @@
     },
     "dismiss_finding": {
       "route": "/[org]/[ws]/spend",
-      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
       "entry": "/[org]/[ws]/spend \u2014 the rev1 surface that invokes dismiss_finding (features/spend/actions.ts)",
       "proof": "apps/app/src/features/spend/dialogs.test.tsx",
       "verifiedAt": "2026-09-16",
@@ -235,10 +244,10 @@
         {
           "route": "/[org]/[ws]",
           "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
-          "entry": "/[org]/[ws] (Fleet) \u2014 Pause, Resume and Cancel on a live wrapped run's row queue dispatch_command (features/fleet/actions.ts, features/fleet/run-row-controls.tsx). Steer stays on the run page: the contract requires a payload on it",
-          "proof": "apps/app/src/features/fleet/run-row-controls.test.tsx",
-          "verifiedAt": "2026-09-20",
-          "verifiedBy": "session-018UrgFq-mc1-controls"
+          "entry": "/[org]/[ws] (Fleet) \u2014 Pause on a live run's row opens the pause dialog, which queues dispatch_command for that run, and Steer in the header queues one steer per selected agent at the turn boundary (features/fleet/actions.ts, features/fleet/board.tsx, features/fleet/steer-fleet.tsx)",
+          "proof": "apps/app/src/features/fleet/fleet.test.tsx",
+          "verifiedAt": "2026-09-23",
+          "verifiedBy": "session-01GDv3vs-fleet-rev1"
         }
       ]
     },
@@ -249,6 +258,14 @@
       "proof": "apps/app/src/features/audit/export.test.ts",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
+    },
+    "export_billing_statement": {
+      "route": "/[org]/billing",
+      "page": "apps/app/src/app/[org]/billing/page.tsx",
+      "entry": "Billing › Statements: the period picker with Download CSV and Download HTML (features/billing/statements.tsx, features/billing/statement-actions.ts)",
+      "proof": "apps/app/src/features/billing/statements.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session-018ETvVQctfM9iFxyLSZjRBU"
     },
     "export_data": {
       "route": "/[org]",
@@ -265,7 +282,17 @@
       "entry": "/[org]/[ws]/runs/[run] \u2014 Export on a sealed run queues export_run for an org Owner or Admin (features/run/actions.ts, features/run/record-actions.tsx)",
       "proof": "apps/app/src/features/run/controls.test.tsx",
       "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-c2f283fb-3282-review"
+      "verifiedBy": "session-c2f283fb-3282-review",
+      "also": [
+        {
+          "route": "/[org]/[ws]",
+          "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
+          "entry": "/[org]/[ws] (Fleet) \u2014 Export on an ended run's row queues export_run and says the bundle was queued, or why it was not (features/fleet/actions.ts, features/fleet/board.tsx)",
+          "proof": "apps/app/src/features/fleet/fleet.test.tsx",
+          "verifiedAt": "2026-09-23",
+          "verifiedBy": "session-01GDv3vs-fleet-rev1"
+        }
+      ]
     },
     "get_run_export": {
       "route": "/[org]/[ws]/runs/[run]",
@@ -277,7 +304,7 @@
     },
     "export_statement": {
       "route": "/[org]/[ws]/spend",
-      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
       "entry": "/[org]/[ws]/spend \u2014 the rev1 surface that invokes export_statement (features/spend/actions.ts)",
       "proof": "apps/app/src/features/spend/spend.test.tsx",
       "verifiedAt": "2026-09-16",
@@ -308,24 +335,13 @@
       "verifiedBy": "session-mc-3-schemas"
     },
     "get_auto_eligibility": {
-      "route": "/[org]/[ws]",
-      "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
-      "entry": "/[org]/[ws] \u2014 opening the decision dialog reads get_auto_eligibility, so the eligibility line and who has already resolved the call are current at the moment of the decision rather than as old as the page render (features/fleet/approval-decision.tsx, features/fleet/actions.ts)",
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "/[org]/[ws]/runs/[run]?tab=approvals \u2014 the card on the Approvals tab draws the recorded eligibility line, and opening its decision dialog reads get_auto_eligibility again, so who has already resolved the call is current at the moment of the decision (features/fleet/approval-decision.tsx, features/fleet/actions.ts). Fleet draws no approval card since its rev1 rebuild; the shell's approvals drawer draws the same card",
       "testid": "eligibility",
       "proof": "apps/app/src/features/fleet/approval-decision.test.tsx",
-      "verifiedAt": "2026-09-20",
-      "verifiedBy": "session-018UrgFq-mc-1-approve",
-      "also": [
-        {
-          "route": "/[org]/[ws]/runs/[run]?tab=approvals",
-          "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-          "entry": "/[org]/[ws]/runs/[run]?tab=approvals \u2014 the card on the Approvals tab draws the recorded eligibility line, and opening its dialog reads get_auto_eligibility again (features/fleet/approval-decision.tsx, features/fleet/actions.ts)",
-          "testid": "eligibility",
-          "proof": "apps/app/src/features/run/run.test.tsx",
-          "verifiedAt": "2026-09-20",
-          "verifiedBy": "session-018UrgFq-mc1-review"
-        }
-      ]
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session-01GDv3vs-fleet-rev1"
     },
     "get_clone_draft": {
       "route": "/[org]/[ws]/steering",
@@ -337,13 +353,13 @@
       "verifiedBy": "skills-lifecycle-ci-witness"
     },
     "get_connection": {
-      "route": "/[org]/[ws]/tools?tab=connections",
-      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "Tools \u203a Connections: a row opens the connection drawer, which reads get_connection on open (features/tools/connection-drawer.tsx, features/tools/actions.ts)",
+      "route": "/[org]/[ws]/tools/providers",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Providers › Connections: a row opens the connection drawer, which reads get_connection on open (features/tools/connection-drawer.tsx, features/tools/actions.ts)",
       "testid": "connection-open-con_01k5n1",
       "proof": "apps/app/src/features/tools/connections.test.tsx",
-      "verifiedAt": "2026-09-20",
-      "verifiedBy": "session-mc2-connections"
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
     "get_context_pr": {
       "route": "/[org]/[ws]/steering",
@@ -360,6 +376,14 @@
       "proof": "apps/app/src/features/billing/contract-rate.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
+    },
+    "get_data_plane": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "/[org]?tab=dataPlane: the Data plane tab reads the Postgres binding through get_data_plane (data/live/org.ts, data/live/mappers/org.ts, features/organization/data-plane.tsx)",
+      "proof": "apps/app/src/features/organization/data-plane.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01Q41TYoTUbgPir4sajMJP42"
     },
     "get_evidence_retention": {
       "route": "/[org]/billing",
@@ -380,7 +404,7 @@
     },
     "get_finding_evidence": {
       "route": "/[org]/[ws]/spend",
-      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
       "entry": "/[org]/[ws]/spend \u2014 the rev1 surface that invokes get_finding_evidence (data/live/mappers/spend.ts, data/live/spend.ts)",
       "proof": "apps/app/src/features/spend/spend.test.tsx",
       "verifiedAt": "2026-09-16",
@@ -509,7 +533,7 @@
     },
     "get_spend": {
       "route": "/[org]/[ws]/spend",
-      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
       "entry": "/[org]/[ws]/spend \u2014 the rev1 surface that invokes get_spend (data/live/mappers/spend.ts, data/live/spend.ts)",
       "proof": "apps/app/src/features/spend/spend.test.tsx",
       "verifiedAt": "2026-09-16",
@@ -517,7 +541,7 @@
     },
     "get_spend_budget": {
       "route": "/[org]/[ws]/spend",
-      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
       "entry": "/[org]/[ws]/spend \u2014 the rev1 surface that invokes get_spend_budget (data/live/mappers/spend.ts, data/live/spend.ts)",
       "proof": "apps/app/src/features/spend/spend.test.tsx",
       "verifiedAt": "2026-09-16",
@@ -535,7 +559,7 @@
     },
     "get_spend_drill": {
       "route": "/[org]/[ws]/spend",
-      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
       "entry": "/[org]/[ws]/spend \u2014 the rev1 surface that invokes get_spend_drill (data/live/mappers/spend.ts, data/live/spend.ts)",
       "proof": "apps/app/src/features/spend/spend.test.tsx",
       "verifiedAt": "2026-09-16",
@@ -551,7 +575,7 @@
     },
     "get_tacho_session_policy": {
       "route": "/[org]/[ws]/spend",
-      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
       "entry": "/[org]/[ws]/spend?tab=budgets \u2014 Gateway sessions, the panel that reads get_tacho_session_policy (data/live/spend.ts, data/live/mappers/spend.ts)",
       "proof": "apps/app/src/features/spend/gateway-policy.test.tsx",
       "verifiedAt": "2026-09-21",
@@ -567,20 +591,20 @@
       "proof": "apps/app/src/features/shell/account-dialog.test.tsx"
     },
     "grant_mandate": {
-      "route": "/[org]/[ws]/tools?tab=mandates",
-      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "/[org]/[ws]/tools?tab=mandates \u2014 Grant a mandate in the ledger header, and Grant on a requested row (features/tools/grant-mandate.tsx \u2192 features/tools/grant-actions.ts)",
+      "route": "/[org]/[ws]/tools/policy",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Policy › Mandates ledger: Grant a mandate in the ledger header, and Grant on a requested row (features/tools/grant-mandate.tsx → features/tools/grant-actions.ts)",
       "proof": "apps/app/src/features/tools/grant-mandate.test.tsx",
-      "verifiedAt": "2026-09-19",
-      "verifiedBy": "session-tools-gaps"
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
     "import_tools": {
       "route": "/[org]/[ws]/tools",
-      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "/[org]/[ws]/tools \u2014 the rev1 surface that invokes import_tools (features/tools/actions.ts)",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools header, Tools panel and Providers: “Import a provider” and “Add a provider” open the three-step import dialog whose last step invokes import_tools; a provider's drill-down re-imports (features/tools/import-provider.tsx, features/tools/provider-dialog.tsx, features/tools/actions.ts)",
       "proof": "apps/app/src/features/tools/write-controls.test.tsx",
-      "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
     "link_repository": {
       "route": "/[org]/[ws]/repositories",
@@ -604,7 +628,25 @@
       "entry": "/[org]/[ws]/register/[step] \u2014 the rev1 surface that invokes list_agents (data/live/agents.ts, data/live/mappers/agents.ts, data/live/mappers/mappers.type-test.ts, features/onboarding/agent-form.ts)",
       "proof": "apps/app/src/features/onboarding/register.test.tsx",
       "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "verifiedBy": "session-20daa43b-cutover",
+      "also": [
+        {
+          "route": "/[org]/[ws]",
+          "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
+          "entry": "/[org]/[ws] (Fleet) \u2014 the Live runs tile's workspace total and the agents Steer the fleet selects come from list_agents (features/fleet/fleet.tsx, features/fleet/steer-fleet.tsx)",
+          "proof": "apps/app/src/features/fleet/steer-fleet.test.tsx",
+          "verifiedAt": "2026-09-23",
+          "verifiedBy": "session-01GDv3vs-fleet-rev1"
+        },
+        {
+          "route": "/[org]?tab=workspaces",
+          "page": "apps/app/src/app/[org]/page.tsx",
+          "entry": "Organization › Workspaces: the Agents count of each workspace the viewer may enter, and the Agents fact in Edit workspace (data/live/org.ts org.workspaceFacts, features/organization/workspaces.tsx)",
+          "proof": "apps/app/src/data/live/org.test.ts",
+          "verifiedAt": "2026-09-24",
+          "verifiedBy": "session_01Q41TYoTUbgPir4sajMJP42"
+        }
+      ]
     },
     "list_api_keys": {
       "route": "/[org]/api-keys",
@@ -615,40 +657,40 @@
       "verifiedBy": "session-20daa43b-cutover"
     },
     "list_approval_rules": {
-      "route": "/[org]/[ws]/tools?tab=autoapprovals",
-      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "Tools \u203a Auto-approvals: the rules table and its three totals (features/tools/auto-approvals.tsx, data/live/tools.ts, data/live/mappers/tools.ts)",
-      "proof": "apps/app/src/features/tools/tools.test.tsx",
-      "verifiedAt": "2026-09-19",
-      "verifiedBy": "session-tools-gaps"
+      "route": "/[org]/[ws]/tools/policy",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Policy: the auto-approval rules table (features/tools/auto-approvals.tsx, data/live/tools.ts, data/live/mappers/tools.ts)",
+      "proof": "apps/app/src/features/tools/policy.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
     "list_approvals": {
       "route": "/[org]/[ws]",
       "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
-      "entry": "/[org]/[ws] \u2014 the Fleet approvals panel invokes list_approvals, and /[org]/[ws]/runs/[run]?tab=approvals reads it narrowed to one run (data/live/approvals.ts, features/fleet/approvals-panel.tsx, features/run/run.tsx)",
+      "entry": "/[org]/[ws] \u2014 the Fleet Waiting on a human tile counts list_approvals and marks the runs a parked call names, and /[org]/[ws]/runs/[run]?tab=approvals reads it narrowed to one run (data/live/approvals.ts, features/fleet/board.tsx, features/fleet/approvals-panel.tsx, features/run/run.tsx)",
       "proof": "apps/app/src/features/run/run.test.tsx",
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-replay-ui"
     },
     "list_connections": {
-      "route": "/[org]/[ws]/tools?tab=connections",
-      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "Tools \u203a Connections: the connections table above the credential grants log (features/tools/connections.tsx, data/live/tools.ts, data/live/mappers/tools.ts)",
+      "route": "/[org]/[ws]/tools/providers",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Providers: the connections table above the credential grants log (features/tools/connections.tsx, data/live/tools.ts, data/live/mappers/tools.ts)",
       "proof": "apps/app/src/features/tools/connections.test.tsx",
-      "verifiedAt": "2026-09-20",
-      "verifiedBy": "session-mc2-connections"
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
     "list_credential_grants": {
-      "route": "/[org]/[ws]/tools",
-      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "/[org]/[ws]/tools \u2014 the rev1 surface that invokes list_credential_grants (data/live/mappers/tools.ts, data/live/tools.ts)",
+      "route": "/[org]/[ws]/tools/providers",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Providers: the credential grants log (features/tools/connections.tsx GrantsLog, data/live/tools.ts)",
       "proof": "apps/app/src/features/tools/tools.test.tsx",
-      "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
     "list_findings": {
       "route": "/[org]/[ws]/spend",
-      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
       "entry": "/[org]/[ws]/spend \u2014 the rev1 surface that invokes list_findings (data/live/mappers/spend.ts, data/live/spend.ts)",
       "proof": "apps/app/src/features/spend/spend.test.tsx",
       "verifiedAt": "2026-09-16",
@@ -684,7 +726,17 @@
       "entry": "Repositories \u203a the Not linked table of repositories the installation reaches, and the main-repository picker (features/repositories/bound-repositories.tsx, features/repositories/main-repository.tsx, features/repositories/actions.ts)",
       "proof": "apps/app/src/features/repositories/repositories.test.tsx",
       "verifiedAt": "2026-09-19",
-      "verifiedBy": "session-mc-repositories-page"
+      "verifiedBy": "session-mc-repositories-page",
+      "also": [
+        {
+          "route": "/[org]",
+          "page": "apps/app/src/app/[org]/page.tsx",
+          "entry": "Organization › Create a workspace: the Main repository select offers the repositories the organization's installations reach, and Production branch the default branch create_workspace records (features/organization/workspace-reads.ts, features/organization/workspace-actions.tsx)",
+          "proof": "apps/app/src/features/organization/workspace-actions.test.tsx",
+          "verifiedAt": "2026-09-24",
+          "verifiedBy": "session_01Q41TYoTUbgPir4sajMJP42"
+        }
+      ]
     },
     "list_invoices": {
       "route": "/[org]/billing",
@@ -695,12 +747,12 @@
       "verifiedBy": "session-20daa43b-cutover"
     },
     "list_kill_switches": {
-      "route": "/[org]/[ws]/tools",
-      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "/[org]/[ws]/tools \u2014 the rev1 surface that invokes list_kill_switches (data/live/mappers/tools.ts, data/live/tools.ts)",
+      "route": "/[org]/[ws]/tools/switches",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Kill switches: the class and scoped switches with the deny generation, and the tab's count of switches on (features/tools/switches.tsx, data/live/tools.ts)",
       "proof": "apps/app/src/features/tools/tools.test.tsx",
-      "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
     "list_mandates": {
       "route": "/[org]/[ws]",
@@ -711,12 +763,12 @@
       "verifiedBy": "session-20daa43b-cutover"
     },
     "list_mcp_servers": {
-      "route": "/[org]/[ws]/tools",
-      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "Tools \u203a Registry: the Tool servers section under the registry, and the server picker in the import dialog (features/tools/servers.tsx, features/tools/import-controls.tsx, data/live/tools.ts)",
-      "proof": "apps/app/src/features/tools/servers.test.tsx",
-      "verifiedAt": "2026-09-20",
-      "verifiedBy": "session-mc2-connections"
+      "route": "/[org]/[ws]/tools/providers",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Providers: the providers table and drill-down, the Provider cell on each tool row, and the provider picker in the import dialog (features/tools/providers.tsx, features/tools/provider-row.tsx, features/tools/provider-dialog.tsx, data/live/tools.ts)",
+      "proof": "apps/app/src/features/tools/tools.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
     "list_members": {
       "route": "/[org]",
@@ -736,7 +788,7 @@
     },
     "list_price_entries": {
       "route": "/[org]/[ws]/spend?tab=pricing",
-      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
       "entry": "Spend \u203a Pricing \u203a The price book \u2014 the table of list and negotiated rows the tab is built on (features/spend/pricing.tsx, data/live/spend.ts, data/live/mappers/spend.ts)",
       "proof": "apps/app/src/features/spend/pricing.test.tsx",
       "verifiedAt": "2026-09-17",
@@ -764,7 +816,17 @@
       "entry": "Repositories \u203a the repository table every visit reads, main first, with role, production branch, .oxagen/, events and symbols (features/repositories/repositories.tsx, features/repositories/bound-repositories.tsx, features/repositories/actions.ts)",
       "proof": "apps/app/src/features/repositories/repositories.test.tsx",
       "verifiedAt": "2026-09-19",
-      "verifiedBy": "session-mc-repositories-page"
+      "verifiedBy": "session-mc-repositories-page",
+      "also": [
+        {
+          "route": "/[org]?tab=workspaces",
+          "page": "apps/app/src/app/[org]/page.tsx",
+          "entry": "Organization › Workspaces: Main repo, Production branch and Linked repos, read inside each workspace the viewer may enter, and the main repository and branch in Edit workspace (data/live/org.ts org.workspaceFacts, features/organization/workspaces.tsx, features/organization/workspace-actions.tsx)",
+          "proof": "apps/app/src/features/organization/workspaces.test.tsx",
+          "verifiedAt": "2026-09-24",
+          "verifiedBy": "session_01Q41TYoTUbgPir4sajMJP42"
+        }
+      ]
     },
     "list_resolved_approvals": {
       "route": "/[org]/[ws]/runs/[run]",
@@ -772,15 +834,26 @@
       "entry": "/[org]/[ws]/runs/[run]?tab=approvals: the Resolved section reads list_resolved_approvals narrowed to the run, showing the rule that auto-approved a call with no person (features/run/resolved-approvals.tsx, features/run/run.tsx, data/live/approvals.ts)",
       "proof": "apps/app/src/features/run/run.test.tsx",
       "verifiedAt": "2026-09-19",
-      "verifiedBy": "session_011hCk8oPj1zX2ZgeBEfH1wT"
+      "verifiedBy": "session_011hCk8oPj1zX2ZgeBEfH1wT",
+      "also": [
+        {
+          "route": "/[org]",
+          "page": "apps/app/src/app/[org]/page.tsx",
+          "entry": "every page: the approvals drawer lists today's resolutions under \"N resolved today\" from list_resolved_approvals since the start of the viewer's day, per workspace (features/shell/approvals-drawer.tsx, features/shell/source.ts, data/live/approvals.ts)",
+          "testid": "resolved-row",
+          "proof": "apps/app/src/features/shell/approvals-drawer.test.tsx",
+          "verifiedAt": "2026-09-23",
+          "verifiedBy": "session_01GDv3vsEjQPCRnZtvAm88cY"
+        }
+      ]
     },
     "list_runs": {
       "route": "/[org]/[ws]",
       "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
-      "entry": "/[org]/[ws] \u2014 the Fleet runs table, whose Tier, Replay and Verdict columns render list_runs' recorded enforcementTier, replayGrade and verdict (features/fleet/runs-table.tsx, ui/enforcement-tier.tsx, data/live/mappers/runs.ts, data/live/mappers/mappers.type-test.ts, data/live/runs.ts)",
+      "entry": "/[org]/[ws] \u2014 the Fleet Runs panel and the four summary tiles rolled up from its rows: the Tier and Replay columns render list_runs' recorded enforcementTier and replayGrade, and Spend shown sums the recorded cost with its basis (features/fleet/board.tsx, features/fleet/view.ts, data/live/mappers/runs.ts, data/live/mappers/mappers.type-test.ts, data/live/runs.ts)",
       "proof": "apps/app/src/features/fleet/fleet.test.tsx",
-      "verifiedAt": "2026-09-20",
-      "verifiedBy": "session-018UrgFq-mc1-columns"
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session-01GDv3vs-fleet-rev1"
     },
     "list_skills": {
       "route": "/[org]/[ws]/steering?tab=skills",
@@ -826,15 +899,15 @@
     },
     "list_tool_versions": {
       "route": "/[org]/[ws]/tools",
-      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "/[org]/[ws]/tools \u2014 the rev1 surface that invokes list_tool_versions (data/live/mappers/tools.ts, data/live/tools.ts)",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Tools: the tool versions table, its category chips and the tab count (features/tools/registry.tsx, data/live/tools.ts)",
       "proof": "apps/app/src/features/tools/tools.test.tsx",
-      "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
     "list_unpriced_models": {
       "route": "/[org]/[ws]/spend?tab=pricing",
-      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
       "entry": "Spend \u203a Pricing \u203a Models the price book cannot price \u2014 the table that explains a run with no cost (features/spend/pricing.tsx, data/live/spend.ts, data/live/mappers/spend.ts)",
       "proof": "apps/app/src/features/spend/pricing.test.tsx",
       "verifiedAt": "2026-09-17",
@@ -842,7 +915,7 @@
     },
     "list_waste": {
       "route": "/[org]/[ws]/spend",
-      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
       "entry": "/[org]/[ws]/spend \u2014 the rev1 surface that invokes list_waste (data/live/mappers/spend.ts, data/live/spend.ts)",
       "proof": "apps/app/src/features/spend/spend.test.tsx",
       "verifiedAt": "2026-09-16",
@@ -947,7 +1020,7 @@
     },
     "record_finding_fix": {
       "route": "/[org]/[ws]/spend",
-      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
       "entry": "/[org]/[ws]/spend \u2014 the rev1 surface that invokes record_finding_fix (features/spend/actions.ts)",
       "proof": "apps/app/src/features/spend/dialogs.test.tsx",
       "verifiedAt": "2026-09-16",
@@ -962,13 +1035,13 @@
       "verifiedBy": "session-20daa43b-cutover"
     },
     "register_mcp_server": {
-      "route": "/[org]/[ws]/tools",
-      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "Tools \u203a Registry \u203a Tool servers: \u201cRegister a server\u201d opens the dialog that invokes register_mcp_server (features/tools/register-server.tsx, features/tools/actions.ts)",
-      "testid": "server-register-open",
-      "proof": "apps/app/src/features/tools/servers.test.tsx",
-      "verifiedAt": "2026-09-20",
-      "verifiedBy": "session-mc2-connections"
+      "route": "/[org]/[ws]/tools/providers",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Providers: “Add a provider” (and “Import a provider” in the header) opens the import dialog whose Connect step invokes register_mcp_server (features/tools/import-provider.tsx, features/tools/actions.ts)",
+      "testid": "tools-import-open",
+      "proof": "apps/app/src/features/tools/write-controls.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
     "remove_org_member": {
       "route": "/[org]",
@@ -980,7 +1053,7 @@
     },
     "remove_price_entry": {
       "route": "/[org]/[ws]/spend?tab=pricing",
-      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
       "entry": "Spend \u203a Pricing \u203a \u201cRemove\u201d on a negotiated row \u2014 ends the rate so the model falls back to the list price (features/spend/remove-rate-dialog.tsx, features/spend/actions.ts)",
       "testid": "spend-remove-rate-open",
       "proof": "apps/app/src/features/spend/price-actions.test.ts",
@@ -1005,22 +1078,22 @@
       "verifiedBy": "assigned-issue-batch; CI pending"
     },
     "resolve_approval": {
-      "route": "/[org]/[ws]",
-      "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
-      "entry": "/[org]/[ws] \u2014 Decide on a parked approval card opens the approve or deny dialog, which invokes resolve_approval through the kernel seam; the same card and dialog are drawn on /[org]/[ws]/runs/[run]?tab=approvals (features/fleet/approval-decision.tsx, features/fleet/actions.ts, features/fleet/approvals-panel.tsx)",
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "/[org]/[ws]/runs/[run]?tab=approvals \u2014 Decide on a parked approval card opens the approve or deny dialog, which invokes resolve_approval through the kernel seam (features/fleet/approval-decision.tsx, features/fleet/actions.ts, features/fleet/approvals-panel.tsx, features/run/run.tsx). Fleet draws no approval card since its rev1 rebuild; the shell's approvals drawer draws the same card",
       "testid": "decide",
       "proof": "apps/app/src/features/fleet/approval-decision.test.tsx",
-      "verifiedAt": "2026-09-20",
-      "verifiedBy": "session-018UrgFq-mc-1-approve",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session-01GDv3vs-fleet-rev1",
       "also": [
         {
-          "route": "/[org]/[ws]/runs/[run]?tab=approvals",
-          "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-          "entry": "/[org]/[ws]/runs/[run]?tab=approvals \u2014 the Approvals tab draws the same card and the same Decide dialog Fleet's panel draws, over the same kernel seam (features/fleet/approvals-panel.tsx, features/fleet/approval-decision.tsx, features/run/run.tsx)",
-          "testid": "decide",
-          "proof": "apps/app/src/features/run/run.test.tsx",
-          "verifiedAt": "2026-09-20",
-          "verifiedBy": "session-018UrgFq-mc1-review"
+          "route": "/[org]",
+          "page": "apps/app/src/app/[org]/page.tsx",
+          "entry": "every page: the top bar's Approvals button opens the #apdrawer drawer, and a row opens the same card and Decide dialog Fleet draws, over the same kernel seam (features/shell/approvals-drawer.tsx, features/shell/shell-chrome.tsx, features/fleet/approvals-panel.tsx)",
+          "testid": "approvals-button",
+          "proof": "apps/app/src/features/shell/approvals-drawer.test.tsx",
+          "verifiedAt": "2026-09-23",
+          "verifiedBy": "session_01GDv3vsEjQPCRnZtvAm88cY"
         }
       ]
     },
@@ -1030,7 +1103,17 @@
       "entry": "/[org]/[ws]/agents/[agent] \u2014 the rev1 surface that invokes retire_agent (features/agents/actions.ts)",
       "proof": "apps/app/src/features/agents/agent-actions.test.tsx",
       "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "verifiedBy": "session-20daa43b-cutover",
+      "also": [
+        {
+          "route": "/[org]/[ws]/register/[step]",
+          "page": "apps/app/src/app/[org]/[ws]/register/[step]/page.tsx",
+          "entry": "/[org]/[ws]/register/[step] — Cancel on the wrap and run steps retires the identity the name step minted (features/onboarding/ui/cancel-registration.tsx, features/onboarding/register-actions.ts)",
+          "proof": "apps/app/src/features/onboarding/ui.test.tsx",
+          "verifiedAt": "2026-09-23",
+          "verifiedBy": "session_01Gb3zJhinQuXfKoGwzRvVQo"
+        }
+      ]
     },
     "revise_context_record": {
       "route": "/[org]/[ws]/steering/records/[lineage]",
@@ -1097,7 +1180,17 @@
       "entry": "/[org]/[ws]/agents/[agent] \u2014 the rev1 surface that invokes rotate_agent_credential (features/agents/actions.ts)",
       "proof": "apps/app/src/features/agents/agent-actions.test.tsx",
       "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "verifiedBy": "session-20daa43b-cutover",
+      "also": [
+        {
+          "route": "/[org]/[ws]/register/[step]",
+          "page": "apps/app/src/app/[org]/[ws]/register/[step]/page.tsx",
+          "entry": "/[org]/[ws]/register/wrap — the SDK tab issues the agent credential once (features/onboarding/ui/wrap-agent.tsx, features/onboarding/register-actions.ts)",
+          "proof": "apps/app/src/features/onboarding/ui.test.tsx",
+          "verifiedAt": "2026-09-23",
+          "verifiedBy": "session_01Gb3zJhinQuXfKoGwzRvVQo"
+        }
+      ]
     },
     "rotate_api_key": {
       "route": "/[org]/api-keys",
@@ -1106,6 +1199,15 @@
       "proof": "apps/app/src/features/organization/key-row.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
+    },
+    "search_tools": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
+      "entry": "every workspace page: \u2318K (or the top bar's Search or run an action) reads search_tools for the query through features/shell/command-actions.ts and lists its runs, agents, approvals and belt tools in the menu's groups (features/shell/command-menu.tsx, features/shell/commands.ts)",
+      "testid": "command-menu",
+      "proof": "apps/app/src/features/shell/shell-client.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01GDv3vsEjQPCRnZtvAm88cY"
     },
     "send_workspace_invite": {
       "route": "/[org]",
@@ -1117,21 +1219,21 @@
       "verifiedBy": "session-mc3-invite"
     },
     "set_approval_rule_enabled": {
-      "route": "/[org]/[ws]/tools?tab=autoapprovals",
-      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "Tools \u203a Auto-approvals \u203a Switch on or Switch off on a row, and Switch off instead in the delete dialog (features/tools/approval-rule-controls.tsx RuleToggle and RuleDelete, setApprovalRuleEnabled in features/tools/actions.ts)",
+      "route": "/[org]/[ws]/tools/policy",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Policy › Auto-approval rules: Switch on or Switch off on a row, and Switch off instead in the delete dialog (features/tools/approval-rule-controls.tsx RuleToggle and RuleDelete, setApprovalRuleEnabled in features/tools/actions.ts)",
       "proof": "apps/app/src/features/tools/approval-rule-controls.test.tsx",
-      "verifiedAt": "2026-09-19",
-      "verifiedBy": "session-tools-gaps"
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
     "set_approval_rules": {
-      "route": "/[org]/[ws]/tools?tab=autoapprovals",
-      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "Tools \u203a Auto-approvals \u203a Create rule, and Edit on a row (features/tools/approval-rule-controls.tsx RuleEditor, saveApprovalRule in features/tools/actions.ts)",
+      "route": "/[org]/[ws]/tools/policy",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Policy › Auto-approval rules: Create rule, and Edit on a row (features/tools/approval-rule-controls.tsx RuleEditor, saveApprovalRule in features/tools/actions.ts)",
       "testid": "rule-create-open",
       "proof": "apps/app/src/features/tools/approval-rule-controls.test.tsx",
-      "verifiedAt": "2026-09-19",
-      "verifiedBy": "session-tools-gaps"
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
     "set_auto_topup": {
       "route": "/[org]/billing",
@@ -1150,12 +1252,12 @@
       "verifiedBy": "session-1818a309-workspace-governance-mode"
     },
     "set_kill_switch": {
-      "route": "/[org]/[ws]/tools",
-      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "/[org]/[ws]/tools \u2014 the rev1 surface that invokes set_kill_switch (features/tools/actions.ts)",
+      "route": "/[org]/[ws]/tools/switches",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools header “Flip a kill switch”, and the toggle on each switch card (features/tools/switch-controls.tsx FlipControls, flipKillSwitch in features/tools/actions.ts)",
       "proof": "apps/app/src/features/tools/write-controls.test.tsx",
-      "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
     "set_model_credential": {
       "route": "/[org]/model-funding",
@@ -1176,7 +1278,7 @@
     },
     "set_price_entry": {
       "route": "/[org]/[ws]/spend?tab=pricing",
-      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
       "entry": "Spend \u203a Pricing \u203a Set a negotiated rate: one set_price_entry call per atomic model card (features/spend/price-dialog.tsx, features/spend/actions.ts)",
       "testid": "spend-price-open",
       "proof": "apps/app/src/features/spend/price-dialog.test.tsx",
@@ -1201,7 +1303,7 @@
     },
     "set_spend_budget": {
       "route": "/[org]/[ws]/spend",
-      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
       "entry": "/[org]/[ws]/spend \u2014 the rev1 surface that invokes set_spend_budget (features/spend/actions.ts)",
       "proof": "apps/app/src/features/spend/dialogs.test.tsx",
       "verifiedAt": "2026-09-16",
@@ -1225,11 +1327,11 @@
     },
     "set_tool_classification": {
       "route": "/[org]/[ws]/tools",
-      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "/[org]/[ws]/tools \u2014 the rev1 surface that invokes set_tool_classification (features/tools/actions.ts)",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Tools: a row opens the tool dialog, whose form reclassifies the version (features/tools/tool-dialog.tsx, setToolClassification in features/tools/actions.ts)",
       "proof": "apps/app/src/features/tools/write-controls.test.tsx",
-      "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
     "start_subscription_upgrade": {
       "route": "/[org]/billing",
@@ -1298,7 +1400,7 @@
     },
     "update_tacho_session_policy": {
       "route": "/[org]/[ws]/spend",
-      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
       "entry": "/[org]/[ws]/spend?tab=budgets \u2014 Gateway sessions \u203a Save the policy, which invokes update_tacho_session_policy (features/spend/actions.ts)",
       "proof": "apps/app/src/features/spend/gateway-policy.test.tsx",
       "verifiedAt": "2026-09-21",
@@ -1372,11 +1474,38 @@
     },
     "export_cost_center_statement": {
       "route": "/[org]/[ws]/spend",
-      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
       "entry": "/[org]/[ws]/spend export dialog, Organization by cost center (features/spend/actions.ts)",
       "proof": "apps/app/src/features/spend/dialogs.test.tsx",
       "verifiedAt": "2026-09-22",
       "verifiedBy": "session-1a3727fe-cost-centers"
+    },
+    "get_nav_counts": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
+      "entry": "every workspace page: the workspace layout reads get_nav_counts (open steering proposals, open severity-10 incidents) for the workspace in the URL and the chrome draws the sidebar's Steering and Audit counts, or \"?\" when the read gave no figure, and the phone's More count from it (features/shell/workspace-activity.tsx, features/shell/activity-store.ts, features/shell/sidebar.tsx, data/live/shell.ts)",
+      "testid": "shell-workspace",
+      "proof": "apps/app/src/features/shell/notifications-dialog.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01GDv3vsEjQPCRnZtvAm88cY"
+    },
+    "list_notifications": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
+      "entry": "every workspace page: the top bar's bell reads list_notifications for the workspace in the URL and the notifications dialog lists the viewer's newest rows with the unread dot (features/shell/workspace-activity.tsx, features/shell/notifications-dialog.tsx, data/live/shell.ts, data/live/mappers/shell.ts)",
+      "testid": "notification",
+      "proof": "apps/app/src/features/shell/notifications-dialog.test.tsx",
+      "verifiedAt": "2026-09-24",
+      "verifiedBy": "session_01GDv3vsEjQPCRnZtvAm88cY"
+    },
+    "mark_notification": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
+      "entry": "every workspace page: Mark all read in the notifications dialog invokes mark_notification once per listed row through the kernel seam (features/shell/notification-actions.ts, features/shell/notifications-dialog.tsx)",
+      "testid": "mark-all-read",
+      "proof": "apps/app/src/features/shell/notifications-dialog.test.tsx",
+      "verifiedAt": "2026-09-24",
+      "verifiedBy": "session_01GDv3vsEjQPCRnZtvAm88cY"
     },
     "get_run_work": {
       "route": "/[org]/[ws]/runs/[run]",
@@ -1434,6 +1563,54 @@
       "proof": "apps/app/src/features/steering/steering.test.tsx",
       "verifiedAt": "2026-09-22",
       "verifiedBy": "steering-rescue-ci"
+    },
+    "list_memories": {
+      "route": "/[org]/[ws]/steering/memory",
+      "page": "apps/app/src/app/[org]/[ws]/steering/[...view]/page.tsx",
+      "entry": "The Steering Library's Memory shelf reads list_memories through the steering port (data/live/steering.ts, features/steering/tabs/memory.tsx)",
+      "proof": "apps/app/src/features/steering/steering.test.tsx",
+      "verifiedAt": "2026-09-24",
+      "verifiedBy": "session_01GofFReg5qtDbMZjKu569CR"
+    },
+    "update_memory": {
+      "route": "/[org]/[ws]/steering/memory",
+      "page": "apps/app/src/app/[org]/[ws]/steering/[...view]/page.tsx",
+      "entry": "Forget on a Memory shelf row retracts the memory through update_memory (features/steering/actions.ts forgetMemory, server/kernel.ts)",
+      "proof": "apps/app/src/features/steering/actions.test.ts",
+      "verifiedAt": "2026-09-24",
+      "verifiedBy": "session_01GofFReg5qtDbMZjKu569CR"
+    },
+    "delete_mcp_server": {
+      "route": "/[org]/[ws]/tools/providers",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Providers: Remove on a provider row and in the provider drill-down's footer invokes delete_mcp_server after saying what stops and what is kept for replay (features/tools/provider-dialog.tsx, removeProvider in features/tools/actions.ts)",
+      "proof": "apps/app/src/features/tools/tools.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
+    },
+    "create_scim_token": {
+      "route": "/[org]/sso",
+      "page": "apps/app/src/app/[org]/sso/page.tsx",
+      "entry": "/[org]/sso: Generate token in the SCIM provisioning section (features/organization/scim-controls.tsx, sso-actions.ts)",
+      "proof": "apps/app/src/features/organization/sso.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session-scim-provisioning"
+    },
+    "rotate_scim_token": {
+      "route": "/[org]/sso",
+      "page": "apps/app/src/app/[org]/sso/page.tsx",
+      "entry": "/[org]/sso: Rotate token in the SCIM provisioning section (features/organization/scim-controls.tsx, sso-actions.ts)",
+      "proof": "apps/app/src/features/organization/sso.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session-scim-provisioning"
+    },
+    "revoke_scim_token": {
+      "route": "/[org]/sso",
+      "page": "apps/app/src/app/[org]/sso/page.tsx",
+      "entry": "/[org]/sso: Revoke token in the SCIM provisioning section (features/organization/scim-controls.tsx, sso-actions.ts)",
+      "proof": "apps/app/src/features/organization/sso.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session-scim-provisioning"
     }
   }
 }

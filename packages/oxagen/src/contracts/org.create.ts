@@ -66,6 +66,9 @@ export {
   WORKSPACE_SLUG_PATTERN,
 } from "../workspace-slug";
 
+/** `organizations.namespace`: 2-6 lowercase letters or digits, no hyphen. */
+export const ORG_NAMESPACE_PATTERN = /^[a-z0-9]{2,6}$/;
+
 const slugShape = z
   .string()
   .min(2)
@@ -93,6 +96,17 @@ export const organizationCreateInputBase = z.object({
   slug: slugShape.refine((s) => !RESERVED_ORG_SLUGS.has(s), {
     message: "slug is a reserved route segment",
   }),
+  /**
+   * The immutable namespace every agent key starts with
+   * (`<namespace>.<workspace>.<agent>`, ADR-024), as the organization step
+   * names it. The column's own shape (`organizations_namespace_check`). Left
+   * off, the handler derives one from the slug; given, it is used verbatim or
+   * refused as `conflict: namespace_taken`, never silently altered.
+   */
+  namespace: z
+    .string()
+    .regex(ORG_NAMESPACE_PATTERN, "2-6 lowercase letters or digits")
+    .optional(),
   // Organization creation is not a billing entitlement grant. Privileged plans
   // are established only through the canonical subscription lifecycle.
   planSlug: z.literal("free").default("free"),

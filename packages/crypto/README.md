@@ -4,6 +4,57 @@ Envelope encryption over a pluggable key-encryption-key (KEK) adapter seam.
 The default adapter is **Vercel-native** — the KEK lives in an encrypted
 environment variable, with no cloud KMS dependency.
 
+## Boundary
+
+- **Owns:**
+  - AES-256-GCM envelope encryption with a fresh data key per call, and the
+    v0x01 wire format (`src/envelope.ts`, `src/types.ts`).
+  - The `KmsAdapter` interface and its two implementations: the local KEK
+    held in an environment variable (`src/kms/local.ts`) and AWS KMS
+    (`src/kms/aws.ts`).
+  - Choosing the adapter for connector credentials on write and on read
+    (`src/ingestion.ts`).
+- **Does not own:**
+  - Where ciphertext is stored, or the `bytea` column helper:
+    [`@oxagen/database`](../database/README.md)
+    (`packages/database/src/schema/_mixins.ts`).
+  - Which master key a given feature uses. Each caller reads its own
+    environment variable and builds the adapter.
+  - Plugin, vault, and workspace credential services:
+    [`@oxagen/plugins`](../plugins/README.md).
+  - The auth startup guard that requires `AUTH_TOKEN_ENCRYPTION_KEY` outside
+    local development: [`@oxagen/auth`](../auth/README.md)
+    (`packages/auth/src/auth.ts`).
+- **Depends on:** No `@oxagen/*` runtime dependencies.
+- **Used by:** `apps/api`, `@oxagen/agent`, `@oxagen/auth`, `@oxagen/billing`,
+  `@oxagen/database`, `@oxagen/github`, `@oxagen/handlers`,
+  `@oxagen/inngest-functions`, `@oxagen/plugins`, and `@oxagen/run-ledger`.
+
+## Seams
+
+| Seam | Kind | Source | Wired by |
+|---|---|---|---|
+| `KmsAdapter` | port | `packages/crypto/src/types.ts` | Implemented by `src/kms/local.ts` and `src/kms/aws.ts` |
+| `createLocalKmsAdapter` | adapter | `packages/crypto/src/kms/local.ts` | `packages/auth/src/auth.ts`, `packages/plugins/src/credentials/kms.ts`, `packages/plugins/src/vault/vault-kms.ts`, `packages/database/src/sso-secrets.ts`, `packages/database/src/data-plane-resolver.ts`, `packages/agent/src/runtime/mcp-server-auth-crypto.ts` |
+| `createAwsKmsAdapter` | adapter | `packages/crypto/src/kms/aws.ts` | `src/ingestion.ts`, when `INGESTION_CRYPTO_PROVIDER=kms` |
+| `createIngestionCryptoAdapter` | export | `packages/crypto/src/ingestion.ts` | Write paths: `packages/handlers/src/connection.create.ts`, `apps/api/src/routes/v1/github-oauth.ts`, `packages/inngest-functions/src/functions/ingestion.oauth-refresh.ts`, `packages/run-ledger/src/evidence-store.ts` |
+| `resolveIngestionCryptoAdapterForKeyId` | export | `packages/crypto/src/ingestion.ts` | Read paths: `packages/inngest-functions/src/lib/resolve-connection-auth.ts`, `packages/github/src/workspace-token.ts`, `apps/api/src/routes/v1/webhook.ts`, `packages/run-ledger/src/evidence-store.ts` |
+
+## Entry points
+
+- `.` (`src/index.ts`): `encrypt`, `decrypt`, `ENVELOPE_VERSION`, the adapter
+  types, the ingestion helpers, and both adapter factories.
+- `./kms` (`src/kms/index.ts`): `createLocalKmsAdapter`, `loadMasterKey`, and
+  `createAwsKmsAdapter`.
+
+## Tests
+
+```bash
+pnpm --filter @oxagen/crypto test:unit src/envelope.test.ts
+```
+
+Tests sit beside their source under `src/` and `src/kms/`.
+
 ## Contract
 
 ```ts
@@ -97,12 +148,14 @@ in the wire format reserves space for a future per-row format migration.
 
 | Variable                    | Required                | Description                                                                    |
 |-----------------------------|-------------------------|--------------------------------------------------------------------------------|
-| `AUTH_TOKEN_ENCRYPTION_KEY` | Yes                     | Base64 256-bit (32-byte) KEK for auth and plugin credentials.                  |
+| `AUTH_TOKEN_ENCRYPTION_KEY` | Outside local dev       | Base64 256-bit (32-byte) KEK for auth and plugin credentials.                  |
 | `INGESTION_CRYPTO_PROVIDER` | No (defaults to `env`)  | `env` for the local KEK, `kms` for AWS KMS. Applies to connector credentials.  |
 | `INGESTION_ENCRYPTION_KEY`  | When provider is `env`  | Base64 256-bit (32-byte) KEK for connector credentials.                        |
 | `AWS_KMS_INGESTION_KEY_ARN` | When provider is `kms`  | Full ARN of the KMS key that wraps connector DEKs. The region comes from it.   |
 
-`AUTH_TOKEN_ENCRYPTION_KEY` is validated at boot by `@oxagen/config`.
+`@oxagen/config` declares `AUTH_TOKEN_ENCRYPTION_KEY` optional. The startup
+guard in `packages/auth/src/auth.ts` refuses to boot without it outside local
+development, and each other caller degrades or refuses when it is unset.
 Generate any of the base64 keys with `openssl rand -base64 32`.
 
 ## Security notes

@@ -810,6 +810,19 @@ describe("revoke_tacho_enrollment", () => {
 });
 
 describe("fleet reads", () => {
+  it("carries the OS version and architecture the host reported, and a blank one as not reported", async () => {
+    const db: Fake = {
+      hosts: [host({ osVersion: " 15.6 ", arch: "" })],
+      sessions: [],
+      commands: [],
+      updates: [],
+      inserts: [],
+    };
+    wire(db);
+    const listed = await tachoHostListHandler({ limit: 50 }, OPERATOR);
+    expect(listed.hosts[0]).toMatchObject({ osVersion: "15.6", arch: null });
+  });
+
   it("lists hosts and sessions with cursors and reads one session's index", async () => {
     const db: Fake = {
       hosts: [host()],

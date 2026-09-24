@@ -2,8 +2,6 @@ import { notFound } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Suspense, type ReactNode } from "react";
 import { TranscriptZoom } from "@/data/contracts/run";
-import type { TranscriptKind } from "@/data/contracts/run";
-import { TRANSCRIPT_KINDS } from "@/data/contracts/run";
 import type {
   ApprovalQueue,
   ResolvedApprovalItem,
@@ -27,7 +25,7 @@ import { ReadFailure } from "@/ui/read-failure";
 import { ChainSection } from "./chain";
 import { CostSection } from "./cost";
 import { FramesSection } from "./frames";
-import { RunHeader } from "./header";
+import { RunHeader, RunTitle } from "./header";
 import { OutputsSpine } from "./outputs";
 import { ResolvedApprovalsPanel } from "./resolved-approvals";
 import {
@@ -37,7 +35,12 @@ import {
   PolicySection,
 } from "./sections";
 import { StatRow, SummaryPanel } from "./stats";
-import { kindsParam, TranscriptSection } from "./transcript";
+import {
+  type KindFilter,
+  kindsParam,
+  parseKinds,
+  TranscriptSection,
+} from "./transcript";
 import { ChangesPanel, SpendByArea } from "./work";
 import { isWhole, readWholeTranscript } from "./whole-transcript";
 import { RunWork, RunWorkLoading, readRunWork } from "./work-ci";
@@ -67,13 +70,6 @@ const TAB_ALIASES: Record<string, Tab> = {
 const FRAME_SEQ = /^\d{1,19}$/;
 
 type Place = { org: string; ws: string; runId: string };
-
-/** `?kinds=tools,errors` as the contract's own list; an unknown word is dropped, not refused. */
-function parseKinds(raw: string | null): TranscriptKind[] {
-  if (raw === null) return [];
-  const asked = new Set(raw.split(","));
-  return TRANSCRIPT_KINDS.filter((kind) => asked.has(kind));
-}
 
 type Counted = {
   run: RunRow;
@@ -144,7 +140,7 @@ function Tabs({
 }: {
   selected: Tab;
   zoom: TranscriptZoom;
-  kinds: readonly TranscriptKind[];
+  kinds: KindFilter;
   /** The reads each tab's count comes from. */
   counts: Counted;
 } & Place) {
@@ -250,7 +246,7 @@ export async function Run({
   tab: string | null;
   /** `?zoom=`; anything but a level opens the transcript at steps. */
   zoom: string | null;
-  /** `?kinds=`, the chips pressed, comma-separated; an unknown word is dropped. */
+  /** `?kinds=`, the kinds the chips show, comma-separated, or `none`; an unknown word is dropped. */
   kinds: string | null;
   /** `?frames=`, the opaque cursor a later frames page was read from. */
   frames: string | null;
@@ -278,9 +274,12 @@ export async function Run({
   if (!read.ok) {
     if (read.reason === "error" && read.status === 404) notFound();
     return (
-      <div className={`${panel} p-4`}>
-        <ReadFailure read={read} section={runId} />
-      </div>
+      <>
+        <RunTitle id={runId} run={null} />
+        <div className={`${panel} p-4`}>
+          <ReadFailure read={read} section={runId} />
+        </div>
+      </>
     );
   }
   const detail = read.value;
@@ -327,13 +326,16 @@ export async function Run({
     case "transcript":
       section = (
         <TranscriptSection
+          // No chip on (`none`) reads nothing: the section draws the chips
+          // and says so. No filter is the whole-run read already in hand.
           read={
-            chips.length === 0
+            chips === "none" || chips.length === 0
               ? everything
               : await source.runs.transcript(ctx, run.id, "everything", {
-                  kinds: chips,
+                  kinds: [...chips],
                 })
           }
+          tally={everything}
           zoom={zoomed}
           kinds={chips}
           run={run}
@@ -342,7 +344,7 @@ export async function Run({
       );
       break;
     case "issues":
-      section = <IssuesSection run={run} />;
+      section = <IssuesSection run={run} work={work} />;
       break;
     case "actions": {
       const seq = body !== null && FRAME_SEQ.test(body) ? body : null;
@@ -419,6 +421,7 @@ export async function Run({
   const outcomes = await outcomesPolicy;
   return (
     <div className="flex flex-col gap-6">
+      <RunTitle id={run.id} run={run} />
       <RunHeader
         run={run}
         agent={agent}
@@ -427,6 +430,7 @@ export async function Run({
             ? outputs.value.nodes.filter((node) => node.kind === "pr")
             : null
         }
+        work={work}
         orgRole={ctx.orgRole}
         wsRole={ctx.wsRole}
         org={place.org}

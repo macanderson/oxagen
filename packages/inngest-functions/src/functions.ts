@@ -3,6 +3,8 @@ import { billingDunningSweep } from "./functions/billing.dunning-sweep";
 import { billingUsageDelivery } from "./functions/billing.usage-delivery";
 import { billingGauClose } from "./functions/billing.gau-close";
 import { costRunRollup } from "./functions/cost.run-rollup";
+import { costRunProgress } from "./functions/cost.run-progress";
+import { tachoSessionIdleClose } from "./functions/tacho.session-idle-close";
 import { costDailyRollup } from "./functions/cost.daily-rollup";
 import { costPriceBookSync } from "./functions/cost.price-book-sync";
 import { costPriceBookReprice } from "./functions/cost.price-book-reprice";
@@ -18,6 +20,10 @@ import {
   privacyErasureExecuteOnFailure,
 } from "./functions/privacy.erasure.execute";
 import { authSessionExpiryAudit } from "./functions/auth.session-expiry-audit";
+import {
+  authSsoResealDaily,
+  authSsoResealRequested,
+} from "./functions/auth.sso-reseal";
 import { approvalResume } from "./functions/approval.resume";
 import { mandateExpiry } from "./functions/mandate.expiry";
 import { ingestionPipeline } from "./functions/ingestion.pipeline";
@@ -43,7 +49,11 @@ import {
   evidenceRunExportOnFailure,
 } from "./functions/evidence.run-export";
 import { evidenceFrameCompaction } from "./functions/evidence.frame-compaction";
-import { runEnrich, runEnrichmentSweep } from "./functions/run.enrich";
+import {
+  runEnrich,
+  runEnrichOnFailure,
+  runEnrichmentSweep,
+} from "./functions/run.enrich";
 
 // The DurableFunction objects returned by createFunction are also valid Inngest
 // function instances at runtime (they are Object.assign-ed Inngest functions).
@@ -56,6 +66,8 @@ export const functions: any[] = [
   billingGauClose,
   billingUsageDelivery,
   costRunRollup,
+  costRunProgress,
+  tachoSessionIdleClose,
   costDailyRollup,
   costPriceBookSync,
   costPriceBookReprice,
@@ -68,6 +80,8 @@ export const functions: any[] = [
   privacyErasureExecute,
   privacyErasureExecuteOnFailure,
   authSessionExpiryAudit,
+  authSsoResealDaily,
+  authSsoResealRequested,
   mandateExpiry,
   approvalResume,
   ingestionPipeline,
@@ -90,5 +104,6 @@ export const functions: any[] = [
   evidenceRunExportOnFailure,
   evidenceFrameCompaction,
   runEnrich,
+  runEnrichOnFailure,
   runEnrichmentSweep,
 ].filter((fn): fn is NonNullable<typeof fn> => fn != null);

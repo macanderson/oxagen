@@ -5,6 +5,13 @@
 // harness's name (`packages/handlers/src/tacho.host.list.ts` `tiersFor`). It is
 // not mapped: a tier is computed per run from what was actually routed, and a
 // value looked up from a name would print a tier no run earned (INV-10).
+//
+// `hooksOk` is mapped as it stands. It is Claude Code's alone: the collector
+// reads the harness's settings file back each tick (`tachoHookPresence`,
+// packages/tacho/src/host/settings-writer.ts) and reports `true` only when
+// every hook Tacho writes, the five command hooks among them, is present with
+// its environment. `false` names no count, so the page reads a count only
+// from `true` (#3818).
 import type { agentList } from "@oxagen/oxagen/contracts/agent.list";
 import type { tachoHostList } from "@oxagen/oxagen/contracts/tacho.host.list";
 import type { z } from "zod";
@@ -24,7 +31,7 @@ type AgentItem = ContractOutput<typeof agentList>["items"][number];
  * Claude Code is routed and Codex goes direct is `mixed`, because reading it
  * as routed would claim the proxy sees calls it never sees.
  */
-export function modelRouteOf(host: HostSummary): {
+function modelRouteOf(host: HostSummary): {
   route: ModelRoute | null;
   shadowedBy: string | null;
 } {
@@ -51,6 +58,8 @@ export function toRuntimeEnrollment(
     id: host.hostEnrollmentId,
     hostname: host.hostname,
     platform: host.platform,
+    osVersion: host.osVersion,
+    arch: host.arch,
     osUser: host.osUser,
     status: host.status,
     mode: host.mode,
@@ -59,6 +68,7 @@ export function toRuntimeEnrollment(
     collectorVersion: host.wrapperVersion,
     modelRoute: route,
     shadowedBy,
+    managed: host.managed,
     hooksOk: host.hooksOk,
     lastSeenAt: host.lastSeenAt,
     createdAt: host.createdAt,

@@ -2,12 +2,14 @@
 // Client-side navigation (ARCHITECTURE.md §3.8, INV-13): the only useRouter
 // importer and the only file with a computed href or form action. Links take a
 // SafePath, so a target that did not come from sanitizeNext or a route builder
-// does not compile; the three external links take a HostedInvoiceUrl, a
-// PullRequestUrl and a GitHubUrl.
+// does not compile; the external links take a HostedInvoiceUrl, a
+// PullRequestUrl, a GitHubUrl, a GitLabUrl and a DesktopDownloadUrl.
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type ComponentProps, useMemo } from "react";
+import type { DesktopDownloadUrl } from "@/shared/desktop-downloads";
 import type { GitHubUrl } from "@/shared/github-url";
+import type { GitLabUrl } from "@/shared/gitlab-url";
 import type { HostedInvoiceUrl } from "@/shared/invoice-url";
 import type { RunExportDownloadUrl } from "@/shared/run-export-download-url";
 import type { PullRequestUrl } from "@/shared/pull-request-url";
@@ -117,6 +119,42 @@ export function GitHubLink({
   ...props
 }: Omit<ComponentProps<"a">, "href" | "target" | "rel"> & {
   to: GitHubUrl;
+}) {
+  return <a href={to} target="_blank" rel="noopener noreferrer" {...props} />;
+}
+
+/**
+ * An Oxagen app installer on the downloads host. The browser saves the file
+ * and the page stays where it is, so this is a plain anchor with no new tab.
+ * `download` is left off: a browser ignores it on another origin, and the
+ * host serves each installer with a binary content type
+ * (apps/desktop/src/downloads.ts), which a browser saves rather than shows.
+ */
+export function DesktopInstallerLink({
+  to,
+  ...props
+}: Omit<ComponentProps<"a">, "href" | "download"> & {
+  to: DesktopDownloadUrl;
+}) {
+  return <a href={to} {...props} />;
+}
+
+/** The downloads page, with every version and its checksums, opened in a new tab without handing it this window. */
+export function DesktopDownloadsPageLink({
+  to,
+  ...props
+}: Omit<ComponentProps<"a">, "href" | "target" | "rel"> & {
+  to: DesktopDownloadUrl;
+}) {
+  return <a href={to} target="_blank" rel="noopener noreferrer" {...props} />;
+}
+
+/** A project page on gitlab.com, opened without handing it this window (#3762). */
+export function GitLabLink({
+  to,
+  ...props
+}: Omit<ComponentProps<"a">, "href" | "target" | "rel"> & {
+  to: GitLabUrl;
 }) {
   return <a href={to} target="_blank" rel="noopener noreferrer" {...props} />;
 }

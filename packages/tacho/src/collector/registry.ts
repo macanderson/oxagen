@@ -112,6 +112,22 @@ export interface SessionControl {
   cancelled: string | null;
   /** Operator prompt content to inject at the next boundary. */
   messages: QueuedPrompt[];
+  /**
+   * What the current pause did to the agent. `refused`: a boundary denied
+   * the agent a tool call because of it, so the agent may be about to end
+   * its turn on that refusal. `stopped`: the agent ended its turn while
+   * paused (a `Stop` or a `StopFailure`), so nothing is running to resume.
+   * Absent while the pause has touched nothing. Resume reads it to decide
+   * whether the agent is owed a continuation (`resumeOwed`).
+   */
+  pauseEffect?: "refused" | "stopped";
+  /**
+   * The id of a resume that owes the agent a continuation: the next boundary
+   * that can carry text tells it the operator resumed it. The resume command
+   * was acknowledged when it applied, so delivering this seals a frame and
+   * sends no second acknowledgement.
+   */
+  resumeOwed?: string;
 }
 
 export interface SessionFacts {
@@ -140,9 +156,9 @@ export interface SessionFacts {
    *
    * Set on the first git read for the session in a given repository, which
    * is the earliest this daemon knows that repository at all. Bound to the
-   * repository: when `ensure` sees a new `cwd` this is cleared, and the next
-   * read puts back the entry `baselines` holds for the repository the new
-   * directory is in, or captures a new one (see `rememberBaseline`).
+   * repository root (`baselineRoot`): when `ensure` sees a new `cwd` this is
+   * cleared, and the next read puts back the entry `baselines` holds for the
+   * root it reads at, or captures a new one (see `rememberBaseline`).
    * Persisted through `state` / `restore` so a daemon restart does not lose
    * it mid-session.
    *
@@ -152,13 +168,28 @@ export interface SessionFacts {
    */
   baselineCommit?: string;
   /**
-   * The baseline of every repository this session has been read in, keyed
-   * by repository root and bounded to `MAX_SESSION_BASELINES`, the least
-   * recently read dropped first. `baselineCommit` is the entry for the
-   * repository `cwd` is in now. A `cd` inside one repository keeps its
-   * entry, and so does a move to another repository and back.
+   * The repository root `baselineCommit` was taken in. A session can edit
+   * a different worktree from the one it started in, so the baseline is bound
+   * to the root it was read from and is switched when the work moves to
+   * another root.
+   */
+  baselineRoot?: string;
+  /**
+   * The baseline of every repository root this session has been read in,
+   * bounded to `MAX_SESSION_BASELINES`, the least recently read dropped
+   * first. `baselineCommit` is the entry for `baselineRoot`. A move to
+   * another root and back finds the first one again (see `rememberBaseline`).
    */
   baselines?: Record<string, string>;
+  /**
+   * The directory of the file the agent last wrote. The session's `cwd` is
+   * where it started. An agent working in a git worktree often keeps that
+   * `cwd` on the primary checkout and edits files by absolute path, so git
+   * read from `cwd` described the primary checkout on `main`. The run then
+   * showed no branch, no diff, and a PR somebody once opened from `main`.
+   * Git reads start here when it is set.
+   */
+  workDir?: string;
   /**
    * The sweep sealed this chain because it went quiet, not because its
    * process ended or it sent `SessionEnd`. That is a guess, and the next hook
@@ -545,10 +576,17 @@ export class SessionRegistry {
         // after a move makes reconciliation diff against a sha that may
         // not exist here, fall back to the new HEAD, and drop work the
         // session already committed in the new tree. `baselines` still
-        // holds it by repository, and the next read puts it back when the
-        // new directory is in the same one.
-        if (existing.cwd !== undefined && facts.cwd !== existing.cwd) {
+        // holds it by repository root, and the next read puts it back when
+        // the new directory is in the same repository. A session that
+        // writes files by path reads git from `workDir`, and its baseline
+        // stays with that root whatever `cwd` does.
+        if (
+          existing.cwd !== undefined &&
+          facts.cwd !== existing.cwd &&
+          existing.workDir === undefined
+        ) {
           delete existing.baselineCommit;
+          delete existing.baselineRoot;
         }
         existing.cwd = facts.cwd;
       }
@@ -557,6 +595,9 @@ export class SessionRegistry {
         existing.lastHookEvent = facts.lastHookEvent;
       if (facts.baselineCommit !== undefined)
         existing.baselineCommit = facts.baselineCommit;
+      if (facts.baselineRoot !== undefined)
+        existing.baselineRoot = facts.baselineRoot;
+      if (facts.workDir !== undefined) existing.workDir = facts.workDir;
       if (facts.ambient === false) existing.ambient = false;
       existing.lastSeenAt = now;
       this.noteAgent(existing, false);
@@ -653,6 +694,10 @@ export class SessionRegistry {
    */
   private close(record: SessionRecord): void {
     record.sealed = true;
+    // A resume's continuation has no boundary left either. The resume was
+    // acknowledged when it applied, and a chain reopened later must not tell
+    // the agent it was just resumed.
+    record.control.resumeOwed = undefined;
     for (const message of record.control.messages.splice(0)) {
       if (this.expiredOnSeal.some((ack) => ack.command_id === message.id))
         continue;
@@ -772,7 +817,11 @@ export class SessionRegistry {
         (turn.turnSeq > 0 || record.lastHookEvent === "Stop")
           ? "completed"
           : "crashed";
-      out.push(...record.recorder.finalize(outcome, this.ts()));
+      // The session ended when it was last seen, not when the sweep noticed:
+      // an idle session swept six hours late would otherwise read as having
+      // run six hours longer (#4024). `lastSeenAt` is the receipt time of its
+      // last activity, so it is at or after every event its hooks sealed.
+      out.push(...record.recorder.finalize(outcome, record.lastSeenAt));
       this.close(record);
     }
     return out;
@@ -788,6 +837,12 @@ export class SessionRegistry {
           paused: record.control.paused,
           cancelled: record.control.cancelled,
           messages: [...record.control.messages],
+          ...(record.control.pauseEffect !== undefined
+            ? { pauseEffect: record.control.pauseEffect }
+            : {}),
+          ...(record.control.resumeOwed !== undefined
+            ? { resumeOwed: record.control.resumeOwed }
+            : {}),
         },
         startedAt: record.startedAt,
         lastSeenAt: record.lastSeenAt,
@@ -839,6 +894,13 @@ export class SessionRegistry {
             expiresAt: null,
             ...m,
           })),
+          // Absent in state files written before resume owed a continuation.
+          ...(persisted.control.pauseEffect !== undefined
+            ? { pauseEffect: persisted.control.pauseEffect }
+            : {}),
+          ...(persisted.control.resumeOwed !== undefined
+            ? { resumeOwed: persisted.control.resumeOwed }
+            : {}),
         },
         startedAt: persisted.startedAt,
         lastSeenAt: persisted.lastSeenAt,
@@ -894,6 +956,19 @@ export function rememberHookId(
 }
 
 /**
+ * Drop a hook id from the ledger. The daemon calls this when a hook routed
+ * but its frames never reached the WAL: the client saw a failure and spools
+ * the same id, and that replay has to be sealed, not dropped as a repeat.
+ */
+export function forgetHookId(
+  record: Pick<SessionRecord, "recentHookIds">,
+  hookId: string,
+): void {
+  const at = record.recentHookIds.indexOf(hookId);
+  if (at !== -1) record.recentHookIds.splice(at, 1);
+}
+
+/**
  * Which of two records for the same session id a caller that named no agent
  * means: a live chain over a sealed one, then the more recently seen.
  * `lastSeenAt` is a protocol timestamp, so it sorts as text.
@@ -925,9 +1000,13 @@ function optionalFacts(facts: SessionFacts): SessionFacts {
     ...(facts.baselineCommit !== undefined
       ? { baselineCommit: facts.baselineCommit }
       : {}),
+    ...(facts.baselineRoot !== undefined
+      ? { baselineRoot: facts.baselineRoot }
+      : {}),
     ...(facts.baselines !== undefined
       ? { baselines: { ...facts.baselines } }
       : {}),
+    ...(facts.workDir !== undefined ? { workDir: facts.workDir } : {}),
     ...(facts.closedIdle === true ? { closedIdle: true } : {}),
   };
 }
@@ -972,33 +1051,48 @@ function isTombstone(value: unknown): value is ChainTombstone {
 export const MAX_SESSION_BASELINES = 16;
 
 /**
- * Make the baseline for the repository at `repoRoot` the session's
+ * Make the baseline for the repository root `repoRoot` the session's
  * `baselineCommit`, and return it: the one the session already holds for
- * that repository, or `headSha` on its first read there. Keyed by
- * repository root rather than by `cwd`, so a `cd packages/foo` keeps the
- * commit the session started on and everything it committed since stays
- * measured. A `baselineCommit` with no entry yet (a state file written
- * before `baselines`) belongs to the current repository, because `ensure`
- * clears it on every move.
+ * that root, or `headSha` on its first read there. Undefined, with no
+ * baseline in force, for a root the session holds none for when there is no
+ * `headSha` (a read that found no commit). Keyed by repository root rather
+ * than by `cwd`, so a `cd packages/foo` keeps the commit the session started
+ * on and everything it committed since stays measured, and a move to another
+ * repository and back finds the first one again.
+ *
+ * A `baselineCommit` the map does not hold yet (a state file written before
+ * it) joins it under `baselineRoot`, or under `repoRoot` when that is unset
+ * too, because `ensure` clears the baseline on every move.
  */
 export function rememberBaseline(
-  record: Pick<SessionFacts, "baselineCommit" | "baselines">,
+  record: Pick<SessionFacts, "baselineCommit" | "baselineRoot" | "baselines">,
   repoRoot: string,
-  headSha: string,
-): string {
+  headSha: string | undefined,
+): string | undefined {
   const baselines = { ...record.baselines };
-  const kept = baselines[repoRoot] ?? record.baselineCommit ?? headSha;
-  // The most recently read goes last, so the bound drops the repository the
-  // session left longest ago.
-  delete baselines[repoRoot];
-  baselines[repoRoot] = kept;
+  const heldRoot = record.baselineRoot ?? repoRoot;
+  if (record.baselineCommit !== undefined && baselines[heldRoot] === undefined)
+    baselines[heldRoot] = record.baselineCommit;
+  const kept = baselines[repoRoot] ?? headSha;
+  if (kept !== undefined) {
+    // The most recently read goes last, so the bound drops the repository
+    // the session left longest ago.
+    delete baselines[repoRoot];
+    baselines[repoRoot] = kept;
+  }
   const roots = Object.keys(baselines);
   for (const root of roots.slice(
     0,
     Math.max(0, roots.length - MAX_SESSION_BASELINES),
   ))
     delete baselines[root];
-  record.baselines = baselines;
-  record.baselineCommit = kept;
+  if (roots.length > 0) record.baselines = baselines;
+  if (kept === undefined) {
+    delete record.baselineCommit;
+    delete record.baselineRoot;
+  } else {
+    record.baselineCommit = kept;
+    record.baselineRoot = repoRoot;
+  }
   return kept;
 }

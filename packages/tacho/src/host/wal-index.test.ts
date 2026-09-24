@@ -9,6 +9,11 @@
  * five waves cost 5.7 times the first five, because each of a wave's five
  * batches re-read every byte written so far. Against the index they cost 1.0
  * times, measured on 2026-09-22.
+ *
+ * The test counts the bytes each wave reads from the body file rather than
+ * timing it. Wall time under a coverage run on a shared CI runner put the last
+ * waves at 4.5 times the first with the index in place, which failed main's
+ * test job on 2026-09-24. A byte count is the same on every machine.
  */
 import {
   appendFileSync,
@@ -30,6 +35,54 @@ import { minimalSession } from "../test-helpers";
 import { scratchPaths } from "./test-support";
 import { TACHO_MAX_BATCH } from "../wire";
 import { Wal } from "./wal";
+
+/** Bytes read from any session's body file, by the sync and async paths. */
+const bodyReads = vi.hoisted(() => ({ fds: new Set<number>(), bytes: 0 }));
+
+function isBodyFile(path: unknown): boolean {
+  return String(path).endsWith(".bodies.jsonl");
+}
+
+vi.mock("node:fs", async (importOriginal) => {
+  const fs = await importOriginal<typeof import("node:fs")>();
+  return {
+    ...fs,
+    openSync: ((path, ...rest) => {
+      const fd = fs.openSync(path, ...rest);
+      if (isBodyFile(path)) bodyReads.fds.add(fd);
+      return fd;
+    }) as typeof fs.openSync,
+    closeSync: ((fd) => {
+      bodyReads.fds.delete(fd);
+      fs.closeSync(fd);
+    }) as typeof fs.closeSync,
+    readSync: ((fd, ...rest) => {
+      const size = (fs.readSync as (...args: unknown[]) => number)(fd, ...rest);
+      if (bodyReads.fds.has(fd)) bodyReads.bytes += size;
+      return size;
+    }) as typeof fs.readSync,
+  };
+});
+
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const fsp = await importOriginal<typeof import("node:fs/promises")>();
+  return {
+    ...fsp,
+    open: (async (path, ...rest) => {
+      const handle = await fsp.open(path, ...rest);
+      if (!isBodyFile(path)) return handle;
+      const read = handle.read.bind(handle) as (
+        ...args: unknown[]
+      ) => Promise<{ bytesRead: number }>;
+      (handle as { read: unknown }).read = async (...args: unknown[]) => {
+        const result = await read(...args);
+        bodyReads.bytes += result.bytesRead;
+        return result;
+      };
+      return handle;
+    }) as typeof fsp.open,
+  };
+});
 
 const SESSION = "5c1f0a2e-0000-4000-8000-00000000f00d";
 const TOTAL_EVENTS = 20_000;
@@ -117,13 +170,13 @@ describe("shipping a long session", () => {
       now: () => Date.now(),
     });
 
-    const waveMs: number[] = [];
+    const waveBytes: number[] = [];
     for (let from = 0; from < TOTAL_EVENTS; from += WAVE) {
       const { events, bodies } = wave(from);
       wal.append(events, bodies);
-      const startedAt = performance.now();
+      const readBefore = bodyReads.bytes;
       await shipper.drain();
-      waveMs.push(performance.now() - startedAt);
+      waveBytes.push(bodyReads.bytes - readBefore);
     }
 
     // Every event and every body left, in full batches and no more.
@@ -134,13 +187,14 @@ describe("shipping a long session", () => {
     expect(wal.stats().unshipped).toBe(0);
 
     // The last five waves ship a file about six times the size the first five
-    // did. A scan-per-batch read measured 5.7 times the cost for them, an
-    // offset read 1.0. The bound sits between the two, loose because this is
-    // wall time on a shared machine.
-    const quarter = waveMs.length / 4;
-    const first = mean(waveMs.slice(0, quarter));
-    const last = mean(waveMs.slice(-quarter));
-    expect(last).toBeLessThan(Math.max(first, 5) * 3);
+    // did. A scan-per-batch read re-reads the whole file for each batch, so
+    // its later waves read several times the bytes. An offset read takes each
+    // wave's bodies and nothing else, so every wave reads about the same.
+    const quarter = waveBytes.length / 4;
+    const first = mean(waveBytes.slice(0, quarter));
+    const last = mean(waveBytes.slice(-quarter));
+    expect(first).toBeGreaterThan(0);
+    expect(last).toBeLessThan(first * 1.5);
 
     // The index is beside the bodies, holds no content, and is a fraction of
     // the file it describes.

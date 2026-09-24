@@ -23,6 +23,12 @@
 // on a root session emits `cost/run.sealed` so the rollup job rebuilds the
 // run's `cost.run_totals` row from its frames (ADR-060 §3).
 //
+// Billing (ADR-165): each tool call a wrapped harness made and Tacho allowed
+// is one governed action unit on the per-action ledger, keyed by the call's
+// `tool_use_id` so a re-sent batch bills nothing twice (`isBillableToolCall`
+// has the rule). Denials are free. The control envelope is built after
+// billing, so a batch refused at any step leaves its commands queued.
+//
 // Proof (ADR-064): each fresh `proof.observed` frame writes its verdict row
 // (lib/proof.ts) under the run it is part of, the root session named by its
 // `root_session_uuid`, whichever session's chain carried it. A verdict reaching
@@ -45,6 +51,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { tachoEventsIngest } from "@oxagen/oxagen/contracts/tacho.events.ingest";
 import { schema, withTenantDb } from "@oxagen/database";
+import type { TachoSealSource } from "@oxagen/database/schema";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
 import {
   PROOF_OBSERVED_KIND,
@@ -67,8 +74,15 @@ import {
   storeOverloadedFrom,
   type TachoEventInsert,
 } from "@oxagen/telemetry";
-import { recordSpend } from "@oxagen/billing";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import {
+  attributableWorkspaceId,
+  governedActionEntry,
+  type GovernedActionEntry,
+  ledgerKey,
+  recordGovernedActions,
+  recordSpend,
+} from "@oxagen/billing";
+import { and, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
 import { writeAssembly } from "@oxagen/run-ledger";
 import {
@@ -78,6 +92,7 @@ import {
 } from "./lib/tacho-containment";
 import { machineSnapshotOf } from "./lib/machine-facts";
 import { rollupFiles } from "./lib/file-facts-rollup";
+import { latestHarnessTitle } from "./lib/harness-title";
 import { unlockOnboardingGate } from "./lib/onboarding";
 import {
   gatewayInvocationColumnReady,
@@ -87,6 +102,7 @@ import {
   sessionMachineSnapshotColumnReady,
 } from "./lib/tacho-gateway-columns";
 import { eventClient } from "./event-client";
+import { RUN_PROGRESSED_EVENT } from "@oxagen/inngest-functions/events";
 import { recordProofFrames } from "./lib/proof";
 import {
   type TachoHostRow,
@@ -270,6 +286,36 @@ export function usageCountedEvents(
 }
 
 /**
+ * The run facts a batch last recorded: the model, the permission mode, the
+ * effort, and the head commit. Each is the latest non-empty value in the
+ * batch, so a batch whose last frame carries no context (a daemon frame, a
+ * reconciliation) does not read as a session that stopped reporting them.
+ * The caller writes each one only when it is non-null (#4010).
+ */
+export function lastRecordedContext(fresh: readonly TachoEvent[]): {
+  model: string | null;
+  permissionMode: string | null;
+  effort: string | null;
+  gitHeadSha: string | null;
+} {
+  const facts = {
+    model: null as string | null,
+    permissionMode: null as string | null,
+    effort: null as string | null,
+    gitHeadSha: null as string | null,
+  };
+  for (const event of fresh) {
+    const context = event.context;
+    if (!context) continue;
+    facts.model = str(context.model) ?? facts.model;
+    facts.permissionMode = str(context.permission_mode) ?? facts.permissionMode;
+    facts.effort = str(context.effort) ?? facts.effort;
+    facts.gitHeadSha = str(context.git_head_sha) ?? facts.gitHeadSha;
+  }
+  return facts;
+}
+
+/**
  * Fold one event into the session's counters. Model usage counts each call
  * once, from its first sighting (OTel log, transcript, or hook), or the
  * proxy's observed view when the session has one: the caller passes the
@@ -369,6 +415,135 @@ export function foldDelta(delta: SessionDelta, event: TachoEvent): void {
     default:
       break;
   }
+}
+
+/**
+ * The key Tacho writes for Oxagen's own MCP server in a harness's
+ * `mcpServers` map (`OXAGEN_MCP_SERVER_KEY`,
+ * packages/tacho/src/host/mcp-config-writer.ts). Not exported from the
+ * package root, so it is repeated here. Change both together.
+ */
+const OXAGEN_MCP_SERVER = "oxagen";
+
+/**
+ * Whether a frame is a tool call that bills one governed action unit: a call
+ * a wrapped harness made, Tacho allowed, and the tool completed.
+ *
+ * A tool call normally has one frame that answers yes. The reasoning, one
+ * condition at a time:
+ *
+ *   1. `kind === "tool_call"`. PreToolUse seals `tool_requested`, and a
+ *      PermissionRequest seals `approval_request`, so the frames before the
+ *      call runs never bill. PostToolUse and PostToolUseFailure seal the
+ *      `tool_call`. The effect frame the same hook adds (`command`,
+ *      `file_io`, `network`) is a different kind and never bills.
+ *   2. `source === "hook"`. The hook is where Tacho rules on a harness tool
+ *      call (every harness reaches it: Claude Code and Codex directly, Cursor
+ *      and Stella through their adapters). The OTel exporter and the
+ *      transcript tailer report the same call again, and the recorder seals
+ *      at most one of those repeats (ADR-140). They observed the call, they
+ *      did not govern it. `collector` frames are the daemon's own: a call to
+ *      Oxagen's MCP gateway, which the kernel bills when it serves it, or a
+ *      brokered git push, which the hook already reported as the harness's
+ *      shell call.
+ *   3. `tool_status === "ok"`. A denial never reaches PostToolUse. It seals a
+ *      `policy_decision` (PermissionDenied, a Tacho deny) or `token_denied`,
+ *      so denials stay free by construction. A frame reporting `rejected` or
+ *      `cancelled` is a person or the harness stopping the call, and `error`
+ *      is a call that failed. None of them bill, which is the rule the kernel
+ *      applies to a handler that throws and the agent runtime applies to an
+ *      external MCP call that fails: an action bills when it completes.
+ *   4. Not a call to Oxagen's own MCP server. That call runs `invoke()`,
+ *      and the kernel already bills it as a governed action. Billing its hook
+ *      frame too would charge one action twice.
+ *
+ * What guarantees one unit per call, rather than one per frame, is the
+ * ledger key ({@link tachoToolCallEntries}), not this predicate. A second
+ * hook frame for a call (a repeat the recorder stamps because it brings a
+ * body) carries the same `tool_use_id`, and the ledger bills a key once.
+ */
+export function isBillableToolCall(event: TachoEvent): boolean {
+  if (event.kind !== "tool_call" || event.source !== "hook") return false;
+  const body = event.body as Body;
+  if (body["tool_status"] !== "ok") return false;
+  return body["mcp_server_name"] !== OXAGEN_MCP_SERVER;
+}
+
+/** Who a session's tool calls are attributed to on the ledger. */
+export interface ToolCallAttribution {
+  /** claude-code, codex, cursor or stella, as the session row recorded it. */
+  harness: string | null;
+  /** The registered agent's public id (`agt_…`), or the host's agent key. */
+  agentId: string | null;
+  /** The agent principal the host enrolled as, when it enrolled as one. */
+  principalId: string | null;
+  principalKind: string | null;
+  /** The session's initiating human principal. */
+  operatorUserId: string | null;
+  /** The run the Run page shows: the root session's public id (`tse_…`). */
+  runId: string | null;
+}
+
+/**
+ * The ledger entries for a batch's billable tool calls (ADR-165): one per
+ * call, keyed `tacho:<session_uuid>:<tool_use_id>`.
+ *
+ * `tool_use_id` is unique within a session for every harness Tacho wraps
+ * (Stella's is numbered per invocation by the daemon), so the key names the
+ * call and not the frame that reported it. A re-sent batch builds the same
+ * keys, and the ledger bills a key once.
+ *
+ * A frame without a `tool_use_id` falls back to its `event_id_idem`, which
+ * the host assigns once and re-sends unchanged. Never a random value: a key
+ * that changed on a re-send would bill the same call again.
+ *
+ * `toolName` is never null because the ledger requires a subject on every
+ * row (`gau_ledger_subject_check`). A hook frame always carries one. The
+ * fallback names the MCP tool, then says the harness sent no name.
+ */
+export function tachoToolCallEntries(
+  events: readonly TachoEvent[],
+  attributionFor: (sessionUuid: string) => ToolCallAttribution | undefined,
+  args: { workspaceId: string; requestId: string | null; now: Date },
+): GovernedActionEntry[] {
+  const workspaceId = attributableWorkspaceId(args.workspaceId);
+  const entries: GovernedActionEntry[] = [];
+  for (const event of events) {
+    if (!isBillableToolCall(event)) continue;
+    const body = event.body as Body;
+    const toolUseId = str(body["tool_use_id"]);
+    const attribution = attributionFor(event.session_uuid);
+    const at = new Date(event.ts);
+    entries.push(
+      governedActionEntry({
+        idempotencyKey: ledgerKey(
+          "tacho",
+          event.session_uuid,
+          toolUseId ?? `event:${event.event_id_idem}`,
+        ),
+        source: "tacho",
+        units: 1,
+        occurredAt: isNaN(at.getTime()) ? args.now : at,
+        toolName:
+          str(body["tool_name"]) ??
+          str(body["mcp_tool_name"]) ??
+          "unnamed tool",
+        mcpServer: str(body["mcp_server_name"]),
+        surface: "tacho",
+        harness: attribution?.harness ?? str(event.agent.harness),
+        workspaceId,
+        agentId: attribution?.agentId ?? null,
+        principalId: attribution?.principalId ?? null,
+        principalKind: attribution?.principalKind ?? null,
+        operatorUserId: attribution?.operatorUserId ?? null,
+        runId: attribution?.runId ?? null,
+        sessionId: event.session_uuid,
+        toolCallId: toolUseId,
+        requestId: args.requestId,
+      }),
+    );
+  }
+  return entries;
 }
 
 /**
@@ -782,6 +957,22 @@ function genesisRow(
   };
 }
 
+/**
+ * What reopening an idle-closed session writes: exactly the columns the
+ * control plane's idle close set (`idleCloseColumns` in
+ * `@oxagen/inngest-functions`), back to an open session's values.
+ */
+export const IDLE_CLOSE_UNDONE = {
+  sealedAt: null,
+  sealSource: null,
+  outcome: "running",
+  endedAt: null,
+  finalHash: null,
+  unobservedTail: false,
+  completenessGaps: [],
+  replayGrade: null,
+} as const;
+
 /** Terminal facts from an `agent_stop`, when the batch carries one. */
 function terminalPatch(
   events: TachoEvent[],
@@ -796,6 +987,8 @@ function terminalPatch(
   const patch: Record<string, unknown> = {
     endedAt: new Date(stop.ts),
     sealedAt: now,
+    // The host's own end: final, unlike the control plane's idle close.
+    sealSource: "agent_stop" satisfies TachoSealSource,
     finalHash: stop.hash,
     outcome:
       outcome === "completed" || outcome === "aborted" || outcome === "crashed"
@@ -1065,8 +1258,24 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
     // that finds its frames missing from ClickHouse is the retry of an append
     // that failed, and the seal dispatch that attempt never sent is sent now.
     const sealedRoots = new Map<string, string>();
+    // The root session of each chain this batch landed model or tool frames
+    // on, by root session uuid. A subagent's frames are its root's cost, so
+    // the root is what is rolled up. Resolved to open roots after the loop.
+    const progressedRootUuids = new Set<string>();
+    // Every root the batch's chains belong to, and the ones a subagent's
+    // fresh frames reported for: those are open again if the control plane
+    // closed them for silence.
+    const batchRootUuids = new Set<string>();
+    const subagentReportedRootUuids = new Set<string>();
     // The batch's fresh `proof.observed` frames, by the root session they belong to.
     const proofsByRoot = new Map<string, TachoEvent[]>();
+    // Who each session's tool calls are billed to, read off the rows this
+    // transaction wrote. The ledger entries are built after the commit, from
+    // every event in the batch (see the billing step below).
+    const attribution = new Map<string, ToolCallAttribution>();
+    // The rows name the root session by uuid; the run a person opens is the
+    // root's public id. Collected here, resolved once after the loop.
+    const rootUuids = new Map<string, string>();
     let newSessions = 0;
     // The first root session this batch opened: the run the onboarding gate
     // records when this is the organization's first frame (#2967).
@@ -1107,6 +1316,7 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
     for (const [sessionUuid, events] of bySession) {
       events.sort((a, b) => a.seq - b.seq);
       const first = events[0] as TachoEvent;
+      batchRootUuids.add(first.root_session_uuid);
       const last = events[events.length - 1] as TachoEvent;
       const existing = await tx.query.tachoSessions.findFirst({
         where: eq(schema.tachoSessions.sessionUuid, sessionUuid),
@@ -1123,6 +1333,9 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
           toolBodyFrames: true,
           enforcementTier: true,
           sealedAt: true,
+          // Whether that seal is the host's or the control plane's idle
+          // close, which the next event overrules.
+          sealSource: true,
           // What the chain proved it was when it opened. The gateway states
           // the same hash on every call, and a tier rises only when the two
           // agree (#3221).
@@ -1264,12 +1477,22 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
       const gatewayEvidenceAt =
         chainRecord?.at ??
         (firstObserved !== undefined ? new Date(firstObserved.ts) : null);
-      const effectiveTier = promotedTier(existing, derivedTier);
+      // The control plane's idle close (`tacho.session-idle-close`) is an
+      // inference from silence, not the host's word, so it is not final: this
+      // batch's `agent_stop` replaces it with the host's own seal, and any
+      // other new frame reopens the session. Nothing was signed on the
+      // strength of the close that a later seal could contradict, so the tier
+      // may still rise under it.
+      const idleClosed =
+        !!existing?.sealedAt && existing.sealSource === "idle_timeout";
+      const openExisting =
+        existing && idleClosed ? { ...existing, sealedAt: null } : existing;
+      const effectiveTier = promotedTier(openExisting, derivedTier);
       const promoteToGateway =
         existing !== undefined && effectiveTier !== existing.enforcementTier;
       // The grade is computed once, at seal: a sealed session is never
       // sealed again, whatever a later batch carries.
-      const terminal = existing?.sealedAt ? {} : terminalPatch(fresh, now);
+      const terminal = openExisting?.sealedAt ? {} : terminalPatch(fresh, now);
       const { totalCostMicrosAuthoritative, ...terminalColumns } =
         terminal as Record<string, unknown> & {
           totalCostMicrosAuthoritative?: number;
@@ -1297,7 +1520,15 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
         terminalColumns["completenessGaps"] = seal.completenessGaps;
         terminalColumns["replayGrade"] = seal.replayGrade;
       }
+      // New frames on an idle-closed session with no stop among them: the
+      // session was not over. Undo exactly what the close wrote
+      // (`idleCloseColumns` in @oxagen/inngest-functions).
+      const reopen =
+        idleClosed && fresh.length > 0 && terminal["sealedAt"] === undefined
+          ? IDLE_CLOSE_UNDONE
+          : {};
       const tail = fresh.at(-1);
+      const latest = lastRecordedContext(fresh);
       const increments = {
         numTurns: sql`${schema.tachoSessions.numTurns} + ${delta.numTurns}`,
         numPrompts: sql`${schema.tachoSessions.numPrompts} + ${delta.numPrompts}`,
@@ -1359,9 +1590,30 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
         ...(tail
           ? {
               lastHash: tail.hash,
-              modelFinal: tail.context?.model ?? null,
-              permissionModeFinal: tail.context?.permission_mode ?? null,
-              gitHeadShaEnd: tail.context?.git_head_sha ?? null,
+              // Each fact moves only when the batch recorded one. Writing the
+              // tail frame's value unconditionally cleared the model and the
+              // permission mode whenever a batch ended on a frame with no
+              // context, and the Run header then read them as not recorded.
+              ...(latest.model === null ? {} : { modelFinal: latest.model }),
+              ...(latest.permissionMode === null
+                ? {}
+                : { permissionModeFinal: latest.permissionMode }),
+              ...(latest.gitHeadSha === null
+                ? {}
+                : { gitHeadShaEnd: latest.gitHeadSha }),
+              // The genesis row takes effort and the first permission mode
+              // from its own frame. A session whose genesis carried neither
+              // gets them from the first batch that does.
+              ...(latest.effort === null
+                ? {}
+                : {
+                    effort: sql`COALESCE(${schema.tachoSessions.effort}, ${latest.effort})`,
+                  }),
+              ...(latest.permissionMode === null
+                ? {}
+                : {
+                    permissionModeInitial: sql`COALESCE(${schema.tachoSessions.permissionModeInitial}, ${latest.permissionMode})`,
+                  }),
             }
           : {}),
         // The rise to `gateway`, on every batch rather than only the one that
@@ -1404,6 +1656,7 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
           ? { costBasis: TACHO_METERING_OBSERVED }
           : {}),
         updatedAt: now,
+        ...reopen,
         ...terminalColumns,
         ...increments,
       };
@@ -1466,6 +1719,14 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
                 schema.tachoSessions.enforcementTier,
                 existing.enforcementTier,
               ),
+              // The idle close moves the seal without moving the head. A close
+              // that committed after this batch's read would otherwise take
+              // these frames without the reopen they owe it, and leave a
+              // session that is plainly running reading as closed. Refused,
+              // the batch is re-sent and its next read reopens the session.
+              ...(existing.sealedAt
+                ? []
+                : [isNull(schema.tachoSessions.sealedAt)]),
             ),
           )
           .returning({ id: schema.tachoSessions.id });
@@ -1568,9 +1829,31 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
 
       const sessionRow = await tx.query.tachoSessions.findFirst({
         where: eq(schema.tachoSessions.sessionUuid, sessionUuid),
-        columns: { id: true, publicId: true, parentSessionUuid: true },
+        columns: {
+          id: true,
+          publicId: true,
+          parentSessionUuid: true,
+          rootSessionUuid: true,
+          harness: true,
+          initiatingPrincipalId: true,
+        },
       });
       const sessionId = sessionRow?.id;
+      if (sessionRow) {
+        attribution.set(sessionUuid, {
+          harness: sessionRow.harness ?? null,
+          agentId: null,
+          principalId: host.agentPrincipalId ?? null,
+          principalKind: host.agentPrincipalId ? "agent" : null,
+          operatorUserId: sessionRow.initiatingPrincipalId ?? null,
+          runId:
+            sessionRow.parentSessionUuid == null
+              ? (sessionRow.publicId ?? null)
+              : null,
+        });
+        if (sessionRow.parentSessionUuid != null && sessionRow.rootSessionUuid)
+          rootUuids.set(sessionUuid, sessionRow.rootSessionUuid);
+      }
       // `inserted`, not `accepted && !existing`: a conflict that took the update
       // path is accepted and still did not open the session, and `!existing` is
       // the read that preceded the statement.
@@ -1599,6 +1882,7 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
           now,
           observedStatusColumn,
         );
+        await refreshHarnessTitle(tx, sessionId, fresh);
       }
       if (accepted) {
         for (const event of fresh) {
@@ -1610,6 +1894,17 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
         }
         if (delta.totalCostMicros > 0)
           spendDeltas.push({ micros: delta.totalCostMicros, at: now });
+        // A reopen asks too, whatever the batch carried: the run's row was
+        // rebuilt at the close and reads final until it is rebuilt open.
+        if (
+          delta.numModelCalls > 0 ||
+          delta.numToolCalls > 0 ||
+          delta.totalCostMicros > 0 ||
+          "sealedAt" in reopen
+        )
+          progressedRootUuids.add(first.root_session_uuid);
+        if (fresh.length > 0 && first.root_session_uuid !== sessionUuid)
+          subagentReportedRootUuids.add(first.root_session_uuid);
       }
       if (
         accepted &&
@@ -1661,6 +1956,55 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
       rollupRoots.push(...proofs.witnessRunIds);
     }
 
+    // A run is one piece of work across its chains. When a subagent reports,
+    // a root the control plane closed for silence was not done, so it is
+    // reopened too, conditional on the close still standing.
+    for (const rootSessionUuid of subagentReportedRootUuids) {
+      const reopened = await tx
+        .update(schema.tachoSessions)
+        .set({ ...IDLE_CLOSE_UNDONE, updatedAt: now })
+        .where(
+          and(
+            eq(schema.tachoSessions.orgId, ctx.orgId),
+            eq(schema.tachoSessions.workspaceId, ctx.workspaceId),
+            eq(schema.tachoSessions.sessionUuid, rootSessionUuid),
+            isNull(schema.tachoSessions.parentSessionUuid),
+            eq(
+              schema.tachoSessions.sealSource,
+              "idle_timeout" satisfies TachoSealSource,
+            ),
+          ),
+        )
+        .returning({ id: schema.tachoSessions.id });
+      if (reopened.length > 0) progressedRootUuids.add(rootSessionUuid);
+    }
+
+    // The public id of every root the batch touched. An open root's row is
+    // its running estimate. A root this batch sealed is left to
+    // `cost/run.sealed`. A root sealed earlier is rolled up again too: a
+    // subagent's chain, or a harness that carried on after the daemon's sweep
+    // sealed it, can land frames after the seal's rollup, and nothing else
+    // would ever count them. One read per root, like the proof loop above: a
+    // batch names one or two.
+    const rootIds = new Map<string, string>();
+    for (const rootSessionUuid of batchRootUuids) {
+      const root = await tx.query.tachoSessions.findFirst({
+        where: and(
+          eq(schema.tachoSessions.orgId, ctx.orgId),
+          eq(schema.tachoSessions.workspaceId, ctx.workspaceId),
+          eq(schema.tachoSessions.sessionUuid, rootSessionUuid),
+          isNull(schema.tachoSessions.parentSessionUuid),
+        ),
+        columns: { publicId: true },
+      });
+      if (root) rootIds.set(rootSessionUuid, root.publicId);
+    }
+    const sealedThisBatch = new Set(rollupRoots);
+    const progressRoots = [...progressedRootUuids].flatMap((uuid) => {
+      const runId = rootIds.get(uuid);
+      return runId === undefined || sealedThisBatch.has(runId) ? [] : [runId];
+    });
+
     if (newSessions > 0) {
       await tx
         .update(schema.tachoHosts)
@@ -1691,12 +2035,47 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
         );
       }
     }
+    // The ledger attribution the loop could not finish from one row: the run a
+    // subagent session belongs to is its root's, and the agent is named by its
+    // registry public id when the host enrolled as a registered agent, so a
+    // tool call Tacho recorded and an action the kernel recorded for the same
+    // agent group together. Read only when the batch has something to bill.
+    if (input.events.some(isBillableToolCall)) {
+      const rootRuns = new Map<string, string | null>();
+      for (const root of new Set(rootUuids.values())) {
+        const row = await tx.query.tachoSessions.findFirst({
+          where: and(
+            eq(schema.tachoSessions.sessionUuid, root),
+            isNull(schema.tachoSessions.parentSessionUuid),
+          ),
+          columns: { publicId: true },
+        });
+        rootRuns.set(root, row?.publicId ?? null);
+      }
+      const agent = host.agentId
+        ? await tx.query.agents.findFirst({
+            where: eq(schema.agents.id, host.agentId),
+            columns: { publicId: true },
+          })
+        : undefined;
+      const agentId = agent?.publicId ?? host.agentKey;
+      for (const [sessionUuid, entry] of attribution) {
+        const root = rootUuids.get(sessionUuid);
+        attribution.set(sessionUuid, {
+          ...entry,
+          agentId,
+          runId:
+            root === undefined ? entry.runId : (rootRuns.get(root) ?? null),
+        });
+      }
+    }
     const seen = await touchHost(tx as never, host, input.daemon, now, true);
     // The control envelope is NOT built here. Building it drains the host's
     // queued commands and marks them `sent`, and this transaction commits
     // before the ClickHouse append below. An append that failed after the
     // commit answered the host a 500 or a 503: the commands never reached it,
-    // and a `sent` row is never selected again, so they were lost.
+    // and a `sent` row is offered again only once its redelivery lease runs
+    // out (`drainCommands`).
     return {
       chainBreaks,
       verified,
@@ -1704,7 +2083,10 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
       seen,
       spendDeltas,
       rollupRoots,
+      attribution,
       sealedRoots,
+      progressRoots,
+      rootIds,
     };
   });
 
@@ -1814,11 +2196,102 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
     }
   }
 
-  // Built only now that the frames are in ClickHouse: draining the queue
-  // marks the host's commands `sent`, and a response that does not reach the
-  // host must not have done that (see above). A failure here fails the
-  // request, the host re-sends the batch, which then lands as already
-  // recorded, and the commands are still queued for that response.
+  // A run's cost is rolled up as it goes, and reads as an estimate until it
+  // seals (#3980). Sent after the append for the reason the seal event is,
+  // and debounced per run by `cost.run-progress`, so one event per batch is
+  // what the sender owes. Best-effort like the seal: a run whose event is lost
+  // is rolled up by its next batch, or at its seal. Sent before billing: a
+  // billing failure fails the request, and the re-sent batch folds no new
+  // frames, so an event owed by this attempt would otherwise never go out.
+  // A second event for the same run is harmless; the job is debounced.
+  //
+  // A re-send that wrote model or tool frames ClickHouse was missing is the
+  // retry of an append that failed, and that attempt sent no progress event.
+  // Its fold saw the frames as already recorded, so the delta was empty.
+  const progressRoots = new Set(result.progressRoots);
+  for (const event of input.events) {
+    if (event.kind !== "llm_call" && event.kind !== "tool_call") continue;
+    if (!resent.missing.has(event.event_id_idem)) continue;
+    const runId = result.rootIds.get(event.root_session_uuid);
+    if (runId !== undefined && !rollupRoots.has(runId))
+      progressRoots.add(runId);
+  }
+  if (progressRoots.size > 0) {
+    try {
+      await eventClient.send(
+        [...progressRoots].map((runId) => ({
+          name: RUN_PROGRESSED_EVENT,
+          data: { runId, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+        })),
+      );
+    } catch (err) {
+      logger.warn(
+        { err, runIds: [...progressRoots] },
+        "tacho.events.ingest: cost/run.progressed dispatch failed; the next batch or the seal rolls the run up",
+      );
+    }
+  }
+
+  // Billing: one governed action unit per allowed tool call (ADR-165). Run
+  // after every write above, so a charge never lands for a frame the record
+  // does not hold, and before the control envelope, for the reason given
+  // there.
+  //
+  // Built from EVERY event in the batch, not only the fresh ones. `fresh` is
+  // what this batch added past the recorded head, and after a failure here
+  // the host re-sends a batch whose events are all below it. Billing only
+  // fresh events would bill that re-send nothing, and the calls would never
+  // be charged. The ledger key makes the whole batch safe to offer again: a
+  // key already on the ledger inserts nothing and debits nothing.
+  //
+  // A failure here fails the request, and that is the durable choice. The
+  // host's WAL cursor moves only on a 2xx, so it keeps the batch and ships it
+  // again after its backoff. Everything this handler wrote is safe to write
+  // twice: the session counters fold only frames past the recorded head, the
+  // ClickHouse append keeps the newest row per seq, a body is stored by its
+  // digest, the spend counter and the seal event were handled on the first
+  // attempt, and the ledger dedups the charge. The one write that was not
+  // safe, the control commands marked `sent`, now happens after this step.
+  // Accepting the batch and logging instead would lose the charge for good
+  // whenever the billing store blinked.
+  //
+  // The recording is never refused for a lack of units. `recordGovernedActions`
+  // debits whatever the bucket holds, and an exhausted prepaid organisation is
+  // refused at its next server-side action by the admission gate, not here.
+  const billable = tachoToolCallEntries(
+    input.events,
+    (sessionUuid) => result.attribution.get(sessionUuid),
+    { workspaceId: ctx.workspaceId, requestId: ctx.requestId ?? null, now },
+  );
+  if (billable.length > 0) {
+    try {
+      await recordGovernedActions({
+        orgId: ctx.orgId,
+        entries: billable,
+        label: "tacho:tool_calls",
+      });
+    } catch (err) {
+      logger.error(
+        {
+          err,
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId,
+          toolCalls: billable.length,
+          alert: "tacho_tool_call_billing_failed",
+        },
+        "tacho.events.ingest: tool-call billing failed; the batch is refused so the host re-sends it, and the ledger bills each call once",
+      );
+      throw err;
+    }
+  }
+
+  // The control envelope last, in its own transaction. Draining marks the
+  // host's queued commands `sent`, and a `sent` row is offered again only once
+  // its redelivery lease runs out (`drainCommands`). Drained inside the ingest
+  // transaction, a failure after the commit (the ClickHouse append, the
+  // billing step) left commands marked `sent` in a response the host never
+  // received: a pause or a steer held back for that lease. Drained here, any
+  // earlier failure leaves them queued, and the re-sent batch delivers them.
   const control = await withTenantDb((tx) =>
     controlEnvelope(tx as never, ctx, result.seen, new Date()),
   );
@@ -2168,6 +2641,33 @@ async function refreshSessionTitle(
     .update(schema.tachoSessions)
     .set({ title, updatedAt: now })
     .where(eq(schema.tachoSessions.id, sessionId));
+}
+
+/**
+ * Store the latest title the harness gave the session (`harness-title.ts`).
+ * The update keeps a stored title whose frame is newer, so a batch that
+ * arrives late cannot bring back an older name. It leaves `updated_at` alone:
+ * the title is not input to the run's generated account.
+ */
+async function refreshHarnessTitle(
+  tx: Tx,
+  sessionId: string,
+  events: TachoEvent[],
+): Promise<void> {
+  const latest = latestHarnessTitle(events);
+  if (latest === null) return;
+  await tx
+    .update(schema.tachoSessions)
+    .set({ harnessTitle: latest.title, harnessTitleAt: latest.at })
+    .where(
+      and(
+        eq(schema.tachoSessions.id, sessionId),
+        or(
+          isNull(schema.tachoSessions.harnessTitleAt),
+          lte(schema.tachoSessions.harnessTitleAt, latest.at),
+        ),
+      ),
+    );
 }
 
 async function rollupCommands(

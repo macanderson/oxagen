@@ -43,6 +43,8 @@
         "GITHUB_LOGIN_CLIENT_ID",
         "GITHUB_LOGIN_CLIENT_SECRET",
         "AUTH_TOKEN_ENCRYPTION_KEY",
+        "SSO_SECRET_KEY_ID",
+        "SSO_SECRET_PREVIOUS_KEYS",
         // Stripe billing + usage meter
         "STRIPE_SECRET_KEY",
         "STRIPE_PUBLISHABLE_KEY",

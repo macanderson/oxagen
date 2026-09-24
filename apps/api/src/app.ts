@@ -29,6 +29,9 @@ import { billingAutoTopupSetRoute } from "./routes/v1/billing.auto_topup.set";
 import { billingContractRateGetRoute } from "./routes/v1/billing.contract_rate.get";
 import { billingGauBucketGetRoute } from "./routes/v1/billing.gau_bucket.get";
 import { billingInvoiceListRoute } from "./routes/v1/billing.invoice.list";
+import { billingPrepaidOrderListRoute } from "./routes/v1/billing.prepaid_order.list";
+import { billingStatementGetRoute } from "./routes/v1/billing.statement.get";
+import { billingStatementExportRoute } from "./routes/v1/billing.statement.export";
 import { billingSubscriptionReadRoute } from "./routes/v1/billing.subscription.read";
 import { billingUsageBreakdownRoute } from "./routes/v1/billing.usage.breakdown";
 import { billingSubscriptionUpgradeStartRoute } from "./routes/v1/billing.subscription_upgrade.start";
@@ -235,6 +238,7 @@ import {
   githubOauthCallbackRoute,
 } from "./routes/v1/github-oauth";
 import { githubAppWebhookRoute } from "./routes/v1/github-webhook";
+import { gitlabWebhookRoute } from "./routes/v1/gitlab-webhook";
 import { graphNodeGetRoute } from "./routes/v1/graph.node.get";
 import { graphNodeSearchRoute } from "./routes/v1/graph.node.search";
 import { graphSearchRoute } from "./routes/v1/graph.search";
@@ -252,6 +256,7 @@ import { ontologyNeighborsRoute } from "./routes/v1/ontology.neighbors";
 import { auditLogQueryRoute } from "./routes/v1/audit.log.query";
 import { auditEventsExportRoute } from "./routes/v1/audit.events.export";
 import { authCliTokenRoute } from "./routes/v1/auth.cli.token";
+import { scimRoute } from "./routes/scim";
 import { telemetryUsageRoute } from "./routes/v1/telemetry.usage";
 import { telemetryStellaEnrollRoute } from "./routes/v1/telemetry.stella.enroll";
 import { telemetryStellaIngestRoute } from "./routes/v1/telemetry.stella.ingest";
@@ -282,6 +287,7 @@ import { contextGovernanceModeSetRoute } from "./routes/v1/context.governance_mo
 import { repositoryInstallationListRoute } from "./routes/v1/repository.installation.list";
 import { repositoryInstallationCandidatesRoute } from "./routes/v1/repository.installation.candidates";
 import { repositoryInstallationAttachRoute } from "./routes/v1/repository.installation.attach";
+import { repositoryGitlabAttachRoute } from "./routes/v1/repository.gitlab.attach";
 import { tachoHostListRoute } from "./routes/v1/tacho.host.list";
 import { tachoSessionPolicyReadRoute } from "./routes/v1/tacho.session_policy.read";
 import { tachoSessionPolicyWriteRoute } from "./routes/v1/tacho.session_policy.write";
@@ -366,11 +372,32 @@ app.route("/webhooks/stripe", stripeWebhook);
 // installation id. Mounted BEFORE the generic /webhooks route so "/webhooks/github/app"
 // is not captured as connectorId=github, connectionId=app.
 app.route("/webhooks/github/app", githubAppWebhookRoute);
+// GitLab project webhooks (#3762): one hook per connected project, authenticated
+// by its secret token. Mounted BEFORE the generic /webhooks route for the same reason.
+app.route("/webhooks/gitlab", gitlabWebhookRoute);
 // Connector webhooks: unauthenticated — HMAC validation is the security boundary.
 app.route("/webhooks", webhookRoute);
 // Inngest cloud polls /api/inngest for the function manifest; signing-key
 // verification is enforced inside the inngest/hono serve handler.
 app.route("/api/inngest", inngestRoute);
+
+// SCIM 2.0 provisioning (#3734). An identity provider holds no session and no
+// API key: the organization's SCIM bearer token is the boundary, resolved
+// inside the route, so it is mounted before the auth-gated /v1 groups. The
+// app proxies https://app.oxagen.sh/api/scim/v2/* here. The ceiling keys on
+// the Authorization header, so one token cannot drown another organization's
+// provisioning; Okta and Entra ID push well under 600 requests a minute.
+app.use(
+  "/api/scim/v2/*",
+  distributedRateLimiter({
+    keyPrefix: "scim-preauth-credential",
+    max: 600,
+    bucketKey: authorizationFingerprintBucketKey,
+    methods: "all",
+    storeErrorPolicy: "degrade-to-local",
+  }),
+);
+app.route("/api/scim/v2", scimRoute);
 
 // Public CLI token exchange — no auth middleware (the code + PKCE verifier are
 // the security boundary; RFC 8252 + RFC 7636 S256). Must be mounted BEFORE the
@@ -706,6 +733,9 @@ orgScoped.route(
   "/repository/installation/attach",
   repositoryInstallationAttachRoute,
 );
+// A gitlab.com project connects with a project access token instead of an App
+// installation (attach_gitlab_project, #3762).
+orgScoped.route("/repository/gitlab/attach", repositoryGitlabAttachRoute);
 // Run controls (dispatch_command, list_commands): addressed to runs, agents
 // and the workspace rather than to a host, so they sit beside /runs.
 orgScoped.route("/commands", tachoCommandDispatchRoute);
@@ -778,6 +808,11 @@ orgScoped.route("/cost/price-entries/remove", costPriceEntryRemoveRoute);
 orgScoped.route("/cost/unpriced-models", costUnpricedModelListRoute);
 orgScoped.route("/billing/gau-bucket", billingGauBucketGetRoute);
 orgScoped.route("/billing/invoices", billingInvoiceListRoute);
+// ADR-165: the prepaid orders an enterprise paid for in advance.
+orgScoped.route("/billing/prepaid-orders", billingPrepaidOrderListRoute);
+// ADR-165: the billing statement for a period, as data and as a file.
+orgScoped.route("/billing/statement", billingStatementGetRoute);
+orgScoped.route("/billing/statement/export", billingStatementExportRoute);
 orgScoped.route("/billing/auto-topup", billingAutoTopupSetRoute);
 orgScoped.route("/billing/subscription", billingSubscriptionReadRoute);
 orgScoped.route("/billing/contract-rate", billingContractRateGetRoute);

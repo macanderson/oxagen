@@ -16,8 +16,8 @@
   },
   "dependencies": {
     "@oxagen/config": "workspace:*",
-    "@vercel/blob": "2.4.0",
-    "pino": "9.14.0"
+    "@vercel/blob": "2.8.0",
+    "pino": "10.3.1"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "2.1.9",

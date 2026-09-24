@@ -45,7 +45,7 @@ export const toolsSearch = registerCapability({
     "Rank-search the capabilities the in-app agent may call and the workspace's runs, agents and pending approvals from one index; at most eight rows with ids the caller navigates from.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   mutates: false,
   noBillingGate: true,

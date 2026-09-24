@@ -23,6 +23,7 @@ const scope = { orgId: "org", workspaceId: "workspace" };
 function setup(moving = false) {
   let reads = 0;
   const client = {
+    getRepoInfo: vi.fn().mockResolvedValue({ defaultBranch: "main" }),
     listPullRequests: vi
       .fn()
       .mockResolvedValue([{ number: 2, htmlUrl: `${repo.url}/pull/2` }]),
@@ -36,6 +37,19 @@ function setup(moving = false) {
       headRef: "fix/work",
       changedFiles: 1,
     })),
+    listClosingIssues: vi.fn().mockResolvedValue({
+      issues: [
+        {
+          owner: "acme",
+          repo: "repo",
+          number: 7,
+          title: "Checkout fails on retry",
+          url: "https://github.com/acme/repo/issues/7",
+          state: "open",
+        },
+      ],
+      complete: true,
+    }),
     listCiChecks: vi.fn().mockResolvedValue({
       sha: "head",
       complete: true,
@@ -124,5 +138,54 @@ describe("run pull request evidence", () => {
       ci: { complete: false },
       diff: { complete: false, limitations: ["patch_not_available"] },
     });
+  });
+
+  it("links no PR to a checkout on the default branch or a detached HEAD", async () => {
+    for (const branch of ["main", "HEAD"]) {
+      const { deps, client } = setup();
+      const output = await readWorkPullRequests(
+        scope,
+        [{ ...checkout, branch }],
+        [repo],
+        deps,
+      );
+      expect(client.listPullRequests).not.toHaveBeenCalled();
+      expect(output.pullRequests).toEqual([]);
+      expect(output.warnings).toContain("default_branch_not_linked");
+    }
+  });
+  // Issue #4024: a run's task comes from what its PR closes, as GitHub
+  // records it, never from the branch name.
+  it("carries the issues a pull request closes, from GitHub's own record", async () => {
+    const { deps, client } = setup();
+    const output = await readWorkPullRequests(scope, [checkout], [repo], deps);
+    expect(client.listClosingIssues).toHaveBeenCalledWith({
+      owner: "acme",
+      repo: "repo",
+      number: 2,
+    });
+    expect(output.pullRequests[0]?.closingIssues).toEqual({
+      issues: [
+        {
+          owner: "acme",
+          repo: "repo",
+          number: 7,
+          title: "Checkout fails on retry",
+          url: "https://github.com/acme/repo/issues/7",
+          state: "open",
+        },
+      ],
+      complete: true,
+    });
+    expect(output.warnings).not.toContain("closing_issues_read_failed");
+  });
+  it("reports an unread closing-issue list as unread, not as closing nothing", async () => {
+    const { deps, client } = setup();
+    client.listClosingIssues.mockRejectedValue(new Error("graphql refused"));
+    const output = await readWorkPullRequests(scope, [checkout], [repo], deps);
+    expect(output.pullRequests[0]?.closingIssues).toBeNull();
+    expect(output.pullRequests[0]?.ci).not.toBeNull();
+    expect(output.warnings).toContain("closing_issues_read_failed");
+    expect(output.complete).toBe(false);
   });
 });

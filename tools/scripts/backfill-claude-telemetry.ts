@@ -20,6 +20,8 @@ import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { resolveRate } from "@oxagen/billing/pricing";
+
 // ── JSONL entry interfaces ────────────────────────────────────────────────────
 
 interface UsageObject {
@@ -113,66 +115,10 @@ function toUserMessage(v: unknown): UserMessage | null {
   return v as unknown as UserMessage;
 }
 
-// ── Pricing — published Anthropic rates (USD per million tokens) ──────────────
-
-interface ModelRates {
-  inputPerMtok: number;
-  outputPerMtok: number;
-  cacheWritePerMtok: number;
-  cacheReadPerMtok: number;
-}
-
-// Verified against https://www.anthropic.com/pricing (2026-06-15)
-const MODEL_RATES: Record<string, ModelRates> = {
-  "claude-fable-5": {
-    inputPerMtok: 15.0,
-    outputPerMtok: 75.0,
-    cacheWritePerMtok: 18.75,
-    cacheReadPerMtok: 1.5,
-  },
-  "claude-opus-4-8": {
-    inputPerMtok: 15.0,
-    outputPerMtok: 75.0,
-    cacheWritePerMtok: 18.75,
-    cacheReadPerMtok: 1.5,
-  },
-  "claude-sonnet-5": {
-    inputPerMtok: 3.0,
-    outputPerMtok: 15.0,
-    cacheWritePerMtok: 3.75,
-    cacheReadPerMtok: 0.3,
-  },
-  "claude-sonnet-4-6": {
-    inputPerMtok: 3.0,
-    outputPerMtok: 15.0,
-    cacheWritePerMtok: 3.75,
-    cacheReadPerMtok: 0.3,
-  },
-  "claude-haiku-4-5-20251001": {
-    inputPerMtok: 0.8,
-    outputPerMtok: 4.0,
-    cacheWritePerMtok: 1.0,
-    cacheReadPerMtok: 0.08,
-  },
-};
-
-// Sonnet-tier fallback for unknown models
-const FALLBACK_RATES: ModelRates = {
-  inputPerMtok: 3.0,
-  outputPerMtok: 15.0,
-  cacheWritePerMtok: 3.75,
-  cacheReadPerMtok: 0.3,
-};
-
-function resolveRates(model: string): ModelRates {
-  const direct = MODEL_RATES[model];
-  if (direct !== undefined) return direct;
-  // Prefix match (e.g. "claude-opus-4-8-20251001" → opus rates)
-  for (const [prefix, rates] of Object.entries(MODEL_RATES)) {
-    if (model.startsWith(prefix)) return rates;
-  }
-  return FALLBACK_RATES;
-}
+// ── Pricing ───────────────────────────────────────────────────────────────────
+// Rates come from the billing rate card (packages/billing/src/pricing.ts), so a
+// backfilled session costs what billing would charge for it. A 1-hour cache
+// write bills at 2x base input, per Anthropic's pricing page.
 
 function computeCostMicros(
   model: string,
@@ -183,14 +129,14 @@ function computeCostMicros(
   cacheRead: number,
 ): number {
   if (model === "<synthetic>" || model === "") return 0;
-  const r = resolveRates(model);
+  const r = resolveRate(model);
   const M = 1_000_000;
   return Math.round(
-    (tokensIn / M) * r.inputPerMtok * 1_000_000 +
-      (tokensOut / M) * r.outputPerMtok * 1_000_000 +
-      (cacheWrite5m / M) * r.cacheWritePerMtok * 1_000_000 +
-      (cacheWrite1h / M) * r.cacheWritePerMtok * 2 * 1_000_000 +
-      (cacheRead / M) * r.cacheReadPerMtok * 1_000_000,
+    (tokensIn / M) * r.inputPer1M * 1_000_000 +
+      (tokensOut / M) * r.outputPer1M * 1_000_000 +
+      (cacheWrite5m / M) * r.cacheWritePer1M * 1_000_000 +
+      (cacheWrite1h / M) * r.inputPer1M * 2 * 1_000_000 +
+      (cacheRead / M) * r.cachedInputPer1M * 1_000_000,
   );
 }
 

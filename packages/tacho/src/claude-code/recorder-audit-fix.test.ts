@@ -7,7 +7,6 @@
  */
 import { describe, expect, it } from "vitest";
 import { verifyChain } from "../chain";
-import { digestBytes } from "../digest";
 import type { TachoEvent } from "../envelope";
 import type { ClaudeCodeContext } from "./context";
 import { TURN_END_REASON_ATTR } from "./hooks";
@@ -364,29 +363,40 @@ describe("the session's title", () => {
     JSON.stringify({ type, [member]: text, sessionId: ID });
 
   it("reads a rename as the title", () => {
-    expect(
-      normalizeTranscriptLine(title("custom-title", "customTitle", "Mine"), at)
-        .title,
-    ).toEqual({ text: "Mine", source: "custom-title" });
+    const normalized = normalizeTranscriptLine(
+      title("custom-title", "customTitle", "Mine"),
+      at,
+    );
+    expect(normalized.title).toEqual({ text: "Mine", source: "custom-title" });
+    expect(normalized.drafts).toHaveLength(1);
+    expect(normalized.drafts[0]).toMatchObject({
+      kind: "oxagen:session_title",
+      body: { session_title: "Mine" },
+      hook_source_kind: "custom-title",
+    });
   });
 
-  it("seals each change, the text as content, and lets a rename outrank the generated one", () => {
+  it("seals each change and lets a rename outrank the generated one", () => {
     const chain = started();
     const sealed = (line: string) =>
-      ofKind(chain.ingestTranscriptLine(line), "oxagen:notification");
+      ofKind(chain.ingestTranscriptLine(line), "oxagen:session_title");
     const [first] = sealed(title("ai-title", "aiTitle", "Fix the build"));
-    expect(first?.body).toEqual({ notification_type: "session_title" });
+    expect(first?.body).toEqual({ session_title: "Fix the build" });
     expect(first?.hook_source_kind).toBe("ai-title");
-    expect(first?.content?.digest).toBe(digestBytes("Fix the build"));
     expect(sealed(title("ai-title", "aiTitle", "Fix the build"))).toEqual([]);
     expect(
       sealed(title("ai-title", "aiTitle", "Fix the CI build")),
     ).toHaveLength(1);
     const [rename] = sealed(title("custom-title", "customTitle", "Release"));
+    expect(rename?.body).toEqual({ session_title: "Release" });
     expect(rename?.hook_source_kind).toBe("custom-title");
     expect(sealed(title("ai-title", "aiTitle", "Something else"))).toEqual([]);
     expect(chain.totals.session_title).toBe("Release");
-    expect(JSON.stringify(chain.sealedEvents)).not.toContain("Release");
+    expect(
+      ofKind(chain.sealedEvents, "oxagen:session_title").map(
+        (event) => bodyOf(event)["session_title"],
+      ),
+    ).toEqual(["Fix the build", "Fix the CI build", "Release"]);
   });
 });
 

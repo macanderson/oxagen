@@ -6,7 +6,6 @@ import { TwoFactorForm } from "@/features/auth";
 import { readNext } from "@/shared/safe-path";
 import { AuthColumn, AuthFooter, AuthSkeleton } from "@/ui/auth-shell";
 import { linkText } from "@/ui/control-styles";
-import { PageHeader } from "@/ui/page-header";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("pages");
@@ -14,7 +13,8 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 // Public: after the password step the person holds only Better Auth's short-lived
-// two-factor cookie, not a session (src/proxy.ts PUBLIC_PATHS).
+// two-factor cookie, not a session (src/proxy.ts PUBLIC_PATHS). The proxy sends
+// a visitor holding neither to /login before this page renders.
 export default function TwoFactorPage(props: PageProps<"/two-factor">) {
   return (
     <Suspense fallback={<AuthSkeleton />}>
@@ -36,8 +36,11 @@ async function TwoFactor({
   ]);
   return (
     <AuthColumn>
-      <PageHeader eyebrow={t("twoFactor.eyebrow")} title={pages("twoFactor")} />
-      <TwoFactorForm next={next} />
+      <TwoFactorForm
+        next={next}
+        eyebrow={t("twoFactor.eyebrow")}
+        title={pages("twoFactor")}
+      />
       <AuthFooter>
         <Link href="/login" className={linkText}>
           {t("twoFactor.back")}
