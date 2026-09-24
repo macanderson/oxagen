@@ -362,6 +362,8 @@ Ask before allow is Claude Code's own precedence (deny, then ask, then allow). A
 
 The etag covers policy content only, so an unchanged mandate answers `not_modified` on every poll and the signed copy on disk keeps its first `expires_at`. The daemon counts each `not_modified` as a confirmation, but only in memory. Once the cached copy is past half its signed window, the daemon polls without the etag, and the control plane signs the unchanged mandate again with a new window. A restart, or the hook when the daemon is down, then reads a fresh bundle rather than one stale since the last policy edit.
 
+The host takes a same-etag copy only when its window starts later than the one it holds, so a window never moves back. A cached copy that does not verify is never confirmed by its etag, because an edit to `host.json` keeps the etag it was signed with. The daemon fetches it again without the etag and replaces it with the verified copy, whatever that copy's window.
+
 Tool calls to the Oxagen MCP endpoint (`mcp__oxagen__*`) are not evaluated here at all; the kernel evaluates them on the server, and those calls are what earn a session the `gateway` tier.
 
 ### 7.3 Elevation and tokens

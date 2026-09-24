@@ -565,9 +565,10 @@ async function initializeDaemon(
    *
    * A poll that answers `not_modified` is a confirmation: it says the etag in
    * force is still this one. Freshness has to be measured from here, because
-   * the etag covers policy content only, so an unchanged mandate is never
-   * re-sent and its signed `expires_at` cannot be renewed on the host. See
-   * `isStale` in host/bundle.ts.
+   * the etag covers policy content only, so an unchanged mandate is re-signed
+   * only once the cached copy is past half its window (`pollEtag`). Between
+   * re-signings its signed `expires_at` does not move. See `isStale` in
+   * host/bundle.ts.
    *
    * Undefined until the control plane confirms something in this process,
    * and deliberately not seeded from `bundle_fetched_at`. That field is
@@ -1074,8 +1075,13 @@ async function initializeDaemon(
     try {
       // Past half its signed window the poll sends no etag, so an unchanged
       // mandate comes back freshly signed and the copy on disk stays fresh
-      // across a restart and for the hook when this daemon is down.
-      const response = await client.bundle(pollEtag(host.bundle, now()));
+      // across a restart and for the hook when this daemon is down. A cached
+      // copy that did not verify sends none either: its etag would earn a
+      // `not_modified`, and the edited file would stand until the mandate
+      // next changed.
+      const response = await client.bundle(
+        bundleVerified ? pollEtag(host.bundle, now()) : undefined,
+      );
       lastControlAt = now();
       // `not_modified` is the confirmation freshness is measured from: it
       // says the etag in force is still the current one, which is the only
@@ -1156,8 +1162,12 @@ async function initializeDaemon(
       host_status: control.host_status,
       deny_generation: control.deny_generation,
     });
-    if (control.bundle_etag === host.bundle.etag) mandateConfirmedAt = now();
-    else await refreshBundle();
+    // A cached bundle that did not verify is never confirmed by its etag: an
+    // edited host.json keeps the etag it was signed with, so a match says
+    // nothing about the rest of the file. It is fetched again instead.
+    if (bundleVerified && control.bundle_etag === host.bundle.etag) {
+      mandateConfirmedAt = now();
+    } else await refreshBundle();
     if (control.commands.length > 0) {
       const result = await recordSealedAsync(
         () =>
