@@ -9080,6 +9080,7 @@ type Messages = {
         gitlabCredentialRejected: string;
         repositoryHostChanged: string;
         mergeTimeUnknown: string;
+        mergedOutsideOxagen: string;
         refused: string;
         invalid: string;
         pendingApproval: string;
