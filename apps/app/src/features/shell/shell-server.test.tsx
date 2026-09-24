@@ -6,14 +6,24 @@ import { isValidElement, type ReactElement, type ReactNode, use } from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import shellMessages from "../../../messages/shell.json";
-import { shellData } from "./shell.builders";
+import { approvalItem, shellData, shellWorkspace } from "./shell.builders";
 import type { ShellData } from "./shell-data";
 
-const { shellSource } = vi.hoisted(() => ({
-  shellSource: vi.fn(() => Promise.resolve(shellData())),
+const { shellSource, ApprovalCardAlone } = vi.hoisted(() => ({
+  shellSource: vi.fn(),
+  ApprovalCardAlone: vi.fn((_props: unknown) => null),
 }));
 vi.mock("./source", () => ({ shellSource }));
+// The card is the Fleet lane's; the chrome only renders it once per parked
+// call, alone, with no Fleet panel (heading, parked count, grid) around it.
+vi.mock("@/features/fleet", () => ({ ApprovalCardAlone }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
+// The page-name provider reads the client router and the intl catalogue,
+// neither of which a server render test mounts; route-page-name.test.tsx
+// covers it on its own.
+vi.mock("./route-page-name", () => ({
+  ShellRoutePageName: ({ children }: { children: ReactNode }) => children,
+}));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 
 vi.mock("next-intl/server", () => ({
@@ -41,8 +51,105 @@ afterEach(async () => {
   }
 });
 
+/** A DataSource whose every read is a bare mock; ShellChrome reads it only through shellSource. */
+function stubSource() {
+  return {
+    runtimes: { list: vi.fn(), agents: vi.fn() },
+    pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
+    shell: {
+      context: vi.fn(),
+      preferences: vi.fn(),
+      counts: vi.fn(),
+      notifications: vi.fn(),
+    },
+    billing: {
+      plan: vi.fn(),
+      usageCredits: vi.fn(),
+      retention: vi.fn(),
+      bucket: vi.fn(),
+      contractRate: vi.fn(),
+      invoices: vi.fn(),
+    },
+    runs: {
+      list: vi.fn(),
+      get: vi.fn(),
+      frameBody: vi.fn(),
+      cost: vi.fn(),
+      transcript: vi.fn(),
+      chain: vi.fn(),
+      outputs: vi.fn(),
+      work: vi.fn(),
+      outcomesSettings: vi.fn(),
+    },
+    approvals: {
+      pending: vi.fn(),
+      resolved: vi.fn(),
+      resolvedSince: vi.fn(),
+    },
+    agents: {
+      list: vi.fn(),
+      get: vi.fn(),
+      toolbelt: vi.fn(),
+      incidents: vi.fn(),
+    },
+    spend: {
+      byGroup: vi.fn(),
+      fleet: vi.fn(),
+      drill: vi.fn(),
+      waste: vi.fn(),
+      gatewayPolicy: vi.fn(),
+      budgets: vi.fn(),
+      findings: vi.fn(),
+      findingEvidence: vi.fn(),
+      priceBook: vi.fn(),
+      unpricedModels: vi.fn(),
+    },
+    onboarding: { state: vi.fn(), firstFrame: vi.fn() },
+    org: {
+      members: vi.fn(),
+      roles: vi.fn(),
+      workspaces: vi.fn(),
+      apiKeys: vi.fn(),
+      costCenters: vi.fn(),
+      modelCredential: vi.fn(),
+      sso: vi.fn(),
+    },
+    mandates: { list: vi.fn(), get: vi.fn() },
+    audit: {
+      events: vi.fn(),
+      exportEvents: vi.fn(),
+      retention: vi.fn(),
+      bundle: vi.fn(),
+    },
+    skills: { inventory: vi.fn(), configuration: vi.fn() },
+    steering: {
+      records: vi.fn(),
+      record: vi.fn(),
+      proposals: vi.fn(),
+      contextPr: vi.fn(),
+      freshness: vi.fn(),
+      hub: vi.fn(),
+      deliveries: vi.fn(),
+      memories: vi.fn(),
+      tree: vi.fn(),
+    },
+    tools: {
+      versions: vi.fn(),
+      grants: vi.fn(),
+      killSwitches: vi.fn(),
+      approvalRules: vi.fn(),
+      connections: vi.fn(),
+      mcpServers: vi.fn(),
+    },
+  };
+}
+
 describe("ShellChrome", () => {
   it("hands the client shell what the source read for the layout's context", async () => {
+    shellSource.mockResolvedValue({
+      data: shellData(),
+      cards: { mandates: new Map() },
+    });
     const { ShellChrome } = await import("./shell-chrome");
     const { OrgCtx } = await import("@/server/viewer");
     const { unsafeMint } = await import("@/server/viewer.testing");
@@ -53,88 +160,7 @@ describe("ShellChrome", () => {
       orgName: "Acme Robotics",
       orgRole: "owner",
     });
-    const source = {
-      runtimes: { list: vi.fn(), agents: vi.fn() },
-      pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
-      shell: { context: vi.fn(), preferences: vi.fn() },
-      billing: {
-        plan: vi.fn(),
-        usageCredits: vi.fn(),
-        retention: vi.fn(),
-        bucket: vi.fn(),
-        contractRate: vi.fn(),
-        invoices: vi.fn(),
-      },
-      runs: {
-        list: vi.fn(),
-        get: vi.fn(),
-        frameBody: vi.fn(),
-        cost: vi.fn(),
-        transcript: vi.fn(),
-        chain: vi.fn(),
-        outputs: vi.fn(),
-        work: vi.fn(),
-        outcomesSettings: vi.fn(),
-      },
-      approvals: { pending: vi.fn(), resolved: vi.fn() },
-      agents: {
-        list: vi.fn(),
-        get: vi.fn(),
-        toolbelt: vi.fn(),
-        incidents: vi.fn(),
-      },
-      spend: {
-        byGroup: vi.fn(),
-        fleet: vi.fn(),
-        drill: vi.fn(),
-        waste: vi.fn(),
-        gatewayPolicy: vi.fn(),
-        budgets: vi.fn(),
-        findings: vi.fn(),
-        findingEvidence: vi.fn(),
-        priceBook: vi.fn(),
-        unpricedModels: vi.fn(),
-      },
-      onboarding: { state: vi.fn(), firstFrame: vi.fn() },
-      org: {
-        members: vi.fn(),
-        roles: vi.fn(),
-        workspaces: vi.fn(),
-        apiKeys: vi.fn(),
-        costCenters: vi.fn(),
-        modelCredential: vi.fn(),
-        dataPlane: vi.fn(),
-        workspaceFacts: vi.fn(),
-        sso: vi.fn(),
-      },
-      mandates: { list: vi.fn(), get: vi.fn() },
-      audit: {
-        events: vi.fn(),
-        exportEvents: vi.fn(),
-        retention: vi.fn(),
-        bundle: vi.fn(),
-      },
-      skills: { inventory: vi.fn(), configuration: vi.fn() },
-      steering: {
-        records: vi.fn(),
-        record: vi.fn(),
-        proposals: vi.fn(),
-        contextPr: vi.fn(),
-        freshness: vi.fn(),
-        hub: vi.fn(),
-        deliveries: vi.fn(),
-        memories: vi.fn(),
-        tree: vi.fn(),
-      },
-      tools: {
-        versions: vi.fn(),
-        grants: vi.fn(),
-        killSwitches: vi.fn(),
-        approvalRules: vi.fn(),
-        connections: vi.fn(),
-        mcpServers: vi.fn(),
-      },
-    };
+    const source = stubSource();
     // The chrome is wrapped in the viewer's zone, so its own dates agree with
     // the page's; the client shell is the provider's one child.
     const element: ReactElement<{
@@ -149,6 +175,51 @@ describe("ShellChrome", () => {
     expect(isValidElement(element.props.children)).toBe(true);
     expect(element.props.children.props.data).toEqual(shellData());
     expect(shellSource).toHaveBeenCalledWith(ctx, source);
+  });
+
+  it("renders the Fleet lane's card once per parked call, with that workspace's mandates", async () => {
+    const { ShellChrome } = await import("./shell-chrome");
+    const { OrgCtx } = await import("@/server/viewer");
+    const { unsafeMint } = await import("@/server/viewer.testing");
+    const { readOk } = await import("@/data/read");
+    const mandates = new Map([["mnd_7K2ETQ4", { id: "mnd_7K2ETQ4" }]]);
+    const item = approvalItem({ mandateId: "mnd_7K2ETQ4" });
+    shellSource.mockResolvedValue({
+      data: shellData({
+        approvals: {
+          workspaces: [
+            shellWorkspace({
+              slug: "finops",
+              name: "FinOps",
+              pending: readOk({ items: [item], more: false }),
+            }),
+          ],
+          truncated: false,
+          readAt: 1,
+        },
+      }),
+      cards: { mandates: new Map([["finops", mandates]]) },
+    });
+    const ctx = unsafeMint(OrgCtx, {
+      userId: "usr_marcusbell",
+      orgId: "7a000000-0000-4000-8000-0000000000a1",
+      orgSlug: "acme",
+      orgName: "Acme Robotics",
+      orgRole: "owner",
+    });
+    const element: ReactElement<{
+      children: ReactElement<{ cards: Record<string, ReactElement> }>;
+    }> = await ShellChrome({ ctx, source: stubSource() });
+    const cards = element.props.children.props.cards;
+    expect(Object.keys(cards)).toEqual([item.id]);
+    expect(cards[item.id]?.type).toBe(ApprovalCardAlone);
+    expect(cards[item.id]?.props).toMatchObject({
+      item,
+      mandates,
+      now: 1,
+      org: "acme",
+      ws: "finops",
+    });
   });
 });
 

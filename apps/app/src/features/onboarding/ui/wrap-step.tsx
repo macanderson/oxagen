@@ -32,6 +32,7 @@ import {
   mono,
   panel,
 } from "@/ui/control-styles";
+import { DesktopDownloads } from "@/ui/desktop-downloads";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { SafeLink, useNavigate } from "@/ui/navigation";
 import { advanceOnboarding, issueEnrollmentToken } from "../actions";
@@ -407,6 +408,10 @@ export function WrapStep({
           </>
         ) : null}
       </p>
+      {/* The signed, token-carrying package above is not published yet
+          (#3897). The plain app is: it puts the CLI the enroll command runs
+          on the host's PATH, so it comes before the token. */}
+      <DesktopDownloads />
       <TokenBox
         token={token}
         minting={minting}

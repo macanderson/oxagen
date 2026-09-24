@@ -8,7 +8,17 @@
       "sections": {
         "workspace": "Workspace",
         "organization": "Organization"
-      }
+      },
+      "waiting": ", {count} waiting",
+      "open": ", {count} open",
+      "foot": {
+        "connected": "connected",
+        "offline": "offline",
+        "reachable": "The control plane answered when this page loaded, and the browser is online.",
+        "notBacked": "Agent count and data plane not read here"
+      },
+      "countNotRecorded": "The count could not be read when this page loaded.",
+      "countNotRecordedShort": ", count not recorded"
     },
     "nav": {
       "fleet": "Fleet",
@@ -31,31 +41,43 @@
       "ws": "Switch workspace",
       "current": "current",
       "denied": "You do not have permission to list these.",
-      "unavailable": "This list could not be loaded. Reload the page to try again."
+      "unavailable": "This list could not be loaded. Reload the page to try again.",
+      "searchOrgs": "Search organizations",
+      "noMatch": "Nothing matches “{query}”.",
+      "orgNote": "An organization owns a key-encryption key, a Postgres partition, a billing account, and optionally a dedicated data plane. You belong to {count} here.",
+      "orgMetaNotBacked": "The plan and the agent count of each organization are not recorded with this list yet.",
+      "wsMetaNotBacked": "The main repository, its branch and the agent count of each workspace are not recorded with this list yet.",
+      "createWorkspace": "Create a workspace",
+      "orgTileNotBacked": "plan not recorded",
+      "wsTileNotBacked": "branch not recorded"
     },
     "topbar": {
       "label": "Top bar",
       "menu": "Open navigation",
       "breadcrumbs": "Breadcrumb",
       "search": "Search or run an action",
-      "searchShortcut": "\u2318K",
-      "userMenu": "User menu for {name}"
+      "searchShortcut": "⌘K",
+      "userMenu": "User menu for {name}",
+      "notifications": "Notifications",
+      "notificationsUnread": "Notifications, {count} unread",
+      "unread": "{count} unread",
+      "approvals": "Approvals",
+      "approvalsWaiting": "Approvals, {count} waiting"
     },
     "userMenu": {
       "profile": "Account",
       "preferences": "Preferences",
-      "security": "Security and devices",
+      "security": "Security and sessions",
       "privacy": "Privacy and data",
       "switchTheme": "Switch theme",
-      "themeNow": "now {theme, select, light {Paper} dark {Ink} other {system}}",
       "signOut": "Sign out",
-      "signingOut": "Signing out\u2026",
+      "signingOut": "Signing out…",
       "signOutFailed": "Sign-out did not go through, so this session is still open. Try again."
     },
     "commands": {
       "title": "Command menu",
-      "input": "Go to a page",
-      "empty": "Nothing matches \u201c{query}\u201d.",
+      "input": "Search runs, agents, tools, records, or run an action",
+      "empty": "Nothing matches “{query}”.",
       "create": {
         "any": "Create anything",
         "agent": "New agent",
@@ -67,7 +89,64 @@
         "move": "move",
         "open": "open",
         "escape": "esc",
-        "close": "close"
+        "close": "close",
+        "governed": "<code>search_tools</code> · this search is itself a governed call, recorded in the audit record",
+        "orgOnly": "Runs, agents and tools are searched inside a workspace."
+      },
+      "groups": {
+        "go": {
+          "label": "Go"
+        },
+        "assistant": {
+          "label": "The assistant",
+          "note": "It acts through these same actions."
+        },
+        "create": {
+          "label": "Create",
+          "note": "Each one ends on a pull request."
+        },
+        "runs": {
+          "label": "Runs"
+        },
+        "agents": {
+          "label": "Agents"
+        },
+        "approvals": {
+          "label": "Approvals"
+        },
+        "actions": {
+          "label": "Actions",
+          "note": "Each one is a governed action."
+        },
+        "tools": {
+          "label": "Tools on the belt",
+          "note": "Risk and side effect, the same trailer the model sees."
+        }
+      },
+      "shortcut": "⌘{n}",
+      "assistant": {
+        "open": "Open the assistant",
+        "askTampered": "Ask why a run came back tampered",
+        "askTamperedDraft": "Why did a run in this workspace come back tampered, and what does its record show?",
+        "askCost": "Ask what an agent cost this month",
+        "askCostDraft": "What did each agent in this workspace cost this month, and on what basis?",
+        "mintKey": "Mint a model key for this organization"
+      },
+      "actions": {
+        "pauseAll": "Pause every live run in this workspace",
+        "pauseAllNotBacked": "No capability pauses every live run at once yet.",
+        "steer": "Steer the fleet",
+        "register": "Register an agent",
+        "grant": "Grant a mandate",
+        "role": "Create a role",
+        "killSwitch": "Flip a kill switch",
+        "export": "Export a signed bundle",
+        "exportDetail": "from a sealed run's page",
+        "apiKey": "Create an API key"
+      },
+      "search": {
+        "failed": "search_tools could not be read, so runs, agents, approvals and tools are not listed.",
+        "toolsNotBacked": "search_tools returns no version, risk, side effect or decision for a tool yet."
       }
     },
     "mobileNav": {
@@ -79,11 +158,27 @@
         "spend": "Spend"
       },
       "more": "More",
-      "waiting": ", {count, plural, one {# approval waiting} other {# approvals waiting}}"
+      "waiting": ", {count, plural, one {# approval waiting} other {# approvals waiting}}",
+      "incidents": ", {count, plural, one {# critical incident open} other {# critical incidents open}}",
+      "tileWaiting": "{count} waiting",
+      "sub": {
+        "steering": "library, assignments, gates, proposals, compiler",
+        "runtimes": "hosts, harnesses, hooks, tiers",
+        "repositories": "bindings, working copies, changes",
+        "organization": "people, workspaces, funding",
+        "billing": "plan, meters, invoices",
+        "audit": "events, incidents, holds"
+      },
+      "assistant": "Assistant",
+      "assistantSub": "ask about a run, or change something",
+      "search": "Search",
+      "searchSub": "or run an action",
+      "notifications": "Notifications",
+      "notificationsSub": "the feed could not be read",
+      "account": "Account"
     },
     "drawer": {
-      "title": "Navigation",
-      "close": "Close navigation"
+      "title": "Navigation"
     },
     "account": {
       "title": "Account",
@@ -189,20 +284,20 @@
     },
     "assistant": {
       "label": "Assistant",
-      "launcher": "Ask the assistant",
-      "launcherHint": "over this workspace",
+      "launcher": "Assistant",
+      "launcherNotBacked": "Model and state not read here",
       "close": "Close the assistant",
-      "thinking": "Working\u2026",
+      "thinking": "Working…",
       "recordedAs": "recorded as",
       "parked": "{count, plural, one {# write is waiting on a person} other {# writes are waiting on a person}}. Approve or deny them on Fleet.",
       "needsWorkspace": "The assistant answers over one workspace. Open a workspace to ask it something.",
       "intro": {
         "title": "Ask about this workspace",
-        "body": "The assistant reads this workspace\u2019s runs, agents, spend and knowledge graph. Every turn is recorded as a run of its own."
+        "body": "The assistant reads this workspace’s runs, agents, spend and knowledge graph. Every turn is recorded as a run of its own."
       },
       "composer": {
         "label": "Ask the assistant",
-        "placeholder": "Ask about a run, an agent, or what this is costing\u2026",
+        "placeholder": "Ask about a run, an agent, or what this is costing…",
         "send": "Send",
         "draftTooLong": "This request would exceed the message limit. Your existing draft is unchanged. Send or shorten it, then open the recommendation again."
       },
@@ -246,10 +341,10 @@
         "line": "Line"
       },
       "toneHint": "Solid, soft, or line. Three tones from the house scale, each fixing its own glyph colour, so there is no combination that fails.",
-      "describeIcon": "icon \u00b7 {icon} \u00b7 {tone} tone",
-      "describeInitials": "initials \u00b7 {font} \u00b7 {tone} tone",
-      "describePhoto": "photo \u00b7 by link",
-      "describePhotoNone": "photo \u00b7 none chosen yet",
+      "describeIcon": "icon · {icon} · {tone} tone",
+      "describeInitials": "initials · {font} · {tone} tone",
+      "describePhoto": "photo · by link",
+      "describePhotoNone": "photo · none chosen yet",
       "note": "Saved with <code>update_profile</code>, like any change to your account.",
       "noPhoto": "Paste an https link to a photo first, or switch to an icon or initials.",
       "noLetters": "Type at least one letter.",
@@ -258,24 +353,57 @@
       "failed": "That could not be saved. Try again.",
       "photoPlaceholder": "https://"
     },
-    "activity": {
-      "notifications": "Notifications",
-      "approvals": "Approvals",
-      "unread": "{count} unread notifications",
-      "loading": "Loading activity",
-      "refresh": "Refresh",
-      "failed": "Activity could not be refreshed. Try again.",
-      "allApprovals": "All approvals",
-      "empty": "No approvals waiting",
-      "partial": "More approvals are waiting than this list can show.",
-      "resolved": "{count} resolved today (UTC)",
-      "resolvedTitle": "Resolved approvals",
-      "noWorkspaces": "No accessible workspaces",
-      "noNotifications": "No notifications",
-      "open": "Open",
-      "markRead": "Mark read",
-      "archive": "Archive",
-      "notificationsPartial": "Some notifications are unavailable or outside this page. Counts cover the loaded records."
+    "approvals": {
+      "title": "Approvals",
+      "waiting": "{count} waiting",
+      "close": "Close approvals",
+      "waitingOnYou": "{count} waiting on you",
+      "resolvedToday": "{count} resolved today",
+      "openApproval": "Open approval {id}",
+      "expired": "expired",
+      "resolution": {
+        "approved": "approved",
+        "denied": "denied",
+        "expired": "expired"
+      },
+      "all": "All approvals",
+      "gone": "That approval is no longer listed.",
+      "empty": "Nothing is waiting on a human.",
+      "emptyDetail": "A call parks here when policy returns <code>approve</code>. Denials never park; they end the call and are free.",
+      "rowNotBacked": "Risk, amount, side effect, taint and task are not returned for a parked call yet.",
+      "truncated": "Oxagen read the first {count} workspaces of this organization. Calls parked in the rest are not counted here.",
+      "note": "A resolution mints a single-use approval token bound to the call digest, the agent, the run, and an expiry. It cannot be replayed on a second call. On expiry the call ends and the reason reaches the model.",
+      "interjectionNotBacked": "An open interjection has no record yet.",
+      "resolvedCard": {
+        "chain": "Chain",
+        "who": "Who asked",
+        "agent": "Which agent",
+        "action": "Which action",
+        "rule": "Which rule",
+        "resolution": "Resolution",
+        "resolvedAt": "Resolved at",
+        "resolvedBy": "Resolved by",
+        "notRecorded": "not recorded",
+        "openRun": "Open run"
+      }
+    },
+    "notifications": {
+      "title": "Notifications",
+      "footer": "<code>list_notifications</code> · {count} unread · every kind here maps to a frame kind or an audit event, never to something invented for a bell.",
+      "markAll": "Mark all read",
+      "markDenied": "You do not have permission to mark these notifications.",
+      "markFailed": "The notifications could not be marked. Try again.",
+      "empty": "No notifications.",
+      "noWorkspace": "Notifications are read in a workspace, and this organization has none you can open.",
+      "unread": "Unread.",
+      "footerUnknown": "<code>list_notifications</code> · unread count not recorded · every kind here maps to a frame kind or an audit event, never to something invented for a bell.",
+      "marked": "Marked {count} read. Reading a notification is itself recorded, so the audit record shows who saw what.",
+      "markedLeft": "{count} older unread notifications are not listed here and stay unread."
+    },
+    "denied": {
+      "workspace": "You cannot see this workspace",
+      "permission": "workspace.read on {ws}",
+      "unnamed": "You"
     }
   }
 }

@@ -60,6 +60,8 @@ import type { RunPage } from "./contracts/runs";
 import type { RuntimeAgents, RuntimeList } from "./contracts/runtimes";
 import type {
   OrgChoice,
+  NavCounts,
+  NotificationFeed,
   ShellContext,
   ViewerPreferences,
   WorkspaceChoice,
@@ -128,6 +130,18 @@ export interface DataSource {
      * features/shell/viewer-clock.tsx and features/audit/filters.ts.
      */
     preferences(ctx: OrgCtx): Promise<Read<ViewerPreferences>>;
+    /**
+     * get_nav_counts, what waits on a person in one workspace: the sidebar's
+     * Fleet, Steering and Audit counts; callers:
+     * features/shell/workspace-activity.tsx and features/shell/source.ts.
+     */
+    counts(ctx: WsCtx): Promise<Read<NavCounts>>;
+    /**
+     * list_notifications, the viewer's newest rows and the unread count the
+     * bell's dot reads; callers: features/shell/workspace-activity.tsx and
+     * features/shell/source.ts.
+     */
+    notifications(ctx: WsCtx): Promise<Read<NotificationFeed>>;
   };
   /**
    * The Billing page's six noBillingGate reads, each Owner, Admin or Billing
@@ -221,6 +235,15 @@ export interface DataSource {
       ctx: WsCtx,
       q: { runId: string },
     ): Promise<Read<ResolvedApprovalItem[]>>;
+    /**
+     * list_resolved_approvals since an instant, one page: the approvals
+     * drawer's "N resolved today" (mockup `apdBody()`), with `more` set when
+     * the page did not reach the end; caller: features/shell/source.ts.
+     */
+    resolvedSince(
+      ctx: WsCtx,
+      q: { since: string },
+    ): Promise<Read<{ items: ResolvedApprovalItem[]; more: boolean }>>;
   };
   /**
    * The Agents pages (#2956), each read by the agent's public id or slug:
@@ -249,7 +272,7 @@ export interface DataSource {
    * features/tools/mandates-ledger.tsx (the ledger the accountable office
    * reads) and features/agents/mandates.tsx (the mandates one agent holds).
    * features/run/run.tsx and the shell's approvals drawer
-   * (features/shell/activity-actions.ts) read it for the bar on their approval
+   * (features/shell/source.ts) read it for the bar on their approval
    * cards; Fleet draws no approval card and reads none.
    */
   mandates: {

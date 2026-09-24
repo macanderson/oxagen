@@ -85,7 +85,7 @@ describe("isNavItemCurrent", () => {
     ["/acme/core-platform/tools/switches", "tools"],
     ["/acme/core-platform/steering", "steering"],
     ["/acme/core-platform/runtimes", "runtimes"],
-    ["/acme/core-platform/runtimes/tch_1", "runtimes"],
+    ["/acme/core-platform/runtimes/mbell-mbp-16", "runtimes"],
     ["/acme/core-platform/repositories", "repositories"],
     ["/acme/core-platform/repositories/changes", "repositories"],
     ["/acme/core-platform/spend/budgets", "spend"],
@@ -148,7 +148,7 @@ describe("hrefs", () => {
 });
 
 describe("sidebarSections", () => {
-  it("has the mockup's ten links in order, Runtimes between Steering and Repositories, Repositories before Spend, and Audit after Billing, and no Run or Ontology entry", () => {
+  it("has the mockup's ten links in order, Runtimes then Repositories between Steering and Spend, and Audit after Billing, and no Run, Skills or Ontology entry", () => {
     const sections = sidebarSections("acme", "core-platform");
     expect(sections.map((s) => s.key)).toEqual(["workspace", "organization"]);
     expect(sections.flatMap((s) => s.items)).toEqual([
@@ -206,7 +206,7 @@ describe("the phone's thumb bar and More sheet", () => {
       "/acme/audit",
       "/acme/core-platform/steering",
       "/acme/core-platform/runtimes",
-      "/acme/core-platform/runtimes/tch_1",
+      "/acme/core-platform/runtimes/mbell-mbp-16",
       "/acme/core-platform/repositories",
     ])
       expect(isMoreCurrent(path)).toBe(true);
@@ -283,6 +283,18 @@ describe("breadcrumbs", () => {
     ).toEqual([
       { kind: "id", text: "a", href: "/acme/core-platform/agents/a" },
       { kind: "id", text: "source", href: null },
+    ]);
+  });
+
+  it("runtimes and one host, the host under the list as a run sits under Fleet", () => {
+    expect(breadcrumbs("/acme/core-platform/runtimes", names).slice(2)).toEqual(
+      [{ kind: "nav", key: "runtimes", href: null }],
+    );
+    expect(
+      breadcrumbs("/acme/core-platform/runtimes/mbell-mbp-16", names).slice(2),
+    ).toEqual([
+      { kind: "nav", key: "runtimes", href: "/acme/core-platform/runtimes" },
+      { kind: "id", text: "mbell-mbp-16", href: null },
     ]);
   });
 

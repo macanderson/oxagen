@@ -349,7 +349,12 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
   const source: DataSource = {
     runtimes: { list: refuse, agents: refuse },
     pretenant: { orgs: refuse, workspaces: refuse },
-    shell: { context: refuse, preferences: refuse },
+    shell: {
+      context: refuse,
+      preferences: refuse,
+      counts: refuse,
+      notifications: refuse,
+    },
     runs: {
       list: refuse,
       get: refuse,
@@ -361,7 +366,7 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
       work: refuse,
       outcomesSettings: refuse,
     },
-    approvals: { pending: refuse, resolved: refuse },
+    approvals: { pending: refuse, resolved: refuse, resolvedSince: refuse },
     agents: {
       list: () => Promise.resolve(reads.agents),
       get: refuse,

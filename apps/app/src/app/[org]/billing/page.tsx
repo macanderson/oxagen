@@ -27,18 +27,13 @@ export default async function BillingPage({
     getAuthUser(),
   ]);
   return (
-    <main
-      id="main"
-      className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10"
-    >
-      <Billing
-        ctx={ctx}
-        source={dataSource()}
-        title={t("billing")}
-        viewerName={user === null || user.name === "" ? null : user.name}
-        checkout={firstParam(checkout) ?? null}
-        cursor={firstParam(cursor) ?? null}
-      />
-    </main>
+    <Billing
+      ctx={ctx}
+      source={dataSource()}
+      title={t("billing")}
+      viewerName={user === null || user.name === "" ? null : user.name}
+      checkout={firstParam(checkout) ?? null}
+      cursor={firstParam(cursor) ?? null}
+    />
   );
 }

@@ -26,6 +26,9 @@ describe("SheetDialog dismissal", () => {
     const close = screen.getByRole("button", { name: "Close" });
     expect(close).toBeDisabled();
     await user.click(close);
+    const dismiss = screen.getByRole("button", { name: "Close Held" });
+    expect(dismiss).toBeDisabled();
+    await user.click(dismiss);
     await user.keyboard("{Escape}");
     const backdrop = document.querySelector<HTMLElement>("[data-scrim]");
     if (!backdrop) throw new Error("Missing dialog backdrop");
@@ -43,6 +46,21 @@ describe("SheetDialog dismissal", () => {
       </IntlProvider>,
     );
     await user.click(screen.getByRole("button", { name: "Close" }));
+    expect(change).toHaveBeenCalledWith(false);
+  });
+  it("closes from the header's ✕, named for the dialog it closes", async () => {
+    const change = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <IntlProvider>
+        <SheetDialog open onOpenChange={change} title="More" testId="more">
+          <p>Tiles</p>
+        </SheetDialog>
+      </IntlProvider>,
+    );
+    const dismiss = screen.getByRole("button", { name: "Close More" });
+    expect(dismiss).toHaveAttribute("data-dialog-dismiss");
+    await user.click(dismiss);
     expect(change).toHaveBeenCalledWith(false);
   });
 });
@@ -138,7 +156,7 @@ describe("SheetDialog header close", () => {
     expect(screen.getByRole("button", { name: "Close" })).toBeDisabled();
   });
 
-  it("draws no header close unless asked", () => {
+  it("names the header close for its dialog when the footer's button is Close too, so no two controls share a name", () => {
     render(
       <IntlProvider>
         <SheetDialog open onOpenChange={vi.fn()} title="Plain" testId="plain-x">
@@ -146,6 +164,11 @@ describe("SheetDialog header close", () => {
         </SheetDialog>
       </IntlProvider>,
     );
-    expect(document.querySelector("[data-header-close]")).toBeNull();
+    const header = document.querySelector<HTMLElement>("[data-sheet-header]");
+    if (!header) throw new Error("Missing dialog header");
+    expect(header).toContainElement(
+      screen.getByRole("button", { name: "Close Plain" }),
+    );
+    expect(screen.getAllByRole("button", { name: "Close" })).toHaveLength(1);
   });
 });

@@ -4,6 +4,7 @@
 // Frames tab reads the run's chain, where that seq is a different frame), and
 // says the list is a prefix whenever another page lies past it.
 import type { ReactNode } from "react";
+import type { RunWork } from "@/data/contracts/run-work";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readError, readOk } from "@/data/read";
@@ -17,7 +18,7 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-const { ContextSection, PolicySection } = await import("./sections");
+const { ContextSection, IssuesList, PolicySection } = await import("./sections");
 
 afterEach(cleanup);
 
@@ -180,5 +181,132 @@ describe("PolicySection with no decisions", () => {
     );
     expect(container.querySelector("table")).toBeNull();
     expect(container.textContent.length).toBeGreaterThan(0);
+  });
+});
+
+// #4024: the Issues tab lists the run's task reference and the issues its own
+// pull requests close, by GitHub's record. A pull request matched by branch
+// name is a guess and adds nothing; an unread list never reads as empty.
+describe("IssuesList", () => {
+  const repository = {
+    host: "github.com",
+    owner: "acme",
+    name: "app",
+    url: "https://github.com/acme/app",
+    connected: true,
+  };
+  const issue = (number: number) => ({
+    owner: "acme",
+    repo: "app",
+    number,
+    title: `Issue ${String(number)}`,
+    url: `https://github.com/acme/app/issues/${String(number)}`,
+    state: "open" as const,
+  });
+  const pr = (
+    number: number,
+    association: "recorded" | "head_commit" | "branch",
+    closingIssues: RunWork["pullRequests"][number]["closingIssues"],
+  ): RunWork["pullRequests"][number] => ({
+    repository,
+    number,
+    url: `https://github.com/acme/app/pull/${String(number)}`,
+    title: "Repair",
+    state: "open",
+    headSha: "abc",
+    headRef: "fix/work",
+    association,
+    closingIssues,
+    checkoutRefs: [],
+    observedAt: AT,
+    current: true,
+    ci: null,
+    diff: null,
+  });
+  const work = (pullRequests: RunWork["pullRequests"]): RunWork => ({
+    runId: "tse_7k2m9q",
+    machine: null,
+    checkouts: [],
+    diffs: [],
+    pullRequests,
+    complete: true,
+    warnings: [],
+  });
+
+  it("lists the issues a recorded pull request closes and ignores a branch match", async () => {
+    const { container } = render(
+      <IntlProvider>
+        <IssuesList
+          taskRef="OXA-1"
+          read={readOk(
+            work([
+              pr(42, "recorded", { issues: [issue(7)], complete: true }),
+              pr(43, "branch", { issues: [issue(9)], complete: true }),
+            ]),
+          )}
+        />
+      </IntlProvider>,
+    );
+    const rows = screen.getAllByRole("row").slice(1);
+    expect(rows.map((row) => row.textContent)).toEqual([
+      "OXA-1Task the run was started on",
+      "acme/app#7Pull request #42 closes it",
+    ]);
+    expect(
+      screen.getByRole("link", { name: "acme/app#7" }).getAttribute("href"),
+    ).toBe("https://github.com/acme/app/issues/7");
+    expect(screen.queryByText(/acme\/app#9/)).toBeNull();
+    await expectNoAxe(container);
+  });
+
+  it("says GitHub's list was not read instead of saying no pull request closes an issue", () => {
+    render(
+      <IntlProvider>
+        <IssuesList
+          taskRef={null}
+          read={readOk(work([pr(42, "recorded", null)]))}
+        />
+      </IntlProvider>,
+    );
+    expect(screen.queryByRole("table")).toBeNull();
+    expect(
+      screen.getByText(/GitHub did not return the issues/),
+    ).not.toBeNull();
+    expect(screen.queryByText(/no pull request it opened/)).toBeNull();
+  });
+
+  it("names no issue when the task reference is empty and every list was read", () => {
+    render(
+      <IntlProvider>
+        <IssuesList
+          taskRef={null}
+          read={readOk(
+            work([pr(42, "recorded", { issues: [], complete: true })]),
+          )}
+        />
+      </IntlProvider>,
+    );
+    expect(
+      screen.getByText(
+        "This run names no issue, and no pull request it opened closes one.",
+      ),
+    ).not.toBeNull();
+  });
+
+  it("keeps the task reference while the pull requests are read, and after the read fails", () => {
+    const { rerender } = render(
+      <IntlProvider>
+        <IssuesList taskRef="OXA-1" read={null} />
+      </IntlProvider>,
+    );
+    expect(screen.getByText("OXA-1")).not.toBeNull();
+    expect(screen.getByText("Reading the run's pull requests.")).not.toBeNull();
+    rerender(
+      <IntlProvider>
+        <IssuesList taskRef="OXA-1" read={readError("unavailable", 503)} />
+      </IntlProvider>,
+    );
+    expect(screen.getByText("OXA-1")).not.toBeNull();
+    expect(screen.queryByText("Reading the run's pull requests.")).toBeNull();
   });
 });

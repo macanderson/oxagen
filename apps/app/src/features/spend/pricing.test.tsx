@@ -60,7 +60,12 @@ const unpricedModels = vi.fn<DataSource["spend"]["unpricedModels"]>();
 const source: DataSource = {
   runtimes: { list: vi.fn(), agents: vi.fn() },
   pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
-  shell: { context: vi.fn(), preferences: vi.fn() },
+  shell: {
+    context: vi.fn(),
+    preferences: vi.fn(),
+    counts: vi.fn(),
+    notifications: vi.fn(),
+  },
   billing: {
     plan: vi.fn(),
     usageCredits: vi.fn(),
@@ -80,7 +85,7 @@ const source: DataSource = {
     work: vi.fn(),
     outcomesSettings: vi.fn(),
   },
-  approvals: { pending: vi.fn(), resolved: vi.fn() },
+  approvals: { pending: vi.fn(), resolved: vi.fn(), resolvedSince: vi.fn() },
   agents: {
     list: vi.fn(),
     get: vi.fn(),
