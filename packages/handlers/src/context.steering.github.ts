@@ -19,7 +19,40 @@ import { and, eq, isNull, notInArray } from "drizzle-orm";
 import { logger } from "./logger";
 import { resolveGitHubToken } from "./lib/github-token";
 
-export interface SteeringRepository {
+/**
+ * The repository hosts steering can publish through. A Context PR on GitHub is
+ * a pull request; on GitLab it is a merge request. The two share this port and
+ * nothing else: identifiers, credentials and check semantics stay with each
+ * host's implementation.
+ */
+export type SteeringProvider = "github" | "gitlab";
+
+/**
+ * The workspace's main repository as one host resolved it. `provider` says
+ * which implementation owns every later call made with this handle, so a
+ * handle a GitHub resolve produced is never answered by GitLab.
+ */
+export type SteeringRepository = SteeringRepositoryFields &
+  (
+    | { provider: "github" }
+    | {
+        provider: "gitlab";
+        /**
+         * GitLab's numeric project id, as the binding recorded it. Every call
+         * addresses the project by this id rather than by path, because a
+         * project that moves to another group keeps its id and changes its
+         * path.
+         */
+        projectId: string;
+      }
+  );
+
+interface SteeringRepositoryFields {
+  /**
+   * The owner as the host names it. On GitLab this is the full namespace
+   * path, so a project in a nested group has an owner such as
+   * `acme/platform/tools`.
+   */
   owner: string;
   repo: string;
   /**
@@ -67,7 +100,14 @@ export interface SteeringRepository {
   defaultBranch: string;
 }
 
-export interface SteeringGitHub {
+/**
+ * The port every steering handler publishes through (ADR-061). The method
+ * names are GitHub's because GitHub was the first host; a GitLab
+ * implementation answers the same calls with merge requests, commit statuses
+ * and project access tokens (#3762). `createSteeringHost` picks the host from
+ * the workspace's main repository binding.
+ */
+export interface SteeringHost {
   resolveRepository(scope: {
     orgId: string;
     workspaceId: string;
@@ -151,7 +191,11 @@ export interface SteeringGitHub {
     base: string,
     head: string,
   ): Promise<string[]>;
-  /** The check run's URL, or null when GitHub refuses the token (not an App). */
+  /**
+   * Report one check on the head commit: a check run on GitHub, a commit
+   * status on GitLab. Answers the check's URL, or null when the host refuses
+   * the token (a GitHub token that is not an App) or has no page for it.
+   */
   reportCheckRun(
     repo: SteeringRepository,
     args: {
@@ -164,7 +208,7 @@ export interface SteeringGitHub {
       completedAt: string;
     },
   ): Promise<string | null>;
-  /** Squash-merge, pinned to `sha`: GitHub refuses when the head moved past it. */
+  /** Squash-merge, pinned to `sha`: the host refuses when the head moved past it. */
   mergePullRequest(
     repo: SteeringRepository,
     args: { number: number; commitTitle: string; sha: string },
@@ -173,6 +217,9 @@ export interface SteeringGitHub {
   /** Delete the branch; a branch already gone is not an error. */
   deleteBranch(repo: SteeringRepository, branch: string): Promise<void>;
 }
+
+/** The GitHub implementation of {@link SteeringHost}. */
+export type SteeringGitHub = SteeringHost;
 
 interface DeliveryConfig {
   owner?: unknown;
@@ -403,7 +450,31 @@ export function assertProductionBase(
   }
 }
 
-/** Wrap a GitHub error as a `conflict` the surfaces map to 409. */
+/**
+ * A proposal's PR number is read back only through the host that issued it.
+ *
+ * A GitHub PR number and a GitLab merge request IID are both small integers
+ * scoped to one repository. If the workspace's main repository moved to the
+ * other host after the PR opened, the recorded number names an unrelated
+ * pull request or merge request there, so every read, merge and close
+ * through it is refused. `provider` is the proposal row's; a row written
+ * before the column existed was opened on GitHub.
+ */
+export function assertSameHost(
+  repo: SteeringRepository,
+  provider: string | null,
+  prUrl: string | null,
+): void {
+  const opened = provider ?? "github";
+  if (opened !== repo.provider) {
+    throw new HandlerError({
+      code: "conflict",
+      reason: "repository_host_changed",
+      message: `${prUrl ?? "The pull request"} was opened on ${opened}, but this workspace's main repository is now on ${repo.provider}. Dismiss the proposal and propose it again.`,
+    });
+  }
+}
+
 /**
  * Wrap a GitHub refusal as `conflict: github_refused` with GitHub's own
  * message. A `HandlerError` passes through unchanged, so a refusal this
@@ -509,6 +580,7 @@ export function createSteeringGitHub(
         );
       }
       const repo: SteeringRepository = {
+        provider: "github",
         owner: connection.owner,
         repo: connection.repo,
         fullName,

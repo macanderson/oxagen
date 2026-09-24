@@ -1,6 +1,9 @@
 import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
-import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
+import {
+  githubMainRepoInput,
+  workspaceCreate,
+} from "@oxagen/oxagen/contracts/workspace.create";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
 
@@ -12,7 +15,9 @@ export const schema = {
   slug: workspaceCreate.input.shape.slug.describe(
     "URL-safe unique slug within the organization",
   ),
-  mainRepo: workspaceCreate.input.shape.mainRepo.describe(
+  // The GitHub arm only: the GitLab arm carries a project access token, which
+  // must not pass through an MCP client's transcript (#3762).
+  mainRepo: githubMainRepoInput.describe(
     "The workspace's main GitHub repository ({ owner, name }), required: a workspace cannot exist without one. The GitHub App must be installed on the owner account and reachable by the organization's connected GitHub account.",
   ),
 };

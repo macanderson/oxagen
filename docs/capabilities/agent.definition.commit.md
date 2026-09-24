@@ -56,3 +56,4 @@ Org Owner, Admin or Member; workspace Owner or Member. Checked by the handler (I
 | `forbidden` | No signed-in user and no API key with a live creator; the acting user is not one of the roles; or, for an enterprise org, the definition names tools the committer does not hold (`delegation_ceiling`). |
 | `not_found` | No live agent (`agent_not_found`), or no binding with the given `repositoryId` (`repository_not_found`). |
 | `conflict` | The agent is retired (`agent_retired`); the file's schema (`definition_schema`) or slug (`definition_slug`) is wrong; the workspace binds no repository (`no_repository`) or more than one without `repositoryId` (`repository_ambiguous`); the branch is the default branch (`branch_is_default`). |
+| `conflict` | The main repository is a GitLab project (`repository_host_unsupported`). The commit goes through a GitHub token, and GitLab has no implementation yet (#3762). |

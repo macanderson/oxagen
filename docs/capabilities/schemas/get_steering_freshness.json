@@ -70,6 +70,20 @@
           }
         ]
       },
+      "provider": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "github",
+              "gitlab"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
       "defaultBranch": {
         "anyOf": [
           {
@@ -105,6 +119,7 @@
       "headCommits",
       "publishedAt",
       "repository",
+      "provider",
       "defaultBranch",
       "policy"
     ],
