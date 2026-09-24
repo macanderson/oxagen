@@ -26,6 +26,13 @@ import {
   type SpendGroupKind,
 } from "@oxagen/database/schema";
 import {
+  classesToResolve,
+  FRAME_TOKEN_CLASSES,
+  priceClasses,
+  type FrameTokenClass,
+  type ResolvedClassEntries,
+} from "./class-cost";
+import {
   resolvePriceEntry,
   type PriceBook,
   type PriceTokenClass,
@@ -35,15 +42,8 @@ export type { CostBasis, SpendGroupKind } from "@oxagen/database/schema";
 export { UNASSIGNED_COST_CENTER_KEY } from "@oxagen/database/schema";
 
 /** The token classes a model-call frame carries (spec §12.6). */
-const TOKEN_CLASSES = [
-  "input_uncached",
-  "cache_read",
-  "cache_write_5m",
-  "cache_write_1h",
-  "output",
-  "reasoning",
-] as const;
-type TokenClass = (typeof TOKEN_CLASSES)[number];
+const TOKEN_CLASSES = FRAME_TOKEN_CLASSES;
+type TokenClass = FrameTokenClass;
 export type TokenCounts = Record<TokenClass, number>;
 
 export const ZERO_TOKENS: TokenCounts = {
@@ -114,6 +114,14 @@ export interface ModelBreakdown {
   costMicros: bigint | null;
   /** The same cost split by token class, each rounded once; a class the book priced nothing for is 0. */
   costByClass: Record<TokenClass, bigint>;
+  /**
+   * What this model's cache reads saved, rounded once like
+   * {@link ModelBreakdown.costByClass}: each frame's cache_read tokens priced
+   * at its instant's input_uncached rate less its cache_read rate. 0 when no
+   * frame read the cache. Null when any frame that read the cache had no
+   * entry for either rate, and on a row rolled up before this field existed.
+   */
+  cacheSavingMicros: bigint | null;
   basis: CostBasis | null;
   /**
    * True when any call to this model in the run went unpriced — including a
@@ -179,11 +187,6 @@ export function microsToCentsHalfEven(micros: bigint): bigint {
   return divideHalfEven(micros, 10_000n);
 }
 
-/** The scaled product (units × micros per million) a frame class contributes. */
-function scaledCost(units: number, microsPerMillion: bigint): bigint {
-  return BigInt(units) * microsPerMillion;
-}
-
 /**
  * Fold two bases into the run's: equal stays, different is `mixed`, and an
  * `estimated` figure on either side makes the whole `estimated`, since a
@@ -219,6 +222,12 @@ interface PricedFrame {
   scaledByClass: Record<TokenClass, bigint>;
   basis: CostBasis | null;
   priceEntryIds: string[];
+  /**
+   * A million times the micro-USD the frame's cache reads saved, priced from
+   * the book whatever the frame's own cost came from; 0n with no cache reads,
+   * null when a rate the saving needs is missing.
+   */
+  cacheSavingScaled: bigint | null;
 }
 
 const zeroScaled = (): Record<TokenClass, bigint> => ({
@@ -243,28 +252,18 @@ export function priceFrame(
   orgId: string,
   frame: ModelCallFrame,
 ): PricedFrame {
-  let scaled = 0n;
-  const scaledByClass = zeroScaled();
-  let missed = false;
-  const ids = new Set<string>();
-  for (const c of TOKEN_CLASSES) {
-    const units = frame.tokens[c];
-    if (units <= 0) continue;
-    const entry = resolvePriceEntry(book, {
+  const entries: ResolvedClassEntries = {};
+  for (const c of classesToResolve(frame.tokens))
+    entries[c] = resolvePriceEntry(book, {
       orgId,
       modelId: frame.model,
       tokenClass: PRICE_CLASS[c],
       at: frame.at,
     });
-    if (!entry) {
-      missed = true;
-      continue;
-    }
-    ids.add(entry.id);
-    const part = scaledCost(units, entry.microsPerMillion);
-    scaled += part;
-    scaledByClass[c] += part;
-  }
+  const priced = priceClasses(entries, frame.tokens);
+  const missed = priced.missedClasses.length > 0;
+  const ids = priced.priceEntryIds;
+  const cacheSavingScaled = priced.cacheSavingScaled;
   if (missed && frame.reportedCostMicros !== null) {
     // The reported figure is one number with no split; it sits under output.
     const reported = frame.reportedCostMicros * MILLION;
@@ -272,16 +271,24 @@ export function priceFrame(
       scaled: reported,
       scaledByClass: { ...zeroScaled(), output: reported },
       basis: "estimated",
-      priceEntryIds: [...ids],
+      priceEntryIds: ids,
+      cacheSavingScaled,
     };
   }
-  if (missed && ids.size === 0)
-    return { scaled: null, scaledByClass, basis: null, priceEntryIds: [] };
+  if (missed && ids.length === 0)
+    return {
+      scaled: null,
+      scaledByClass: zeroScaled(),
+      basis: null,
+      priceEntryIds: [],
+      cacheSavingScaled,
+    };
   return {
-    scaled,
-    scaledByClass,
+    scaled: priced.scaled,
+    scaledByClass: priced.scaledByClass,
     basis: missed ? "estimated" : frame.basis,
-    priceEntryIds: [...ids],
+    priceEntryIds: ids,
+    cacheSavingScaled,
   };
 }
 
@@ -336,6 +343,8 @@ export function rollupRun(input: RollupInput): RunTotalsRecord {
       tokens: TokenCounts;
       scaled: bigint | null;
       scaledByClass: Record<TokenClass, bigint>;
+      /** Sticky null: one frame that read the cache and could not price the saving voids it. */
+      cacheSaving: bigint | null;
       basis: CostBasis | null;
       hasUnpriced: boolean;
     }
@@ -355,10 +364,17 @@ export function rollupRun(input: RollupInput): RunTotalsRecord {
       tokens: { ...ZERO_TOKENS },
       scaled: null,
       scaledByClass: zeroScaled(),
+      cacheSaving: 0n,
       basis: null,
       hasUnpriced: false,
     };
     group.calls += 1;
+    // Folded before the unpriced branch below: an unpriced frame that read
+    // the cache is exactly a frame whose saving nobody can price.
+    group.cacheSaving =
+      group.cacheSaving === null || p.cacheSavingScaled === null
+        ? null
+        : group.cacheSaving + p.cacheSavingScaled;
     addTokens(group.tokens, frame.tokens);
     group.provider ??= frame.provider;
     byModel.set(frame.model, group);
@@ -413,6 +429,10 @@ export function rollupRun(input: RollupInput): RunTotalsRecord {
               divideHalfEven(g.scaledByClass[c], MILLION),
             ]),
           ) as Record<TokenClass, bigint>,
+          cacheSavingMicros:
+            g.cacheSaving === null
+              ? null
+              : divideHalfEven(g.cacheSaving, MILLION),
           basis: g.scaled === null ? null : g.basis,
           hasUnpriced: g.hasUnpriced,
         }))

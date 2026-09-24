@@ -673,8 +673,18 @@ export async function readObservedModels(args: {
    * answers are identical.
    */
   boundariesFor?: (models: readonly string[]) => readonly Date[];
+  /**
+   * Which frame stores to read. `all` (the default) folds the gateway's
+   * `token_usage` rows and the wrapped agents' `tacho_events` rows, which is
+   * what a price-coverage report needs. `gateway` reads `token_usage` alone:
+   * the population `get_usage_breakdown` aggregates, so a figure priced from
+   * this read sits beside that breakdown's token totals without counting a
+   * wrapped agent's calls the totals leave out.
+   */
+  frameStores?: "all" | "gateway";
 }): Promise<ObservedModelRow[]> {
   const ch = clickhouse();
+  const withTacho = (args.frameStores ?? "all") === "all";
   const workspace =
     args.workspaceId === undefined
       ? ""
@@ -699,6 +709,23 @@ export async function readObservedModels(args: {
     sources: TACHO_TOKEN_SOURCES,
     duplicateAttr: LLM_CALL_DUPLICATE_OF_ATTR,
   };
+
+  const tachoSummary = `
+        UNION ALL
+
+        SELECT
+          toString(model)                     AS model,
+          toString(provider)                  AS provider,
+          count()                             AS calls,
+          sum(
+            toInt64(coalesce(input_tokens, 0)) + toInt64(coalesce(cache_read_tokens, 0))
+            + toInt64(coalesce(cache_creation_tokens, 0)) + toInt64(coalesce(output_tokens, 0))
+          )                                   AS tokens,
+          min(toDateTime64(ts, 3, 'UTC'))     AS first_seen,
+          max(toDateTime64(ts, 3, 'UTC'))     AS last_seen
+        FROM tacho_events FINAL
+        WHERE ${tachoWhere}
+        GROUP BY toString(model), toString(provider)`;
 
   const summaryResult = await ch.query({
     query: `
@@ -727,22 +754,7 @@ export async function readObservedModels(args: {
           AND model != ''
           ${workspace}
         GROUP BY toString(model), toString(provider)
-
-        UNION ALL
-
-        SELECT
-          toString(model)                     AS model,
-          toString(provider)                  AS provider,
-          count()                             AS calls,
-          sum(
-            toInt64(coalesce(input_tokens, 0)) + toInt64(coalesce(cache_read_tokens, 0))
-            + toInt64(coalesce(cache_creation_tokens, 0)) + toInt64(coalesce(output_tokens, 0))
-          )                                   AS tokens,
-          min(toDateTime64(ts, 3, 'UTC'))     AS first_seen,
-          max(toDateTime64(ts, 3, 'UTC'))     AS last_seen
-        FROM tacho_events FINAL
-        WHERE ${tachoWhere}
-        GROUP BY toString(model), toString(provider)
+        ${withTacho ? tachoSummary : ""}
       )
       GROUP BY model
       ORDER BY tokens DESC, model
@@ -784,35 +796,14 @@ export async function readObservedModels(args: {
   const tachoReasoning = classBucketReasoning("c");
   const tachoServerToolRequests = classBucketServerToolRequests("c");
 
-  // The transcript-split joins below key on `session_uuid`, not on
+  // The wrapped agents' transcript-split joins key on `session_uuid`, not on
   // `root_session_uuid`. A recorder's `LlmCallLedger` is its own, and a
   // subagent session records under its own `session_uuid` while sharing the
   // parent's root, so a request or message id reused across a parent and its
   // subagent would otherwise take `max()` over both and credit ONE call's
   // thinking and one-hour cache split to both. The id is unique within the
   // recorder that issued it, which is the session, so the session is the key.
-  const classResult = await ch.query({
-    query: `
-      WITH gw AS (
-        SELECT
-          toString(model)                                              AS model,
-          toString(provider)                                           AS provider,
-          ${bucketIndexExpr("toDateTime64(created_at, 3, 'UTC')")}      AS bucket_index,
-          toInt64(greatest(0, toInt64(input_tokens) - toInt64(cached_tokens) - ${gatewayCacheWrite})) AS input_uncached,
-          toInt64(coalesce(cached_tokens, 0))                          AS cache_read,
-          ${gatewayCacheWrite}                                         AS cache_write_5m,
-          toInt64(0)                                                   AS cache_write_1h,
-          toInt64(coalesce(output_tokens, 0))                          AS output,
-          toInt64(0)                                                   AS reasoning,
-          toInt64(0)                                                   AS server_tool_request,
-          toDateTime64(created_at, 3, 'UTC')                           AS ts
-        FROM metered_token_usage
-        WHERE org_id = {orgId:UUID}
-          AND created_at >= {since:DateTime64(3)}
-          ${until.replace("{col}", "created_at")}
-          AND model IN {models:Array(String)}
-          ${workspace}
-      ),
+  const tachoClassCte = `,
       tc AS (
         SELECT
           c.model                                                      AS model,
@@ -867,11 +858,33 @@ export async function readObservedModels(args: {
           GROUP BY call_key, session_uuid
           HAVING call_key != ''
         ) AS m ON m.call_key = c.message_id AND m.session_uuid = c.session_uuid
-      ),
+      )`;
+
+  const classResult = await ch.query({
+    query: `
+      WITH gw AS (
+        SELECT
+          toString(model)                                              AS model,
+          toString(provider)                                           AS provider,
+          ${bucketIndexExpr("toDateTime64(created_at, 3, 'UTC')")}      AS bucket_index,
+          toInt64(greatest(0, toInt64(input_tokens) - toInt64(cached_tokens) - ${gatewayCacheWrite})) AS input_uncached,
+          toInt64(coalesce(cached_tokens, 0))                          AS cache_read,
+          ${gatewayCacheWrite}                                         AS cache_write_5m,
+          toInt64(0)                                                   AS cache_write_1h,
+          toInt64(coalesce(output_tokens, 0))                          AS output,
+          toInt64(0)                                                   AS reasoning,
+          toInt64(0)                                                   AS server_tool_request,
+          toDateTime64(created_at, 3, 'UTC')                           AS ts
+        FROM metered_token_usage
+        WHERE org_id = {orgId:UUID}
+          AND created_at >= {since:DateTime64(3)}
+          ${until.replace("{col}", "created_at")}
+          AND model IN {models:Array(String)}
+          ${workspace}
+      )${withTacho ? tachoClassCte : ""},
       unioned AS (
         SELECT model, bucket_index, input_uncached, cache_read, cache_write_5m, cache_write_1h, output, reasoning, server_tool_request, ts FROM gw
-        UNION ALL
-        SELECT model, bucket_index, input_uncached, cache_read, cache_write_5m, cache_write_1h, output, reasoning, server_tool_request, ts FROM tc
+        ${withTacho ? "UNION ALL\n        SELECT model, bucket_index, input_uncached, cache_read, cache_write_5m, cache_write_1h, output, reasoning, server_tool_request, ts FROM tc" : ""}
       )
       SELECT
         model,

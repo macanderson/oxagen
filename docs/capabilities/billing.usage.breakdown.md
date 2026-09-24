@@ -40,7 +40,7 @@ additive (the `@oxagen/ai` gateway reports `inputTokens` as the inclusive total)
 | ------------------- | -------------------------- | ------------------------------------------------------------ |
 | `range`             | `{ start, end }`           | Echoes the requested window.                                 |
 | `totals`            | measures                   | Sum across the window (derived from `byModel`).              |
-| `cacheSavingsMicros`| integer (micro-USD)        | Estimated cache savings NET of the write premium: reads served cheaply minus writes' premium over fresh input, summed across models via the provider rate card. Positive = caching netted money; can go negative. Powers the dashboard "cache savings" figure. |
+| `cacheSavingsMicros`| integer (micro-USD)        | Cache savings NET of the write premium: cache reads priced at the `input_uncached` rate less the `cache_read` rate, minus each cache write's premium over `input_uncached`. Priced from the price book (`cost.price_entries`), with each price-boundary bucket at the rates in force when its calls ran, through the same helper the run rollup uses (#4069). Covers the gateway's `token_usage` calls, the same population as the other figures here. A bucket the book cannot price adds nothing rather than a guessed rate. Positive = caching netted money; can go negative. Powers the dashboard "cache savings" figure. |
 | `series`            | array of `{ day, …measures }` | One point per UTC calendar day, chronological.            |
 | `byModel`           | array of `{ key, provider, …measures }` | Grouped by model; `provider` is the provider slug. |
 | `bySurface`         | array of `{ key, provider: "", …measures }` | Grouped by surface (`api`/`mcp`/`app`/`agent`/…). |
