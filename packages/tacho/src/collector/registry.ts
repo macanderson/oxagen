@@ -570,7 +570,14 @@ export class SessionRegistry {
    */
   ensure(
     harnessSessionId: string,
-    facts: SessionFacts & { ambient?: boolean } = {},
+    facts: SessionFacts & {
+      ambient?: boolean;
+      /**
+       * When the activity was received, for a hook replayed from the spool
+       * or deferred to a later tick. Absent means now.
+       */
+      seenAt?: string;
+    } = {},
   ): { record: SessionRecord; created: boolean; reopened?: true } {
     const now = this.ts();
     // A caller that names no agent (OTel, the transcript detector) joins
@@ -615,7 +622,13 @@ export class SessionRegistry {
         existing.baselineRoot = facts.baselineRoot;
       if (facts.workDir !== undefined) existing.workDir = facts.workDir;
       if (facts.ambient === false) existing.ambient = false;
-      existing.lastSeenAt = now;
+      // A replay was received when the daemon was down, not now. Dating it
+      // now put every restart's time on the sessions its spool touched, and
+      // the sweep then ended a session at the restart rather than at its
+      // last activity (#4024).
+      const seenAt = facts.seenAt ?? now;
+      if (Date.parse(seenAt) > Date.parse(existing.lastSeenAt))
+        existing.lastSeenAt = seenAt;
       this.noteAgent(existing, false);
       return reopened
         ? { record: existing, created: false, reopened: true }

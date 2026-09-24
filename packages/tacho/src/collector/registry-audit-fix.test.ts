@@ -301,6 +301,52 @@ describe("a quiet session with a pid", () => {
   });
 });
 
+describe("a hook replayed after a daemon restart", () => {
+  it("dates the session's activity at the replay's receipt, so the sweep ends it there", async () => {
+    const { registry, now, advance, hook } = harness();
+    await hook(registry, "SessionStart", { source: "startup" });
+    await hook(registry, "UserPromptSubmit", { prompt: "one" });
+    const record = registry.get("sess-1");
+    const lastActivity = record?.lastSeenAt;
+
+    // The daemon is down for half an hour. `tacho-hook` spools a
+    // notification at the start of the outage, and the restarted daemon
+    // replays it.
+    const receivedAt = new Date(now() + 1_000).toISOString();
+    advance(30 * 60_000);
+    const bundle = bundleSigner().sign(unsignedBundle());
+    await handleHookEvent(
+      {
+        session_id: "sess-1",
+        hook_event_name: "Notification",
+        notification_type: "idle_prompt",
+        message: "waiting",
+        cwd: "/repo",
+      },
+      { CLAUDE_PID: "4242" },
+      {
+        registry,
+        policy: () => ({
+          bundle,
+          verified: true,
+          hostStatus: "active",
+          denyGeneration: bundle.deny_generation,
+          controlReachable: true,
+        }),
+        now,
+      },
+      { receivedAt },
+    );
+    expect(record?.lastSeenAt).toBe(receivedAt);
+    expect(Date.parse(receivedAt)).toBeGreaterThan(Date.parse(lastActivity!));
+
+    // The harness process is gone. The sweep ends the session at its last
+    // activity, not at the restart.
+    const closed = registry.sweep(() => false, 60_000);
+    expect(closed[0]?.ts).toBe(receivedAt);
+  });
+});
+
 describe("session baselines", () => {
   it("keeps the baseline across a cd inside one repository and holds one per repository", () => {
     const { registry } = harness();

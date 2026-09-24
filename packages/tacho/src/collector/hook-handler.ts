@@ -740,6 +740,7 @@ async function routeHook(
       : {}),
     ...(input.cwd !== undefined && !inferredCwd ? { cwd: input.cwd } : {}),
     ...(pidFromEnv(env) !== undefined ? { pid: pidFromEnv(env) } : {}),
+    ...(replay !== undefined ? { seenAt: replay.receivedAt } : {}),
   });
   if (inferredCwd && record.cwd === undefined && input.cwd !== undefined) {
     record.cwd = input.cwd;
