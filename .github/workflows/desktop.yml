@@ -63,7 +63,8 @@ name: Desktop
 # `latest/`.
 #
 # A manual run without `publish` builds and uploads the bundles as workflow
-# artifacts only.
+# artifacts only. `preview` does the same with the version a deploy would
+# give the commit, so a branch can prove every bundler takes it.
 
 on:
   push:
@@ -81,6 +82,10 @@ on:
         description: "Commit on main to build (default: the head of the ref this runs on)"
         type: string
         default: ""
+      preview:
+        description: "Number and stamp the commit as a deploy build, publish nothing (checks a branch's bundles)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -129,12 +134,13 @@ jobs:
           fi
 
       - uses: ./.github/actions/pnpm-install
-        if: github.event_name == 'workflow_dispatch' && inputs.publish
+        if: github.event_name == 'workflow_dispatch' && (inputs.publish || inputs.preview)
 
       - name: Choose the version
         id: plan
         env:
           PUBLISH: ${{ github.event_name == 'workflow_dispatch' && inputs.publish }}
+          PREVIEW: ${{ github.event_name == 'workflow_dispatch' && !inputs.publish && inputs.preview }}
         run: |
           set -euo pipefail
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
@@ -144,7 +150,7 @@ jobs:
               echo "channel=release"
               echo "publish=true"
             } >> "$GITHUB_OUTPUT"
-          elif [ "$PUBLISH" = "true" ]; then
+          elif [ "$PUBLISH" = "true" ] || [ "$PREVIEW" = "true" ]; then
             pnpm exec tsx tools/scripts/desktop-build-version.ts plan | tee plan.txt
             version="$(sed -n 's/^version=//p' plan.txt)"
             if [ -z "$version" ]; then
@@ -155,7 +161,7 @@ jobs:
               {
                 echo "version=$version"
                 echo "channel=build"
-                echo "publish=true"
+                echo "publish=$PUBLISH"
               } >> "$GITHUB_OUTPUT"
             fi
           else
