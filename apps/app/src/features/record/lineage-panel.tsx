@@ -1,85 +1,101 @@
-// Where the record lives and who put it there (#3395; mockups/pages/record.md).
-//
-// Provenance is the publishing commit, read out of git, not a column somebody
-// could set. A record whose file the page read but whose commit history it
-// could not reach says so: a blank author and a blank date are honest, and an
-// invented "unknown" author is not.
+// Where the record lives and who put it there (#3395; mockups/pages/record.md,
+// the Lineage panel). Provenance is the publishing commit, read out of git,
+// not a column somebody could set. A record whose file the page read but
+// whose commit history it could not reach says so rather than inventing an
+// author or a date.
 import { useLocale, useTranslations } from "next-intl";
+import type { ReactNode } from "react";
 import type { RecordDetail } from "@/data/contracts/steering";
-import { mono } from "@/ui/control-styles";
+import {
+  mono,
+  panel,
+  panelBody,
+  panelHeader,
+  panelTitle,
+} from "@/ui/control-styles";
+import { useFormatter } from "@/ui/formatter";
 import { formatCount } from "@/ui/money-format";
-import { Fact, Facts, Section, useDate } from "./section";
+import { RECORD_GAPS } from "./gaps";
 
 /** The protocol every `.oxagen/rules/*.toml` file declares. */
 const SCHEMA = "context-record/v0.1";
 
-export function LineagePanel({ detail }: { detail: RecordDetail }) {
+const code = (chunks: ReactNode) => <span className={mono}>{chunks}</span>;
+
+export function LineagePanel({
+  detail,
+  repository,
+}: {
+  detail: RecordDetail;
+  /** The workspace's main repository, `owner/name`; null when unread or unbound. */
+  repository: string | null;
+}) {
   const t = useTranslations("record.lineage");
-  const date = useDate();
+  const format = useFormatter();
   const locale = useLocale();
-  const { record, provenance, effect, backing } = detail;
+  const { record, provenance, effect } = detail;
+  const path = record.path ?? `.oxagen/rules/${record.lineage}.toml`;
+  const commit = provenance?.commit ?? record.commit;
+  const date = provenance?.committedAt ?? record.publishedAt;
   return (
-    <Section id="record-lineage" title={t("title")}>
-      <Facts>
-        <Fact name="lineage" term={t("lineageTerm")}>
-          <span className={mono}>{record.lineage}</span>
-        </Fact>
-        <Fact name="path" term={t("pathTerm")}>
-          {record.path === null ? (
-            <span data-state="not-recorded">{t("pathUnknown")}</span>
+    <section
+      aria-labelledby="record-lineage"
+      data-testid="record-lineage"
+      className={panel}
+    >
+      <div className={panelHeader}>
+        <h2 id="record-lineage" className={panelTitle}>
+          {t("title")}
+        </h2>
+        <span className="font-mono text-[11px] text-dim">{t("badge")}</span>
+      </div>
+      <dl
+        className={`${panelBody} grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2 text-[13px] [&>dd]:min-w-0 [&>dd]:break-words [&>dd]:text-foreground [&>dt]:text-muted-foreground`}
+      >
+        <dt>{t("lineage")}</dt>
+        <dd data-fact="lineage" className={mono}>
+          {record.lineage}
+        </dd>
+        <dt>{t("file")}</dt>
+        <dd data-fact="file">
+          {repository === null
+            ? t.rich("fileAlone", { path, code })
+            : t.rich("fileOn", { path, repository, code })}
+        </dd>
+        <dt>{t("publishedBy")}</dt>
+        <dd data-fact="published">
+          {commit === null ? (
+            <span data-state="not-recorded">{t("publishedNotRecorded")}</span>
+          ) : date === null ? (
+            <span className={mono}>{commit.slice(0, 7)}</span>
           ) : (
-            <span className={mono}>{record.path}</span>
-          )}
-        </Fact>
-        <Fact name="backing" term={t("backingTerm")}>
-          {t(`backing.${backing}`)}
-        </Fact>
-        {provenance === null ? (
-          <Fact name="commit" term={t("commitTerm")}>
-            <span data-state="not-recorded">{t("commitUnknown")}</span>
-          </Fact>
-        ) : (
-          <>
-            <Fact name="commit" term={t("commitTerm")}>
-              <span className={mono}>{provenance.commit.slice(0, 12)}</span>
-            </Fact>
-            <Fact name="author" term={t("authorTerm")}>
-              {provenance.authorLogin === null
-                ? provenance.authorName
-                : t("author", {
-                    name: provenance.authorName,
-                    login: provenance.authorLogin,
-                  })}
-            </Fact>
-            <Fact name="committed" term={t("committedTerm")}>
-              {date(provenance.committedAt)}
-            </Fact>
-            {provenance.summary === "" ? null : (
-              <Fact name="summary" term={t("summaryTerm")}>
-                {provenance.summary}
-              </Fact>
-            )}
-          </>
-        )}
-        {record.version === null ? null : (
-          <Fact name="version" term={t("versionTerm")}>
-            {String(record.version)}
-          </Fact>
-        )}
-        <Fact name="effect" term={t("effectTerm")}>
-          {effect === null ? (
-            <span data-state="not-recorded">{t("effectUnknown")}</span>
-          ) : (
-            t("effect", {
-              rendered: formatCount(effect.rendered, locale),
-              cited: formatCount(effect.cited, locale),
+            t.rich("publishedValue", {
+              commit: commit.slice(0, 7),
+              date: format.dateTime(new Date(date), { dateStyle: "medium" }),
+              code,
             })
           )}
-        </Fact>
-        <Fact name="schema" term={t("schemaTerm")}>
-          <span className={mono}>{SCHEMA}</span>
-        </Fact>
-      </Facts>
-    </Section>
+        </dd>
+        <dt>{t("effect")}</dt>
+        <dd data-fact="effect">
+          {effect === null ? (
+            <span data-state="not-recorded">{t("effectNotRecorded")}</span>
+          ) : effect.rendered === 0 ? (
+            t("neverRendered")
+          ) : (
+            <span data-gap={RECORD_GAPS.violated}>
+              {t("effectLine", {
+                rendered: formatCount(effect.rendered, locale),
+                cited: formatCount(effect.cited, locale),
+              })}
+            </span>
+          )}
+        </dd>
+        <dt>{t("schema")}</dt>
+        <dd data-fact="schema" className={mono}>
+          {SCHEMA}
+        </dd>
+      </dl>
+    </section>
   );
 }

@@ -1,6 +1,6 @@
 // Test support for the sign-in, organization-creation, Fleet, Agents, Audit,
-// Billing, Create, Organization, Shell, Skills, Steering, Tools and Repositories
-// components: the real catalogs, a client provider, and a server
+// Billing, Create, Organization, Shell, Skills, Spend, Steering, Tools and
+// Repositories components: the real catalogs, a client provider, and a server
 // `getTranslations` stand-in that formats ICU arguments the simple way (the
 // components under test use no plurals).
 import { NextIntlClientProvider } from "next-intl";
@@ -22,6 +22,7 @@ import run from "../../messages/run.json";
 import runOutcomes from "../../messages/run-outcomes.json";
 import shell from "../../messages/shell.json";
 import skills from "../../messages/skills.json";
+import spend from "../../messages/spend.json";
 import steering from "../../messages/steering.json";
 import tools from "../../messages/tools.json";
 import ui from "../../messages/ui.json";
@@ -46,6 +47,7 @@ export const messages = {
   ...runOutcomes,
   ...shell,
   ...skills,
+  ...spend,
   ...steering,
   ...tools,
   ...ui,
