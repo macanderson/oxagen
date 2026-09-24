@@ -64,7 +64,6 @@ function element(node: Element | null | undefined, what: string): HTMLElement {
 const formOf = (node: HTMLElement) => element(node.closest("form"), "form");
 
 const at = { org: "acme", ws: "core-platform" };
-const TOOLS = "/acme/core-platform/tools";
 const SWITCHES = "/acme/core-platform/tools/switches";
 const GENERATION = { org: 12, workspace: 4 };
 /** The operator level's picker (#3147): one member, so its option is unambiguous. */
@@ -437,7 +436,10 @@ describe("ToolDialog", () => {
         },
       );
     });
-    expect(router.replace).toHaveBeenCalledWith(TOOLS);
+    // It refreshes where it stands, so a classify from the Providers tab
+    // stays on Providers (#3800).
+    expect(router.refresh).toHaveBeenCalled();
+    expect(router.replace).not.toHaveBeenCalled();
   });
 
   it("keeps a multiword data class whole when the person edits it", async () => {

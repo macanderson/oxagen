@@ -20,7 +20,6 @@ import { inputBase, mono } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
-import { routes } from "@/shared/safe-path";
 import { UNANSWERED, useActionFailure } from "./action-failure";
 import { setToolClassification } from "./actions";
 import { Chip, Fact, Facts, useDate } from "./parts";
@@ -126,7 +125,10 @@ function ClassificationForm({
       });
       if (result.ok) {
         onDone();
-        navigate.replace(routes.tools(at.org, at.ws));
+        // Refresh in place (#3800): the dialog is opened from the Tools list
+        // and from the Providers tab, and a replace to the Tools root would
+        // move a person who classified from Providers off that tab.
+        navigate.refresh();
         return;
       }
       setFailure(failureText(result));
