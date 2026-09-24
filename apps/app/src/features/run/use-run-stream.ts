@@ -21,6 +21,23 @@ import { useEffect, useRef, useState } from "react";
 /** How long frames are gathered before the player is told to read the tail. */
 const COALESCE_MS = 750;
 
+/**
+ * The first wait before reopening after `stream_unavailable`; each retry with
+ * no frame between doubles it, and RETRY_LIMIT of them in a row is a loss.
+ * Five retries wait 1, 2, 4, 8 and 16 seconds: a database timeout has cleared
+ * well inside that, and a longer outage is one the page should name.
+ */
+const RETRY_BASE_MS = 1_000;
+const RETRY_LIMIT = 5;
+
+/** The codes that mean the viewer may no longer read this run. */
+const DENIED_CODES: ReadonlySet<string> = new Set([
+  "authz_denied",
+  "forbidden",
+  "surface_denied",
+  "pending_approval",
+]);
+
 export type StreamState =
   /** Not following: the run is not live, or the browser has no EventSource. */
   | "off"
@@ -76,6 +93,9 @@ export function useRunStream({
     }
     let source: EventSource | null = null;
     let timer: ReturnType<typeof setTimeout> | null = null;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    // Retries since the last frame or clean close; progress resets it.
+    let retries = 0;
     let stopped = false;
 
     function signal() {
@@ -103,10 +123,14 @@ export function useRunStream({
       es.onopen = () => {
         if (!stopped) setState("open");
       };
-      es.onmessage = signal;
+      es.onmessage = () => {
+        retries = 0;
+        signal();
+      };
       es.addEventListener("done", (event: MessageEvent<string>) => {
         es.close();
         if (stopped) return;
+        retries = 0;
         let reason = "idle";
         let cursor: string | null = null;
         try {
@@ -132,18 +156,16 @@ export function useRunStream({
       });
       es.addEventListener("error", (event: Event) => {
         if (stopped || !(event instanceof MessageEvent)) return;
-        // A named server error is terminal. Native transport errors carry no
-        // payload and retain EventSource's retry behavior below.
+        // A named server error. Native transport errors carry no payload and
+        // retain EventSource's retry behavior below.
         let code: string | null = null;
+        let cursor: string | null = null;
         try {
           const payload: unknown = JSON.parse(String(event.data));
-          if (
-            payload !== null &&
-            typeof payload === "object" &&
-            "code" in payload &&
-            typeof payload.code === "string"
-          ) {
-            code = payload.code;
+          if (payload !== null && typeof payload === "object") {
+            const failure: Record<string, unknown> = { ...payload };
+            if (typeof failure.code === "string") code = failure.code;
+            if (typeof failure.cursor === "string") cursor = failure.cursor;
           }
         } catch {
           // A malformed server error is still a terminal stream failure.
@@ -151,7 +173,20 @@ export function useRunStream({
         terminalError = true;
         es.close();
         flushSignal(code === "invalid_input");
-        const denied = code === "authz_denied" || code === "forbidden";
+        // A fault the server expects to pass (a database timeout, #3652) is
+        // retried from the last frame the route wrote, so nothing is read
+        // twice or skipped, until the ceiling is reached.
+        if (code === "stream_unavailable" && retries < RETRY_LIMIT) {
+          const delay = RETRY_BASE_MS * 2 ** retries;
+          retries += 1;
+          setState("connecting");
+          retryTimer = setTimeout(() => {
+            retryTimer = null;
+            open(cursor ?? after);
+          }, delay);
+          return;
+        }
+        const denied = DENIED_CODES.has(code ?? "");
         if (denied) deniedUrl.current = url;
         setState(denied ? "denied" : "lost");
       });
@@ -168,6 +203,7 @@ export function useRunStream({
     return () => {
       stopped = true;
       if (timer !== null) clearTimeout(timer);
+      if (retryTimer !== null) clearTimeout(retryTimer);
       source?.close();
     };
   }, [url, enabled]);
