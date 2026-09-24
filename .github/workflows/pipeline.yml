@@ -1455,6 +1455,76 @@ jobs:
         run: node tools/scripts/check-deploy-tip.mjs --record
 
 
+  publish-installers:
+    name: publish the desktop installers
+    # Every production deploy publishes the desktop app built from the same
+    # commit, for every platform, to https://downloads.oxagen.sh/ (ADR-158).
+    # This job only dispatches desktop.yml: the four builds need macOS and
+    # Windows runners and take most of an hour, and a separate run keeps that
+    # hour out of this one and gives the builds their own concurrency group,
+    # where a newer deploy replaces a waiting build rather than queueing
+    # behind it. A dispatch made with GITHUB_TOKEN starts a workflow; a push
+    # made with it would not.
+    #
+    # `needs: deploy-node` means every service shipped: a failed leg publishes
+    # nothing, so the installers never run ahead of the platform they talk to.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [deploy-node]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    # One installer publish at a time, and never cancelled mid-flight, like
+    # every other service (check-deploy-tip.mjs). `desktop` is a service of
+    # its own here: its record says which commit's installers downloads.oxagen.sh
+    # was last asked for, which is what stops an older run replacing them.
+    concurrency:
+      group: production-desktop
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      actions: write
+      # Reads and writes the record of what is live (check-deploy-tip.mjs).
+      deployments: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: tools/scripts
+
+      # Publish unless a newer commit's installers were already asked for. The
+      # deploy jobs above hold the same rule per service, so a run superseded
+      # on main still publishes when it moves the installers forward, and an
+      # older run reaching here after a newer one skips rather than replacing
+      # newer installers with older ones (#2874).
+      - name: Refuse to publish installers older than what is live
+        id: order
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_SERVICE: desktop
+        run: node tools/scripts/check-deploy-tip.mjs
+
+      - name: Dispatch the desktop build for this commit
+        if: steps.order.outputs.ship == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run desktop.yml --repo "$GITHUB_REPOSITORY" --ref main \
+            -f publish=true -f sha="$GITHUB_SHA"
+          echo "Dispatched the desktop build of $GITHUB_SHA; it publishes to https://downloads.oxagen.sh/ when every platform has built." >> "$GITHUB_STEP_SUMMARY"
+
+      # Record the commit whose installers were dispatched, so the next run can
+      # tell whether it is newer. The build itself runs in desktop.yml and
+      # finishes later; a build that fails publishes nothing and records
+      # nothing further, and the next commit still reads itself as ahead and
+      # dispatches, which is the same fail-open the deploy jobs take.
+      - name: Record $desktop as live at this commit
+        id: record
+        if: steps.order.outputs.ship == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_SERVICE: desktop
+        run: node tools/scripts/check-deploy-tip.mjs --record
+
   manual-app-deploy:
     name: Manual production app deployment
     # The break-glass path, and the one deploy `migration-gate` does not stand
