@@ -55,7 +55,13 @@ function Harness() {
   );
 }
 
-afterEach(cleanup);
+afterEach(async () => {
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
+});
 
 describe("Working copies", () => {
   it("draws Connect a directory as the small secondary when the tab does not hold the gold", async () => {

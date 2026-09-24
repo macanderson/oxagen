@@ -128,7 +128,13 @@ beforeEach(() => {
     fn.mockReset();
   actions.readWorkspaceRepository.mockReturnValue(new Promise(() => {}));
 });
-afterEach(cleanup);
+afterEach(async () => {
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
+});
 
 describe("the init wizard", () => {
   it("binds the repository as main when the workspace has none, finds its binding, moves the branch, then opens the pull request", async () => {

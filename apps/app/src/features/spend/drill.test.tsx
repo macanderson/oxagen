@@ -7,8 +7,8 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { SpendDrill } from "@/data/contracts/spend";
 import { expectNoAxe } from "@/test/expect-no-axe";
+import type { SpendDrill } from "@/data/contracts/spend";
 import { IntlProvider } from "@/test/intl";
 import { DrillSection } from "./drill";
 
@@ -40,7 +40,13 @@ const drill = (over: Partial<SpendDrill> = {}): SpendDrill => ({
   ...over,
 });
 
-afterEach(cleanup);
+afterEach(async () => {
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
+});
 
 describe("the drill", () => {
   it("names an operator the rollup cannot name by their key, and says what could not be read", async () => {
