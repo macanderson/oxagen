@@ -210,6 +210,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [dismiss_proposal](context.proposal.dismiss.md) | [context.proposal.dismiss.ts](../../packages/oxagen/src/contracts/context.proposal.dismiss.ts) | api |
 | [get_context_pr](context.pr.get.md) | [context.pr.get.ts](../../packages/oxagen/src/contracts/context.pr.get.ts) | api, mcp |
 | [get_record](context.records.get.md) | [context.records.get.ts](../../packages/oxagen/src/contracts/context.records.get.ts) | api, mcp, agent |
+| [get_published_steering](context.steering.published.get.md) | [context.steering.published.get.ts](../../packages/oxagen/src/contracts/context.steering.published.get.ts) | api, mcp, cli |
 | `get_steering_freshness` | [context.steering.freshness.ts](../../packages/oxagen/src/contracts/context.steering.freshness.ts) | api, mcp, agent |
 | [list_context_records](context.record.list.md) | [context.record.list.ts](../../packages/oxagen/src/contracts/context.record.list.ts) | api, agent, mcp |
 | [list_proposals](context.proposal.list.md) | [context.proposal.list.ts](../../packages/oxagen/src/contracts/context.proposal.list.ts) | api, mcp |
@@ -450,7 +451,9 @@ after the registered name separately when their contract uses a dotted stem.
 | [list_github_installations](repository.installation.candidates.md) | [repository.installation.candidates.ts](../../packages/oxagen/src/contracts/repository.installation.candidates.ts) | api, mcp |
 | [list_installation_repositories](repository.installation.list.md) | [repository.installation.list.ts](../../packages/oxagen/src/contracts/repository.installation.list.ts) | api, mcp |
 | [list_repositories](repository.list.md) | [repository.list.ts](../../packages/oxagen/src/contracts/repository.list.ts) | api, mcp, cli |
+| [list_working_copies](repository.working_copy.list.md) | [repository.working_copy.list.ts](../../packages/oxagen/src/contracts/repository.working_copy.list.ts) | api, mcp |
 | [open_init_pr](repository.init_pr.open.md) | [repository.init_pr.open.ts](../../packages/oxagen/src/contracts/repository.init_pr.open.ts) | api, mcp, cli |
+| [record_working_copy](repository.working_copy.record.md) | [repository.working_copy.record.ts](../../packages/oxagen/src/contracts/repository.working_copy.record.ts) | api, cli |
 | [set_production_branch](repository.production_branch.set.md) | [repository.production_branch.set.ts](../../packages/oxagen/src/contracts/repository.production_branch.set.ts) | api, mcp, cli |
 | [unlink_repository](repository.unlink.md) | [repository.unlink.ts](../../packages/oxagen/src/contracts/repository.unlink.ts) | api, mcp, cli |
 

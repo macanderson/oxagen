@@ -1,5 +1,5 @@
 {
-  "generatedCount": 387,
+  "generatedCount": 390,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -1504,6 +1504,18 @@
       "consumes": []
     },
     {
+      "name": "get_published_steering",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_rate_card",
       "domain": "billing",
       "surfaces": [
@@ -2740,6 +2752,17 @@
       "consumes": []
     },
     {
+      "name": "list_working_copies",
+      "domain": "repository",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_workspaces",
       "domain": "workspace",
       "surfaces": [
@@ -3127,6 +3150,17 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "record_working_copy",
+      "domain": "repository",
+      "surfaces": [
+        "api",
+        "cli"
       ],
       "component": null,
       "produces": [],

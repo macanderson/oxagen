@@ -16,7 +16,7 @@ The mockup's CSS is the design of record for the app's presentation, rule by rul
 What the recipes say, from the mockup:
 
 - Gold is identity and never state. The one primary button on a screen is gold in both themes, the current tab is underlined in gold, the current nav item carries a gold inset, the organization avatar and the assistant mark are gold. State is a dot and a word in a tinted pill whose hue is a state hue.
-- Headers are flat. A panel header, a table header and a dialog header sit on the panel fill with a hairline under them. Nothing draws a grey band.
+- Headers are flat. A panel header, a table header and a dialog header sit on the panel fill with a hairline under them. Nothing draws a grey band. (ADR-170 amends this for panel headers, which sit on the `--panel-head` band.)
 - The eyebrow over an h1 names the scope, in gold as ink, in caps. Every app page has one.
 - A stat tile is one recipe: caps term, 23px figure, muted note, on the panel fill.
 - A table is 13px rows on the panel with a header in 10.5px caps and the dim ink.

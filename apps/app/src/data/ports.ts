@@ -57,7 +57,7 @@ import type {
   TranscriptZoom,
 } from "./contracts/run";
 import type { RunWork, RunOutcomesPolicy } from "./contracts/run-work";
-import type { RunPage } from "./contracts/runs";
+import type { PullRequestFilter, RunPage } from "./contracts/runs";
 import type { RuntimeAgents, RuntimeList } from "./contracts/runtimes";
 import type {
   OrgChoice,
@@ -182,7 +182,16 @@ export interface DataSource {
    * walks the recording to find its gaps.
    */
   runs: {
-    list(ctx: WsCtx, q: { cursor: string | null }): Promise<Read<RunPage>>;
+    list(
+      ctx: WsCtx,
+      q: {
+        cursor: string | null;
+        /** Runs per page, 1 to 100; absent reads the contract's ceiling. */
+        limit?: number;
+        /** Runs with or without pull requests; absent is every run. */
+        pullRequests?: PullRequestFilter;
+      },
+    ): Promise<Read<RunPage>>;
     get(
       ctx: WsCtx,
       runId: string,

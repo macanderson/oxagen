@@ -181,3 +181,46 @@ describe("describeCliCommands", () => {
     }
   });
 });
+
+// The Working copies tab tells people to run `oxagen init --org <org>
+// --workspace <ws>`. Init once accepted neither flag, so the documented
+// command failed with a parse error. And `oxagen pull` did not exist.
+describe("init and pull", () => {
+  const program = buildProgram();
+  const cmd = (name: string) => program.commands.find((c) => c.name() === name);
+
+  it("takes --org and --workspace on init, each with a value and no short flag", () => {
+    const init = cmd("init");
+    for (const long of ["--org", "--workspace"]) {
+      const opt = init?.options.find((o) => o.long === long);
+      expect(opt, `${long} must be offered`).toBeDefined();
+      expect(opt?.required).toBe(true);
+      expect(opt?.short).toBeUndefined();
+    }
+    expect(init?.options.map((o) => o.long)).toEqual(
+      expect.arrayContaining(["--json", "--no-link"]),
+    );
+  });
+
+  it("parses the documented init command without an error", () => {
+    const p = buildProgram();
+    p.exitOverride();
+    const init = p.commands.find((c) => c.name() === "init");
+    init?.action(() => {});
+    p.parse(["init", "--org", "acme", "--workspace", "payments"], {
+      from: "user",
+    });
+    expect(init?.opts()).toMatchObject({ org: "acme", workspace: "payments" });
+  });
+
+  it("registers pull with its four options", () => {
+    const pull = cmd("pull");
+    expect(pull?.description()).toMatch(/published/);
+    expect(pull?.options.map((o) => o.long).sort()).toEqual([
+      "--binding",
+      "--dry-run",
+      "--force",
+      "--json",
+    ]);
+  });
+});

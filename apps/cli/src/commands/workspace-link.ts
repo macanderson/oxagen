@@ -1,5 +1,7 @@
 /**
- * Per-project workspace binding — stored at <cwd>/.oxagen/workspace.json.
+ * Per-project workspace binding, stored at <root>/.oxagen/workspace.json,
+ * where <root> is the git top level when the project is a repository (see
+ * `projectRootFor` in lib/working-copy.ts).
  *
  * Links the current project to a specific Oxagen org + workspace so that
  * `oxagen init` and downstream commands can resolve the right tenant without
@@ -35,6 +37,28 @@ export interface WorkspaceLink {
   /** GitHub (or other VCS) repos this workspace is linked to. */
   repos?: Array<{ provider: "github"; fullName: string }>;
   linkedAt: string;
+  /**
+   * What the last `oxagen pull` wrote into `.oxagen/`. Absent before the first
+   * pull, and in every link written before pull existed.
+   */
+  pull?: WorkspaceLinkPull;
+}
+
+/**
+ * The base `oxagen pull` compares against: the published commit it wrote and
+ * the sha256 of every file as written. A local file whose hash still matches
+ * its entry was not edited here, so the next pull may replace or delete it.
+ */
+export interface WorkspaceLinkPull {
+  /** The production branch head the files were read at. */
+  commit: string;
+  /** The repository binding (`rpb_…`) the files came from. */
+  bindingId: string;
+  /** `owner/name` of that repository. */
+  fullName: string;
+  pulledAt: string;
+  /** Project-relative path (always under `.oxagen/`) to the sha256 hex of its bytes. */
+  files: Record<string, string>;
 }
 
 /** Absolute path to the workspace link file for the given project root. */

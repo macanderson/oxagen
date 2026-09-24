@@ -90,12 +90,18 @@ The workspace's memory of what agents learned. `remember` captures a lesson and 
 ## oxagen init: link a project
 
 ```bash
-oxagen init [--no-link] [--json]
+oxagen init [--org <slug>] [--workspace <slug>] [--no-link] [--json]
 ```
 
-Resolves an org and workspace (from the picker, or reused from an existing link) and writes `.oxagen/workspace.json`, which every other command reads to scope itself. It then checks the workspace for a GitHub connection and, in an interactive terminal, offers to create one so the graph has a source to ground on. `--no-link` skips that step.
+Resolves an org and workspace and writes `.oxagen/workspace.json`, which every other command reads to scope itself. `--org` and `--workspace` name the pair, so `init` runs without prompting, in CI or any shell without a terminal. Without them, `init` picks the only option or asks you to choose. It then checks the workspace for a GitHub connection and, in an interactive terminal, offers to create one so the graph has a source to ground on. `--no-link` skips that step and cannot be combined with `--org` or `--workspace`.
 
-`init` is idempotent. Running it again in a linked project reuses the existing link.
+Inside a git repository, `init` writes the link at the repository root, whatever subdirectory you run it from. It also adds `.oxagen/workspace.json` to the root `.gitignore` when git does not already ignore it, because the link binds one machine, not every clone. Outside a repository, the link goes in the current directory and `.gitignore` is left alone.
+
+`init` is idempotent. Running it again in a linked project reuses the existing link. When `--org` or `--workspace` names a different pair, `init` replaces the link and prints the pair it replaced.
+
+Last, `init` reports the directory to Oxagen, and it appears on the Working copies tab of the Repositories page with its machine, path, repository, branch, and head commit. The machine is named by a hash of a random id kept in `~/.config/oxagen/machine-id`, never a hardware serial. If the report fails, `init` prints one warning and still succeeds. With `--json`, the result carries the recorded `workingCopy` id or the error.
+
+With `--org` or `--workspace`, `init` exits 1 when it cannot link the pair you named.
 
 The link names the org and the workspace by slug, ID, and name:
 
@@ -112,6 +118,31 @@ The link names the org and the workspace by slug, ID, and name:
 ```
 
 Commands address the workspace by its slugs. The CLI reads the IDs only to find the org and workspace again after one is renamed, and then rewrites the slugs. `init` writes database IDs. To write the file by hand, copy the public IDs (`org_…` and `wrk_…`) from the Workspaces section of the Organization page. The CLI accepts either form.
+
+## oxagen pull: write the published steering here
+
+```bash
+oxagen pull [--binding <rpb_id>] [--force] [--dry-run] [--json]
+```
+
+Writes the steering published in this workspace into this directory's `.oxagen/`. Steering is published by merging a Context PR onto the main repository's production branch, and `pull` reads that tree from Oxagen at the branch head, so the machine needs no git access to the main repository. `--binding` pulls from another linked repository instead of the main one.
+
+Run it anywhere inside a project that `oxagen init` linked. `pull` walks up to the nearest `.oxagen/workspace.json` and uses the workspace it names.
+
+`pull` does not overwrite your edits. It records what it wrote in the `pull` block of `.oxagen/workspace.json` and decides each file three ways:
+
+| Here | Result |
+|---|---|
+| Absent | Created. |
+| Same as published | Left alone. |
+| Unchanged since the last pull | Replaced with the published file. |
+| Edited here | A conflict. |
+
+A file the last pull wrote that is no longer published is deleted if you did not edit it, and is a conflict if you did. One conflict refuses the whole pull, lists the paths, and writes nothing. `--force` overwrites or deletes the edited files. `--dry-run` prints the plan and writes nothing.
+
+`pull` writes only inside `.oxagen/`. It refuses a published path outside `.oxagen/`, a path that climbs out of it, the machine's own `.oxagen/workspace.json`, and a local symlink that would carry a write out of `.oxagen/`. `--force` does not override those refusals.
+
+After a pull, the directory is reported to Oxagen with the commit it pulled, the same way `init` reports it. The command exits 0 on success or when there is nothing to do, 1 on a refusal or an API failure, and 2 on a bad argument.
 
 ## oxagen agent: the agent identity
 

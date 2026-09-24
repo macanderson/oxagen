@@ -894,6 +894,12 @@
       "repoNotCaptured": "repository and branch not captured",
       "repoOnlyNotCaptured": "repository not captured",
       "noPullRequest": "no pull request",
+      "pullState": {
+        "open": "open",
+        "closed": "closed",
+        "merged": "merged",
+        "unknown": "status unknown"
+      },
       "pathNotCaptured": "path not captured",
       "noMachine": "machine not recorded",
       "subagents": "Subagents",

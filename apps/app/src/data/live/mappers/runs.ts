@@ -72,6 +72,22 @@ export function toRunRow(
             generatedAt: run.summary.generatedAt,
             model: run.summary.model,
           },
+    // Carried only when the read carried them: an absent list is "not read"
+    // (a ledger run, or a failed read), which the page must not show as none.
+    ...(run.pullRequests === undefined
+      ? {}
+      : {
+          pullRequests: run.pullRequests.map((pull) => ({
+            url: pull.url,
+            number: pull.number,
+            repository: pull.repository,
+            state: pull.state,
+          })),
+        }),
+    ...(run.pullRequestsOpened === undefined
+      ? {}
+      : { pullRequestsOpened: run.pullRequestsOpened }),
+    ...(run.diff === undefined ? {} : { diff: run.diff }),
     replayGrade: run.replayGrade,
     verdict: run.verdict,
     enforcementTier: run.enforcementTier,
@@ -89,5 +105,9 @@ export function toRunRow(
 }
 
 export function toRunPage(out: RunListOutput): z.input<typeof RunPage> {
-  return { runs: out.runs.map(toRunRow), nextCursor: out.nextCursor };
+  return {
+    runs: out.runs.map(toRunRow),
+    nextCursor: out.nextCursor,
+    ...(out.warnings === undefined ? {} : { warnings: out.warnings }),
+  };
 }

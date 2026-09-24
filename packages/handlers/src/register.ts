@@ -1942,6 +1942,27 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./repository.tree.get"))
         .repositoryTreeGetHandler as CapabilityHandlerFn,
   );
+  // The Working copies tab and `oxagen init` / `oxagen pull`: the directories
+  // the CLI linked to this workspace, and the published .oxagen/ tree a pull
+  // writes into one.
+  registerHandler(
+    "record_working_copy",
+    async () =>
+      (await import("./repository.working_copy.record"))
+        .workingCopyRecordHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_working_copies",
+    async () =>
+      (await import("./repository.working_copy.list"))
+        .workingCopyListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_published_steering",
+    async () =>
+      (await import("./context.steering.published.get"))
+        .publishedSteeringGetHandler as CapabilityHandlerFn,
+  );
   registerHandler(
     "set_production_branch",
     async () =>

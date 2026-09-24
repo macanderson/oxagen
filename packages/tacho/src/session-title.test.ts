@@ -100,4 +100,18 @@ describe("deriveSessionTitle", () => {
   it("ignores a trailing separator on a path", () => {
     expect(deriveSessionTitle({ cwd: "/home/dev/oxagen/" })).toBe("oxagen");
   });
+
+  it("names a folder with no letter or digit by its parent too", () => {
+    // A run in `~/Documents/_` was titled "_", which tells nobody where it
+    // ran. The parent keeps the place readable and still names the folder.
+    expect(deriveSessionTitle({ cwd: "/Users/dev/Documents/_" })).toBe(
+      "Documents/_",
+    );
+    expect(deriveSessionTitle({ cwd: "C:\\Users\\dev\\notes\\--\\" })).toBe(
+      "notes/--",
+    );
+    expect(deriveSessionTitle({ cwd: "/work/_/__" })).toBe("work/_/__");
+    // Nothing above it to name: the folder is all there is.
+    expect(deriveSessionTitle({ cwd: "/_" })).toBe("_");
+  });
 });

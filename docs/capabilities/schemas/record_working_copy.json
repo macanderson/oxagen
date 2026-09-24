@@ -1,0 +1,146 @@
+{
+  "name": "record_working_copy",
+  "domain": "repository",
+  "description": "Record a directory the CLI linked to this workspace: its machine, path, git remote, branch, head, the state of .oxagen/ and the commit its steering was last pulled at.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "cli"
+  ],
+  "sensitivity": "low",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "machineId": {
+        "type": "string"
+      },
+      "hostname": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 255
+      },
+      "directory": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1024
+      },
+      "repository": {
+        "anyOf": [
+          {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 512
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "branch": {
+        "anyOf": [
+          {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "headCommit": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "oxagenPresent": {
+        "type": "boolean"
+      },
+      "symlinks": {
+        "type": "string",
+        "enum": [
+          "linked",
+          "missing",
+          "none"
+        ]
+      },
+      "pulledCommit": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "event": {
+        "type": "string",
+        "enum": [
+          "init",
+          "pull"
+        ]
+      },
+      "cliVersion": {
+        "anyOf": [
+          {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "machineId",
+      "hostname",
+      "directory",
+      "repository",
+      "branch",
+      "headCommit",
+      "oxagenPresent",
+      "symlinks",
+      "pulledCommit",
+      "event",
+      "cliVersion"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "workingCopyId": {
+        "type": "string"
+      },
+      "firstSeenAt": {
+        "type": "string"
+      },
+      "lastSeenAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "workingCopyId",
+      "firstSeenAt",
+      "lastSeenAt"
+    ],
+    "additionalProperties": false
+  }
+}

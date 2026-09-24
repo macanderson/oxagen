@@ -1,7 +1,8 @@
 // repository.handlers.test.ts — the workspace-repository tools (MC spec §10.1):
 // `list_repositories`, `link_repository`, `unlink_repository`, and the
 // Repositories page's `get_repository_tree`, `set_production_branch` and
-// `open_init_pr`.
+// `open_init_pr`, plus the Working copies tab's `list_working_copies` and
+// `oxagen pull`'s `get_published_steering`.
 //
 // Same pattern as agent.handlers.test.ts: the kernel `invoke` and the context
 // seam are mocked, and each tool must dispatch its own contract with the MCP
@@ -227,5 +228,83 @@ describe("open_init_pr tool", () => {
     expect(mocks.invoke).toHaveBeenCalledWith("open_init_pr", args, fakeCtx, {
       surface: "mcp",
     });
+  });
+});
+
+import workingCopiesTool, {
+  metadata as workingCopiesMetadata,
+  schema as workingCopiesSchema,
+} from "./repository.working_copy.list";
+import publishedTool, {
+  metadata as publishedMetadata,
+  schema as publishedSchema,
+} from "./context.steering.published.get";
+
+describe("list_working_copies tool", () => {
+  it("is read-only and returns the directories the CLI reported", async () => {
+    expect(workingCopiesMetadata.name).toBe("list_working_copies");
+    expect(workingCopiesMetadata.annotations?.readOnlyHint).toBe(true);
+    const output = {
+      workingCopies: [
+        {
+          id: "wcp_0a",
+          hostname: "mac-mini.local",
+          directory: "/Users/ada/code/platform",
+          repository: "acme/platform",
+          branch: "main",
+          headCommit: "abc1234",
+          oxagenPresent: true,
+          symlinks: "linked",
+          pulledCommit: "abc1234",
+          lastEvent: "pull",
+          reportedBy: { userId: "u_1", name: "Ada" },
+          cliVersion: "1.4.0",
+          firstSeenAt: "2026-09-20T00:00:00.000Z",
+          lastSeenAt: "2026-09-24T00:00:00.000Z",
+        },
+      ],
+    };
+    mocks.invoke.mockResolvedValue(output);
+    await expect(workingCopiesTool({ limit: 10 })).resolves.toEqual(output);
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "list_working_copies",
+      { limit: 10 },
+      fakeCtx,
+      { surface: "mcp" },
+    );
+  });
+
+  it("refuses a limit past 200 (negative)", () => {
+    expect(workingCopiesSchema.limit.safeParse(201).success).toBe(false);
+  });
+});
+
+describe("get_published_steering tool", () => {
+  it("is read-only and returns the published .oxagen/ files", async () => {
+    expect(publishedMetadata.name).toBe("get_published_steering");
+    expect(publishedMetadata.annotations?.readOnlyHint).toBe(true);
+    const output = {
+      bindingId: "rpb_0a",
+      role: "main",
+      fullName: "acme/platform",
+      productionBranch: "main",
+      head: "abc123",
+      files: [{ path: ".oxagen/workspace.toml", content: "schema = 1" }],
+      readAt: "2026-09-24T00:00:00.000Z",
+    };
+    mocks.invoke.mockResolvedValue(output);
+    await expect(publishedTool({ bindingId: undefined })).resolves.toEqual(
+      output,
+    );
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "get_published_steering",
+      {},
+      fakeCtx,
+      { surface: "mcp" },
+    );
+  });
+
+  it("refuses an id that is not a binding id (negative)", () => {
+    expect(publishedSchema.bindingId.safeParse("con_0b").success).toBe(false);
   });
 });

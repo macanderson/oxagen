@@ -30,6 +30,12 @@ export type EventPayload<T = Record<string, unknown>> = {
    * queueing it twice.
    */
   id?: string;
+  /**
+   * When the provider received the event, in milliseconds since the epoch.
+   * Set on the events a handler receives. A handler reads it to tell how long
+   * the event waited in the queue.
+   */
+  ts?: number;
 };
 
 // ─── Step Context ────────────────────────────────────────────────────────────

@@ -268,6 +268,14 @@ describe("the stored failure reason", () => {
     [{ name: "TimeoutError", message: "The operation was aborted" }, "timeout"],
     [new Error("Run enrichment was disabled"), "disabled"],
     [new Error("Stella returned no run account"), "empty_account"],
+    [new Error("the model provider answered 403"), "model_refused"],
+    [new Error("the model provider answered 429"), "rate_limited"],
+    [new Error("the model provider answered 503"), "provider_error"],
+    [new Error("the model provider answered 400"), "request_rejected"],
+    [
+      new Error("the model call failed before the provider answered"),
+      "provider_unreachable",
+    ],
     [new Error("socket hang up"), "unknown"],
     ["a bare string", "unknown"],
   ])("classifies %o as %s", (error, reason) => {
@@ -298,4 +306,67 @@ it("does not retry a credit refusal inside the job", async () => {
   await expect(call).rejects.toThrow(
     "Run enrichment unavailable: insufficient_credits",
   );
+});
+
+// #4113: a turn whose model call failed settles with an empty answer, and the
+// job recorded every such refusal as `empty_account`.
+describe("a model call that fails inside the turn", () => {
+  async function turnSettlingWith(parts: unknown[], text: string) {
+    const { resolveModelFundingSource, selectModelFromFunding } = await import(
+      "@oxagen/ai"
+    );
+    const { runGovernedTurn } = await import("@oxagen/agent");
+    const { evaluateTurnCreditGate } = await import("@oxagen/billing");
+    vi.clearAllMocks();
+    vi.mocked(resolveModelFundingSource).mockResolvedValue({
+      fundedBy: "platform",
+    } as never);
+    vi.mocked(selectModelFromFunding).mockReturnValue({
+      model: {} as never,
+      fundedBy: "platform",
+    });
+    vi.mocked(evaluateTurnCreditGate).mockResolvedValue({ ok: true } as never);
+    vi.mocked(runGovernedTurn).mockResolvedValue({
+      fullStream: (async function* () {
+        yield* parts;
+      })(),
+      finalText: Promise.resolve(text),
+      modelId: "test-model",
+    } as never);
+    return runNarrativeTurn(scope, "summarize");
+  }
+  const failedWith = (status: number) =>
+    turnSettlingWith(
+      [
+        {
+          type: "error",
+          error: Object.assign(
+            new Error(`the model provider answered ${status}`),
+            { code: "model_call_failed", status },
+          ),
+        },
+        { type: "finish", finishReason: "error" },
+      ],
+      "",
+    );
+
+  it("throws the provider's refusal, not an empty account, and does not retry it", async () => {
+    const { NonRetriableError } = await import("@oxagen/functions");
+    const error = await failedWith(403).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(NonRetriableError);
+    expect(enrichmentFailureReason(error)).toBe("model_refused");
+  });
+
+  it("leaves a rate limit to the job's retries", async () => {
+    const { NonRetriableError } = await import("@oxagen/functions");
+    const error = await failedWith(429).catch((e: unknown) => e);
+    expect(error).not.toBeInstanceOf(NonRetriableError);
+    expect(enrichmentFailureReason(error)).toBe("rate_limited");
+  });
+
+  it("still reports an empty account when the turn ended cleanly with no text", async () => {
+    await expect(turnSettlingWith([], "  ")).rejects.toThrow(
+      "Stella returned no run account",
+    );
+  });
 });
