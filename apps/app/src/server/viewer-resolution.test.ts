@@ -63,6 +63,7 @@ function lookups(overrides: Overrides = {}): SystemLookups {
     ssoPolicy: vi.fn(() => Promise.resolve(null)),
     twoFactorEnabled: vi.fn(() => Promise.resolve(false)),
     invitationByToken: vi.fn(() => Promise.resolve(null)),
+    freePlanIncludedGau: vi.fn(() => Promise.resolve(null)),
     ...overrides,
   };
 }

@@ -105,6 +105,9 @@ describe("routes", () => {
   it("carries a destination forward, encoded, and leaves the link bare for the root", () => {
     const fleet = routes.fleet("acme", "core-platform");
     expect(routes.signup(fleet)).toBe("/signup?next=%2Facme%2Fcore-platform");
+    expect(routes.signup(undefined, { email: "marcus@a-intel.com" })).toBe(
+      "/signup?email=marcus%40a-intel.com",
+    );
     expect(routes.login(ROOT)).toBe("/login");
     expect(routes.login()).toBe("/login");
     expect(routes.loginWithOAuthError("please_restart_the_process")).toBe(

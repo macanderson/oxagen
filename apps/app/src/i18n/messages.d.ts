@@ -1871,6 +1871,7 @@ type Messages = {
       signInLead: string;
       wrongAccountBodyNoInviter: string;
       failedClosed: string;
+      logInInstead: string;
     };
     cli: {
       title: string;

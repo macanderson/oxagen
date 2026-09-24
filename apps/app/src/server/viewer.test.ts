@@ -31,12 +31,14 @@ const {
   resolveMock,
   invitationByToken,
   mfaPolicy,
+  freePlanIncludedGau,
 } = vi.hoisted(() => ({
   requestHeaders: new Headers(),
   getSessionMock: vi.fn(),
   resolveMock: vi.fn<() => Promise<ViewerResolution>>(),
   invitationByToken: vi.fn<() => Promise<InvitationRecord | null>>(),
   mfaPolicy: vi.fn(),
+  freePlanIncludedGau: vi.fn<() => Promise<number | null>>(),
 }));
 
 vi.mock("next/navigation", () => nav);
@@ -50,7 +52,12 @@ vi.mock("next/headers", () => ({
 }));
 vi.mock("./session", () => ({ getSession: getSessionMock }));
 vi.mock("./tenancy-lookups", () => ({
-  systemLookups: { name: "live", invitationByToken, mfaPolicy },
+  systemLookups: {
+    name: "live",
+    invitationByToken,
+    mfaPolicy,
+    freePlanIncludedGau,
+  },
 }));
 vi.mock("./viewer-resolution", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./viewer-resolution")>()),
@@ -66,6 +73,7 @@ import {
   orgTwoFactorPolicy,
   type OrgFields,
   PretenantCtx,
+  readFreePlanAllowance,
   readInvitation,
   requireInvitee,
   requireUser,
@@ -108,6 +116,7 @@ beforeEach(() => {
   for (const key of [...requestHeaders.keys()]) requestHeaders.delete(key);
   resolveMock.mockReset();
   invitationByToken.mockReset();
+  freePlanIncludedGau.mockReset();
   getSessionMock.mockResolvedValue(null);
 });
 
@@ -382,6 +391,19 @@ describe("readInvitation", () => {
     await expect(readInvitation("")).resolves.toBeNull();
     await expect(readInvitation("a".repeat(65))).resolves.toBeNull();
     expect(invitationByToken).not.toHaveBeenCalled();
+  });
+});
+
+describe("readFreePlanAllowance", () => {
+  it("reads the Free plan's allowance with no session", async () => {
+    freePlanIncludedGau.mockResolvedValue(5000);
+    await expect(readFreePlanAllowance()).resolves.toBe(5000);
+    expect(getSessionMock).not.toHaveBeenCalled();
+  });
+
+  it("passes a missing plan row through as null (negative)", async () => {
+    freePlanIncludedGau.mockResolvedValue(null);
+    await expect(readFreePlanAllowance()).resolves.toBeNull();
   });
 });
 

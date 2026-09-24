@@ -23,8 +23,9 @@
 // A member who lacks a permission is not an exception here: the kernel refuses
 // the read or write and the page renders `denied`.
 //
-// readInvitation is the one read here that needs no session: /invite/[token]
-// renders for a signed-out visitor, and the token is the capability (#3049).
+// readInvitation and readFreePlanAllowance are the reads here that need no
+// session: /invite/[token] renders for a signed-out visitor, and the token is
+// the capability (#3049); /signup states the Free plan's published allowance.
 import "server-only";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
@@ -351,6 +352,15 @@ export async function readInvitation(
 ): Promise<InvitationRecord | null> {
   if (!INVITATION_TOKEN.test(token)) return null;
   return systemLookups.invitationByToken(token);
+}
+
+/**
+ * The governed actions the Free plan includes each month, for the sign-up
+ * page's allowance tag, or null when the plan row is not seeded. No session is
+ * read: the published terms belong to no tenant.
+ */
+export function readFreePlanAllowance(): Promise<number | null> {
+  return systemLookups.freePlanIncludedGau();
 }
 
 /**
