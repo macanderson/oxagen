@@ -566,7 +566,7 @@ export class SessionRegistry {
   /**
    * Find or open the record for a harness session, absorbing new facts.
    * `reopened` says this call reopened a sealed record, which the caller
-   * records on the chain (ADR-170).
+   * records on the chain (ADR-172).
    */
   ensure(
     harnessSessionId: string,

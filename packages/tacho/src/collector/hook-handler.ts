@@ -749,7 +749,7 @@ async function routeHook(
   if (wrote !== undefined) record.workDir = wrote;
   // This hook reopened a session the sweep closed for quiet, so the chain
   // starts again, and says so first. The control plane reopens a run whose
-  // host sealed it only on an `agent_start` (ADR-170). A `SessionStart`
+  // host sealed it only on an `agent_start` (ADR-172). A `SessionStart`
   // seals its own; every other hook gets this one from the daemon.
   const reopening: TachoEvent[] =
     reopened === true && input.hook_event_name !== "SessionStart"

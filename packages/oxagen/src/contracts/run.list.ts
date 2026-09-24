@@ -347,7 +347,7 @@ export const runItemSchema = z
     sealedAt: z.string().datetime().nullable(),
     /**
      * What sealed a wrapped session: `agent_stop`, its host's own end,
-     * which the host's next `agent_start` on the chain reopens (ADR-170);
+     * which the host's next `agent_start` on the chain reopens (ADR-172);
      * `idle_timeout`, the control plane closing a run that sent nothing for
      * twelve hours, which the run's next event reopens; or `operator`, a
      * person sealing it through `seal_run` (ADR-169), which is final. Null
