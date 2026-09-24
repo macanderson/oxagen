@@ -264,6 +264,37 @@ describe("two parallel subagents under one parent", () => {
     ).toEqual(["req_typed"]);
   });
 
+  it("files a record that names only the type on the one subagent of it still open", () => {
+    const root = parentWithTwoSubagents();
+    const [a, b] = SUBAGENTS;
+    const stopped = chainOf(root, a.id);
+    root.ingestHook(
+      {
+        session_id: ID,
+        hook_event_name: "SubagentStop",
+        agent_id: a.id,
+        agent_type: "Explore",
+      },
+      {},
+      at,
+    );
+    root.ingestOtlp(
+      otelLog("api_request", {
+        ...usage("req_typed"),
+        "agent.name": "Explore",
+      }),
+    );
+    expect(
+      countedCalls(chainOf(root, b.id).sealedEvents).map((event) =>
+        field(event, "request_id"),
+      ),
+    ).toEqual(["req_typed"]);
+    expect(stopped.sealedEvents.filter((e) => e.kind === "llm_call")).toEqual(
+      [],
+    );
+    expect(countedCalls(root.sealedEvents)).toEqual([]);
+  });
+
   it("keeps the family ledger when a rollback from the root undoes a child's call", () => {
     const root = parentWithTwoSubagents();
     const [a, b] = SUBAGENTS;
