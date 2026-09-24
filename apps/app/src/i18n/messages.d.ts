@@ -538,6 +538,8 @@ type Messages = {
           tierHint: string;
           budget: string;
           budgetHint: string;
+          budgetDay: string;
+          budgetDayHint: string;
         };
         tools: {
           title: string;

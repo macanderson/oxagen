@@ -32,3 +32,23 @@ describe("published price card cardinality", () => {
     }
   });
 });
+
+describe("a field that falls back with .catch()", () => {
+  const doc = JSON.parse(
+    readFileSync(
+      new URL(
+        "../../docs/capabilities/schemas/fetch_commands.json",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  );
+  it("publishes the control envelope's day spend as optional, with its real shape (ADR-160)", () => {
+    const control = doc.output.properties.control;
+    expect(control.required).not.toContain("agent_day_spend");
+    expect(control.properties.agent_day_spend).toMatchObject({
+      type: "object",
+      required: ["day", "this_host_usd_micros", "other_hosts_usd_micros"],
+    });
+  });
+});

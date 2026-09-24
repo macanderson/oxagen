@@ -6,6 +6,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { type RelatedItem, RelatedList } from "./related-list";
 import { recordLink } from "./view";
@@ -33,7 +34,13 @@ const item = (overrides: Partial<RelatedItem>): RelatedItem => ({
   ...overrides,
 });
 
-afterEach(cleanup);
+afterEach(async () => {
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
+});
 
 describe("RelatedList", () => {
   it("draws only the facts a record carries: no force, no effect, no commit and no date when it has none", () => {
