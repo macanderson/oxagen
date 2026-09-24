@@ -126,11 +126,20 @@ afterEach(() => {
 const rows = () => screen.queryAllByTestId("tx-row");
 const kinds = () => rows().map((row) => row.getAttribute("data-kind"));
 const readout = () => screen.getByTestId("transport-readout");
+/**
+ * The row's own tool name. A subagent's rows are drawn inside its call's row,
+ * so a call row also holds the names of the rows under it. Only the name whose
+ * nearest row is this one belongs to it.
+ */
+function ownToolName(row: HTMLElement): string | null {
+  const name = Array.from(
+    row.querySelectorAll('[data-testid="tx-tool-name"]'),
+  ).find((found) => found.closest('[data-testid="tx-row"]') === row);
+  return name?.textContent ?? null;
+}
 /** The tool row whose name reads `name`. */
 function toolRow(name: string): HTMLElement {
-  const found = rows().find(
-    (row) => within(row).queryByTestId("tx-tool-name")?.textContent === name,
-  );
+  const found = rows().find((row) => ownToolName(row) === name);
   if (found === undefined) throw new Error(`no ${name} row`);
   return found;
 }
@@ -1159,8 +1168,8 @@ describe("a read the page makes again", () => {
   );
   const names = () =>
     rows().flatMap((row) => {
-      const name = row.querySelector('[data-testid="tx-tool-name"]');
-      return name === null ? [] : [name.textContent];
+      const name = ownToolName(row);
+      return name === null ? [] : [name];
     });
 
   it("takes the page's new read, so a subagent frame recorded behind the cursor shows under its call once the run seals (#4083)", () => {
@@ -1865,15 +1874,20 @@ describe("searching the transcript", () => {
 
   it("keeps a found row's place in the run", () => {
     renderSection();
-    const clockOf = () =>
-      rows()
-        .find((row) => /changelog/i.test(row.textContent))
-        ?.querySelector("time")
-        ?.getAttribute("dateTime");
-    const before = clockOf();
+    // The row is named by its kind, not by the text it draws: a closed recall
+    // shows its heading and the search opens it, so the words a row shows
+    // change with the search, and a finder that reads them picks a different
+    // row before and after (#4116). The run holds one recall.
+    const recall = () =>
+      rows().find((row) => row.getAttribute("data-kind") === "recall");
+    const clockOf = (row: HTMLElement | undefined) =>
+      row?.querySelector(":scope > time")?.getAttribute("dateTime");
+    const before = clockOf(recall());
     expect(before).toBeDefined();
     search("changelog");
-    expect(clockOf()).toBe(before);
+    const found = recall();
+    expect(found).toHaveTextContent(/changelog/i);
+    expect(clockOf(found)).toBe(before);
   });
 
   it("says nothing matches rather than drawing an empty transcript (negative)", () => {
