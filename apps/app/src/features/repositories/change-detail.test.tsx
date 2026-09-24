@@ -20,11 +20,12 @@ import type { RepositoryChange } from "@/data/contracts/repository";
 import type { ContextPr } from "@/data/contracts/steering";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import type { closeRepositoryChange } from "./actions";
 
 const actions = vi.hoisted(() => ({
   readRepositoryChange: vi.fn(),
   mergeRepositoryChange: vi.fn(),
-  closeRepositoryChange: vi.fn(),
+  closeRepositoryChange: vi.fn<typeof closeRepositoryChange>(),
 }));
 vi.mock("./actions", () => actions);
 
@@ -414,19 +415,16 @@ describe("closing without merging", () => {
     await waitFor(() => {
       expect(actions.closeRepositoryChange).toHaveBeenCalledOnce();
     });
-    expect(actions.closeRepositoryChange).toHaveBeenCalledWith(
+    const [org, ws, proposalId, sent] =
+      actions.closeRepositoryChange.mock.calls[0] ?? [];
+    expect([org, ws, proposalId]).toEqual([
       "acme",
       "core-platform",
       "prp_open1",
-      expect.stringContaining("Closed by Mac Anderson <mac@acme.test>"),
-    );
-    expect(actions.closeRepositoryChange).toHaveBeenCalledWith(
-      "acme",
-      "core-platform",
-      "prp_open1",
-      expect.stringContaining(
-        "/acme/core-platform/repositories/changes/prp_open1",
-      ),
+    ]);
+    expect(sent).toContain("Closed by Mac Anderson <mac@acme.test>");
+    expect(sent).toContain(
+      "/acme/core-platform/repositories/changes/prp_open1",
     );
     expect(await screen.findByTestId("change-done")).toHaveTextContent(
       "Closed without merging.",
