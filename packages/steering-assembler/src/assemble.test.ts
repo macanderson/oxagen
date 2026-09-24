@@ -3,6 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   assembleSteering,
   compareCandidates,
+  HARNESS_CONTEXT_MAX_CHARS,
+  PREFIX_BUDGET_TOKENS,
+  SMALLEST_HARNESS_CONTEXT_MAX_CHARS,
   STEERING_HEADER,
   type SteeringCandidate,
   type SteeringManifestItem,
@@ -333,6 +336,29 @@ describe("assembleSteering", () => {
     );
     const { text } = assembleSteering(run(candidates), 4096);
     expect(text!.length).toBeLessThanOrEqual(16_384);
+  });
+
+  // Witness for #3944: the prefix budget was 4,096 tokens, up to 16,384
+  // characters, and Claude Code replaces anything past 10,000 with a file
+  // path while the manifest still called every record included.
+  it("fits the prefix budget to the smallest harness limit", () => {
+    expect(SMALLEST_HARNESS_CONTEXT_MAX_CHARS).toBe(
+      HARNESS_CONTEXT_MAX_CHARS["claude-code"],
+    );
+    expect(PREFIX_BUDGET_TOKENS * 4).toBeLessThanOrEqual(
+      SMALLEST_HARNESS_CONTEXT_MAX_CHARS,
+    );
+    const candidates = Array.from({ length: 30 }, (_, i) =>
+      record({ id: `r-${i}`, body: `${"s".repeat(600)} (rule; r-${i})` }),
+    );
+    const { text, manifest } = assembleSteering(
+      run(candidates),
+      PREFIX_BUDGET_TOKENS,
+    );
+    expect(text!.length).toBeLessThanOrEqual(
+      SMALLEST_HARNESS_CONTEXT_MAX_CHARS,
+    );
+    expect(manifest.cut).toBeGreaterThan(0);
   });
 
   it("ranks an unparseable instant as the oldest, and breaks a tie on id then kind", () => {

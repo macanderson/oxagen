@@ -11,7 +11,10 @@ import { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { policyBundleSchema } from "@oxagen/oxagen/tacho/schemas";
 import { steeringManifestSchema } from "@oxagen/tacho";
-import { STEERING_HEADER } from "@oxagen/steering-assembler";
+import {
+  SMALLEST_HARNESS_CONTEXT_MAX_CHARS,
+  STEERING_HEADER,
+} from "@oxagen/steering-assembler";
 import {
   CONTEXT_SYSTEM_BUDGET_TOKENS,
   CONTEXT_SYSTEM_MAX_CHARS,
@@ -189,12 +192,17 @@ describe("assembleWorkspaceSteering", () => {
     expect(text!.length).toBeLessThanOrEqual(600);
   });
 
-  it("stays inside the host's limit at the default budget", () => {
+  // Witness for #3944: at 4,096 tokens the text reached 16,384 characters,
+  // and Claude Code swaps anything past 10,000 for a file path.
+  it("stays inside the smallest harness limit at the default budget", () => {
     const rows = Array.from({ length: 500 }, (_, i) =>
       rec({ slug: `r-${i}`, statement: "s".repeat(200) }),
     );
     const { text, manifest } = assemble(rows);
     expect(text!.length).toBeLessThanOrEqual(CONTEXT_SYSTEM_MAX_CHARS);
+    expect(text!.length).toBeLessThanOrEqual(
+      SMALLEST_HARNESS_CONTEXT_MAX_CHARS,
+    );
     expect(manifest.budget_tokens).toBe(CONTEXT_SYSTEM_BUDGET_TOKENS);
     expect(manifest.spent_tokens).toBeLessThanOrEqual(
       CONTEXT_SYSTEM_BUDGET_TOKENS,
