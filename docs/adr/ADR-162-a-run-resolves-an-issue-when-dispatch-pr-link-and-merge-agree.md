@@ -1,4 +1,4 @@
-# ADR-162: An issue is resolved by a run only when its dispatch, PR link, and merge agree
+# ADR-162: A run resolves an issue when dispatch, PR link and merge agree
 
 Status: Accepted
 Date: 2026-09-23
@@ -7,7 +7,7 @@ Refs: #4013
 
 ## Context
 
-You want to know which issues a run resolved, and you want the answer to come from facts rather than from what the agent said. Today Oxagen cannot answer. Three facts are needed, and the code holds one and a half of them.
+You want to know which issues a run resolved, and you want the answer to come from facts rather than from what the agent said. Today Oxagen cannot answer. Three kinds of record are needed, and the code holds one and a half of them.
 
 - **The dispatch.** No code records that Oxagen handed an issue to an agent. `dispatch_command` (`packages/oxagen/src/contracts/tacho.command.dispatch.ts`) queues `pause`, `resume`, `cancel`, `steer`, and `message` to a live run through `tacho.tacho_control_commands`, and knows nothing about issues. `packages/handlers/src/run-issue-provider.ts` goes the other way: a run's outcome opens an issue. This ADR defines the dispatch record.
 - **The pull request a run opened.** PR #4009 adds the `oxagen:pr_link` frame, sealed from Claude Code's `pr-link` transcript record with attrs `pr_number`, `pr_url`, and `pr_repository`. It reaches the control plane through `ingest_tacho_events` on the run's hash chain. ADR-161 gives backfilled runs the same frame.
@@ -57,9 +57,9 @@ The state is derived from stored facts by one pure function, `evaluateIssueDispa
 Postgres holds state, in the `tacho` schema beside the sessions it references.
 
 - `tacho.issue_dispatches`: id (`dsp_`), org, workspace, `repository_binding_id`, provider (`github`), `issue_number`, `issue_node_id`, `agent_id`, `run_session_uuid` (the root session, nullable until claimed), `dispatched_by_principal_id`, `control_command_id`, `state`, `state_changed_at`, `resolved_pr_id`, and `abandoned_reason`. A partial unique index allows one open dispatch per issue per workspace.
-- `tacho.run_pull_requests`: one row per (root session, `pr_repository`, `pr_number`), written from the `pr_link` frame, with the frame's `event_id_idem`. It holds the GitHub facts once known: `pr_node_id`, `merged_at`, `merge_commit_sha`, `closed_unmerged_at`, and `closing_issue_node_ids`.
-- `tacho.github_pull_request_facts`: one row per (repository, `pr_number`), written from the webhook or reconciliation whether or not a run has linked the PR yet. This row is what lets the merge arrive before the `pr_link`.
-- `tacho.issue_resolutions`: unique on `dispatch_id`, with the PR, the matching rule (`closing_reference` or `merge_commit_close`), and the webhook delivery or reconcile run that supplied the last fact.
+- `tacho.run_pull_requests`: one row per (root session, `pr_repository`, `pr_number`), written from the `pr_link` frame, with the frame's `event_id_idem`. It references the matching `github_pull_request_facts` row and copies none of its fields.
+- `tacho.github_pull_request_facts`: one row per (repository, `pr_number`), holding `pr_node_id`, `merged_at`, `merge_commit_sha`, `closed_unmerged_at`, and `closing_issue_node_ids`, written from the webhook or reconciliation whether or not a run has linked the PR yet. This row is what lets the merge arrive before the `pr_link`.
+- `tacho.issue_resolutions`: unique on `dispatch_id`, with the PR, the matching rule (`closing_reference` or `merge_commit_close`), and `resolved_at` (when Oxagen first held all four facts), and the webhook delivery or reconcile run that supplied the last fact.
 
 ClickHouse holds the events, append-only: `issue_dispatch_events`, one row per fact received and per state change, with the source (`capability`, `ingest`, `webhook`, `reconcile`) and its id (the `event_id_idem`, `x-github-delivery`, or reconcile run id). The Run page's history of a dispatch reads from it.
 
