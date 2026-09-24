@@ -132,16 +132,10 @@ function CommandDialog({
   runId,
   write,
   ledgerControl = false,
-  testIdPrefix = "run",
 }: {
   command: Command;
   runId: string;
   ledgerControl?: boolean;
-  /**
-   * The test id's first word. The pause banner draws its own Resume beside the
-   * header's, and two controls with one id would be one control to a test.
-   */
-  testIdPrefix?: string;
   /**
    * The reason a pause carries, or the text a steer sends with the delivery
    * mode picked for it. A halt ignores the mode: the contract refuses a
@@ -200,7 +194,7 @@ function CommandDialog({
     <>
       <button
         type="button"
-        data-testid={`${testIdPrefix}-${command}`}
+        data-testid={`run-${command}`}
         // `.btn.danger`: Cancel ends the run, so it carries the failed hue
         // as ink; every other control is a plain `.btn`.
         className={command === "cancel" ? buttonDanger : buttonSecondary}
@@ -214,7 +208,7 @@ function CommandDialog({
         open={open}
         onOpenChange={openChange}
         title={t(`${command}.title`, { run: runId })}
-        testId={`${testIdPrefix}-${command}-dialog`}
+        testId={`run-${command}-dialog`}
       >
         {queued === null ? (
           <form
@@ -251,9 +245,7 @@ function CommandDialog({
               <DeliveryPicker value={mode} onChange={setMode} />
             ) : null}
             {failure === null ? null : (
-              <FormAlert testId={`${testIdPrefix}-${command}-failure`}>
-                {failure}
-              </FormAlert>
+              <FormAlert testId={`run-${command}-failure`}>{failure}</FormAlert>
             )}
             <SubmitButton
               pending={pending}
@@ -464,50 +456,5 @@ export function RunControls({
         {t(`steerBlocked.${STEER_BLOCK_COPY[steerBlock]}`)}
       </p>
     </div>
-  );
-}
-
-/**
- * Resume, inside the pause banner: the one action a paused run is waiting on,
- * next to the sentence that says it is paused. It is the header's Resume
- * behind the same dialog, and it is drawn only where the header would draw
- * that Resume enabled: a live run whose host a command reaches, for a viewer
- * `dispatch_command` admits. Anyone else gets no button here, because the
- * header's controls already say why they cannot resume.
- */
-export function PauseBannerResume({
-  org,
-  ws,
-  runId,
-  status,
-  source,
-  commandBlock = null,
-  ingressRevoked = false,
-  orgRole,
-  wsRole,
-}: {
-  org: string;
-  ws: string;
-  runId: string;
-  status: RunRow["status"];
-  source: RunRow["source"];
-  commandBlock?: CommandBlock | null;
-  ingressRevoked?: boolean;
-  orgRole: OrgRole;
-  wsRole: WsRole;
-}) {
-  const ledger = source === "ledger";
-  if (status !== "live") return null;
-  if (!ledger && commandBlock !== null) return null;
-  if (!canCommandRun(orgRole, wsRole)) return null;
-  if (ledger && ingressRevoked) return null;
-  return (
-    <CommandDialog
-      command="resume"
-      runId={runId}
-      ledgerControl={ledger}
-      testIdPrefix="banner"
-      write={(text) => haltRun(org, ws, runId, "resume", text)}
-    />
   );
 }

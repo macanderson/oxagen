@@ -35,7 +35,7 @@ import { runFit, type RunFit } from "./fit";
 import type { RunMetrics } from "./metrics";
 import { ExportAction } from "./record-actions";
 import { ReplayActions } from "./replay-actions";
-import { PauseBannerResume, RunControls } from "./run-controls";
+import { RunControls } from "./run-controls";
 import type { Place } from "./tab-props";
 
 /** `.b.b-q`: the quiet pill every strip chip is. */
@@ -611,40 +611,18 @@ function RunStatusWord({ run, parked }: { run: RunRow; parked: boolean }) {
   );
 }
 
-/**
- * The banner under the header while ingress is held: that the run is paused,
- * and Resume beside it for a viewer the header would let resume.
- */
-function PauseBanner({
-  run,
-  orgRole,
-  wsRole,
-  place,
-}: {
-  run: RunRow;
-  orgRole: OrgRole;
-  wsRole: WsRole;
-  place: Place;
-}) {
+/** "Paused" or "Paused at …": the banner under the header while ingress is held. */
+function PauseBanner({ run }: { run: RunRow }) {
   const t = useTranslations("run.header");
   if (run.ingressPaused !== true) return null;
   return (
-    <div className="mb-3.5 flex flex-wrap items-center justify-between gap-2.5 rounded-[10px] border border-info/40 bg-info/10 px-3.5 py-[11px] text-[12.5px] text-foreground">
-      <p role="status" data-testid="run-paused">
-        <b className="text-info">{t("pausedTitle")}</b> {t("paused")}
-      </p>
-      <PauseBannerResume
-        org={place.org}
-        ws={place.ws}
-        runId={run.id}
-        status={run.status}
-        source={run.source}
-        commandBlock={run.commandBlock}
-        ingressRevoked={run.ingressRevoked}
-        orgRole={orgRole}
-        wsRole={wsRole}
-      />
-    </div>
+    <p
+      role="status"
+      data-testid="run-paused"
+      className="mb-3.5 rounded-[10px] border border-info/40 bg-info/10 px-3.5 py-[11px] text-[12.5px] text-foreground"
+    >
+      <b className="text-info">{t("pausedTitle")}</b> {t("paused")}
+    </p>
   );
 }
 
@@ -770,7 +748,7 @@ export function RunHeader({
           />
         </div>
       </header>
-      <PauseBanner run={run} orgRole={orgRole} wsRole={wsRole} place={place} />
+      <PauseBanner run={run} />
     </>
   );
 }
