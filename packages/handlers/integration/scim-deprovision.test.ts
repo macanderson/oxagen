@@ -27,7 +27,11 @@ import { type SQL, sql } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { withSystemDb } from "@oxagen/database";
 import { resolveApiKey, resolveSession } from "@oxagen/auth/resolvers";
-import { hashScimToken, mintScimToken, resolveScimToken } from "@oxagen/auth/scim-token";
+import {
+  hashScimToken,
+  mintScimToken,
+  resolveScimToken,
+} from "@oxagen/auth/scim-token";
 import { createPgScimStore } from "../src/lib/scim/pg-store";
 import { ScimError } from "../src/lib/scim/protocol";
 import { serveScim } from "../src/lib/scim/service";
@@ -56,11 +60,18 @@ async function scimFor(
   body?: unknown,
 ) {
   return withSystemDb((tx) =>
-    serveScim(createPgScimStore(tx, org, null), { method, path, query: {}, body }, BASE),
+    serveScim(
+      createPgScimStore(tx, org, null),
+      { method, path, query: {}, body },
+      BASE,
+    ),
   );
 }
-const scim = (method: "GET" | "POST" | "PATCH" | "DELETE", path: string, body?: unknown) =>
-  scimFor(ORG, method, path, body);
+const scim = (
+  method: "GET" | "POST" | "PATCH" | "DELETE",
+  path: string,
+  body?: unknown,
+) => scimFor(ORG, method, path, body);
 
 function apiKey(): { raw: string; prefix: string; hash: string } {
   const raw = `ox_${randomBytes(32).toString("base64url")}`;
@@ -99,12 +110,15 @@ describe("#3734: removing a person at the identity provider ends their Oxagen ac
   it("the SCIM token resolves to its organization and to nothing else", async () => {
     const minted = mintScimToken();
     {
-        await q(sql`
+      await q(sql`
         INSERT INTO org.scim_tokens (public_id, org_id, token_prefix, token_hash)
         VALUES (${`sct_${RUN}`}, ${ORG}, ${minted.tokenPrefix}, ${minted.tokenHash})
       `);
     }
-    await expect(resolveScimToken(minted.token)).resolves.toMatchObject({ ok: true, orgId: ORG });
+    await expect(resolveScimToken(minted.token)).resolves.toMatchObject({
+      ok: true,
+      orgId: ORG,
+    });
     await expect(resolveScimToken(`${minted.token}x`)).resolves.toEqual({
       ok: false,
       kind: "invalid",
@@ -123,7 +137,9 @@ describe("#3734: removing a person at the identity provider ends their Oxagen ac
     });
     expect(created.status).toBe(201);
     const userId = (created.body as { id: string }).id;
-    const [user] = await q(sql`SELECT email FROM auth.users WHERE id = ${userId}`);
+    const [user] = await q(
+      sql`SELECT email FROM auth.users WHERE id = ${userId}`,
+    );
     expect(user?.email).toBe(`ada@${DOMAIN}`);
 
     // 2. A group mapped to member makes them a member.
@@ -143,7 +159,9 @@ describe("#3734: removing a person at the identity provider ends their Oxagen ac
     const cli = apiKey();
     const sessionToken = randomBytes(24).toString("hex");
     {
-        await q(sql`INSERT INTO workspace.workspace_users (public_id, workspace_id, user_id, role, joined_at) VALUES (${`wsu_${RUN}`}, ${WS}, ${userId}, 'member', now())`);
+      await q(
+        sql`INSERT INTO workspace.workspace_users (public_id, workspace_id, user_id, role, joined_at) VALUES (${`wsu_${RUN}`}, ${WS}, ${userId}, 'member', now())`,
+      );
       await q(sql`
         INSERT INTO auth.sessions (id, user_id, token, expires_at, auth_method)
         VALUES (${randomUUID()}, ${userId}, ${sessionToken}, now() + interval '30 days', ${`sso:${PROVIDER}`})
@@ -174,8 +192,14 @@ describe("#3734: removing a person at the identity provider ends their Oxagen ac
       VALUES (${hostId}, ${hostPublicId}, ${ORG}, ${WS}, 'claude-code', ${hostKeyId}, 'ada-mbp', 'd1', 'darwin',
         'ada', 'd2', 'pk', 'fp', '{}'::jsonb, 'sig', now() + interval '1 year', ${userId})
     `);
-    await expect(resolveApiKey(key.raw)).resolves.toMatchObject({ ok: true, orgId: ORG });
-    await expect(resolveApiKey(cli.raw)).resolves.toMatchObject({ ok: true, userId });
+    await expect(resolveApiKey(key.raw)).resolves.toMatchObject({
+      ok: true,
+      orgId: ORG,
+    });
+    await expect(resolveApiKey(cli.raw)).resolves.toMatchObject({
+      ok: true,
+      userId,
+    });
     await expect(resolveSession(sessionToken)).resolves.toEqual({ userId });
 
     // 4. The identity provider deactivates them.
@@ -188,14 +212,24 @@ describe("#3734: removing a person at the identity provider ends their Oxagen ac
 
     // 5. The key and the browser are refused; the member list no longer
     //    shows them.
-    await expect(resolveApiKey(key.raw)).resolves.toEqual({ ok: false, kind: "invalid" });
-    await expect(resolveApiKey(cli.raw)).resolves.toEqual({ ok: false, kind: "invalid" });
+    await expect(resolveApiKey(key.raw)).resolves.toEqual({
+      ok: false,
+      kind: "invalid",
+    });
+    await expect(resolveApiKey(cli.raw)).resolves.toEqual({
+      ok: false,
+      kind: "invalid",
+    });
     await expect(resolveSession(sessionToken)).resolves.toBeNull();
     expect(
-      await q(sql`SELECT 1 FROM org.org_users WHERE org_id = ${ORG} AND user_id = ${userId}`),
+      await q(
+        sql`SELECT 1 FROM org.org_users WHERE org_id = ${ORG} AND user_id = ${userId}`,
+      ),
     ).toHaveLength(0);
     expect(
-      await q(sql`SELECT 1 FROM workspace.workspace_users WHERE workspace_id = ${WS} AND user_id = ${userId}`),
+      await q(
+        sql`SELECT 1 FROM workspace.workspace_users WHERE workspace_id = ${WS} AND user_id = ${userId}`,
+      ),
     ).toHaveLength(0);
 
     // The removal is on the record, one row per credential, in the same
@@ -219,10 +253,18 @@ describe("#3734: removing a person at the identity provider ends their Oxagen ac
     expect(types).toContain("tacho.host_revoked");
     // The host is revoked through revokeHostEnrollment: both of its keys are
     // retired and the collector is told to stop.
-    const [host] = await q(sql`SELECT status FROM tacho.hosts WHERE id = ${hostId}`);
+    const [host] = await q(
+      sql`SELECT status FROM tacho.hosts WHERE id = ${hostId}`,
+    );
     expect(host?.status).toBe("revoked");
-    await expect(resolveApiKey(hostKey.raw)).resolves.toEqual({ ok: false, kind: "invalid" });
-    await expect(resolveApiKey(gatewayKey.raw)).resolves.toEqual({ ok: false, kind: "invalid" });
+    await expect(resolveApiKey(hostKey.raw)).resolves.toEqual({
+      ok: false,
+      kind: "invalid",
+    });
+    await expect(resolveApiKey(gatewayKey.raw)).resolves.toEqual({
+      ok: false,
+      kind: "invalid",
+    });
     const commands = await q(sql`
       SELECT command FROM tacho.control_commands WHERE host_id = ${hostId}
     `);
@@ -240,14 +282,19 @@ describe("#3734: removing a person at the identity provider ends their Oxagen ac
     `);
     expect(back?.role).toBe("member");
     // The revoked key stays revoked.
-    await expect(resolveApiKey(key.raw)).resolves.toEqual({ ok: false, kind: "invalid" });
+    await expect(resolveApiKey(key.raw)).resolves.toEqual({
+      ok: false,
+      kind: "invalid",
+    });
   });
 
   it("leaving the last mapped group removes membership and keys but keeps the session", async () => {
     // The same removal an SSO sign-in runs when no mapped group admits the
     // person (#3740 item 2): the membership, workspace membership and every
     // key go, and the session stays because it is not this organization's.
-    const created = await scim("POST", "/Users", { userName: `grace@${DOMAIN}` });
+    const created = await scim("POST", "/Users", {
+      userName: `grace@${DOMAIN}`,
+    });
     const userId = (created.body as { id: string }).id;
     const group = await scim("POST", "/Groups", {
       displayName: `Engineering-${RUN}`,
@@ -273,20 +320,30 @@ describe("#3734: removing a person at the identity provider ends their Oxagen ac
 
     await scim("PATCH", `/Groups/${groupId}`, {
       schemas: [PATCH_OP],
-      Operations: [{ op: "Remove", path: "members", value: [{ value: userId }] }],
+      Operations: [
+        { op: "Remove", path: "members", value: [{ value: userId }] },
+      ],
     });
 
     expect(
-      await q(sql`SELECT 1 FROM org.org_users WHERE org_id = ${ORG} AND user_id = ${userId}`),
+      await q(
+        sql`SELECT 1 FROM org.org_users WHERE org_id = ${ORG} AND user_id = ${userId}`,
+      ),
     ).toHaveLength(0);
-    await expect(resolveApiKey(key.raw)).resolves.toEqual({ ok: false, kind: "invalid" });
+    await expect(resolveApiKey(key.raw)).resolves.toEqual({
+      ok: false,
+      kind: "invalid",
+    });
     await expect(resolveSession(sessionToken)).resolves.toEqual({ userId });
     const [removed] = await q(sql`
       SELECT detail FROM security.security_events
       WHERE org_id = ${ORG} AND event_type = 'org.member_removed'
         AND detail->>'userId' = ${userId}
     `);
-    expect(removed?.detail).toMatchObject({ trigger: "scim_group_change", apiKeysRevoked: 1 });
+    expect(removed?.detail).toMatchObject({
+      trigger: "scim_group_change",
+      apiKeysRevoked: 1,
+    });
   });
 
   it("reaches no person of another organization", async () => {
@@ -303,11 +360,18 @@ describe("#3734: removing a person at the identity provider ends their Oxagen ac
       VALUES (${randomUUID()}, 'https://idp.test', '{}', ${`oth-it-${RUN}`}, ${other}, ${otherDomain}, true,
               'oidc', 'Other IdP', 'tok')
     `);
-    const theirs = await scimFor(other, "POST", "/Users", { userName: `eve@${otherDomain}` });
+    const theirs = await scimFor(other, "POST", "/Users", {
+      userName: `eve@${otherDomain}`,
+    });
     const theirId = (theirs.body as { id: string }).id;
 
     const notFound = async (p: Promise<unknown>) =>
-      expect(await p.then(() => null, (e: unknown) => e)).toMatchObject({ status: 404 });
+      expect(
+        await p.then(
+          () => null,
+          (e: unknown) => e,
+        ),
+      ).toMatchObject({ status: 404 });
     await notFound(scim("GET", `/Users/${theirId}`));
     await notFound(
       scim("PATCH", `/Users/${theirId}`, {
@@ -323,7 +387,9 @@ describe("#3734: removing a person at the identity provider ends their Oxagen ac
     expect((group.body as { members: unknown[] }).members).toEqual([]);
     const listed = await scim("GET", "/Users");
     expect(
-      (listed.body as { Resources: { id: string }[] }).Resources.map((r) => r.id),
+      (listed.body as { Resources: { id: string }[] }).Resources.map(
+        (r) => r.id,
+      ),
     ).not.toContain(theirId);
     // Their principal in their own organization is untouched.
     const [principal] = await q(sql`
@@ -362,28 +428,44 @@ describe("#3734: removing a person at the identity provider ends their Oxagen ac
     // SCIM cannot move the shared account onto this organization's domain.
     const moved = await scim("PATCH", `/Users/${userId}`, {
       schemas: [PATCH_OP],
-      Operations: [{ op: "replace", path: "userName", value: `takeover@${DOMAIN}` }],
-    }).then(() => null, (e: unknown) => e);
+      Operations: [
+        { op: "replace", path: "userName", value: `takeover@${DOMAIN}` },
+      ],
+    }).then(
+      () => null,
+      (e: unknown) => e,
+    );
     expect(moved).toMatchObject({ status: 403, denial: "identity_not_owned" });
-    const [unchanged] = await q(sql`SELECT email FROM auth.users WHERE id = ${userId}`);
+    const [unchanged] = await q(
+      sql`SELECT email FROM auth.users WHERE id = ${userId}`,
+    );
     expect(unchanged?.email).toBe(`contractor-${RUN}@gmail.test`);
 
     await scim("PATCH", `/Users/${userId}`, {
       schemas: [PATCH_OP],
       Operations: [{ op: "replace", path: "active", value: false }],
     });
-    await expect(resolveApiKey(key.raw)).resolves.toEqual({ ok: false, kind: "invalid" });
+    await expect(resolveApiKey(key.raw)).resolves.toEqual({
+      ok: false,
+      kind: "invalid",
+    });
     await expect(resolveSession(sessionToken)).resolves.toEqual({ userId });
     expect(
-      await q(sql`SELECT 1 FROM org.org_users WHERE org_id = ${ORG} AND user_id = ${userId}`),
+      await q(
+        sql`SELECT 1 FROM org.org_users WHERE org_id = ${ORG} AND user_id = ${userId}`,
+      ),
     ).toHaveLength(0);
   });
 
   it("refuses to deprovision an Owner and changes nothing", async () => {
-    const created = await scim("POST", "/Users", { userName: `owner@${DOMAIN}` });
+    const created = await scim("POST", "/Users", {
+      userName: `owner@${DOMAIN}`,
+    });
     const userId = (created.body as { id: string }).id;
     {
-        await q(sql`INSERT INTO org.org_users (public_id, org_id, user_id, role, joined_at) VALUES (${`ou_${RUN}`}, ${ORG}, ${userId}, 'owner', now())`);
+      await q(
+        sql`INSERT INTO org.org_users (public_id, org_id, user_id, role, joined_at) VALUES (${`ou_${RUN}`}, ${ORG}, ${userId}, 'owner', now())`,
+      );
     }
     const refused = await scim("DELETE", `/Users/${userId}`).then(
       () => null,
@@ -419,7 +501,9 @@ describe("#3740 item 2: Require SSO reaches API keys", () => {
       VALUES (${randomUUID()}, 'https://idp.test', '{}', ${provider}, ${org}, ${`req-${RUN}.test`}, true,
               'oidc', 'Require IdP', 'tok')
     `);
-    await q(sql`INSERT INTO security.org_security_policy (org_id, sso_required) VALUES (${org}, true)`);
+    await q(
+      sql`INSERT INTO security.org_security_policy (org_id, sso_required) VALUES (${org}, true)`,
+    );
 
     const person = async (role: string, ssoAccount: boolean) => {
       const userId = randomUUID();
@@ -446,11 +530,17 @@ describe("#3740 item 2: Require SSO reaches API keys", () => {
       return key.raw;
     };
 
-    await expect(resolveApiKey(await person("member", false))).resolves.toEqual({
-      ok: false,
-      kind: "sso_required",
-    });
-    await expect(resolveApiKey(await person("member", true))).resolves.toMatchObject({ ok: true });
-    await expect(resolveApiKey(await person("owner", false))).resolves.toMatchObject({ ok: true });
+    await expect(resolveApiKey(await person("member", false))).resolves.toEqual(
+      {
+        ok: false,
+        kind: "sso_required",
+      },
+    );
+    await expect(
+      resolveApiKey(await person("member", true)),
+    ).resolves.toMatchObject({ ok: true });
+    await expect(
+      resolveApiKey(await person("owner", false)),
+    ).resolves.toMatchObject({ ok: true });
   });
 });
