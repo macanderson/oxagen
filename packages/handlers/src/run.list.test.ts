@@ -23,6 +23,8 @@ import {
   tachoRunOutcome,
   tachoRunName,
   tachoRunStatus,
+  costIsEstimate,
+  recordedSealSource,
 } from "./run.list";
 import {
   ctx,
@@ -1045,6 +1047,35 @@ describe("a run row says whether a command can reach it", () => {
     expect(byId.get("tse_sealed")?.commandBlock).toBe("run_sealed");
   });
 
+  it("offers commands on a run Oxagen closed for silence while its host still polls (#3980)", async () => {
+    const { list } = handlerOver(
+      [],
+      [
+        tachoSession({
+          publicId: "tse_idle",
+          session: {
+            outcome: "unknown",
+            sealedAt: new Date("2026-09-15T21:00:00.000Z"),
+            sealSource: "idle_timeout",
+          },
+          host: host("active", 10),
+        }),
+        tachoSession({
+          publicId: "tse_stopped",
+          session: { sealSource: "agent_stop" },
+          host: host("active", 10),
+        }),
+      ],
+    );
+    const byId = new Map(
+      (await list({ limit: 50 }, ctx())).runs.map((r) => [r.id, r]),
+    );
+    // The close is an inference, so a command queues for the host to take.
+    expect(byId.get("tse_idle")?.commandBlock).toBeNull();
+    // The host's own stop is final.
+    expect(byId.get("tse_stopped")?.commandBlock).toBe("run_sealed");
+  });
+
   // #4023: Stella reads steering text only at session start, so its row
   // offers pause, resume and cancel but not Steer.
   it("names a Stella run's steer block and leaves its other commands open", async () => {
@@ -1434,6 +1465,52 @@ describe("run outcome", () => {
     // The status read guessed `sealed` here, which said the record was
     // complete when the row said nothing of the kind.
     expect(() => tachoRunStatus("abandoned")).toThrow(RangeError);
+  });
+});
+
+describe("an open run's cost and what sealed a run (#3980)", () => {
+  const cost = {
+    costMicros: 900n,
+    currency: "USD",
+    costBasis: "client_attested" as const,
+  };
+  const sealed = at("2026-09-11T10:05:00.000Z");
+
+  it("reads a priced open run as an estimate", () => {
+    expect(costIsEstimate(null, { cost, verdict: null, sealedAt: null })).toBe(
+      true,
+    );
+  });
+
+  it("reads a sealed run whose row predates the seal as an estimate", () => {
+    expect(
+      costIsEstimate(sealed, { cost, verdict: null, sealedAt: null }),
+    ).toBe(true);
+  });
+
+  it("reads a sealed run rolled up after its seal as final", () => {
+    expect(
+      costIsEstimate(sealed, { cost, verdict: null, sealedAt: sealed }),
+    ).toBe(false);
+  });
+
+  it("calls no cost an estimate (negative)", () => {
+    expect(costIsEstimate(null, undefined)).toBe(false);
+    expect(
+      costIsEstimate(null, { cost: null, verdict: null, sealedAt: null }),
+    ).toBe(false);
+  });
+
+  it("names the idle close, and reads every other seal as the host's own", () => {
+    expect(recordedSealSource(sealed, "idle_timeout")).toBe("idle_timeout");
+    expect(recordedSealSource(sealed, "agent_stop")).toBe("agent_stop");
+    // Sealed before the column existed: only an agent_stop sealed then.
+    expect(recordedSealSource(sealed, null)).toBe("agent_stop");
+    expect(recordedSealSource(null, "idle_timeout")).toBeNull();
+  });
+
+  it("refuses a seal source outside the CHECK (negative)", () => {
+    expect(() => recordedSealSource(sealed, "guessed")).toThrow(RangeError);
   });
 });
 

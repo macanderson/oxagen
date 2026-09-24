@@ -24,3 +24,14 @@
  * estimated.
  */
 export const PRICE_BOOK_BACKDATED_EVENT = "cost/price-book.backdated";
+
+/**
+ * Sent by the tacho ingest handler after a batch lands model or tool frames
+ * on a run, unless that batch also sealed it (the seal sends
+ * `cost/run.sealed`). Consumed by `cost.run-progress`, which rebuilds the
+ * run's `cost.run_totals` row from the frames recorded so far: an open run's
+ * cost then reads as an estimate before it seals rather than nothing at all,
+ * and frames that land after a seal are counted too. Debounced per run by the
+ * consumer, so a sender need not throttle.
+ */
+export const RUN_PROGRESSED_EVENT = "cost/run.progressed";

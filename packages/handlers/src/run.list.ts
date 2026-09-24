@@ -501,6 +501,7 @@ const tachoColumns = {
     seqCount: sessions.seqCount,
     startedAt: sessions.startedAt,
     sealedAt: sessions.sealedAt,
+    sealSource: sessions.sealSource,
     endedAt: sessions.endedAt,
     replayGrade: sessions.replayGrade,
     completenessGaps: sessions.completenessGaps,
@@ -718,8 +719,16 @@ export type RunCost = {
   costBasis: NonNullable<RunItem["cost"]>["basis"];
 };
 
-/** What a `cost.run_totals` row says about a run: its spend and its witness verdict. */
-type RunRollup = { cost: RunCost | null; verdict: RunItem["verdict"] };
+/**
+ * What a `cost.run_totals` row says about a run: its spend, its witness
+ * verdict, and whether the run had sealed when the row was rebuilt (null: it
+ * had not, so the spend is a running estimate).
+ */
+type RunRollup = {
+  cost: RunCost | null;
+  verdict: RunItem["verdict"];
+  sealedAt: Date | null;
+};
 
 export type TachoSessionColumns = GeneratedSummaryColumns & {
   harness?: string;
@@ -738,7 +747,9 @@ export type TachoSessionColumns = GeneratedSummaryColumns & {
   seqCount: number;
   startedAt: Date;
   sealedAt: Date | null;
-  /** The `agent_stop` event's own timestamp; null while the session is open. */
+  /** `agent_stop` or `idle_timeout`; null while open or on a seal older than the column. */
+  sealSource?: string | null;
+  /** The `agent_stop` event's own timestamp, or after an idle close the last event's; null while open. */
   endedAt?: Date | null;
   /** The model the session started on and the one it ended on; either may be unrecorded. */
   modelInitial: string | null;
@@ -920,8 +931,8 @@ export function microsString(micros: number): string {
 }
 
 /**
- * The run's cost as its rollup row records it. No row yet — the run is open,
- * or the rollup has not covered its seal — means no cost, never zero.
+ * The run's cost as its rollup row records it. No row yet — the rollup has
+ * not priced any of its frames — means no cost, never zero.
  */
 function rollupCost(rollup: RunRollup | undefined): RunItem["cost"] {
   const row = rollup?.cost;
@@ -931,6 +942,35 @@ function rollupCost(rollup: RunRollup | undefined): RunItem["cost"] {
     currency: row.currency,
     basis: row.costBasis,
   };
+}
+
+/**
+ * Whether the run's cost is still an estimate: the run is open, or its row
+ * was rebuilt before the seal and the seal's rollup has not landed yet.
+ */
+export function costIsEstimate(
+  runSealedAt: Date | string | null,
+  rollup: RunRollup | undefined,
+): boolean {
+  if (!rollup?.cost) return false;
+  return runSealedAt === null || rollup.sealedAt === null;
+}
+
+/**
+ * What sealed a sealed session. A seal written before `seal_source` existed
+ * was an `agent_stop`, which is the only thing that sealed a session then.
+ */
+export function recordedSealSource(
+  sealedAt: Date | null,
+  source: string | null | undefined,
+): RunItem["sealSource"] {
+  if (sealedAt === null) return null;
+  if (source === "idle_timeout") return "idle_timeout";
+  if (source === null || source === undefined || source === "agent_stop")
+    return "agent_stop";
+  throw new RangeError(
+    `tacho session seal source outside the CHECK: ${source}`,
+  );
 }
 
 /** A column an enrolment left empty reads as unrecorded, never as a value. */
@@ -1004,10 +1044,15 @@ export function toLedgerRunItem(
     steps: rollup.modelCalls + rollup.toolCalls,
     frames: rollup.frames,
     cost: rollupCost(totals),
+    costIsEstimate: costIsEstimate(
+      status === "live" ? null : (record.seal?.sealedAt ?? null),
+      totals,
+    ),
     taskRef: identity.goal,
     startedAt: (run.startedAt ?? run.createdAt).toISOString(),
     sealedAt:
       status === "live" ? null : (record.seal?.sealedAt.toISOString() ?? null),
+    sealSource: null,
     // The ledger records no stop instant apart from its seal.
     endedAt:
       status === "live" ? null : (record.seal?.sealedAt.toISOString() ?? null),
@@ -1120,6 +1165,7 @@ function tachoCommandBlock(
   return {
     commandBlock: commandBlockOf({
       outcome: row.session.outcome,
+      sealSource: row.session.sealSource,
       host:
         host === null || host.status == null
           ? null
@@ -1185,6 +1231,7 @@ export function toTachoRunItem(
     steps: session.numModelCalls + session.numToolCalls,
     frames: session.seqCount,
     cost: rollupCost(totals),
+    costIsEstimate: costIsEstimate(session.sealedAt, totals),
     reportedCost:
       Number.isSafeInteger(session.totalCostMicros) &&
       ((session.totalCostMicros ?? 0) > 0 || session.costBasis != null)
@@ -1198,6 +1245,7 @@ export function toTachoRunItem(
     taskRef: null,
     startedAt: session.startedAt.toISOString(),
     sealedAt: session.sealedAt?.toISOString() ?? null,
+    sealSource: recordedSealSource(session.sealedAt, session.sealSource),
     // The stop event's own timestamp (`terminalPatch`), never receipt time.
     endedAt:
       status === "live" ? null : (session.endedAt?.toISOString() ?? null),
@@ -1327,6 +1375,7 @@ export const postgresReadRunRollups: ReadRunRollups = async (scope, runIds) => {
         currency: schema.runTotals.currency,
         costBasis: schema.runTotals.costBasis,
         verdict: schema.runTotals.verdict,
+        sealedAt: schema.runTotals.sealedAt,
       })
       .from(schema.runTotals)
       .where(
@@ -1350,7 +1399,11 @@ export const postgresReadRunRollups: ReadRunRollups = async (scope, runIds) => {
             currency: r.currency,
             costBasis: r.costBasis as RunCost["costBasis"],
           };
-    out.set(r.runId, { cost, verdict: recordedVerdict(r.verdict) });
+    out.set(r.runId, {
+      cost,
+      verdict: recordedVerdict(r.verdict),
+      sealedAt: r.sealedAt,
+    });
   }
   return out;
 };

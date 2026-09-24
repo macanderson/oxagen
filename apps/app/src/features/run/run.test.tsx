@@ -432,9 +432,11 @@ describe("header", () => {
     expect(usage.getByText("340 output")).toBeTruthy();
     expect(usage.getByText("56,000 cache read")).toBeTruthy();
     expect(usage.getByText("7,800 cache write")).toBeTruthy();
-    // The row carries a finalized cost, so it is not marked as reported.
+    // The row carries a finalized cost, so it is marked neither reported
+    // nor an estimate.
     expect(usage.getByTestId("run-usage-cost")).toHaveTextContent("$4.13");
     expect(usage.queryByText("agent reported")).toBeNull();
+    expect(usage.queryByTestId("run-usage-cost-estimate")).toBeNull();
   });
 
   it("marks an agent-reported cost and says when no tokens were recorded", async () => {
@@ -2252,7 +2254,9 @@ describe("the work", () => {
     });
     expect(screen.queryByTestId("run-spend")).toBeNull();
     expect(
-      screen.getByText("No cost rollup yet. It is built after the run seals."),
+      screen.getByText(
+        "No cost rollup yet. It is built as the run records calls, or once it seals.",
+      ),
     ).toBeTruthy();
   });
 
@@ -2289,11 +2293,7 @@ describe("the work", () => {
     expect(screen.getByTestId("run-spend-provisional").textContent).toBe(
       "Provisional until the rollup. Priced from the cost each call reported.",
     );
-    expect(
-      screen.queryByText(
-        "No cost rollup yet. It is built after the run seals.",
-      ),
-    ).toBeNull();
+    expect(spend.queryByText(/No cost rollup yet/)).toBeNull();
   });
 
   it("draws no provisional label once the rollup exists (negative)", async () => {
@@ -2303,6 +2303,107 @@ describe("the work", () => {
     });
     expect(screen.getByTestId("run-spend")).toBeTruthy();
     expect(screen.queryByTestId("run-spend-provisional")).toBeNull();
+  });
+});
+
+describe("an open run's cost and the idle close (#3980)", () => {
+  const estimate = () => {
+    const { rollup } = runCost();
+    if (rollup === null) throw new Error("runCost() builds a rollup");
+    return runCost({ rollup: { ...rollup, isEstimate: true } });
+  };
+
+  it("labels a rollup built from an open run as an estimate", async () => {
+    await renderRun({
+      detail: ok(runDetail({ run: runRow({ sealedAt: null }) })),
+      transcript: ok(runTranscript()),
+      cost: ok(estimate()),
+    });
+    const stats = within(screen.getByTestId("run-stats"));
+    expect(stats.getByText("$4.13")).toBeTruthy();
+    expect(
+      stats.getByText(
+        "Estimate from the calls so far. Final when the run seals.",
+      ),
+    ).toBeTruthy();
+    expect(stats.queryByText(/Finalized rollup/)).toBeNull();
+    expect(screen.getByTestId("run-spend-estimate")).toHaveTextContent(
+      "Estimate while the run is open",
+    );
+  });
+
+  it("marks the header's cost an estimate while the run is open", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({ run: runRow({ sealedAt: null, costIsEstimate: true }) }),
+      ),
+      transcript: ok(runTranscript()),
+      cost: ok(estimate()),
+    });
+    const usage = within(screen.getByTestId("run-usage"));
+    expect(usage.getByTestId("run-usage-cost")).toHaveTextContent("$4.13");
+    expect(usage.getByTestId("run-usage-cost-estimate")).toHaveTextContent(
+      "estimate",
+    );
+    expect(usage.queryByText("agent reported")).toBeNull();
+  });
+
+  it("marks the header's cost an estimate for a sealed run whose row predates the seal", async () => {
+    await renderRun({
+      detail: ok(runDetail({ run: runRow({ costIsEstimate: true }) })),
+      transcript: ok(runTranscript()),
+    });
+    expect(
+      within(screen.getByTestId("run-usage")).getByTestId(
+        "run-usage-cost-estimate",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("says above the Cost tab's figures that they are an estimate", async () => {
+    await renderRun(
+      {
+        detail: ok(runDetail({ run: runRow({ sealedAt: null }) })),
+        transcript: ok(runTranscript()),
+        cost: ok(estimate()),
+      },
+      { tab: "cost" },
+    );
+    expect(screen.getByTestId("cost-estimate")).toHaveTextContent(
+      "They are final once the run seals.",
+    );
+  });
+
+  it("says nothing of an estimate once the rollup priced the sealed run (negative)", async () => {
+    await renderRun(
+      {
+        detail: ok(runDetail()),
+        transcript: ok(runTranscript()),
+        cost: ok(runCost()),
+      },
+      { tab: "cost" },
+    );
+    expect(screen.queryByTestId("cost-estimate")).toBeNull();
+    expect(screen.queryByTestId("run-spend-estimate")).toBeNull();
+  });
+
+  it("names a run Oxagen closed for silence, with no end it can claim", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            outcome: "unknown",
+            sealSource: "idle_timeout",
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-closed-idle")).toHaveTextContent(
+      "no event for 12 hours",
+    );
+    const stats = within(screen.getByTestId("run-stats"));
+    expect(stats.getByText("no end recorded")).toBeTruthy();
   });
 });
 

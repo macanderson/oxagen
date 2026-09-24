@@ -186,7 +186,8 @@
     },
     "cost": {
       "title": "Cost",
-      "notRolledUp": "The rollup has not rebuilt this run yet. It runs after a run seals, and until it has there is no figure to show. A zero here would be a measurement, and nothing has measured one.",
+      "notRolledUp": "The rollup has not priced this run yet. It prices a run as its calls are recorded, or once the run seals. A zero here would be a measurement, and nothing has measured one.",
+      "estimate": "Estimate. The run is still open, so these figures cover the calls recorded so far and grow as it adds more. They are final once the run seals.",
       "total": "Total",
       "basisNotRecorded": "basis not recorded",
       "cacheHitRate": "Cache hit rate",
@@ -534,7 +535,8 @@
         "withheld": "withheld"
       }
     },
-    "costReportedProvisional": "Agent reported. Provisional until finalized.",
+    "costReportedProvisional": "Estimate reported by the agent. Final when the run seals.",
+    "costEstimate": "Estimate from the calls so far. Final when the run seals.",
     "costFinalized": "Finalized rollup ({basis})",
     "tokenUsage": {
       "title": "Reported tokens",
@@ -583,8 +585,11 @@
       "tokensNotRecorded": "tokens not recorded",
       "costNotRecorded": "cost not recorded",
       "costReported": "agent reported",
+      "costEstimate": "estimate",
       "started": "started",
       "sealed": "sealed",
+      "closedIdle": "closed",
+      "closedIdleWhy": "no event for 12 hours",
       "running": "still running",
       "sealNotRecorded": "ended with no seal recorded",
       "ended": "ended",
@@ -618,6 +623,7 @@
       "promptsCut": "at least this many",
       "wastedNote": "derived from the productive share",
       "running": "still running",
+      "noEnd": "no end recorded",
       "noRollup": "no rollup yet"
     },
     "issues": {
@@ -675,7 +681,8 @@
       "more": "{count} more in the outputs",
       "spend": "Spend by area",
       "toolCalls": "Tool calls",
-      "noSpend": "No cost rollup yet. It is built after the run seals.",
+      "noSpend": "No cost rollup yet. It is built as the run records calls, or once it seals.",
+      "estimate": "Estimate while the run is open",
       "spendProvisional": "Provisional until the rollup. Priced from the cost each call reported.",
       "callCount": "{count, plural, one {# call} other {# calls}}"
     },

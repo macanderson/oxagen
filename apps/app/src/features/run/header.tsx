@@ -448,8 +448,9 @@ function WorkStripsLoading() {
 
 /**
  * Token counts and cost. The counts are the session's sums over its `llm_call`
- * frames. The cost is the finalized rollup when there is one, and otherwise
- * what the agent reported, marked as such.
+ * frames. The cost is the rollup when there is one, marked as an estimate
+ * while the run is open or its row was built before the seal (#3980), and
+ * otherwise what the agent reported, marked as such.
  */
 function Usage({ run }: { run: RunRow }) {
   const t = useTranslations("run.header");
@@ -484,6 +485,13 @@ function Usage({ run }: { run: RunRow }) {
           <Money value={cost} />
           {run.cost === null ? (
             <span className="text-muted-foreground">{t("costReported")}</span>
+          ) : run.sealedAt === null || run.costIsEstimate === true ? (
+            <span
+              data-testid="run-usage-cost-estimate"
+              className="text-muted-foreground"
+            >
+              {t("costEstimate")}
+            </span>
           ) : null}
         </span>
       )}
@@ -520,7 +528,7 @@ export function RunTitle({ id, run }: { id: string; run: RunRow | null }) {
   );
 }
 
-/** "started <t> by <operator> · ended <t>". */
+/** "started <t> by <operator> · ended <t>", or "closed <t> (why)". */
 function When({ run }: { run: RunRow }) {
   const t = useTranslations("run.header");
   const tr = useTranslations("run");
@@ -573,6 +581,14 @@ function When({ run }: { run: RunRow }) {
           receipt time and can trail the run by the upload. */}
       {run.status === "live" ? (
         <span>{t("running")}</span>
+      ) : run.sealSource === "idle_timeout" && run.sealedAt != null ? (
+        // Oxagen closed it for silence; the host never said it ended, and its
+        // next event reopens it.
+        <span data-testid="run-closed-idle">
+          {t("closedIdle")}{" "}
+          <time dateTime={run.sealedAt}>{when(run.sealedAt)}</time> (
+          {t("closedIdleWhy")})
+        </span>
       ) : run.endedAt != null ? (
         <span data-testid="run-ended">
           {t("ended")} <time dateTime={run.endedAt}>{when(run.endedAt)}</time>

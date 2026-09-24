@@ -67,6 +67,27 @@ describe("spend port", () => {
     });
   });
 
+  it("byGroup passes get_spend's open-run count through, and invents none when it is absent", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        period,
+        groupBy: "model",
+        total: figure,
+        rows: [],
+        estimatedRuns: 3,
+      }),
+    );
+    const open = await spend.byGroup(ctx, "model", period);
+    expect(open.ok && open.value.estimatedRuns).toBe(3);
+
+    kernelRead.mockResolvedValue(
+      readOk({ period, groupBy: "model", total: figure, rows: [] }),
+    );
+    const older = await spend.byGroup(ctx, "model", period);
+    expect(older.ok).toBe(true);
+    expect(older.ok ? older.value.estimatedRuns : null).toBeUndefined();
+  });
+
   it("fleet reads get_spend at the model level over the day asked for", async () => {
     const day = { from: "2026-09-15", to: "2026-09-15" };
     kernelRead.mockResolvedValue(

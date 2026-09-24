@@ -37,7 +37,10 @@ export function CompilerControls({
   const agentId = useId();
   const promptId = useId();
   return (
-    <div className="grid gap-3.5 md:grid-cols-2" data-testid="compiler-controls">
+    <div
+      className="grid gap-3.5 md:grid-cols-2"
+      data-testid="compiler-controls"
+    >
       <div className="flex min-w-0 flex-col gap-1.5">
         <label
           htmlFor={agentId}
@@ -60,7 +63,10 @@ export function CompilerControls({
             </option>
           ))}
         </select>
-        <p className="text-[12px] text-muted-foreground" data-testid="compiler-agent-hint">
+        <p
+          className="text-[12px] text-muted-foreground"
+          data-testid="compiler-agent-hint"
+        >
           {hint}
         </p>
       </div>

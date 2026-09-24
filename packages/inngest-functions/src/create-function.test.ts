@@ -115,6 +115,29 @@ describe("createFunction adapter", () => {
       expect(inngestConfig.timeouts).toEqual({ finish: "16m" });
     });
 
+    it("passes debounce through in Inngest's own shape", () => {
+      createFunction(
+        {
+          id: "cost.run-progress",
+          debounce: { key: "event.data.runId", period: "30s", timeout: "2m" },
+        },
+        { event: "cost/run.progressed" },
+        async () => undefined,
+      );
+      expect((capturedConfigs[0] as Record<string, unknown>).debounce).toEqual({
+        key: "event.data.runId",
+        period: "30s",
+        timeout: "2m",
+      });
+    });
+
+    it("sends no debounce for a function that sets none (negative)", () => {
+      createFunction({ id: "plain" }, { event: "x/y" }, async () => undefined);
+      expect(capturedConfigs[0] as Record<string, unknown>).not.toHaveProperty(
+        "debounce",
+      );
+    });
+
     it("translates event trigger to Inngest format", () => {
       const config: DurableFunctionConfig = { id: "test" };
       const trigger: DurableFunctionTrigger = { event: "my/event" };
