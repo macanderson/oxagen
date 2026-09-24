@@ -24,7 +24,7 @@ import type { RunMetrics } from "./metrics";
 export type Place = { org: string; ws: string; runId: string };
 
 /** The URL's view of the run: the query values a tab reads. */
-export type RunView = {
+type RunView = {
   /** The transcript chips pressed; empty when none is. */
   kinds: readonly TranscriptKind[];
   /** `?frames=`, the opaque cursor a later frames page was read from. */

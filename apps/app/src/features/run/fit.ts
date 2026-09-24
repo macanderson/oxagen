@@ -52,7 +52,7 @@ export type ModelFit =
  * and contained tiers). No contract carries it today at any tier, so every
  * run answers one of these two, and the page never prints a value.
  */
-export type EffortFit = { verdict: "unseen"; why: "not_proxied" | "not_sent" };
+type EffortFit = { verdict: "unseen"; why: "not_proxied" | "not_sent" };
 
 export type RunFit = {
   /** What the reading read; null when the record lacks a figure it is keyed on. */

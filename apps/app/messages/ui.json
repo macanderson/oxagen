@@ -50,10 +50,6 @@
       "crashed": "crashed",
       "unknown": "outcome not recorded"
     },
-    "generated": {
-      "label": "generated",
-      "provenance": "Written by {model} on {when}. The frames are the record."
-    },
     "replayGrade": {
       "inspect": {
         "label": "inspect",

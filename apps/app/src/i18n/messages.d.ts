@@ -7106,10 +7106,6 @@ type Messages = {
       crashed: string;
       unknown: string;
     };
-    generated: {
-      label: string;
-      provenance: string;
-    };
     replayGrade: {
       inspect: {
         label: string;

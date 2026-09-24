@@ -16,7 +16,7 @@ import type { Place } from "./tab-props";
 import { kindsParam } from "./transcript";
 
 /** The seven tabs, in the spec's order (pages/run.md). */
-export const TABS = [
+const TABS = [
   "transcript",
   "issues",
   "actions",

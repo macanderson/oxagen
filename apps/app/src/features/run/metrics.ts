@@ -92,7 +92,7 @@ export type PricedClasses = {
   cacheSaved: Money | null;
 };
 
-export type Prompts = {
+type Prompts = {
   /** Entries that carry the operator's words: the first prompt and every one after it. */
   count: number;
   /** A prompt after the first fixes or fills what the first left out. */
@@ -100,7 +100,7 @@ export type Prompts = {
 };
 
 /** Where the wall clock went; each part in milliseconds. */
-export type WallParts = {
+type WallParts = {
   model: number;
   tool: number;
   /** From a parked call to the answer that released it. */
@@ -110,7 +110,7 @@ export type WallParts = {
 };
 export type WallLead = keyof WallParts;
 
-export type WallClock = {
+type WallClock = {
   /** Start to seal, or start to the last recorded frame on a live run; null when neither is recorded. */
   ms: number | null;
   sealed: boolean;
@@ -118,7 +118,7 @@ export type WallClock = {
   lead: WallLead | null;
 };
 
-export type ToolCall = {
+type ToolCall = {
   name: string;
   group: ToolGroup;
   /** The call's own wall time; null when the step is one frame. */
