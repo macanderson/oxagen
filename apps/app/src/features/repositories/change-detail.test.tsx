@@ -20,11 +20,12 @@ import type { RepositoryChange } from "@/data/contracts/repository";
 import type { ContextPr } from "@/data/contracts/steering";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import type { closeRepositoryChange } from "./actions";
 
 const actions = vi.hoisted(() => ({
   readRepositoryChange: vi.fn(),
   mergeRepositoryChange: vi.fn(),
-  closeRepositoryChange: vi.fn(),
+  closeRepositoryChange: vi.fn<typeof closeRepositoryChange>(),
 }));
 vi.mock("./actions", () => actions);
 

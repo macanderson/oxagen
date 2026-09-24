@@ -155,6 +155,7 @@ const LINKED_TREE: RepositoryTree = {
   readAt: "2026-09-19T10:00:00.000Z",
 };
 
+/** The open change the Changes tab lists first. */
 const OPEN_CHANGE: RepositoryChanges["changes"][number] = {
   proposalId: "prp_open1",
   lineage: "ctx.scr.001-never-push-to-main",
