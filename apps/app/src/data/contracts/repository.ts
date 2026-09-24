@@ -298,3 +298,37 @@ export type RepositoryChanges = {
   /** Pull requests still waiting on a person: every state but merged and rejected. */
   open: number;
 };
+
+/**
+ * One directory the CLI linked to this workspace, as `list_working_copies`
+ * reports it (MC spec §10.1, the Working copies tab). Every field is what the
+ * last `oxagen init` or `oxagen pull` on that machine sent, as of
+ * `lastSeenAt`: Oxagen reads nothing from the machine itself.
+ */
+export type WorkingCopy = {
+  id: string;
+  hostname: string;
+  /** The absolute path on that machine. */
+  directory: string;
+  /** `owner/name` from the git remote; null when the directory has none. */
+  repository: string | null;
+  /** Null on a detached head. */
+  branch: string | null;
+  headCommit: string | null;
+  oxagenPresent: boolean;
+  /** stella's links into `.oxagen/`: all resolve, one is absent or broken, or no `.stella/` at all. */
+  symlinks: "linked" | "missing" | "none";
+  /** The production-branch commit `oxagen pull` last wrote; null until the first pull. */
+  pulledCommit: string | null;
+  lastEvent: "init" | "pull";
+  /** The person whose session sent the latest report; null for a key. */
+  reportedBy: { userId: string; name: string | null } | null;
+  cliVersion: string | null;
+  firstSeenAt: string;
+  lastSeenAt: string;
+};
+
+/** Every reported directory, most recently seen first. */
+export type WorkingCopies = {
+  workingCopies: WorkingCopy[];
+};

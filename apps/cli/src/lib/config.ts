@@ -42,6 +42,15 @@ export interface TelemetryConfig {
 const CONFIG_DIR = join(homedir(), ".config", "oxagen");
 const CONFIG_FILE = join(CONFIG_DIR, "config.json");
 
+/**
+ * The directory that holds the CLI's own files (`~/.config/oxagen`). Other
+ * per-machine state, such as the `machine-id` the working-copy report hashes,
+ * lives beside `config.json` here.
+ */
+export function getConfigDir(): string {
+  return CONFIG_DIR;
+}
+
 export function readConfig(): CliConfig {
   if (!existsSync(CONFIG_FILE)) return {};
   try {

@@ -16,6 +16,12 @@ const REPOSITORY_TABS = [
 ] as const;
 type RepositoryTab = (typeof REPOSITORY_TABS)[number];
 
+/**
+ * The most rows one read of the Working copies tab asks for: the ceiling
+ * `list_working_copies` accepts. A list this long may have more behind it.
+ */
+export const WORKING_COPY_LIMIT = 200;
+
 /** What the route names: a tab, and on Changes the one pull request selected. */
 export type RepositoryView = { tab: RepositoryTab; change: string | null };
 
