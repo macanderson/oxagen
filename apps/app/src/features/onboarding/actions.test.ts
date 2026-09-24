@@ -350,6 +350,7 @@ describe("bindMainRepository", () => {
 
   it("binds the repository and reports whether it closed the provisional window", async () => {
     invoke.mockResolvedValue({
+      provider: "github",
       bindingId: "rpb_1",
       connectionId: "con_1",
       fullName: "acme/platform",

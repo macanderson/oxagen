@@ -264,6 +264,7 @@ import "./contracts/repo.pr.diff";
 import "./contracts/repo.pr.get";
 import "./contracts/repo.resume";
 import "./contracts/repo.sync";
+import "./contracts/repository.gitlab.attach";
 import "./contracts/repository.init_pr.open";
 import "./contracts/repository.installation.attach";
 import "./contracts/repository.installation.candidates";

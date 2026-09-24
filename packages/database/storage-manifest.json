@@ -117,6 +117,15 @@
       "writes": []
     },
     {
+      "domain": "repository",
+      "name": "attach_gitlab_project",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "attach_memory_evidence",
       "reads": [],
@@ -3953,7 +3962,7 @@
       "writes": []
     }
   ],
-  "contentHash": "a950cccda2f7af5f14683085335e529c2872079fb21efa28965d8b79c66e5621",
+  "contentHash": "31e1def683f24f5bdaea95db047687cdc5e56853ba5ac2f714a053a7c5e4f1d8",
   "domains": [
     {
       "name": "agent",
@@ -8471,6 +8480,12 @@
         },
         {
           "name": "governance_mode",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "provider",
           "nullable": true,
           "primaryKey": false,
           "type": "text"

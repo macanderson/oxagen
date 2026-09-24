@@ -4486,6 +4486,22 @@
       }
     },
     {
+      "name": "attach_gitlab_project",
+      "file": "repository.gitlab.attach.ts",
+      "domain": "repository",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "open_init_pr",
       "file": "repository.init_pr.open.ts",
       "domain": "repository",

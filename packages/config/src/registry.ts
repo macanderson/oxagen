@@ -2093,6 +2093,33 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "origin/main",
   },
+  GITLAB_TOKEN: {
+    group: "Operator scripts",
+    description:
+      "A gitlab.com project access token that `tools/scripts/gitlab-steering-exercise.ts` " +
+      "publishes one context record with, as recorded evidence for #3762. Set it in the " +
+      "shell for one run only; the platform never reads it, and workspaces store their own " +
+      "tokens through attach_gitlab_project.",
+    secret: true,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "glpat-...",
+  },
+  GITLAB_PROJECT: {
+    group: "Operator scripts",
+    description:
+      "The gitlab.com project, `group/project`, that `tools/scripts/gitlab-steering-exercise.ts` " +
+      "publishes its exercise record to. Use a scratch project: a run with --merge adds a " +
+      "file to its default branch.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "acme/oxagen-steering-scratch",
+  },
   DB_LINT_HEAD_REF: {
     group: "Operator scripts",
     description:

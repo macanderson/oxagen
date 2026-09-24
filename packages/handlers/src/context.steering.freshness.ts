@@ -15,7 +15,7 @@ import {
   type ContextSteeringFreshnessOutput,
 } from "@oxagen/oxagen/contracts/context.steering.freshness";
 import { steeringDeps, type SteeringDeps } from "./context.steering.deps";
-import { readGitHubConnection } from "./context.steering.github";
+import { readSteeringConnection } from "./context.steering.host";
 
 /**
  * Read the `steering` block out of `workspaces.settings`.
@@ -47,10 +47,10 @@ export function readGatePolicy(
 export function createGetSteeringFreshnessHandler(
   deps: Pick<SteeringDeps, "store"> & {
     /** The connection seam; injected so a test can answer without a database. */
-    readConnection?: typeof readGitHubConnection;
+    readConnection?: typeof readSteeringConnection;
   },
 ): CapabilityHandler<typeof contextSteeringFreshness> {
-  const readConnection = deps.readConnection ?? readGitHubConnection;
+  const readConnection = deps.readConnection ?? readSteeringConnection;
   return async (_input, ctx): Promise<ContextSteeringFreshnessOutput> => {
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
 
@@ -70,11 +70,14 @@ export function createGetSteeringFreshnessHandler(
         // discarded the whole platform answer, and neither `autoSync` nor
         // `blockStaleRuns` could be enforced for that workspace. A legacy
         // connection states no default ref, so the CLI resolves the remote's
-        // own, which is what it does whenever the platform names none.
+        // own, which is what it does whenever the platform names none. A
+        // GitLab main project answers through the same reader (#3762).
         readConnection(scope).then((connection) =>
           connection === null
             ? null
             : {
+                // Absent from an injected reader that predates it: GitHub.
+                provider: connection.provider ?? ("github" as const),
                 fullName:
                   connection.source === "binding"
                     ? connection.approvedFullName
@@ -101,6 +104,7 @@ export function createGetSteeringFreshnessHandler(
       headCommits: publication?.commitShas ?? [],
       publishedAt: publication?.publishedAt.toISOString() ?? null,
       repository: binding?.fullName ?? null,
+      provider: binding?.provider ?? null,
       defaultBranch: binding?.defaultRef ?? null,
       policy: readGatePolicy(settings),
     };

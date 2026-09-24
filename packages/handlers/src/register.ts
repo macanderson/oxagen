@@ -429,7 +429,8 @@ registerHandlersOnce("@oxagen/handlers", () => {
   registerHandler(
     "execute_scim_request",
     async () =>
-      (await import("./scim.request")).scimRequestHandler as CapabilityHandlerFn,
+      (await import("./scim.request"))
+        .scimRequestHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "set_sso_policy",
@@ -1942,6 +1943,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./repository.installation.attach"))
         .repositoryInstallationAttachHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "attach_gitlab_project",
+    async () =>
+      (await import("./repository.gitlab.attach"))
+        .repositoryGitlabAttachHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "create_enrollment_token",
