@@ -219,9 +219,14 @@ export function InitWizard({
     if (previous !== undefined) setStep(previous);
   }
 
-  /** The binding this repository opens through, binding it first when it has none. */
+  /**
+   * The binding this repository opens through, binding it first when it has
+   * none. `onBound` fires once a bind has been written, even when the list
+   * read that follows it fails: the workspace changed, so the page re-reads.
+   */
   async function bindingFor(
     row: RepositoryRow,
+    onBound: () => void,
   ): Promise<{ ok: true; bindingId: string } | RepositoriesFailure> {
     if (row.bindingId !== null) return { ok: true, bindingId: row.bindingId };
     const target = { owner: row.owner, name: row.name };
@@ -233,6 +238,7 @@ export function InitWizard({
     }
     const bound = await bindWorkspaceRepository(org, ws, target);
     if (!bound.ok) return bound;
+    onBound();
     // The bind answers the repository, not its binding id: the list does.
     const list = await readWorkspaceRepositories(org, ws);
     if (!list.ok) return list;
@@ -250,7 +256,9 @@ export function InitWizard({
     setFailure(null);
     let wrote = false;
     try {
-      const binding = await bindingFor(repository);
+      const binding = await bindingFor(repository, () => {
+        wrote = true;
+      });
       if (!binding.ok) {
         setFailure(failureText(binding));
         return;

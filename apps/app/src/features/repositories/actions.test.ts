@@ -36,7 +36,10 @@ const {
   linkWorkspaceRepository,
   listGithubInstallations,
   listInstallationRepositories,
+  closeRepositoryChange,
+  mergeRepositoryChange,
   openInitPullRequest,
+  readRepositoryChange,
   readRepositoryChanges,
   readRepositoryTree,
   readWorkspaceRepositories,
@@ -859,5 +862,205 @@ describe("readRepositoryChanges", () => {
       reason: "denied",
       code: "repository.read",
     });
+  });
+});
+
+describe("readRepositoryChange", () => {
+  const CHECK = {
+    name: "schema",
+    status: "passed",
+    summary: "The record parses.",
+    detailsUrl: null,
+    startedAt: "2026-09-18T10:00:00.000Z",
+    completedAt: "2026-09-18T10:00:01.000Z",
+  };
+  const CONTEXT_PR = {
+    proposalId: "prp_open1",
+    lineageId: "ctx.scr.001-never-push-to-main",
+    status: "checks_passed",
+    governanceMode: "team",
+    pr: {
+      number: 42,
+      url: "https://github.com/acme/platform/pull/42",
+      repository: "acme/platform",
+      baseRef: "main",
+      branch: "context/ctx.scr.001-never-push-to-main",
+      headSha: "0123456789abcdef",
+      path: ".oxagen/rules/ctx.scr.001-never-push-to-main.toml",
+    },
+    record: null,
+    body: "Why this rule",
+    checks: [CHECK],
+    onMerge: {
+      publishes: {
+        lineageId: "ctx.scr.001-never-push-to-main",
+        path: ".oxagen/rules/ctx.scr.001-never-push-to-main.toml",
+      },
+      bundleVersion: { current: 3, afterMerge: 4 },
+      review: null,
+    },
+    merged: null,
+  };
+
+  it("reads get_context_pr and answers the page's shape: the lineage, the checks without their timings, and what merge publishes", async () => {
+    invoke.mockResolvedValue(CONTEXT_PR);
+    expect(
+      await readRepositoryChange("acme", "core-platform", "prp_open1"),
+    ).toEqual({
+      ok: true,
+      value: {
+        proposalId: "prp_open1",
+        lineage: "ctx.scr.001-never-push-to-main",
+        status: "checks_passed",
+        governanceMode: "team",
+        pr: {
+          number: 42,
+          url: "https://github.com/acme/platform/pull/42",
+          repository: "acme/platform",
+          baseRef: "main",
+          branch: "context/ctx.scr.001-never-push-to-main",
+          headSha: "0123456789abcdef",
+        },
+        body: "Why this rule",
+        checks: [
+          { name: "schema", status: "passed", summary: "The record parses." },
+        ],
+        onMerge: {
+          path: ".oxagen/rules/ctx.scr.001-never-push-to-main.toml",
+          bundleVersion: { current: 3, afterMerge: 4 },
+        },
+        merged: null,
+      },
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "get_context_pr",
+      { proposalId: "prp_open1" },
+      expect.objectContaining({ surface: "app" }),
+    );
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+  });
+
+  it("answers a proposal with no pull request yet, and a merged one with its commit and promotion event", async () => {
+    invoke.mockResolvedValueOnce({
+      ...CONTEXT_PR,
+      status: "proposed",
+      governanceMode: null,
+      pr: null,
+      checks: [],
+    });
+    const unopened = await readRepositoryChange(
+      "acme",
+      "core-platform",
+      "prp_open1",
+    );
+    expect(unopened).toMatchObject({
+      ok: true,
+      value: { status: "proposed", pr: null, checks: [], merged: null },
+    });
+
+    invoke.mockResolvedValueOnce({
+      ...CONTEXT_PR,
+      status: "merged",
+      merged: {
+        commit: "fedcba9876543210",
+        at: "2026-09-19T10:00:00.000Z",
+        byUserId: "usr_1",
+        promotionEventId: "pev_1",
+        recordId: "rec_1",
+      },
+    });
+    const merged = await readRepositoryChange(
+      "acme",
+      "core-platform",
+      "prp_open1",
+    );
+    expect(merged).toMatchObject({
+      ok: true,
+      value: {
+        status: "merged",
+        merged: {
+          commit: "fedcba9876543210",
+          at: "2026-09-19T10:00:00.000Z",
+          promotionEventId: "pev_1",
+          recordId: "rec_1",
+        },
+      },
+    });
+    // The merger's user id is not part of what the page reads.
+    expect(merged.ok && merged.value.merged).not.toHaveProperty("byUserId");
+  });
+
+  it("carries a missing proposal across as not_found (negative)", async () => {
+    invoke.mockRejectedValue({
+      code: "not_found",
+      reason: "proposal_not_found",
+    });
+    expect(
+      await readRepositoryChange("acme", "core-platform", "prp_gone1"),
+    ).toMatchObject({ ok: false, reason: "not_found" });
+  });
+});
+
+describe("mergeRepositoryChange", () => {
+  it("merges through merge_context_pr and answers the merged commit", async () => {
+    invoke.mockResolvedValue({
+      proposalId: "prp_open1",
+      status: "merged",
+      record: {
+        id: "rec_1",
+        lineageId: "ctx.scr.001-never-push-to-main",
+        version: 1,
+        path: ".oxagen/rules/ctx.scr.001-never-push-to-main.toml",
+      },
+      mergedCommit: "fedcba9876543210",
+      promotionEvent: { id: "pev_1", seq: 4, chainDigest: "sha256:abc" },
+      bundleVersion: { before: 3, after: 4 },
+    });
+    expect(
+      await mergeRepositoryChange("acme", "core-platform", "prp_open1"),
+    ).toEqual({ ok: true, value: { commit: "fedcba9876543210" } });
+    expect(invoke).toHaveBeenCalledWith(
+      "merge_context_pr",
+      { proposalId: "prp_open1" },
+      expect.objectContaining({ surface: "app" }),
+    );
+  });
+
+  it("carries the handler's refusal across and merges nothing (negative)", async () => {
+    invoke.mockRejectedValue({ code: "conflict", reason: "checks_not_passed" });
+    expect(
+      await mergeRepositoryChange("acme", "core-platform", "prp_open1"),
+    ).toEqual({ ok: false, reason: "conflict", code: "checks_not_passed" });
+  });
+});
+
+describe("closeRepositoryChange", () => {
+  it("dismisses the proposal with the previewed comment, trimmed, as its reason", async () => {
+    invoke.mockResolvedValue({ proposalId: "prp_open1", status: "rejected" });
+    expect(
+      await closeRepositoryChange(
+        "acme",
+        "core-platform",
+        "prp_open1",
+        "  Closed by Mac <mac@acme.test>\n",
+      ),
+    ).toEqual({ ok: true, value: { status: "rejected" } });
+    expect(invoke).toHaveBeenCalledWith(
+      "dismiss_proposal",
+      { proposalId: "prp_open1", reason: "Closed by Mac <mac@acme.test>" },
+      expect.objectContaining({ surface: "app" }),
+    );
+  });
+
+  it("carries a denial across and closes nothing (negative)", async () => {
+    invoke.mockRejectedValue({ code: "authz_denied" });
+    expect(
+      await closeRepositoryChange(
+        "acme",
+        "core-platform",
+        "prp_open1",
+        "Closed by Mac",
+      ),
+    ).toMatchObject({ ok: false, reason: "denied" });
   });
 });

@@ -49,6 +49,9 @@ const actions = vi.hoisted(() => ({
   setProductionBranch: vi.fn(),
   openInitPullRequest: vi.fn(),
   readRepositoryChanges: vi.fn(),
+  readRepositoryChange: vi.fn(),
+  mergeRepositoryChange: vi.fn(),
+  closeRepositoryChange: vi.fn(),
 }));
 vi.mock("./actions", () => actions);
 
@@ -1321,5 +1324,163 @@ describe("change read states", () => {
     expect(row.querySelector("a")).toBeNull();
     expect(row).toHaveTextContent("queued");
     expect(row).not.toHaveTextContent("3 / 6");
+  });
+});
+
+describe("one change on the Changes tab", () => {
+  const CONTEXT_PR = {
+    proposalId: "prp_open1",
+    lineage: "ctx.scr.001-never-push-to-main",
+    status: "checks_passed",
+    governanceMode: "team",
+    pr: {
+      number: 42,
+      url: "https://github.com/acme/platform/pull/42",
+      repository: "acme/platform",
+      baseRef: "main",
+      branch: "oxagen/prp_open1",
+      headSha: "0123456789abcdef",
+    },
+    body: null,
+    checks: [{ name: "schema", status: "passed", summary: "It parses." }],
+    onMerge: {
+      path: ".oxagen/rules/ctx.scr.001-never-push-to-main.toml",
+      bundleVersion: { current: 3, afterMerge: 4 },
+    },
+    merged: null,
+  };
+
+  function changePage(change: string) {
+    return render(
+      <IntlProvider>
+        <Repositories
+          org="acme"
+          ws="core-platform"
+          orgName="Acme"
+          wsName="Core platform"
+          view={{ tab: "changes", change }}
+          viewer={VIEWER}
+        />
+      </IntlProvider>,
+    );
+  }
+
+  it("opens the change with the list's row, hands the gold to Merge, and goes back to every change", async () => {
+    actions.readRepositoryChange.mockResolvedValue({
+      ok: true,
+      value: CONTEXT_PR,
+    });
+    const user = userEvent.setup();
+    changePage("prp_open1");
+    const detail = await screen.findByTestId("change-detail");
+    await within(detail).findByTestId("change-merge-steps");
+    // The row the list holds supplies the opener and the why.
+    await waitFor(() => {
+      expect(within(detail).getByTestId("change-why")).toHaveTextContent(
+        "Main is shared and contested.",
+      );
+    });
+    const merge = within(detail).getByTestId("change-merge");
+    expect(merge.className).toContain("bg-button-primary-bg");
+    // Merge holds the screen's one gold, so the header's Add Oxagen does not.
+    await waitFor(() => {
+      expect(
+        screen.getByTestId("repositories-add-oxagen").className,
+      ).not.toContain("bg-button-primary-bg");
+    });
+    expect(actions.readRepositoryChange).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "prp_open1",
+    );
+    await user.click(within(detail).getByTestId("change-back"));
+    expect(nav.push).toHaveBeenCalledWith(
+      "/acme/core-platform/repositories/changes",
+    );
+  });
+
+  it("re-reads the page after a merge", async () => {
+    actions.readRepositoryChange.mockResolvedValue({
+      ok: true,
+      value: CONTEXT_PR,
+    });
+    actions.mergeRepositoryChange.mockResolvedValue({
+      ok: true,
+      value: { commit: "fedcba9876543210" },
+    });
+    const user = userEvent.setup();
+    changePage("prp_open1");
+    const detail = await screen.findByTestId("change-detail");
+    await user.click(await within(detail).findByTestId("change-merge"));
+    await waitFor(() => {
+      expect(actions.readWorkspaceRepositories).toHaveBeenCalledTimes(2);
+    });
+    expect(actions.readRepositoryChanges).toHaveBeenCalledTimes(2);
+  });
+
+  it("opens a change the list does not hold, with no row behind it (negative)", async () => {
+    actions.readRepositoryChanges.mockResolvedValue({
+      ok: false,
+      reason: "unavailable",
+      code: "github_down",
+    });
+    actions.readRepositoryChange.mockResolvedValue({
+      ok: true,
+      value: CONTEXT_PR,
+    });
+    changePage("prp_open1");
+    const detail = await screen.findByTestId("change-detail");
+    await within(detail).findByTestId("change-merge-steps");
+    expect(within(detail).getByTestId("change-why")).toHaveTextContent(
+      "not recorded",
+    );
+    expect(within(detail).getByRole("heading", { level: 2 })).toHaveTextContent(
+      "ctx.scr.001-never-push-to-main",
+    );
+  });
+});
+
+describe("page reads", () => {
+  it("draws nothing from answers that land after the page left the screen", async () => {
+    let answerList!: (value: unknown) => void;
+    let answerChanges!: (value: unknown) => void;
+    actions.readWorkspaceRepositories.mockReturnValue(
+      new Promise((resolve) => {
+        answerList = resolve;
+      }),
+    );
+    actions.readRepositoryChanges.mockReturnValue(
+      new Promise((resolve) => {
+        answerChanges = resolve;
+      }),
+    );
+    const view = page();
+    view.unmount();
+    answerChanges({ ok: true, value: CHANGES });
+    answerList({ ok: true, value: { repositories: [MAIN] } });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(screen.queryByTestId("repositories-page")).toBeNull();
+    // The unmounted page asked for no tree: the list answered too late.
+    expect(actions.readRepositoryTree).not.toHaveBeenCalled();
+  });
+
+  it("names the call as unanswered when the list read throws (negative)", async () => {
+    actions.readWorkspaceRepositories.mockRejectedValue(new Error("offline"));
+    page();
+    expect(await screen.findByTestId("repositories-error")).toHaveTextContent(
+      "action_failed",
+    );
+  });
+
+  it("says the workspace binds no main repository on Configuration when only linked ones are bound", async () => {
+    actions.readWorkspaceRepositories.mockResolvedValue({
+      ok: true,
+      value: { repositories: [LINKED] },
+    });
+    await loaded("configuration");
+    expect(
+      await screen.findByTestId("configuration-no-main"),
+    ).toHaveTextContent("binds no main repository");
   });
 });
