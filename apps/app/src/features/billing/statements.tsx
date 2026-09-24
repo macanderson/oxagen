@@ -25,7 +25,11 @@ import {
 } from "./statement-period";
 import { Section } from "./section";
 
-/** CSV pages the browser joins before it stops: 200,000 rows at 10,000 a page. */
+/**
+ * CSV pages the browser joins before it stops: 200,000 rows at 10,000 a page.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export const MAX_PAGES = 20;
 
 type Format = "csv" | "html";

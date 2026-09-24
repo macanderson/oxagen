@@ -52,10 +52,6 @@ function dayMs(value: string): number | null {
   return new Date(ms).toISOString().slice(0, 10) === value ? ms : null;
 }
 
-export function isStatementKind(value: string): value is StatementKind {
-  return (STATEMENT_KINDS as readonly string[]).includes(value);
-}
-
 /** The form as the contract's period fields, or the field that is wrong. */
 export function statementPeriodInput(
   form: StatementForm,
