@@ -81,8 +81,8 @@ function parseUsdMicros(text: string): number | null {
 }
 
 /**
- * The draft with `budget.per_run_micros` set to `next` and every other budget
- * key kept. The file may spell the table three ways, and the patcher works on
+ * The draft with `budget.<key>` set to `next` (`per_run_micros` or
+ * `per_day_micros`) and every other budget key kept. The file may spell the table three ways, and the patcher works on
  * lines, so the spelling decides which line is rewritten: a `[budget]` table
  * gets its own key line, a dotted root key is replaced on its line, and an
  * inline table (or no budget at all) is rewritten at the root with `siblings`
@@ -93,23 +93,33 @@ function parseUsdMicros(text: string): number | null {
  * bodies: a regex over the whole source once took a `[budget]` line inside
  * the instructions for a header and appended a second table.
  */
-function setPerRunMicros(
+function setBudgetMicros(
   current: string,
   siblings: TomlTable | null,
+  key: BudgetKey,
   next: number,
 ): string {
   const literal = tomlLiteral(next);
   const form = tomlTableForm(current, "budget");
-  if (form === "header")
-    return tomlSet(current, "budget", "per_run_micros", literal);
+  if (form === "header") return tomlSet(current, "budget", key, literal);
   if (form === "dotted")
-    return tomlSet(current, null, "budget.per_run_micros", literal);
+    return tomlSet(current, null, `budget.${key}`, literal);
   return tomlSet(
     current,
     null,
     "budget",
-    tomlLiteral({ ...(siblings ?? {}), per_run_micros: next }),
+    tomlLiteral({ ...(siblings ?? {}), [key]: next }),
   );
+}
+
+type BudgetKey = "per_run_micros" | "per_day_micros";
+
+/** A budget key's stored micros, or null when it is absent or not a whole non-negative number. */
+function budgetMicros(budget: TomlTable | null, key: BudgetKey): number | null {
+  const value = budget === null ? undefined : tomlGet(budget, key);
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+    ? value
+    : null;
 }
 
 /** The draft's document: what parses, or the empty table with the line that stopped the parse. */
@@ -262,13 +272,10 @@ export function DefinitionForm({
   const field = (key: string) => `${id}-${key}`;
 
   const budget = table(tomlGet(doc, "budget"));
-  const micros =
-    budget === null ? undefined : tomlGet(budget, "per_run_micros");
-  const perRunMicros =
-    typeof micros === "number" && Number.isSafeInteger(micros) && micros >= 0
-      ? micros
-      : null;
+  const perRunMicros = budgetMicros(budget, "per_run_micros");
   const perRunUsd = perRunMicros === null ? "" : usdInputValue(perRunMicros);
+  const perDayMicros = budgetMicros(budget, "per_day_micros");
+  const perDayUsd = perDayMicros === null ? "" : usdInputValue(perDayMicros);
   const tier = text(tomlGet(doc, "model_tier"));
   const tiers: readonly string[] =
     tier === "" || MODEL_TIERS.some((known) => known === tier)
@@ -476,7 +483,33 @@ export function DefinitionForm({
                     const next = parseUsdMicros(event.target.value);
                     if (next === null || next === perRunMicros) return;
                     setDraft((current) =>
-                      setPerRunMicros(current, budget, next),
+                      setBudgetMicros(current, budget, "per_run_micros", next),
+                    );
+                  }}
+                />
+              </Labelled>
+              <Labelled
+                id={field("budget-day")}
+                label={t("model.budgetDay")}
+                hint={t("model.budgetDayHint", {
+                  micros: perDayMicros === null ? "…" : String(perDayMicros),
+                })}
+              >
+                <input
+                  id={field("budget-day")}
+                  type="number"
+                  step="any"
+                  min="0"
+                  inputMode="decimal"
+                  key={`budget-day:${perDayUsd}`}
+                  defaultValue={perDayUsd}
+                  className={`${inputBase} ${mono}`}
+                  onBlur={(event) => {
+                    if (event.target.value === perDayUsd) return;
+                    const next = parseUsdMicros(event.target.value);
+                    if (next === null || next === perDayMicros) return;
+                    setDraft((current) =>
+                      setBudgetMicros(current, budget, "per_day_micros", next),
                     );
                   }}
                 />
