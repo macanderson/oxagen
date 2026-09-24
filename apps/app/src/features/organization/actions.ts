@@ -111,7 +111,7 @@ export async function deleteRole(
   return kernelWrite(ctx, iamRoleDelete, { roleId });
 }
 
-export type WorkspaceDraft = { name: string; slug: string };
+type WorkspaceDraft = { name: string; slug: string };
 
 /**
  * A new workspace's draft: its name, and its main repository as the one

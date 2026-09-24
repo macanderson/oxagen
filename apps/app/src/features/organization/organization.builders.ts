@@ -251,9 +251,9 @@ export function orgSource(reads: OrgReads): {
       modelCredential: answer(reads.modelCredential, "modelCredential"),
       dataPlane: answer(reads.dataPlane, "dataPlane"),
       sso: answer(reads.sso, "sso"),
-      workspaceFacts: (...args: unknown[]) => {
-        calls.workspaceFacts.push(args);
-        const { wsSlug } = args[0] as { wsSlug: string };
+      workspaceFacts: (ctx: { wsSlug: string }, ...rest: unknown[]) => {
+        calls.workspaceFacts.push([ctx, ...rest]);
+        const { wsSlug } = ctx;
         const read = reads.workspaceFacts?.[wsSlug];
         return read === undefined
           ? Promise.reject(

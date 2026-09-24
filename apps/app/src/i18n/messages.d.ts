@@ -3699,6 +3699,7 @@ type Messages = {
       };
       form: {
         key: string;
+        keyPlaceholder: string;
         keyHint: string;
         show: string;
         hide: string;

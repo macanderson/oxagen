@@ -505,6 +505,7 @@
       },
       "form": {
         "key": "Your OpenRouter or vendor key",
+        "keyPlaceholder": "sk-or-v1-…",
         "keyHint": "Oxagen calls the model with it once to check it works, then stores it encrypted. It is never returned to a screen and never read from the environment.",
         "show": "Show",
         "hide": "Hide",

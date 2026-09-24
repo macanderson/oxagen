@@ -324,7 +324,8 @@ describe("orgTwoFactorPolicy", () => {
 
   it("refuses a forged context (negative)", async () => {
     await expect(
-      orgTwoFactorPolicy({ ...orgFields } as unknown as OrgCtx),
+      // @ts-expect-error -- a context not minted by viewer-mint.ts
+      orgTwoFactorPolicy({ ...orgFields }),
     ).rejects.toThrow(TypeError);
   });
 });

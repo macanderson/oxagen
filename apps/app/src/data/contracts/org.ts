@@ -107,7 +107,7 @@ const BoundRepository = z.object({
   /** The approved production ref the binding records, never live GitHub's. */
   defaultRef: z.string().min(1),
 });
-export type BoundRepository = z.infer<typeof BoundRepository>;
+type BoundRepository = z.infer<typeof BoundRepository>;
 
 /**
  * What one workspace binds and registers, read inside it (`list_repositories`

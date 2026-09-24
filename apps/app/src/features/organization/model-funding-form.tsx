@@ -240,7 +240,7 @@ export function ModelFundingForm({
         name="apiKey"
         label={t("form.key")}
         hint={t("form.keyHint")}
-        placeholder="sk-or-v1-…"
+        placeholder={t("form.keyPlaceholder")}
         autoComplete="off"
         spellCheck={false}
         value={apiKey}

@@ -10,7 +10,7 @@
 // below Owner or Admin gets the frame's denied state before the read.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactElement, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ModelCredential } from "@/data/contracts/org";
 import { type Read, readError, readOk } from "@/data/read";
@@ -105,7 +105,9 @@ async function renderTab(read: Read<ModelCredential>, role: OrgRole = "owner") {
     workspaces: readOk({ workspaces: [workspaceRow()] }),
     modelCredential: read,
   });
-  const page = OrganizationModelFunding({ ctx, source });
+  // The route hands the frame its props; render the frame with the same ones.
+  const page: ReactElement<ComponentProps<typeof OrganizationFrame>> =
+    OrganizationModelFunding({ ctx, source });
   const view = render(
     <IntlProvider>{await OrganizationFrame(page.props)}</IntlProvider>,
   );
