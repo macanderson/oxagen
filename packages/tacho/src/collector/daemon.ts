@@ -25,6 +25,7 @@ import { hookInputSchema } from "../claude-code/hooks";
 import { homedir, hostname as osHostname } from "node:os";
 import { dirname, join } from "node:path";
 import { execFile, spawnSync } from "node:child_process";
+import { GENESIS_CURSOR } from "../chain";
 import { type ClaudeCodeContext, digestText } from "../claude-code/context";
 import { normalizeOtlp, type OtlpPayload } from "../claude-code/otel";
 import type {
@@ -84,7 +85,7 @@ import {
   NO_RETENTION,
   type RetentionMandate,
 } from "../evidence/retention";
-import { Wal } from "../host/wal";
+import { Wal, WalRecoveryConflict } from "../host/wal";
 import { ulid } from "../ids";
 import { toProtocolTimestamp } from "../timestamp";
 import {
@@ -509,6 +510,19 @@ async function initializeDaemon(
     if (outcome !== "ok")
       log(`WAL tail repair for session ${session}: ${outcome}`);
   }
+  // Every recorder this daemon opens without restored state, a session or a
+  // subagent under one, starts after the last event its WAL file already
+  // holds. `reconcileRestoredCursor` below does the same for the chains
+  // `daemon.json` names; this covers the ones it lost.
+  context.chainTail = (sessionUuid) => {
+    const head = wal.lastEvent(sessionUuid);
+    return head === undefined
+      ? undefined
+      : {
+          seq: head.seq + 1,
+          prevHash: head.hash as RecorderState["cursor"]["prevHash"],
+        };
+  };
   const registry = new SessionRegistry({
     context,
     scope: host.host_enrollment_id,
@@ -758,16 +772,18 @@ async function initializeDaemon(
     // A session the failed call created has no mark: it did not exist when
     // the marks were taken. Its chain goes back to where it was born, or its
     // unwritten genesis keeps seq 0 and the retry seals a resume after it.
-    // A session with a WAL file is left alone: the model proxy runs off the
-    // serial queue, and it may have opened and written that session while
-    // the failed call was awaiting.
+    // A session whose WAL has moved since then is left alone: the model
+    // proxy runs off the serial queue, and it may have written that session
+    // while the failed call was awaiting. A session born on top of a WAL
+    // file it continues (`continueFromDisk`) goes back like any other.
     const marked = new Set(marks.map(({ session }) => session));
-    const unmarked = registry.list().filter((session) => !marked.has(session));
-    if (unmarked.length > 0) {
-      const onDisk = new Set(wal.sessions());
-      for (const session of unmarked)
-        if (!onDisk.has(session.recorder.sessionUuid))
-          session.recorder.rollbackToBirth();
+    for (const session of registry.list()) {
+      if (marked.has(session)) continue;
+      const born = session.recorder.birthCursor;
+      const onDisk =
+        context.chainTail?.(session.recorder.sessionUuid) ?? GENESIS_CURSOR;
+      if (onDisk.seq === born.seq && onDisk.prevHash === born.prevHash)
+        session.recorder.rollbackToBirth();
     }
     for (const { session, mark } of [...marks].reverse())
       session.recorder.rollbackChain(mark);
@@ -2048,9 +2064,17 @@ async function initializeDaemon(
       pendingUuid === undefined
         ? undefined
         : pendingSessionEnds.get(pendingUuid);
-    if (pending?.terminal !== undefined) {
-      flushPendingTerminal(pending.terminal);
-      return {};
+    if (pendingUuid !== undefined && pending?.terminal !== undefined) {
+      try {
+        flushPendingTerminal(pending.terminal);
+        return {};
+      } catch (error) {
+        if (!(error instanceof WalRecoveryConflict)) throw error;
+        // Sealed on a chain the WAL does not hold, so no retry can land it.
+        // It is set aside once, and the end is sealed again below from the
+        // hook this envelope still carries.
+        setAsideConflictingTerminal(pendingUuid, pending, error);
+      }
     }
     const before = pending === undefined ? undefined : registry.state();
     // Marked before the seal, not only before the write below: a session
@@ -2152,6 +2176,55 @@ async function initializeDaemon(
     return outcome.response;
   }
 
+  /**
+   * Move a journaled terminal the WAL refuses as a conflict out of the retry
+   * path, and put the session's chains back on the WAL.
+   *
+   * The conflict is permanent: the WAL already holds that seq with another
+   * hash, so every retry fails the same way. The git lane used to requeue it
+   * on every tick, and one host logged the same conflict over a thousand
+   * times while the session's end never landed (#4086). The events go to
+   * `quarantine/` as evidence, where `tacho status` counts them and the
+   * retention sweep ages them out. Their bodies do not go with them: content
+   * whose event can never reach the chain would outlive every sweep that
+   * enforces the retention mandate.
+   *
+   * The hook id is forgotten for the same reason `recordHookOutcome`
+   * forgets it after a failed write. The route that computed this terminal
+   * remembered it, and the end sealed again from this envelope would
+   * otherwise be dropped as a repeat.
+   */
+  function setAsideConflictingTerminal(
+    uuid: string,
+    pending: PendingSessionEnd,
+    conflict: WalRecoveryConflict,
+  ): void {
+    const name = `${uuid}-terminal-conflict-${String(conflict.seq).padStart(8, "0")}.json`;
+    writeSensitiveFileAtomic(
+      join(paths.quarantine, name),
+      JSON.stringify(
+        {
+          reason: conflict.message,
+          events: pending.terminal?.events ?? [],
+          bodies_dropped: pending.terminal?.bodies.length ?? 0,
+        },
+        null,
+        2,
+      ),
+    );
+    delete pending.terminal;
+    persistPendingEnds();
+    const session = registry.byUuid(uuid);
+    if (session !== undefined) {
+      session.recorder.continueFromDisk();
+      if (pending.hook_id !== undefined)
+        forgetHookId(session, pending.hook_id);
+    }
+    log(
+      `session end for ${uuid} conflicts with the WAL at ${conflict.sessionUuid}:${conflict.seq}; its sealed terminal is in quarantine/${name}, and the end is sealed again on the chain the WAL holds`,
+    );
+  }
+
   function flushPendingTerminal(
     terminal: z.infer<typeof terminalSchema>,
   ): void {
@@ -2229,6 +2302,22 @@ async function initializeDaemon(
     }
   }
 
+  /**
+   * When this process began answering hooks, and the sessions it has already
+   * chained a `daemon_down` gap on for the outage that ended then.
+   *
+   * A hook is spooled whenever its client gets no good answer: the daemon was
+   * down, or it answered with an error or past the hook's time budget. Only
+   * the first is an outage. Every drain used to seal a gap for every session
+   * it replayed, so a hook the daemon refused while it was up, and #4051 has
+   * it refuse a hook whose write failed so the replay can land it, sealed a
+   * `daemon_down` gap each time it was replayed. One host chained about 70 in
+   * twenty minutes with the daemon running throughout. The startup gap below
+   * and `drainSpool` both add here, so one outage gives a session one gap.
+   */
+  let servingSince: number | undefined;
+  const outageGapped = new Set<string>();
+
   /** Replay what `tacho-hook` spooled while the daemon was down, in order. */
   async function drainSpool(): Promise<number> {
     const files = readdirSync(paths.spool)
@@ -2261,7 +2350,13 @@ async function initializeDaemon(
         continue;
       }
       const sessionId = (file.payload as { session_id?: string }).session_id;
-      if (sessionId !== undefined && !gapped.has(sessionId))
+      // A hook spooled since this process began serving was refused or
+      // answered late, not missed: its replay here recovers it, and nothing
+      // else the daemon receives directly was lost.
+      const spooledWhileDown =
+        servingSince === undefined ||
+        !(Date.parse(file.received_at) >= servingSince);
+      if (sessionId !== undefined && spooledWhileDown && !gapped.has(sessionId))
         gapped.set(sessionId, file.received_at);
       try {
         await handleHookInner(spoolEnvelope(file));
@@ -2292,6 +2387,7 @@ async function initializeDaemon(
     for (const [sessionId, firstAt] of gapped) {
       const session = registry.get(sessionId);
       if (session === undefined || session.sealed) continue;
+      if (outageGapped.has(session.recorder.sessionUuid)) continue;
       const mark = session.recorder.markChain();
       gapMarks.push({ session, mark });
       gaps.push(
@@ -2309,6 +2405,8 @@ async function initializeDaemon(
       rollbackEveryChain(gapMarks);
       throw error;
     }
+    for (const { session } of gapMarks)
+      outageGapped.add(session.recorder.sessionUuid);
     // Commit the WAL before removing the on-disk evidence it is the only
     // other copy of. A spool file is the sole record of a hook payload until
     // its events are durable; unlinking it before a flush trades a crash
@@ -2943,6 +3041,8 @@ async function initializeDaemon(
     }
     try {
       record(restartGaps);
+      for (const { session } of restartMarks)
+        outageGapped.add(session.recorder.sessionUuid);
     } catch (error) {
       rollbackEveryChain(restartMarks);
       log(
@@ -2952,6 +3052,7 @@ async function initializeDaemon(
   }
 
   ready(api);
+  servingSince = now();
   if (options.listen ?? true) {
     const unixSocket = (options.platform ?? process.platform) !== "win32";
     log(

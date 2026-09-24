@@ -439,7 +439,36 @@ export class SessionRecorder {
     this.harnessVersion = options.context.agent.harness_version;
     if (options.context.host) this.host = { ...options.context.host };
     if (options.restore) this.restore(options.restore);
+    else this.continueFromDisk();
     this.birth = this.markChain();
+  }
+
+  /**
+   * Put this chain, and every subagent chain under it, directly after the
+   * last event the host's WAL holds for it, wherever the cursor stands now.
+   *
+   * The uuid is derived from the harness session id, so a recorder opened for
+   * a session the daemon lost track of names a chain that may already be on
+   * disk. `daemon.json` lags the WAL by up to a tick, and further when the
+   * tick that writes it keeps failing, so a crash can drop a session or a
+   * subagent the WAL holds hundreds of events for. Opened at genesis, every
+   * write to that chain was refused because the file already held seq 0, and
+   * a session end sealed there could never land (#4086). Answers whether any
+   * cursor moved.
+   */
+  continueFromDisk(): boolean {
+    let moved = false;
+    const tail = this.options.context.chainTail?.(this.sessionUuid);
+    if (
+      tail !== undefined &&
+      (tail.seq !== this.cursor.seq || tail.prevHash !== this.cursor.prevHash)
+    ) {
+      this.cursor = { ...tail };
+      moved = true;
+    }
+    for (const link of this.children.values())
+      if (link.recorder.continueFromDisk()) moved = true;
+    return moved;
   }
 
   private restore(state: RecorderState): void {
@@ -664,6 +693,11 @@ export class SessionRecorder {
    */
   rollbackToBirth(): void {
     this.rollbackChain(this.birth);
+  }
+
+  /** Where this chain stood when the recorder was built. */
+  get birthCursor(): ChainCursor {
+    return this.birth.cursor;
   }
 
   /**
@@ -900,6 +934,9 @@ export class SessionRecorder {
     });
     // A child chain opens with its own genesis, so its journal has a session_start.
     recorder.started = true;
+    // A chain the WAL already holds has its genesis on disk; this recorder
+    // only continues it.
+    if (recorder.cursor.seq > 0) return recorder;
     const genesis = recorder.seal(
       "agent_start",
       {
