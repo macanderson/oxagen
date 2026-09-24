@@ -21,7 +21,7 @@ import { cell, headCell, numericCell } from "@/ui/table";
 import { fillBar, fillBarFill } from "./instruments";
 import type { Batches, Family, RunMetrics } from "./metrics";
 import { Fact, Facts, NoValue, Note, Panel } from "./parts";
-import { StepIcon } from "./tool-icon";
+import { ToolIcon } from "./tool-icon";
 
 /** `.cc { grid-template-columns:minmax(0,1fr) minmax(0,1fr) }`; one column on a phone. */
 const columns = "grid grid-cols-1 md:grid-cols-2";
@@ -89,7 +89,7 @@ function FamilyTable({ families }: { families: readonly Family[] }) {
               <td className={`${cell} w-[1%] whitespace-nowrap pr-3.5`}>
                 <span className="flex min-w-0 items-center gap-[9px]">
                   <span className={familyIcon}>
-                    <StepIcon node="tool" group={family.group} />
+                    <ToolIcon group={family.group} size="md" />
                   </span>
                   <span className="grid min-w-0 leading-[1.3]">
                     <b className={familyName}>

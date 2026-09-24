@@ -1,14 +1,30 @@
-// The transcript's shape (mockup `pRun`, "Transcript: run -> turn -> step ->
-// frame"): the entries `get_run_transcript` answers at `everything`, one per
-// frame, grouped into the turns they fall in and the steps inside each turn.
+// The transcript's shape. Two readings of the entries `get_run_transcript`
+// answers at `everything`, one per frame:
 //
-// Pure, so the grouping is tested without a render. Nothing here reads a body
-// or invents a value: a step's name, argument and chips come from the frames'
-// recorded types, labels, instants and costs, and a figure the frames did not
-// carry is left out rather than drawn as a zero.
-import { type Money, sumMoney } from "@/data/contracts/money";
-import type { TranscriptBody, TranscriptEntry } from "@/data/contracts/run";
-import { type ToolDetail, toolDetail } from "./tool-detail";
+//  - `buildTranscript`: the frames grouped into the turns they fall in and the
+//    steps inside each turn, which the Run page's metrics count from;
+//  - `buildFeed`: the rows the Transcript tab draws (mockup `txEntries` and
+//    `txRow`): the operator's prompt, the model's text and thinking, each tool
+//    call as one row, what each model step cost, what was recalled, and the
+//    run's stop.
+//
+// Pure, so both are tested without a render. Nothing here invents a value: a
+// row's name, arguments and chips come from the frames' recorded types,
+// labels, instants, bodies and costs, and a figure the frames did not carry
+// is left out rather than drawn as a zero.
+import { type Cost, type Money, sumMoney } from "@/data/contracts/money";
+import type {
+  TranscriptBody,
+  TranscriptEntry,
+  TranscriptUsage,
+} from "@/data/contracts/run";
+import {
+  parseBody,
+  type ToolDetail,
+  type ToolDiff,
+  type ToolGroup,
+  toolDetailOf,
+} from "./tool-detail";
 
 /**
  * The one half of the exchange an entry carries, or null.
@@ -22,9 +38,8 @@ import { type ToolDetail, toolDetail } from "./tool-detail";
  * its result in `response`; a positional `response ?? request` would silently
  * render a tool's input where its result belongs, and nothing about the page
  * would look wrong. A caller that needs both halves reads them by name, which
- * is what the frame renderer does. Module-private: its one caller is
- * `textOf` below, in this file; a turn's prompt and reply are the only
- * place the app still reads a body positionally instead of by name.
+ * is what the tool reading does. Module-private: the feed reads a prompt,
+ * a reply and a recall frame through it, which are single-frame entries.
  */
 function soleBody(entry: TranscriptEntry): TranscriptBody | null {
   if (entry.request !== null && entry.response !== null) return null;
@@ -52,14 +67,8 @@ export function isNonEmpty(
   return entries.length > 0;
 }
 
-/** The frame at `pos`, held inside the transcript. */
-export function frameAt(entries: Frames, pos: number): TranscriptEntry {
-  const index = Math.min(Math.max(0, pos), entries.length - 1);
-  return entries[index] ?? entries[0];
-}
-
 /** The spine's dot: what kind of thing a step was. */
-export type StepNode = "model" | "tool" | "policy" | "control" | "deny";
+type StepNode = "model" | "tool" | "policy" | "control" | "deny";
 
 export type TranscriptStep = {
   /** Stable across re-reads of a live run: the opening frame's `entryKey`. */
@@ -81,10 +90,6 @@ export type TranscriptTurn = {
   last: TranscriptEntry;
   frames: TranscriptEntry[];
   steps: TranscriptStep[];
-  /** The prompt the turn opened with, when the recorder kept its body. */
-  prompt: string | null;
-  /** The agent's last message in the turn, when the recorder kept its body. */
-  reply: string | null;
 };
 
 const MODEL_REQUEST = "model.request";
@@ -248,8 +253,21 @@ function stepPair(
     const callKey = frame.callKey;
     if (callKey !== null) {
       const j = closeOf(frames, byKey, i, callKey, close);
+      // The decisions about this call, keyed to it, belong to it as they do
+      // when the pairing is by adjacency: a policy decision or an approval
+      // request between the request and the call, or after a request that
+      // has no call yet because it is waiting on one.
+      const gates = (byKey.get(callKey) ?? []).filter(
+        (k) =>
+          k > i &&
+          (j === null || k < j) &&
+          TOOL_GATE.has(frames[k]?.type ?? ""),
+      );
       return {
-        indices: j === null ? [i] : absorbEffects(frames, [i, j], callKey),
+        indices:
+          j === null
+            ? [i, ...gates]
+            : absorbEffects(frames, [i, ...gates, j], callKey),
         kind: "tool",
       };
     }
@@ -286,6 +304,9 @@ function stepPair(
       const next = frames[j];
       if (next === undefined || next.type !== frame.type || !isBare(next))
         break;
+      // A subagent's frame of the same type is the subagent's: the run's
+      // own stop is not folded into a subagent's, nor the other way round.
+      if (next.subagent?.chainRef !== frame.subagent?.chainRef) break;
       indices.push(j);
     }
     return { indices, kind: "event" };
@@ -301,41 +322,6 @@ function isBare(frame: TranscriptEntry): boolean {
     frame.response === null &&
     frame.decision === null
   );
-}
-
-/**
- * A wrapped session's tool receipt carries the call's input and its output in
- * one JSON body. Read them apart so the page can label each, and null for a
- * body that is not that shape. A shell result is shown as its streams rather
- * than as the JSON around them.
- */
-export function toolExchange(
-  text: string,
-): { input: string; output: string } | null {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    return null;
-  }
-  if (typeof parsed !== "object" || parsed === null) return null;
-  if (!("input" in parsed) || !("output" in parsed)) return null;
-  const { input, output } = parsed;
-  return { input: readable(input), output: readable(output) };
-}
-
-function readable(value: unknown): string {
-  if (typeof value === "string") return value;
-  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
-    const out = "stdout" in value ? value.stdout : undefined;
-    const err = "stderr" in value ? value.stderr : undefined;
-    const parts = [
-      typeof out === "string" && out.length > 0 ? out : null,
-      typeof err === "string" && err.length > 0 ? err : null,
-    ].filter((part): part is string => part !== null);
-    if (parts.length > 0) return parts.join("\n");
-  }
-  return JSON.stringify(value, null, 2);
 }
 
 function stepsOf(
@@ -387,24 +373,6 @@ function stepsOf(
   return steps;
 }
 
-/** The first (or last) frame of `type` in `frames` that carries text. */
-function textOf(
-  frames: readonly TranscriptEntry[],
-  type: string,
-  last: boolean,
-): string | null {
-  const ordered = last ? [...frames].reverse() : frames;
-  // A subagent's own prompt and reply sit inside the turn that spawned it;
-  // they are the subagent's, not what the person asked or was answered.
-  const found = ordered.find(
-    (frame) =>
-      frame.subagent === undefined &&
-      frame.type === type &&
-      (soleBody(frame)?.text ?? null) !== null,
-  );
-  return found === undefined ? null : (soleBody(found)?.text ?? null);
-}
-
 /**
  * The run as turns. Entries are grouped by their `turn`; a run of entries
  * with the same value is one group, so a recording that reuses a turn number
@@ -427,13 +395,6 @@ export function buildTranscript(
       last: entry,
       frames,
       steps: stepsOf(frames, start),
-      prompt: textOf(frames, "turn_start", false),
-      // A harness that reports the agent's message apart from the turn's end
-      // (Cursor) can close the turn before the message lands; the message
-      // frame is then the only copy, and it is still this turn's reply.
-      reply:
-        textOf(frames, "turn_end", true) ??
-        textOf(frames, "oxagen:message", true),
     });
     start = index + 1;
   });
@@ -482,27 +443,10 @@ function policySubject(frame: TranscriptEntry): string | null {
   return words[1] ?? null;
 }
 
-/**
- * The call a frame's decision was made on, for the surface to name beside
- * the decision.
- *
- * A gate frame names the call in its label. A tool frame that carries a
- * folded decision *is* the call, so its own name is the subject. Anything
- * else answers null, and the surface says what was decided without claiming
- * a subject it does not have.
- */
-export function decisionSubject(frame: TranscriptEntry): string | null {
-  if (TOOL_GATE.has(frame.type)) return policySubject(frame);
-  if (!TOOL_CLOSE.has(frame.type) && frame.type !== "tool_requested")
-    return null;
-  const name = toolName(frame.label);
-  return name === frame.type ? null : name;
-}
-
 const DENIED = /^(deny|denied|reject|rejected|refused)$/;
 const FAILED = /^(error|failed|failure|denied|timeout)$/;
 
-export type StepDigest = {
+type StepDigest = {
   node: StepNode;
   name: string;
   /** What the step acted on; null when the label says nothing beyond the name. */
@@ -596,134 +540,74 @@ export function stepDigest(step: TranscriptStep): StepDigest {
   };
 }
 
+/** The frame that closes a tool step: its result, or the one receipt a producer wrote. */
+function toolClose(step: TranscriptStep): TranscriptEntry | undefined {
+  const close = step.frames.find((frame) => TOOL_CLOSE.has(frame.type));
+  if (close !== undefined) return close;
+  const { first } = step;
+  // A receipt that opens its own step (no request frame before it) is the
+  // whole exchange; an intention that opens one is only the request.
+  return first.kind === "tool_call" &&
+    first.type !== TOOL_REQUESTED &&
+    first.type !== TOOL_ENGINE_STARTED
+    ? first
+    : undefined;
+}
+
 /**
- * What a tool step did, read from the body the recorder kept.
+ * What a tool step did, read from the bodies the recorder kept.
  *
- * The close frame is preferred because it holds both halves together
- * (`{input, output}`); the request frame holds the input alone and is the
- * fallback, which is what a step that never completed leaves behind. A step
- * whose bodies were all `digest_only` answers a detail with no panes: the
- * tool's name is still known from the frame's label, so the line still reads
- * even when there is nothing to show under it.
+ * A wrapped session's receipt holds both halves together (`{input, output}`),
+ * and is read as it is. A producer that wrote the input on the request frame
+ * and the result on the receipt is read from both: the input from the one,
+ * the output from the other. A step whose bodies were all `digest_only`
+ * still answers a detail when its label names the tool, so the row still
+ * reads even when there is nothing to show under it.
  *
- * Separate from `stepDigest` because it parses JSON, and the view calls it
- * behind a `useMemo` while it calls `stepDigest` on every render.
+ * Separate from `stepDigest` because it parses JSON.
+ *
+ * @internal Exported for its unit test; the feed is its caller.
  */
 export function stepTool(step: TranscriptStep): ToolDetail | null {
   if (step.kind !== "tool") return null;
-  const close = step.frames.find((frame) => TOOL_CLOSE.has(frame.type));
+  const close = toolClose(step);
   const named = close ?? step.first;
   const name = toolName(named.label);
   // A label of `Bash ok` names the tool; a label that is just the frame's
   // type names nothing, and the body's own `name` is then the only source.
   const known = name === named.type ? null : name;
-  const ordered = close === undefined ? step.frames : [close, ...step.frames];
-  const body =
-    ordered
-      .flatMap((frame) => [frame.response, frame.request])
-      .find((half) => (half?.text ?? null) !== null)?.text ?? null;
-  return toolDetail(known, body);
-}
-
-/**
- * What a model step did, read from the reply's blocks.
- *
- * A model call reads as the thing it did, not as the model that did it: a
- * reply that called Bash reads "Bash" with the command's first line, exactly
- * as the tool step for the same call would, through the same reader. A reply
- * with words and no call reads as a reply, with its first line. The model's
- * name moves to a chip. Null where no frame of the step kept its blocks, so
- * the view falls back to the digest.
- */
-export function stepModel(step: TranscriptStep): ToolDetail | null {
-  if (step.kind !== "model") return null;
-  const blocks = step.frames
-    .flatMap((frame) => [frame.response, frame.request])
-    .find(
-      (half) => half?.blocks !== undefined && half.blocks.length > 0,
-    )?.blocks;
-  if (blocks === undefined) return null;
-  const uses = blocks.filter((block) => block.kind === "tool_use");
-  if (uses.length > 0) {
-    const details = uses.flatMap((use) => {
-      const read = toolDetail(use.name, JSON.stringify({ input: use.input }));
-      return read === null ? [] : [read];
-    });
-    const first = details[0];
-    if (first !== undefined) {
-      return {
-        ...first,
-        detail: uses.length > 1 ? `+${String(uses.length - 1)}` : first.detail,
-        panes: details.flatMap((detail) => detail.panes),
-      };
-    }
-  }
-  const text = blocks
-    .filter((block) => block.kind === "text")
-    .map((block) => block.text)
-    .join("\n\n")
-    .trim();
-  if (text === "") return null;
-  const cut = text.indexOf("\n");
-  return {
-    name: "reply",
-    group: "tool",
-    headline: cut === -1 ? text : text.slice(0, cut),
-    detail: null,
-    multiline: cut !== -1,
-    panes: [{ kind: "note", label: "reply", text }],
-  };
-}
-
-/**
- * The steps of a turn worth a row. A step with nothing to read on any frame
- * and no decision is bookkeeping (a hook registering, a queue tick) or a
- * digest-only duplicate of a call another source sealed with its body; the
- * Frames tab still has every one of them.
- */
-export function visibleSteps(turn: TranscriptTurn): TranscriptStep[] {
-  return turn.steps.filter((step) =>
-    step.frames.some(
+  // The receipt that kept a body. A wrapped call is sealed up to three times
+  // on one call key, and the copies that kept only a digest are passed over.
+  const receipt =
+    step.frames.find(
       (frame) =>
-        hasContent(frame) ||
-        frame.decision !== null ||
-        TOOL_GATE.has(frame.type),
-    ),
+        (frame === close || frame.kind === "tool_call") &&
+        frame.type !== TOOL_REQUESTED &&
+        frame.type !== TOOL_ENGINE_STARTED &&
+        (frame.response?.text ?? null) !== null,
+    ) ?? close;
+  const receiptText = receipt?.response?.text ?? null;
+  const parsed = parseBody(receiptText);
+  if (isExchange(parsed)) return toolDetailOf(known, parsed);
+  // The input is the first request half that kept text.
+  const requested = parseBody(
+    step.frames
+      .map((frame) => frame.request)
+      .find((half) => (half?.text ?? null) !== null)?.text ?? null,
   );
+  const output = parsed ?? receiptText;
+  if (isRecord(requested) && isRecord(requested["tool_use"]))
+    return toolDetailOf(known, { ...requested, tool_result: output });
+  if (isExchange(requested))
+    return toolDetailOf(known, { ...requested, output });
+  return toolDetailOf(known, { input: requested, output });
 }
 
-/** Whether either half of the entry carries text to read. */
-function hasContent(entry: TranscriptEntry): boolean {
-  return [entry.request, entry.response].some(
-    (half) => half !== null && half.text !== null,
-  );
-}
-
-/**
- * The frames of a step worth drawing. A duplicate seal of the same tool call
- * that carries only a digest is left out when another frame of the step, for
- * the same call id, carries the body; a step whose every copy is digest-only
- * keeps them all, so a run recorded under `digest_only` still shows its
- * frames.
- */
-export function visibleFrames(step: TranscriptStep): TranscriptEntry[] {
-  if (step.kind !== "tool") return step.frames;
-  const full = new Set(
-    step.frames.flatMap((frame) =>
-      frame.kind === "tool_call" && frame.callKey !== null && hasContent(frame)
-        ? [frame.callKey]
-        : [],
-    ),
-  );
-  if (full.size === 0) return step.frames;
-  return step.frames.filter(
-    (frame) =>
-      !(
-        frame.kind === "tool_call" &&
-        frame.callKey !== null &&
-        full.has(frame.callKey) &&
-        !hasContent(frame)
-      ),
+/** A body in one of the call shapes `splitBody` reads, rather than a bare input or output. */
+function isExchange(value: unknown): value is Record<string, unknown> {
+  return (
+    isRecord(value) &&
+    ("input" in value || "output" in value || "tool_use" in value)
   );
 }
 
@@ -734,42 +618,743 @@ export function frameCost(frames: readonly TranscriptEntry[]): Money | null {
   );
 }
 
+// ── The feed ────────────────────────────────────────────────────────────────
+
 /**
- * How long playback waits before moving from `pos` to the next frame: the
- * real gap, held between 120 ms and 2 s so idle time is compressed and a
- * burst stays readable, divided by the speed.
+ * The Transcript tab's kind chips (mockup `TX_GROUPS`), each over something
+ * the record carries:
+ *
+ *  - `prompt`: the operator's words, a `turn_start` frame's body on the
+ *    run's own chain;
+ *  - `responses`: the model's text, from the reply's `text` blocks or a plain
+ *    reply body, and the message a turn closed on;
+ *  - `thinking`: the reply's `thinking` blocks;
+ *  - `tools`: one row per tool call, a tool step or a `tool_use` block no
+ *    tool step recorded;
+ *  - `usage`: one row per model step that carried a cost record or token
+ *    counts;
+ *  - `recall`: the frames the contract files under `recall` (what was put in
+ *    front of the model: `context.*`, `steering.manifest`);
+ *  - `seal`: the run's own stop frames, `agent_stop` and the ledger's
+ *    `terminal.attempt_terminated`.
+ *
+ * The contract's `policy` kind has no chip of its own: a decision is drawn as
+ * the ⚖ chip on the call it was made about, which is where the design puts it.
  */
-export function playDelay(
-  entries: readonly TranscriptEntry[],
-  pos: number,
-  speed: number,
-): number {
-  const here = entries[pos];
-  const next = entries[pos + 1];
-  if (here === undefined || next === undefined) return 400;
-  const gap = Date.parse(next.at) - Date.parse(here.at);
-  return Math.min(2000, Math.max(120, gap)) / speed;
+export const FEED_GROUPS = [
+  "prompt",
+  "responses",
+  "thinking",
+  "tools",
+  "usage",
+  "recall",
+  "seal",
+] as const;
+export type FeedGroup = (typeof FEED_GROUPS)[number];
+
+/** A frame a row links to. `chainRef` is set for a subagent's frame, which no link can open by seq. */
+export type FrameRef = { seq: string; type: string; chainRef: string | null };
+
+/** A decision a rule or a person made about a call, and the frame that records it. */
+export type FeedGate = { decision: string; frame: FrameRef };
+
+export type FeedCall = {
+  name: string;
+  group: ToolGroup;
+  /** What the call acted on, on one line; null when the record says nothing more than the name. */
+  arg: string | null;
+  /** First frame of the call to its last; null for a call recorded in one frame. */
+  durationMs: number | null;
+  output: string | null;
+  diffs: ToolDiff[];
+  /** The call as it was made, for the row's fold. */
+  raw: string | null;
+  gates: FeedGate[];
+  /** The request for approval the call is waiting on, when it is. */
+  parked: FrameRef | null;
+  /** No frame recorded a result, and nothing refused or parked the call. */
+  pending: boolean;
+  /** A body of the call was cut at the contract's ceiling. */
+  truncated: boolean;
+  /** The call's own frame: its receipt, or its request when none was written. */
+  frame: FrameRef;
+};
+
+type FeedRecall = {
+  /** What the count counts: context frames, or the items a manifest included. */
+  unit: "frames" | "items";
+  count: number | null;
+  tokens: number | null;
+  cut: number | null;
+  items: { kind: string; label: string; tokens: number | null }[];
+};
+
+type FeedBase = {
+  key: string;
+  /** The instant of the frame the row reads, and how far into the run it sits. */
+  at: string;
+  elapsedMs: number;
+  /** The chip that shows or hides the row; null for a row no chip governs. */
+  group: FeedGroup | null;
+  /** A call that did not do what it was asked to, or a frame that recorded an error. */
+  failed: boolean;
+  subagent: TranscriptEntry["subagent"];
+  /** What the run had spent by this row: the contract's own running total. */
+  spent: Cost | null;
+  /** The row's words, lowercased, for the search field. */
+  haystack: string;
+};
+
+export type FeedRow = FeedBase &
+  (
+    | { kind: "prompt"; text: string; turn: number | null; first: boolean }
+    | { kind: "text"; text: string }
+    | { kind: "thinking"; text: string }
+    | { kind: "tool"; call: FeedCall }
+    | {
+        kind: "usage";
+        model: string | null;
+        usage: TranscriptUsage | null;
+        cost: Cost | null;
+        frame: FrameRef;
+      }
+    | { kind: "recall"; recall: FeedRecall; frame: FrameRef }
+    | { kind: "seal"; label: string | null; frame: FrameRef }
+    | {
+        kind: "event";
+        name: string;
+        text: string | null;
+        gates: FeedGate[];
+        frame: FrameRef;
+      }
+  );
+
+const MESSAGE = "oxagen:message";
+const SEAL: ReadonlySet<string> = new Set([
+  "agent_stop",
+  "terminal.attempt_terminated",
+]);
+/** A decision that holds the call until someone answers it. */
+const ASK = /^(ask|approve|approval|approval_required|pending|parked)$/;
+const ANSWER: ReadonlySet<string> = new Set([
+  "approval_decision",
+  "tool.approval_recorded",
+  "token_denied",
+]);
+
+function refOf(frame: TranscriptEntry): FrameRef {
+  return {
+    seq: frame.seq,
+    type: frame.type,
+    chainRef: frame.subagent?.chainRef ?? null,
+  };
 }
 
-/** The ids open at a zoom level: turns open at Steps, turns and steps at Everything. */
-export function openAtZoom(
-  turns: readonly TranscriptTurn[],
-  zoom: "turns" | "steps" | "everything",
-): Set<string> {
-  const open = new Set<string>();
-  if (zoom === "turns") return open;
-  for (const turn of turns) {
-    open.add(turn.id);
-    if (zoom === "everything") for (const step of turn.steps) open.add(step.id);
-  }
-  return open;
+function haystack(parts: readonly (string | null | undefined)[]): string {
+  return parts
+    .filter((part): part is string => typeof part === "string")
+    .join("\n")
+    .toLowerCase();
 }
 
-/** The turn and step holding position `pos`, so a reveal opens both. */
-export function idsAt(turns: readonly TranscriptTurn[], pos: number): string[] {
-  for (const turn of turns) {
-    const step = turn.steps.find((s) => pos >= s.from && pos <= s.to);
-    if (step !== undefined) return [turn.id, step.id];
+function base(
+  key: string,
+  frame: TranscriptEntry,
+  group: FeedGroup | null,
+  spent: Cost | null,
+): Omit<FeedBase, "haystack"> {
+  return {
+    key,
+    at: frame.at,
+    elapsedMs: frame.elapsedMs,
+    group,
+    failed: false,
+    subagent: frame.subagent,
+    spent,
+  };
+}
+
+/** The text of the one half a single-frame entry carries, when it kept any. */
+function soleText(frames: readonly TranscriptEntry[]): string | null {
+  for (const frame of frames) {
+    const text = soleBody(frame)?.text ?? null;
+    if (text !== null && text.trim() !== "") return text;
   }
-  return [];
+  return null;
+}
+
+/** The decisions recorded on a step's frames, one per deciding frame. */
+function gatesOf(frames: readonly TranscriptEntry[]): FeedGate[] {
+  const seen = new Set<string>();
+  const gates: FeedGate[] = [];
+  for (const frame of frames) {
+    const gate: FeedGate | null =
+      frame.decision !== null
+        ? {
+            decision: frame.decision.decision,
+            frame: {
+              seq: frame.decision.seq,
+              type: frame.decision.type,
+              chainRef: frame.decision.chainRef ?? null,
+            },
+          }
+        : TOOL_GATE.has(frame.type)
+          ? {
+              decision: policyOutcome(frame) ?? frame.type,
+              frame: refOf(frame),
+            }
+          : null;
+    if (gate === null) continue;
+    const key = `${gate.frame.chainRef ?? ""}:${gate.frame.seq}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    gates.push(gate);
+  }
+  return gates;
+}
+
+/** The step's cost records summed, with the basis they share; null when none carried one. */
+function stepCost(frames: readonly TranscriptEntry[]): Cost | null {
+  const costs = frames.flatMap((frame) =>
+    frame.cost === null ? [] : [frame.cost],
+  );
+  const sum = sumMoney(costs);
+  if (sum === null) return null;
+  const bases = new Set(costs.map((cost) => cost.basis));
+  const [basis] = bases;
+  // Two observers of one step's cost is no single basis, and the row says so
+  // rather than lending the figure the stronger of the two.
+  return { ...sum, basis: bases.size === 1 ? (basis ?? null) : null };
+}
+
+/** The step's token counts summed, class by class; null when no frame reported any. */
+function stepUsage(frames: readonly TranscriptEntry[]): TranscriptUsage | null {
+  const reported = frames.flatMap((frame) =>
+    frame.usage === null || frame.usage === undefined ? [] : [frame.usage],
+  );
+  if (reported.length === 0) return null;
+  const sum = (key: keyof TranscriptUsage): number | null => {
+    const counts = reported.flatMap((usage) =>
+      usage[key] === null ? [] : [usage[key]],
+    );
+    return counts.length === 0 ? null : counts.reduce((a, b) => a + b, 0);
+  };
+  return {
+    inputUncached: sum("inputUncached"),
+    cacheRead: sum("cacheRead"),
+    cacheWrite: sum("cacheWrite"),
+    output: sum("output"),
+    reasoning: sum("reasoning"),
+  };
+}
+
+type Block = NonNullable<TranscriptBody["blocks"]>[number];
+type ToolUse = Extract<Block, { kind: "tool_use" }>;
+type ToolResults = ReadonlyMap<string, { ok: boolean; summary: string }>;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function textField(value: unknown, key: string): string | null {
+  if (!isRecord(value)) return null;
+  const found = value[key];
+  return typeof found === "string" ? found : null;
+}
+
+/** One part of a Messages API `content` array as a block, or none. */
+function contentBlock(part: unknown): Block[] {
+  const type = textField(part, "type");
+  if (type === "text") {
+    const said = textField(part, "text");
+    return said === null ? [] : [{ kind: "text", text: said }];
+  }
+  if (type === "thinking") {
+    const thought = textField(part, "thinking");
+    return thought === null ? [] : [{ kind: "thinking", text: thought }];
+  }
+  const name = textField(part, "name");
+  if (type !== "tool_use" || name === null || name === "") return [];
+  return [
+    {
+      kind: "tool_use",
+      name,
+      input: isRecord(part) ? part["input"] : null,
+      callKey: textField(part, "id"),
+    },
+  ];
+}
+
+/** A chat completion's first message as blocks: its reasoning, its words, its calls. */
+function messageBlocks(message: Record<string, unknown>): Block[] {
+  const blocks: Block[] = [];
+  const reasoning = textField(message, "reasoning_content");
+  if (reasoning !== null && reasoning !== "")
+    blocks.push({ kind: "thinking", text: reasoning });
+  const said = textField(message, "content");
+  if (said !== null && said !== "") blocks.push({ kind: "text", text: said });
+  const calls = message["tool_calls"];
+  for (const call of Array.isArray(calls) ? calls : []) {
+    const fn = isRecord(call) ? call["function"] : null;
+    const name = textField(fn, "name");
+    if (name === null || name === "") continue;
+    const args = textField(fn, "arguments");
+    blocks.push({
+      kind: "tool_use",
+      name,
+      input: parseBody(args) ?? args,
+      callKey: textField(call, "id"),
+    });
+  }
+  return blocks;
+}
+
+/**
+ * A reply body the recorder kept as the provider's own JSON, read as blocks:
+ * the Messages API's `content` array, or a chat completion's first message.
+ * Null for any other shape, and the reply is then drawn by its cost alone,
+ * never as JSON to open.
+ */
+function providerBlocks(text: string | null): Block[] | null {
+  const parsed = parseBody(text);
+  if (!isRecord(parsed)) return null;
+  const content = parsed["content"];
+  const choices = parsed["choices"];
+  const choice: unknown = Array.isArray(choices) ? choices[0] : undefined;
+  const message = isRecord(choice) ? choice["message"] : undefined;
+  const blocks = Array.isArray(content)
+    ? content.flatMap(contentBlock)
+    : isRecord(message)
+      ? messageBlocks(message)
+      : [];
+  return blocks.length === 0 ? null : blocks;
+}
+
+/** The reply's blocks: as the recorder assembled them, or read from the provider's JSON. */
+function replyBlocks(step: TranscriptStep): Block[] | null {
+  const halves = step.frames.flatMap((frame) => [
+    frame.response,
+    frame.request,
+  ]);
+  const assembled = halves.find(
+    (half) => half?.blocks !== undefined && half.blocks.length > 0,
+  )?.blocks;
+  if (assembled !== undefined) return assembled;
+  for (const frame of step.frames) {
+    const read = providerBlocks(frame.response?.text ?? null);
+    if (read !== null) return read;
+  }
+  return null;
+}
+
+/** A reply the recorder kept as plain words: not JSON, so not a body to open. */
+function replyText(step: TranscriptStep): string | null {
+  for (const frame of step.frames) {
+    const text = frame.response?.text ?? null;
+    if (text === null || text.trim() === "") continue;
+    if (parseBody(text) !== null) continue;
+    return text;
+  }
+  return null;
+}
+
+/** The results a reply's `tool_result` blocks record, by the call they answer. */
+function toolResults(entries: readonly TranscriptEntry[]): ToolResults {
+  const results = new Map<string, { ok: boolean; summary: string }>();
+  for (const entry of entries) {
+    for (const half of [entry.request, entry.response]) {
+      for (const block of half?.blocks ?? []) {
+        if (block.kind === "tool_result")
+          results.set(block.forRef, { ok: block.ok, summary: block.summary });
+      }
+    }
+  }
+  return results;
+}
+
+/** The headline and its qualifier on one line, or null when neither was recorded. */
+function argOf(detail: ToolDetail | null): string | null {
+  const parts = [detail?.headline ?? null, detail?.detail ?? null].filter(
+    (part): part is string => part !== null,
+  );
+  return parts.length === 0 ? null : parts.join(" · ");
+}
+
+function toolRow(step: TranscriptStep): FeedRow {
+  const digest = stepDigest(step);
+  const detail = stepTool(step);
+  const close = toolClose(step);
+  const answered = step.frames.some(
+    (frame) =>
+      ANSWER.has(frame.type) ||
+      (frame.decision !== null && !ASK.test(frame.decision.decision)),
+  );
+  const asked =
+    step.frames.find((frame) => frame.type === "approval_request") ??
+    step.frames.find(
+      (frame) =>
+        TOOL_GATE.has(frame.type) && ASK.test(policyOutcome(frame) ?? ""),
+    );
+  const parked =
+    asked !== undefined && close === undefined && !answered
+      ? refOf(asked)
+      : null;
+  const failed =
+    digest.node === "deny" ||
+    step.frames.some((frame) => frame.kinds.includes("errors"));
+  const name = detail?.name ?? digest.name;
+  const arg = detail === null ? digest.arg : argOf(detail);
+  const call: FeedCall = {
+    name,
+    group: detail?.group ?? "tool",
+    arg,
+    // A call with no result has taken no time yet that the record can
+    // state: the gap to its last gate frame is a wait, not the call.
+    durationMs: close === undefined ? null : digest.durationMs,
+    output: detail?.output ?? null,
+    diffs: detail?.diffs ?? [],
+    raw: detail?.raw ?? null,
+    gates: gatesOf(step.frames),
+    parked,
+    pending: close === undefined && parked === null && !failed,
+    truncated: step.frames.some(
+      (frame) =>
+        frame.request?.truncated === true || frame.response?.truncated === true,
+    ),
+    frame: refOf(close ?? step.first),
+  };
+  return {
+    ...base(step.id, step.first, "tools", step.last.cumulativeCost),
+    failed,
+    kind: "tool",
+    call,
+    haystack: haystack([
+      name,
+      arg,
+      call.raw,
+      call.output,
+      ...call.diffs.flatMap((diff) =>
+        diff.diff.hunks.flatMap((hunk) => hunk.lines.map((line) => line.text)),
+      ),
+    ]),
+  };
+}
+
+/**
+ * A tool the model called that no tool step recorded: the gateway saw the
+ * call in the reply, and the harness wrote no frame of its own for it. Its
+ * result is the reply's `tool_result` block for the same call, when one was
+ * kept.
+ */
+function blockToolRow(
+  block: ToolUse,
+  key: string,
+  frame: TranscriptEntry,
+  results: ToolResults,
+): FeedRow {
+  const result =
+    block.callKey === null ? undefined : results.get(block.callKey);
+  const detail = toolDetailOf(block.name, {
+    input: block.input,
+    output: result?.summary ?? null,
+  });
+  const name = detail?.name ?? block.name;
+  const arg = argOf(detail);
+  const call: FeedCall = {
+    name,
+    group: detail?.group ?? "tool",
+    arg,
+    durationMs: null,
+    output: detail?.output ?? null,
+    diffs: detail?.diffs ?? [],
+    raw: detail?.raw ?? null,
+    gates: [],
+    parked: null,
+    pending: result === undefined,
+    truncated: frame.response?.truncated === true,
+    frame: refOf(frame),
+  };
+  return {
+    ...base(key, frame, "tools", frame.cumulativeCost),
+    failed: result?.ok === false,
+    kind: "tool",
+    call,
+    haystack: haystack([name, arg, call.raw, call.output]),
+  };
+}
+
+/**
+ * The rows a model step reads as: what it thought, what it said, what it
+ * cost, then any tool it called that no tool step recorded. A reply whose
+ * only content is a call that a tool step recorded reads as that tool's row
+ * alone, so no row is ever a model frame with JSON to open.
+ */
+function modelRows(
+  step: TranscriptStep,
+  claims: (block: ToolUse) => boolean,
+  results: ToolResults,
+): FeedRow[] {
+  const reply =
+    [...step.frames].reverse().find((frame) => frame.response !== null) ??
+    step.last;
+  const spent = step.last.cumulativeCost;
+  const blocks = replyBlocks(step);
+  const rows: FeedRow[] = [];
+  const said = (key: string, kind: "text" | "thinking", text: string) => {
+    rows.push({
+      ...base(key, reply, kind === "text" ? "responses" : "thinking", spent),
+      kind,
+      text,
+      haystack: haystack([text]),
+    });
+  };
+  if (blocks === null) {
+    const text = replyText(step);
+    if (text !== null) said(`${step.id}:text`, "text", text);
+  } else {
+    blocks.forEach((block, index) => {
+      if (block.kind !== "text" && block.kind !== "thinking") return;
+      if (block.text.trim() === "") return;
+      said(`${step.id}:${String(index)}`, block.kind, block.text);
+    });
+  }
+  const cost = stepCost(step.frames);
+  const usage = stepUsage(step.frames);
+  if (cost !== null || usage !== null) {
+    const model = stepDigest(step).name;
+    rows.push({
+      ...base(`${step.id}:usage`, reply, "usage", spent),
+      kind: "usage",
+      model: model === reply.type ? null : model,
+      usage,
+      cost,
+      frame: refOf(reply),
+      haystack: haystack([model]),
+    });
+  }
+  blocks?.forEach((block, index) => {
+    if (block.kind !== "tool_use" || claims(block)) return;
+    rows.push(
+      blockToolRow(block, `${step.id}:u${String(index)}`, reply, results),
+    );
+  });
+  return rows;
+}
+
+function numberField(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+/** One listed item of a recall body: its kind, what it is, and its tokens. */
+function recallItem(
+  item: Record<string, unknown>,
+): FeedRecall["items"][number] {
+  return {
+    kind: textField(item, "kind") ?? textField(item, "type") ?? "",
+    label:
+      textField(item, "label") ??
+      textField(item, "id") ??
+      textField(item, "name") ??
+      "",
+    tokens: numberField(item["tokens"]) ?? numberField(item["tok"]),
+  };
+}
+
+/**
+ * What a recall frame says it put in front of the model. A steering manifest
+ * (ADR-093) lists its items with the outcome of each; a context frame lists
+ * its frames; the ledger's `context.frames_selected` carries only a count, in
+ * its label.
+ */
+function recallOf(step: TranscriptStep): FeedRecall {
+  const parsed = parseBody(soleText(step.frames));
+  if (isRecord(parsed)) {
+    const items = parsed["items"];
+    const list = Array.isArray(items) ? items : parsed["frames"];
+    if (Array.isArray(list)) {
+      // A manifest lists what it cut beside what it kept; the row lists what
+      // reached the model and counts the rest.
+      const kept = list
+        .filter(isRecord)
+        .filter(
+          (item) =>
+            item["outcome"] === undefined || item["outcome"] === "included",
+        )
+        .map(recallItem);
+      return {
+        unit: Array.isArray(items) ? "items" : "frames",
+        count: numberField(parsed["included"]) ?? kept.length,
+        tokens:
+          numberField(parsed["spent_tokens"]) ?? numberField(parsed["tokens"]),
+        cut: numberField(parsed["cut"]),
+        items: kept,
+      };
+    }
+  }
+  const counted = /^frames=(\d+)$/.exec(step.first.label)?.[1];
+  return {
+    unit: "frames",
+    count: counted === undefined ? null : Number(counted),
+    tokens: null,
+    cut: null,
+    items: [],
+  };
+}
+
+/** Frame types that frame the run rather than record what it did: no row unless they failed or were decided on. */
+function isQuiet(type: string): boolean {
+  return (
+    CONTROL.has(type) ||
+    type.startsWith("oxagen:") ||
+    type.startsWith("admission.")
+  );
+}
+
+function eventRows(step: TranscriptStep): FeedRow[] {
+  const { first } = step;
+  const spent = step.last.cumulativeCost;
+  const text = soleText(step.frames);
+  const own = first.subagent === undefined;
+  if (first.type === "turn_start" && own) {
+    if (text === null) return [];
+    return [
+      {
+        ...base(step.id, first, "prompt", spent),
+        kind: "prompt",
+        text,
+        turn: first.turn,
+        first: false,
+        haystack: haystack([text]),
+      },
+    ];
+  }
+  if (first.type === "turn_end" || first.type === MESSAGE) {
+    if (text === null) return [];
+    return [
+      {
+        ...base(step.id, first, "responses", spent),
+        kind: "text",
+        text,
+        haystack: haystack([text]),
+      },
+    ];
+  }
+  if (first.kinds.includes("recall")) {
+    const recall = recallOf(step);
+    return [
+      {
+        ...base(step.id, first, "recall", spent),
+        kind: "recall",
+        recall,
+        frame: refOf(first),
+        haystack: haystack([
+          first.type,
+          ...recall.items.map((item) => item.label),
+        ]),
+      },
+    ];
+  }
+  if (SEAL.has(first.type) && own) {
+    return [
+      {
+        ...base(step.id, first, "seal", spent),
+        kind: "seal",
+        label: first.label === first.type ? null : first.label,
+        frame: refOf(first),
+        haystack: haystack([first.type, first.label]),
+      },
+    ];
+  }
+  const gates = gatesOf(step.frames);
+  const failed =
+    step.frames.some((frame) => frame.kinds.includes("errors")) ||
+    gates.some((gate) => DENIED.test(gate.decision));
+  if (gates.length === 0 && !failed && (text === null || isQuiet(first.type)))
+    return [];
+  // A decision on no recorded call is named by the call its label names.
+  const name = policySubject(first) ?? first.type;
+  return [
+    {
+      ...base(step.id, first, null, spent),
+      failed,
+      kind: "event",
+      name,
+      text,
+      gates,
+      frame: refOf(first),
+      haystack: haystack([name, text]),
+    },
+  ];
+}
+
+/**
+ * Whether a reply's `tool_use` block names a call a tool step of the turn
+ * recorded, so the call is drawn once, as the tool's row. By call key where
+ * both sides recorded one; otherwise the next unclaimed tool step of the same
+ * name after the reply.
+ */
+function claimer(
+  turn: TranscriptTurn,
+  after: TranscriptStep,
+  claimed: Set<string>,
+): (block: ToolUse) => boolean {
+  const tools = turn.steps.filter((step) => step.kind === "tool");
+  const keyed = new Set(
+    tools.flatMap((step) =>
+      step.frames.flatMap((frame) =>
+        frame.callKey === null ? [] : [frame.callKey],
+      ),
+    ),
+  );
+  return (block) => {
+    if (block.callKey !== null && keyed.has(block.callKey)) return true;
+    const name = toolDetailOf(block.name, null)?.name ?? block.name;
+    const match = tools.find(
+      (tool) =>
+        tool.from > after.to &&
+        !claimed.has(tool.id) &&
+        (tool.first.callKey === null || block.callKey === null) &&
+        (stepTool(tool)?.name ?? stepDigest(tool).name) === name,
+    );
+    if (match === undefined) return false;
+    claimed.add(match.id);
+    return true;
+  };
+}
+
+/**
+ * The run as the Transcript tab's rows, in the order the steps happened
+ * (mockup `txEntries`). Every row is read from the frames; a frame with
+ * nothing to read (a hook registering, a turn boundary with no body, a
+ * digest-only copy of a call another source sealed with its body) gets no
+ * row, and the Governed actions tab still has it.
+ */
+export function buildFeed(entries: readonly TranscriptEntry[]): FeedRow[] {
+  const results = toolResults(entries);
+  const rows: FeedRow[] = [];
+  const claimed = new Set<string>();
+  for (const turn of buildTranscript(entries)) {
+    // The last words drawn in this turn: a turn's closing message repeats
+    // the reply the model gave when both were recorded, and is one row.
+    let said: string | null = null;
+    for (const step of turn.steps) {
+      const made =
+        step.kind === "tool"
+          ? [toolRow(step)]
+          : step.kind === "model"
+            ? modelRows(step, claimer(turn, step, claimed), results)
+            : eventRows(step);
+      for (const row of made) {
+        if (row.kind === "text") {
+          if (said !== null && row.text.trim() === said) continue;
+          said = row.text.trim();
+        }
+        rows.push(row);
+      }
+    }
+  }
+  const first = rows.findIndex((row) => row.kind === "prompt");
+  return rows.map((row, index) =>
+    index === first && row.kind === "prompt" ? { ...row, first: true } : row,
+  );
 }

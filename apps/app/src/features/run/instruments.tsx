@@ -24,7 +24,7 @@ import {
 import { type ClassPrices, type Ledger, perTurn } from "./cost-figures";
 import type { Family, RunMetrics, WallLead } from "./metrics";
 import { NoValue } from "./parts";
-import { StepIcon } from "./tool-icon";
+import { ToolIcon } from "./tool-icon";
 
 /**
  * `.inst-grid { grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px }`
@@ -636,7 +636,7 @@ function FamilyRows({ families: rows }: { families: readonly Family[] }) {
           className={familyRow}
         >
           <span className={familyIcon}>
-            <StepIcon node="tool" group={family.group} />
+            <ToolIcon group={family.group} />
           </span>
           <span className={familyLabel}>{t(`families.${family.group}`)}</span>
           <span className={fillBar}>
