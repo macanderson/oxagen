@@ -181,7 +181,9 @@ describe("header", () => {
     const h1 = screen.getByRole("heading", { level: 1 });
     expect(h1).toHaveTextContent("Cut the 3.2 release branch");
     expect(h1.className).not.toContain("font-mono");
-    expect(screen.getByRole("button", { name: "Copy tse_7k2m9q" })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Copy tse_7k2m9q" }),
+    ).toBeTruthy();
     // The title is the h1's alone, never repeated in the when line.
     expect(screen.getByTestId("run-when")).not.toHaveTextContent(
       "Cut the 3.2 release branch",
@@ -232,7 +234,9 @@ describe("header", () => {
 
   it("reads sealed from the run's status in the when line, the same status the record actions gate on", async () => {
     await renderRun({
-      detail: ok(runDetail({ run: runRow({ status: "halted", sealedAt: null }) })),
+      detail: ok(
+        runDetail({ run: runRow({ status: "halted", sealedAt: null }) }),
+      ),
       transcript: ok(runTranscript()),
     });
     const when = screen.getByTestId("run-when");
@@ -240,7 +244,9 @@ describe("header", () => {
     expect(when).not.toHaveTextContent("still running");
     cleanup();
     await renderRun({
-      detail: ok(runDetail({ run: runRow({ status: "live", sealedAt: null }) })),
+      detail: ok(
+        runDetail({ run: runRow({ status: "live", sealedAt: null }) }),
+      ),
       transcript: ok(runTranscript()),
     });
     expect(screen.getByTestId("run-when")).toHaveTextContent("still running");
@@ -306,7 +312,9 @@ describe("header", () => {
     );
     cleanup();
     await renderRun({
-      detail: ok(runDetail({ run: runRow({ operatorAttribution: "initiator" }) })),
+      detail: ok(
+        runDetail({ run: runRow({ operatorAttribution: "initiator" }) }),
+      ),
       transcript: ok(runTranscript()),
     });
     const operator = screen.getByTestId("run-operator");
@@ -346,14 +354,18 @@ describe("header", () => {
   it("titles a run that carries no name and no task reference by its id in mono (negative)", async () => {
     await renderRun({
       detail: ok(
-        runDetail({ run: runRow({ name: null, taskRef: null, summary: null }) }),
+        runDetail({
+          run: runRow({ name: null, taskRef: null, summary: null }),
+        }),
       ),
       transcript: ok(runTranscript()),
     });
     const h1 = screen.getByRole("heading", { level: 1 });
     expect(h1).toHaveTextContent("tse_7k2m9q");
     expect(h1.className).toContain("font-mono");
-    expect(screen.queryByRole("button", { name: "Copy tse_7k2m9q" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Copy tse_7k2m9q" }),
+    ).toBeNull();
   });
 
   it("titles a run whose read failed by the id the URL named", async () => {
@@ -2193,7 +2205,9 @@ describe("the work", () => {
       "Provisional until the rollup. Priced from the cost each call reported.",
     );
     expect(
-      screen.queryByText("No cost rollup yet. It is built after the run seals."),
+      screen.queryByText(
+        "No cost rollup yet. It is built after the run seals.",
+      ),
     ).toBeNull();
   });
 
@@ -2391,21 +2405,23 @@ describe("loading", () => {
     await expectNoAxe(container);
   });
 
-  it("keeps the page's own main container and header, rather than exporting the skeleton alone", () => {
+  it("keeps the page's frame and header, and leaves main#main to the streamed page", () => {
     render(
       <IntlProvider>
         <RunLoading />
       </IntlProvider>,
     );
-    // Next swaps page.tsx's whole return value for this default export while
-    // the route suspends, so the skip-to-content target and the page frame
-    // have to come from here too, or a stranger's tab-order loses its anchor
-    // and the layout jumps once the real page takes the same container.
-    const main = document.getElementById("main");
-    expect(main).not.toBeNull();
-    expect(main?.tagName).toBe("MAIN");
-    expect(main).toContainElement(screen.getByRole("heading", { name: "Run" }));
-    expect(main).toContainElement(screen.getByRole("status"));
+    // The frame comes from here, so the layout does not jump once the real
+    // page lands. main#main does not: while the page streams in, this
+    // fallback and the page are in the document together, and only the page
+    // may own the landmark (arch/loading-landmarks.test.ts).
+    const frame = screen.getByTestId("run-loading-frame");
+    expect(frame).toContainElement(
+      screen.getByRole("heading", { name: "Run" }),
+    );
+    expect(frame).toContainElement(screen.getByRole("status"));
+    expect(document.getElementById("main")).toBeNull();
+    expect(screen.queryByRole("main")).toBeNull();
   });
 });
 

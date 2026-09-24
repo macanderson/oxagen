@@ -208,10 +208,9 @@ export function StatRow({
           <NoValue />
         ) : (
           formatDuration(
-              new Date(endedAt).getTime() -
-                new Date(run.startedAt).getTime(),
-              locale,
-            )
+            new Date(endedAt).getTime() - new Date(run.startedAt).getTime(),
+            locale,
+          )
         )}
       </Stat>
       <Stat label={t("cacheHit")} note={missingRollup}>
