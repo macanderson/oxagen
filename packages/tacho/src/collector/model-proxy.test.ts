@@ -1398,6 +1398,26 @@ describe("the loopback model proxy", () => {
     void resumed;
   });
 
+  // A 403 here read to Claude Code as a failed login ("Please run /login"),
+  // so every launchd restart told the person their credentials were bad.
+  it("answers a call cut off by the daemon stopping as retryable, not as a refusal", async () => {
+    const fake = await vendor(() => undefined);
+    const { handle, port, session } = await boot(fake.url);
+    await session("sess-restart");
+    const inFlight = call(port, {
+      path: "/anthropic/v1/messages",
+      headers: ["X-Claude-Code-Session-Id", "sess-restart"],
+      body: "{}",
+    });
+    await until(() => fake.requests.length === 1);
+    await handle.stop();
+    const answer = await inFlight;
+    expect(answer.status).toBe(503);
+    expect(answer.headers["x-oxagen-refusal"]).toBe("daemon_stopping");
+    expect(answer.headers["x-should-retry"]).toBe("true");
+    expect(answer.body.toString()).toContain("api_error");
+  });
+
   it("marks a steer delivered as interrupt, and answers before headers when it can", async () => {
     const fake = await vendor(() => undefined);
     const { handle, plane, port, session } = await boot(fake.url);

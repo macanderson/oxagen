@@ -288,7 +288,12 @@ const DEFAULT_UPSTREAM_IDLE_MS = 10 * 60_000;
 const DEFAULT_BEFORE_FORWARD_TIMEOUT_MS = 250;
 
 interface InFlight {
-  abort: (reason: string) => void;
+  /**
+   * End the call. An operator's interrupt is a refusal the harness must not
+   * retry. A daemon shutting down is not: the service manager starts it again
+   * within seconds, so that call is answered as retryable.
+   */
+  abort: (reason: string, retryable?: boolean) => void;
 }
 
 function isLoopbackPeer(address: string | undefined): boolean {
@@ -833,6 +838,7 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     status: number,
     code: string,
     message: string,
+    retryable = false,
   ): void {
     if (res.headersSent) {
       res.destroy();
@@ -843,8 +849,9 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
       "Content-Type": "application/json",
       "Content-Length": Buffer.byteLength(error.body),
       "x-oxagen-refusal": code,
-      // Both vendors' SDKs read this, and a refusal must not be retried.
-      "x-should-retry": "false",
+      // Both vendors' SDKs read this. A refusal must not be retried; a call
+      // cut off by the daemon restarting should be.
+      "x-should-retry": retryable ? "true" : "false",
     });
     res.end(error.body);
   }
@@ -1108,17 +1115,30 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     });
 
     const entry: InFlight = {
-      abort: (reason) => {
+      abort: (reason, retryable = false) => {
         abortReason = reason;
         upstreamReq.destroy(new Error(reason));
         if (!res.headersSent) {
-          sendProviderError(
-            res,
-            route,
-            403,
-            "interrupted_by_operator",
-            `This model call was interrupted by the session's Oxagen operator: ${reason}`,
-          );
+          // A 403 reads to Claude Code as a failed login and tells the person
+          // to run /login, which is wrong for a daemon restart. That case gets
+          // a 503 the harness retries once the service is back.
+          if (retryable)
+            sendProviderError(
+              res,
+              route,
+              503,
+              "daemon_stopping",
+              `The Oxagen daemon restarted during this model call: ${reason}. Retry the call.`,
+              true,
+            );
+          else
+            sendProviderError(
+              res,
+              route,
+              403,
+              "interrupted_by_operator",
+              `This model call was interrupted by the session's Oxagen operator: ${reason}`,
+            );
         } else {
           res.destroy();
         }
@@ -1566,7 +1586,8 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     },
     close: () => {
       for (const calls of inFlight.values())
-        for (const call of [...calls]) call.abort("the daemon is stopping");
+        for (const call of [...calls])
+          call.abort("the daemon is stopping", true);
       httpAgent.destroy();
       httpsAgent.destroy();
     },
