@@ -51,10 +51,8 @@ export default tseslint.config(
           // Root-level files (vitest.workspace.ts) belong to no package
           // tsconfig; lint them via the inferred default project instead of
           // erroring when they are passed to eslint explicitly (pre-commit
-          // lints staged files by path). handlers' integration tests sit
-          // outside its tsconfig, whose rootDir is src, and any merge that
-          // stages them sends them through the same pre-commit lint.
-          allowDefaultProject: ["*.ts", "packages/handlers/integration/*.ts"],
+          // lints staged files by path).
+          allowDefaultProject: ["*.ts"],
         },
         tsconfigRootDir: import.meta.dirname,
       },
