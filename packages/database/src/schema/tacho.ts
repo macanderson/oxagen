@@ -553,6 +553,14 @@ export const tachoSessions = tachoSchema.table(
     // Why the last automatic account failed, as a short reason code; null
     // once an account is written or the run is no longer due.
     summaryError: text("summary_error"),
+    // The title the harness gave the session itself (Claude Code's
+    // `ai-title`), and the frame time it carried. It outranks `name` and
+    // `title` on the Run page, and an older frame never replaces it.
+    harnessTitle: text("harness_title"),
+    harnessTitleAt: timestamp("harness_title_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
   },
   (t) => ({
     sessionUuidUniq: uniqueIndex("tacho_sessions_session_uuid_uniq").on(

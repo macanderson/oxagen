@@ -22200,6 +22200,18 @@
           "nullable": true,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "harness_title",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "harness_title_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
         }
       ],
       "domain": "tacho",

@@ -515,6 +515,8 @@ const tachoColumns = {
     // showed one for ever. That is the whole point of deriving a title, and
     // it was being written to a column nothing read.
     title: sessions.title,
+    // The title the harness gave the session itself (`harness-title.ts`).
+    harnessTitle: sessions.harnessTitle,
     summary: sessions.summary,
     summaryGeneratedAt: sessions.summaryGeneratedAt,
     summaryModel: sessions.summaryModel,
@@ -610,6 +612,8 @@ type GeneratedSummaryColumns = {
    * run has no such column, so it is optional here rather than shared.
    */
   title?: string | null;
+  /** The title the harness gave the session itself; wrapped sessions only. */
+  harnessTitle?: string | null;
   summary: string | null;
   summaryGeneratedAt: Date | null;
   summaryModel: string | null;
@@ -1044,6 +1048,26 @@ export function tachoRunOutcome(outcome: string): RunItem["outcome"] {
   }
 }
 
+/**
+ * The name a wrapped session shows, first match wins:
+ *
+ * 1. The title the harness gave the session (Claude Code's `ai-title`). The
+ *    operator already sees it in their terminal, so a name Oxagen wrote does
+ *    not replace it.
+ * 2. `name`: the model-written name, or until one exists, the first sentence
+ *    of the first prompt plus the branch that `run.enrich` writes.
+ * 3. `title`: the place-and-counts title the ingest derives.
+ *
+ * A run always has something to be called.
+ */
+export function tachoRunName(session: {
+  harnessTitle?: string | null;
+  name: string | null;
+  title?: string | null;
+}): string | null {
+  return session.harnessTitle ?? session.name ?? session.title ?? null;
+}
+
 export function toTachoRunItem(
   row: TachoSessionRow,
   totals: RunRollup | undefined,
@@ -1094,9 +1118,7 @@ export function toTachoRunItem(
           runtime: session.runtime ?? null,
         }
       : null,
-    // The model-written name when `summarize_run` has produced one, and the
-    // derived title until then. A run always has something to be called.
-    name: session.name ?? session.title ?? null,
+    name: tachoRunName(session),
     summary: generatedSummary(session),
     ...enrichmentError(session),
   };
@@ -1351,23 +1373,29 @@ export function createRunListHandler(
       : true;
     return {
       runs: merged.items
-        .map((item) =>
-          item.kind === "ledger"
-            ? toLedgerRunItem(enrich(item.row), costs.get(item.id))
-            : toTachoRunItem(item.row, costs.get(item.id)),
-        )
-        .map((run) => ({
-          ...run,
-          enrichmentEnabled: enabled,
-          ...(enabled
-            ? {}
-            : {
-                name: null,
-                summary: null,
-                canSummarize: false,
-                enrichmentError: undefined,
-              }),
-        })),
+        .map((item) => {
+          const run =
+            item.kind === "ledger"
+              ? toLedgerRunItem(enrich(item.row), costs.get(item.id))
+              : toTachoRunItem(item.row, costs.get(item.id));
+          return {
+            ...run,
+            enrichmentEnabled: enabled,
+            ...(enabled
+              ? {}
+              : {
+                  // Turning automatic accounts off hides what Oxagen wrote,
+                  // not the title the harness gave the session.
+                  name:
+                    item.kind === "tacho"
+                      ? (item.row.session.harnessTitle ?? null)
+                      : null,
+                  summary: null,
+                  canSummarize: false,
+                  enrichmentError: undefined,
+                }),
+          };
+        }),
       nextCursor: merged.nextCursor,
     };
   };

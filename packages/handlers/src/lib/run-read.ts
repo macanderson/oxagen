@@ -119,7 +119,12 @@ export async function resolveRun(
     ...(enabled
       ? {}
       : {
-          name: null,
+          // Turning automatic accounts off hides what Oxagen wrote, not the
+          // title the harness gave the session.
+          name:
+            run.source === "tacho"
+              ? (run.row.session.harnessTitle ?? null)
+              : null,
           summary: null,
           canSummarize: false,
           enrichmentError: undefined,
