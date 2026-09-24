@@ -1,6 +1,6 @@
 import type { ModelMessage } from "@oxagen/ai";
 import type { CapabilityContext } from "@oxagen/oxagen";
-import { invoke } from "@oxagen/oxagen/kernel";
+import { invoke, runWithinEnclosingAction } from "@oxagen/oxagen/kernel";
 import { agentMemoryRecall } from "@oxagen/oxagen/contracts/agent.memory.recall";
 
 // Deterministic per-turn memory recall for the in-app agent's turn
@@ -100,18 +100,26 @@ export async function recallWorkspaceMemoryMessage(args: {
     const raw = await Promise.race([
       // The invoke itself is guarded: a recall failure must degrade to null, not
       // reject the race and bubble out of this best-effort path.
-      doInvoke(
-        agentMemoryRecall.name,
-        {
-          query,
-          limit: RECALL_LIMIT,
-          executionRef: args.executionRef,
-        },
-        args.ctx,
-        // Recall runs on behalf of the chat agent — mark it the `agent` surface
-        // (matching the other agent-capability invokes) so IAM and metering
-        // attribute it correctly. agent.memory.recall exposes no api/mcp surface.
-        { surface: "agent" },
+      //
+      // Recall is a step of the turn, not a tool call the model made, and the
+      // turn is not a governed action (ADR-053). Running it inside the
+      // enclosing frame makes the invoke nested: it bills no unit and the GAU
+      // gate never refuses it. Before this it ran top-level, so every turn
+      // cost one unit and an exhausted bucket silently switched recall off.
+      runWithinEnclosingAction(() =>
+        doInvoke(
+          agentMemoryRecall.name,
+          {
+            query,
+            limit: RECALL_LIMIT,
+            executionRef: args.executionRef,
+          },
+          args.ctx,
+          // Recall runs on behalf of the chat agent: the `agent` surface
+          // (matching the other agent-capability invokes) so IAM attributes it
+          // correctly. agent.memory.recall exposes no api/mcp surface.
+          { surface: "agent" },
+        ),
       ).catch(() => null),
       timeout,
     ]);
