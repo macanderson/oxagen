@@ -358,9 +358,9 @@ describe("Events", () => {
 
     expect(tiles()).toEqual([
       [
-        "Events · 30 days",
+        "Events in 30 days",
         "3",
-        "every IAM decision is recorded, allowed or not",
+        "every allowed and denied IAM decision is recorded",
       ],
       ["Denied", "2", "denials are recorded and cost nothing"],
       [
@@ -374,10 +374,10 @@ describe("Events", () => {
     ]);
     expect(document.body).not.toHaveTextContent("with a receipt");
     // The Events tab carries the same count the first tile does.
-    expect(screen.getByRole("link", { name: /Events/ })).toHaveTextContent(
+    expect(screen.getByRole("tab", { name: /Events/ })).toHaveTextContent(
       "Events3",
     );
-    expect(screen.getByRole("link", { name: /Events/ })).toHaveAttribute(
+    expect(screen.getByRole("tab", { name: /Events/ })).toHaveAttribute(
       "aria-current",
       "page",
     );
@@ -396,7 +396,7 @@ describe("Events", () => {
     answer({ window: recordOf([denied]) });
     await renderAudit({ range: "48h" });
 
-    expect(tiles()[0]?.[0]).toBe("Events · 48 hours");
+    expect(tiles()[0]?.[0]).toBe("Events in 48 hours");
     expect(events.mock.calls[0]?.[1]).toMatchObject({
       since: "2026-09-14T12:00:00.000Z",
     });
@@ -451,7 +451,7 @@ describe("Events", () => {
     expect(panel).toHaveTextContent(
       "admin actions, IAM changes, repo bindings, plane changes, key rotations",
     );
-    expect(panel).toHaveTextContent("postgres · 7 years");
+    expect(panel).toHaveTextContent("postgres for 7 years");
     expect(panel).toHaveTextContent(
       "The record is written by the kernel, never by an agent. A client-attested call is labeled as such and can never be shown as decided by Oxagen.",
     );
@@ -500,7 +500,7 @@ describe("Events", () => {
       within(result)
         .getAllByRole("option")
         .map((option) => option.textContent),
-    ).toEqual(["All · Result", "allowed", "denied"]);
+    ).toEqual(["All results", "allowed", "denied"]);
     expect(screen.getByRole("combobox", { name: "Rows" })).toHaveValue("25");
 
     const search = screen.getByRole("searchbox", {
@@ -517,11 +517,20 @@ describe("Events", () => {
     const severity = screen.getByRole("combobox", { name: "Severity" });
     expect(severity).toBeDisabled();
     expect([...selectOf(severity).options].map((o) => o.textContent)).toEqual([
-      "All · Severity",
+      "All severities",
       "critical",
       "info",
       "warning",
     ]);
+    // Every filter is a 44 px tap target with 16 px text on a phone (rev1
+    // audit.md, Mobile); the house input alone is about 38 px tall.
+    const filters = screen.getByTestId("audit-filters");
+    for (const each of filters.querySelectorAll(
+      "select, input:not([type=hidden])",
+    )) {
+      expect(each.className).toContain("max-md:min-h-11");
+      expect(each.className).toContain("max-md:text-base");
+    }
 
     // The table's page is narrowed by the result and sized by Rows; the
     // window the tiles count is not narrowed by the result.
@@ -535,27 +544,114 @@ describe("Events", () => {
     );
   });
 
-  it("links Newer and Older at the Rows size, keeping the filters", async () => {
+  it("draws the design's numbered pager when the window read holds every row", async () => {
+    const rows = Array.from({ length: 30 }, (_, i) =>
+      event({ request: `req_${i}` }),
+    );
+    answer({
+      window: recordOf(rows),
+      page: recordOf(rows.slice(10, 20), { hasMore: true, offset: 10 }),
+    });
+    await renderAudit({ outcome: "deny", offset: "10" });
+
+    const pager = screen.getByRole("navigation", {
+      name: "Pages of the audit record",
+    });
+    expect(screen.getByTestId("audit-shown")).toHaveTextContent("11–20 of 30");
+    expect(pager).toHaveTextContent("11–20 of 30‹123›");
+    expect(
+      within(pager).getByRole("link", { name: "Previous page" }),
+    ).toHaveAttribute("href", "/acme/audit?outcome=deny");
+    expect(within(pager).getByRole("link", { name: "2" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(within(pager).getByRole("link", { name: "3" })).toHaveAttribute(
+      "href",
+      "/acme/audit?outcome=deny&offset=20",
+    );
+    expect(
+      within(pager).getByRole("link", { name: "Next page" }),
+    ).toHaveAttribute("href", "/acme/audit?outcome=deny&offset=20");
+    // A 44 px tap target on a phone (rev1 audit.md, Mobile).
+    expect(
+      within(pager).getByRole("link", { name: "Next page" }).className,
+    ).toContain("max-md:min-h-11");
+  });
+
+  it("folds a long record into 1 2 … 45, as the design draws it", async () => {
+    const rows = Array.from({ length: 200 }, (_, i) =>
+      event({ request: `req_${i}` }),
+    );
+    answer({
+      window: recordOf(rows),
+      page: recordOf(rows.slice(0, 5), { hasMore: true, limit: 5 }),
+    });
+    await renderAudit({ rows: "5" });
+
+    const pager = screen.getByRole("navigation", {
+      name: "Pages of the audit record",
+    });
+    expect(pager).toHaveTextContent("1–5 of 200‹12…40›");
+    expect(
+      within(pager).getByRole("button", { name: "Previous page" }),
+    ).toBeDisabled();
+    expect(within(pager).getByRole("link", { name: "40" })).toHaveAttribute(
+      "href",
+      "/acme/audit?rows=5&offset=195",
+    );
+  });
+
+  it("claims no last page when the window read did not hold every row (negative)", async () => {
     answer({
       window: recordOf([denied], { hasMore: true }),
       page: recordOf([denied], { hasMore: true, offset: 25, limit: 25 }),
     });
     await renderAudit({ outcome: "deny", rows: "25", offset: "25" });
 
-    expect(screen.getByRole("link", { name: "Newer events" })).toHaveAttribute(
-      "href",
-      "/acme/audit?outcome=deny&rows=25",
-    );
-    expect(screen.getByRole("link", { name: "Older events" })).toHaveAttribute(
-      "href",
-      "/acme/audit?outcome=deny&rows=25&offset=50",
-    );
-    // A 44 px tap target on a phone (rev1 audit.md, Mobile).
-    for (const name of ["Newer events", "Older events"]) {
-      expect(screen.getByRole("link", { name }).className).toContain(
-        "max-md:min-h-11",
-      );
-    }
+    const pager = screen.getByRole("navigation", {
+      name: "Pages of the audit record",
+    });
+    // Pages 1 and 2 are read, page 3 exists, and nothing past it is known.
+    expect(pager).toHaveTextContent("26–26‹123…›");
+    expect(
+      within(pager).getByRole("link", { name: "Previous page" }),
+    ).toHaveAttribute("href", "/acme/audit?outcome=deny&rows=25");
+    expect(
+      within(pager).getByRole("link", { name: "Next page" }),
+    ).toHaveAttribute("href", "/acme/audit?outcome=deny&rows=25&offset=50");
+    expect(document.body).not.toHaveTextContent("Older events");
+  });
+
+  it("applies a picked filter at once, but a keyboard step only on Enter or leaving the select", async () => {
+    answer({ window: recordOf([denied]) });
+    await renderAudit();
+    const submit = vi
+      .spyOn(HTMLFormElement.prototype, "requestSubmit")
+      .mockImplementation(() => undefined);
+    const range = screen.getByRole("combobox", { name: "Range" });
+
+    // A pick from the open list (a click or a tap) applies.
+    fireEvent.pointerDown(range);
+    fireEvent.change(range, { target: { value: "7d" } });
+    expect(submit).toHaveBeenCalledTimes(1);
+
+    // An arrow key on the closed select steps the value and reloads nothing
+    // (WCAG 3.2.2): the page keeps focus on the select.
+    fireEvent.keyDown(range, { key: "ArrowDown" });
+    fireEvent.change(range, { target: { value: "30d" } });
+    expect(submit).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(range, { key: "Enter" });
+    expect(submit).toHaveBeenCalledTimes(2);
+
+    // A stepped value applies when focus leaves, and a clean blur does nothing.
+    const result = screen.getByRole("combobox", { name: "Result" });
+    fireEvent.keyDown(result, { key: "ArrowDown" });
+    fireEvent.change(result, { target: { value: "deny" } });
+    fireEvent.blur(result);
+    expect(submit).toHaveBeenCalledTimes(3);
+    fireEvent.blur(result);
+    expect(submit).toHaveBeenCalledTimes(3);
   });
 
   it("opens an event's recorded facts from a 44 px summary on a phone", async () => {
@@ -598,7 +694,7 @@ describe("Events", () => {
     fireEvent.click(screen.getByRole("button", { name: "CSV" }));
     const dialog = await screen.findByRole("dialog", { name: "Export events" });
     expect(dialog).toHaveTextContent(
-      "CSV · the same rows the API and MCP return",
+      "CSV of the same rows the API and MCP return",
     );
     expect(
       within(dialog).getByRole("link", { name: "Download CSV" }),
@@ -606,9 +702,30 @@ describe("Events", () => {
       "href",
       "/acme/audit/export?outcome=deny&range=7d&format=csv",
     );
+    // The design's count sentence, off the window read through the result.
+    expect(within(dialog).getByTestId("audit-csv-body")).toHaveTextContent(
+      /^1 event in the last 7 days, with the event id, actor, capability, result, workspace, IP address, user agent and request id\./,
+    );
     expect(
       within(dialog).getByRole("button", { name: "Cancel" }),
     ).toBeInTheDocument();
+    // The design's header close beside the title.
+    expect(
+      within(dialog).getByRole("button", { name: "Close" }),
+    ).toHaveAttribute("data-header-close");
+  });
+
+  it("counts the CSV as a lower bound when the window read did not hold every row (negative)", async () => {
+    answer({
+      window: recordOf([denied, allowed], { hasMore: true }),
+    });
+    await renderAudit();
+
+    fireEvent.click(screen.getByRole("button", { name: "CSV" }));
+    const dialog = await screen.findByRole("dialog", { name: "Export events" });
+    expect(within(dialog).getByTestId("audit-csv-body")).toHaveTextContent(
+      /^2\+ events in the last 30 days, with/,
+    );
   });
 });
 
@@ -618,19 +735,26 @@ describe("tabs", () => {
     await renderAudit({}, { tab: "keys" });
 
     const nav = screen.getByRole("navigation", { name: "Audit sections" });
+    // The design's tab semantics (audit.audit-prompt.md check 12): a tablist
+    // of tabs with aria-selected, each still a link to its own segment.
+    const list = within(nav).getByRole("tablist", { name: "Audit sections" });
     expect(
-      within(nav)
-        .getAllByRole("link")
-        .map((link) => [link.textContent, link.getAttribute("href")]),
+      within(list)
+        .getAllByRole("tab")
+        .map((tab) => [
+          tab.textContent,
+          tab.getAttribute("href"),
+          tab.getAttribute("aria-selected"),
+        ]),
     ).toEqual([
-      ["Events1", "/acme/audit"],
-      ["Incidents", "/acme/audit/incidents"],
-      ["Receipts", "/acme/audit/receipts"],
-      ["Exports", "/acme/audit/exports"],
-      ["Keys", "/acme/audit/keys"],
-      ["Retention", "/acme/audit/retention"],
+      ["Events1", "/acme/audit", "false"],
+      ["Incidents", "/acme/audit/incidents", "false"],
+      ["Receipts", "/acme/audit/receipts", "false"],
+      ["Exports", "/acme/audit/exports", "false"],
+      ["Keys", "/acme/audit/keys", "true"],
+      ["Retention", "/acme/audit/retention", "false"],
     ]);
-    expect(within(nav).getByRole("link", { name: "Keys" })).toHaveAttribute(
+    expect(within(nav).getByRole("tab", { name: "Keys" })).toHaveAttribute(
       "aria-current",
       "page",
     );
@@ -675,7 +799,7 @@ describe("tabs", () => {
 
     expect(tiles().map(([term, value]) => [term, value])).toEqual([
       ["Open", "not recorded"],
-      ["Critical · 12 months", "not recorded"],
+      ["Critical in 12 months", "not recorded"],
       ["Median time to resolve", "not recorded"],
       ["Money moved without a receipt", "not recorded"],
     ]);
@@ -694,6 +818,7 @@ describe("tabs", () => {
       "agent key, tool, external effect id, call digest, receipt id",
     );
     expect(search).toHaveAccessibleDescription(why);
+    expect(search.className).toContain("max-md:min-h-11");
     expect(screen.getByRole("button", { name: "Search" })).toBeDisabled();
     const chips = within(screen.getByRole("list", { name: "Examples" }))
       .getAllByRole("button")
@@ -930,9 +1055,40 @@ describe("tabs", () => {
       expect(
         within(dialog).getByRole("button", { name: "Cancel" }),
       ).toBeInTheDocument();
+      // The design's header close, the one control named Close.
       expect(
-        within(dialog).queryByRole("button", { name: "Close" }),
-      ).toBeNull();
+        within(dialog).getByRole("button", { name: "Close" }),
+      ).toHaveAttribute("data-header-close");
+      // Every field is a 44 px tap target with 16 px text on a phone (audit.md, Mobile).
+      for (const each of dialog.querySelectorAll("input, select, textarea")) {
+        expect(each.className).toContain("max-md:min-h-11");
+        expect(each.className).toContain("max-md:text-base");
+      }
+    },
+  );
+
+  it.each([
+    "events",
+    "incidents",
+    "receipts",
+    "exports",
+    "keys",
+    "retention",
+  ] as const)(
+    "on %s, no heading, tile, badge or option carries a mid-dot, a comma or a not/never contrast",
+    async (tab) => {
+      answer({ window: recordOf([event()]) });
+      await renderAudit({}, { tab });
+
+      // The house rule the spec repeats (rev1 audit.md): a label is a plain noun.
+      const labels = [
+        ...screen.getAllByRole("heading"),
+        ...document.querySelectorAll("dt, option, th"),
+      ].map((each) => each.textContent ?? "");
+      expect(labels.length).toBeGreaterThan(0);
+      for (const text of labels) {
+        expect(text).not.toMatch(/·|,|\b(not|never)\b/);
+      }
     },
   );
 
@@ -1107,6 +1263,12 @@ describe("states", () => {
     expect(
       within(dialog).getByRole("button", { name: "Send the request" }),
     ).toBeDisabled();
+    expect(dialog).toHaveTextContent(
+      "Granting a role is a governed action. It will appear in the audit record with the granter’s name, your name, and this reason.",
+    );
+    expect(
+      within(dialog).getByRole("button", { name: "Close" }),
+    ).toHaveAttribute("data-header-close");
     expect(within(dialog).getByTestId("audit-not-recorded").dataset.issue).toBe(
       "3820",
     );
@@ -1228,6 +1390,14 @@ describe("the header's gold action", () => {
     for (const field of ["From", "To", "Format"]) {
       expect(within(dialog).getByLabelText(field)).toBeDisabled();
     }
+    // From and To stack full width on a phone and pair up on a desktop.
+    const dates = within(dialog).getByLabelText("From").closest("label")
+      ?.parentElement as HTMLElement;
+    expect(dates.className).toContain("grid-cols-1");
+    expect(dates.className).toContain("md:grid-cols-2");
+    expect(
+      within(dialog).getByRole("button", { name: "Close" }),
+    ).toHaveAttribute("data-header-close");
     expect(dialog).toHaveTextContent(
       "Runs as export_data, a governed action with third-party egress.",
     );

@@ -300,8 +300,11 @@ function AuditBody({
       });
   return (
     <div className="flex flex-col gap-3.5">
+      {/* The design's tab semantics, as the Organization rows carry them
+          (#3995): a tablist of tabs, each still a link to its own segment. */}
       <RouteTabs
         label={t("label")}
+        tablist
         tabs={AUDIT_TABS.map((each) => ({
           to: tabPath(org, each),
           label: t(each),

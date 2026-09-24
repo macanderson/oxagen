@@ -936,8 +936,8 @@ type Messages = {
       shown: string;
       shownOpen: string;
       pager: string;
-      newer: string;
-      older: string;
+      previous: string;
+      next: string;
       actorKinds: {
         human: string;
         agent: string;
@@ -1127,6 +1127,7 @@ type Messages = {
       title: string;
       role: string;
       why: string;
+      callout: string;
       notRecorded: string;
       submit: string;
     };

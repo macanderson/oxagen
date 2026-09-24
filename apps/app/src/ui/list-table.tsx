@@ -19,6 +19,7 @@
 // text, so its card cell has no label.
 import { useTranslations } from "next-intl";
 import { type ReactNode, useId, useRef, useState } from "react";
+import { pageList, pagerButton } from "@/ui/page-list";
 import { cell, headCell, numericCell } from "@/ui/table";
 
 export type ListColumn = {
@@ -78,25 +79,6 @@ function compare(a: string, b: string, numeric: boolean): number {
     sensitivity: "base",
   });
 }
-
-/** The page numbers the pager shows, with an ellipsis on either side past seven pages. */
-function pageList(
-  page: number,
-  pages: number,
-): (number | "gap-before" | "gap-after")[] {
-  if (pages <= 7) return Array.from({ length: pages }, (_, i) => i + 1);
-  const lo = Math.max(2, page - 1);
-  const hi = Math.min(pages - 1, page + 1);
-  const out: (number | "gap-before" | "gap-after")[] = [1];
-  if (lo > 2) out.push("gap-before");
-  for (let p = lo; p <= hi; p++) out.push(p);
-  if (hi < pages - 1) out.push("gap-after");
-  out.push(pages);
-  return out;
-}
-
-const pagerButton =
-  "inline-flex min-h-7 min-w-7 items-center justify-center rounded-[7px] border border-button-default-border bg-button-default-bg px-2 py-0.5 text-[12px] tabular-nums text-button-default-fg hover:bg-button-default-hover-bg disabled:cursor-default disabled:opacity-40 aria-[current=page]:border-gold aria-[current=page]:text-accent-text max-md:min-h-11 max-md:min-w-11";
 
 const controlSelect =
   "rounded-lg border border-input-border bg-input-bg px-2 py-[5px] text-[12px] text-input-fg focus-visible:border-input-border-focus focus-visible:outline-none";
