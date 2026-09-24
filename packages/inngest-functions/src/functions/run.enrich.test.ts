@@ -373,9 +373,9 @@ it("queues the run sealed now ahead of a week-old backlog, a few per organizatio
     new Date("2026-09-24T12:00:00Z"),
   ).toSQL();
   const col = (name: string) => `"tacho"."sessions"."${name}"`;
-  // Within each organization: ended runs first, then the latest change first.
+  // Within each organization: ended runs first, then the latest seal first.
   const rank = new RegExp(
-    `row_number\\(\\) over \\(partition by ${escapeRegExp(col("org_id"))} order by \\(${escapeRegExp(col("outcome"))} <> \\$(\\d+)\\) desc, ${escapeRegExp(col("updated_at"))} desc\\)`,
+    `row_number\\(\\) over \\(partition by ${escapeRegExp(col("org_id"))} order by \\(${escapeRegExp(col("outcome"))} <> \\$(\\d+)\\) desc, coalesce\\(${escapeRegExp(col("sealed_at"))}, ${escapeRegExp(col("updated_at"))}\\) desc\\)`,
     "u",
   ).exec(query.sql);
   expect(rank).not.toBeNull();
@@ -384,7 +384,8 @@ it("queues the run sealed now ahead of a week-old backlog, a few per organizatio
   expect(limit).not.toBeNull();
   expect(query.params[Number(limit![1]) - 1]).toBe(SWEEP_RUNS_PER_ORG);
   expect(SWEEP_RUNS_PER_ORG).toBeLessThanOrEqual(5);
-  expect(query.sql).not.toContain("coalesce(");
+  // The old order: oldest observation or change first.
+  expect(query.sql).not.toContain(`coalesce(${col("summary_observed_at")}`);
 });
 
 describe("a queued event that no longer asks for work", () => {

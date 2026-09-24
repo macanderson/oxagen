@@ -5,7 +5,6 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import {
   and,
   asc,
-  desc,
   eq,
   isNotNull,
   isNull,
@@ -100,9 +99,11 @@ function sealedRun(
 
 /**
  * The order a sweep takes due runs in: ended runs before live ones, then the
- * most recently changed first. An operator reads the run that just ended, so
- * it goes ahead of the backlog, and the backlog is worked through, newest
- * first, whenever no newer run is waiting.
+ * most recently ended first (a live run by its last change). An operator reads
+ * the run that just ended, so it goes ahead of the backlog, and the backlog is
+ * worked through, newest first, whenever no newer run is waiting. The seal
+ * time ranks a sealed session, not `updated_at`, because a sealed Claude Code
+ * session goes on receiving events and would otherwise stay at the front.
  *
  * The sweep used to take the oldest first, 500 at a time. Once more than 500
  * runs were due, every newly sealed run ranked past the 500th and was never
@@ -111,7 +112,14 @@ function sealedRun(
 export function enrichmentPriority(
   table: typeof schema.tachoSessions | typeof schema.agentRuns,
 ): SQL[] {
-  return [sql`(${sealedRun(table)}) desc`, desc(table.updatedAt)];
+  const ended =
+    table === schema.tachoSessions
+      ? schema.tachoSessions.sealedAt
+      : schema.agentRuns.completedAt;
+  return [
+    sql`(${sealedRun(table)}) desc`,
+    sql`coalesce(${ended}, ${table.updatedAt}) desc`,
+  ];
 }
 
 /**
@@ -372,7 +380,7 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
   },
   { event: RUN_ENRICH_EVENT },
   async ({ event, events, step }) => {
-    const latest = (events?.at(-1) ?? event) as { data: unknown; ts?: number };
+    const latest = events?.at(-1) ?? event;
     const data = eventSchema.parse(latest.data);
     const scope = { orgId: data.orgId, workspaceId: data.workspaceId };
     const inScope = <T>(fn: () => Promise<T>) => runInTenantScope(scope, fn);
