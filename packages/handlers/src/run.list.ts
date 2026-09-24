@@ -822,7 +822,10 @@ export type TachoSessionColumns = GeneratedSummaryColumns & {
   enforcementTier: string;
   /** The sealed commitment for the whole session; null while open. */
   finalHash: string | null;
-  /** The last pause or resume the host applied was a pause; absent where a reader did not select it. */
+  /**
+   * The last pause or resume the host applied was a pause. Absent where a
+   * reader did not select it.
+   */
   paused?: boolean;
 };
 

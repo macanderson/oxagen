@@ -547,9 +547,9 @@ describe("run controls", () => {
       expect(
         screen.queryByTestId(`run-${paused ? "pause" : "resume"}`),
       ).toBeNull();
-      expect(screen.getAllByRole("button", { name: /pause|resume/i })).toHaveLength(
-        1,
-      );
+      expect(
+        screen.getAllByRole("button", { name: /pause|resume/i }),
+      ).toHaveLength(1);
       await user.click(screen.getByTestId(`run-${command}`));
       await user.click(
         screen.getByRole("button", { name: `Queue the ${command}` }),
@@ -567,8 +567,14 @@ describe("run controls", () => {
   );
 
   it.each([
-    ["the host is offline", { commandBlock: "host_offline" as const, wsRole: "owner" as const }],
-    ["the viewer's role admits no command", { commandBlock: null, wsRole: "viewer" as const }],
+    [
+      "the host is offline",
+      { commandBlock: "host_offline" as const, wsRole: "owner" as const },
+    ],
+    [
+      "the viewer's role admits no command",
+      { commandBlock: null, wsRole: "viewer" as const },
+    ],
   ])(
     "draws only a disabled Resume on a paused run when %s (negative)",
     (_why, { commandBlock, wsRole }) => {
