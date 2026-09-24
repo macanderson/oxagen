@@ -113,6 +113,18 @@ function useTabCounts({
   };
 }
 
+/** The first prompt entry's text and instant, when the recorder kept its body. */
+function firstPrompt(
+  read: Read<RunTranscript>,
+): { text: string; at: string } | null {
+  if (!read.ok) return null;
+  const entry = read.value.entries.find((item) =>
+    item.kinds.includes("prompt"),
+  );
+  const text = entry?.request?.text ?? entry?.response?.text ?? null;
+  return entry === undefined || text === null ? null : { text, at: entry.at };
+}
+
 /** A call parked on this run: the dot the Governed actions and Policy tabs carry. */
 function isParked(pending: Read<ApprovalQueue>): boolean {
   return pending.ok && pending.value.items.length > 0;
@@ -313,10 +325,21 @@ export async function Run({
   // A run whose loop Oxagen stopped on an interjection is drawn as the three
   // panes of pages/run-interjection.md rather than the ordinary run page.
   const interject = interjectionOf(detail);
-  if (interject !== null)
+  if (interject !== null) {
+    // The agent's pane opens on the operator's first message, which is the
+    // transcript's first prompt entry.
+    const prompts = await source.runs.transcript(ctx, run.id, "everything", {
+      kinds: ["prompt"],
+    });
     return (
-      <RunInterjection detail={detail} interject={interject} ws={place.ws} />
+      <RunInterjection
+        detail={detail}
+        interject={interject}
+        prompt={firstPrompt(prompts)}
+        ws={place.ws}
+      />
     );
+  }
   // The header, the stat row, the side column and the tab counts all read
   // from these, whichever tab is open, so they are read together rather than
   // one after another. The whole-run transcript serves the Prompts figure,
@@ -355,6 +378,7 @@ export async function Run({
           zoom={zoomed}
           kinds={chips}
           run={run}
+          all={everything}
           {...place}
         />
       );

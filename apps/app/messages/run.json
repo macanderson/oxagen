@@ -92,15 +92,17 @@
       "recording": "Recording. Every frame is hash-chained to its predecessor as it arrives, and this view follows the run's head and reads what it records.",
       "chipsLabel": "Filter the transcript",
       "chip": {
-        "prompt": "Prompt",
-        "responses": "Responses",
-        "tools": "Tools",
-        "policy": "Policy",
-        "recall": "Recall",
-        "usage": "Usage",
-        "errors": "Errors"
+        "prompt": "prompt",
+        "responses": "responses",
+        "thinking": "thinking",
+        "tools": "tools",
+        "usage": "usage",
+        "recall": "recall",
+        "seal": "seal",
+        "policy": "policy",
+        "errors": "✗ errors"
       },
-      "chipsClear": "Clear the filter",
+      "chipsClear": "all",
       "emptyFiltered": "No entry in this run answers to the {count} chips you pressed. Clear the filter to read the whole run.",
       "more": "Read more",
       "readingMore": "Reading",
@@ -130,7 +132,30 @@
         "input": "Input",
         "reply": "Reply"
       },
-      "note": "The transcript is what the agent showed its operator. The gateway’s own frames sit behind the ⚖ chips."
+      "note": "The transcript is what the agent showed its operator. The gateway’s own frames sit behind the ⚖ chips.",
+      "chipGap": {
+        "thinking": "Counted from the reasoning the recorder kept. The transcript read has no thinking filter yet.",
+        "seal": "No transcript kind carries the seal yet. Chain and seal shows it."
+      },
+      "head": {
+        "turns": "{count, plural, one {# turn} other {# turns}}",
+        "steps": "{count, plural, one {# step} other {# steps}}",
+        "entries": "{count, plural, one {{shown} entry} other {{shown} entries}}",
+        "entriesAtLeast": "at least {shown} entries",
+        "status": {
+          "live": "live",
+          "sealed": "sealed",
+          "halted": "halted"
+        },
+        "burn": "burn",
+        "of": "of"
+      },
+      "search": "Search the transcript",
+      "searchPlaceholder": "search the transcript",
+      "noMatch": "No entry on this page matches that search.",
+      "first": "First frame",
+      "last": "Last frame",
+      "index": "{n} / {total}"
     },
     "frames": {
       "title": "Frames",
@@ -650,7 +675,7 @@
         "status": "Status",
         "relation": "Relation",
         "edge": "Edge",
-        "view": "Tracker"
+        "view": "View"
       },
       "empty": "No issue is linked to this session.",
       "statusNotRead": "not read",
@@ -873,7 +898,8 @@
       "workspaceCreated": "Workspace created",
       "operatorNotRecorded": "the operator",
       "cut": "This read stopped before the end of the recording, so later frames are not listed.",
-      "linkTo": "to {ws}"
+      "linkTo": "to {ws}",
+      "promptNotRecorded": "The operator's first message is not on the record."
     }
   }
 }

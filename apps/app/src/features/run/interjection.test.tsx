@@ -18,6 +18,8 @@ import {
   runRow,
   runSource,
   runTranscript,
+  transcriptBody,
+  transcriptEntry,
 } from "./run.builders";
 
 vi.mock("next/link", () => ({
@@ -85,7 +87,10 @@ const interject = runFrame({
   observedAt: "2026-09-15T09:14:02.146Z",
 });
 
-async function renderRun(frames: ReturnType<typeof runFrame>[]) {
+async function renderRun(
+  frames: ReturnType<typeof runFrame>[],
+  transcript = runTranscript(),
+) {
   const { source } = runSource({
     detail: readOk(
       runDetail({
@@ -93,7 +98,7 @@ async function renderRun(frames: ReturnType<typeof runFrame>[]) {
         frames: { frames, cursor: null, more: false },
       }),
     ),
-    transcript: readOk(runTranscript()),
+    transcript: readOk(transcript),
   });
   const page = await Run({
     ctx,
@@ -249,5 +254,40 @@ describe("a run held on an interjection", () => {
     await renderRun([started, runFrame()]);
     expect(screen.queryByTestId("run-interjection")).toBeNull();
     expect(screen.getByTestId("run-header")).toBeInTheDocument();
+  });
+
+  it("opens the agent's pane on the operator's first message from the transcript", async () => {
+    await renderRun(
+      [started, unknown, interject],
+      runTranscript({
+        entries: [
+          transcriptEntry({
+            kind: "turn",
+            kinds: ["prompt"],
+            at: "2026-09-15T09:14:01.500Z",
+            request: transcriptBody({
+              text: "Cut the first release notes for edge-proxy.",
+            }),
+            response: null,
+          }),
+        ],
+      }),
+    );
+    const prompt = screen.getByTestId("interjection-prompt");
+    expect(prompt).toHaveTextContent("Marcus Bell");
+    expect(prompt).toHaveTextContent(
+      "Cut the first release notes for edge-proxy.",
+    );
+    expect(prompt).toHaveTextContent("09:14:01Z");
+    expect(prompt.querySelector('[data-gap="interjection-prompt"]')).toBeNull();
+  });
+
+  it("says the operator's message is not on the record when no prompt body was kept", async () => {
+    await renderRun([started, unknown, interject]);
+    expect(
+      screen
+        .getByTestId("interjection-prompt")
+        .querySelector('[data-gap="interjection-prompt"]'),
+    ).toHaveTextContent("The operator's first message is not on the record.");
   });
 });

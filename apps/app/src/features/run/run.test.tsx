@@ -1484,7 +1484,8 @@ describe("chips", () => {
       { tab: "transcript", kinds: "thinking,proof,tools" },
     );
     expect(calls.transcript[1]?.[3]).toEqual({ kinds: ["tools"] });
-    expect(screen.queryByTestId("chip-thinking")).toBeNull();
+    // The thinking chip is a count in the spec's place, never a filter link.
+    expect(screen.getByTestId("chip-thinking")).not.toHaveAttribute("href");
     expect(screen.queryByTestId("chip-proof")).toBeNull();
   });
 
@@ -2068,7 +2069,7 @@ describe("issues", () => {
       within(issues.getByRole("table"))
         .getAllByRole("columnheader")
         .map((th) => th.textContent),
-    ).toEqual(["Issue", "Status", "Relation", "Edge", "Tracker"]);
+    ).toEqual(["Issue", "Status", "Relation", "Edge", "View"]);
     const row = within(issues.getByTestId("run-issue-row"));
     expect(row.getByText(/ENG-4121/)).toBeTruthy();
     expect(row.getByText("not read")).toBeTruthy();

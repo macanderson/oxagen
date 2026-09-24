@@ -13,16 +13,23 @@
 //
 // The chips are the filter, and they are links: a filter is a query value, so
 // it survives a reload, opens in a new tab, and is in the URL a person copies.
-// They are the contract's own `TranscriptKind` list and not the mockup's. The
-// mockup drew a `thinking` chip and a `proof` chip that `get_run_transcript`
-// publishes no kind for, and a chip that filtered on nothing would promise a
-// slice of the record that does not exist.
+// The chips that filter are the contract's own `TranscriptKind` list. The spec
+// also draws `thinking` and `seal`, which `get_run_transcript` publishes no
+// kind for, so those two sit in the row, in the spec's place, as counts that
+// press nothing: thinking is counted from the reasoning blocks the recorder
+// kept, and the seal names that no kind carries it. A chip that pretended to
+// filter would promise a slice of the record that does not exist.
 import { useLocale, useTranslations } from "next-intl";
-import type { RunTranscript, TranscriptKind } from "@/data/contracts/run";
+import type {
+  RunTranscript,
+  TranscriptEntry,
+  TranscriptKind,
+} from "@/data/contracts/run";
 import { TRANSCRIPT_KINDS } from "@/data/contracts/run";
 import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
+import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
@@ -46,28 +53,106 @@ export function kindsParam(
 }
 
 /**
+ * The row of chips in the spec's order. A string is a kind the contract
+ * filters on; `thinking` and `seal` are the two the spec draws that it does
+ * not, and they render as counts rather than links. `errors` closes the row.
+ * `policy` is the contract's own and sits after the spec's seven.
+ */
+const CHIP_ROW = [
+  "prompt",
+  "responses",
+  "thinking",
+  "tools",
+  "usage",
+  "recall",
+  "seal",
+  "policy",
+  "errors",
+] as const;
+type ChipName = (typeof CHIP_ROW)[number];
+const UNFILTERED = new Set<ChipName>(["thinking", "seal"]);
+
+/** True when an entry carries a reasoning block the recorder kept. */
+function hasThinking(entry: TranscriptEntry): boolean {
+  return [entry.request, entry.response].some(
+    (half) => half?.blocks?.some((block) => block.kind === "thinking") ?? false,
+  );
+}
+
+/**
+ * Each chip's count, read from the whole-run transcript. Null when that read
+ * failed: a chip with no count says nothing rather than zero. `seal` has no
+ * count because no transcript kind carries it.
+ */
+export function chipCounts(
+  read: Read<RunTranscript>,
+): Partial<Record<ChipName, number>> | null {
+  if (!read.ok) return null;
+  const counts: Partial<Record<ChipName, number>> = {};
+  for (const kind of TRANSCRIPT_KINDS)
+    counts[kind] = read.value.entries.filter((entry) =>
+      entry.kinds.includes(kind),
+    ).length;
+  counts.thinking = read.value.entries.filter(hasThinking).length;
+  return counts;
+}
+
+/**
  * The filter chips. Each is a link that adds or removes its own kind. No chip
  * pressed keeps every entry, which is what the contract does with an empty
- * list, so there is no "all" chip to get out of step with the others.
+ * list, so the row's toggle reads "all" and appears once a chip narrows it.
  */
 function KindChips({
   zoom,
   kinds,
+  counts,
   org,
   ws,
   runId,
 }: {
   zoom: RunTranscript["zoom"];
   kinds: readonly TranscriptKind[];
+  /** Each chip's count over the whole run; null when that read failed. */
+  counts: Partial<Record<ChipName, number>> | null;
 } & Place) {
   const t = useTranslations("run.transcript");
+  const locale = useLocale();
+  const count = (name: ChipName) => {
+    const value = counts?.[name];
+    return value === undefined ? null : (
+      <span
+        data-testid={`chip-count-${name}`}
+        className="font-mono text-[10.5px] tabular-nums text-dim"
+      >
+        {formatCount(value, locale)}
+      </span>
+    );
+  };
   return (
     <nav
       aria-label={t("chipsLabel")}
       data-testid="transcript-chips"
       className="flex flex-wrap items-center gap-1 pb-3"
     >
-      {TRANSCRIPT_KINDS.map((kind) => {
+      {CHIP_ROW.map((name) => {
+        if (UNFILTERED.has(name))
+          return (
+            <span
+              key={name}
+              data-testid={`chip-${name}`}
+              data-gap={`transcript-kind-${name}`}
+              aria-disabled="true"
+              title={t(`chipGap.${name as "thinking" | "seal"}`)}
+              className="inline-flex min-h-8 cursor-not-allowed items-center gap-1.5 rounded-full border border-dashed border-border px-3 text-xs text-muted-foreground"
+            >
+              {t(`chip.${name as "thinking" | "seal"}`)}
+              {count(name)}
+              <span className="sr-only">
+                {t(`chipGap.${name as "thinking" | "seal"}`)}
+              </span>
+            </span>
+          );
+        const kind = name as TranscriptKind;
         const on = kinds.includes(kind);
         const next = on
           ? kinds.filter((held) => held !== kind)
@@ -85,9 +170,10 @@ function KindChips({
             // A chip is a link, so its state is `aria-current`, which a link
             // may carry, and not `aria-pressed`, which belongs to a button.
             aria-current={on ? "true" : undefined}
-            className="inline-flex min-h-8 items-center rounded-full border border-border px-3 text-xs text-muted-foreground hover:text-foreground aria-[current=true]:border-foreground aria-[current=true]:text-foreground"
+            className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-border px-3 text-xs text-muted-foreground hover:text-foreground aria-[current=true]:border-foreground aria-[current=true]:text-foreground"
           >
             {t(`chip.${kind}`)}
+            {count(kind)}
           </SafeLink>
         );
       })}
@@ -104,11 +190,77 @@ function KindChips({
   );
 }
 
+/**
+ * The line above the feed: `<task> · <agent> · <model> · N turns · N steps ·
+ * N entries · ● <status> · burn $ of $`. Each part the record lacks is left
+ * out rather than printed as a zero; the burn is the running cost at the
+ * run's last entry against the run's own total.
+ */
+function FeedHead({
+  run,
+  entries,
+  complete,
+}: {
+  run: TranscriptRun;
+  entries: readonly TranscriptEntry[];
+  complete: boolean;
+}) {
+  const t = useTranslations("run.transcript");
+  const locale = useLocale();
+  const parts = [
+    run.taskRef ?? null,
+    run.agentKey ?? null,
+    run.model?.slug ?? null,
+    run.turns === null || run.turns === undefined
+      ? null
+      : t("head.turns", { count: run.turns }),
+    run.steps === undefined ? null : t("head.steps", { count: run.steps }),
+    t(complete ? "head.entries" : "head.entriesAtLeast", {
+      count: entries.length,
+      shown: formatCount(entries.length, locale),
+    }),
+  ].filter((part): part is string => part !== null);
+  const burn = entries.at(-1)?.cumulativeCost ?? null;
+  return (
+    <p
+      data-testid="transcript-head"
+      className="flex flex-wrap items-center gap-x-2 gap-y-1 pb-2 font-mono text-[11.5px] text-muted-foreground"
+    >
+      <span>{parts.join(" · ")}</span>
+      <span className="inline-flex items-center gap-1">
+        <span
+          aria-hidden="true"
+          className={`size-1.5 rounded-full ${run.status === "live" ? "bg-success" : "bg-muted-foreground"}`}
+        />
+        {t(`head.status.${run.status}`)}
+      </span>
+      {burn === null ? null : (
+        <span data-testid="transcript-burn">
+          {t("head.burn")} <Money value={burn} />
+          {run.cost === null || run.cost === undefined ? null : (
+            <>
+              {" "}
+              {t("head.of")} <Money value={run.cost} />
+            </>
+          )}
+        </span>
+      )}
+    </p>
+  );
+}
+
+/** What the tab reads off the run row: the status always, the head line's parts when the page has them. */
+type TranscriptRun = Pick<RunRow, "status" | "replayGrade"> &
+  Partial<
+    Pick<RunRow, "taskRef" | "agentKey" | "model" | "turns" | "steps" | "cost">
+  >;
+
 export function TranscriptSection({
   read,
   zoom,
   kinds,
   run,
+  all,
   org,
   ws,
   runId,
@@ -119,12 +271,26 @@ export function TranscriptSection({
   zoom: RunTranscript["zoom"];
   /** The chips the URL pressed; empty keeps every entry. */
   kinds: readonly TranscriptKind[];
-  run: Pick<RunRow, "status" | "replayGrade">;
+  run: TranscriptRun;
+  /**
+   * The whole-run transcript, unfiltered, which the chip counts and the head
+   * line read. Defaults to `read`, which is the same read when no chip is
+   * pressed.
+   */
+  all?: Read<RunTranscript>;
 } & Place) {
   const t = useTranslations("run.transcript");
   const locale = useLocale();
   const place = { org, ws, runId };
-  const chips = <KindChips zoom={zoom} kinds={kinds} {...place} />;
+  const whole = all ?? read;
+  const chips = (
+    <KindChips
+      zoom={zoom}
+      kinds={kinds}
+      counts={chipCounts(whole)}
+      {...place}
+    />
+  );
   if (!read.ok) {
     return (
       <Panel title={t("title")}>
@@ -155,6 +321,11 @@ export function TranscriptSection({
   return (
     <div className="flex flex-col">
       {chips}
+      <FeedHead
+        run={run}
+        entries={whole.ok ? whole.value.entries : entries}
+        complete={whole.ok ? whole.value.complete : read.value.complete}
+      />
       <TranscriptView
         // The view holds the pages it has appended, so a new filter must build
         // a new one rather than append a filtered page to an unfiltered one.

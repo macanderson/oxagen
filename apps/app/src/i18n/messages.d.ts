@@ -3720,10 +3720,12 @@ type Messages = {
       chip: {
         prompt: string;
         responses: string;
+        thinking: string;
         tools: string;
-        policy: string;
-        recall: string;
         usage: string;
+        recall: string;
+        seal: string;
+        policy: string;
         errors: string;
       };
       chipsClear: string;
@@ -3757,6 +3759,29 @@ type Messages = {
         reply: string;
       };
       note: string;
+      chipGap: {
+        thinking: string;
+        seal: string;
+      };
+      head: {
+        turns: string;
+        steps: string;
+        entries: string;
+        entriesAtLeast: string;
+        status: {
+          live: string;
+          sealed: string;
+          halted: string;
+        };
+        burn: string;
+        of: string;
+      };
+      search: string;
+      searchPlaceholder: string;
+      noMatch: string;
+      first: string;
+      last: string;
+      index: string;
     };
     frames: {
       title: string;
@@ -4500,6 +4525,7 @@ type Messages = {
       operatorNotRecorded: string;
       cut: string;
       linkTo: string;
+      promptNotRecorded: string;
     };
   };
   runOutcomes: {

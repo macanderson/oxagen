@@ -106,9 +106,16 @@ function FrameRow({
 export function RunInterjection({
   detail,
   interject,
+  prompt,
   ws,
 }: {
   detail: RunDetail;
+  /**
+   * The operator's first message, from the run's transcript: the text the
+   * agent's window shows above Oxagen's question. Null when the recorder kept
+   * no prompt body, and the pane says so.
+   */
+  prompt: { text: string; at: string } | null;
   /** The run's `control.interject` frame. */
   interject: RunFrame;
   /** The workspace the page sits in: the one the Link path names. */
@@ -177,6 +184,29 @@ export function RunInterjection({
           source={t("agentSource")}
           testId="interjection-agent"
         >
+          <div
+            data-testid="interjection-prompt"
+            className="flex flex-col gap-1.5 rounded-lg border border-l-2 border-border border-l-foreground/40 bg-app-panel-bg p-3"
+          >
+            <p className="flex items-center justify-between gap-2 text-sm font-semibold">
+              <span>{operator}</span>
+              {prompt === null ? null : (
+                <span className={`${mono} text-[11px] text-muted-foreground`}>
+                  {clock(prompt.at)}
+                </span>
+              )}
+            </p>
+            {prompt === null ? (
+              <p
+                data-gap="interjection-prompt"
+                className="text-sm text-muted-foreground"
+              >
+                {t("promptNotRecorded")}
+              </p>
+            ) : (
+              <p className="whitespace-pre-wrap text-sm">{prompt.text}</p>
+            )}
+          </div>
           <div className="flex flex-col gap-2 rounded-lg border-l-2 border-gold bg-app-panel-bg p-3">
             <p className="flex items-center justify-between gap-2 text-sm font-semibold">
               <span className="flex items-center gap-2">
