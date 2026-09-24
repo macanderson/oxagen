@@ -13,10 +13,10 @@ import {
   type RunFrame,
   stepKind,
   tachoFrame,
-  tachoStage,
   tachoTimestamp,
   turnOrdinals,
 } from "./run-frames";
+import { tachoStage } from "./tacho-kinds";
 import type { AttemptEventReadRecord } from "./run-store";
 
 function event(
@@ -709,6 +709,30 @@ describe("frameKinds and filterFramesByKind", () => {
     expect(frameKinds(usage).sort()).toEqual(["responses", "usage"]);
     expect(frameKinds(policy)).toEqual(["policy"]);
     expect(frameKinds(recall)).toEqual(["recall"]);
+  });
+
+  it("counts the prompt an operator typed, once, and not a subagent's", () => {
+    const typed = tachoFrame(tachoRow(6, "turn_start", { turnSeq: 1 }));
+    const handed = tachoFrame(
+      tachoRow(7, "turn_start", {
+        sessionUuid: "sub",
+        rootSessionUuid: "root",
+      }),
+    );
+    // The transcript tailer's copy of the same prompt.
+    const copy = tachoFrame(
+      tachoRow(8, "oxagen:message", {
+        body: JSON.stringify({ prompt_digest: "sha256:ab", prompt_length: 3 }),
+      }),
+    );
+    expect(frameKinds(typed)).toEqual(["prompt"]);
+    expect(frameKinds(handed)).toEqual([]);
+    expect(frameKinds(copy)).toEqual([]);
+    expect(
+      filterFramesByKind([typed, handed, copy, tool], ["prompt"]).map(
+        (f) => f.seq,
+      ),
+    ).toEqual(["6"]);
   });
 
   it("keeps everything for an empty selection, and only the chips pressed otherwise", () => {

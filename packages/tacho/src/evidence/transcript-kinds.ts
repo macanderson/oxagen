@@ -16,7 +16,10 @@
  */
 
 export const TRANSCRIPT_KINDS = [
-  /** What went out to a model: the request half of a model call. */
+  /**
+   * What went out to a model: the request half of a model call, or the
+   * prompt an operator typed to open a turn of a wrapped run.
+   */
   "prompt",
   /** What came back from a model: the response half, or a single receipt. */
   "responses",

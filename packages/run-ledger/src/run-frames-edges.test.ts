@@ -2,13 +2,8 @@
 // stage it belongs to, the chain it was recorded on, and bisect over frames
 // whose identities differ in each field it keys on.
 import { describe, expect, it } from "vitest";
-import {
-  bisectFrames,
-  bisectKey,
-  tachoFrame,
-  tachoFrameSummary,
-  tachoStage,
-} from "./run-frames";
+import { bisectFrames, bisectKey, tachoFrame } from "./run-frames";
+import { tachoFrameSummary, tachoStage } from "./tacho-kinds";
 
 type Row = Parameters<typeof tachoFrame>[0];
 
@@ -122,21 +117,24 @@ describe("tachoFrame", () => {
     policy_source: "harness",
   });
 
-  it("reads a stored OTel harness check as harness_permission, not a policy decision", () => {
-    const frame = tachoFrame(
-      row(4, "policy_decision", {
-        source: "otel_log",
-        body: harnessBody,
-        toolName: "Bash",
-        toolUseId: "toolu_1",
-        policyDecision: "allow",
-      }),
-    );
-    expect(frame.type).toBe("harness_permission");
-    expect(frame.stage).toBe("tool");
-    expect(frame.summary).toBe("allow Bash");
-    expect(frame.identity.callId).toBe("toolu_1");
-  });
+  it.each(["otel_log", "otel_span"])(
+    "reads a stored %s harness check as harness_permission, not a policy decision",
+    (source) => {
+      const frame = tachoFrame(
+        row(4, "policy_decision", {
+          source,
+          body: harnessBody,
+          toolName: "Bash",
+          toolUseId: "toolu_1",
+          policyDecision: "allow",
+        }),
+      );
+      expect(frame.type).toBe("harness_permission");
+      expect(frame.stage).toBe("tool");
+      expect(frame.summary).toBe("allow Bash");
+      expect(frame.identity.callId).toBe("toolu_1");
+    },
+  );
 
   it("keeps a collector verdict as a policy decision and carries its target", () => {
     const frame = tachoFrame(
