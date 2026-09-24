@@ -63,12 +63,14 @@ for (const row of SIGNED_IN_ROUTES) {
     if (row.path.endsWith("/steering")) {
       // The tabs are path segments: Gates carries the freshness gates the
       // one-route page called Settings (roadmap pages/steering.md).
-      await page.locator('[data-tab="gates"]').click();
-      await expect(page.locator('[data-tab="gates"]')).toHaveAttribute(
+      // Cache Components keeps the previous route's tab bar mounted but
+      // hidden after navigation, so only the visible bar is asserted.
+      await page.locator('[data-tab="gates"]:visible').click();
+      await expect(page).toHaveURL(/\/steering\/gates(?:\?|$)/);
+      await expect(page.locator('[data-tab="gates"]:visible')).toHaveAttribute(
         "aria-selected",
         "true",
       );
-      await expect(page).toHaveURL(/\/steering\/gates(?:\?|$)/);
       await page.setViewportSize({ width: 1280, height: 720 });
       await page.screenshot({
         path: test.info().outputPath("gates-desktop.png"),
