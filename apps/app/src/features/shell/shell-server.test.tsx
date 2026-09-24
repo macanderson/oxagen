@@ -272,6 +272,23 @@ describe("ShellFrame", () => {
     expect(declarations).toEqual(["var(--ink)", "var(--ink)"]);
   });
 
+  it("keeps the drawers on a raised token that the app's ink does not move", () => {
+    // The drawers, the flyout and the phone bar's count pills paint with
+    // `--app-raised-bg`. The house kit maps it to the card and gives it a
+    // Tailwind colour. The app leaves it alone, so the ink stays behind them.
+    const kit = readFileSync(
+      path.join(process.cwd(), "../../packages/ui/src/styles/globals.css"),
+      "utf8",
+    );
+    expect(kit).toMatch(/--app-raised-bg:\s*var\(--card\);/);
+    expect(kit).toMatch(/--color-app-raised-bg:\s*var\(--app-raised-bg\);/);
+    const app = readFileSync(
+      path.join(process.cwd(), "src/app/globals.css"),
+      "utf8",
+    );
+    expect(app).not.toMatch(/--app-raised-bg:/);
+  });
+
   it("streams a labelled skeleton while the chrome loads", async () => {
     const { ShellFrame } = await import("./shell-frame");
     const pending = new Promise<never>(() => undefined);

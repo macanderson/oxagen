@@ -349,7 +349,7 @@ describe("the drawer", () => {
     expect(aside).toBe(drawer());
     // `.apd { background: var(--panel) }`: the drawer stays on the panel
     // while the page body behind it is on the ink.
-    expect(aside).toHaveClass("bg-card");
+    expect(aside).toHaveClass("bg-app-raised-bg");
     expect(aside).not.toHaveClass("bg-app-panel-bg");
     expect(
       within(aside).getByRole("heading", { level: 3, name: "Approvals" }),

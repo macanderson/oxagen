@@ -188,7 +188,7 @@ describe("AssistantFlyout", () => {
     expect(flyout).not.toHaveTextContent("Assistant");
     // `.asst { background: var(--panel) }`: the flyout stays on the panel
     // while the page body behind it is on the ink.
-    expect(flyout).toHaveClass("bg-card", "text-card-foreground");
+    expect(flyout).toHaveClass("bg-app-raised-bg", "text-app-raised-fg");
     expect(flyout).not.toHaveClass("bg-app-panel-bg");
     await expectNoAxe(flyout);
   });
