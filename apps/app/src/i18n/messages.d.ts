@@ -22,7 +22,6 @@ type Messages = {
     register: string;
     cliAuthorize: string;
     cliComplete: string;
-    workspaceEyebrow: string;
     fleet: string;
     run: string;
     agents: string;
