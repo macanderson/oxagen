@@ -4662,10 +4662,12 @@ type Messages = {
         sealed: string;
         halted: string;
       };
+      rewind: string;
       back: string;
       play: string;
       pause: string;
       forward: string;
+      toEnd: string;
       scrub: string;
       position: string;
       of: string;

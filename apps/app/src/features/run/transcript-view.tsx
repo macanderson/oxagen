@@ -1231,9 +1231,9 @@ export function TranscriptView({
           type="button"
           className={tpButton}
           disabled={pos <= 0}
-          aria-label={t("back")}
+          aria-label={t("rewind")}
           onClick={() => {
-            moveTo(pos - 1);
+            moveTo(0);
           }}
         >
           <svg viewBox="0 0 16 16" aria-hidden="true" className="size-[13px]">
@@ -1245,6 +1245,19 @@ export function TranscriptView({
               height="9.6"
               fill="currentColor"
             />
+          </svg>
+        </button>
+        <button
+          type="button"
+          className={tpButton}
+          disabled={pos <= 0}
+          aria-label={t("back")}
+          onClick={() => {
+            moveTo(pos - 1);
+          }}
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true" className="size-[13px]">
+            <path d="M11.4 3.2 4.6 8l6.8 4.8Z" fill="currentColor" />
           </svg>
         </button>
         <button
@@ -1290,6 +1303,19 @@ export function TranscriptView({
           aria-label={t("forward")}
           onClick={() => {
             moveTo(pos + 1);
+          }}
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true" className="size-[13px]">
+            <path d="M4.6 3.2 11.4 8l-6.8 4.8Z" fill="currentColor" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          className={tpButton}
+          disabled={pos >= head}
+          aria-label={t("toEnd")}
+          onClick={() => {
+            moveTo(head);
           }}
         >
           <svg viewBox="0 0 16 16" aria-hidden="true" className="size-[13px]">

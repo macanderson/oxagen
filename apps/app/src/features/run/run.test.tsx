@@ -783,6 +783,38 @@ describe("transcript", () => {
     expect(readout).toHaveTextContent("frame 4 /");
   });
 
+  it("rewinds to the first frame, jumps to the last, and offers the mockup's four speeds", async () => {
+    await renderRun(
+      { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
+      { tab: "transcript" },
+    );
+    const readout = screen.getByTestId("transport-readout");
+    const rewind = screen.getByRole("button", {
+      name: "Rewind to the first frame",
+    });
+    const end = screen.getByRole("button", { name: "Go to the last frame" });
+    expect(end).toBeDisabled();
+    fireEvent.click(rewind);
+    expect(readout).toHaveTextContent("frame 1 / 13");
+    expect(rewind).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Step back" })).toBeDisabled();
+    fireEvent.click(end);
+    expect(readout).toHaveTextContent("frame 13 / 13");
+    const speeds = within(
+      screen.getByRole("group", { name: "Playback speed" }),
+    ).getAllByRole("button");
+    expect(speeds.map((button) => button.textContent)).toEqual([
+      "1×",
+      "2×",
+      "3×",
+      "6×",
+    ]);
+    expect(speeds[0]).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(speeds[3] as HTMLElement);
+    expect(speeds[3]).toHaveAttribute("aria-pressed", "true");
+    expect(speeds[0]).toHaveAttribute("aria-pressed", "false");
+  });
+
   it("opens every step's frames at Everything, and says a digest_only frame has nothing to read", async () => {
     await renderRun(
       { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },

@@ -70,10 +70,12 @@
         "sealed": "sealed",
         "halted": "halted"
       },
+      "rewind": "Rewind to the first frame",
       "back": "Step back",
       "play": "Play",
       "pause": "Pause playback",
       "forward": "Step forward",
+      "toEnd": "Go to the last frame",
       "scrub": "Scrub to frame",
       "position": "frame {n}",
       "of": "/ {n}",
