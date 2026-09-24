@@ -25,6 +25,12 @@ export function useNavigate(): {
    * would push a history entry and fetch the same route twice.
    */
   refresh(): void;
+  /**
+   * Replaces the entry and keeps the scroll where it is, for a playback that
+   * walks the frames: one history entry for the whole playback, and the page
+   * does not jump to its top at every frame.
+   */
+  advance(path: SafePath): void;
 } {
   const router = useRouter();
   // Memoised on the router: an effect that navigates has to list this object,
@@ -40,6 +46,9 @@ export function useNavigate(): {
       },
       refresh() {
         router.refresh();
+      },
+      advance(path: SafePath) {
+        router.replace(path, { scroll: false });
       },
     }),
     [router],

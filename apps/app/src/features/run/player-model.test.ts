@@ -21,6 +21,8 @@ import {
   markOf,
   matchApprovals,
   openFrameOf,
+  PLAYBACK_MIN_MS,
+  playbackGaps,
   runStateOf,
   stepsOf,
   tickPositions,
@@ -110,6 +112,37 @@ describe("tickPositions", () => {
     ];
     expect(tickPositions(same)).toEqual([0, 1.7]);
     expect(tickPositions([])).toEqual([]);
+  });
+});
+
+describe("playbackGaps", () => {
+  const frameAt = (seq: string, observedAt: string) =>
+    runFrame({ seq, cursor: seq, observedAt });
+
+  it("holds each frame for its recorded gap to the next, between 250 ms and 5 s", () => {
+    const gaps = playbackGaps([
+      frameAt("0", "2026-09-24T10:00:00.000Z"),
+      frameAt("1", "2026-09-24T10:00:01.200Z"),
+      frameAt("2", "2026-09-24T10:00:01.210Z"),
+      frameAt("3", "2026-09-24T10:00:31.210Z"),
+    ]);
+    expect(gaps).toEqual([1200, PLAYBACK_MIN_MS, 5000]);
+  });
+
+  it("holds the floor for an instant that does not parse or runs backwards", () => {
+    const gaps = playbackGaps([
+      frameAt("0", "2026-09-24T10:00:02.000Z"),
+      frameAt("1", "2026-09-24T10:00:01.000Z"),
+      frameAt("2", "not an instant"),
+    ]);
+    expect(gaps).toEqual([PLAYBACK_MIN_MS, PLAYBACK_MIN_MS]);
+  });
+
+  it("has no gap after the last frame", () => {
+    expect(playbackGaps([frameAt("0", "2026-09-24T10:00:00.000Z")])).toEqual(
+      [],
+    );
+    expect(playbackGaps([])).toEqual([]);
   });
 });
 

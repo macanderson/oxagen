@@ -28,6 +28,7 @@ import {
   matchApprovals,
   type OpenFrame,
   openFrameOf,
+  playbackGaps,
   runStateOf,
   stepsOf,
   tickPositions,
@@ -228,6 +229,7 @@ function GovernedActions({
           last: target(steps.last),
         }}
         hrefs={frames.map((frame) => hrefOf(frame.seq))}
+        gaps={playbackGaps(frames)}
         marks={frames.map((frame) =>
           markOf(frame.type, decisionOf(entries.get(frame.seq))),
         )}
