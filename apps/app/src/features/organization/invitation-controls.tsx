@@ -44,7 +44,9 @@ export function InvitationControls({
         : revokeInvitation)(org, invitationId);
       if (result.ok) {
         recordReceipt(
-          verb === "resend" ? tReceipt("invitationResent") : tReceipt("invitationRevoked"),
+          verb === "resend"
+            ? tReceipt("invitationResent")
+            : tReceipt("invitationRevoked"),
         );
         setOutcome(
           verb === "resend"

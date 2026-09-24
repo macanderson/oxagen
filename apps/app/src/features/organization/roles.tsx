@@ -128,7 +128,9 @@ export function RolesTab({
   // order the design draws them in.
   const creators = [
     ...new Set(
-      catalog.roles.filter((role) => !role.builtIn).map((role) => originOf(role)),
+      catalog.roles
+        .filter((role) => !role.builtIn)
+        .map((role) => originOf(role)),
     ),
   ].sort((a, b) => a.localeCompare(b));
   const origins = catalog.roles.some((role) => role.builtIn)
