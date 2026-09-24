@@ -199,8 +199,8 @@ describe("IssuesList", () => {
     owner: "acme",
     repo: "app",
     number,
-    title: `Issue ${number}`,
-    url: `https://github.com/acme/app/issues/${number}`,
+    title: `Issue ${String(number)}`,
+    url: `https://github.com/acme/app/issues/${String(number)}`,
     state: "open" as const,
   });
   const pr = (
@@ -210,7 +210,7 @@ describe("IssuesList", () => {
   ): RunWork["pullRequests"][number] => ({
     repository,
     number,
-    url: `https://github.com/acme/app/pull/${number}`,
+    url: `https://github.com/acme/app/pull/${String(number)}`,
     title: "Repair",
     state: "open",
     headSha: "abc",

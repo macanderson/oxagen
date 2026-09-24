@@ -57,7 +57,7 @@ export function closingIssuesOf(work: RunWorkView): {
     }
     if (!pr.closingIssues.complete) unread = true;
     for (const issue of pr.closingIssues.issues) {
-      const label = `${issue.owner}/${issue.repo}#${issue.number}`;
+      const label = `${issue.owner}/${issue.repo}#${String(issue.number)}`;
       if (!issues.has(label))
         issues.set(label, { key: label, label, url: issue.url, pr: pr.number });
     }
