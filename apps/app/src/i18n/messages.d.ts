@@ -4693,6 +4693,8 @@ type Messages = {
       "claude-agent-sdk": string;
       custom: string;
       none: string;
+      atEnrollment: string;
+      versionUnrecorded: string;
     };
     ladder: {
       title: string;
@@ -4792,6 +4794,10 @@ type Messages = {
         smoke: string;
         unenroll: string;
       };
+      settings: {
+        managed: string;
+        user: string;
+      };
     };
     unenroll: {
       title: string;
@@ -4808,6 +4814,9 @@ type Messages = {
         pendingApproval: string;
         unavailable: string;
       };
+    };
+    os: {
+      unreported: string;
     };
   };
   shell: {
@@ -6698,6 +6707,20 @@ type Messages = {
       previous: string;
       next: string;
       pages: string;
+    };
+    list: {
+      search: string;
+      facetAll: string;
+      facetLabel: string;
+      rows: string;
+      all: string;
+      range: string;
+      pager: string;
+      previous: string;
+      next: string;
+      page: string;
+      sortBy: string;
+      noMatch: string;
     };
   };
 };

@@ -133,6 +133,11 @@ describe("Runtimes, loaded", () => {
           status: "revoked",
           revokedAt: "2026-09-20T10:00:00.000Z",
         }),
+        enrollment({
+          id: "tch_mbellmbp16ccccccccccccc",
+          agentKey: "acme.core.expired-bot",
+          expiresAt: "2026-01-01T00:00:00.000Z",
+        }),
       ]),
     });
     expect(screen.getByText("Core platform")).toBeInTheDocument();
@@ -155,7 +160,8 @@ describe("Runtimes, loaded", () => {
         .getAllByRole("term")
         .map((dt) => dt.textContent),
     ).toEqual(["Runtimes", "Agents hosted", "Highest tier earned", "Degraded"]);
-    // Two distinct agents with a live enrollment; the revoked one is not hosted.
+    // Two distinct agents on a host still enrolled: the revoked enrollment
+    // and the expired one are not hosted, as their Health cells say.
     expect(
       within(screen.getByTestId("tile-agents")).getByText("2"),
     ).toBeInTheDocument();
@@ -163,7 +169,7 @@ describe("Runtimes, loaded", () => {
       "a host is shared; its hooks see every one of them",
     );
     expect(screen.getByTestId("tile-runtimes")).toHaveTextContent(
-      "3 agent enrollments recorded; no host row yet",
+      "4 agent enrollments recorded; no host row yet",
     );
     for (const id of ["tile-runtimes", "tile-tier", "tile-degraded"])
       expect(
@@ -177,9 +183,35 @@ describe("Runtimes, loaded", () => {
     );
 
     const hosts = screen.getByRole("region", { name: "Enrolled hosts" });
-    expect(within(hosts).getByTestId("runtimes-hosts-count")).toHaveTextContent(
-      "3",
+    // The design badges the runtime count, which no store holds (#3816): the
+    // badge is not recorded, never the enrollment count read as hosts.
+    const badge = within(hosts).getByTestId("runtimes-hosts-count");
+    expect(badge).toHaveTextContent(/^not recorded$/);
+    expect(badge.querySelector("[data-not-backed]")).toHaveAttribute(
+      "data-gap",
+      "#3816",
     );
+    // The design's list controls: search, Rows and the pager.
+    expect(
+      within(hosts).getByRole("searchbox", { name: "Search this list" }),
+    ).toBeInTheDocument();
+    expect(within(hosts).getByRole("combobox", { name: "Rows" })).toHaveValue(
+      "10",
+    );
+    expect(within(hosts).getByTestId("list-pager")).toHaveTextContent(
+      "1–4 of 4",
+    );
+    // Four rows, and Health reads two values: the design's rule offers it.
+    // Kind reads not recorded on every row and offers nothing.
+    const health = within(hosts).getByRole("combobox", {
+      name: "Filter by Health",
+    });
+    expect(
+      [...health.querySelectorAll("option")].map((o) => o.textContent),
+    ).toEqual(["All · Health", "not enrolled", "not recorded"]);
+    expect(
+      within(hosts).queryByRole("combobox", { name: "Filter by Kind" }),
+    ).toBeNull();
     expect(
       within(hosts)
         .getAllByRole("columnheader")
@@ -228,11 +260,12 @@ describe("Runtimes, loaded", () => {
     expect(row).toHaveClass("relative", "cursor-pointer");
     expect(link.className).toContain("after:absolute");
     expect(link.className).toContain("after:inset-0");
-    expect(cells[0]).toHaveTextContent("macOS");
+    expect(cells[0]).toHaveTextContent("macOS 15.6 · arm64");
     expect(
       nth(cells, 1, "cell").querySelector("[data-not-backed]"),
     ).toHaveAttribute("data-gap", "#3816");
-    expect(cells[2]).toHaveTextContent("Claude Code2.1.4");
+    // The one version the record holds, labelled as what it is.
+    expect(cells[2]).toHaveTextContent("Claude Code 2.1.4 at enrollment");
     expect(cells[3]).toHaveTextContent("loopback proxy");
     expect(
       nth(cells, 4, "cell").querySelector("[data-not-backed]"),
@@ -269,7 +302,6 @@ describe("Runtimes, loaded", () => {
         [
           enrollment({
             modelRoute: null,
-            hooksOk: false,
             expiresAt: "2026-01-01T00:00:00.000Z",
             agentKey: "",
             harnesses: [],
@@ -298,6 +330,80 @@ describe("Runtimes, loaded", () => {
     );
   });
 
+  it("searches, filters, sorts and pages the hosts with the design's list controls", async () => {
+    const hosts = Array.from({ length: 12 }, (_, index) =>
+      enrollment({
+        id: `tch_host${String(index).padStart(2, "0")}aaaaaaaaaaaaaaaa`,
+        hostname: `host-${String(index).padStart(2, "0")}`,
+        agentKey: `acme.core.agent-${index}`,
+        ...(index === 3
+          ? { status: "revoked", revokedAt: "2026-09-20T10:00:00.000Z" }
+          : {}),
+      }),
+    );
+    await renderList({ list: runtimeList(hosts) });
+    const shown = () =>
+      screen
+        .getAllByTestId("runtime-row")
+        .filter((row) => !row.hidden)
+        .map((row) => row.querySelector("a")?.textContent);
+    const pager = screen.getByTestId("list-pager");
+    expect(pager).toHaveTextContent("1–10 of 12");
+    expect(shown()).toHaveLength(10);
+    fireEvent.click(within(pager).getByRole("button", { name: "Page 2" }));
+    expect(pager).toHaveTextContent("11–12 of 12");
+    expect(shown()).toEqual(["host-10", "host-11"]);
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Rows" }), {
+      target: { value: "0" },
+    });
+    expect(shown()).toHaveLength(12);
+
+    fireEvent.change(
+      screen.getByRole("searchbox", { name: "Search this list" }),
+      {
+        target: { value: "HOST-07" },
+      },
+    );
+    expect(shown()).toEqual(["host-07"]);
+    fireEvent.change(
+      screen.getByRole("searchbox", { name: "Search this list" }),
+      {
+        target: { value: "nothing like this" },
+      },
+    );
+    expect(screen.getByTestId("list-no-match")).toHaveTextContent(
+      "No rows match.",
+    );
+    fireEvent.change(
+      screen.getByRole("searchbox", { name: "Search this list" }),
+      {
+        target: { value: "" },
+      },
+    );
+
+    fireEvent.change(
+      screen.getByRole("combobox", { name: "Filter by Health" }),
+      {
+        target: { value: "not enrolled" },
+      },
+    );
+    expect(shown()).toEqual(["host-03"]);
+    fireEvent.change(
+      screen.getByRole("combobox", { name: "Filter by Health" }),
+      {
+        target: { value: "" },
+      },
+    );
+
+    const runtime = screen.getByRole("columnheader", { name: "Runtime" });
+    fireEvent.click(within(runtime).getByRole("button"));
+    expect(runtime).toHaveAttribute("aria-sort", "ascending");
+    fireEvent.click(within(runtime).getByRole("button"));
+    expect(runtime).toHaveAttribute("aria-sort", "descending");
+    expect(shown()[0]).toBe("host-11");
+  });
+
   it("names a shadowing settings file and a harness this build does not know", async () => {
     await renderList({
       list: runtimeList([
@@ -305,15 +411,22 @@ describe("Runtimes, loaded", () => {
           harnesses: ["codex", "acme-bot"],
           modelRoute: "direct",
           shadowedBy: "/etc/managed-settings.json",
-          hooksOk: null,
+          osVersion: null,
+          arch: null,
         }),
       ]),
     });
     const cells = within(screen.getByTestId("runtime-row")).getAllByRole(
       "cell",
     );
-    expect(cells[2]).toHaveTextContent("Codex CLI");
-    expect(cells[2]).toHaveTextContent("acme-bot");
+    expect(cells[0]).toHaveTextContent(
+      "macOS · version and architecture not reported",
+    );
+    expect(cells[2]).toHaveTextContent("Codex CLI version not recorded");
+    expect(cells[2]).toHaveTextContent("acme-bot version not recorded");
+    // Enrollment records Claude Code's version alone (#3919).
+    for (const version of cells[2]?.querySelectorAll("[data-not-backed]") ?? [])
+      expect(version).toHaveAttribute("data-gap", "#3919");
     expect(cells[3]).toHaveTextContent("provider direct");
     expect(cells[3]).toHaveTextContent(
       "overridden by /etc/managed-settings.json",
@@ -458,7 +571,7 @@ describe("One runtime", () => {
     const host = screen.getByRole("region", { name: "mbell-mbp-16" });
     const subtitle = screen.getByTestId("runtime-subtitle");
     expect(subtitle).toHaveTextContent(
-      "kind not recorded · macOS · started by not recorded",
+      "kind not recorded · macOS 15.6 · arm64 · started by not recorded",
     );
     for (const gap of subtitle.querySelectorAll("[data-not-backed]"))
       expect(gap).toHaveAttribute("data-gap", "#3816");
@@ -496,7 +609,11 @@ describe("One runtime", () => {
     expect(screen.getByTestId("fact-tier")).toHaveTextContent(
       "computed per run from what was actually routed",
     );
-    for (const id of ["fact-settings", "fact-checkpoint", "fact-hooks-written"])
+    // Where the installer wrote the hooks, as enrollment recorded it.
+    expect(screen.getByTestId("fact-settings")).toHaveTextContent(
+      /^user settings$/,
+    );
+    for (const id of ["fact-checkpoint", "fact-hooks-written"])
       expect(
         screen.getByTestId(id).querySelector("[data-not-backed]"),
       ).toBeInTheDocument();
@@ -508,6 +625,13 @@ describe("One runtime", () => {
         .map((th) => th.textContent),
     ).toEqual(["Agent", "Operator", "Tier", "Principal", "Runs 30d"]);
     const row = within(agents).getByTestId("runtime-agent-row");
+    // The design's agent card names the harness under the key.
+    expect(nth(within(row).getAllByRole("cell"), 0, "cell")).toHaveTextContent(
+      "acme.core.release-managerClaude Code",
+    );
+    expect(within(agents).getByTestId("list-pager")).toHaveTextContent(
+      "1–1 of 1",
+    );
     expect(within(row).getByRole("link")).toHaveAttribute(
       "href",
       "/acme/core-platform/agents/release-manager",
@@ -567,6 +691,15 @@ describe("One runtime", () => {
     });
     expect(screen.getByTestId("runtime-operator")).toHaveTextContent(
       /^Operator$/,
+    );
+  });
+
+  it("names managed settings when the installer wrote the hooks there", async () => {
+    await renderDetail({
+      list: runtimeList([enrollment({ managed: true })]),
+    });
+    expect(screen.getByTestId("fact-settings")).toHaveTextContent(
+      /^managed settings$/,
     );
   });
 
@@ -786,6 +919,10 @@ describe("Runtimes on a phone", () => {
         expect(getComputedStyle(target).minHeight).toBe("44px");
       const ladder = within(phone.container).getByTestId("tier-ladder");
       expect(ladder).toHaveClass("grid-cols-2", "lg:grid-cols-4");
+      // The mockup's phone rule draws the four tiles two to a row.
+      expect(within(phone.container).getByTestId("runtimes-tiles")).toHaveClass(
+        "grid-cols-2",
+      );
     } finally {
       phone.restore();
     }

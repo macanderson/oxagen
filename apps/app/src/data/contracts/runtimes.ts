@@ -41,6 +41,10 @@ export const RuntimeEnrollment = z.object({
   id: PublicId,
   hostname: z.string(),
   platform: RuntimePlatform,
+  /** The OS version the host reported at enrollment (`15.6`); null when it reported none. */
+  osVersion: z.string().nullable(),
+  /** The CPU architecture the host reported at enrollment (`arm64`); null when it reported none. */
+  arch: z.string().nullable(),
   /** The OS account the daemon runs as. */
   osUser: z.string(),
   status: RuntimeStatus,
@@ -55,8 +59,12 @@ export const RuntimeEnrollment = z.object({
   modelRoute: ModelRoute.nullable(),
   /** The managed settings file that overrides the harness config, when the daemon named one. */
   shadowedBy: z.string().nullable(),
-  /** Whether the daemon last reported its hooks in place; null before its first report. */
-  hooksOk: z.boolean().nullable(),
+  /**
+   * Where the installer wrote the hooks: `true` for the managed settings an
+   * administrator distributes, `false` for the user's own settings. Recorded
+   * at enrollment.
+   */
+  managed: z.boolean(),
   lastSeenAt: Instant.nullable(),
   createdAt: Instant,
   expiresAt: Instant,

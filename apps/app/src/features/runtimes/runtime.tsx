@@ -24,15 +24,17 @@ import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { type OperatorIdentity, OperatorName } from "@/ui/operator";
 import { ReadFailure } from "@/ui/read-failure";
-import { cell, numericCell, Table } from "@/ui/table";
+import { type ListRow, ListTable } from "./list-table";
 import { SmokeSession, Unenroll } from "./controls";
 import {
   Facts,
+  HarnessLabel,
   HarnessNames,
   HealthBadge,
   ModelSurface,
   NotBacked,
   Note,
+  OsLine,
   Panel,
   Sub,
 } from "./parts";
@@ -128,7 +130,10 @@ function HostPanel({
     },
     {
       term: t("detail.facts.settings"),
-      value: <NotBacked gap="hooks" />,
+      // Where the installer wrote the hooks, as recorded at enrollment.
+      value: t(
+        host.managed ? "detail.settings.managed" : "detail.settings.user",
+      ),
       testId: "fact-settings",
     },
     {
@@ -157,7 +162,7 @@ function HostPanel({
           className="mt-0.5 text-xs text-muted-foreground"
         >
           {t.rich("detail.subtitle", {
-            platform: t(`platform.${host.platform}`),
+            os: () => <OsLine host={host} />,
             kind: () => (
               <NotBacked gap="host">{t("detail.kindUnrecorded")}</NotBacked>
             ),
@@ -201,77 +206,76 @@ function operatorOf(
   };
 }
 
-function AgentRow({
+/** The one agent on this enrollment as a list row: Agent, Operator, Tier, Principal, Runs 30d. */
+function agentRow({
   agent,
   agentKey,
   members,
   org,
   ws,
+  words,
 }: {
   agent: RuntimeAgent | null;
   agentKey: string;
   members: Read<MemberList>;
   org: string;
   ws: string;
-}) {
-  const t = useTranslations("runtimes");
-  const locale = useLocale();
+  words: { notRecorded: string; unknown: string; runs: string | null };
+}): ListRow {
   const card = (
     <AgentCard
       agentKey={agentKey}
-      notRecorded={t("notRecorded")}
-      sub={agent === null ? t("detail.agents.unknown") : agent.name}
+      notRecorded={words.notRecorded}
+      // The design's `agentCard` names the harness under the key.
+      sub={
+        agent === null ? (
+          words.unknown
+        ) : (
+          <HarnessLabel harness={agent.harness} />
+        )
+      }
     />
   );
-  return (
-    // A row opens the agent: the card's link is stretched over the row, and
-    // the operator cell sits above it so its identity card still opens.
-    <tr
-      data-testid="runtime-agent-row"
-      className={agent === null ? undefined : "relative cursor-pointer"}
-    >
-      <td className={cell}>
-        {agent === null ? (
-          card
-        ) : (
-          <SafeLink
-            to={routes.agent(org, ws, agent.slug)}
-            data-touch-target=""
-            className="inline-flex items-center rounded-sm after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-ring"
-          >
-            {card}
-          </SafeLink>
-        )}
-      </td>
-      <td className={`${cell} relative z-[1]`}>
-        {agent === null || agent.operatorId === null ? (
-          <span className="text-muted-foreground">{t("notRecorded")}</span>
-        ) : (
-          <OperatorName
-            operator={operatorOf(agent.operatorId, members)}
-            testId="runtime-operator"
-          />
-        )}
-      </td>
-      <td className={cell}>
-        <NotBacked gap="tier" />
-      </td>
-      <td className={cell}>
-        {agent === null || agent.principalId === null ? (
-          <span className="text-muted-foreground">{t("notRecorded")}</span>
-        ) : (
-          <span className={`${mono} text-xs`}>{agent.principalId}</span>
-        )}
-      </td>
-      <td className={numericCell}>
-        {agent === null ? (
-          <span className="text-muted-foreground">{t("notRecorded")}</span>
-        ) : (
-          formatCount(agent.runs30d, locale)
-        )}
-      </td>
-    </tr>
+  const notRecorded = (
+    <span className="text-muted-foreground">{words.notRecorded}</span>
   );
+  return {
+    key: agentKey,
+    props: {
+      "data-testid": "runtime-agent-row",
+      className: agent === null ? undefined : "relative cursor-pointer",
+    },
+    cells: [
+      // A row opens the agent: the card's link is stretched over the row,
+      // and the operator cell sits above it so its identity card still opens.
+      agent === null ? (
+        card
+      ) : (
+        <SafeLink
+          to={routes.agent(org, ws, agent.slug)}
+          data-touch-target=""
+          className="inline-flex items-center rounded-sm after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-ring"
+        >
+          {card}
+        </SafeLink>
+      ),
+      agent === null || agent.operatorId === null ? (
+        notRecorded
+      ) : (
+        <OperatorName
+          operator={operatorOf(agent.operatorId, members)}
+          testId="runtime-operator"
+        />
+      ),
+      <NotBacked key="tier" gap="tier" />,
+      agent === null || agent.principalId === null ? (
+        notRecorded
+      ) : (
+        <span className={`${mono} text-xs`}>{agent.principalId}</span>
+      ),
+      words.runs ?? notRecorded,
+    ],
+  };
 }
 
 function AgentsPanel({
@@ -288,6 +292,8 @@ function AgentsPanel({
   ws: string;
 }) {
   const t = useTranslations("runtimes.detail.agents");
+  const tr = useTranslations("runtimes");
+  const locale = useLocale();
   const assigned = host.agentKey !== "";
   const agent = agents.ok
     ? (agents.value.agents.find((a) => a.agentKey === host.agentKey) ?? null)
@@ -308,24 +314,36 @@ function AgentsPanel({
               <ReadFailure read={agents} section={t("title")} />
             </div>
           )}
-          <Table
+          <ListTable
             label={t("title")}
+            testId="runtime-agents-list"
             columns={[
-              { label: t("columns.agent") },
-              { label: t("columns.operator") },
-              { label: t("columns.tier") },
-              { label: t("columns.principal") },
-              { label: t("columns.runs"), numeric: true },
+              { key: "agent", label: t("columns.agent") },
+              {
+                key: "operator",
+                label: t("columns.operator"),
+                cellClassName: "relative z-[1]",
+              },
+              { key: "tier", label: t("columns.tier") },
+              { key: "principal", label: t("columns.principal") },
+              { key: "runs", label: t("columns.runs"), numeric: true },
             ]}
-          >
-            <AgentRow
-              agent={agent}
-              agentKey={host.agentKey}
-              members={members}
-              org={org}
-              ws={ws}
-            />
-          </Table>
+            rows={[
+              agentRow({
+                agent,
+                agentKey: host.agentKey,
+                members,
+                org,
+                ws,
+                words: {
+                  notRecorded: tr("notRecorded"),
+                  unknown: t("unknown"),
+                  runs:
+                    agent === null ? null : formatCount(agent.runs30d, locale),
+                },
+              }),
+            ]}
+          />
         </>
       )}
       <Note>{t("note")}</Note>

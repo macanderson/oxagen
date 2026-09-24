@@ -130,6 +130,20 @@
       "previous": "Previous page",
       "next": "Next page",
       "pages": "{label} pages"
+    },
+    "list": {
+      "search": "Search this list",
+      "facetAll": "All · {column}",
+      "facetLabel": "Filter by {column}",
+      "rows": "Rows",
+      "all": "All",
+      "range": "{from}–{to} of {total}",
+      "pager": "Pages",
+      "previous": "Previous page",
+      "next": "Next page",
+      "page": "Page {page}",
+      "sortBy": "Sort by {column}",
+      "noMatch": "No rows match."
     }
   }
 }

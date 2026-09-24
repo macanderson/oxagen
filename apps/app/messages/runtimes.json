@@ -62,7 +62,9 @@
       "stella": "Stella",
       "claude-agent-sdk": "Claude Agent SDK",
       "custom": "Custom harness",
-      "none": "none reported"
+      "none": "none reported",
+      "atEnrollment": "at enrollment",
+      "versionUnrecorded": "version not recorded"
     },
     "ladder": {
       "title": "The tier ladder",
@@ -120,7 +122,7 @@
     },
     "detail": {
       "back": "← All runtimes",
-      "subtitle": "<kind>kind</kind> · {platform} · started by <who>who</who>",
+      "subtitle": "<kind>kind</kind> · <os>os</os> · started by <who>who</who>",
       "kindUnrecorded": "kind not recorded",
       "healthUnrecorded": "health not recorded",
       "facts": {
@@ -161,6 +163,10 @@
         "note": "If hooks are stripped by hand instead, the next run records <code>hooks_removed</code> and the tier falls to <code>observe</code>. It is never upgraded after the fact.",
         "smoke": "Run a smoke session",
         "unenroll": "Unenroll"
+      },
+      "settings": {
+        "managed": "managed settings",
+        "user": "user settings"
       }
     },
     "unenroll": {
@@ -178,6 +184,9 @@
         "pendingApproval": "This write is waiting for approval. Access request {accessRequestId}.",
         "unavailable": "This write could not be answered: {code}. Nothing was changed."
       }
+    },
+    "os": {
+      "unreported": "{os} · version and architecture not reported"
     }
   }
 }

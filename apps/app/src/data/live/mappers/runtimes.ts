@@ -5,6 +5,10 @@
 // harness's name (`packages/handlers/src/tacho.host.list.ts` `tiersFor`). It is
 // not mapped: a tier is computed per run from what was actually routed, and a
 // value looked up from a name would print a tier no run earned (INV-10).
+//
+// `hooksOk` is not mapped either. It is Claude Code's alone, and it says only
+// whether every hook and the environment were in place, so it can give
+// neither the count of five nor the list the Hooks cells draw (#3818).
 import type { agentList } from "@oxagen/oxagen/contracts/agent.list";
 import type { tachoHostList } from "@oxagen/oxagen/contracts/tacho.host.list";
 import type { z } from "zod";
@@ -51,6 +55,8 @@ export function toRuntimeEnrollment(
     id: host.hostEnrollmentId,
     hostname: host.hostname,
     platform: host.platform,
+    osVersion: host.osVersion,
+    arch: host.arch,
     osUser: host.osUser,
     status: host.status,
     mode: host.mode,
@@ -59,7 +65,7 @@ export function toRuntimeEnrollment(
     collectorVersion: host.wrapperVersion,
     modelRoute: route,
     shadowedBy,
-    hooksOk: host.hooksOk,
+    managed: host.managed,
     lastSeenAt: host.lastSeenAt,
     createdAt: host.createdAt,
     expiresAt: host.expiresAt,
