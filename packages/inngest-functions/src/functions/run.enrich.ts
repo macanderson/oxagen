@@ -31,7 +31,12 @@ import {
 import { readRunFrames, resolveRunRecord } from "../lib/run-record";
 import { logger } from "../logger";
 
-export const RUN_ENRICH_EVENT = "run/enrich";
+import { RUN_ENRICH_EVENT } from "../events";
+
+export { RUN_ENRICH_EVENT };
+
+/** How long a request waits for others to the same run before the job runs. */
+export const ENRICH_BATCH_TIMEOUT = "2s";
 const eventSchema = z.object({
   orgId: z.string().uuid(),
   workspaceId: z.string().uuid(),
@@ -372,9 +377,13 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
       limit: 1,
       key: "event.data.orgId",
     },
+    // The batch folds the requests one run collects in a moment (ingest's
+    // first-prompt request, an operator's `summarize_run`, a sweep) into one
+    // read. Its wait is paid by every run before its account starts, so it is
+    // kept to seconds: at thirty, a new run sat half a minute under its uuid.
     batchEvents: {
       maxSize: MAX_BATCH_SIZE,
-      timeout: "30s",
+      timeout: ENRICH_BATCH_TIMEOUT,
       key: "event.data.orgId + ':' + event.data.runPublicId",
     },
   },

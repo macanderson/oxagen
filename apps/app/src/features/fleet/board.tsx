@@ -7,10 +7,14 @@
 // and the labels say "shown" for that reason. Every figure here comes from
 // `view.ts` over the same rows the table draws.
 //
-// The list controls run over the rows one `list_runs` read returned (up to the
-// contract's 100). The pager says so: its total carries a `+` when the read
-// stopped before the oldest run, and a link opens the next read.
-import { ArrowUpDown } from "lucide-react";
+// The page size is the read's own limit, and the pull-request filter is the
+// read's own filter, so both change what `list_runs` returns rather than
+// slicing a fixed page. The page size and the columns shown are the person's
+// saved choice (`prefs.ts`), kept in a cookie the page reads on the server.
+// Search, facets and sort run over the rows the read returned. The pager says
+// so: its total carries a `+` when the read stopped before the oldest run, and
+// a link opens the next read.
+import { ArrowUpDown, Columns3, GitPullRequest } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import {
   type ReactNode,
@@ -24,14 +28,18 @@ import type { ApprovalQueue } from "@/data/contracts/approvals";
 import {
   type CommandBlock,
   commandBlockOf,
+  type PullRequestFilter,
+  type RunDiff,
+  type RunPullRequest,
   type RunRow,
 } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import { openApprovals } from "@/features/shell/client";
+import { parsePullRequestUrl } from "@/shared/pull-request-url";
 import { routes } from "@/shared/safe-path";
 import { AgentCard } from "@/ui/agent-card";
 import { Avatar } from "@/ui/avatar";
-import { Badge } from "@/ui/badge";
+import { Badge, type BadgeTone } from "@/ui/badge";
 import {
   COMMAND_BLOCK_COPY,
   UNANSWERED,
@@ -56,7 +64,7 @@ import { FormAlert } from "@/ui/form-feedback";
 import { useFormatter } from "@/ui/formatter";
 import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
-import { SafeLink, useNavigate } from "@/ui/navigation";
+import { PullRequestLink, SafeLink, useNavigate } from "@/ui/navigation";
 import { ReplayGradeBadge } from "@/ui/replay-grade";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { StatusBadge } from "@/ui/status-badge";
@@ -65,20 +73,32 @@ import { ToastStack, useToasts } from "@/ui/toast";
 import { dispatchRunCommand, exportFleetRun } from "./actions";
 import { Clock } from "@/ui/clock";
 import {
+  DEFAULT_FLEET_PREFS,
+  FIXED_COLUMN,
+  FLEET_COLUMNS,
+  type FleetColumn,
+  type FleetPrefs,
+  fleetPrefsCookieString,
+  PAGE_SIZES,
+  type PageSize,
+  pageSizeOf,
+  shownColumns,
+  withColumn,
+} from "./prefs";
+import {
   applyList,
   chipRows,
   type Facets,
   facetValues,
+  forgeOf,
   type ListedRun,
   type ListQuery,
   listRuns,
   liveCount,
   oldestApproval,
-  pagerSlots,
   parkedRunIds,
+  pullRequestLabel,
   RUN_CHIPS,
-  ROWS_PER_PAGE,
-  rowsPerPageOf,
   type RowWords,
   type RunChip,
   type SortKey,
@@ -309,6 +329,10 @@ function useRowWords(listed: readonly ListedRun[]): RowWords[] {
         const text = [
           ...Object.values(words),
           runTitle(run) ?? "",
+          run.enrichmentEnabled === false ? "" : (run.summary?.text ?? ""),
+          ...(run.pullRequests ?? []).map(
+            (pull) => pullRequestLabel(pull) ?? "",
+          ),
           run.harness?.name ?? "",
           run.cost?.basis ?? "",
         ].join(" ");
@@ -371,22 +395,218 @@ function Started({ at, now }: { at: string; now: number }) {
   );
 }
 
+// ── Summary, pull requests and lines ─────────────────────────────────────
+
+/**
+ * The generated summary, two lines at most with the whole text on hover. A
+ * workspace that turned summaries off reads so, rather than "none yet".
+ */
+function SummaryCell({ run }: { run: RunRow }) {
+  const t = useTranslations("fleet.runs");
+  const off = run.enrichmentEnabled === false;
+  const summary = off ? null : run.summary;
+  if (summary === null)
+    return (
+      <span className="text-muted-foreground">
+        {off ? t("summaryOff") : t("summaryNone")}
+      </span>
+    );
+  return (
+    <p
+      data-testid="row-summary"
+      title={summary.text}
+      className="line-clamp-2 text-[12px] leading-snug text-muted-foreground"
+    >
+      {summary.text}
+    </p>
+  );
+}
+
+/** The tone a recorded pull-request state reads in; the Run page uses the same ladder. */
+const PR_STATE_TONE: Record<NonNullable<RunPullRequest["state"]>, BadgeTone> = {
+  open: "approval",
+  draft: "quiet",
+  merged: "allowed",
+  closed: "quiet",
+};
+
+/**
+ * One pull request: a link that opens it on GitHub or GitLab in a new tab
+ * when the URL names a page Oxagen recognises, else its label alone, and its
+ * state. No store records the state yet, so it reads "status unknown" and
+ * says on hover where the live state is.
+ */
+function PullRequestItem({ pull }: { pull: RunPullRequest }) {
+  const t = useTranslations("fleet.runs.prs");
+  const url = parsePullRequestUrl(pull.url);
+  const label = pullRequestLabel(pull) ?? t("unnamed");
+  const forge = forgeOf(pull.url);
+  return (
+    <li className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+      {url === null ? (
+        <span className={`${mono} text-[11.5px]`} title={pull.url}>
+          {label}
+        </span>
+      ) : (
+        <PullRequestLink
+          to={url}
+          data-testid="row-pr-link"
+          data-forge={forge ?? undefined}
+          data-touch-target=""
+          aria-label={
+            forge === "gitlab"
+              ? t("openOnGitLab", { pr: label })
+              : t("openOnGitHub", { pr: label })
+          }
+          onClick={(event) => {
+            event.stopPropagation();
+          }}
+          className={`${linkText} inline-flex items-center gap-1 whitespace-nowrap font-mono text-[11.5px]`}
+        >
+          <GitPullRequest aria-hidden className="size-3 flex-none" />
+          {label}
+        </PullRequestLink>
+      )}
+      {pull.state === null ? (
+        <span
+          data-testid="row-pr-state"
+          data-state="unknown"
+          title={t("stateUnknownHint")}
+          className="whitespace-nowrap text-[10.5px] text-muted-foreground"
+        >
+          {t("stateUnknown")}
+        </span>
+      ) : (
+        <Badge
+          tone={PR_STATE_TONE[pull.state]}
+          data-testid="row-pr-state"
+          data-state={pull.state}
+        >
+          {t(`state.${pull.state}`)}
+        </Badge>
+      )}
+    </li>
+  );
+}
+
+/** The most pull requests a row lists before it says how many more there are. */
+const PRS_SHOWN = 2;
+
+function PullRequestsCell({ run }: { run: RunRow }) {
+  const t = useTranslations("fleet.runs.prs");
+  const pulls = run.pullRequests;
+  const opened = run.pullRequestsOpened ?? 0;
+  if (pulls === undefined) {
+    // Not read: a ledger run's pull requests are receipts the Run page reads,
+    // and a wrapped session's read failed (the panel says so above the table).
+    if (run.source === "ledger")
+      return (
+        <span
+          data-testid="row-prs-elsewhere"
+          title={t("ledgerHint")}
+          className="text-muted-foreground"
+        >
+          {t("onRunPage")}
+        </span>
+      );
+    return (
+      <span data-testid="row-prs-unread" className="text-muted-foreground">
+        {opened > 0 ? t("openedNoLink", { count: opened }) : t("notRead")}
+      </span>
+    );
+  }
+  if (pulls.length === 0)
+    return opened > 0 ? (
+      <span data-testid="row-prs-nolink" title={t("noLinkHint")}>
+        {t("openedNoLink", { count: opened })}
+      </span>
+    ) : (
+      <span data-testid="row-prs-none" className="text-muted-foreground">
+        {t("none")}
+      </span>
+    );
+  const shown = pulls.slice(0, PRS_SHOWN);
+  return (
+    <ul data-testid="row-prs" className="flex min-w-36 flex-col gap-1">
+      {shown.map((pull) => (
+        <PullRequestItem key={pull.url} pull={pull} />
+      ))}
+      {pulls.length > shown.length ? (
+        <li className="text-[11px] text-muted-foreground">
+          {t("more", { count: pulls.length - shown.length })}
+        </li>
+      ) : null}
+    </ul>
+  );
+}
+
+/**
+ * Lines added and removed, green and red, with what the figure is on hover
+ * and in words for a screen reader. Git's figure counts only what was not yet
+ * committed, and the cell says "uncommitted" under it.
+ */
+function DiffCell({ diff }: { diff: RunDiff | null | undefined }) {
+  const t = useTranslations("fleet.runs.diff");
+  const locale = useLocale();
+  if (diff === null || diff === undefined)
+    return <span className="text-muted-foreground">{t("none")}</span>;
+  return (
+    <span
+      data-testid="row-diff"
+      data-basis={diff.basis}
+      title={t(`basis.${diff.basis}`)}
+      className="whitespace-nowrap font-mono tabular-nums"
+    >
+      <span aria-hidden="true">
+        <span className="text-success">+{formatCount(diff.added, locale)}</span>{" "}
+        <span className="text-error-ink">
+          −{formatCount(diff.removed, locale)}
+        </span>
+      </span>
+      <span className="sr-only">
+        {t("spoken", {
+          added: formatCount(diff.added, locale),
+          removed: formatCount(diff.removed, locale),
+        })}
+      </span>
+      {diff.basis === "git_observed" ? (
+        <span className="block text-[10px] text-muted-foreground">
+          {t("uncommitted")}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
 // ── The Runs panel ───────────────────────────────────────────────────────
 
-const COLUMNS: readonly { key: SortKey | "tokens"; numeric?: boolean }[] = [
-  { key: "run" },
-  { key: "agent" },
-  { key: "operator" },
-  { key: "status" },
-  { key: "tier" },
-  { key: "replay" },
-  { key: "tokens", numeric: true },
-  { key: "cost", numeric: true },
-  { key: "frames", numeric: true },
-  { key: "started" },
-];
+/**
+ * How each column heads the table. `sort` names what a header click sorts
+ * on. `tokens` has no figure to sort yet, and `summary` is prose with no
+ * order a reader would use, so neither sorts.
+ */
+const COLUMN_HEAD: Record<
+  FleetColumn,
+  { sort: SortKey | "tokens" | null; numeric?: boolean }
+> = {
+  run: { sort: "run" },
+  summary: { sort: null },
+  agent: { sort: "agent" },
+  operator: { sort: "operator" },
+  status: { sort: "status" },
+  pullRequests: { sort: "pullRequests" },
+  diff: { sort: "diff", numeric: true },
+  tier: { sort: "tier" },
+  replay: { sort: "replay" },
+  tokens: { sort: "tokens", numeric: true },
+  cost: { sort: "cost", numeric: true },
+  frames: { sort: "frames", numeric: true },
+  started: { sort: "started" },
+};
 
 const FACETS = ["tier", "replay", "status"] as const;
+
+const PR_FILTERS: readonly PullRequestFilter[] = ["any", "with", "without"];
 
 const selectBase =
   "rounded-lg border border-input-border bg-input-bg px-2 py-[5px] text-xs text-input-fg max-md:min-h-11 max-md:text-base focus-visible:outline-2 focus-visible:outline-input-ring";
@@ -424,10 +644,20 @@ function ListBar({
   query,
   setQuery,
   words,
+  pageSize,
+  onPageSize,
+  pullRequests,
+  onPullRequests,
+  onColumns,
 }: {
   query: ListQuery;
   setQuery: (next: ListQuery) => void;
   words: readonly RowWords[];
+  pageSize: PageSize;
+  onPageSize: (size: PageSize) => void;
+  pullRequests: PullRequestFilter;
+  onPullRequests: (filter: PullRequestFilter) => void;
+  onColumns: () => void;
 }) {
   const t = useTranslations("fleet.runs");
   const rowsId = useId();
@@ -470,6 +700,32 @@ function ListBar({
           </select>
         );
       })}
+      <select
+        aria-label={t("prFilter.label")}
+        data-testid="pr-filter"
+        value={pullRequests}
+        onChange={(event) => {
+          const next = PR_FILTERS.find((f) => f === event.target.value);
+          if (next !== undefined) onPullRequests(next);
+        }}
+        className={selectBase}
+      >
+        {PR_FILTERS.map((filter) => (
+          <option key={filter} value={filter}>
+            {t(`prFilter.${filter}`)}
+          </option>
+        ))}
+      </select>
+      <button
+        type="button"
+        data-testid="columns-open"
+        data-touch-target=""
+        onClick={onColumns}
+        className={`${buttonSecondary} inline-flex items-center gap-1.5 px-2.5 py-1 text-xs`}
+      >
+        <Columns3 aria-hidden className="size-3.5" />
+        {t("columnsPicker.open")}
+      </button>
       <label
         htmlFor={rowsId}
         className="ms-auto inline-flex items-center gap-1.5 whitespace-nowrap text-[11.5px] text-muted-foreground"
@@ -478,50 +734,124 @@ function ListBar({
         <select
           id={rowsId}
           data-testid="rows-per-page"
-          value={String(query.perPage)}
+          value={String(pageSize)}
           onChange={(event) => {
-            setQuery({
-              ...query,
-              perPage: rowsPerPageOf(event.target.value),
-              page: 1,
-            });
+            onPageSize(pageSizeOf(event.target.value));
           }}
           className={selectBase}
         >
-          {ROWS_PER_PAGE.map((per) => (
-            <option key={per} value={String(per)}>
-              {per === 0 ? t("rowsAll") : String(per)}
+          {PAGE_SIZES.map((size) => (
+            <option key={size} value={String(size)}>
+              {String(size)}
             </option>
           ))}
         </select>
       </label>
+      {pullRequests === "any" ? null : (
+        <p
+          data-testid="pr-filter-note"
+          className="basis-full text-[11.5px] text-muted-foreground"
+        >
+          {t("prFilter.note")}
+        </p>
+      )}
     </div>
   );
 }
 
+/**
+ * Which columns the table shows. Each change applies at once and is saved in
+ * this browser's cookie, so the next visit draws the same table. The run
+ * column names the row, so it stays.
+ */
+function ColumnPicker({
+  open,
+  onOpenChange,
+  prefs,
+  onChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  prefs: FleetPrefs;
+  onChange: (next: FleetPrefs) => void;
+}) {
+  const t = useTranslations("fleet.runs");
+  return (
+    <SheetDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={t("columnsPicker.title")}
+      subtitle={t("columnsPicker.subtitle")}
+      testId="columns-dialog"
+      footerNote={t("columnsPicker.saved")}
+      footer={
+        <button
+          type="button"
+          data-testid="columns-reset"
+          data-touch-target=""
+          disabled={prefs.hidden.size === 0}
+          onClick={() => {
+            onChange({ ...prefs, hidden: new Set() });
+          }}
+          className={buttonSecondary}
+        >
+          {t("columnsPicker.reset")}
+        </button>
+      }
+    >
+      <fieldset className="flex flex-col gap-0.5">
+        <legend className="sr-only">{t("columnsPicker.legend")}</legend>
+        {FLEET_COLUMNS.map((column) => {
+          const fixed = column === FIXED_COLUMN;
+          return (
+            <label
+              key={column}
+              data-touch-target=""
+              className="flex min-h-9 cursor-pointer items-center gap-2.5 rounded-lg px-2 text-[13px] hover:bg-hl max-md:min-h-11"
+            >
+              <input
+                type="checkbox"
+                data-testid={`column-${column}`}
+                checked={!prefs.hidden.has(column)}
+                disabled={fixed}
+                onChange={(event) => {
+                  onChange(withColumn(prefs, column, event.target.checked));
+                }}
+                className="size-4"
+              />
+              <span>{t(`columns.${column}`)}</span>
+              {fixed ? (
+                <span className="text-xs text-muted-foreground">
+                  {t("columnsPicker.fixed")}
+                </span>
+              ) : null}
+            </label>
+          );
+        })}
+      </fieldset>
+    </SheetDialog>
+  );
+}
+
 function Pager({
-  page,
-  pages,
   from,
   to,
   total,
   more,
-  onPage,
   org,
   ws,
   cursor,
   nextCursor,
+  pullRequests,
 }: {
-  page: number;
-  pages: number;
   from: number;
   to: number;
   total: number;
   /** True when the read stopped before the oldest run. */
   more: boolean;
-  onPage: (page: number) => void;
   cursor: string | null;
   nextCursor: string | null;
+  pullRequests: PullRequestFilter;
 } & Place) {
   const t = useTranslations("fleet.runs.pager");
   const locale = useLocale();
@@ -533,7 +863,6 @@ function Pager({
           to: formatCount(to, locale),
           total: formatCount(total, locale),
         });
-  const pageButton = `${buttonSecondary} min-w-7 px-2 py-0.5 text-xs tabular-nums`;
   return (
     <nav
       aria-label={t("label")}
@@ -542,74 +871,28 @@ function Pager({
       <span data-testid="pager-range" className="font-mono tabular-nums">
         {range}
       </span>
-      {cursor === null ? null : (
-        <SafeLink
-          to={routes.fleet(org, ws)}
-          data-touch-target=""
-          className={`${linkText} inline-flex items-center`}
-        >
-          {t("newest")}
-        </SafeLink>
-      )}
-      {nextCursor === null ? null : (
-        <SafeLink
-          to={routes.fleet(org, ws, { cursor: nextCursor })}
-          data-touch-target=""
-          className={`${linkText} inline-flex items-center`}
-        >
-          {t("older")}
-        </SafeLink>
-      )}
-      <span className="ms-auto flex flex-wrap items-center gap-1">
-        <button
-          type="button"
-          aria-label={t("previous")}
-          data-touch-target=""
-          disabled={page <= 1}
-          onClick={() => {
-            onPage(page - 1);
-          }}
-          className={pageButton}
-        >
-          ‹
-        </button>
-        {pagerSlots(page, pages).map((slot, index) =>
-          slot === "gap" ? (
-            <span
-              key={`gap-${String(index)}`}
-              aria-hidden="true"
-              className="px-1"
-            >
-              …
-            </span>
-          ) : (
-            <button
-              key={slot}
-              type="button"
-              aria-label={t("page", { page: slot })}
-              aria-current={slot === page ? "page" : undefined}
-              data-touch-target=""
-              onClick={() => {
-                onPage(slot);
-              }}
-              className={`${pageButton} ${slot === page ? "border-button-primary-border text-accent-text" : ""}`}
-            >
-              {slot}
-            </button>
-          ),
+      <span className="ms-auto flex flex-wrap items-center gap-3">
+        {cursor === null ? null : (
+          <SafeLink
+            to={routes.fleet(org, ws, { prs: pullRequests })}
+            data-touch-target=""
+            className={`${linkText} inline-flex items-center`}
+          >
+            {t("newest")}
+          </SafeLink>
         )}
-        <button
-          type="button"
-          aria-label={t("next")}
-          data-touch-target=""
-          disabled={page >= pages}
-          onClick={() => {
-            onPage(page + 1);
-          }}
-          className={pageButton}
-        >
-          ›
-        </button>
+        {nextCursor === null ? null : (
+          <SafeLink
+            to={routes.fleet(org, ws, {
+              cursor: nextCursor,
+              prs: pullRequests,
+            })}
+            data-touch-target=""
+            className={`${linkText} inline-flex items-center`}
+          >
+            {t("older")}
+          </SafeLink>
+        )}
       </span>
     </nav>
   );
@@ -617,6 +900,7 @@ function Pager({
 
 function RunRowView({
   listed,
+  columns,
   now,
   org,
   ws,
@@ -625,6 +909,7 @@ function RunRowView({
   onExport,
 }: {
   listed: ListedRun;
+  columns: readonly FleetColumn[];
   now: number;
   exporting: boolean;
   onPause: (run: RunRow) => void;
@@ -647,6 +932,179 @@ function RunRowView({
   );
   const action =
     state === "live" ? "pause" : state === "parked" ? "resolve" : "export";
+
+  function cellOf(column: FleetColumn): ReactNode {
+    switch (column) {
+      case "run":
+        return (
+          <td key={column} className={`${cell} min-w-48 max-w-72`}>
+            <SafeLink
+              to={to}
+              onClick={(event) => {
+                event.stopPropagation();
+              }}
+              data-touch-target=""
+              className={`${mono} block truncate text-[12px] text-muted-foreground hover:text-foreground max-md:leading-[44px]`}
+            >
+              {run.id}
+            </SafeLink>
+            {title === null ? null : (
+              <span className="block text-[11.5px] text-dim" title={title}>
+                {title}
+              </span>
+            )}
+          </td>
+        );
+      case "summary":
+        return (
+          <td key={column} className={`${cell} min-w-56 max-w-80`}>
+            <SummaryCell run={run} />
+          </td>
+        );
+      case "agent":
+        return (
+          <td key={column} className={`${cell} min-w-48`}>
+            <AgentCard
+              agentKey={run.agentKey}
+              notRecorded={t("notRecorded")}
+              sub={
+                run.harness
+                  ? `${run.harness.name}${run.harness.version ? ` ${run.harness.version}` : ""}`
+                  : t(`source.${run.source}`)
+              }
+            />
+          </td>
+        );
+      case "operator":
+        return (
+          <td key={column} className={`${cell} whitespace-nowrap`}>
+            {operatorLabel === null ? (
+              notRecorded
+            ) : (
+              <span className="inline-flex items-center gap-[7px]">
+                <Avatar
+                  value={null}
+                  initials={initialsOf(run.operatorName ?? operatorLabel)}
+                  size={22}
+                />
+                <span
+                  className={
+                    run.operatorName === null && run.operatorKind === null
+                      ? mono
+                      : undefined
+                  }
+                >
+                  {operatorLabel}
+                </span>
+              </span>
+            )}
+          </td>
+        );
+      case "status":
+        return (
+          <td key={column} className={cell}>
+            {state === "parked" ? (
+              <Badge tone="approval" data-status="parked">
+                {t("parked")}
+              </Badge>
+            ) : (
+              <StatusBadge
+                status={run.status}
+                outcome={run.outcome}
+                vocabulary="lifecycle"
+              />
+            )}
+          </td>
+        );
+      case "pullRequests":
+        return (
+          <td key={column} className={`${cell} text-[12px]`}>
+            <PullRequestsCell run={run} />
+          </td>
+        );
+      case "diff":
+        return (
+          <td key={column} className={numericCell}>
+            <DiffCell diff={run.diff} />
+          </td>
+        );
+      case "tier":
+        return (
+          <td key={column} className={cell}>
+            <TierBadge tier={run.enforcementTier} />
+          </td>
+        );
+      case "replay":
+        return (
+          <td key={column} className={cell}>
+            {run.replayGrade === null ? (
+              notRecorded
+            ) : (
+              <ReplayGradeBadge grade={run.replayGrade} />
+            )}
+          </td>
+        );
+      case "tokens":
+        return (
+          <td key={column} className={numericCell}>
+            {/* Tokens are not on list_runs yet (G3, #3834); the cell says so. */}
+            <span
+              data-testid="row-tokens"
+              data-recorded="false"
+              data-gap="G3"
+              className="text-muted-foreground"
+            >
+              {t("notRecorded")}
+            </span>
+          </td>
+        );
+      case "cost":
+        return (
+          <td key={column} className={numericCell}>
+            {cost === null ? (
+              notRecorded
+            ) : (
+              <>
+                <Money value={cost.value} />
+                <span className="block text-[10px] text-muted-foreground">
+                  {cost.estimate ? (
+                    // A running rollup, or before any rollup the agent's own
+                    // figure, which Spend shown counts as an estimate too.
+                    <span
+                      data-testid={
+                        cost.reported
+                          ? "row-cost-reported"
+                          : "row-cost-estimate"
+                      }
+                    >
+                      {t("estimate")}
+                    </span>
+                  ) : (
+                    (cost.value.basis ?? t("basisNotRecorded"))
+                  )}
+                </span>
+              </>
+            )}
+          </td>
+        );
+      case "frames":
+        return (
+          <td key={column} className={numericCell}>
+            {formatCount(run.frames, locale)}
+          </td>
+        );
+      case "started":
+        return (
+          <td
+            key={column}
+            className={`${cell} whitespace-nowrap font-mono text-[11px] text-muted-foreground`}
+          >
+            <Started at={run.startedAt} now={now} />
+          </td>
+        );
+    }
+  }
+
   return (
     <tr
       data-testid="run-row"
@@ -656,120 +1114,7 @@ function RunRowView({
         navigate.push(to);
       }}
     >
-      <td className={`${cell} min-w-48 max-w-72`}>
-        <SafeLink
-          to={to}
-          onClick={(event) => {
-            event.stopPropagation();
-          }}
-          data-touch-target=""
-          className={`${mono} block truncate text-[12px] text-muted-foreground hover:text-foreground max-md:leading-[44px]`}
-        >
-          {run.id}
-        </SafeLink>
-        {title === null ? null : (
-          <span className="block text-[11.5px] text-dim" title={title}>
-            {title}
-          </span>
-        )}
-      </td>
-      <td className={`${cell} min-w-48`}>
-        <AgentCard
-          agentKey={run.agentKey}
-          notRecorded={t("notRecorded")}
-          sub={
-            run.harness
-              ? `${run.harness.name}${run.harness.version ? ` ${run.harness.version}` : ""}`
-              : t(`source.${run.source}`)
-          }
-        />
-      </td>
-      <td className={`${cell} whitespace-nowrap`}>
-        {operatorLabel === null ? (
-          notRecorded
-        ) : (
-          <span className="inline-flex items-center gap-[7px]">
-            <Avatar
-              value={null}
-              initials={initialsOf(run.operatorName ?? operatorLabel)}
-              size={22}
-            />
-            <span
-              className={
-                run.operatorName === null && run.operatorKind === null
-                  ? mono
-                  : undefined
-              }
-            >
-              {operatorLabel}
-            </span>
-          </span>
-        )}
-      </td>
-      <td className={cell}>
-        {state === "parked" ? (
-          <Badge tone="approval" data-status="parked">
-            {t("parked")}
-          </Badge>
-        ) : (
-          <StatusBadge
-            status={run.status}
-            outcome={run.outcome}
-            vocabulary="lifecycle"
-          />
-        )}
-      </td>
-      <td className={cell}>
-        <TierBadge tier={run.enforcementTier} />
-      </td>
-      <td className={cell}>
-        {run.replayGrade === null ? (
-          notRecorded
-        ) : (
-          <ReplayGradeBadge grade={run.replayGrade} />
-        )}
-      </td>
-      <td className={numericCell}>
-        {/* Tokens are not on list_runs yet (G3, #3834); the cell says so. */}
-        <span
-          data-testid="row-tokens"
-          data-recorded="false"
-          data-gap="G3"
-          className="text-muted-foreground"
-        >
-          {t("notRecorded")}
-        </span>
-      </td>
-      <td className={numericCell}>
-        {cost === null ? (
-          notRecorded
-        ) : (
-          <>
-            <Money value={cost.value} />
-            <span className="block text-[10px] text-muted-foreground">
-              {cost.estimate ? (
-                // A running rollup, or before any rollup the agent's own
-                // figure, which Spend shown counts as an estimate too.
-                <span
-                  data-testid={
-                    cost.reported ? "row-cost-reported" : "row-cost-estimate"
-                  }
-                >
-                  {t("estimate")}
-                </span>
-              ) : (
-                (cost.value.basis ?? t("basisNotRecorded"))
-              )}
-            </span>
-          </>
-        )}
-      </td>
-      <td className={numericCell}>{formatCount(run.frames, locale)}</td>
-      <td
-        className={`${cell} whitespace-nowrap font-mono text-[11px] text-muted-foreground`}
-      >
-        <Started at={run.startedAt} now={now} />
-      </td>
+      {columns.map(cellOf)}
       <td
         className={cell}
         onClick={(event) => {
@@ -975,6 +1320,9 @@ export function FleetBoard({
   agentTotal,
   now,
   canCommand,
+  prefs: savedPrefs = DEFAULT_FLEET_PREFS,
+  pullRequests = "any",
+  pullRequestsUnread = false,
   org,
   ws,
 }: {
@@ -988,6 +1336,12 @@ export function FleetBoard({
   now: number;
   /** Whether `dispatch_command` admits this viewer. */
   canCommand: boolean;
+  /** The columns and page size the person saved, read from the cookie by the page. */
+  prefs?: FleetPrefs;
+  /** The pull-request filter the read applied. */
+  pullRequests?: PullRequestFilter;
+  /** The read could not see this page's pull requests. */
+  pullRequestsUnread?: boolean;
 } & Place) {
   const t = useTranslations("fleet.runs");
   const pauseT = useTranslations("fleet.pause");
@@ -998,13 +1352,19 @@ export function FleetBoard({
     search: "",
     facets: { tier: null, replay: null, status: null },
     sort: null,
-    perPage: 10,
+    // The read already holds one page, of the size the person chose; the
+    // table lists all of it.
+    perPage: 0,
     page: 1,
   });
+  const [prefs, setPrefs] = useState<FleetPrefs>(savedPrefs);
+  const [picking, setPicking] = useState(false);
+  const [reading, startReading] = useTransition();
   const [pausing, setPausing] = useState<RunRow | null>(null);
   const { toasts, toast } = useToasts();
   const [exportingId, setExportingId] = useState<string | null>(null);
   const [, startExport] = useTransition();
+  const columns = shownColumns(prefs);
 
   const all = useMemo(
     () =>
@@ -1014,6 +1374,35 @@ export function FleetBoard({
   const listed = useMemo(() => chipRows(all, chip), [all, chip]);
   const words = useRowWords(listed);
   const page = applyList(listed, words, query);
+
+  /** Apply a choice now and remember it in this browser for a year. */
+  function save(next: FleetPrefs) {
+    setPrefs(next);
+    document.cookie = fleetPrefsCookieString(
+      next,
+      document.URL.startsWith("https:"),
+    );
+  }
+
+  // The page size is the read's limit, so a new size reads again from the
+  // newest run: the page re-renders on the server with the saved cookie.
+  function changePageSize(size: PageSize) {
+    if (size === prefs.pageSize) return;
+    save({ ...prefs, pageSize: size });
+    startReading(() => {
+      if (cursor === null) navigate.refresh();
+      else navigate.push(routes.fleet(org, ws, { prs: pullRequests }));
+    });
+  }
+
+  // The filter is the read's filter and lives in the URL, so a filtered
+  // Fleet can be linked, and a new filter starts from the newest run.
+  function changeFilter(next: PullRequestFilter) {
+    if (next === pullRequests) return;
+    startReading(() => {
+      navigate.push(routes.fleet(org, ws, { prs: next }));
+    });
+  }
 
   function sortBy(key: SortKey) {
     const current = query.sort;
@@ -1051,6 +1440,13 @@ export function FleetBoard({
     });
   }
 
+  const emptyText =
+    runs.length > 0 || pullRequests === "any"
+      ? t("noMatch")
+      : pullRequests === "with"
+        ? t("prFilter.noneWith")
+        : t("prFilter.noneWithout");
+
   return (
     <>
       <Tiles
@@ -1072,25 +1468,58 @@ export function FleetBoard({
             }}
           />
         </div>
-        <ListBar query={query} setQuery={setQuery} words={words} />
+        <ListBar
+          query={query}
+          setQuery={setQuery}
+          words={words}
+          pageSize={prefs.pageSize}
+          onPageSize={changePageSize}
+          pullRequests={pullRequests}
+          onPullRequests={changeFilter}
+          onColumns={() => {
+            setPicking(true);
+          }}
+        />
+        {pullRequestsUnread ? (
+          <p
+            role="status"
+            data-testid="prs-unread"
+            className="border-b border-border px-3 py-2 text-xs text-muted-foreground"
+          >
+            {t("prs.unread")}
+          </p>
+        ) : null}
         <div className="min-w-0 overflow-x-auto">
           <table
             aria-labelledby="fleet-runs"
-            className="w-full min-w-[560px] border-collapse text-[13px]"
+            aria-busy={reading}
+            data-testid="runs-table"
+            className={`w-full min-w-[560px] border-collapse text-[13px] ${reading ? "opacity-60" : ""}`}
           >
             <thead>
               <tr className="border-b border-border">
-                {COLUMNS.map((column) => {
-                  const label = t(`columns.${column.key}`);
-                  const key = column.key;
+                {columns.map((key) => {
+                  const head = COLUMN_HEAD[key];
+                  const label = t(`columns.${key}`);
                   const align =
-                    column.numeric === true ? "text-right" : "text-left";
+                    head.numeric === true ? "text-right" : "text-left";
+                  const sortKey = head.sort;
+                  if (sortKey === null)
+                    return (
+                      <th
+                        key={key}
+                        scope="col"
+                        className={`${headCell} ${align}`}
+                      >
+                        {label}
+                      </th>
+                    );
                   // The design's Tokens header sorts. list_runs carries no
                   // token figure yet (G3, #3834), so every cell reads "not
                   // recorded" and there is no order to put them in. The
                   // control is drawn where the design has it, disabled, and
                   // its hover says why.
-                  if (key === "tokens")
+                  if (sortKey === "tokens")
                     return (
                       <th
                         key={key}
@@ -1111,7 +1540,8 @@ export function FleetBoard({
                         </button>
                       </th>
                     );
-                  const sorted = query.sort?.key === key ? query.sort.dir : 0;
+                  const sorted =
+                    query.sort?.key === sortKey ? query.sort.dir : 0;
                   return (
                     <th
                       key={key}
@@ -1129,7 +1559,7 @@ export function FleetBoard({
                         type="button"
                         aria-label={t("sortBy", { column: label })}
                         onClick={() => {
-                          sortBy(key);
+                          sortBy(sortKey);
                         }}
                         className="inline-flex items-center gap-1 uppercase tracking-[inherit] hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
                       >
@@ -1139,17 +1569,20 @@ export function FleetBoard({
                     </th>
                   );
                 })}
-                <th scope="col" className={headCell} />
+                <th scope="col" className={headCell}>
+                  <span className="sr-only">{t("actionsColumn")}</span>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border [&>tr]:transition-colors [&>tr:hover]:bg-hl">
               {page.rows.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={COLUMNS.length + 1}
+                    colSpan={columns.length + 1}
+                    data-testid="runs-none"
                     className="px-4 py-[18px] text-center text-dim"
                   >
-                    {t("noMatch")}
+                    {emptyText}
                   </td>
                 </tr>
               ) : (
@@ -1159,6 +1592,7 @@ export function FleetBoard({
                     <RunRowView
                       key={row.run.id}
                       listed={row}
+                      columns={columns}
                       now={now}
                       org={org}
                       ws={ws}
@@ -1175,21 +1609,23 @@ export function FleetBoard({
           </table>
         </div>
         <Pager
-          page={page.page}
-          pages={page.pages}
           from={page.from}
           to={page.to}
           total={page.total}
           more={nextCursor !== null}
-          onPage={(next) => {
-            setQuery({ ...query, page: next });
-          }}
           org={org}
           ws={ws}
           cursor={cursor}
           nextCursor={nextCursor}
+          pullRequests={pullRequests}
         />
       </section>
+      <ColumnPicker
+        open={picking}
+        onOpenChange={setPicking}
+        prefs={prefs}
+        onChange={save}
+      />
       {/* The design confirms an export or a queued pause with a toast. */}
       <ToastStack toasts={toasts} testId="runs-toasts" />
       <PauseDialog

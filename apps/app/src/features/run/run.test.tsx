@@ -459,6 +459,65 @@ describe("header", () => {
     await expectNoAxe(container);
   });
 
+  it("says each pull request's state beside it, as the work read took it from the forge", async () => {
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      work: ok(runWork()),
+    });
+    const checkout = within(await screen.findByTestId("run-checkout"));
+    const states = checkout.getAllByTestId("run-pull-state");
+    expect(states.map((s) => s.getAttribute("data-state"))).toEqual(["open"]);
+    expect(states[0]).toHaveTextContent("open");
+  });
+
+  it("links a pull request only the frames recorded, a GitLab merge request included, with status unknown", async () => {
+    const gitlab = "https://gitlab.com/acme/platform/web/-/merge_requests/9";
+    const { container } = await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      work: ok(runWork()),
+      outputs: ok(
+        runOutputs([
+          // The work read already holds #482; this node is the same PR.
+          runOutputNode({
+            seq: "300",
+            kind: "pr",
+            name: "#482",
+            where: "acme/platform",
+            state: "open",
+            note: "https://github.com/acme/platform/pull/482",
+            stat: null,
+          }),
+          runOutputNode({
+            seq: "301",
+            kind: "pr",
+            name: "#9",
+            where: "acme/platform/web",
+            state: "open",
+            note: gitlab,
+            stat: null,
+          }),
+        ]),
+      ),
+    });
+    const checkout = within(await screen.findByTestId("run-checkout"));
+    // #482 is listed once, from the work read, with its live state.
+    expect(
+      checkout.getAllByRole("link", { name: "acme/platform#482" }),
+    ).toHaveLength(1);
+    const mr = checkout.getByRole("link", { name: "acme/platform/web#9" });
+    expect(mr).toHaveAttribute("href", gitlab);
+    expect(mr).toHaveAttribute("target", "_blank");
+    expect(
+      checkout
+        .getAllByTestId("run-pull-state")
+        .map((s) => s.getAttribute("data-state")),
+    ).toEqual(["open", "unknown"]);
+    expect(checkout.getByText("status unknown")).toBeTruthy();
+    await expectNoAxe(container);
+  });
+
   it("names the host with no enrolled checkout and says no path is held, with the host's facts on hover", async () => {
     await renderRun({
       detail: ok(runDetail()),

@@ -87,41 +87,9 @@ export async function collectRunText(
   };
 }
 
-const TITLE_PROMPT_CHARS = 60;
-const TITLE_CHARS = 80;
-const UNNAMED_BRANCHES = new Set(["main", "master", "HEAD"]);
-
-/**
- * A title that needs no model: the first sentence of the run's first prompt,
- * cut at a word boundary, then "on" and the branch when it names the work,
- * the way a session title reads ("oxagen on agent/pensive-volta"). The model's
- * name replaces it once an account is written. Returns null when the prompt
- * holds no words.
- */
-export function fallbackRunTitle(
-  prompt: string,
-  branch: string | null,
-): string | null {
-  const line =
-    prompt
-      .replace(/<[^>]*>/gu, " ")
-      .split(/\r?\n/u)
-      .map((part) => part.replace(/\s+/gu, " ").trim())
-      .find((part) => part.length > 0) ?? "";
-  const sentence = (/^.*?[.?!](?=\s|$)/u.exec(line)?.[0] ?? line)
-    .replace(/[.]$/u, "")
-    .trim();
-  if (!sentence) return null;
-  let title = sentence;
-  if (title.length > TITLE_PROMPT_CHARS) {
-    const cut = title.slice(0, TITLE_PROMPT_CHARS - 1);
-    const space = cut.lastIndexOf(" ");
-    title = `${(space > TITLE_PROMPT_CHARS / 2 ? cut.slice(0, space) : cut).trimEnd()}…`;
-  }
-  const named = branch?.trim();
-  if (!named || UNNAMED_BRANCHES.has(named)) return title;
-  return `${title} on ${named}`.slice(0, TITLE_CHARS);
-}
+// The prompt-derived title lives beside the place-derived one, so the ingest
+// path can name a run from its first prompt without loading the model stack.
+export { fallbackRunTitle } from "@oxagen/tacho";
 
 /**
  * A short code for why an enrichment attempt failed, safe to store on the run
