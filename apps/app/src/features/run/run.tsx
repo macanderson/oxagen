@@ -27,7 +27,7 @@ import { ReadFailure } from "@/ui/read-failure";
 import { ChainSection } from "./chain";
 import { CostSection } from "./cost";
 import { FramesSection } from "./frames";
-import { RunHeader } from "./header";
+import { RunHeader, RunTitle } from "./header";
 import { OutputsSpine } from "./outputs";
 import { ResolvedApprovalsPanel } from "./resolved-approvals";
 import {
@@ -278,9 +278,12 @@ export async function Run({
   if (!read.ok) {
     if (read.reason === "error" && read.status === 404) notFound();
     return (
-      <div className={`${panel} p-4`}>
-        <ReadFailure read={read} section={runId} />
-      </div>
+      <>
+        <RunTitle id={runId} run={null} />
+        <div className={`${panel} p-4`}>
+          <ReadFailure read={read} section={runId} />
+        </div>
+      </>
     );
   }
   const detail = read.value;
@@ -419,6 +422,7 @@ export async function Run({
   const outcomes = await outcomesPolicy;
   return (
     <div className="flex flex-col gap-6">
+      <RunTitle id={run.id} run={run} />
       <RunHeader
         run={run}
         agent={agent}
@@ -427,6 +431,7 @@ export async function Run({
             ? outputs.value.nodes.filter((node) => node.kind === "pr")
             : null
         }
+        work={work}
         orgRole={ctx.orgRole}
         wsRole={ctx.wsRole}
         org={place.org}

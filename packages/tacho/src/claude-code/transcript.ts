@@ -452,15 +452,41 @@ export function normalizeTranscriptLine(
         totals.models_used = rec(record["modelUsage"]);
       return { drafts: [], totals };
     }
-    case "ai-title":
+    case "ai-title": {
+      // Claude Code names the session itself and rewrites the name as the
+      // work moves. The totals keep the last one for the session's end; the
+      // frame ships each one now, so a live run has a title while it runs.
+      const title = s(record["aiTitle"]);
+      if (title === undefined) return { drafts: [], totals: {} };
       return {
-        drafts: [],
-        totals: {
-          ...(s(record["aiTitle"]) !== undefined
-            ? { session_title: s(record["aiTitle"]) }
-            : {}),
-        },
+        drafts: [draft("oxagen:session_title", { session_title: title })],
+        totals: { session_title: title },
       };
+    }
+    case "pr-link": {
+      // Claude Code writes this line when the session opens a pull request.
+      // It is the one record that ties a PR to a run with certainty; a PR
+      // found by branch name is a guess.
+      const url = s(record["prUrl"]);
+      const number = n(record["prNumber"]);
+      if (url === undefined || number === undefined)
+        return { drafts: [], totals: {} };
+      const repository = s(record["prRepository"]);
+      return {
+        drafts: [
+          draft(
+            "oxagen:pr_link",
+            {},
+            {
+              pr_number: String(number),
+              pr_url: url,
+              ...(repository !== undefined ? { pr_repository: repository } : {}),
+            },
+          ),
+        ],
+        totals: {},
+      };
+    }
     default:
       return { drafts: [], totals: {} };
   }
