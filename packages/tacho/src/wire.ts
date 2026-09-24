@@ -211,6 +211,17 @@ export const BUNDLE_FEATURE_STEERING_MANIFEST = "steering_manifest" as const;
 export const BUNDLE_FEATURE_CONTAINMENT = "containment" as const;
 
 /**
+ * The host enforces `budget.daily_limit_usd`: it keeps the agent's observed
+ * spend for the UTC day, seeded from its WAL and from the control envelope's
+ * `agent_day_spend`, and refuses with `daily_budget_exceeded` at the ceiling
+ * (ADR-160). The field always parsed, so this gate is not about strictness.
+ * It exists because a host that parses the ceiling and refuses nothing is the
+ * defect #3728 reported: the control plane signs the ceiling only to a host
+ * that advertises this.
+ */
+export const BUNDLE_FEATURE_DAILY_BUDGET = "daily_budget" as const;
+
+/**
  * Every bundle feature the host in *this* tree can parse, which is what it
  * advertises. One list, read by the daemon's health report and by enrollment,
  * so a field added to `policyBundleSchema` is advertised from the one place
@@ -224,6 +235,7 @@ export const TACHO_BUNDLE_FEATURES = [
   BUNDLE_FEATURE_HOOK_FAIL_OPEN,
   BUNDLE_FEATURE_STEERING_MANIFEST,
   BUNDLE_FEATURE_CONTAINMENT,
+  BUNDLE_FEATURE_DAILY_BUDGET,
 ] as const;
 
 export type TachoBundleFeature = (typeof TACHO_BUNDLE_FEATURES)[number];
@@ -703,10 +715,10 @@ export const policyBundleSchema = z
       .object({
         session_limit_usd: z.number().nonnegative().optional(),
         /**
-         * Declared, and read by nothing on the host. The control plane stopped
-         * signing it (#3728) because the model proxy refuses against the
-         * session limit only. It stays in this `.strict()` schema so a host
-         * still parses a bundle from a control plane that signs it.
+         * The agent's ceiling for one UTC day (ADR-160). The model proxy
+         * refuses with `daily_budget_exceeded` once the agent's observed
+         * spend that day reaches it. Signed only to a host that advertises
+         * `BUNDLE_FEATURE_DAILY_BUDGET`.
          */
         daily_limit_usd: z.number().nonnegative().optional(),
         mode: z.enum(["observed", "enforced"]),
@@ -1124,6 +1136,21 @@ export type TachoBatch = z.output<typeof tachoBatchSchema>;
  * version of ourselves, and the compatible move is to ignore what we do not
  * yet understand.
  */
+/**
+ * What the control plane has recorded of an agent's observed model spend on
+ * one UTC day (ADR-160): this host's shipped calls, and every other host
+ * enrolled under the same agent. Micro-USD, summed from `llm_call` frames by
+ * their own timestamp. Sent on the control envelope only to a host whose
+ * mandate carries `budget.daily_limit_usd`.
+ */
+export const agentDaySpendSchema = z.object({
+  day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  this_host_usd_micros: z.number().int().nonnegative(),
+  other_hosts_usd_micros: z.number().int().nonnegative(),
+});
+
+export type AgentDaySpend = z.output<typeof agentDaySpendSchema>;
+
 export const controlEnvelopeSchema = z
   .object({
     host_status: tachoHostStatusSchema,
@@ -1132,6 +1159,9 @@ export const controlEnvelopeSchema = z
     // Tolerant per element as well as per envelope: a strict array inside a
     // tolerant wrapper is the same outage one level down.
     commands: z.array(deliveredCommandResponseSchema).max(100),
+    // A figure this host cannot read is dropped, not fatal: the day budget
+    // then counts this host's own WAL, which is the fail-open half of ADR-160.
+    agent_day_spend: agentDaySpendSchema.optional().catch(undefined),
   })
   .passthrough();
 

@@ -94,6 +94,7 @@ import {
   TACHO_METERING_ATTR,
   TACHO_METERING_OBSERVED,
   type CommandAcknowledgement,
+  type AgentDaySpend,
   type ControlEnvelope,
   type DaemonHealth,
   type ModelBaseUrlReport,
@@ -125,6 +126,7 @@ import {
 import { createGithubProxy } from "./github-proxy";
 import { pushCredentialBasis } from "./push-basis";
 import { issueRunToken } from "./credential-issuer";
+import { utcDay } from "./day-spend";
 import { type BeforeForward, createModelProxy } from "./model-proxy";
 import { createModelProxyListener } from "./model-proxy-listener";
 import {
@@ -621,6 +623,8 @@ async function initializeDaemon(
     return now() - (mandateConfirmedAt ?? issued) > expires - issued;
   }
   let lastControlAt: number | undefined;
+  /** The control plane's latest figures for the agent's UTC day (ADR-160). */
+  let recordedDaySpend: AgentDaySpend | undefined;
   let lastOtlpAt: number | undefined;
   let lastIngestAt: number | undefined;
   // When a command poll last succeeded. The poll's cadence gate reads it next
@@ -1138,6 +1142,12 @@ async function initializeDaemon(
 
   async function onControl(control: ControlEnvelope): Promise<void> {
     lastControlAt = now();
+    // Replaced on every envelope that carries one, and kept when one does
+    // not: a poll that omits the figure (no daily ceiling, or the store did
+    // not answer) says nothing new about the day. The proxy ignores a figure
+    // for any day but today.
+    if (control.agent_day_spend !== undefined)
+      recordedDaySpend = control.agent_day_spend;
     host = applyControlFacts(paths.hostFile, host, {
       host_status: control.host_status,
       deny_generation: control.deny_generation,
@@ -2451,6 +2461,35 @@ async function initializeDaemon(
       ...displacedUpstreams,
       ...options.modelUpstreams,
     }),
+    // A restart must not hand the agent's day back either (ADR-160). Only a
+    // session whose last frame is from `day` can hold a frame from it, so
+    // the rest of the week the WAL keeps is not parsed.
+    priorDaySpendMicros: (day) => {
+      const start = Date.parse(`${day}T00:00:00.000Z`);
+      let total = 0;
+      for (const session of wal.sessions()) {
+        const last = wal.lastEvent(session);
+        if (last !== undefined && Date.parse(last.ts) < start) continue;
+        for (const event of wal.read(session)) {
+          if (event.kind !== "llm_call") continue;
+          if (event.attrs[TACHO_METERING_ATTR] !== TACHO_METERING_OBSERVED)
+            continue;
+          if (utcDay(Date.parse(event.ts)) !== day) continue;
+          const cost = (event.body as { cost_usd_micros?: number })
+            .cost_usd_micros;
+          if (typeof cost === "number") total += cost;
+        }
+      }
+      return total;
+    },
+    recordedDaySpend: () =>
+      recordedDaySpend === undefined
+        ? undefined
+        : {
+            day: recordedDaySpend.day,
+            thisHostMicros: recordedDaySpend.this_host_usd_micros,
+            otherHostsMicros: recordedDaySpend.other_hosts_usd_micros,
+          },
     // A restart must not hand a session its budget back: what the chain
     // already holds is counted before the first call is admitted.
     priorSpendMicros: (sessionUuid) => {

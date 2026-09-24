@@ -190,9 +190,10 @@ describe("deriveBundleBudget", () => {
     });
   });
 
-  // #3728: no proxy reads daily_limit_usd, so the bundle must not carry it,
-  // and a mandate whose only ceiling is per-day must not read "enforced".
-  it("stays observed and signs no daily limit when only per_day_micros is set", () => {
+  // #3728: a host that does not advertise daily_budget refuses nothing
+  // against daily_limit_usd, so its bundle must not carry it, and a mandate
+  // whose only ceiling is per-day must not read "enforced" there.
+  it("stays observed and signs no daily limit for a host that does not enforce a day", () => {
     expect(deriveBundleBudget({ perDayMicros: 20_000_000 })).toEqual({
       mode: "observed",
     });
@@ -210,6 +211,30 @@ describe("deriveBundleBudget", () => {
   it("does not invent a limit from a zero or negative figure", () => {
     expect(deriveBundleBudget({ perRunMicros: 0, perDayMicros: -1 })).toEqual({
       mode: "observed",
+    });
+    expect(
+      deriveBundleBudget(
+        { perRunMicros: 0, perDayMicros: 0 },
+        { enforcesDaily: true },
+      ),
+    ).toEqual({ mode: "observed" });
+  });
+
+  // ADR-160: a host that enforces the day receives the ceiling, and a
+  // day-only mandate is enforced there.
+  it("signs the daily limit, enforced, for a host that enforces a day", () => {
+    expect(
+      deriveBundleBudget({ perDayMicros: 20_000_000 }, { enforcesDaily: true }),
+    ).toEqual({ mode: "enforced", daily_limit_usd: 20 });
+    expect(
+      deriveBundleBudget(
+        { perRunMicros: 2_500_000, perDayMicros: 20_000_000 },
+        { enforcesDaily: true },
+      ),
+    ).toEqual({
+      mode: "enforced",
+      session_limit_usd: 2.5,
+      daily_limit_usd: 20,
     });
   });
 });

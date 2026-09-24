@@ -24,17 +24,23 @@ vi.mock("./tacho-session-policy", () => ({
   readTachoSessionPolicyIn: policyRead,
 }));
 
+const selectAgentDaySpend = vi.hoisted(() => vi.fn());
+vi.mock("@oxagen/telemetry", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@oxagen/telemetry")>()),
+  selectAgentDaySpend,
+}));
+
 const gatewayMandateTools = vi.fn(() => undefined as string[] | undefined);
 vi.mock("@oxagen/iam/machine-key-scope", () => ({
   gatewayMandateTools: () => gatewayMandateTools(),
 }));
 
-const { resolveHostMandate, signBundle, unsignedBundle } = await import(
-  "./tacho-host"
-);
+const { agentDaySpend, resolveHostMandate, signBundle, unsignedBundle } =
+  await import("./tacho-host");
 const { policyBundleSchema } = await import("@oxagen/oxagen/tacho/schemas");
 const {
   BUNDLE_FEATURE_CONTAINMENT,
+  BUNDLE_FEATURE_DAILY_BUDGET,
   BUNDLE_FEATURE_GATEWAY_TOOLS,
   BUNDLE_FEATURE_MODEL_ALLOWLIST,
   BUNDLE_FEATURE_INDEPENDENT_MODELS,
@@ -523,9 +529,47 @@ describe("the active definition budget on the signed bundle", () => {
     expect(findVersion).not.toHaveBeenCalled();
   });
 
-  it("keeps a daily-only declaration observed without inventing a session limit", async () => {
+  it("keeps a daily-only declaration observed for a host that does not enforce a day (negative)", async () => {
     const { tx } = budgetTransaction("budget = { per_day_micros = 20000000 }");
     expect((await resolveHostMandate(tx, ctx, governedHost())).budget).toEqual({
+      mode: "observed",
+    });
+  });
+
+  it("signs a daily-only declaration, enforced, to a host that advertises daily_budget (ADR-160)", async () => {
+    const { tx } = budgetTransaction("budget = { per_day_micros = 20000000 }");
+    const dailyHost = {
+      ...governedHost(),
+      bundleFeatures: [BUNDLE_FEATURE_DAILY_BUDGET],
+    };
+    const mandate = await resolveHostMandate(tx, ctx, dailyHost);
+    expect(mandate.budget).toEqual({ mode: "enforced", daily_limit_usd: 20 });
+    const signed = unsignedBundle(
+      dailyHost,
+      { org: 1, workspace: 1 },
+      { mode: "digest_only", classes: [] },
+      STEERING,
+      mandate,
+      NOW,
+    );
+    expect(signed.budget).toEqual({ mode: "enforced", daily_limit_usd: 20 });
+  });
+
+  it("signs both ceilings side by side, and never a zero day", async () => {
+    const dailyHost = {
+      ...governedHost(),
+      bundleFeatures: [BUNDLE_FEATURE_DAILY_BUDGET],
+    };
+    const both = budgetTransaction(
+      "budget = { per_run_micros = 2500000, per_day_micros = 20000000 }",
+    );
+    expect((await resolveHostMandate(both.tx, ctx, dailyHost)).budget).toEqual({
+      mode: "enforced",
+      session_limit_usd: 2.5,
+      daily_limit_usd: 20,
+    });
+    const zero = budgetTransaction("budget = { per_day_micros = 0 }");
+    expect((await resolveHostMandate(zero.tx, ctx, dailyHost)).budget).toEqual({
       mode: "observed",
     });
   });
@@ -612,5 +656,63 @@ describe("a mandate that requires the contained tier (ADR-152)", () => {
     expect(withMandate(features, REQUIRES).etag).not.toBe(
       withMandate(features, NO_MANDATE).etag,
     );
+  });
+});
+
+describe("the agent's day spend on the control envelope (ADR-160)", () => {
+  const NOON = new Date("2026-09-24T12:00:00.000Z");
+  const ours = {
+    publicId: "tch_ours",
+    agentId: "agent-1",
+  } as Parameters<typeof agentDaySpend>[1];
+  function hostsTransaction(publicIds: string[]) {
+    const findMany = vi.fn(async () =>
+      publicIds.map((publicId) => ({ publicId })),
+    );
+    const tx = {
+      query: { tachoHosts: { findMany } },
+    } as unknown as Parameters<typeof agentDaySpend>[0];
+    return { tx, findMany };
+  }
+
+  beforeEach(() => selectAgentDaySpend.mockReset());
+
+  it("splits the agent's UTC day into this host and every other host of the agent", async () => {
+    const { tx } = hostsTransaction(["tch_ours", "tch_laptop", "tch_ci"]);
+    selectAgentDaySpend.mockResolvedValueOnce(
+      new Map([
+        ["tch_ours", 4_000],
+        ["tch_laptop", 1_500],
+        ["tch_ci", 500],
+      ]),
+    );
+    expect(await agentDaySpend(tx, ours, NOON)).toEqual({
+      day: "2026-09-24",
+      this_host_usd_micros: 4_000,
+      other_hosts_usd_micros: 2_000,
+    });
+    expect(selectAgentDaySpend).toHaveBeenCalledWith({
+      day: "2026-09-24",
+      hostEnrollmentIds: ["tch_ours", "tch_laptop", "tch_ci"],
+    });
+  });
+
+  it("answers nothing for a host with no agent, and asks no store (negative)", async () => {
+    const { tx, findMany } = hostsTransaction([]);
+    expect(
+      await agentDaySpend(
+        tx,
+        { ...ours, agentId: null } as Parameters<typeof agentDaySpend>[1],
+        NOON,
+      ),
+    ).toBeUndefined();
+    expect(findMany).not.toHaveBeenCalled();
+    expect(selectAgentDaySpend).not.toHaveBeenCalled();
+  });
+
+  it("omits the figure rather than failing the poll when ClickHouse cannot answer (negative)", async () => {
+    const { tx } = hostsTransaction(["tch_ours"]);
+    selectAgentDaySpend.mockRejectedValueOnce(new Error("store degraded"));
+    expect(await agentDaySpend(tx, ours, NOON)).toBeUndefined();
   });
 });

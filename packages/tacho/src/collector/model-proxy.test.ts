@@ -41,7 +41,9 @@ import {
   unsignedBundle,
 } from "../host/test-support";
 import {
+  type AgentDaySpend,
   type ControlEnvelope,
+  controlEnvelopeSchema,
   type DeliveredCommand,
   type PolicyBundle,
   policyBundleSchema,
@@ -212,6 +214,9 @@ function call(
 function controlPlane() {
   const ingested: TachoEvent[] = [];
   const queue: DeliveredCommand[] = [];
+  // What the control plane has recorded of the agent's day, sent on every
+  // envelope while set (ADR-160).
+  let daySpend: AgentDaySpend | undefined;
   const fetch: FetchLike = async (url, init) => {
     const body = JSON.parse(init.body ?? "{}") as Record<string, unknown>;
     // Built only for the routes that carry an envelope. The bundle route
@@ -221,6 +226,7 @@ function controlPlane() {
       deny_generation: { org: 1, workspace: 1 },
       bundle_etag: "etag-3",
       commands: queue.splice(0),
+      ...(daySpend !== undefined ? { agent_day_spend: daySpend } : {}),
     });
     if (url.endsWith("/events")) {
       const events = body["events"] as TachoEvent[];
@@ -257,6 +263,9 @@ function controlPlane() {
   return {
     fetch,
     ingested,
+    recordDaySpend: (next: AgentDaySpend) => {
+      daySpend = next;
+    },
     queue: (
       command: Pick<DeliveredCommand, "id" | "command" | "session_uuid"> &
         Partial<DeliveredCommand>,
@@ -1040,6 +1049,150 @@ describe("the loopback model proxy", () => {
     expect((await ask(second.port)).status).toBe(403);
     expect(fake.requests).toHaveLength(1);
     expect(verifyChain(second.handle.wal.read(uuid)).ok).toBe(true);
+  });
+
+  it("refuses an agent at its daily budget across its sessions and a restart, and names the UTC day (ADR-160)", async () => {
+    const fake = await vendor(streamingAnthropic(1));
+    const paths = scratchPaths();
+    // A daily ceiling alone: no per-run figure. Before ADR-160 this mandate
+    // enforced nothing.
+    const budget = { mode: "enforced" as const, daily_limit_usd: 0.01 };
+    let clock = Date.parse("2026-09-24T12:00:00.000Z");
+    const daemon = { now: () => clock };
+    const first = await boot(fake.url, { paths, bundle: { budget }, daemon });
+    const a = await first.session("sess-day-a");
+    const ask = (port: number, id: string) =>
+      call(port, {
+        path: "/anthropic/v1/messages",
+        headers: ["X-Api-Key", FAKE_KEY, "X-Claude-Code-Session-Id", id],
+        body: JSON.stringify({ model: "claude-sonnet-5", stream: true }),
+      });
+
+    // $0.0111 observed against a $0.01 day: the call that crosses it finishes.
+    expect((await ask(first.port, "sess-day-a")).status).toBe(200);
+    // A second session of the same agent is refused: the day is the agent's.
+    const b = await first.session("sess-day-b");
+    const refused = await ask(first.port, "sess-day-b");
+    expect(refused.status).toBe(403);
+    expect(refused.headers["x-oxagen-refusal"]).toBe("daily_budget_exceeded");
+    const error = JSON.parse(refused.body.toString()) as {
+      error: { message: string };
+    };
+    expect(error.error.message).toContain(
+      "$0.01 observed of a $0.01 limit on 2026-09-24 (UTC)",
+    );
+    expect(error.error.message).toContain(
+      "It resets at 2026-09-25T00:00:00.000Z",
+    );
+    expect(fake.requests).toHaveLength(1);
+    const [decision] = first.frames(b, "policy_decision");
+    expect(decision!.body).toMatchObject({
+      policy_decision: "deny",
+      policy_source: "bundle",
+      policy_reason_code: "daily_budget_exceeded",
+    });
+    expect(decision!.attrs).toMatchObject({
+      "oxagen.day": "2026-09-24",
+      "oxagen.day_spend_usd_micros": String(ANTHROPIC_COST),
+    });
+    // The crossing call is on the record under the day it was charged to.
+    const [call1] = first.frames(a);
+    expect(call1!.ts.startsWith("2026-09-24T12:00:00")).toBe(true);
+
+    // A restart reads the day back from the WAL before admitting a call.
+    await first.handle.stop();
+    const second = await boot(fake.url, { paths, bundle: { budget }, daemon });
+    await second.session("sess-day-c");
+    expect((await ask(second.port, "sess-day-c")).status).toBe(403);
+    expect(fake.requests).toHaveLength(1);
+
+    // 00:00 UTC opens a new day with that day's spend, which is none.
+    clock = Date.parse("2026-09-25T00:00:00.000Z");
+    expect((await ask(second.port, "sess-day-c")).status).toBe(200);
+    expect(fake.requests).toHaveLength(2);
+  });
+
+  it("charges a call settling at 23:59:59.999 UTC to that day, and the next call to the next day", async () => {
+    const fake = await vendor(streamingAnthropic(1));
+    // A ceiling of two calls: one crossing call per day stays admitted.
+    const budget = {
+      mode: "enforced" as const,
+      daily_limit_usd: (ANTHROPIC_COST * 1.5) / 1_000_000,
+    };
+    let clock = Date.parse("2026-09-24T23:59:59.999Z");
+    const booted = await boot(fake.url, {
+      bundle: { budget },
+      daemon: { now: () => clock },
+    });
+    const uuid = await booted.session("sess-midnight");
+    const ask = () =>
+      call(booted.port, {
+        path: "/anthropic/v1/messages",
+        headers: [
+          "X-Api-Key",
+          FAKE_KEY,
+          "X-Claude-Code-Session-Id",
+          "sess-midnight",
+        ],
+        body: JSON.stringify({ model: "claude-sonnet-5", stream: true }),
+      });
+
+    expect((await ask()).status).toBe(200);
+    clock = Date.parse("2026-09-25T00:00:00.000Z");
+    // The first call belongs to the 24th, so the 25th starts at zero: two
+    // calls fit before this day's ceiling, and the third is refused.
+    expect((await ask()).status).toBe(200);
+    expect((await ask()).status).toBe(200);
+    const third = await ask();
+    expect(third.headers["x-oxagen-refusal"]).toBe("daily_budget_exceeded");
+    expect(third.body.toString()).toContain("on 2026-09-25 (UTC)");
+    const calls = booted.frames(uuid);
+    expect(calls.map((frame) => frame.ts.slice(0, 10))).toEqual([
+      "2026-09-24",
+      "2026-09-25",
+      "2026-09-25",
+    ]);
+  });
+
+  it("counts the agent's other hosts from the control envelope, and ignores a figure for another day (negative)", async () => {
+    const fake = await vendor(streamingAnthropic(1));
+    const budget = { mode: "enforced" as const, daily_limit_usd: 1 };
+    const booted = await boot(fake.url, {
+      bundle: { budget },
+      daemon: { now: () => Date.parse("2026-09-24T09:00:00.000Z") },
+    });
+    await booted.session("sess-fleet");
+    const ask = () =>
+      call(booted.port, {
+        path: "/anthropic/v1/messages",
+        headers: [
+          "X-Api-Key",
+          FAKE_KEY,
+          "X-Claude-Code-Session-Id",
+          "sess-fleet",
+        ],
+        body: JSON.stringify({ model: "claude-sonnet-5", stream: true }),
+      });
+
+    // Yesterday's figure says nothing about today.
+    booted.plane.recordDaySpend({
+      day: "2026-09-23",
+      this_host_usd_micros: 0,
+      other_hosts_usd_micros: 5_000_000,
+    });
+    await booted.handle.tick();
+    expect((await ask()).status).toBe(200);
+
+    // Today's: the other hosts have spent the day.
+    booted.plane.recordDaySpend({
+      day: "2026-09-24",
+      this_host_usd_micros: 0,
+      other_hosts_usd_micros: 1_000_000,
+    });
+    await booted.handle.tick();
+    const refused = await ask();
+    expect(refused.headers["x-oxagen-refusal"]).toBe("daily_budget_exceeded");
+    expect(fake.requests).toHaveLength(1);
   });
 
   it("refuses a model the mandate does not permit, names it on the frame, and forwards a permitted one", async () => {
@@ -2788,7 +2941,37 @@ describe("the wire and the host file", () => {
       "hook_fail_open",
       "steering_manifest",
       "containment",
+      "daily_budget",
     ]);
+  });
+
+  it("reads the day figure off a control envelope, and drops one it cannot read rather than the envelope (negative)", () => {
+    const envelope = {
+      host_status: "active",
+      deny_generation: { org: 1, workspace: 1 },
+      bundle_etag: "etag-1",
+      commands: [],
+    };
+    expect(
+      controlEnvelopeSchema.parse({
+        ...envelope,
+        agent_day_spend: {
+          day: "2026-09-24",
+          this_host_usd_micros: 1,
+          other_hosts_usd_micros: 2,
+        },
+      }).agent_day_spend,
+    ).toEqual({
+      day: "2026-09-24",
+      this_host_usd_micros: 1,
+      other_hosts_usd_micros: 2,
+    });
+    const odd = controlEnvelopeSchema.parse({
+      ...envelope,
+      agent_day_spend: { day: "Thursday", this_host_usd_micros: -1 },
+    });
+    expect(odd.agent_day_spend).toBeUndefined();
+    expect(odd.bundle_etag).toBe("etag-1");
   });
 
   it("parses models, keeps a null allowlist apart from an empty one, and refuses a stray key", () => {

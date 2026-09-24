@@ -31,8 +31,10 @@
  *   1. **Observed metering.** Every model call seals one `llm_call` frame with
  *      the vendor's own usage, a digest of the request and of the response,
  *      the latency and the status, marked `oxagen.metering: observed`.
- *   2. **An enforced session budget.** `budget.session_limit_usd` is compared
- *      with the session's observed spend before a call is forwarded.
+ *   2. **An enforced budget.** `budget.session_limit_usd` is compared with
+ *      the session's observed spend, and `budget.daily_limit_usd` with the
+ *      agent's observed spend for the UTC day (ADR-160, `day-spend.ts`),
+ *      before a call is forwarded.
  *   3. **A real interrupt.** A paused or cancelled session has its in-flight
  *      calls aborted and its new ones refused until it is resumed.
  *   4. **A model allowlist.** `models.allow` and `models.deny` are checked
@@ -52,7 +54,7 @@
  * no session can be found for (still subject to model policy), and
  * a `beforeForward` that throws or stalls (the original request is sent).
  *
- * Closed: a session at its limit under an `enforced` budget, a model the
+ * Closed: a session or an agent's day at its limit under an `enforced` budget, a model the
  * workspace's `models` policy refuses independently, a paused or
  * cancelled session, and a suspended or revoked host. Those are refused with
  * an error in the vendor's own shape and recorded as a `policy_decision`.
@@ -95,6 +97,7 @@ import {
 import { digestText } from "../claude-code/context";
 import type { SessionRecorder } from "../claude-code/recorder";
 import { digestBytes, jcs } from "../digest";
+import { toProtocolTimestamp } from "../timestamp";
 import type { TachoEvent } from "../envelope";
 import {
   type DraftContent,
@@ -127,6 +130,12 @@ import {
   defaultHarnessForProvider,
 } from "../wire";
 import { GUARD_MESSAGES, guardLoopbackRequest } from "./loopback-guard";
+import {
+  createDaySpend,
+  type DaySpendDeps,
+  nextUtcDayStart,
+  utcDay,
+} from "./day-spend";
 import { modelVerdict } from "./model-allowlist";
 import { priceObservedUsage, usdToMicros } from "./model-pricing";
 import { RequestPrefixMemory } from "./request-prefix";
@@ -186,6 +195,7 @@ export type BeforeForward = (
 /** Why a call was refused, as the frame and the `x-oxagen-refusal` header say it. */
 export type ModelRefusalCode =
   | "session_budget_exceeded"
+  | "daily_budget_exceeded"
   | "model_not_permitted"
   | "model_ambiguous"
   | "session_paused"
@@ -251,6 +261,13 @@ export interface ModelProxyDeps {
   upstreams?: () => ModelUpstreams;
   /** Observed spend already on a session's chain, read once per session. */
   priorSpendMicros?: (sessionUuid: string) => number;
+  /**
+   * This host's observed spend on a UTC day (`YYYY-MM-DD`), read from its
+   * WAL once per day (ADR-160).
+   */
+  priorDaySpendMicros?: DaySpendDeps["priorDaySpendMicros"];
+  /** The control plane's latest figures for the agent's day, when it sent any. */
+  recordedDaySpend?: DaySpendDeps["recordedDaySpend"];
   beforeForward?: BeforeForward;
   credentials?: CredentialBroker;
   /** How long `beforeForward` may take before the original is sent. */
@@ -540,6 +557,14 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
   const httpsAgent = new HttpsAgent({ keepAlive: true, maxSockets: Infinity });
   const inFlight = new Map<string, Set<InFlight>>();
   const spent = new Map<string, number>();
+  const daySpend = createDaySpend({
+    ...(deps.priorDaySpendMicros !== undefined
+      ? { priorDaySpendMicros: deps.priorDaySpendMicros }
+      : {}),
+    ...(deps.recordedDaySpend !== undefined
+      ? { recordedDaySpend: deps.recordedDaySpend }
+      : {}),
+  });
   const observed = new Map<string, number>();
   // What each session's previous call carried, so the next call's body holds
   // only what is new (`request-prefix.ts`).
@@ -649,7 +674,13 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     modelAmbiguous: boolean,
     requiresModel: boolean,
   ):
-    | { code: ModelRefusalCode; message: string; source: "human" | "bundle" }
+    | {
+        code: ModelRefusalCode;
+        message: string;
+        source: "human" | "bundle";
+        /** Facts the refusal's frame carries beside the reason code. */
+        attrs?: Record<string, string>;
+      }
     | undefined {
     const view = deps.policy();
     if (view.hostStatus !== "active") {
@@ -701,9 +732,12 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
         };
       }
     }
-    if (record === undefined) return undefined;
     const budget = view.bundle.budget;
-    if (budget.mode === "enforced" && budget.session_limit_usd !== undefined) {
+    if (
+      record !== undefined &&
+      budget.mode === "enforced" &&
+      budget.session_limit_usd !== undefined
+    ) {
       const limit = usdToMicros(budget.session_limit_usd);
       const used = spendFor(record.recorder.sessionUuid);
       if (used >= limit) {
@@ -711,6 +745,24 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
           code: "session_budget_exceeded",
           message: `This session reached its Oxagen budget: $${(used / 1_000_000).toFixed(2)} observed of a $${budget.session_limit_usd.toFixed(2)} limit. Ask the workspace's operator to raise the limit, or start a new session.`,
           source: "bundle",
+        };
+      }
+    }
+    // The day ceiling belongs to the agent, not to a session, so it holds
+    // for a call no session could be found for too (ADR-160).
+    if (budget.mode === "enforced" && budget.daily_limit_usd !== undefined) {
+      const day = utcDay(deps.now());
+      const limit = usdToMicros(budget.daily_limit_usd);
+      const used = daySpend.total(day);
+      if (used >= limit) {
+        return {
+          code: "daily_budget_exceeded",
+          message: `This agent reached its Oxagen daily budget: $${(used / 1_000_000).toFixed(2)} observed of a $${budget.daily_limit_usd.toFixed(2)} limit on ${day} (UTC). It resets at ${nextUtcDayStart(day)}. Ask the workspace's operator to raise the limit.`,
+          source: "bundle",
+          attrs: {
+            "oxagen.day": day,
+            "oxagen.day_spend_usd_micros": String(used),
+          },
         };
       }
     }
@@ -991,6 +1043,7 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
                     ),
                   }
                 : {}),
+              ...("attrs" in refusal ? refusal.attrs : {}),
             },
           },
         ),
@@ -1160,8 +1213,13 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
             { ...usage, ...(model !== undefined ? { model } : {}) },
           )
         : undefined;
+      // One clock read stamps the frame and picks the day it is charged to,
+      // so the record and the day budget cannot disagree about a call that
+      // settles on a UTC midnight (ADR-160).
+      const settledAt = deps.now();
       if (priced !== undefined && record !== undefined)
         spent.set(sessionKey, spendFor(sessionKey) + priced);
+      if (priced !== undefined) daySpend.add(utcDay(settledAt), priced);
       callsObserved += 1;
       observed.set(sessionKey, (observed.get(sessionKey) ?? 0) + 1);
       const failed =
@@ -1270,6 +1328,7 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
                 : {}),
             },
             {
+              ts: toProtocolTimestamp(settledAt),
               fidelity: "proxy",
               // The recorder redacts these bytes, digests what is left and puts
               // that digest on the frame as `content.digest`, overriding any the

@@ -26,6 +26,7 @@ vi.mock("./tenant", () => ({
 
 import {
   insertTachoEvents,
+  selectAgentDaySpend,
   selectTachoEventRecords,
   selectTachoEvents,
   selectTachoStoredFrames,
@@ -378,5 +379,47 @@ describe("selectTachoEventRecords", () => {
       afterSeq: -1,
       limit: 500,
     });
+  });
+});
+
+describe("selectAgentDaySpend (ADR-160)", () => {
+  it("sums the proxy's priced calls per host by the frame's own UTC day", async () => {
+    chSelect.mockResolvedValueOnce({
+      data: [
+        { host_enrollment_id: "tch_a", micros: "11100" },
+        { host_enrollment_id: "tch_b", micros: 2500 },
+        { host_enrollment_id: "tch_c", micros: "0" },
+      ],
+    });
+    const spend = await selectAgentDaySpend({
+      day: "2026-09-24",
+      hostEnrollmentIds: ["tch_a", "tch_b", "tch_c"],
+    });
+    expect([...spend]).toEqual([
+      ["tch_a", 11_100],
+      ["tch_b", 2_500],
+    ]);
+    const [call] = chSelect.mock.calls[0] ?? [];
+    // The frame's timestamp decides the day, never when it was received.
+    expect(call?.query).toContain(
+      "ts >= toDateTime64({start:String}, 3, 'UTC')",
+    );
+    expect(call?.query).not.toContain("received_at");
+    expect(call?.query).toContain("fidelity = 'proxy'");
+    expect(call?.params).toMatchObject({
+      hosts: ["tch_a", "tch_b", "tch_c"],
+      meteringAttr: "oxagen.metering",
+      metered: "observed",
+      start: "2026-09-24 00:00:00.000",
+    });
+  });
+
+  it("asks nothing of ClickHouse for an agent with no hosts (negative)", async () => {
+    const spend = await selectAgentDaySpend({
+      day: "2026-09-24",
+      hostEnrollmentIds: [],
+    });
+    expect(spend.size).toBe(0);
+    expect(chSelect).not.toHaveBeenCalled();
   });
 });
