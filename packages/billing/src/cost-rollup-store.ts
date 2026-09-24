@@ -714,6 +714,9 @@ async function replaceDailyTotals(
   rows: readonly DailyTotalsRecord[],
   rolledUpAt: Date,
 ): Promise<void> {
+  // tenancy: the scheduled rollup jobs rebuild outside a tenant scope; every
+  // statement here is filtered by the orgId and workspaceId of the one
+  // workspace-day being rebuilt, and the rows written carry that same pair.
   await withSystemDb(async (tx) => {
     // One rebuild of a workspace-day at a time. Two concurrent rebuilds each
     // delete the rows the other has not committed yet and then both insert,
@@ -794,6 +797,9 @@ export async function rebuildDailyTotals(
 export async function listRunsAwaitingRollup(args: {
   limit: number;
 }): Promise<string[]> {
+  // tenancy: the scheduled nightly sweep reads sealed runs across all orgs by
+  // design and returns only their public ids; each rebuild then loads the
+  // run's own orgId and workspaceId and is filtered by them.
   return withSystemDb(async (tx) => {
     const tacho = await tx
       .select({ publicId: sessions.publicId, sealedAt: sessions.sealedAt })
