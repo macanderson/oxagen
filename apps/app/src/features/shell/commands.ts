@@ -25,7 +25,11 @@ import {
   workspaceHref,
 } from "./nav";
 
-/** The groups, in the order the menu draws them. */
+/**
+ * The groups, in the order the menu draws them.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export const COMMAND_GROUPS = [
   "go",
   "assistant",
@@ -39,7 +43,7 @@ export const COMMAND_GROUPS = [
 export type CommandGroup = (typeof COMMAND_GROUPS)[number];
 
 /** The pages ⌘1 to ⌘5 open, in that order (mockup `CMDS` Go). */
-export const SHORTCUT_PAGES: readonly WorkspaceNavKey[] = [
+const SHORTCUT_PAGES: readonly WorkspaceNavKey[] = [
   "fleet",
   "agents",
   "tools",
@@ -50,7 +54,11 @@ export const SHORTCUT_PAGES: readonly WorkspaceNavKey[] = [
 /** The issue that owns a tool row's missing version, risk, side effect and decision. */
 export const TOOL_ROW_GAP = "#3969";
 
-/** The issue that owns the one action with no write, carried as a data attribute only. */
+/**
+ * The issue that owns the one action with no write, carried as a data attribute only.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export const PAUSE_ALL_GAP = "#3862";
 
 type Base = {
@@ -73,7 +81,7 @@ export type Command =
   | (Base & { gap: string });
 
 /** The copy the menu's own entries need, beyond the nav labels. */
-export type CommandTextKey =
+type CommandTextKey =
   | "assistant.open"
   | "assistant.askTampered"
   | "assistant.askTamperedDraft"

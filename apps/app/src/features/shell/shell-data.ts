@@ -32,7 +32,7 @@ export type WorkspaceApprovals = {
  * when the organization has more workspaces than the chrome reads, so the
  * count says "+" rather than a total it cannot stand behind.
  */
-export type ShellApprovals = {
+type ShellApprovals = {
   workspaces: WorkspaceApprovals[];
   truncated: boolean;
   /** The instant the reads were made: every countdown in the drawer ticks from it. */

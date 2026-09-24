@@ -463,7 +463,7 @@ export function ShellMobileNav({ data }: { data: ShellData }) {
 }
 
 /** Tailwind's md breakpoint, where the rail replaces the drawer. */
-export const WIDE_QUERY = "(min-width: 48rem)";
+const WIDE_QUERY = "(min-width: 48rem)";
 
 /**
  * The phone drawer: the whole sidebar over a scrim, opened from the top bar's

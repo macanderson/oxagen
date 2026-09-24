@@ -88,11 +88,7 @@ const ALLOWED: Record<
   features: (from, target, edge) => {
     const page = featurePage(from.file);
     if (page !== null && under(target, `features/${page}`)) return true;
-    if (
-      isFeatureBarrel(target) ||
-      target === "features/fleet/client" ||
-      target === "features/shell/client"
-    )
+    if (isFeatureBarrel(target) || target === "features/shell/client")
       return true;
     if (under(target, "ui") || under(target, "shared")) return true;
     if (isVocabulary(target) || target === "data/ports") return true;

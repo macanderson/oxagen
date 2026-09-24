@@ -143,6 +143,8 @@ const code =
  * `errorState(what, code)`: the page could not be read. The title is the
  * page's own ("Fleet could not be loaded"); the code is the one the read path
  * answered, as `503 run_index_unavailable`.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
  */
 export function PageError({
   title,
@@ -237,7 +239,7 @@ export const RoutePageNameContext = createContext<
 >(null);
 
 /** `YYYY-MM-DD hh:mm:ssZ`, the instant a boundary caught the failure, as the mock's trace line prints it. */
-export function utcInstant(at: Date): string {
+function utcInstant(at: Date): string {
   const iso = at.toISOString();
   return `${iso.slice(0, 10)} ${iso.slice(11, 19)}Z`;
 }

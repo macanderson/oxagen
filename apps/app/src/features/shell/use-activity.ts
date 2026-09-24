@@ -20,7 +20,7 @@ export type OrgWaiting = {
 };
 
 /** The three nav items that carry a count (audit-prompt check 5). */
-export type NavCountKey = "fleet" | "steering" | "audit";
+type NavCountKey = "fleet" | "steering" | "audit";
 
 export type ShellCounts = {
   /** The topbar button's figure; null when no workspace's queue could be read. */

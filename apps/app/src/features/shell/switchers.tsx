@@ -30,7 +30,7 @@ type Choice = { slug: string; name: string; href: SafePath };
 const META_GAP = "#3861";
 
 /** Every whitespace-separated term appears in the name or the slug, ignoring case. */
-export function matchesChoice(choice: Choice, query: string): boolean {
+function matchesChoice(choice: Choice, query: string): boolean {
   const terms = query.toLocaleLowerCase().split(/\s+/).filter(Boolean);
   const hay = `${choice.name} ${choice.slug}`.toLocaleLowerCase();
   return terms.every((term) => hay.includes(term));

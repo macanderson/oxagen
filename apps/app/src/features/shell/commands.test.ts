@@ -127,7 +127,7 @@ describe("buildCommands", () => {
       "/acme/core-platform/register/name",
       "/acme/core-platform/tools",
       "/acme/roles",
-      "/acme/core-platform/tools?tab=switches",
+      "/acme/core-platform/tools/switches",
       "/acme/core-platform",
       "/acme/api-keys",
     ]);

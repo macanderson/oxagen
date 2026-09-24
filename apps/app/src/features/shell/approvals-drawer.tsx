@@ -42,10 +42,10 @@ const ROW_GAP = "#3848";
 const INTERJECTION_GAP = "#3849";
 
 /** Under two minutes left, a countdown takes the critical ink (mockup `sec<120`, `.apsm-clk.warn`). */
-export const WARN_BELOW_SECONDS = 120;
+const WARN_BELOW_SECONDS = 120;
 
 /** `m:ss` until `at`, or null once it has passed. */
-export function countdown(at: number, now: number): string | null {
+function countdown(at: number, now: number): string | null {
   const left = Math.floor((at - now) / 1000);
   if (left <= 0) return null;
   const m = Math.floor(left / 60);

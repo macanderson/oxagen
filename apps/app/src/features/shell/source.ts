@@ -21,12 +21,20 @@ import { type OrgCtx, requireViewer } from "@/server/viewer";
 import { startOfZonedDay } from "@/shared/calendar-day";
 import type { ShellData, WorkspaceApprovals } from "./shell-data";
 
-/** The most workspaces whose approvals the chrome reads on one render. */
+/**
+ * The most workspaces whose approvals the chrome reads on one render.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export const WORKSPACE_BOUND = 12;
 /** How many workspaces are read at once, so a large organization does not take the pool. */
 const BATCH = 4;
 
-/** The first instant of the viewer's calendar day: "resolved today" counts from here. */
+/**
+ * The first instant of the viewer's calendar day: "resolved today" counts from here.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export function startOfViewerDay(now: number, timeZone: string): string {
   // en-CA formats a date as YYYY-MM-DD.
   const day = new Intl.DateTimeFormat("en-CA", {

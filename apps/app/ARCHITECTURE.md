@@ -1309,6 +1309,4 @@ The billing amendment itself changed, beyond the above: §0 items 2, 8 and 9; §
 
 The shell's reads run on the server when the organization layout renders. `features/shell/source.ts` resolves each workspace's viewer with `requireViewer` before reading the approvals and mandates ports, a few workspaces at a time, and hands plain data to the client shell. The approvals drawer's card is Fleet's `ApprovalCardAlone`, rendered in `features/shell/shell-chrome.tsx` on the server and passed to the drawer as an element, so the drawer keeps Fleet's approval and mandate mapping without copying it. No shell module imports `data/source`.
 
-`features/fleet/client.ts` is the public client entry for the shared approvals panel. A client module in another lane imports it instead of the server barrel. The entry exports only client-compatible components.
-
 `features/shell/client.ts` is the shell's public client entry. It exports `openApprovals`, which Fleet's waiting tile calls to open the approvals drawer. The shell barrel reaches server modules, so a client component that imports it pulls `next/headers` into the browser bundle and fails the build.
