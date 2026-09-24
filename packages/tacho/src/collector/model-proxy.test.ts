@@ -1710,7 +1710,9 @@ describe("the loopback model proxy", () => {
     expect(answer.body.toString()).toContain("api_error");
   });
 
-  it("marks a steer delivered as interrupt, and answers before headers when it can", async () => {
+  // A 403 ended the turn in StopFailure, whose answer Claude Code ignores, so
+  // the steer the cut made room for never reached the agent (#4019).
+  it("marks a steer delivered as interrupt, and answers the cut call as retryable", async () => {
     const fake = await vendor(() => undefined);
     const { handle, plane, port, session } = await boot(fake.url);
     const uuid = await session("sess-steer");
@@ -1730,8 +1732,9 @@ describe("the loopback model proxy", () => {
     });
     await handle.tick();
     const answer = await inFlight;
-    expect(answer.status).toBe(403);
-    expect(answer.headers["x-oxagen-refusal"]).toBe("interrupted_by_operator");
+    expect(answer.status).toBe(503);
+    expect(answer.headers["x-oxagen-refusal"]).toBe("steered_by_operator");
+    expect(answer.headers["x-should-retry"]).toBe("true");
     expect(
       handle.registry.get("sess-steer")!.control.messages[0]!.interrupted,
     ).toBe(true);
