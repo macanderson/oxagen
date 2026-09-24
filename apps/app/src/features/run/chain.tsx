@@ -281,6 +281,7 @@ function SealPanel({
                 ws={place.ws}
                 runId={run.id}
                 sealed={run.status !== "live"}
+                closedIdle={run.sealSource === "idle_timeout"}
                 orgRole={orgRole}
                 label={t("export")}
                 testId="chain-export"

@@ -1088,6 +1088,30 @@ describe("a run row says whether a command can reach it", () => {
     expect(byId.get("tse_stopped")?.commandBlock).toBe("run_sealed");
   });
 
+  it("lists a run an operator sealed as sealed and final, with its seal source (#4073)", async () => {
+    const { list } = handlerOver(
+      [],
+      [
+        tachoSession({
+          publicId: "tse_operator",
+          session: {
+            outcome: "unknown",
+            sealedAt: new Date("2026-09-15T21:00:00.000Z"),
+            sealSource: "operator",
+          },
+          host: host("active", 10),
+        }),
+      ],
+    );
+    const run = (await list({ limit: 50 }, ctx())).runs[0];
+    expect(run).toMatchObject({
+      status: "sealed",
+      sealSource: "operator",
+      // Final like the host's own stop: no command reaches it.
+      commandBlock: "run_sealed",
+    });
+  });
+
   // #4023: Stella reads steering text only at session start, so its row
   // offers pause, resume and cancel but not Steer.
   it("names a Stella run's steer block and leaves its other commands open", async () => {
@@ -1519,6 +1543,11 @@ describe("an open run's cost and what sealed a run (#3980)", () => {
     // Sealed before the column existed: only an agent_stop sealed then.
     expect(recordedSealSource(sealed, null)).toBe("agent_stop");
     expect(recordedSealSource(null, "idle_timeout")).toBeNull();
+  });
+
+  it("names an operator's seal (#4073)", () => {
+    expect(recordedSealSource(sealed, "operator")).toBe("operator");
+    expect(recordedSealSource(null, "operator")).toBeNull();
   });
 
   it("refuses a seal source outside the CHECK (negative)", () => {

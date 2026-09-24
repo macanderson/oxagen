@@ -103,18 +103,6 @@ describe("ratioWidth", () => {
   });
 });
 
-describe("formatClock", () => {
-  it("reads whole seconds as m:ss", () => {
-    expect(formatClock(0, "en-US")).toBe("0:00");
-    expect(formatClock(65.9, "en-US")).toBe("1:05");
-    expect(formatClock(600, "en-US")).toBe("10:00");
-  });
-
-  it("reads a negative duration as 0:00 (negative)", () => {
-    expect(formatClock(-30, "en-US")).toBe("0:00");
-  });
-});
-
 describe("formatRatio", () => {
   it("prints a 0..1 ratio as a percentage with at most one decimal", () => {
     expect(formatRatio(0.4567, "en-US")).toBe("45.7%");
@@ -153,10 +141,19 @@ describe("ratioWidth", () => {
 });
 
 describe("formatClock", () => {
-  it("reads whole seconds as m:ss", () => {
+  it("reads whole seconds as m:ss under an hour", () => {
     expect(formatClock(0, "en-US")).toBe("0:00");
     expect(formatClock(65.9, "en-US")).toBe("1:05");
     expect(formatClock(600, "en-US")).toBe("10:00");
+    expect(formatClock(3599, "en-US")).toBe("59:59");
+  });
+
+  it("reads h:mm:ss from an hour, so days of a run stay short enough for a tile", () => {
+    expect(formatClock(3600, "en-US")).toBe("1:00:00");
+    expect(formatClock(3 * 86_400 + 4 * 3600 + 12 * 60 + 9, "en-US")).toBe(
+      "76:12:09",
+    );
+    expect(formatClock(1234 * 3600 + 5, "en-US")).toBe("1,234:00:05");
   });
 
   it("reads a negative duration as 0:00 (negative)", () => {
@@ -178,6 +175,7 @@ describe("formatDuration", () => {
   it("reads a minute and beyond on the clock", () => {
     expect(formatDuration(60_000, "en")).toBe("1:00");
     expect(formatDuration(127_000, "en")).toBe("2:07");
+    expect(formatDuration(3_723_000, "en")).toBe("1:02:03");
   });
 
   it("reads a negative duration as zero rather than as a negative one (negative)", () => {

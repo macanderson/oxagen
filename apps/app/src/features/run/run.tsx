@@ -251,7 +251,7 @@ export async function Run({
             .catch(() => null),
     ],
   );
-  const metrics = runMetrics({ run, cost, transcript: everything });
+  const metrics = runMetrics({ run, cost, transcript: everything, now: at });
   const props: RunTabProps = {
     ctx,
     source,

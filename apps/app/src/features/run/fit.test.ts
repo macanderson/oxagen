@@ -28,6 +28,7 @@ function metrics(overrides: Partial<RunMetrics> = {}): RunMetrics {
       ms: null,
       sealed: false,
       closedIdle: false,
+      ticking: null,
       parts: null,
       lead: null,
     },

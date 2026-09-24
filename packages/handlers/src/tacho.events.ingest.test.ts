@@ -93,7 +93,10 @@ vi.mock("./event-client", () => ({
 import { digestBytes } from "@oxagen/tacho";
 import { tachoEventsIngest } from "@oxagen/oxagen/contracts/tacho.events.ingest";
 import { clearSteeringCacheForTests } from "./lib/tacho-steering";
-import { idleCloseColumns } from "@oxagen/inngest-functions/tacho-idle-close";
+import {
+  controlPlaneSealColumns,
+  idleCloseColumns,
+} from "@oxagen/inngest-functions/tacho-idle-close";
 import {
   IDLE_CLOSE_UNDONE,
   enforcementTierOf,
@@ -375,6 +378,12 @@ interface FakeDb {
    * One-shot, like `advanceSeqCountOnRead`.
    */
   closeOnRead: boolean;
+  /**
+   * An operator's `seal_run` commits between this request's read and its
+   * write: the row is sealed `operator` and its head does not move. One-shot,
+   * like `closeOnRead`.
+   */
+  operatorSealOnRead: boolean;
   containedLaunches: Array<{ sessionUuid: string; genesisHash: string }>;
   gatewayChains: Array<{
     chainSessionUuid: string;
@@ -454,6 +463,7 @@ function fakeDb(): FakeDb {
     hideSessionFromNextRead: false,
     advanceSeqCountOnRead: undefined,
     closeOnRead: false,
+    operatorSealOnRead: false,
     pendingColumns: new Set<string>(),
     gatewayChains: [],
     containedLaunches: [],
@@ -678,6 +688,14 @@ function wire(db: FakeDb): void {
                   outcome: "unknown",
                 });
                 db.closeOnRead = false;
+              }
+              if (db.operatorSealOnRead) {
+                Object.assign(row, {
+                  sealedAt: new Date("2026-09-09T01:00:00.000Z"),
+                  sealSource: "operator",
+                  outcome: "unknown",
+                });
+                db.operatorSealOnRead = false;
               }
               return snapshot;
             },
@@ -4846,6 +4864,88 @@ describe("running cost and the idle close", () => {
     // The late frame's cost is still counted: the sealed run is rolled up
     // again, as the final figure it is.
     expect(sentNames()).toEqual(["cost/run.progressed"]);
+  });
+
+  /** The columns an operator's `seal_run` writes (#4073), on the fake's row. */
+  function sealByOperator(db: FakeDb): Record<string, unknown> {
+    const row = db.sessions.get(SESSION)!;
+    return Object.assign(
+      row,
+      controlPlaneSealColumns(
+        {
+          lastHash: (row["lastHash"] as string | undefined) ?? null,
+          lastEventAt: new Date("2026-09-08T10:06:03.000Z"),
+          chainVerified: true,
+          telemetryGapCount: 0,
+          contentFrames: 0,
+          bodyFrames: 0,
+          numToolCalls: 0,
+          toolBodyFrames: 0,
+          enforcementTier: "observe",
+        },
+        "content_exact",
+        new Date("2026-09-09T01:00:00.000Z"),
+        "operator",
+      ),
+    );
+  }
+
+  it("keeps an operator's seal final: a later frame does not reopen it and a later agent_stop does not replace it (#4073)", async () => {
+    const db = fakeDb();
+    wire(db);
+    const events = session();
+    await tachoEventsIngestHandler(batch(events.slice(0, 3)), CONTEXT);
+    const { sealedAt, finalHash } = sealByOperator(db);
+    expect(finalHash).toBe(events[2]!.hash);
+
+    // The harness was still running: frames with no stop.
+    await tachoEventsIngestHandler(batch(events.slice(3, -1)), CONTEXT);
+    expect(db.sessions.get(SESSION)).toMatchObject({
+      sealedAt,
+      sealSource: "operator",
+      outcome: "unknown",
+      finalHash,
+      unobservedTail: true,
+    });
+
+    // Then its host's own stop.
+    await tachoEventsIngestHandler(batch(events.slice(-1)), CONTEXT);
+    expect(db.sessions.get(SESSION)).toMatchObject({
+      sealedAt,
+      sealSource: "operator",
+      outcome: "unknown",
+      finalHash,
+      unobservedTail: true,
+    });
+  });
+
+  it("refuses a batch that read an idle close an operator's seal then overtook, and keeps the seal on its re-send (#4073)", async () => {
+    const db = fakeDb();
+    wire(db);
+    const events = session();
+    await tachoEventsIngestHandler(batch(events.slice(0, 3)), CONTEXT);
+    closeForIdleness(db);
+
+    // This batch reads the idle close and would reopen the session. The
+    // operator's seal commits before it writes, and moves no head.
+    db.operatorSealOnRead = true;
+    const refused = await tachoEventsIngestHandler(
+      batch(events.slice(3, -1)),
+      CONTEXT,
+    ).catch((err: unknown) => err);
+    expect(isHandlerError(refused) && refused.code).toBe("conflict");
+    expect(db.sessions.get(SESSION)).toMatchObject({
+      sealSource: "operator",
+      outcome: "unknown",
+    });
+
+    // The daemon's spool re-sends it, and the next read sees the final seal.
+    await tachoEventsIngestHandler(batch(events.slice(3, -1)), CONTEXT);
+    expect(db.sessions.get(SESSION)).toMatchObject({
+      sealSource: "operator",
+      outcome: "unknown",
+    });
+    expect(db.sessions.get(SESSION)!["sealedAt"]).not.toBeNull();
   });
 });
 

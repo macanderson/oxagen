@@ -294,6 +294,14 @@
         }
       ]
     },
+    "seal_run": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "/[org]/[ws]/runs/[run] \u2014 Seal run on a live or idle-closed wrapped run opens a dialog that seals it through seal_run and says whether its agent's kill was queued, for an org Owner or Admin or the workspace Owner (features/run/actions.ts, features/run/seal-run.tsx, features/run/header.tsx)",
+      "proof": "apps/app/src/features/run/seal-run.test.tsx",
+      "verifiedAt": "2026-09-24",
+      "verifiedBy": "session-014z7BMxb5guRYRar9qDcvQn"
+    },
     "get_run_export": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",

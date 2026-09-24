@@ -136,6 +136,7 @@ import { runTranscriptGet } from "./run.transcript.get";
 import { runChainGet } from "./run.chain.get";
 import { runExport } from "./run.export";
 import { runExportGet } from "./run.export.get";
+import { runSeal } from "./run.seal";
 import { runBisect } from "./run.bisect";
 import { runFork } from "./run.fork";
 import { runSummarize } from "./run.summarize";
@@ -733,6 +734,7 @@ export {
   runChainGet,
   runExport,
   runExportGet,
+  runSeal,
   runBisect,
   runFork,
   runSummarize,
@@ -1128,6 +1130,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   runChainGet,
   runExport,
   runExportGet,
+  runSeal,
   runBisect,
   runFork,
   runSummarize,
