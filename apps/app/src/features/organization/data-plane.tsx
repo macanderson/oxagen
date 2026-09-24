@@ -29,7 +29,7 @@ import {
 import { ReadFailure } from "@/ui/read-failure";
 import { cell, Table } from "@/ui/table";
 import { DataPlaneModes, type PlaneMode } from "./data-plane-modes";
-import { DateCell, NotRecorded, note } from "./parts";
+import { DateCell, NotRecordedValue, note } from "./parts";
 import { StubDialog } from "./stub-dialog";
 
 /** The fact labels the three modes draw, as the catalogue names them. */
@@ -89,7 +89,7 @@ function StatusBadge({ plane }: { plane: DataPlane }) {
 function useDetails(plane: DataPlane): Record<PlaneMode, ReactNode> {
   const t = useTranslations("organization.dataPlane");
   const f = (key: FactKey) => t(`facts.${key}`);
-  const nr = <NotRecorded />;
+  const nr = <NotRecordedValue />;
   const binding = (
     <span className="inline-flex flex-wrap items-center gap-1.5">
       <StatusBadge plane={plane} />
@@ -245,7 +245,7 @@ function Binding({ org, plane }: { org: string; plane: DataPlane }) {
 
 function Retention() {
   const t = useTranslations("organization.dataPlane.retention");
-  const nr = <NotRecorded />;
+  const nr = <NotRecordedValue />;
   return (
     <section aria-labelledby="org-retention" className={panel}>
       <div className={panelHeader}>

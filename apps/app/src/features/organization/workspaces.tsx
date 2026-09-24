@@ -39,7 +39,7 @@ import {
 } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
 import { type ListRow, ListTable } from "./list-table";
-import { NotRecorded, note } from "./parts";
+import { NotRecordedValue, note } from "./parts";
 import {
   ArchiveWorkspace,
   CreateWorkspace,
@@ -283,7 +283,7 @@ export function WorkspacesTab({
       cells: [
         <WorkspaceCell key="workspace" workspace={workspace} />,
         ...known.cells,
-        <NotRecorded key="owner" />,
+        <NotRecordedValue key="owner" />,
         <GovernanceCell key="governance" workspace={workspace} />,
         <Actions key="actions" org={org} workspace={workspace} facts={read} />,
       ],

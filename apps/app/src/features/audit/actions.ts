@@ -15,7 +15,8 @@
 // the handler re-reads the caller's membership on that organization and
 // refuses anyone but an Owner or Admin with a coded `forbidden`.
 import { privacyDataExport } from "@oxagen/oxagen/contracts/privacy.data.export";
-import { type ActionResult, kernelWrite } from "@/server/kernel";
+import type { ActionResult } from "@/server/kernel";
+import { kernelWrite } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
 
 export type BundleQueued = { exportId: string };

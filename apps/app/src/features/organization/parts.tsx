@@ -31,7 +31,7 @@ export function DateCell({ iso }: { iso: string }) {
  * never a zero or a dash that could read as a value, and carries
  * `data-not-recorded` so a test and the audit can find every one.
  */
-export function NotRecorded() {
+export function NotRecordedValue() {
   const t = useTranslations("organization");
   return (
     <span data-not-recorded="" className="text-[11.5px] text-dim">

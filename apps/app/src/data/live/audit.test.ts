@@ -277,7 +277,7 @@ describe("audit.bundle", () => {
     );
     expect(await audit.bundle(ctx, id)).toEqual(
       readOk({
-        exportId: id,
+        exportRef: id,
         status: "ready",
         ready: true,
         completedAt: "2026-09-16T11:58:00.000Z",

@@ -74,7 +74,7 @@ export function toAuditBundle(
   out: ContractOutput<typeof privacyDataExportStatus>,
 ): z.input<typeof AuditBundle> {
   return {
-    exportId: out.exportId,
+    exportRef: out.exportId,
     status: out.status,
     ready: out.ready,
     completedAt: out.completedAt,

@@ -191,7 +191,7 @@ const EXPORT_ID = "3f1c2b7a-9d4e-4c1b-8a2f-5e6d7c8b9a01";
 
 const queued = (over: Partial<AuditBundle> = {}): Read<AuditBundle> =>
   readOk({
-    exportId: EXPORT_ID,
+    exportRef: EXPORT_ID,
     status: "processing",
     ready: false,
     completedAt: null,
@@ -1588,12 +1588,15 @@ describe("the header's gold action", () => {
       accessRequestId: "ar_01K5WAIT",
     });
     const dialog = await openBundle();
-    const build = () =>
+    // The failure line can land before the transition settles, so each press
+    // waits for the button to read "Build bundle" again rather than pressing
+    // the pending one.
+    const build = async () =>
       fireEvent.click(
-        within(dialog).getByRole("button", { name: "Build bundle" }),
+        await within(dialog).findByRole("button", { name: "Build bundle" }),
       );
 
-    build();
+    await build();
     expect(
       await within(dialog).findByTestId("audit-bundle-failure"),
     ).toHaveTextContent("The export waits on access request ar_01K5WAIT.");
@@ -1603,7 +1606,7 @@ describe("the header's gold action", () => {
       reason: "unavailable",
       code: "export_queue_unavailable",
     });
-    build();
+    await build();
     await vi.waitFor(() => {
       expect(
         within(dialog).getByTestId("audit-bundle-failure"),

@@ -274,16 +274,16 @@ function BundleCard({
   }
   const bundle = read.value;
   const building = bundle.status === "queued" || bundle.status === "processing";
-  const verifyNote = `audit-bundle-verify-${bundle.exportId}`;
+  const verifyNote = `audit-bundle-verify-${bundle.exportRef}`;
   return (
     <article
-      aria-labelledby={`audit-bundle-${bundle.exportId}`}
+      aria-labelledby={`audit-bundle-${bundle.exportRef}`}
       data-testid="audit-bundle"
       className={`${panel} flex flex-col`}
     >
       <header className={panelHeader}>
         <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-          <h2 id={`audit-bundle-${bundle.exportId}`} className={panelTitle}>
+          <h2 id={`audit-bundle-${bundle.exportRef}`} className={panelTitle}>
             {t("card")}
           </h2>
           <Badge
@@ -305,7 +305,7 @@ function BundleCard({
           </button>
           {bundle.ready ? (
             <DownloadLink
-              to={routes.accountExport(org, bundle.exportId)}
+              to={routes.accountExport(org, bundle.exportRef)}
               data-export="bundle"
               className={buttonSecondary}
             >
@@ -317,7 +317,7 @@ function BundleCard({
       <div className={`${panelBody} flex flex-col gap-3`}>
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-[13px]">
           <Fact term={t("exportId")}>
-            <span className={mono}>{bundle.exportId}</span>
+            <span className={mono}>{bundle.exportRef}</span>
           </Fact>
           <Fact term={t("range")} />
           <Fact term={t("contents")}>{t("contentsOrg")}</Fact>

@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MemberList, WorkspaceFacts } from "@/data/contracts/org";
 import { readOk } from "@/data/read";
 import type { OrgRole } from "@/server/viewer";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider, translator } from "@/test/intl";
 
 const { getSession, requireViewer } = vi.hoisted(() => ({
@@ -222,13 +223,14 @@ describe("parseOrganizationTab", () => {
 describe("Organization", () => {
   it("draws People by default and makes no read of a tab's own", async () => {
     const { source, calls } = sourceWith();
-    await renderPage(
+    const view = await renderPage(
       Organization({ ctx: ctxFor("owner"), source, tab: "people" }),
     );
 
     expect(screen.getByRole("table", { name: "People" })).toHaveTextContent(
       "Marcus Bell",
     );
+    await expectNoAxe(view.container);
     expect(calls.workspaceFacts).toEqual([]);
     expect(calls.dataPlane).toEqual([]);
     expect(calls.costCenters).toEqual([]);
@@ -237,13 +239,14 @@ describe("Organization", () => {
 
   it("draws the pending invitations on Invitations", async () => {
     const { source } = sourceWith();
-    await renderPage(
+    const view = await renderPage(
       Organization({ ctx: ctxFor("owner"), source, tab: "invitations" }),
     );
 
     expect(
       screen.getByRole("table", { name: "Pending invitations" }),
     ).toHaveTextContent("dana@acme.example");
+    await expectNoAxe(view.container);
   });
 
   it("reads the facts of each workspace the viewer may enter, through its own viewer, and of no other", async () => {

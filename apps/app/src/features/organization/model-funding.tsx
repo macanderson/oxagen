@@ -43,7 +43,7 @@ import {
   recordedSource,
 } from "./funding-sources";
 import { ModelFundingForm } from "./model-funding-form";
-import { NotRecorded, note } from "./parts";
+import { NotRecordedValue, note } from "./parts";
 import { DetailsDialog, StubDialog } from "./stub-dialog";
 
 /** §4.5's tiers for Oxagen's own work, in the order the design lists them. */
@@ -146,7 +146,7 @@ function CustomerKey({
         <dd>{t("customer.storage")}</dd>
         <dt className={term}>{t("facts.engine")}</dt>
         <dd>
-          <NotRecorded />
+          <NotRecordedValue />
         </dd>
       </dl>
       <ModelFundingForm org={org} credential={credential} />
@@ -217,7 +217,7 @@ function HeldKey({ orgName }: { orgName: string }) {
           <div key={row} className="contents">
             <dt className={term}>{t(`facts.${row}`)}</dt>
             <dd>
-              <NotRecorded />
+              <NotRecordedValue />
             </dd>
           </div>
         ))}
@@ -259,15 +259,15 @@ function Reconciliation() {
       <dl className={facts}>
         <dt className={term}>{t("provider")}</dt>
         <dd>
-          <NotRecorded />
+          <NotRecordedValue />
         </dd>
         <dt className={term}>{t("ledger")}</dt>
         <dd>
-          <NotRecorded />
+          <NotRecordedValue />
         </dd>
         <dt className={term}>{t("difference")}</dt>
         <dd>
-          <NotRecorded />
+          <NotRecordedValue />
         </dd>
       </dl>
       <p className={`${note} mt-2.5`}>{t("note")}</p>
@@ -371,19 +371,19 @@ function ModelRoutes() {
               </div>
             </td>
             <td className={cell}>
-              <NotRecorded />
+              <NotRecordedValue />
             </td>
             <td className={cell}>
-              <NotRecorded />
+              <NotRecordedValue />
             </td>
             <td className={cell}>
-              <NotRecorded />
+              <NotRecordedValue />
             </td>
             <td className={numericCell}>
-              <NotRecorded />
+              <NotRecordedValue />
             </td>
             <td className={numericCell}>
-              <NotRecorded />
+              <NotRecordedValue />
             </td>
             <td className={cell}>
               <StubDialog
@@ -407,7 +407,7 @@ function ModelRoutes() {
             <span className="text-[11.5px] text-dim">{t("currency")}</span>
           </td>
           <td className={numericCell}>
-            <NotRecorded />
+            <NotRecordedValue />
           </td>
           <td className={cell} />
         </tr>

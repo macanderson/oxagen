@@ -35,7 +35,7 @@ import { InvitationControls } from "./invitation-controls";
 import { InviteDialog } from "./invite-dialog";
 import { type ListRow, ListTable } from "./list-table";
 import { MemberRowActions } from "./member-row-actions";
-import { DateCell, NotRecorded, note } from "./parts";
+import { DateCell, NotRecordedValue, note } from "./parts";
 
 type Member = MemberList["members"][number];
 
@@ -76,11 +76,11 @@ function MemberFacts({ member }: { member: Member }) {
         </dd>
         <dt className={term}>{t("twoFactor")}</dt>
         <dd>
-          <NotRecorded />
+          <NotRecordedValue />
         </dd>
         <dt className={term}>{t("lastSeen")}</dt>
         <dd>
-          <NotRecorded />
+          <NotRecordedValue />
         </dd>
         <dt className={term}>{t("id")}</dt>
         <dd className={`${mono} select-all`}>{member.id}</dd>
@@ -100,27 +100,27 @@ function MemberFacts({ member }: { member: Member }) {
         <tbody>
           <tr data-member-workspaces="not-recorded">
             <td className={cell}>
-              <NotRecorded />
+              <NotRecordedValue />
             </td>
             <td className={cell}>
-              <NotRecorded />
+              <NotRecordedValue />
             </td>
           </tr>
         </tbody>
       </table>
       <h3 className={sectionTitle}>{t("agents")}</h3>
       <p data-member-agents="not-recorded">
-        <NotRecorded />
+        <NotRecordedValue />
       </p>
       <h3 className={sectionTitle}>{t("mandates")}</h3>
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
         <dt className={term}>{t("granted")}</dt>
         <dd>
-          <NotRecorded />
+          <NotRecordedValue />
         </dd>
         <dt className={term}>{t("heldByAgents")}</dt>
         <dd>
-          <NotRecorded />
+          <NotRecordedValue />
         </dd>
       </dl>
     </div>
@@ -160,9 +160,9 @@ export function PeopleTab({
       <span key="role" className={`${mono} text-[11.5px]`}>
         {tRole(member.role)}
       </span>,
-      <NotRecorded key="workspaces" />,
-      <NotRecorded key="twoFactor" />,
-      <NotRecorded key="lastSeen" />,
+      <NotRecordedValue key="workspaces" />,
+      <NotRecordedValue key="twoFactor" />,
+      <NotRecordedValue key="lastSeen" />,
       <Badge key="status" tone="allowed" data-status="active">
         {t("statusActive")}
       </Badge>,
@@ -345,7 +345,7 @@ export function InvitationsTab({
         <span key="role" className={`${mono} text-[11.5px]`}>
           {tRole(invitation.role)}
         </span>,
-        <NotRecorded key="by" />,
+        <NotRecordedValue key="by" />,
         <DateCell key="sent" iso={invitation.invitedAt} />,
         invitation.expiresAt === null ? (
           <span key="expires">{t("never")}</span>

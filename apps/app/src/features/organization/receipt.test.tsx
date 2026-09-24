@@ -4,6 +4,7 @@
 // still shows it, and gone after the toast's 4.2 seconds.
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { TOAST_MS } from "@/ui/toast";
 import { Receipts, recordReceipt } from "./receipt";
 
@@ -56,5 +57,17 @@ describe("Receipts", () => {
       vi.advanceTimersByTime(1);
     });
     expect(screen.getByTestId("organization-receipts")).toBeEmptyDOMElement();
+  });
+
+  it("passes the accessibility check with a line showing", async () => {
+    // axe schedules its own work on timers, so this case runs on real ones
+    // and hands fake ones back for the shared teardown.
+    vi.useRealTimers();
+    const view = render(<Receipts />);
+    act(() => {
+      recordReceipt("Key created. Recorded in the audit record.");
+    });
+    await expectNoAxe(view.container);
+    vi.useFakeTimers();
   });
 });

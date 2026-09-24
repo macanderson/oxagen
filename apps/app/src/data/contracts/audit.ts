@@ -142,7 +142,12 @@ const AuditBundleStatus = z.enum(["queued", "processing", "ready", "failed"]);
  * range, size, signature and key ids are not part of this record.
  */
 export const AuditBundle = z.object({
-  exportId: z.uuid(),
+  /**
+   * The export row's uuid, as `export_data` answers it. It is a `…Ref`, not a
+   * `…Id`: the export has no public id (INV-11), and the uuid is the key the
+   * download route and `get_export_status` take.
+   */
+  exportRef: z.uuid(),
   status: AuditBundleStatus,
   ready: z.boolean(),
   completedAt: z.string().nullable(),

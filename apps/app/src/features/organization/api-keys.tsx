@@ -54,7 +54,7 @@ import {
 } from "./api-keys-view";
 import { CreateKeyDialog } from "./create-key-dialog";
 import { KeyActionsCell, KeyExpiryCell } from "./key-row";
-import { DateCell, emptyLine, NotRecorded, note } from "./parts";
+import { DateCell, emptyLine, NotRecordedValue, note } from "./parts";
 
 /**
  * The workspaces of the organization this viewer may actually enter: the ones
@@ -473,9 +473,9 @@ function Keys({
               </div>,
               // Principal, Grants and Created by: list_api_keys returns none
               // of them, and Actions 30d has no per-key count (#3934).
-              <NotRecorded key="principal" />,
-              <NotRecorded key="grants" />,
-              <NotRecorded key="createdBy" />,
+              <NotRecordedValue key="principal" />,
+              <NotRecordedValue key="grants" />,
+              <NotRecordedValue key="createdBy" />,
               <span key="lastUsed" className={`${mono} text-[11px] text-dim`}>
                 {key.lastUsedAt === null ? (
                   t("neverUsed")
@@ -483,7 +483,7 @@ function Keys({
                   <DateCell iso={key.lastUsedAt} />
                 )}
               </span>,
-              <NotRecorded key="actions30d" />,
+              <NotRecordedValue key="actions30d" />,
               <KeyExpiryCell key="expires" apiKey={key} now={now} />,
               <KeyActionsCell
                 key="actions"
