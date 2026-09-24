@@ -1572,3 +1572,193 @@ describe("tachoRunName", () => {
     expect(tachoRunName(session)).toBe(expected);
   });
 });
+
+describe("pull requests, the lines changed and the pull-request filter", () => {
+  const uuid = (i: number) =>
+    `0192d4a8-7c1e-7a00-8000-${String(i).padStart(12, "0")}`;
+  const session = (
+    i: number,
+    over: Parameters<typeof tachoSession>[0]["session"] = {},
+  ) =>
+    tachoSession({
+      publicId: `tse_${String(i).padStart(3, "0")}`,
+      session: {
+        id: uuid(1000 + i),
+        sessionUuid: uuid(i),
+        // Newest first by index: session 0 is the newest.
+        startedAt: new Date(Date.UTC(2026, 8, 11, 12, 0, 0) - i * 60_000),
+        ...over,
+      },
+    });
+  const pull = (n: number) => ({
+    url: `https://github.com/acme/api/pull/${String(n)}`,
+    number: n,
+    repository: "acme/api",
+    state: null,
+  });
+
+  function handler(
+    tacho: ReturnType<typeof session>[],
+    linked: Record<number, number[]>,
+    opts: {
+      ledger?: Parameters<typeof memoryStores>[0];
+      readPullRequests?: (uuids: readonly string[]) => Promise<never>;
+      git?: Map<string, { added: number; removed: number }>;
+    } = {},
+  ) {
+    const stores = memoryStores(opts.ledger ?? [], tacho);
+    const asked: (readonly string[])[] = [];
+    const gitAsked: (readonly string[])[] = [];
+    const list = createRunListHandler({
+      ...stores,
+      readPullRequests:
+        opts.readPullRequests ??
+        ((uuids) => {
+          asked.push(uuids);
+          const out = new Map<string, ReturnType<typeof pull>[]>();
+          for (const [i, numbers] of Object.entries(linked))
+            if (uuids.includes(uuid(Number(i))))
+              out.set(uuid(Number(i)), numbers.map(pull));
+          return Promise.resolve(out);
+        }),
+      readGitDiffs: (_scope, uuids) => {
+        gitAsked.push(uuids);
+        return Promise.resolve(opts.git ?? new Map());
+      },
+    });
+    return { list, asked, gitAsked };
+  }
+
+  it("carries the pull requests the frames name and the pr_open count, with status unknown", async () => {
+    const { list, asked } = handler(
+      [session(0, { pullRequests: 1 }), session(1, { pullRequests: 0 })],
+      { 0: [12, 13] },
+    );
+    const out = await list({ limit: 10 }, ctx());
+    expect(asked).toEqual([[uuid(0), uuid(1)]]);
+    expect(out.runs[0]?.pullRequests).toEqual([pull(12), pull(13)]);
+    expect(out.runs[0]?.pullRequestsOpened).toBe(1);
+    expect(out.runs[1]?.pullRequests).toEqual([]);
+    expect(out.runs[1]?.pullRequestsOpened).toBe(0);
+    expect(out.warnings).toBeUndefined();
+    // The contract accepts the row it built, state and all.
+    expect(runList.output.parse(out)).toEqual(out);
+  });
+
+  it("keeps the rows and warns when the pull-request frames cannot be read (negative)", async () => {
+    const { list } = handler(
+      [session(0, { pullRequests: 2 })],
+      {},
+      {
+        readPullRequests: () => Promise.reject(new Error("clickhouse down")),
+      },
+    );
+    const out = await list({ limit: 10 }, ctx());
+    expect(out.runs).toHaveLength(1);
+    expect(out.runs[0]).not.toHaveProperty("pullRequests");
+    expect(out.runs[0]?.pullRequestsOpened).toBe(2);
+    expect(out.warnings).toEqual(["pull_requests_unread"]);
+  });
+
+  it("reads no pull requests for a ledger run, and leaves its row without them", async () => {
+    const { list, asked } = handler(
+      [],
+      {},
+      {
+        ledger: [ledgerRun({ publicId: "arun_1", runId: RUN_A })],
+      },
+    );
+    const out = await list({ limit: 10 }, ctx());
+    expect(asked).toEqual([]);
+    expect(out.runs[0]).not.toHaveProperty("pullRequests");
+    expect(out.runs[0]).not.toHaveProperty("pullRequestsOpened");
+  });
+
+  it("shows the harness's line totals, else git's uncommitted change, else nothing", async () => {
+    const { list, gitAsked } = handler(
+      [
+        session(0, { linesAdded: 120, linesRemoved: 30 }),
+        session(1),
+        session(2),
+      ],
+      {},
+      { git: new Map([[uuid(1), { added: 4, removed: 1 }]]) },
+    );
+    const out = await list({ limit: 10 }, ctx());
+    // Git is asked only about the sessions with no harness totals.
+    expect(gitAsked).toEqual([[uuid(1), uuid(2)]]);
+    expect(out.runs.map((r) => r.diff)).toEqual([
+      { added: 120, removed: 30, basis: "harness_reported" },
+      { added: 4, removed: 1, basis: "git_observed" },
+      null,
+    ]);
+  });
+
+  it("lists only sessions with pull requests, by frame or by count, and leaves ledger runs out", async () => {
+    const tacho = [
+      session(0),
+      session(1, { pullRequests: 1 }),
+      session(2),
+      session(3),
+    ];
+    const { list } = handler(
+      tacho,
+      { 2: [7] },
+      {
+        ledger: [
+          ledgerRun({
+            publicId: "arun_new",
+            runId: RUN_A,
+            run: {
+              runId: RUN_A,
+              publicId: "arun_new",
+              status: "completed",
+              createdAt: at("2026-09-12T00:00:00.000Z"),
+              startedAt: at("2026-09-12T00:00:00.000Z"),
+              name: null,
+              summary: null,
+              summaryGeneratedAt: null,
+              summaryModel: null,
+            },
+          }),
+        ],
+      },
+    );
+    const withPrs = await list({ limit: 10, pullRequests: "with" }, ctx());
+    expect(withPrs.runs.map((r) => r.id)).toEqual(["tse_001", "tse_002"]);
+    expect(withPrs.nextCursor).toBeNull();
+    const without = await list({ limit: 10, pullRequests: "without" }, ctx());
+    expect(without.runs.map((r) => r.id)).toEqual(["tse_000", "tse_003"]);
+    const any = await list({ limit: 10, pullRequests: "any" }, ctx());
+    expect(any.runs.map((r) => r.id)).toContain("arun_new");
+  });
+
+  it("stops a full filtered page at the last run it took, and the next page carries on", async () => {
+    const tacho = Array.from({ length: 6 }, (_, i) =>
+      session(i, { pullRequests: i % 2 === 0 ? 1 : 0 }),
+    );
+    const { list } = handler(tacho, {});
+    const first = await list({ limit: 2, pullRequests: "with" }, ctx());
+    expect(first.runs.map((r) => r.id)).toEqual(["tse_000", "tse_002"]);
+    expect(first.nextCursor).not.toBeNull();
+    const second = await list(
+      { limit: 2, pullRequests: "with", cursor: first.nextCursor ?? "" },
+      ctx(),
+    );
+    expect(second.runs.map((r) => r.id)).toEqual(["tse_004"]);
+    expect(second.nextCursor).toBeNull();
+  });
+
+  it("returns what a bounded scan found, with a cursor past the last run it looked at (negative)", async () => {
+    // More sessions than the scan reads, none of them matching: the page is
+    // empty, and its cursor lets the reader go on rather than reading "none".
+    const tacho = Array.from({ length: 501 }, (_, i) => session(i));
+    const { list, asked } = handler(tacho, {});
+    const out = await list({ limit: 10, pullRequests: "with" }, ctx());
+    expect(out.runs).toEqual([]);
+    expect(asked).toHaveLength(5);
+    expect(out.nextCursor).not.toBeNull();
+    const next = decodeRunCursor(out.nextCursor ?? "");
+    expect(next?.id).toBe("tse_499");
+  });
+});
