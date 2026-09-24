@@ -428,6 +428,96 @@ describe("Add a provider › registry and OAuth", () => {
     expect(popup.close).toHaveBeenCalled();
   });
 
+  it.each<[string]>([
+    ["authorization_expired"],
+    ["authorization_failed"],
+    ["authorization_discovery_failed"],
+    ["authorization_url_invalid"],
+    ["endpoint_not_public"],
+    ["redirect_url_invalid"],
+    ["server_not_found"],
+  ])(
+    "names a start refused with %s in the kernel's own words",
+    async (code) => {
+      openWizard();
+      fireEvent.click(
+        await screen.findByTestId("registry-browser-pick-verified/linear"),
+      );
+      startProviderAuthorization.mockResolvedValue({
+        ok: false,
+        reason: "unavailable",
+        code,
+      });
+      fireEvent.click(screen.getByTestId("tools-import-connect"));
+      expect(
+        await screen.findByTestId("tools-import-oauth-failure"),
+      ).toHaveTextContent(oauth(`failure.${code}`));
+      expect(popup.close).toHaveBeenCalled();
+    },
+  );
+
+  it("ignores a forged outcome from another origin and a malformed one, and settles on the callback's", async () => {
+    openWizard();
+    fireEvent.click(
+      await screen.findByTestId("registry-browser-pick-verified/linear"),
+    );
+    startProviderAuthorization.mockResolvedValue({
+      ok: true,
+      value: {
+        status: "redirect",
+        authorizationUrl: "https://mcp.linear.app/a",
+        state: STATE_LINEAR,
+      },
+    });
+    fireEvent.click(screen.getByTestId("tools-import-connect"));
+    await screen.findByTestId("tools-import-oauth-waiting");
+    const success = {
+      type: "oxagen:mcp-oauth",
+      ok: true,
+      state: STATE_LINEAR,
+      serverId: "mcs_forged",
+      name: "Linear",
+      healthStatus: "healthy",
+      discoveredTools: ["exfiltrate"],
+    };
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: success,
+          origin: "https://evil.example",
+        }),
+      );
+    });
+    // The right state in the wrong shape: no server id.
+    callback({ ok: true, state: STATE_LINEAR, name: "Linear" });
+    expect(screen.getByTestId("tools-import-oauth-waiting")).toBeVisible();
+    expect(screen.queryByText("Review tools/list")).not.toBeInTheDocument();
+    callback({ ...success, serverId: "mcs_linear", discoveredTools: ["a"] });
+    expect(await screen.findByText("Review tools/list")).toBeVisible();
+    expect(screen.queryByText("exfiltrate")).not.toBeInTheDocument();
+  });
+
+  it("refuses a sign-in address that carries credentials, and closes the popup", async () => {
+    openWizard();
+    fireEvent.click(
+      await screen.findByTestId("registry-browser-pick-verified/linear"),
+    );
+    startProviderAuthorization.mockResolvedValue({
+      ok: true,
+      value: {
+        status: "redirect",
+        authorizationUrl: "https://user:pw@mcp.linear.app/a",
+        state: STATE_LINEAR,
+      },
+    });
+    fireEvent.click(screen.getByTestId("tools-import-connect"));
+    expect(
+      await screen.findByTestId("tools-import-oauth-failure"),
+    ).toHaveTextContent(oauth("failure.authorization_url_invalid"));
+    expect(navigatePopup).not.toHaveBeenCalled();
+    expect(popup.close).toHaveBeenCalled();
+  });
+
   it("connects a server that turns out to ask for no OAuth, without sign-in", async () => {
     searchRegistry.mockResolvedValue(
       page([server({ auth: "unknown", oauthRegistration: null })]),

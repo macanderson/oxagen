@@ -243,4 +243,60 @@ describe("searchMcpRegistry", () => {
     expect(out.servers).toEqual([]);
     expect(out.nextCursor).toBeNull();
   });
+
+  it("probes an endpoint once per half hour, and asks the registry for everything on an empty query", async () => {
+    const probes: string[] = [];
+    const fetchFn = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url.startsWith("https://registry.modelcontextprotocol.io/")) {
+        expect(new URL(url).searchParams.has("search")).toBe(false);
+        return json({ servers: [ACME], metadata: {} });
+      }
+      probes.push(url);
+      // No metadata, and an initialize that succeeds: an open server.
+      return url.includes("/.well-known/")
+        ? new Response("", { status: 404 })
+        : json({ jsonrpc: "2.0", id: 0, result: {} });
+    });
+    let clock = 1_000_000;
+    const deps = {
+      fetchFn: fetchFn as unknown as typeof fetch,
+      now: () => clock,
+    };
+    const first = await searchMcpRegistry({ query: "  ", limit: 5 }, deps);
+    expect(
+      first.servers.find((s) => s.id === "com.acme/tickets"),
+    ).toMatchObject({ auth: "none", oauthRegistration: null });
+    const probedOnce = probes.length;
+    expect(probedOnce).toBeGreaterThan(0);
+
+    clock += 29 * 60 * 1000;
+    await searchMcpRegistry({ query: "", limit: 5 }, deps);
+    expect(probes.length).toBe(probedOnce);
+
+    clock += 2 * 60 * 1000;
+    await searchMcpRegistry({ query: "", limit: 5 }, deps);
+    expect(probes.length).toBe(probedOnce * 2);
+  });
+
+  it("lists a server that did not answer as unknown, and probes it again next time", async () => {
+    const probes: string[] = [];
+    const fetchFn = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url.startsWith("https://registry.modelcontextprotocol.io/")) {
+        return json({ servers: [ACME], metadata: {} });
+      }
+      probes.push(url);
+      return new Response("", { status: 503 });
+    });
+    const deps = { fetchFn: fetchFn as unknown as typeof fetch };
+    const out = await searchMcpRegistry({ query: "acme", limit: 5 }, deps);
+    expect(out.servers.find((s) => s.id === "com.acme/tickets")).toMatchObject({
+      auth: "unknown",
+      oauthRegistration: null,
+    });
+    const once = probes.length;
+    await searchMcpRegistry({ query: "acme", limit: 5 }, deps);
+    expect(probes.length).toBe(once * 2);
+  });
 });

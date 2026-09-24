@@ -620,4 +620,80 @@ describe("Providers › status light and reconnect (#4132)", () => {
       screen.queryByTestId("provider-reconnect-mcs_01k5s1"),
     ).not.toBeInTheDocument();
   });
+
+  it("ends a wait with Cancel, and lets the person reconnect again", async () => {
+    const popup = stubPopup();
+    startProviderAuthorization.mockResolvedValue({
+      ok: true,
+      value: {
+        status: "redirect",
+        authorizationUrl: "https://mcp.linear.app/authorize?state=s",
+        state: "s".repeat(32),
+      },
+    });
+    renderProviders(oneProvider(oauthServer({ state: "needs_reauth" }), []));
+    fireEvent.click(screen.getByTestId("provider-reconnect-mcs_01k5s1"));
+    fireEvent.click(
+      await screen.findByTestId("provider-reconnect-cancel-mcs_01k5s1"),
+    );
+    expect(
+      screen.queryByTestId("provider-reconnect-cancel-mcs_01k5s1"),
+    ).not.toBeInTheDocument();
+    expect(popup.close).toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId("provider-reconnect-mcs_01k5s1"));
+    await waitFor(() => {
+      expect(startProviderAuthorization).toHaveBeenCalledTimes(2);
+    });
+    popup.open.mockRestore();
+    popup.remove();
+  });
+
+  it("offers the sign-in page as a link when the browser blocked the popup", async () => {
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    startProviderAuthorization.mockResolvedValue({
+      ok: true,
+      value: {
+        status: "redirect",
+        authorizationUrl: "https://mcp.linear.app/authorize?state=s",
+        state: "s".repeat(32),
+      },
+    });
+    renderProviders(oneProvider(oauthServer({ state: "revoked" }), []));
+    fireEvent.click(screen.getByTestId("provider-reconnect-mcs_01k5s1"));
+    expect(
+      await screen.findByRole("link", { name: "Open sign-in" }),
+    ).toHaveAttribute("href", "https://mcp.linear.app/authorize?state=s");
+    open.mockRestore();
+  });
+
+  it.each<[string, unknown, string]>([
+    [
+      "a refused start",
+      { ok: false, reason: "denied", code: "org_role_required" },
+      "org_role_required",
+    ],
+    [
+      "a server that now wants the workspace's OAuth app",
+      {
+        ok: true,
+        value: {
+          status: "client_required",
+          scopesSupported: [],
+          redirectUrl: "https://app.oxagen.sh/api/v1/mcp/oauth/callback",
+        },
+      },
+      "This provider needs its OAuth app again",
+    ],
+  ])("names %s where the person acted", async (_case, answer, text) => {
+    const popup = stubPopup();
+    startProviderAuthorization.mockResolvedValue(answer);
+    renderProviders(oneProvider(oauthServer({ state: "needs_reauth" }), []));
+    fireEvent.click(screen.getByTestId("provider-reconnect-mcs_01k5s1"));
+    expect(
+      await screen.findByTestId("provider-reconnect-failure-mcs_01k5s1"),
+    ).toHaveTextContent(text);
+    expect(popup.close).toHaveBeenCalled();
+    popup.open.mockRestore();
+    popup.remove();
+  });
 });

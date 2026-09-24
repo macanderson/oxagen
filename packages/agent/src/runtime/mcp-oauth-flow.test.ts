@@ -29,7 +29,6 @@ vi.mock("@oxagen/plugins", () => ({
       return m.pendingRedirect;
     }
   },
-  detectOAuthProtected: m.detect,
   getWorkspaceSecret: m.getSecret,
   setWorkspaceSecret: m.setSecret,
   preregisteredClientForEndpoint: m.prereg,
@@ -37,6 +36,7 @@ vi.mock("@oxagen/plugins", () => ({
   deleteOAuthState: m.deleteState,
 }));
 
+vi.mock("./mcp-auth-probe", () => ({ probeMcpAuth: m.detect }));
 vi.mock("../dispatch/mcp-client", () => ({ healthcheck: m.healthcheck }));
 vi.mock("./mcp-snapshots", () => ({
   captureToolSnapshots: m.snapshots,
@@ -97,7 +97,7 @@ beforeEach(() => {
   m.rows = [];
   m.inserts = [];
   m.pendingRedirect = null;
-  m.detect.mockResolvedValue(true);
+  m.detect.mockResolvedValue("oauth");
   m.getSecret.mockResolvedValue(null);
   m.prereg.mockReturnValue(undefined);
   m.deleteState.mockResolvedValue(undefined);
@@ -239,10 +239,39 @@ describe("startMcpAuthorization", () => {
   });
 
   it("answers not_oauth for an endpoint that asks for no OAuth, and stores nothing", async () => {
-    m.detect.mockResolvedValue(false);
+    m.detect.mockResolvedValue("none");
     const out = await startMcpAuthorization(SCOPE, add, { fetchFn });
     expect(out).toEqual({ status: "not_oauth" });
     expect(m.inserts).toHaveLength(0);
+  });
+
+  it("tries sign-in, not an open connect, for a server that did not answer the probe", async () => {
+    m.detect.mockResolvedValue("unknown");
+    m.discover.mockRejectedValue(new Error("timeout"));
+    await expect(
+      startMcpAuthorization(SCOPE, add, { fetchFn }),
+    ).rejects.toMatchObject({ reason: "authorization_discovery_failed" });
+    expect(m.inserts).toHaveLength(1);
+  });
+
+  it("refuses to reconnect a provider whose listing is not OAuth", async () => {
+    m.rows.push([
+      {
+        id: "listing-static",
+        title: "Keyed",
+        endpointUrl: "https://mcp.keyed.dev/mcp",
+        authKind: "secret",
+      },
+    ]);
+    await expect(
+      startMcpAuthorization(
+        SCOPE,
+        { mcpServerId: "mcs_static", redirectUrl: REDIRECT },
+        { fetchFn },
+      ),
+    ).rejects.toMatchObject({ code: "not_found", reason: "server_not_found" });
+    expect(m.auth).not.toHaveBeenCalled();
+    expect(m.setSecret).not.toHaveBeenCalled();
   });
 
   it("refuses a private endpoint before probing it", async () => {
@@ -322,6 +351,75 @@ describe("startMcpAuthorization", () => {
       startMcpAuthorization(SCOPE, add, { fetchFn }),
     ).rejects.toMatchObject({
       reason: "authorization_failed",
+    });
+  });
+  it("refuses with authorization_discovery_failed when the server's metadata cannot be read, and starts no sign-in", async () => {
+    m.discover.mockRejectedValue(new Error("ECONNRESET"));
+    await expect(
+      startMcpAuthorization(SCOPE, add, { fetchFn }),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "authorization_discovery_failed",
+    });
+    expect(m.auth).not.toHaveBeenCalled();
+  });
+
+  it("goes on to sign-in when discovery finds no authorization-server metadata to refuse on", async () => {
+    m.discover.mockResolvedValue({ resourceMetadata: undefined });
+    m.auth.mockImplementation(async () => {
+      m.pendingRedirect = new URL("https://auth.x.dev/authorize");
+      return "REDIRECT";
+    });
+    const out = await startMcpAuthorization(SCOPE, add, {
+      fetchFn,
+      newState: () => "s3",
+    });
+    expect(out).toMatchObject({ status: "redirect", state: "s3" });
+  });
+
+  it("refuses a REDIRECT that carries no sign-in URL rather than returning an empty one", async () => {
+    m.getSecret.mockResolvedValue({ oauthClientId: "x" });
+    m.auth.mockResolvedValue("REDIRECT");
+    await expect(
+      startMcpAuthorization(SCOPE, add, { fetchFn }),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "authorization_failed",
+    });
+  });
+
+  it("skips discovery for a host the platform holds a pre-registered client for", async () => {
+    m.prereg.mockReturnValue({ clientId: "platform" });
+    m.auth.mockImplementation(async () => {
+      m.pendingRedirect = new URL("https://mcp.linear.app/authorize");
+      return "REDIRECT";
+    });
+    await startMcpAuthorization(SCOPE, add, { fetchFn, newState: () => "s4" });
+    expect(m.discover).not.toHaveBeenCalled();
+    expect(m.prereg).toHaveBeenCalledWith("https://mcp.linear.app/mcp");
+  });
+
+  it("keys a custom server by its endpoint, marks it custom, and drops an icon that is not https", async () => {
+    m.getSecret.mockResolvedValue({ oauthClientId: "x" });
+    m.auth.mockImplementation(async () => {
+      m.pendingRedirect = new URL("https://auth.acme.dev/authorize");
+      return "REDIRECT";
+    });
+    await startMcpAuthorization(
+      SCOPE,
+      {
+        name: "Acme",
+        endpointUrl: "https://mcp.acme.dev/v1/mcp/",
+        iconUrl: "http://acme.dev/icon.png",
+        redirectUrl: REDIRECT,
+      },
+      { fetchFn, newState: () => "s5" },
+    );
+    expect(m.inserts[0]?.values).toMatchObject({
+      source: "custom",
+      name: "custom:mcp.acme.dev/v1/mcp",
+      iconUrl: null,
+      description: null,
     });
   });
 });
@@ -418,5 +516,82 @@ describe("completeMcpAuthorization", () => {
         { fetchFn },
       ),
     ).rejects.toMatchObject({ reason: "server_not_found" });
+  });
+
+  it("treats a state it cannot find as expired, and exchanges nothing", async () => {
+    m.loadState.mockResolvedValue(null);
+    await expect(
+      completeMcpAuthorization(
+        SCOPE,
+        { state: "gone", code: "c", redirectUrl: REDIRECT },
+        { fetchFn },
+      ),
+    ).rejects.toMatchObject({ reason: "authorization_expired" });
+    expect(m.auth).not.toHaveBeenCalled();
+  });
+
+  it("treats a state from another organization as expired", async () => {
+    m.loadState.mockResolvedValue({ ...saved, orgId: "org-other" });
+    await expect(
+      completeMcpAuthorization(
+        SCOPE,
+        { state: "s1", code: "c", redirectUrl: REDIRECT },
+        { fetchFn },
+      ),
+    ).rejects.toMatchObject({ reason: "authorization_expired" });
+    expect(m.auth).not.toHaveBeenCalled();
+  });
+
+  it("spends the state when the listing was removed mid-flow", async () => {
+    m.loadState.mockResolvedValue(saved);
+    m.rows.push([
+      { id: "listing-1", title: "x", name: "x", endpointUrl: null },
+    ]);
+    await expect(
+      completeMcpAuthorization(
+        SCOPE,
+        { state: "s1", code: "c", redirectUrl: REDIRECT },
+        { fetchFn },
+      ),
+    ).rejects.toMatchObject({ reason: "server_not_found" });
+    expect(m.deleteState).toHaveBeenCalledWith("s1");
+    expect(m.auth).not.toHaveBeenCalled();
+  });
+
+  it("still records the provider when pinning its tools fails, and pins nothing for a server that listed none", async () => {
+    m.loadState.mockResolvedValue(saved);
+    const listing = {
+      id: "listing-1",
+      title: "Linear",
+      name: "verified/linear",
+      endpointUrl: "https://mcp.linear.app/mcp",
+    };
+    m.rows.push([listing]);
+    m.auth.mockResolvedValue("AUTHORIZED");
+    m.snapshots.mockRejectedValue(new Error("clickhouse down"));
+    await expect(
+      completeMcpAuthorization(
+        SCOPE,
+        { state: "s1", code: "c", redirectUrl: REDIRECT },
+        { fetchFn },
+      ),
+    ).resolves.toMatchObject({ mcpServerId: "mcs_new" });
+    expect(m.change).toHaveBeenCalledTimes(1);
+
+    m.snapshots.mockClear();
+    m.rows.push([listing]);
+    m.healthcheck.mockResolvedValue({
+      status: "unreachable",
+      discoveredTools: [],
+      descriptors: [],
+    });
+    await expect(
+      completeMcpAuthorization(
+        SCOPE,
+        { state: "s2", code: "c", redirectUrl: REDIRECT },
+        { fetchFn },
+      ),
+    ).resolves.toMatchObject({ healthStatus: "unreachable" });
+    expect(m.snapshots).not.toHaveBeenCalled();
   });
 });

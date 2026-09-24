@@ -136,6 +136,15 @@ export function ReconnectProvider({
               {tOAuth("openSignIn")}
             </ProviderLink>
           )}
+          {/* A closed popup posts nothing back, so waiting ends here, not on a reload. */}
+          <button
+            type="button"
+            data-testid={`provider-reconnect-cancel-${server.id}`}
+            className={`${buttonSecondary} self-start`}
+            onClick={oauth.reset}
+          >
+            {tOAuth("cancel")}
+          </button>
         </span>
       ) : null}
       {phase.kind === "failed" ? (

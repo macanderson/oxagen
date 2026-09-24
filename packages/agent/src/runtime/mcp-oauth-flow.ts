@@ -33,7 +33,6 @@ import { HandlerError } from "@oxagen/oxagen/handler-error";
 import {
   DbOAuthClientProvider,
   deleteOAuthState,
-  detectOAuthProtected,
   getWorkspaceSecret,
   loadOAuthState,
   preregisteredClientForEndpoint,
@@ -46,6 +45,7 @@ import type {
 import type { AgentMcpAuthorizeCompleteOutput } from "@oxagen/oxagen/contracts/agent.mcp.authorize.complete";
 import { healthcheck } from "../dispatch/mcp-client";
 import { captureToolSnapshots, recordServerChange } from "./mcp-snapshots";
+import { probeMcpAuth } from "./mcp-auth-probe";
 import { mcpOAuthFetch } from "./mcp-oauth-fetch";
 
 /** The path every redirect URL must end in: the app's one callback route. */
@@ -76,7 +76,8 @@ function refuse(
 /**
  * The redirect URL must be an http(s) URL ending in the callback path. The
  * origin is the app's own, which only the app knows, so it is checked for
- * shape here and bound to the flow: the exchange uses the URL `start` stored.
+ * shape here. The exchange sends the URL `complete` is given, and the
+ * authorization server refuses it unless it is the one `start` sent.
  */
 export function assertRedirectUrl(raw: string): string {
   let url: URL;
@@ -176,7 +177,10 @@ async function listingForServer(
       )
       .limit(1),
   );
-  if (row === undefined) {
+  // A static-auth provider has no sign-in to renew: tokens stored against its
+  // listing would never be read, since the runtime takes the OAuth branch
+  // only for an `oauth` listing.
+  if (row === undefined || row.authKind !== "oauth") {
     return refuse(
       "not_found",
       "server_not_found",
@@ -279,10 +283,11 @@ export async function startMcpAuthorization(
       );
     }
     const endpointUrl = assertEndpoint(input.endpointUrl);
-    // A server that asks for no OAuth is added with a static credential or
-    // none, and the wizard says so rather than storing an OAuth listing that
-    // will never authorize.
-    if (!(await detectOAuthProtected(endpointUrl, { fetchFn }))) {
+    // A server that says it needs no credential is added open, and the
+    // wizard says so rather than storing an OAuth listing that will never
+    // authorize. A server that did not answer the probe is not taken for
+    // open: sign-in is tried, and its discovery says what went wrong.
+    if ((await probeMcpAuth(endpointUrl, fetchFn)) === "none") {
       return { status: "not_oauth" };
     }
     listing = await upsertListing(scope, {

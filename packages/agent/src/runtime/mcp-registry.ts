@@ -21,11 +21,11 @@ import {
   assertPublicHttpUrl,
   UnsafeOutboundUrlError,
 } from "@oxagen/config/public-url";
-import { detectOAuthProtected } from "@oxagen/plugins";
 import type {
   AgentMcpRegistrySearchOutput,
   McpRegistryServer,
 } from "@oxagen/oxagen/contracts/agent.mcp.registry.search";
+import { probeMcpAuth } from "./mcp-auth-probe";
 import { createMcpOAuthFetch } from "./mcp-oauth-fetch";
 import {
   searchVerifiedServers,
@@ -218,6 +218,11 @@ export function clearRegistryProbeCacheForTests(): void {
   probeCache.clear();
 }
 
+/**
+ * A server's auth, from the cache or a probe. Only a definite answer is
+ * cached: a server that did not answer this time (a cold start, a 5xx) is
+ * `unknown` now and probed again on the next search.
+ */
 async function probeAuth(
   endpointUrl: string,
   fetchFn: typeof fetch,
@@ -226,18 +231,12 @@ async function probeAuth(
   const cached = probeCache.get(endpointUrl);
   if (cached !== undefined && now - cached.at < PROBE_TTL_MS)
     return cached.auth;
-  try {
-    const oauth = await detectOAuthProtected(endpointUrl, {
-      fetchFn,
-      timeoutMs: PROBE_TIMEOUT_MS,
-    });
-    const auth = oauth ? "oauth" : "none";
+  const auth = await probeMcpAuth(endpointUrl, fetchFn);
+  if (auth !== "unknown") {
     if (probeCache.size >= PROBE_CACHE_MAX) probeCache.clear();
     probeCache.set(endpointUrl, { auth, at: now });
-    return auth;
-  } catch {
-    return "unknown";
   }
+  return auth;
 }
 
 export type RegistrySearchDeps = {
