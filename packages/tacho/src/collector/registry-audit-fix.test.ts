@@ -252,6 +252,45 @@ describe("a quiet session with a pid", () => {
     expect(record?.closedIdle).toBeUndefined();
   });
 
+  it("records the reopen as the chain's restart, so the control plane reopens the run (ADR-170)", async () => {
+    const { registry, advance, hook, chain } = harness();
+    await hook(registry, "SessionStart", { source: "startup" });
+    advance(STALE_PID_SESSION_MS + 60_000);
+    const closed = registry.sweep(() => true, 60_000);
+    chain.push(...closed);
+    const stop = closed[0];
+
+    const back = await hook(registry, "UserPromptSubmit", { prompt: "back" });
+    expect(kinds(back)).toEqual(["agent_start", "turn_start"]);
+    expect(back[0]).toMatchObject({
+      source: "collector",
+      seq: (stop?.seq ?? 0) + 1,
+      body: {
+        session_start_source: "reopen",
+        resume_of_session_id: "sess-1",
+        resume_last_seq_seen: stop?.seq,
+      },
+    });
+    expect(verifyChain(chain).ok).toBe(true);
+
+    // Open again, the chain seals no second restart for the next hook.
+    const next = await hook(registry, "Stop");
+    expect(kinds(next)).not.toContain("agent_start");
+  });
+
+  it("leaves the restart of a resumed session to its own SessionStart", async () => {
+    const { registry, hook } = harness();
+    await hook(registry, "SessionStart", { source: "startup" });
+    await hook(registry, "SessionEnd", { reason: "prompt_input_exit" });
+
+    const resumed = await hook(registry, "SessionStart", { source: "resume" });
+    expect(kinds(resumed).filter((k) => k === "agent_start")).toHaveLength(1);
+    expect(resumed[0]).toMatchObject({
+      source: "hook",
+      body: { session_start_source: "resume" },
+    });
+  });
+
   it("is not reopened by a stray hook once SessionEnd closed it", () => {
     const { registry } = harness();
     const { record } = registry.ensure("sess-1", { ambient: false });

@@ -667,7 +667,7 @@ async function routeHook(
   const at = replay?.receivedAt ?? toProtocolTimestamp(deps.now());
   const inferredCwd =
     harness === "cursor" && input["cursor_cwd_inferred"] === true;
-  const { record } = deps.registry.ensure(input.session_id, {
+  const { record, reopened } = deps.registry.ensure(input.session_id, {
     ambient: false,
     lastHookEvent: input.hook_event_name,
     ...(harness !== undefined ? { harness } : {}),
@@ -683,6 +683,28 @@ async function routeHook(
   }
   const wrote = writtenDir(input);
   if (wrote !== undefined) record.workDir = wrote;
+  // This hook reopened a session the sweep closed for quiet, so the chain
+  // starts again, and says so first. The control plane reopens a run whose
+  // host sealed it only on an `agent_start` (ADR-170). A `SessionStart`
+  // seals its own; every other hook gets this one from the daemon.
+  const reopening: TachoEvent[] =
+    reopened === true && input.hook_event_name !== "SessionStart"
+      ? [
+          record.recorder.sealCollectorEvent(
+            "agent_start",
+            {
+              session_start_source: "reopen",
+              resume_of_session_id: record.harnessSessionId,
+              resume_last_seq_seen: record.recorder.chainCursor.seq - 1,
+            },
+            {
+              ts: at,
+              hook_event_name: input.hook_event_name,
+              attrs: replayAttrs(replay),
+            },
+          ),
+        ]
+      : [];
   // A replay of a hook this session already recorded — the client's own
   // request timed out and it fell back to a spool file, but the daemon had
   // already processed the live request before that timeout fired. Sealing
@@ -694,13 +716,13 @@ async function routeHook(
   // succeeds (in `handleHookEvent`), so a live request that threw leaves no
   // sighting behind and its spool replay is sealed.
   if (hookId !== undefined && sawHookId(record, hookId)) {
-    return { events: [], response: {}, record };
+    return { events: reopening, response: {}, record };
   }
   // Stella's tool-use ids are derived from the call, so the daemon numbers
   // each invocation before anything reads the payload.
   const payload = invocationToolUseId(raw, input, record);
   const view = deps.policy();
-  const events: TachoEvent[] = [];
+  const events: TachoEvent[] = [...reopening];
   const replayed = replayAttrs(replay);
   const pushBasis = await gitPushBasis(input, record, deps);
   const withReplay = (draft: HookDraft): HookDraft => ({

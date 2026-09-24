@@ -973,14 +973,44 @@ export const IDLE_CLOSE_UNDONE = {
   replayGrade: null,
 } as const;
 
-/** Terminal facts from an `agent_stop`, when the batch carries one. */
+/**
+ * What reopening a host-sealed session writes when its host starts the chain
+ * again (ADR-170): the idle close's columns, plus the two reasons a host's
+ * `agent_stop` records and the idle close does not.
+ */
+export const HOST_SEAL_UNDONE = {
+  ...IDLE_CLOSE_UNDONE,
+  endReason: null,
+  terminalReason: null,
+} as const;
+
+/**
+ * The host started this chain again after its stop (ADR-170). A resumed
+ * session's `SessionStart` hook seals an `agent_start`: Claude Code sends one
+ * on `--resume`, and a background session sends one each time its process
+ * comes back for the next message. The daemon seals one when any other hook
+ * reopens a session its sweep closed for quiet. Nothing else seals an
+ * `agent_start` on a chain that has already begun, so a late transcript line
+ * or OTel record after the stop never counts.
+ */
+function isRestart(event: TachoEvent): boolean {
+  return event.kind === "agent_start";
+}
+
+/**
+ * Terminal facts from an `agent_stop`, when the batch carries one and does
+ * not start the chain again after it.
+ */
 function terminalPatch(
   events: TachoEvent[],
   now: Date,
 ): Record<string, unknown> {
-  const stop = [...events]
-    .reverse()
-    .find((event) => event.kind === "agent_stop");
+  let stop: TachoEvent | undefined;
+  for (const event of events) {
+    if (event.kind === "agent_stop") stop = event;
+    // Stopped and then started again in one batch: the session is running.
+    else if (stop !== undefined && isRestart(event)) stop = undefined;
+  }
   if (!stop) return {};
   const body = stop.body as Body;
   const outcome = str(body["session_outcome"]);
@@ -1485,13 +1515,25 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
       // may still rise under it.
       const idleClosed =
         !!existing?.sealedAt && existing.sealSource === "idle_timeout";
+      // A host's seal holds against every later frame but one: the host
+      // starting the chain again (ADR-170). Claude Code resumes a session
+      // under the id it ended with, so its chain carries on past the stop,
+      // and one session stays one run. An operator's seal stays final
+      // (ADR-169). A row sealed before `seal_source` existed reads as the
+      // host's.
+      const resumed =
+        !!existing?.sealedAt &&
+        (existing.sealSource === "agent_stop" || existing.sealSource === null) &&
+        fresh.some(isRestart);
       const openExisting =
-        existing && idleClosed ? { ...existing, sealedAt: null } : existing;
+        existing && (idleClosed || resumed)
+          ? { ...existing, sealedAt: null }
+          : existing;
       const effectiveTier = promotedTier(openExisting, derivedTier);
       const promoteToGateway =
         existing !== undefined && effectiveTier !== existing.enforcementTier;
-      // The grade is computed once, at seal: a sealed session is never
-      // sealed again, whatever a later batch carries.
+      // The grade is computed once, at seal: a sealed session is sealed
+      // again only after something reopened it.
       const terminal = openExisting?.sealedAt ? {} : terminalPatch(fresh, now);
       const { totalCostMicrosAuthoritative, ...terminalColumns } =
         terminal as Record<string, unknown> & {
@@ -1522,10 +1564,15 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
       }
       // New frames on an idle-closed session with no stop among them: the
       // session was not over. Undo exactly what the close wrote
-      // (`idleCloseColumns` in @oxagen/inngest-functions).
+      // (`idleCloseColumns` in @oxagen/inngest-functions). A resumed session
+      // undoes the host's seal the same way, and its stop's reasons with it.
       const reopen =
-        idleClosed && fresh.length > 0 && terminal["sealedAt"] === undefined
-          ? IDLE_CLOSE_UNDONE
+        fresh.length > 0 && terminal["sealedAt"] === undefined
+          ? resumed
+            ? HOST_SEAL_UNDONE
+            : idleClosed
+              ? IDLE_CLOSE_UNDONE
+              : {}
           : {};
       const tail = fresh.at(-1);
       const latest = lastRecordedContext(fresh);
@@ -1731,6 +1778,8 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
               // undo a seal that is final. So the batch writes only while the
               // idle close it read still stands. Refused, the batch is
               // re-sent and its next read sees the operator's seal.
+              //
+              // A resume undoes the host's seal it read, and only that one.
               ...(existing.sealedAt
                 ? idleClosed
                   ? [
@@ -1739,7 +1788,16 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
                         "idle_timeout" satisfies TachoSealSource,
                       ),
                     ]
-                  : []
+                  : resumed
+                    ? [
+                        existing.sealSource === null
+                          ? isNull(schema.tachoSessions.sealSource)
+                          : eq(
+                              schema.tachoSessions.sealSource,
+                              "agent_stop" satisfies TachoSealSource,
+                            ),
+                      ]
+                    : []
                 : [isNull(schema.tachoSessions.sealedAt)]),
             ),
           )

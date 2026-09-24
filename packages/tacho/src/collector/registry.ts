@@ -552,11 +552,15 @@ export class SessionRegistry {
     return record;
   }
 
-  /** Find or open the record for a harness session, absorbing new facts. */
+  /**
+   * Find or open the record for a harness session, absorbing new facts.
+   * `reopened` says this call reopened a sealed record, which the caller
+   * records on the chain (ADR-170).
+   */
   ensure(
     harnessSessionId: string,
     facts: SessionFacts & { ambient?: boolean } = {},
-  ): { record: SessionRecord; created: boolean } {
+  ): { record: SessionRecord; created: boolean; reopened?: true } {
     const now = this.ts();
     // A caller that names no agent (OTel, the transcript detector) joins
     // whichever agent already owns the id; a caller that names one only ever
@@ -568,7 +572,8 @@ export class SessionRegistry {
         this.adopt(harnessSessionId, facts))
       : this.get(harnessSessionId);
     if (existing) {
-      if (reopens(existing, facts)) this.reopen(existing);
+      const reopened = reopens(existing, facts);
+      if (reopened) this.reopen(existing);
       if (facts.transcriptPath !== undefined)
         existing.transcriptPath = facts.transcriptPath;
       if (facts.cwd !== undefined) {
@@ -601,7 +606,9 @@ export class SessionRegistry {
       if (facts.ambient === false) existing.ambient = false;
       existing.lastSeenAt = now;
       this.noteAgent(existing, false);
-      return { record: existing, created: false };
+      return reopened
+        ? { record: existing, created: false, reopened: true }
+        : { record: existing, created: false };
     }
     const record: SessionRecord = {
       harnessSessionId,
