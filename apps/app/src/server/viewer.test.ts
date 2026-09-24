@@ -337,6 +337,9 @@ describe("orgTwoFactorPolicy", () => {
       // @ts-expect-error -- a context not minted by viewer-mint.ts
       orgTwoFactorPolicy({ ...orgFields }),
     ).rejects.toThrow(TypeError);
+  });
+});
+
 describe("resolveWorkspaceViewer", () => {
   const {
     orgId: _o,

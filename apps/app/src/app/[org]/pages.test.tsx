@@ -51,7 +51,6 @@ const {
   Tools,
   ToolsLoading,
   Runtimes,
-  members,
   workspaces,
   source,
 } = vi.hoisted(() => {
@@ -113,7 +112,6 @@ const {
     // Runtimes draws its own header (its error and access-denied states
     // replace the body with the header included), so the stand-in draws it.
     Runtimes: vi.fn((_props: Record<string, unknown>) => <h1>Runtimes</h1>),
-    members,
     workspaces,
     source: { org: { workspaces } },
   };

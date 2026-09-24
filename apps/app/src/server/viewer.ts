@@ -338,6 +338,8 @@ export async function orgTwoFactorPolicy(
   if (!OrgCtx.is(ctx)) throw new TypeError("orgTwoFactorPolicy: forged ctx");
   const policy = await systemLookups.mfaPolicy(ctx.orgId);
   return { required: policy?.mfaRequired === true };
+}
+
 /**
  * The workspace viewer for the workspace layout: a minted ctx, or `refused`
  * with the organization ctx the viewer does hold.
