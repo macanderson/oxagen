@@ -951,14 +951,15 @@ export const postgresSteeringStore: SteeringStore = {
         .limit(1);
 
       const classification = {
-        title: proposal.title ?? proposal.statement,
+        title: proposal.title?.trim() || proposal.statement,
         // An omitted label keeps the record's own. The title names a new
-        // record only when the proposal gave no label.
+        // record only when the proposal gave no label. A proposal stored
+        // before the title was trimmed can carry a blank one, and a blank
+        // label fails context_records_label_check after GitHub has merged.
         label:
           proposal.label ??
           existing?.label ??
-          proposal.title ??
-          contextRecordLabel(proposal.lineageId),
+          (proposal.title?.trim() || contextRecordLabel(proposal.lineageId)),
         status: "active" as const,
         kind: proposal.kind,
         force: proposal.force,

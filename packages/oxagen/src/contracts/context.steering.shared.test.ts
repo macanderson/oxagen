@@ -52,6 +52,14 @@ describe("steering vocabulary", () => {
     ).toBe(false);
   });
 
+  it("trims a title and refuses a blank one", () => {
+    expect(
+      proposedRecordSchema.safeParse({ ...base, title: "   " }).success,
+    ).toBe(false);
+    const r = proposedRecordSchema.safeParse({ ...base, title: "  Reads  " });
+    expect(r.success && r.data.title).toBe("Reads");
+  });
+
   it("runs the six §10.3 checks in order and records each outcome", () => {
     expect(CHECK_NAMES).toEqual([
       "schema",
