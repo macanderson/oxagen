@@ -118,4 +118,21 @@ describe("AssistantLauncher", () => {
     expect(launcher).toHaveAttribute("aria-expanded", "false");
     expect(launcher).not.toHaveAttribute("data-unread");
   });
+
+  // Only opening the panel reads a reply. A close that finds it already
+  // closed keeps the cue, so the person still has something to open.
+  it("keeps shining through a close of a panel that is already closed", async () => {
+    const user = userEvent.setup();
+    renderLauncher();
+    const launcher = screen.getByTestId("assistant-launcher");
+    await user.click(screen.getByRole("button", { name: "settle a turn" }));
+    expect(launcher).toHaveAttribute("data-unread");
+
+    await user.click(screen.getByRole("button", { name: "close the panel" }));
+    expect(launcher).toHaveAttribute("aria-expanded", "false");
+    expect(launcher).toHaveAttribute("data-unread");
+    expect(screen.getByTestId("assistant-launcher-unread")).toHaveTextContent(
+      "New reply",
+    );
+  });
 });
