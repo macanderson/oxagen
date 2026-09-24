@@ -8,7 +8,7 @@
 // fetching again. Nothing here is stored, and nothing is inferred: a frame
 // whose body was not retained says `digest_only` rather than showing an empty
 // bubble, a body cut at the contract's ceiling links to the whole of it on
-// the Frames tab, and a transcript that could not carry the whole run pages
+// the Governed actions tab, and a transcript that could not carry the whole run pages
 // the rest in rather than stopping short of it.
 //
 // The chips are the filter, and they are links: a filter is a query value, so
@@ -56,7 +56,8 @@ export function kindsParam(
  * The row of chips in the spec's order. A string is a kind the contract
  * filters on; `thinking` and `seal` are the two the spec draws that it does
  * not, and they render as counts rather than links. `errors` closes the row.
- * `policy` is the contract's own and sits after the spec's seven.
+ * The contract's `policy` kind has no chip: the spec draws none, and a policy
+ * decision is still in the feed under all, and on the Policy tab.
  */
 const CHIP_ROW = [
   "prompt",
@@ -66,7 +67,6 @@ const CHIP_ROW = [
   "usage",
   "recall",
   "seal",
-  "policy",
   "errors",
 ] as const;
 type ChipName = (typeof CHIP_ROW)[number];
@@ -86,9 +86,9 @@ function hasThinking(entry: TranscriptEntry): boolean {
  */
 export function chipCounts(
   read: Read<RunTranscript>,
-): Partial<Record<ChipName, number>> | null {
+): Partial<Record<ChipName | TranscriptKind, number>> | null {
   if (!read.ok) return null;
-  const counts: Partial<Record<ChipName, number>> = {};
+  const counts: Partial<Record<ChipName | TranscriptKind, number>> = {};
   for (const kind of TRANSCRIPT_KINDS)
     counts[kind] = read.value.entries.filter((entry) =>
       entry.kinds.includes(kind),
@@ -97,14 +97,19 @@ export function chipCounts(
   return counts;
 }
 
+/** `?kinds=none`: every chip off, so the feed shows nothing until one is pressed. */
+export const KINDS_NONE = "none";
+
 /**
  * The filter chips. Each is a link that adds or removes its own kind. No chip
  * pressed keeps every entry, which is what the contract does with an empty
- * list, so the row's toggle reads "all" and appears once a chip narrows it.
+ * list. The row's toggle (spec: all/none) reads "none" while every entry is
+ * shown and turns every chip off, and reads "all" once the row is narrowed.
  */
 function KindChips({
   zoom,
   kinds,
+  none = false,
   counts,
   org,
   ws,
@@ -112,12 +117,14 @@ function KindChips({
 }: {
   zoom: RunTranscript["zoom"];
   kinds: readonly TranscriptKind[];
+  /** True when the URL turned every chip off. */
+  none?: boolean;
   /** Each chip's count over the whole run; null when that read failed. */
-  counts: Partial<Record<ChipName, number>> | null;
+  counts: Partial<Record<ChipName | TranscriptKind, number>> | null;
 } & Place) {
   const t = useTranslations("run.transcript");
   const locale = useLocale();
-  const count = (name: ChipName) => {
+  const count = (name: ChipName | TranscriptKind) => {
     const value = counts?.[name];
     return value === undefined ? null : (
       <span
@@ -143,7 +150,7 @@ function KindChips({
               data-gap={`transcript-kind-${name}`}
               aria-disabled="true"
               title={t(`chipGap.${name as "thinking" | "seal"}`)}
-              className="inline-flex min-h-8 cursor-not-allowed items-center gap-1.5 rounded-full border border-dashed border-border px-3 text-xs text-muted-foreground"
+              className="inline-flex min-h-11 cursor-not-allowed items-center sm:min-h-8 gap-1.5 rounded-full border border-dashed border-border px-3 text-xs text-muted-foreground"
             >
               {t(`chip.${name as "thinking" | "seal"}`)}
               {count(name)}
@@ -170,18 +177,30 @@ function KindChips({
             // A chip is a link, so its state is `aria-current`, which a link
             // may carry, and not `aria-pressed`, which belongs to a button.
             aria-current={on ? "true" : undefined}
-            className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-border px-3 text-xs text-muted-foreground hover:text-foreground aria-[current=true]:border-foreground aria-[current=true]:text-foreground"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-border px-3 text-xs sm:min-h-8 text-muted-foreground hover:text-foreground aria-[current=true]:border-foreground aria-[current=true]:text-foreground"
           >
             {t(`chip.${kind}`)}
             {count(kind)}
           </SafeLink>
         );
       })}
-      {kinds.length === 0 ? null : (
+      {kinds.length === 0 && !none ? (
+        <SafeLink
+          to={routes.run(org, ws, runId, {
+            tab: "transcript",
+            zoom,
+            kinds: KINDS_NONE,
+          })}
+          data-testid="chip-none"
+          className="inline-flex min-h-11 items-center px-2 text-xs underline underline-offset-4 sm:min-h-8"
+        >
+          {t("chipsNone")}
+        </SafeLink>
+      ) : (
         <SafeLink
           to={routes.run(org, ws, runId, { tab: "transcript", zoom })}
           data-testid="chip-clear"
-          className="inline-flex min-h-8 items-center px-2 text-xs underline underline-offset-4"
+          className="inline-flex min-h-11 items-center px-2 text-xs underline underline-offset-4 sm:min-h-8"
         >
           {t("chipsClear")}
         </SafeLink>
@@ -261,6 +280,7 @@ export function TranscriptSection({
   kinds,
   run,
   all,
+  none = false,
   org,
   ws,
   runId,
@@ -278,6 +298,8 @@ export function TranscriptSection({
    * pressed.
    */
   all?: Read<RunTranscript>;
+  /** `?kinds=none`: every chip is off and the feed says so. */
+  none?: boolean;
 } & Place) {
   const t = useTranslations("run.transcript");
   const locale = useLocale();
@@ -287,10 +309,24 @@ export function TranscriptSection({
     <KindChips
       zoom={zoom}
       kinds={kinds}
+      none={none}
       counts={chipCounts(whole)}
       {...place}
     />
   );
+  if (none) {
+    return (
+      <Panel title={t("title")}>
+        {chips}
+        <p
+          data-testid="transcript-none"
+          className="max-w-prose text-sm text-muted-foreground"
+        >
+          {t("noneShown")}
+        </p>
+      </Panel>
+    );
+  }
   if (!read.ok) {
     return (
       <Panel title={t("title")}>

@@ -31,9 +31,9 @@ export function CopyText({ text }: { text: string }) {
         type="button"
         onClick={() => void copy()}
         aria-label={t("copyLabel", { text })}
-        className="rounded px-1 text-[11px] font-medium text-muted-foreground hover:text-foreground"
+        className="inline-flex min-h-11 min-w-11 items-center justify-center rounded px-1 text-[11px] font-medium text-muted-foreground hover:text-foreground sm:min-h-0 sm:min-w-0"
       >
-        {state === "copied" ? t("copied") : t("copy")}
+        {state === "copied" ? t("copiedText", { text }) : t("copy")}
       </button>
       {state === "failed" ? (
         <span role="status" className="text-[11px] text-muted-foreground">

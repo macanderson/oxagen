@@ -90,10 +90,13 @@ export function RunReadFailure({
   wsRole,
   retry,
   readAt,
+  viewerName = null,
 }: Place & {
   read: Failure;
   orgName: string;
   wsSlug: string;
+  /** The signed-in person's name for Signed in as; null when none is recorded. */
+  viewerName?: string | null;
   orgRole: OrgRole;
   wsRole: WsRole;
   /** Where Try again points: this same page. */
@@ -144,7 +147,15 @@ export function RunReadFailure({
             </span>
             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-left text-xs">
               <dt className="text-dim">{t("denied.signedIn")}</dt>
-              <dd>
+              <dd data-testid="run-denied-viewer">
+                {viewerName === null ? null : (
+                  <>
+                    <span className="font-medium text-foreground">
+                      {viewerName}
+                    </span>
+                    {" · "}
+                  </>
+                )}
                 {t("denied.roles", {
                   org: t(`role.${orgRole}`),
                   ws: t(`role.${wsRole}`),

@@ -183,7 +183,7 @@ function href(place: Place, view: View) {
 const linkQuiet =
   "rounded-sm underline decoration-dotted underline-offset-2 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
 
-/** `fr 118`: the frame that recorded the node, which opens the Frames tab on it. */
+/** `fr 118`: the frame that recorded the node, which opens the Governed actions tab on it. */
 function Frame({ seq, place }: { seq: string | null; place: Place }) {
   const t = useTranslations("run.outputs");
   if (seq === null) return null;

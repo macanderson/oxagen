@@ -117,6 +117,11 @@ vi.mock("@/features/audit", () => ({ Audit, AuditSkeleton: () => null }));
 vi.mock("@/features/billing", () => ({ Billing, BillingActions }));
 vi.mock("@/features/fleet", () => ({ Fleet, FleetRegister: () => null }));
 vi.mock("@/features/run", () => ({ Run }));
+// The Run route reads the signed-in person's name for the denied state's
+// Signed in as line; the session itself is the auth lane's test.
+vi.mock("@/features/auth", () => ({
+  getAuthUser: () => Promise.resolve({ name: "Marcus Bell" }),
+}));
 vi.mock("@/features/agents", () => ({
   Agents,
   Agent,
@@ -547,6 +552,7 @@ describe("the Run page", () => {
       body: null,
       reads: "hide",
       spine: "0,3",
+      viewerName: "Marcus Bell",
     });
     expect(screen.queryByTestId("not-recorded")).toBeNull();
   });

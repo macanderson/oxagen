@@ -70,6 +70,14 @@ function EdgeChip({ seq, place }: { seq: string | null; place: Place }) {
   );
 }
 
+/**
+ * How many issues the session touched: the one task reference the run record
+ * keeps, or none. The Issues tab's count and its table both read this.
+ */
+export function issueCount(run: Pick<RunRow, "taskRef">): number {
+  return run.taskRef === null ? 0 : 1;
+}
+
 function IssuesTable({ run }: { run: RunRow }) {
   const t = useTranslations("run.issues");
   const ref = run.taskRef;
@@ -79,7 +87,7 @@ function IssuesTable({ run }: { run: RunRow }) {
       title={t("title")}
       aside={
         <Badge tone="quiet" dot={false}>
-          {t("count", { count: ref === null ? 0 : 1 })}
+          {t("count", { count: issueCount(run) })}
         </Badge>
       }
     >
@@ -101,7 +109,15 @@ function IssuesTable({ run }: { run: RunRow }) {
           </tr>
         ) : (
           <tr data-testid="run-issue-row">
-            <td className={`${cell} ${mono}`}>{ref}</td>
+            <td className={cell}>
+              <span className={`${mono} block`}>{ref}</span>
+              <span
+                data-gap="tracker-title"
+                className="block text-xs text-muted-foreground"
+              >
+                {t("titleNotRead")}
+              </span>
+            </td>
             <td className={`${cell} text-muted-foreground`} data-gap="tracker">
               {t("statusNotRead")}
             </td>
@@ -168,6 +184,7 @@ function LinkedWork({
   place: Place;
 }) {
   const t = useTranslations("run.issues.linked");
+  const ti = useTranslations("run.issues");
   const locale = useLocale();
   if (!read.ok) {
     return (
@@ -206,9 +223,16 @@ function LinkedWork({
     >
       <div className="flex flex-col gap-1 text-xs text-muted-foreground">
         <p className={eyebrow}>{t("title")}</p>
-        <p>{t("observed")}</p>
-        <p>{t("stated")}</p>
-        <p>
+        <p className="flex flex-wrap items-center gap-1.5">
+          <Badge tone="allowed">{ti("edge.observed")}</Badge>
+          {t("observed")}
+        </p>
+        <p className="flex flex-wrap items-center gap-1.5">
+          <Badge tone="quiet">{ti("edge.stated")}</Badge>
+          {t("stated")}
+        </p>
+        <p className="flex flex-wrap items-center gap-1.5">
+          <Badge tone="denied">{ti("edge.inferred")}</Badge>
           {t("inferred", { inferred, total: rows })}
           {read.value.complete ? "" : ` ${t("cut")}`}
         </p>

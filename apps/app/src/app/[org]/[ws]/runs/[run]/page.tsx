@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { dataSource } from "@/data/source";
+import { getAuthUser } from "@/features/auth";
 import { Run } from "@/features/run";
 import { requireViewer } from "@/server/viewer";
 import { firstParam } from "@/shared/safe-path";
@@ -25,7 +26,8 @@ export default async function RunPage({
 }: PageProps<"/[org]/[ws]/runs/[run]">) {
   const { org, ws, run } = await params;
   const ctx = await requireViewer(org, ws);
-  const { tab, zoom, kinds, frames, body, reads, spine } = await searchParams;
+  const [{ tab, zoom, kinds, frames, body, reads, spine }, user] =
+    await Promise.all([searchParams, getAuthUser()]);
   return (
     <main
       id="main"
@@ -42,6 +44,7 @@ export default async function RunPage({
         body={firstParam(body) ?? null}
         reads={firstParam(reads) ?? null}
         spine={firstParam(spine) ?? null}
+        viewerName={user?.name || null}
       />
     </main>
   );
