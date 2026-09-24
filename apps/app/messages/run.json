@@ -560,6 +560,7 @@
       "started": "started",
       "sealed": "sealed",
       "running": "still running",
+      "sealNotRecorded": "ended with no seal recorded",
       "by": "by",
       "paused": "Ingress is paused. The agent takes no new step until you resume it.",
       "copy": "Copy",

@@ -521,8 +521,13 @@ function When({ run }: { run: RunRow }) {
         {t("by")} {operator}
       </span>
       <span aria-hidden="true">·</span>
-      {run.sealedAt === null ? (
+      {/* One definition of sealed across the header: the run's status, the
+          same one RecordActions and summarize_run gate on. A run that ended
+          without a recorded seal instant says so rather than "still running". */}
+      {run.status === "live" ? (
         <span>{t("running")}</span>
+      ) : run.sealedAt === null ? (
+        <span>{t("sealNotRecorded")}</span>
       ) : (
         <span>
           {t("sealed")}{" "}

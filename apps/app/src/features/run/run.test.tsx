@@ -221,6 +221,22 @@ describe("header", () => {
     expect(screen.queryByText("$0.00")).toBeNull();
   });
 
+  it("reads sealed from the run's status in the when line, the same status the record actions gate on", async () => {
+    await renderRun({
+      detail: ok(runDetail({ run: runRow({ status: "halted", sealedAt: null }) })),
+      transcript: ok(runTranscript()),
+    });
+    const when = screen.getByTestId("run-when");
+    expect(when).toHaveTextContent("ended with no seal recorded");
+    expect(when).not.toHaveTextContent("still running");
+    cleanup();
+    await renderRun({
+      detail: ok(runDetail({ run: runRow({ status: "live", sealedAt: null }) })),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-when")).toHaveTextContent("still running");
+  });
+
   it("leaves out the generated name when automatic names are disabled", async () => {
     await renderRun({
       detail: ok(

@@ -5152,6 +5152,7 @@ type Messages = {
       started: string;
       sealed: string;
       running: string;
+      sealNotRecorded: string;
       by: string;
       paused: string;
       copy: string;
