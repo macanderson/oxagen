@@ -28,8 +28,11 @@ export const agentMemoryList = registerCapability({
     "List the workspace's AgentMemory nodes with optional weight/kind/node/citation filters and sort by recency or citation count; non-semantic browse counterpart to agent.memory.recall",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
   scoped: true,
+  // A console read is outside the metering surface (ADR-052 exclusion 2): the
+  // Steering Library's Memory shelf lists memories and spends no credits.
+  noBillingGate: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "memory" },
   sensitivity: "low",
   mutates: false,
