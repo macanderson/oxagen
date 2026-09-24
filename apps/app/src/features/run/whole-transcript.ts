@@ -1,12 +1,13 @@
-// A transcript read to its end, for the tabs that list or count across the
-// whole run: Policy, Context and the Cost waterfall.
+// A transcript read to its end. The Run page reads it once, at `everything`,
+// and everything that lists or counts across the whole run reads that one
+// read: the stat row, the Transcript feed, Policy, Context and the Cost tab.
 //
-// `get_run_transcript` answers one page of entries and a cursor. These tabs
+// `get_run_transcript` answers one page of entries and a cursor. The tabs
 // used to take the first page and call it the run, and they said the list
 // was cut only when `complete` was false, which means the run passed the
 // read's frame cap and not that another page was waiting. A run with more
 // than one page of policy decisions showed the first page as the whole list.
-// Here the tab reads page after page, up to a bound, and `isWhole` says
+// Here the page reads page after page, up to a bound, and `isWhole` says
 // whether what it holds is the whole run.
 import {
   type RunTranscript,

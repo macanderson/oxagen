@@ -122,10 +122,12 @@ describe("runs.list", () => {
             cost: null,
             costIsEstimate: false,
             reportedCost: null,
-            reportedTokens: null,
+            // #4018's session facts: a row that recorded none maps each to
+            // null, never to a guess.
             effort: null,
             thinking: null,
             permissionMode: null,
+            reportedTokens: null,
             model: viewModel,
             harness: null,
             machine,
@@ -888,8 +890,7 @@ describe("runs.work", () => {
       checkoutRefs: ["chk_1"],
     });
     expect(read.value.pullRequests[0]).not.toHaveProperty("checkoutIds");
-    // The harness mints a subagent's id, so the view carries it as `agentRef`
-    // rather than an `id` a reader would take for a public id (INV-11).
+    // A subagent's id is the harness's own, so the view names it a ref (INV-11).
     expect(read.value.subagents?.[0]).toMatchObject({
       agentRef: "a0182b6cd3a21d284",
       type: "Explore",

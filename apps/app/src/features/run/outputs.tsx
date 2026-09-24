@@ -29,7 +29,7 @@ import type {
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
 import { Badge, type BadgeTone } from "@/ui/badge";
-import { eyebrow, mono } from "@/ui/control-styles";
+import { buttonSecondary, eyebrowQuiet, mono } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
 
@@ -121,7 +121,7 @@ function Glyph({ kind }: { kind: RunOutputKind }) {
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
-      className="size-[15px]"
+      className="size-[13px]"
     >
       {GLYPH[kind]}
     </svg>
@@ -180,8 +180,26 @@ function href(place: Place, view: View) {
   });
 }
 
+/**
+ * `.ro-link { font-size:11.5px; color:var(--muted); text-decoration:underline;
+ * text-underline-offset:2px; text-decoration-color:var(--rule) }`.
+ */
 const linkQuiet =
-  "rounded-sm underline decoration-dotted underline-offset-2 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
+  "rounded-sm text-[11.5px] text-muted-foreground underline decoration-rule underline-offset-2 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
+
+/**
+ * `.ro-dot { position:absolute; left:-30px; top:6px; width:23px; height:23px;
+ * border-radius:50%; border:1px solid var(--border); background:var(--panel) }`,
+ * tinted by the node's state (`.ro-n.s-awaiting .ro-dot`, `.s-blocked`) and
+ * dashed for a held call (`.ro-would .ro-dot`).
+ */
+const DOT_TONE: Partial<Record<RunOutputNode["state"], string>> = {
+  awaiting: "border-info/55 text-info",
+  blocked: "border-warning/55 text-warning",
+};
+
+/** `.ro-tick { position:absolute; left:-23px; top:12px; width:9px; height:1px; background:var(--rule) }` */
+const tick = "absolute -left-[23px] top-3 h-px w-[9px] bg-rule";
 
 /** `fr 118`: the frame that recorded the node, which opens the Frames tab on it. */
 function Frame({ seq, place }: { seq: string | null; place: Place }) {
@@ -194,7 +212,7 @@ function Frame({ seq, place }: { seq: string | null; place: Place }) {
         body: seq,
       })}
       title={t("frameTitle")}
-      className={`${mono} shrink-0 rounded border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground hover:text-foreground`}
+      className="shrink-0 rounded-md border border-border bg-background px-1.5 py-px font-mono text-[10.5px] text-dim hover:border-rule hover:text-foreground"
     >
       {t("frame", { seq })}
     </SafeLink>
@@ -207,7 +225,7 @@ function Stat({ stat }: { stat: RunOutputNode["stat"] }) {
   return (
     <span className={`${mono} shrink-0 text-[11px] tabular-nums`}>
       <b className="font-semibold text-success">+{stat.added}</b>{" "}
-      <b className="font-semibold text-error-ink">&minus;{stat.removed}</b>
+      <b className="font-semibold text-warning">&minus;{stat.removed}</b>
     </span>
   );
 }
@@ -232,56 +250,74 @@ function keyedByOccurrence<T>(
 
 function Node({ node, place }: { node: RunOutputNode; place: Place }) {
   const t = useTranslations("run.outputs");
-  const soft = node.kind === "would";
+  const would = node.kind === "would";
+  const gate = node.kind === "gate";
   return (
     <li
       data-kind={node.kind}
       data-state={node.state}
-      className={`flex gap-3 border-l-2 py-2.5 pl-3 ${
-        node.kind === "gate"
-          ? "border-info/50"
-          : soft
-            ? "border-dashed border-border"
-            : "border-border"
-      }`}
+      className="relative min-w-0 py-[7px]"
     >
       <span
-        className={`mt-0.5 flex size-6 flex-none items-center justify-center rounded-md border border-border ${
-          soft ? "text-dim" : "text-muted-foreground"
+        aria-hidden="true"
+        className={`absolute -left-[30px] top-1.5 grid size-[23px] place-items-center rounded-full border bg-card ${
+          would
+            ? "border-dashed border-border text-dim"
+            : (DOT_TONE[node.state] ?? "border-border text-muted-foreground")
         }`}
       >
         <Glyph kind={node.kind} />
       </span>
-      <div className="flex min-w-0 flex-col gap-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <b className={`${mono} min-w-0 text-sm font-semibold break-all`}>
+      <div
+        className={`min-w-0 ${
+          gate
+            ? "rounded-[10px] border border-info/40 bg-info/10 px-3 py-2.5"
+            : would
+              ? "rounded-[10px] border border-dashed border-rule px-3 py-2"
+              : ""
+        }`}
+      >
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <b
+            className={`min-w-0 max-w-full truncate text-[13px] ${
+              would
+                ? "font-medium text-muted-foreground"
+                : "font-mono font-semibold text-foreground"
+            }`}
+          >
             {node.name}
           </b>
           <Badge tone={TONE[node.state]}>{t(`state.${node.state}`)}</Badge>
           <Stat stat={node.stat} />
           <Frame seq={node.seq} place={place} />
         </div>
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+        <div className="mt-[3px] flex flex-wrap items-baseline gap-2 text-[11.5px] leading-normal">
           {node.where === null ? null : (
-            <span className={mono}>{node.where}</span>
+            <span className="font-mono text-[11px] text-dim">{node.where}</span>
           )}
-          {node.note === null ? null : <span>{node.note}</span>}
+          {node.note === null ? null : (
+            <span className="min-w-0 text-muted-foreground">{node.note}</span>
+          )}
           {/* The ledger records a change without its path. Saying so beats
               printing `rpl_…` where a reader expects a file name. */}
-          {node.nameIsLocator ? <span>{t("locator")}</span> : null}
+          {node.nameIsLocator ? (
+            <span className="text-muted-foreground">{t("locator")}</span>
+          ) : null}
         </div>
-        {node.kind === "gate" ? (
-          <p className="flex flex-wrap items-center gap-2 pt-1 text-xs text-muted-foreground">
+        {gate ? (
+          <div className="mt-[9px] flex flex-wrap items-center gap-2.5">
             <SafeLink
               to={routes.run(place.org, place.ws, place.runId, {
                 tab: "actions",
               })}
-              className={`${linkQuiet} font-medium text-info`}
+              className={`${buttonSecondary} min-h-7 px-2.5 text-xs`}
             >
               {t("reviewApproval")}
             </SafeLink>
-            <span>{t("gateHint")}</span>
-          </p>
+            <span className="text-[11px] text-muted-foreground">
+              {t("gateHint")}
+            </span>
+          </div>
         ) : null}
       </div>
     </li>
@@ -307,16 +343,16 @@ function ReadMark({
     reads: view.reads,
     open: withToggled(view.open, group.index),
   });
+  const notes = group.items
+    .map((node) => node.note)
+    .filter((note): note is string => note !== null);
   return (
     <li
       data-kind="read"
-      className="flex items-baseline gap-3 border-l-2 border-dotted border-border py-1.5 pl-3 text-xs text-muted-foreground"
+      className="relative flex min-w-0 flex-wrap items-baseline gap-2 py-[5px]"
     >
-      <span
-        aria-hidden="true"
-        className="mt-[7px] h-px w-3 flex-none self-start bg-border"
-      />
-      <span className="min-w-0 flex-1">
+      <span aria-hidden="true" className={tick} />
+      <span className="min-w-0 text-[11.5px] text-dim">
         {t("readMark")}{" "}
         {keyedByOccurrence(shown, (name) => name).map(
           ({ item: name, key }, i) => (
@@ -324,7 +360,9 @@ function ReadMark({
             // many times the name appeared before it.
             <span key={key}>
               {i === 0 ? null : ", "}
-              <b className={`${mono} font-medium break-all`}>{name}</b>
+              <b className="break-all font-mono text-[11px] font-medium text-muted-foreground">
+                {name}
+              </b>
             </span>
           ),
         )}
@@ -344,6 +382,9 @@ function ReadMark({
             </SafeLink>
           </>
         ) : null}
+        {notes.length === 0 ? null : (
+          <span className="text-dim"> · {notes.join(" · ")}</span>
+        )}
       </span>
       <Frame seq={group.items.at(-1)?.seq ?? null} place={place} />
     </li>
@@ -370,7 +411,7 @@ function NodeGroup({
   });
   return (
     <li>
-      <ol className="flex flex-col">
+      <ol className="m-0 list-none p-0">
         {keyedByOccurrence(
           items,
           (node) => `${node.kind}:${node.seq ?? "none"}:${node.name}`,
@@ -380,11 +421,8 @@ function NodeGroup({
           <Node key={key} node={node} place={place} />
         ))}
         {group.items.length > FOLD_OVER ? (
-          <li className="flex items-baseline gap-3 border-l-2 border-dotted border-border py-1.5 pl-3 text-xs text-muted-foreground">
-            <span
-              aria-hidden="true"
-              className="mt-[7px] h-px w-3 flex-none self-start bg-border"
-            />
+          <li className="relative py-[5px]">
+            <span aria-hidden="true" className={tick} />
             <SafeLink to={fold} className={linkQuiet}>
               {folds
                 ? t("moreOfKind", {
@@ -408,6 +446,7 @@ export function OutputsSpine({
   read,
   reads,
   spine,
+  live = false,
   ...place
 }: {
   read: Read<RunOutputs>;
@@ -415,6 +454,8 @@ export function OutputsSpine({
   reads: string | null;
   /** `?spine=`, the folded groups a person opened. */
   spine: string | null;
+  /** A live run's spine fades out at the bottom: it is still being written. */
+  live?: boolean;
 } & Place) {
   const t = useTranslations("run.outputs");
   if (!read.ok) return <ReadFailure read={read} section={t("label")} />;
@@ -428,20 +469,27 @@ export function OutputsSpine({
   ].filter((part) => part !== null);
 
   return (
-    <section aria-label={t("label")} data-testid="run-outputs">
-      <div className="flex flex-wrap items-center justify-between gap-3 pb-1">
-        <p className={`${eyebrow} m-0`}>{t("title")}</p>
-        <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-          <span data-testid="run-outputs-tally">{counts.join(", ")}</span>
-          {tally.reads > 0 ? (
-            <SafeLink
-              to={href(place, { reads: !view.reads, open: view.open })}
-              className={linkQuiet}
-            >
-              {view.reads ? t("hideReads") : t("showReads")}
-            </SafeLink>
-          ) : null}
-        </div>
+    <section
+      aria-label={t("label")}
+      data-testid="run-outputs"
+      className="rounded-xl border border-border bg-card px-[18px] pb-[13px] pt-[15px] text-card-foreground"
+    >
+      <div className="mb-3 flex flex-wrap items-center gap-2.5">
+        <h2 className={`${eyebrowQuiet} m-0`}>{t("title")}</h2>
+        <span
+          data-testid="run-outputs-tally"
+          className="ml-auto font-mono text-[11px] text-dim"
+        >
+          {counts.join(" · ")}
+        </span>
+        {tally.reads > 0 ? (
+          <SafeLink
+            to={href(place, { reads: !view.reads, open: view.open })}
+            className={linkQuiet}
+          >
+            {view.reads ? t("hideReads") : t("showReads")}
+          </SafeLink>
+        ) : null}
       </div>
 
       {nodes.length === 0 ? (
@@ -449,7 +497,13 @@ export function OutputsSpine({
           {complete ? t("empty") : t("cut")}
         </p>
       ) : (
-        <ol className="flex flex-col">
+        <ol
+          className={`relative m-0 list-none py-0 pl-[30px] before:absolute before:bottom-1.5 before:left-[11px] before:top-1.5 before:w-px before:content-[''] ${
+            live
+              ? "before:bg-gradient-to-b before:from-rule before:from-[78%] before:to-transparent"
+              : "before:bg-rule"
+          }`}
+        >
           {groupNodes(nodes).map((group) =>
             group.kind === "read" ? (
               view.reads ? (
@@ -472,7 +526,7 @@ export function OutputsSpine({
         </ol>
       )}
 
-      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-2 text-xs text-muted-foreground">
+      <p className="mt-[11px] flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border pt-2.5 text-[11px] text-dim">
         <span>{t("footer")}</span>
         {complete ? null : <span>{t("cut")}</span>}
       </p>

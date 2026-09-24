@@ -1,101 +1,61 @@
-// The Run page while its reads are in flight (the page spec's loading state):
-// the shell stays, and the page body is replaced by a skeleton shaped like
-// what is coming: the header's strips, then the two columns, with the
-// summary, the six stat tiles, the tab strip and a panel of rows on the left
-// and the three side panels on the right.
+// The Run page while its reads are in flight (pages/run.md, States: "the
+// shell stays; the page body is replaced by the skeleton (four tile blocks
+// and a panel of seven rows), so you keep your bearings"). It is the
+// mockup's `skeleton()`: a `.grid.g4` of four `.sk.b` blocks, then a panel
+// whose header holds one `.sk.t` bar and whose body holds seven `.sk.r` rows.
 //
-// A skeleton in the shape of the answer is the point: a spinner in the middle
-// of the page would move every element once the reads land, and a person who
-// has already started reading the header would lose their place.
+// No figure, no zero and no stale row is drawn: the skeleton is shapes only.
 //
-// Next renders this default export as the route segment's Suspense fallback,
-// so it reproduces the page's container and header: the frame does not jump
-// once the read finishes and the real page takes over. The container is not
-// the page's main landmark: while the page streams in, this fallback and the page
-// are in the document together, and two main#main elements gave the skip
-// link two targets and failed page-load's strict locator (Billing's fallback,
-// 2026-09-24; arch/loading-landmarks.test.ts). The run's id is not known
-// here, so the h1 says "Run" until the page lands.
+// The frame keeps the page's container classes, so nothing jumps when the page
+// takes over, but it is not `main#main`. While the page streams in, the
+// document holds this fallback and the hidden page together, and only the page
+// may own the landmark: two would give the skip link two targets and fail the
+// page-load oracle's strict locator, as the onboarding gate did on 2026-09-24
+// (#4036).
 import { useTranslations } from "next-intl";
-import { panel } from "@/ui/control-styles";
-import { PageHeader } from "@/ui/page-header";
+import { panel, panelBody, panelHeader } from "@/ui/control-styles";
 
-/** The stat row: tokens, prompts, cost, wasted, wall clock, cache hit. */
-const TILES = [0, 1, 2, 3, 4, 5];
-/** The seven tabs. */
-const TABS = [0, 1, 2, 3, 4, 5, 6];
-/** The open section's rows. */
+/** `.grid.g4`'s four blocks. */
+const BLOCKS = [0, 1, 2, 3];
+/** The panel's seven rows. */
 const ROWS = [0, 1, 2, 3, 4, 5, 6];
-/** Changes, Outputs and Spend by area. */
-const SIDE = [0, 1, 2];
 
-const bar = "block animate-pulse rounded bg-muted motion-reduce:animate-none";
+/**
+ * `.sk { background: linear-gradient(90deg, var(--hl) 25%, var(--panel) 50%,
+ * var(--hl) 75%); animation: shim 1.5s linear infinite; border-radius: 6px }`,
+ * as the kit's pulse, which stops under reduced motion.
+ */
+const sk = "block animate-pulse bg-hl motion-reduce:animate-none";
 
 export function RunLoading() {
-  const t = useTranslations();
+  const t = useTranslations("run");
   return (
-    <div
-      data-testid="run-loading-frame"
-      className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-10"
-    >
-      <PageHeader eyebrow={t("pages.run")} title={t("pages.run")} />
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-10">
       <div
         role="status"
         aria-busy="true"
         data-testid="run-loading"
-        className="flex flex-col gap-6"
+        className="flex flex-col"
       >
-        <span className="sr-only">{t("run.loading")}</span>
-        <div aria-hidden="true" className="flex flex-col gap-2">
-          <span className={`${bar} h-6 w-72`} />
-          <span className={`${bar} h-4 w-96 max-w-full`} />
-          <span className={`${bar} h-4 w-80 max-w-full`} />
+        <span className="sr-only">{t("loading")}</span>
+        <div
+          aria-hidden="true"
+          className="mb-4 grid grid-cols-2 gap-3.5 md:grid-cols-4"
+        >
+          {BLOCKS.map((block) => (
+            <span
+              key={block}
+              className={`${sk} h-16 rounded-[11px] border border-border`}
+            />
+          ))}
         </div>
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">
-            <div className={`${panel} flex flex-col gap-2 p-4`}>
-              <span aria-hidden="true" className={`${bar} h-4 w-24`} />
-              <span aria-hidden="true" className={`${bar} h-4 w-full`} />
-              <span aria-hidden="true" className={`${bar} h-4 w-2/3`} />
-            </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
-              {TILES.map((tile) => (
-                <span
-                  key={tile}
-                  aria-hidden="true"
-                  className="flex flex-col gap-1.5 rounded-lg border border-border px-3 py-2.5"
-                >
-                  <span className={`${bar} h-3 w-14`} />
-                  <span className={`${bar} h-5 w-20`} />
-                </span>
-              ))}
-            </div>
-            <div className="flex gap-4 overflow-hidden border-b border-border pb-3">
-              {TABS.map((tab) => (
-                <span
-                  key={tab}
-                  aria-hidden="true"
-                  className={`${bar} h-4 w-20 shrink-0`}
-                />
-              ))}
-            </div>
-            <div className={`${panel} flex flex-col gap-2 p-4`}>
-              {ROWS.map((row) => (
-                <span
-                  key={row}
-                  aria-hidden="true"
-                  className={`${bar} h-4 w-full`}
-                />
-              ))}
-            </div>
+        <div aria-hidden="true" className={panel}>
+          <div className={panelHeader}>
+            <span className={`${sk} h-[22px] w-[180px] rounded-[7px]`} />
           </div>
-          <div className="flex min-w-0 flex-col gap-6">
-            {SIDE.map((side) => (
-              <div key={side} className={`${panel} flex flex-col gap-2 p-4`}>
-                <span aria-hidden="true" className={`${bar} h-4 w-24`} />
-                <span aria-hidden="true" className={`${bar} h-4 w-full`} />
-                <span aria-hidden="true" className={`${bar} h-4 w-3/4`} />
-              </div>
+          <div className={`${panelBody} flex flex-col gap-2`}>
+            {ROWS.map((row) => (
+              <span key={row} className={`${sk} h-[38px] rounded-[9px]`} />
             ))}
           </div>
         </div>

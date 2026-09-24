@@ -16,7 +16,7 @@
 // the Billing feature (WL-38); Organization, Roles and API keys hand their
 // viewer, the data source and the tab or the keys' workspace to the
 // Organization feature (pages/organization.md); Run hands its viewer, the data source, the
-// run id and the tab, zoom and frames cursor the URL carries to the Run feature
+// run id and the tab, chips and frames cursor the URL carries to the Run feature
 // (WL-35).
 import { screen } from "@testing-library/react";
 import type { ReactNode } from "react";
@@ -797,18 +797,21 @@ describe("the Run page", () => {
     requireViewer.mockResolvedValue(ctx);
   });
 
-  // Only the run read knows the run's title, so Run draws the h1 (its own
-  // tests cover it) and the page adds no heading beside it. The tab title
-  // stays the catalog's "Run".
+  // The spec (pages/run.md) makes the run's id the h1 and "Run" the eyebrow,
+  // so the tab title and the h1 differ here, unlike every other page. The Run
+  // feature draws that header itself (its not-loaded states replace it), so
+  // the route names the document and hands the whole body to Run; the h1 is
+  // held in features/run/run.test.tsx.
   async function expectRunTitle(props: RouteProps<typeof SEGMENTS>) {
     const page = await RUN();
     const metadata = await page.generateMetadata(props);
     const container = await renderPage(await page.default(props));
     expect(container.querySelectorAll("h1")).toHaveLength(0);
+    expect(screen.getByTestId("run-body")).toBeTruthy();
     expect(metadata.title).toBe(title("run"));
   }
 
-  it("hands the run, the tab, the zoom, the chips, the frames cursor and the spine's folds the URL names to Run", async () => {
+  it("hands the run, the tab, the chips, the frames cursor and the spine's folds the URL names to Run, and drops an older link's zoom", async () => {
     await expectRunTitle(
       routeProps(SEGMENTS, {
         tab: "frames",
@@ -825,7 +828,6 @@ describe("the Run page", () => {
       source,
       runId: "arun_1",
       tab: "frames",
-      zoom: "turns",
       kinds: "tools,errors",
       frames: "ZjoyMA",
       body: null,
@@ -839,7 +841,6 @@ describe("the Run page", () => {
     await expectRunTitle(routeProps(SEGMENTS));
     expect(Run.mock.calls.at(-1)?.[0]).toMatchObject({
       tab: null,
-      zoom: null,
       kinds: null,
       frames: null,
       body: null,

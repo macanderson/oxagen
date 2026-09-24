@@ -42,7 +42,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 const { RunControls } = await import("./run-controls");
-const { RecordActions } = await import("./record-actions");
+const { ExportAction, SummarizeAction } = await import("./record-actions");
 
 const RUN = "tse_7k2m9q";
 
@@ -558,13 +558,20 @@ describe("record writes", () => {
   ) {
     return render(
       <IntlProvider>
-        <RecordActions
+        <SummarizeAction
           org="acme"
           ws="core-platform"
           runId={RUN}
           sealed
           hasSummary={hasSummary}
           summarizable={summarizable}
+          orgRole={orgRole}
+        />
+        <ExportAction
+          org="acme"
+          ws="core-platform"
+          runId={RUN}
+          sealed
           orgRole={orgRole}
         />
       </IntlProvider>,
@@ -627,7 +634,8 @@ describe("record writes", () => {
     renderRecord(true, "member");
     const button = screen.getByTestId("run-export");
     expect(button).toBeDisabled();
-    expect(screen.getByTestId("export-no-role")).toHaveTextContent(
+    expect(button).toHaveAttribute("data-reason", "export-no-role");
+    expect(button.getAttribute("title")).toContain(
       "needs an organization Owner or Admin role",
     );
     await user.click(button);
@@ -639,16 +647,20 @@ describe("record writes", () => {
   it("draws Summarize disabled, with the reason, for an organization Viewer (negative)", () => {
     renderRecord(false, "viewer");
     expect(screen.getByTestId("run-summarize")).toBeDisabled();
-    expect(screen.getByTestId("summarize-no-role")).toHaveTextContent(
+    expect(screen.getByTestId("run-summarize")).toHaveAttribute(
+      "data-reason",
+      "summarize-no-role",
+    );
+    expect(screen.getByTestId("run-summarize").getAttribute("title")).toContain(
       "Owner, Admin or Member role",
     );
     expect(screen.getByTestId("run-export")).toBeDisabled();
   });
 
-  it("offers neither write while the run is live (negative)", () => {
+  it("offers no summary while the run is live, and draws Export disabled until it seals (negative)", () => {
     render(
       <IntlProvider>
-        <RecordActions
+        <SummarizeAction
           org="acme"
           ws="core-platform"
           runId={RUN}
@@ -657,9 +669,19 @@ describe("record writes", () => {
           summarizable={false}
           orgRole="owner"
         />
+        <ExportAction
+          org="acme"
+          ws="core-platform"
+          runId={RUN}
+          sealed={false}
+          orgRole="owner"
+        />
       </IntlProvider>,
     );
-    expect(screen.queryByTestId("run-export")).toBeNull();
     expect(screen.queryByTestId("run-summarize")).toBeNull();
+    expect(screen.getByTestId("run-export")).toBeDisabled();
+    expect(screen.getByTestId("run-export").getAttribute("title")).toContain(
+      "Export this run once it seals",
+    );
   });
 });

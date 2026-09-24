@@ -210,7 +210,9 @@ describe("the fallback title", () => {
       `feature/${"x".repeat(60)}`,
     )!;
     expect(title.length).toBeLessThanOrEqual(80);
-    expect(title).toMatch(/^Refactor the billing proration path .*… · feature\//u);
+    expect(title).toMatch(
+      /^Refactor the billing proration path .*… · feature\//u,
+    );
     expect(title.split(" · ")[0]!.length).toBeLessThanOrEqual(60);
   });
   it("gives no title for a prompt with no words", () => {
