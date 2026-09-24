@@ -2385,11 +2385,9 @@ type Messages = {
       };
       noEffectYet: string;
       releasedNoEffect: string;
-      releasedFigure: string;
       notRecorded: string;
       filteredEmpty: string;
       readBound: string;
-      footnote: string;
       empty: string;
       emptyBodyEffective: string;
       emptyBody: string;

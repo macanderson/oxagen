@@ -296,8 +296,8 @@ function Exceptions() {
 }
 
 /**
- * The skeleton: four tile blocks and a panel of seven rows, as the design
- * shows. `role="status"` carries the name, and the skeleton holds no text, so
+ * The skeleton: four 64px tile blocks and a panel of seven 38px rows under a
+ * 22px title, the design's `.sk.b`, `.sk.r` and `.sk.t`. `role="status"` carries the name, and the skeleton holds no text, so
  * the page never flashes a zero where a limit goes.
  */
 export function MandateLoading() {
@@ -313,19 +313,19 @@ export function MandateLoading() {
         {[0, 1, 2, 3].map((tile) => (
           <div
             key={tile}
-            className={`${statTile} h-[88px] animate-pulse bg-hl motion-reduce:animate-none`}
+            className="h-16 animate-pulse rounded-[11px] bg-hl motion-reduce:animate-none"
           />
         ))}
       </div>
       <div className={panel}>
         <div className={panelHeader}>
-          <div className="h-3.5 w-[180px] animate-pulse rounded bg-hl motion-reduce:animate-none" />
+          <div className="h-[22px] w-[180px] animate-pulse rounded-[7px] bg-hl motion-reduce:animate-none" />
         </div>
         <div className={`${panelBody} flex flex-col gap-2`}>
           {[0, 1, 2, 3, 4, 5, 6].map((row) => (
             <div
               key={row}
-              className="h-8 animate-pulse rounded-md bg-hl motion-reduce:animate-none"
+              className="h-[38px] animate-pulse rounded-[9px] bg-hl motion-reduce:animate-none"
             />
           ))}
         </div>

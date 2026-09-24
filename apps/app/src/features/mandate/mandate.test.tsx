@@ -375,7 +375,7 @@ describe("Mandate › loaded", () => {
     expect(release).toHaveTextContent("released, no effect");
   });
 
-  it("prints what a released draw cost, $0.00, with the figure its reservation held beneath", async () => {
+  it("prints what a released draw cost, $0.00, and nothing beneath it", async () => {
     await renderMandate(
       mandateDetailRead({
         draws: [
@@ -391,10 +391,10 @@ describe("Mandate › loaded", () => {
       }),
     );
     const amount = draws()[0]?.querySelectorAll("td")[2];
-    expect(amount).toHaveTextContent(/^\$0\.00\$18\.00 held, then released$/);
-    expect(
-      amount?.querySelector('[data-state="released-figure"]'),
-    ).toHaveTextContent("$18.00 held, then released");
+    expect(amount).toHaveTextContent(/^\$0\.00$/);
+    expect(screen.queryByText(/held, then released/)).toBeNull();
+    // The design has no footnote under the table: each cell names its own gap.
+    expect(screen.queryByText(/Not recorded yet: the tool version/)).toBeNull();
   });
 
   it("searches, facets on State, and pages the ledger with a range line", async () => {
@@ -675,7 +675,7 @@ describe("Mandate › empty", () => {
 });
 
 describe("Mandate › loading", () => {
-  it("draws four tile blocks and a panel of seven rows, with no figure", () => {
+  it("draws the design's four 64px tile blocks and a panel of seven 38px rows, with no figure", () => {
     render(
       <IntlProvider>
         <MandateLoading />
@@ -686,7 +686,8 @@ describe("Mandate › loading", () => {
     });
     expect(skeleton).toHaveAttribute("aria-busy", "true");
     expect(skeleton).toHaveTextContent("");
-    expect(skeleton.querySelectorAll(".h-8")).toHaveLength(7);
+    expect(skeleton.querySelectorAll(".h-16")).toHaveLength(4);
+    expect(skeleton.querySelectorAll(".h-\\[38px\\]")).toHaveLength(7);
   });
 });
 
