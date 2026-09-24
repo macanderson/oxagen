@@ -70,6 +70,7 @@ import {
   requireInvitee,
   requireUser,
   requireViewer,
+  resolveWorkspaceViewer,
   WsCtx,
   type WsFields,
 } from "./viewer";
@@ -300,6 +301,63 @@ describe("requireViewer", () => {
       "NEXT_PERMANENT_REDIRECT",
     );
     expect(nav.permanentRedirect).toHaveBeenLastCalledWith("/acme");
+  });
+});
+
+describe("resolveWorkspaceViewer", () => {
+  const {
+    orgId: _o,
+    orgSlug: _s,
+    orgName: _n,
+    orgRole: _r,
+    userId: _u,
+    ...ws
+  } = wsFields;
+  /** The organization resolves; the workspace answers `forWs`. */
+  function resolveWith(forWs: ViewerResolution) {
+    resolveMock.mockImplementation((...args: unknown[]) =>
+      Promise.resolve(
+        args[2] === undefined
+          ? { kind: "ok", org: orgFields, ws: null }
+          : forWs,
+      ),
+    );
+  }
+
+  it("mints a WsCtx for a member of the workspace", async () => {
+    resolveWith({ kind: "ok", org: orgFields, ws });
+    const out = await resolveWorkspaceViewer("acme", "core-platform");
+    expect(out.kind).toBe("ok");
+    expect(WsCtx.is(out.ctx)).toBe(true);
+    expect(fieldsOf(out.ctx)).toEqual(wsFields);
+  });
+
+  it("answers refused with the organization ctx for a workspace it will not admit (negative)", async () => {
+    resolveWith({ kind: "not_found" });
+    const out = await resolveWorkspaceViewer("acme", "finops");
+    expect(out.kind).toBe("refused");
+    expect(OrgCtx.is(out.ctx)).toBe(true);
+    expect(WsCtx.is(out.ctx)).toBe(false);
+    expect(fieldsOf(out.ctx)).toEqual(orgFields);
+    expect(nav.notFound).not.toHaveBeenCalled();
+  });
+
+  it("still 404s an organization the viewer is not a member of (negative)", async () => {
+    resolveMock.mockResolvedValue({ kind: "not_found" });
+    await expect(resolveWorkspaceViewer("acme", "finops")).rejects.toThrow(
+      "NEXT_NOT_FOUND",
+    );
+  });
+
+  it("still redirects a historical workspace slug to its canonical URL", async () => {
+    requestHeaders.set("x-url", "https://app.oxagen.sh/acme/platform/tools");
+    resolveWith({ kind: "redirect", org: "acme", ws: "core-platform" });
+    await expect(resolveWorkspaceViewer("acme", "platform")).rejects.toThrow(
+      "NEXT_PERMANENT_REDIRECT",
+    );
+    expect(nav.permanentRedirect).toHaveBeenCalledWith(
+      "/acme/core-platform/tools",
+    );
   });
 });
 

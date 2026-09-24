@@ -9,16 +9,22 @@
 // flyout and the drawer share a stacking level, so a drawer left open would
 // cover the panel the tap just opened.
 //
-// The launcher WL-06 deleted reported engine health beside its label, read
-// through a `shell.assistantEngine` port. `get_assistant_engine` is
-// workspace-scoped and the shell mounts at organization scope, so that read has
-// nowhere to run from here; a turn that cannot reach the engine says so in the
-// flyout instead, where the person is looking when it matters.
-import { ChevronRight, Sparkles } from "lucide-react";
+// The mock labels it "Assistant" with the model and the engine's state under
+// it ("z-ai/glm-flash-latest · ready"). No contract returns the assistant's
+// model, and `get_assistant_engine` probes the engine up to three times with a
+// two-second timeout each, too slow for a read every page render waits on. So
+// the line under the label says the two are not read here (#2968, which adds
+// the `shell.assistantEngine` port), and a turn that cannot reach the engine
+// says so in the flyout, where the person is looking when it matters.
+import { ChevronRight } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { StellaIcon } from "@/ui/stella-mark";
 import { useShellState } from "./shell-state";
 
 export const ASSISTANT_PANEL_ID = "shell-assistant";
+
+/** The issue that owns the launcher's missing model and engine state, as a data attribute only. */
+const ENGINE_GAP = "#2968";
 
 export function AssistantLauncher({
   onNavigate,
@@ -48,16 +54,21 @@ export function AssistantLauncher({
         assistantOpen ? "border-gold" : "border-border"
       }`}
     >
+      {/* Stella's asterisk is the mark, and gold is the mark's colour. */}
       <span
         aria-hidden="true"
-        className="grid size-6 flex-none place-items-center rounded-md bg-gold text-on-gold"
+        className="grid size-6 flex-none place-items-center rounded-md border border-border bg-background"
       >
-        <Sparkles className="size-3.5" />
+        <StellaIcon className="size-5" data-testid="assistant-launcher-icon" />
       </span>
       <span className="min-w-0 flex-1">
         <b className="block text-[13px] font-semibold">{t("launcher")}</b>
-        <span className="block truncate font-mono text-[11px] text-sidebar-nav-label-fg">
-          {t("launcherHint")}
+        <span
+          data-testid="assistant-launcher-not-backed"
+          data-gap={ENGINE_GAP}
+          className="block truncate font-mono text-[11px] text-sidebar-nav-label-fg"
+        >
+          {t("launcherNotBacked")}
         </span>
       </span>
       <ChevronRight

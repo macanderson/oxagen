@@ -91,7 +91,7 @@
 // container renders on every pass and only its contents are conditional: a
 // polite region inserted in the same commit as its own text is announced
 // unreliably.
-import { CircleAlert, Send, Sparkles } from "lucide-react";
+import { CircleAlert, Send } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
@@ -116,6 +116,7 @@ import { useShellState } from "./shell-state";
 import { routes } from "@/shared/safe-path";
 import { linkText } from "@/ui/control-styles";
 import { SafeLink, useNavigate } from "@/ui/navigation";
+import { StellaIcon, StellaWordmark } from "@/ui/stella-mark";
 
 type Entry =
   | { kind: "asked"; id: string; text: string }
@@ -126,7 +127,15 @@ type Entry =
       runId: string;
       parked: readonly ParkedCard[];
     }
-  | { kind: "refused"; id: string; code: Refusal };
+  | {
+      kind: "refused";
+      id: string;
+      code: Refusal;
+      /** The code the action answered with, shown so an operator can look it up. */
+      detail: string | null;
+      /** The question that was refused, so "Ask again" can send it unchanged. */
+      question: string;
+    };
 
 /**
  * One workspace's conversation with the assistant: what was said, the
@@ -150,18 +159,34 @@ const EMPTY_THREAD: Thread = {
 };
 
 /**
- * The refusal reasons a turn can come back with, each said plainly. The
- * credit gate's two refusals are their own entries rather than `exhausted`,
- * because each has one way out and the sentence links to it.
+ * The refusal reasons a turn can come back with, each said plainly (#3227).
+ * The engine being down, a run the ledger would not admit, and a turn the
+ * engine stopped are told apart from a network failure, and an empty credit
+ * balance from a spent monthly cap, because each asks the person to do
+ * something different. The two credit-gate refusals link to their way out.
  */
 type Refusal =
   | "denied"
   | "invalid"
   | "exhausted"
-  | "out-of-credits"
-  | "spend-cap"
+  | "noCredit"
+  | "spendCap"
+  | "keyLimit"
   | "parked"
+  | "engine"
+  | "unrecorded"
+  | "aborted"
+  | "model"
   | "unavailable";
+
+/** The refusals worth asking again: the service, not the question, failed. */
+const RETRYABLE: ReadonlySet<Refusal> = new Set([
+  "engine",
+  "unrecorded",
+  "aborted",
+  "model",
+  "unavailable",
+]);
 
 /**
  * Below `md` the flyout is `w-full` and covers the application, so it is a
@@ -266,18 +291,35 @@ function recordOnPage(
   return found;
 }
 
-function refusalKey(
-  result: Extract<Awaited<ReturnType<typeof askAssistant>>, { ok: false }>,
-): Refusal {
-  if (result.reason === "denied") return "denied";
-  if (result.reason === "invalid") return "invalid";
-  if (result.reason === "exhausted") {
-    if (result.code === "insufficient_credits") return "out-of-credits";
-    if (result.code === "assistant_spend_cap") return "spend-cap";
-    return "exhausted";
+type Refused = Extract<Awaited<ReturnType<typeof askAssistant>>, { ok: false }>;
+
+function refusalKey(result: Refused): Refusal {
+  switch (result.reason) {
+    case "denied":
+      return "denied";
+    case "invalid":
+      return "invalid";
+    case "pending_approval":
+      return "parked";
+    case "exhausted":
+      if (result.code === "insufficient_credits") return "noCredit";
+      if (result.code === "assistant_spend_cap") return "spendCap";
+      if (result.code === "assistant_model_key_limit") return "keyLimit";
+      return "exhausted";
+    case "conflict":
+      return result.code === "engine_aborted" ? "aborted" : "unavailable";
+    case "not_found":
+    case "unavailable":
+      if (result.code === "engine_unavailable") return "engine";
+      if (result.code === "assistant_run_not_recorded") return "unrecorded";
+      if (result.code === "model_call_failed") return "model";
+      return "unavailable";
   }
-  if (result.reason === "pending_approval") return "parked";
-  return "unavailable";
+}
+
+/** The code a refusal carries, if it carries one. */
+function refusalDetail(result: Refused): string | null {
+  return result.reason === "pending_approval" ? null : result.code;
 }
 
 /**
@@ -296,10 +338,10 @@ function RefusalText({ code, org }: { code: Refusal; org: string | null }) {
       return <>{t("exhausted")}</>;
     // The way out is a top-up on Billing, where the usage credit balance and
     // its purchase form live (features/billing/usage-credits.tsx).
-    case "out-of-credits":
+    case "noCredit":
       return (
         <>
-          {t("outOfCredits")}
+          {t("noCredit")}
           {org === null ? null : (
             <>
               {" "}
@@ -308,7 +350,7 @@ function RefusalText({ code, org }: { code: Refusal; org: string | null }) {
                 data-testid="assistant-buy-credits"
                 className={linkText}
               >
-                {t("outOfCreditsLink")}
+                {t("noCreditLink")}
               </SafeLink>
             </>
           )}
@@ -316,7 +358,7 @@ function RefusalText({ code, org }: { code: Refusal; org: string | null }) {
       );
     // The cap bounds only what the platform key pays (ADR-053 §3); a turn on
     // the organization's own key is not held to it.
-    case "spend-cap":
+    case "spendCap":
       return (
         <>
           {t("spendCap")}
@@ -334,8 +376,18 @@ function RefusalText({ code, org }: { code: Refusal; org: string | null }) {
           )}
         </>
       );
+    case "keyLimit":
+      return <>{t("keyLimit")}</>;
     case "parked":
       return <>{t("parked")}</>;
+    case "engine":
+      return <>{t("engine")}</>;
+    case "unrecorded":
+      return <>{t("unrecorded")}</>;
+    case "aborted":
+      return <>{t("aborted")}</>;
+    case "model":
+      return <>{t("model")}</>;
     case "unavailable":
       return <>{t("unavailable")}</>;
   }
@@ -516,9 +568,17 @@ export function AssistantFlyout() {
   const navigate = useNavigate();
   const inWorkspace = scope !== null;
 
-  async function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
+  function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
-    const content = draft.trim();
+    void send(draft.trim(), { fromDraft: true });
+  }
+
+  /**
+   * Ask `content` in the workspace the person is standing in. From the
+   * composer the draft is cleared; "Ask again" sends a refused question as it
+   * was and leaves whatever the person has typed since alone.
+   */
+  async function send(content: string, { fromDraft }: { fromDraft: boolean }) {
     if (
       pending ||
       content === "" ||
@@ -553,8 +613,7 @@ export function AssistantFlyout() {
     updateThread(asked, (t) => ({
       ...t,
       entries: [...t.entries, { kind: "asked", id, text: content }],
-      draft: "",
-      draftTooLong: false,
+      ...(fromDraft ? { draft: "", draftTooLong: false } : {}),
       pending: true,
     }));
     try {
@@ -597,6 +656,8 @@ export function AssistantFlyout() {
           kind: "refused",
           id: `${id}-a`,
           code: refusalKey(result),
+          detail: refusalDetail(result),
+          question: content,
         };
         updateThread(asked, (t) => ({
           ...t,
@@ -608,6 +669,8 @@ export function AssistantFlyout() {
         kind: "refused",
         id: `${id}-a`,
         code: "unavailable",
+        detail: null,
+        question: content,
       };
       updateThread(asked, (t) => ({
         ...t,
@@ -646,11 +709,21 @@ export function AssistantFlyout() {
       }`}
     >
       <div className="flex flex-none items-center gap-2.5 border-b border-border px-4 py-3">
+        {/*
+          The heading is the Stella wordmark. Its name comes from the mark's
+          title, so the dialog is still labelled "Stella" to a screen reader,
+          and the letters take the panel's text colour, so the app's own theme
+          switch reaches them (`@/ui/stella-mark`).
+        */}
         <h2
           id={`${ASSISTANT_PANEL_ID}-title`}
-          className="text-sm font-semibold"
+          className="flex items-center text-app-panel-fg"
         >
-          {t("label")}
+          <StellaWordmark
+            title={t("label")}
+            className="h-[18px] w-auto"
+            data-testid="assistant-wordmark"
+          />
         </h2>
         <button
           ref={closeRef}
@@ -738,19 +811,42 @@ export function AssistantFlyout() {
                     )}
                   </div>
                 ) : (
-                  <p
-                    role="alert"
-                    data-testid={`assistant-${entry.code}`}
-                    className="flex items-start gap-2 text-sm text-error-ink"
-                  >
-                    <CircleAlert
-                      aria-hidden="true"
-                      className="mt-0.5 size-4 flex-none text-error"
-                    />
-                    <span>
-                      <RefusalText code={entry.code} org={org} />
-                    </span>
-                  </p>
+                  <div>
+                    <p
+                      role="alert"
+                      data-testid={`assistant-${entry.code}`}
+                      className="flex items-start gap-2 text-sm text-error-ink"
+                    >
+                      <CircleAlert
+                        aria-hidden="true"
+                        className="mt-0.5 size-4 flex-none text-error"
+                      />
+                      <span>
+                        <RefusalText code={entry.code} org={org} />
+                      </span>
+                    </p>
+                    {entry.detail === null ? null : (
+                      <p
+                        data-testid="assistant-refusal-code"
+                        className="mt-1 ml-6 font-mono text-[11px] text-muted-foreground"
+                      >
+                        {entry.detail}
+                      </p>
+                    )}
+                    {RETRYABLE.has(entry.code) && inWorkspace ? (
+                      <button
+                        type="button"
+                        data-testid="assistant-retry"
+                        disabled={pending}
+                        onClick={() => {
+                          void send(entry.question, { fromDraft: false });
+                        }}
+                        className={`mt-1.5 ml-6 text-[12px] ${linkText} disabled:opacity-60`}
+                      >
+                        {t("retry")}
+                      </button>
+                    ) : null}
+                  </div>
                 )}
               </li>
             ))}
@@ -761,7 +857,7 @@ export function AssistantFlyout() {
 
       <div className="flex-none border-t border-border px-3 py-3">
         {inWorkspace ? (
-          <form onSubmit={(e) => void onSubmit(e)}>
+          <form onSubmit={onSubmit}>
             <div className="flex items-end gap-2 rounded-lg border border-border bg-background px-3 py-2">
               <textarea
                 rows={2}
@@ -803,7 +899,7 @@ export function AssistantFlyout() {
             data-testid="assistant-needs-workspace"
             className="flex items-start gap-2 text-[13px] text-muted-foreground"
           >
-            <Sparkles aria-hidden="true" className="mt-0.5 size-4 flex-none" />
+            <StellaIcon className="mt-0.5 size-4 flex-none" />
             <span>{t("needsWorkspace")}</span>
           </p>
         )}

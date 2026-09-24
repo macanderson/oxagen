@@ -363,12 +363,11 @@ export class MemoryStore implements SteeringStore {
         r.workspaceId === scope.workspaceId && r.slug === proposal.lineageId,
     );
     const classification = {
-      title: proposal.title ?? proposal.statement,
+      title: proposal.title?.trim() || proposal.statement,
       label:
         proposal.label ??
         existing?.label ??
-        proposal.title ??
-        contextRecordLabel(proposal.lineageId),
+        (proposal.title?.trim() || contextRecordLabel(proposal.lineageId)),
       status: "active",
       kind: proposal.kind,
       force: proposal.force,

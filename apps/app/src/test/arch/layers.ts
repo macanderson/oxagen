@@ -88,19 +88,10 @@ const ALLOWED: Record<
   features: (from, target, edge) => {
     const page = featurePage(from.file);
     if (page !== null && under(target, `features/${page}`)) return true;
-    if (
-      isFeatureBarrel(target) ||
-      target === "features/fleet/client" ||
-      target === "features/shell/client"
-    )
+    if (isFeatureBarrel(target) || target === "features/shell/client")
       return true;
     if (under(target, "ui") || under(target, "shared")) return true;
     if (isVocabulary(target) || target === "data/ports") return true;
-    if (target === "data/source")
-      return (
-        from.file === "features/shell/activity-actions" &&
-        from.directive === "use server"
-      );
     if (target === "server/viewer" || target === "server/session") return true;
     // `server/viewer-zone` has no row here on purpose. A write that places a
     // calendar day a person picked needs the zone they picked it in, and
@@ -316,11 +307,16 @@ const PLATFORM_NAMED_ROWS: Readonly<
   },
   // The record wizard shows the label and file name a slug will get, using
   // the same pure functions the publish handler runs, so the preview matches.
+  // Both files check a slug against the pattern the contract enforces.
   "src/features/create/record-wizard.tsx": {
     "@oxagen/oxagen/context-record-label": [
+      "CONTEXT_RECORD_LINEAGE",
       "contextRecordLabel",
       "contextRecordSlug",
     ],
+  },
+  "src/features/create/record-file.ts": {
+    "@oxagen/oxagen/context-record-label": ["CONTEXT_RECORD_LINEAGE"],
   },
   "instrumentation.ts": {
     "@oxagen/telemetry": ["initTracer", "recordSecurityEvent"],

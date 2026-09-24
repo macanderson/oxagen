@@ -9,6 +9,7 @@
 // (packages/handlers/src/context.steering.file.ts), so the bytes a reviewer
 // sees are the bytes the checks hash. This module only shapes what the
 // operator chooses: the lineage, the statement, the force and the effect.
+import { CONTEXT_RECORD_LINEAGE } from "@oxagen/oxagen/context-record-label";
 import type {
   ConstraintEffect,
   RecordForce,
@@ -19,8 +20,6 @@ import { estimateTokens, wordsOf } from "./draft-text";
 /** proposedRecordSchema's statement limit. */
 export const STATEMENT_MAX = 2000;
 
-/** The lineage rule proposedRecordSchema enforces. */
-const LINEAGE = /^[a-z0-9][a-z0-9.-]*[a-z0-9]$/;
 const SLUG_MAX = 48;
 
 /**
@@ -76,7 +75,7 @@ export function lineageOf(ws: string, desc: string): string {
   const set =
     (ws.split("-")[0] ?? "").toLowerCase().replace(/[^a-z0-9]/g, "") || "ws";
   const id = `ctx.${set}.${slugOf(desc)}`;
-  return LINEAGE.test(id) ? id : `ctx.${set}.new-record`;
+  return CONTEXT_RECORD_LINEAGE.test(id) ? id : `ctx.${set}.new-record`;
 }
 
 /**

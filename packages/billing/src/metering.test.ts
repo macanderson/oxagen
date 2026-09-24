@@ -132,10 +132,10 @@ const {
 const { PgDialect } = await import("drizzle-orm/pg-core");
 
 // Markup solved for the default 65% target — passed explicitly so these tests
-// don't depend on env. ($0.06 cost × 3.319 / $0.01 = 19.9 → ceil 20 credits.)
+// don't depend on env. (Sonnet 4.6 at $3/$15: $0.06 cost × 3.319 / $0.01 = 19.9 → ceil 20 credits.)
 const MARKUP = 3.319;
 const sonnetCall = {
-  model: "claude-sonnet-5",
+  model: "claude-sonnet-4-6",
   inputTokens: 10_000,
   outputTokens: 2_000,
 };
@@ -195,7 +195,7 @@ describe("meterCreditsForUsage", () => {
   it("returns 0 credits for a zero-cost call", () => {
     expect(
       meterCreditsForUsage(
-        { model: "claude-sonnet-5", inputTokens: 0, outputTokens: 0 },
+        { model: "claude-sonnet-4-6", inputTokens: 0, outputTokens: 0 },
         { markup: MARKUP },
       ),
     ).toBe(0n);
@@ -358,7 +358,7 @@ describe("chargeUsageCredits", () => {
       reason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       orgId: "org-1",
       markup: MARKUP,
-      model: "claude-sonnet-5",
+      model: "claude-sonnet-4-6",
       inputTokens: 0,
       outputTokens: 0,
     });
@@ -432,7 +432,7 @@ describe("snapshotUsageCharge", () => {
     });
     expect(snapshot).toEqual({
       orgId: "org-1",
-      model: "claude-sonnet-5",
+      model: "claude-sonnet-4-6",
       reason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       inputTokens: 10_000,
       outputTokens: 2_000,
