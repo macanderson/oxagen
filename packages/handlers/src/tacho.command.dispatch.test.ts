@@ -120,6 +120,7 @@ function session(over: Partial<RecipientSession> = {}): RecipientSession {
     sessionUuid: "3f2b7a5e-8c1d-4e6f-9a0b-1c2d3e4f5a6b",
     hostId: "11111111-1111-4111-8111-111111111111",
     agentKey: "acme.core.cc-laptop",
+    runtime: "claude-code",
     outcome: "running",
     enforcementTier: "harness",
     host: {
@@ -254,11 +255,11 @@ describe("resolveDeliveryMode", () => {
 
   it("records next_step and interrupt as turn_boundary on a host with no step carrier", () => {
     for (const tier of ["harness", "gateway", "contained", "observe"]) {
-      expect(resolveDeliveryMode("next_step", tier, [])).toEqual({
+      expect(resolveDeliveryMode("next_step", tier, [], "claude-code")).toEqual({
         deliveryMode: "turn_boundary",
         degradedReason: "no_step_carrier",
       });
-      expect(resolveDeliveryMode("interrupt", tier, [])).toEqual({
+      expect(resolveDeliveryMode("interrupt", tier, [], "claude-code")).toEqual({
         deliveryMode: "turn_boundary",
         degradedReason: "no_step_carrier",
       });
@@ -266,32 +267,56 @@ describe("resolveDeliveryMode", () => {
   });
 
   it("carries turn_boundary on every host", () => {
-    expect(resolveDeliveryMode("turn_boundary", "observe", [])).toEqual({
+    expect(resolveDeliveryMode("turn_boundary", "observe", [], "claude-code")).toEqual({
       deliveryMode: "turn_boundary",
       degradedReason: null,
     });
   });
 
   it("carries next_step where the host advertises a step carrier", () => {
-    expect(resolveDeliveryMode("next_step", "harness", carrier)).toEqual({
+    expect(resolveDeliveryMode("next_step", "harness", carrier, "claude-code")).toEqual({
       deliveryMode: "next_step",
       degradedReason: null,
     });
   });
 
   it("delivers interrupt only where the model proxy can cut the call", () => {
-    expect(resolveDeliveryMode("interrupt", "contained", carrier)).toEqual({
+    expect(resolveDeliveryMode("interrupt", "contained", carrier, "claude-code")).toEqual({
       deliveryMode: "interrupt",
       degradedReason: null,
     });
-    expect(resolveDeliveryMode("interrupt", "gateway", carrier)).toEqual({
+    expect(resolveDeliveryMode("interrupt", "gateway", carrier, "claude-code")).toEqual({
       deliveryMode: "interrupt",
       degradedReason: null,
     });
-    expect(resolveDeliveryMode("interrupt", "harness", carrier)).toEqual({
+    expect(resolveDeliveryMode("interrupt", "harness", carrier, "claude-code")).toEqual({
       deliveryMode: "next_step",
       degradedReason: "harness_tier",
     });
+  });
+});
+
+// A host with the carrier still cannot move a Cursor or Stella steer earlier:
+// Cursor's adapter delivers at Stop, Stella's at SessionStart.
+describe("resolveDeliveryMode by runtime", () => {
+  const carrier = [BUNDLE_FEATURE_STEER_NEXT_STEP];
+
+  it("carries next_step for Codex as for Claude Code", () => {
+    expect(resolveDeliveryMode("next_step", "harness", carrier, "codex")).toEqual({
+      deliveryMode: "next_step",
+      degradedReason: null,
+    });
+  });
+
+  it("records a Cursor or Stella steer at the turn boundary", () => {
+    for (const runtime of ["cursor", "stella", "custom"]) {
+      for (const mode of ["next_step", "interrupt"] as const) {
+        expect(resolveDeliveryMode(mode, "gateway", carrier, runtime)).toEqual({
+          deliveryMode: "turn_boundary",
+          degradedReason: "no_step_carrier",
+        });
+      }
+    }
   });
 });
 

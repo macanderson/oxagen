@@ -65,11 +65,22 @@ import { ledgerIdentityQuery, type RunScope, runScope } from "./run.list";
 /**
  * The bundle feature a host advertises when it can put steering text in
  * front of the agent before its next step, rather than at the next prompt.
- * No host in this tree advertises it yet: the model-proxy seam that would
- * carry it (`beforeForward`) is not wired. It moves to `@oxagen/tacho`'s
- * `wire.ts` beside the other features when the host side lands.
+ * The host side (#4027) declares the same word in `@oxagen/tacho`'s
+ * `wire.ts`; this copy goes when that lands.
  */
 export const BUNDLE_FEATURE_STEER_NEXT_STEP = "steer_next_step";
+
+/**
+ * The runtimes whose hook adapter carries a steer mid-turn, once the host
+ * advertises the feature. Claude Code and Codex deliver at `PostToolUse` and
+ * at `Stop` as a block. Cursor's adapter delivers at `Stop` only, which is
+ * the end of the turn (ADR-141), and Stella's only at `SessionStart`, so a
+ * host carrying the feature still cannot move either one's steer earlier.
+ */
+const STEP_CARRIER_RUNTIMES: ReadonlySet<string> = new Set([
+  "claude-code",
+  "codex",
+]);
 
 /**
  * Why the achieved mode is below the requested one (spec §7.3).
@@ -92,8 +103,8 @@ type ResolvedMode = {
  * The hook adapter injects steering text at the next prompt
  * (`UserPromptSubmit`), so `turn_boundary` is the one mode every host
  * delivers. `next_step` needs a host that advertises
- * `BUNDLE_FEATURE_STEER_NEXT_STEP`; without one, `next_step` and `interrupt`
- * are recorded as `turn_boundary`, which is when the text will arrive. Cutting
+ * `BUNDLE_FEATURE_STEER_NEXT_STEP` and a runtime in `STEP_CARRIER_RUNTIMES`;
+ * without both, `next_step` and `interrupt` are recorded as `turn_boundary`, which is when the text will arrive. Cutting
  * a call without delivering the text would disrupt the run and steer nothing.
  *
  * With a step carrier, `interrupt` also needs the run's model traffic routed
@@ -106,10 +117,14 @@ export function resolveDeliveryMode(
   requested: TachoDeliveryMode,
   enforcementTier: string,
   hostFeatures: readonly string[],
+  runtime: string,
 ): ResolvedMode {
   if (requested === "turn_boundary")
     return { deliveryMode: requested, degradedReason: null };
-  if (!hostFeatures.includes(BUNDLE_FEATURE_STEER_NEXT_STEP))
+  if (
+    !hostFeatures.includes(BUNDLE_FEATURE_STEER_NEXT_STEP) ||
+    !STEP_CARRIER_RUNTIMES.has(runtime)
+  )
     return { deliveryMode: "turn_boundary", degradedReason: "no_step_carrier" };
   if (
     requested === "interrupt" &&
@@ -130,6 +145,8 @@ export type RecipientSession = {
   sessionUuid: string;
   hostId: string | null;
   agentKey: string;
+  /** `tacho.sessions.runtime`: the harness, which decides the steer carrier. */
+  runtime: string;
   /** `tacho.sessions.outcome`: `running` is live. */
   outcome: string;
   /** `tacho.sessions.enforcement_tier`: gateway, harness or observe. */
@@ -352,6 +369,7 @@ export function createDispatchCommandHandler(
                 requestedMode,
                 session.enforcementTier,
                 session.host?.bundleFeatures ?? [],
+                session.runtime,
               )
             : null;
         const payload: Record<string, unknown> = {
@@ -414,6 +432,7 @@ const recipientColumns = {
   sessionUuid: sessions.sessionUuid,
   hostId: sessions.hostId,
   agentKey: sessions.agentKey,
+  runtime: sessions.runtime,
   outcome: sessions.outcome,
   enforcementTier: sessions.enforcementTier,
   hostRowId: hosts.id,
@@ -429,6 +448,7 @@ type RecipientRow = {
   sessionUuid: string;
   hostId: string | null;
   agentKey: string;
+  runtime: string;
   outcome: string;
   enforcementTier: string;
   hostRowId: string | null;
