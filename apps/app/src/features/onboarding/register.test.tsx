@@ -178,6 +178,9 @@ describe("the gate", () => {
     expect(loading).toHaveTextContent("Loading the step");
     expect(loading.querySelectorAll(".h-16")).toHaveLength(4);
     expect(loading.querySelectorAll(".h-9")).toHaveLength(7);
+    // Every bone is the design's shimmer, as on every other page, and none pulses.
+    expect(loading.querySelectorAll(".skeleton")).toHaveLength(12);
+    expect(loading.querySelector(".animate-pulse")).toBeNull();
   });
 });
 

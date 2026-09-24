@@ -80,6 +80,23 @@ function spanName(event: TachoEvent): string {
   return event.kind;
 }
 
+/**
+ * `gen_ai.system` for a model call: the provider the frame names, or the one
+ * its model id belongs to. A model this cannot place gets no attribute
+ * rather than a wrong one.
+ */
+function genAiSystem(body: Record<string, unknown>): string | undefined {
+  const provider = body["provider"];
+  if (typeof provider === "string" && provider.length > 0) return provider;
+  const model = body["canonical_model"] ?? body["model"];
+  if (typeof model !== "string") return undefined;
+  const id = model.toLowerCase();
+  if (id.startsWith("claude")) return "anthropic";
+  if (/^(gpt|o\d|codex|chatgpt)/.test(id)) return "openai";
+  if (id.startsWith("gemini")) return "gcp.gemini";
+  return undefined;
+}
+
 /** GenAI-flavoured attributes for a span, from the typed body. */
 function genAiAttrs(event: TachoEvent): OtlpAttr[] {
   const body = event.body as Record<string, unknown>;
@@ -90,7 +107,7 @@ function genAiAttrs(event: TachoEvent): OtlpAttr[] {
   };
   if (event.kind === "llm_call") {
     push("gen_ai.operation.name", "chat");
-    push("gen_ai.system", "anthropic");
+    push("gen_ai.system", genAiSystem(body));
     push("gen_ai.request.model", body["model"]);
     push("gen_ai.response.model", body["canonical_model"] ?? body["model"]);
     push("gen_ai.usage.input_tokens", body["input_tokens"]);

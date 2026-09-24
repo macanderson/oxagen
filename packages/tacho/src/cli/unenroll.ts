@@ -35,7 +35,7 @@ import {
   writeHostFile,
 } from "../host/host-file";
 import { restoreGithubRepositories } from "./github";
-import { restoreCredentials } from "./credential";
+import { harnessDirsOf, restoreCredentials } from "./credential";
 import {
   modelBaseUrlBackupPath,
   hasOrphanedModelBaseUrl,
@@ -177,11 +177,14 @@ export async function restoreModelBaseUrlsFor(
   for (const harness of MODEL_BASE_URL_HARNESSES) {
     try {
       if (host !== undefined && !host.harnesses.includes(harness)) {
+        const dirs = harnessDirsOf(deps);
         try {
-          lstatSync(modelBaseUrlBackupPath(harness, deps.home, stellaHome));
+          lstatSync(
+            modelBaseUrlBackupPath(harness, deps.home, stellaHome, dirs),
+          );
         } catch (error) {
           if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-          if (!hasOrphanedModelBaseUrl(harness, deps.home, stellaHome))
+          if (!hasOrphanedModelBaseUrl(harness, deps.home, stellaHome, dirs))
             continue;
         }
       }
@@ -200,6 +203,70 @@ export async function restoreModelBaseUrlsFor(
     }
   }
   return { restored, failed };
+}
+
+/**
+ * Take the gateway out of every harness file while tachod is still up: each
+ * vendor key back from custody and its run token or helper out, then the
+ * model base URL out, in the order `unenroll` uses. For a failure that
+ * leaves the host with no enrollment for the daemon to run as (a reassign or
+ * a harness addition that revoked and could not enroll again, a daemon that
+ * did not come back): stopping the service first left Claude Code on a
+ * refused connection with a helper that prints nothing, and Codex holding a
+ * run token nobody accepts. Passthrough, so a store that cannot be opened
+ * keeps the run token rather than losing the key. Returns false when a
+ * harness may still point at the gateway, and then the caller must leave the
+ * service running.
+ */
+export async function disarmGateway(
+  host: Pick<HostFile, "port" | "harnesses"> | undefined,
+  deps: CliDeps,
+  warnings: string[],
+): Promise<boolean> {
+  const credentials = await restoreCredentials(host, deps, "passthrough");
+  for (const file of credentials.restored)
+    deps.out(`      model credential given back to ${file}`);
+  warnings.push(...credentials.warnings);
+  for (const failure of credentials.failed)
+    warnings.push(`could not give a model credential back: ${failure}`);
+  // A run token with no base URL goes straight to the vendor, which refuses
+  // it, so the base URL stays while any credential is still in custody.
+  if (credentials.failed.length > 0) return false;
+  const baseUrls = await restoreModelBaseUrlsFor(host, deps);
+  for (const file of baseUrls.restored)
+    deps.out(`      model base URL taken out of ${file}`);
+  for (const failure of baseUrls.failed)
+    warnings.push(`could not take the model base URL out: ${failure}`);
+  return baseUrls.failed.length === 0;
+}
+
+/**
+ * `disarmGateway`, then the service, for a host a failed `reassign` or
+ * harness addition left with no enrollment: left loaded, tachod keeps
+ * shipping on a revoked key and restarting under KeepAlive. When a harness
+ * could not be disarmed the service stays, since an agent pointed at a
+ * stopped gateway makes no model call at all. Returns whether it was
+ * stopped.
+ */
+export async function stopGateway(
+  host: Pick<HostFile, "port" | "harnesses"> | undefined,
+  deps: CliDeps,
+  warnings: string[],
+): Promise<boolean> {
+  if (!(await disarmGateway(host, deps, warnings))) {
+    warnings.push(
+      "tachod was left running because a harness still points at its model gateway; fix the file named above and run `tacho unenroll`, or enroll again",
+    );
+    return false;
+  }
+  try {
+    deps.serviceManager.uninstall();
+  } catch (error) {
+    warnings.push(
+      `service removal failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  return true;
 }
 
 export async function stripEnrollmentHooks(
@@ -440,7 +507,7 @@ async function unenrollLocked(
 
   const githubFailures = read.githubRecoveryError
     ? [read.githubRecoveryError]
-    : restoreGithubRepositories(host ?? read.salvaged, deps);
+    : restoreGithubRepositories(host ?? read.salvaged, deps, warnings);
   if (githubFailures.length > 0) {
     warnings.push(...githubFailures);
     for (const warning of warnings) deps.err(`warning: ${warning}`);
@@ -596,6 +663,7 @@ async function unenrollLocked(
     deps.paths.deviceKey,
     deps.paths.socket,
     deps.paths.daemonState,
+    deps.paths.hookIdJournal,
     deps.paths.transcriptTailState,
     deps.paths.pid,
     deps.paths.daemonLauncher,

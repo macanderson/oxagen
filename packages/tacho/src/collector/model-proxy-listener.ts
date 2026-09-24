@@ -15,9 +15,12 @@
  *
  * The listener is now in the agent's critical path, so it does not get to die
  * quietly. A malformed request is answered 400 and the socket closed. If the
- * server errors or the port is taken, it is rebuilt on a backoff and the
- * daemon's status says `listening: false` until it is back. If the daemon
- * itself is down the harness gets a refused connection, which is loud on
+ * bind fails or the port is taken, it is rebuilt on a backoff and the
+ * daemon's status says `listening: false` until it is back. An error once it
+ * is bound is logged and nothing more: it comes from accepting one connection
+ * (`EMFILE` when the host is out of descriptors), the listening socket is
+ * still open, and tearing it down would cut every stream in flight. If the
+ * daemon itself is down the harness gets a refused connection, which is loud on
  * purpose: a base URL that silently fell through to the vendor would be a
  * gateway that can be bypassed by killing it.
  */
@@ -44,6 +47,8 @@ export interface ModelProxyListener {
 }
 
 const MAX_CONNECTIONS = 512;
+/** At most one line per this long for errors on a bound listener. */
+const ACCEPT_ERROR_LOG_MS = 10_000;
 
 export function createModelProxyListener(
   options: ModelProxyListenerOptions,
@@ -57,6 +62,8 @@ export function createModelProxyListener(
   let restarts = 0;
   let retryMs = baseRetryMs;
   let retryTimer: NodeJS.Timeout | undefined;
+  let acceptErrorLoggedAt = Number.NEGATIVE_INFINITY;
+  let acceptErrorsUnlogged = 0;
 
   function scheduleRebind(): void {
     if (closed || retryTimer !== undefined) return;
@@ -92,13 +99,27 @@ export function createModelProxyListener(
       });
       let settledOnce = false;
       next.on("error", (error: NodeJS.ErrnoException) => {
+        if (server === next) {
+          // Bound, so this is the accept loop's, and Node keeps accepting
+          // once descriptors free up. Serving on is the recovery.
+          const now = Date.now();
+          if (now - acceptErrorLoggedAt < ACCEPT_ERROR_LOG_MS) {
+            acceptErrorsUnlogged += 1;
+            return;
+          }
+          options.log(
+            `model proxy listener on 127.0.0.1:${boundPort} could not accept a connection (${error.code ?? error.message}); still listening${acceptErrorsUnlogged > 0 ? `, ${acceptErrorsUnlogged} more since the last line` : ""}`,
+          );
+          acceptErrorLoggedAt = now;
+          acceptErrorsUnlogged = 0;
+          return;
+        }
         options.log(
           `model proxy listener on 127.0.0.1:${boundPort} failed (${error.code ?? error.message}); rebinding in ${Math.round(retryMs / 1000)}s`,
         );
         bound = false;
         next.close(() => undefined);
         next.closeAllConnections?.();
-        if (server === next) server = undefined;
         scheduleRebind();
         if (!settledOnce) {
           settledOnce = true;

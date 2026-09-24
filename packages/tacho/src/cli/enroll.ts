@@ -33,6 +33,7 @@ import { Wal } from "../host/wal";
 import {
   HOST_FILE_SCHEMA,
   type HostFile,
+  harnessFilesRecord,
   mcpEndpointOverrideRequestFrom,
   readHostFile,
   writeHostFile,
@@ -64,11 +65,17 @@ import {
   brokerCredentials,
   type CredentialMode,
   describeHarness,
+  harnessDirsOf,
   restoreCredentials,
 } from "./credential";
 import { restoreGithubRepositories } from "./github";
 import { shippingHealth, type ShippingHealth } from "./status";
-import { revokeAndMark, stripEnrollmentHooks } from "./unenroll";
+import {
+  disarmGateway,
+  revokeOnControlPlane,
+  stopGateway,
+  stripEnrollmentHooks,
+} from "./unenroll";
 
 export interface EnrollOptions extends CredentialOptions {
   /**
@@ -95,6 +102,33 @@ export interface EnrollOptions extends CredentialOptions {
    * key with the harness and puts back any the gateway holds.
    */
   credentials?: CredentialMode;
+  /** Enroll even when running as root (`--allow-root`). */
+  allowRoot?: boolean;
+}
+
+/**
+ * Who the process runs as, for the root guard. Only the real CLI passes it
+ * (`main.ts`): a test runs as whoever runs the suite, root in a container
+ * included, and is not refused for it.
+ */
+export interface RunsAs {
+  getuid?: () => number | undefined;
+}
+
+/**
+ * Why `tacho <command>` must not run as root, or undefined when it may.
+ * `sudo tacho enroll` on macOS kept the user's HOME, so it wrote root-owned
+ * 0600 files into it that the user's own agents then could not read, and
+ * bootstrapped the service into root's session instead of theirs.
+ */
+export function rootRefusal(
+  command: "enroll" | "reassign",
+  deps: Pick<CliDeps, "env" | "home"> & RunsAs,
+  allowRoot: boolean | undefined,
+): string | undefined {
+  if (allowRoot === true || deps.getuid?.() !== 0) return undefined;
+  const user = deps.env["SUDO_USER"] ?? "<user>";
+  return `tacho ${command} is running as root, which would write root-owned files into ${deps.home} and install tachod for root. Run it as the user whose agents it governs, without sudo or as \`sudo -u ${user} tacho ${command}\`, or pass --allow-root if root's own agents are the ones to govern.`;
 }
 
 /**
@@ -346,6 +380,19 @@ function sameArgv(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((part, i) => part === b[i]);
 }
 
+/** What the hooks and the managed settings document are rendered from. */
+function hookInstallConfig(host: HostFile, deps: CliDeps): HookInstallConfig {
+  return {
+    enrollmentId: host.host_enrollment_id,
+    hookCommand: host.hook_command,
+    port: host.port,
+    localToken: host.local_token,
+    ...(deps.env["TACHO_HOME"] !== undefined
+      ? { tachoHome: deps.env["TACHO_HOME"] }
+      : {}),
+  };
+}
+
 /**
  * Everything that would stop a harness file being written, found before
  * anything is minted: a file that is not valid JSON, valid JSON of the wrong
@@ -409,9 +456,15 @@ export function harnessFileProblems(
  */
 export async function enroll(
   options: EnrollOptions,
-  deps: CliDeps,
+  deps: CliDeps & RunsAs,
 ): Promise<EnrollResult> {
-  if (options.printManaged === true) return enrollLocked(options, deps);
+  const asRoot = rootRefusal("enroll", deps, options.allowRoot);
+  if (asRoot !== undefined) {
+    deps.err(asRoot);
+    return { ok: false, warnings: [] };
+  }
+  // `--print-managed` too: it mints, writes host.json and installs the
+  // service like any enroll, so it must not interleave with another.
   const lock = acquireInstallLock(deps.paths.root, deps.now);
   if ("heldBy" in lock) {
     deps.err(
@@ -431,16 +484,94 @@ export async function enrollLocked(
   options: EnrollOptions,
   deps: CliDeps,
 ): Promise<EnrollResult> {
+  const addition: PendingAddition = {};
+  let result: EnrollResult = { ok: false, warnings: [] };
+  try {
+    result = await enrollSteps(options, deps, addition);
+  } finally {
+    // Set only between a harness addition's revoke and the new enrollment
+    // reaching host.json: whatever stopped it in between, returned or
+    // thrown, left a host with no enrollment to run as.
+    if (addition.revoked !== undefined)
+      await abandonAddition(addition, options, deps, result.warnings);
+  }
+  return result;
+}
+
+/** A harness addition that has revoked the live enrollment and not yet replaced it. */
+interface PendingAddition {
+  revoked?: HostFile;
+  harnesses?: TachoHarness[];
+}
+
+/**
+ * A harness addition revoked the live enrollment and then could not enroll
+ * again (refused, offline, a bundle that does not verify). Until the control
+ * plane can supersede an enrollment in one step, the host is left
+ * unenrolled rather than half enrolled, the way a failed `reassign` leaves
+ * it: the gateway comes out of the harness files while tachod still serves
+ * it, and then the service goes, since it would keep running on a revoked
+ * key. host.json stays marked retired, so the next `enroll` takes the fresh
+ * path.
+ */
+async function abandonAddition(
+  addition: PendingAddition,
+  options: EnrollOptions,
+  deps: CliDeps,
+  warnings: string[],
+): Promise<void> {
+  const revoked = addition.revoked as HostFile;
+  const own: string[] = [];
+  const stopped = await stopGateway(revoked, deps, own);
+  for (const warning of own) deps.err(`warning: ${warning}`);
+  warnings.push(...own);
+  const harnesses = (addition.harnesses ?? revoked.harnesses).join(",");
+  deps.err(
+    `Adding a harness failed after revoking ${revoked.host_enrollment_id}; this host is now unenrolled (host.json kept, marked retired)${stopped ? " and tachod was stopped" : ""}. Run \`tacho enroll --harness ${harnesses} --org ${revoked.org_slug} --workspace ${revoked.workspace_slug} --api-url ${options.apiUrl ?? revoked.api_url}\` once the cause is fixed.`,
+  );
+}
+
+async function enrollSteps(
+  options: EnrollOptions,
+  deps: CliDeps,
+  addition: PendingAddition,
+): Promise<EnrollResult> {
   const warnings: string[] = [];
   const step = (n: number, text: string) => deps.out(`[${n}/6] ${text}`);
 
   const existing = readHostFile(deps.paths.hostFile);
   let host: HostFile;
   let harnesses: TachoHarness[] = options.harnesses ?? ["claude-code"];
+  // A revoke from the fleet page reaches this machine as host_status, never
+  // as revoked_at. Re-applying that enrollment re-armed hooks and base URLs
+  // the control plane then denied, so it is refused, not repaired.
+  const fleetRevoked =
+    existing !== undefined &&
+    existing.revoked_at === null &&
+    existing.host_status === "revoked";
+  if (fleetRevoked && options.force !== true) {
+    deps.err(
+      `This host's enrollment ${existing.host_enrollment_id} was revoked on the control plane, so its hooks are not applied again. Run \`tacho unenroll\` to remove it, or \`tacho enroll --force\` to enroll this machine again.`,
+    );
+    return { ok: false, warnings };
+  }
   const live =
     existing !== undefined &&
     existing.revoked_at === null &&
+    !fleetRevoked &&
     options.force !== true;
+  // An enrolled host only needs its document rendered: nothing is minted,
+  // written or installed for it.
+  if (options.printManaged === true && live) {
+    deps.out(
+      `Already enrolled as ${existing.agent_key} (${existing.host_enrollment_id}); rendering its managed settings. Pass --force to enroll again.`,
+    );
+    const managedSettings = renderManagedSettings(
+      hookInstallConfig(existing, deps),
+    );
+    deps.out(JSON.stringify(managedSettings, null, 2));
+    return { ok: true, host: existing, managedSettings, warnings };
+  }
   // Harnesses named on a live enrollment that it does not hook yet. Adding
   // one is a change to the control plane's host record (`tacho.hosts.
   // harnesses`), which only an enrollment writes, so it goes through a
@@ -507,8 +638,14 @@ export async function enrollLocked(
         warnings.push(
           `tacho is running from ${deps.runtime.transient} (${deps.runtime.binDir}), which is gone once it is closed, so the service and hooks stay on ${host.hook_command}; run enroll again from a permanent install to move them`,
         );
+      } else if (deps.runtime.executableProblem !== undefined) {
+        warnings.push(
+          `${deps.runtime.executableProblem}, so the service and hooks stay on ${host.hook_command}; run enroll again from an installed tacho to move them`,
+        );
       } else {
-        host = repointed;
+        // The files the hooks now go into, so `unenroll` finds them whatever
+        // the environment it later runs in says.
+        host = { ...repointed, harness_files: harnessFilesRecord(deps.paths) };
         writeHostFile(deps.paths.hostFile, host);
         deps.out(
           `      service and hooks now run from ${deps.runtime.binDir} (was ${existing.hook_command})`,
@@ -527,6 +664,14 @@ export async function enrollLocked(
           (deps.platform === "darwin"
             ? "Move Oxagen to /Applications (or run the app's Link into PATH, which keeps a copy of the tools) and enroll again, or point TACHO_BIN_DIR at a permanent copy of tacho."
             : "Install the package (.deb/.rpm) or run the app's Link into PATH, which keeps a copy of the tools, and enroll again; or point TACHO_BIN_DIR at a permanent copy of tacho."),
+      );
+      return { ok: false, warnings };
+    }
+    // The same for a native layout with no tacho executable in it: every
+    // hook and the service would name a file that is not there.
+    if (deps.runtime.executableProblem !== undefined) {
+      deps.err(
+        `Cannot enroll from here: ${deps.runtime.executableProblem}, so the hooks and the service would name a file that does not exist. Run enroll from an installed tacho, or point TACHO_BIN_DIR at the directory that holds it.`,
       );
       return { ok: false, warnings };
     }
@@ -573,7 +718,7 @@ export async function enrollLocked(
       }
       credentials = resolved.credentials;
     }
-    const custodyFailures = restoreGithubRepositories(existing, deps);
+    const custodyFailures = restoreGithubRepositories(existing, deps, warnings);
     if (custodyFailures.length > 0) {
       for (const failure of custodyFailures) deps.err(failure);
       return { ok: false, warnings: [...warnings, ...custodyFailures] };
@@ -595,15 +740,32 @@ export async function enrollLocked(
       deps.out(
         `      adding ${added.join(", ")} to ${existing.agent_key}: revoking ${existing.host_enrollment_id} and enrolling again for ${harnesses.join(", ")} so the control plane's host record follows (device key, port and local token kept)`,
       );
-      await revokeAndMark(
+      // Only a revoke the control plane confirmed is marked, and only then
+      // is anything changed. Marking one it refused (a token that is not an
+      // org admin's, a network blip) retired an enrollment that was still
+      // live, and the mint after it failed for the same reason.
+      const refused: string[] = [];
+      const revoked = await revokeOnControlPlane(
         existing,
         {
           token: credentials.token,
           reason: `tacho enroll --harness ${harnesses.join(",")}`,
         },
         deps,
-        warnings,
+        refused,
       );
+      if (!revoked) {
+        deps.err(
+          `Cannot add ${added.join(", ")}: ${existing.host_enrollment_id} could not be revoked (${refused.join("; ")}), so nothing was changed; this host still reports as ${existing.agent_key} for ${existing.harnesses.join(", ")}.`,
+        );
+        return { ok: false, warnings: [...warnings, ...refused] };
+      }
+      writeHostFile(deps.paths.hostFile, {
+        ...existing,
+        revoked_at: toProtocolTimestamp(deps.now()),
+      });
+      addition.revoked = existing;
+      addition.harnesses = harnesses;
       await stripEnrollmentHooks(existing, deps);
     }
 
@@ -699,9 +861,12 @@ export async function enrollLocked(
       }
       return { ok: false, warnings };
     }
+    // Bound to the enrollment just minted: a bundle signed for another host
+    // is refused here as the daemon refuses it later.
     const verification = verifyBundle(
       response.policyBundle,
       response.bundlePublicKeyPem,
+      response.hostEnrollmentId,
     );
     if (!verification.ok) {
       deps.err(
@@ -756,8 +921,8 @@ export async function enrollLocked(
           ? { mcp: response.enrollment.claims.mcp_endpoint }
           : {}),
       },
-      // The service unit tachod runs under carries only TACHO_HOME,
-      // CLAUDE_CONFIG_DIR, PATH and HOME, so TACHO_MCP_ENDPOINT as exported in
+      // The service unit tachod runs under carries only TACHO_HOME, the
+      // harness home variables, PATH and HOME, so TACHO_MCP_ENDPOINT as exported in
       // this shell would not survive the install. Write it down instead —
       // beside `port` and `local_token`, the host's other local settings — and
       // leave the signed claims free of plaintext endpoints.
@@ -820,6 +985,7 @@ export async function enrollLocked(
           ? existing.displaced_mcp_servers
           : {},
       mcp_stdio_command: deps.runtime.mcpStdioCommand,
+      harness_files: harnessFilesRecord(deps.paths),
       enrolled_at: now,
       expires_at: response.expiresAt,
       revoked_at: null,
@@ -844,20 +1010,43 @@ export async function enrollLocked(
       }
     }
     writeHostFile(deps.paths.hostFile, host);
+    delete addition.revoked;
     deps.out(
       `      enrolled as ${host.agent_key} (${host.host_enrollment_id}); bundle v${host.bundle.version}, mode ${host.bundle.mode}`,
     );
+    // `--force` over a live enrollment mints a second one beside it; left
+    // alone, the first one's host key stayed valid for the rest of its term
+    // with nothing on this machine that remembered it. Best effort: the new
+    // enrollment stands either way.
+    if (
+      options.force === true &&
+      existing !== undefined &&
+      existing.revoked_at === null &&
+      !fleetRevoked &&
+      existing.host_enrollment_id !== host.host_enrollment_id
+    ) {
+      const problems: string[] = [];
+      const revoked = await revokeOnControlPlane(
+        existing,
+        {
+          ...(options.token !== undefined ? { token: options.token } : {}),
+          reason: "tacho enroll --force",
+        },
+        deps,
+        problems,
+      );
+      if (revoked)
+        deps.out(
+          `      previous enrollment ${existing.host_enrollment_id} revoked`,
+        );
+      else
+        warnings.push(
+          `the previous enrollment ${existing.host_enrollment_id} could not be revoked (${problems.join("; ")}); its host key stays valid until ${existing.expires_at} unless an operator revokes it from the fleet page`,
+        );
+    }
   }
 
-  const hookConfig: HookInstallConfig = {
-    enrollmentId: host.host_enrollment_id,
-    hookCommand: host.hook_command,
-    port: host.port,
-    localToken: host.local_token,
-    ...(deps.env["TACHO_HOME"] !== undefined
-      ? { tachoHome: deps.env["TACHO_HOME"] }
-      : {}),
-  };
+  const hookConfig = hookInstallConfig(host, deps);
 
   step(
     4,
@@ -873,9 +1062,21 @@ export async function enrollLocked(
           ...(deps.env["TACHO_HOME"] !== undefined
             ? { TACHO_HOME: deps.env["TACHO_HOME"] }
             : {}),
-          ...(deps.env["CLAUDE_CONFIG_DIR"] !== undefined
-            ? { CLAUDE_CONFIG_DIR: deps.env["CLAUDE_CONFIG_DIR"] }
-            : {}),
+          // The harness homes the enrolling shell moved, so tachod reads
+          // the same files the hooks were written to.
+          ...Object.fromEntries(
+            (
+              [
+                "CLAUDE_CONFIG_DIR",
+                "CODEX_HOME",
+                "STELLA_HOME",
+                "CURSOR_CONFIG_DIR",
+              ] as const
+            ).flatMap((key) => {
+              const value = deps.env[key];
+              return value !== undefined ? [[key, value]] : [];
+            }),
+          ),
           PATH: deps.env["PATH"] ?? "/usr/local/bin:/usr/bin:/bin",
           HOME: deps.home,
         },
@@ -1179,6 +1380,7 @@ export async function enrollLocked(
           const file = modelBaseUrlFile(harness, {
             home: deps.home,
             stellaHome,
+            ...harnessDirsOf(deps),
           });
           let linked = false;
           try {
@@ -1258,9 +1460,38 @@ export async function enrollLocked(
           }
         }
       } else {
-        warnings.push(
-          "the model proxy is not listening, so no model base URL was written and model calls are not routed through Oxagen. Run `tacho enroll` again once tachod is up",
-        );
+        // A re-enroll finds the previous enrollment's base URL and helper
+        // still in the files, naming a port nothing listens on now, so they
+        // come out rather than being reported as never written.
+        let pointing: string[] = [];
+        try {
+          const state = await deps.modelBaseUrls.read({
+            home: deps.home,
+            stellaHome,
+            port: host.port,
+            harnesses: routed,
+          });
+          pointing = state.harnesses
+            .filter((entry) => entry.ours)
+            .map((entry) => entry.file);
+        } catch (error) {
+          warnings.push(
+            `could not read the model base URLs: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+        if (pointing.length === 0) {
+          warnings.push(
+            "the model proxy is not listening, so no model base URL was written and model calls are not routed through Oxagen. Run `tacho enroll` again once tachod is up",
+          );
+        } else if (await disarmGateway(host, deps, warnings)) {
+          warnings.push(
+            `the model proxy is not listening, so the model base URL was taken out of ${pointing.join(", ")} and model calls are not routed through Oxagen. Run \`tacho enroll\` again once tachod is up`,
+          );
+        } else {
+          warnings.push(
+            `the model proxy is not listening and the model base URL could not be taken out of ${pointing.join(", ")}, so those model calls fail until tachod is up. Fix the file named above, or run \`tacho enroll\` again once tachod is up`,
+          );
+        }
       }
     }
     if (healthy)

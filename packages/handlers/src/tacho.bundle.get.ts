@@ -39,7 +39,7 @@ export const tachoBundleGetHandler: CapabilityHandler<
       readWorkspaceSteering(tx as never, ctx.orgId, ctx.workspaceId),
       resolveHostMandate(tx as never, ctx, host),
     ]);
-    const unsigned = unsignedBundle(
+    const built = unsignedBundle(
       host,
       denyGeneration,
       retention,
@@ -47,6 +47,17 @@ export const tachoBundleGetHandler: CapabilityHandler<
       mandate,
       now,
     );
+    // `version` counts mandate changes, not fetches: the same etag keeps the
+    // version it was served with, so a version sealed into a frame names one
+    // mandate. That holds for the copy signed again when a host renews a quiet
+    // mandate by polling without its etag (`pollEtag` in `@oxagen/tacho`).
+    const unsigned = {
+      ...built,
+      version:
+        (host.bundleEtagServed === built.etag
+          ? host.bundleVersionServed
+          : null) ?? built.version,
+    };
     await tx
       .update(schema.tachoHosts)
       .set({

@@ -12,6 +12,7 @@ import type {
   RunCost,
   RunCostRollup,
   RunTranscript,
+  RunTurns,
   TranscriptEntry,
   TranscriptKind,
 } from "@/data/contracts/run";
@@ -233,6 +234,59 @@ export function costTranscript(
     cursor: null,
     complete: true,
   };
+}
+
+/**
+ * The same script as `get_run_turns` answers it: one row per turn over the
+ * frames `costTranscript` records, counted by that contract's rules. A model
+ * step is one call (its request and response pair), a tool step is one call
+ * key, and a turn's cost and reported input are its frames' sums, null where
+ * none carried one.
+ */
+export function costTurns(
+  turns: readonly TurnSpec[],
+  options: { startSecondsAgo?: number } = {},
+): RunTurns {
+  const entries = costTranscript(turns, options).entries;
+  const rows: RunTurns["turns"] = [];
+  let running: bigint | null = null;
+  for (const [index] of turns.entries()) {
+    const turn = index + 1;
+    const frames = entries.filter((entry) => entry.turn === turn);
+    const first = frames[0];
+    if (first === undefined) continue;
+    let micros: bigint | null = null;
+    let inputUncached: number | null = null;
+    let cacheRead: number | null = null;
+    for (const frame of frames) {
+      if (frame.cost !== null)
+        micros = (micros ?? 0n) + BigInt(frame.cost.micros);
+      const usage = frame.usage;
+      if (usage?.inputUncached != null)
+        inputUncached = (inputUncached ?? 0) + usage.inputUncached;
+      if (usage?.cacheRead != null)
+        cacheRead = (cacheRead ?? 0) + usage.cacheRead;
+    }
+    if (micros !== null) running = (running ?? 0n) + micros;
+    const keys = new Set(
+      frames
+        .filter((frame) => frame.kind === "tool_call")
+        .map((frame) => frame.callKey),
+    );
+    rows.push({
+      turn,
+      seq: first.seq,
+      at: first.at,
+      frames: frames.length,
+      modelSteps: frames.filter((frame) => frame.type === "model.request")
+        .length,
+      toolSteps: keys.size,
+      cost: micros === null ? null : usd(String(micros)),
+      cumulativeCost: running === null ? null : usd(String(running)),
+      tokens: { inputUncached, cacheRead },
+    });
+  }
+  return { turns: rows, complete: true };
 }
 
 /**

@@ -1533,6 +1533,17 @@
     },
     {
       "domain": "run",
+      "name": "get_run_turns",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "run",
       "name": "get_run_work",
       "reads": [],
       "surfaces": [
@@ -4018,7 +4029,7 @@
       "writes": []
     }
   ],
-  "contentHash": "736d8792fd0bfa62e5772956f8a9ce6ea61e432992fa4f0141f5fd7e88f197e7",
+  "contentHash": "202f5c61fd9856b293d348bc9fd19ecb41d928af5d66b5106a3bd63b3817bd2b",
   "domains": [
     {
       "name": "agent",

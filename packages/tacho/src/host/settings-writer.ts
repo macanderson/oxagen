@@ -45,6 +45,18 @@ export const HTTP_HOOK_EVENTS = [
   "PreModelSwitch",
   "PostModelSwitch",
   "Setup",
+] as const;
+
+/**
+ * Events an earlier enroll registered and this one must take back out.
+ * `WorktreeCreate` and `WorktreeRemove` are not notifications: a hook on
+ * either replaces Claude Code's own `git worktree` step, and `WorktreeCreate`
+ * must answer with the path it created. The daemon answers `{}`, so with
+ * Tacho enrolled `--worktree`, a subagent's `isolation: "worktree"` and a
+ * background session could not get a worktree at all. The transcript's
+ * `worktree-state` record and `CwdChanged` already carry the same facts.
+ */
+export const RETIRED_HOOK_EVENTS = [
   "WorktreeCreate",
   "WorktreeRemove",
 ] as const;
@@ -139,10 +151,7 @@ export function hookUrl(port: number, enrollmentId: string): string {
  * list of entries rather than Claude Code's groups, so its writer
  * (`cursor-writer.ts`) needs the same test one level down.
  */
-export function isTachoEntry(
-  entry: HookEntry,
-  enrollmentId?: string,
-): boolean {
+export function isTachoEntry(entry: HookEntry, enrollmentId?: string): boolean {
   const idPattern = enrollmentId ?? "tch_[a-z0-9]{22}";
   if (entry.type === "command" && typeof entry.command === "string") {
     return new RegExp(`--enrollment ${idPattern}(\\s|$)`).test(entry.command);
@@ -272,7 +281,8 @@ export function settingsShapeProblem(document: unknown): string | undefined {
 /**
  * Merge Tacho's entries into a settings document. Idempotent: a second call
  * with the same config changes nothing. Foreign groups on the same events
- * are kept; earlier Tacho groups for the same enrollment are replaced.
+ * are kept; earlier Tacho groups for the same enrollment are replaced, and
+ * Tacho groups on a `RETIRED_HOOK_EVENTS` event are removed.
  */
 export function mergeTachoSettings(
   existing: unknown,
@@ -289,6 +299,16 @@ export function mergeTachoSettings(
       (group) => !isTachoGroup(group, config.enrollmentId),
     );
     hooks[event] = [...foreign, ...groups];
+  }
+  // Any enrollment's group on a retired event is taken out, not only this
+  // one's: no build of Tacho writes them any more, and each one left in place
+  // keeps breaking worktrees for as long as the file holds it.
+  for (const event of RETIRED_HOOK_EVENTS) {
+    const groups = hooks[event] ?? [];
+    const kept = groups.filter((group) => !isTachoGroup(group));
+    if (kept.length === groups.length) continue;
+    if (kept.length > 0) hooks[event] = kept;
+    else delete hooks[event];
   }
   settings.hooks = hooks;
   const env = { ...(settings.env ?? {}) };

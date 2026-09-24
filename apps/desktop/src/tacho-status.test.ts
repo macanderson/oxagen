@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { parseTachoStatus, serviceStatusText } from "./tacho-status";
+import {
+  gatewayText,
+  parseTachoStatus,
+  serviceStatusText,
+} from "./tacho-status";
 
 /** What `tacho status --json` prints for an enrolled host with both wrappers. */
 const ENROLLED = {
@@ -353,5 +357,49 @@ describe("Cursor's hooks fold to one row", () => {
     expect(parse(undefined)).toBeUndefined();
     expect(parse([])).toBeUndefined();
     expect(parse("nope")).toBeUndefined();
+  });
+});
+
+describe("the Gateway line", () => {
+  it("says unknown when tacho status has not answered, not that the build lacks it", () => {
+    expect(gatewayText(null, true, ["claude-code", "codex"])).toBe(
+      "model proxy unknown; claude-code: unknown, codex: unknown",
+    );
+    expect(gatewayText(null, true, [])).toBe("model proxy unknown");
+  });
+
+  it("says unknown while the collector is not answering", () => {
+    expect(gatewayText({ enrolled: true }, false, ["claude-code"])).toBe(
+      "model proxy unknown; claude-code: unknown",
+    );
+  });
+
+  it("names the proxy and each harness's tier once the collector reports them", () => {
+    expect(
+      gatewayText(
+        {
+          enrolled: true,
+          gateway: { listening: true, port: 47002 },
+          tiers: { "claude-code": "gateway" },
+        },
+        true,
+        ["claude-code", "codex"],
+      ),
+    ).toBe(
+      "model proxy listening on 127.0.0.1:47002; claude-code: gateway, codex: no run yet",
+    );
+    expect(
+      gatewayText(
+        { enrolled: true, gateway: { listening: false, port: 47002 } },
+        true,
+        [],
+      ),
+    ).toBe("model proxy not listening");
+  });
+
+  it("says not available only when a collector that answered reported no proxy", () => {
+    expect(gatewayText({ enrolled: true }, true, [])).toBe(
+      "not available on this build",
+    );
   });
 });

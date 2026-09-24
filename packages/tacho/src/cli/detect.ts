@@ -16,7 +16,7 @@
  * that app would and would not record, and a list that leaves the tier to be
  * inferred invites the surface to guess.
  */
-import { readHostFile } from "../host/host-file";
+import { readHostFileLenient } from "../host/host-file";
 import {
   isConnectedHarness,
   TACHO_HARNESS_LABELS,
@@ -152,7 +152,9 @@ export function detect(
   options: { json?: boolean },
   deps: CliDeps,
 ): DetectReport {
-  const host = readHostFile(deps.paths.hostFile);
+  // Lenient, as `status` and `unenroll` read it: a host.json from another
+  // version or cut short must not stop the first run from listing the apps.
+  const host = readHostFileLenient(deps.paths.hostFile).host;
   const enrolledList = host?.revoked_at === null ? host.harnesses : [];
   const report: DetectReport = {
     enrolled: host !== undefined && host.revoked_at === null,

@@ -1,10 +1,8 @@
-// `readWholeTranscript` and `isWhole`: the Policy, Context and Cost tabs read
-// the run to its end rather than taking the first page as the run.
+// `readWholeTranscript` and `isWhole`: the page's figures, Policy and Context
+// read the run to its end rather than taking the first page as the run, at the
+// largest page the contract allows, with each entry once.
 import { describe, expect, it, vi } from "vitest";
-import {
-  type RunTranscript,
-  TRANSCRIPT_ENTRY_DEFAULT,
-} from "@/data/contracts/run";
+import { type RunTranscript, TRANSCRIPT_ENTRY_MAX } from "@/data/contracts/run";
 import type { DataSource } from "@/data/ports";
 import { readError, readOk, type Read } from "@/data/read";
 import { WsCtx } from "@/server/viewer";
@@ -45,7 +43,7 @@ function sourceOf(
 
 describe("readWholeTranscript", () => {
   it("reads page after page to the end, narrowed to the chip asked for", async () => {
-    const full = TRANSCRIPT_ENTRY_DEFAULT;
+    const full = TRANSCRIPT_ENTRY_MAX;
     const { source, transcript } = sourceOf((after) =>
       after === undefined
         ? readOk(page(0, full, "p2"))
@@ -57,33 +55,60 @@ describe("readWholeTranscript", () => {
     expect(read.ok && read.value.entries).toHaveLength(full + 3);
     expect(read.ok && isWhole(read.value)).toBe(true);
     expect(transcript).toHaveBeenCalledTimes(2);
+    expect(transcript.mock.calls[0]?.[3]).toEqual({
+      kinds: ["policy"],
+      limit: 500,
+    });
     expect(transcript.mock.calls[1]?.[3]).toEqual({
       kinds: ["policy"],
       after: "p2",
+      limit: 500,
     });
+  });
+
+  it("keeps an entry a later page sends again once, in its place, as the later page has it", async () => {
+    const full = TRANSCRIPT_ENTRY_MAX;
+    const first = page(0, full, "p2");
+    const grown = transcriptEntry({ seq: "5", endSeq: "900", frames: 9 });
+    const { source } = sourceOf((after) =>
+      after === undefined
+        ? readOk(first)
+        : readOk(
+            runTranscript({
+              entries: [
+                grown,
+                transcriptEntry({ seq: String(full), endSeq: String(full) }),
+              ],
+              cursor: null,
+            }),
+          ),
+    );
+    const read = await readWholeTranscript(source, ctx, "tse_1", "steps");
+    if (!read.ok) throw new Error("the read answers");
+    expect(read.value.entries).toHaveLength(full + 1);
+    expect(read.value.entries[5]).toEqual(grown);
+    expect(read.value.entries.at(-1)?.seq).toBe(String(full));
   });
 
   it("stops at the page bound and says the list is a prefix (negative)", async () => {
     const { source, transcript } = sourceOf(() =>
-      readOk(page(0, TRANSCRIPT_ENTRY_DEFAULT, "more")),
+      readOk(page(0, TRANSCRIPT_ENTRY_MAX, "more")),
     );
     const read = await readWholeTranscript(source, ctx, "tse_1", "steps");
-    // The reader's page bound: the contract's 10,000-frame cap at the default
-    // page size.
-    expect(transcript).toHaveBeenCalledTimes(50);
+    // The reader's page bound: the contract's 10,000-frame cap at the largest
+    // page it allows.
+    expect(transcript).toHaveBeenCalledTimes(20);
     expect(read.ok && isWhole(read.value)).toBe(false);
   });
 
   it("keeps what it read when a later page fails, and says it stops short", async () => {
     const { source } = sourceOf((after) =>
       after === undefined
-        ? readOk(page(0, TRANSCRIPT_ENTRY_DEFAULT, "p2"))
+        ? readOk(page(0, TRANSCRIPT_ENTRY_MAX, "p2"))
         : readError("frame_store_unreachable", 502),
     );
     const read = await readWholeTranscript(source, ctx, "tse_1", "turns");
-    expect(read.ok && read.value.entries).toHaveLength(
-      TRANSCRIPT_ENTRY_DEFAULT,
-    );
+    expect(read.ok && read.value.entries).toHaveLength(TRANSCRIPT_ENTRY_MAX);
     expect(read.ok && isWhole(read.value)).toBe(false);
   });
 

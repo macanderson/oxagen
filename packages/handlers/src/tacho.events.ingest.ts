@@ -111,6 +111,7 @@ import {
   resolveEnrolledHost,
   tachoDenied,
   touchHost,
+  unstorableBatch,
 } from "./lib/tacho-host";
 import {
   type BodyRejection,
@@ -1064,9 +1065,20 @@ function terminalPatch(
   return patch;
 }
 
+// A batch whose own values Postgres refuses fails the same way on every retry,
+// so it is answered as a refused input the shipper can bisect, never as a 500
+// it retries for ever (`unstorableBatch` in ./lib/tacho-host.ts).
 export const tachoEventsIngestHandler: CapabilityHandler<
   typeof tachoEventsIngest
-> = async (input, ctx) => {
+> = (input, ctx) =>
+  ingestBatch(input, ctx).catch((err: unknown) => {
+    throw unstorableBatch("ingest_tacho_events", err) ?? err;
+  });
+
+const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
+  input,
+  ctx,
+) => {
   const now = new Date();
   const capability = "ingest_tacho_events";
 
@@ -2076,7 +2088,8 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     // queued commands and marks them `sent`, and this transaction commits
     // before the ClickHouse append below. An append that failed after the
     // commit answered the host a 500 or a 503: the commands never reached it,
-    // and a `sent` row is never selected again, so they were lost.
+    // and a `sent` row is offered again only once its redelivery lease runs
+    // out (`drainCommands`).
     return {
       chainBreaks,
       verified,
@@ -2287,12 +2300,12 @@ export const tachoEventsIngestHandler: CapabilityHandler<
   }
 
   // The control envelope last, in its own transaction. Draining marks the
-  // host's queued commands `sent`, and a command marked `sent` is never
-  // selected again. Drained inside the ingest transaction, a failure after
-  // the commit (the ClickHouse append, the billing step) left commands marked
-  // `sent` in a response the host never received: a pause or a steer lost
-  // with no error anywhere. Drained here, any earlier failure leaves them
-  // queued, and the re-sent batch delivers them.
+  // host's queued commands `sent`, and a `sent` row is offered again only once
+  // its redelivery lease runs out (`drainCommands`). Drained inside the ingest
+  // transaction, a failure after the commit (the ClickHouse append, the
+  // billing step) left commands marked `sent` in a response the host never
+  // received: a pause or a steer held back for that lease. Drained here, any
+  // earlier failure leaves them queued, and the re-sent batch delivers them.
   const control = await withTenantDb((tx) =>
     controlEnvelope(tx as never, ctx, result.seen, new Date()),
   );

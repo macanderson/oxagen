@@ -1,8 +1,8 @@
 // The runs port on the kernel (ARCHITECTURE.md §3.3): one cursor page of
-// list_runs for the Fleet table, and the Run page's three reads (get_run,
-// get_run_cost, get_run_transcript). Every one is a noBillingGate read, so no
-// page load is refused for lack of GAUs, and each is mapped into its view
-// model at the boundary.
+// list_runs for the Fleet table, and the Run page's reads (get_run,
+// get_run_cost, get_run_transcript, and get_run_turns for the Cost tab).
+// Every one is a noBillingGate read, so no page load is refused for lack of
+// GAUs, and each is mapped into its view model at the boundary.
 //
 // `get_run_chain` is its own read because it walks the recording: it belongs
 // to the Chain and seal tab and is made only when that tab is open, so the
@@ -19,6 +19,7 @@ import { runCostGet } from "@oxagen/oxagen/contracts/run.cost";
 import { runFrameBodyGet } from "@oxagen/oxagen/contracts/run.frame_body.get";
 import { FRAME_LIMIT_DEFAULT, runGet } from "@oxagen/oxagen/contracts/run.get";
 import { runList } from "@oxagen/oxagen/contracts/run.list";
+import { runTurnsGet } from "@oxagen/oxagen/contracts/run.turns.get";
 import { runWorkGet } from "@oxagen/oxagen/contracts/run.work.get";
 import { runOutcomesSettingsGet } from "@oxagen/oxagen/contracts/run.outcomes.settings.get";
 import { RunWork, RunOutcomesPolicy } from "@/data/contracts/run-work";
@@ -36,6 +37,7 @@ import {
   RunFrameBody,
   RunOutputs,
   RunTranscript,
+  RunTurns,
 } from "@/data/contracts/run";
 import { RunPage } from "@/data/contracts/runs";
 import type { DataSource } from "@/data/ports";
@@ -48,6 +50,7 @@ import {
   toRunFrameBody,
   toRunOutputs,
   toRunTranscript,
+  toRunTurns,
 } from "./mappers/run";
 import { toRunPage } from "./mappers/runs";
 
@@ -183,6 +186,15 @@ export const runs: DataSource["runs"] = {
     if (!read.ok) return read;
     return view(ctx.orgId, RunCost, toRunCost(read.value), "runs.cost");
   },
+  async turns(ctx, runId) {
+    const read = await kernelRead(ctx, {
+      contract: runTurnsGet,
+      input: { runId },
+      page: "run",
+    });
+    if (!read.ok) return read;
+    return view(ctx.orgId, RunTurns, toRunTurns(read.value), "runs.turns");
+  },
   async transcript(ctx, runId, zoom, q) {
     const read = await kernelRead(ctx, {
       contract: runTranscriptGet,
@@ -190,7 +202,7 @@ export const runs: DataSource["runs"] = {
         runId,
         zoom,
         kinds: q?.kinds ?? [],
-        limit: TRANSCRIPT_ENTRY_DEFAULT,
+        limit: q?.limit ?? TRANSCRIPT_ENTRY_DEFAULT,
         // Omitted rather than null: the contract refuses a cursor it did not
         // write, and `undefined` is what "read from the start" means there.
         ...(q?.after ? { after: q.after } : {}),

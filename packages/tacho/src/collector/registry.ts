@@ -12,11 +12,15 @@
  * never roster entries — so the desktop app can show every agent the host
  * has run, not only those with a live session.
  */
+import type { ChainCursor } from "../chain";
 import type { ClaudeCodeContext } from "../claude-code/context";
 import { type RecorderState, SessionRecorder } from "../claude-code/recorder";
+import { isSha256Digest } from "../digest";
 import type { TachoEvent, TachoRuntime } from "../envelope";
+import { COMMAND_HOOK_TIMEOUTS_S } from "../host/settings-writer";
 import { toProtocolTimestamp } from "../timestamp";
 import {
+  type CommandAcknowledgement,
   isWrappedHarness,
   TACHO_HARNESS_LABELS,
   type TachoDeliveryMode,
@@ -138,7 +142,8 @@ export interface SessionFacts {
   /**
    * The newest hook event the session sent. Stella has no SessionEnd, so a
    * chain whose process is gone after a `Stop` ended cleanly; without a
-   * `Stop` it did not.
+   * `Stop` it did not. Any later hook replaces it, so the sweep reads the
+   * recorder's turn first and this only for a session with no turn on record.
    */
   lastHookEvent?: string;
   /**
@@ -150,11 +155,13 @@ export interface SessionFacts {
    * session changed, so an agent that committed its work before the
    * end-of-turn `Stop` left a clean tree and recorded none of it.
    *
-   * Set on the first git read for the session in a given `cwd`, which is the
-   * earliest this daemon knows that repository at all. Bound to the
-   * worktree: when `ensure` sees a new `cwd`, the baseline is cleared and
-   * the next read captures the new one. Persisted through `state` /
-   * `restore` so a daemon restart does not lose it mid-session.
+   * Set on the first git read for the session in a given repository, which
+   * is the earliest this daemon knows that repository at all. Bound to the
+   * repository root (`baselineRoot`): when `ensure` sees a new `cwd` this is
+   * cleared, and the next read puts back the entry `baselines` holds for the
+   * root it reads at, or captures a new one (see `rememberBaseline`).
+   * Persisted through `state` / `restore` so a daemon restart does not lose
+   * it mid-session.
    *
    * A session that commits before that first read measures from after the
    * commit; that is a smaller window than measuring from `HEAD` every time,
@@ -164,10 +171,17 @@ export interface SessionFacts {
   /**
    * The repository root `baselineCommit` was taken in. A session can edit
    * a different worktree from the one it started in, so the baseline is bound
-   * to the root it was read from and is retaken when the work moves to
+   * to the root it was read from and is switched when the work moves to
    * another root.
    */
   baselineRoot?: string;
+  /**
+   * The baseline of every repository root this session has been read in,
+   * bounded to `MAX_SESSION_BASELINES`, the least recently read dropped
+   * first. `baselineCommit` is the entry for `baselineRoot`. A move to
+   * another root and back finds the first one again (see `rememberBaseline`).
+   */
+  baselines?: Record<string, string>;
   /**
    * The directory of the file the agent last wrote. The session's `cwd` is
    * where it started. An agent working in a git worktree often keeps that
@@ -177,6 +191,12 @@ export interface SessionFacts {
    * Git reads start here when it is set.
    */
   workDir?: string;
+  /**
+   * The sweep sealed this chain because it went quiet, not because its
+   * process ended or it sent `SessionEnd`. That is a guess, and the next hook
+   * the session sends proves it wrong, so that hook reopens the chain.
+   */
+  closedIdle?: boolean;
 }
 
 export interface SessionRecord extends SessionFacts {
@@ -210,16 +230,21 @@ export interface SessionRecord extends SessionFacts {
    */
   toolUseIds: Record<string, string>;
   /**
-   * The most recent `hook_id`s this session recorded, oldest first, bounded
-   * to `HOOK_ID_LEDGER_CAPACITY`. `tacho-hook` generates one when it reads
-   * stdin and sends it on both the live request and the spool file it falls
-   * back to when that request times out on the client's own side. A client
-   * timeout does not mean the daemon never got the hook — only that this
-   * process stopped waiting for the answer — so the same hook can arrive
-   * twice: once live, once as a later spool replay. See `sawHookId` and
-   * `rememberHookId`.
+   * The hooks this session recorded, as `ledger key -> epoch ms` in the
+   * order they were recorded. `tacho-hook` generates a `hook_id` when it
+   * reads stdin and sends it on both the live request and the spool file it
+   * falls back to when that request times out on the client's own side. A
+   * client timeout does not mean the daemon never got the hook, only that
+   * the client stopped waiting for the answer, so the same hook can arrive
+   * twice: once live, once as a later spool replay. A hook sent without a
+   * `hook_id` is keyed on its harness tool-call id where it has one (see
+   * `hookLedgerKey` in the hook handler).
+   *
+   * A key stays until a complete spool drain runs `HOOK_ID_REPLAY_WINDOW_MS`
+   * past it (see `pruneHookIds`), with `HOOK_ID_LEDGER_CEILING` as a
+   * backstop. See `sawHookId` and `rememberHookId`.
    */
-  recentHookIds: string[];
+  hookIds: Map<string, number>;
 }
 
 export interface PersistedSession extends SessionFacts {
@@ -235,7 +260,12 @@ export interface PersistedSession extends SessionFacts {
   ambient: boolean;
   /** Absent in files written before derived tool-use ids were numbered. */
   toolUseIds?: Record<string, string>;
-  /** Absent in files written before the hook-id replay ledger existed. */
+  /** `SessionRecord.hookIds` as `[key, epoch ms]` pairs, oldest first. */
+  hookIds?: Array<[string, number]>;
+  /**
+   * The ledger as files written before it carried times held it: ids only,
+   * capped at 64. `restore` dates each one at the session's `lastSeenAt`.
+   */
   recentHookIds?: string[];
 }
 
@@ -262,7 +292,49 @@ export interface RegistryState {
   sessions: PersistedSession[];
   /** Absent in files written before the roster existed. */
   agents?: AgentRosterEntry[];
+  /** Absent in files written before forgotten chains kept a tombstone. */
+  tombstones?: ChainTombstone[];
 }
+
+/**
+ * Where a forgotten session's chain stopped. `forgetSealed` drops a sealed
+ * session a week after it was last seen, but the harness still holds its
+ * transcript and can resume it under the same session id. A new recorder
+ * for that id derives the same session uuid and would start again at
+ * sequence 0, forking a chain the WAL already holds. The tombstone is what
+ * lets it continue instead.
+ */
+export interface ChainTombstone {
+  /** `sessionMapKey` of the forgotten record. */
+  key: string;
+  sessionUuid: string;
+  cursor: ChainCursor;
+  turnSeq: number;
+  forgottenAt: string;
+}
+
+/**
+ * How long a tombstone outlives the session it stands for. Claude Code
+ * deletes a transcript thirty days after its last use by default, and a
+ * session with no transcript cannot be resumed.
+ */
+export const TOMBSTONE_RETAIN_MS = 30 * 24 * 60 * 60_000;
+
+/** The most tombstones kept; the oldest is dropped first. */
+export const MAX_TOMBSTONES = 512;
+
+/**
+ * How long a session with a pid may go without a single event before the
+ * sweep closes it anyway. The OS hands a freed pid to the next process it
+ * starts, so a pid that still answers is not proof the harness is running.
+ */
+export const STALE_PID_SESSION_MS = 24 * 60 * 60_000;
+
+/** The detail an operator reads on a message its session never reached. */
+export const EXPIRED_ON_SEAL_DETAIL = "session ended before a boundary";
+
+/** The most such acknowledgements held for the daemon to send. */
+const MAX_EXPIRED_ON_SEAL = 256;
 
 /**
  * The daemon-state file as a `RegistryState`, or `undefined` if it is not one.
@@ -320,6 +392,13 @@ export class SessionRegistry {
   private readonly options: RegistryOptions;
   private readonly sessions = new Map<string, SessionRecord>();
   private readonly roster = new Map<string, AgentRosterEntry>();
+  /** Forgotten chains by map key, oldest first; see `ChainTombstone`. */
+  private readonly tombstones = new Map<string, ChainTombstone>();
+  /**
+   * Acknowledgements for queued messages whose session sealed before a
+   * boundary delivered them, waiting for the daemon to send them.
+   */
+  private readonly expiredOnSeal: CommandAcknowledgement[] = [];
 
   constructor(options: RegistryOptions) {
     this.options = options;
@@ -500,15 +579,18 @@ export class SessionRegistry {
         this.adopt(harnessSessionId, facts))
       : this.get(harnessSessionId);
     if (existing) {
+      if (reopens(existing, facts)) this.reopen(existing);
       if (facts.transcriptPath !== undefined)
         existing.transcriptPath = facts.transcriptPath;
       if (facts.cwd !== undefined) {
-        // The baseline is a commit in the previous worktree. Keeping it
+        // The baseline may be a commit in another repository. Keeping it
         // after a move makes reconciliation diff against a sha that may
         // not exist here, fall back to the new HEAD, and drop work the
-        // session already committed in the new tree.
-        // A session that writes files by path reads git from `workDir`, and
-        // its baseline stays with that root whatever `cwd` does.
+        // session already committed in the new tree. `baselines` still
+        // holds it by repository root, and the next read puts it back when
+        // the new directory is in the same repository. A session that
+        // writes files by path reads git from `workDir`, and its baseline
+        // stays with that root whatever `cwd` does.
         if (
           existing.cwd !== undefined &&
           facts.cwd !== existing.cwd &&
@@ -534,18 +616,7 @@ export class SessionRegistry {
     }
     const record: SessionRecord = {
       harnessSessionId,
-      recorder: new SessionRecorder({
-        context: contextForHarness(
-          this.options.context,
-          facts.harness,
-          facts.customAgent,
-        ),
-        harnessSessionId,
-        scope: this.options.scope,
-        ...(facts.customAgent === undefined
-          ? {}
-          : { customAgent: facts.customAgent }),
-      }),
+      recorder: this.openRecorder(harnessSessionId, facts),
       control: { paused: null, cancelled: null, messages: [] },
       startedAt: now,
       lastSeenAt: now,
@@ -553,12 +624,112 @@ export class SessionRegistry {
       lastCheckpointSeq: -1,
       ambient: facts.ambient ?? false,
       toolUseIds: {},
-      recentHookIds: [],
+      hookIds: new Map(),
       ...optionalFacts(facts),
     };
     this.sessions.set(this.key(harnessSessionId, facts), record);
     this.noteAgent(record, true);
     return { record, created: true };
+  }
+
+  /**
+   * The recorder for a session this registry does not hold. A session it
+   * forgot continues its chain from the tombstone, but only when a new
+   * recorder derives the same uuid: that is proof it is the same chain, and
+   * anything else (a legacy uuid, a host enrolled again) opens its own.
+   */
+  private openRecorder(
+    harnessSessionId: string,
+    facts: SessionFacts,
+  ): SessionRecorder {
+    const context = contextForHarness(
+      this.options.context,
+      facts.harness,
+      facts.customAgent,
+    );
+    const options = {
+      context,
+      harnessSessionId,
+      scope: this.options.scope,
+      ...(facts.customAgent === undefined
+        ? {}
+        : { customAgent: facts.customAgent }),
+    };
+    const recorder = new SessionRecorder(options);
+    const key = this.key(harnessSessionId, facts);
+    const tombstone = this.tombstones.get(key);
+    if (tombstone === undefined) return recorder;
+    this.tombstones.delete(key);
+    if (tombstone.sessionUuid !== recorder.sessionUuid) return recorder;
+    return new SessionRecorder({
+      ...options,
+      restore: {
+        sessionUuid: tombstone.sessionUuid,
+        cursor: { ...tombstone.cursor },
+        turnSeq: tombstone.turnSeq,
+        turnOpen: false,
+        // The chain opened long ago, so the next SessionStart is sealed as
+        // the resume it is.
+        started: true,
+        stopped: false,
+        context: {},
+        host: { ...context.host },
+        anthropic: {},
+        totals: {},
+        children: {},
+      },
+    });
+  }
+
+  /**
+   * Let a sealed chain take frames again at the cursor it closed on. The
+   * recorder is told too: `finalize` seals `agent_stop` only on a chain it
+   * thinks is still running, so a session that resumed and then crashed
+   * would otherwise close with no terminal frame.
+   */
+  private reopen(record: SessionRecord): void {
+    record.sealed = false;
+    delete record.closedIdle;
+    // `SessionRecorder` has no reopen of its own. A rollback to a mark taken
+    // this instant undoes nothing, and it sets the one flag it is handed.
+    record.recorder.rollbackChain({
+      ...record.recorder.markChain(),
+      stopped: false,
+    });
+  }
+
+  /**
+   * Seal the record, and hand every message still queued on it to
+   * `takeExpiredOnSeal`: no boundary will come to deliver it, and a command
+   * left `received` reads to the operator as one still on its way.
+   */
+  private close(record: SessionRecord): void {
+    record.sealed = true;
+    // A resume's continuation has no boundary left either. The resume was
+    // acknowledged when it applied, and a chain reopened later must not tell
+    // the agent it was just resumed.
+    record.control.resumeOwed = undefined;
+    for (const message of record.control.messages.splice(0)) {
+      if (this.expiredOnSeal.some((ack) => ack.command_id === message.id))
+        continue;
+      this.expiredOnSeal.push({
+        command_id: message.id,
+        status: "expired",
+        session_uuid: record.recorder.sessionUuid,
+        detail: EXPIRED_ON_SEAL_DETAIL,
+      });
+    }
+    // Bounded for a daemon that never drains it.
+    const over = this.expiredOnSeal.length - MAX_EXPIRED_ON_SEAL;
+    if (over > 0) this.expiredOnSeal.splice(0, over);
+  }
+
+  /**
+   * The `expired` acknowledgements for messages whose session sealed before
+   * a boundary delivered them, drained. The daemon sends them with the rest.
+   */
+  takeExpiredOnSeal(): CommandAcknowledgement[] {
+    return this.expiredOnSeal.splice(0);
   }
 
   touch(harnessSessionId: string): void {
@@ -575,58 +746,94 @@ export class SessionRegistry {
    */
   seal(session: string | SessionRecord): void {
     const record = typeof session === "string" ? this.get(session) : session;
-    if (record) record.sealed = true;
+    if (record) this.close(record);
   }
 
   /**
    * Forget sealed sessions older than `retainMs`, and report the harness
-   * session ids dropped. The roster keeps them counted.
+   * session ids dropped. The roster keeps them counted, and a tombstone keeps
+   * where each chain stopped, so a resume after this continues it.
    */
   forgetSealed(retainMs: number): string[] {
-    const cutoff = this.options.now() - retainMs;
+    const now = this.options.now();
+    const cutoff = now - retainMs;
     const removed: string[] = [];
     for (const [key, record] of this.sessions) {
       if (record.sealed && Date.parse(record.lastSeenAt) < cutoff) {
         this.sessions.delete(key);
         removed.push(record.harnessSessionId);
+        const cursor = record.recorder.chainCursor;
+        if (!isInternalSession(record.harnessSessionId) && cursor.seq > 0) {
+          this.tombstones.delete(key);
+          this.tombstones.set(key, {
+            key,
+            sessionUuid: record.recorder.sessionUuid,
+            cursor: { ...cursor },
+            turnSeq: record.recorder.state().turnSeq,
+            forgottenAt: toProtocolTimestamp(now),
+          });
+        }
       }
+    }
+    for (const [key, tombstone] of this.tombstones) {
+      if (
+        this.tombstones.size > MAX_TOMBSTONES ||
+        Date.parse(tombstone.forgottenAt) < now - TOMBSTONE_RETAIN_MS
+      )
+        this.tombstones.delete(key);
     }
     return removed;
   }
 
   /**
-   * Close chains whose process is gone (or, with no pid known, idle past
-   * `idleMs`). Returns the sealing events. A session whose process is gone
-   * right after a `Stop` hook completed its turn and exited: that is how
-   * Stella, which has no SessionEnd, ends every session, so it closes as
-   * `completed`. Anything else closes as `crashed`, including a session
-   * that only ever showed up through OTel or a transcript: the harness
-   * never told us it ended.
+   * Close chains whose process is gone, or that went quiet: past `idleMs`
+   * with no pid known, past `staleMs` with one (a pid can be reused, so it
+   * alone cannot keep a chain open). Returns the sealing events. A session
+   * whose process is gone with no turn open finished its last turn and
+   * exited: that is how Stella, which has no SessionEnd, ends every session,
+   * so it closes as `completed`. Anything else closes as `crashed`,
+   * including a session that only ever showed up through OTel or a
+   * transcript: the harness never told us it ended.
    */
   sweep(
     isAlive: (pid: number) => boolean,
     idleMs: number,
     deferSeal: (session: SessionRecord) => boolean = () => false,
+    staleMs: number = STALE_PID_SESSION_MS,
   ): TachoEvent[] {
     const out: TachoEvent[] = [];
     const now = this.options.now();
     for (const record of this.sessions.values()) {
       if (record.sealed || deferSeal(record)) continue;
       const gone = record.pid !== undefined ? !isAlive(record.pid) : false;
-      const idle = now - Date.parse(record.lastSeenAt) > idleMs;
-      if (!gone && !(record.pid === undefined && idle)) continue;
+      const quiet = now - Date.parse(record.lastSeenAt);
+      // The daemon's own chain is exempt: its pid is this process.
+      const idle =
+        record.pid === undefined
+          ? quiet > idleMs
+          : quiet > staleMs && !isInternalSession(record.harnessSessionId);
+      if (!gone && !idle) continue;
+      if (!gone) record.closedIdle = true;
       if (!record.recorder.hasStarted) {
-        record.sealed = true;
+        this.close(record);
         continue;
       }
+      // The recorder's turn, not the newest hook: a Notification after
+      // `Stop` replaced it, and a clean exit read as a crash. A session with
+      // no turn on record still needs the `Stop` to count as finished.
+      const turn = record.recorder.state();
       const outcome =
-        gone && record.lastHookEvent === "Stop" ? "completed" : "crashed";
+        gone &&
+        !turn.turnOpen &&
+        (turn.turnSeq > 0 || record.lastHookEvent === "Stop")
+          ? "completed"
+          : "crashed";
       // The session ended when it was last seen, not when the sweep noticed:
       // an idle session swept six hours late would otherwise read as having
       // run six hours longer (#4024). `lastSeenAt` is the receipt time of its
       // last activity, so it is at or after every event its hooks sealed.
       out.push(...record.recorder.finalize(outcome, record.lastSeenAt));
-      record.sealed = true;
+      this.close(record);
     }
     return out;
   }
@@ -656,12 +863,13 @@ export class SessionRegistry {
         ...(Object.keys(record.toolUseIds).length > 0
           ? { toolUseIds: { ...record.toolUseIds } }
           : {}),
-        ...(record.recentHookIds.length > 0
-          ? { recentHookIds: [...record.recentHookIds] }
-          : {}),
+        ...(record.hookIds.size > 0 ? { hookIds: [...record.hookIds] } : {}),
         ...optionalFacts(record),
       })),
       agents: [...this.roster.values()].map((entry) => ({ ...entry })),
+      ...(this.tombstones.size > 0
+        ? { tombstones: [...this.tombstones.values()].map(copyTombstone) }
+        : {}),
     };
   }
 
@@ -709,58 +917,111 @@ export class SessionRegistry {
         lastCheckpointSeq: persisted.lastCheckpointSeq,
         ambient: persisted.ambient,
         toolUseIds: { ...persisted.toolUseIds },
-        recentHookIds: [...(persisted.recentHookIds ?? [])],
+        hookIds: restoredHookIds(persisted),
         ...optionalFacts(persisted),
       });
     }
     for (const entry of state.agents ?? []) {
       this.roster.set(entry.key, { ...entry });
     }
+    // A tombstone whose session is held again is spent. One that does not
+    // parse is dropped: continuing a chain from a bad cursor forks it too.
+    for (const tombstone of state.tombstones ?? []) {
+      if (!isTombstone(tombstone) || this.sessions.has(tombstone.key)) continue;
+      this.tombstones.set(tombstone.key, copyTombstone(tombstone));
+    }
   }
 }
 
 /**
- * The most recent hook ids one session's replay-dedup ledger keeps. A
- * client's fallback spool never queues faster than a person or an agent
- * drives hooks, so a few dozen is generous room for a spool replay to still
- * find its live sighting.
+ * How long a hook stays in a session's ledger once a complete spool drain
+ * could have seen its replay: the longest a harness lets `tacho-hook` run
+ * (`COMMAND_HOOK_TIMEOUTS_S.PermissionRequest`), plus a minute for the
+ * client to write its spool file after it gives up. A client names a hook
+ * when it reads stdin, before the daemon receives it, so every spool file
+ * for a hook the daemon recorded at `t` exists by `t` plus this window.
  */
-export const HOOK_ID_LEDGER_CAPACITY = 64;
+export const HOOK_ID_REPLAY_WINDOW_MS =
+  (Math.max(...Object.values(COMMAND_HOOK_TIMEOUTS_S)) + 60) * 1_000;
 
 /**
- * Whether this session's ledger already holds this hook id — a client-side
+ * The most hooks one session's ledger holds whatever their age. It only
+ * matters when the spool never drains to empty (a file that keeps failing
+ * transiently), and it holds about an hour of an agent's busiest pace.
+ */
+export const HOOK_ID_LEDGER_CEILING = 4_096;
+
+/**
+ * Whether this session's ledger already holds this key: a client-side
  * timeout followed by a spool replay of the hook the daemon already
- * processed live. See `SessionRecord.recentHookIds`.
+ * processed live. See `SessionRecord.hookIds`.
  */
 export function sawHookId(
-  record: Pick<SessionRecord, "recentHookIds">,
-  hookId: string,
+  record: Pick<SessionRecord, "hookIds">,
+  key: string,
 ): boolean {
-  return record.recentHookIds.includes(hookId);
-}
-
-/** Record a hook id as seen, bounded to `HOOK_ID_LEDGER_CAPACITY`. */
-export function rememberHookId(
-  record: Pick<SessionRecord, "recentHookIds">,
-  hookId: string,
-): void {
-  if (record.recentHookIds.includes(hookId)) return;
-  record.recentHookIds.push(hookId);
-  const over = record.recentHookIds.length - HOOK_ID_LEDGER_CAPACITY;
-  if (over > 0) record.recentHookIds.splice(0, over);
+  return record.hookIds.has(key);
 }
 
 /**
- * Drop a hook id from the ledger. The daemon calls this when a hook routed
+ * Record a key as seen at `at` (epoch ms), evicting the oldest past
+ * `HOOK_ID_LEDGER_CEILING`. A key already held keeps its first time.
+ */
+export function rememberHookId(
+  record: Pick<SessionRecord, "hookIds">,
+  key: string,
+  at: number,
+): void {
+  if (record.hookIds.has(key)) return;
+  record.hookIds.set(key, at);
+  for (const oldest of record.hookIds.keys()) {
+    if (record.hookIds.size <= HOOK_ID_LEDGER_CEILING) break;
+    record.hookIds.delete(oldest);
+  }
+}
+
+/**
+ * Drop a key from the ledger. The daemon calls this when a hook routed
  * but its frames never reached the WAL: the client saw a failure and spools
  * the same id, and that replay has to be sealed, not dropped as a repeat.
  */
 export function forgetHookId(
-  record: Pick<SessionRecord, "recentHookIds">,
-  hookId: string,
+  record: Pick<SessionRecord, "hookIds">,
+  key: string,
 ): void {
-  const at = record.recentHookIds.indexOf(hookId);
-  if (at !== -1) record.recentHookIds.splice(at, 1);
+  record.hookIds.delete(key);
+}
+
+/**
+ * Drop every key recorded before `before` (epoch ms) and return how many
+ * went. The daemon calls this after a spool drain that left nothing behind,
+ * with `before` set `HOOK_ID_REPLAY_WINDOW_MS` earlier than the moment it
+ * listed the spool: any replay of an older key was in that listing.
+ */
+export function pruneHookIds(
+  record: Pick<SessionRecord, "hookIds">,
+  before: number,
+): number {
+  let removed = 0;
+  for (const [key, at] of record.hookIds) {
+    if (at >= before) continue;
+    record.hookIds.delete(key);
+    removed += 1;
+  }
+  return removed;
+}
+
+/**
+ * The ledger a state file holds. A file written before the ledger carried
+ * times has ids only, so each is dated at the session's `lastSeenAt`, which
+ * is no earlier than when the daemon recorded it.
+ */
+function restoredHookIds(persisted: PersistedSession): Map<string, number> {
+  if (persisted.hookIds !== undefined) return new Map(persisted.hookIds);
+  const at = Date.parse(persisted.lastSeenAt);
+  return new Map(
+    (persisted.recentHookIds ?? []).map((id): [string, number] => [id, at]),
+  );
 }
 
 /**
@@ -798,6 +1059,96 @@ function optionalFacts(facts: SessionFacts): SessionFacts {
     ...(facts.baselineRoot !== undefined
       ? { baselineRoot: facts.baselineRoot }
       : {}),
+    ...(facts.baselines !== undefined
+      ? { baselines: { ...facts.baselines } }
+      : {}),
     ...(facts.workDir !== undefined ? { workDir: facts.workDir } : {}),
+    ...(facts.closedIdle === true ? { closedIdle: true } : {}),
   };
+}
+
+/**
+ * Whether a hook reopens the sealed chain it arrived for. `SessionStart` is a
+ * resume (`--resume`, `--continue`): the harness keeps the session id, so the
+ * chain continues at its cursor. Any hook reopens a chain the sweep closed
+ * only because it went quiet. A caller that is not a hook (OTel, the
+ * transcript detector) never does. A chain whose terminal has not reached
+ * the WAL stays closed: a frame sealed now would take a sequence number
+ * after a terminal that a failed write may still discard.
+ */
+function reopens(record: SessionRecord, facts: SessionFacts): boolean {
+  if (!record.sealed || record.pendingTerminal === true) return false;
+  if (facts.lastHookEvent === undefined) return false;
+  return facts.lastHookEvent === "SessionStart" || record.closedIdle === true;
+}
+
+function copyTombstone(tombstone: ChainTombstone): ChainTombstone {
+  return { ...tombstone, cursor: { ...tombstone.cursor } };
+}
+
+/** A tombstone read back from disk, checked before a chain continues from it. */
+function isTombstone(value: unknown): value is ChainTombstone {
+  if (typeof value !== "object" || value === null) return false;
+  const t = value as Partial<ChainTombstone>;
+  return (
+    typeof t.key === "string" &&
+    typeof t.sessionUuid === "string" &&
+    typeof t.forgottenAt === "string" &&
+    Number.isInteger(t.turnSeq) &&
+    typeof t.cursor === "object" &&
+    t.cursor !== null &&
+    Number.isInteger(t.cursor.seq) &&
+    t.cursor.seq > 0 &&
+    isSha256Digest(t.cursor.prevHash)
+  );
+}
+
+/** The most repositories one session keeps a baseline for. */
+export const MAX_SESSION_BASELINES = 16;
+
+/**
+ * Make the baseline for the repository root `repoRoot` the session's
+ * `baselineCommit`, and return it: the one the session already holds for
+ * that root, or `headSha` on its first read there. Undefined, with no
+ * baseline in force, for a root the session holds none for when there is no
+ * `headSha` (a read that found no commit). Keyed by repository root rather
+ * than by `cwd`, so a `cd packages/foo` keeps the commit the session started
+ * on and everything it committed since stays measured, and a move to another
+ * repository and back finds the first one again.
+ *
+ * A `baselineCommit` the map does not hold yet (a state file written before
+ * it) joins it under `baselineRoot`, or under `repoRoot` when that is unset
+ * too, because `ensure` clears the baseline on every move.
+ */
+export function rememberBaseline(
+  record: Pick<SessionFacts, "baselineCommit" | "baselineRoot" | "baselines">,
+  repoRoot: string,
+  headSha: string | undefined,
+): string | undefined {
+  const baselines = { ...record.baselines };
+  const heldRoot = record.baselineRoot ?? repoRoot;
+  if (record.baselineCommit !== undefined && baselines[heldRoot] === undefined)
+    baselines[heldRoot] = record.baselineCommit;
+  const kept = baselines[repoRoot] ?? headSha;
+  if (kept !== undefined) {
+    // The most recently read goes last, so the bound drops the repository
+    // the session left longest ago.
+    delete baselines[repoRoot];
+    baselines[repoRoot] = kept;
+  }
+  const roots = Object.keys(baselines);
+  for (const root of roots.slice(
+    0,
+    Math.max(0, roots.length - MAX_SESSION_BASELINES),
+  ))
+    delete baselines[root];
+  if (roots.length > 0) record.baselines = baselines;
+  if (kept === undefined) {
+    delete record.baselineCommit;
+    delete record.baselineRoot;
+  } else {
+    record.baselineCommit = kept;
+    record.baselineRoot = repoRoot;
+  }
+  return kept;
 }

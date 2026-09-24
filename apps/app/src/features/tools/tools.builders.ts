@@ -221,6 +221,7 @@ export function toolsSource(reads: ToolsReads) {
       get: refuse,
       frameBody: refuse,
       cost: refuse,
+      turns: refuse,
       transcript: refuse,
       chain: refuse,
       outputs: refuse,

@@ -23,9 +23,9 @@ import { useTranslations } from "next-intl";
 import type { OrgRole } from "@/data/contracts/common";
 import type { Read } from "@/data/read";
 import { routes, type SafePath } from "@/shared/safe-path";
-import { linkText, mono } from "@/ui/control-styles";
-import { OutcomePanel } from "@/ui/form-feedback";
+import { buttonPrimary, buttonSecondary, mono } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
+import { StateWrap, stateTrace } from "@/ui/state-wrap";
 
 type Failure = Exclude<Read<unknown>, { ok: true }>;
 
@@ -56,62 +56,66 @@ export function MandateReadFailure({
   switch (read.reason) {
     case "denied":
       return (
-        <OutcomePanel
-          tone="deny"
+        <StateWrap
+          tone="denied"
           testId="mandate-denied"
           title={t("denied.title")}
           actions={
-            <SafeLink to={routes.fleet(org, ws)} className={linkText}>
+            <SafeLink to={routes.fleet(org, ws)} className={buttonSecondary}>
               {t("back")}
             </SafeLink>
           }
-        >
-          <span className="flex flex-col gap-2">
-            <span>{t("denied.body")}</span>
-            <span className="flex flex-col gap-0.5 text-left">
-              <span>{t("denied.signedIn", { role: roles(orgRole) })}</span>
-              <span>
+          after={
+            <ul className="mx-auto mt-5 flex max-w-[420px] flex-col gap-[7px] text-left text-[12.5px] text-muted-foreground">
+              <li>{t("denied.signedIn", { role: roles(orgRole) })}</li>
+              <li>
                 {t("denied.needed")}{" "}
-                <span className={mono}>{read.permission}</span>
-              </span>
-              <span>{t("denied.decidedBy")}</span>
-            </span>
-          </span>
-        </OutcomePanel>
+                <span className={`${mono} text-foreground`}>
+                  {read.permission}
+                </span>
+              </li>
+              <li>{t("denied.decidedBy")}</li>
+            </ul>
+          }
+        >
+          {t("denied.body")}
+        </StateWrap>
       );
     case "pending_approval":
       return (
-        <OutcomePanel
+        <StateWrap
           tone="neutral"
+          glyph="lock"
           testId="mandate-pending"
           title={t("pending.title")}
         >
           {t("pending.body", { request: read.accessRequestId })}
-        </OutcomePanel>
+        </StateWrap>
       );
     case "error":
       return (
-        <OutcomePanel
-          tone="neutral"
+        <StateWrap
+          tone="failed"
           testId="mandate-error"
           title={t("error.title")}
           actions={
-            <SafeLink to={retry} className={linkText}>
+            <SafeLink to={retry} className={buttonPrimary}>
               {t("error.retry")}
             </SafeLink>
           }
-        >
-          <span className="flex flex-col gap-1">
-            <span>{t("error.body")}</span>
-            <span className={mono}>
+          after={
+            <p className={stateTrace}>
               {t("error.code", {
                 status: String(read.status),
                 code: read.code,
               })}
-            </span>
-            <span className={mono}>{t("error.readAt", { at: readAt })}</span>
-          </span>
-        </OutcomePanel>
+              <br />
+              {t("error.readAt", { at: readAt })}
+            </p>
+          }
+        >
+          {t("error.body")}
+        </StateWrap>
       );
   }
 }

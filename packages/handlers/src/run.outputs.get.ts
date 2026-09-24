@@ -4,11 +4,11 @@
 // The two stores answer the one node shape:
 //
 //   tse_…  a wrapped session, read from `tacho.session_files`: one row per
-//          path the session touched, already carrying its counters, its diff
-//          stat, git's word for what happened to it, and the frames that
-//          touched it. The row names a path, so the node names a file.
-//          Each `oxagen:pr_link` frame the harness wrote adds a pull-request
-//          node, one per URL, at the frame that linked it.
+//          path the session or one of its subagents touched, already carrying
+//          its counters, its diff stat, git's word for what happened to it,
+//          and the frames that touched it. The row names a path, so the node
+//          names a file. Each `oxagen:pr_link` frame the harness wrote adds a
+//          pull-request node, one per URL, at the frame that linked it.
 //   arun_… an evidence-ledger run, read from its `change.recorded` and
 //          `provider_publish.*` receipts. Those carry a payload, and a
 //          `RunFrame` does not, so they are read through the store's own
@@ -112,10 +112,15 @@ async function wrappedNodes(
     });
   }
   // Both lists arrive in frame order, and the spine promises that order, so
-  // the PR nodes are merged in by their frame rather than appended.
+  // the PR nodes are merged in by their frame rather than appended. A
+  // subagent's path carries no frame of the run's and arrives after the run's
+  // own, chain by chain; the sort is stable, so those keep their place at the
+  // tail.
   const nodes = [...rows.map(sessionFileNode), ...pulls].sort((a, b) => {
-    const x = BigInt(a.seq ?? "0");
-    const y = BigInt(b.seq ?? "0");
+    if (a.seq === null || b.seq === null)
+      return a.seq === b.seq ? 0 : a.seq === null ? 1 : -1;
+    const x = BigInt(a.seq);
+    const y = BigInt(b.seq);
     return x < y ? -1 : x > y ? 1 : 0;
   });
   return {

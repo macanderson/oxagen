@@ -715,6 +715,17 @@ export function buildProgram(): Command {
       await runChain(runId, opts);
     });
   runCmd
+    .command("turns")
+    .description(
+      "Show a run's cost turn by turn: each turn's model and tool steps, frames, cache hit, cost, and the cost so far",
+    )
+    .argument("<run-id>", "The run's public id (arun_… or tse_…)")
+    .option("--json", "Output JSON")
+    .action(async (runId: string, opts: { json?: boolean }) => {
+      const { runTurns } = await import("./commands/run.js");
+      await runTurns(runId, opts);
+    });
+  runCmd
     .command("export")
     .description(
       "Queue the signed, offline-verifiable evidence bundle for a sealed run — Owner/Admin only",

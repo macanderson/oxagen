@@ -184,7 +184,10 @@
     --code-bg: color-mix(in oklab, var(--ox-panel) 55%, var(--ox-ink));
     --button-disabled-bg: var(--hl);
     --input-disabled-bg: var(--hl);
-    --app-panel-bg: var(--panel);
+    /* `body` and `#viewport` sit on the ink and `.main` draws no fill of its
+       own (engine.css), so the page body is ink in the dark theme. Panels,
+       tiles and the drawers stay on the panel. */
+    --app-panel-bg: var(--ink);
     --shadow: 0 1px 0 rgba(255, 255, 255, 0.03), 0 18px 44px rgba(0, 0, 0, 0.5);
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   }
@@ -219,7 +222,7 @@
       --code-bg: color-mix(in oklab, var(--ox-panel) 55%, var(--ox-ink));
       --button-disabled-bg: var(--hl);
       --input-disabled-bg: var(--hl);
-      --app-panel-bg: var(--panel);
+      --app-panel-bg: var(--ink);
       --shadow:
         0 1px 0 rgba(255, 255, 255, 0.03), 0 18px 44px rgba(0, 0, 0, 0.5);
       --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
@@ -296,6 +299,155 @@
 }
 [data-shell-page] main#main > :nth-child(n + 5) {
   animation-delay: 160ms;
+}
+
+/*
+ * `.sk` (engine.css, "state surfaces"): a skeleton bone is a band of the
+ * panel sweeping across the wash, left to right, every 1.5s. Every loading
+ * state draws its bones with this one class, so they all read alike. Each
+ * bone sets its own height and corners. Under reduced motion the sweep stops
+ * and the wash stays. The kit's kill-switch only shortens an animation, and a
+ * 0.01ms infinite sweep would flicker, so this one is switched off outright.
+ */
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 130% 0;
+  }
+  100% {
+    background-position: -30% 0;
+  }
+}
+
+@utility skeleton {
+  display: block;
+  background: linear-gradient(
+    90deg,
+    var(--hl) 25%,
+    var(--panel) 50%,
+    var(--hl) 75%
+  );
+  background-size: 220% 100%;
+  animation: skeleton-shimmer 1.5s linear infinite;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+/*
+ * The stella spinner (`StellaSpinner` in `ui/stella-mark.tsx`), on the kit's
+ * timing from `oxagen-brand/spinners/stella-spinner.svg`: the asterisk turns
+ * 60 degrees and a light sweep crosses it, both every 3.2s. The kit's global
+ * reduced-motion switch only shortens durations, and an infinite animation at
+ * 0.01ms still jitters, so both opt out by name.
+ */
+@keyframes ox-stella-turn {
+  0%,
+  20% {
+    transform: rotate(0deg);
+  }
+  70%,
+  100% {
+    transform: rotate(60deg);
+  }
+}
+@keyframes ox-stella-sweep {
+  0% {
+    transform: skewX(-18deg) translateX(0);
+  }
+  55%,
+  100% {
+    transform: skewX(-18deg) translateX(137.9px);
+  }
+}
+.ox-stella-turn {
+  transform-origin: 35.225px -62.82px;
+  animation: ox-stella-turn 3.2s cubic-bezier(0.6, 0, 0.2, 1) infinite;
+}
+.ox-stella-sweep {
+  animation: ox-stella-sweep 3.2s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ox-stella-turn {
+    animation: none;
+  }
+  .ox-stella-sweep {
+    animation: none;
+    opacity: 0;
+  }
+}
+
+/*
+ * A reply the person has not seen (`AssistantLauncher`). A gold light runs
+ * around the launcher's border while the ring fades in and out, until the
+ * flyout opens. The ring is a conic gradient masked to a 1.5px band, and the
+ * registered angle is what lets the gradient turn. Under reduced motion the
+ * ring holds still as a plain gold border, and the launcher's own text says
+ * there is a new reply, so the cue is never colour alone.
+ */
+@property --ox-shine-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+@keyframes ox-shine-turn {
+  to {
+    --ox-shine-angle: 360deg;
+  }
+}
+@keyframes ox-shine-fade {
+  0%,
+  100% {
+    opacity: 0.15;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes ox-shine-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  50% {
+    box-shadow: 0 0 14px 1px color-mix(in oklab, var(--gold) 45%, transparent);
+  }
+}
+.ox-launcher-unread {
+  position: relative;
+  animation: ox-shine-glow 2.4s ease-in-out infinite;
+}
+.ox-launcher-unread::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  padding: 1.5px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--ox-shine-angle),
+    transparent 0deg,
+    var(--gold-bright) 50deg,
+    var(--gold) 90deg,
+    transparent 150deg,
+    transparent 360deg
+  );
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
+  pointer-events: none;
+  animation:
+    ox-shine-turn 2.4s linear infinite,
+    ox-shine-fade 2.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ox-launcher-unread {
+    animation: none;
+  }
+  .ox-launcher-unread::before {
+    animation: none;
+    opacity: 1;
+    background: var(--gold);
+  }
 }
 
 /* A disclosure's body arrives rather than appears. */

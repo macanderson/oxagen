@@ -20,7 +20,7 @@ use serde::Serialize;
 use serde_json::{Map, Value};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 #[cfg(not(windows))]
 use std::time::Duration;
 
@@ -45,22 +45,83 @@ pub fn sidecar_dir() -> Option<PathBuf> {
 
 /// Whether a directory exists only for this launch: an AppImage's squashfs
 /// mount (`/tmp/.mount_*`, or the `APPIMAGE` variable the runtime sets), a
-/// mounted disk image (`/Volumes/*`), or App Translocation (a quarantined
-/// app opened where it was downloaded). `tacho enroll` bakes the sidecar's
-/// directory into the hook commands and the service unit, and PATH links
-/// point into it, so nothing durable may reference such a directory.
-pub fn is_transient_dir(dir: &Path, appimage_env: bool) -> bool {
+/// mounted disk image, or App Translocation (a quarantined app opened where
+/// it was downloaded). `tacho enroll` bakes the sidecar's directory into the
+/// hook commands and the service unit, and PATH links point into it, so
+/// nothing durable may reference such a directory.
+///
+/// A disk image mounts read-only under `/Volumes`. An external disk mounts
+/// there too, writable, and an app copied onto it stays: counting every
+/// `/Volumes` path copied 240 MB on each launch. `volume_read_only` answers
+/// for the volume a `/Volumes` path is on.
+pub fn is_transient_dir(dir: &Path, appimage_env: bool, volume_read_only: &dyn Fn(&Path) -> bool) -> bool {
     let text = dir.to_string_lossy().replace('\\', "/");
     text.starts_with("/tmp/.mount_")
         || text.contains("/AppTranslocation/")
-        || text.starts_with("/Volumes/")
+        || (text.starts_with("/Volumes/") && volume_read_only(dir))
         || appimage_env
 }
 
+/// Pure: whether `mount`'s table (the macOS form, `<device> on <mount
+/// point> (<type>, <flag>, ...)`) has the volume `dir` is on mounted
+/// read-only. The volume is the deepest mount point `dir` is under other
+/// than `/`, which on macOS is the sealed read-only system volume. `None`
+/// when the table lists no such mount point.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn mount_table_read_only(table: &str, dir: &Path) -> Option<bool> {
+    let mut deepest: Option<(usize, bool)> = None;
+    for line in table.lines() {
+        let Some((_, rest)) = line.split_once(" on ") else {
+            continue;
+        };
+        let Some(open) = rest.rfind(" (") else {
+            continue;
+        };
+        let point = &rest[..open];
+        if point == "/" || !dir.starts_with(point) {
+            continue;
+        }
+        let read_only = rest[open + 2..]
+            .trim_end_matches(')')
+            .split(',')
+            .any(|flag| flag.trim() == "read-only");
+        match deepest {
+            Some((len, _)) if len >= point.len() => {}
+            _ => deepest = Some((point.len(), read_only)),
+        }
+    }
+    deepest.map(|(_, read_only)| read_only)
+}
+
+/// Whether the volume `dir` is on is mounted read-only, from `/sbin/mount`.
+/// A volume the table does not answer for counts as read-only, the safe
+/// side: a copy that was not needed costs disk space, and a hook pointing
+/// into an image that is gone costs every session.
+#[cfg(target_os = "macos")]
+fn volume_is_read_only(dir: &Path) -> bool {
+    std::process::Command::new("/sbin/mount")
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .ok()
+        .and_then(|out| mount_table_read_only(&String::from_utf8_lossy(&out.stdout), dir))
+        .unwrap_or(true)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn volume_is_read_only(_dir: &Path) -> bool {
+    true
+}
+
+/// Worked out once per launch: the sidecar directory and the volume it is on
+/// do not change while the app runs, and `desktop_state` asks on every poll.
 pub fn sidecar_dir_is_transient() -> bool {
-    sidecar_dir()
-        .map(|dir| is_transient_dir(&dir, std::env::var_os("APPIMAGE").is_some()))
-        .unwrap_or(false)
+    static TRANSIENT: OnceLock<bool> = OnceLock::new();
+    *TRANSIENT.get_or_init(|| {
+        sidecar_dir()
+            .map(|dir| is_transient_dir(&dir, std::env::var_os("APPIMAGE").is_some(), &volume_is_read_only))
+            .unwrap_or(false)
+    })
 }
 
 /// A per-user directory the app copies the sidecars into when it runs from
@@ -102,10 +163,6 @@ pub struct InstallEnv {
     /// What a new terminal's PATH would be. `None` asks the login shell,
     /// which can take seconds, so it is only asked when it is needed.
     pub login_path: Option<String>,
-    /// Export `TACHO_BIN_DIR` to this process when a durable copy is made, so
-    /// the sidecars spawned next write the durable path into hooks. Off in a
-    /// test: the environment is process-wide and tests run in parallel.
-    pub export_bin_dir: bool,
 }
 
 impl InstallEnv {
@@ -116,26 +173,49 @@ impl InstallEnv {
             transient: sidecar_dir_is_transient(),
             process_path: std::env::var("PATH").unwrap_or_default(),
             login_path: None,
-            export_bin_dir: true,
         }
     }
 }
 
-/// Point every sidecar the app spawns at the durable copy (they inherit the
-/// app's environment): with `TACHO_BIN_DIR` set, `tacho` writes that path
-/// into hooks and the service unit instead of its own transient one.
+/// Point every sidecar the app spawns at the durable copy an earlier launch
+/// made (they inherit the app's environment): with `TACHO_BIN_DIR` set,
+/// `tacho` writes that path into hooks and the service unit instead of its
+/// own transient one.
+///
+/// Called first thing in `run()`, before any thread exists. Changing the
+/// environment once other threads run is unsound on Unix (a concurrent
+/// `getenv` in WebKit or the async runtime can read freed memory), so a copy
+/// made later in the launch is not exported here: the webview asks
+/// `sidecar_env` for it and passes it to each sidecar it spawns.
 pub fn export_bin_dir() {
-    if sidecar_dir_is_transient() {
-        if let Some(dir) = bin_dir() {
-            std::env::set_var("TACHO_BIN_DIR", dir);
-        }
+    for (key, value) in sidecar_env() {
+        std::env::set_var(key, value);
     }
+}
+
+/// What a sidecar needs in its environment on top of the app's own, asked
+/// for each spawn (the `sidecar_env` command) so a copy made during this
+/// launch is used at once.
+pub fn sidecar_env() -> std::collections::BTreeMap<String, String> {
+    sidecar_env_for(sidecar_dir_is_transient(), bin_dir().as_deref())
+}
+
+/// Pure: `TACHO_BIN_DIR` at the durable copy while the app runs from a
+/// transient directory. Nothing otherwise: from a directory that lasts,
+/// tacho derives the right path itself, and with no copy yet it refuses to
+/// enroll, which is the point.
+pub fn sidecar_env_for(transient: bool, bin_dir: Option<&Path>) -> std::collections::BTreeMap<String, String> {
+    let mut env = std::collections::BTreeMap::new();
+    if let (true, Some(dir)) = (transient, bin_dir) {
+        env.insert("TACHO_BIN_DIR".to_string(), dir.display().to_string());
+    }
+    env
 }
 
 /// Search a `PATH`-shaped string for an executable named `name`, the way a
 /// shell's own lookup would: first directory that has it wins. Shared by
 /// `on_path` (the current process's own PATH, for `desktop_state`) and the
-/// shadow check in `install_cli_core` (the *login shell's* PATH, which can
+/// shadow check in `install_cli_locked` (the *login shell's* PATH, which can
 /// differ from this process's own).
 fn resolve_in_path_var(name: &str, path_var: &str) -> Option<PathBuf> {
     for dir in std::env::split_paths(path_var) {
@@ -421,9 +501,8 @@ pub enum PathPrecedence {
     /// Oxagen-owned location — so linking/replacing is safe.
     Ours,
     /// Something else already claims this name (a Homebrew install, a
-    /// manual copy, anything not ours). Linking would shadow it in every
-    /// new terminal, since the install dir gets prepended to PATH — leave
-    /// it alone.
+    /// manual copy, anything not ours). Leave it alone: it wins over a link
+    /// in the install dir, which the profile block appends to PATH.
     Shadowed,
 }
 
@@ -529,8 +608,27 @@ pub fn profile_path_for(kind: ShellKind, home: &Path, platform: &str) -> Option<
 const MARKER_BEGIN: &str = "# >>> oxagen >>>";
 const MARKER_END: &str = "# <<< oxagen <<<";
 
+/// A directory as the inside of a bash or zsh double-quoted string, where
+/// `$`, `` ` ``, `"` and `\` are special. Unescaped, a `$` in a home
+/// directory expands and a `"` ends the string.
+pub fn sh_double_quote_escape(dir: &str) -> String {
+    let mut out = String::with_capacity(dir.len());
+    for c in dir.chars() {
+        if matches!(c, '$' | '`' | '"' | '\\') {
+            out.push('\\');
+        }
+        out.push(c);
+    }
+    out
+}
+
+/// The directory goes at the end of PATH. At the front it changed which
+/// `python` or `claude` every new terminal found, for any other tool that
+/// happens to live in `~/.local/bin`. Our own two names do not need the
+/// front: the shadow check in `install_cli_locked` links a name only when
+/// nothing earlier on PATH already answers to it.
 fn path_export_line(dir: &str) -> String {
-    format!("export PATH=\"{dir}:$PATH\"")
+    format!("export PATH=\"$PATH:{}\"", sh_double_quote_escape(dir))
 }
 
 /// The line break a profile already uses, so an inserted block matches it.
@@ -556,9 +654,16 @@ pub fn fish_quote(dir: &str) -> String {
 }
 
 /// The whole-file content for the fish profile: fish's own `conf.d` file is
-/// entirely ours, so there is no marker block, just `fish_add_path`.
+/// entirely ours, so there is no marker block, just `fish_add_path`. With no
+/// flags it prepends to the universal `fish_user_paths`, which outlives this
+/// file, so removing the file left the directory on PATH. `--global --path`
+/// changes this session's PATH only, and `--append` puts it at the end for
+/// the reason `path_export_line` gives.
 pub fn fish_add_path_content(dir: &str) -> String {
-    format!("{MARKER_BEGIN}\nfish_add_path {}\n{MARKER_END}\n", fish_quote(dir))
+    format!(
+        "{MARKER_BEGIN}\nfish_add_path --global --path --append {}\n{MARKER_END}\n",
+        fish_quote(dir)
+    )
 }
 
 /// Whether an existing `conf.d/oxagen.fish` is one we wrote. The file is
@@ -570,18 +675,21 @@ pub fn fish_file_is_ours(text: &str) -> bool {
     text.starts_with(MARKER_BEGIN)
 }
 
-/// Whether a line is the one line our block carries between its markers.
+/// Whether a line is the one line our block carries between its markers:
+/// the appending form `path_export_line` writes, or the prepending form an
+/// earlier version wrote, so that block is still moved and removed.
 fn is_path_export_line(line: &str) -> bool {
-    line.starts_with("export PATH=\"") && line.ends_with(":$PATH\"")
+    (line.starts_with("export PATH=\"$PATH:") && line.ends_with('"'))
+        || (line.starts_with("export PATH=\"") && line.ends_with(":$PATH\""))
 }
 
 /// The byte ranges of every block this module wrote: exactly a start marker
-/// line, one `export PATH="…:$PATH"` line and an end marker line. Anything
-/// else is not ours and is never used as a range boundary: a start marker
-/// whose end line the user deleted, or a block the user added lines to. So a
-/// user's own line can never fall inside a range. Each range also covers the
-/// one line break `upsert_path_block` puts in front of a block, which is what
-/// makes removal restore the file byte for byte.
+/// line, one `export PATH=` line (`is_path_export_line`) and an end marker
+/// line. Anything else is not ours and is never used as a range boundary: a
+/// start marker whose end line the user deleted, or a block the user added
+/// lines to. So a user's own line can never fall inside a range. Each range
+/// also covers the one line break `upsert_path_block` puts in front of a
+/// block, which is what makes removal restore the file byte for byte.
 fn find_path_blocks(text: &str) -> Vec<(usize, usize)> {
     // (start of line, the line without its break, end including its break)
     let mut lines: Vec<(usize, &str, usize)> = Vec::new();
@@ -708,6 +816,17 @@ impl Default for CliInstallState {
     }
 }
 
+impl CliInstallState {
+    /// Replace the reported outcome. Every caller does this with
+    /// `INSTALL_LOCK` still held, so the view stored last is the one from
+    /// the pass that ran last. Stored after the lock was released, the
+    /// launch-time install's "Linked" could land after a "Remove links" that
+    /// ran in between and report links that were gone.
+    pub fn set(&self, view: CliInstallView) {
+        *self.0.lock().unwrap_or_else(|e| e.into_inner()) = view;
+    }
+}
+
 // ---------------------------------------------------------------------
 // Orchestration: copy sidecars, link/shim, and (Unix) the profile block
 // ---------------------------------------------------------------------
@@ -782,14 +901,36 @@ fn keep_sidecars(sidecars: &Path, durable: &Path) -> Result<PathBuf, String> {
         let to = durable.join(exe(name));
         // Copy beside, then rename: a running daemon keeps its old inode
         // and the link never points at a half-written file.
-        let staging = durable.join(format!(".{}.tmp", exe(name)));
-        fs::copy(&from, &staging)
-            .map_err(|e| format!("cannot copy {} to {}: {e}", from.display(), staging.display()))?;
-        fs::set_permissions(&staging, fs::Permissions::from_mode(0o755))
-            .map_err(|e| format!("cannot chmod {}: {e}", staging.display()))?;
-        fs::rename(&staging, &to).map_err(|e| format!("cannot move {} to {}: {e}", staging.display(), to.display()))?;
+        let staging = durable.join(staging_name(&exe(name)));
+        let staged = fs::copy(&from, &staging)
+            .map_err(|e| format!("cannot copy {} to {}: {e}", from.display(), staging.display()))
+            .and_then(|_| {
+                fs::set_permissions(&staging, fs::Permissions::from_mode(0o755))
+                    .map_err(|e| format!("cannot chmod {}: {e}", staging.display()))
+            })
+            .and_then(|()| {
+                fs::rename(&staging, &to)
+                    .map_err(|e| format!("cannot move {} to {}: {e}", staging.display(), to.display()))
+            });
+        if let Err(e) = staged {
+            let _ = fs::remove_file(&staging);
+            return Err(e);
+        }
     }
     Ok(durable)
+}
+
+/// A staging name no other copy uses: this process's id and the time.
+/// `INSTALL_LOCK` only orders the threads of one process, and a second app
+/// instance copying at the same moment used to write into the same
+/// `.tacho.tmp` as this one and rename a half-written binary into place.
+#[cfg(not(windows))]
+fn staging_name(file: &str) -> String {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    format!(".{file}.{}-{nanos}.tmp", std::process::id())
 }
 
 /// The PowerShell that appends a directory to the user PATH. The directory
@@ -801,15 +942,29 @@ fn keep_sidecars(sidecars: &Path, durable: &Path) -> Result<PathBuf, String> {
 /// and calling `.TrimEnd` on it throws, so the value is normalized to an
 /// empty string first and the separator is only written when there is
 /// something to separate from.
+///
+/// The value is read and written in `HKCU\Environment` itself.
+/// `[Environment]::GetEnvironmentVariable` returns it with every
+/// `%USERPROFILE%` already expanded and `SetEnvironmentVariable` writes it
+/// back as `REG_SZ`, so one edit froze the user's other entries to today's
+/// paths for good. Read unexpanded, written as `REG_EXPAND_SZ`. Writing the
+/// registry directly tells no one, so setting and clearing a throwaway user
+/// variable afterward broadcasts `WM_SETTINGCHANGE` the way the .NET call
+/// does, and a new terminal sees the change without a sign-out.
 #[allow(dead_code)]
-const ADD_TO_USER_PATH_PS: &str = "$d=$env:OXAGEN_BIN; $p=[Environment]::GetEnvironmentVariable('Path','User'); if($null -eq $p){ $p='' }; $p=$p.TrimEnd(';'); if(($p -split ';') -notcontains $d){ if($p.Length -gt 0){ $p=$p+';'+$d } else { $p=$d }; [Environment]::SetEnvironmentVariable('Path', $p, 'User') }";
+const ADD_TO_USER_PATH_PS: &str = "$d=$env:OXAGEN_BIN; $k=[Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment'); $p=$k.GetValue('Path',$null,[Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames); if($null -eq $p){ $p='' }; $p=$p.TrimEnd(';'); if(($p -split ';') -notcontains $d){ if($p.Length -gt 0){ $p=$p+';'+$d } else { $p=$d }; $k.SetValue('Path',$p,[Microsoft.Win32.RegistryValueKind]::ExpandString); [Environment]::SetEnvironmentVariable('OXAGEN_PATH_CHANGED','1','User'); [Environment]::SetEnvironmentVariable('OXAGEN_PATH_CHANGED',$null,'User') }; $k.Close()";
 
+/// Run one of the two user-PATH scripts with the directory in
+/// `$env:OXAGEN_BIN`. `CREATE_NO_WINDOW`: the app has no console, so
+/// Windows would otherwise open one for PowerShell and flash it on screen.
 #[cfg(windows)]
-fn add_to_user_path_windows(dir: &str) -> Result<(), String> {
-    // setx truncates at 1024 characters; the .NET API does not.
+fn run_user_path_script(script: &str, dir: &str) -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     let status = std::process::Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", ADD_TO_USER_PATH_PS])
+        .args(["-NoProfile", "-NonInteractive", "-Command", script])
         .env("OXAGEN_BIN", dir)
+        .creation_flags(CREATE_NO_WINDOW)
         .status()
         .map_err(|e| e.to_string())?;
     if status.success() {
@@ -817,6 +972,12 @@ fn add_to_user_path_windows(dir: &str) -> Result<(), String> {
     } else {
         Err(format!("powershell exited {status}"))
     }
+}
+
+#[cfg(windows)]
+fn add_to_user_path_windows(dir: &str) -> Result<(), String> {
+    // setx truncates at 1024 characters; the registry API does not.
+    run_user_path_script(ADD_TO_USER_PATH_PS, dir)
 }
 
 #[cfg(not(windows))]
@@ -828,22 +989,14 @@ fn add_to_user_path_windows(_dir: &str) -> Result<(), String> {
 /// The inverse of `ADD_TO_USER_PATH_PS`: drop every entry equal to the
 /// directory from the user PATH. "Remove links" used to leave the entry
 /// behind, pointing at a directory with nothing in it. Same out-of-band
-/// `$env:OXAGEN_BIN` and the same `$null` guard.
+/// `$env:OXAGEN_BIN`, the same `$null` guard, and the same unexpanded read,
+/// `REG_EXPAND_SZ` write and broadcast.
 #[allow(dead_code)]
-const REMOVE_FROM_USER_PATH_PS: &str = "$d=$env:OXAGEN_BIN; $p=[Environment]::GetEnvironmentVariable('Path','User'); if($null -ne $p){ $k=@(($p -split ';') | Where-Object { $_ -ne '' -and $_ -ne $d }); $n=($k -join ';'); if($n -ne $p.TrimEnd(';')){ [Environment]::SetEnvironmentVariable('Path', $n, 'User') } }";
+const REMOVE_FROM_USER_PATH_PS: &str = "$d=$env:OXAGEN_BIN; $k=[Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment'); $p=$k.GetValue('Path',$null,[Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames); if($null -ne $p){ $e=@(($p -split ';') | Where-Object { $_ -ne '' -and $_ -ne $d }); $n=($e -join ';'); if($n -ne $p.TrimEnd(';')){ $k.SetValue('Path',$n,[Microsoft.Win32.RegistryValueKind]::ExpandString); [Environment]::SetEnvironmentVariable('OXAGEN_PATH_CHANGED','1','User'); [Environment]::SetEnvironmentVariable('OXAGEN_PATH_CHANGED',$null,'User') } }; $k.Close()";
 
 #[cfg(windows)]
 fn remove_from_user_path_windows(dir: &str) -> Result<(), String> {
-    let status = std::process::Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", REMOVE_FROM_USER_PATH_PS])
-        .env("OXAGEN_BIN", dir)
-        .status()
-        .map_err(|e| e.to_string())?;
-    if status.success() {
-        Ok(())
-    } else {
-        Err(format!("powershell exited {status}"))
-    }
+    run_user_path_script(REMOVE_FROM_USER_PATH_PS, dir)
 }
 
 /// Wait up to `timeout` for `child`, killing it if it outlives the deadline.
@@ -874,9 +1027,24 @@ fn wait_with_timeout(mut child: std::process::Child, timeout: Duration) -> Optio
     Some(buf)
 }
 
-/// `$SHELL -lc 'printf %s "$PATH"'`: what PATH looks like for a *new*
-/// terminal, which differs from this process's own PATH (Tauri apps launch
-/// without sourcing shell profiles at all on macOS/Linux). Falls back to the
+const PATH_BEGIN: &str = "__OXAGEN_PATH_BEGIN__";
+const PATH_END: &str = "__OXAGEN_PATH_END__";
+
+/// Pure: the PATH a login shell printed between `PATH_BEGIN` and `PATH_END`.
+/// A profile that prints a banner, a fortune or an `nvm` notice writes to the
+/// same stdout before (and a logout script after) the probe does, and all of
+/// it used to be read as PATH.
+#[cfg_attr(windows, allow(dead_code))]
+pub fn path_between_sentinels(stdout: &str) -> Option<String> {
+    let start = stdout.find(PATH_BEGIN)? + PATH_BEGIN.len();
+    let len = stdout[start..].find(PATH_END)?;
+    let path = stdout[start..start + len].trim();
+    (!path.is_empty()).then(|| path.to_string())
+}
+
+/// `$SHELL -lc 'printf ...'`: what PATH looks like for a *new* terminal,
+/// which differs from this process's own PATH (Tauri apps launch without
+/// sourcing shell profiles at all on macOS/Linux). Falls back to the
 /// process's own PATH when the probe fails or times out.
 #[cfg(not(windows))]
 fn login_shell_path(shell: &str) -> Option<String> {
@@ -884,20 +1052,14 @@ fn login_shell_path(shell: &str) -> Option<String> {
         return None;
     }
     let child = std::process::Command::new(shell)
-        .args(["-lc", "printf %s \"$PATH\""])
+        .args(["-lc", &format!("printf '%s%s%s' '{PATH_BEGIN}' \"$PATH\" '{PATH_END}'")])
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
         .spawn()
         .ok()?;
     let bytes = wait_with_timeout(child, Duration::from_secs(5))?;
-    let text = String::from_utf8(bytes).ok()?;
-    let trimmed = text.trim();
-    if trimmed.is_empty() {
-        None
-    } else {
-        Some(trimmed.to_string())
-    }
+    path_between_sentinels(&String::from_utf8_lossy(&bytes))
 }
 
 /// The PATH the shadow check and the profile-block decision both reason
@@ -1140,14 +1302,9 @@ fn note_for(state: &str, view: &CliInstallView) -> String {
 
 /// The install itself, regardless of the opt-out flag: copy sidecars out of
 /// a transient directory if needed, link or shim each one, and (Unix) make
-/// sure the directory is on PATH for new terminals.
-fn install_cli_core(env: &InstallEnv) -> CliInstallView {
-    let _guard = install_guard();
-    install_cli_locked(env)
-}
-
-/// `install_cli_core`'s body, for callers that already hold `INSTALL_LOCK`.
-/// `INSTALL_LOCK` is not reentrant, so nothing here may take it again.
+/// sure the directory is on PATH for new terminals. For callers that
+/// already hold `INSTALL_LOCK`, which is not reentrant, so nothing here may
+/// take it again.
 pub(crate) fn install_cli_locked(env: &InstallEnv) -> CliInstallView {
     let roots = &env.roots;
     let dir = roots.cli_install_dir();
@@ -1192,16 +1349,12 @@ pub(crate) fn install_cli_locked(env: &InstallEnv) -> CliInstallView {
 
     #[cfg(not(windows))]
     let sidecars = if env.transient {
+        // Not exported to this process: see `export_bin_dir`.
         match create_dir_tracking(&durable).and_then(|made| {
             created.extend(made);
             keep_sidecars(&bundled, &durable)
         }) {
-            Ok(kept) => {
-                if env.export_bin_dir {
-                    std::env::set_var("TACHO_BIN_DIR", &kept);
-                }
-                kept
-            }
+            Ok(kept) => kept,
             Err(e) => {
                 view.state = "failed".to_string();
                 view.note = e;
@@ -1215,10 +1368,10 @@ pub(crate) fn install_cli_locked(env: &InstallEnv) -> CliInstallView {
     let sidecars = bundled;
 
     // What a *new terminal* would resolve each name to, computed once
-    // (login_shell_path spawns a shell). Linking into `dir` and then
-    // prepending `dir` to PATH would silently shadow anything else that
-    // already claims the name — e.g. a Homebrew `oxagen` ahead of `dir` on
-    // PATH — in every terminal opened from then on, even though the link
+    // (login_shell_path spawns a shell). Linking into `dir` where `dir`
+    // already comes early on PATH would silently shadow anything else that
+    // already claims the name — e.g. a Homebrew `oxagen` later on PATH —
+    // in every terminal opened from then on, even though the link
     // itself never overwrites a file. So a name that already resolves to
     // something that isn't ours is left alone entirely: not linked, and
     // (below) not allowed to trigger the profile-PATH edit on its own.
@@ -1328,13 +1481,17 @@ pub(crate) fn install_cli_locked(env: &InstallEnv) -> CliInstallView {
 
 /// The one entry point `lib.rs`'s `setup` calls on every launch, off the
 /// main thread. Honours the `autoLinkCli` opt-out and never overwrites
-/// anything the user or another tool put on PATH.
-pub fn ensure_cli_installed() -> CliInstallView {
-    ensure_cli_installed_in(&InstallEnv::real())
+/// anything the user or another tool put on PATH. The outcome goes into
+/// `state` before the lock is released: see `CliInstallState::set`.
+pub fn ensure_cli_installed(state: &CliInstallState) {
+    ensure_cli_installed_in(&InstallEnv::real(), state);
 }
 
-pub(crate) fn ensure_cli_installed_in(env: &InstallEnv) -> CliInstallView {
-    if !read_auto_link_cli(&env.roots) {
+pub(crate) fn ensure_cli_installed_in(env: &InstallEnv, state: &CliInstallState) -> CliInstallView {
+    let _guard = install_guard();
+    let view = if read_auto_link_cli(&env.roots) {
+        install_cli_locked(env)
+    } else {
         let dir = env.roots.cli_install_dir();
         let mut view = CliInstallView {
             state: "opted_out".to_string(),
@@ -1346,9 +1503,10 @@ pub(crate) fn ensure_cli_installed_in(env: &InstallEnv) -> CliInstallView {
             note: String::new(),
         };
         view.note = note_for("opted_out", &view);
-        return view;
-    }
-    install_cli_core(env)
+        view
+    };
+    state.set(view.clone());
+    view
 }
 
 // ---------------------------------------------------------------------
@@ -1371,23 +1529,28 @@ pub struct InstallResult {
 
 /// "Link into PATH" against an explicit environment: re-enables
 /// `autoLinkCli` first, so an opted-out user clicking it explicitly gets
-/// what they asked for.
-pub(crate) fn link_cli_in(env: &InstallEnv) -> Result<CliInstallView, String> {
+/// what they asked for. The outcome goes into `state` before the lock is
+/// released: see `CliInstallState::set`.
+pub(crate) fn link_cli_in(env: &InstallEnv, state: &CliInstallState) -> Result<CliInstallView, String> {
     // Re-enable inside the lock, so a concurrent "Remove links" cannot turn
     // the flag back off between this write and the re-read in
     // `install_cli_locked` and make an explicit click do nothing.
     let _guard = install_guard();
     write_auto_link_cli(&env.roots, true)?;
-    Ok(install_cli_locked(env))
+    let view = install_cli_locked(env);
+    state.set(view.clone());
+    Ok(view)
 }
 
 /// "Link into PATH": always runs, and updates the managed state
-/// `desktop_state` reports.
-#[tauri::command]
+/// `desktop_state` reports. `async` so Tauri runs it off the main thread: it
+/// can wait on `INSTALL_LOCK` while the launch-time pass probes the login
+/// shell, then copy 240 MB of sidecars, and a synchronous command freezes
+/// the window for all of it.
+#[tauri::command(async)]
 pub fn install_cli(state: tauri::State<CliInstallState>) -> Result<InstallResult, String> {
-    let view = link_cli_in(&InstallEnv::real())?;
+    let view = link_cli_in(&InstallEnv::real(), &state)?;
     if view.state == "failed" {
-        *state.0.lock().unwrap_or_else(|e| e.into_inner()) = view.clone();
         return Err(view.note);
     }
     let result = InstallResult {
@@ -1398,10 +1561,9 @@ pub fn install_cli(state: tauri::State<CliInstallState>) -> Result<InstallResult
         // "already" with nothing skipped, or the PATH edit landed (Windows)
         // or was not needed or was made (Unix).
         on_path: view.state == "already" || view.path_updated,
-        note: view.note.clone(),
-        profile: view.profile.clone(),
+        note: view.note,
+        profile: view.profile,
     };
-    *state.0.lock().unwrap_or_else(|e| e.into_inner()) = view;
     Ok(result)
 }
 
@@ -1515,14 +1677,15 @@ pub(crate) fn unlink_cli_in(env: &InstallEnv) -> UnlinkOutcome {
 /// the profile block(s) it added, and turns off automatic re-linking on the
 /// next launch. The sidecars themselves stay with the app. Ownership is
 /// tested exactly as it is on the way in, so a `oxagen` in the same directory
-/// that we refused to overwrite is also one we refuse to delete.
-#[tauri::command]
+/// that we refused to overwrite is also one we refuse to delete. `async` for
+/// the same reason as `install_cli`.
+#[tauri::command(async)]
 pub fn uninstall_cli(state: tauri::State<CliInstallState>) -> Result<Vec<String>, String> {
     let _guard = install_guard();
     let env = InstallEnv::real();
     let outcome = unlink_cli_in(&env);
     write_auto_link_cli(&env.roots, false)?;
-    *state.0.lock().unwrap_or_else(|e| e.into_inner()) = CliInstallView {
+    state.set(CliInstallView {
         state: "opted_out".to_string(),
         dir: env.roots.cli_install_dir().display().to_string(),
         files: Vec::new(),
@@ -1530,7 +1693,7 @@ pub fn uninstall_cli(state: tauri::State<CliInstallState>) -> Result<Vec<String>
         profile: None,
         path_updated: false,
         note: note_for("opted_out", &CliInstallView::default()),
-    };
+    });
     if !outcome.failed.is_empty() {
         return Err(outcome.failed.join("; "));
     }
@@ -1550,8 +1713,10 @@ pub struct RemovalReport {
 /// the durable copy of the sidecars, and `~/.config/oxagen`. Refused while
 /// the machine is still enrolled. A host `tacho unenroll` has retired (the
 /// revoke could not reach the control plane) is not enrolled: refusing it
-/// made an offline uninstall impossible, forever.
-pub(crate) fn remove_everything_in(env: &InstallEnv) -> Result<RemovalReport, String> {
+/// made an offline uninstall impossible, forever. What `desktop_state`
+/// reports afterward goes into `state` before the lock is released: see
+/// `CliInstallState::set`.
+pub(crate) fn remove_everything_in(env: &InstallEnv, state: &CliInstallState) -> Result<RemovalReport, String> {
     use crate::machine::Enrollment;
     let _guard = install_guard();
     let roots = &env.roots;
@@ -1593,6 +1758,12 @@ pub(crate) fn remove_everything_in(env: &InstallEnv) -> Result<RemovalReport, St
     if let Some(parent) = roots.oxagen_dir().parent() {
         crate::machine::remove_dir_if_empty(parent);
     }
+    state.set(CliInstallView {
+        state: "opted_out".to_string(),
+        dir: roots.cli_install_dir().display().to_string(),
+        note: "Removed. Oxagen links the command line tools again the next time it opens.".to_string(),
+        ..Default::default()
+    });
     Ok(report)
 }
 
@@ -1849,9 +2020,60 @@ mod tests {
         let once = upsert_path_block(original, "/home/dev/.local/bin");
         assert!(once.starts_with(original));
         assert!(once.contains(MARKER_BEGIN));
-        assert!(once.contains("export PATH=\"/home/dev/.local/bin:$PATH\""));
+        assert!(once.contains("export PATH=\"$PATH:/home/dev/.local/bin\""));
         let twice = upsert_path_block(&once, "/home/dev/.local/bin");
         assert_eq!(once, twice, "a second identical upsert must not change the file");
+    }
+
+    /// At the front of PATH the directory decided which `python` or `claude`
+    /// every new terminal ran.
+    #[test]
+    fn the_block_appends_the_directory_to_path() {
+        let block = upsert_path_block("", "/home/dev/.local/bin");
+        assert!(
+            block.contains("export PATH=\"$PATH:/home/dev/.local/bin\"\n"),
+            "{block}"
+        );
+        assert!(!block.contains(":$PATH\""), "{block}");
+    }
+
+    #[test]
+    fn a_prepending_block_from_an_earlier_version_is_moved_and_removed() {
+        let old = "export FOO=bar\n\n# >>> oxagen >>>\nexport PATH=\"/home/dev/.local/bin:$PATH\"\n# <<< oxagen <<<\n";
+        let upserted = upsert_path_block(old, "/home/dev/.local/bin");
+        assert_eq!(upserted.matches(MARKER_BEGIN).count(), 1, "{upserted}");
+        assert!(upserted.contains("export PATH=\"$PATH:/home/dev/.local/bin\""));
+        assert_eq!(remove_path_block(&upserted), "export FOO=bar\n");
+        assert_eq!(remove_path_block(old), "export FOO=bar\n");
+    }
+
+    #[test]
+    fn the_directory_is_escaped_inside_the_double_quotes() {
+        // Unescaped, `$HOME` expands, a backtick runs a command and `"` ends
+        // the string.
+        let dir = r#"/Users/a$HOME`id`"q\b/.local/bin"#;
+        assert_eq!(sh_double_quote_escape(dir), r#"/Users/a\$HOME\`id\`\"q\\b/.local/bin"#);
+        let block = upsert_path_block("export FOO=bar\n", dir);
+        assert!(
+            block.contains(r#"export PATH="$PATH:/Users/a\$HOME\`id\`\"q\\b/.local/bin""#),
+            "{block}"
+        );
+        // Still recognized as ours: moved, not duplicated, and removable.
+        assert_eq!(upsert_path_block(&block, dir), block);
+        assert_eq!(remove_path_block(&block), "export FOO=bar\n");
+    }
+
+    /// The line bash reads back is the directory, byte for byte.
+    #[cfg(not(windows))]
+    #[test]
+    fn a_shell_reading_the_block_gets_the_directory_back() {
+        let dir = r#"/tmp/a b$HOME`id`"q\x"#;
+        let script = format!("PATH=/usr/bin\n{}printf %s \"$PATH\"", upsert_path_block("", dir));
+        let out = std::process::Command::new("/bin/sh")
+            .args(["-c", &script])
+            .output()
+            .unwrap();
+        assert_eq!(String::from_utf8(out.stdout).unwrap(), format!("/usr/bin:{dir}"));
     }
 
     #[test]
@@ -1933,14 +2155,27 @@ mod tests {
     #[test]
     fn fish_content_is_whole_file_ownership() {
         let content = fish_add_path_content("/home/dev/.local/bin");
-        assert!(content.contains("fish_add_path '/home/dev/.local/bin'"));
+        assert!(content.contains("fish_add_path --global --path --append '/home/dev/.local/bin'"));
         assert!(content.contains(MARKER_BEGIN));
+    }
+
+    /// With no flags `fish_add_path` writes the universal `fish_user_paths`,
+    /// which outlives `conf.d/oxagen.fish`, so removing the file left the
+    /// directory on every fish's PATH.
+    #[test]
+    fn fish_changes_this_session_path_and_nothing_universal() {
+        let content = fish_add_path_content("/home/dev/.local/bin");
+        let line = content.lines().find(|l| l.starts_with("fish_add_path")).unwrap();
+        for flag in ["--global", "--path", "--append"] {
+            assert!(line.split(' ').any(|word| word == flag), "{line}");
+        }
+        assert!(!line.contains("-U") && !line.contains("--universal"), "{line}");
     }
 
     #[test]
     fn fish_quotes_the_directory_so_a_space_cannot_split_it() {
         let content = fish_add_path_content("/Users/First Last/.local/bin");
-        assert!(content.contains("fish_add_path '/Users/First Last/.local/bin'"));
+        assert!(content.contains("'/Users/First Last/.local/bin'"));
         // Inside fish single quotes only these two characters are special.
         assert_eq!(fish_quote(r"/tmp/o'brien\bin"), r"'/tmp/o\'brien\\bin'");
         // Backslashes are doubled before quotes are escaped, so the escape
@@ -2028,17 +2263,83 @@ mod tests {
 
     #[test]
     fn transient_directories_are_the_per_launch_ones() {
-        let t = |p: &str| is_transient_dir(Path::new(p), false);
+        let read_only = |_: &Path| true;
+        let t = |p: &str| is_transient_dir(Path::new(p), false, &read_only);
         assert!(t("/tmp/.mount_OxagenAb12Cd/usr/bin"));
         assert!(t("/Volumes/Oxagen/Oxagen.app/Contents/MacOS"));
         assert!(t(
             "/private/var/folders/x/T/AppTranslocation/1234-abcd/d/Oxagen.app/Contents/MacOS"
         ));
-        assert!(is_transient_dir(Path::new("/usr/lib/oxagen"), true));
+        assert!(is_transient_dir(Path::new("/usr/lib/oxagen"), true, &read_only));
         assert!(!t("/Applications/Oxagen.app/Contents/MacOS"));
         assert!(!t("/usr/lib/oxagen"));
         assert!(!t("C:\\Program Files\\Oxagen"));
         assert!(!t("/home/dev/.local/share/oxagen/bin"));
+    }
+
+    #[test]
+    fn a_sidecar_gets_the_durable_copy_only_while_the_app_is_transient() {
+        let durable = Path::new("/home/dev/.local/share/oxagen/bin");
+        let env = sidecar_env_for(true, Some(durable));
+        assert_eq!(
+            env.get("TACHO_BIN_DIR").map(String::as_str),
+            Some("/home/dev/.local/share/oxagen/bin")
+        );
+        assert_eq!(env.len(), 1);
+        // No copy yet: tacho refuses to enroll from the transient directory.
+        assert!(sidecar_env_for(true, None).is_empty());
+        // A directory that lasts: tacho derives it itself.
+        assert!(sidecar_env_for(false, Some(Path::new("/Applications/Oxagen.app/Contents/MacOS"))).is_empty());
+    }
+
+    /// An app copied to an external disk stays there, and counting it as a
+    /// disk image copied 240 MB of sidecars on every launch.
+    #[test]
+    fn an_app_on_a_writable_external_disk_is_not_transient() {
+        let writable = |_: &Path| false;
+        assert!(!is_transient_dir(
+            Path::new("/Volumes/External/Applications/Oxagen.app/Contents/MacOS"),
+            false,
+            &writable
+        ));
+        // Translocation is transient whatever the volume says.
+        assert!(is_transient_dir(
+            Path::new("/private/var/folders/x/T/AppTranslocation/1234/d/Oxagen.app/Contents/MacOS"),
+            false,
+            &writable
+        ));
+        // Only a `/Volumes` path asks about its volume: `/` is the sealed
+        // read-only system volume on every Mac.
+        let asked = std::cell::Cell::new(false);
+        let probe = |_: &Path| {
+            asked.set(true);
+            true
+        };
+        assert!(!is_transient_dir(
+            Path::new("/Applications/Oxagen.app/Contents/MacOS"),
+            false,
+            &probe
+        ));
+        assert!(!asked.get());
+    }
+
+    #[test]
+    fn the_mount_table_tells_a_disk_image_from_an_external_disk() {
+        let table = "\
+/dev/disk3s1s1 on / (apfs, sealed, local, read-only, journaled)
+/dev/disk3s5 on /System/Volumes/Data (apfs, local, journaled, nobrowse, protect)
+/dev/disk5s1 on /Volumes/Oxagen (hfs, local, nodev, nosuid, read-only, noowners, quarantine, mounted by dev)
+/dev/disk6s2 on /Volumes/Backup on Tuesday (apfs, local, nodev, nosuid, journaled, noowners)
+/dev/disk7s1 on /Volumes/Oxagen 1 (apfs, local, nodev, nosuid, journaled, noowners)
+map auto_home on /System/Volumes/Data/home (autofs, automounted, nobrowse)
+";
+        let ro = |p: &str| mount_table_read_only(table, Path::new(p));
+        assert_eq!(ro("/Volumes/Oxagen/Oxagen.app/Contents/MacOS"), Some(true));
+        assert_eq!(ro("/Volumes/Backup on Tuesday/Oxagen.app/Contents/MacOS"), Some(false));
+        // A name that merely starts with another volume's is its own volume.
+        assert_eq!(ro("/Volumes/Oxagen 1/Oxagen.app/Contents/MacOS"), Some(false));
+        // Not a volume the table lists: `/` alone does not answer.
+        assert_eq!(ro("/Volumes/Gone/Oxagen.app/Contents/MacOS"), None);
     }
 
     #[test]
@@ -2048,6 +2349,39 @@ mod tests {
         assert!(ADD_TO_USER_PATH_PS.contains("$env:OXAGEN_BIN"));
         assert!(!ADD_TO_USER_PATH_PS.contains("{dir}"));
         assert!(!ADD_TO_USER_PATH_PS.contains("{}"));
+    }
+
+    /// `[Environment]::GetEnvironmentVariable('Path','User')` expands every
+    /// `%USERPROFILE%` and `SetEnvironmentVariable` writes `REG_SZ`, so one
+    /// edit froze the user's other PATH entries for good.
+    #[test]
+    fn the_path_scripts_keep_the_user_path_unexpanded() {
+        for script in [ADD_TO_USER_PATH_PS, REMOVE_FROM_USER_PATH_PS] {
+            assert!(script.contains("CurrentUser.CreateSubKey('Environment')"), "{script}");
+            assert!(
+                script.contains(
+                    "GetValue('Path',$null,[Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)"
+                ),
+                "{script}"
+            );
+            assert!(
+                script.contains("SetValue('Path',")
+                    && script.contains("[Microsoft.Win32.RegistryValueKind]::ExpandString"),
+                "{script}"
+            );
+            assert!(!script.contains("GetEnvironmentVariable('Path'"), "{script}");
+            assert!(!script.contains("SetEnvironmentVariable('Path'"), "{script}");
+            // The registry write tells no one; setting and clearing a user
+            // variable broadcasts WM_SETTINGCHANGE, after the write.
+            let write = script.find("SetValue('Path',").unwrap();
+            let set = script
+                .find("SetEnvironmentVariable('OXAGEN_PATH_CHANGED','1','User')")
+                .unwrap();
+            let clear = script
+                .find("SetEnvironmentVariable('OXAGEN_PATH_CHANGED',$null,'User')")
+                .unwrap();
+            assert!(write < set && set < clear, "{script}");
+        }
     }
 
     #[test]
@@ -2148,5 +2482,104 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         let _ = fs::remove_dir_all(&old_oxagen_dir);
         let _ = fs::remove_dir_all(&foreign_dir);
+    }
+
+    // ---- the durable copy ----
+
+    /// A second app instance copying at the same moment: its staging file is
+    /// not this one's to write into or rename away.
+    #[cfg(not(windows))]
+    #[test]
+    fn the_durable_copy_stages_under_a_name_no_other_instance_uses() {
+        let base = unique_temp_dir("keep");
+        let sidecars = base.join("mount");
+        let durable = base.join("durable");
+        fs::create_dir_all(&sidecars).unwrap();
+        fs::create_dir_all(&durable).unwrap();
+        for name in ["oxagen", "tacho"] {
+            fs::write(sidecars.join(name), format!("{name} v2")).unwrap();
+        }
+        // Where every instance used to stage, mid-copy in another process.
+        let theirs = durable.join(".tacho.tmp");
+        fs::write(&theirs, b"half a binary").unwrap();
+
+        assert_eq!(keep_sidecars(&sidecars, &durable).unwrap(), durable);
+        assert_eq!(fs::read(durable.join("tacho")).unwrap(), b"tacho v2");
+        assert_eq!(fs::read(&theirs).unwrap(), b"half a binary");
+        let mut left: Vec<String> = fs::read_dir(&durable)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        left.sort();
+        assert_eq!(left, [".tacho.tmp", "oxagen", "tacho"]);
+
+        let staged = staging_name("tacho");
+        assert!(
+            staged.starts_with(&format!(".tacho.{}-", std::process::id())),
+            "{staged}"
+        );
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn a_failed_durable_copy_leaves_no_staging_file_behind() {
+        let base = unique_temp_dir("keep-fail");
+        let sidecars = base.join("mount");
+        let durable = base.join("durable");
+        fs::create_dir_all(&sidecars).unwrap();
+        for name in ["oxagen", "tacho"] {
+            fs::write(sidecars.join(name), name).unwrap();
+        }
+        // A directory where the binary goes: the copy lands, the rename fails.
+        fs::create_dir_all(durable.join("oxagen").join("in-use")).unwrap();
+        let err = keep_sidecars(&sidecars, &durable).unwrap_err();
+        assert!(err.contains("cannot move"), "{err}");
+        let stray: Vec<_> = fs::read_dir(&durable)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().ends_with(".tmp"))
+            .collect();
+        assert!(stray.is_empty(), "{stray:?}");
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    // ---- the login-shell PATH probe ----
+
+    #[test]
+    fn the_login_path_is_read_between_the_sentinels() {
+        let path = "/usr/local/bin:/usr/bin:/bin";
+        let wrapped = format!("{PATH_BEGIN}{path}{PATH_END}");
+        assert_eq!(path_between_sentinels(&wrapped).as_deref(), Some(path));
+        // A profile banner before it and a logout message after it.
+        let noisy = format!("Welcome back!\nnvm: using node 22\n{wrapped}\nlogout\n");
+        assert_eq!(path_between_sentinels(&noisy).as_deref(), Some(path));
+        // No sentinels, an unterminated probe, or an empty PATH: no answer,
+        // and the caller falls back to this process's own PATH.
+        assert_eq!(path_between_sentinels(path), None);
+        assert_eq!(path_between_sentinels(&format!("{PATH_BEGIN}{path}")), None);
+        assert_eq!(path_between_sentinels(&format!("{PATH_BEGIN}{PATH_END}")), None);
+    }
+
+    /// A real shell whose profile prints a banner, run the way the probe
+    /// runs `$SHELL`.
+    #[cfg(not(windows))]
+    #[test]
+    fn a_profile_banner_is_not_read_as_path() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = unique_temp_dir("login-shell");
+        let shell = dir.join("chatty-sh");
+        fs::write(
+            &shell,
+            "#!/bin/sh\necho 'Last login: today'\nPATH=/opt/probe/bin:/usr/bin\nexport PATH\n/bin/sh -c \"$2\"\necho bye\n",
+        )
+        .unwrap();
+        fs::set_permissions(&shell, fs::Permissions::from_mode(0o755)).unwrap();
+        // A few tries: a test on another thread that forks while the script
+        // is still open for writing makes the first exec fail with "text
+        // file busy", which the probe reports as no answer.
+        let path = (0..5).find_map(|_| login_shell_path(&shell.display().to_string()));
+        assert_eq!(path.as_deref(), Some("/opt/probe/bin:/usr/bin"));
+        let _ = fs::remove_dir_all(&dir);
     }
 }

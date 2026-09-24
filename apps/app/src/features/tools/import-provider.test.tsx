@@ -3,7 +3,10 @@
 // auth config typed for a bearer or header provider, and the one that is
 // refused before it is sent; a connect that threw; a provider that listed
 // nothing; the Back buttons; closing the dialog midway, which starts the next
-// one at Connect; and the receipt that leaves the confirm button inert. The
+// one at Connect; the filter over a long list, which hides a checked tool
+// without dropping it from the import; a tool list whose suggestions could not
+// be read, which still takes typed names; and the receipt that leaves the
+// confirm button inert. The
 // auth config is secret material, so the tests also check it never comes
 // back into the dialog. axe checks the state each test ends in (INV-26).
 import {
@@ -18,13 +21,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider, translator } from "@/test/intl";
 
-const { router, importTools, registerServer } = vi.hoisted(() => ({
-  router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
-  importTools: vi.fn(),
-  registerServer: vi.fn(),
-}));
+const { router, importTools, registerServer, chooseServerTools } = vi.hoisted(
+  () => ({
+    router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
+    importTools: vi.fn(),
+    registerServer: vi.fn(),
+    chooseServerTools: vi.fn(),
+  }),
+);
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("./actions", () => ({ importTools, registerServer }));
+vi.mock("@/features/shell/client", () => ({ chooseServerTools }));
 
 const { ImportProvider } = await import("./import-provider");
 
@@ -97,6 +104,9 @@ beforeEach(() => {
   ]) {
     fn.mockReset();
   }
+  chooseServerTools
+    .mockReset()
+    .mockResolvedValue({ ok: true, value: { options: [], partial: false } });
 });
 
 afterEach(async () => {
@@ -265,16 +275,90 @@ describe("ImportProvider › review and classify", () => {
     );
   });
 
+  it("narrows a long list by the filter and keeps the count over every tool", async () => {
+    registerServer.mockResolvedValue(
+      registered(["get_page", "create_page", "list_users"]),
+    );
+    open();
+    describeNew();
+    fireEvent.submit(connectForm());
+    await screen.findByRole("checkbox", { name: "list_users" });
+    fill(t("filter"), "PAGE");
+    expect(screen.getAllByRole("checkbox")).toHaveLength(2);
+    expect(
+      screen.queryByRole("checkbox", { name: "list_users" }),
+    ).not.toBeInTheDocument();
+    // A hidden tool stays checked: the filter changes what is shown, not
+    // what is imported.
+    expect(screen.getByTestId("tools-import-selected")).toHaveTextContent(
+      "3 of 3 selected",
+    );
+  });
+
+  it("imports a checked tool the filter hides (negative)", async () => {
+    registerServer.mockResolvedValue(
+      registered(["get_page", "create_page", "list_users"]),
+    );
+    importTools.mockResolvedValue({
+      ok: true,
+      value: { importDigest: "d1", published: 2, unchanged: 0 },
+    });
+    open();
+    describeNew();
+    fireEvent.submit(connectForm());
+    await screen.findByRole("checkbox", { name: "list_users" });
+    fill(t("filter"), "page");
+    fireEvent.click(screen.getByRole("checkbox", { name: "create_page" }));
+    fireEvent.click(screen.getByTestId("tools-import-classify"));
+    fireEvent.click(screen.getByTestId("tools-import-confirm"));
+    await waitFor(() => {
+      expect(importTools).toHaveBeenCalledWith("acme", "core-platform", {
+        serverId: "mcs_01k5s9",
+        tools: ["get_page", "list_users"],
+      });
+    });
+  });
+
+  it("still takes typed names when the suggestions could not be read (negative)", async () => {
+    chooseServerTools.mockResolvedValue({
+      ok: false,
+      reason: "unavailable",
+      code: "tool_registry_unavailable",
+    });
+    importTools.mockResolvedValue({
+      ok: true,
+      value: { importDigest: "d1", published: 1, unchanged: 0 },
+    });
+    open();
+    fill("Provider", "mcs_01k5s1");
+    fireEvent.submit(connectForm());
+    fireEvent.focus(screen.getByLabelText("Tools"));
+    expect(
+      await screen.findByText(translator("ui.picker")("failedFreeform")),
+    ).toBeVisible();
+    fill("Tools", "list_refunds,");
+    fireEvent.click(screen.getByTestId("tools-import-classify"));
+    fireEvent.click(screen.getByTestId("tools-import-confirm"));
+    await waitFor(() => {
+      expect(importTools).toHaveBeenCalledWith("acme", "core-platform", {
+        serverId: "mcs_01k5s1",
+        tools: ["list_refunds"],
+      });
+    });
+  });
+
   it("goes back a step from Classify and from Review, keeping what was chosen", () => {
     open();
     fill("Provider", "mcs_01k5s1");
     fireEvent.submit(connectForm());
-    fill("Tools", "list_refunds");
+    fill("Tools", "list_refunds,");
     fireEvent.click(screen.getByTestId("tools-import-classify"));
     expect(currentStep()).toBe(t("steps.s3"));
     fireEvent.click(screen.getByRole("button", { name: t("back") }));
     expect(currentStep()).toBe(t("steps.s2"));
-    expect(screen.getByLabelText("Tools")).toHaveValue("list_refunds");
+    expect(
+      screen.getByRole("button", { name: "Remove list_refunds" }),
+    ).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: t("back") }));
     expect(currentStep()).toBe(t("steps.s1"));
     expect(screen.getByLabelText("Provider")).toHaveValue("mcs_01k5s1");

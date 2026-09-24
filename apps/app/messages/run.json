@@ -3,7 +3,7 @@
     "notRecorded": "not recorded",
     "enrichment": {
       "label": "Automatic run names and summaries",
-      "description": "Stella reads captured turns and uses organization credits. Applies to this workspace. Turning this off stops generated names and summaries. Harness titles, recorded repositories, files, outputs, and harness facts remain available."
+      "description": "stella reads captured turns and uses organization credits. Applies to this workspace. Turning this off stops generated names and summaries. Harness titles, recorded repositories, files, outputs, and harness facts remain available."
     },
     "noSummary": "No summary yet. Open the transcript to review recorded prompts, model calls, and tools.",
     "facts": {
@@ -806,10 +806,10 @@
       "running": "{from} → {to}",
       "totalRow": "total",
       "ofRecorded": "of {cost} recorded",
-      "empty": "This run has no turn the recording could fold, so there is nothing to lay out.",
+      "empty": "This run has recorded no turn yet, so there is nothing to lay out.",
       "unpriced": "No turn in this run carries a cost, so the bars have no scale to sit against. The turns are listed as recorded.",
       "mixedCurrency": "The turns carry costs in more than one currency, so no one total gives the bars a scale. Each turn's cost is listed as recorded.",
-      "cut": "This stops short of the end of the run: the run is still recording, or it has more turns and steps than these reads carry."
+      "cut": "The run is longer than one read carries, so this shows its first {count} turns."
     },
     "replay": {
       "forkNeedsLedger": "Forking replays an attempt from the evidence ledger. This run was recorded by a wrapped agent, which has no attempt to branch from.",

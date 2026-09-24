@@ -432,6 +432,10 @@ describe("Mandate › error", () => {
     expect(
       within(panel).getByRole("link", { name: "Try again" }),
     ).toHaveAttribute("href", "/a-intel/core-platform/mandates/mnd_4f2a9c");
+    // The design's error state: the state wrap in the failed tone.
+    expect(
+      panel.querySelector("[data-state-icon]")?.getAttribute("data-state-icon"),
+    ).toBe("failed");
   });
 
   it("names the instant the read was attempted", async () => {
@@ -467,6 +471,9 @@ describe("Mandate › access denied", () => {
     expect(
       within(panel).getByRole("link", { name: "Back to Fleet" }),
     ).toHaveAttribute("href", "/a-intel/core-platform");
+    expect(
+      panel.querySelector("[data-state-icon]")?.getAttribute("data-state-icon"),
+    ).toBe("denied");
   });
 
   it("names the access request while one is waiting", async () => {

@@ -154,6 +154,7 @@ describe("service managers", () => {
     expect(calls).toEqual([
       `launchctl bootout gui/501/${SERVICE_LABEL}`,
       `launchctl print gui/501/${SERVICE_LABEL}`,
+      `launchctl enable gui/501/${SERVICE_LABEL}`,
       `launchctl bootstrap gui/501 ${manager.unitPath}`,
       `launchctl print gui/501/${SERVICE_LABEL}`,
     ]);
@@ -209,6 +210,7 @@ describe("service managers", () => {
       `launchctl print ${target}`,
       `launchctl print ${target}`,
       `launchctl print ${target}`,
+      `launchctl enable ${target}`,
       `launchctl bootstrap gui/501 ${d.manager.unitPath}`,
       `launchctl print ${target}`,
     ]);
@@ -299,6 +301,7 @@ describe("service managers", () => {
     expect(manager.kind).toBe("systemd");
     manager.install(SPEC);
     expect(calls).toEqual([
+      "systemctl --user show-environment",
       "systemctl --user daemon-reload",
       "systemctl --user enable --now tachod.service",
       "systemctl --user restart tachod.service",

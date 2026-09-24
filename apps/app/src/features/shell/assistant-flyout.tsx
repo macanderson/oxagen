@@ -85,6 +85,17 @@
 // without unmounting it — so the restore checks that focus actually moved
 // rather than that the element is still there.
 //
+// Above `md` the right edge is a handle. Dragging it, or pressing the arrow
+// keys on it, widens the panel for a long answer and narrows it again, never
+// below the 430px it was designed at. A cookie remembers the width, so the
+// panel reopens where it was left (`assistant-width.ts`). Below `md` the panel
+// is the full screen and has no handle. The width is a CSS variable the `md:`
+// class reads, not an inline width, so a phone keeps `w-full` whatever the
+// cookie says.
+//
+// A turn that settles while the panel is closed tells the shell
+// (`noteAssistantReply`), and the launcher shines until the panel opens again.
+//
 // The transcript is the live region. A refusal carries `role="alert"`, which
 // interrupts; an answer is an ordinary paragraph, so `role="log"` on the
 // container reads it out to a person whose focus is still on the composer. The
@@ -95,6 +106,7 @@ import { CircleAlert, Send } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
+  type CSSProperties,
   type SyntheticEvent,
   useEffect,
   useRef,
@@ -109,7 +121,15 @@ import {
 import { ASSISTANT_PANEL_ID } from "./assistant-launcher";
 import { askAssistant, type ParkedCard } from "./assistant-actions";
 import { AssistantStreamingText } from "./assistant-streaming-text";
-import { AssistantThinkingDots } from "./assistant-thinking-dots";
+import { AssistantThinking } from "./assistant-thinking";
+import {
+  ASSISTANT_MIN_WIDTH,
+  assistantWidthCookieString,
+  clampAssistantWidth,
+  readAssistantWidth,
+  widestAssistant,
+  widthForKey,
+} from "./assistant-width";
 import { parseShellPath } from "./nav";
 import { usePageRecord } from "./page-record";
 import { useShellState } from "./shell-state";
@@ -224,6 +244,14 @@ function useCoversTheApp(): boolean {
     () => false,
   );
 }
+
+/** The width cookie changes only through this panel, which re-renders as it writes. */
+function subscribeToNothing(): () => void {
+  return () => undefined;
+}
+
+/** A style that sets CSS custom properties, which React's own type does not name. */
+type StyleWithVariables = CSSProperties & Record<`--${string}`, string>;
 
 /**
  * Take the application out of the tab order and the accessibility tree while
@@ -395,7 +423,8 @@ function RefusalText({ code, org }: { code: Refusal; org: string | null }) {
 
 export function AssistantFlyout() {
   const t = useTranslations("shell.assistant");
-  const { assistantOpen, setAssistantOpen } = useShellState();
+  const { assistantOpen, setAssistantOpen, noteAssistantReply } =
+    useShellState();
   const pathname = usePathname();
   const { org, ws, rest } = parseShellPath(pathname);
   // The route the person is standing on, and what that page says it is showing.
@@ -565,6 +594,48 @@ export function AssistantFlyout() {
     log.scrollTo({ top: log.scrollHeight });
   }
 
+  // The width the person left the panel at. The cookie is read as a store:
+  // the server renders the designed width, and the first client read corrects
+  // it while the panel is still closed and out of sight.
+  const savedWidth = useSyncExternalStore(
+    subscribeToNothing,
+    () => readAssistantWidth(document.cookie),
+    () => ASSISTANT_MIN_WIDTH,
+  );
+  const [chosenWidth, setChosenWidth] = useState<number | null>(null);
+  const width = chosenWidth ?? savedWidth;
+  // The widest the panel can be where it sits, measured when the handle is
+  // grabbed or focused. CSS caps the width at the same limit, so a remembered
+  // width wider than this screen reads as the limit.
+  const [widest, setWidest] = useState<number | null>(null);
+  const shownWidth = widest === null ? width : Math.min(width, widest);
+  // The pointer that grabbed the edge. Events from any other pointer, such as
+  // a second finger on a touchscreen, are ignored until that one lets go.
+  const dragRef = useRef<{
+    pointerId: number;
+    left: number;
+    widest: number;
+  } | null>(null);
+
+  function measureWidest(): number {
+    const left = panelRef.current?.getBoundingClientRect().left ?? 0;
+    const next = widestAssistant(left, window.innerWidth);
+    setWidest(next);
+    return next;
+  }
+
+  function keepWidth(next: number) {
+    setChosenWidth(next);
+    document.cookie = assistantWidthCookieString(
+      next,
+      document.URL.startsWith("https:"),
+    );
+  }
+
+  const widthStyle: StyleWithVariables = {
+    "--assistant-width": `${String(width)}px`,
+  };
+
   const navigate = useNavigate();
   const inWorkspace = scope !== null;
 
@@ -678,6 +749,9 @@ export function AssistantFlyout() {
       }));
     } finally {
       updateThread(asked, (t) => ({ ...t, pending: false }));
+      // An answer, a refusal, or an unreachable engine is each something the
+      // person has not read yet if the panel was closed while it ran.
+      noteAssistantReply();
     }
   }
 
@@ -697,10 +771,11 @@ export function AssistantFlyout() {
       inert={!assistantOpen}
       data-state={assistantOpen ? "open" : "closed"}
       data-testid="assistant-flyout"
+      style={widthStyle}
       onKeyDown={(e) => {
         if (e.key === "Escape") setAssistantOpen(false);
       }}
-      className={`fixed inset-y-0 left-0 z-50 flex w-full flex-col border-r border-border bg-app-panel-bg pb-[env(safe-area-inset-bottom)] text-app-panel-fg shadow-2xl duration-300 ease-[cubic-bezier(.32,.72,0,1)] motion-reduce:translate-x-0 motion-reduce:duration-100 md:left-(--sidebar-width) md:w-[min(430px,calc(100vw-var(--sidebar-width)-56px))] ${
+      className={`fixed inset-y-0 left-0 z-50 flex w-full flex-col border-r border-border bg-app-raised-bg pb-[env(safe-area-inset-bottom)] text-app-raised-fg shadow-2xl duration-300 ease-[cubic-bezier(.32,.72,0,1)] motion-reduce:translate-x-0 motion-reduce:duration-100 md:left-(--sidebar-width) md:w-[min(var(--assistant-width),calc(100vw-var(--sidebar-width)-56px))] ${
         assistantOpen
           ? // Visible at once, so the close button can take focus on open…
             "visible translate-x-0 opacity-100 transition-[translate,opacity]"
@@ -710,14 +785,14 @@ export function AssistantFlyout() {
     >
       <div className="flex flex-none items-center gap-2.5 border-b border-border px-4 py-3">
         {/*
-          The heading is the Stella wordmark. Its name comes from the mark's
-          title, so the dialog is still labelled "Stella" to a screen reader,
+          The heading is the stella wordmark. Its name comes from the mark's
+          title, so the dialog is still labelled "stella" to a screen reader,
           and the letters take the panel's text colour, so the app's own theme
           switch reaches them (`@/ui/stella-mark`).
         */}
         <h2
           id={`${ASSISTANT_PANEL_ID}-title`}
-          className="flex items-center text-app-panel-fg"
+          className="flex items-center text-app-raised-fg"
         >
           <StellaWordmark
             title={t("label")}
@@ -852,7 +927,7 @@ export function AssistantFlyout() {
             ))}
           </ol>
         )}
-        {pending ? <AssistantThinkingDots label={t("thinking")} /> : null}
+        {pending ? <AssistantThinking label={t("thinking")} /> : null}
       </div>
 
       <div className="flex-none border-t border-border px-3 py-3">
@@ -904,6 +979,67 @@ export function AssistantFlyout() {
           </p>
         )}
       </div>
+      {/*
+        The right edge, last in the tab order, after the composer. A pointer
+        drag sets the width from where the pointer is, and the width is saved
+        when the drag ends. The cursor points only right at the designed
+        width, because the edge cannot go further left.
+      */}
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label={t("resize")}
+        aria-controls={ASSISTANT_PANEL_ID}
+        aria-valuenow={shownWidth}
+        aria-valuemin={ASSISTANT_MIN_WIDTH}
+        aria-valuemax={widest ?? undefined}
+        tabIndex={0}
+        data-testid="assistant-resize"
+        onFocus={measureWidest}
+        onKeyDown={(e) => {
+          const next = widthForKey(e.key, shownWidth, measureWidest());
+          if (next === null) return;
+          e.preventDefault();
+          keepWidth(next);
+        }}
+        onPointerDown={(e) => {
+          if (e.button !== 0 || dragRef.current !== null) return;
+          e.preventDefault();
+          // Guarded because pointer capture is a browser affordance jsdom
+          // does not implement.
+          if (typeof e.currentTarget.setPointerCapture === "function")
+            e.currentTarget.setPointerCapture(e.pointerId);
+          const left = panelRef.current?.getBoundingClientRect().left ?? 0;
+          dragRef.current = {
+            pointerId: e.pointerId,
+            left,
+            widest: measureWidest(),
+          };
+        }}
+        onPointerMove={(e) => {
+          const drag = dragRef.current;
+          if (drag?.pointerId !== e.pointerId) return;
+          setChosenWidth(
+            clampAssistantWidth(e.clientX - drag.left, drag.widest),
+          );
+        }}
+        onPointerUp={(e) => {
+          const drag = dragRef.current;
+          if (drag?.pointerId !== e.pointerId) return;
+          dragRef.current = null;
+          keepWidth(clampAssistantWidth(e.clientX - drag.left, drag.widest));
+        }}
+        onPointerCancel={(e) => {
+          if (dragRef.current?.pointerId !== e.pointerId) return;
+          dragRef.current = null;
+          keepWidth(shownWidth);
+        }}
+        className={`absolute inset-y-0 -right-1 z-10 hidden w-2 touch-none select-none before:absolute before:inset-y-0 before:left-1/2 before:w-0.5 before:-translate-x-1/2 before:content-[''] hover:before:bg-rule focus-visible:outline-none focus-visible:before:bg-ring md:block ${
+          shownWidth <= ASSISTANT_MIN_WIDTH
+            ? "cursor-e-resize"
+            : "cursor-ew-resize"
+        }`}
+      />
     </aside>
   );
 }

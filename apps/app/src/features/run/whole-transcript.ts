@@ -1,6 +1,7 @@
 // A transcript read to its end. The Run page reads it once, at `everything`,
 // and everything that lists or counts across the whole run reads that one
-// read: the stat row, the Transcript feed, Policy, Context and the Cost tab.
+// read: the stat row, the Transcript feed, Policy, Context, and the Cost tab's
+// figures other than its per-turn ledger, which `get_run_turns` answers.
 //
 // `get_run_transcript` answers one page of entries and a cursor. The tabs
 // used to take the first page and call it the run, and they said the list
@@ -11,20 +12,26 @@
 // whether what it holds is the whole run.
 import {
   type RunTranscript,
-  TRANSCRIPT_ENTRY_DEFAULT,
+  TRANSCRIPT_ENTRY_MAX,
   type TranscriptKind,
   type TranscriptZoom,
 } from "@/data/contracts/run";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import type { WsCtx } from "@/server/viewer";
+import { mergeEntries } from "./transcript-model";
 
 /**
- * The most pages one tab reads. At the default page size that is the
- * contract's frame cap (10,000), so a run the read can fold at all is read to
+ * The most pages one read makes. At the largest page the contract allows,
+ * that is its frame cap (10,000), so a run the read can fold at all is read to
  * its end, and a run past it stops here and says so.
+ *
+ * Every page re-reads and re-folds the run on the server, so the page size is
+ * what the whole read costs. At the default 200 entries a page, a
+ * 25,000-frame run took 50 reads and 7.1 seconds; at 500 it takes 20 reads and
+ * 2.8 seconds (#4067, the benchmark in run.transcript.get.bench.test.ts).
  */
-const WHOLE_TRANSCRIPT_PAGES = 50;
+const WHOLE_TRANSCRIPT_PAGES = 10_000 / TRANSCRIPT_ENTRY_MAX;
 
 /**
  * Whether a transcript holds the whole run: the read folded every frame
@@ -39,11 +46,13 @@ export function isWhole(transcript: RunTranscript): boolean {
 /**
  * `get_run_transcript` at `zoom`, narrowed to `kinds`, read page by page until
  * the run is read or `WHOLE_TRANSCRIPT_PAGES` pages have been. The entries
- * are every page's, in order. The cursor is the last page's: null when the
- * run was read to its end, and otherwise the point the list stops at, so
- * `isWhole` says it is a prefix. A page that fails after the first keeps what
- * was read and its cursor, so the tab says the list stops short rather than
- * failing a list it mostly holds.
+ * are every page's, in order, each once: a page that sends again an entry an
+ * earlier page held (one that grew between the two reads of a live run)
+ * replaces it where it stands (`mergeEntries`). The cursor is the last page's:
+ * null when the run was read to its end, and otherwise the point the list
+ * stops at, so `isWhole` says it is a prefix. A page that fails after the
+ * first keeps what was read and its cursor, so the tab says the list stops
+ * short rather than failing a list it mostly holds.
  */
 export async function readWholeTranscript(
   // Only the transcript read: a caller hands in its whole source, and a test
@@ -54,9 +63,13 @@ export async function readWholeTranscript(
   zoom: TranscriptZoom,
   kinds: TranscriptKind[] = [],
 ): Promise<Read<RunTranscript>> {
-  const first = await source.runs.transcript(ctx, runId, zoom, { kinds });
+  const limit = TRANSCRIPT_ENTRY_MAX;
+  const first = await source.runs.transcript(ctx, runId, zoom, {
+    kinds,
+    limit,
+  });
   if (!first.ok) return first;
-  const entries = [...first.value.entries];
+  let entries = [...first.value.entries];
   let last = first.value;
   for (
     let pages = 1;
@@ -64,15 +77,16 @@ export async function readWholeTranscript(
     last.cursor !== null &&
     // A short page is the end of what the run holds now. A live run still
     // answers a cursor there, to resume from when it records more.
-    last.entries.length >= TRANSCRIPT_ENTRY_DEFAULT;
+    last.entries.length >= limit;
     pages += 1
   ) {
     const next = await source.runs.transcript(ctx, runId, zoom, {
       kinds,
       after: last.cursor,
+      limit,
     });
     if (!next.ok) break;
-    entries.push(...next.value.entries);
+    entries = mergeEntries(entries, next.value.entries);
     last = next.value;
   }
   return {

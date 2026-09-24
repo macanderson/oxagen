@@ -22,10 +22,18 @@ async function Brandmark() {
 export function AuthShell({
   children,
   aside,
+  pending = false,
 }: {
   children: ReactNode;
   aside?: ReactNode;
+  /**
+   * The column is a loading fallback: a busy region, not `main#main`. While
+   * the page streams in, the fallback and the page are in the document
+   * together, and only the page may own the skip link's target.
+   */
+  pending?: boolean;
 }) {
+  const column = "flex w-full max-w-xl flex-col items-center pt-8 sm:pt-11";
   return (
     <div className="relative isolate flex min-h-dvh flex-col items-center bg-background px-4 pb-14 sm:px-5">
       <div
@@ -38,12 +46,15 @@ export function AuthShell({
           <div className="ml-auto flex min-w-0 items-center gap-3">{aside}</div>
         ) : null}
       </header>
-      <main
-        id="main"
-        className="flex w-full max-w-xl flex-col items-center pt-8 sm:pt-11"
-      >
-        {children}
-      </main>
+      {pending ? (
+        <div aria-busy="true" className={column}>
+          {children}
+        </div>
+      ) : (
+        <main id="main" className={column}>
+          {children}
+        </main>
+      )}
     </div>
   );
 }

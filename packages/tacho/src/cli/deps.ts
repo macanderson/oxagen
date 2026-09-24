@@ -21,6 +21,7 @@ import { postUnix } from "../claude-code/hook-client";
 import {
   type CodexAppServer,
   codexAppServerClient,
+  spawnInvocation,
 } from "../host/codex-app-server";
 import type { FetchLike } from "../host/control-client";
 import {
@@ -175,6 +176,13 @@ export interface RuntimeCommands {
    * `enroll` refuses rather than bake it into the hooks and the service.
    */
   transient?: string;
+  /**
+   * Set when the native layout found no `tacho` executable to name: none
+   * in `binDir`, and this process is not one. The commands above then name
+   * a file that does not exist, so a caller must refuse rather than write
+   * them into the hooks and the service.
+   */
+  executableProblem?: string;
 }
 
 /**
@@ -228,6 +236,32 @@ function exeName(name: string, platform: NodeJS.Platform): string {
 }
 
 /**
+ * The same executable at a path the package manager keeps across upgrades,
+ * or the path as it is. Homebrew runs a formula from `…/Cellar/<formula>/
+ * <version>/` and `brew upgrade` deletes that directory, while
+ * `…/opt/<formula>/` follows the installed version. Scoop does the same
+ * with `…\apps\<app>\<version>\` and `…\apps\<app>\current\`. The
+ * running binary's own path is the versioned one, because Node resolves it.
+ */
+export function stableExecutablePath(
+  executable: string,
+  platform: NodeJS.Platform,
+  exists: (candidate: string) => boolean = existsSync,
+): string {
+  const stable =
+    platform === "win32"
+      ? executable.replace(
+          /^(.*\\apps\\[^\\]+\\)(?!current\\)[^\\]+(\\.*)$/i,
+          "$1current$2",
+        )
+      : executable.replace(
+          /^(.*)\/Cellar\/([^/]+)\/[^/]+\/(.*)$/,
+          "$1/opt/$2/$3",
+        );
+  return stable !== executable && exists(stable) ? stable : executable;
+}
+
+/**
  * Locate the executables the hooks and the service run. Three layouts:
  *
  *   - native: one compiled, multi-call `tacho` binary (a Tauri sidecar or a
@@ -246,6 +280,7 @@ export function runtimeCommands(
   nodePath: string = process.execPath,
   platform: NodeJS.Platform = process.platform,
   native: boolean = isNativeBuild(),
+  exists: (candidate: string) => boolean = existsSync,
 ): RuntimeCommands {
   // Path flavour follows the target platform, not the host, so a macOS test
   // can describe a Windows layout.
@@ -258,29 +293,49 @@ export function runtimeCommands(
       const here = dirname(fileURLToPath(import.meta.url));
       const entryDir =
         entry !== undefined ? P.dirname(P.resolve(entry)) : undefined;
-      if (entryDir !== undefined && existsSync(P.join(entryDir, "tachod.mjs")))
+      if (entryDir !== undefined && exists(P.join(entryDir, "tachod.mjs")))
         binDir = entryDir;
       else binDir = resolve(here, "..", "..", "bin");
     }
   }
   const nativeTacho = P.join(binDir, exeName("tacho", platform));
   const nativeLayout =
-    native ||
-    (existsSync(nativeTacho) && !existsSync(P.join(binDir, "tachod.mjs")));
-  const transient = transientBinDir(binDir, env);
-  const flagged = transient !== undefined ? { transient } : {};
+    native || (exists(nativeTacho) && !exists(P.join(binDir, "tachod.mjs")));
   if (nativeLayout) {
+    // A `tacho` in the directory first, then this process when it is a
+    // tacho: Scoop installs the binary under its release asset's name
+    // (`tacho-x86_64-pc-windows-msvc.exe`), so `tacho.exe` is not there.
+    const running = P.basename(nodePath);
+    const isTacho = (
+      platform === "win32" ? running.toLowerCase() : running
+    ).startsWith("tacho");
+    const found = exists(nativeTacho)
+      ? nativeTacho
+      : native && isTacho
+        ? nodePath
+        : undefined;
+    const tacho =
+      found !== undefined
+        ? stableExecutablePath(found, platform, exists)
+        : nativeTacho;
+    const dir = P.dirname(tacho);
+    const transient = transientBinDir(dir, env);
     return {
-      hookCommand: `${shellQuote(nativeTacho, platform)} hook`,
-      credentialHelperCommand: helperCommandFor(
-        shellQuote(nativeTacho, platform),
-      ),
-      daemonCommand: [nativeTacho, "daemon"],
-      mcpStdioCommand: [nativeTacho, "mcp-stdio"],
-      binDir,
-      ...flagged,
+      hookCommand: `${shellQuote(tacho, platform)} hook`,
+      credentialHelperCommand: helperCommandFor(shellQuote(tacho, platform)),
+      daemonCommand: [tacho, "daemon"],
+      mcpStdioCommand: [tacho, "mcp-stdio"],
+      binDir: dir,
+      ...(transient !== undefined ? { transient } : {}),
+      ...(found === undefined
+        ? {
+            executableProblem: `there is no ${exeName("tacho", platform)} in ${binDir}, and this process (${running}) is not one`,
+          }
+        : {}),
     };
   }
+  const transient = transientBinDir(binDir, env);
+  const flagged = transient !== undefined ? { transient } : {};
   return {
     hookCommand: `${shellQuote(nodePath, platform)} ${shellQuote(P.join(binDir, "tacho-hook.mjs"), platform)}`,
     credentialHelperCommand: helperCommandFor(
@@ -477,10 +532,16 @@ function spawnCapture(
   // (the desktop app keeps its sidecar's stdin pipe open for the process
   // lifetime), and the timeout turns a shell profile that prompts or hangs
   // into "not found" instead of a scan that never ends.
-  const result = spawnSync(command, args, {
+  // A batch file (an npm-installed harness on Windows) runs through cmd.exe:
+  // Node refuses to spawn one directly.
+  const invocation = spawnInvocation(command, args);
+  const result = spawnSync(invocation.command, invocation.args, {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
     timeout: timeoutMs,
+    ...(invocation.windowsVerbatimArguments === true
+      ? { windowsVerbatimArguments: true }
+      : {}),
   });
   return {
     status: result.error !== undefined ? null : result.status,
@@ -533,12 +594,39 @@ export function wellKnownBinDirs(
   ];
 }
 
-function firstLine(result: ReturnType<Exec>): string | undefined {
-  if (result.status !== 0) return undefined;
-  const line = (
-    result.stdout.split(/\r?\n/).find((l) => l.trim().length > 0) ?? ""
-  ).trim();
-  return line.length > 0 ? line : undefined;
+function outputLines(result: ReturnType<Exec>): string[] {
+  if (result.status !== 0) return [];
+  return result.stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+}
+
+/**
+ * The executable `where` found that Windows can run. An npm global install
+ * leaves an extensionless shell script beside `codex.cmd`, and `where` lists
+ * it first; spawning it fails. So an `.exe` wins, then a batch file, and only
+ * then whatever came first.
+ */
+function whereExecutable(result: ReturnType<Exec>): string | undefined {
+  const lines = outputLines(result);
+  return (
+    lines.find((line) => /\.exe$/i.test(line)) ??
+    lines.find((line) => /\.(cmd|bat)$/i.test(line)) ??
+    lines[0]
+  );
+}
+
+/**
+ * The path `command -v` printed under a login shell. A profile can print
+ * before it (an nvm or a motd banner), so the answer is the last line that
+ * is an absolute path, and a line that is not one (an alias, a function
+ * name) is no answer at all.
+ */
+function shellExecutable(result: ReturnType<Exec>): string | undefined {
+  return outputLines(result)
+    .reverse()
+    .find((line) => line.startsWith("/"));
 }
 
 /**
@@ -564,12 +652,12 @@ export function harnessFacts(
 ): HarnessFacts {
   let path: string | undefined;
   if (platform === "win32") {
-    path = firstLine(exec("where", [name]));
+    path = whereExecutable(exec("where", [name]));
   } else {
     const shell = env["SHELL"];
     if (shell !== undefined && shell.length > 0 && shell !== "/bin/sh")
-      path = firstLine(exec(shell, ["-lc", `command -v ${name}`]));
-    path ??= firstLine(exec("sh", ["-lc", `command -v ${name}`]));
+      path = shellExecutable(exec(shell, ["-lc", `command -v ${name}`]));
+    path ??= shellExecutable(exec("sh", ["-lc", `command -v ${name}`]));
   }
   if (path === undefined) {
     const sep = platform === "win32" ? "\\" : "/";
@@ -712,6 +800,21 @@ export function claudeFacts(
   return harnessFacts(exec, "claude", platform, env, home);
 }
 
+/**
+ * Settle the harness files, and fail when one still carries this host's
+ * hooks. `unenroll` reports a throw here as a file it could not clean, and
+ * the file keeps its receipt for the retry.
+ */
+function settleOrThrow(harnessFiles: HarnessFiles): SettleOutcome[] {
+  const outcomes = harnessFiles.settle();
+  const failed = outcomes.filter((outcome) => outcome.result === "failed");
+  if (failed.length > 0)
+    throw new Error(
+      failed.map((outcome) => `${outcome.path} ${outcome.reason}`).join("; "),
+    );
+  return outcomes;
+}
+
 export function defaultCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
   const env = overrides.env ?? process.env;
   const home = overrides.home ?? homedir();
@@ -727,6 +830,10 @@ export function defaultCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
   // what made the detect tests pass on macOS and fail on Linux CI.
   const paths = overrides.paths ?? tachoPaths(env, home, platform);
   const harnessFiles = new HarnessFiles(paths.root);
+  const harnessDirs = {
+    claudeConfigDir: dirname(paths.claudeSettings),
+    codexHome: dirname(paths.codexHooks),
+  };
   const daemonGet = async (path: string): Promise<unknown | undefined> => {
     const host = readHostFile(paths.hostFile);
     if (host === undefined) return undefined;
@@ -834,17 +941,23 @@ export function defaultCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
       );
     },
     harnessWriteProblem: (path) => harnessFiles.writeProblem(path),
-    settleHarnessFiles: () => harnessFiles.settle(),
+    settleHarnessFiles: () => settleOrThrow(harnessFiles),
+    // The base URL and the vendor key live in the files the hooks went into,
+    // so they take the directories `paths` resolved for them. A caller that
+    // names its own still wins.
     modelBaseUrls: {
-      apply: (options) => applyModelBaseUrls(options),
-      restore: (options) => restoreModelBaseUrls(options),
-      read: (options) => readModelBaseUrlState(options),
+      apply: (options) => applyModelBaseUrls({ ...harnessDirs, ...options }),
+      restore: (options) =>
+        restoreModelBaseUrls({ ...harnessDirs, ...options }),
+      read: (options) => readModelBaseUrlState({ ...harnessDirs, ...options }),
     },
     modelCredentials: {
-      peek: (options) => peekModelCredentials(options),
-      apply: (options) => applyModelCredentials(options),
-      restore: (options, secrets) => restoreModelCredentials(options, secrets),
-      read: (options) => readModelCredentialState(options),
+      peek: (options) => peekModelCredentials({ ...harnessDirs, ...options }),
+      apply: (options) => applyModelCredentials({ ...harnessDirs, ...options }),
+      restore: (options, secrets) =>
+        restoreModelCredentials({ ...harnessDirs, ...options }, secrets),
+      read: (options) =>
+        readModelCredentialState({ ...harnessDirs, ...options }),
     },
     credentialStore: openCredentialStore({
       file: paths.credentials,

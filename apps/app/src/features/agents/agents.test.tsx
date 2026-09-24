@@ -958,6 +958,9 @@ describe("Agents, not loaded", () => {
     expect(loading).toHaveAttribute("aria-busy", "true");
     expect(loading).toHaveTextContent("Loading agents");
     expect(loading.textContent).not.toMatch(/\d/);
+    // Every bone is the design's shimmer, as on every other page, and none pulses.
+    expect(loading.querySelectorAll(".skeleton").length).toBeGreaterThan(0);
+    expect(loading.querySelector(".animate-pulse")).toBeNull();
   });
 });
 

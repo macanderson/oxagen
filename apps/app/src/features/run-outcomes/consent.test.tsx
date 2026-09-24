@@ -43,7 +43,7 @@ describe("run follow-through consent", () => {
     });
     await show();
     expect(action).not.toHaveBeenCalled();
-    expect(screen.getByText(/Stella model calls are metered/)).toBeVisible();
+    expect(screen.getByText(/stella model calls are metered/)).toBeVisible();
     await userEvent.click(
       screen.getByRole("button", { name: "Enable metered follow-through" }),
     );
