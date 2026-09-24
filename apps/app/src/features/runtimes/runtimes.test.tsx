@@ -39,7 +39,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh }),
   notFound: () => notFound(),
 }));
-const unenrollRuntime = vi.fn();
+const unenrollRuntime = vi.fn<(...args: unknown[]) => unknown>();
 vi.mock("./actions", () => ({
   unenrollRuntime: (...args: unknown[]) => unenrollRuntime(...args),
 }));
