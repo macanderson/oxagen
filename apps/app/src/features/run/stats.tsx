@@ -137,8 +137,12 @@ export function SummaryPanel({
           notRecorded={t("notRecorded")}
           sub={harness ?? t("header.harnessNotRecorded")}
         />
+        {/* A wrapped session's operator can be the person who enrolled its
+            machine rather than one who started it, and the line says which. */}
         <span className="text-xs text-muted-foreground">
-          {t("summary.onBehalfOf")}
+          {run.operatorAttribution === "host_enroller"
+            ? t("summary.enrolledBy")
+            : t("summary.onBehalfOf")}
         </span>
         <span
           data-testid="run-operator"
@@ -161,13 +165,25 @@ export function SummaryPanel({
         </span>
       </div>
       {summary === null ? (
-        <p className="text-sm text-muted-foreground">{t("noSummary")}</p>
+        // Turning enrichment off stops the generated summary only; the
+        // harness title and every recorded fact stay on the page.
+        <p className="text-sm text-muted-foreground">
+          {run.enrichmentEnabled === false ? t("summaryOff") : t("noSummary")}
+        </p>
       ) : (
         <p
           data-testid="generated-summary"
           className="text-[15px] leading-relaxed"
         >
           {summary.text}
+        </p>
+      )}
+      {run.enrichmentError === undefined ? null : (
+        <p
+          data-testid="run-summary-failed"
+          className="text-xs text-muted-foreground"
+        >
+          {t("summaryFailed", { reason: run.enrichmentError })}
         </p>
       )}
       <div className="flex flex-wrap items-end justify-between gap-3 border-t border-border pt-3">
@@ -255,9 +271,32 @@ export function StatRow({
   // A finalized rollup wins. Otherwise the agent-reported cost is provisional.
   const displayedCost = runCost ?? run.reportedCost ?? null;
   const missingRollup = cost.ok && rollup === null ? t("noRollup") : null;
+  // Before the rollup rebuilds a run, the session's own sums over its
+  // llm_call frames stand in, so a live run shows its tokens too. Those sums
+  // are labelled provisional, since the rollup may still reprice or recount.
+  const reported = rollup === null ? (run.reportedTokens ?? null) : null;
+  const tokens =
+    rollup !== null
+      ? {
+          in: tokensIn(rollup.tokens),
+          out: tokensOut(rollup.tokens),
+        }
+      : reported === null
+        ? null
+        : {
+            in: reported.input + reported.cacheRead + reported.cacheWrite,
+            out: reported.output,
+          };
+  // Keyed on the status, as the header's started line is. An ended run's
+  // clock stops at the recorder's end time, falling back to the seal, which
+  // is the server's receipt time; an ended run with neither has no clock.
+  const ended = run.endedAt ?? run.sealedAt;
   const wall =
-    (run.sealedAt === null ? at : new Date(run.sealedAt).getTime()) -
-    new Date(run.startedAt).getTime();
+    run.status === "live"
+      ? at - new Date(run.startedAt).getTime()
+      : ended === null
+        ? null
+        : new Date(ended).getTime() - new Date(run.startedAt).getTime();
   return (
     <section
       aria-label={t("label")}
@@ -267,19 +306,17 @@ export function StatRow({
       <Stat
         label={t("tokens")}
         note={
-          rollup === null
+          tokens === null
             ? missingRollup
-            : t("tokensNote", {
-                in: count(tokensIn(rollup.tokens)),
-                out: count(tokensOut(rollup.tokens)),
-              })
+            : reported !== null
+              ? t("tokensProvisional")
+              : t("tokensNote", {
+                  in: count(tokens.in),
+                  out: count(tokens.out),
+                })
         }
       >
-        {rollup === null ? (
-          <NoValue />
-        ) : (
-          count(tokensIn(rollup.tokens) + tokensOut(rollup.tokens))
-        )}
+        {tokens === null ? <NoValue /> : count(tokens.in + tokens.out)}
       </Stat>
       <Stat
         label={t("prompts")}
@@ -339,9 +376,13 @@ export function StatRow({
       </Stat>
       <Stat
         label={t("wallClock")}
-        note={run.sealedAt === null ? t("soFar") : t("splitNotRecorded")}
+        note={run.status === "live" ? t("soFar") : t("splitNotRecorded")}
       >
-        {formatDuration(Math.max(0, wall), locale)}
+        {wall === null ? (
+          <NoValue />
+        ) : (
+          formatDuration(Math.max(0, wall), locale)
+        )}
       </Stat>
       <Stat
         label={t("cacheHit")}

@@ -4652,6 +4652,8 @@ type Messages = {
       description: string;
     };
     noSummary: string;
+    summaryOff: string;
+    summaryFailed: string;
     facts: {
       operatorKind: {
         human: string;
@@ -5272,13 +5274,26 @@ type Messages = {
       chips: string;
       harnessNotRecorded: string;
       versionNotCaptured: string;
+      effortValue: string;
+      thinkingOn: string;
+      thinkingOff: string;
+      permissionMode: string;
+      permissionModeNotRecorded: string;
       checkout: string;
       repoNotCaptured: string;
+      moreCheckouts: string;
       noPullRequest: string;
       pathNotCaptured: string;
       noMachine: string;
+      subagents: string;
+      subagentTypeNotRecorded: string;
+      subagentNoStop: string;
+      subagentRunning: string;
+      moreSubagents: string;
       started: string;
       sealed: string;
+      sealNotRecorded: string;
+      ended: string;
       paused: string;
       copy: string;
       copyLabel: string;
@@ -5311,6 +5326,7 @@ type Messages = {
       check: string;
       generated: string;
       onBehalfOf: string;
+      enrolledBy: string;
       operator: string;
       roleNotRecorded: string;
       roleWhy: string;
@@ -5325,6 +5341,7 @@ type Messages = {
       wallClock: string;
       cacheHit: string;
       tokensNote: string;
+      tokensProvisional: string;
       promptsCut: string;
       noRollup: string;
       noPrompt: string;
@@ -5462,6 +5479,8 @@ type Messages = {
       more: string;
       spend: string;
       noSpend: string;
+      spendProvisional: string;
+      toolCalls: string;
       callCount: string;
       base: string;
       baseNotCaptured: string;
@@ -7885,10 +7904,6 @@ type Messages = {
       cancelled: string;
       crashed: string;
       unknown: string;
-    };
-    generated: {
-      label: string;
-      provenance: string;
     };
     replayGrade: {
       inspect: {

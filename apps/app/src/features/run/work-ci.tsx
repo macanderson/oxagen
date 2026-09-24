@@ -55,9 +55,25 @@ export function workOf(read: Read<RunWork> | null): RunWork | null {
   return read?.ok === true ? read.value : null;
 }
 
-/** The first recorded checkout: the directory the run worked in. */
+/** Seqs are decimal strings: the longer one is later, then the larger. */
+function laterSeq(a: string, b: string): boolean {
+  return a.length === b.length ? a > b : a.length > b.length;
+}
+
+/**
+ * The checkout the session touched last: the directory the run worked in. A
+ * session that moved between checkouts is placed by the one it ended in.
+ */
 export function checkoutOf(work: RunWork | null) {
-  return work?.checkouts[0] ?? null;
+  return (
+    work?.checkouts.reduce<RunWork["checkouts"][number] | null>(
+      (latest, checkout) =>
+        latest === null || laterSeq(checkout.lastSeq, latest.lastSeq)
+          ? checkout
+          : latest,
+      null,
+    ) ?? null
+  );
 }
 
 /**

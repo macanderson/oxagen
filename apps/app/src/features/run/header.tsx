@@ -2,18 +2,23 @@
 // and the run id as the page's h1, who ran it and under what tier, the rig it
 // ran on, where it ran, when, and the controls the run's status allows.
 //
-// Every chip shows what the record holds. A fact the record does not capture
-// (a harness version the session did not report, the effort setting, the
-// repository, the branch and the checkout path) is said to be missing in words
-// rather than left blank or guessed. The model-fit badges the mockup draws
-// beside the rig need a fit reading nothing records (G14), so they are not
-// drawn; the Cost tab's Model fit panel names that gap.
+// Every chip shows what the record holds. The rig reads the session row (the
+// model, the effort level and thinking setting the harness reported, and the
+// permission mode), and the checkout reads `get_run_work` (the worktree
+// frames). A run whose session started subagents lists them in a third strip
+// from the same read, one chip per recorded agent id. A fact the record does
+// not capture (a harness version the session did not report, an effort
+// setting no frame carried, the repository, the branch and the checkout path)
+// is said to be missing in words rather than left blank or guessed. The
+// model-fit badges the mockup draws beside the rig need a fit reading nothing
+// records (G14), so they are not drawn; the Cost tab's Model fit panel names
+// that gap.
 import { useLocale, useTranslations } from "next-intl";
 import { Suspense } from "react";
 import type { Cost } from "@/data/contracts/money";
 import type { AgentDetail } from "@/data/contracts/agents";
 import type { RunOutputNode } from "@/data/contracts/run";
-import type { RunWork } from "@/data/contracts/run-work";
+import type { RunSubagent, RunWork } from "@/data/contracts/run-work";
 import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import type { OrgRole, WsRole } from "@/server/viewer";
@@ -45,6 +50,9 @@ import { PauseBannerActions, RunControls } from "./run-controls";
 
 const chip = `${mono} inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border border-border px-2 py-0.5 text-[11.5px]`;
 const missing = "text-[11.5px] text-muted-foreground";
+
+/** Subagent chips drawn before the rest are counted as "N more". */
+const SUBAGENT_CHIPS = 12;
 
 /** One labelled row of chips: the rig or the checkout. */
 function Strip({
@@ -138,17 +146,41 @@ function Rig({ run, agent }: { run: RunRow; agent: Read<AgentDetail> | null }) {
           {model.slug}
         </span>
       )}
-      {/* Effort is read out of the request body, which the record does not
-          keep (G6), so the chip says so rather than printing a default. */}
-      <span
-        data-testid="run-effort"
-        data-gap="G6"
-        title={t("effortWhy")}
-        className={chip}
-      >
-        {t("effort")}{" "}
-        <span className="text-muted-foreground">{t("notCaptured")}</span>
-      </span>
+      {/* The effort level is the one the harness reported in its config
+          frame. A session whose frames carried none says so rather than
+          printing a default, because the request body that would carry it is
+          not kept (G6). */}
+      {run.effort == null ? (
+        <span
+          data-testid="run-effort"
+          data-gap="G6"
+          title={t("effortWhy")}
+          className={chip}
+        >
+          {t("effort")}{" "}
+          <span className="text-muted-foreground">{t("notCaptured")}</span>
+        </span>
+      ) : (
+        <span data-testid="run-effort" className={chip}>
+          {t("effortValue", { value: run.effort })}
+        </span>
+      )}
+      {run.thinking == null ? null : (
+        <span data-testid="run-thinking" className={chip}>
+          {run.thinking ? t("thinkingOn") : t("thinkingOff")}
+        </span>
+      )}
+      {run.permissionMode == null ? (
+        <span data-testid="run-permission-mode" className={chip}>
+          <span className="text-muted-foreground">
+            {t("permissionModeNotRecorded")}
+          </span>
+        </span>
+      ) : (
+        <span data-testid="run-permission-mode" className={chip}>
+          {t("permissionMode", { value: run.permissionMode })}
+        </span>
+      )}
     </Strip>
   );
 }
@@ -190,6 +222,38 @@ function useMachineProvenance(run: RunRow): string | null {
 }
 
 /**
+ * The output PR nodes the work read did not already answer. Both reads carry
+ * a harness PR link, so the same PR would otherwise be drawn twice. The work
+ * read wins, since it carries the PR's state from the forge.
+ */
+function pullsBeyond(
+  pulls: readonly RunOutputNode[] | null,
+  recorded: RunWork["pullRequests"],
+): RunOutputNode[] {
+  const drawn = new Set(
+    recorded.map((pr) =>
+      `${pr.repository.owner}/${pr.repository.name}#${String(pr.number)}`.toLowerCase(),
+    ),
+  );
+  return (pulls ?? []).filter(
+    (node) => !drawn.has(`${node.where ?? ""}${node.name}`.toLowerCase()),
+  );
+}
+
+/** The pull requests the outputs recorded, as plain chips. */
+function OutputPulls({ pulls }: { pulls: readonly RunOutputNode[] }) {
+  return pulls.map((pull) => (
+    <span
+      key={`${pull.seq ?? ""}${pull.name}`}
+      data-testid="run-checkout-pr"
+      className={chip}
+    >
+      {pull.name}
+    </span>
+  ));
+}
+
+/**
  * The checkout: the repository, the branch, every pull request the run pushed
  * to, and `<machine>:<path>`. `get_run_work` carries what the collector
  * recorded (the checkout's repository, branch and path, and the pull requests
@@ -221,6 +285,9 @@ function Checkout({
   const branch = checkout?.branch ?? null;
   const headed = pullForBranch(evidence, branch);
   const forgePulls = evidence?.pullRequests ?? [];
+  const extraPulls =
+    forgePulls.length === 0 ? [] : pullsBeyond(pulls, forgePulls);
+  const others = Math.max((evidence?.checkouts.length ?? 0) - 1, 0);
   const machine = evidence?.machine?.name ?? run.machine?.hostname ?? null;
   return (
     <Strip label={t("checkout")} testId="run-checkout">
@@ -253,30 +320,25 @@ function Checkout({
         </ForgeLink>
       )}
       {forgePulls.length > 0 ? (
-        forgePulls.map((pull) => (
-          <ForgeLink
-            key={pull.url}
-            url={pull.url}
-            className={`${chip} hover:border-foreground`}
-          >
-            <span data-testid="run-checkout-pr">{pullName(pull)}</span>
-            <span className="text-muted-foreground">{stateOf(pull)}</span>
-          </ForgeLink>
-        ))
+        <>
+          {forgePulls.map((pull) => (
+            <ForgeLink
+              key={pull.url}
+              url={pull.url}
+              className={`${chip} hover:border-foreground`}
+            >
+              <span data-testid="run-checkout-pr">{pullName(pull)}</span>
+              <span className="text-muted-foreground">{stateOf(pull)}</span>
+            </ForgeLink>
+          ))}
+          <OutputPulls pulls={extraPulls} />
+        </>
       ) : pulls === null ? null : pulls.length === 0 ? (
         <span className={chip}>
           <span className="text-muted-foreground">{t("noPullRequest")}</span>
         </span>
       ) : (
-        pulls.map((pull) => (
-          <span
-            key={`${pull.seq ?? ""}${pull.name}`}
-            data-testid="run-checkout-pr"
-            className={chip}
-          >
-            {pull.name}
-          </span>
-        ))
+        <OutputPulls pulls={pulls} />
       )}
       {machine === null ? (
         <span className={chip}>
@@ -305,20 +367,85 @@ function Checkout({
           <CopyText text={`${machine}:${checkout.path}`} />
         </span>
       )}
+      {others === 0 ? null : (
+        <span data-testid="run-more-checkouts" className={missing}>
+          {t("moreCheckouts", { count: others })}
+        </span>
+      )}
     </Strip>
   );
 }
 
-/** "<task title> · started <t>", with "· sealed <t>" once sealed. */
+function SubagentChip({
+  subagent,
+  live,
+}: {
+  subagent: RunSubagent;
+  live: boolean;
+}) {
+  const t = useTranslations("run.header");
+  return (
+    <span data-testid="run-subagent" className={chip} title={subagent.id}>
+      {subagent.type ?? (
+        <span className="text-muted-foreground">
+          {t("subagentTypeNotRecorded")}
+        </span>
+      )}
+      <span className="text-muted-foreground">{subagent.id.slice(0, 7)}</span>
+      {subagent.stopped ? null : (
+        <span className="text-muted-foreground">
+          {live ? t("subagentRunning") : t("subagentNoStop")}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/**
+ * The subagents the session started, one chip per recorded agent id, from the
+ * subagent hook frames `get_run_work` reads. The strip is drawn only for a
+ * session that started one, so a run without subagents keeps the two strips
+ * the spec draws. A chip reads live from the run's status, the same
+ * definition of sealed the rest of the header uses.
+ */
+function Subagents({ run, work }: { run: RunRow; work: Read<RunWork> }) {
+  const t = useTranslations("run.header");
+  const subagents = workOf(work)?.subagents ?? [];
+  if (subagents.length === 0) return null;
+  return (
+    <Strip label={t("subagents")} testId="run-subagents">
+      {subagents.slice(0, SUBAGENT_CHIPS).map((subagent) => (
+        <SubagentChip
+          key={subagent.id}
+          subagent={subagent}
+          live={run.status === "live"}
+        />
+      ))}
+      {subagents.length > SUBAGENT_CHIPS ? (
+        <span className={missing}>
+          {t("moreSubagents", { count: subagents.length - SUBAGENT_CHIPS })}
+        </span>
+      ) : null}
+    </Strip>
+  );
+}
+
+/**
+ * "<task title> · started <t>", then, once the run ended, "· ended <t>" by
+ * the recorder's clock and "· sealed <t>" by the server's receipt. Keyed on
+ * the run's status, the one definition of sealed the header's actions use, so
+ * an ended run with no seal instant says so rather than reading as running.
+ */
 function When({ run }: { run: RunRow }) {
   const t = useTranslations("run.header");
   const format = useFormatter();
   const when = (at: string) =>
     format.dateTime(new Date(at), { dateStyle: "medium", timeStyle: "short" });
-  // A workspace that turned automatic naming off shows the task reference,
-  // never a generated name (ADR-153).
-  const title =
-    (run.enrichmentEnabled === false ? null : run.name) ?? run.taskRef;
+  // The run's name is the title its harness recorded, else the one Oxagen
+  // generated, then the task reference. Turning automatic names off stops
+  // Oxagen generating one (ADR-153); the server never answers a generated
+  // name then, and it never hides the title the harness recorded.
+  const title = run.name ?? run.taskRef;
   return (
     <p
       data-testid="run-when"
@@ -334,13 +461,33 @@ function When({ run }: { run: RunRow }) {
         {t("started")}{" "}
         <time dateTime={run.startedAt}>{when(run.startedAt)}</time>
       </span>
-      {run.sealedAt === null ? null : (
+      {run.status === "live" ? null : (
         <>
-          <span aria-hidden="true">·</span>
-          <span>
-            {t("sealed")}{" "}
-            <time dateTime={run.sealedAt}>{when(run.sealedAt)}</time>
-          </span>
+          {run.endedAt == null ? null : (
+            <>
+              <span aria-hidden="true">·</span>
+              <span data-testid="run-ended">
+                {t("ended")}{" "}
+                <time dateTime={run.endedAt}>{when(run.endedAt)}</time>
+              </span>
+            </>
+          )}
+          {run.sealedAt === null ? (
+            run.endedAt == null ? (
+              <>
+                <span aria-hidden="true">·</span>
+                <span>{t("sealNotRecorded")}</span>
+              </>
+            ) : null
+          ) : (
+            <>
+              <span aria-hidden="true">·</span>
+              <span>
+                {t("sealed")}{" "}
+                <time dateTime={run.sealedAt}>{when(run.sealedAt)}</time>
+              </span>
+            </>
+          )}
         </>
       )}
     </p>
@@ -525,7 +672,10 @@ export function RunHeader({
             >
               <WithWork read={work}>
                 {(settled) => (
-                  <Checkout run={run} pulls={pulls} work={settled} />
+                  <>
+                    <Checkout run={run} pulls={pulls} work={settled} />
+                    <Subagents run={run} work={settled} />
+                  </>
                 )}
               </WithWork>
             </Suspense>
@@ -546,6 +696,7 @@ export function RunHeader({
               status={run.status}
               source={run.source}
               enforcementTier={run.enforcementTier}
+              commandBlock={run.commandBlock}
               ingressRevoked={run.ingressRevoked}
               ingressPaused={run.ingressPaused}
               orgRole={orgRole}

@@ -12,7 +12,9 @@
 // `cost.run_totals` does not carry the per-area token columns the split needs
 // (tool definitions, context frames, steering: G3), so the panel prints the
 // run's cost with its basis, names the gap, and lists the tools the rollup
-// counted, by calls.
+// counted, by calls. Before the rollup reaches a wrapped run, the panel draws
+// the provisional per-model figures ingest keeps, priced from the cost each
+// call reported and labelled as such.
 import { useLocale, useTranslations } from "next-intl";
 import type { RunCost, RunOutputNode, RunOutputs } from "@/data/contracts/run";
 import type { RunWork } from "@/data/contracts/run-work";
@@ -24,7 +26,7 @@ import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
-import { Panel } from "./parts";
+import { NoValue, Panel } from "./parts";
 import {
   checksOf,
   ForgeLink,
@@ -320,6 +322,57 @@ function DearestTools({
   );
 }
 
+/**
+ * A wrapped run's running figures before the rollup exists: calls and the
+ * reported cost per model, and the tool calls the root session made. The
+ * rollup replaces them once it rebuilds the run.
+ */
+function ProvisionalSpend({
+  figures,
+}: {
+  figures: NonNullable<RunCost["provisional"]>;
+}) {
+  const t = useTranslations("run.work");
+  const locale = useLocale();
+  return (
+    <Panel title={t("spend")}>
+      <p
+        data-testid="run-spend-provisional"
+        className="mb-2 max-w-prose text-xs text-muted-foreground"
+      >
+        {t("spendProvisional")}
+      </p>
+      <ul
+        data-testid="run-spend"
+        className="flex flex-col divide-y divide-border text-sm"
+      >
+        {figures.byModel.map((row) => (
+          <li
+            key={`${row.provider ?? ""}/${row.model}`}
+            className="flex items-baseline justify-between gap-3 py-2"
+          >
+            <span className="flex min-w-0 flex-col">
+              <span className={`${mono} truncate`}>{row.model}</span>
+              <span className="text-xs text-muted-foreground">
+                {t("callCount", { count: row.calls })}
+              </span>
+            </span>
+            <span className="shrink-0 tabular-nums">
+              {row.cost === null ? <NoValue /> : <Money value={row.cost} />}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <dl className="mt-3 flex gap-2 text-xs">
+        <dt className="text-muted-foreground">{t("toolCalls")}</dt>
+        <dd className="tabular-nums">
+          {formatCount(figures.toolCalls, locale)}
+        </dd>
+      </dl>
+    </Panel>
+  );
+}
+
 export function SpendByArea({
   read,
   place,
@@ -339,6 +392,10 @@ export function SpendByArea({
     );
   }
   const rollup = read.value.rollup;
+  const provisional = read.value.provisional ?? null;
+  if (rollup === null && provisional !== null) {
+    return <ProvisionalSpend figures={provisional} />;
+  }
   if (rollup === null) {
     return (
       <Panel title={t("spend")}>

@@ -564,6 +564,7 @@ describe("the Run page", () => {
     const metadata = await page.generateMetadata(props);
     const container = await renderPage(await page.default(props));
     expect(container.querySelector("main#main")).not.toBeNull();
+    expect(container.querySelectorAll("h1")).toHaveLength(0);
     expect(metadata.title).toBe(title("run"));
   }
 
