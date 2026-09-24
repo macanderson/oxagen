@@ -20,7 +20,6 @@ import {
   ratioOfMicros,
   roundToCentsHalfEven,
   shareOfMicros,
-  subMoney,
   sumMoney,
 } from "./money";
 
@@ -129,32 +128,6 @@ describe("perMillionTokens", () => {
     expect(() =>
       perMillionTokens({ micros: "5", currency: "USD" }, 1.5),
     ).toThrow("safe integer");
-  });
-});
-
-describe("subMoney", () => {
-  it("answers the exact difference, negative when b is larger", () => {
-    expect(
-      subMoney(
-        { micros: "3000000", currency: "USD" },
-        { micros: "300000", currency: "USD" },
-      ),
-    ).toEqual({ micros: "2700000", currency: "USD" });
-    expect(
-      subMoney(
-        { micros: "1", currency: "USD" },
-        { micros: "3", currency: "USD" },
-      )?.micros,
-    ).toBe("-2");
-  });
-
-  it("answers null across two currencies (negative)", () => {
-    expect(
-      subMoney(
-        { micros: "1", currency: "USD" },
-        { micros: "1", currency: "EUR" },
-      ),
-    ).toBeNull();
   });
 });
 
