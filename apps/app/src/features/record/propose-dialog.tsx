@@ -40,7 +40,7 @@ type Opened = Extract<
 const code = (chunks: ReactNode) => <span className={mono}>{chunks}</span>;
 
 /** `wzChecks`: one row per check, the name then what it asserts. */
-export function CheckRows({
+function CheckRows({
   rows,
 }: {
   rows: readonly { key: string; name: string; what: ReactNode }[];

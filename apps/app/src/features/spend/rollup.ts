@@ -21,7 +21,7 @@ export const TOKEN_CLASSES = [
   "output",
   "reasoning",
 ] as const;
-export type TokenClass = (typeof TOKEN_CLASSES)[number];
+type TokenClass = (typeof TOKEN_CLASSES)[number];
 export type TokenClasses = Record<TokenClass, number>;
 
 /** One row's tokens in the page's five classes. */
@@ -94,6 +94,8 @@ export function findingsOn(
  * weakest claim the parts can carry together. A part nobody recorded a basis
  * for leaves the sum without one; an estimated part makes the sum estimated;
  * observed and attested parts together are `mixed`. Never stronger than a part.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
  */
 export function basisOf(parts: readonly Cost[]): Cost["basis"] {
   const bases = new Set(parts.map((part) => part.basis));

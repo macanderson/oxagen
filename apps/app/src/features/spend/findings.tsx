@@ -48,7 +48,7 @@ const opacityOf = (index: number): number =>
   RAMP[index % RAMP.length] ?? RAMP[0] ?? 1;
 
 /** Each listed finding's saving over the listed total; null where the total does not divide it. */
-export function sharesOf(
+function sharesOf(
   findings: readonly SpendFinding[],
   total: SpendFindings["saving"],
 ): (number | null)[] {

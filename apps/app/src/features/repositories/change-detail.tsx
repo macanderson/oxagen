@@ -43,7 +43,7 @@ type Check = ContextPr["checks"][number];
 export type Closer = { name: string; email: string };
 
 /** Every check reported, none failed, and nothing merged yet. */
-export function canMerge(pr: ContextPr): boolean {
+function canMerge(pr: ContextPr): boolean {
   return (
     pr.status === "checks_passed" &&
     pr.merged === null &&

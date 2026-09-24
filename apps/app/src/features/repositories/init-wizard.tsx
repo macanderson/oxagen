@@ -104,9 +104,7 @@ const FILE_NOTE = [
  * reads and holds no `.oxagen/`, and one the installation reaches that no
  * binding names yet.
  */
-export function initCandidates(
-  rows: readonly RepositoryRow[],
-): RepositoryRow[] {
+function initCandidates(rows: readonly RepositoryRow[]): RepositoryRow[] {
   return rows.filter(
     (row) => row.role === "available" || treeState(row.tree) === "absent",
   );
@@ -687,7 +685,7 @@ export function InitWizard({
 }
 
 /** The permission table: the access this lifecycle needs, writes included. */
-export function PermissionTable() {
+function PermissionTable() {
   const t = useTranslations("repositories.wizard.permissions");
   return (
     <div className="min-w-0 overflow-x-auto rounded-[10px] border border-border">

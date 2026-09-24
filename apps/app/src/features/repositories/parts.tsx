@@ -24,10 +24,6 @@ export const prose = "text-[13px] leading-relaxed text-muted-foreground";
 export const note =
   "border-l-2 border-gold py-0.5 pl-3 text-[12.5px] leading-relaxed text-muted-foreground";
 
-/** `.warn`: a boundary a confirm names before it is crossed. */
-export const warn =
-  "rounded-lg border border-warning/45 bg-warning/9 px-3 py-2 text-[12.5px] leading-relaxed text-foreground";
-
 /** `.btn.danger`: the red outline a destructive action takes. */
 export const buttonDanger =
   "inline-flex min-h-8 max-md:min-h-11 items-center justify-center gap-1.5 rounded-[9px] border border-error/45 bg-card px-[13px] py-1.5 text-[13px] font-medium text-error-ink transition-colors hover:bg-error/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-45";
@@ -118,7 +114,10 @@ export function SectionLabel({
   children: ReactNode;
 }) {
   return (
-    <h3 id={id} className="mb-2 text-[12.5px] font-semibold text-muted-foreground">
+    <h3
+      id={id}
+      className="mb-2 text-[12.5px] font-semibold text-muted-foreground"
+    >
       {children}
     </h3>
   );

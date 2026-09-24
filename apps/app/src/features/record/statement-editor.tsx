@@ -44,7 +44,11 @@ const codeText =
 const layer =
   "m-0 whitespace-pre-wrap break-words px-[18px] py-3 [overflow-wrap:break-word] [tab-size:2]";
 
-/** Ln and Col of an offset, 1-based, as the status line prints them. */
+/**
+ * Ln and Col of an offset, 1-based, as the status line prints them.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export function caretAt(
   value: string,
   index: number,
@@ -54,7 +58,11 @@ export function caretAt(
   return { line, col: before.length - before.lastIndexOf("\n") };
 }
 
-/** Every case-insensitive match of `query` in `text`, as start offsets. */
+/**
+ * Every case-insensitive match of `query` in `text`, as start offsets.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export function findAll(text: string, query: string): number[] {
   if (query === "") return [];
   const haystack = text.toLowerCase();
@@ -73,6 +81,8 @@ export function findAll(text: string, query: string): number[] {
  * The edit Tab and Shift+Tab make: two spaces at the caret, or two spaces in
  * or out on every line of a multi-line selection. Returns the new text and
  * the selection to restore.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
  */
 export function indent(
   value: string,
@@ -103,6 +113,8 @@ export function indent(
 /**
  * The edit Enter makes: a new line at the indent of the current one, and in a
  * list, the next marker (the next number after a numbered step).
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
  */
 export function newline(
   value: string,

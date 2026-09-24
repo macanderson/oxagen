@@ -75,7 +75,7 @@ export function TreeBadge({
   }
 }
 
-export function RoleBadge({ role }: { role: RepositoryRow["role"] }) {
+function RoleBadge({ role }: { role: RepositoryRow["role"] }) {
   const t = useTranslations("repositories.repos.roles");
   return role === "main" ? (
     <Badge tone="proven" dot={false} data-role={role}>
@@ -91,7 +91,7 @@ export function RoleBadge({ role }: { role: RepositoryRow["role"] }) {
 }
 
 /** The rows' linked repositories that carry no `.oxagen/` on a readable branch. */
-export function ungoverned(rows: readonly RepositoryRow[]): RepositoryRow[] {
+function ungoverned(rows: readonly RepositoryRow[]): RepositoryRow[] {
   return rows.filter(
     (row) => row.role === "linked" && treeState(row.tree) === "absent",
   );

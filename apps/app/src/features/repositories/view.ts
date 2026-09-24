@@ -14,7 +14,7 @@ const REPOSITORY_TABS = [
   "changes",
   "configuration",
 ] as const;
-export type RepositoryTab = (typeof REPOSITORY_TABS)[number];
+type RepositoryTab = (typeof REPOSITORY_TABS)[number];
 
 /** What the route names: a tab, and on Changes the one pull request selected. */
 export type RepositoryView = { tab: RepositoryTab; change: string | null };
@@ -45,7 +45,7 @@ type Bound = WorkspaceRepositories["repositories"][number];
 type Reachable = InstallationRepositories["repositories"][number];
 
 /** A repository's role in this workspace: the workspace's word, not GitHub's. */
-export type RepositoryRole = "main" | "linked" | "available";
+type RepositoryRole = "main" | "linked" | "available";
 
 /** What the `.oxagen/` cell says, read from the production branch. */
 export type TreeState =

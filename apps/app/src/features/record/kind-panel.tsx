@@ -354,6 +354,8 @@ function ConstraintPanel({
  * sentence splits on its commas and full stops after the colon, the way the
  * mockup reads "Cut a release in this order: freeze main, dry-run the
  * migrations, tag, then publish the notes."
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
  */
 export function procedureSteps(statement: string | null): string[] {
   const text = (statement ?? "").trim();

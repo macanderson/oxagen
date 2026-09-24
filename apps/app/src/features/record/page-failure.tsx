@@ -31,7 +31,7 @@ const strong = (chunks: ReactNode) => (
 );
 
 /** `.state-wrap`: the icon tile, the heading, one paragraph, the actions. */
-export function StateWrap({
+function StateWrap({
   testId,
   icon,
   tone,
