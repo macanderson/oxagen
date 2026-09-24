@@ -7490,7 +7490,9 @@ type Messages = {
     assistant: {
       label: string;
       launcher: string;
-      launcherNotBacked: string;
+      launcherHint: string;
+      launcherUnread: string;
+      resize: string;
       close: string;
       thinking: string;
       recordedAs: string;

@@ -1,4 +1,4 @@
-// The Stella marks, drawn inline so they follow the app's theme.
+// The stella marks and spinner, drawn inline so they follow the app's theme.
 //
 // The house kit (`oxagenai/oxagen-brand`) generates both marks and
 // `tools/scripts/sync-brand-assets.mjs` vendors its adaptive files into
@@ -12,7 +12,7 @@
 // The path data is the kit's, byte for byte. `stella-mark.test.tsx` reads the
 // vendored files and fails when a kit rebuild changes a path here, so the mark
 // is never redrawn by hand.
-import type { SVGProps } from "react";
+import { type SVGProps, useId } from "react";
 
 /**
  * The kit's gold. The asterisk is the mark, so it stays gold in both themes.
@@ -97,6 +97,72 @@ export function StellaWordmark({ title, ...props }: MarkProps) {
     >
       <path d={STELLA_WORDMARK_LETTERS} fill="currentColor" />
       <path d={STELLA_WORDMARK_ACCENT} fill={STELLA_GOLD} />
+    </svg>
+  );
+}
+
+/**
+ * The light that sweeps across the spinner's asterisk.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
+export const STELLA_SHIMMER = "#F1CE65";
+
+/**
+ * The placement `oxagen-brand/spinners/stella-spinner.svg` gives the asterisk,
+ * a little larger than the icon's so the turning points stay inside the square.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
+export const STELLA_SPINNER_TRANSFORM =
+  "translate(8.813,117.886) scale(1.11248)";
+
+/**
+ * The kit's stella spinner: the asterisk turns and a light sweeps across it.
+ * Drawn inline for the reason the marks are, and because the sweep needs
+ * gradient and clip ids that stay unique when two spinners share a page. The
+ * motion is `.ox-stella-turn` and `.ox-stella-sweep` in `app/globals.css`, which
+ * hold still under reduced motion.
+ */
+export function StellaSpinner({ title, ...props }: MarkProps) {
+  const id = useId().replace(/[^\w-]/g, "");
+  const clip = `stella-spin-clip-${id}`;
+  const sweep = `stella-spin-sweep-${id}`;
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox={STELLA_ICON_VIEWBOX}
+      focusable="false"
+      data-mark="stella-spinner"
+      {...a11y(title)}
+      {...props}
+    >
+      <defs>
+        <clipPath id={clip}>
+          <path d={STELLA_ICON_MARK} />
+        </clipPath>
+        <linearGradient id={sweep} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor={STELLA_SHIMMER} stopOpacity="0" />
+          <stop offset="0.5" stopColor={STELLA_SHIMMER} stopOpacity="0.95" />
+          <stop offset="1" stopColor={STELLA_SHIMMER} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <g transform={STELLA_SPINNER_TRANSFORM}>
+        <g className="ox-stella-turn">
+          <path d={STELLA_ICON_MARK} fill={STELLA_GOLD} />
+          <g clipPath={`url(#${clip})`}>
+            <rect
+              className="ox-stella-sweep"
+              x="-49.86"
+              y="-98.03"
+              width="32.27"
+              height="70.42"
+              fill={`url(#${sweep})`}
+              transform="skewX(-18)"
+            />
+          </g>
+        </g>
+      </g>
     </svg>
   );
 }

@@ -101,7 +101,7 @@
         "ccTier": "The tier is computed per run from what was actually routed, never from what the adapter can do on paper. Hooks deliver steering and can refuse at four events, client-attested and fail-open. No report can render a stronger word than the tier allows.",
         "codexBody": "The same installer, with the Codex profile. It writes <mono>~/.codex/config.toml</mono>: the Oxagen MCP server, the notify hook to the collector, and the approval policy routed through Oxagen.",
         "codexTier": "Which of the two the native tools earn depends on the harness version. On versions that do not expose an approval hook the agent is recorded only, and the run says so.",
-        "sdkBody": "Five lines in your own process. <mono>oxagen.agent.wrap({})</mono> installs a frame emitter, the checkpoint gate before each turn, and the Oxagen MCP endpoint as the agent’s tool server. Works with the OpenAI Agents SDK, the Claude Agent SDK, Stella, and any custom loop.",
+        "sdkBody": "Five lines in your own process. <mono>oxagen.agent.wrap({})</mono> installs a frame emitter, the checkpoint gate before each turn, and the Oxagen MCP endpoint as the agent’s tool server. Works with the OpenAI Agents SDK, the Claude Agent SDK, stella, and any custom loop.",
         "ladder": {
           "thisAgent": "This agent",
           "next": "Next rung",
@@ -144,7 +144,7 @@
         "continue": "I have already installed it — continue",
         "advancing": "Moving on…",
         "noAgentTitle": "No agent to wrap yet",
-        "noAgentBody": "The gate does not name a first agent, and this workspace has no Claude Code, Codex, Cursor or Stella agent registered. An enrollment token is minted for a registered agent, so register one first.",
+        "noAgentBody": "The gate does not name a first agent, and this workspace has no Claude Code, Codex, Cursor or stella agent registered. An enrollment token is minted for a registered agent, so register one first.",
         "noAgentAction": "Register an agent",
         "credentialValue": "{prefix}••••"
       },
@@ -384,7 +384,7 @@
           "claude-code": "Enrolling writes the Claude Code hooks and enrolls this host with its own device key. The hooks report every session to Oxagen through the <code>tachod</code> collector.",
           "codex": "The same enrollment, with the Codex profile. It writes <code>~/.codex/config.toml</code>: the Oxagen MCP server, the notify hook to the collector, and the approval policy routed through Oxagen.",
           "cursor": "The same enrollment, with the Cursor profile. It writes <code>~/.cursor/hooks.json</code>, which the IDE and <code>cursor-agent</code> both read. Cursor has no ask step, so a policy that asks is answered deny with the reason.",
-          "sdk": "Your own process calls Oxagen with the agent credential: the frames it sends, the checkpoint before each turn, and the Oxagen MCP endpoint as the agent's tool server. Works with the OpenAI Agents SDK, the Claude Agent SDK, Stella, and any custom loop."
+          "sdk": "Your own process calls Oxagen with the agent credential: the frames it sends, the checkpoint before each turn, and the Oxagen MCP endpoint as the agent's tool server. Works with the OpenAI Agents SDK, the Claude Agent SDK, stella, and any custom loop."
         },
         "ladder": {
           "thisAgent": "This agent",

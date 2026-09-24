@@ -2,7 +2,7 @@
   "agents": {
     "notRecorded": "not recorded",
     "harness": {
-      "stella": "Stella",
+      "stella": "stella",
       "claude-code": "Claude Code",
       "codex": "Codex",
       "cursor": "Cursor",

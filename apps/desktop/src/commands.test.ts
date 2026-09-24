@@ -332,7 +332,7 @@ describe("wizard and de-register", () => {
       "claude-desktop",
     ]);
     for (const h of HARNESSES) expect(HARNESS_LABEL[h]).toBeTruthy();
-    expect(HARNESS_LABEL.stella).toBe("Stella");
+    expect(HARNESS_LABEL.stella).toBe("stella");
     expect(HARNESS_LABEL.cursor).toBe("Cursor");
   });
 

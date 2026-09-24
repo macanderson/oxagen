@@ -500,7 +500,7 @@ footer a{color:var(--muted)}
 <section class="hero">
 <p class="eyebrow">Workforce management for autonomous agents</p>
 <h1>Download the Oxagen app</h1>
-<p class="lede">The Oxagen app signs this machine in to your organization and registers the Claude Code, Codex, Cursor, and Stella installs it finds. Every run they make is recorded, and every action routed through Oxagen is answered by your rules.</p>
+<p class="lede">The Oxagen app signs this machine in to your organization and registers the Claude Code, Codex, Cursor, and stella installs it finds. Every run they make is recorded, and every action routed through Oxagen is answered by your rules.</p>
 <p class="meta"><span>${build ? "Build" : "Version"} <code>${version}</code></span><span>Published <code>${escapeHtml(input.publishedAt)}</code></span><span><a href="${links.notes}">${build ? "Releases" : "Release notes"}</a></span></p>
 <div class="cta">${primary}<span class="alt" id="alt">Other platforms and architectures are listed below. Each file has a SHA-256.</span></div>
 </section>

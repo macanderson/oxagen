@@ -9,22 +9,41 @@
 // flyout and the drawer share a stacking level, so a drawer left open would
 // cover the panel the tap just opened.
 //
-// The mock labels it "Assistant" with the model and the engine's state under
-// it ("z-ai/glm-flash-latest · ready"). No contract returns the assistant's
-// model, and `get_assistant_engine` probes the engine up to three times with a
-// two-second timeout each, too slow for a read every page render waits on. So
-// the line under the label says the two are not read here (#2968, which adds
-// the `shell.assistantEngine` port), and a turn that cannot reach the engine
-// says so in the flyout, where the person is looking when it matters.
+// It reads "Ask stella*" over "oxagen’s in-app AI agent". Both names are set
+// as text in the wordmark face (`.ox-wordmark`), and the asterisk takes
+// `.ox-wordmark-accent`, whose `--ember-ink` is the kit's deep gold on the
+// light theme and the metal on the dark one, so the launcher follows the app's
+// theme switch. The asterisk is hidden from assistive technology: the button's
+// name is "Ask stella", not "Ask stella star".
+//
+// It used to carry the stella icon and a mono line saying the model and the
+// engine state are not read here (#2968). The icon repeated the asterisk the
+// text now carries, and the line described a gap rather than the control.
+//
+// A reply that lands while the flyout is closed marks the launcher unread
+// (`noteAssistantReply` in `shell-state.tsx`). It then shines gold around its
+// border until the flyout opens, and says "New reply" to a screen reader, so
+// the cue is never colour or motion alone.
 import { ChevronRight } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { StellaIcon } from "@/ui/stella-mark";
+import type { ReactNode } from "react";
 import { useShellState } from "./shell-state";
 
 export const ASSISTANT_PANEL_ID = "shell-assistant";
 
-/** The issue that owns the launcher's missing model and engine state, as a data attribute only. */
-const ENGINE_GAP = "#2968";
+/** A name set in the wordmark face, inside a translated line. */
+function wordmark(chunks: ReactNode) {
+  return <span className="ox-wordmark">{chunks}</span>;
+}
+
+/** The gold asterisk after "stella", hidden from assistive technology. */
+function accent(chunks: ReactNode) {
+  return (
+    <span aria-hidden="true" className="ox-wordmark-accent">
+      {chunks}
+    </span>
+  );
+}
 
 export function AssistantLauncher({
   onNavigate,
@@ -33,7 +52,7 @@ export function AssistantLauncher({
   onNavigate?: () => void;
 } = {}) {
   const t = useTranslations("shell.assistant");
-  const { assistantOpen, setAssistantOpen } = useShellState();
+  const { assistantOpen, setAssistantOpen, assistantUnread } = useShellState();
   return (
     <button
       type="button"
@@ -50,26 +69,23 @@ export function AssistantLauncher({
       aria-expanded={assistantOpen}
       data-touch-target=""
       data-testid="assistant-launcher"
+      data-unread={assistantUnread ? "" : undefined}
       className={`mb-2 flex w-full items-center gap-2.5 rounded-[10px] border bg-card px-2.5 py-2 text-left text-card-foreground transition-colors hover:border-rule focus-visible:outline-2 focus-visible:outline-ring ${
         assistantOpen ? "border-gold" : "border-border"
-      }`}
+      } ${assistantUnread ? "ox-launcher-unread" : ""}`}
     >
-      {/* Stella's asterisk is the mark, and gold is the mark's colour. */}
-      <span
-        aria-hidden="true"
-        className="grid size-6 flex-none place-items-center rounded-md border border-border bg-background"
-      >
-        <StellaIcon className="size-5" data-testid="assistant-launcher-icon" />
-      </span>
       <span className="min-w-0 flex-1">
-        <b className="block text-[13px] font-semibold">{t("launcher")}</b>
-        <span
-          data-testid="assistant-launcher-not-backed"
-          data-gap={ENGINE_GAP}
-          className="block truncate font-mono text-[11px] text-sidebar-nav-label-fg"
-        >
-          {t("launcherNotBacked")}
+        <span className="block text-[13px] font-semibold">
+          {t.rich("launcher", { wordmark, accent })}
         </span>
+        <span className="mt-0.5 block text-[11px] text-sidebar-nav-label-fg">
+          {t.rich("launcherHint", { wordmark })}
+        </span>
+        {assistantUnread ? (
+          <span className="sr-only" data-testid="assistant-launcher-unread">
+            {t("launcherUnread")}
+          </span>
+        ) : null}
       </span>
       <ChevronRight
         aria-hidden="true"
