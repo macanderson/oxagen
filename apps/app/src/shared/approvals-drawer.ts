@@ -11,5 +11,7 @@ export function openApprovals(): void {
 
 export function subscribeApprovals(open: () => void): () => void {
   window.addEventListener(APPROVALS_EVENT, open);
-  return () => window.removeEventListener(APPROVALS_EVENT, open);
+  return () => {
+    window.removeEventListener(APPROVALS_EVENT, open);
+  };
 }

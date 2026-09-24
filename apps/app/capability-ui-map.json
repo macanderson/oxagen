@@ -1445,6 +1445,24 @@
       "verifiedAt": "2026-09-23",
       "verifiedBy": "session_01GDv3vsEjQPCRnZtvAm88cY"
     },
+    "list_notifications": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
+      "entry": "every workspace page: the top bar's bell reads list_notifications for the workspace in the URL and the notifications dialog lists the viewer's newest rows with the unread dot (features/shell/workspace-activity.tsx, features/shell/notifications-dialog.tsx, data/live/shell.ts, data/live/mappers/shell.ts)",
+      "testid": "notification",
+      "proof": "apps/app/src/features/shell/notifications-dialog.test.tsx",
+      "verifiedAt": "2026-09-24",
+      "verifiedBy": "session_01GDv3vsEjQPCRnZtvAm88cY"
+    },
+    "mark_notification": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
+      "entry": "every workspace page: Mark all read in the notifications dialog invokes mark_notification once per listed row through the kernel seam (features/shell/notification-actions.ts, features/shell/notifications-dialog.tsx)",
+      "testid": "mark-all-read",
+      "proof": "apps/app/src/features/shell/notifications-dialog.test.tsx",
+      "verifiedAt": "2026-09-24",
+      "verifiedBy": "session_01GDv3vsEjQPCRnZtvAm88cY"
+    },
     "get_run_work": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",

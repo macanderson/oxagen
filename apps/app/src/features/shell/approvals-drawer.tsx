@@ -62,11 +62,15 @@ function useTicking(readAt: number, running: boolean): number {
   const [now, setNow] = useState(readAt);
   useEffect(() => {
     if (!running) return;
-    setNow(Date.now());
-    const timer = setInterval(() => {
+    // The first reading lands on the next task rather than in the effect
+    // body, where a setState cascades a second render of the drawer.
+    const tick = () => {
       setNow(Date.now());
-    }, 1000);
+    };
+    const first = setTimeout(tick, 0);
+    const timer = setInterval(tick, 1000);
     return () => {
+      clearTimeout(first);
       clearInterval(timer);
     };
   }, [running]);
@@ -398,13 +402,11 @@ export function ApprovalsDrawer({
             </>
           ) : (
             <>
-              {failures.map(({ key, read, w }) =>
-                read.ok ? null : (
-                  <div key={key} className="mb-3">
-                    <ReadFailure read={read} section={w.name} />
-                  </div>
-                ),
-              )}
+              {failures.map(({ key, read, w }) => (
+                <div key={key} className="mb-3">
+                  <ReadFailure read={read} section={w.name} />
+                </div>
+              ))}
               {pending.length > 0 ? (
                 <>
                   <p className={eyebrow}>

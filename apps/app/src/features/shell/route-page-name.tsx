@@ -9,7 +9,7 @@
 // thrown, and names it the way the sidebar lights its current item.
 import { useTranslations } from "next-intl";
 import { type ReactNode, useCallback } from "react";
-import { RoutePageName } from "@/ui/page-states";
+import { RoutePageNameContext } from "@/ui/page-states";
 import { currentNavKey } from "./nav";
 
 export function ShellRoutePageName({ children }: { children: ReactNode }) {
@@ -21,5 +21,5 @@ export function ShellRoutePageName({ children }: { children: ReactNode }) {
     },
     [t],
   );
-  return <RoutePageName value={nameOf}>{children}</RoutePageName>;
+  return <RoutePageNameContext value={nameOf}>{children}</RoutePageNameContext>;
 }

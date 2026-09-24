@@ -6,6 +6,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { DataSource } from "@/data/ports";
 import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider, translator } from "@/test/intl";
@@ -15,45 +16,43 @@ vi.mock("next-intl/server", () => ({
   getTranslations: (ns: string) => Promise.resolve(translator(ns)),
 }));
 vi.mock("@/features/auth", () => ({ getAuthUser }));
-vi.mock("@/ui/navigation", () => ({
-  SafeLink: ({
-    to,
-    children,
-    className,
-  }: {
-    to: string;
-    children: React.ReactNode;
-    className?: string;
-  }) => (
-    <a href={to} className={className}>
-      {children}
-    </a>
-  ),
+// SafeLink stays real; only the router the navigate hook reads is stood in.
+vi.mock("@/ui/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/ui/navigation")>()),
   useNavigate: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
+vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
+vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 
-import { WorkspaceDenied } from "./workspace-denied";
+const { OrgCtx } = await import("@/server/viewer");
+const { unsafeMint } = await import("@/server/viewer.testing");
+const { WorkspaceDenied } = await import("./workspace-denied");
 
-const ctx = {
+const ctx = unsafeMint(OrgCtx, {
+  userId: "usr_marcusbell",
+  orgId: "7a000000-0000-4000-8000-0000000000a1",
   orgSlug: "acme",
   orgName: "Acme Robotics",
   orgRole: "member",
-} as never;
+});
+
+type ShellPort = Pick<DataSource, "shell">;
 
 function sourceWith(
-  context: Awaited<ReturnType<typeof readOk>> | ReturnType<typeof readError>,
-) {
+  context: Awaited<ReturnType<ShellPort["shell"]["context"]>>,
+): ShellPort {
+  const unread = () => Promise.reject(new Error("not read by this state"));
   return {
     shell: {
       context: vi.fn(() => Promise.resolve(context)),
-      preferences: vi.fn(),
-      counts: vi.fn(),
-      notifications: vi.fn(),
+      preferences: unread,
+      counts: unread,
+      notifications: unread,
     },
-  } as never;
+  };
 }
 
-async function draw(source: never) {
+async function draw(source: ShellPort) {
   const element: ReactElement = await WorkspaceDenied({
     ctx,
     ws: "finops",

@@ -192,8 +192,10 @@ function button() {
   );
 }
 
-function drawer() {
-  return document.getElementById("apdrawer") as HTMLElement;
+function drawer(): HTMLElement {
+  const found = document.getElementById("apdrawer");
+  if (found === null) throw new Error("no #apdrawer on the page");
+  return found;
 }
 
 describe("the approvals button", () => {

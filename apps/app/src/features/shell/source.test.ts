@@ -7,6 +7,7 @@
 // session.
 import { createHash } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { DataSource } from "@/data/ports";
 
 const getAuthUser = vi.fn();
 vi.mock("@/features/auth", () => ({ getAuthUser }));
@@ -39,7 +40,7 @@ const preferences = vi.fn();
 const notifications = vi.fn();
 const counts = vi.fn();
 const pending = vi.fn();
-const resolvedSince = vi.fn();
+const resolvedSince = vi.fn<DataSource["approvals"]["resolvedSince"]>();
 const mandatesList = vi.fn();
 const source = {
   runtimes: { list: vi.fn(), agents: vi.fn() },
@@ -167,7 +168,12 @@ beforeEach(() => {
 describe("shellSource", () => {
   it("hands the context's organization, the signed-in person, their zone and the shell.context read to the shell", async () => {
     const { data } = await shellSource(ctx, source);
-    expect(data).toEqual({
+    // readAt is the instant of the read; check its type, then compare the rest.
+    expect(typeof data.approvals.readAt).toBe("number");
+    expect({
+      ...data,
+      approvals: { ...data.approvals, readAt: 0 },
+    }).toEqual({
       org: {
         key: createHash("sha256").update(`account:${ctx.orgId}`).digest("hex"),
         slug: "acme",
@@ -194,7 +200,7 @@ describe("shellSource", () => {
           },
         ],
         truncated: false,
-        readAt: expect.any(Number) as number,
+        readAt: 0,
       },
       feed,
       counts: {
@@ -282,9 +288,10 @@ describe("shellSource across the organization's workspaces", () => {
     expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
     const wsCtx = { org: "acme", ws: "core-platform" };
     expect(pending).toHaveBeenCalledWith(wsCtx, { runId: null });
-    expect(resolvedSince).toHaveBeenCalledWith(wsCtx, {
-      since: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/) as string,
-    });
+    expect(resolvedSince).toHaveBeenCalledOnce();
+    const [scope, window] = resolvedSince.mock.calls[0] ?? [];
+    expect(scope).toEqual(wsCtx);
+    expect(window?.since).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     expect(notifications).toHaveBeenCalledWith(wsCtx);
   });
 

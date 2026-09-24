@@ -33,6 +33,8 @@ import { accountOperations } from "./account-operations";
 import { recoveryCodeVault } from "./recovery-code-vault";
 import { shellData } from "./shell.builders";
 import { ShellClient } from "./shell-client";
+import type { ActionResult } from "@/server/kernel";
+import type { SearchRowView } from "./commands";
 import type { ShellData } from "./shell-data";
 
 const nav = vi.hoisted(() => ({
@@ -71,26 +73,31 @@ vi.mock("./session-client", () => ({
 // The command menu's search_tools read: one run and one belt tool, whatever
 // the query, so the menu's own filter and the search's rows are both visible.
 const searchCommands = vi.hoisted(() =>
-  vi.fn((_org: string, _ws: string, _query: string) =>
-    Promise.resolve({
-      ok: true as const,
-      value: {
-        rows: [
-          {
-            kind: "run" as const,
-            id: "arun_7k2m9q",
-            label: "Cut 4.11.0 release notes",
-            contextLine: "live",
-          },
-          {
-            kind: "tool" as const,
-            id: "list_runs",
-            label: "list_runs",
-            contextLine: "List the workspace's runs",
-          },
-        ],
-      },
-    }),
+  vi.fn(
+    (
+      _org: string,
+      _ws: string,
+      _query: string,
+    ): Promise<ActionResult<{ rows: SearchRowView[] }>> =>
+      Promise.resolve({
+        ok: true as const,
+        value: {
+          rows: [
+            {
+              kind: "run" as const,
+              id: "arun_7k2m9q",
+              label: "Cut 4.11.0 release notes",
+              contextLine: "live",
+            },
+            {
+              kind: "tool" as const,
+              id: "list_runs",
+              label: "list_runs",
+              contextLine: "List the workspace's runs",
+            },
+          ],
+        },
+      }),
   ),
 );
 vi.mock("./command-actions", () => ({ searchCommands }));
@@ -519,7 +526,7 @@ describe("command menu", () => {
       ok: false,
       reason: "unavailable",
       code: "down",
-    } as never);
+    });
     const user = userEvent.setup();
     renderShell(shellData());
     await user.keyboard("{Meta>}k{/Meta}");
@@ -552,7 +559,7 @@ describe("command menu", () => {
     searchCommands.mockResolvedValue({
       ok: true,
       value: { rows: [] },
-    } as never);
+    });
     const user = userEvent.setup();
     renderShell(shellData());
     await user.click(

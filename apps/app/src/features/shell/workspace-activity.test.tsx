@@ -22,7 +22,19 @@ describe("ShellWorkspace", () => {
         notifications: vi.fn(() => Promise.resolve(feed)),
       },
     };
-    const ctx = { wsSlug: "core-platform" } as never;
+    const { WsCtx } = await import("@/server/viewer");
+    const { unsafeMint } = await import("@/server/viewer.testing");
+    const ctx = unsafeMint(WsCtx, {
+      userId: "usr_marcusbell",
+      orgId: "7a000000-0000-4000-8000-0000000000a1",
+      orgSlug: "acme",
+      orgName: "Acme Robotics",
+      orgRole: "member",
+      workspaceId: "7a000000-0000-4000-8000-0000000000b1",
+      wsSlug: "core-platform",
+      wsName: "Core platform",
+      wsRole: "member",
+    });
     const element: ReactElement<{ activity: WorkspaceActivity }> =
       await ShellWorkspace({ ctx, source });
     expect(isValidElement(element)).toBe(true);

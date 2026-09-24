@@ -5,7 +5,13 @@
 // denial naming the permission with who asked, what was needed and what
 // decided. Request access and Open an incident have no write yet, so each is
 // disabled and says why rather than doing nothing.
-import { cleanup, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -17,7 +23,7 @@ import {
   PageError,
   PageSkeleton,
   RouteError,
-  RoutePageName,
+  RoutePageNameContext,
 } from "./page-states";
 
 const refresh = vi.hoisted(() => vi.fn());
@@ -135,7 +141,8 @@ describe("PageError", () => {
 describe("RouteError", () => {
   function renderBoundary(digest?: string) {
     const reset = vi.fn();
-    const error = Object.assign(new Error("boom"), digest ? { digest } : {});
+    const error: Error & { digest?: string } = new Error("boom");
+    if (digest) error.digest = digest;
     render(
       <IntlProvider>
         <RouteError error={error} reset={reset} />
@@ -144,15 +151,18 @@ describe("RouteError", () => {
     return reset;
   }
 
-  it("draws the error state with the server's digest as the trace id and the instant it caught the failure", () => {
+  it("draws the error state with the server's digest as the trace id and the instant it caught the failure", async () => {
     renderBoundary("2731905432");
     expect(
       screen.getByRole("heading", { name: "This page could not be loaded" }),
     ).toBeInTheDocument();
     expect(screen.getByText("500 internal_error")).toBeInTheDocument();
-    expect(screen.getByTestId("page-error-trace").textContent).toMatch(
-      /^trace 2731905432 · \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}Z$/,
-    );
+    // The instant is read on the task after mount, so the trace fills in then.
+    await waitFor(() => {
+      expect(screen.getByTestId("page-error-trace").textContent).toMatch(
+        /^trace 2731905432 · \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}Z$/,
+      );
+    });
     // The skip link's target is on the boundary's own <main>.
     expect(screen.getByRole("main")).toHaveAttribute("id", "main");
   });
@@ -160,9 +170,9 @@ describe("RouteError", () => {
   it("names the page the shell resolved from the path, as the mock's title does", () => {
     render(
       <IntlProvider>
-        <RoutePageName value={() => "Fleet"}>
+        <RoutePageNameContext value={() => "Fleet"}>
           <RouteError error={new Error("boom")} reset={vi.fn()} />
-        </RoutePageName>
+        </RoutePageNameContext>
       </IntlProvider>,
     );
     expect(
@@ -170,11 +180,13 @@ describe("RouteError", () => {
     ).toBeInTheDocument();
   });
 
-  it("prints no trace id when the failure carries no digest (negative)", () => {
+  it("prints no trace id when the failure carries no digest (negative)", async () => {
     renderBoundary();
-    expect(screen.getByTestId("page-error-trace").textContent).toMatch(
-      /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}Z$/,
-    );
+    await waitFor(() => {
+      expect(screen.getByTestId("page-error-trace").textContent).toMatch(
+        /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}Z$/,
+      );
+    });
   });
 
   it("re-requests the route and clears the boundary on Try again", async () => {

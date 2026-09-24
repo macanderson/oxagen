@@ -17,7 +17,7 @@ import {
   createContext,
   type ReactNode,
   startTransition,
-  useContext,
+  use,
   useEffect,
   useId,
   useState,
@@ -232,7 +232,7 @@ export function PageError({
  * thrown. Outside the shell, or on a path no nav item holds, the title stays
  * generic.
  */
-export const RoutePageName = createContext<
+export const RoutePageNameContext = createContext<
   ((pathname: string) => string | null) | null
 >(null);
 
@@ -261,23 +261,25 @@ export function RouteError({
   /**
    * The page's name as the sidebar prints it ("Fleet"), so the title reads
    * "Fleet could not be loaded" as the mock's does. Read from
-   * `RoutePageName` when absent; null keeps the generic title.
+   * `RoutePageNameContext` when absent; null keeps the generic title.
    */
   page?: string | null;
 }) {
   const t = useTranslations("ui.pageState.error");
-  const nameOf = useContext(RoutePageName);
+  const nameOf = use(RoutePageNameContext);
   const pathname = usePathname();
-  const name =
-    page === undefined
-      ? nameOf === null || pathname === null
-        ? null
-        : nameOf(pathname)
-      : page;
+  const name = page === undefined ? (nameOf?.(pathname) ?? null) : page;
   const navigate = useNavigate();
   const [at, setAt] = useState<string | null>(null);
   useEffect(() => {
-    setAt(utcInstant(new Date()));
+    // The instant lands on the next task rather than in the effect body,
+    // where a setState cascades a second render of the boundary.
+    const read = setTimeout(() => {
+      setAt(utcInstant(new Date()));
+    }, 0);
+    return () => {
+      clearTimeout(read);
+    };
   }, []);
   return (
     // `id="main"` is the skip link's target, as every page's own <main> is.
