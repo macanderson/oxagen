@@ -78,6 +78,16 @@ describe("BudgetSection", () => {
     expect(row).not.toHaveTextContent("25%");
   });
 
+  it("says a rolling ceiling's window is not recorded when the read carries none (negative)", () => {
+    const panel = renderPanel(
+      readOk(spendBudgets({ period: "rolling", windowDays: null })),
+    );
+    const row = nth(within(panel).getAllByRole("row"), 1, "the ceiling row");
+    expect(
+      nth(within(row).getAllByRole("cell"), 0, "the period cell"),
+    ).toHaveTextContent("not recorded");
+  });
+
   it("says there is no ceiling rather than showing a limit of zero (negative)", () => {
     const panel = renderPanel(
       readOk(spendBudgets({ limit: null, ratio: 0, state: "ok" })),

@@ -3,7 +3,13 @@
 // reason, re-reads the tab, and names a refusal without navigating; Enroll a
 // host mints the token, shows it once with the command, copies each, and says
 // so when the browser refuses the clipboard.
-import { cleanup, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { routes } from "@/shared/safe-path";
@@ -258,5 +264,44 @@ describe("EnrollHost", () => {
     );
     await open("Show the CLI path", "enroll-host-dialog");
     expect(screen.queryByTestId("enrollment-token")).not.toBeInTheDocument();
+  });
+});
+
+describe("Enrollment writes while a dialog is open", () => {
+  it("forgets a refused unenroll when its dialog is closed and opened again", async () => {
+    revokeHostEnrollment.mockResolvedValue(DENIED);
+    renderRevoke();
+    const dialog = await open("Unenroll build-01", "revoke-host-dialog");
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Unenroll" }),
+    );
+    await screen.findByTestId("revoke-host-failure");
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: /^(Close|Cancel)$/ }),
+    );
+    await open("Unenroll build-01", "revoke-host-dialog");
+    expect(screen.queryByTestId("revoke-host-failure")).toBeNull();
+  });
+
+  it("sends one unenroll however often the form is submitted while it is pending (negative)", async () => {
+    revokeHostEnrollment.mockReturnValue(new Promise(() => undefined));
+    renderRevoke();
+    const dialog = await open("Unenroll build-01", "revoke-host-dialog");
+    const form = dialog.querySelector("form");
+    if (form === null) throw new Error("unenroll form not drawn");
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    expect(revokeHostEnrollment).toHaveBeenCalledTimes(1);
+  });
+
+  it("mints one token however often the form is submitted while it is pending (negative)", async () => {
+    issueAgentEnrollmentToken.mockReturnValue(new Promise(() => undefined));
+    renderEnroll();
+    const dialog = await open("Show the CLI path", "enroll-host-dialog");
+    const form = dialog.querySelector("form");
+    if (form === null) throw new Error("mint form not drawn");
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    expect(issueAgentEnrollmentToken).toHaveBeenCalledTimes(1);
   });
 });

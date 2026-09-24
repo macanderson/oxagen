@@ -351,3 +351,34 @@ describe("Off the belt", () => {
     await expectNoAxe(container);
   });
 });
+
+describe("Toolbelt edges", () => {
+  it("says a matched tool records no category rather than leaving the line blank", async () => {
+    const { container } = draw();
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "Search this agent\u2019s belt" }),
+      "search tools{Enter}",
+    );
+    const hits = screen.getByTestId("belt-hits");
+    expect(hits).toHaveTextContent("search_tools");
+    expect(hits).toHaveTextContent("no category recorded");
+    await expectNoAxe(container);
+  });
+
+  it("says the belt is empty in the decision rules when the model is shown no tool (negative)", async () => {
+    const { container } = draw(toolbelt({ tools: [] }));
+    expect(
+      screen.getByRole("region", { name: "Per-tool decision rules" }),
+    ).toHaveTextContent("The belt is empty: the model is shown no tool.");
+    await expectNoAxe(container);
+  });
+
+  it("closes the tool dialog and returns to the rules", async () => {
+    draw();
+    const dialog = await openTool("search_tools");
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Close" }),
+    );
+    expect(screen.queryByTestId("belt-tool-dialog")).toBeNull();
+  });
+});

@@ -187,6 +187,18 @@ describe("Permissions › roles", () => {
     );
   });
 
+  it("names the agent as this agent in the denial chain when it has no agent key (negative)", () => {
+    // An Owner reads the whole ledger, so the empty state carries the chain.
+    renderPermissions({
+      orgRole: "owner",
+      detail: agentDetail({ identity: { agentKey: null } }),
+    });
+    expect(screen.getByTestId("denial-chain")).toHaveTextContent("this agent");
+    expect(screen.getByTestId("denial-chain")).not.toHaveTextContent(
+      "acme.core.release-bot",
+    );
+  });
+
   it("says whether it can move money is not recorded when the mandates were not read (negative)", () => {
     renderPermissions({ mandates: readError("mandates_unavailable", 503) });
     expect(region("Roles")).toHaveTextContent("Can move moneynot recorded");
