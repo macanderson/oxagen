@@ -350,6 +350,7 @@ function deps(overrides: Partial<CliDeps> = {}): CliDeps & {
         return {
           uptime_s: 5,
           spool_depth: 0,
+          last_control_at: "2026-01-01T00:00:00.000Z",
           last_ingest_at: null,
           last_error: null,
           sessions: [],
@@ -598,6 +599,65 @@ describe("enroll → status → unenroll", () => {
       ok: true,
       settingsChanged: false,
     });
+  });
+
+  // A daemon that answers on loopback but cannot reach Oxagen records every
+  // session and ships none. Enroll used to stop at "healthy" and print Done.
+  it("reports an enrollment whose daemon never reaches Oxagen as not working", async () => {
+    const enrollAt = (status: Record<string, unknown>) => {
+      const d = deps();
+      const base = d.daemonGet;
+      d.daemonGet = async (path) =>
+        path === "/status" && (await base("/health")) !== undefined
+          ? { uptime_s: 1, spool_depth: 0, ...status }
+          : base(path);
+      return d;
+    };
+    const options = {
+      token: "tok",
+      org: "acme",
+      workspace: "core",
+      apiUrl: "https://api.test",
+    };
+
+    const failing = enrollAt({
+      last_control_at: null,
+      last_ingest_at: null,
+      last_error: "control plane unreachable: This operation was aborted",
+    });
+    const refused = await enroll(options, failing);
+    expect(refused.ok).toBe(true);
+    expect(refused.shipping).toEqual({
+      healthy: false,
+      detail:
+        "the last call to Oxagen failed: control plane unreachable: This operation was aborted",
+    });
+    expect(failing.errors.join("\n")).toContain("it is not reporting");
+    expect(failing.lines.some((l) => l.startsWith("Done."))).toBe(false);
+
+    const silent = enrollAt({
+      last_control_at: null,
+      last_ingest_at: null,
+      last_error: null,
+    });
+    const waited = await enroll(options, silent);
+    expect(waited.shipping).toMatchObject({ healthy: false });
+    expect(waited.shipping?.detail).toContain("has not reached Oxagen");
+
+    const reached = enrollAt({
+      last_control_at: "2026-01-01T00:00:00.000Z",
+      last_ingest_at: null,
+      last_error: null,
+    });
+    const working = await enroll(options, reached);
+    expect(working.shipping).toEqual({
+      healthy: true,
+      detail: "every recorded event has shipped",
+    });
+    expect(reached.lines.some((l) => l.includes("tachod reached Oxagen"))).toBe(
+      true,
+    );
+    expect(reached.lines.at(-1)).toContain("observe mode");
   });
 
   it("writes TACHO_MCP_ENDPOINT into host.json, because the service unit will not carry it", async () => {

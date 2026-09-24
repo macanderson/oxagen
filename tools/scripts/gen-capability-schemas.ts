@@ -81,6 +81,13 @@ function convert(schema: ZodLike): { schema: JsonSchema; optional: boolean } {
       }
       return { schema: { ...inner.schema, default: dft }, optional: true };
     }
+    case "ZodCatch": {
+      // `.catch()` answers a fallback for any input the inner schema refuses,
+      // absence included, so the field never fails a parse and is never
+      // required. The inner schema is still what a well-formed value is.
+      const inner = convert(d.innerType as ZodLike);
+      return { schema: withDesc(inner.schema), optional: true };
+    }
     case "ZodNullable": {
       const inner = convert(d.innerType as ZodLike);
       return {
