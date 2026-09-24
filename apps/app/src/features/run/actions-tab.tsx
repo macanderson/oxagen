@@ -12,6 +12,7 @@ import type {
   ApprovalItem,
   ApprovalQueue,
   ResolvedApprovalItem,
+  ResolvedApprovals,
 } from "@/data/contracts/approvals";
 import type { MandateRow } from "@/data/contracts/mandates";
 import type { RunFrameBody, TranscriptEntry } from "@/data/contracts/run";
@@ -133,7 +134,7 @@ function GovernedActions({
   open: OpenFrame | null;
   body: Read<RunFrameBody> | null;
   pending: Read<ApprovalQueue>;
-  resolved: Read<ResolvedApprovalItem[]>;
+  resolved: Read<ResolvedApprovals>;
   mandates: ReadonlyMap<string, MandateRow>;
   now: number;
 }) {
@@ -164,7 +165,7 @@ function GovernedActions({
   // Every approval on the run, pending and decided, matched to the frames on
   // the page as one set, so a frame is never claimed by two approvals.
   const pendingItems = pending.ok ? pending.value.items : [];
-  const decidedItems = resolved.ok ? resolved.value : [];
+  const decidedItems = resolved.ok ? resolved.value.items : [];
   const matches = matchApprovals<Approval>(frames, [
     ...pendingItems,
     ...decidedItems,

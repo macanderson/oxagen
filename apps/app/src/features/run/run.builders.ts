@@ -19,7 +19,7 @@ import type {
 } from "@/data/contracts/run";
 import type {
   ApprovalQueue,
-  ResolvedApprovalItem,
+  ResolvedApprovals,
 } from "@/data/contracts/approvals";
 import type { MandateList } from "@/data/contracts/mandates";
 import type { RunWork } from "@/data/contracts/run-work";
@@ -638,7 +638,7 @@ type RunReads = {
    */
   approvals?: Read<ApprovalQueue>;
   /** As `approvals`, for the calls already decided (#3153). */
-  resolvedApprovals?: Read<ResolvedApprovalItem[]>;
+  resolvedApprovals?: Read<ResolvedApprovals>;
   /**
    * get_agent for the agent the run names, read with the page for the
    * header's agent card and harness. A test that says nothing about it gets
@@ -765,7 +765,7 @@ export function runSource(reads: RunReads) {
       ),
       resolved: answer(
         "resolvedApprovals",
-        reads.resolvedApprovals ?? readOk([]),
+        reads.resolvedApprovals ?? readOk({ items: [], more: false }),
       ),
       resolvedSince: refuse,
     },

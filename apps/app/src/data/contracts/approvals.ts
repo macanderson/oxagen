@@ -149,3 +149,20 @@ export const ResolvedApprovalItem = z.object({
   autoRuleRef: z.string().min(1).nullable(),
 });
 export type ResolvedApprovalItem = z.infer<typeof ResolvedApprovalItem>;
+
+/**
+ * One run's decided approvals as the Run page reads them (#3477): the rows,
+ * and whether the read stopped before the end of the run's ledger.
+ *
+ * `list_resolved_approvals` answers at most 100 rows a page and the read walks
+ * at most ten pages. A run with more than 1,000 decided calls used to come
+ * back as its first 1,000 with nothing said, so an approval frame whose
+ * decision lay past the bound read as one the record ties to no decision.
+ * `more` is what lets the page say the list is part of the ledger.
+ */
+export const ResolvedApprovals = z.object({
+  items: z.array(ResolvedApprovalItem),
+  /** True when the run holds decided approvals past the ones in `items`. */
+  more: z.boolean(),
+});
+export type ResolvedApprovals = z.infer<typeof ResolvedApprovals>;
