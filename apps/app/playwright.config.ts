@@ -36,6 +36,18 @@ export default defineConfig({
   retries: 0,
   failOnFlakyTests: true,
   workers: 1,
+  // 20 minutes for the whole run, well under the `e2e` job's 45-minute
+  // ceiling and the setup steps (build, seed, browser install) that run
+  // before Playwright ever starts. Three projects, ~19 tests total, each
+  // bounded by its own default 30s test timeout, add up to a few minutes in
+  // the worst case where every one fails — this run should never approach
+  // the cap on its own. Run 35941767115 (commit 310955e) had none: the "E2E
+  // tests" step sat silent for 29 minutes and was cancelled only when the
+  // job's own timeout hit, which reads identically to a step one minute from
+  // finishing. A globalTimeout turns that into a named failure with a report
+  // instead of a cancelled job with no evidence.
+  globalTimeout: 20 * 60_000,
+
   reporter: isCI ? [["list"], ["html", { open: "never" }]] : [["list"]],
   use: { baseURL: appUrl, trace: "retain-on-failure" },
   projects: [

@@ -643,10 +643,20 @@ jobs:
 
       # One shard: the suite is three tests (INV-20), and the login project
       # writes the storage state the other two depend on.
+      #
+      # --log-order=stream: turbo's default ("auto") buffers a task's whole
+      # output and prints it only when the task finishes, which on this
+      # one-task step means nothing reaches the log until Playwright exits.
+      # Run 35941767115 (commit 310955e) sat for 29 minutes with no output at
+      # all before the job's 45-minute ceiling cancelled it — indistinguishable
+      # in the log from a step that was one more minute from finishing.
+      # Streaming prints each test as Playwright's own list reporter reports
+      # it, so a slow step reads differently from a stuck one, and a stuck one
+      # names the test it stuck on.
       - name: E2E tests
         run: |
           set -f  # keep the unquoted ...[origin/main] filter literal (no globbing)
-          pnpm turbo run test:e2e $TURBO_FILTER
+          pnpm turbo run test:e2e $TURBO_FILTER --log-order=stream
 
       - name: Upload Playwright screenshots and traces
         if: always()
