@@ -6,6 +6,7 @@ import { billingProvider } from "./client";
 import { syncSubscriptionFromStripe } from "./subscriptions";
 import { syncInvoiceFromStripe } from "./invoices";
 import { CREDIT_REASONS } from "./constants";
+import { settleOwedCredits, upsertBalanceMirror } from "./credits";
 import { logger } from "./logger";
 import type { BillingCheckoutSession, BillingInvoice } from "./provider";
 
@@ -87,6 +88,11 @@ async function tryInsertGrantLedger(
 /**
  * Insert a credit lot and upsert the credit_balances mirror inside a running
  * transaction. Used by all grant paths after the ledger row is confirmed.
+ *
+ * Between the two, the grant pays whatever the org owes from a turn that
+ * outran its balance ({@link settleOwedCredits}): the credits arrive, the debt
+ * is collected from them under its own ledger reason, and the mirror is
+ * written with what is left.
  */
 async function insertLotAndMirrorBalance(
   tx: DbTx,
@@ -105,17 +111,8 @@ async function insertLotAndMirrorBalance(
     expiresAt,
   });
 
-  await tx
-    .insert(schema.creditBalances)
-    .values({ orgId, balanceCents: amountCents, lastEventAt: grantedAt })
-    .onConflictDoUpdate({
-      target: schema.creditBalances.orgId,
-      set: {
-        balanceCents: sql`${schema.creditBalances.balanceCents} + ${amountCents}`,
-        lastEventAt: grantedAt,
-        updatedAt: grantedAt,
-      },
-    });
+  const settled = await settleOwedCredits(tx, orgId);
+  await upsertBalanceMirror(tx, orgId, amountCents - settled, grantedAt);
 }
 
 /**
@@ -639,4 +636,71 @@ export async function grantCreditPackForCheckout(
       "billing: credit pack already granted, skipping",
     );
   }
+}
+
+// ---------------------------------------------------------------------------
+// A once-only grant on the caller's transaction
+// ---------------------------------------------------------------------------
+
+/** One grant keyed on the reference that paid for it. */
+export interface GrantCreditLotOnceArgs {
+  orgId: string;
+  /** A CREDIT_REASONS.GRANT_* value: only `grant_%` reasons are deduplicated. */
+  reason: string;
+  referenceType: string;
+  /** A uuid: `credit_ledger.reference_id` is a uuid column. */
+  referenceId: string;
+  amountCents: bigint;
+  source: "free_grant" | "subscription" | "purchase";
+  grantedAt: Date;
+  /** Null: the lot never expires. */
+  expiresAt: Date | null;
+}
+
+/**
+ * Grant a credit lot once per `(org, reason, referenceType, referenceId)`, on
+ * the caller's transaction. The ledger insert is the idempotency fence (the
+ * partial unique index on `grant_%` reasons); only when it inserts are the lot
+ * and the balance mirror written, through the same helper every other grant
+ * path uses, so a debt the org owes is settled from these credits too.
+ *
+ * Returns true when this call granted and false when the reference was
+ * already granted. The caller owns the transaction: the prepaid-order grant
+ * (prepaid-orders.ts) writes its units, this lot and its own fence columns in
+ * one commit.
+ */
+export async function grantCreditLotOnce(
+  tx: Tx,
+  args: GrantCreditLotOnceArgs,
+): Promise<boolean> {
+  if (!args.reason.startsWith("grant_")) {
+    // Outside the index predicate the insert is never deduplicated, so a
+    // retry would grant a second lot. Refuse rather than double-grant.
+    throw new Error(
+      `grantCreditLotOnce: reason ${args.reason} is not a grant_* reason`,
+    );
+  }
+  if (args.amountCents <= 0n) {
+    throw new Error(
+      "grantCreditLotOnce: amountCents must be greater than zero",
+    );
+  }
+  const inserted = await tryInsertGrantLedger(
+    tx,
+    args.orgId,
+    args.reason,
+    args.referenceType,
+    args.referenceId,
+    args.amountCents,
+  );
+  if (!inserted) return false;
+  await insertLotAndMirrorBalance(
+    tx,
+    args.orgId,
+    args.source,
+    args.amountCents,
+    args.grantedAt,
+    args.expiresAt,
+  );
+  return true;
 }

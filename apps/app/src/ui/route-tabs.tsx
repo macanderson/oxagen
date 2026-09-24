@@ -2,6 +2,12 @@
 // real tabs links each one to its own route and marks the current one with
 // aria-current, so the tab survives a reload and a shared link.
 //
+// `tablist` opts a row into the design's tab semantics (engine.js draws
+// `role="tablist"` and `role="tab" aria-selected`): the list becomes the
+// tablist, each link a tab, and the current one is selected as well as
+// current. Each tab is still a link to its own URL, so the keyboard moves
+// between them with Tab, and Enter opens one (#3995).
+//
 // `.tab { padding:8px 13px; font-size:13px; color:var(--muted);
 // border-bottom:2px solid transparent }` and `.tab[aria-selected] {
 // color:var(--fg); border-bottom-color:var(--gold) }` (engine.css, ADR-132):
@@ -31,9 +37,12 @@ export const tabCount = "font-mono text-[10.5px] font-normal text-dim";
 export function RouteTabs({
   label,
   tabs,
+  tablist = false,
 }: {
   label: string;
   tabs: readonly RouteTab[];
+  /** Draw the row as a tablist of tabs, as the design's tab rows are. */
+  tablist?: boolean;
 }) {
   return (
     <nav
@@ -41,11 +50,21 @@ export function RouteTabs({
       data-tab-row=""
       className="min-w-0 overflow-x-auto border-b border-border"
     >
-      <ul className="flex w-max min-w-full gap-0.5">
+      <ul
+        className="flex w-max min-w-full gap-0.5"
+        role={tablist ? "tablist" : undefined}
+        aria-label={tablist ? label : undefined}
+      >
         {tabs.map((tab) => (
-          <li key={tab.to} data-tab="">
+          <li
+            key={tab.to}
+            data-tab=""
+            role={tablist ? "presentation" : undefined}
+          >
             <SafeLink
               to={tab.to}
+              role={tablist ? "tab" : undefined}
+              aria-selected={tablist ? tab.current : undefined}
               aria-current={tab.current ? "page" : undefined}
               className={tabLink}
             >

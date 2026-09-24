@@ -5,6 +5,14 @@
  *
  *   pnpm billing:terms --org acme --invoice-billing on  --invoice-gau-max 250000
  *   pnpm billing:terms --org acme --invoice-billing off --invoice-gau-max 100000
+ *   pnpm billing:terms --org acme --assistant-cap-usd 6000
+ *   pnpm billing:terms --org acme --assistant-cap-usd none
+ *
+ * `--assistant-cap-usd` sets the org's monthly cap on assistant tokens the
+ * platform key pays for (ADR-053 §3): dollars a month, or `none` for no cap.
+ * The column defaults to $20 and the app has no control for it, so an
+ * enterprise that prepays assistant credits needs an operator to raise it.
+ * A run sets the billing mode (its two flags together), the cap, or both.
  *
  * Approving an organisation for invoice billing is a credit decision: from
  * then on it consumes governed action units without a cap and is invoiced
@@ -52,30 +60,35 @@ import {
   type BillingOrgTermsSetOutput,
 } from "@oxagen/oxagen/contracts/billing.org_terms.set";
 import type { CapabilityContext } from "@oxagen/oxagen";
+import { usdToCents } from "./lib/platform-operator-run";
 
 // ── Flags ─────────────────────────────────────────────────────────────────────
 
 export interface BillingTermsFlags {
   /** The organisation's slug, as a person knows it. */
   orgSlug: string;
-  /** `--invoice-billing on|off`. */
-  approvedForInvoiceBilling: boolean;
+  /** `--invoice-billing on|off`; given with `invoiceGauMax` or not at all. */
+  approvedForInvoiceBilling?: boolean;
   /** `--invoice-gau-max <n>`; the contract bounds it at 1…100,000,000. */
-  invoiceGauMax: number;
+  invoiceGauMax?: number;
+  /** `--assistant-cap-usd <n|none>` in cents; null is no cap; absent leaves it alone. */
+  assistantSpendCapCents?: number | null;
 }
 
 const USAGE =
-  "usage: pnpm billing:terms --org <slug> --invoice-billing on|off --invoice-gau-max <n>";
+  "usage: pnpm billing:terms --org <slug> [--invoice-billing on|off --invoice-gau-max <n>] [--assistant-cap-usd <n|none>]";
 
 /**
- * Parse the three required flags. Every flag is required: a partial update
- * would make "what did I just set" depend on the stored row, and the operator
- * reading the command back is the only review this decision gets.
+ * Parse the flags. The billing mode's two flags are given together: a mode
+ * without its ceiling would make "what did I just set" depend on the stored
+ * row, and the operator reading the command back is the only review this
+ * decision gets. The cap stands on its own. A run sets at least one.
  */
 export function parseFlags(argv: string[]): BillingTermsFlags {
   let orgSlug: string | null = null;
   let invoiceBilling: string | null = null;
   let invoiceGauMaxRaw: string | null = null;
+  let assistantCapRaw: string | null = null;
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -90,28 +103,48 @@ export function parseFlags(argv: string[]): BillingTermsFlags {
     if (arg === "--org") orgSlug = value();
     else if (arg === "--invoice-billing") invoiceBilling = value();
     else if (arg === "--invoice-gau-max") invoiceGauMaxRaw = value();
+    else if (arg === "--assistant-cap-usd") assistantCapRaw = value();
     else throw new Error(`unknown flag: ${arg}\n${USAGE}`);
   }
 
   if (!orgSlug) throw new Error(`--org is required\n${USAGE}`);
-  if (invoiceBilling !== "on" && invoiceBilling !== "off") {
-    throw new Error(`--invoice-billing must be "on" or "off"\n${USAGE}`);
-  }
-  if (invoiceGauMaxRaw === null) {
-    throw new Error(`--invoice-gau-max is required\n${USAGE}`);
-  }
-  const invoiceGauMax = Number(invoiceGauMaxRaw);
-  if (!Number.isInteger(invoiceGauMax) || invoiceGauMax < 1) {
-    throw new Error(
-      `--invoice-gau-max must be a whole number >= 1; got "${invoiceGauMaxRaw}"\n${USAGE}`,
-    );
+  const flags: BillingTermsFlags = { orgSlug };
+
+  if (invoiceBilling !== null || invoiceGauMaxRaw !== null) {
+    if (invoiceBilling === null || invoiceGauMaxRaw === null) {
+      throw new Error(
+        `--invoice-billing and --invoice-gau-max are given together\n${USAGE}`,
+      );
+    }
+    if (invoiceBilling !== "on" && invoiceBilling !== "off") {
+      throw new Error(`--invoice-billing must be "on" or "off"\n${USAGE}`);
+    }
+    const invoiceGauMax = Number(invoiceGauMaxRaw);
+    if (!Number.isInteger(invoiceGauMax) || invoiceGauMax < 1) {
+      throw new Error(
+        `--invoice-gau-max must be a whole number >= 1; got "${invoiceGauMaxRaw}"\n${USAGE}`,
+      );
+    }
+    flags.approvedForInvoiceBilling = invoiceBilling === "on";
+    flags.invoiceGauMax = invoiceGauMax;
   }
 
-  return {
-    orgSlug,
-    approvedForInvoiceBilling: invoiceBilling === "on",
-    invoiceGauMax,
-  };
+  if (assistantCapRaw !== null) {
+    flags.assistantSpendCapCents =
+      assistantCapRaw === "none"
+        ? null
+        : usdToCents(assistantCapRaw, "--assistant-cap-usd");
+  }
+
+  if (
+    flags.approvedForInvoiceBilling === undefined &&
+    flags.assistantSpendCapCents === undefined
+  ) {
+    throw new Error(
+      `nothing to set: give --invoice-billing and --invoice-gau-max, --assistant-cap-usd, or both\n${USAGE}`,
+    );
+  }
+  return flags;
 }
 
 // ── The run ───────────────────────────────────────────────────────────────────
@@ -203,8 +236,15 @@ export async function runBillingTerms(
       billingOrgTermsSet.name,
       {
         orgId,
-        approvedForInvoiceBilling: flags.approvedForInvoiceBilling,
-        invoiceGauMax: flags.invoiceGauMax,
+        ...(flags.approvedForInvoiceBilling !== undefined
+          ? {
+              approvedForInvoiceBilling: flags.approvedForInvoiceBilling,
+              invoiceGauMax: flags.invoiceGauMax,
+            }
+          : {}),
+        ...(flags.assistantSpendCapCents !== undefined
+          ? { assistantSpendCapCents: flags.assistantSpendCapCents }
+          : {}),
       },
       ctx,
     );
@@ -215,6 +255,13 @@ export async function runBillingTerms(
 }
 
 // ── Entrypoint ────────────────────────────────────────────────────────────────
+
+/** A cap in cents as the operator typed it: dollars a month, or no cap. */
+export function formatCap(capCents: number | null): string {
+  return capCents === null
+    ? "no cap"
+    : `$${(capCents / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} a month`;
+}
 
 /** Host and database of the target, with any credentials stripped. */
 export function describeTarget(raw: string): string {
@@ -236,11 +283,19 @@ async function main(): Promise<void> {
   console.log(
     `  Target database: ${kleur.yellow(describeTarget(env.DATABASE_URL))}`,
   );
-  console.log(
-    `  Organisation   : ${kleur.yellow(flags.orgSlug)}\n` +
+  console.log(`  Organisation   : ${kleur.yellow(flags.orgSlug)}`);
+  if (flags.approvedForInvoiceBilling !== undefined) {
+    console.log(
       `  Invoice billing: ${flags.approvedForInvoiceBilling ? kleur.red("ON") : kleur.green("off")}\n` +
-      `  Interim ceiling: ${kleur.yellow(flags.invoiceGauMax.toLocaleString("en-US"))} GAUs\n`,
-  );
+        `  Interim ceiling: ${kleur.yellow((flags.invoiceGauMax ?? 0).toLocaleString("en-US"))} GAUs`,
+    );
+  }
+  if (flags.assistantSpendCapCents !== undefined) {
+    console.log(
+      `  Assistant cap  : ${kleur.yellow(formatCap(flags.assistantSpendCapCents))}`,
+    );
+  }
+  console.log("");
 
   // The kernel dispatches through the handler registry; without this import
   // the capability has a contract and no handler.
@@ -264,7 +319,7 @@ async function main(): Promise<void> {
 
   console.log(
     kleur.bold().cyan("  Stored:") +
-      ` org ${stored.orgId}, invoice billing ${stored.approvedForInvoiceBilling ? "on" : "off"}, ceiling ${stored.invoiceGauMax.toLocaleString("en-US")} GAUs\n`,
+      ` org ${stored.orgId}, invoice billing ${stored.approvedForInvoiceBilling ? "on" : "off"}, ceiling ${stored.invoiceGauMax.toLocaleString("en-US")} GAUs, assistant cap ${formatCap(stored.assistantSpendCapCents)}\n`,
   );
 }
 

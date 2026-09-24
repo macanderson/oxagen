@@ -59,6 +59,11 @@ vi.mock("./metering", () => ({
   AssistantSpendCapError,
 }));
 
+const loggerError = vi.fn();
+vi.mock("./logger", () => ({
+  logger: { error: loggerError, warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
+}));
+
 const { evaluateTurnCreditGate } = await import("./turn-credit-gate");
 
 describe("evaluateTurnCreditGate", () => {
@@ -124,5 +129,19 @@ describe("evaluateTurnCreditGate", () => {
     await expect(evaluateTurnCreditGate("org-1")).resolves.toEqual({
       ok: true,
     });
+    // A gate stuck open must be visible: one alert-grade line per open.
+    expect(loggerError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orgId: "org-1",
+        alert: "billing_turn_credit_gate_failed_open",
+      }),
+      expect.any(String),
+    );
+  });
+
+  it("logs nothing when it refuses on an affirmative billing error", async () => {
+    assertCanStartTurnMock.mockRejectedValue(new BillingSuspendedError());
+    await evaluateTurnCreditGate("org-1");
+    expect(loggerError).not.toHaveBeenCalled();
   });
 });

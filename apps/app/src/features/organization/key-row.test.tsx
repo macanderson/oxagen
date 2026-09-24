@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-// One row of the API keys table and the one clock it judges itself by: the
-// status word and the controls beside it come from the same instant, so a page
-// left open past an expiry cannot show "live" over a row with no Rotate.
+// The two clocked cells of an API keys row, Expires and the controls, drawn
+// side by side as the table draws them: each runs its own clock from the same
+// captured instant, so a page left open past an expiry cannot show "live" over
+// a row with no Rotate.
 import { act, cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ApiKey } from "@/data/contracts/org";
@@ -19,11 +20,9 @@ vi.mock("./api-key-actions", () => ({
   rotateApiKey: vi.fn(),
 }));
 
-const { KeyRow } = await import("./key-row");
+const { KeyActionsCell, KeyExpiryCell } = await import("./key-row");
 
 const HERE = routes.apiKeys("acme", { workspace: "core-platform" });
-/** Where a rotation returns: the first page of the filter in view. */
-const AFTER_MINT = routes.apiKeys("acme", { workspace: "core-platform" });
 const NOW = Date.parse("2026-09-16T12:00:00.000Z");
 
 afterEach(() => {
@@ -36,16 +35,22 @@ function renderRow(key: ApiKey, now = NOW, archived = false) {
     <IntlProvider>
       <table>
         <tbody>
-          <KeyRow
-            apiKey={key}
-            org="acme"
-            ws="core-platform"
-            archived={archived}
-            now={now}
-            listedIds={[key.id]}
-            here={HERE}
-            afterMint={AFTER_MINT}
-          />
+          <tr>
+            <td>
+              <KeyExpiryCell apiKey={key} now={now} />
+            </td>
+            <td>
+              <KeyActionsCell
+                apiKey={key}
+                org="acme"
+                ws="core-platform"
+                archived={archived}
+                now={now}
+                listedIds={[key.id]}
+                after={HERE}
+              />
+            </td>
+          </tr>
         </tbody>
       </table>
     </IntlProvider>,
@@ -68,6 +73,28 @@ describe("a row's state and its controls come from one clock", () => {
     expect(view.status()).toBe("live");
     expect(view.buttons()).toEqual(["Rotate", "Revoke"]);
     await expectNoAxe(document.body);
+  });
+
+  it("words the Expires badge as the design does: active, expires in N days, never used", () => {
+    const soon = apiKey({
+      id: "aky_soon000000000000000000",
+      expiresAt: new Date(NOW + 21 * 86_400_000 - 1000).toISOString(),
+    });
+    renderRow(soon);
+    expect(screen.getByText("expires in 21 days")).toHaveAttribute(
+      "data-status",
+      "expiring",
+    );
+    cleanup();
+    renderRow(apiKey({ lastUsedAt: null }));
+    expect(screen.getByText("never used")).toHaveAttribute(
+      "data-status",
+      "never-used",
+    );
+    cleanup();
+    renderRow(apiKey());
+    expect(screen.getByText("active")).toHaveAttribute("data-status", "live");
+    expect(screen.getByText("Never")).toBeInTheDocument();
   });
 
   it("reads expired with Revoke alone for a key whose expiry has passed", () => {
@@ -101,13 +128,14 @@ describe("a row's state and its controls come from one clock", () => {
 
   it("turns the status and the controls over together when the expiry passes while the page is open", async () => {
     // The page clock is captured once, server-side. Both halves of the row read
-    // the same running clock, so the row cannot say "live" with no Rotate.
+    // the same running clock, so the row cannot offer Rotate on an expired key.
+    // Inside the last thirty days a live key reads "expires in N days".
     vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.setSystemTime(NOW);
     const view = renderRow(
       apiKey({ expiresAt: new Date(NOW + 20_000).toISOString() }),
     );
-    expect(view.status()).toBe("live");
+    expect(view.status()).toBe("expiring");
     expect(view.buttons()).toEqual(["Rotate", "Revoke"]);
 
     await act(async () => {

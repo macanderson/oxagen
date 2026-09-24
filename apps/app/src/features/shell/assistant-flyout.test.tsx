@@ -506,6 +506,37 @@ describe("AssistantFlyout", () => {
     expect(await screen.findByTestId("assistant-exhausted")).toBeTruthy();
   });
 
+  // The credit gate's two refusals each have one way out, and the sentence
+  // links to it: the top-up on Billing, or a key of the organization's own
+  // on Model funding.
+  it("links an organization out of credit to the top-up on Billing (negative)", async () => {
+    askAssistant.mockResolvedValue({
+      ok: false,
+      reason: "exhausted",
+      code: "insufficient_credits",
+    });
+    const { user } = await openFlyout();
+    await ask(user, "what is live?");
+    await screen.findByTestId("assistant-noCredit");
+    expect(
+      screen.getByTestId("assistant-buy-credits").getAttribute("href"),
+    ).toBe("/acme/billing");
+  });
+
+  it("links a spent monthly cap to Model funding (negative)", async () => {
+    askAssistant.mockResolvedValue({
+      ok: false,
+      reason: "exhausted",
+      code: "assistant_spend_cap",
+    });
+    const { user } = await openFlyout();
+    await ask(user, "what is live?");
+    await screen.findByTestId("assistant-spendCap");
+    expect(
+      screen.getByTestId("assistant-model-funding").getAttribute("href"),
+    ).toBe("/acme/model-funding");
+  });
+
   // #3227: each of these used to read "could not be reached", whatever the
   // cause. The sentence names the cause and the code rides beneath it.
   // The phrase is what the person reads. The test id alone comes from the

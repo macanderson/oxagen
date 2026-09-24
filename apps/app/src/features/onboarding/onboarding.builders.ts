@@ -215,6 +215,8 @@ export function onboardingSource(reads: Reads): {
     audit: {
       events: refuse("audit.events"),
       exportEvents: refuse("audit.exportEvents"),
+      retention: refuse("audit.retention"),
+      bundle: refuse("audit.bundle"),
     },
     org: {
       members: refuse("org.members"),
@@ -223,6 +225,8 @@ export function onboardingSource(reads: Reads): {
       apiKeys: refuse("org.apiKeys"),
       costCenters: refuse("org.costCenters"),
       modelCredential: refuse("org.modelCredential"),
+      dataPlane: refuse("org.dataPlane"),
+      workspaceFacts: refuse("org.workspaceFacts"),
       sso: refuse("org.sso"),
     },
     skills: {

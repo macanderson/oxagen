@@ -602,8 +602,35 @@ export interface BillingInvoice {
    * routes `invoice.paid` and `invoice.payment_failed` on it (ADR-055 §6).
    */
   gauSettlementId: string | null;
+  /**
+   * The prepaid order this invoice bills, from `metadata.prepaid_order_id` on
+   * an invoice whose `metadata.oxagen_kind` is `prepaid_order`; absent or
+   * null for every other invoice. The webhook grants the order on
+   * `invoice.paid` and mirrors `invoice.voided` / `marked_uncollectible` onto
+   * it (prepaid-orders.ts).
+   */
+  prepaidOrder?: BillingPrepaidOrderRef | null;
   lineItems: BillingInvoiceLineItem[];
 }
+
+/**
+ * What a prepaid-order invoice's metadata says about the grant it pays for.
+ *
+ * `assistantSpendCap` is the operator's instruction for the org's monthly
+ * cap on platform-paid assistant tokens, applied in the transaction that
+ * grants the order's credits: `unchanged` leaves the cap as it is, `set`
+ * writes `capCents` (null removes the cap). Metadata key
+ * `assistant_spend_cap_cents`: absent → unchanged, `none` → null, digits →
+ * that many credit cents.
+ */
+export interface BillingPrepaidOrderRef {
+  orderId: string;
+  assistantSpendCap: AssistantSpendCapChange;
+}
+
+export type AssistantSpendCapChange =
+  | { kind: "unchanged" }
+  | { kind: "set"; capCents: number | null };
 
 // ── Checkout domain types ────────────────────────────────────────────────────
 
@@ -711,6 +738,11 @@ export interface BillingGauInvoiceInput {
   /** ISO 4217, lower case. */
   currency: string;
   description: string;
+  /**
+   * The bucket month the units were used in, half-open `[start, end)`. Set
+   * as the line's service period, so the invoice says which month it bills.
+   */
+  period: { start: Date; end: Date };
   collection: GauInvoiceCollection;
 }
 
@@ -725,6 +757,67 @@ export interface BillingGauInvoicePayment {
   status: "paid" | "open";
   amountCents: number;
   hostedInvoiceUrl: string | null;
+}
+
+// ── Prepaid-order invoices ───────────────────────────────────────────────────
+
+/** One line of a prepaid order's invoice. */
+export interface BillingPrepaidInvoiceLine {
+  /** Stable per order: the line's idempotency key suffix and `metadata.line`. */
+  key: "licence" | "gau" | "credits";
+  description: string;
+  quantity: number;
+  /** Minor units per unit as a decimal string (sub-cent rates allowed). */
+  unitAmountDecimal: string;
+  /** Service period, half-open `[start, end)`; null for a line with none. */
+  period: { start: Date; end: Date } | null;
+}
+
+/**
+ * A prepaid order's invoice (billing.prepaid_orders): emailed to the
+ * customer's billing contact and paid by bank transfer or on the hosted page.
+ */
+export interface BillingPrepaidInvoiceInput {
+  customerId: string;
+  orgId: string;
+  /** The order's id: invoice metadata, and the prefix of every idempotency key. */
+  orderId: string;
+  /** ISO 4217, lower case. */
+  currency: string;
+  daysUntilDue: number;
+  lines: BillingPrepaidInvoiceLine[];
+  /** Printed in the invoice header: "Agreement", "PO number". At most four. */
+  customFields: { name: string; value: string }[];
+  /** The memo printed above the lines; null for none. */
+  memo: string | null;
+  footer: string;
+  /** Extra metadata the webhook reads back (the assistant cap instruction). */
+  metadata: Record<string, string>;
+}
+
+/** The invoice a prepaid order is billed on, addressed by both ids. */
+export interface BillingPrepaidInvoiceRef {
+  orderId: string;
+  invoiceId: string;
+  /**
+   * The order's own total in minor units. A draft whose subtotal differs is
+   * never sent: something between the order and the provider changed a line.
+   */
+  expectedSubtotalCents: number;
+}
+
+export interface BillingPrepaidInvoiceState {
+  /** `open`: sent and unpaid. `paid`: the provider settled it on finalize. */
+  status: "open" | "paid";
+  number: string | null;
+  hostedInvoiceUrl: string | null;
+  invoicePdfUrl: string | null;
+  amountDueCents: number;
+  /**
+   * The assistant cap instruction the invoice metadata carries: the one
+   * record of it, read by the issue-time grant and the webhook grant alike.
+   */
+  assistantSpendCap: AssistantSpendCapChange;
 }
 
 /** What `deleteOrVoidDraftInvoice` found and did. `absent`: already void or deleted. */
@@ -951,6 +1044,26 @@ export interface BillingProvider {
   deleteOrVoidDraftInvoice(
     ref: BillingGauInvoiceRef,
   ): Promise<{ outcome: BillingDraftInvoiceOutcome }>;
+
+  /**
+   * Create a prepaid order's invoice as a draft (`auto_advance: false`,
+   * `collection_method: send_invoice`) with one item per line. Every request
+   * is keyed on the order id, so a retry inside the provider's idempotency
+   * window returns the same invoice and the same items.
+   */
+  createPrepaidInvoice(
+    input: BillingPrepaidInvoiceInput,
+  ): Promise<{ invoiceId: string }>;
+
+  /**
+   * Send a prepaid order's invoice: a draft is checked against the order's
+   * subtotal, then finalized and emailed in one request; an invoice that is
+   * already open or paid is only read. Throws for a void or uncollectible
+   * invoice, and for a draft whose subtotal is not the order's.
+   */
+  sendPrepaidInvoice(
+    ref: BillingPrepaidInvoiceRef,
+  ): Promise<BillingPrepaidInvoiceState>;
 
   // ── Checkout ─────────────────────────────────────────────────────────────────
 

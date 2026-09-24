@@ -243,6 +243,13 @@ export interface StreamAgentReplyArgs {
      * field is not nullable, so there is no "no step" escape hatch: mint a UUID.
      */
     messageId: string;
+    /**
+     * The person the turn answers, when there is one: the user id (a uuid)
+     * the caller already resolved, never a guess. A platform-funded charge
+     * writes it to `credit_ledger.created_by_id`, so a statement can show
+     * assistant spend by operator. Leave it off for a call no person drove.
+     */
+    userId?: string;
   };
   /**
    * Who paid the vendor for this call (ADR-053 §3). `platform` charges the
@@ -440,6 +447,9 @@ export function streamAgentReply(
               orgId: args.telemetry.orgId,
               referenceId: args.telemetry.messageId,
               reason: args.chargeReason,
+              ...(args.telemetry.userId === undefined
+                ? {}
+                : { createdById: args.telemetry.userId }),
               ...usage,
             }
           : undefined,

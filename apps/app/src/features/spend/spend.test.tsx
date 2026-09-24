@@ -179,10 +179,17 @@ const source: DataSource = {
     apiKeys: vi.fn(),
     costCenters: vi.fn(),
     modelCredential: vi.fn(),
+    dataPlane: vi.fn(),
+    workspaceFacts: vi.fn(),
     sso: vi.fn(),
   },
   mandates: { list: vi.fn(), get: vi.fn() },
-  audit: { events: vi.fn(), exportEvents: vi.fn() },
+  audit: {
+    events: vi.fn(),
+    exportEvents: vi.fn(),
+    retention: vi.fn(),
+    bundle: vi.fn(),
+  },
   skills: { inventory: vi.fn(), configuration: vi.fn() },
   steering: {
     records: vi.fn(),

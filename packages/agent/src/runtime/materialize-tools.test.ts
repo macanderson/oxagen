@@ -171,6 +171,42 @@ vi.mock("@oxagen/oxagen/kernel", () => ({
   })),
 }));
 
+// Governed action billing (ADR-165). The admission gate and the recorder are
+// spies; the ledger helpers stay real, so the keys these tests read are the
+// keys production writes. Each spy records the tenant scope it ran in, since
+// both write or read through withTenantDb.
+const billingMocks = vi.hoisted(() => ({
+  scopes: [] as Array<{ orgId: string; workspaceId: string } | null>,
+  assertGauAvailable: vi.fn(async (_orgId: string): Promise<void> => undefined),
+  recordGovernedActions: vi.fn(
+    async (_args: {
+      orgId: string;
+      entries: Array<Record<string, unknown>>;
+      label: string;
+    }): Promise<unknown> => ({ billedUnits: 1 }),
+  ),
+}));
+vi.mock("@oxagen/billing", async () => {
+  // The ledger module alone, not the package: the package's index builds
+  // statement queries from `schema` at load time, and this file's database
+  // double carries only the MCP tables. Typed through the package name, since
+  // a type import of the path would pull another package's source under this
+  // one's `rootDir`.
+  const ledger = await vi.importActual<
+    Pick<
+      typeof import("@oxagen/billing"),
+      "attributableWorkspaceId" | "governedActionEntry" | "ledgerKey"
+    >
+  >("../../../billing/src/gau-ledger");
+  return {
+    attributableWorkspaceId: ledger.attributableWorkspaceId,
+    governedActionEntry: ledger.governedActionEntry,
+    ledgerKey: ledger.ledgerKey,
+    assertGauAvailable: billingMocks.assertGauAvailable,
+    recordGovernedActions: billingMocks.recordGovernedActions,
+  };
+});
+
 // Agent RBAC (spec §3.5): keep the pure resolver REAL (the filter's behavior
 // is exercised end-to-end against actual role-grant resolution), but wrap
 // resolveAgentRunCapability in a spy so the tests can prove the filter reads
@@ -426,6 +462,29 @@ describe("materializeTools", () => {
       surface: "agent",
       runId: null,
     });
+  });
+
+  it("hands the model's tool-call id to the kernel so a retried call bills once (ADR-165)", async () => {
+    const { tools } = await materializeTools(CTX);
+    const t = tools.capA as unknown as {
+      execute: (
+        i: unknown,
+        options?: { toolCallId?: string },
+      ) => Promise<unknown>;
+    };
+    await t.execute({ x: "hello" }, { toolCallId: "call_cap" });
+    expect(invoke).toHaveBeenCalledWith(
+      "capA",
+      { x: "hello" },
+      { ...CTX, toolCallId: "call_cap" },
+      { surface: "agent", runId: null },
+    );
+    // No id, or an empty one: the context goes through as it came, the same
+    // object, so nothing downstream sees a field the caller never set.
+    await t.execute({ x: "again" });
+    await t.execute({ x: "empty" }, { toolCallId: "" });
+    expect(vi.mocked(invoke).mock.calls[1]?.[2]).toBe(CTX);
+    expect(vi.mocked(invoke).mock.calls[2]?.[2]).toBe(CTX);
   });
 
   it("a successful invocation resolves cleanly through the kernel", async () => {
@@ -1041,6 +1100,207 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
       expect.any(Number),
       error,
     );
+  });
+
+  describe("governed action billing (ADR-165)", () => {
+    const KEY = `mcp.${MCP_SERVER.id}.list_pull_requests`;
+    const RUN_CTX = { ...CTX, runId: "run_1" };
+    type Execute = (
+      input: unknown,
+      options?: { toolCallId?: string },
+    ) => Promise<unknown>;
+    const external = async (ctx: typeof CTX = RUN_CTX): Promise<Execute> => {
+      const { tools } = await materializeTools(ctx);
+      return (
+        tools[`mcp_${MCP_SERVER.id}_list_pull_requests`] as unknown as {
+          execute: Execute;
+        }
+      ).execute;
+    };
+    const offered = () =>
+      billingMocks.recordGovernedActions.mock.calls.map(
+        ([args]) => args.entries,
+      );
+
+    beforeEach(() => {
+      billingMocks.scopes.length = 0;
+      billingMocks.assertGauAvailable
+        .mockReset()
+        .mockImplementation(async () => {
+          billingMocks.scopes.push(tenancyMock.state.current);
+        });
+      billingMocks.recordGovernedActions
+        .mockReset()
+        .mockImplementation(async () => {
+          billingMocks.scopes.push(tenancyMock.state.current);
+          return { billedUnits: 1 };
+        });
+    });
+
+    it("bills one unit for a completed call, keyed by the model's tool-call id within the run", async () => {
+      const execute = await external();
+      await expect(execute({}, { toolCallId: "call_1" })).resolves.toEqual({
+        data: "result",
+      });
+      expect(billingMocks.assertGauAvailable).toHaveBeenCalledWith("ten_1");
+      expect(billingMocks.recordGovernedActions).toHaveBeenCalledOnce();
+      expect(
+        billingMocks.recordGovernedActions.mock.calls[0]?.[0],
+      ).toMatchObject({ orgId: "ten_1", label: KEY });
+      expect(offered()).toEqual([
+        [
+          expect.objectContaining({
+            idempotencyKey: "external_tool:run_1:call_1",
+            source: "external_tool",
+            units: 1,
+            toolName: KEY,
+            mcpServer: "GitHub",
+            surface: "agent",
+            runId: "run_1",
+            toolCallId: "call_1",
+            operatorUserId: "u_1",
+            agentId: null,
+            requestId: "req_1",
+            // `ws_1` is not a uuid, so it is not a workspace to attribute to.
+            workspaceId: null,
+          }),
+        ],
+      ]);
+      // Both the gate and the recorder ran inside the org's tenant scope.
+      expect(billingMocks.scopes).toEqual([
+        { orgId: "ten_1", workspaceId: "ws_1" },
+        { orgId: "ten_1", workspaceId: "ws_1" },
+      ]);
+    });
+
+    it("offers a retried call the same key, so the ledger bills it once", async () => {
+      const execute = await external();
+      await execute({}, { toolCallId: "call_1" });
+      await execute({}, { toolCallId: "call_1" });
+      const keys = offered().map((entries) => entries[0]?.["idempotencyKey"]);
+      expect(keys).toEqual([
+        "external_tool:run_1:call_1",
+        "external_tool:run_1:call_1",
+      ]);
+    });
+
+    it("gives a call with no tool-call id a key of its own, so two calls bill twice", async () => {
+      const execute = await external();
+      await execute({});
+      await execute({});
+      const keys = offered().map((entries) => entries[0]?.["idempotencyKey"]);
+      expect(keys).toHaveLength(2);
+      expect(new Set(keys).size).toBe(2);
+      for (const key of keys)
+        expect(key).toMatch(/^external_tool:run_1:inv:[0-9a-f-]{36}$/);
+    });
+
+    it("does not scope a tool-call id to nothing: outside a run or turn the key is the invocation's", async () => {
+      const execute = await external(CTX);
+      await execute({}, { toolCallId: "call_1" });
+      expect(offered()[0]?.[0]).toMatchObject({
+        idempotencyKey: expect.stringMatching(/^external_tool:-:inv:/),
+        toolCallId: "call_1",
+        runId: null,
+      });
+    });
+
+    it("attributes an agent run's call to the agent and the person who started it", async () => {
+      const execute = await external({
+        ...RUN_CTX,
+        // Only the fields the recorder reads. The run's IAM gates are
+        // mocked in this suite, so no resolution is consulted.
+        agentRun: undefined,
+        deployedAgentInvocation: {
+          agentId: "agt_1",
+          initiatingPrincipal: { id: "prn_human" },
+        },
+      } as unknown as typeof CTX);
+      vi.mocked(authorizeExternalCapability).mockResolvedValue({
+        allowed: true,
+        outcome: "allow",
+        reason: null,
+        decision: null,
+        principal: { id: "prn_agent", kind: "agent" },
+      } as Awaited<ReturnType<typeof authorizeExternalCapability>>);
+      await execute({}, { toolCallId: "call_2" });
+      expect(offered()[0]?.[0]).toMatchObject({
+        agentId: "agt_1",
+        operatorUserId: "prn_human",
+        principalId: "prn_agent",
+        principalKind: "agent",
+      });
+    });
+
+    it("bills nothing for a call IAM refuses, the transport fails, or the server answers with an error", async () => {
+      vi.mocked(authorizeExternalCapability).mockResolvedValueOnce({
+        allowed: false,
+        outcome: "deny",
+        reason: "denied",
+        decision: null,
+      });
+      const execute = await external();
+      expect(await execute({}, { toolCallId: "a" })).toContain("denied");
+      fakeExecute.mockRejectedValueOnce(new Error("transport failed"));
+      await expect(execute({}, { toolCallId: "b" })).rejects.toThrow(
+        "transport failed",
+      );
+      fakeExecute.mockResolvedValueOnce({
+        isError: true,
+        content: { data: "refused" },
+      });
+      await expect(execute({}, { toolCallId: "c" })).rejects.toMatchObject({
+        code: "mcp_tool_execution_failed",
+      });
+      expect(billingMocks.recordGovernedActions).not.toHaveBeenCalled();
+    });
+
+    it("refuses the call when the organisation has no units left, before any gate asks a person", async () => {
+      const exhausted = Object.assign(
+        new Error("Governed action units exhausted: the bucket is empty."),
+        { name: "GauExhaustedError", code: "gau_exhausted" },
+      );
+      billingMocks.assertGauAvailable.mockRejectedValueOnce(exhausted);
+      const execute = await external();
+      await expect(execute({}, { toolCallId: "call_1" })).rejects.toBe(
+        exhausted,
+      );
+      expect(fakeExecute).not.toHaveBeenCalled();
+      expect(externalRulesMock).not.toHaveBeenCalled();
+      expect(billingMocks.recordGovernedActions).not.toHaveBeenCalled();
+      expect(mocks.insertToolInvocation).toHaveBeenCalledOnce();
+      expect(mocks.insertToolInvocation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: "failed",
+          error_class: "GauExhaustedError",
+        }),
+      );
+      expect(emitExternalCapabilityOutcome).toHaveBeenCalledWith(
+        KEY,
+        RUN_CTX,
+        "error",
+        expect.any(Number),
+        exhausted,
+      );
+    });
+
+    it("returns a completed call's result when recording its unit fails", async () => {
+      billingMocks.recordGovernedActions.mockRejectedValueOnce(
+        new Error("ledger unavailable"),
+      );
+      const execute = await external();
+      await expect(execute({}, { toolCallId: "call_1" })).resolves.toEqual({
+        data: "result",
+      });
+      expect(fakeExecute).toHaveBeenCalledOnce();
+      expect(emitExternalCapabilityOutcome).toHaveBeenCalledWith(
+        KEY,
+        RUN_CTX,
+        "allow",
+        expect.any(Number),
+        undefined,
+      );
+    });
   });
 
   it("keeps final IAM denial fail-closed when telemetry insertion fails", async () => {

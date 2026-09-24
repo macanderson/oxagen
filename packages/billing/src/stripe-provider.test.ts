@@ -44,6 +44,7 @@ const stripeMethods = {
     pay: vi.fn(),
     del: vi.fn(),
     voidInvoice: vi.fn(),
+    sendInvoice: vi.fn(),
   },
   invoiceItems: {
     create: vi.fn(),
@@ -1040,6 +1041,45 @@ describe("StripeProvider", () => {
       ).toBeNull();
     });
 
+    it.each([
+      [undefined, { kind: "unchanged" }],
+      ["none", { kind: "set", capCents: null }],
+      ["600000", { kind: "set", capCents: 600_000 }],
+      ["20.5", { kind: "unchanged" }],
+    ])(
+      "reads a prepaid order and its assistant cap instruction %s from the metadata",
+      async (cap, expected) => {
+        stripeMethods.invoices.retrieve.mockResolvedValue(
+          makeStripeInvoice({
+            subscription: null,
+            metadata: {
+              org_id: "org-ent",
+              oxagen_kind: "prepaid_order",
+              prepaid_order_id: "0192d4a8-7c1e-7a00-8000-0000000000d1",
+              ...(cap === undefined ? {} : { assistant_spend_cap_cents: cap }),
+            },
+          }),
+        );
+        const invoice = await provider.getInvoice("in_pre_001");
+        expect(invoice.prepaidOrder).toEqual({
+          orderId: "0192d4a8-7c1e-7a00-8000-0000000000d1",
+          assistantSpendCap: expected,
+        });
+      },
+    );
+
+    it("names no prepaid order on an invoice of any other kind, even one carrying the id", async () => {
+      stripeMethods.invoices.retrieve.mockResolvedValue(
+        makeStripeInvoice({
+          metadata: {
+            oxagen_kind: "gau_interim",
+            prepaid_order_id: "0192d4a8-7c1e-7a00-8000-0000000000d1",
+          },
+        }),
+      );
+      expect((await provider.getInvoice("in_x")).prepaidOrder).toBeNull();
+    });
+
     it("maps unknown invoice status to 'draft'", async () => {
       stripeMethods.invoices.retrieve.mockResolvedValue(
         makeStripeInvoice({ status: "unknown_status" }),
@@ -1170,7 +1210,11 @@ describe("StripeProvider", () => {
       quantityGau: 5_000,
       ratePerGauMicros: 5_000n,
       currency: "usd",
-      description: "Oxagen governed action units: auto top-up",
+      description: "Governed action units, auto top-up: 1 Sep to 30 Sep 2026",
+      period: {
+        start: new Date("2026-09-01T00:00:00.000Z"),
+        end: new Date("2026-10-01T00:00:00.000Z"),
+      },
       collection: {
         method: "charge_automatically" as const,
         defaultPaymentMethodId: "pm_test_001",
@@ -1211,7 +1255,11 @@ describe("StripeProvider", () => {
           quantity: 5_000,
           unit_amount_decimal: "0.5",
           currency: "usd",
-          description: "Oxagen governed action units: auto top-up",
+          description:
+            "Governed action units, auto top-up: 1 Sep to 30 Sep 2026",
+          // The bucket month, with the end on its last second so Stripe
+          // prints 30 Sep, the same last day the description does.
+          period: { start: 1788220800, end: 1790812799 },
         },
         { idempotencyKey: "set_001:item" },
       );
@@ -1261,6 +1309,203 @@ describe("StripeProvider", () => {
       await expect(provider.createGauInvoice(input)).rejects.toThrow("down");
       expect(stripeMethods.invoiceItems.create).not.toHaveBeenCalled();
     });
+  });
+
+  describe("createPrepaidInvoice", () => {
+    const ORDER = "0192d4a8-7c1e-7a00-8000-0000000000d1";
+    const input = {
+      customerId: "cus_ent_001",
+      orgId: "org-ent",
+      orderId: ORDER,
+      currency: "usd",
+      daysUntilDue: 30,
+      lines: [
+        {
+          key: "licence" as const,
+          description:
+            "Oxagen platform licence (agreement MSA-2026-014): 1 Oct 2026 to 30 Sep 2027",
+          quantity: 1,
+          unitAmountDecimal: "12000000",
+          period: {
+            start: new Date("2026-10-01T00:00:00.000Z"),
+            end: new Date("2027-10-01T00:00:00.000Z"),
+          },
+        },
+        {
+          key: "credits" as const,
+          description:
+            "Usage credits for the in-app assistant, prepaid: $5,000.00 (500,000 credits)",
+          quantity: 1,
+          unitAmountDecimal: "500000",
+          period: null,
+        },
+      ],
+      customFields: [
+        { name: "Agreement", value: "MSA-2026-014" },
+        { name: "PO number", value: "PO-7781" },
+      ],
+      memo: "Year one of the enterprise agreement.",
+      footer: "Itemised usage: request a statement.",
+      metadata: { assistant_spend_cap_cents: "none" },
+    };
+
+    beforeEach(() => {
+      stripeMethods.invoices.create.mockResolvedValue({ id: "in_pre_001" });
+      stripeMethods.invoiceItems.create.mockResolvedValue({ id: "ii_001" });
+    });
+
+    it("creates a send_invoice draft keyed on the order, with the header fields, footer, memo and routing metadata", async () => {
+      expect(await provider.createPrepaidInvoice(input)).toEqual({
+        invoiceId: "in_pre_001",
+      });
+      expect(stripeMethods.invoices.create).toHaveBeenCalledWith(
+        {
+          customer: "cus_ent_001",
+          auto_advance: false,
+          collection_method: "send_invoice",
+          days_until_due: 30,
+          currency: "usd",
+          pending_invoice_items_behavior: "exclude",
+          custom_fields: [
+            { name: "Agreement", value: "MSA-2026-014" },
+            { name: "PO number", value: "PO-7781" },
+          ],
+          description: "Year one of the enterprise agreement.",
+          footer: "Itemised usage: request a statement.",
+          metadata: {
+            assistant_spend_cap_cents: "none",
+            org_id: "org-ent",
+            oxagen_kind: "prepaid_order",
+            prepaid_order_id: ORDER,
+          },
+        },
+        { idempotencyKey: `${ORDER}:invoice` },
+      );
+    });
+
+    it("adds one item per line, each keyed on the order and the line, with the licence period and none on the credits", async () => {
+      await provider.createPrepaidInvoice(input);
+      expect(stripeMethods.invoiceItems.create).toHaveBeenNthCalledWith(
+        1,
+        {
+          customer: "cus_ent_001",
+          invoice: "in_pre_001",
+          quantity: 1,
+          unit_amount_decimal: "12000000",
+          currency: "usd",
+          description:
+            "Oxagen platform licence (agreement MSA-2026-014): 1 Oct 2026 to 30 Sep 2027",
+          period: { start: 1790812800, end: 1822348799 },
+          metadata: { prepaid_order_id: ORDER, line: "licence" },
+        },
+        { idempotencyKey: `${ORDER}:item:licence` },
+      );
+      const second = stripeMethods.invoiceItems.create.mock.calls[1]!;
+      expect(second[0]).not.toHaveProperty("period");
+      expect(second[1]).toEqual({ idempotencyKey: `${ORDER}:item:credits` });
+    });
+
+    it("omits custom fields and the memo when the order has neither", async () => {
+      await provider.createPrepaidInvoice({
+        ...input,
+        customFields: [],
+        memo: null,
+      });
+      const params = stripeMethods.invoices.create.mock.calls[0]![0];
+      expect(params).not.toHaveProperty("custom_fields");
+      expect(params).not.toHaveProperty("description");
+    });
+
+    it("adds no item when Stripe refuses the invoice", async () => {
+      stripeMethods.invoices.create.mockRejectedValue(new Error("down"));
+      await expect(provider.createPrepaidInvoice(input)).rejects.toThrow(
+        "down",
+      );
+      expect(stripeMethods.invoiceItems.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("sendPrepaidInvoice", () => {
+    const ORDER = "0192d4a8-7c1e-7a00-8000-0000000000d1";
+    const ref = {
+      orderId: ORDER,
+      invoiceId: "in_pre_001",
+      expectedSubtotalCents: 12_500_000,
+    };
+    const invoice = (over: Record<string, unknown>) => ({
+      id: "in_pre_001",
+      status: "draft",
+      subtotal: 12_500_000,
+      amount_due: 12_500_000,
+      number: null,
+      hosted_invoice_url: null,
+      invoice_pdf: null,
+      ...over,
+    });
+
+    it("sends a draft whose subtotal matches the order, keyed on the order, and answers with the number and pages", async () => {
+      stripeMethods.invoices.retrieve.mockResolvedValue(invoice({}));
+      stripeMethods.invoices.sendInvoice.mockResolvedValue(
+        invoice({
+          status: "open",
+          number: "OXA-0042",
+          metadata: {
+            oxagen_kind: "prepaid_order",
+            prepaid_order_id: ORDER,
+            assistant_spend_cap_cents: "600000",
+          },
+          hosted_invoice_url: "https://invoice.stripe.com/i/pre",
+          invoice_pdf: "https://invoice.stripe.com/i/pre.pdf",
+        }),
+      );
+      expect(await provider.sendPrepaidInvoice(ref)).toEqual({
+        status: "open",
+        number: "OXA-0042",
+        hostedInvoiceUrl: "https://invoice.stripe.com/i/pre",
+        invoicePdfUrl: "https://invoice.stripe.com/i/pre.pdf",
+        amountDueCents: 12_500_000,
+        assistantSpendCap: { kind: "set", capCents: 600_000 },
+      });
+      expect(stripeMethods.invoices.sendInvoice).toHaveBeenCalledWith(
+        "in_pre_001",
+        {},
+        { idempotencyKey: `${ORDER}:send` },
+      );
+    });
+
+    it("never sends a draft whose subtotal differs from the order", async () => {
+      stripeMethods.invoices.retrieve.mockResolvedValue(
+        invoice({ subtotal: 12_499_999 }),
+      );
+      await expect(provider.sendPrepaidInvoice(ref)).rejects.toThrow(
+        /subtotals 12499999, the order 12500000; not sent/,
+      );
+      expect(stripeMethods.invoices.sendInvoice).not.toHaveBeenCalled();
+    });
+
+    it.each(["open", "paid"])(
+      "only reads an invoice that is already %s: a resume sends no second email",
+      async (status) => {
+        stripeMethods.invoices.retrieve.mockResolvedValue(
+          invoice({ status, number: "OXA-0042" }),
+        );
+        expect(await provider.sendPrepaidInvoice(ref)).toMatchObject({
+          status,
+          number: "OXA-0042",
+        });
+        expect(stripeMethods.invoices.sendInvoice).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each(["void", "uncollectible"])(
+      "throws for a %s invoice",
+      async (status) => {
+        stripeMethods.invoices.retrieve.mockResolvedValue(invoice({ status }));
+        await expect(provider.sendPrepaidInvoice(ref)).rejects.toThrow(
+          new RegExp(`is ${status}, neither open nor paid`),
+        );
+      },
+    );
   });
 
   describe("finalizeAndPayGauInvoice", () => {

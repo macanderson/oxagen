@@ -233,12 +233,19 @@ export function fleetSource(reads: FleetReads) {
       apiKeys: refuse,
       costCenters: refuse,
       modelCredential: refuse,
+      dataPlane: refuse,
+      workspaceFacts: refuse,
       sso: refuse,
     },
     // Fleet reads no mandate: the approval cards that draw a mandate bar are
     // the shell drawer's and the Run page's.
     mandates: { list: refuse, get: refuse },
-    audit: { events: refuse, exportEvents: refuse },
+    audit: {
+      events: refuse,
+      exportEvents: refuse,
+      retention: refuse,
+      bundle: refuse,
+    },
     skills: { inventory: refuse, configuration: refuse },
     steering: {
       records: refuse,
