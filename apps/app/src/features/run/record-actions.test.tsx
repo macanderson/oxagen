@@ -255,3 +255,144 @@ describe("export status", () => {
     expect(readRunExport).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * Replace the clipboard for one test. `userEvent.setup()` installs its own,
+ * so this runs after it and puts the original descriptor back.
+ */
+function stubClipboard(writeText: () => Promise<void>) {
+  const original = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+  Object.defineProperty(navigator, "clipboard", {
+    value: { writeText },
+    configurable: true,
+  });
+  return () => {
+    if (original) Object.defineProperty(navigator, "clipboard", original);
+    else Reflect.deleteProperty(navigator, "clipboard");
+  };
+}
+
+describe("export status, what the read did not record", () => {
+  it("says the size is not recorded, and shows no digest, link or expiry it was not given", async () => {
+    readRunExport.mockResolvedValue(exportAt("ready"));
+    await queueExport();
+    await advance(EXPORT_POLL_FIRST_MS);
+    const ready = screen.getByTestId("export-ready");
+    expect(screen.getByTestId("export-size")).toHaveTextContent("Not recorded");
+    expect(screen.queryByTestId("export-digest")).toBeNull();
+    expect(screen.queryByTestId("export-download")).toBeNull();
+    expect(ready).not.toHaveTextContent("Link expires");
+  });
+
+  it("says the export failed with no error recorded rather than inventing one (negative)", async () => {
+    readRunExport.mockResolvedValue(exportAt("failed"));
+    await queueExport();
+    await advance(EXPORT_POLL_FIRST_MS);
+    expect(screen.getByTestId("export-failed")).toHaveTextContent(
+      "The export failed, and the job recorded no error.",
+    );
+  });
+
+  it.each([
+    [
+      { ok: false, reason: "denied", code: "org_role_required" },
+      "Reading an export needs an organization Owner or Admin role.",
+    ],
+    [
+      { ok: false, reason: "pending_approval", accessRequestId: "acr_9" },
+      "Oxagen answered pending_approval when asked for this export.",
+    ],
+  ] as const)(
+    "names the read's refusal %o (negative)",
+    async (refusal, sentence) => {
+      readRunExport.mockResolvedValue(refusal);
+      await queueExport();
+      await advance(EXPORT_POLL_FIRST_MS);
+      expect(screen.getByTestId("export-read-failure")).toHaveTextContent(
+        sentence,
+      );
+    },
+  );
+
+  it("drops a read that answers after the dialog is gone", async () => {
+    let answer!: (value: unknown) => void;
+    readRunExport.mockReturnValue(
+      new Promise((resolve) => {
+        answer = resolve;
+      }),
+    );
+    const { view } = await queueExport();
+    await advance(EXPORT_POLL_FIRST_MS);
+    expect(readRunExport).toHaveBeenCalledOnce();
+    view.unmount();
+    await act(async () => {
+      answer(exportAt("queued"));
+      await Promise.resolve();
+    });
+    // A queued answer would schedule the next read; the unmounted dialog
+    // schedules none.
+    await advance(EXPORT_POLL_BUDGET_MS);
+    expect(readRunExport).toHaveBeenCalledOnce();
+  });
+});
+
+describe("the bundle digest", () => {
+  it("copies the whole digest and says so", async () => {
+    readRunExport.mockResolvedValue(READY);
+    const { user } = await queueExport();
+    await advance(EXPORT_POLL_FIRST_MS);
+    const writeText = vi.fn(() => Promise.resolve());
+    const restore = stubClipboard(writeText);
+    try {
+      await user.click(screen.getByRole("button", { name: "Copy" }));
+      expect(writeText).toHaveBeenCalledWith(DIGEST);
+      expect(
+        await screen.findByRole("button", { name: "Copied" }),
+      ).toBeTruthy();
+    } finally {
+      restore();
+    }
+  });
+
+  it("says the browser refused the clipboard (negative)", async () => {
+    readRunExport.mockResolvedValue(READY);
+    const { user } = await queueExport();
+    await advance(EXPORT_POLL_FIRST_MS);
+    const restore = stubClipboard(() =>
+      Promise.reject(new Error("clipboard denied")),
+    );
+    try {
+      await user.click(screen.getByRole("button", { name: "Copy" }));
+      expect(
+        await screen.findByText(
+          "This browser refused the clipboard. Select the digest and copy it.",
+        ),
+      ).toBeTruthy();
+    } finally {
+      restore();
+    }
+  });
+});
+
+describe("what the viewer may do", () => {
+  it("disables Summarize on a recording with no bodies, and says why, for a role that could summarize", () => {
+    render(
+      <IntlProvider>
+        <RecordActions
+          org="acme"
+          ws="core-platform"
+          runId={RUN}
+          sealed
+          hasSummary={false}
+          summarizable={false}
+          orgRole="owner"
+        />
+      </IntlProvider>,
+    );
+    expect(screen.getByTestId("run-summarize")).toBeDisabled();
+    expect(screen.getByTestId("summarize-no-bodies")).toHaveTextContent(
+      "This recording kept digests and no bodies",
+    );
+    expect(screen.queryByTestId("summarize-no-role")).toBeNull();
+  });
+});

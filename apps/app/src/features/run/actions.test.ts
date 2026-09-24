@@ -6,7 +6,10 @@
 // interface claim more than the control plane did: a command carries the run as
 // its target and nothing wider, and a steer is refused before the kernel when
 // its text is empty or past the contract's ceiling.
-import { STEER_TEXT_MAX } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
+import {
+  COMMAND_REASON_MAX,
+  STEER_TEXT_MAX,
+} from "@oxagen/oxagen/contracts/tacho.command.dispatch";
 import type { runTranscriptGet } from "@oxagen/oxagen/contracts/run.transcript.get";
 import type { ContractOutput } from "@/server/kernel";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -41,6 +44,7 @@ const {
   haltRun,
   readRunExport,
   readTranscriptPage,
+  setRunEnrichment,
   steerRun,
   summarizeRun,
 } = await import("./actions");
@@ -537,4 +541,197 @@ describe("readTranscriptPage", () => {
   // proved directly against `data/live/runs.ts`'s `view()` helper instead
   // (`data/live/runs.test.ts`), which is the same defensive parse this file's
   // own copy of the mapping mirrors (see the doc comment on `toTranscriptPage`).
+});
+
+describe("the refusals each write carries back", () => {
+  it("refuses a halt reason past the contract's ceiling before the kernel runs (negative)", async () => {
+    expect(
+      await haltRun(
+        "acme",
+        "core-platform",
+        RUN,
+        "pause",
+        "r".repeat(COMMAND_REASON_MAX + 1),
+      ),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "command_reason",
+      field: "reason",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("returns a steer the kernel denied as denied (negative)", async () => {
+    invoke.mockRejectedValue(denied("dispatch_command"));
+    expect(
+      await steerRun(
+        "acme",
+        "core-platform",
+        RUN,
+        "Stop and re-read the diff.",
+        "next_step",
+      ),
+    ).toMatchObject({ ok: false, reason: "denied" });
+  });
+
+  it("returns a bisect the handler refused as a conflict (negative)", async () => {
+    invoke.mockRejectedValue(refused("run_not_found"));
+    expect(
+      await bisectRuns("acme", "core-platform", RUN, "tse_other1"),
+    ).toEqual({ ok: false, reason: "conflict", code: "run_not_found" });
+  });
+});
+
+describe("setRunEnrichment", () => {
+  it("writes only the enrichment switch through update_workspace_settings", async () => {
+    invoke.mockRejectedValue(denied("update_workspace_settings"));
+    expect(
+      await setRunEnrichment("acme", "core-platform", false),
+    ).toMatchObject({ ok: false, reason: "denied" });
+    expect(invoke).toHaveBeenCalledWith(
+      "update_workspace_settings",
+      { runEnrichmentEnabled: false },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("refuses a value that is not a boolean, as a client posting to the action could send, before the kernel runs (negative)", async () => {
+    // A server action is an endpoint: its argument arrives from the wire, so
+    // the type the caller was compiled against is not a guarantee.
+    const result: unknown = await Reflect.apply(setRunEnrichment, undefined, [
+      "acme",
+      "core-platform",
+      "yes",
+    ]);
+    expect(result).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_enrichment_setting",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("readTranscriptPage mapping and refusals", () => {
+  const CHAIN = "0b1c2d3e-4f50-4a61-8b72-9c83d94eaf05";
+  const body = (seq: string, sessionUuid?: string) => ({
+    seq,
+    ...(sessionUuid === undefined ? {} : { sessionUuid }),
+    type: "model_request",
+    digest: null,
+    bytesRef: null,
+    redactions: [],
+    fidelity: "full" as const,
+    text: "hello",
+    truncated: false,
+    assembly: null,
+  });
+
+  it("names a subagent's chain on the entry and on each half recorded there, and prints no cost it was not given", async () => {
+    const { toRunTranscript } = await import("@/data/live/mappers/run");
+    const out: TranscriptOutput = {
+      zoom: "everything",
+      kinds: [],
+      entries: [
+        {
+          seq: "20",
+          endSeq: "22",
+          subagent: { sessionUuid: CHAIN, id: null, type: "reviewer" },
+          at: "2026-09-15T08:10:00.000Z",
+          elapsedMs: 5000,
+          kind: "model_call",
+          type: "model_request",
+          label: "claude-opus-5",
+          callId: null,
+          kinds: ["prompt", "responses"],
+          turn: 2,
+          request: body("20", CHAIN),
+          response: body("22"),
+          decision: {
+            seq: "21",
+            sessionUuid: CHAIN,
+            decision: "allow",
+            type: "policy_decision",
+            at: "2026-09-15T08:10:01.000Z",
+          },
+          frames: 3,
+          cost: null,
+          cumulativeCost: null,
+        },
+      ],
+      cursor: null,
+      complete: true,
+    };
+    invoke.mockResolvedValue(out);
+    const page = await readTranscriptPage(
+      "acme",
+      "core-platform",
+      RUN,
+      "everything",
+      [],
+      "ZjoxOQ",
+    );
+    expect(page).toEqual({ ok: true, value: toRunTranscript(out) });
+    if (!page.ok) return;
+    const [entry] = page.value.entries;
+    expect(entry?.subagent).toEqual({ chainRef: CHAIN, type: "reviewer" });
+    expect(entry?.request?.chainRef).toBe(CHAIN);
+    expect(entry?.response).not.toHaveProperty("chainRef");
+    expect(entry?.decision?.chainRef).toBe(CHAIN);
+    expect(entry?.cost).toBeNull();
+    expect(entry?.cumulativeCost).toBeNull();
+  });
+
+  it("carries a denied page across as denied, naming the permission (negative)", async () => {
+    invoke.mockRejectedValue(denied("get_run_transcript"));
+    const page = await readTranscriptPage(
+      "acme",
+      "core-platform",
+      RUN,
+      "steps",
+      [],
+      "ZjoxMQ",
+    );
+    expect(page).toMatchObject({
+      ok: false,
+      reason: "denied",
+      code: expect.any(String),
+    });
+  });
+
+  it("carries a parked page across with the request to wait on (negative)", async () => {
+    invoke.mockRejectedValue({
+      code: "pending_approval",
+      accessRequestId: "acr_0202",
+    });
+    expect(
+      await readTranscriptPage(
+        "acme",
+        "core-platform",
+        RUN,
+        "steps",
+        [],
+        "ZjoxMQ",
+      ),
+    ).toEqual({
+      ok: false,
+      reason: "pending_approval",
+      accessRequestId: "acr_0202",
+    });
+  });
+
+  it("carries a store that did not answer across as unavailable, not as a bad cursor (negative)", async () => {
+    invoke.mockRejectedValue(new Error("socket hang up"));
+    const page = await readTranscriptPage(
+      "acme",
+      "core-platform",
+      RUN,
+      "steps",
+      [],
+      "ZjoxMQ",
+    );
+    expect(page).toMatchObject({ ok: false, reason: "unavailable" });
+    expect(page).not.toMatchObject({ code: "invalid_cursor" });
+  });
 });
