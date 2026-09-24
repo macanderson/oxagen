@@ -22,6 +22,14 @@ import { nth } from "@/test/nth";
 import { WORKING_COPY_LIMIT } from "./view";
 import { ConnectDirectoryDialog, WorkingCopies } from "./working-copies";
 
+// The ceiling is 200 in the app. Here it is 3, so the ceiling case renders
+// three rows rather than two hundred: axe runs after every case, and over a
+// 200-row table it outlasts the hook timeout on a loaded CI runner.
+vi.mock("./view", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./view")>()),
+  WORKING_COPY_LIMIT: 3,
+}));
+
 /** The instant the read settled: every last-seen time is relative to it. */
 const READ_AT = new Date("2026-09-24T12:00:00.000Z");
 
