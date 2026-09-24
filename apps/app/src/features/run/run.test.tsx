@@ -713,7 +713,7 @@ describe("transcript", () => {
     ]);
     expect(turns[1]).toHaveTextContent("done");
     expect(turns[1]).toHaveTextContent("4 steps");
-    expect(turns[1]).toHaveTextContent("seq 2 to 8");
+    expect(turns[1]).toHaveTextContent("steps 1 to 4");
     // What was asked sits above the turn it opened, outside the disclosure,
     // so a collapsed turn still shows it.
     const asked = screen.getByTestId("transcript-you");
@@ -731,6 +731,11 @@ describe("transcript", () => {
     // call the recorder kept only a digest of) draws no row; the Frames tab
     // still has it. What is left is what the run did.
     expect(nodes).toEqual(["control", "model", "tool", "control", "deny"]);
+    // The steps are numbered over the rows drawn: the run start and the
+    // digest-only model call have no row, and leave no gap in the count.
+    expect(
+      screen.getAllByTestId("step-number").map((n) => n.textContent),
+    ).toEqual(["1", "2", "3", "4", "5"]);
     await expectNoAxe(container);
   });
 
@@ -740,8 +745,9 @@ describe("transcript", () => {
       { tab: "transcript" },
     );
     const readout = screen.getByTestId("transport-readout");
-    expect(readout).toHaveTextContent("seq 12");
-    expect(readout).toHaveTextContent("/ 12");
+    // The position counts frames from 1, not the recorded seq, so it runs
+    // without gaps whatever seq numbers the chain carries.
+    expect(readout).toHaveTextContent("frame 13 / 13");
     expect(readout).toHaveTextContent("0:24 / 0:24");
     expect(readout).toHaveTextContent("$0.90");
     const now = screen
@@ -765,14 +771,14 @@ describe("transcript", () => {
       target: { value: "4" },
     });
     const readout = screen.getByTestId("transport-readout");
-    expect(readout).toHaveTextContent("seq 4");
+    expect(readout).toHaveTextContent("frame 5 /");
     expect(readout).toHaveTextContent("$0.38");
     const steps = screen.getAllByTestId("transcript-step");
     const now = steps.find((step) => step.hasAttribute("data-now"));
     expect(now).toHaveTextContent("claude-fable-5-1");
     expect(steps[steps.length - 1]?.className).toContain("opacity-35");
     fireEvent.click(screen.getByRole("button", { name: "Step back" }));
-    expect(readout).toHaveTextContent("seq 3");
+    expect(readout).toHaveTextContent("frame 4 /");
   });
 
   it("opens every step's frames at Everything, and says a digest_only frame has nothing to read", async () => {
@@ -807,7 +813,7 @@ describe("transcript", () => {
         .getAllByTestId("transcript-turn")
         .every((turn) => !turn.hasAttribute("open")),
     ).toBe(true);
-    expect(screen.getByTestId("transport-readout")).toHaveTextContent("seq 12");
+    expect(screen.getByTestId("transport-readout")).toHaveTextContent("frame 13 /");
     expect(replaceState).toHaveBeenCalledWith(
       null,
       "",
@@ -887,11 +893,11 @@ describe("transcript", () => {
         target: { value: "2" },
       });
       expect(screen.getByTestId("transport-readout")).not.toHaveTextContent(
-        "seq 12",
+        "frame 13 /",
       );
       fireEvent.click(screen.getByRole("button", { name: "go live" }));
       expect(screen.getByTestId("transport-readout")).toHaveTextContent(
-        "seq 12",
+        "frame 13 /",
       );
     } finally {
       vi.useRealTimers();
@@ -907,21 +913,21 @@ describe("transcript", () => {
       );
       fireEvent.click(screen.getByRole("button", { name: "Play" }));
       const readout = screen.getByTestId("transport-readout");
-      expect(readout).toHaveTextContent("seq 0");
+      expect(readout).toHaveTextContent("frame 1 /");
       act(() => {
         vi.advanceTimersByTime(2000);
       });
-      expect(readout).toHaveTextContent("seq 1");
+      expect(readout).toHaveTextContent("frame 2 /");
       fireEvent.click(screen.getByRole("button", { name: "×2" }));
       act(() => {
         vi.advanceTimersByTime(1000);
       });
-      expect(readout).toHaveTextContent("seq 2");
+      expect(readout).toHaveTextContent("frame 3 /");
       fireEvent.click(screen.getByRole("button", { name: "Pause playback" }));
       act(() => {
         vi.advanceTimersByTime(10_000);
       });
-      expect(readout).toHaveTextContent("seq 2");
+      expect(readout).toHaveTextContent("frame 3 /");
     } finally {
       vi.useRealTimers();
     }

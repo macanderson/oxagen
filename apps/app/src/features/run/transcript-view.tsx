@@ -453,10 +453,15 @@ function StepRow({
   open,
   onToggle,
   place,
+  number,
   nested,
 }: {
   step: TranscriptStep;
   digest: StepDigest;
+  /** The step's place in the run, counted over the rows drawn, so a frame
+   * with no row (a harness allow, a digest-only call) leaves no gap. A
+   * subagent's step reads `4.2`, the second step under step 4. */
+  number: string;
   pos: number;
   open: boolean;
   onToggle: (id: string, open: boolean) => void;
@@ -519,6 +524,12 @@ function StepRow({
           </span>
           <span className="flex min-w-0 flex-wrap items-baseline gap-2">
             <Chevron />
+            <span
+              data-testid="step-number"
+              className="shrink-0 font-mono text-[10.5px] tabular-nums text-muted-foreground"
+            >
+              {number}
+            </span>
             <span
               className={`flex shrink-0 items-baseline gap-1.5 font-mono text-xs font-semibold ${NAME[digest.node]}`}
             >
@@ -649,6 +660,7 @@ function Role({ who, text }: { who: "you" | "agent"; text: string }) {
 
 function TurnBlock({
   turn,
+  firstStep,
   pos,
   running,
   openIds,
@@ -656,6 +668,8 @@ function TurnBlock({
   place,
 }: {
   turn: TranscriptTurn;
+  /** The run-wide number of this turn's first drawn step. */
+  firstStep: number;
   pos: number;
   running: boolean;
   openIds: Set<string>;
@@ -667,6 +681,7 @@ function TurnBlock({
   const { first, last } = turn;
   const cost = frameCost(turn.frames);
   const seconds = (Date.parse(last.at) - Date.parse(first.at)) / 1000;
+  const steps = visibleSteps(turn);
   return (
     <>
       {/* What was asked sits ABOVE the turn it opened, outside the
@@ -710,10 +725,15 @@ function TurnBlock({
               </span>
             )}
             <span className="ml-auto flex flex-wrap gap-1.5">
-              <Chip>
-                {t("stepCount", { count: visibleSteps(turn).length })}
-              </Chip>
-              <Chip>{t("seqSpan", { from: first.seq, to: last.seq })}</Chip>
+              <Chip>{t("stepCount", { count: steps.length })}</Chip>
+              {steps.length === 0 ? null : (
+                <Chip>
+                  {t("stepSpan", {
+                    from: firstStep,
+                    to: firstStep + steps.length - 1,
+                  })}
+                </Chip>
+              )}
               <Chip>{formatClock(seconds, locale)}</Chip>
               {cost === null ? null : (
                 <Chip tone="cost">
@@ -723,12 +743,14 @@ function TurnBlock({
             </span>
           </div>
         </summary>
-        {visibleSteps(turn).map((step) => {
+        {steps.map((step, index) => {
           const children = visibleChildren(step);
+          const number = firstStep + index;
           return (
             <StepRow
               key={step.id}
               step={step}
+              number={String(number)}
               digest={stepDigest(step)}
               pos={pos}
               open={openIds.has(step.id)}
@@ -737,10 +759,11 @@ function TurnBlock({
               nested={
                 children.length === 0
                   ? null
-                  : children.map((child) => (
+                  : children.map((child, childIndex) => (
                       <StepRow
                         key={child.id}
                         step={child}
+                        number={`${number}.${childIndex + 1}`}
                         digest={stepDigest(child)}
                         pos={pos}
                         open={openIds.has(child.id)}
@@ -774,9 +797,9 @@ function Readout({ entries, pos }: { entries: Frames; pos: number }) {
       className="whitespace-nowrap font-mono text-[11.5px] tabular-nums text-muted-foreground"
     >
       <b className="font-medium text-foreground">
-        {t("position", { seq: here.seq })}
+        {t("position", { n: pos + 1 })}
       </b>{" "}
-      {t("of", { seq: frameAt(entries, head).seq })}
+      {t("of", { n: head + 1 })}
       {" · "}
       {formatClock(here.elapsedMs / 1000, locale)} /{" "}
       {formatClock(frameAt(entries, head).elapsedMs / 1000, locale)}
@@ -839,6 +862,16 @@ export function TranscriptView({
   const [pageFailure, setPageFailure] = useState<PageFailure | null>(null);
   const head = entries.length - 1;
   const turns = useMemo(() => buildTranscript(entries), [entries]);
+  // Each turn's first step number, counted over the rows drawn, so the
+  // numbers run 1, 2, 3 across the run whatever frames have no row.
+  const firstSteps = useMemo(() => {
+    let next = 1;
+    return turns.map((turn) => {
+      const at = next;
+      next += visibleSteps(turn).length;
+      return at;
+    });
+  }, [turns]);
   const live = status === "live";
 
   const [zoom, setZoom] = useState<TranscriptZoom>(initialZoom);
@@ -1167,7 +1200,7 @@ export function TranscriptView({
             max={head}
             value={pos}
             aria-label={t("scrub")}
-            aria-valuetext={t("position", { seq: frameAt(entries, pos).seq })}
+            aria-valuetext={t("position", { n: pos + 1 })}
             onChange={(e) => {
               moveTo(Number(e.currentTarget.value));
             }}
@@ -1221,10 +1254,11 @@ export function TranscriptView({
         ref={bodyRef}
         className="max-h-[min(66vh,760px)] overflow-y-auto motion-safe:scroll-smooth"
       >
-        {turns.map((turn) => (
+        {turns.map((turn, index) => (
           <TurnBlock
             key={turn.id}
             turn={turn}
+            firstStep={firstSteps[index] ?? 1}
             pos={pos}
             running={activelyLive && turn.id === lastTurnId}
             openIds={shown}

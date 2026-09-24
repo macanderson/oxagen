@@ -4660,7 +4660,7 @@ type Messages = {
       frameCount: string;
       repeats: string;
       reply: string;
-      seqSpan: string;
+      stepSpan: string;
       ms: string;
       live: string;
       goLive: string;

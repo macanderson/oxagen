@@ -22,6 +22,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   TRANSCRIPT_ENTRY_DEFAULT,
   RunTranscript,
+  type TranscriptEntry,
   type TranscriptKind,
 } from "@/data/contracts/run";
 import { toRunTranscript } from "@/data/live/mappers/run";
@@ -273,6 +274,123 @@ describe("a subagent's frames", () => {
         .getAllByRole("link")
         .some((link) => link.getAttribute("href")?.includes("body=4")),
     ).toBe(true);
+  });
+});
+
+describe("a subagent's steps under its Task call", () => {
+  // The shape of a wrapped Claude Code run: the gate, the harness check and
+  // the receipt of one call share its tool_use_id, and the subagent's own
+  // calls land on its chain, numbered from 0, between the Task call's frames.
+  const CHAIN = "0192d4a8-7c1e-7a00-8000-0000000000c3";
+  const sub = { chainRef: CHAIN, type: "Explore", spawnKey: "toolu_C" };
+  const frame = (over: Partial<TranscriptEntry>): TranscriptEntry =>
+    transcriptEntry({
+      kind: "frame",
+      type: "oxagen:note",
+      label: "oxagen:note",
+      callKey: null,
+      request: null,
+      response: null,
+      decision: null,
+      turn: 1,
+      frames: 1,
+      cost: null,
+      cumulativeCost: null,
+      kinds: [],
+      ...over,
+    });
+  const gate = (
+    seq: string,
+    key: string,
+    tool: string,
+    target: string | null,
+    over: Partial<TranscriptEntry> = {},
+  ) =>
+    frame({
+      seq,
+      kind: "policy",
+      type: "policy_decision",
+      label: `allow ${tool}`,
+      callKey: key,
+      target,
+      decision: {
+        seq,
+        decision: "allow",
+        type: "policy_decision",
+        at: transcriptEntry().at,
+      },
+      ...over,
+    });
+  const harness = (seq: string, key: string) =>
+    frame({
+      seq,
+      type: "harness_permission",
+      label: "allow Bash",
+      callKey: key,
+    });
+  const call = (
+    seq: string,
+    key: string,
+    label: string,
+    over: Partial<TranscriptEntry> = {},
+  ) =>
+    frame({
+      seq,
+      kind: "tool_call",
+      type: "tool_call",
+      label,
+      callKey: key,
+      response: transcriptBody({
+        seq,
+        fidelity: "digest_only",
+        bytesRef: null,
+        text: null,
+      }),
+      ...over,
+    });
+  const entries = [
+    frame({
+      seq: "1",
+      type: "turn_start",
+      request: transcriptBody({ seq: "1", text: "Find the flaky test." }),
+    }),
+    gate("2", "toolu_A", "Bash", "git status"),
+    harness("3", "toolu_A"),
+    call("4", "toolu_A", "Bash ok"),
+    gate("5", "toolu_C", "Task", null),
+    harness("6", "toolu_C"),
+    frame({ seq: "7", type: "subagent_start", callKey: "toolu_C" }),
+    gate("0", "toolu_X1", "Grep", "flaky", { subagent: sub }),
+    call("1", "toolu_X1", "Grep ok", { subagent: sub }),
+    gate("2", "toolu_X2", "Read", "apps/app/src/flaky.test.ts", {
+      subagent: sub,
+    }),
+    call("3", "toolu_X2", "Read ok", { subagent: sub }),
+    call("8", "toolu_C", "Task ok"),
+    gate("9", "toolu_B", "Bash", "git diff"),
+    harness("10", "toolu_B"),
+    call("11", "toolu_B", "Bash ok"),
+  ];
+
+  it("draws the subagent's calls inside the Task step, numbered under it, with no gap in the run's count", () => {
+    renderSection({ read: readOk(runTranscript({ entries })) });
+    const nested = screen.getByTestId("transcript-subagent-steps");
+    const task = nested.closest('[data-testid="transcript-step"]');
+    if (!(task instanceof HTMLElement))
+      throw new Error("expected the Task step");
+    expect(task).toHaveTextContent("Task");
+    const inner = within(nested).getAllByTestId("transcript-step");
+    expect(inner.map((row) => row.textContent)).toEqual([
+      expect.stringContaining("Grep"),
+      expect.stringContaining("Read"),
+    ]);
+    expect(inner[0]).toHaveTextContent("flaky");
+    // The turn's start, then one step per call: the harness's allow draws no
+    // row of its own, so it leaves no gap in the count.
+    const numbers = screen
+      .getAllByTestId("step-number")
+      .map((n) => n.textContent);
+    expect(numbers).toEqual(["1", "2", "3", "3.1", "3.2", "4"]);
   });
 });
 
