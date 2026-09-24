@@ -113,10 +113,10 @@ describe("priceEntriesFromRateCards", () => {
     );
     const sonnet = rows.filter((r) => r.model === "claude-sonnet-5");
     expect(sonnet.map((r) => [r.tokenClass, r.microsPerMillion])).toEqual([
-      ["input_uncached", 3_000_000n],
-      ["cache_read", 300_000n],
-      ["cache_write_5m", 3_750_000n],
-      ["output", 15_000_000n],
+      ["input_uncached", 2_000_000n],
+      ["cache_read", 200_000n],
+      ["cache_write_5m", 2_500_000n],
+      ["output", 10_000_000n],
     ]);
     expect(
       sonnet.every((r) => r.effectiveFrom === FROM && r.unit === "token"),
