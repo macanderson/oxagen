@@ -158,6 +158,11 @@ export function createRunWorkGetHandler(
     if (diffs.length > WORK_DIFF_CAP) warnings.push("captured_diff_limit");
     if (subagents.length > WORK_SUBAGENT_CAP) warnings.push("subagent_limit");
     if (!contexts.length) warnings.push("checkout_context_not_recorded");
+    // The facts above come from every frame the host sent, including frames
+    // past a chain break. The break is reported here rather than by dropping
+    // them, so the page shows what the store holds and says what the chain
+    // cannot prove (ADR-171).
+    if (run.row.session.chainVerified === false) warnings.push("chain_break");
     return {
       runId: input.runId,
       machine: run.row.host?.hostname ? { name: run.row.host.hostname } : null,

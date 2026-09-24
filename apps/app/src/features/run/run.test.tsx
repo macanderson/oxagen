@@ -327,13 +327,16 @@ describe("header", () => {
     expect(screen.queryByTestId("run-wall-ticking")).toBeNull();
   });
 
-  it("leaves out the generated name when automatic names are disabled", async () => {
+  it("shows the harness title when automatic names are disabled", async () => {
+    // With enrichment off, get_run already swaps Oxagen's name for the title
+    // the harness gave the session (`resolveRun`). The header shows what it
+    // is sent; dropping it hid the one title the operator chose to keep.
     await renderRun({
       detail: ok(
         runDetail({
           run: runRow({
             enrichmentEnabled: false,
-            name: "Old generated name",
+            name: "Fix the billing proration",
             taskRef: "A derived project label",
             summary: null,
           }),
@@ -341,8 +344,10 @@ describe("header", () => {
       ),
       transcript: ok(runTranscript()),
     });
-    expect(screen.queryByText("Old generated name")).toBeNull();
     expect(screen.getByTestId("run-when")).toHaveTextContent(
+      "Fix the billing proration",
+    );
+    expect(screen.getByTestId("run-when")).not.toHaveTextContent(
       "A derived project label",
     );
     expect(
@@ -350,6 +355,25 @@ describe("header", () => {
         name: "Automatic run names and summaries",
       }),
     ).not.toBeChecked();
+  });
+
+  it("falls back to the task label when names are disabled and the harness gave none", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            enrichmentEnabled: false,
+            name: null,
+            taskRef: "A derived project label",
+            summary: null,
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-when")).toHaveTextContent(
+      "A derived project label",
+    );
   });
 
   it("draws the agent, status, tier and task chips, and the rig the run ran on", async () => {

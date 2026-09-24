@@ -1,6 +1,6 @@
 import { schema, type withTenantDb } from "@oxagen/database";
 import type { TachoEvent } from "@oxagen/tacho";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, or, type SQL, sql } from "drizzle-orm";
 import {
   fileIdentityOf,
   languageOf,
@@ -52,6 +52,42 @@ function legacyRelativeOf(row: {
       : row.path;
   if (relative.length === 0 || isAbsoluteStoredPath(relative)) return undefined;
   return relative;
+}
+
+/**
+ * The `session_files` rows that count as files one session changed.
+ *
+ * A file changed by a shell command, a formatter or a build has no attested
+ * write, edit or delete, only the `observed_status` the reconciliation gave
+ * it, so both halves count. The two halves are joined with `or()` and not
+ * written into one `sql` fragment: `and()` does not parenthesise its
+ * arguments, so a bare `... > 0 OR observed_status IN (...)` bound looser
+ * than the session filter and counted every observed row in the workspace.
+ * That is how every run on one laptop came to be titled with the same
+ * count of about 2,278 files.
+ *
+ * `observedStatusColumn` is false until `tacho.session_files.observed_status`
+ * exists; the attested writes alone are counted until then.
+ */
+export function sessionChangedFilesWhere(
+  sessionId: string,
+  observedStatusColumn: boolean,
+): SQL | undefined {
+  const attested = sql`${schema.tachoSessionFiles.writes} + ${schema.tachoSessionFiles.edits} + ${schema.tachoSessionFiles.deletes} > 0`;
+  return and(
+    eq(schema.tachoSessionFiles.sessionId, sessionId),
+    observedStatusColumn
+      ? or(
+          attested,
+          inArray(schema.tachoSessionFiles.observedStatus, [
+            "added",
+            "modified",
+            "deleted",
+            "renamed",
+          ]),
+        )
+      : attested,
+  );
 }
 
 export async function rollupFiles(

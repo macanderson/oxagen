@@ -505,8 +505,9 @@ function When({ run }: { run: RunRow }) {
   const format = useFormatter();
   const when = (at: string) =>
     format.dateTime(new Date(at), { dateStyle: "medium", timeStyle: "medium" });
-  const title =
-    (run.enrichmentEnabled === false ? null : run.name) ?? run.taskRef;
+  // With automatic names off, get_run already sends the harness's own title
+  // as `name` (or null), so the header takes it as sent.
+  const title = run.name ?? run.taskRef;
   return (
     <p
       data-testid="run-when"

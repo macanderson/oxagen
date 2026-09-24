@@ -120,6 +120,22 @@ export interface WalStats {
   oldestUnshippedAt?: string;
 }
 
+/**
+ * A retried batch holds an event at a seq the file already holds with a
+ * different hash. The batch was sealed on a chain that is not the one on
+ * disk, so no retry of it can ever land: the caller has to set it aside
+ * rather than offer it again.
+ */
+export class WalRecoveryConflict extends Error {
+  constructor(
+    readonly sessionUuid: string,
+    readonly seq: number,
+  ) {
+    super(`WAL recovery conflict at ${sessionUuid}:${seq}`);
+    this.name = "WalRecoveryConflict";
+  }
+}
+
 interface Cursor {
   shipped: Record<string, number>;
   sealed: Record<string, string>;
@@ -477,9 +493,7 @@ export class Wal {
         prior.hash !== event.hash ||
         prior.event_id_idem !== event.event_id_idem
       )
-        throw new Error(
-          `WAL recovery conflict at ${event.session_uuid}:${event.seq}`,
-        );
+        throw new WalRecoveryConflict(event.session_uuid, event.seq);
     }
     // A recovery can truncate a torn tail, which moves the bytes after it.
     for (const event of events) this.resume.delete(event.session_uuid);
