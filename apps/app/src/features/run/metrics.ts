@@ -119,6 +119,14 @@ type WallClock = {
   /** Start to seal, or start to the last recorded frame on a live run; null when neither is recorded. */
   ms: number | null;
   sealed: boolean;
+  /**
+   * Oxagen closed the run for silence (`sealSource` `idle_timeout`, #3980):
+   * the seal is when the close ran, 12 hours after the last event, and the
+   * host never said the run ended, so there is no end to measure to. Every
+   * reader of the clock, the stat row and the Cost tab's Wall clock alike,
+   * reads it as not recorded.
+   */
+  closedIdle: boolean;
   parts: WallParts | null;
   lead: WallLead | null;
 };
@@ -515,6 +523,8 @@ function wallClock(
   // run by the upload. A live run runs to its last recorded frame.
   const endedAt = run.status === "live" ? null : (run.endedAt ?? run.sealedAt);
   const sealed = endedAt !== null;
+  if (run.status !== "live" && run.sealSource === "idle_timeout")
+    return { ms: null, sealed, closedIdle: true, parts: null, lead: null };
   const last = entries?.at(-1);
   const ms = sealed
     ? Math.max(0, Date.parse(endedAt) - Date.parse(run.startedAt))
@@ -522,7 +532,7 @@ function wallClock(
       ? null
       : last.elapsedMs;
   if (ms === null || entries === null || turns === null || ms === 0)
-    return { ms, sealed, parts: null, lead: null };
+    return { ms, sealed, closedIdle: false, parts: null, lead: null };
   let model = 0;
   let tool = 0;
   for (const turn of turns) {
@@ -542,7 +552,13 @@ function wallClock(
   const lead = WALL_LEADS.reduce((best, key) =>
     parts[key] > parts[best] ? key : best,
   );
-  return { ms, sealed, parts, lead: parts[lead] > 0 ? lead : null };
+  return {
+    ms,
+    sealed,
+    closedIdle: false,
+    parts,
+    lead: parts[lead] > 0 ? lead : null,
+  };
 }
 
 export function runMetrics({

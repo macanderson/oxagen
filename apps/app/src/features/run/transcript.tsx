@@ -10,29 +10,39 @@
 // and a transcript that could not carry the whole run pages the rest in.
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
-import type { RunTranscript, TranscriptKind } from "@/data/contracts/run";
+import type { RunTranscript } from "@/data/contracts/run";
 import { TRANSCRIPT_KINDS } from "@/data/contracts/run";
 import type { Read } from "@/data/read";
 import { ReadFailure } from "@/ui/read-failure";
 import { LiveEmptyFollow } from "./live-empty-follow";
 import { Panel } from "./parts";
-import type { RunTabProps } from "./tab-props";
+import type { KindFilter, RunTabProps } from "./tab-props";
 import { isNonEmpty } from "./transcript-model";
 import { type TranscriptRun, TranscriptView } from "./transcript-view";
 
 type Place = { org: string; ws: string; runId: string };
 
 /**
- * The contract's filter words as a URL value: `tools,errors`. The order
- * follows the contract's own list rather than the order they were pressed, so
- * one filter has one URL. The tab strip carries it on the Transcript tab's
- * link, and the tab opens its chips from it.
+ * The filter as a URL value: `tools,errors`, or `none`. The order follows the
+ * contract's own list rather than the order they were pressed, so one filter
+ * has one URL. The tab strip carries it on the Transcript tab's link, and the
+ * tab opens its chips from it.
  */
-export function kindsParam(
-  kinds: readonly TranscriptKind[],
-): string | undefined {
+export function kindsParam(kinds: KindFilter): string | undefined {
+  if (kinds === "none") return "none";
   const picked = TRANSCRIPT_KINDS.filter((kind) => kinds.includes(kind));
   return picked.length === 0 ? undefined : picked.join(",");
+}
+
+/**
+ * `?kinds=` as a filter. `none` is every chip off, as the all and none toggle
+ * leaves them; an unknown word is dropped, not refused.
+ */
+export function parseKinds(raw: string | null): KindFilter {
+  if (raw === null) return [];
+  if (raw === "none") return "none";
+  const asked = new Set(raw.split(","));
+  return TRANSCRIPT_KINDS.filter((kind) => asked.has(kind));
 }
 
 /** @internal The tab's body over one read; the page renders it through `TranscriptTab`. */
@@ -48,7 +58,7 @@ export function TranscriptSection({
   read: Read<RunTranscript>;
   run: TranscriptRun;
   /** The URL's `?kinds=`, which sets the chips the tab opens with. */
-  kinds: readonly TranscriptKind[];
+  kinds: KindFilter;
 } & Place) {
   const t = useTranslations("run.transcript");
   if (!read.ok) {

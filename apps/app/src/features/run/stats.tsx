@@ -268,9 +268,6 @@ export function StatRow({
   // A count read from a transcript that stopped short of the run is a floor.
   const floor = metrics.whole ? "" : "+";
   const displayedCost = metrics.cost ?? run.reportedCost ?? null;
-  // A run Oxagen closed for silence has no recorded end: the seal is when the
-  // close ran, 12 hours after the last event (#3980).
-  const endUnrecorded = run.sealSource === "idle_timeout";
   const wastedPositive =
     metrics.wasted !== null && metrics.wasted.micros !== "0";
   return (
@@ -356,18 +353,14 @@ export function StatRow({
         testId="run-stat-wall"
         label={t("wallClock")}
         note={
-          endUnrecorded
+          wall.closedIdle
             ? t("noEnd")
             : wall.lead === null
               ? undefined
               : t(`mostly.${wall.lead}`)
         }
       >
-        {endUnrecorded || wall.ms === null ? (
-          <NoValue />
-        ) : (
-          formatDuration(wall.ms, locale)
-        )}
+        {wall.ms === null ? <NoValue /> : formatDuration(wall.ms, locale)}
       </Stat>
       <Stat
         testId="run-stat-cache"

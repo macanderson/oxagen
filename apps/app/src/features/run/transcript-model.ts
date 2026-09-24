@@ -691,14 +691,16 @@ export function stepDigest(step: TranscriptStep): StepDigest {
 function toolClose(step: TranscriptStep): TranscriptEntry | undefined {
   const close = step.frames.find((frame) => TOOL_CLOSE.has(frame.type));
   if (close !== undefined) return close;
-  const { first } = step;
-  // A receipt that opens its own step (no request frame before it) is the
-  // whole exchange; an intention that opens one is only the request.
-  return first.kind === "tool_call" &&
-    first.type !== TOOL_REQUESTED &&
-    first.type !== TOOL_ENGINE_STARTED
-    ? first
-    : undefined;
+  // A receipt with no request frame before it is the whole exchange; an
+  // intention is only the request. A step gathered on its call key opens on
+  // the gate's decision when Oxagen decided first (`callFold`), so the
+  // receipt is looked for among every frame, not only the first.
+  return step.frames.find(
+    (frame) =>
+      frame.kind === "tool_call" &&
+      frame.type !== TOOL_REQUESTED &&
+      frame.type !== TOOL_ENGINE_STARTED,
+  );
 }
 
 /**
@@ -1211,7 +1213,13 @@ function toolRow(step: TranscriptStep): FeedRow {
       (frame) =>
         frame.request?.truncated === true || frame.response?.truncated === true,
     ),
-    frame: refOf(close ?? step.first),
+    // The call's own frame: its receipt, or its request while it has none.
+    // Never the gate's, which a step gathered on the call key can open on.
+    frame: refOf(
+      close ??
+        step.frames.find((frame) => frame.kind === "tool_call") ??
+        step.first,
+    ),
   };
   return {
     ...base(step.id, step.first, "tools", step.last.cumulativeCost),

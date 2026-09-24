@@ -11,8 +11,6 @@
 import { notFound } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Suspense, type ReactNode } from "react";
-import type { TranscriptKind } from "@/data/contracts/run";
-import { TRANSCRIPT_KINDS } from "@/data/contracts/run";
 import type { DataSource } from "@/data/ports";
 import { PAGE_FAILURES, readError } from "@/data/read";
 import type { WsCtx } from "@/server/viewer";
@@ -30,18 +28,11 @@ import { RunDenied, RunEmpty, RunError, RunPending } from "./states";
 import { StatRow, SummaryPanel } from "./stats";
 import type { RunTabProps } from "./tab-props";
 import { RunTabs, type Tab, type TabFigure, tabOf } from "./tabs";
-import { TranscriptTab } from "./transcript";
+import { parseKinds, TranscriptTab } from "./transcript";
 import { buildFeed } from "./transcript-model";
 import { readWholeTranscript } from "./whole-transcript";
 import { ChangesLoading, ChangesPanel } from "./work";
 import { readRunWork } from "./work-ci";
-
-/** `?kinds=tools,errors` as the contract's own list; an unknown word is dropped, not refused. */
-function parseKinds(raw: string | null): TranscriptKind[] {
-  if (raw === null) return [];
-  const asked = new Set(raw.split(","));
-  return TRANSCRIPT_KINDS.filter((kind) => asked.has(kind));
-}
 
 /** The tab strip, with what each tab carries beside its name, from the reads the page already made. */
 function Tabs({
@@ -175,7 +166,7 @@ export async function Run({
   runId: string;
   /** `?tab=`; anything but a tab's name or an old alias opens Transcript. */
   tab: string | null;
-  /** `?kinds=`, the chips pressed, comma-separated; an unknown word is dropped. */
+  /** `?kinds=`, the chips a link opens with, comma-separated, or `none`; an unknown word is dropped. */
   kinds: string | null;
   /** `?frames=`, the opaque cursor a later frames page was read from. */
   frames: string | null;

@@ -1613,6 +1613,23 @@ describe("chips", () => {
     expect(screen.getByTestId("chip-all")).toHaveTextContent("all");
   });
 
+  it("opens every chip off from a link that says none, and keeps none on the tab's link", async () => {
+    const { calls } = await renderRun(
+      { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
+      { tab: "transcript", kinds: "none" },
+    );
+    expect(calls.transcript).toHaveLength(1);
+    expect(calls.transcript[0]?.[3]).toEqual({ kinds: [] });
+    expect(screen.getByTestId("chip-tools")).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(screen.getByRole("tab", { name: /Transcript/ })).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=transcript&kinds=none",
+    );
+  });
+
   it("carries the chips on the Transcript tab's own link, so one filter has one URL", async () => {
     await renderRun(
       { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
@@ -2258,6 +2275,45 @@ describe("an open run's cost and the idle close (#3980)", () => {
     );
     const stats = within(screen.getByTestId("run-stats"));
     expect(stats.getByText("no end recorded")).toBeTruthy();
+    expect(
+      within(screen.getByTestId("run-stat-wall")).getByText("not recorded"),
+    ).toBeTruthy();
+  });
+
+  it("gives the Cost tab's wall clock no end for a run Oxagen closed for silence, as the stat row does", async () => {
+    await renderRun(
+      {
+        detail: ok(
+          runDetail({
+            run: runRow({ outcome: "unknown", sealSource: "idle_timeout" }),
+          }),
+        ),
+        transcript: ok(runTranscript()),
+      },
+      { tab: "cost" },
+    );
+    expect(
+      within(screen.getByTestId("inst-wall")).getByText("not recorded"),
+    ).toBeTruthy();
+  });
+
+  it("calls an open run's figures an estimate on the Cost tab and the stat row alike, even when its row reads final", async () => {
+    // A row the idle close sealed reads final until the next frame rebuilds
+    // it open; the run's own open state decides, once, in metrics.ts.
+    await renderRun(
+      {
+        detail: ok(
+          runDetail({ run: runRow({ status: "live", sealedAt: null }) }),
+        ),
+        transcript: ok(runTranscript()),
+        cost: ok(runCost()),
+      },
+      { tab: "cost" },
+    );
+    expect(screen.getByTestId("cost-estimate")).toBeTruthy();
+    expect(
+      within(screen.getByTestId("run-stat-cost")).getByText("estimate"),
+    ).toBeTruthy();
   });
 });
 

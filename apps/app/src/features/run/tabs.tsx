@@ -8,11 +8,10 @@
 // buttons carry.
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
-import type { TranscriptKind } from "@/data/contracts/run";
 import { routes } from "@/shared/safe-path";
 import { SafeLink } from "@/ui/navigation";
 import { tabCount, tabLink } from "@/ui/route-tabs";
-import type { Place } from "./tab-props";
+import type { KindFilter, Place } from "./tab-props";
 import { kindsParam } from "./transcript";
 
 /** The seven tabs, in the spec's order (pages/run.md). */
@@ -68,7 +67,7 @@ export function RunTabs({
 }: {
   selected: Tab;
   figures: Partial<Record<Tab, TabFigure>>;
-  kinds: readonly TranscriptKind[];
+  kinds: KindFilter;
   place: Place;
 }) {
   const t = useTranslations("run.tabs");

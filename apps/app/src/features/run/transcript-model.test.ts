@@ -2206,3 +2206,58 @@ describe("a wrapped Claude Code session", () => {
     expect(harnessRows).toHaveLength(1);
   });
 });
+
+describe("a call whose step opens on Oxagen's gate", () => {
+  // Oxagen decides before the call's own frames land, so a step gathered on
+  // the call key opens on the gate. The receipt and the frame a row links are
+  // looked for among the call's frames, never taken from the first.
+  const gate = frame({
+    seq: "1",
+    kind: "policy",
+    type: "policy_decision",
+    label: "allow Bash",
+    callKey: "tc_1",
+    decision: { seq: "1", decision: "allow", type: "policy_decision", at: T0 },
+  });
+  const request = frame({
+    seq: "2",
+    kind: "tool_call",
+    type: "tool_requested",
+    label: "Bash",
+    callKey: "tc_1",
+  });
+  // A completed call in the ledger's own vocabulary, not a wrapped tool_call.
+  const receipt = frame({
+    seq: "3",
+    kind: "tool_call",
+    type: "tool.call_completed",
+    label: "Bash ok",
+    callKey: "tc_1",
+    response: body("3", null),
+  });
+  const callOf = (entries: TranscriptEntry[]) => {
+    const row = buildFeed(entries).find((r) => r.kind === "tool");
+    if (row?.kind !== "tool") throw new Error("expected a tool row");
+    return row.call;
+  };
+
+  it("reads the call done and links its receipt", () => {
+    const call = callOf([gate, request, receipt]);
+    expect(call.pending).toBe(false);
+    expect(call.frame).toEqual({
+      seq: "3",
+      type: "tool.call_completed",
+      chainRef: null,
+    });
+  });
+
+  it("links a call still waiting to its request, never to the gate (negative)", () => {
+    const call = callOf([gate, request]);
+    expect(call.pending).toBe(true);
+    expect(call.frame).toEqual({
+      seq: "2",
+      type: "tool_requested",
+      chainRef: null,
+    });
+  });
+});

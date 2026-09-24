@@ -776,6 +776,51 @@ describe("runMetrics over a partial record", () => {
     expect(m.toolCalls?.[0]?.ms).toBe(4000);
   });
 
+  it("has no wall clock for a run Oxagen closed for silence, whatever its row's end says", () => {
+    const m = runMetrics({
+      run: runRow({ sealSource: "idle_timeout" }),
+      cost: readOk(runCost()),
+      transcript: readOk(mockupTranscript()),
+      book: null,
+    });
+    expect(m.wall).toEqual({
+      ms: null,
+      sealed: true,
+      closedIdle: true,
+      parts: null,
+      lead: null,
+    });
+  });
+
+  it("calls an open run's cost an estimate, and a sealed run's final once the rollup priced it sealed", () => {
+    const rollup = runCost().rollup;
+    if (rollup === null) throw new Error("the builder's rollup is present");
+    const estimateOf = (
+      run: Parameters<typeof runRow>[0],
+      isEstimate: boolean | undefined,
+    ) =>
+      runMetrics({
+        run: runRow(run),
+        cost: readOk(runCost({ rollup: { ...rollup, isEstimate } })),
+        transcript: readOk(mockupTranscript()),
+        book: null,
+      }).costIsEstimate;
+    expect(estimateOf({ sealedAt: null }, false)).toBe(true);
+    expect(estimateOf({}, true)).toBe(true);
+    expect(estimateOf({}, false)).toBe(false);
+    expect(estimateOf({}, undefined)).toBe(false);
+    // With no rollup, the run row's own flag decides.
+    const rowOnly = (costIsEstimate: boolean) =>
+      runMetrics({
+        run: runRow({ costIsEstimate }),
+        cost: readOk(runCost({ rollup: null })),
+        transcript: readOk(mockupTranscript()),
+        book: null,
+      }).costIsEstimate;
+    expect(rowOnly(true)).toBe(true);
+    expect(rowOnly(false)).toBe(false);
+  });
+
   it("keeps a sealed run's wall clock when the transcript read failed, but draws no split of it (negative)", () => {
     const m = runMetrics({
       run: runRow(),
@@ -786,6 +831,7 @@ describe("runMetrics over a partial record", () => {
     expect(m.wall).toEqual({
       ms: 3_300_000,
       sealed: true,
+      closedIdle: false,
       parts: null,
       lead: null,
     });
@@ -808,6 +854,7 @@ describe("runMetrics over a partial record", () => {
     expect(instant.wall).toEqual({
       ms: 0,
       sealed: true,
+      closedIdle: false,
       parts: null,
       lead: null,
     });
@@ -833,6 +880,7 @@ describe("runMetrics over a partial record", () => {
     expect(m.wall).toEqual({
       ms: null,
       sealed: false,
+      closedIdle: false,
       parts: null,
       lead: null,
     });

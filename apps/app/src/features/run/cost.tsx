@@ -50,10 +50,13 @@ export function CostTab({
 }: RunTabProps) {
   const ledger = ledgerOf(metrics.turns ?? []);
   const prices = classPrices(metrics.priced, metrics.tokens);
-  const retries = cost.ok ? (cost.value.rollup?.retries ?? null) : null;
+  const rollup = cost.ok ? cost.value.rollup : null;
+  const retries = rollup?.retries ?? null;
   // A rollup built while the run was open covers the calls recorded so far
-  // (#3980), and the tab says so above its figures.
-  const estimate = cost.ok && cost.value.rollup?.isEstimate === true;
+  // (#3980), and the tab says so above its figures. The rule is the stat
+  // row's (`costIsEstimate`), so an open run whose row still reads final is
+  // an estimate on both.
+  const estimate = rollup !== null && metrics.costIsEstimate;
   return (
     <div data-testid="cost-tab" className="flex flex-col gap-3.5">
       {estimate ? <CostEstimate /> : null}

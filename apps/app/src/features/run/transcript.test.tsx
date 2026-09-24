@@ -24,7 +24,6 @@ import {
   TRANSCRIPT_ENTRY_DEFAULT,
   RunTranscript,
   type TranscriptEntry,
-  type TranscriptKind,
 } from "@/data/contracts/run";
 import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
@@ -40,6 +39,7 @@ import {
   transcriptBody,
   transcriptEntry,
 } from "./run.builders";
+import type { KindFilter } from "./tab-props";
 import {
   type FrameSpec,
   releaseSpecs,
@@ -88,7 +88,7 @@ const RUN = runRow({
 
 type SectionView = {
   read?: Read<RunTranscript>;
-  kinds?: TranscriptKind[];
+  kinds?: KindFilter;
   status?: RunRow["status"];
   run?: Partial<RunRow>;
 };
@@ -280,6 +280,19 @@ describe("the kind chips", () => {
     expect(kinds().at(-1)).toBe("seal");
     // The run is sealed, so its last stop reads as the seal and its instant.
     expect(rows().at(-1)).toHaveTextContent("sealed 08:55:00");
+  });
+
+  it("opens every chip off from a link that says none", () => {
+    renderSection({ kinds: "none" });
+    const chips = within(
+      screen.getByRole("group", { name: "Filter the transcript" }),
+    );
+    expect(chips.queryAllByRole("button", { pressed: true })).toEqual([]);
+    expect(rows()).toHaveLength(0);
+    expect(screen.getByTestId("transcript-empty")).toHaveTextContent(
+      "Nothing to show with these filters.",
+    );
+    expect(screen.getByTestId("chip-all")).toHaveTextContent("all");
   });
 
   it("opens with the chips an older link's filter named", () => {

@@ -49,6 +49,7 @@ import { formatCount, formatDuration, ratioWidth } from "@/ui/money-format";
 import { SafeLink, useNavigate } from "@/ui/navigation";
 import type { ActionResult } from "@/server/kernel";
 import { readTranscriptPage } from "./actions";
+import type { KindFilter } from "./tab-props";
 import { Note } from "./parts";
 import type { ToolDiff, ToolGroup } from "./tool-detail";
 import {
@@ -1396,10 +1397,12 @@ function nest(rows: readonly FeedRow[]): Drawn[] {
   return top;
 }
 
-/** Every chip on, except where the URL's older `?kinds=` named the ones it wanted. */
-function initialGroups(
-  kinds: readonly TranscriptKind[],
-): Record<FeedGroup, boolean> {
+/**
+ * Every chip on, except where the URL's `?kinds=` named the ones it wanted,
+ * or said `none`.
+ */
+function initialGroups(kinds: KindFilter): Record<FeedGroup, boolean> {
+  if (kinds === "none") return eachGroup(() => false);
   // The contract's filter words that name one of these chips. `prompt` there
   // is the request sent to a model and `policy` a decision, neither of which
   // is a row here, so a link carrying only those opens every chip.
@@ -1443,7 +1446,7 @@ export function TranscriptView({
   entries: Frames;
   run: TranscriptRun;
   /** The URL's `?kinds=`, which sets the chips a link opens with. */
-  kinds: readonly TranscriptKind[];
+  kinds: KindFilter;
 } & Place) {
   const t = useTranslations("run.transcript");
   const locale = useLocale();
@@ -1474,7 +1477,9 @@ export function TranscriptView({
   const rows = useMemo(() => buildFeed(entries), [entries]);
 
   const [on, setOn] = useState(() => initialGroups(kinds));
-  const [errorsOnly, setErrorsOnly] = useState(() => kinds.includes("errors"));
+  const [errorsOnly, setErrorsOnly] = useState(
+    () => kinds !== "none" && kinds.includes("errors"),
+  );
   const [query, setQuery] = useState("");
   const [thinking, setThinking] = useState(false);
   const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set());

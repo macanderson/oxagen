@@ -23,10 +23,16 @@ import type { RunMetrics } from "./metrics";
 /** Where the run lives: every link a tab draws is built from these. */
 export type Place = { org: string; ws: string; runId: string };
 
+/**
+ * The chips a link opens the Transcript tab with: the contract's filter words,
+ * where an empty list opens every chip, or `none`, which opens every chip off.
+ */
+export type KindFilter = readonly TranscriptKind[] | "none";
+
 /** The URL's view of the run: the query values a tab reads. */
 type RunView = {
-  /** The transcript chips pressed; empty when none is. */
-  kinds: readonly TranscriptKind[];
+  /** The transcript chips a link opens with: empty opens every chip, `none` opens none. */
+  kinds: KindFilter;
   /** `?frames=`, the opaque cursor a later frames page was read from. */
   frames: string | null;
   /** `?body=`, the seq of the open frame; null when none is open. */
