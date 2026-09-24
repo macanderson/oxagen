@@ -104,12 +104,19 @@ function GateRail({
 /**
  * The gate's frame. `back` names where each done step opens; a done step with
  * no target renders as a disabled button. `cancel` is where Cancel goes.
+ *
+ * `pending` marks a Suspense fallback. Its body is a busy region, not the
+ * page's `main`. While a step streams in, the document holds the fallback and
+ * the hidden step together, and only the step may own `main#main`: two would
+ * give the skip link two targets and fail the page-load oracle's strict
+ * locator, as they did on 2026-09-24.
  */
 export function GateShell({
   step,
   email,
   cancel,
   back = {},
+  pending = false,
   children,
 }: {
   step: GateStepId;
@@ -117,9 +124,20 @@ export function GateShell({
   email: string | null;
   cancel: SafePath;
   back?: Partial<Record<GateStepId, SafePath>>;
+  pending?: boolean;
   children: ReactNode;
 }) {
   const t = useTranslations("onboarding.welcome.shell");
+  const body = (
+    <>
+      <GateRail step={step} back={back} />
+      {children}
+      <p className="mt-1 text-center text-xs leading-relaxed text-muted-foreground">
+        {t("caption")}
+      </p>
+    </>
+  );
+  const bodyClass = "flex min-w-0 flex-col gap-5 pt-7";
   return (
     <div className="min-h-dvh bg-background px-4 pb-14 sm:px-5">
       <div className="mx-auto flex w-full max-w-[772px] flex-col">
@@ -143,13 +161,15 @@ export function GateShell({
             </SafeLink>
           </div>
         </header>
-        <main id="main" className="flex min-w-0 flex-col gap-5 pt-7">
-          <GateRail step={step} back={back} />
-          {children}
-          <p className="mt-1 text-center text-xs leading-relaxed text-muted-foreground">
-            {t("caption")}
-          </p>
-        </main>
+        {pending ? (
+          <div aria-busy="true" className={bodyClass}>
+            {body}
+          </div>
+        ) : (
+          <main id="main" className={bodyClass}>
+            {body}
+          </main>
+        )}
       </div>
     </div>
   );

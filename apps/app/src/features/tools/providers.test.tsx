@@ -115,7 +115,10 @@ async function openDrill(id = "mcs_01k5s1") {
 }
 
 /** The value a drill-down fact prints, found by its term. */
-function fact(dialog: ReturnType<typeof within>, term: string): HTMLElement {
+function fact(
+  dialog: { getByText: (text: string) => HTMLElement },
+  term: string,
+): HTMLElement {
   const dd = dialog.getByText(term).nextElementSibling;
   if (!(dd instanceof HTMLElement)) throw new Error(`no value for ${term}`);
   return dd;

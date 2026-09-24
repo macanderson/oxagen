@@ -344,15 +344,21 @@ glob, and any business-capability rule unrelated to a tool call. Both keep
 governing the in-app agent's own calls at `packages/agent/src/runtime/
 mcp-rbac.ts`, just not this second, harness-facing surface (see
 `tacho-mandate.ts`'s `decisionRuleToHarnessRule`). `budget.mode` is
-`"enforced"` only when the agent's own definition names a `per_run_micros`
-figure (`deriveBundleBudget`); otherwise it stays `"observed"`. The loopback
-model proxy refuses a call once the session's observed spend reaches
-`session_limit_usd`, with `session_budget_exceeded`
-(`src/collector/model-proxy.ts`). A `per_day_micros` figure is not signed,
-because nothing on the host keeps a day's spend (#3728). The bundle carries no `models` clause
-at all: a workspace's model allow and deny lists are stored and read back
-(`workspace.tacho_session_policy`, `get_tacho_session_policy`) and signed into
-no bundle, so the proxy refuses no model. Operator steer commands are the only
+`"enforced"` only when the agent's own definition names a `per_run_micros` or
+a signed `per_day_micros` figure (`deriveBundleBudget`); otherwise it stays
+`"observed"`. The loopback model proxy (`src/collector/model-proxy.ts`)
+refuses a call with one of these reason codes:
+
+| Code | When |
+|---|---|
+| `session_budget_exceeded` | The session's observed spend reached `budget.session_limit_usd`. |
+| `daily_budget_exceeded` | The agent's observed spend for the UTC day reached `budget.daily_limit_usd` (ADR-160). The day total is this host's WAL for the day, what the proxy priced since, and the other hosts' total from the control envelope's `agent_day_spend` (`src/collector/day-spend.ts`). Signed only to a host that advertises `daily_budget`. |
+| `model_not_permitted` | The workspace's armed model lists refuse the requested model (ADR-149). Signed only to a host that advertises `models_independent`. |
+| `model_ambiguous` | Model lists are armed and the request names no single readable model. |
+| `session_paused`, `session_cancelled` | The operator paused or cancelled the session. |
+| `host_paused`, `host_suspended`, `host_revoked` | The operator changed the host's status. |
+
+The credential seam adds its own codes (ADR-143). Operator steer commands are the only
 live text channel from the server to a running agent. Token and cost numbers for
 Claude Code are the harness's own telemetry, self-reported. Codex and Stella export
 none. There is no sandbox. The MCP gateway (`src/collector/mcp-gateway.ts`) is real
