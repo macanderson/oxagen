@@ -389,12 +389,13 @@ describe("a subagent's steps under its Task call", () => {
       expect.stringContaining("Read"),
     ]);
     expect(inner[0]).toHaveTextContent("flaky");
-    // The turn's start, then one step per call: the harness's allow draws no
-    // row of its own, so it leaves no gap in the count.
+    // One step per call. The turn's start draws as the prompt above the turn,
+    // not as a step (#4050), and the harness's allow draws no row of its own,
+    // so neither leaves a gap in the count.
     const numbers = screen
       .getAllByTestId("step-number")
       .map((n) => n.textContent);
-    expect(numbers).toEqual(["1", "2", "3", "3.1", "3.2", "4"]);
+    expect(numbers).toEqual(["1", "2", "2.1", "2.2", "3"]);
   });
 });
 
