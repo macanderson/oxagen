@@ -437,6 +437,47 @@ describe("get_run_transcript", () => {
     expect(out.entries[0]?.kinds).toContain("policy");
   });
 
+  // #3370: `kinds` is the union over every folded frame. A turn whose model
+  // call filled its response slot still holds the failed tool call after it,
+  // and that call is the entry's only sign of an error.
+  it("turns: an entry answers to the chips of every frame it folds, not only its halves", async () => {
+    const { transcript } = harness([
+      tachoRow(0, {
+        kind: "turn_start",
+        toolName: "",
+        toolStatus: "",
+        turnSeq: 1,
+      }),
+      tachoRow(1, {
+        kind: "llm_call",
+        toolName: "",
+        toolStatus: "",
+        model: "haiku",
+        provider: "anthropic",
+        turnSeq: 1,
+      }),
+      tachoRow(2, { turnSeq: 1, toolStatus: "error" }),
+    ]);
+    const out = await transcript(input({ zoom: "turns" }), ctx());
+    expect(out.entries).toHaveLength(1);
+    expect(out.entries[0]?.kinds).toEqual(
+      expect.arrayContaining(["prompt", "responses", "tools", "errors"]),
+    );
+    // A turn with no failed call answers no errors chip (negative).
+    const clean = harness([
+      tachoRow(0, {
+        kind: "turn_start",
+        toolName: "",
+        toolStatus: "",
+        turnSeq: 1,
+      }),
+      tachoRow(1, { turnSeq: 1 }),
+    ]);
+    const quiet = await clean.transcript(input({ zoom: "turns" }), ctx());
+    expect(quiet.entries[0]?.kinds).toContain("tools");
+    expect(quiet.entries[0]?.kinds).not.toContain("errors");
+  });
+
   it("filters frames by the chips pressed before folding, and echoes the selection", async () => {
     const { transcript } = harness(rows);
     const out = await transcript(

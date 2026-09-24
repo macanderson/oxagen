@@ -103,13 +103,17 @@ export async function collectSummarySteps(
     const { opening } = fold;
     // The response half is the result; a producer that appends a single
     // terminal receipt records it there too, so `opening` is only read when
-    // the fold has no response half at all.
+    // the fold has neither half. A request with no response is a call that
+    // never completed (a failed or abandoned attempt): it has no result, and
+    // reading its opening would hand the model the input as what came back
+    // (#3370).
+    const result = fold.response ?? (fold.request === null ? opening : null);
     steps.push({
       seq: opening.seq,
       kind: fold.kind,
       label: opening.summary,
       input: await bodyText(fold.request),
-      text: await bodyText(fold.response ?? opening),
+      text: await bodyText(result),
     });
   }
   return { steps, total: folds.length };

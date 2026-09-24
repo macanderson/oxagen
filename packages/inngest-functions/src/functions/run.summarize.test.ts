@@ -359,4 +359,22 @@ describe("a step the producer wrote in two halves", () => {
       "(body not retained)",
     );
   });
+
+  // #3370 finding 10: an attempt that failed or was abandoned mid-call leaves
+  // a request with no completion. The request is what the call was made with,
+  // never what came back.
+  it("reads no result for a request that never completed (negative)", async () => {
+    store('{"path":"README.md"}');
+    const frames = [
+      row(1, "tool_requested", '{"path":"README.md"}', "tu_unfinished"),
+    ];
+    const collected = await collectSummarySteps(scope, frames, getBody);
+    expect(collected.steps[0]).toMatchObject({
+      input: '{"path":"README.md"}',
+      text: null,
+    });
+    const prompt = summaryPrompt("tse_0a1b2c", collected);
+    expect(prompt).toContain('called with: {"path":"README.md"}');
+    expect(prompt).toContain("(body not retained)");
+  });
 });

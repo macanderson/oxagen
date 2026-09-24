@@ -252,6 +252,48 @@ describe("WaterfallPanel", () => {
     );
   });
 
+  // #3370 (from #3415): the sum of the turns read is not the run's total, so
+  // nothing beside it may call it the total.
+  it("names the turns a cut ledger's sum covers wherever the sum is labelled (negative)", () => {
+    renderPanel(
+      [
+        turn({ turn: 1, seq: "1", cost: usd("400000") }),
+        turn({ turn: 2, seq: "10", cost: usd("800000") }),
+      ],
+      { read: readOk({ turns: [], complete: false }) },
+    );
+    const svg = screen.getByRole("img", {
+      name: "Cost by turn over the first 2 turns, accumulating to $1.20",
+    });
+    expect(svg).toHaveTextContent("first 2 turns");
+    expect(svg).not.toHaveTextContent(/total$/);
+    expect(screen.getByTestId("waterfall-caption")).toHaveTextContent(
+      "The dashed line is cost accumulating to $1.20 over the first 2 turns, not the whole run.",
+    );
+    const total = screen.getByTestId("waterfall-total");
+    expect(total.children[0]).toHaveTextContent(/^first 2 turns$/);
+    expect(total.children[4]).toHaveTextContent("$1.20");
+  });
+
+  it("labels the sum as the total when the ledger reached the run's last turn", () => {
+    renderPanel([
+      turn({ turn: 1, seq: "1", cost: usd("400000") }),
+      turn({ turn: 2, seq: "10", cost: usd("800000") }),
+    ]);
+    expect(
+      screen.getByRole("img", {
+        name: "Cost by turn, accumulating to $1.20",
+      }),
+    ).toHaveTextContent(/total$/);
+    expect(screen.getByTestId("waterfall-caption")).not.toHaveTextContent(
+      "first",
+    );
+    expect(
+      screen.getByTestId("waterfall-total").children[0],
+    ).toHaveTextContent(/^total$/);
+    expect(screen.queryByTestId("waterfall-cut")).toBeNull();
+  });
+
   it("draws every turn with no cut note when the page's transcript stopped short (negative)", () => {
     renderPanel([turn({ turn: 1, seq: "1" })], {
       overrides: { whole: false },

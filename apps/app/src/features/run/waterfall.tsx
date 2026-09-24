@@ -16,6 +16,12 @@
 // measurement nobody made. Finding pins are not recorded (no contract names
 // the turn a Spend finding points at), so the Pinned column says that in
 // every row rather than drawing a pin.
+//
+// When the read stops short of the run's last turn (`complete` false), every
+// place that names the sum names the turns it covers: the chart's end label,
+// its accessible name, the caption and the total row. The sum of the first
+// turns is not the run's total, and a label that says "total" beside it would
+// be a figure a FinOps reader acts on as if it were (#3370, from #3415).
 import { useLocale, useTranslations } from "next-intl";
 import {
   type Money,
@@ -64,7 +70,16 @@ function at(value: number): number {
   return Math.round(value * 10) / 10;
 }
 
-function Chart({ ledger, total }: { ledger: Ledger; total: Money }) {
+function Chart({
+  ledger,
+  total,
+  complete,
+}: {
+  ledger: Ledger;
+  total: Money;
+  /** The ledger reached the run's last turn, so `total` is the run's. */
+  complete: boolean;
+}) {
   const t = useTranslations("run.waterfall");
   const locale = useLocale();
   const money = (value: Money) =>
@@ -97,7 +112,11 @@ function Chart({ ledger, total }: { ledger: Ledger; total: Money }) {
     <svg
       viewBox={`0 0 ${String(W)} ${String(H)}`}
       role="img"
-      aria-label={t("chart", { total: money(total) })}
+      aria-label={
+        complete
+          ? t("chart", { total: money(total) })
+          : t("chartCut", { total: money(total), count: n })
+      }
       data-testid="waterfall"
       className={chartSvg}
     >
@@ -230,7 +249,7 @@ function Chart({ ledger, total }: { ledger: Ledger; total: Money }) {
         fontSize={10}
         className="fill-dim"
       >
-        {t("total")}
+        {complete ? t("total") : t("totalCut", { count: n })}
       </text>
     </svg>
   );
@@ -239,9 +258,12 @@ function Chart({ ledger, total }: { ledger: Ledger; total: Money }) {
 function LedgerTable({
   metrics,
   ledger,
+  complete,
 }: {
   metrics: RunMetrics;
   ledger: Ledger;
+  /** The ledger reached the run's last turn, so its total row is the run's. */
+  complete: boolean;
 }) {
   const t = useTranslations("run.waterfall");
   const locale = useLocale();
@@ -291,7 +313,11 @@ function LedgerTable({
         </tr>
       ))}
       <tr data-testid="waterfall-total" className="font-semibold">
-        <td className={cell}>{t("totalRow")}</td>
+        <td className={cell}>
+          {complete
+            ? t("totalRow")
+            : t("totalCut", { count: ledger.rows.length })}
+        </td>
         <td className={numericCell}>{count(ledger.steps)}</td>
         <td className={numericCell}>{count(ledger.frames)}</td>
         <td className={`${numericCell} font-normal`}>
@@ -406,7 +432,7 @@ function WaterfallBody({
         ) : (
           <>
             <div className="overflow-x-auto">
-              <Chart ledger={ledger} total={ledger.cost} />
+              <Chart ledger={ledger} total={ledger.cost} complete={complete} />
             </div>
             <div className={chartLegend}>
               <span className="inline-flex items-center gap-[5px]">
@@ -418,16 +444,27 @@ function WaterfallBody({
                 {t("soFar")}
               </span>
             </div>
-            <p className={caption}>
-              {t("caption", {
-                total: formatMoney(ledger.cost, { locale, precision: "cents" }),
-              })}
+            <p data-testid="waterfall-caption" className={caption}>
+              {complete
+                ? t("caption", {
+                    total: formatMoney(ledger.cost, {
+                      locale,
+                      precision: "cents",
+                    }),
+                  })
+                : t("captionCut", {
+                    total: formatMoney(ledger.cost, {
+                      locale,
+                      precision: "cents",
+                    }),
+                    count: ledger.rows.length,
+                  })}
             </p>
           </>
         )}
       </PanelBody>
       <div className="border-t border-border">
-        <LedgerTable metrics={metrics} ledger={ledger} />
+        <LedgerTable metrics={metrics} ledger={ledger} complete={complete} />
       </div>
       {complete ? null : (
         <PanelBody rule>

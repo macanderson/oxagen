@@ -786,6 +786,7 @@
       "aside": "{turns, plural, one {# turn} other {# turns}} · {cost} {basis}",
       "asideTurns": "{turns, plural, one {# turn} other {# turns}}",
       "chart": "Cost by turn, accumulating to {total}",
+      "chartCut": "Cost by turn over the first {count, plural, one {# turn} other {# turns}}, accumulating to {total}",
       "barTitle": "Turn {turn}: {cost}, {steps, plural, one {# step} other {# steps}}, {frames, plural, one {# frame} other {# frames}}",
       "turnLabel": "T{turn}",
       "cache": "{hit} cache",
@@ -794,6 +795,8 @@
       "turnCost": "turn cost",
       "soFar": "cost so far",
       "caption": "Bar height is the turn's cost on the left scale. The dashed line is cost accumulating to {total}. Finding pins are not recorded yet.",
+      "captionCut": "Bar height is the turn's cost on the left scale. The dashed line is cost accumulating to {total} over the first {count, plural, one {# turn} other {# turns}}, not the whole run. Finding pins are not recorded yet.",
+      "totalCut": "first {count, plural, one {# turn} other {# turns}}",
       "tableLabel": "Cost by turn",
       "columns": {
         "turn": "Turn",
