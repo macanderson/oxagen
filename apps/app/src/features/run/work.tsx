@@ -77,7 +77,7 @@ function Stat({ added, removed }: { added: number; removed: number }) {
   return (
     <span className="whitespace-nowrap font-mono">
       <b className="text-success">+{formatCount(added, locale)}</b>{" "}
-      <b className="text-error-ink">−{formatCount(removed, locale)}</b>
+      <b className="text-warning">−{formatCount(removed, locale)}</b>
     </span>
   );
 }

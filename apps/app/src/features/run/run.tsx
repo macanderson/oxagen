@@ -308,7 +308,13 @@ export async function Run({
               place={place}
             />
           </Suspense>
-          <OutputsSpine read={outputs} reads={reads} spine={spine} {...place} />
+          <OutputsSpine
+            read={outputs}
+            reads={reads}
+            spine={spine}
+            live={run.status === "live"}
+            {...place}
+          />
         </RunSide>
       </div>
     </div>
