@@ -154,15 +154,17 @@
       "search": "Search this list",
       "facetAll": "All · {facet}",
       "facetLabel": "Filter by {facet}",
-      "rows": "Rows",
-      "rowsAll": "All",
+      "rows": "Runs per page",
       "sortBy": "Sort by {column}",
       "tokensUnsorted": "Runs carry no token figure yet, so there is nothing to sort.",
       "columns": {
         "run": "Run",
+        "summary": "Summary",
         "agent": "Agent",
         "operator": "Operator",
         "status": "Status",
+        "pullRequests": "Pull requests",
+        "diff": "Lines",
         "tier": "Tier",
         "replay": "Replay",
         "tokens": "Tokens",
@@ -189,9 +191,6 @@
         "range": "{from}–{to} of {total}",
         "rangeMore": "{from}–{to} of {total}+",
         "none": "0 of 0",
-        "previous": "Previous page",
-        "next": "Next page",
-        "page": "Page {page}",
         "older": "Older runs",
         "newest": "Newest runs"
       },
@@ -200,7 +199,58 @@
       "export": "Export",
       "rowAction": "{action} {run}",
       "exportQueued": "Export bundle queued for {run}.",
-      "exportFailed": "The export bundle for {run} was not queued. {reason}"
+      "exportFailed": "The export bundle for {run} was not queued. {reason}",
+      "actionsColumn": "Actions",
+      "summaryNone": "No summary yet",
+      "summaryOff": "Summaries off",
+      "prFilter": {
+        "label": "Filter by pull requests",
+        "any": "All runs",
+        "with": "With pull requests",
+        "without": "Without pull requests",
+        "note": "Runs from an external engine are left out. Open one to see its pull requests.",
+        "noneWith": "No run on this page has a pull request. Older runs may.",
+        "noneWithout": "Every run on this page has a pull request. Older runs may not."
+      },
+      "columnsPicker": {
+        "open": "Columns",
+        "title": "Choose columns",
+        "subtitle": "Show or hide columns in the runs table.",
+        "legend": "Columns shown",
+        "fixed": "always shown",
+        "reset": "Show all columns",
+        "saved": "Saved in this browser for your next visit."
+      },
+      "prs": {
+        "none": "none",
+        "notRead": "not read",
+        "onRunPage": "on the run page",
+        "ledgerHint": "This run's pull requests come from its evidence. Open the run to see them.",
+        "unread": "Oxagen could not read this page's pull requests. The other columns are current. Reload to try again.",
+        "openedNoLink": "{count, plural, one {# opened, link not recorded} other {# opened, links not recorded}}",
+        "noLinkHint": "The agent opened a pull request, and its output named no link Oxagen could read.",
+        "more": "+{count} more",
+        "unnamed": "Pull request",
+        "stateUnknown": "status unknown",
+        "stateUnknownHint": "Oxagen does not record pull request status yet. Open the run to read it from GitHub.",
+        "state": {
+          "open": "open",
+          "draft": "draft",
+          "merged": "merged",
+          "closed": "closed"
+        },
+        "openOnGitHub": "Open {pr} on GitHub",
+        "openOnGitLab": "Open {pr} on GitLab"
+      },
+      "diff": {
+        "none": "not recorded",
+        "uncommitted": "uncommitted",
+        "spoken": "{added} lines added, {removed} removed",
+        "basis": {
+          "harness_reported": "Lines added and removed, as the harness reported at the end of the session.",
+          "git_observed": "Uncommitted lines git reported at the last check. Committed work is not counted."
+        }
+      }
     },
     "pause": {
       "title": "Pause this run",

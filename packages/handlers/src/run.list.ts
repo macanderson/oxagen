@@ -11,7 +11,9 @@ import { readRunEnrichmentEnabled } from "./lib/run-enrichment";
 // Cost, basis and the witness verdict for both come from the run's
 // `cost.run_totals` row (ADR-060, ADR-064), which the rollup job rebuilds from
 // the run's frames after its seal; a run with no row yet answers `cost: null`
-// and `verdict: null`. Nothing here reads ClickHouse.
+// and `verdict: null`. The one ClickHouse read is the pull requests a wrapped
+// session's frames name (`lib/run-list-work.ts`), and a failure there leaves
+// the rows up with a warning.
 //
 // An API-key caller is shown no witness run (ADR-064): a worker holds API keys,
 // and a run a verdict names as its witness run would show it the witness.
@@ -46,6 +48,7 @@ import {
   runList,
   runMachineSnapshotSchema,
   type RunListOutput,
+  type RunPullRequest,
 } from "@oxagen/oxagen/contracts/run.list";
 import {
   hidesWitnessRuns,
@@ -66,6 +69,15 @@ import {
   TOOL_CALL_EVENT_TYPES,
 } from "@oxagen/run-ledger";
 import { modelFactsOf } from "./lib/model-facts";
+import {
+  matchesPullRequestFilter,
+  postgresRunGitDiffs,
+  type ReadRunGitDiffs,
+  type ReadRunPullRequests,
+  readRunPullRequests,
+  runDiffOf,
+} from "./lib/run-list-work";
+import { logger } from "./logger";
 import { PROOF_VERDICTS } from "@oxagen/run-evidence";
 import {
   and,
@@ -513,6 +525,9 @@ const tachoColumns = {
     endedAt: sessions.endedAt,
     replayGrade: sessions.replayGrade,
     completenessGaps: sessions.completenessGaps,
+    // False from the first chain break on. `get_run_work` reports it beside
+    // the facts it reads, since it reads them from every frame (ADR-171).
+    chainVerified: sessions.chainVerified,
     enforcementTier: sessions.enforcementTier,
     // The sealed commitment (`terminalPatch`, `agent_stop`): the collector
     // stops checkpointing once `session.sealed` is written, so the last
@@ -575,6 +590,11 @@ const tachoColumns = {
       order by ${commands.appliedAt} desc nulls last, ${commands.issuedAt} desc
       limit 1
     ), false)`,
+    // What the page lists beside the run: how many `pr_open` calls ingest
+    // counted, and the harness's own line totals from the session's end.
+    pullRequests: sessions.pullRequests,
+    linesAdded: sessions.linesAdded,
+    linesRemoved: sessions.linesRemoved,
   },
   operatorPublicId: schema.principals.publicId,
   operatorKind: schema.principals.kind,
@@ -816,9 +836,16 @@ export type TachoSessionColumns = GeneratedSummaryColumns & {
   outputTokens?: number;
   cacheReadTokens?: number;
   cacheCreationTokens?: number;
+  /** `pr_open` calls ingest counted; absent where a reader did not select it. */
+  pullRequests?: number;
+  /** The harness's line totals, written at the session's end; absent where not selected. */
+  linesAdded?: number;
+  linesRemoved?: number;
   /** Written by the seal at `agent_stop`; null while the session is open. */
   replayGrade: string | null;
   completenessGaps: unknown;
+  /** `tacho.sessions.chain_verified`: false from the first chain break on. Absent where a reader did not select it. */
+  chainVerified?: boolean;
   enforcementTier: string;
   /** The sealed commitment for the whole session; null while open. */
   finalHash: string | null;
@@ -1544,11 +1571,26 @@ export type RunListDeps = {
   queries: RunQueries;
   readRunRollups: ReadRunRollups;
   readEnrichmentEnabled?: typeof readRunEnrichmentEnabled;
+  /** The pull requests each wrapped session's frames name; absent reads none. */
+  readPullRequests?: ReadRunPullRequests;
+  /** Git's uncommitted change per wrapped session; absent reads none. */
+  readGitDiffs?: ReadRunGitDiffs;
 };
 
 type FleetItem =
   | { kind: "ledger"; id: string; startedAt: string; row: LedgerRunRow }
   | { kind: "tacho"; id: string; startedAt: string; row: TachoSessionRow };
+
+type LineCounts = { added: number; removed: number };
+
+/**
+ * How many sessions one batch of a filtered page reads, and how many batches
+ * it reads before it returns what it found with a cursor past the last run it
+ * looked at. A filter that matches rarely then costs at most five reads a
+ * page, and the next page carries on from where this one stopped.
+ */
+export const FILTER_SCAN_BATCH = 100;
+export const FILTER_SCAN_BATCHES = 5;
 
 export function createRunListHandler(
   deps: RunListDeps,
@@ -1559,64 +1601,168 @@ export function createRunListHandler(
       input.cursor === undefined ? null : decodeRunCursor(input.cursor);
     if (input.cursor !== undefined && cursor === null)
       throw invalidCursor(runList.name);
-    const page = {
-      cursor,
-      limit: input.limit,
-      withoutWitnessRuns: hidesWitnessRuns(ctx),
-    };
+    const filter = input.pullRequests ?? "any";
+    const withoutWitnessRuns = hidesWitnessRuns(ctx);
 
     // The enrichment flag depends on nothing the pages return, so it is read
     // alongside them rather than after the rollups.
-    const [ledger, tacho, enabled] = await Promise.all([
-      deps.queries.ledgerPage(scope, page),
-      deps.queries.tachoPage(scope, page),
-      deps.readEnrichmentEnabled
-        ? deps.readEnrichmentEnabled(scope)
-        : Promise.resolve(true),
-    ]);
-    const merged = mergeNewestFirst<FleetItem>(
-      [
-        {
-          items: ledger.slice(0, input.limit).map((row) => ({
-            kind: "ledger" as const,
-            id: row.run.publicId,
-            startedAt: (row.run.startedAt ?? row.run.createdAt).toISOString(),
-            row,
-          })),
-          overflowed: ledger.length > input.limit,
-        },
-        {
-          items: tacho.slice(0, input.limit).map((row) => ({
-            kind: "tacho" as const,
-            id: row.session.publicId,
-            startedAt: row.session.startedAt.toISOString(),
-            row,
-          })),
-          overflowed: tacho.length > input.limit,
-        },
-      ],
-      input.limit,
-    );
+    const enabledRead = deps.readEnrichmentEnabled
+      ? deps.readEnrichmentEnabled(scope)
+      : Promise.resolve(true);
 
-    const [enrich, costs] = await Promise.all([
+    // One merged newest-first page. A filtered page reads wrapped sessions
+    // only: a ledger run's pull requests are receipts this read cannot see,
+    // so it can be listed as neither "with" nor "without".
+    async function readBatch(at: RunCursor | null, limit: number) {
+      const page = { cursor: at, limit, withoutWitnessRuns };
+      const [ledger, tacho] = await Promise.all([
+        filter === "any"
+          ? deps.queries.ledgerPage(scope, page)
+          : Promise.resolve([]),
+        deps.queries.tachoPage(scope, page),
+      ]);
+      return mergeNewestFirst<FleetItem>(
+        [
+          {
+            items: ledger.slice(0, limit).map((row) => ({
+              kind: "ledger" as const,
+              id: row.run.publicId,
+              startedAt: (row.run.startedAt ?? row.run.createdAt).toISOString(),
+              row,
+            })),
+            overflowed: ledger.length > limit,
+          },
+          {
+            items: tacho.slice(0, limit).map((row) => ({
+              kind: "tacho" as const,
+              id: row.session.publicId,
+              startedAt: row.session.startedAt.toISOString(),
+              row,
+            })),
+            overflowed: tacho.length > limit,
+          },
+        ],
+        limit,
+      );
+    }
+
+    // The pull requests the frames name, per session uuid. A session missing
+    // from the map was not read, and its row carries no `pullRequests`.
+    const links = new Map<string, RunPullRequest[]>();
+    let linksUnread = false;
+    async function readLinks(items: readonly FleetItem[]) {
+      const read = deps.readPullRequests;
+      if (read === undefined) return;
+      const uuids = items.flatMap((item) =>
+        item.kind === "tacho" && !links.has(item.row.session.sessionUuid)
+          ? [item.row.session.sessionUuid]
+          : [],
+      );
+      if (uuids.length === 0) return;
+      try {
+        const found = await read(uuids);
+        for (const uuid of uuids) links.set(uuid, found.get(uuid) ?? []);
+      } catch (err) {
+        linksUnread = true;
+        logger.warn(
+          { err, sessions: uuids.length },
+          "list_runs: the pull-request frames could not be read; rows carry none",
+        );
+      }
+    }
+
+    let items: FleetItem[];
+    let nextCursor: string | null;
+    if (filter === "any") {
+      const page = await readBatch(cursor, input.limit);
+      items = page.items;
+      nextCursor = page.nextCursor;
+      await readLinks(items);
+    } else {
+      items = [];
+      nextCursor = null;
+      let at = cursor;
+      for (let batch = 1; ; batch += 1) {
+        const page = await readBatch(at, FILTER_SCAN_BATCH);
+        await readLinks(page.items);
+        let full: FleetItem | null = null;
+        for (const item of page.items) {
+          if (item.kind !== "tacho") continue;
+          const session = item.row.session;
+          if (
+            !matchesPullRequestFilter(
+              filter,
+              links.get(session.sessionUuid),
+              session.pullRequests,
+            )
+          )
+            continue;
+          items.push(item);
+          if (items.length === input.limit) {
+            full = item;
+            break;
+          }
+        }
+        if (full !== null) {
+          // The page is full. Older runs remain when this batch had runs
+          // after the last one taken, or more batches follow it.
+          const more = full !== page.items.at(-1) || page.nextCursor !== null;
+          nextCursor = more
+            ? encodeRunCursor({ at: full.startedAt, id: full.id })
+            : null;
+          break;
+        }
+        if (page.nextCursor === null) break;
+        if (batch >= FILTER_SCAN_BATCHES) {
+          nextCursor = page.nextCursor;
+          break;
+        }
+        at = decodeRunCursor(page.nextCursor);
+      }
+    }
+
+    // Git's figure is read only for the sessions with no harness totals,
+    // which are the only rows that would show it.
+    const needGit = items.flatMap((item) =>
+      item.kind === "tacho" &&
+      (item.row.session.linesAdded ?? 0) === 0 &&
+      (item.row.session.linesRemoved ?? 0) === 0
+        ? [item.row.session.sessionUuid]
+        : [],
+    );
+    const noGit = new Map<string, LineCounts>();
+    const [enabled, enrich, costs, gitDiffs] = await Promise.all([
+      enabledRead,
       ledgerEnrichment(
         deps,
         scope,
-        merged.items.flatMap((item) =>
+        items.flatMap((item) =>
           item.kind === "ledger" ? [item.row.run.runId] : [],
         ),
       ),
       deps.readRunRollups(
         scope,
-        merged.items.map((item) => item.id),
+        items.map((item) => item.id),
       ),
+      deps.readGitDiffs === undefined || needGit.length === 0
+        ? Promise.resolve(noGit)
+        : deps.readGitDiffs(scope, needGit).catch((err: unknown) => {
+            logger.warn(
+              { err, sessions: needGit.length },
+              "list_runs: git's change could not be read; rows show the harness totals alone",
+            );
+            return noGit;
+          }),
     ]);
     return {
-      runs: merged.items.map((item) => {
+      runs: items.map((item) => {
         const run =
           item.kind === "ledger"
             ? toLedgerRunItem(enrich(item.row), costs.get(item.id))
-            : toTachoRunItem(item.row, costs.get(item.id));
+            : {
+                ...toTachoRunItem(item.row, costs.get(item.id)),
+                ...tachoWorkFields(item.row.session, links, gitDiffs),
+              };
         return {
           ...run,
           enrichmentEnabled: enabled,
@@ -1635,8 +1781,25 @@ export function createRunListHandler(
               }),
         };
       }),
-      nextCursor: merged.nextCursor,
+      nextCursor,
+      ...(linksUnread ? { warnings: ["pull_requests_unread" as const] } : {}),
     };
+  };
+}
+
+/** The pull requests, the `pr_open` count and the lines a wrapped session's row carries. */
+function tachoWorkFields(
+  session: TachoSessionColumns,
+  links: ReadonlyMap<string, RunPullRequest[]>,
+  gitDiffs: ReadonlyMap<string, LineCounts>,
+): Pick<RunItem, "pullRequests" | "pullRequestsOpened" | "diff"> {
+  const pulls = links.get(session.sessionUuid);
+  return {
+    ...(pulls === undefined ? {} : { pullRequests: pulls }),
+    ...(session.pullRequests === undefined
+      ? {}
+      : { pullRequestsOpened: session.pullRequests }),
+    diff: runDiffOf(session, gitDiffs.get(session.sessionUuid)),
   };
 }
 
@@ -1644,4 +1807,6 @@ export const runListHandler = createRunListHandler({
   queries: postgresRunQueries,
   readRunRollups: postgresReadRunRollups,
   readEnrichmentEnabled: readRunEnrichmentEnabled,
+  readPullRequests: readRunPullRequests,
+  readGitDiffs: postgresRunGitDiffs,
 });

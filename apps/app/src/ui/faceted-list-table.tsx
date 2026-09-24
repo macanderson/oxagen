@@ -13,9 +13,10 @@
 // no grouped cells, so a phone still turns the table into labelled cards
 // (features/shell/card-tables.ts); the sort glyph is drawn by CSS, so it never
 // becomes part of a card's label.
+import { ChevronDown } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { type ReactNode, useMemo, useState } from "react";
-import { buttonSecondary, inputBase } from "./control-styles";
+import { type ComponentProps, type ReactNode, useMemo, useState } from "react";
+import { buttonSecondary } from "./control-styles";
 import { headCell } from "./table";
 
 export type ListColumn = {
@@ -35,7 +36,29 @@ export type ListRow = {
 /** The rows-per-page choices; 0 is every row on one page. */
 const PER_PAGE = [5, 10, 25, 50, 0] as const;
 
-const select = `${inputBase} w-auto min-h-8 max-md:min-h-11 max-md:text-base py-1.5 pr-8`;
+// The bar's controls share one skin and size to their content. `inputBase`
+// is a form field (`block w-full`), and in this flex row it stretched the
+// search and every select to a full line of its own, so the bar stacked into
+// five rows. The search takes the room left over; each select is as wide as
+// its longest option, with its own chevron in place of the browser's.
+const control =
+  "min-h-8 max-md:min-h-11 rounded-md border border-input-border bg-input-bg py-1.5 text-[13px] max-md:text-base text-input-fg " +
+  "hover:border-input-border-hover focus-visible:border-input-border-focus focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-input-ring";
+const search = `${control} min-w-0 flex-[1_1_14rem] px-3 placeholder:text-input-placeholder`;
+const select = `${control} cursor-pointer appearance-none pl-3 pr-8`;
+
+/** A select with the bar's chevron; the wrapper keeps it one flex item. */
+function BarSelect(props: ComponentProps<"select">) {
+  return (
+    <span className="relative inline-flex shrink-0">
+      <select {...props} className={select} />
+      <ChevronDown
+        aria-hidden="true"
+        className="pointer-events-none absolute top-1/2 right-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
+      />
+    </span>
+  );
+}
 
 type Sort = { key: string; dir: 1 | -1 } | null;
 
@@ -167,7 +190,7 @@ export function ListTable({
       >
         <input
           type="search"
-          className={`${inputBase} min-h-8 max-md:min-h-11 max-md:text-base min-w-[12rem] flex-1 py-1.5`}
+          className={search}
           placeholder={searchLabel ?? t("search")}
           aria-label={searchLabel ?? t("search")}
           value={query}
@@ -177,9 +200,8 @@ export function ListTable({
           }}
         />
         {facets.map((facet) => (
-          <select
+          <BarSelect
             key={facet.key}
-            className={select}
             data-filter={facet.key}
             aria-label={t("filterBy", { column: facet.label })}
             value={picked[facet.key] ?? ""}
@@ -194,12 +216,11 @@ export function ListTable({
                 {value}
               </option>
             ))}
-          </select>
+          </BarSelect>
         ))}
-        <label className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+        <label className="ml-auto flex shrink-0 items-center gap-1.5 text-[12px] text-muted-foreground">
           {t("rows")}
-          <select
-            className={select}
+          <BarSelect
             data-rows=""
             aria-label={t("rows")}
             value={per}
@@ -213,7 +234,7 @@ export function ListTable({
                 {n === 0 ? t("allRows") : n}
               </option>
             ))}
-          </select>
+          </BarSelect>
         </label>
       </div>
       <div className="min-w-0 overflow-x-auto">

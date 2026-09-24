@@ -47,7 +47,7 @@ export const DEFAULT_TAIL_BUDGET_BYTES = 4 * 1024 * 1024;
  * earlier Claude Code identity), and tailing one fed every line through a
  * normalizer that does not understand it: nothing sealed, and — once a
  * refused line seals a `telemetry_gap` instead of silently failing (see
- * `feedLine`) — a gap frame per line, forever, for a transcript this reader
+ * `advance`) — a gap frame every pass, forever, for a transcript this reader
  * was never going to make sense of. Skipping it here is a smaller change
  * than adding the normalizer neither harness has yet; that stays a
  * follow-up.
@@ -151,6 +151,13 @@ interface Cursor {
    * genuinely quiet for `sealedIdleMs`, not merely stopped for one tick.
    */
   sealedQuietSinceMs?: number;
+  /**
+   * Lines this cursor moved past that the recorder refused, and that no gap
+   * frame on the chain accounts for yet. Held here, and persisted with the
+   * offset, until the gap is written, so a gap that cannot be written this
+   * pass is carried to the next one rather than lost.
+   */
+  refused?: { count: number; detail: string };
 }
 
 interface PersistedTailState {
@@ -199,6 +206,11 @@ async function readAt(
   } finally {
     await handle.close();
   }
+}
+
+/** An error's message, or the thrown value as text. */
+function describe(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 /**
@@ -310,6 +322,8 @@ export class TranscriptTailer {
       ...(cursor.ino !== undefined ? { ino: cursor.ino } : {}),
       ...(cursor.head !== undefined ? { head: cursor.head } : {}),
       subagents: cursor.subagents,
+      // Lines already passed that no gap names yet: still owed to the chain.
+      ...(cursor.refused !== undefined ? { refused: cursor.refused } : {}),
     });
     this.dirty = true;
   }
@@ -461,11 +475,30 @@ export class TranscriptTailer {
     // not, the writer was cut off and the fragment is not a record.
     const { lines } = completeLines(chunk);
     let fed = 0;
+    let refused = 0;
+    let firstRefusal: unknown;
     for (const line of lines) {
       if (line.length === 0) continue;
-      this.feedLine(session, line, subagentId);
+      const refusal = this.feedLine(session, line, subagentId);
+      if (refusal !== undefined) {
+        if (refused === 0) firstRefusal = refusal;
+        refused += 1;
+      }
       fed += 1;
     }
+    // One gap for the whole transcript. A subagent whose chain refused every
+    // line sealed one gap per line, 608 of them in one second on one host
+    // (#4094).
+    // A gap that cannot be written throws here, before the subagent is
+    // marked fed, so its transcript is read again later.
+    if (refused > 0)
+      this.sealGap(
+        session,
+        "transcript_line_refused",
+        describe(firstRefusal),
+        subagentId,
+        refused,
+      );
     cursor.subagents.push(subagentId);
     this.dirty = true;
     this.persist();
@@ -475,68 +508,102 @@ export class TranscriptTailer {
   /**
    * One line to the recorder, and its events and bodies to the WAL in one
    * call, so a body is never written for an event that is still in memory.
+   * Answers the error when the line was refused, and nothing when it landed.
    *
    * Marked and rolled back per line, not per tick: one line the envelope
    * refuses (a shape `normalizeTranscriptLine` did not anticipate, or a
    * field an earlier clamp missed) used to throw out of the whole read loop,
    * before the cursor advanced past the lines already fed and before any
-   * line after it was ever tried — one bad line stopped shipping for the
+   * line after it was ever tried. One bad line stopped shipping for the
    * whole host and, because the offset had not moved, replayed itself and
    * everything before it on every following tick. Now the chain rolls back
-   * to where it stood before the line, a `telemetry_gap` frame takes its
-   * place so the loss is visible on the chain, and the caller still moves
-   * the cursor past it.
+   * to where it stood before the line, and the caller moves the cursor past
+   * it and counts it into the one gap frame its pass seals.
    */
   private feedLine(
     session: TailedSession,
     line: string,
     subagentId?: string,
-  ): void {
+  ): unknown {
     const recorder = session.recorder;
     const mark = recorder.markChain();
     try {
       const events = recorder.ingestTranscriptLine(line, subagentId);
       this.options.record(events, recorder.takeBodies());
+      return undefined;
     } catch (error) {
       recorder.rollbackChain(mark);
-      this.sealGap(session, "transcript_line_refused", error, subagentId);
+      return error;
     }
   }
 
   /**
-   * A `telemetry_gap` frame for a piece of transcript this tailer could not
-   * carry forward: a line the envelope refused, or a line longer than the
-   * tick's read budget. Bodies are taken in the same call as `feedLine`
-   * does, so a gap frame's own attrs never wait behind an event still in
-   * memory.
+   * A `telemetry_gap` frame for transcript this tailer could not carry
+   * forward: lines the envelope refused, or a line longer than the tick's
+   * read budget. Bodies are taken in the same call as `feedLine` does, so a
+   * gap frame's own attrs never wait behind an event still in memory.
+   *
+   * A gap that cannot be written is rolled back before the error goes on.
+   * Left sealed, it moved the chain past a frame nothing held, and the next
+   * attempt sealed one position further on: a refused chain walked its
+   * cursor forward once a tick for as long as the refusals lasted.
    */
   private sealGap(
     session: TailedSession,
     reason: string,
-    error: unknown,
+    detail: string,
     subagentId?: string,
+    dropped = 1,
   ): void {
-    const detail = error instanceof Error ? error.message : String(error);
-    const gap = session.recorder.sealCollectorEvent(
-      "telemetry_gap",
-      { gap_dropped_count: 1 },
-      {
-        attrs: {
-          "gap.reason": reason,
-          "gap.detail": detail.slice(0, 512),
-          ...(subagentId !== undefined
-            ? { "gap.subagent_id": subagentId }
-            : {}),
+    const mark = session.recorder.markChain();
+    try {
+      const gap = session.recorder.sealCollectorEvent(
+        "telemetry_gap",
+        { gap_dropped_count: dropped },
+        {
+          attrs: {
+            "gap.reason": reason,
+            "gap.detail": detail.slice(0, 512),
+            ...(subagentId !== undefined
+              ? { "gap.subagent_id": subagentId }
+              : {}),
+          },
         },
-      },
-    );
-    this.options.record([gap], session.recorder.takeBodies());
+      );
+      this.options.record([gap], session.recorder.takeBodies());
+    } catch (error) {
+      session.recorder.rollbackChain(mark);
+      throw error;
+    }
     this.options.log?.(
-      `transcript gap (${reason}) for ${session.harnessSessionId}: ${detail}`,
+      `transcript gap (${reason}, ${dropped} line${dropped === 1 ? "" : "s"}) for ${session.harnessSessionId}: ${detail}`,
     );
   }
 
+  /**
+   * Read the transcript on from the cursor, then seal one gap for every line
+   * the pass refused, however many there were.
+   */
   private async advance(
+    session: TailedSession,
+    cursor: Cursor,
+    budget: number,
+  ): Promise<void> {
+    await this.feed(session, cursor, budget);
+    const refused = cursor.refused;
+    if (refused === undefined) return;
+    this.sealGap(
+      session,
+      "transcript_line_refused",
+      refused.detail,
+      undefined,
+      refused.count,
+    );
+    delete cursor.refused;
+    this.dirty = true;
+  }
+
+  private async feed(
     session: TailedSession,
     cursor: Cursor,
     budget: number,
@@ -605,22 +672,28 @@ export class TranscriptTailer {
         this.sealGap(
           session,
           "transcript_line_too_long",
-          new Error(
-            `${skipTo - cursor.offset} bytes at offset ${cursor.offset}`,
-          ),
+          `${skipTo - cursor.offset} bytes at offset ${cursor.offset}`,
         );
         cursor.offset = skipTo;
         this.dirty = true;
         continue;
       }
       // Fed and advanced one line at a time: a line the recorder refuses
-      // rolls back and seals a gap in `feedLine` without disturbing the
-      // lines before or after it, and the cursor moves past exactly the
-      // bytes that line and its newline held, not the whole chunk, so a
-      // later line's failure can never re-open one already recorded.
+      // rolls back in `feedLine` without disturbing the lines before or
+      // after it, and is counted toward the pass's one gap. The cursor moves
+      // past exactly the bytes that line and its newline held, not the whole
+      // chunk, so a later line's failure can never re-open one already
+      // recorded.
       for (const line of lines) {
         const lineBytes = Buffer.byteLength(line, "utf8") + 1;
-        if (line.length > 0) this.feedLine(session, line);
+        if (line.length > 0) {
+          const refusal = this.feedLine(session, line);
+          if (refusal !== undefined)
+            cursor.refused = {
+              count: (cursor.refused?.count ?? 0) + 1,
+              detail: cursor.refused?.detail ?? describe(refusal).slice(0, 512),
+            };
+        }
         cursor.offset += lineBytes;
         remaining -= lineBytes;
         this.dirty = true;

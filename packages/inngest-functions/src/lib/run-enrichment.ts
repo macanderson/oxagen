@@ -87,41 +87,9 @@ export async function collectRunText(
   };
 }
 
-const TITLE_PROMPT_CHARS = 60;
-const TITLE_CHARS = 80;
-const UNNAMED_BRANCHES = new Set(["main", "master", "HEAD"]);
-
-/**
- * A title that needs no model: the first sentence of the run's first prompt,
- * cut at a word boundary, then "on" and the branch when it names the work,
- * the way a session title reads ("oxagen on agent/pensive-volta"). The model's
- * name replaces it once an account is written. Returns null when the prompt
- * holds no words.
- */
-export function fallbackRunTitle(
-  prompt: string,
-  branch: string | null,
-): string | null {
-  const line =
-    prompt
-      .replace(/<[^>]*>/gu, " ")
-      .split(/\r?\n/u)
-      .map((part) => part.replace(/\s+/gu, " ").trim())
-      .find((part) => part.length > 0) ?? "";
-  const sentence = (/^.*?[.?!](?=\s|$)/u.exec(line)?.[0] ?? line)
-    .replace(/[.]$/u, "")
-    .trim();
-  if (!sentence) return null;
-  let title = sentence;
-  if (title.length > TITLE_PROMPT_CHARS) {
-    const cut = title.slice(0, TITLE_PROMPT_CHARS - 1);
-    const space = cut.lastIndexOf(" ");
-    title = `${(space > TITLE_PROMPT_CHARS / 2 ? cut.slice(0, space) : cut).trimEnd()}…`;
-  }
-  const named = branch?.trim();
-  if (!named || UNNAMED_BRANCHES.has(named)) return title;
-  return `${title} on ${named}`.slice(0, TITLE_CHARS);
-}
+// The prompt-derived title lives beside the place-derived one, so the ingest
+// path can name a run from its first prompt without loading the model stack.
+export { fallbackRunTitle } from "@oxagen/tacho";
 
 /**
  * A short code for why an enrichment attempt failed, safe to store on the run
@@ -139,6 +107,12 @@ export function enrichmentFailureReason(error: unknown): string {
   if (text === "Run enrichment was disabled") return "disabled";
   if (text === "Stella returned no run account") return "empty_account";
   if (name === "ZodError" || name === "SyntaxError") return "invalid_account";
+  // `ModelCallFailedError` (@oxagen/agent) names the provider's status and
+  // never its body, so the status is the only fact there is to read.
+  if (/\banswered 429\b|rate.?limit/iu.test(text)) return "rate_limited";
+  if (/\banswered 5\d\d\b/u.test(text)) return "provider_error";
+  if (/failed before the provider answered/u.test(text))
+    return "provider_unreachable";
   if (
     name === "TimeoutError" ||
     name === "AbortError" ||
@@ -151,6 +125,7 @@ export function enrichmentFailureReason(error: unknown): string {
     )
   )
     return "model_refused";
+  if (/\banswered 4\d\d\b/u.test(text)) return "request_rejected";
   return "unknown";
 }
 
@@ -182,12 +157,45 @@ export async function runNarrativeTurn(
     maxSteps: 1,
     abortSignal: AbortSignal.timeout(120_000),
   });
-  for await (const _part of turn.fullStream) {
-    /* Drain before reading the final result. */
+  // A turn whose model call failed still settles, with an empty answer and an
+  // error part in the stream. Keep that error: without it the attempt read as
+  // `empty_account` and the provider's refusal was never recorded.
+  let failure: unknown = null;
+  for await (const part of turn.fullStream) {
+    if (failure === null && isErrorPart(part)) failure = part.error;
   }
   const text = await turn.finalText;
-  if (!text.trim()) throw new Error("Stella returned no run account");
+  if (!text.trim()) {
+    if (failure !== null) throw terminalOrRetryable(failure);
+    throw new Error("Stella returned no run account");
+  }
   return { text, model: turn.modelId };
+}
+
+function isErrorPart(part: unknown): part is { error: unknown } {
+  return (
+    typeof part === "object" &&
+    part !== null &&
+    (part as { type?: unknown }).type === "error"
+  );
+}
+
+/**
+ * A provider that refused the request (a 4xx other than a timeout or a rate
+ * limit) refuses it again on retry, and the engine has already tried it
+ * several times. Such a failure ends the job at once, and the failure handler
+ * records it. Anything else is left to the job's retries.
+ */
+function terminalOrRetryable(failure: unknown): unknown {
+  const status = (failure as { status?: unknown } | null)?.status;
+  const refused =
+    typeof status === "number" &&
+    status >= 400 &&
+    status < 500 &&
+    status !== 408 &&
+    status !== 429;
+  if (!refused) return failure;
+  return new NonRetriableError((failure as Error).message, { cause: failure });
 }
 
 /**

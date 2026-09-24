@@ -25,7 +25,7 @@ export interface WorkContextRow {
 }
 export interface WorkDiffRow extends WorkContextRow {
   seq: number | string;
-  ts: string;
+  observed_at: string;
   base: string;
   content_digest: string;
   bytes_ref: string;
@@ -44,8 +44,8 @@ export interface WorkPrLinkRow {
   url: string;
   number: string;
   repository: string;
-  seq: number | string;
-  ts: string;
+  first_seq: number | string;
+  first_ts: string;
 }
 export const WORK_CONTEXT_CAP = 200;
 export const WORK_PR_LINK_CAP = 50;
@@ -100,6 +100,17 @@ export async function connectedRunRepositories(
   }));
 }
 
+// Two rules hold for every `tacho_events` read in this file.
+//
+// No alias reuses a column name. A ClickHouse alias applies to the whole
+// query, so `min(seq) AS seq` turned every other `seq` into `min(seq)` and
+// `argMin(ts, seq)` into an aggregate inside an aggregate (code 184). That one
+// alias failed every `get_run_work` call in production. `run-work.test.ts`
+// checks each query against the table's columns.
+//
+// No read filters on `chain_verified`. A fact comes from every frame the
+// control plane accepted from the session's host, and a broken chain is
+// reported beside the facts, never by hiding them (ADR-171).
 const PATH =
   "coalesce(nullIf(worktree_path, ''), nullIf(project_dir, ''), cwd)";
 export async function readWorkContexts(
@@ -112,7 +123,7 @@ export async function readWorkContexts(
       min(seq) AS first_seq, max(seq) AS last_seq
       FROM tacho_events FINAL
       WHERE org_id = {orgId:UUID} AND workspace_id = {workspaceId:UUID}
-        AND session_uuid = {sessionUuid:UUID} AND chain_verified = true
+        AND session_uuid = {sessionUuid:UUID}
         AND ${PATH} != ''
       GROUP BY path, branch, remote ORDER BY first_seq ASC LIMIT {limit:UInt32}`,
     params: { sessionUuid, limit: WORK_CONTEXT_CAP + 1 },
@@ -134,7 +145,7 @@ export async function readWorkSubagents(
       max(kind = 'subagent_stop') AS stopped
       FROM tacho_events FINAL
       WHERE org_id = {orgId:UUID} AND workspace_id = {workspaceId:UUID}
-        AND session_uuid = {sessionUuid:UUID} AND chain_verified = true
+        AND session_uuid = {sessionUuid:UUID}
         AND kind IN ('subagent_start', 'subagent_stop')
         AND attrs['hook.agent_id'] != ''
       GROUP BY id ORDER BY first_seq ASC LIMIT {limit:UInt32}`,
@@ -155,12 +166,12 @@ export async function readWorkPrLinks(
     query: `SELECT attrs['pr_url'] AS url,
       argMin(attrs['pr_number'], seq) AS number,
       argMaxIf(attrs['pr_repository'], seq, attrs['pr_repository'] != '') AS repository,
-      min(seq) AS seq, toString(argMin(ts, seq)) AS ts
+      min(seq) AS first_seq, toString(argMin(ts, seq)) AS first_ts
       FROM tacho_events FINAL
       WHERE org_id = {orgId:UUID} AND workspace_id = {workspaceId:UUID}
-        AND session_uuid = {sessionUuid:UUID} AND chain_verified = true
+        AND session_uuid = {sessionUuid:UUID}
         AND kind = 'oxagen:pr_link' AND attrs['pr_url'] != ''
-      GROUP BY url ORDER BY seq ASC LIMIT {limit:UInt32}`,
+      GROUP BY url ORDER BY first_seq ASC LIMIT {limit:UInt32}`,
     params: { sessionUuid, limit: WORK_PR_LINK_CAP + 1 },
   });
   return result.data;
@@ -211,22 +222,22 @@ export async function readSessionConfig(
 ): Promise<SessionConfig> {
   const result = await chSelect<{
     setting: string;
-    effort: string;
+    reported_effort: string;
     thinking: string;
   }>({
     query: `SELECT
         argMaxIf(effort_level_setting, seq, effort_level_setting != '') AS setting,
-        argMaxIf(effort, seq, effort != '') AS effort,
+        argMaxIf(effort, seq, effort != '') AS reported_effort,
         ifNull(toString(argMaxIf(always_thinking_enabled, seq,
           always_thinking_enabled IS NOT NULL)), '') AS thinking
       FROM tacho_events FINAL
       WHERE org_id = {orgId:UUID} AND workspace_id = {workspaceId:UUID}
-        AND session_uuid = {sessionUuid:UUID} AND chain_verified = true`,
+        AND session_uuid = {sessionUuid:UUID}`,
     params: { sessionUuid },
   });
   const row = result.data[0];
   return {
-    effort: row?.setting.trim() || row?.effort.trim() || null,
+    effort: row?.setting.trim() || row?.reported_effort.trim() || null,
     thinking:
       row?.thinking === "true"
         ? true
@@ -249,7 +260,7 @@ export async function readSessionTitle(
     query: `SELECT JSONExtractString(body, 'session_title') AS title
       FROM tacho_events FINAL
       WHERE org_id = {orgId:UUID} AND workspace_id = {workspaceId:UUID}
-        AND session_uuid = {sessionUuid:UUID} AND chain_verified = true
+        AND session_uuid = {sessionUuid:UUID}
         AND kind = 'oxagen:session_title'
         AND JSONExtractString(body, 'session_title') != ''
       ORDER BY seq DESC LIMIT 1`,
@@ -271,13 +282,13 @@ export async function readWorkDiffs(
 ): Promise<WorkDiffRow[]> {
   const result = await chSelect<WorkDiffRow>({
     query: `SELECT ${PATH} AS path, git_branch AS branch, git_remote_digest AS remote,
-      attrs['diff_head_sha'] AS head, attrs['repository_url'] AS repository, seq, toString(ts) AS ts,
+      attrs['diff_head_sha'] AS head, attrs['repository_url'] AS repository, seq, toString(ts) AS observed_at,
       attrs['diff_base_sha'] AS base, content_digest, bytes_ref,
       attrs['diff_complete'] AS complete, attrs['diff_limitations'] AS limitations,
       attrs['body_omitted'] AS omitted
       FROM tacho_events FINAL
       WHERE org_id = {orgId:UUID} AND workspace_id = {workspaceId:UUID}
-        AND session_uuid = {sessionUuid:UUID} AND chain_verified = true
+        AND session_uuid = {sessionUuid:UUID}
         AND kind = 'oxagen:worktree_reconciled'
       ORDER BY seq DESC LIMIT {limit:UInt32}`,
     params: { sessionUuid, limit: WORK_DIFF_CAP + 1 },
@@ -365,6 +376,6 @@ export function capturedDiffOf(row: WorkDiffRow): RunCapturedDiff {
           ? "complete"
           : "partial",
     limitations,
-    observedAt: row.ts,
+    observedAt: row.observed_at,
   };
 }
