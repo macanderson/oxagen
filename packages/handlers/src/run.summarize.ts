@@ -21,6 +21,7 @@ import {
   type RunSummarizeOutput,
 } from "@oxagen/oxagen/contracts/run.summarize";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
+import { RUN_ENRICH_EVENT } from "@oxagen/inngest-functions/events";
 import { eventClient } from "./event-client";
 import { canSummarizeRun } from "@oxagen/oxagen/contracts/run.list";
 import { recordedGaps, runScope } from "./run.list";
@@ -33,7 +34,7 @@ import {
 
 const SUMMARIZE_ROLES = ["Owner", "Admin", "Member"] as const;
 
-export const RUN_SUMMARIZE_EVENT = "run/enrich";
+export const RUN_SUMMARIZE_EVENT = RUN_ENRICH_EVENT;
 
 interface RunSummarizeEvent {
   name: typeof RUN_SUMMARIZE_EVENT;

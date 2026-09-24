@@ -240,6 +240,8 @@ it("registers enrichment under the adapter limits and serializes each organizati
   expect(config.batchEvents?.maxSize).toBeLessThanOrEqual(5);
   expect(config.concurrency).toEqual({ limit: 1, key: "event.data.orgId" });
   expect(config.batchEvents?.key).toContain("event.data.runPublicId");
+  // Every run waits out the batch before its account starts.
+  expect(config.batchEvents?.timeout).toBe("2s");
 });
 
 it("does not charge for queued child sessions or legacy rows absent from the readable selection", async () => {
