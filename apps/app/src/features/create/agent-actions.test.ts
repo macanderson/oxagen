@@ -84,8 +84,8 @@ beforeEach(() => {
 });
 
 describe("readToolbelt", () => {
-  it("reads one page of list_tool_versions and keeps what a pick needs", async () => {
-    kernelRead.mockResolvedValue({
+  it("reads list_tool_versions page by page and keeps what a pick needs", async () => {
+    kernelRead.mockResolvedValueOnce({
       ok: true,
       value: {
         items: [
@@ -109,11 +109,20 @@ describe("readToolbelt", () => {
         nextCursor: "c2",
       },
     });
+    kernelRead.mockResolvedValueOnce({
+      ok: true,
+      value: { items: [], nextCursor: null },
+    });
     const result = await readToolbelt("acme", "core-platform");
     expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
-    expect(kernelRead).toHaveBeenCalledWith(CTX, {
+    expect(kernelRead).toHaveBeenNthCalledWith(1, CTX, {
       contract: toolVersionList,
       input: { limit: 100 },
+      page: "tools",
+    });
+    expect(kernelRead).toHaveBeenNthCalledWith(2, CTX, {
+      contract: toolVersionList,
+      input: { limit: 100, cursor: "c2" },
       page: "tools",
     });
     expect(result).toEqual({
@@ -148,8 +157,37 @@ describe("readToolbelt", () => {
             killed: false,
           },
         ],
-        more: true,
+        more: false,
       },
+    });
+  });
+
+  it("stops at ten pages and says more exist", async () => {
+    kernelRead.mockResolvedValue({
+      ok: true,
+      value: { items: [version()], nextCursor: "next" },
+    });
+    const result = await readToolbelt("acme", "core-platform");
+    expect(kernelRead).toHaveBeenCalledTimes(10);
+    expect(result.ok && result.value.tools.length).toBe(10);
+    expect(result.ok && result.value.more).toBe(true);
+  });
+
+  it("fails the belt when a later page is refused (negative)", async () => {
+    kernelRead
+      .mockResolvedValueOnce({
+        ok: true,
+        value: { items: [version()], nextCursor: "c2" },
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        reason: "denied",
+        permission: "tool.read",
+      });
+    expect(await readToolbelt("acme", "core-platform")).toEqual({
+      ok: false,
+      reason: "denied",
+      code: "tool.read",
     });
   });
 

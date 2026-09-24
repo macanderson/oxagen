@@ -514,6 +514,12 @@ export function RecordMultiPicker({
   };
 
   const rowValue = (i: number) => rowAt(i, matches, typed);
+  const labelOf = (v: string) => all.find((o) => o.value === v)?.label ?? v;
+  /** The typed text names this value outright, by its value or its label. */
+  const names = (v: string) => {
+    const said = query.trim().toLowerCase();
+    return said === v.toLowerCase() || said === labelOf(v).toLowerCase();
+  };
 
   const openList = () => {
     ensure();
@@ -537,7 +543,12 @@ export function RecordMultiPicker({
       else move(e.key === "ArrowDown" ? 1 : -1);
     } else if (e.key === "Enter") {
       const next = open ? rowValue(highlight) : null;
-      if (next !== null) {
+      if (next !== null && values.includes(next) && names(next)) {
+        // Typing the name of a value already chosen asks for it, so it stays.
+        // Part of a name only finds the row, so Enter still toggles it off.
+        e.preventDefault();
+        setQuery("");
+      } else if (next !== null) {
         e.preventDefault();
         toggle(next);
       } else if (freeform && query.trim() !== "") {
@@ -553,8 +564,6 @@ export function RecordMultiPicker({
       setOpen(false);
     }
   };
-
-  const labelOf = (v: string) => all.find((o) => o.value === v)?.label ?? v;
 
   return (
     <div className="min-w-0" data-testid={testId}>

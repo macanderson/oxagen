@@ -19,8 +19,13 @@ vi.mock("@/server/viewer", () => ({
   requireViewer: vi.fn(() => Promise.resolve({})),
 }));
 
-const { chooseAgents, chooseApprovers, chooseModels, chooseToolPatterns } =
-  await import("./choice-actions");
+const {
+  chooseAgents,
+  chooseApprovers,
+  chooseModels,
+  chooseServerTools,
+  chooseToolPatterns,
+} = await import("./choice-actions");
 
 const ok = <T>(value: T) => ({ ok: true as const, value });
 
@@ -84,6 +89,58 @@ describe("chooseToolPatterns", () => {
       ok: false,
       reason: "denied",
       code: "tools.read",
+    });
+  });
+});
+
+describe("chooseServerTools", () => {
+  it("offers each tool name of one provider once, and no other provider's", async () => {
+    source.tools.versions.mockResolvedValue(
+      ok({
+        items: [
+          { ...version("notion_get", 1), name: "get_page", serverId: "mcs_1" },
+          { ...version("notion_get", 2), name: "get_page", serverId: "mcs_1" },
+          {
+            ...version("gh_issue", 1),
+            name: "create_issue",
+            serverId: "mcs_2",
+          },
+          { ...version("local", 1), name: "local", serverId: null },
+        ],
+        nextCursor: null,
+      }),
+    );
+    expect(await chooseServerTools("acme", "core", "mcs_1")).toEqual({
+      ok: true,
+      value: {
+        partial: false,
+        options: [
+          { value: "get_page", label: "get_page", detail: "notion_get" },
+        ],
+      },
+    });
+  });
+
+  it("stops at ten pages and says the list is partial", async () => {
+    source.tools.versions.mockResolvedValue(
+      ok({
+        items: [{ ...version("notion_get", 1), serverId: "mcs_1" }],
+        nextCursor: "more",
+      }),
+    );
+    const result = await chooseServerTools("acme", "core", "mcs_1");
+    expect(source.tools.versions).toHaveBeenCalledTimes(10);
+    expect(result.ok && result.value.partial).toBe(true);
+  });
+
+  it("fails the list with the reason the page gave (negative)", async () => {
+    source.tools.versions.mockResolvedValue(
+      readError("tool_registry_unavailable", 503),
+    );
+    expect(await chooseServerTools("acme", "core", "mcs_1")).toEqual({
+      ok: false,
+      reason: "unavailable",
+      code: "tool_registry_unavailable",
     });
   });
 });

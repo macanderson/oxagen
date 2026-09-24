@@ -26,16 +26,16 @@ const {
   registerServer,
   setToolClassification,
   flipKillSwitch,
-  chooseMcpServers,
   chooseSwitchTargets,
+  chooseServerTools,
 } = vi.hoisted(() => ({
   router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
   importTools: vi.fn(),
   registerServer: vi.fn(),
   setToolClassification: vi.fn(),
   flipKillSwitch: vi.fn(),
-  chooseMcpServers: vi.fn(),
   chooseSwitchTargets: vi.fn(),
+  chooseServerTools: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("./actions", () => ({
@@ -45,8 +45,8 @@ vi.mock("./actions", () => ({
   flipKillSwitch,
 }));
 vi.mock("@/features/shell/client", () => ({
-  chooseMcpServers,
   chooseSwitchTargets,
+  chooseServerTools,
 }));
 
 const { ImportProvider } = await import("./import-provider");
@@ -127,8 +127,8 @@ beforeEach(() => {
   ]) {
     fn.mockReset();
   }
-  chooseMcpServers.mockReset().mockResolvedValue(loaded([]));
   chooseSwitchTargets.mockReset().mockResolvedValue(loaded([]));
+  chooseServerTools.mockReset().mockResolvedValue(loaded([]));
 });
 
 afterEach(async () => {
@@ -183,7 +183,14 @@ describe("ImportProvider", () => {
     );
   });
 
-  it("imports the tools typed for a provider picked off the roster, by its id, and reloads the registry", async () => {
+  it("imports the tools picked for a provider off the roster, by its id, and reloads the registry", async () => {
+    chooseServerTools.mockResolvedValue({
+      ok: true,
+      value: {
+        options: [{ value: "get_page", label: "get_page", detail: "notion" }],
+        partial: false,
+      },
+    });
     importTools.mockResolvedValue({
       ok: true,
       value: { importDigest: "d1", published: 2, unchanged: 1 },
@@ -193,7 +200,21 @@ describe("ImportProvider", () => {
     // `import_tools` names a provider by, never the name a person reads.
     fill("Provider", "mcs_01k5s2");
     fireEvent.submit(formOf(screen.getByLabelText("Provider")));
-    fill("Tools", "get_page create_page");
+    // The tools field offers the names this provider's versions carry, found
+    // by typing part of one, and takes a pin never imported as typed.
+    const tools = screen.getByRole("combobox", { name: "Tools" });
+    fireEvent.focus(tools);
+    expect(chooseServerTools).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "mcs_01k5s2",
+    );
+    fireEvent.change(tools, { target: { value: "get_p" } });
+    expect(
+      await screen.findByRole("option", { name: /get_page/ }),
+    ).toBeVisible();
+    fireEvent.keyDown(tools, { key: "Enter" });
+    fireEvent.change(tools, { target: { value: "create_page," } });
     fireEvent.click(screen.getByTestId("tools-import-classify"));
     expect(
       screen.getByText("What import does not do.", { exact: false }),
