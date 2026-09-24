@@ -13,12 +13,15 @@ import {
   capturedDiffOf,
   checkoutOf,
   connectedRunRepositories,
+  prLinkOf,
+  readWorkPrLinks,
   readWorkContexts,
   readWorkDiffs,
   readWorkSubagents,
   subagentOf,
   WORK_CONTEXT_CAP,
   WORK_DIFF_CAP,
+  WORK_PR_LINK_CAP,
   WORK_SUBAGENT_CAP,
 } from "./lib/run-work";
 import { readWorkPullRequests, type RecordedRunPr } from "./lib/run-work-prs";
@@ -28,6 +31,7 @@ export type RunWorkDeps = RunReadDeps & {
   contexts: typeof readWorkContexts;
   diffs: typeof readWorkDiffs;
   subagents: typeof readWorkSubagents;
+  prLinks: typeof readWorkPrLinks;
   repositories: typeof connectedRunRepositories;
   pullRequests: typeof readWorkPullRequests;
 };
@@ -103,17 +107,52 @@ export function createRunWorkGetHandler(
         ],
       };
     }
-    const [contexts, diffs, subagents, repositories] = await Promise.all([
-      deps.contexts(run.sessionUuid),
-      deps.diffs(run.sessionUuid),
-      deps.subagents(run.sessionUuid),
-      deps.repositories(scope),
-    ]);
+    const [contexts, diffs, subagents, links, repositories] =
+      await Promise.all([
+        deps.contexts(run.sessionUuid),
+        deps.diffs(run.sessionUuid),
+        deps.subagents(run.sessionUuid),
+        deps.prLinks(run.sessionUuid),
+        deps.repositories(scope),
+      ]);
     const checkouts = contexts
       .slice(0, WORK_CONTEXT_CAP)
       .map((row) => checkoutOf(row, repositories));
-    const prs = await deps.pullRequests(scope, checkouts, repositories);
-    const warnings = [...prs.warnings];
+    // A PR the harness linked is a receipt: it names the PR outright, so it
+    // is read by number and marked `recorded`, and a branch match that finds
+    // the same PR merges into it rather than listing it twice.
+    const receipts: RecordedRunPr[] = [];
+    const linkWarnings = new Set<string>();
+    for (const row of links.slice(0, WORK_PR_LINK_CAP)) {
+      const link = prLinkOf(row);
+      if (link === null) {
+        linkWarnings.add("pr_link_unreadable");
+        continue;
+      }
+      const repo = repositories.find(
+        (candidate) =>
+          candidate.owner.toLowerCase() === link.owner.toLowerCase() &&
+          candidate.name.toLowerCase() === link.name.toLowerCase(),
+      );
+      if (!repo?.providerRepositoryId) {
+        linkWarnings.add("recorded_repository_not_connected");
+        continue;
+      }
+      receipts.push({
+        repositoryId: repo.providerRepositoryId,
+        number: link.number,
+        headSha: null,
+      });
+    }
+    const prs = await deps.pullRequests(
+      scope,
+      checkouts,
+      repositories,
+      undefined,
+      receipts,
+    );
+    const warnings = [...new Set([...prs.warnings, ...linkWarnings])];
+    if (links.length > WORK_PR_LINK_CAP) warnings.push("pr_link_limit");
     if (contexts.length > WORK_CONTEXT_CAP) warnings.push("checkout_limit");
     if (diffs.length > WORK_DIFF_CAP) warnings.push("captured_diff_limit");
     if (subagents.length > WORK_SUBAGENT_CAP) warnings.push("subagent_limit");
@@ -135,6 +174,7 @@ export const runWorkGetHandler = createRunWorkGetHandler({
   contexts: readWorkContexts,
   diffs: readWorkDiffs,
   subagents: readWorkSubagents,
+  prLinks: readWorkPrLinks,
   repositories: connectedRunRepositories,
   pullRequests: readWorkPullRequests,
 });

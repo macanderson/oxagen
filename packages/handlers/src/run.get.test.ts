@@ -42,6 +42,8 @@ type Over = {
   found?: boolean;
   /** The worker run the tacho fixture witnessed; none by default. */
   witnessFor?: string;
+  /** The harness title the wrapped session recorded; none by default. */
+  sessionTitle?: string;
   /** Runs after each fake sleep, with the count so far; a test lands events here. */
   onSleep?: (count: number, log: AttemptEventReadRecord[]) => void;
 };
@@ -77,6 +79,10 @@ function harness(over: Over = {}) {
           : null,
       ),
     tachoFrames: memoryTachoFrames(SESSION_UUID, over.tachoRows ?? []),
+    sessionTitle: (sessionUuid) =>
+      Promise.resolve(
+        sessionUuid === SESSION_UUID ? (over.sessionTitle ?? null) : null,
+      ),
     now: () => clock,
     sleep: (ms) => {
       sleeps.push(ms);
@@ -442,6 +448,7 @@ describe("get_run", () => {
       readRunRollups: stores.readRunRollups,
       readWitnessFor: async () => null,
       tachoFrames,
+      sessionTitle: async () => null,
       now: () => 0,
       sleep: () => Promise.resolve(),
     });
@@ -516,5 +523,14 @@ describe("get_run witnessFor (ADR-064)", () => {
       (e: unknown) => e,
     );
     expect(isHandlerError(err) && err.code).toBe("not_found");
+  });
+
+  it("names a wrapped session by the title its harness last gave it", async () => {
+    const titled = harness({ sessionTitle: "Fix the billing proration" });
+    const out = await titled.get(input({ runId: TACHO_ID }), ctx());
+    expect(out.run.name).toBe("Fix the billing proration");
+    const untitled = harness();
+    const plain = await untitled.get(input({ runId: TACHO_ID }), ctx());
+    expect(plain.run.name).not.toBe("Fix the billing proration");
   });
 });

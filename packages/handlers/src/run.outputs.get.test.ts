@@ -59,6 +59,7 @@ function harness(opts: {
   files?: SessionFileRow[];
   events?: ReturnType<typeof event>[];
   approvals?: RunApprovalRow[];
+  links?: Awaited<ReturnType<RunOutputsGetDeps["prLinks"]>>;
 }) {
   const stores = memoryStores(
     [ledgerRun({ publicId: LEDGER_ID, runId: RUN_UUID })],
@@ -87,11 +88,53 @@ function harness(opts: {
     readWitnessFor: stores.readWitnessFor,
     tachoFrames: () => Promise.resolve([]),
     outputs,
+    prLinks: (sessionUuid) =>
+      Promise.resolve(sessionUuid === SESSION_UUID ? (opts.links ?? []) : []),
   };
   return createRunOutputsGetHandler(deps);
 }
 
 describe("get_run_outputs — a wrapped session", () => {
+  it("adds a PR node per harness PR link, in frame order", async () => {
+    const outputs = harness({
+      files: [
+        file({ path: "src/a.ts", writes: 1, lastSeq: 10 }),
+        file({ path: "src/b.ts", writes: 1, lastSeq: 30 }),
+      ],
+      links: [
+        {
+          url: "https://github.com/acme/app/pull/41",
+          number: "41",
+          repository: "acme/app",
+          seq: 20,
+          ts: "2026-09-23 10:00:00.000",
+        },
+        {
+          url: "not a url",
+          number: "9",
+          repository: "acme/app",
+          seq: 25,
+          ts: "2026-09-23 10:01:00.000",
+        },
+      ],
+    });
+
+    const out = await outputs({ runId: TACHO_ID }, ctx());
+
+    expect(out.nodes.map((n) => [n.seq, n.kind, n.name])).toEqual([
+      ["10", "file", "src/a.ts"],
+      ["20", "pr", "#41"],
+      ["30", "file", "src/b.ts"],
+    ]);
+    expect(out.nodes[1]).toMatchObject({
+      where: "acme/app",
+      state: "open",
+      note: "https://github.com/acme/app/pull/41",
+      observedAt: "2026-09-23T10:00:00.000Z",
+    });
+    expect(out.tally.artifacts).toBe(3);
+  });
+
   it("splits reads from writes and counts them apart", async () => {
     const outputs = harness({
       files: [

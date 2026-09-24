@@ -40,7 +40,15 @@ export interface WorkSubagentRow {
   last_seq: number | string;
   stopped: number | string;
 }
+export interface WorkPrLinkRow {
+  url: string;
+  number: string;
+  repository: string;
+  seq: number | string;
+  ts: string;
+}
 export const WORK_CONTEXT_CAP = 200;
+export const WORK_PR_LINK_CAP = 50;
 export const WORK_SUBAGENT_CAP = 200;
 export const WORK_DIFF_CAP = 200;
 export const workDigest = (value: string) =>
@@ -133,6 +141,82 @@ export async function readWorkSubagents(
     params: { sessionUuid, limit: WORK_SUBAGENT_CAP + 1 },
   });
   return result.data;
+}
+/**
+ * The pull requests the harness said this session opened or linked, one row
+ * per URL, from `oxagen:pr_link` frames. Claude Code writes one each time a
+ * session creates or links a PR, so the link is certain and needs no branch
+ * match. The earliest frame names where the run produced it.
+ */
+export async function readWorkPrLinks(
+  sessionUuid: string,
+): Promise<WorkPrLinkRow[]> {
+  const result = await chSelect<WorkPrLinkRow>({
+    query: `SELECT attrs['pr_url'] AS url,
+      argMin(attrs['pr_number'], seq) AS number,
+      argMaxIf(attrs['pr_repository'], seq, attrs['pr_repository'] != '') AS repository,
+      min(seq) AS seq, toString(argMin(ts, seq)) AS ts
+      FROM tacho_events FINAL
+      WHERE org_id = {orgId:UUID} AND workspace_id = {workspaceId:UUID}
+        AND session_uuid = {sessionUuid:UUID} AND chain_verified = true
+        AND kind = 'oxagen:pr_link' AND attrs['pr_url'] != ''
+      GROUP BY url ORDER BY seq ASC LIMIT {limit:UInt32}`,
+    params: { sessionUuid, limit: WORK_PR_LINK_CAP + 1 },
+  });
+  return result.data;
+}
+/**
+ * A linked PR as `owner`, `name` and `number`. The frame's `pr_repository`
+ * wins, and the URL's `/owner/name/pull/N` path fills what it leaves out.
+ * Null when neither names a repository and a positive number.
+ */
+export function prLinkOf(
+  row: Pick<WorkPrLinkRow, "url" | "number" | "repository">,
+): { owner: string; name: string; number: number; url: string } | null {
+  let path: string[] = [];
+  try {
+    const parsed = new URL(row.url);
+    if (parsed.protocol !== "https:") return null;
+    path = parsed.pathname.split("/").filter(Boolean);
+  } catch {
+    return null;
+  }
+  const fromUrl = path.length >= 4 && path[2] === "pull" ? path : null;
+  const [owner, name] = row.repository
+    ? row.repository.split("/")
+    : [fromUrl?.[0], fromUrl?.[1]];
+  const number = Number(row.number || fromUrl?.[3]);
+  if (
+    !owner ||
+    !name ||
+    !/^[\w.-]+$/.test(owner) ||
+    !/^[\w.-]+$/.test(name) ||
+    !Number.isInteger(number) ||
+    number <= 0
+  )
+    return null;
+  return { owner, name, number, url: row.url };
+}
+/**
+ * The title the harness last gave the session, from its latest
+ * `oxagen:session_title` frame. Claude Code renames a session as the work
+ * takes shape, so the latest frame is the name the operator sees in the
+ * harness. Null when the session recorded none.
+ */
+export async function readSessionTitle(
+  sessionUuid: string,
+): Promise<string | null> {
+  const result = await chSelect<{ title: string }>({
+    query: `SELECT JSONExtractString(body, 'session_title') AS title
+      FROM tacho_events FINAL
+      WHERE org_id = {orgId:UUID} AND workspace_id = {workspaceId:UUID}
+        AND session_uuid = {sessionUuid:UUID} AND chain_verified = true
+        AND kind = 'oxagen:session_title'
+        AND JSONExtractString(body, 'session_title') != ''
+      ORDER BY seq DESC LIMIT 1`,
+    params: { sessionUuid },
+  });
+  return result.data[0]?.title.trim() || null;
 }
 export function subagentOf(row: WorkSubagentRow): RunSubagent {
   return {

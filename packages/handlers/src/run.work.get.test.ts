@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { prLinkOf } from "./lib/run-work";
 import { createRunWorkGetHandler, type RunWorkDeps } from "./run.work.get";
 import {
   ctx,
@@ -46,6 +47,7 @@ function setup() {
       { id: "a0182b6cd3a21d284", type: "Explore", first_seq: 3, last_seq: 9, stopped: 1 },
       { id: "a079426c9a96dd3cb", type: "", first_seq: 12, last_seq: 12, stopped: 0 },
     ]),
+    prLinks: vi.fn().mockResolvedValue([]),
     repositories: vi.fn().mockResolvedValue([]),
     pullRequests: vi.fn().mockResolvedValue({
       pullRequests: [],
@@ -104,5 +106,76 @@ describe("get_run_work", () => {
         stopped: false,
       },
     ]);
+  });
+  it("passes each harness PR link to the PR read as a recorded receipt", async () => {
+    const { handler, deps } = setup();
+    vi.mocked(deps.repositories).mockResolvedValue([
+      {
+        connectionId: "conn_1",
+        providerRepositoryId: "R_1",
+        host: "github.com",
+        owner: "acme",
+        name: "app",
+        url: "https://github.com/acme/app",
+        connected: true,
+      },
+    ]);
+    vi.mocked(deps.prLinks).mockResolvedValue([
+      {
+        url: "https://github.com/acme/app/pull/41",
+        number: "41",
+        repository: "acme/app",
+        seq: 20,
+        ts: "2026-09-23 10:00:00.000",
+      },
+      {
+        url: "https://github.com/Acme/App/pull/42",
+        number: "",
+        repository: "",
+        seq: 30,
+        ts: "2026-09-23 10:05:00.000",
+      },
+      {
+        url: "https://github.com/other/repo/pull/7",
+        number: "7",
+        repository: "other/repo",
+        seq: 40,
+        ts: "2026-09-23 10:06:00.000",
+      },
+    ]);
+    const result = await handler({ runId: RUN_ID }, ctx());
+    const call = vi.mocked(deps.pullRequests).mock.calls[0]!;
+    expect(call[4]).toEqual([
+      { repositoryId: "R_1", number: 41, headSha: null },
+      { repositoryId: "R_1", number: 42, headSha: null },
+    ]);
+    expect(result.warnings).toContain("recorded_repository_not_connected");
+  });
+  it("reads a PR link from the frame first and its URL second", () => {
+    expect(
+      prLinkOf({
+        url: "https://github.com/acme/app/pull/41",
+        number: "",
+        repository: "",
+      }),
+    ).toEqual({
+      owner: "acme",
+      name: "app",
+      number: 41,
+      url: "https://github.com/acme/app/pull/41",
+    });
+    expect(
+      prLinkOf({
+        url: "https://github.com/acme/app/pull/41",
+        number: "41",
+        repository: "fork/app",
+      }),
+    ).toMatchObject({ owner: "fork", name: "app", number: 41 });
+    expect(
+      prLinkOf({ url: "http://github.com/acme/app/pull/41", number: "41", repository: "" }),
+    ).toBeNull();
+    expect(
+      prLinkOf({ url: "https://github.com/acme/app", number: "", repository: "" }),
+    ).toBeNull();
   });
 });
