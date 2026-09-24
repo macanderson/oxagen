@@ -1516,10 +1516,16 @@ describe("an open run's cost and what sealed a run (#3980)", () => {
 
 describe("tachoRunName", () => {
   it.each([
-    [{ harnessTitle: "Claude title", name: "Model name", title: "dir" }, "Claude title"],
+    [
+      { harnessTitle: "Claude title", name: "Model name", title: "dir" },
+      "Claude title",
+    ],
     [{ harnessTitle: null, name: "Model name", title: "dir" }, "Model name"],
     [{ name: "Fix login · fix/auth", title: "dir" }, "Fix login · fix/auth"],
-    [{ harnessTitle: null, name: null, title: "oxagen · 6 files" }, "oxagen · 6 files"],
+    [
+      { harnessTitle: null, name: null, title: "oxagen · 6 files" },
+      "oxagen · 6 files",
+    ],
     [{ name: null }, null],
   ])("names %o as %s", (session, expected) => {
     expect(tachoRunName(session)).toBe(expected);

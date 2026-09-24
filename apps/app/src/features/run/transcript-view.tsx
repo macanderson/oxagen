@@ -1,40 +1,30 @@
 "use client";
-// The transcript and its transport (mockup `pRun`, `renderTranscript` and
-// `renderTransport`): every run reads the same way, from the run's start
-// through each turn, each turn's steps on a spine, and each step's frames
-// behind a disclosure.
+// The Transcript tab's feed and its transport (mockup `transcriptTab`, `txRow`
+// and the `.tx-*` rules in engine.css; pages/run.md, Transcript).
 //
-// The transport moves the viewer, never the run. Its position is a frame;
-// playback walks the frames at their recorded pace, idle longer than 2 s
-// compressed, and the readout puts the true elapsed time and the cost to
-// that point beside the position. Frames past the position are dimmed, and
-// the step holding it is marked.
+// The feed is the run as its operator saw it: the prompt, the model's words
+// and thinking, each tool call as one row with the output it read, what each
+// model step cost, what was recalled, and the stop. Oxagen's own frames sit
+// behind the chips: a ⚖ chip opens the decision's frame on the Governed
+// actions tab, and a frame chip opens a reply's or a call's.
 //
-// Zoom is which disclosures start open (Turns: none, Steps: the turns,
-// Everything: the turns and their steps), read once from `?zoom=`. The page
-// draws no zoom tabs, because the mockup of record has none: the chips,
-// search and "expand thinking" are how a reader narrows the transcript.
+// The kind chips, the search and the errors toggle filter the rows in the
+// browser, over the whole-run transcript the page already read, so a count on
+// a chip is the count of rows it shows.
 //
-// Search narrows what is drawn, never what is read. A step shows when any of
-// its frames matches, a turn when any of its steps does, and the step
-// numbers stay the run's, so a found step keeps the number it had before.
+// The transport moves the viewer, never the run. Its position is a count of
+// rows shown; playback reveals the next row after the recorded gap to it,
+// compressed and divided by the speed (`txPaced`), and a search shows every
+// match at once. A sealed run opens at its end; a live run opens following
+// its head, and pausing stops following without touching the run.
 //
 // A live run follows its own head over the SSE route
 // (`GET /v1/:org/:ws/runs/:run_id/stream`, reached same-origin through the
 // `/api/v1/*` rewrite). The stream carries frames, and the transcript carries
 // entries the contract derives from them, so a frame landing is the signal to
-// read the tail rather than something to render: deriving an entry here would
-// put a second, weaker copy of the contract's derivation on the page.
-// Scrubbing back stops following, and "go live" resumes it; a sealed or halted
-// run is never followed.
-//
-// A run longer than one read is paged rather than truncated. The read answers
-// a cursor, "Read more" asks for the next page, and playback reads ahead of
-// the playhead so it does not stall at a page boundary. Entries are appended,
-// never replaced, so the scroll position and the playhead stay where they are.
-// A cursor this capability did not write is refused, and the view says so
-// instead of starting the transcript again.
-import { TokenUsage } from "./token-usage";
+// read the tail rather than something to render. A run longer than one read
+// is paged rather than truncated: entries are appended, never replaced, and a
+// cursor this capability did not write is refused and said so.
 import { useLocale, useTranslations } from "next-intl";
 import {
   type ReactNode,
@@ -44,893 +34,1425 @@ import {
   useRef,
   useState,
 } from "react";
-import type { Money as MoneyValue } from "@/data/contracts/money";
+import { type Cost, ratioOfMicros } from "@/data/contracts/money";
 import {
   type RunTranscript,
   TRANSCRIPT_ENTRY_DEFAULT,
-  type TranscriptBody,
-  type TranscriptDecision,
-  type TranscriptEntry,
   type TranscriptKind,
-  type TranscriptZoom,
 } from "@/data/contracts/run";
-import type { ReplayGrade, RunStatus } from "@/data/contracts/runs";
-import { languageForPath } from "@/shared/code-highlight";
+import type { RunRow } from "@/data/contracts/runs";
+import type { DiffLine } from "@/shared/line-diff";
 import { routes } from "@/shared/safe-path";
-import { CodePanel, DiffPanel } from "@/ui/code-panel";
-import { linkText } from "@/ui/control-styles";
+import { useFormatter } from "@/ui/formatter";
 import { Money } from "@/ui/money";
-import { formatClock, formatCount, formatDuration } from "@/ui/money-format";
+import { formatCount, formatDuration, ratioWidth } from "@/ui/money-format";
 import { SafeLink, useNavigate } from "@/ui/navigation";
 import type { ActionResult } from "@/server/kernel";
 import { readTranscriptPage } from "./actions";
-import type { ToolDetail } from "./tool-detail";
-import { StepIcon } from "./tool-icon";
+import type { KindFilter } from "./tab-props";
+import { Note } from "./parts";
+import type { ToolDiff, ToolGroup } from "./tool-detail";
 import {
-  buildTranscript,
-  entryKey,
-  entryText,
-  decisionSubject,
+  buildFeed,
+  FEED_GROUPS,
+  type FeedCall,
+  type FeedGate,
+  type FeedGroup,
+  type FeedRow,
   type Frames,
-  frameAt,
-  frameCost,
-  idsAt,
-  openAtZoom,
-  playDelay,
-  type StepDigest,
-  type StepNode,
-  stepDigest,
-  stepModel,
-  stepThinking,
-  stepTool,
-  toolExchange,
-  type TranscriptStep,
-  type TranscriptTurn,
-  visibleChildren,
-  visibleFrames,
-  visibleSteps,
+  type FrameRef,
 } from "./transcript-model";
 import { useRunStream } from "./use-run-stream";
 
 type Place = { org: string; ws: string; runId: string };
 
+/** The run facts the feed's header line and its rows read. */
+export type TranscriptRun = Pick<
+  RunRow,
+  | "status"
+  | "taskRef"
+  | "agentKey"
+  | "model"
+  | "turns"
+  | "steps"
+  | "operatorName"
+  | "sealedAt"
+  | "ingressPaused"
+>;
+
 /** Why a later page did not arrive, in the shape the action answers with. */
 type PageFailure = Exclude<ActionResult<unknown>, { ok: true }>;
 
+/** `TX_SPEEDS=[1,2,3,6]`. */
 const SPEEDS = [1, 2, 3, 6] as const;
-/** How close to the end the playhead gets before the next page is read ahead of it. */
-const PREFETCH_WITHIN = 5;
-
-/*
- * A step's kind is a STATE, and the house rule is that the gold never encodes
- * one: it is identity, and at most one action per screen. So `control` — a
- * frame Oxagen itself wrote, a steer or a pause — is told apart by SHAPE, the
- * square dot among round ones, which is also the only difference that survives
- * greyscale and colour blindness. It used to take the gold, which put the
- * brand metal inside the same axis as info, success and destructive.
- */
-const DOT: Record<StepNode, string> = {
-  model: "border-info",
-  tool: "border-muted-foreground",
-  policy: "border-success",
-  control: "border-foreground rounded-[2px]",
-  deny: "border-destructive bg-destructive",
-};
-const NAME: Record<StepNode, string> = {
-  model: "text-info",
-  tool: "text-foreground",
-  policy: "text-foreground",
-  control: "text-foreground",
-  deny: "text-destructive",
-};
-
-const chip =
-  "whitespace-nowrap rounded-full border border-border bg-card px-2 font-mono text-[10.5px] leading-[1.8] text-muted-foreground";
-const segButton =
-  "border-r border-border px-2 py-1 text-[11px] text-muted-foreground last:border-r-0 hover:text-foreground aria-pressed:bg-card aria-pressed:font-semibold aria-pressed:text-foreground";
-const tpButton =
-  "grid size-[30px] shrink-0 place-items-center rounded-md border border-border bg-card text-foreground hover:border-foreground/40 disabled:cursor-not-allowed disabled:opacity-35";
-
-function Chevron() {
-  return (
-    <span
-      aria-hidden="true"
-      className="inline-block w-2.5 shrink-0 text-[8px] text-muted-foreground transition-transform group-open:rotate-90"
-    >
-      ▶
-    </span>
-  );
-}
-
-function Chip({
-  children,
-  tone,
-}: {
-  children: ReactNode;
-  tone?: "cost" | "warn";
-}) {
-  return (
-    <span
-      className={`${chip} ${tone === "cost" ? "text-foreground" : tone === "warn" ? "text-destructive" : ""}`}
-    >
-      {children}
-    </span>
-  );
-}
+type Speed = (typeof SPEEDS)[number];
 
 /**
- * The decision a rule or a person made, and the call it was made on.
+ * `txPaced`: the recorded gap to the next row, divided by the speed, held
+ * between 90 ms and 1.4 s (both divided by the speed too, so 6× reads as six
+ * times faster through a run whose gaps are either near zero or long).
  *
- * The subject is the point: a line that says a decision was `allow` and not
- * what was allowed is a line a reader has to open the envelope to act on.
- * It falls back to the decision alone where the frame recorded no tool,
- * which a gate on something other than a tool call legitimately does.
+ * @internal Exported for its unit test; nothing outside this module imports it.
  */
-function Decision({
-  decision,
-  subject,
-}: {
-  decision: TranscriptDecision;
-  subject: string | null;
-}) {
-  const t = useTranslations("run.transcript");
-  return (
-    <p
-      data-testid="entry-decision"
-      className="m-0 text-xs text-muted-foreground"
-    >
-      {subject === null
-        ? t("decision", { decision: decision.decision, seq: decision.seq })
-        : t("decisionOn", {
-            decision: decision.decision,
-            subject,
-            seq: decision.seq,
-          })}
-    </p>
+export function paceMs(gapMs: number, speed: number): number {
+  return Math.max(
+    90 / speed,
+    Math.min(1400 / speed, Math.max(0, gapMs) / speed),
   );
 }
+
+/** How many output lines a tool row shows before its fold (`budget=6`). */
+const OUTPUT_BUDGET = 6;
+/** How many diff lines a closed row shows (`cap=12`). */
+const DIFF_CAP = 12;
+/** How many recalled items a closed recall row lists (`CTXF.slice(0,3)`). */
+const RECALL_CAP = 3;
 
 /**
- * One half of an exchange: what went out, or what came back. The label says
- * which, so a reader never has to work out whether a body is an input or a
- * result, and a half whose bytes were not retained says so rather than
- * drawing an empty box.
+ * `TX_SALIENT` and `txSalient`: the line an output window opens at. The first
+ * line that reads as a failure, when one does; otherwise the first line with
+ * anything on it.
  */
-function FrameHalf({
-  body,
-  label,
-  seq,
-  text,
-  org,
-  ws,
-  runId,
-}: {
-  body: TranscriptBody;
-  label: string;
-  seq: string;
-  /** The text to draw in place of the body's own, when the body was read apart. */
-  text?: string;
-} & Place) {
-  const t = useTranslations("run.transcript");
-  const shown = text ?? body.text;
-  return (
-    <div
-      data-testid="transcript-half"
-      data-half={label}
-      className="flex flex-col gap-1.5"
-    >
-      <span className="text-[10.5px] font-medium text-muted-foreground">
-        {label}
-      </span>
-      {shown === null ? (
-        <p className="m-0 text-xs text-muted-foreground">
-          {t(body.fidelity === "digest_only" ? "digestOnly" : "noBody")}
-        </p>
-      ) : (
-        <pre className="m-0 max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-card p-2.5 font-mono text-[11.5px] leading-relaxed text-foreground">
-          {shown}
-        </pre>
-      )}
-      {body.truncated ? (
-        <p
-          data-testid="entry-truncated"
-          className="m-0 text-xs text-muted-foreground"
-        >
-          {t("truncated")}
-          {/* A subagent's frame is on its own chain, which the Frames tab
-              does not read: a link by seq would open the run's own frame of
-              that number, a different frame. */}
-          {body.chainRef === undefined ? (
-            <>
-              {" "}
-              <SafeLink
-                to={routes.run(org, ws, runId, { tab: "actions", body: seq })}
-                className={linkText}
-              >
-                {t("openFrame", { seq })}
-              </SafeLink>
-            </>
-          ) : null}
-        </p>
-      ) : null}
-    </div>
-  );
+const SALIENT = [
+  "error",
+  "warning",
+  "failed",
+  "failure",
+  "panic",
+  "assert",
+  "fatal",
+  "exception",
+];
+function salientLine(lines: readonly string[]): number {
+  let first = -1;
+  for (const [index, line] of lines.entries()) {
+    const trimmed = line.trimStart();
+    if (first === -1 && trimmed !== "") first = index;
+    const lower = trimmed.toLowerCase();
+    for (const mark of SALIENT) {
+      if (lower.startsWith(mark)) return index;
+      const at = lower.indexOf(`${mark}:`);
+      if (at >= 0 && at <= 12) return index;
+    }
+  }
+  return Math.max(0, first);
 }
 
-function FrameDetail({
-  frame,
-  org,
-  ws,
-  runId,
-}: { frame: TranscriptEntry } & Place) {
+/** `txFold`: a passage as its first sentence and the rest. */
+function foldText(text: string): { head: string; rest: string } {
+  const match = /^[\s\S]*?[.!?](?=\s|$)/.exec(text);
+  if (match === null || match[0].length >= text.length - 1)
+    return { head: text, rest: "" };
+  return {
+    head: match[0],
+    rest: text.slice(match[0].length).replace(/^\s+/, ""),
+  };
+}
+
+// ── The design's rules, as class recipes (ADR-132) ──────────────────────────
+
+/**
+ * `.txs { font-family:var(--mono); font-size:12.5px; line-height:1.65;
+ * color:var(--fg) }`.
+ */
+const txs =
+  "flex min-w-0 flex-col font-mono text-[12.5px] leading-[1.65] text-foreground";
+/** `.tx-tools { display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:0 0 10px }` */
+const txTools = "flex flex-wrap items-center gap-2 pb-2.5";
+/**
+ * `.tx-tools input { background:var(--void); border:1px solid var(--border);
+ * border-radius:8px; padding:6px 10px; font-size:12px; width:220px }`; a
+ * phone gets the 16px input the house sheets use.
+ */
+const txSearch =
+  "w-[220px] max-w-full max-md:w-full rounded-lg border border-border bg-void px-2.5 py-1.5 font-mono text-xs text-foreground placeholder:text-dim focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-ring max-md:text-base";
+/** `.tx-kinds { display:flex; flex-wrap:wrap; gap:3px }` */
+const txKinds = "flex flex-wrap gap-[3px]";
+/**
+ * `.tx-kind { display:inline-flex; gap:6px; padding:3px 8px 3px 6px;
+ * border-radius:6px; font-size:11px; color:var(--muted) }`, pressed
+ * `{ background:var(--hl); color:var(--fg); box-shadow:inset 0 0 0 1px
+ * var(--rule) }`, released `{ color:var(--dim) }` with its words struck.
+ * `.all { padding-left:8px }`, and `.err[aria-pressed="true"] {
+ * color:var(--st-failed) }`.
+ */
+const kindShape =
+  "inline-flex items-center gap-1.5 rounded-md py-[3px] pr-2 font-mono text-[11px] focus-visible:outline-2 focus-visible:outline-ring max-md:min-h-9";
+const kindPressed =
+  "aria-pressed:bg-hl aria-pressed:shadow-[inset_0_0_0_1px_var(--rule)] aria-[pressed=false]:text-dim aria-[pressed=false]:[&>span:not([data-dot])]:line-through";
+const txKind = `${kindShape} ${kindPressed} pl-1.5 text-muted-foreground aria-pressed:text-foreground`;
+const txKindAll = `${kindShape} pl-2 text-muted-foreground hover:text-foreground`;
+const txKindErrors = `${kindShape} ${kindPressed} pl-1.5 text-muted-foreground aria-pressed:text-error`;
+/** `.tx-kind .n { font-size:10px; color:var(--dim) }` */
+const txKindCount = "text-[10px] tabular-nums text-dim";
+/**
+ * `.tx-kind .d { width:8px; height:8px; border-radius:2px; background:var(--c);
+ * box-shadow:0 0 0 1px <c 40%> }`, and released `{ background:transparent;
+ * box-shadow:inset 0 0 0 1.5px var(--c); opacity:.7 }`. One pair per frame
+ * kind hue (`TX_HUE`), written out so Tailwind sees every class.
+ */
+const DOT: Record<FeedGroup, { on: string; off: string }> = {
+  prompt: {
+    on: "bg-fk-op shadow-[0_0_0_1px_color-mix(in_srgb,var(--fk-op)_40%,transparent)]",
+    off: "shadow-[inset_0_0_0_1.5px_var(--fk-op)] opacity-70",
+  },
+  responses: {
+    on: "bg-fk-model shadow-[0_0_0_1px_color-mix(in_srgb,var(--fk-model)_40%,transparent)]",
+    off: "shadow-[inset_0_0_0_1.5px_var(--fk-model)] opacity-70",
+  },
+  thinking: {
+    on: "bg-fk-model shadow-[0_0_0_1px_color-mix(in_srgb,var(--fk-model)_40%,transparent)]",
+    off: "shadow-[inset_0_0_0_1.5px_var(--fk-model)] opacity-70",
+  },
+  tools: {
+    on: "bg-fk-tool shadow-[0_0_0_1px_color-mix(in_srgb,var(--fk-tool)_40%,transparent)]",
+    off: "shadow-[inset_0_0_0_1.5px_var(--fk-tool)] opacity-70",
+  },
+  usage: {
+    on: "bg-fk-gov shadow-[0_0_0_1px_color-mix(in_srgb,var(--fk-gov)_40%,transparent)]",
+    off: "shadow-[inset_0_0_0_1.5px_var(--fk-gov)] opacity-70",
+  },
+  recall: {
+    on: "bg-fk-ctx shadow-[0_0_0_1px_color-mix(in_srgb,var(--fk-ctx)_40%,transparent)]",
+    off: "shadow-[inset_0_0_0_1.5px_var(--fk-ctx)] opacity-70",
+  },
+  seal: {
+    on: "bg-fk-gov shadow-[0_0_0_1px_color-mix(in_srgb,var(--fk-gov)_40%,transparent)]",
+    off: "shadow-[inset_0_0_0_1.5px_var(--fk-gov)] opacity-70",
+  },
+};
+/** `.tx-play { display:flex; gap:4px; margin-left:auto; flex-wrap:wrap }` */
+const txPlay = "ml-auto flex flex-wrap items-center gap-1 max-md:ml-0";
+/**
+ * `.btn.sm` inside `.tx-play { padding:3px 8px; font-size:11.5px;
+ * min-width:30px; justify-content:center }` over `.btn { border:1px solid
+ * var(--border); background:var(--panel); border-radius:7px }` and
+ * `.btn:hover { border-color:var(--rule); background:var(--hl) }`; `.ghost`
+ * drops the fill, and the play button is `min-width:74px`.
+ */
+const buttonShape =
+  "inline-flex items-center justify-center gap-1 rounded-[7px] border border-border px-2 py-[3px] font-mono text-[11.5px] text-foreground transition-colors hover:border-rule hover:bg-hl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-45 max-md:min-h-9";
+const txButton = `${buttonShape} min-w-[30px] bg-card`;
+const txGhost = `${buttonShape} min-w-[30px] bg-transparent`;
+const txPlayButton = `${buttonShape} min-w-[74px] bg-card`;
+/**
+ * `.seg { display:inline-flex; gap:2px; padding:2px; border:1px solid
+ * var(--border); border-radius:8px; background:var(--void) }` and `.seg .btn
+ * { border-color:transparent; background:transparent }`, pressed `{
+ * background:var(--hl); border-color:var(--rule) }`.
+ */
+const txSeg =
+  "ml-1 inline-flex gap-0.5 rounded-lg border border-border bg-void p-0.5";
+const txSegButton =
+  "inline-flex min-w-[30px] items-center justify-center rounded-[7px] border border-transparent bg-transparent px-2 py-[3px] font-mono text-[11.5px] text-foreground hover:bg-hl aria-pressed:border-rule aria-pressed:bg-hl max-md:min-h-9";
+/** `.tx-play .cnt { font-size:10.5px; color:var(--dim); margin-left:4px }` */
+const txCount = "ml-1 whitespace-nowrap text-[10.5px] tabular-nums text-dim";
+/**
+ * `.tx-frame { background:var(--tx-surface); border:1px solid var(--border);
+ * border-radius:12px; overflow:hidden }`.
+ */
+const txFrame =
+  "overflow-hidden rounded-xl border border-border bg-(--tx-surface)";
+/**
+ * `.tx-runbar { display:flex; gap:12px; padding:9px 14px; border-bottom:1px
+ * solid var(--border); background:var(--panel); flex-wrap:wrap }`,
+ * `.name { font-weight:700; letter-spacing:.05em }`, `.meta { color:var(--dim);
+ * font-size:11px }`.
+ */
+const txRunbar =
+  "flex flex-wrap items-center gap-3 border-b border-border bg-card px-3.5 py-[9px]";
+/**
+ * `.tx-burn { display:flex; gap:8px; margin-left:auto; font-size:10.5px;
+ * color:var(--muted) }`, `.bar { width:120px; height:4px; border-radius:2px;
+ * background:var(--hl) }`, `.bar i { background:var(--st-approval) }`.
+ */
+const txBurn =
+  "ml-auto flex items-center gap-2 whitespace-nowrap text-[10.5px] tabular-nums text-muted-foreground max-md:ml-0 max-md:flex-wrap max-md:whitespace-normal";
+/** `.tx-feed { max-height:640px; overflow-y:auto; padding:6px 0 10px }` */
+const txFeed =
+  "max-h-[640px] overflow-y-auto pt-1.5 pb-2.5 motion-safe:scroll-smooth max-md:max-h-[70vh]";
+/**
+ * `.tx-row { display:grid; grid-template-columns:82px 30px minmax(0,1fr);
+ * padding:1px 12px 1px 0 }`; a phone drops the clock (`0 22px`).
+ */
+/** A subagent's rows under the call that spawned it, on a rule of their own. */
+const txNested = "mt-1 border-l border-border pl-2";
+const txRow =
+  "grid grid-cols-[82px_30px_minmax(0,1fr)] items-baseline py-px pr-3 max-md:grid-cols-[0_22px_minmax(0,1fr)]";
+/** `.tx-clock { color:var(--dim); font-size:10.5px; text-align:right; padding-right:10px }` */
+const txClock =
+  "whitespace-nowrap pr-2.5 text-right text-[10.5px] tabular-nums text-dim max-md:invisible";
+/**
+ * `.tx-node { position:relative; align-self:stretch }` and its `::before`,
+ * the 1px spine down the middle of the column.
+ */
+const txNode =
+  "relative self-stretch text-center before:absolute before:inset-y-0 before:left-1/2 before:w-px before:bg-border";
+/**
+ * `.tx-dot { width:7px; height:7px; margin-top:6px; border-radius:50%;
+ * background:var(--tx-surface); border:2px solid currentColor }`, and
+ * `.solid { background:currentColor }` for a call that changed something.
+ */
+const txDot =
+  "relative z-10 mt-1.5 inline-block size-[7px] rounded-full border-2 border-current bg-(--tx-surface)";
+/** `.tx-role { grid-template-columns:72px minmax(0,1fr); padding:9px 0; border-bottom:1px solid var(--border) }` */
+const txRole =
+  "grid grid-cols-[72px_minmax(0,1fr)] border-b border-border py-[9px] max-md:grid-cols-1 max-md:gap-1";
+/** `.tx-rolegut { text-align:right; padding-right:14px }` */
+const txRoleGut = "pr-3.5 text-right max-md:p-0 max-md:text-left";
+/**
+ * `.tx-roletag { font-size:10px; font-weight:700; letter-spacing:.14em;
+ * padding:1px 7px; border-radius:4px; color:var(--ink) }`, on `--tx-you`
+ * (the muted ink) for YOU and `--tx-agent` (the ink) for the agent.
+ */
+const txRoleTag =
+  "rounded px-[7px] py-px text-[10px] font-bold tracking-[0.14em] text-background";
+/** `.tx-prose { max-width:72ch; white-space:pre-wrap; color:var(--body) }` */
+const txProse =
+  "max-w-[72ch] whitespace-pre-wrap [overflow-wrap:anywhere] text-(color:--body)";
+/** `.tx-answer { border-left:2px solid var(--tx-agent); padding-left:14px; color:var(--fg) }` */
+const txAnswer = "border-l-2 border-foreground pl-3.5 text-foreground";
+/** `.tx-sub { font-size:10.5px; color:var(--dim); margin-top:5px; gap:6px }` */
+const txSub =
+  "mt-[5px] flex flex-wrap items-baseline gap-1.5 text-[10.5px] text-dim";
+/** `.tx-think { color:var(--dim); font-style:italic; max-width:72ch }` */
+const txThink =
+  "max-w-[72ch] whitespace-pre-wrap [overflow-wrap:anywhere] italic text-dim";
+/** `.tx-fold { border:0; background:none; font-size:10.5px; color:var(--dim) }` */
+const txFold =
+  "border-0 bg-transparent p-0 font-mono text-[10.5px] text-dim hover:text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring";
+/**
+ * `.tx-call { display:flex; align-items:baseline; gap:8px; min-width:0 }`; on
+ * a phone the chips wrap under the name rather than push the row sideways.
+ */
+const txCall = "flex min-w-0 items-baseline gap-2 max-md:flex-wrap";
+/** `.tx-call .nm { font-weight:600; flex:none; min-width:8.5rem }` */
+const txName = "flex-none font-semibold min-w-[8.5rem] max-md:min-w-0";
+/** `.tx-call .arg { min-width:0; flex:1; text-overflow:ellipsis; color:var(--muted) }` */
+const txArg = "min-w-0 flex-1 truncate text-muted-foreground";
+/** `.tx-chips { margin-left:auto; display:flex; gap:5px; flex-wrap:wrap; flex:none }` */
+const txChips =
+  "ml-auto flex flex-none flex-wrap items-baseline gap-[5px] max-md:ml-0 max-md:flex-initial";
+/**
+ * `.tx-chip { font-size:10.5px; color:var(--muted); background:var(--panel);
+ * border:1px solid var(--border); border-radius:5px; padding:0 6px;
+ * line-height:1.6 }`, and its tones: `.ok` (allowed), `.warn` (the approval
+ * hue), `.err` (failed), `.cost { color:var(--fg); border-color:var(--rule) }`,
+ * `.burn { color:var(--dim) }`, and `.gov { color:var(--st-approval);
+ * border-color:<st-approval 40%> }` with `:hover { color:var(--fg) }` for a
+ * chip that opens one of Oxagen's frames. Each tone is a whole class list, so
+ * no chip carries two inks.
+ */
+const chipShape =
+  "whitespace-nowrap rounded-[5px] border bg-card px-1.5 text-[10.5px] leading-[1.6] tabular-nums";
+const CHIP = {
+  plain: `${chipShape} border-border text-muted-foreground`,
+  ok: `${chipShape} border-border text-success`,
+  warn: `${chipShape} border-border text-info`,
+  err: `${chipShape} border-border text-error`,
+  cost: `${chipShape} border-rule text-foreground`,
+  burn: `${chipShape} border-border text-dim`,
+  gov: `${chipShape} border-info/40 text-info hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring`,
+  link: `${chipShape} border-border text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring`,
+} as const;
+/**
+ * `.tx-out { margin:2px 0 4px 20px; color:var(--muted); font-size:12px;
+ * line-height:1.55 }` and `.tx-out.err { color:var(--st-failed) }`.
+ */
+const txOut =
+  "mt-0.5 mb-1 ml-5 whitespace-pre-wrap [overflow-wrap:anywhere] text-xs leading-[1.55]";
+/** `.tx-args { margin:2px 0 4px 20px; color:var(--dim); font-size:11px }` */
+const txArgs =
+  "mt-0.5 mb-1 ml-5 whitespace-pre-wrap [overflow-wrap:anywhere] text-[11px] text-dim";
+/**
+ * `.tx-diffwrap .path { font-size:11px; color:var(--muted); padding:4px 10px;
+ * background:var(--panel); border:1px solid var(--border); border-bottom:0;
+ * border-radius:9px 9px 0 0 }`.
+ */
+const txDiffPath =
+  "flex items-center gap-2.5 rounded-t-[9px] border border-b-0 border-border bg-card px-2.5 py-1 text-[11px] text-muted-foreground";
+/**
+ * `.diff { background:var(--void); border:1px solid var(--border);
+ * font-size:11.5px; line-height:1.6 }` with `.tx-diffwrap .diff {
+ * border-radius:0 0 9px 9px; max-height:320px }`.
+ */
+const txDiff =
+  "max-h-[320px] overflow-auto rounded-b-[9px] border border-border bg-void text-[11.5px] leading-[1.6]";
+/**
+ * `.dl { grid-template-columns:34px 34px minmax(0,1fr) }`, its numbers in the
+ * dim ink right of a hairline, `.add`/`.del` washed 14% in the allowed and
+ * denied hues.
+ */
+const txDiffLine = "grid grid-cols-[34px_34px_minmax(0,1fr)]";
+const txDiffNum =
+  "select-none border-r border-border px-1.5 text-right text-dim";
+const DIFF_WASH: Record<DiffLine["op"], string> = {
+  add: "bg-success/14 text-foreground",
+  del: "bg-warning/14 text-foreground",
+  ctx: "",
+};
+/** `.tx-usage { font-size:10.5px; color:var(--dim); gap:8px }` */
+const txUsage = "flex min-w-0 items-baseline gap-2 text-[10.5px] text-dim";
+/** `.tx-recall { grid-template-columns:auto minmax(0,1fr) auto; gap:2px 12px; font-size:11px; margin:3px 0 2px 20px }` */
+const txRecall =
+  "mt-[3px] mb-0.5 ml-5 grid grid-cols-[auto_minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-0.5 text-[11px]";
+/** `.tx-empty { padding:18px 16px; color:var(--dim) }` */
+const txEmpty = "px-4 py-[18px] text-dim";
+/** `.txs mark { background:var(--gold); color:var(--on-gold); border-radius:2px }` */
+const txMark = "rounded-[2px] bg-gold px-px text-on-gold";
+
+/**
+ * What a tool's family reads as, for the colour of its name (`--tx-inspect`
+ * muted, `--tx-mutate` and `--tx-execute` the ink, `--tx-delegate` muted).
+ * The design's `verify` and `repo` read a call's purpose, which the record
+ * does not carry, so no call is coloured by them.
+ */
+const CALL_CLASS: Record<
+  ToolGroup,
+  "inspect" | "mutate" | "execute" | "delegate"
+> = {
+  shell: "execute",
+  read: "inspect",
+  search: "inspect",
+  web: "inspect",
+  edit: "mutate",
+  create: "mutate",
+  delete: "mutate",
+  notebook: "mutate",
+  skill: "delegate",
+  agent: "delegate",
+  plan: "delegate",
+  mcp: "execute",
+  tool: "execute",
+};
+const CALL_INK = {
+  inspect: "text-muted-foreground",
+  mutate: "text-foreground",
+  execute: "text-foreground",
+  delegate: "text-muted-foreground",
+} as const;
+
+// ── Pieces ──────────────────────────────────────────────────────────────────
+
+/** `txHi`: the text with every match of the search marked. */
+function Hi({ text, q }: { text: string; q: string }) {
+  if (q === "") return <>{text}</>;
+  const lower = text.toLowerCase();
+  const parts: ReactNode[] = [];
+  let from = 0;
+  for (let at = lower.indexOf(q, from); at >= 0; at = lower.indexOf(q, from)) {
+    parts.push(text.slice(from, at));
+    parts.push(
+      <mark key={at} className={txMark}>
+        {text.slice(at, at + q.length)}
+      </mark>,
+    );
+    from = at + q.length;
+  }
+  parts.push(text.slice(from));
+  return <>{parts}</>;
+}
+
+/** The row's clock: the instant in the viewer's zone, with its place in the run as the title. */
+function Clock({ at, elapsedMs }: { at: string; elapsedMs: number }) {
+  const format = useFormatter();
   const t = useTranslations("run.transcript");
   const locale = useLocale();
-  const place = { org, ws, runId };
-  // The halves are read by name, never positionally. At `everything` a frame
-  // carries one of them; at a folded zoom a tool step carries its input in
-  // `request` and its result in `response`, and both are drawn. Picking one of
-  // the two would put a tool's input where its result belongs, and the page
-  // would look no different for it.
-  const { request, response } = frame;
-  const both = request !== null && response !== null;
-  // A tool was called with its input and returned its result; every other kind
-  // sent and received. The words differ because the actions do.
-  const sent = frame.kind === "tool_call" ? t("calledWith") : t("request");
-  // The header names one fidelity, and the one a reader is here for is the
-  // result's: a step whose input was kept and whose result was not is a step
-  // with no result to read. Where no result was recorded the outgoing half is
-  // the only half, so it is the one named. This is a summary and never the
-  // only place the fidelity appears. Each half below states its own, so it
-  // is a deliberate choice of which to headline, not a pick between two
-  // bodies. The bodies themselves are read by name.
-  const headline = response ?? request;
-  const neither = request === null && response === null;
-  // A wrapped session's tool receipt is one body holding the input and the
-  // output. Drawn as one "Returned" block it read as a JSON blob with the
-  // call's arguments buried inside; read apart, each half gets its own label.
-  const exchange =
-    frame.kind === "tool_call" && request === null && response?.text
-      ? toolExchange(response.text)
-      : null;
   return (
-    <div
-      data-testid="transcript-frame"
-      className="border-b border-border last:border-b-0"
+    <time
+      dateTime={at}
+      title={t("elapsed", { time: formatDuration(elapsedMs, locale) })}
+      className={txClock}
     >
-      <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted px-3 py-1.5">
-        <span className="font-mono text-[11px] text-foreground">
-          {frame.type}
-        </span>
-        {frame.subagent === undefined ? null : (
-          <span
-            data-testid="transcript-subagent"
-            className="rounded-md bg-hl px-1.5 text-[10.5px] text-muted-foreground"
-          >
-            {frame.subagent.type === null
-              ? t("subagent")
-              : t("subagentTyped", { type: frame.subagent.type })}
-          </span>
-        )}
-        <span className="ml-auto font-mono text-[10.5px] text-muted-foreground">
-          {t("frameHead", {
-            seq: frame.seq,
-            // Run-relative, not wall-clock: a frame's place in the run is
-            // what a reader is locating, and it is the reading the transport
-            // below counts in. The absolute instant stays on the step rail's
-            // `dateTime`, so nothing the record holds is dropped.
-            time: formatDuration(frame.elapsedMs, locale),
-            fidelity: t(`fidelity.${headline?.fidelity ?? "digest_only"}`),
-          })}
-        </span>
-      </div>
-      <div className="flex flex-col gap-2 px-3 py-2.5">
-        {frame.label !== frame.type ? (
-          <p className="m-0 font-mono text-[11.5px] text-muted-foreground">
-            {frame.label}
-          </p>
-        ) : null}
-        {frame.decision === null ? null : (
-          <Decision
-            decision={frame.decision}
-            subject={decisionSubject(frame)}
-          />
-        )}
-        {neither ? (
-          <p
-            data-testid="entry-no-halves"
-            className="m-0 text-xs text-muted-foreground"
-          >
-            {t("noHalves")}
-          </p>
-        ) : exchange !== null && response !== null ? (
-          <>
-            <FrameHalf
-              body={response}
-              label={t("calledWith")}
-              seq={response.seq}
-              text={exchange.input}
-              {...place}
-            />
-            <FrameHalf
-              body={response}
-              label={t("response")}
-              seq={response.seq}
-              text={exchange.output}
-              {...place}
-            />
-          </>
-        ) : (
-          <>
-            {request === null ? null : (
-              <FrameHalf
-                body={request}
-                label={both ? sent : t("request")}
-                seq={request.seq}
-                {...place}
-              />
-            )}
-            {response === null ? null : (
-              <FrameHalf
-                body={response}
-                label={t("response")}
-                seq={response.seq}
-                {...place}
-              />
-            )}
-          </>
-        )}
-        {headline?.truncated === true || frame.subagent !== undefined ? null : (
-          <SafeLink
-            to={routes.run(org, ws, runId, { tab: "actions", body: frame.seq })}
-            className={`${linkText} self-start text-[11px]`}
-          >
-            {t("envelope", { seq: frame.seq })}
-          </SafeLink>
-        )}
-      </div>
-    </div>
+      {format.dateTime(new Date(at), {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        fractionalSecondDigits: 1,
+        hourCycle: "h23",
+      })}
+    </time>
   );
 }
 
 /**
- * What a tool step did, drawn as the thing it is: a command as shell source,
- * an edit as a diff, a file's contents as numbered lines, a brief as prose.
- *
- * This is the half of the step a reader came for, so it sits above the frame
- * envelopes rather than below them. It is a *reading* of the record and never
- * a replacement for it: every byte it draws came out of a body the recorder
- * kept, and the frames it was read from are directly beneath, unchanged, with
- * their digests and their links into the Frames tab.
+ * A chip that opens one frame on the Governed actions tab. A subagent's frame
+ * is on its own chain, which that tab does not read, so a link by seq would
+ * open the run's own frame of that number: it reads as a plain chip.
  */
-function ToolPanes({ detail }: { detail: ToolDetail }) {
+function FrameChip({
+  frame,
+  children,
+  place,
+  className = CHIP.gov,
+}: {
+  frame: FrameRef;
+  children: ReactNode;
+  place: Place;
+  className?: string;
+}) {
   const t = useTranslations("run.transcript");
-  if (detail.panes.length === 0) return null;
+  if (frame.chainRef !== null) {
+    return (
+      <span className={className} title={t("subagentFrame")}>
+        {children}
+      </span>
+    );
+  }
   return (
-    <div data-testid="tool-panes" className="flex flex-col gap-2 pb-2.5">
-      {detail.panes.map((pane, index) => {
-        const key = `${pane.kind}-${pane.label}-${String(index)}`;
-        if (pane.kind === "diff") {
-          return (
-            <DiffPanel
-              key={key}
-              diff={pane.diff}
-              path={pane.path}
-              language={languageForPath(pane.path)}
-              label={t(`pane.${pane.label}`)}
-            />
-          );
-        }
-        if (pane.kind === "note") {
-          return (
-            <div
-              key={key}
-              className="overflow-hidden rounded-md border border-border bg-code-bg"
-            >
-              <div className="border-b border-border px-2.5 py-1 font-mono text-[10.5px] tracking-[0.08em] text-muted-foreground uppercase">
-                {t(`pane.${pane.label}`)}
-              </div>
-              <p className="m-0 max-h-60 overflow-auto whitespace-pre-wrap break-words px-2.5 py-2 text-[12px] leading-relaxed text-foreground">
-                {pane.text}
-              </p>
-            </div>
-          );
-        }
-        return (
-          <CodePanel
-            key={key}
-            code={pane.text}
-            language={pane.language}
-            startLine={pane.startLine}
-            preview={pane.preview}
-            label={t(`pane.${pane.label}`)}
-            expandLabel={t("showAll")}
-          />
-        );
+    <SafeLink
+      to={routes.run(place.org, place.ws, place.runId, {
+        tab: "actions",
+        body: frame.seq,
       })}
+      className={className}
+    >
+      {children}
+    </SafeLink>
+  );
+}
+
+/** `txGovChip`: ⚖, the decision, and the frame that records it. */
+function GateChip({ gate, place }: { gate: FeedGate; place: Place }) {
+  const t = useTranslations("run.transcript");
+  return (
+    <FrameChip frame={gate.frame} place={place}>
+      <span aria-hidden="true">⚖ </span>
+      {t("gate", { decision: gate.decision, seq: gate.frame.seq })}
+    </FrameChip>
+  );
+}
+
+function SubagentChip({ row }: { row: FeedRow }) {
+  const t = useTranslations("run.transcript");
+  if (row.subagent === undefined) return null;
+  return (
+    <span data-testid="transcript-subagent" className={CHIP.plain}>
+      {row.subagent.type === null
+        ? t("subagent")
+        : t("subagentTyped", { type: row.subagent.type })}
+    </span>
+  );
+}
+
+/** The fold under a closed output: how many lines it holds back. */
+function MoreLines({
+  hidden,
+  open,
+  onToggle,
+}: {
+  hidden: number;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const t = useTranslations("run.transcript");
+  if (hidden <= 0 && !open) return null;
+  return (
+    <button
+      type="button"
+      className={`${txFold} ml-5`}
+      aria-expanded={open}
+      onClick={onToggle}
+    >
+      {open ? (
+        <>
+          <span aria-hidden="true">⏶ </span>
+          {t("collapse")}
+        </>
+      ) : (
+        <>
+          <span aria-hidden="true">⋯ </span>
+          {t("moreLines", { count: hidden })}
+        </>
+      )}
+    </button>
+  );
+}
+
+/** `txDiffBlock`: the path, the stat, and the changed lines, twelve until the row opens. */
+function DiffBlock({
+  change,
+  open,
+  q,
+}: {
+  change: ToolDiff;
+  open: boolean;
+  q: string;
+}) {
+  const t = useTranslations("run.transcript");
+  type Line = DiffLine | { op: "gap"; key: string };
+  const all: Line[] = change.diff.hunks.flatMap((hunk, index) => [
+    ...(index === 0
+      ? []
+      : [{ op: "gap" as const, key: `gap-${String(index)}` }]),
+    ...hunk.lines,
+  ]);
+  const shown = open ? all : all.slice(0, DIFF_CAP);
+  const hidden = all.length - shown.length;
+  return (
+    <div data-testid="tx-diff" className="mt-1 mb-1.5 ml-5 min-w-0">
+      <div className={txDiffPath}>
+        <b className="min-w-0 font-semibold text-foreground [overflow-wrap:anywhere]">
+          {change.path}
+        </b>
+        {change.created ? <span>{t("newFile")}</span> : null}
+        <span className="ml-auto">
+          <b className="text-success">+{change.diff.added}</b>{" "}
+          <b className="text-warning">−{change.diff.removed}</b>
+        </span>
+      </div>
+      <div className={txDiff}>
+        {shown.map((line) =>
+          line.op === "gap" ? (
+            <div key={line.key} className={txDiffLine}>
+              <span className={txDiffNum} />
+              <span className={txDiffNum} />
+              <span className="px-2.5 text-center text-dim">⋯</span>
+            </div>
+          ) : (
+            <div
+              key={`${line.op}-${String(line.before ?? "n")}-${String(line.after ?? "n")}`}
+              className={`${txDiffLine} ${DIFF_WASH[line.op]}`}
+            >
+              <span className={txDiffNum}>{line.before ?? ""}</span>
+              <span className={txDiffNum}>{line.after ?? ""}</span>
+              <span className="whitespace-pre-wrap px-2.5 [overflow-wrap:anywhere]">
+                {line.op === "add" ? "+" : line.op === "del" ? "−" : " "}{" "}
+                <Hi text={line.text} q={q} />
+              </span>
+            </div>
+          ),
+        )}
+        {hidden > 0 ? (
+          <div className={txDiffLine}>
+            <span className={txDiffNum} />
+            <span className={txDiffNum} />
+            <span className="px-2.5 text-center text-dim">
+              <span aria-hidden="true">⋯ </span>
+              {t("moreLines", { count: hidden })}
+            </span>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
 
-function StepRow({
-  step,
-  digest,
-  pos,
+// ── Rows ────────────────────────────────────────────────────────────────────
+
+type RowProps = {
+  row: FeedRow;
+  q: string;
+  open: boolean;
+  onToggle: (key: string) => void;
+  place: Place;
+};
+
+function PromptRow({
+  row,
+  q,
+  run,
+}: {
+  row: Extract<FeedRow, { kind: "prompt" }>;
+  q: string;
+  run: TranscriptRun;
+}) {
+  const t = useTranslations("run.transcript");
+  return (
+    <div data-testid="transcript-you" className={txRole}>
+      <div className={txRoleGut}>
+        <span className={`${txRoleTag} bg-muted-foreground`}>{t("you")}</span>
+      </div>
+      <div>
+        <div className={`${txProse} text-foreground`}>
+          <Hi text={row.text} q={q} />
+        </div>
+        <div className={txSub}>
+          {run.operatorName === null ? null : (
+            <span>{t("operator", { name: run.operatorName })}</span>
+          )}
+          {row.first && run.taskRef !== null ? (
+            <span>{t("task", { ref: run.taskRef })}</span>
+          ) : null}
+          <span>
+            {row.first
+              ? t("firstPrompt")
+              : row.turn === null
+                ? t("laterPrompt")
+                : t("turn", { n: row.turn })}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TextRow({
+  row,
+  q,
+  open,
+  onToggle,
+  answer,
+}: Omit<RowProps, "row" | "place"> & {
+  row: Extract<FeedRow, { kind: "text" }>;
+  answer: boolean;
+}) {
+  const t = useTranslations("run.transcript");
+  const { head, rest } = foldText(row.text);
+  const foldable = !answer && rest.length > 0;
+  const folded = foldable && !open;
+  return (
+    <div data-testid="transcript-agent" className={txRole}>
+      <div className={txRoleGut}>
+        <span className={`${txRoleTag} bg-foreground`}>
+          {answer ? t("answer") : t("agent")}
+        </span>
+      </div>
+      <div className="min-w-0">
+        <div className={`${txProse} ${answer ? txAnswer : ""}`}>
+          {foldable ? (
+            <button
+              type="button"
+              className={`${txFold} pr-1.5`}
+              aria-expanded={!folded}
+              aria-label={folded ? t("showRest") : t("showLess")}
+              onClick={() => {
+                onToggle(row.key);
+              }}
+            >
+              {folded ? "⏵" : "⏶"}
+            </button>
+          ) : null}
+          <Hi text={folded ? head : row.text} q={q} />
+          {folded ? <span className="text-dim"> …</span> : null}
+        </div>
+        {row.subagent === undefined ? null : (
+          <div className={txSub}>
+            <SubagentChip row={row} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ThinkingRow({
+  row,
+  q,
+  open,
+  onToggle,
+}: Omit<RowProps, "row" | "place"> & {
+  row: Extract<FeedRow, { kind: "thinking" }>;
+}) {
+  const t = useTranslations("run.transcript");
+  const locale = useLocale();
+  if (row.text === null) {
+    return (
+      <div data-testid="step-thinking-unkept" className={txThink}>
+        {t("thinkingUnkept", { count: formatCount(row.tokens ?? 0, locale) })}
+      </div>
+    );
+  }
+  const lines = row.text.split("\n").length;
+  const { head, rest } = foldText(row.text);
+  const folded = !open && rest.length > 0;
+  return (
+    <div>
+      <button
+        type="button"
+        className={txFold}
+        aria-expanded={open}
+        onClick={() => {
+          onToggle(row.key);
+        }}
+      >
+        <span aria-hidden="true">{open ? "⏶ " : "⏵ "}</span>
+        {t("thinkingLines", { count: lines })}
+      </button>
+      <div data-testid="tx-think" className={txThink}>
+        <Hi text={folded ? head : row.text} q={q} />
+        {folded ? " …" : null}
+      </div>
+    </div>
+  );
+}
+
+function ToolRow({
+  row,
+  call,
+  q,
   open,
   onToggle,
   place,
-  number,
-  nested,
-  thinkingOpen,
-}: {
-  step: TranscriptStep;
-  digest: StepDigest;
-  /** The step's place in the run, counted over the rows drawn, so a frame
-   * with no row (a harness allow, a digest-only call) leaves no gap. A
-   * subagent's step reads `4.2`, the second step under step 4. */
-  number: string;
-  pos: number;
-  open: boolean;
-  onToggle: (id: string, open: boolean) => void;
-  place: Place;
-  /** The rows of the subagent this step spawned, drawn inside it. */
-  nested?: ReactNode;
-  /** "Expand thinking" is on: a step with a kept thought opens on it. */
-  thinkingOpen: boolean;
-}) {
+  live,
+}: RowProps & { call: FeedCall; live: boolean }) {
   const t = useTranslations("run.transcript");
   const locale = useLocale();
-  const { first } = step;
-  const thinking = useMemo(() => stepThinking(step), [step]);
-  const opened = open || (thinkingOpen && thinking?.text != null);
-  const isNow = pos >= step.from && pos <= step.to;
-  const isFuture = step.from > pos;
-  // Held across renders because it parses the recorded body, where the digest
-  // beside it is cheap enough to recompute.
-  const detail = useMemo(() => stepTool(step) ?? stepModel(step), [step]);
-  // The tool's own name beats the label's first word wherever the body was
-  // kept. A skill load is the one exception: it is the step that changes what
-  // the agent CAN do rather than recording what it did, so the line says so
-  // in words — `Loaded skill file-inbox`, not `Skill file-inbox`.
-  const name =
-    detail?.group === "skill"
-      ? t("loadedSkill")
-      : detail?.name === "reply"
-        ? t("reply")
-        : (detail?.name ?? digest.name);
-  // The headline read out of the body says what the call acted on — a
-  // command, a path, a pattern — where `digest.arg` had only the frame's
-  // label, which for a tool is the tool's name a second time.
-  const arg = detail?.headline ?? digest.arg;
-  // A detail with nothing to draw — every body was `digest_only` — is not a
-  // reading of the step, so the frames below stay open rather than folding
-  // behind a disclosure that would reveal nothing new.
-  const panes = detail === null || detail.panes.length === 0 ? null : detail;
-  return (
-    <details
-      data-testid="transcript-step"
-      data-node={digest.node}
-      data-now={isNow ? "true" : undefined}
-      open={opened}
-      onToggle={(e) => {
-        onToggle(step.id, e.currentTarget.open);
-      }}
-      className={`group border-b border-border last:border-b-0 ${isFuture ? "opacity-35" : ""}`}
-    >
-      <summary
-        className={`cursor-pointer list-none py-1.5 pr-3 select-none hover:bg-muted [&::-webkit-details-marker]:hidden ${isNow ? "bg-muted shadow-[inset_3px_0_0_var(--color-brand)]" : ""}`}
-      >
-        <div className="grid grid-cols-[46px_30px_1fr] items-baseline">
-          <time
-            dateTime={first.at}
-            className="pr-2 text-right font-mono text-[10.5px] tabular-nums text-muted-foreground"
-          >
-            {formatClock(first.elapsedMs / 1000, locale)}
-          </time>
-          <span className="relative text-center before:absolute before:-top-3 before:-bottom-3 before:left-1/2 before:w-px before:bg-border">
-            <span
-              aria-hidden="true"
-              className={`relative z-10 inline-block size-[7px] rounded-full border-2 bg-card ${DOT[digest.node]}`}
-            />
-          </span>
-          <span className="flex min-w-0 flex-wrap items-baseline gap-2">
-            <Chevron />
-            <span
-              data-testid="step-number"
-              className="shrink-0 font-mono text-[10.5px] tabular-nums text-muted-foreground"
-            >
-              {number}
-            </span>
-            <span
-              className={`flex shrink-0 items-baseline gap-1.5 font-mono text-xs font-semibold ${NAME[digest.node]}`}
-            >
-              {/* The mark takes its colour from this span, so the palette on
-                  the rail stays the four the node already spends and a new
-                  tool family can never add a fifth. */}
-              <StepIcon node={digest.node} group={detail?.group ?? null} />
-              {name}
-            </span>
-            {arg === null ? null : (
-              <span className="max-w-[46ch] overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[11.5px] text-muted-foreground">
-                {arg}
-              </span>
-            )}
-            {detail?.detail == null ? null : (
-              <span className="shrink-0 font-mono text-[11px] text-muted-foreground/80">
-                {detail.detail}
-              </span>
-            )}
-            <span className="ml-auto flex flex-wrap gap-1.5">
-              {step.kind === "model" && detail !== null ? (
-                <Chip>
-                  <span data-testid="step-model">{digest.name}</span>
-                </Chip>
-              ) : null}
-              {thinking?.effort == null ? null : (
-                <Chip>
-                  <span data-testid="step-effort">
-                    {t("effort", { effort: thinking.effort })}
-                  </span>
-                </Chip>
-              )}
-              {thinking?.tokens == null ? null : (
-                <Chip>
-                  <span data-testid="step-thinking-tokens">
-                    {t("thinkingTokens", {
-                      count: formatCount(thinking.tokens, locale),
-                    })}
-                  </span>
-                </Chip>
-              )}
-              {digest.outcome === null ? null : (
-                <Chip tone={digest.node === "deny" ? "warn" : undefined}>
-                  {digest.outcome}
-                </Chip>
-              )}
-              {digest.status === null ? null : (
-                <Chip tone={digest.node === "deny" ? "warn" : undefined}>
-                  {digest.status}
-                </Chip>
-              )}
-              {digest.durationMs === null ? null : (
-                <Chip>
-                  {t("ms", { ms: formatCount(digest.durationMs, locale) })}
-                </Chip>
-              )}
-              {digest.repeats !== null ? (
-                <Chip>
-                  <span data-testid="step-repeats">
-                    {t("repeats", {
-                      count: formatCount(digest.repeats, locale),
-                    })}
-                  </span>
-                </Chip>
-              ) : step.frames.length > 1 ? (
-                <Chip>{t("frameCount", { count: step.frames.length })}</Chip>
-              ) : null}
-              {digest.cost === null ? null : (
-                <Chip tone="cost">
-                  <Money value={digest.cost} precision="exact" />
-                </Chip>
-              )}
-            </span>
-          </span>
-        </div>
-      </summary>
-      {opened ? (
-        <div className="pr-3 pb-2.5 pl-3 md:pl-[76px]">
-          {thinking === null ? null : thinking.text !== null ? (
-            <details
-              // Keyed on the toggle so "expand thinking" opens or closes
-              // every thought, whatever a reader did to one of them since.
-              key={thinkingOpen ? "open" : "shut"}
-              data-testid="step-thinking"
-              open={thinkingOpen}
-              className="group/think mb-2 overflow-hidden rounded-md border border-border bg-background"
-            >
-              <summary className="cursor-pointer list-none px-3 py-1.5 text-[11px] text-muted-foreground select-none hover:text-foreground [&::-webkit-details-marker]:hidden">
-                <span
-                  aria-hidden="true"
-                  className="mr-1.5 inline-block text-[8px] transition-transform group-open/think:rotate-90"
-                >
-                  ▶
-                </span>
-                {t("pane.thinking")}
-              </summary>
-              <p className="m-0 max-w-[70ch] whitespace-pre-wrap border-t border-border px-3 py-2 text-[12.5px] leading-relaxed text-muted-foreground italic">
-                {thinking.text}
-              </p>
-            </details>
-          ) : thinking.tokens === null ? null : (
-            <p
-              data-testid="step-thinking-unkept"
-              className="m-0 mb-2 max-w-prose text-[11.5px] text-muted-foreground"
-            >
-              {t("thinkingUnkept", {
-                count: formatCount(thinking.tokens, locale),
-              })}
-            </p>
-          )}
-          {panes === null ? null : <ToolPanes detail={panes} />}
-          {/* The record under the reading of it. Where the panes above already
-              say what the step did, the envelopes they were read from fold
-              away behind one more click — still one step away, never a page
-              away — and where there are no panes the frames ARE the reading,
-              so they stay open. A digest-only duplicate of a frame whose body
-              is already shown elsewhere in the step is left out here too. */}
-          {panes === null ? (
-            <div className="overflow-hidden rounded-md border border-border bg-background">
-              {visibleFrames(step).map((frame) => (
-                <FrameDetail key={entryKey(frame)} frame={frame} {...place} />
-              ))}
-            </div>
-          ) : (
-            <details className="group/raw overflow-hidden rounded-md border border-border bg-background">
-              <summary className="cursor-pointer list-none px-3 py-1.5 text-[11px] text-muted-foreground select-none hover:text-foreground group-open/raw:border-b group-open/raw:border-border [&::-webkit-details-marker]:hidden">
-                <span
-                  aria-hidden="true"
-                  className="mr-1.5 inline-block text-[8px] transition-transform group-open/raw:rotate-90"
-                >
-                  ▶
-                </span>
-                {t("frameCount", { count: step.frames.length })}
-              </summary>
-              {visibleFrames(step).map((frame) => (
-                <FrameDetail key={entryKey(frame)} frame={frame} {...place} />
-              ))}
-            </details>
-          )}
-        </div>
-      ) : null}
-      {nested == null ? null : (
-        <div
-          data-testid="transcript-subagent-steps"
-          className="ml-[76px] border-l-2 border-border"
-        >
-          {nested}
-        </div>
-      )}
-    </details>
+  const failed = row.failed;
+  const kind = CALL_CLASS[call.group];
+  const diff = call.diffs[0] ?? null;
+  const lines = call.output?.split("\n") ?? [];
+  const anchor = Math.min(
+    salientLine(lines),
+    Math.max(0, lines.length - OUTPUT_BUDGET),
   );
-}
-
-function Role({ who, text }: { who: "you" | "agent"; text: string }) {
-  const t = useTranslations("run.transcript");
+  const shown = open ? lines : lines.slice(anchor, anchor + OUTPUT_BUDGET);
+  const added = call.diffs.reduce((sum, each) => sum + each.diff.added, 0);
+  const removed = call.diffs.reduce((sum, each) => sum + each.diff.removed, 0);
+  const foldable = call.raw !== null || call.truncated;
   return (
-    <div
-      data-testid={`transcript-${who}`}
-      className="grid grid-cols-1 border-b border-border py-2.5 pr-3 pl-3 md:grid-cols-[74px_1fr] md:pl-0"
-    >
-      <div className="pb-1.5 md:pr-3 md:pb-0 md:text-right">
+    <div>
+      <div className={txCall}>
         <span
-          className={`inline-block rounded px-1.5 py-0.5 text-[9.5px] font-bold tracking-[0.13em] text-background ${who === "you" ? "bg-info" : "bg-muted-foreground"}`}
+          aria-hidden="true"
+          className={`flex-none select-none ${failed ? "text-error" : "text-dim"}`}
         >
-          {t(who)}
+          {failed ? "✗" : "●"}
+        </span>
+        <span
+          data-testid="tx-tool-name"
+          className={`${txName} ${failed ? "text-error" : CALL_INK[kind]}`}
+        >
+          <Hi text={call.name} q={q} />
+        </span>
+        {call.arg === null ? null : (
+          <span data-testid="tx-tool-arg" className={txArg} title={call.arg}>
+            <Hi text={call.arg} q={q} />
+          </span>
+        )}
+        <span className={txChips}>
+          <SubagentChip row={row} />
+          {call.diffs.length > 0 ? (
+            <span className={CHIP.plain}>
+              <span className="text-success">+{added}</span>{" "}
+              <span className="text-warning">−{removed}</span>
+            </span>
+          ) : null}
+          {call.durationMs === null ? null : (
+            <span className={failed ? CHIP.err : CHIP.plain}>
+              {formatDuration(call.durationMs, locale)}
+            </span>
+          )}
+          {diff === null && lines.length > 1 ? (
+            <span className={failed ? CHIP.err : CHIP.plain}>
+              {t("lines", { count: formatCount(lines.length, locale) })}
+            </span>
+          ) : null}
+          {call.parked !== null ? (
+            <FrameChip frame={call.parked} place={place}>
+              <span aria-hidden="true">⏸ </span>
+              {t("parked", { seq: call.parked.seq })}
+            </FrameChip>
+          ) : call.pending ? (
+            <span className={CHIP.plain}>
+              {live ? t("running") : t("noResult")}
+            </span>
+          ) : null}
+          {call.gates.map((gate) => (
+            <GateChip
+              key={`${gate.frame.chainRef ?? ""}:${gate.frame.seq}`}
+              gate={gate}
+              place={place}
+            />
+          ))}
+          {foldable ? (
+            <button
+              type="button"
+              className={txFold}
+              aria-expanded={open}
+              aria-label={open ? t("hideCall") : t("showCall")}
+              onClick={() => {
+                onToggle(row.key);
+              }}
+            >
+              {open ? "⏶" : "⋯"}
+            </button>
+          ) : null}
         </span>
       </div>
-      <p
-        className={`m-0 max-w-[70ch] whitespace-pre-wrap text-[13px] leading-relaxed text-foreground ${who === "agent" ? "border-l-2 border-border pl-3" : ""}`}
-      >
-        {text}
-      </p>
+      {open && foldable ? (
+        <div data-testid="tx-call-fold">
+          {call.raw === null ? null : (
+            <pre className={txArgs}>
+              <Hi text={call.raw} q={q} />
+            </pre>
+          )}
+          <div className={`${txSub} ml-5`}>
+            <FrameChip frame={call.frame} place={place}>
+              {t("frame", { type: call.frame.type, seq: call.frame.seq })}
+            </FrameChip>
+            {call.truncated ? <span>{t("truncated")}</span> : null}
+          </div>
+        </div>
+      ) : null}
+      {call.diffs.map((change, index) => (
+        <DiffBlock
+          key={`${change.path}-${String(index)}`}
+          change={change}
+          open={open}
+          q={q}
+        />
+      ))}
+      {diff === null && lines.length > 0 ? (
+        <>
+          <pre
+            data-testid="tx-out"
+            className={`${txOut} ${failed ? "text-error" : "text-muted-foreground"}`}
+          >
+            <Hi text={shown.join("\n")} q={q} />
+          </pre>
+          <MoreLines
+            hidden={lines.length - shown.length}
+            open={open && lines.length > OUTPUT_BUDGET}
+            onToggle={() => {
+              onToggle(row.key);
+            }}
+          />
+        </>
+      ) : null}
+      {call.parked === null ? null : (
+        <div className={`${txSub} ml-5`}>{t("parkedNote")}</div>
+      )}
     </div>
   );
 }
 
-function TurnBlock({
-  turn,
-  firstStep,
-  pos,
-  running,
-  openIds,
-  onToggle,
-  place,
-  matched,
-  thinkingOpen,
+/** A cost chip, with the basis that says who observed it as its title. */
+function CostChip({
+  value,
+  tone,
+  prefix,
 }: {
-  turn: TranscriptTurn;
-  /** The run-wide number of this turn's first drawn step. */
-  firstStep: number;
-  pos: number;
-  running: boolean;
-  openIds: Set<string>;
-  onToggle: (id: string, open: boolean) => void;
+  value: Cost;
+  tone: "cost" | "burn";
+  prefix?: string;
+}) {
+  const t = useTranslations("run.transcript");
+  return (
+    <span className={CHIP[tone]} title={value.basis ?? t("basisNotRecorded")}>
+      {prefix === undefined ? null : `${prefix} `}
+      <Money value={value} precision="exact" />
+    </span>
+  );
+}
+
+function UsageRow({
+  row,
+  place,
+}: {
+  row: Extract<FeedRow, { kind: "usage" }>;
   place: Place;
-  /** The keys of the entries a search found; null when nothing is searched. */
-  matched: ReadonlySet<string> | null;
-  thinkingOpen: boolean;
 }) {
   const t = useTranslations("run.transcript");
   const locale = useLocale();
-  const { first, last } = turn;
-  const cost = frameCost(turn.frames);
-  const seconds = (Date.parse(last.at) - Date.parse(first.at)) / 1000;
-  const steps = visibleSteps(turn);
-  // A search draws the turn only where something in it matched, and opens
-  // it, so a found step is on screen rather than behind a closed turn.
-  if (matched !== null && !turn.frames.some((f) => matched.has(entryKey(f)))) {
-    return null;
-  }
-  const found = (step: TranscriptStep) =>
-    matched === null || stepMatches(step, matched);
+  const { usage } = row;
+  const counts = [
+    usage?.inputUncached == null
+      ? null
+      : t("tokensIn", { count: formatCount(usage.inputUncached, locale) }),
+    usage?.cacheRead == null
+      ? null
+      : t("tokensCache", { count: formatCount(usage.cacheRead, locale) }),
+    usage?.cacheWrite == null
+      ? null
+      : t("tokensCacheWrite", { count: formatCount(usage.cacheWrite, locale) }),
+    usage?.output == null
+      ? null
+      : t("tokensOut", { count: formatCount(usage.output, locale) }),
+  ].filter((part): part is string => part !== null);
+  return (
+    <div data-testid="tx-usage" className={txUsage}>
+      <span className="min-w-0 truncate">
+        {[t("usage"), row.model, ...counts]
+          .filter((part): part is string => part !== null)
+          .join(" · ")}
+      </span>
+      <span className={txChips}>
+        <SubagentChip row={row} />
+        {row.effort === null ? null : (
+          <span data-testid="step-effort" className={CHIP.plain}>
+            {t("effort", { effort: row.effort })}
+          </span>
+        )}
+        {usage?.reasoning == null || usage.reasoning === 0 ? null : (
+          <span data-testid="step-thinking-tokens" className={CHIP.plain}>
+            {t("thinkingTokens", {
+              count: formatCount(usage.reasoning, locale),
+            })}
+          </span>
+        )}
+        {row.cost === null ? null : <CostChip value={row.cost} tone="cost" />}
+        {row.spent === null ? null : (
+          <CostChip value={row.spent} tone="burn" prefix="Σ" />
+        )}
+        <FrameChip frame={row.frame} place={place}>
+          {t("frame", { type: row.frame.type, seq: row.frame.seq })}
+        </FrameChip>
+      </span>
+    </div>
+  );
+}
+
+function RecallRow({
+  row,
+  q,
+  open,
+  onToggle,
+  place,
+}: Omit<RowProps, "row"> & { row: Extract<FeedRow, { kind: "recall" }> }) {
+  const t = useTranslations("run.transcript");
+  const locale = useLocale();
+  const { recall } = row;
+  const shown = open ? recall.items : recall.items.slice(0, RECALL_CAP);
+  const held = recall.items.slice(shown.length);
+  // The tokens held back are summed only when every held item recorded its
+  // count; a partial sum would read as the whole.
+  const heldTokens = held.every((item) => item.tokens !== null)
+    ? held.reduce((sum, item) => sum + (item.tokens ?? 0), 0)
+    : null;
+  const heading = [
+    t("recall"),
+    recall.count === null
+      ? null
+      : recall.unit === "frames"
+        ? t("recallFrames", { count: recall.count })
+        : t("recallItems", { count: formatCount(recall.count, locale) }),
+    recall.tokens === null
+      ? null
+      : t("recallTokens", { count: formatCount(recall.tokens, locale) }),
+    recall.cut === null
+      ? null
+      : t("recallCut", { count: formatCount(recall.cut, locale) }),
+  ]
+    .filter((part): part is string => part !== null)
+    .join(" · ");
+  // `color:var(--st-proven); font-weight:600; font-size:12.5px` on the fold.
+  const headingClass =
+    "border-0 bg-transparent p-0 font-mono text-[12.5px] font-semibold text-proven";
+  return (
+    <div data-testid="tx-recall">
+      {recall.items.length > RECALL_CAP ? (
+        <button
+          type="button"
+          className={headingClass}
+          aria-expanded={open}
+          onClick={() => {
+            onToggle(row.key);
+          }}
+        >
+          <span aria-hidden="true">◉ </span>
+          {heading}
+        </button>
+      ) : (
+        <span className={headingClass}>
+          <span aria-hidden="true">◉ </span>
+          {heading}
+        </span>
+      )}
+      {shown.length === 0 ? null : (
+        <div className={txRecall}>
+          {shown.map((item, index) => (
+            <RecallItem
+              // A manifest names each item once; the index keeps two
+              // unnamed items apart.
+              key={`${item.kind}-${item.label}-${String(index)}`}
+              item={item}
+              q={q}
+            />
+          ))}
+        </div>
+      )}
+      {held.length === 0 ? null : (
+        <button
+          type="button"
+          className={`${txFold} ml-5`}
+          aria-expanded={false}
+          onClick={() => {
+            onToggle(row.key);
+          }}
+        >
+          <span aria-hidden="true">⋯ </span>
+          {heldTokens === null
+            ? t("recallMore", { count: formatCount(held.length, locale) })
+            : t("recallMoreTokens", {
+                count: formatCount(held.length, locale),
+                tokens: formatCount(heldTokens, locale),
+              })}
+        </button>
+      )}
+      <div className={`${txSub} ml-5`}>
+        <FrameChip frame={row.frame} place={place}>
+          {t("frame", { type: row.frame.type, seq: row.frame.seq })}
+        </FrameChip>
+        <SafeLink
+          to={routes.run(place.org, place.ws, place.runId, { tab: "context" })}
+          className={CHIP.link}
+        >
+          {t("openContext")}
+        </SafeLink>
+      </div>
+    </div>
+  );
+}
+
+function RecallItem({
+  item,
+  q,
+}: {
+  item: { kind: string; label: string; tokens: number | null };
+  q: string;
+}) {
+  const t = useTranslations("run.transcript");
+  const locale = useLocale();
   return (
     <>
-      {/* What was asked sits ABOVE the turn it opened, outside the
-          disclosure, so it is the first thing on the transcript and it is
-          there at every zoom. Inside the disclosure it was the one line a
-          reader needed to read the rest and the one line a collapsed turn
-          hid. */}
-      <TokenUsage entries={turn.frames} />
-      {turn.prompt === null ? null : <Role who="you" text={turn.prompt} />}
-      <details
-        data-testid="transcript-turn"
-        open={matched !== null || openIds.has(turn.id)}
-        onToggle={(e) => {
-          onToggle(turn.id, e.currentTarget.open);
-        }}
-        className="group/turn"
-      >
-        <summary className="cursor-pointer list-none border-b border-border bg-muted px-3 py-2.5 select-none hover:bg-card [&::-webkit-details-marker]:hidden">
-          <div className="flex flex-wrap items-baseline gap-2.5">
-            <span
-              aria-hidden="true"
-              className="inline-block w-2.5 shrink-0 text-[8px] text-muted-foreground transition-transform group-open/turn:rotate-90"
-            >
-              ▶
-            </span>
-            <span className="text-[13px] font-semibold text-foreground">
-              {/* A turn marker is structure, not identity and not an action, so
-                  it does not spend the screen's one gold. */}
-              <span aria-hidden="true" className="text-muted-foreground">
-                ▍
-              </span>
-              {turn.turn === null ? t("runStart") : t("turn", { n: turn.turn })}
-            </span>
-            {turn.turn === null ? null : running ? (
-              <span className="text-[11px] tracking-[0.06em] text-info">
-                {t("turnRunning")}
-              </span>
-            ) : (
-              <span className="text-[11px] tracking-[0.06em] text-success">
-                {t("turnDone")}
-              </span>
-            )}
-            <span className="ml-auto flex flex-wrap gap-1.5">
-              <Chip>{t("stepCount", { count: steps.length })}</Chip>
-              {steps.length === 0 ? null : (
-                <Chip>
-                  {t("stepSpan", {
-                    from: firstStep,
-                    to: firstStep + steps.length - 1,
-                  })}
-                </Chip>
-              )}
-              <Chip>{formatClock(seconds, locale)}</Chip>
-              {cost === null ? null : (
-                <Chip tone="cost">
-                  <Money value={cost} precision="exact" />
-                </Chip>
-              )}
-            </span>
-          </div>
-        </summary>
-        {steps.map((step, index) => {
-          // Numbered before the search filters, so a found step keeps the
-          // number it has in the whole run.
-          const number = firstStep + index;
-          if (!found(step)) return null;
-          const children = visibleChildren(step).flatMap((child, at) =>
-            found(child) ? [{ child, at }] : [],
-          );
-          return (
-            <StepRow
-              key={step.id}
-              step={step}
-              number={String(number)}
-              digest={stepDigest(step)}
-              pos={pos}
-              open={openIds.has(step.id)}
-              onToggle={onToggle}
-              place={place}
-              thinkingOpen={thinkingOpen}
-              nested={
-                children.length === 0
-                  ? null
-                  : children.map(({ child, at }) => (
-                      <StepRow
-                        key={child.id}
-                        step={child}
-                        number={`${String(number)}.${String(at + 1)}`}
-                        digest={stepDigest(child)}
-                        pos={pos}
-                        open={openIds.has(child.id)}
-                        onToggle={onToggle}
-                        place={place}
-                        thinkingOpen={thinkingOpen}
-                      />
-                    ))
-              }
-            />
-          );
-        })}
-        {turn.reply === null ? null : <Role who="agent" text={turn.reply} />}
-      </details>
+      <span className="text-dim">{item.kind}</span>
+      <span className="truncate text-(color:--body)">
+        <Hi text={item.label} q={q} />
+      </span>
+      <span className="text-right tabular-nums text-dim">
+        {item.tokens === null
+          ? ""
+          : t("recallTokens", { count: formatCount(item.tokens, locale) })}
+      </span>
     </>
   );
 }
 
-/** Whether a step, or a subagent step under it, holds an entry the search found. */
-function stepMatches(
-  step: TranscriptStep,
-  matched: ReadonlySet<string>,
-): boolean {
+function SealRow({
+  row,
+  q,
+  place,
+  sealedAt,
+}: {
+  row: Extract<FeedRow, { kind: "seal" }>;
+  q: string;
+  place: Place;
+  /** The run's seal, when this is its last stop frame and the run is sealed. */
+  sealedAt: string | null;
+}) {
+  const t = useTranslations("run.transcript");
+  const format = useFormatter();
   return (
-    step.frames.some((frame) => matched.has(entryKey(frame))) ||
-    (step.children ?? []).some((child) => stepMatches(child, matched))
+    <div className="flex min-w-0 items-baseline gap-2">
+      <span className="font-semibold text-success">
+        {sealedAt === null
+          ? t("stopped")
+          : t("sealedAt", {
+              time: format.dateTime(new Date(sealedAt), {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+                hourCycle: "h23",
+              }),
+            })}
+      </span>
+      {row.label === null ? null : (
+        <span className="text-dim">
+          <Hi text={row.label} q={q} />
+        </span>
+      )}
+      <span className={txChips}>
+        <FrameChip frame={row.frame} place={place}>
+          {t("frame", { type: row.frame.type, seq: row.frame.seq })}
+        </FrameChip>
+      </span>
+    </div>
   );
 }
 
-function Readout({ entries, pos }: { entries: Frames; pos: number }) {
+function EventRow({
+  row,
+  q,
+  open,
+  onToggle,
+  place,
+}: Omit<RowProps, "row"> & { row: Extract<FeedRow, { kind: "event" }> }) {
   const t = useTranslations("run.transcript");
-  const locale = useLocale();
-  const head = entries.length - 1;
-  const here = frameAt(entries, pos);
-  // Elapsed and cumulative cost come from the read, not from this page: the
-  // contract measures both from the run's start, so a transcript that was cut
-  // short still reports what the run had spent and how far into it this frame
-  // sits.
-  const cost: MoneyValue | null = here.cumulativeCost;
+  const lines = row.text?.split("\n") ?? [];
+  const [head] = lines;
+  const foldable = lines.length > 1;
+  return (
+    <div>
+      <div className={txCall}>
+        <span
+          aria-hidden="true"
+          className={`flex-none select-none ${row.failed ? "text-error" : "text-dim"}`}
+        >
+          {row.failed ? "✗" : "●"}
+        </span>
+        <span
+          className={`${txName} ${row.failed ? "text-error" : "text-muted-foreground"}`}
+        >
+          <Hi text={row.name} q={q} />
+        </span>
+        {head === undefined ? null : (
+          <span className={txArg} title={head}>
+            <Hi text={head} q={q} />
+          </span>
+        )}
+        <span className={txChips}>
+          <SubagentChip row={row} />
+          {row.gates.map((gate) => (
+            <GateChip
+              key={`${gate.frame.chainRef ?? ""}:${gate.frame.seq}`}
+              gate={gate}
+              place={place}
+            />
+          ))}
+          {row.gates.length > 0 ? null : (
+            <FrameChip frame={row.frame} place={place}>
+              {t("frame", { type: row.frame.type, seq: row.frame.seq })}
+            </FrameChip>
+          )}
+          {foldable ? (
+            <button
+              type="button"
+              className={txFold}
+              aria-expanded={open}
+              aria-label={open ? t("showLess") : t("showRest")}
+              onClick={() => {
+                onToggle(row.key);
+              }}
+            >
+              {open ? "⏶" : "⋯"}
+            </button>
+          ) : null}
+        </span>
+      </div>
+      {open && foldable && row.text !== null ? (
+        <pre
+          className={`${txOut} ${row.failed ? "text-error" : "text-muted-foreground"}`}
+        >
+          <Hi text={row.text} q={q} />
+        </pre>
+      ) : null}
+    </div>
+  );
+}
+
+/** The dot on the spine: a tool call's family, coloured by what it did. */
+function NodeDot({ row }: { row: FeedRow }) {
+  if (row.kind !== "tool") return null;
+  const kind = CALL_CLASS[row.call.group];
   return (
     <span
-      data-testid="transport-readout"
-      className="whitespace-nowrap font-mono text-[11.5px] tabular-nums text-muted-foreground"
+      aria-hidden="true"
+      className={`${txDot} ${kind === "mutate" ? "bg-current" : ""} ${row.failed ? "text-error" : CALL_INK[kind]}`}
+    />
+  );
+}
+
+// ── Chips and transport ─────────────────────────────────────────────────────
+
+/** `TX_HUE`, as the chip's accessible hue is its word: the dot only repeats it. */
+function KindChips({
+  counts,
+  floor,
+  on,
+  errors,
+  errorsOnly,
+  onGroup,
+  onAll,
+  onErrors,
+}: {
+  counts: Record<FeedGroup, number>;
+  /**
+   * More of the run lies past the rows read, so each count is how many at
+   * least, and reads `12+` rather than a total the record has not shown.
+   */
+  floor: boolean;
+  on: Record<FeedGroup, boolean>;
+  errors: number;
+  errorsOnly: boolean;
+  onGroup: (group: FeedGroup) => void;
+  onAll: (value: boolean) => void;
+  onErrors: () => void;
+}) {
+  const t = useTranslations("run.transcript");
+  const locale = useLocale();
+  const anyOff = FEED_GROUPS.some((group) => !on[group]);
+  const count = (n: number): string =>
+    floor
+      ? t("countFloor", { count: formatCount(n, locale) })
+      : formatCount(n, locale);
+  return (
+    <div
+      role="group"
+      aria-label={t("chipsLabel")}
+      data-testid="transcript-chips"
+      className={txKinds}
     >
-      <b className="font-medium text-foreground">
-        {t("position", { n: pos + 1 })}
-      </b>{" "}
-      {t("of", { n: head + 1 })}
-      {" · "}
-      {formatClock(here.elapsedMs / 1000, locale)} /{" "}
-      {formatClock(frameAt(entries, head).elapsedMs / 1000, locale)}
-      {cost === null ? null : (
-        <>
-          {" · "}
-          <b className="font-medium text-foreground">
-            <Money value={cost} precision="exact" />
-          </b>
-        </>
-      )}
+      {FEED_GROUPS.map((group) => (
+        <button
+          key={group}
+          type="button"
+          data-testid={`chip-${group}`}
+          aria-pressed={on[group]}
+          onClick={() => {
+            onGroup(group);
+          }}
+          className={txKind}
+        >
+          <span
+            data-dot=""
+            aria-hidden="true"
+            className={`size-2 flex-none rounded-[2px] ${on[group] ? DOT[group].on : DOT[group].off}`}
+          />
+          <span>{t(`chip.${group}`)}</span>
+          <span data-testid={`chip-${group}-count`} className={txKindCount}>
+            {count(counts[group])}
+          </span>
+        </button>
+      ))}
+      <button
+        type="button"
+        data-testid="chip-all"
+        onClick={() => {
+          onAll(anyOff);
+        }}
+        className={txKindAll}
+      >
+        {anyOff ? t("all") : t("none")}
+      </button>
+      <button
+        type="button"
+        data-testid="chip-errors"
+        aria-pressed={errorsOnly}
+        title={errors > 0 ? t("errorsHint") : t("errorsNone")}
+        onClick={onErrors}
+        className={txKindErrors}
+      >
+        <span>{t("errors")}</span>
+        {errors > 0 ? (
+          <span data-testid="chip-errors-count" className={txKindCount}>
+            {count(errors)}
+          </span>
+        ) : null}
+      </button>
+    </div>
+  );
+}
+
+function Burn({ spent, total }: { spent: Cost | null; total: Cost | null }) {
+  const t = useTranslations("run.transcript");
+  if (total === null) {
+    return (
+      <span data-testid="tx-burn" className={txBurn}>
+        <span>{t("burn")}</span>
+        <span>{t("burnNotRecorded")}</span>
+      </span>
+    );
+  }
+  const share = spent === null ? null : ratioOfMicros(spent, total);
+  return (
+    <span data-testid="tx-burn" className={txBurn}>
+      <span>{t("burn")}</span>
+      <span className="h-1 w-[120px] overflow-hidden rounded-[2px] bg-hl">
+        <i
+          aria-hidden="true"
+          className="block h-full bg-info transition-[width] duration-200"
+          style={{ width: share === null ? "0%" : ratioWidth(share) }}
+        />
+      </span>
+      <b className="font-semibold text-foreground">
+        {spent === null ? (
+          t("burnNone")
+        ) : (
+          <Money value={spent} precision="cents" />
+        )}
+      </b>
+      <span>
+        {t("burnOf")} <Money value={total} precision="cents" />{" "}
+        {total.basis ?? t("basisNotRecorded")}
+      </span>
     </span>
   );
+}
+
+// ── The view ────────────────────────────────────────────────────────────────
+
+/** A row drawn, its place in the rows shown, and the subagent rows under it. */
+type Drawn = { row: FeedRow; index: number; children: Drawn[] };
+
+/**
+ * The rows shown, with each subagent's rows moved under the Task or Agent
+ * call row that spawned it (`FeedRow.parent`), so the subagent's work reads
+ * as that call's and not as the run's own. `buildFeed` puts a subagent's rows
+ * right after their call's, so the order on screen is the order of the list.
+ * A row whose call is not shown (a filter hid it, or the transport has not
+ * reached it) draws at the top level rather than disappearing.
+ */
+function nest(rows: readonly FeedRow[]): Drawn[] {
+  const top: Drawn[] = [];
+  const byKey = new Map<string, Drawn>();
+  rows.forEach((row, index) => {
+    const drawn: Drawn = { row, index, children: [] };
+    const parent = row.parent === null ? undefined : byKey.get(row.parent);
+    if (parent === undefined) {
+      top.push(drawn);
+      byKey.set(row.key, drawn);
+    } else parent.children.push(drawn);
+  });
+  return top;
+}
+
+/**
+ * Every chip on, except where the URL's `?kinds=` named the ones it wanted,
+ * or said `none`.
+ */
+function initialGroups(kinds: KindFilter): Record<FeedGroup, boolean> {
+  if (kinds === "none") return eachGroup(() => false);
+  // The contract's filter words that name one of these chips. `prompt` there
+  // is the request sent to a model and `policy` a decision, neither of which
+  // is a row here, so a link carrying only those opens every chip.
+  const named: Partial<Record<TranscriptKind, FeedGroup>> = {
+    responses: "responses",
+    thinking: "thinking",
+    tools: "tools",
+    recall: "recall",
+    usage: "usage",
+    seal: "seal",
+  };
+  const asked = new Set(kinds.flatMap((kind) => named[kind] ?? []));
+  return eachGroup((group) => asked.size === 0 || asked.has(group));
+}
+
+/** One value per chip, in the chips' order. */
+function eachGroup<T>(value: (group: FeedGroup) => T): Record<FeedGroup, T> {
+  return {
+    prompt: value("prompt"),
+    responses: value("responses"),
+    thinking: value("thinking"),
+    tools: value("tools"),
+    usage: value("usage"),
+    recall: value("recall"),
+    seal: value("seal"),
+  };
 }
 
 export function TranscriptView({
   transcript,
   entries: first,
+  run,
   kinds,
-  chips,
-  zoom,
-  status,
   org,
   ws,
   runId,
 }: {
   /** `cursor` is set when entries lie past this read: more can be paged in. */
   transcript: Pick<RunTranscript, "complete" | "cursor">;
-  /** The first page of the transcript's frames, at least one. */
+  /** The whole-run transcript's entries, at least one. */
   entries: Frames;
-  /** The kinds the chips show; a later page is read through the same filter. */
-  kinds: readonly TranscriptKind[];
-  /** The filter chips, drawn in the toolbar after the search. */
-  chips?: ReactNode;
-  /** The level the URL asked for: which disclosures start open. */
-  zoom: TranscriptZoom;
-  status: RunStatus;
-  replayGrade: ReplayGrade | null;
+  run: TranscriptRun;
+  /** The URL's `?kinds=`, which sets the chips a link opens with. */
+  kinds: KindFilter;
 } & Place) {
   const t = useTranslations("run.transcript");
   const locale = useLocale();
   const navigate = useNavigate();
   const place = useMemo(() => ({ org, ws, runId }), [org, ws, runId]);
+  const live = run.status === "live";
 
   // The entries and the cursor as the last read left them. A ref as well as
   // state, because an append needs the new length before React has committed
@@ -939,9 +1461,9 @@ export function TranscriptView({
   const cursorRef = useRef<string | null>(transcript.cursor);
   const readingRef = useRef(false);
   // A signal that arrived mid-read: set when a caller finds readingRef
-  // already true, so the request in flight cannot see it. The finally
-  // block below checks it and runs one more tail read once that request
-  // settles, so a frame landing during an active read is never dropped.
+  // already true, so the request in flight cannot see it. The finally block
+  // below checks it and runs one more tail read once that request settles,
+  // so a frame landing during an active read is never dropped.
   const pendingReadRef = useRef(false);
   // Latest loadMore, so the finally block can request a follow-up without
   // closing over the useCallback identity (React Compiler refuses that).
@@ -951,69 +1473,47 @@ export function TranscriptView({
   const [complete, setComplete] = useState(transcript.complete);
   const [reading, setReading] = useState(false);
   const [pageFailure, setPageFailure] = useState<PageFailure | null>(null);
-  const head = entries.length - 1;
-  const turns = useMemo(() => buildTranscript(entries), [entries]);
-  // Each turn's first step number, counted over the rows drawn, so the
-  // numbers run 1, 2, 3 across the run whatever frames have no row.
-  const firstSteps = useMemo(() => {
-    const starts: number[] = [];
-    let next = 1;
-    for (const turn of turns) {
-      starts.push(next);
-      next += visibleSteps(turn).length;
-    }
-    return starts;
-  }, [turns]);
-  const live = status === "live";
 
-  const [openIds, setOpenIds] = useState(() => {
-    const open = openAtZoom(turns, zoom);
-    for (const id of idsAt(turns, head)) open.add(id);
-    return open;
-  });
-  // The frame the viewer pinned; null follows the head as a live run grows.
-  const [pinned, setPinned] = useState<number | null>(null);
-  const [playing, setPlaying] = useState(false);
-  const [speed, setSpeed] = useState<(typeof SPEEDS)[number]>(1);
+  const rows = useMemo(() => buildFeed(entries), [entries]);
+
+  const [on, setOn] = useState(() => initialGroups(kinds));
+  const [errorsOnly, setErrorsOnly] = useState(
+    () => kinds !== "none" && kinds.includes("errors"),
+  );
   const [query, setQuery] = useState("");
-  const [thinkingOpen, setThinkingOpen] = useState(false);
-  const needle = query.trim().toLowerCase();
-  const matched = useMemo(
+  const [thinking, setThinking] = useState(false);
+  const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set());
+  const q = query.trim().toLowerCase();
+  const paced = q === "";
+
+  const counts = useMemo(() => {
+    return eachGroup(
+      (group) => rows.filter((row) => row.group === group).length,
+    );
+  }, [rows]);
+  const errors = useMemo(() => rows.filter((row) => row.failed).length, [rows]);
+
+  const visible = useMemo(
     () =>
-      needle === ""
-        ? null
-        : new Set(
-            entries
-              .filter((entry) => entryText(entry).includes(needle))
-              .map(entryKey),
-          ),
-    [entries, needle],
+      rows.filter((row) => {
+        if (errorsOnly) return row.failed;
+        if (row.group !== null && !on[row.group]) return false;
+        return q === "" || row.haystack.includes(q);
+      }),
+    [rows, errorsOnly, on, q],
   );
-  const bodyRef = useRef<HTMLDivElement>(null);
+  const total = visible.length;
 
-  const following = pinned === null;
-  const pos = pinned === null ? head : Math.min(pinned, head);
-  // A sealed run stops at its last frame; a live one waits there for more.
-  const isPlaying = playing && (live || pos < head);
-
-  // A viewer following a live run sees the newest step open, at any zoom but Turns.
-  const shown = useMemo(() => {
-    if (!following || zoom === "turns") return openIds;
-    const ids = idsAt(turns, head);
-    if (ids.every((id) => openIds.has(id))) return openIds;
-    return new Set([...openIds, ...ids]);
-  }, [following, zoom, openIds, turns, head]);
-
-  const reveal = useCallback(
-    (at: number) => {
-      const ids = idsAt(turns, at);
-      setOpenIds((prev) => {
-        if (ids.every((id) => prev.has(id))) return prev;
-        return new Set([...prev, ...ids]);
-      });
-    },
-    [turns],
-  );
+  // The transport. `pos` is how many rows are shown; null holds the end, so
+  // a live run's new rows appear as they land.
+  const [pos, setPos] = useState<number | null>(null);
+  const [playing, setPlaying] = useState(live);
+  const [speed, setSpeed] = useState<Speed>(1);
+  const at = paced ? Math.min(pos ?? total, total) : total;
+  // A sealed run stops at its last row; a live one waits there for more.
+  const isPlaying = playing && paced && (live || at < total);
+  const done = !isPlaying && at >= total && !live;
+  const feedRef = useRef<HTMLDivElement>(null);
 
   /**
    * Read the page past the cursor and append it. Nothing already on screen is
@@ -1052,12 +1552,13 @@ export function TranscriptView({
         // must keep a resume cursor from the handler so SSE can ask for
         // the next page.
         if (cursorRef.current === null) return;
+        // The chips filter in the browser, so every page is read whole.
         const read = await readTranscriptPage(
           org,
           ws,
           runId,
           "everything",
-          kinds,
+          [],
           cursorRef.current,
         );
         if (!read.ok) {
@@ -1101,23 +1602,23 @@ export function TranscriptView({
         void loadMoreRef.current();
       }
     }
-  }, [kinds, org, runId, ws]);
+  }, [org, runId, ws]);
   useEffect(() => {
     loadMoreRef.current = loadMore;
   }, [loadMore]);
 
-  // A followed live run reads its tail when the stream says a frame landed.
+  // A live run reads its tail when the stream says a frame landed. The
+  // stream stays open while the viewer is paused: the run keeps recording,
+  // and the count beside the transport says how far behind the viewer is.
   const stream = useRunStream({
     url: `/api/v1/${encodeURIComponent(org)}/${encodeURIComponent(
       ws,
     )}/runs/${encodeURIComponent(runId)}/stream`,
-    enabled: live && following,
+    enabled: live,
     onFrames: () => {
       void loadMore();
     },
   });
-
-  const activelyLive = live && stream !== "denied" && stream !== "lost";
 
   // The seal changes the header, the badges and the record actions, none of
   // which this component owns, so the page is re-read once when it happens.
@@ -1125,335 +1626,434 @@ export function TranscriptView({
     if (stream === "sealed") navigate.refresh();
   }, [stream, navigate]);
 
-  // Read ahead of the playhead, so playback does not stall at a page boundary.
+  // Playback reveals the next row after the recorded gap to it.
   useEffect(() => {
-    if (!isPlaying || cursor === null || reading || stream === "denied") return;
-    if (pos < head - PREFETCH_WITHIN) return;
-    void loadMore();
-  }, [isPlaying, pos, head, cursor, reading, loadMore, stream]);
-
-  // Playback walks the frames at their recorded pace.
-  useEffect(() => {
-    if (!isPlaying || pos >= head) return;
+    if (!isPlaying || at >= total) return;
+    const next = visible[at];
+    const previous = at === 0 ? 0 : (visible[at - 1]?.elapsedMs ?? 0);
+    const gap = (next?.elapsedMs ?? previous) - previous;
     const timer = setTimeout(
       () => {
-        const next = pos + 1;
-        setPinned(next >= head ? null : next);
-        reveal(next);
+        setPos(at + 1 >= total ? null : at + 1);
       },
-      playDelay(entries, pos, speed),
+      paceMs(gap, speed),
     );
     return () => {
       clearTimeout(timer);
     };
-  }, [isPlaying, pos, head, entries, speed, reveal]);
+  }, [isPlaying, at, total, visible, speed]);
 
-  // Keep the marked step in view while playing; the container's scroll
-  // behaviour honours reduced motion.
+  // Keep the newest row in view while playing or following.
   useEffect(() => {
     if (!isPlaying) return;
-    bodyRef.current
-      ?.querySelector<HTMLElement>("[data-now]")
-      ?.scrollIntoView({ block: "nearest" });
-  }, [isPlaying, pos]);
+    const feed = feedRef.current;
+    if (feed !== null) feed.scrollTop = feed.scrollHeight;
+  }, [isPlaying, at]);
 
-  const moveTo = (next: number) => {
-    const clamped = Math.max(0, Math.min(head, next));
-    setPlaying(false);
-    setPinned(clamped >= head ? null : clamped);
-    reveal(clamped);
-  };
-
-  const toggle = useCallback((id: string, open: boolean) => {
-    setOpenIds((prev) => {
-      if (prev.has(id) === open) return prev;
+  const toggle = useCallback((key: string) => {
+    setOpen((prev) => {
       const next = new Set(prev);
-      if (open) next.add(id);
-      else next.delete(id);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   }, []);
 
-  const lastTurnId = turns[turns.length - 1]?.id;
+  const seek = (next: number) => {
+    const clamped = Math.max(0, Math.min(total, next));
+    // At the end of a live run, holding the end is following it.
+    setPos(clamped >= total && live && isPlaying ? null : clamped);
+  };
+  const step = (by: number) => {
+    setPlaying(false);
+    setPos(Math.max(0, Math.min(total, at + by)));
+  };
+  const playPause = () => {
+    if (done) {
+      setPos(0);
+      setPlaying(true);
+      return;
+    }
+    if (isPlaying) {
+      // Pausing holds the rows shown; a live run's next rows wait past it.
+      setPos(at);
+      setPlaying(false);
+      return;
+    }
+    setPlaying(true);
+  };
+
+  // The answer is the last thing the agent said, once the run has stopped.
+  const answer = live
+    ? -1
+    : visible.reduce(
+        (last, row, index) => (row.kind === "text" ? index : last),
+        -1,
+      );
+  const lastSeal = visible.reduce(
+    (last, row, index) => (row.kind === "seal" ? index : last),
+    -1,
+  );
+  // What the run had spent by the last row shown, from the contract's own
+  // running total, and what it spent in all.
+  const spentTotal = entries[entries.length - 1]?.cumulativeCost ?? null;
+  const spent =
+    at >= total
+      ? spentTotal
+      : visible
+          .slice(0, at)
+          .reduceRight<Cost | null>((found, row) => found ?? row.spent, null);
+
+  const meta = [
+    run.agentKey,
+    run.model?.slug ?? null,
+    run.turns === null ? null : t("turns", { count: run.turns }),
+    t("steps", { count: run.steps }),
+    t("entries", { count: rows.length }),
+  ].filter((part): part is string => part !== null);
+
+  const empty = errorsOnly
+    ? t("emptyErrors")
+    : q !== ""
+      ? t("emptySearch")
+      : rows.length === 0
+        ? t("emptyRows")
+        : t("emptyFiltered");
+
+  const footer =
+    stream === "denied"
+      ? t("followDenied")
+      : stream === "lost"
+        ? t("followLost")
+        : stream === "sealed"
+          ? t("followSealed")
+          : live && stream !== "off"
+            ? null
+            : cursor !== null
+              ? t("loadedMore", { count: formatCount(entries.length, locale) })
+              : !complete
+                ? t("cut", { count: formatCount(entries.length, locale) })
+                : null;
+
+  // One drawn row, with the subagent rows under it drawn inside it.
+  const drawRow = ({ row, index, children }: Drawn): ReactNode => (
+    <div
+      key={row.key}
+      data-testid="tx-row"
+      data-kind={row.kind}
+      className={txRow}
+    >
+      <Clock at={row.at} elapsedMs={row.elapsedMs} />
+      <span className={txNode}>
+        <NodeDot row={row} />
+      </span>
+      <div className="min-w-0">
+        <FeedRowView
+          row={row}
+          q={q}
+          open={open.has(row.key) || (row.kind === "thinking" && thinking)}
+          onToggle={toggle}
+          place={place}
+          run={run}
+          live={live}
+          answer={index === answer}
+          sealed={index === lastSeal && run.sealedAt !== null}
+        />
+        {children.length === 0 ? null : (
+          <div data-testid="transcript-subagent-steps" className={txNested}>
+            {children.map(drawRow)}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 
   return (
-    <section
-      aria-label={t("title")}
-      data-testid="transcript"
-      className="overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm"
-    >
-      <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2.5">
+    <section aria-label={t("title")} data-testid="transcript" className={txs}>
+      <div className={txTools}>
         <input
           type="search"
-          data-testid="transcript-search"
           value={query}
           placeholder={t("searchPlaceholder")}
           aria-label={t("searchLabel")}
-          onChange={(e) => {
-            setQuery(e.currentTarget.value);
+          onChange={(event) => {
+            setQuery(event.currentTarget.value);
           }}
-          className="h-8 min-w-0 flex-[1_1_220px] rounded-md border border-border bg-background px-2.5 text-[12.5px] text-foreground placeholder:text-muted-foreground"
+          className={txSearch}
         />
-        {matched === null ? null : (
+        {q === "" ? null : (
           <span
-            data-testid="transcript-search-count"
-            className="font-mono text-[11px] tabular-nums text-muted-foreground"
+            data-testid="tx-matches"
+            className="font-mono text-[10.5px] text-dim"
           >
-            {t("searchCount", {
-              shown: formatCount(matched.size, locale),
-              total: formatCount(entries.length, locale),
+            {t("matches", {
+              shown: formatCount(visible.length, locale),
+              total: formatCount(rows.length, locale),
             })}
           </span>
         )}
-        {chips}
-      </div>
-      <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted px-3 py-2.5">
-        {stream === "denied" ? null : status !== "live" ? (
-          <span className="inline-flex shrink-0 items-center rounded-full border border-border px-2 py-0.5 font-mono text-[10.5px] font-semibold tracking-[0.1em] text-muted-foreground uppercase">
-            {t(`recorded.${status}`)}
-          </span>
-        ) : following ? (
-          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-success/15 px-2 py-0.5 font-mono text-[10.5px] font-semibold tracking-[0.1em] text-success uppercase">
-            <span
-              aria-hidden="true"
-              className="size-1.5 animate-pulse rounded-full bg-success"
-            />
-            {t("live")}
-          </span>
-        ) : (
-          <button
-            type="button"
-            onClick={() => {
-              moveTo(head);
-            }}
-            className="inline-flex shrink-0 items-center rounded-full border border-border bg-muted px-2 py-0.5 font-mono text-[10.5px] font-semibold tracking-[0.1em] text-muted-foreground uppercase hover:text-foreground"
-          >
-            {t("goLive")}
-          </button>
-        )}
-        <button
-          type="button"
-          className={tpButton}
-          disabled={pos <= 0}
-          aria-label={t("rewind")}
-          onClick={() => {
-            moveTo(0);
+        <KindChips
+          counts={counts}
+          floor={cursor !== null || !complete}
+          on={on}
+          errors={errors}
+          errorsOnly={errorsOnly}
+          onGroup={(group) => {
+            setOn((prev) => ({ ...prev, [group]: !prev[group] }));
           }}
-        >
-          <svg viewBox="0 0 16 16" aria-hidden="true" className="size-[13px]">
-            <path d="M11.4 3.2 4.6 8l6.8 4.8Z" fill="currentColor" />
-            <rect
-              x="3.2"
-              y="3.2"
-              width="1.6"
-              height="9.6"
-              fill="currentColor"
-            />
-          </svg>
-        </button>
-        <button
-          type="button"
-          className={tpButton}
-          disabled={pos <= 0}
-          aria-label={t("back")}
-          onClick={() => {
-            moveTo(pos - 1);
+          onAll={(value) => {
+            setOn(eachGroup(() => value));
           }}
-        >
-          <svg viewBox="0 0 16 16" aria-hidden="true" className="size-[13px]">
-            <path d="M11.4 3.2 4.6 8l6.8 4.8Z" fill="currentColor" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          className={`${tpButton} size-[34px] border-foreground/30`}
-          aria-label={isPlaying ? t("pause") : t("play")}
-          onClick={() => {
-            if (isPlaying) {
-              setPlaying(false);
-              return;
-            }
-            setPinned(pos >= head && !live ? 0 : pos);
-            setPlaying(true);
+          onErrors={() => {
+            setErrorsOnly((prev) => !prev);
           }}
-        >
-          {isPlaying ? (
-            <svg viewBox="0 0 16 16" aria-hidden="true" className="size-[13px]">
-              <rect
-                x="4.6"
-                y="3.4"
-                width="2.4"
-                height="9.2"
-                fill="currentColor"
-              />
-              <rect
-                x="9"
-                y="3.4"
-                width="2.4"
-                height="9.2"
-                fill="currentColor"
-              />
-            </svg>
-          ) : (
-            <svg viewBox="0 0 16 16" aria-hidden="true" className="size-[13px]">
-              <path d="M4.6 3.2 12.4 8l-7.8 4.8Z" fill="currentColor" />
-            </svg>
-          )}
-        </button>
-        <button
-          type="button"
-          className={tpButton}
-          disabled={pos >= head}
-          aria-label={t("forward")}
-          onClick={() => {
-            moveTo(pos + 1);
-          }}
-        >
-          <svg viewBox="0 0 16 16" aria-hidden="true" className="size-[13px]">
-            <path d="M4.6 3.2 11.4 8l-6.8 4.8Z" fill="currentColor" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          className={tpButton}
-          disabled={pos >= head}
-          aria-label={t("toEnd")}
-          onClick={() => {
-            moveTo(head);
-          }}
-        >
-          <svg viewBox="0 0 16 16" aria-hidden="true" className="size-[13px]">
-            <path d="M4.6 3.2 11.4 8l-6.8 4.8Z" fill="currentColor" />
-            <rect
-              x="11.2"
-              y="3.2"
-              width="1.6"
-              height="9.6"
-              fill="currentColor"
-            />
-          </svg>
-        </button>
-        <span className="flex min-w-[130px] flex-[1_1_190px] items-center">
-          <input
-            type="range"
-            min={0}
-            max={head}
-            value={pos}
-            aria-label={t("scrub")}
-            aria-valuetext={t("position", { n: pos + 1 })}
-            onChange={(e) => {
-              moveTo(Number(e.currentTarget.value));
-            }}
-            className="h-1 w-full cursor-pointer accent-foreground"
-          />
-        </span>
-        <Readout entries={entries} pos={pos} />
-        <span
-          role="group"
-          aria-label={t("speedLabel")}
-          className="flex shrink-0 overflow-hidden rounded-md border border-border"
-        >
-          {SPEEDS.map((value) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={speed === value}
-              onClick={() => {
-                setSpeed(value);
-              }}
-              className={`${segButton} font-mono`}
-            >
-              {t("speed", { speed: value })}
-            </button>
-          ))}
-        </span>
-        <button
-          type="button"
-          data-testid="expand-thinking"
-          aria-pressed={thinkingOpen}
-          onClick={() => {
-            setThinkingOpen((was) => !was);
-          }}
-          className={`${segButton} shrink-0 rounded-md border`}
-        >
-          {thinkingOpen ? t("collapseThinking") : t("expandThinking")}
-        </button>
-        <p className="m-0 basis-full text-[11px] leading-snug text-muted-foreground">
-          {t("transportNote")}
-        </p>
-      </div>
-      <div
-        ref={bodyRef}
-        className="max-h-[min(66vh,760px)] overflow-y-auto motion-safe:scroll-smooth"
-      >
-        {turns.map((turn, index) => (
-          <TurnBlock
-            key={turn.id}
-            turn={turn}
-            firstStep={firstSteps[index] ?? 1}
-            pos={pos}
-            running={activelyLive && turn.id === lastTurnId}
-            openIds={shown}
-            onToggle={toggle}
-            place={place}
-            matched={matched}
-            thinkingOpen={thinkingOpen}
-          />
-        ))}
-        {matched !== null && matched.size === 0 ? (
-          <p
-            data-testid="transcript-search-empty"
-            className="m-0 px-3 py-4 text-sm text-muted-foreground"
-          >
-            {t("searchEmpty")}
-          </p>
-        ) : null}
-      </div>
-      <div className="flex flex-wrap items-center gap-2 border-t border-border bg-muted px-3 py-2.5 text-xs text-muted-foreground">
-        <span
-          aria-hidden="true"
-          className={`size-1.5 rounded-full ${activelyLive ? "animate-pulse bg-success" : "bg-muted-foreground"}`}
         />
-        <span data-testid="transcript-count">
-          {live
-            ? stream === "denied"
-              ? t("followDenied")
-              : stream === "lost"
-                ? t("followLost")
-                : t("recording")
-            : stream === "sealed"
-              ? t("followSealed")
-              : cursor !== null
-                ? t("loadedMore", {
-                    count: formatCount(entries.length, locale),
-                  })
-                : complete
-                  ? t("complete", {
-                      count: formatCount(entries.length, locale),
-                    })
-                  : t("cut", { count: formatCount(entries.length, locale) })}
-        </span>
-        {cursor === null ? null : (
+        <div role="group" aria-label={t("transportLabel")} className={txPlay}>
           <button
             type="button"
-            data-testid="transcript-more"
-            disabled={reading || stream === "denied"}
+            data-testid="expand-thinking"
+            aria-pressed={thinking}
+            className={txGhost}
             onClick={() => {
-              void loadMore();
+              setThinking((prev) => !prev);
+              setOpen(new Set());
             }}
-            className={segButton}
           >
-            {reading ? t("readingMore") : t("more")}
+            {thinking ? t("collapseThinking") : t("expandThinking")}
           </button>
-        )}
-        {pageFailure === null ? null : (
-          <span data-testid="transcript-page-failed" className="basis-full">
-            {pageFailure.reason === "invalid"
-              ? t("badCursor")
-              : t("pageFailed")}
+          {paced ? (
+            <>
+              <button
+                type="button"
+                className={txButton}
+                aria-label={t("rewind")}
+                title={t("rewind")}
+                disabled={at <= 0}
+                onClick={() => {
+                  seek(0);
+                }}
+              >
+                ⏮
+              </button>
+              <button
+                type="button"
+                className={txButton}
+                aria-label={t("back")}
+                title={t("back")}
+                disabled={at <= 0}
+                onClick={() => {
+                  step(-1);
+                }}
+              >
+                ◀
+              </button>
+              <button
+                type="button"
+                data-testid="tx-play"
+                className={txPlayButton}
+                onClick={playPause}
+              >
+                <span aria-hidden="true">
+                  {done ? "▶ " : isPlaying ? "❙❙ " : "▶ "}
+                </span>
+                {done ? t("replay") : isPlaying ? t("pause") : t("play")}
+              </button>
+              <button
+                type="button"
+                className={txButton}
+                aria-label={t("forward")}
+                title={t("forward")}
+                disabled={at >= total}
+                onClick={() => {
+                  step(1);
+                }}
+              >
+                ▶
+              </button>
+              <button
+                type="button"
+                className={txButton}
+                aria-label={t("end")}
+                title={t("end")}
+                disabled={at >= total}
+                onClick={() => {
+                  seek(total);
+                }}
+              >
+                ⏭
+              </button>
+              <span role="group" aria-label={t("speedLabel")} className={txSeg}>
+                {SPEEDS.map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={speed === value}
+                    onClick={() => {
+                      setSpeed(value);
+                    }}
+                    className={txSegButton}
+                  >
+                    {t("speed", { speed: value })}
+                  </button>
+                ))}
+              </span>
+              <span data-testid="transport-readout" className={txCount}>
+                {t("position", {
+                  at: formatCount(at, locale),
+                  total: formatCount(total, locale),
+                })}
+              </span>
+            </>
+          ) : (
+            <span className={txCount}>{t("unpaced")}</span>
+          )}
+        </div>
+      </div>
+      <div className={txFrame}>
+        <div data-testid="tx-runbar" className={txRunbar}>
+          <span className="font-bold tracking-[0.05em]">
+            {run.taskRef ?? runId}
           </span>
+          <span className="text-[11px] text-dim">{meta.join(" · ")}</span>
+          <span className="flex flex-wrap gap-[5px]">
+            {errorsOnly ? (
+              <span className={CHIP.err}>{t("errorsOnly")}</span>
+            ) : null}
+            {live && stream !== "denied" ? (
+              run.ingressPaused === true ? (
+                <span className={CHIP.warn}>
+                  <span aria-hidden="true">⏸ </span>
+                  {t("paused")}
+                </span>
+              ) : (
+                <span className={CHIP.ok}>
+                  <span aria-hidden="true">● </span>
+                  {t("live")}
+                </span>
+              )
+            ) : run.status === "live" ? null : (
+              <span className={CHIP.plain}>{t(`status.${run.status}`)}</span>
+            )}
+          </span>
+          <Burn spent={spent} total={spentTotal} />
+        </div>
+        <div ref={feedRef} data-testid="tx-feed" className={txFeed}>
+          {total === 0 ? (
+            <div data-testid="transcript-empty" className={txEmpty}>
+              {empty}
+            </div>
+          ) : (
+            nest(visible.slice(0, at)).map(drawRow)
+          )}
+        </div>
+        {footer === null && pageFailure === null ? null : (
+          <div className="flex flex-wrap items-center gap-2 border-t border-border bg-card px-3.5 py-2 text-[11px] text-muted-foreground">
+            {footer === null ? null : (
+              <span data-testid="transcript-count">{footer}</span>
+            )}
+            {cursor === null ? null : (
+              <button
+                type="button"
+                data-testid="transcript-more"
+                disabled={reading || stream === "denied"}
+                onClick={() => {
+                  void loadMore();
+                }}
+                className={txButton}
+              >
+                {reading ? t("readingMore") : t("more")}
+              </button>
+            )}
+            {pageFailure === null ? null : (
+              <span data-testid="transcript-page-failed" className="basis-full">
+                {pageFailure.reason === "invalid"
+                  ? t("badCursor")
+                  : t("pageFailed")}
+              </span>
+            )}
+          </div>
         )}
+      </div>
+      <div className="mt-3">
+        <Note testId="transcript-note">{t("note")}</Note>
       </div>
     </section>
   );
+}
+
+function FeedRowView({
+  row,
+  q,
+  open,
+  onToggle,
+  place,
+  run,
+  live,
+  answer,
+  sealed,
+}: RowProps & {
+  run: TranscriptRun;
+  live: boolean;
+  answer: boolean;
+  sealed: boolean;
+}) {
+  switch (row.kind) {
+    case "prompt":
+      return <PromptRow row={row} q={q} run={run} />;
+    case "text":
+      return (
+        <TextRow
+          row={row}
+          q={q}
+          open={open}
+          onToggle={onToggle}
+          answer={answer}
+        />
+      );
+    case "thinking":
+      return <ThinkingRow row={row} q={q} open={open} onToggle={onToggle} />;
+    case "tool":
+      return (
+        <ToolRow
+          row={row}
+          call={row.call}
+          q={q}
+          open={open}
+          onToggle={onToggle}
+          place={place}
+          live={live}
+        />
+      );
+    case "usage":
+      return <UsageRow row={row} place={place} />;
+    case "recall":
+      return (
+        <RecallRow
+          row={row}
+          q={q}
+          open={open}
+          onToggle={onToggle}
+          place={place}
+        />
+      );
+    case "seal":
+      return (
+        <SealRow
+          row={row}
+          q={q}
+          place={place}
+          sealedAt={sealed ? run.sealedAt : null}
+        />
+      );
+    case "event":
+      return (
+        <EventRow
+          row={row}
+          q={q}
+          open={open}
+          onToggle={onToggle}
+          place={place}
+        />
+      );
+  }
 }

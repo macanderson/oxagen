@@ -1,95 +1,32 @@
-// The Transcript tab (mockup `pRun`'s transcript; spec §14): every run drawn
-// the same way, from the run's start through each turn and its steps to each
-// frame's body, with a transport that replays it.
+// The Transcript tab (mockup `transcriptTab`; pages/run.md, Transcript), the
+// Run page's default: the run as its operator saw it, with the kind chips,
+// the search, the transport, the header line and the burn meter over it.
 //
-// One read serves every zoom level: the transcript at `everything`, one entry
-// per frame with the turn it falls in, so the view groups turns and steps
-// itself and a change of level opens and closes disclosures rather than
-// fetching again. Nothing here is stored, and nothing is inferred: a frame
-// whose body was not retained says `digest_only` rather than showing an empty
-// bubble, a body cut at the contract's ceiling links to the whole of it on
-// the Frames tab, and a transcript that could not carry the whole run pages
-// the rest in rather than stopping short of it.
-//
-// The chips are the filter, and they are links: a filter is a query value, so
-// it survives a reload, opens in a new tab, and is in the URL a person copies.
-// They are the mockup's chips in the mockup's order (`mockups/pages/run.md`,
-// Transcript): prompt, responses, thinking, tools, usage, recall and seal,
-// each with its count, then an all/none toggle and errors. An earlier
-// revision drew the contract's kinds instead, because the contract published
-// no thinking or seal kind and a chip that filtered on nothing would promise a
-// slice of the record that does not exist. The contract now publishes both,
-// so the page draws the mockup of record. `policy` has no chip of its own:
-// a tool call's gate decision rides the tools chip, and the Policy tab reads
-// the kind directly.
-//
-// A chip that is on shows its kind. Every chip on is no filter at all, the
-// contract's empty list; every chip off is `kinds=none`, which reads nothing.
-import { useLocale, useTranslations } from "next-intl";
+// It reads nothing of its own. The page already read the whole-run
+// transcript at `everything` to its end, and the tab filters and plays that
+// in the browser, so a chip's count is the count of the rows it shows. A
+// frame whose body was not retained draws no row rather than an empty one,
+// a body cut at the contract's ceiling says so and links to the whole of it,
+// and a transcript that could not carry the whole run pages the rest in.
+import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
-import type { RunTranscript, TranscriptKind } from "@/data/contracts/run";
+import type { RunTranscript } from "@/data/contracts/run";
 import { TRANSCRIPT_KINDS } from "@/data/contracts/run";
-import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
-import { routes } from "@/shared/safe-path";
-import { formatCount } from "@/ui/money-format";
-import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
-import { Panel } from "./parts";
-import { isNonEmpty } from "./transcript-model";
-import { TranscriptView } from "./transcript-view";
 import { LiveEmptyFollow } from "./live-empty-follow";
-import { isWhole } from "./whole-transcript";
+import { Panel } from "./parts";
+import type { KindFilter, RunTabProps } from "./tab-props";
+import { isNonEmpty } from "./transcript-model";
+import { type TranscriptRun, TranscriptView } from "./transcript-view";
 
 type Place = { org: string; ws: string; runId: string };
 
 /**
- * What the chips select: a list of the contract's kinds, where empty keeps
- * every entry, or `none`, which keeps nothing and reads nothing.
- */
-export type KindFilter = readonly TranscriptKind[] | "none";
-
-/** The mockup's chips, each over the contract kinds it shows. */
-const CHIPS = [
-  { chip: "prompt", kinds: ["prompt"] },
-  { chip: "responses", kinds: ["responses"] },
-  { chip: "thinking", kinds: ["thinking"] },
-  { chip: "tools", kinds: ["tools", "policy"] },
-  { chip: "usage", kinds: ["usage"] },
-  { chip: "recall", kinds: ["recall"] },
-  { chip: "seal", kinds: ["seal"] },
-] as const satisfies readonly {
-  chip: TranscriptKind;
-  kinds: readonly TranscriptKind[];
-}[];
-
-type Chip = (typeof CHIPS)[number]["chip"];
-
-/** Whether the filter is the errors toggle alone. */
-function errorsOnly(kinds: KindFilter): boolean {
-  return kinds !== "none" && kinds.length === 1 && kinds[0] === "errors";
-}
-
-/** The chips a filter shows as on. No filter is every chip on. */
-function chipsOn(kinds: KindFilter): ReadonlySet<Chip> {
-  if (kinds === "none" || errorsOnly(kinds)) return new Set();
-  if (kinds.length === 0) return new Set(CHIPS.map(({ chip }) => chip));
-  return new Set(
-    CHIPS.filter(({ chip }) => kinds.includes(chip)).map(({ chip }) => chip),
-  );
-}
-
-/** The filter a set of chips selects: every chip is no filter, no chip is `none`. */
-function filterOf(on: ReadonlySet<Chip>): KindFilter {
-  if (on.size === CHIPS.length) return [];
-  if (on.size === 0) return "none";
-  return CHIPS.filter(({ chip }) => on.has(chip)).flatMap(({ kinds }) => kinds);
-}
-
-/**
  * The filter as a URL value: `tools,errors`, or `none`. The order follows the
- * contract's own list rather than the order the chips were pressed, so one
- * filter has one URL and two people who chose the same chips share a link.
+ * contract's own list rather than the order they were pressed, so one filter
+ * has one URL. The tab strip carries it on the Transcript tab's link, and the
+ * tab opens its chips from it.
  */
 export function kindsParam(kinds: KindFilter): string | undefined {
   if (kinds === "none") return "none";
@@ -98,8 +35,8 @@ export function kindsParam(kinds: KindFilter): string | undefined {
 }
 
 /**
- * `?kinds=` as a filter. `none` is the all/none toggle turned off; an unknown
- * word is dropped, not refused.
+ * `?kinds=` as a filter. `none` is every chip off, as the all and none toggle
+ * leaves them; an unknown word is dropped, not refused.
  */
 export function parseKinds(raw: string | null): KindFilter {
   if (raw === null) return [];
@@ -108,166 +45,25 @@ export function parseKinds(raw: string | null): KindFilter {
   return TRANSCRIPT_KINDS.filter((kind) => asked.has(kind));
 }
 
-/**
- * How many entries of the whole-run read answer to each chip, and to errors.
- * A read that stopped short gives a floor, and says so with a plus. A failed
- * read gives no counts rather than zeros.
- */
-function useChipCounts(
-  tally: Read<RunTranscript> | undefined,
-): ((kinds: readonly TranscriptKind[]) => string) | null {
-  const t = useTranslations("run.transcript");
-  const locale = useLocale();
-  if (tally === undefined || !tally.ok) return null;
-  const { entries } = tally.value;
-  const floor = !isWhole(tally.value);
-  return (kinds) => {
-    const count = formatCount(
-      entries.filter((entry) => entry.kinds.some((kind) => kinds.includes(kind)))
-        .length,
-      locale,
-    );
-    return floor ? t("chipCountFloor", { count }) : t("chipCount", { count });
-  };
-}
-
-const chipClass =
-  "inline-flex min-h-8 items-center gap-1.5 rounded-full border border-border px-3 text-xs text-muted-foreground hover:text-foreground aria-[current=true]:border-foreground aria-[current=true]:text-foreground";
-
-/**
- * The filter chips. Each is a link that turns its own kind on or off, then
- * the all/none toggle and errors, which shows only failed calls.
- */
-function KindChips({
-  zoom,
-  kinds,
-  tally,
-  org,
-  ws,
-  runId,
-}: {
-  zoom: RunTranscript["zoom"];
-  kinds: KindFilter;
-  /** The whole-run read the counts come from; absent draws no counts. */
-  tally?: Read<RunTranscript>;
-} & Place) {
-  const t = useTranslations("run.transcript");
-  const count = useChipCounts(tally);
-  const on = chipsOn(kinds);
-  const errors = errorsOnly(kinds);
-  const anyOff = on.size < CHIPS.length;
-  const link = (next: KindFilter) =>
-    routes.run(org, ws, runId, {
-      tab: "transcript",
-      zoom,
-      kinds: kindsParam(next),
-    });
-  return (
-    <nav
-      aria-label={t("chipsLabel")}
-      data-testid="transcript-chips"
-      className="flex flex-wrap items-center gap-1"
-    >
-      {CHIPS.map(({ chip, kinds: shows }) => {
-        const pressed = on.has(chip);
-        const next = new Set(on);
-        if (pressed) next.delete(chip);
-        else next.add(chip);
-        return (
-          <SafeLink
-            key={chip}
-            to={link(filterOf(next))}
-            data-testid={`chip-${chip}`}
-            data-on={pressed ? "true" : "false"}
-            // A chip is a link, so its state is `aria-current`, which a link
-            // may carry, and not `aria-pressed`, which belongs to a button.
-            aria-current={pressed ? "true" : undefined}
-            className={chipClass}
-          >
-            {t(`chip.${chip}`)}
-            {count === null ? null : (
-              <span
-                data-testid={`chip-${chip}-count`}
-                className="font-mono text-[10.5px] tabular-nums"
-              >
-                {count(shows)}
-              </span>
-            )}
-          </SafeLink>
-        );
-      })}
-      <SafeLink
-        to={link(anyOff ? [] : "none")}
-        data-testid="chip-all"
-        className="inline-flex min-h-8 items-center px-2 text-xs underline underline-offset-4"
-      >
-        {anyOff ? t("chipsAll") : t("chipsNone")}
-      </SafeLink>
-      <SafeLink
-        to={link(errors ? [] : ["errors"])}
-        data-testid="chip-errors"
-        data-on={errors ? "true" : "false"}
-        aria-current={errors ? "true" : undefined}
-        title={t("errorsTitle")}
-        className={`${chipClass} aria-[current=true]:border-destructive aria-[current=true]:text-destructive`}
-      >
-        <span aria-hidden="true">✗</span>
-        {t("chip.errors")}
-        {count === null ? null : (
-          <span
-            data-testid="chip-errors-count"
-            className="font-mono text-[10.5px] tabular-nums"
-          >
-            {count(["errors"])}
-          </span>
-        )}
-      </SafeLink>
-    </nav>
-  );
-}
-
+/** @internal The tab's body over one read; the page renders it through `TranscriptTab`. */
 export function TranscriptSection({
   read,
-  tally,
-  zoom,
-  kinds,
   run,
+  kinds,
   org,
   ws,
   runId,
 }: {
-  /** The transcript at `everything`: one entry per frame. */
+  /** The whole-run transcript at `everything`: one entry per frame. */
   read: Read<RunTranscript>;
-  /** The whole-run read the chip counts come from; absent draws no counts. */
-  tally?: Read<RunTranscript>;
-  /** The level the URL asked for: which disclosures start open. */
-  zoom: RunTranscript["zoom"];
-  /** What the chips select; an empty list keeps every entry, `none` keeps none. */
+  run: TranscriptRun;
+  /** The URL's `?kinds=`, which sets the chips the tab opens with. */
   kinds: KindFilter;
-  run: Pick<RunRow, "status" | "replayGrade">;
 } & Place) {
   const t = useTranslations("run.transcript");
-  const place = { org, ws, runId };
-  const chips: ReactNode = (
-    <KindChips zoom={zoom} kinds={kinds} tally={tally} {...place} />
-  );
-  if (kinds === "none") {
-    return (
-      <Panel title={t("title")}>
-        {chips}
-        <p
-          data-testid="transcript-empty"
-          className="max-w-prose text-sm text-muted-foreground"
-        >
-          {t("emptyFiltered")}
-        </p>
-      </Panel>
-    );
-  }
   if (!read.ok) {
     return (
       <Panel title={t("title")}>
-        {chips}
         <ReadFailure read={read} section={t("title")} />
       </Panel>
     );
@@ -276,12 +72,11 @@ export function TranscriptSection({
   if (!isNonEmpty(entries)) {
     return (
       <Panel title={t("title")}>
-        {chips}
         <p
           data-testid="transcript-empty"
           className="max-w-prose text-sm text-muted-foreground"
         >
-          {kinds.length === 0 ? t("empty") : t("emptyFiltered")}
+          {t("empty")}
         </p>
         {run.status === "live" ? (
           <LiveEmptyFollow org={org} ws={ws} runId={runId} />
@@ -291,19 +86,29 @@ export function TranscriptSection({
   }
   return (
     <TranscriptView
-      // The view holds the pages it has appended, so a new filter must build
-      // a new one rather than append a filtered page to an unfiltered one.
-      key={kindsParam(kinds) ?? ""}
       transcript={read.value}
       entries={entries}
+      run={run}
       kinds={kinds}
-      chips={chips}
-      zoom={zoom}
-      status={run.status}
-      replayGrade={run.replayGrade}
       org={org}
       ws={ws}
       runId={runId}
     />
+  );
+}
+
+/**
+ * The Transcript tab over the page's bundle. The page awaits every tab the
+ * same way, so this answers a promise although it makes no read of its own.
+ */
+export function TranscriptTab(props: RunTabProps): Promise<ReactNode> {
+  const { run, view, place, everything } = props;
+  return Promise.resolve(
+    <TranscriptSection
+      read={everything}
+      run={run}
+      kinds={view.kinds}
+      {...place}
+    />,
   );
 }

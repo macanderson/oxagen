@@ -1,11 +1,29 @@
 import { describe, it, expect } from "vitest";
-import { RATE_CARD, estimateCostUsd, rateFor } from "./rate-card";
 import {
+  FALLBACK_RATE,
+  RATE_CARD,
+  estimateCostUsd,
+  rateFor,
+  type ModelRate,
+} from "./rate-card";
+import {
+  FALLBACK_RATE_MODEL,
   providerCostUsd,
   isRateCardMiss,
   PROVIDER_RATE_CARD,
   resolveRate,
 } from "./pricing";
+
+/** Billing's rate for a model id, cut to the four fields the engine card holds. */
+function billingRate(id: string): ModelRate {
+  const rate = resolveRate(id);
+  return {
+    inputPer1M: rate.inputPer1M,
+    outputPer1M: rate.outputPer1M,
+    cachedInputPer1M: rate.cachedInputPer1M,
+    cacheWritePer1M: rate.cacheWritePer1M,
+  };
+}
 
 /**
  * The two rate cards, held together.
@@ -99,32 +117,33 @@ describe("rate-card parity: model ids as callers send them (#3944)", () => {
   // dated or dotted id that the engine's first-match order sends to a different
   // row than billing's longest-prefix match does. Opus 4.1 was one: billing
   // priced it at $15/$75 and the engine card at the $5/$25 family rate.
+  //
+  // The ids come from billing's own Claude keys, each in the three shapes
+  // callers send: bare, dated, and through the gateway. A typed list missed
+  // six engine rows (Opus 4.5 to 4.8 in one spelling or the other), which
+  // could be deleted without failing anything.
+  const CLAUDE_KEYS = Object.keys(PROVIDER_RATE_CARD).filter((k) =>
+    k.startsWith("claude-"),
+  );
   const IDS = [
-    "claude-opus-4-20250514",
-    "anthropic/claude-opus-4",
-    "claude-opus-4-1-20250805",
-    "anthropic/claude-opus-4.1",
-    "claude-opus-4-5-20251101",
-    "anthropic/claude-opus-4.8",
-    "claude-opus-5",
-    "anthropic/claude-opus-5.5",
-    "claude-fable-5",
-    "anthropic/claude-fable-5.1",
-    "claude-sonnet-5",
-    "claude-sonnet-4-6",
-    "claude-haiku-4-5-20251001",
+    ...new Set([
+      ...CLAUDE_KEYS.flatMap((k) => [k, `${k}-20260101`, `anthropic/${k}`]),
+      // Real ids that no key spells out, so they reach a row only by prefix.
+      "claude-opus-4-20250514",
+      "claude-opus-4-1-20250805",
+      "anthropic/claude-opus-4.1",
+      "claude-opus-4-5-20251101",
+      "claude-haiku-4-5-20251001",
+    ]),
   ];
+
+  it("reads billing's Claude keys, not an empty list", () => {
+    expect(CLAUDE_KEYS.length).toBeGreaterThanOrEqual(20);
+  });
 
   for (const id of IDS) {
     it(`${id} resolves to the same rate in both cards`, () => {
-      const billing = resolveRate(id);
-      const engine = rateFor(id);
-      expect(engine).toEqual({
-        inputPer1M: billing.inputPer1M,
-        outputPer1M: billing.outputPer1M,
-        cachedInputPer1M: billing.cachedInputPer1M,
-        cacheWritePer1M: billing.cacheWritePer1M,
-      });
+      expect(rateFor(id)).toEqual(billingRate(id));
     });
   }
 });
@@ -162,6 +181,38 @@ describe("rate-card parity: the prices #1412 measured", () => {
       ).toBeCloseTo(expectedUsd, 9);
     });
   }
+});
+
+describe("rate-card parity: a model neither card knows", () => {
+  // Billing prices a miss at FALLBACK_RATE_MODEL's row and the engine card at
+  // FALLBACK_RATE. #3944 moved that row to Sonnet 5's $2/$10 while the engine
+  // fallback stayed at $3/$15, so `oxagen cost` quoted an unknown model at
+  // half again what the invoice charged. The walks above never reach a miss.
+  const UNKNOWN = ["mistral-large-2", "mistral/mistral-large-2"];
+
+  for (const id of UNKNOWN) {
+    it(`${id} is a miss priced at the same rate in both cards`, () => {
+      expect(isRateCardMiss(id)).toBe(true);
+      expect(rateFor(id)).toEqual(billingRate(id));
+    });
+  }
+
+  it("the engine fallback is billing's fallback row", () => {
+    expect(FALLBACK_RATE).toEqual(billingRate(FALLBACK_RATE_MODEL));
+  });
+
+  it("charges an unknown 1M in and 1M out at Sonnet 5's $12", () => {
+    // Pinned in dollars so moving FALLBACK_RATE_MODEL, or repricing its row,
+    // fails here and gets decided on purpose.
+    const usage = { inputTokens: 1_000_000, outputTokens: 1_000_000 };
+    expect(
+      providerCostUsd({ model: "mistral/mistral-large-2", ...usage }),
+    ).toBeCloseTo(12, 9);
+    expect(estimateCostUsd("mistral/mistral-large-2", usage)).toBeCloseTo(
+      12,
+      9,
+    );
+  });
 });
 
 describe("isRateCardMiss", () => {

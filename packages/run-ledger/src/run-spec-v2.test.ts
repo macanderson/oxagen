@@ -266,7 +266,11 @@ describe("canonicalJson", () => {
     ["a half", 1.5, "1.5"],
     ["negative zero", -0, "0"],
     ["a large exponent", 1e21, "1e+21"],
-    ["the largest integer below the exponent form", 1e20, "100000000000000000000"],
+    [
+      "the largest integer below the exponent form",
+      1e20,
+      "100000000000000000000",
+    ],
     ["a small exponent", 1e-7, "1e-7"],
     ["the smallest non-exponent fraction", 0.000001, "0.000001"],
     ["an unsafe integer", Number.MAX_SAFE_INTEGER + 2, "9007199254740992"],

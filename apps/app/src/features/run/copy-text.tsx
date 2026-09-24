@@ -1,14 +1,22 @@
 "use client";
-// An identifier set in mono with a button that copies it: the machine the run
-// was recorded on and the checkout's local directory, in the header's
-// checkout strip. The clipboard can refuse
-// (an insecure origin, a denied permission), and the refusal is said beside
-// the value rather than swallowed.
+// The checkout chip in the header's second strip (mockup `runWhere`, `copyPath`):
+// `<machine>:<path>` as a copy button. The clipboard can refuse (an insecure
+// origin, a denied permission); the refusal is said beside the chip rather
+// than thrown, and the path stays on screen to select by hand.
+import { FolderTree } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import { mono } from "@/ui/control-styles";
+import { linkChip } from "@/ui/control-styles";
 
-export function CopyText({ text }: { text: string }) {
+export function CopyPath({
+  text,
+  title,
+}: {
+  /** `<machine>:<path>`, exactly as it is copied. */
+  text: string;
+  /** Where the path came from: recorded on the host, or worked out. */
+  title: string;
+}) {
   const t = useTranslations("run.header");
   const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
 
@@ -22,25 +30,30 @@ export function CopyText({ text }: { text: string }) {
   }
 
   return (
-    <span className="inline-flex items-center gap-1.5">
-      <code
-        className={`${mono} rounded-md border border-border px-2 py-0.5 text-[11.5px]`}
-      >
-        {text}
-      </code>
+    <span className="inline-flex min-w-0 max-w-full items-center gap-1.5">
       <button
         type="button"
+        data-testid="run-checkout-path"
         onClick={() => void copy()}
+        title={title}
         aria-label={t("copyLabel", { text })}
-        className="rounded px-1 text-[11px] font-medium text-muted-foreground hover:text-foreground"
+        className={`${linkChip} font-mono text-[10.5px] font-medium`}
       >
-        {state === "copied" ? t("copied") : t("copy")}
-      </button>
-      {state === "failed" ? (
-        <span role="status" className="text-[11px] text-muted-foreground">
-          {t("copyFailed")}
+        <FolderTree
+          aria-hidden="true"
+          className="size-3 flex-none opacity-80"
+        />
+        <span className="min-w-0 truncate [direction:rtl] [text-align:left]">
+          <bdi>{text}</bdi>
         </span>
-      ) : null}
+      </button>
+      <span role="status" className="text-[11px] text-muted-foreground">
+        {state === "copied"
+          ? t("copied", { text })
+          : state === "failed"
+            ? t("copyFailed")
+            : ""}
+      </span>
     </span>
   );
 }
