@@ -15,6 +15,11 @@ payloads translated by `cursor-adapter.ts` and `stella-adapter.ts`. A custom
 agent wraps itself through `tacho.wrap(...)`. Claude Desktop is connected
 rather than wrapped (ADR-078).
 
+`backfill.md` (Proposed, 2026-09-23) turns Claude Code transcripts from before
+enrollment into reconstructed runs, under the decisions in ADR-161. It holds the
+record-to-frame mapping, the `tacho backfill` command, and the plan for the
+other three harnesses.
+
 `design/` holds the product design that is built or adopted by `spec.md`: the
 overview, the trace model, the threat model, and `adr-0005` (trace anchoring and
 CGP export). The build plan (`plan.md`, with its recorded hook latency figures)

@@ -13,6 +13,8 @@ it.each([
     "https://user:secret@github.com/acme/repo.git?token=secret#key",
     "https://github.com/acme/repo",
   ],
+  ["https://github.com/acme/repo.git", "https://github.com/acme/repo"],
+  ["http://gitlab.example/acme/repo", "https://gitlab.example/acme/repo"],
   ["git@github.com:acme/repo.git", "https://github.com/acme/repo"],
   [
     "ssh://git@gitlab.example/acme/nested/repo.git",

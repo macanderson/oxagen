@@ -1,6 +1,6 @@
 # get_run_work
 
-Read the machine and checkout locations recorded for a run, captured patch references, and connected pull requests with their CI checks.
+Read the machine and checkout locations recorded for a run, captured patch references, connected pull requests with their CI checks, and the subagents the session started.
 
 **Surfaces:** api
 
@@ -18,6 +18,10 @@ This console read does not consume AI credits. IAM and the run reader enforce or
 
 `pullRequests` identifies its association as a recorded receipt, an exact head match, or a branch match. CI reads use the PR head SHA and page through checks and statuses, up to ten pages each. The handler rereads the PR head after collecting files. A moved head sets `current: false` and discards the mutable diff. Missing patches, file limits, and provider failures remain explicit.
 
+`subagents` lists one entry per subagent the session started, keyed by the agent id on its `subagent_start` and `subagent_stop` hook frames. Each entry carries the agent type the frames recorded, the first and last sequence, and whether a stop frame arrived. A type the frames did not carry is null. Ledger runs return an empty list, because the ledger records no subagent frames. The read returns at most 200 subagents and warns with `subagent_limit` past that.
+
 The read limits checkout groups and recorded diffs to 200 each, PRs and discovery requests to 20 each, and each PR patch response to 512 KiB. A collector snapshot holds at most 256 KiB and probes at most 32 untracked files. Limits do not turn missing evidence into an empty successful result.
+
+A wrapped run's `oxagen:pr_link` frames are its recorded receipts: each names `pr_number`, `pr_url`, and `pr_repository`. Frames with the same URL count once. A receipt resolves only against a repository connected to this workspace that carries its provider repository id.
 
 Ledger runs reuse recorded PR receipts. Their receipts do not record a host checkout, so location remains absent. The existing Outputs view retains file observations and ledger change locators.

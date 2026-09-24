@@ -21,7 +21,13 @@ export interface WorktreeSnapshot {
 
 /** Keep only a forge host and repository path. Never retain remote credentials. */
 export function safeRepositoryUrl(remote: string): string | null {
-  const scp = /^(?:[^@\s/]+@)?([a-z0-9.-]+):([\w./-]+)$/i.exec(remote.trim());
+  // A URL with a scheme is never scp syntax. Without this guard the scp
+  // pattern read `https://github.com/acme/repo.git` as host `https` and path
+  // `//github.com/...`, and every credential-free HTTPS remote recorded no
+  // repository (#4010).
+  const scp = remote.includes("://")
+    ? null
+    : /^(?:[^@\s/]+@)?([a-z0-9.-]+):([\w./-]+)$/i.exec(remote.trim());
   try {
     const url = new URL(scp ? `ssh://${scp[1]}/${scp[2]}` : remote.trim());
     if (!["https:", "http:", "ssh:", "git:"].includes(url.protocol))
