@@ -126,9 +126,6 @@ export function UserMenu({ data }: { data: ShellData }) {
               }}
             >
               <span className="flex-1">{t("userMenu.switchTheme")}</span>
-              <span className="text-xs text-muted-foreground">
-                {t("userMenu.themeNow", { theme })}
-              </span>
             </Menu.Item>
             <Menu.Item
               className={itemClass}

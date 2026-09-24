@@ -95,7 +95,8 @@ export async function resolveScimToken(
   const stored = Buffer.from(row.tokenHash, "hex");
   const presented = Buffer.from(hashScimToken(raw), "hex");
   if (stored.length !== presented.length) return { ok: false, kind: "invalid" };
-  if (!timingSafeEqual(stored, presented)) return { ok: false, kind: "invalid" };
+  if (!timingSafeEqual(stored, presented))
+    return { ok: false, kind: "invalid" };
 
   const now = Date.now();
   if (

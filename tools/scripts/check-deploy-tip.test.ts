@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   DEPLOY_ENVIRONMENT,
+  DEPLOY_JOBS,
   decide,
   deployJobSteps,
   guardProblems,
@@ -322,8 +323,9 @@ describe("guardProblems", () => {
     expect(guardProblems(pipeline)).toEqual([]);
   });
 
-  it("finds both deploy jobs gated after the order step, ending in the record step", () => {
-    for (const job of ["deploy-web", "deploy-node"]) {
+  it("finds every deploy job gated after the order step, ending in the record step", () => {
+    expect(DEPLOY_JOBS).toContain("publish-installers");
+    for (const job of DEPLOY_JOBS) {
       const steps = deployJobSteps(pipeline, job) ?? [];
       const orderAt = steps.findIndex((s) => s.id === "order");
       expect(orderAt).toBe(1);
@@ -331,6 +333,18 @@ describe("guardProblems", () => {
       expect(steps.slice(orderAt + 1).every((s) => s.gated)).toBe(true);
       expect(steps.at(-1)?.id).toBe("record");
     }
+  });
+
+  it("holds the installer publish to the same rule as the deploys", () => {
+    // The installers are a service of their own: an older run reaching here
+    // after a newer one must not replace newer installers with older ones.
+    const steps = deployJobSteps(pipeline, "publish-installers") ?? [];
+    const dispatch = steps.find(
+      (s) => s.name === "Dispatch the desktop build for this commit",
+    );
+    expect(dispatch?.gated).toBe(true);
+    expect(pipeline).toContain("      group: production-desktop");
+    expect(pipeline).toMatch(/DEPLOY_SERVICE: desktop/);
   });
 
   it("fails when one step after the order step loses its gate", () => {

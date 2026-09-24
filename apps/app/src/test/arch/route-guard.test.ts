@@ -1,6 +1,8 @@
 // INV-01 (ARCHITECTURE.md §4): every page.tsx, layout.tsx and route.ts whose
-// path has an [org] segment resolves its viewer with `requireViewer` or
-// `resolveViewer` imported from `src/server/viewer.ts` (§3.1), passing every
+// path has an [org] segment resolves its viewer with `requireViewer`,
+// `resolveViewer` or `resolveWorkspaceViewer` (the workspace layout's form,
+// which answers `refused` instead of a 404) imported from
+// `src/server/viewer.ts` (§3.1), passing every
 // tenant segment it has ([org], then [ws]). A delegating route.ts satisfies it
 // when its delegate's deps type requires `resolveViewer` and the delegate's
 // unit test carries the non-member 404 negative; the delegate is followed with
@@ -21,7 +23,11 @@ import {
 } from "./parse";
 
 const RULE = "route-guard";
-const VIEWER_RESOLVERS = ["requireViewer", "resolveViewer"] as const;
+const VIEWER_RESOLVERS = [
+  "requireViewer",
+  "resolveViewer",
+  "resolveWorkspaceViewer",
+] as const;
 /** The one module that exports them, as `resolveInternal` spells it. */
 const VIEWER_MODULE = "server/viewer";
 

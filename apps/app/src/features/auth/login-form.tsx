@@ -16,7 +16,6 @@ import {
 } from "react";
 import type { AuthOutcomeKey } from "./auth-errors";
 import {
-  type AuthNotice,
   liveSignIn,
   rememberPendingEmail,
   rememberPendingNext,
@@ -30,6 +29,7 @@ import { type FieldErrors, LoginSchema, fieldErrors } from "./schemas";
 import { Field, PasswordField } from "@/ui/field";
 import { OutcomePanel, SubmitButton } from "@/ui/form-feedback";
 import { linkText, mono } from "@/ui/control-styles";
+import { ToastStack, useToasts } from "@/ui/toast";
 import { formText } from "./form-text";
 import { AuthAlert, AuthPanel } from "./ui/auth-card";
 import { OAuthButtons } from "./ui/oauth-buttons";
@@ -75,20 +75,21 @@ export function LoginForm({
   );
   const [pending, setPending] = useState(false);
   const [email, setEmail] = useState("");
-  const [notice, setNotice] = useState<AuthNotice | null>(null);
+  const { toasts, toast } = useToasts();
 
-  // A notice another screen left (a password just set) shows once, after
-  // hydration; the ref keeps a development double-run from taking it twice.
-  // A signed-in mark found here belongs to a sign-in that came back failed
-  // (a provider round-trip lands on /login?error=), so it is dropped unread.
+  // A notice another screen left (a password just set) shows once as a toast,
+  // after hydration, the way the design's `toast()` does (reset-password.md,
+  // Functionality). The ref keeps a development double-run from taking it
+  // twice. A signed-in mark found here belongs to a sign-in that came back
+  // failed (a provider round-trip lands on /login?error=), so it is dropped.
   const tookRef = useRef(false);
   useEffect(() => {
     if (tookRef.current) return;
     tookRef.current = true;
-    // eslint-disable-next-line @eslint-react/set-state-in-effect -- sessionStorage exists only after hydration, so the notice is read here once, not during render
-    setNotice(takeNotice());
+    if (takeNotice() === "passwordSet")
+      toast(t("login.passwordSet"), "allowed");
     takeSignedIn();
-  }, []);
+  }, [t, toast]);
 
   async function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -101,7 +102,6 @@ export function LoginForm({
     };
     const parsed = LoginSchema.safeParse(input);
     setOutcome(null);
-    setNotice(null);
     if (!parsed.success) {
       setErrors(fieldErrors(parsed.error));
       return;
@@ -141,6 +141,9 @@ export function LoginForm({
         tone="deny"
         testId="login-suspended"
         title={t("login.suspendedTitle")}
+        // A submit replaced the form (the address is set then); a suspension
+        // carried in on the query opens on this card and keeps focus put.
+        announce={email !== ""}
       >
         {email
           ? t.rich("login.suspendedBody", {
@@ -175,15 +178,6 @@ export function LoginForm({
     <>
       {header}
       {ssoOpen ? sso : null}
-      {notice ? (
-        <p
-          role="status"
-          data-testid="login-notice"
-          className="rounded-[9px] border border-success/40 bg-success/10 px-3 py-2.5 text-[12.5px] text-foreground"
-        >
-          {t("login.passwordSet")}
-        </p>
-      ) : null}
       <AuthPanel testId="login-card">
         {outcome ? (
           <AuthAlert
@@ -242,6 +236,7 @@ export function LoginForm({
       </AuthPanel>
       {ssoOpen ? null : sso}
       {footer}
+      <ToastStack toasts={toasts} testId="login-toasts" />
     </>
   );
 }
