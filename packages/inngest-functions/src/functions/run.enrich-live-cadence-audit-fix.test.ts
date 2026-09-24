@@ -2,8 +2,10 @@
  * The sweep's due rule for a live run. Every ingest batch moves a live run's
  * `updated_at`, so the revision rule alone re-summarized every active run
  * from its start at every five-minute sweep. A live run is now due only while
- * it has no name, or once its last enrichment is 30 minutes old; an ended run
- * keeps the revision rule.
+ * it has no name, or once its last enrichment is 30 minutes old. An ended run
+ * that changed after its account is held the same way, since a sealed Claude
+ * Code session goes on receiving events. One that did not change is due for
+ * its own reasons.
  */
 import { describe, expect, it, vi } from "vitest";
 
@@ -34,15 +36,15 @@ describe("dueForEnrichment for a live run", () => {
     expect(sql).toContain(
       `${s}."updated_at" IS DISTINCT FROM ${s}."summary_observed_revision"`,
     );
-    // And, as a second condition, the live gate: ended, unnamed, never
-    // observed, or observed 30 minutes ago.
+    // And, as a second condition, the hold: unnamed, never observed,
+    // observed 30 minutes ago, or ended and unchanged since its account.
     expect(sql).toMatch(
       new RegExp(
-        String.raw`\) and \(${esc(s)}\."outcome" <> \$4 or ${esc(s)}\."name" is null or ${esc(s)}\."summary_observed_at" is null or ${esc(s)}\."summary_observed_at" < \$5\)\)$`,
+        String.raw`\) and \(${esc(s)}\."name" is null or ${esc(s)}\."summary_observed_at" is null or ${esc(s)}\."summary_observed_at" < \$4 or \(${esc(s)}\."outcome" <> \$5 and ${esc(s)}\."updated_at" IS NOT DISTINCT FROM ${esc(s)}\."summary_observed_revision"\)\)\)$`,
       ),
     );
-    expect(params[3]).toBe("running");
-    expect(params[4]).toBe("2026-09-23T11:30:00.000Z");
+    expect(params[3]).toBe("2026-09-23T11:30:00.000Z");
+    expect(params[4]).toBe("running");
     // The five-minute retry for partial evidence and the retry after a
     // failure keep their own bounds.
     expect(params[1]).toBe("2026-09-23T11:55:00.000Z");
@@ -54,13 +56,13 @@ describe("dueForEnrichment for a live run", () => {
     const r = '"agent"."agent_runs"';
     expect(sql).toMatch(
       new RegExp(
-        String.raw`\) and \(${esc(r)}\."status" not in \(\$4, \$5\) or ${esc(r)}\."name" is null or ${esc(r)}\."summary_observed_at" is null or ${esc(r)}\."summary_observed_at" < \$6\)\)$`,
+        String.raw`\) and \(${esc(r)}\."name" is null or ${esc(r)}\."summary_observed_at" is null or ${esc(r)}\."summary_observed_at" < \$4 or \(${esc(r)}\."status" not in \(\$5, \$6\) and ${esc(r)}\."updated_at" IS NOT DISTINCT FROM ${esc(r)}\."summary_observed_revision"\)\)\)$`,
       ),
     );
     expect(params.slice(3)).toEqual([
+      "2026-09-23T11:30:00.000Z",
       "pending",
       "running",
-      "2026-09-23T11:30:00.000Z",
     ]);
   });
 });
