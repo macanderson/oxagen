@@ -254,9 +254,12 @@ describe("LoginForm", () => {
     await userEvent.type(screen.getByLabelText("Password"), "x");
     await userEvent.click(screen.getByRole("button", { name: "Log in" }));
     const state = await screen.findByTestId("login-suspended");
+    // The card replaced the form and its submit, so it is announced and its
+    // heading holds focus rather than the body.
+    expect(state).toHaveAttribute("role", "status");
     expect(
       screen.getByRole("heading", { name: "This account is suspended" }),
-    ).toBeInTheDocument();
+    ).toHaveFocus();
     expect(state).toHaveTextContent(
       "marcus@a-intel.example is suspended. Runs already recorded are kept; no new run tokens are minted.",
     );
@@ -327,13 +330,27 @@ describe("LoginForm", () => {
     expect(live.rememberSignedIn).not.toHaveBeenCalled();
   });
 
-  it("after a reset it says the password is set, once", async () => {
+  it("after a reset it toasts that the password is set, once, and draws no status line", async () => {
     live.takeNotice.mockReturnValue("passwordSet");
-    renderWithIntl(<LoginForm next={routes.root()} />);
-    expect(await screen.findByTestId("login-notice")).toHaveTextContent(
+    renderStrict(<LoginForm next={routes.root()} />);
+    const stack = screen.getByTestId("login-toasts");
+    await waitFor(() => {
+      expect(stack.querySelectorAll("[data-toast]")).toHaveLength(1);
+    });
+    expect(stack).toHaveTextContent(
       "Password set. Every other device was logged out.",
     );
+    expect(stack.querySelector("[data-toast]")).toHaveAttribute(
+      "data-tone",
+      "allowed",
+    );
+    expect(screen.queryByTestId("login-notice")).toBeNull();
     expect(live.takeNotice).toHaveBeenCalledTimes(1);
+  });
+
+  it("with no notice left the toast stack is empty (negative)", () => {
+    renderWithIntl(<LoginForm next={routes.root()} />);
+    expect(screen.getByTestId("login-toasts")).toBeEmptyDOMElement();
   });
 
   it("a second press while signing in sends nothing more (negative)", async () => {
@@ -361,6 +378,9 @@ describe("LoginForm", () => {
     );
     expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
     expect(screen.queryByRole("form")).toBeNull();
+    // Opened on the card: nothing was submitted, so focus is not moved.
+    expect(screen.getByTestId("login-suspended")).not.toHaveAttribute("role");
+    expect(document.activeElement).toBe(document.body);
   });
 });
 
@@ -446,7 +466,11 @@ describe("LoginForm SSO entry", () => {
 
   it("opens by default under ?sso=required and says why", () => {
     renderWithIntl(<LoginForm next={routes.people("acme")} ssoRequired />);
-    expect(screen.getByRole("status")).toHaveTextContent(
+    expect(screen.getByTestId("sso-required")).toHaveAttribute(
+      "role",
+      "status",
+    );
+    expect(screen.getByTestId("sso-required")).toHaveTextContent(
       "Your organization requires single sign-on.",
     );
     expect(ssoForm()).toBeInTheDocument();
@@ -899,6 +923,11 @@ describe("TwoFactorForm", () => {
       screen.getByRole("button", { name: "Use a recovery code instead" }),
     );
     expect(screen.queryByTestId("two-factor-expiry")).toBeNull();
+    // The subtext under the h1 is one sentence (two-factor.md, rules).
+    expect(document.body).toHaveTextContent(
+      "Enter one of your single-use recovery codes.",
+    );
+    expect(document.body).not.toHaveTextContent("Each code works once.");
     await userEvent.type(screen.getByLabelText("Recovery code"), "AbCd3-fGh1j");
     await userEvent.click(screen.getByRole("button", { name: "Verify" }));
     await waitFor(() => {
@@ -1025,6 +1054,14 @@ describe("ForgotPasswordForm", () => {
     expect(await screen.findByTestId("forgot-sent")).toHaveTextContent(
       "Reset link sentIf an account exists for anyone@acme.example a reset link is on its way. The link is good for 60 minutes and can be used once.",
     );
+    // The submit button is gone with the form: the card is announced and its
+    // heading takes focus, so a screen reader hears the result.
+    expect(
+      screen.getByRole("status", { name: "Reset link sent" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Reset link sent" }),
+    ).toHaveFocus();
     // The design's `ob-state ok`: the Inbox glyph on the success tone.
     const glyph = screen
       .getByTestId("forgot-sent")
@@ -1122,6 +1159,9 @@ describe("ResetPasswordForm", () => {
     const request = screen.getByRole("link", { name: "Request a new link" });
     expect(request).toHaveAttribute("href", "/forgot-password");
     expect(request.className).not.toContain("bg-button-primary-bg");
+    // The page opened on this card, so focus is not moved (negative).
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(document.activeElement).toBe(document.body);
   });
 
   it("carries the meter and requirements, and no footer link", () => {
@@ -1183,7 +1223,14 @@ describe("ResetPasswordForm", () => {
     });
     renderWithIntl(<ResetPasswordForm token="rst_2" />);
     await submit(STRONG, STRONG);
-    expect(await screen.findByTestId("reset-expired")).toBeInTheDocument();
+    expect(await screen.findByTestId("reset-expired")).toHaveAttribute(
+      "role",
+      "status",
+    );
+    // The card replaced the submitted form, so its heading takes focus.
+    expect(
+      screen.getByRole("heading", { name: "This reset link has expired" }),
+    ).toHaveFocus();
   });
 
   it("shows server field errors and other outcomes", async () => {
