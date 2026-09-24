@@ -9,16 +9,22 @@
 // another's folder. `steeringSource` is the one stub of the seam: a second
 // stub in the second feature would be a second place for it to fall behind
 // `DataSource`. Test support only: src/test is never in a production bundle.
+import type { AgentPage } from "@/data/contracts/agents";
+import type { KillSwitchBoard } from "@/data/contracts/tools";
 import type { DataSource } from "@/data/ports";
 import type {
   ContextPr,
+  MemoryPage,
+  OxagenTree,
   Proposal,
   ProposalPage,
   ProposalStatus,
   RecordDetail,
+  RecordKind,
   RecordPage,
   SteeringFreshness,
   SteeringDeliveries,
+  SteeringHub,
 } from "@/data/contracts/steering";
 import { type Read, readOk } from "@/data/read";
 
@@ -200,13 +206,77 @@ export function contextPr(
 }
 
 export type SteeringReads = {
-  records: Read<RecordPage>;
+  /**
+   * One read for every records call, or an answer per query: the Steering hub
+   * reads every kind for its counts and a shelf then reads its own kind.
+   */
+  records:
+    | Read<RecordPage>
+    | ((q: { kind: RecordKind | null; offset: number }) => Read<RecordPage>);
   record: Read<RecordDetail>;
   proposals: Read<ProposalPage>;
   contextPr: Read<ContextPr>;
   freshness: Read<SteeringFreshness>;
+  hub: Read<SteeringHub>;
   deliveries: Read<SteeringDeliveries>;
+  memories: Read<MemoryPage>;
+  tree: Read<OxagenTree>;
+  /**
+   * The agent registry, which the Assignments count, the Assignments body and
+   * the Compiler read (features/steering/agents-read.ts). Not a Steering
+   * read, so `calls` does not record it.
+   */
+  agents: Read<AgentPage>;
+  /** The kill switches the Gates tab lists; not recorded in `calls` either. */
+  killSwitches: Read<KillSwitchBoard>;
 };
+
+/** One enrolled agent, for the views that draw a row per agent set up for steering. */
+export function enrolledAgent(
+  overrides: Partial<AgentPage["agents"][number]> = {},
+): AgentPage["agents"][number] {
+  return {
+    id: "agt_01k5rr2m",
+    slug: "release-manager",
+    name: "Release manager",
+    description: null,
+    agentKey: "acme.core-platform.release-manager",
+    harness: "claude-code",
+    operatorId: null,
+    operatorName: null,
+    principalId: null,
+    credentials: 1,
+    hosts: 1,
+    host: null,
+    status: "enrolled",
+    enforcementTier: null,
+    runs30d: 12,
+    spend30d: null,
+    tokens30d: null,
+    mandates: null,
+    incidents: 0,
+    tamperIncidents: 0,
+    tamperIncidentsRecorded: 0,
+    ...overrides,
+  };
+}
+
+/** A registry page holding `agents`, with the totals counted from them. */
+export function agentPage(
+  agents: AgentPage["agents"] = [enrolledAgent()],
+): AgentPage {
+  return {
+    agents,
+    nextCursor: null,
+    totals: {
+      identities: agents.length,
+      enrolled: agents.filter((a) => a.status === "enrolled").length,
+      holdingMandate: null,
+      tamperIncidents: 0,
+      tamper: { recorded: 0, open: 0, newest: null },
+    },
+  };
+}
 
 /** The freshness panel's read: a bound repository, one publication, both gates off. */
 export function steeringFreshness(
@@ -223,6 +293,16 @@ export function steeringFreshness(
   };
 }
 
+/** The hub header's read: `team` declared on the main repository, three proposals waiting. */
+export function steeringHub(overrides: Partial<SteeringHub> = {}): SteeringHub {
+  return {
+    governance: { state: "read", repository: "acme/platform", mode: "team" },
+    proposalsWaiting: 3,
+    segments: { candidates: 4, prs: 2 },
+    ...overrides,
+  };
+}
+
 /** A DataSource answering the three Steering reads; `calls` records their arguments. */
 export function steeringSource(overrides: Partial<SteeringReads> = {}) {
   const reads: SteeringReads = {
@@ -231,21 +311,37 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
     proposals: readOk({ proposals: [proposal()], total: 1 }),
     contextPr: readOk(contextPr("checks_passed")),
     freshness: readOk(steeringFreshness()),
+    hub: readOk(steeringHub()),
     deliveries: readOk({
       runs: [],
       undelivered: [],
       scanned: 0,
       truncated: false,
     }),
+    memories: readOk({ memories: [], total: 0 }),
+    tree: readOk({ state: "unbound" }),
+    // An empty workspace is the neutral answer for tests that set neither.
+    agents: readOk(agentPage([])),
+    killSwitches: readOk({
+      denyGeneration: { org: 0, workspace: 0 },
+      switches: [],
+      truncated: false,
+    }),
     ...overrides,
   };
-  const calls: Record<keyof SteeringReads, unknown[][]> = {
+  const calls: Record<
+    Exclude<keyof SteeringReads, "agents" | "killSwitches">,
+    unknown[][]
+  > = {
     records: [],
     record: [],
     proposals: [],
     contextPr: [],
     freshness: [],
+    hub: [],
     deliveries: [],
+    memories: [],
+    tree: [],
   };
   const refuse = () => Promise.reject(new Error("not a Steering read"));
   const source: DataSource = {
@@ -265,7 +361,7 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
     },
     approvals: { pending: refuse, resolved: refuse },
     agents: {
-      list: refuse,
+      list: () => Promise.resolve(reads.agents),
       get: refuse,
       toolbelt: refuse,
       incidents: refuse,
@@ -310,7 +406,10 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
       },
       records: (...args) => {
         calls.records.push(args);
-        return Promise.resolve(reads.records);
+        const read = reads.records;
+        return Promise.resolve(
+          typeof read === "function" ? read(args[1]) : read,
+        );
       },
       record: (...args) => {
         calls.record.push(args);
@@ -328,11 +427,23 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
         calls.freshness.push(args);
         return Promise.resolve(reads.freshness);
       },
+      hub: (...args) => {
+        calls.hub.push(args);
+        return Promise.resolve(reads.hub);
+      },
+      memories: (...args) => {
+        calls.memories.push(args);
+        return Promise.resolve(reads.memories);
+      },
+      tree: (...args) => {
+        calls.tree.push(args);
+        return Promise.resolve(reads.tree);
+      },
     },
     tools: {
       versions: refuse,
       grants: refuse,
-      killSwitches: refuse,
+      killSwitches: () => Promise.resolve(reads.killSwitches),
       approvalRules: refuse,
       connections: refuse,
       mcpServers: refuse,
