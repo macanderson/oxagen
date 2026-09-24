@@ -203,7 +203,9 @@ describe("Agents, loaded", () => {
         {
           identities: 2,
           enrolled: 2,
+          unenrolled: 0,
           holdingMandate: 0,
+          mandateHolders: [],
           tamperIncidents: 0,
           tamper: { recorded: 0, open: 0, newest: null },
         },
@@ -230,6 +232,7 @@ describe("Agents, loaded", () => {
         {
           identities: 3,
           enrolled: 3,
+          unenrolled: 0,
           tamper: {
             recorded: 2,
             open: 0,
@@ -250,7 +253,19 @@ describe("Agents, loaded", () => {
     );
   });
 
-  it("names every holder among the rows, as the design does, with no count of the rest", async () => {
+  it("counts not yet enrolled by status, so a retired or suspended agent is in neither figure", async () => {
+    // Seven agents: two enrolled, three waiting, one retired, one suspended.
+    await renderAgents({
+      list: agentPage([agentRow()], null, {
+        identities: 7,
+        enrolled: 2,
+        unenrolled: 3,
+      }),
+    });
+    expect(tiles()[1]?.textContent).toBe("Enrolled23 not yet enrolled");
+  });
+
+  it("names the holders the count counted, from the read, not the rows on this page", async () => {
     await renderAgents({
       list: agentPage(
         [
@@ -281,11 +296,21 @@ describe("Agents, loaded", () => {
           }),
         ],
         null,
-        { holdingMandate: 4 },
+        {
+          holdingMandate: 5,
+          // acme.core.z holds one and sits on a later page of the read.
+          mandateHolders: [
+            "acme.core.b",
+            "acme.core.d",
+            "acme.core.e",
+            "acme.core.release-bot",
+            "acme.core.z",
+          ],
+        },
       ),
     });
     expect(tiles()[2]?.textContent).toBe(
-      "Holding a mandate4acme.core.release-bot · in Core platform, acme.core.b · in Core platform, acme.core.d · in Core platform, acme.core.e · in Core platform · counted in Core platform only",
+      "Holding a mandate5acme.core.b · in Core platform, acme.core.d · in Core platform, acme.core.e · in Core platform, acme.core.release-bot · in Core platform, acme.core.z · in Core platform · counted in Core platform only",
     );
     expect(tiles()[2]?.textContent).not.toContain("more in");
   });
@@ -381,6 +406,23 @@ describe("Agents, loaded", () => {
         agentRow({ id: "agt_c", slug: "c", enforcementTier: "observe" }),
         agentRow({ id: "agt_d", slug: "d", enforcementTier: "contained" }),
         agentRow({ id: "agt_e", slug: "e", enforcementTier: null }),
+        // Negative: a retired or suspended agent is never healthy, whatever
+        // tier its last wrapped session recorded.
+        agentRow({
+          id: "agt_f",
+          slug: "f",
+          status: "retired",
+          credentials: 0,
+          hosts: 0,
+          host: null,
+          enforcementTier: "gateway",
+        }),
+        agentRow({
+          id: "agt_g",
+          slug: "g",
+          status: "suspended",
+          enforcementTier: "gateway",
+        }),
       ]),
     });
     expect(rows().map((row) => cellsOf(row)[7])).toEqual([
@@ -389,11 +431,58 @@ describe("Agents, loaded", () => {
       "observeenrolled, and nothing is delivered or refused yet",
       "healthyenrolled, and its latest wrapped session recorded the contained tier",
       "not recorded",
+      "not enrolledretired, so its credential and hosts are revoked and no hook is installed",
+      "—suspended, so every call is refused and there is no health verdict",
     ]);
+    expect(document.querySelectorAll('[data-health="healthy"]')).toHaveLength(
+      1,
+    );
     const pending = rows()[1];
     if (pending === undefined) throw new Error("no row");
-    expect(cellsOf(pending)[5]).toBe("—not recorded · not recorded");
+    // No host, so no runtime kind: the line under the dash is the tier alone.
+    expect(cellsOf(pending)[5]).toBe("—not recorded");
+    expect(
+      pending.querySelector('[data-gap="runtimeKind"]'),
+    ).not.toBeInTheDocument();
+    expect(pending.querySelector('[data-gap="tier"]')).toBeInTheDocument();
     expect(cellsOf(pending)[6]).toBe("prn_pending");
+  });
+
+  it("reads tamper before retired or suspended, so an open incident is never hidden behind a status", async () => {
+    await renderAgents({
+      list: agentPage([
+        agentRow({
+          id: "agt_r",
+          slug: "r",
+          status: "retired",
+          host: null,
+          tamperIncidents: 1,
+        }),
+        agentRow({
+          id: "agt_s",
+          slug: "s",
+          status: "suspended",
+          tamperIncidents: 3,
+        }),
+      ]),
+    });
+    expect(rows().map((row) => cellsOf(row)[7])).toEqual([
+      "tamper1 open incident",
+      "tamper3 open incidents",
+    ]);
+    expect(document.querySelectorAll('[data-health="tamper"]')).toHaveLength(2);
+  });
+
+  it("prints the tier alone under the dash when an agent with a recorded tier has no host", async () => {
+    await renderAgents({
+      list: agentPage([agentRow({ host: null, enforcementTier: "gateway" })]),
+    });
+    const [row] = rows();
+    if (row === undefined) throw new Error("no row");
+    expect(cellsOf(row)[5]).toBe("—gateway");
+    expect(
+      row.querySelector('[data-gap="runtimeKind"]'),
+    ).not.toBeInTheDocument();
   });
 
   it("switches to Operations over the same agents, with its subtext and columns", async () => {
@@ -539,6 +628,35 @@ describe("Agents list controls", () => {
     ).toEqual(["5", "10", "25", "50", "All"]);
     fireEvent.change(size, { target: { value: "0" } });
     expect(rows()).toHaveLength(12);
+  });
+
+  it("windows the pager past seven pages with an ellipsis, as the design's pager does", async () => {
+    await renderAgents({
+      list: agentPage(
+        Array.from({ length: 100 }, (_, i) => {
+          const n = String(i).padStart(3, "0");
+          return agentRow({
+            id: `agt_p${n}`,
+            slug: `agent-${n}`,
+            agentKey: `acme.core.agent-${n}`,
+          });
+        }),
+      ),
+    });
+    fireEvent.change(screen.getByRole("combobox", { name: "Rows" }), {
+      target: { value: "5" },
+    });
+    const pager = screen.getByRole("navigation", { name: "Pages" });
+    const labels = () => [...pager.children].map((child) => child.textContent);
+    expect(labels()).toEqual(["‹", "1", "2", "…", "20", "›"]);
+    fireEvent.click(within(pager).getByRole("button", { name: "Page 2" }));
+    fireEvent.click(within(pager).getByRole("button", { name: "Page 3" }));
+    fireEvent.click(within(pager).getByRole("button", { name: "Page 4" }));
+    expect(labels()).toEqual(["‹", "1", "…", "3", "4", "5", "…", "20", "›"]);
+    expect(
+      within(pager).getByRole("button", { name: "Page 4" }),
+    ).toHaveAttribute("aria-current", "page");
+    expect(screen.getByText("16–20 of 100")).toBeInTheDocument();
   });
 
   it("searches the rows and says when nothing matches, in a row of the table", async () => {
@@ -787,7 +905,7 @@ describe("Agents, not loaded", () => {
     ]);
     expect(denied.querySelector('[data-gap="policy"]')).toHaveAttribute(
       "title",
-      "The read's refusal does not name the policy that decided it.",
+      "The read's refusal does not name the policy that decided it yet (#3846).",
     );
     expect(
       [...denied.querySelectorAll("button, a")].map((el) => el.textContent),
@@ -878,6 +996,60 @@ describe("Agents at phone width", () => {
       expect(targets.length).toBeGreaterThan(1);
       for (const target of targets)
         expect(getComputedStyle(target).minHeight).toBe("44px");
+    } finally {
+      phone.restore();
+    }
+  });
+
+  it("makes the Agent cell the card's head, start-aligned, with a rule between cells", async () => {
+    const phone = phoneWidth();
+    try {
+      await renderAgents(
+        { list: agentPage([agentRow()]) },
+        null,
+        phone.container,
+      );
+      // The shell labels each body cell with its column header
+      // (features/shell/card-tables.ts); the page test renders no shell, so
+      // it labels the table the same way.
+      const table = phone.container.querySelector("table");
+      if (table === null) throw new Error("no table");
+      const labels = [...(table.tHead?.rows.item(0)?.cells ?? [])].map((th) =>
+        th.textContent.trim(),
+      );
+      for (const cell of table.tBodies.item(0)?.rows.item(0)?.cells ?? []) {
+        const label = labels[cell.cellIndex];
+        if (label) cell.setAttribute("data-label", label);
+      }
+      table.setAttribute("data-cards", "");
+
+      const cells = [...(table.tBodies.item(0)?.rows.item(0)?.cells ?? [])];
+      const [head, purpose] = cells;
+      const actions = cells.at(-1);
+      if (!head || !purpose || !actions) throw new Error("no cells");
+      // The Agent cell is labelled like every cell, and phone.css hides that
+      // label and sets the agent card at the start edge as the card's head.
+      expect(head).toHaveAttribute("data-label", "Agent");
+      expect(getComputedStyle(head).justifyContent).toBe("flex-start");
+      expect(getComputedStyle(purpose).justifyContent).toBe("flex-end");
+      // The unlabelled actions cell sits at the start edge too.
+      expect(actions).not.toHaveAttribute("data-label");
+      expect(getComputedStyle(actions).justifyContent).toBe("flex-start");
+      // A hairline between cells, none under the last.
+      expect(getComputedStyle(purpose).borderBottomStyle).toBe("solid");
+      expect(getComputedStyle(actions).borderBottomWidth).toBe("0px");
+      // The head's label is hidden by a ::before rule jsdom cannot compute,
+      // so the rule itself is asserted present in the phone block.
+      const rules = [...document.styleSheets]
+        .flatMap((sheet) => [...sheet.cssRules])
+        .map((rule) => rule.cssText);
+      expect(
+        rules.some(
+          (text) =>
+            text.includes("td:first-child::before") &&
+            text.includes("display: none"),
+        ),
+      ).toBe(true);
     } finally {
       phone.restore();
     }

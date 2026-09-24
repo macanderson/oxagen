@@ -2606,8 +2606,11 @@ async function initializeDaemon(
    * The real interrupt. A pause, cancel or kill already stops the session at
    * its next hook boundary; here it also cuts the model calls that are in
    * flight, and the proxy refuses new ones until the session is resumed. A
-   * steer delivered as `interrupt` cuts the current call so the steer lands
-   * at the next boundary instead of after the step finishes.
+   * steer delivered as `interrupt` cuts the current call as retryable: the
+   * harness retries it, and the next PreToolUse refuses the call it produces
+   * with the steer as the reason (`hook-handler.ts`), so the steer lands
+   * before that step runs. A refused cut would end the turn in StopFailure
+   * and the steer would never arrive.
    */
   function interruptModelCalls(commands: ControlEnvelope["commands"]): void {
     for (const command of commands) {
@@ -2628,6 +2631,7 @@ async function initializeDaemon(
         const cut = modelProxy.abortSession(
           target.recorder.sessionUuid,
           command.reason ?? `operator ${command.command}`,
+          command.command === "steer" ? "steer" : undefined,
         );
         if (cut > 0 && command.command === "steer") {
           // The frame that records the steer says the step was cut short.
