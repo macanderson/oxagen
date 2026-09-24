@@ -563,11 +563,22 @@ export class SessionRegistry {
     return record;
   }
 
-  /** Find or open the record for a harness session, absorbing new facts. */
+  /**
+   * Find or open the record for a harness session, absorbing new facts.
+   * `reopened` says this call reopened a sealed record, which the caller
+   * records on the chain (ADR-170).
+   */
   ensure(
     harnessSessionId: string,
-    facts: SessionFacts & { ambient?: boolean } = {},
-  ): { record: SessionRecord; created: boolean } {
+    facts: SessionFacts & {
+      ambient?: boolean;
+      /**
+       * When the activity was received, for a hook replayed from the spool
+       * or deferred to a later tick. Absent means now.
+       */
+      seenAt?: string;
+    } = {},
+  ): { record: SessionRecord; created: boolean; reopened?: true } {
     const now = this.ts();
     // A caller that names no agent (OTel, the transcript detector) joins
     // whichever agent already owns the id; a caller that names one only ever
@@ -579,7 +590,8 @@ export class SessionRegistry {
         this.adopt(harnessSessionId, facts))
       : this.get(harnessSessionId);
     if (existing) {
-      if (reopens(existing, facts)) this.reopen(existing);
+      const reopened = reopens(existing, facts);
+      if (reopened) this.reopen(existing);
       if (facts.transcriptPath !== undefined)
         existing.transcriptPath = facts.transcriptPath;
       if (facts.cwd !== undefined) {
@@ -610,9 +622,17 @@ export class SessionRegistry {
         existing.baselineRoot = facts.baselineRoot;
       if (facts.workDir !== undefined) existing.workDir = facts.workDir;
       if (facts.ambient === false) existing.ambient = false;
-      existing.lastSeenAt = now;
+      // A replay was received when the daemon was down, not now. Dating it
+      // now put every restart's time on the sessions its spool touched, and
+      // the sweep then ended a session at the restart rather than at its
+      // last activity (#4024).
+      const seenAt = facts.seenAt ?? now;
+      if (Date.parse(seenAt) > Date.parse(existing.lastSeenAt))
+        existing.lastSeenAt = seenAt;
       this.noteAgent(existing, false);
-      return { record: existing, created: false };
+      return reopened
+        ? { record: existing, created: false, reopened: true }
+        : { record: existing, created: false };
     }
     const record: SessionRecord = {
       harnessSessionId,

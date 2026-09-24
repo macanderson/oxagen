@@ -4866,6 +4866,236 @@ describe("running cost and the idle close", () => {
     expect(sentNames()).toEqual(["cost/run.progressed"]);
   });
 
+  /** Drafts sealed onto the end of a chain, continuing its cursor. */
+  function continued(
+    chain: TachoEvent[],
+    drafts: UnsealedTachoEvent[],
+  ): TachoEvent[] {
+    const last = chain.at(-1)!;
+    let cursor: ChainCursor = {
+      seq: last.seq + 1,
+      prevHash: last.hash as ChainCursor["prevHash"],
+    };
+    return drafts.map((draft) => {
+      const sealed = sealEvent(draft, cursor);
+      cursor = sealed.next;
+      return sealed.event;
+    });
+  }
+
+  /** Claude Code's `SessionStart` hook on `--resume`, then a prompt and a call. */
+  function resumed(chain: TachoEvent[]): TachoEvent[] {
+    return continued(chain, [
+      unsealed("agent_start", {
+        session_start_source: "resume",
+        resume_of_session_id: "sess-1",
+        resume_last_seq_seen: chain.at(-1)!.seq,
+      }),
+      unsealed("turn_start", { prompt_length: 2 }),
+      unsealed(
+        "llm_call",
+        {
+          model: "claude-haiku-4-5-20251001",
+          input_tokens: 6,
+          output_tokens: 2,
+          cost_usd_micros: 400,
+        },
+        "otel_log",
+      ),
+    ]);
+  }
+
+  /**
+   * The head a real update leaves on the row. The fake stores the SQL an
+   * update sets, and `GREATEST(seq_count, …)` is not a number the next
+   * batch's fold can read.
+   */
+  function settle(db: FakeDb, chain: TachoEvent[]): void {
+    Object.assign(db.sessions.get(SESSION)!, {
+      seqCount: chain.at(-1)!.seq + 1,
+      lastHash: chain.at(-1)!.hash,
+    });
+  }
+
+  /** Every column a host's seal leaves on the row, back to an open session's. */
+  const OPEN_AGAIN = {
+    sealedAt: null,
+    sealSource: null,
+    outcome: "running",
+    endedAt: null,
+    finalHash: null,
+    unobservedTail: false,
+    completenessGaps: [],
+    replayGrade: null,
+    endReason: null,
+    terminalReason: null,
+  };
+
+  it("reopens a run the daemon's sweep sealed as crashed when the harness resumes the session (ADR-170)", async () => {
+    const db = fakeDb();
+    wire(db);
+    // The harness process went away between messages, so the sweep sealed
+    // the chain with a stop of its own.
+    const open = session().slice(0, -1);
+    const swept = [
+      ...open,
+      ...continued(open, [
+        unsealed(
+          "agent_stop",
+          { session_outcome: "crashed", unobserved_tail: true },
+          "collector",
+        ),
+      ]),
+    ];
+    await tachoEventsIngestHandler(batch(swept), CONTEXT);
+    expect(db.sessions.get(SESSION)).toMatchObject({
+      sealSource: "agent_stop",
+      outcome: "crashed",
+      unobservedTail: true,
+    });
+    mocks.sendEvent.mockClear();
+
+    // The same session comes back in a new process.
+    const resume = resumed(swept);
+    await tachoEventsIngestHandler(batch(resume), CONTEXT);
+
+    expect(db.sessions.get(SESSION)).toMatchObject({
+      ...OPEN_AGAIN,
+      lastHash: resume.at(-1)!.hash,
+    });
+    // Open again, so its cost is an estimate again and is rolled up as one.
+    expect(sentNames()).toEqual(["cost/run.progressed"]);
+  });
+
+  it("reopens a run its host sealed on a clean exit when the harness resumes it, and seals it again at the next stop (ADR-170)", async () => {
+    const db = fakeDb();
+    wire(db);
+    const events = session();
+    await tachoEventsIngestHandler(batch(events), CONTEXT);
+    expect(db.sessions.get(SESSION)).toMatchObject({
+      sealSource: "agent_stop",
+      outcome: "completed",
+      endReason: "other",
+    });
+
+    const resume = resumed(events);
+    await tachoEventsIngestHandler(batch(resume), CONTEXT);
+    expect(db.sessions.get(SESSION)).toMatchObject(OPEN_AGAIN);
+    settle(db, resume);
+    mocks.sendEvent.mockClear();
+
+    const stop = continued(
+      [...events, ...resume],
+      [
+        unsealed("agent_stop", {
+          session_outcome: "completed",
+          session_end_reason: "prompt_input_exit",
+        }),
+      ],
+    );
+    await tachoEventsIngestHandler(batch(stop), CONTEXT);
+    const row = db.sessions.get(SESSION)!;
+    expect(row).toMatchObject({
+      sealSource: "agent_stop",
+      outcome: "completed",
+      endReason: "prompt_input_exit",
+      finalHash: stop[0]!.hash,
+    });
+    expect(row["sealedAt"]).toBeInstanceOf(Date);
+    expect(sentNames()).toEqual(["cost/run.sealed"]);
+  });
+
+  it("seals a sealed run again when one batch carries its resume and its next stop", async () => {
+    const db = fakeDb();
+    wire(db);
+    const events = session();
+    await tachoEventsIngestHandler(batch(events), CONTEXT);
+    const firstSeal = db.sessions.get(SESSION)!["sealedAt"];
+    mocks.sendEvent.mockClear();
+
+    const resume = resumed(events);
+    const stop = continued(
+      [...events, ...resume],
+      [unsealed("agent_stop", { session_outcome: "aborted" })],
+    );
+    await tachoEventsIngestHandler(batch([...resume, ...stop]), CONTEXT);
+    const row = db.sessions.get(SESSION)!;
+    expect(row).toMatchObject({
+      sealSource: "agent_stop",
+      outcome: "aborted",
+      finalHash: stop[0]!.hash,
+    });
+    expect(row["sealedAt"]).not.toBe(firstSeal);
+    expect(sentNames()).toEqual(["cost/run.sealed"]);
+  });
+
+  it("leaves a run open when one batch carries its stop and then its resume", async () => {
+    const db = fakeDb();
+    wire(db);
+    const events = session();
+    await tachoEventsIngestHandler(batch(events.slice(0, 3)), CONTEXT);
+    mocks.sendEvent.mockClear();
+
+    await tachoEventsIngestHandler(
+      batch([...events.slice(3), ...resumed(events)]),
+      CONTEXT,
+    );
+    const row = db.sessions.get(SESSION)!;
+    expect(row["sealedAt"] ?? null).toBeNull();
+    expect(row["sealSource"] ?? null).toBeNull();
+    expect(row["endedAt"] ?? null).toBeNull();
+    expect(sentNames()).not.toContain("cost/run.sealed");
+  });
+
+  it("reopens a run sealed before the seal_source column existed when the harness resumes it", async () => {
+    const db = fakeDb();
+    wire(db);
+    const events = session();
+    await tachoEventsIngestHandler(batch(events), CONTEXT);
+    db.sessions.get(SESSION)!["sealSource"] = null;
+
+    await tachoEventsIngestHandler(batch(resumed(events)), CONTEXT);
+    expect(db.sessions.get(SESSION)).toMatchObject(OPEN_AGAIN);
+  });
+
+  it("reopens a run when the daemon reopens a session its sweep closed for quiet (ADR-170)", async () => {
+    const db = fakeDb();
+    wire(db);
+    const open = session().slice(0, -1);
+    const swept = [
+      ...open,
+      ...continued(open, [
+        unsealed(
+          "agent_stop",
+          { session_outcome: "crashed", unobserved_tail: true },
+          "collector",
+        ),
+      ]),
+    ];
+    await tachoEventsIngestHandler(batch(swept), CONTEXT);
+
+    // A day later the operator types into the same terminal. No SessionStart:
+    // the daemon seals the chain's restart ahead of the prompt.
+    await tachoEventsIngestHandler(
+      batch(
+        continued(swept, [
+          unsealed(
+            "agent_start",
+            {
+              session_start_source: "reopen",
+              resume_of_session_id: "sess-1",
+              resume_last_seq_seen: swept.at(-1)!.seq,
+            },
+            "collector",
+          ),
+          unsealed("turn_start", { prompt_length: 4 }),
+        ]),
+      ),
+      CONTEXT,
+    );
+    expect(db.sessions.get(SESSION)).toMatchObject(OPEN_AGAIN);
+  });
+
   /** The columns an operator's `seal_run` writes (#4073), on the fake's row. */
   function sealByOperator(db: FakeDb): Record<string, unknown> {
     const row = db.sessions.get(SESSION)!;
@@ -4916,6 +5146,25 @@ describe("running cost and the idle close", () => {
       outcome: "unknown",
       finalHash,
       unobservedTail: true,
+    });
+  });
+
+  it("keeps an operator's seal final when the harness resumes the session (ADR-169, ADR-170)", async () => {
+    const db = fakeDb();
+    wire(db);
+    const events = session();
+    await tachoEventsIngestHandler(batch(events.slice(0, 3)), CONTEXT);
+    const { sealedAt, finalHash } = sealByOperator(db);
+
+    await tachoEventsIngestHandler(
+      batch(resumed(events.slice(0, 3))),
+      CONTEXT,
+    );
+    expect(db.sessions.get(SESSION)).toMatchObject({
+      sealedAt,
+      sealSource: "operator",
+      outcome: "unknown",
+      finalHash,
     });
   });
 
