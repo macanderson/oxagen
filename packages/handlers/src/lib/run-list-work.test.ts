@@ -13,7 +13,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@oxagen/database")>();
   const { drizzle } = await import("drizzle-orm/postgres-js");
   const db = drizzle.mock({ schema: actual.schema });
-  return {
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = {
     ...actual,
     // Build the query on a mock driver to read its SQL, then answer the rows
     // the test set: no database, and the statement is still the real one.
@@ -22,6 +25,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
       return Promise.resolve(tenantDb.rows);
     },
   };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
 
 import {
