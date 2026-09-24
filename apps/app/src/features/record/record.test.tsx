@@ -972,6 +972,9 @@ describe("Record › the not-loaded states", () => {
     const loading = screen.getByRole("status");
     expect(loading.getAttribute("aria-busy")).toBe("true");
     expect(loading.textContent).toBe("");
+    // Every bone is the design's shimmer, as on every other page, and none pulses.
+    expect(loading.querySelectorAll(".skeleton").length).toBeGreaterThan(0);
+    expect(loading.querySelector(".animate-pulse")).toBeNull();
   });
 });
 

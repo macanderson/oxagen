@@ -11,65 +11,75 @@
 // "not recorded" (#3841, #3846), and Request access and Open an incident open
 // dialogs that name the write they wait on (#3820, #3847).
 import "server-only";
-import { CircleAlert, Clock, Lock, PanelTop } from "lucide-react";
 import { useTranslations } from "next-intl";
-import type { ComponentType, ReactNode } from "react";
+import type { ReactNode } from "react";
 import type { Read } from "@/data/read";
 import { routes, type SafePath } from "@/shared/safe-path";
 import type { OrgRole } from "@/server/viewer";
-import { buttonPrimary, buttonSecondary, mono } from "@/ui/control-styles";
+import {
+  buttonPrimary,
+  buttonSecondary,
+  kvTerm,
+  kvValue,
+  mono,
+} from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
+import {
+  StateWrap,
+  type StateTone,
+  stateCode,
+  stateFacts,
+  stateTrace,
+} from "@/ui/state-wrap";
 import { IncidentDialog, RequestAccessDialog } from "./dialogs";
 import { AUDIT_GAPS } from "./gaps";
 
 type Failure = Exclude<Read<unknown>, { ok: true }>;
 
-function StateWrap({
+/**
+ * The shared `.state-wrap`, marked `data-audit-state` so the page header
+ * steps out of view while a state stands alone.
+ */
+function AuditState({
   state,
-  icon: Icon,
+  tone,
+  lock = false,
   title,
   body,
   actions,
   children,
 }: {
   state: string;
-  /** The design's glyph for the state, drawn in a bordered square above the title. */
-  icon: ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
+  tone: StateTone;
+  /** Draw the lock in a neutral tone: an access request still waiting. */
+  lock?: boolean;
   title: string;
   body: ReactNode;
   actions: ReactNode;
   children?: ReactNode;
 }) {
   return (
-    <section
+    <StateWrap
+      testId={`audit-${state}`}
       data-state={state}
-      data-testid={`audit-${state}`}
       data-audit-state={state}
-      aria-labelledby={`audit-${state}-title`}
-      className="mx-auto flex max-w-lg flex-col items-center gap-3 px-4 py-16 text-center"
+      tone={tone}
+      glyph={lock ? "lock" : undefined}
+      title={title}
+      actions={actions}
+      after={children}
     >
-      <span
-        data-state-icon=""
-        className={`flex size-11 items-center justify-center rounded-lg border ${state === "denied" || state === "error" ? "border-destructive/40 text-destructive" : "border-border text-foreground"}`}
-      >
-        <Icon aria-hidden className="size-4" />
-      </span>
-      <h2 id={`audit-${state}-title`} className="text-lg font-semibold">
-        {title}
-      </h2>
-      <p className="text-[13px] text-muted-foreground">{body}</p>
-      <div className="flex flex-wrap justify-center gap-2">{actions}</div>
-      {children}
-    </section>
+      {body}
+    </StateWrap>
   );
 }
 
 export function AuditEmpty({ org }: { org: string }) {
   const t = useTranslations("audit.empty");
   return (
-    <StateWrap
+    <AuditState
       state="empty"
-      icon={PanelTop}
+      tone="neutral"
       title={t("title")}
       body={t("body")}
       actions={
@@ -80,8 +90,6 @@ export function AuditEmpty({ org }: { org: string }) {
     />
   );
 }
-
-const code = "rounded bg-hl px-1 font-mono text-[0.92em]";
 
 export function AuditFailure({
   read,
@@ -114,15 +122,15 @@ export function AuditFailure({
   switch (read.reason) {
     case "denied":
       return (
-        <StateWrap
+        <AuditState
           state="denied"
-          icon={Lock}
+          tone="denied"
           title={t("denied.title")}
           body={t.rich("denied.body", {
             org: orgName,
             permission: read.permission,
-            b: (chunks) => <b>{chunks}</b>,
-            code: (chunks) => <code className={code}>{chunks}</code>,
+            b: (chunks) => <b className="text-foreground">{chunks}</b>,
+            code: (chunks) => <code className={stateCode}>{chunks}</code>,
           })}
           actions={
             <>
@@ -142,9 +150,9 @@ export function AuditFailure({
             </>
           }
         >
-          <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-left text-[13px]">
-            <dt className="text-muted-foreground">{t("denied.signedIn")}</dt>
-            <dd>
+          <dl className={stateFacts}>
+            <dt className={kvTerm}>{t("denied.signedIn")}</dt>
+            <dd className={kvValue}>
               {t.rich("denied.signedInAs", {
                 name: viewer,
                 role: `org.${orgRole}`,
@@ -152,20 +160,21 @@ export function AuditFailure({
                 c: (chunks) => <span className={mono}>{chunks}</span>,
               })}
             </dd>
-            <dt className="text-muted-foreground">{t("denied.needed")}</dt>
-            <dd className={mono}>{read.permission}</dd>
-            <dt className="text-muted-foreground">{t("denied.decidedBy")}</dt>
+            <dt className={kvTerm}>{t("denied.needed")}</dt>
+            <dd className={`${kvValue} ${mono}`}>{read.permission}</dd>
+            <dt className={kvTerm}>{t("denied.decidedBy")}</dt>
             <dd data-recorded="false" className="text-muted-foreground">
               {t("notRecorded")}
             </dd>
           </dl>
-        </StateWrap>
+        </AuditState>
       );
     case "pending_approval":
       return (
-        <StateWrap
+        <AuditState
           state="pending"
-          icon={Clock}
+          tone="neutral"
+          lock
           title={t("pending.title")}
           body={t("pending.body", { id: read.accessRequestId })}
           actions={null}
@@ -173,14 +182,14 @@ export function AuditFailure({
       );
     case "error":
       return (
-        <StateWrap
+        <AuditState
           state="error"
-          icon={CircleAlert}
+          tone="failed"
           title={t("error.title")}
           body={t.rich("error.body", {
             status: String(read.status),
             code: read.code,
-            c: (chunks) => <code className={code}>{chunks}</code>,
+            c: (chunks) => <code className={stateCode}>{chunks}</code>,
           })}
           actions={
             <>
@@ -191,10 +200,8 @@ export function AuditFailure({
             </>
           }
         >
-          <p className={`${mono} text-xs text-dim`}>
-            {t("error.trace", { at })}
-          </p>
-        </StateWrap>
+          <p className={stateTrace}>{t("error.trace", { at })}</p>
+        </AuditState>
       );
   }
 }

@@ -234,9 +234,9 @@ export function SkillsLoading() {
       aria-label={t("loading")}
       className={`${panel} flex flex-col gap-3 p-4`}
     >
-      <div className="h-4 w-1/3 animate-pulse rounded bg-muted" />
-      <div className="h-10 animate-pulse rounded-md bg-muted" />
-      <div className="h-10 animate-pulse rounded-md bg-muted" />
+      <div className="skeleton h-4 w-1/3 rounded-md" />
+      <div className="skeleton h-10 rounded-md" />
+      <div className="skeleton h-10 rounded-md" />
     </section>
   );
 }

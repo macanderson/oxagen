@@ -198,7 +198,8 @@ export async function RegisterGate({
 /** The loading state (register specs, States): four tile blocks and a panel of seven rows under the rail. */
 export function RegisterSkeleton() {
   const t = useTranslations("onboarding.register");
-  const block = "animate-pulse bg-hl motion-reduce:animate-none";
+  // The design's `.sk` shimmer (globals.css), the one every skeleton draws.
+  const block = "skeleton";
   return (
     <div
       data-testid="register-loading"
@@ -211,10 +212,7 @@ export function RegisterSkeleton() {
         className="grid grid-cols-2 gap-3.5 md:grid-cols-4"
       >
         {[0, 1, 2, 3].map((n) => (
-          <div
-            key={n}
-            className={`${block} h-16 rounded-xl border border-border`}
-          />
+          <div key={n} className={`${block} h-16 rounded-[11px]`} />
         ))}
       </div>
       <div aria-hidden="true" className={`${panel} flex flex-col`}>

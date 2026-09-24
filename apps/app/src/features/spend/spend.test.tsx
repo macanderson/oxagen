@@ -1287,6 +1287,11 @@ describe("Spend › states", () => {
     ).toBeGreaterThanOrEqual(11);
     expect(loading.querySelector("[data-testid=money]")).toBeNull();
     expect(loading).not.toHaveTextContent("$");
+    // Every bone is the design's shimmer, as on every other page, and none pulses.
+    expect(loading.querySelectorAll(".skeleton").length).toBeGreaterThanOrEqual(
+      11,
+    );
+    expect(loading.querySelector(".animate-pulse")).toBeNull();
   });
 });
 

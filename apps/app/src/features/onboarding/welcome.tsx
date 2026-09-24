@@ -83,8 +83,20 @@ function permissionFor(step: Step, ctx: WsCtx): string {
     : `repo.bind on ${ctx.wsSlug}`;
 }
 
-/** The loading state: the shell and the rail stay, the card is the skeleton. */
-export function WelcomeLoading({ step }: { step: Step }) {
+/**
+ * The loading state: the shell and the rail stay, the card is the skeleton.
+ * The installer's screens sit in the auth shell with no rail, so its skeleton
+ * does too, and nothing moves when the screens land.
+ */
+export function WelcomeLoading({ step }: { step: Step | "installer" }) {
+  if (step === "installer")
+    return (
+      <AuthShell pending>
+        <div className="w-full">
+          <GateSkeleton />
+        </div>
+      </AuthShell>
+    );
   return (
     <GateShell step={step} email={null} cancel={routes.root()} pending>
       <GateSkeleton />

@@ -18,7 +18,8 @@ const TILES = [0, 1, 2, 3];
 /** The Runs panel's rows. */
 const ROWS = [0, 1, 2, 3, 4, 5, 6];
 
-const bone = "animate-pulse bg-hl motion-reduce:animate-none";
+/** The design's `.sk` shimmer (globals.css), the one every skeleton draws. */
+const bone = "skeleton";
 
 export function FleetLoading() {
   const t = useTranslations("fleet");

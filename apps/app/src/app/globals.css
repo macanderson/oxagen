@@ -298,6 +298,39 @@
   animation-delay: 160ms;
 }
 
+/*
+ * `.sk` (engine.css, "state surfaces"): a skeleton bone is a band of the
+ * panel sweeping across the wash, left to right, every 1.5s. Every loading
+ * state draws its bones with this one class, so they all read alike. Each
+ * bone sets its own height and corners. Under reduced motion the sweep stops
+ * and the wash stays. The kit's kill-switch only shortens an animation, and a
+ * 0.01ms infinite sweep would flicker, so this one is switched off outright.
+ */
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 130% 0;
+  }
+  100% {
+    background-position: -30% 0;
+  }
+}
+
+@utility skeleton {
+  display: block;
+  background: linear-gradient(
+    90deg,
+    var(--hl) 25%,
+    var(--panel) 50%,
+    var(--hl) 75%
+  );
+  background-size: 220% 100%;
+  animation: skeleton-shimmer 1.5s linear infinite;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
 /* A disclosure's body arrives rather than appears. */
 [data-shell-page] details[open] > :not(summary) {
   animation: fade-in var(--motion-base) var(--ease-entry) both;

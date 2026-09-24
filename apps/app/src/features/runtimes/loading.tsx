@@ -5,18 +5,13 @@
 // React holds the resolved page hidden beside this fallback, and two
 // `main#main` in one document is what the page-load check refused.
 import { useTranslations } from "next-intl";
-import {
-  panel,
-  panelBody,
-  panelHeader,
-  statStrip,
-  statTile,
-} from "@/ui/control-styles";
+import { panel, panelBody, panelHeader, statStrip } from "@/ui/control-styles";
 
 const TILES = [0, 1, 2, 3];
 const ROWS = [0, 1, 2, 3, 4, 5, 6];
 
-const bone = "animate-pulse rounded bg-muted motion-reduce:animate-none";
+/** The design's `.sk` shimmer (globals.css), the one every skeleton draws. */
+const bone = "skeleton";
 
 export function RuntimesLoading() {
   const t = useTranslations("runtimes.page");
@@ -37,17 +32,24 @@ export function RuntimesLoading() {
             <span
               key={tile}
               aria-hidden="true"
-              className={`${statTile} h-[66px] ${bone}`}
+              data-skeleton-tile=""
+              className={`${bone} h-16 rounded-[11px]`}
             />
           ))}
         </div>
         <div aria-hidden="true" className={panel}>
           <div className={panelHeader}>
-            <span className={`h-4 w-44 ${bone}`} />
+            <span
+              className={`${bone} h-[22px] w-[180px] max-w-full rounded-[7px]`}
+            />
           </div>
           <div className={`${panelBody} flex flex-col gap-2`}>
             {ROWS.map((row) => (
-              <span key={row} className={`block h-9 ${bone}`} />
+              <span
+                key={row}
+                data-skeleton-row=""
+                className={`${bone} h-[38px] rounded-[9px]`}
+              />
             ))}
           </div>
         </div>

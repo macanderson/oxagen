@@ -26,6 +26,24 @@ describe("FleetLoading", () => {
     expect(screen.getAllByTestId("skeleton-row")).toHaveLength(7);
   });
 
+  it("draws every bone with the design's shimmer, as every skeleton does", () => {
+    render(
+      <IntlProvider>
+        <FleetLoading />
+      </IntlProvider>,
+    );
+    const status = screen.getByRole("status");
+    for (const bone of [
+      ...screen.getAllByTestId("skeleton-tile"),
+      ...screen.getAllByTestId("skeleton-row"),
+    ]) {
+      expect(bone).toHaveClass("skeleton");
+    }
+    // Four tiles, the panel's title bar and seven rows, and none pulses.
+    expect(status.querySelectorAll(".skeleton")).toHaveLength(12);
+    expect(status.querySelector(".animate-pulse")).toBeNull();
+  });
+
   it("draws no heading, no figure and no table (negative)", () => {
     const { container } = render(
       <IntlProvider>

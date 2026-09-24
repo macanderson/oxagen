@@ -29,7 +29,8 @@ import { StubAction } from "./stub-action";
 
 type Failure = Exclude<Read<unknown>, { ok: true }>;
 
-const bar = "animate-pulse rounded bg-muted motion-reduce:animate-none";
+/** The design's `.sk` shimmer (globals.css), the one every skeleton draws. */
+const bar = "skeleton rounded-md";
 
 /** Four tile blocks and a panel of seven rows (`skeleton()`). */
 export function SteeringLoading() {
