@@ -44,7 +44,6 @@ import {
   statTile,
   statValue,
 } from "@/ui/control-styles";
-import { useFormatter } from "@/ui/formatter";
 import { Measure, NamedMeasure } from "@/ui/measure";
 import { type GrantAgent, MandateGrant, type PeopleNames } from "./grant";
 import { MandateLedger } from "./ledger";
@@ -56,6 +55,7 @@ import {
   MANDATE_ID,
   mandateLink,
   measuresOf,
+  traceTime,
   unitsOf,
 } from "./view";
 
@@ -502,7 +502,6 @@ function Failure({
   at: MandateAt;
   readAt: string;
 }) {
-  const format = useFormatter();
   return (
     <MandateReadFailure
       read={read}
@@ -511,10 +510,8 @@ function Failure({
       org={at.org}
       ws={at.ws}
       retry={mandateLink(at)}
-      readAt={format.dateTime(new Date(readAt), {
-        dateStyle: "medium",
-        timeStyle: "long",
-      })}
+      mandate={at.mandate}
+      readAt={traceTime(new Date(readAt))}
     />
   );
 }

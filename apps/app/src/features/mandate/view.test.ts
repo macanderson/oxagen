@@ -10,6 +10,7 @@ import {
   mandateRow,
 } from "@/test/mandate-views";
 import {
+  costOf,
   editableOf,
   isDrawn,
   kindOf,
@@ -305,7 +306,8 @@ describe("ledger sort", () => {
   });
 
   it("sorts amounts as integers within a measure, never across measures", () => {
-    // "amount" before "calls"; 50 < 100 < 900 dollars, by micros, not by text.
+    // "amount" before "calls"; 0 (the release cost nothing) < 100 < 900
+    // dollars, by micros, not by text.
     expect(refs({ column: "amount", dir: 1 })).toEqual([
       "pi_a",
       null,
@@ -337,5 +339,28 @@ describe("ledger sort", () => {
     expect(down).toEqual({ column: "amount", dir: -1 });
     expect(nextSort(down, "amount")).toBeNull();
     expect(nextSort(down, "when")).toEqual({ column: "when", dir: 1 });
+  });
+});
+
+describe("costOf", () => {
+  it("prints a released draw as zero in its own currency or unit, and every other draw as its value", () => {
+    const usd = {
+      kind: "money",
+      money: { micros: "18000000", currency: "USD" },
+    } as const;
+    expect(costOf(mandateDraw({ state: "release", value: usd }))).toEqual({
+      kind: "money",
+      money: { micros: "0", currency: "USD" },
+    });
+    expect(
+      costOf(
+        mandateDraw({
+          state: "release",
+          value: { kind: "count", count: "3", unit: "calls" },
+        }),
+      ),
+    ).toEqual({ kind: "count", count: "0", unit: "calls" });
+    expect(costOf(mandateDraw({ state: "settle", value: usd }))).toEqual(usd);
+    expect(costOf(mandateDraw({ state: "reserve", value: usd }))).toEqual(usd);
   });
 });

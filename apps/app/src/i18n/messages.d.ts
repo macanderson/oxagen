@@ -2379,6 +2379,7 @@ type Messages = {
       };
       noEffectYet: string;
       releasedNoEffect: string;
+      releasedFigure: string;
       notRecorded: string;
       filteredEmpty: string;
       readBound: string;
@@ -2443,6 +2444,8 @@ type Messages = {
           weekly: string;
           monthly: string;
         };
+        secondApprover: string;
+        blankKeeps: string;
       };
       revoke: {
         open: string;
@@ -2497,8 +2500,6 @@ type Messages = {
       denied: {
         title: string;
         body: string;
-        requestAccess: string;
-        requestAccessBody: string;
         signedIn: string;
         needed: string;
         decidedBy: string;
@@ -2513,11 +2514,33 @@ type Messages = {
         title: string;
         body: string;
         retry: string;
-        incident: string;
-        incidentBody: string;
         trace: string;
+        traceNotRecorded: string;
+        regionNotRecorded: string;
       };
-      stubCancel: string;
+      requestAccess: {
+        title: string;
+        role: string;
+        why: string;
+        note: string;
+        send: string;
+        cancel: string;
+        unbacked: string;
+      };
+      incident: {
+        title: string;
+        subject: string;
+        severity: string;
+        severities: {
+          critical: string;
+          warning: string;
+          info: string;
+        };
+        attach: string;
+        raise: string;
+        cancel: string;
+        unbacked: string;
+      };
     };
   };
   onboarding: {

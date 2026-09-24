@@ -35,6 +35,7 @@ import { SafeLink, useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { UNANSWERED, useActionFailure } from "./action-failure";
 import { changeMandateLimits, revokeMandate } from "./actions";
+import { NotBacked } from "./state";
 import { editableOf, lastDayOf, measuresOf, thresholdOf, unitOf } from "./view";
 
 /** What a write that landed did, for the line under the actions. */
@@ -277,7 +278,16 @@ function ChangeLimits({ org, ws, mandate, here, agentKey, done }: Place) {
               defaultValue={defaults.validTo}
             />
           </Field>
-          <Note>{t("note")}</Note>
+          {/* The design's note names the second approver a widening needs.
+              A mandate stores no second approver (#3872), so that clause says
+              so as not recorded rather than naming a person. The last sentence
+              is not the design's: a cleared field keeps its stored bound
+              (ADR-102), and a reader who clears Per call expecting no limit
+              must be told. */}
+          <Note>
+            {t("note")} <NotBacked gap="G1">{t("secondApprover")}</NotBacked>{" "}
+            {t("blankKeeps")}
+          </Note>
           {failure === null ? null : (
             <FormAlert testId="change-limits-failure">{failure}</FormAlert>
           )}

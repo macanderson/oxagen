@@ -376,6 +376,28 @@ describe("Mandate › loaded", () => {
     expect(release).toHaveTextContent("released, no effect");
   });
 
+  it("prints what a released draw cost, $0.00, with the figure its reservation held beneath", async () => {
+    await renderMandate(
+      mandateDetailRead({
+        draws: [
+          mandateDraw({
+            state: "release",
+            value: {
+              kind: "money",
+              money: { micros: "18000000", currency: "USD" },
+            },
+            externalEffectRef: null,
+          }),
+        ],
+      }),
+    );
+    const amount = draws()[0]?.querySelectorAll("td")[2];
+    expect(amount).toHaveTextContent(/^\$0\.00\$18\.00 held, then released$/);
+    expect(
+      amount?.querySelector('[data-state="released-figure"]'),
+    ).toHaveTextContent("$18.00 held, then released");
+  });
+
   it("searches, facets on State, and pages the ledger with a range line", async () => {
     const user = userEvent.setup({ delay: null });
     const ledger = Array.from({ length: 12 }, (_, index) =>
@@ -685,14 +707,39 @@ describe("Mandate › error", () => {
     expect(
       within(error).getByRole("link", { name: "Try again" }),
     ).toHaveAttribute("href", "/a-intel/core-platform/mandates/mnd_4f2a9c");
-    expect(screen.getByTestId("mandate-trace")).toHaveTextContent(
-      /Trace not recorded\. Read at /,
+    // The design's `trace <id> · <region> · <instant>`: the read returns no
+    // trace id and no region, so those two say not recorded.
+    const trace = screen.getByTestId("mandate-trace");
+    expect(trace).toHaveTextContent(
+      /^trace not recorded · region not recorded · \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}Z$/,
     );
+    expect(trace.querySelectorAll('[data-state="not-backed"]')).toHaveLength(2);
     await user.click(
       within(error).getByRole("button", { name: "Open an incident" }),
     );
     const dialog = await screen.findByTestId("open-incident");
-    expect(dialog).toHaveTextContent(/does not record incidents/);
+    expect(within(dialog).getByLabelText("Subject")).toHaveValue(
+      "503 mandate_ledger_unavailable",
+    );
+    const severity = within(dialog).getByLabelText("Severity");
+    expect(
+      [...severity.querySelectorAll("option")].map((o) => o.textContent),
+    ).toEqual([
+      "critical — money moved that Oxagen did not govern",
+      "warning",
+      "info",
+    ]);
+    const attach = within(dialog).getByTestId("incident-attach");
+    expect(attach).toHaveTextContent("mnd_4f2a9c");
+    expect(attach).toHaveTextContent("503 mandate_ledger_unavailable");
+    // No write raises an incident (#3847): the design's primary is drawn
+    // disabled beside the sentence that says so.
+    expect(
+      within(dialog).getByRole("button", { name: "Raise it" }),
+    ).toBeDisabled();
+    expect(within(dialog).getByTestId("incident-unbacked")).toHaveTextContent(
+      /does not record incidents/,
+    );
     expect(dialog.querySelector('[data-state="not-backed"]')).not.toBeNull();
   });
 
@@ -752,6 +799,18 @@ describe("Mandate › access denied", () => {
       within(denied).getByRole("button", { name: "Request access" }),
     );
     const dialog = await screen.findByTestId("request-access");
+    expect(within(dialog).getByLabelText("Role requested")).toHaveValue(
+      "org.billing",
+    );
+    expect(within(dialog).getByLabelText("Why")).toBeInTheDocument();
+    expect(dialog).toHaveTextContent(
+      "Granting a role is a governed action. It will appear in the audit record with the granter’s name, your name, and this reason.",
+    );
+    // No write files an access request (#3846): the design's primary is
+    // drawn disabled beside the sentence that says so.
+    expect(
+      within(dialog).getByRole("button", { name: "Send the request" }),
+    ).toBeDisabled();
     expect(dialog).toHaveTextContent(/does not record access requests/);
     // The design's header close, with the footer's dismiss named Cancel.
     expect(
