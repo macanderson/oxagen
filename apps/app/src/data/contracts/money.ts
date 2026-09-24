@@ -219,7 +219,6 @@ export function ratioOfMicros(part: Money, whole: Money): number | null {
   return Number(scaled) / RATIO_SCALE;
 }
 
-
 /**
  * Orders two amounts by their micros, for a column a person sorts by cost.
  * Negative when `a` is smaller, positive when larger, zero when equal. The
