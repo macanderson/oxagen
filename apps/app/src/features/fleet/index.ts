@@ -12,7 +12,6 @@ export { Fleet } from "./fleet";
 // its URL, so Fleet's first render already draws what the person chose.
 export {
   FLEET_PREFS_COOKIE,
-  type FleetPrefs,
   pullRequestFilterOf,
   readFleetPrefs,
 } from "./prefs";

@@ -41,7 +41,7 @@ export const FIXED_COLUMN: FleetColumn = "run";
 export const PAGE_SIZES = [10, 25, 50, 100] as const;
 export type PageSize = (typeof PAGE_SIZES)[number];
 
-export const DEFAULT_PAGE_SIZE: PageSize = 25;
+const DEFAULT_PAGE_SIZE: PageSize = 25;
 
 export type FleetPrefs = {
   pageSize: PageSize;
@@ -87,7 +87,12 @@ export function readFleetPrefs(raw: string | undefined): FleetPrefs {
   };
 }
 
-/** The cookie value for a choice, columns in table order so equal choices write equal text. */
+/**
+ * The cookie value for a choice, columns in table order so equal choices write
+ * equal text. Exported for its tests.
+ *
+ * @internal
+ */
 export function fleetPrefsValue(prefs: FleetPrefs): string {
   const hidden = FLEET_COLUMNS.filter(
     (column) => column !== FIXED_COLUMN && prefs.hidden.has(column),

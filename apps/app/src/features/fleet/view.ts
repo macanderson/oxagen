@@ -190,6 +190,9 @@ export function windowParts(windowSeconds: number): {
 /**
  * How many pull requests a row can name: the links its frames recorded, else
  * the `pr_open` calls counted, else null when neither was read (a ledger run).
+ * Exported for its tests.
+ *
+ * @internal
  */
 export function pullRequestCount(run: RunRow): number | null {
   const links = run.pullRequests?.length ?? null;
