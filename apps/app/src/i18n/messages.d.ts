@@ -953,6 +953,7 @@ type Messages = {
       };
       tagsLabel: string;
     };
+    signedIn: string;
     fields: {
       name: string;
       email: string;

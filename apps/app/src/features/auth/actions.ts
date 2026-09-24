@@ -80,9 +80,11 @@ export async function resetPassword(input: {
         context: "[reset-password] resetPassword failed",
       });
     }
+    // An unrecognised failure is an outage until shown otherwise: calling it
+    // an expired link would send the person for a new one that fails the same way.
     return {
       ok: false,
-      outcome: outcome === "unknown" ? "linkExpired" : outcome,
+      outcome: outcome === "unknown" ? "unavailable" : outcome,
     };
   }
 }

@@ -18,6 +18,7 @@ import {
 import type { AuthOutcomeKey } from "./auth-errors";
 import {
   liveVerifyTwoFactor,
+  rememberSignedIn,
   takePendingEmail,
   takePendingNext,
 } from "./auth-client";
@@ -126,6 +127,8 @@ export function TwoFactorForm({
         setAttempt((n) => n + 1);
         return;
       }
+      // The destination shows "Signed in as …" once (SignedInToast).
+      rememberSignedIn();
       navigate.replace(destination);
     } catch {
       setOutcome("unavailable");

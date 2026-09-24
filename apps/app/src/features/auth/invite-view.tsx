@@ -1,7 +1,8 @@
 // The invitation screen (mockup `obInvite`): the inviter, the facts of the
 // invitation, and accept or decline for the invited account. A closed
-// invitation keeps the card and says why at its top; another signed-in account
-// gets one full card in place of the page. Server Component; the buttons are
+// invitation keeps the card, its two actions disabled and its footer, and says
+// why at its top; another signed-in account gets one full card in place of the
+// page. Server Component; the buttons are
 // the InviteDecision island.
 //
 // The design also lists the workspace, the workspace role and what that role
@@ -96,9 +97,25 @@ export async function InvitationBody({
   const t = await getTranslations("auth.invite");
   const format = await getFormatter();
   const here = routes.invite(invitation.token);
-  const date = (iso: string) =>
-    format.dateTime(new Date(iso), { dateStyle: "medium" });
+  // "11 Sep 2026", the design's form: day, short month, year, each part in
+  // the request's zone. `dateStyle: "medium"` under `en` would give "Sep 11, 2026".
+  const date = (iso: string) => {
+    const at = new Date(iso);
+    return [
+      format.dateTime(at, { day: "numeric" }),
+      format.dateTime(at, { month: "short" }),
+      format.dateTime(at, { year: "numeric" }),
+    ].join(" ");
+  };
   const invitedOn = date(invitation.invitedAt);
+  // Who the footer names: the invited account on an open invitation, whoever
+  // is signed in on a closed one, and nobody for a signed-out visitor.
+  const signedInAs =
+    decision.kind === "accept"
+      ? invitation.email
+      : decision.kind === "closed"
+        ? decision.signedInAs
+        : null;
 
   return (
     <>
@@ -156,6 +173,27 @@ export async function InvitationBody({
           </dl>
           {decision.kind === "accept" ? (
             <InviteDecision token={invitation.token} />
+          ) : decision.kind === "closed" ? (
+            // The design keeps the rest of the card when the invitation is
+            // closed; the two actions stay in place and cannot be pressed.
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled
+                data-touch-target=""
+                className={`${buttonPrimary} max-md:flex-1 disabled:cursor-not-allowed disabled:opacity-50`}
+              >
+                {t("accept")}
+              </button>
+              <button
+                type="button"
+                disabled
+                data-touch-target=""
+                className={`${buttonSecondary} max-md:flex-1 disabled:cursor-not-allowed disabled:opacity-50`}
+              >
+                {t("decline")}
+              </button>
+            </div>
           ) : decision.kind === "sign-in" ? (
             <div className="flex flex-col gap-3">
               <p className="text-[13px] text-muted-foreground">
@@ -176,9 +214,9 @@ export async function InvitationBody({
           ) : null}
         </AuthPanel>
       </section>
-      {decision.kind === "accept" ? (
+      {signedInAs !== null ? (
         <AuthFooter>
-          {t.rich("signedInAs", { email: invitation.email, mono: monoTag })}{" "}
+          {t.rich("signedInAs", { email: signedInAs, mono: monoTag })}{" "}
           <span aria-hidden className="text-dim">
             ·
           </span>{" "}

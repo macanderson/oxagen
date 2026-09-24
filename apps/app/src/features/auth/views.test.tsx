@@ -107,7 +107,7 @@ describe("InvitationBody", () => {
     const card = screen.getByTestId("invite-card");
     expect(card).toHaveTextContent("Priya Natarajan");
     expect(card).toHaveTextContent(
-      "organization owner · invited you on Sep 11, 2026",
+      "organization owner · invited you on 11 Sep 2026",
     );
     expect(screen.getByText("PN")).toHaveAttribute("aria-hidden", "true");
     const terms = [...card.querySelectorAll("dt")].map((dt) => dt.textContent);
@@ -144,7 +144,7 @@ describe("InvitationBody", () => {
       />,
     );
     expect(screen.getByTestId("invite-card")).toHaveTextContent(
-      "invited you on Sep 11, 2026",
+      "invited you on 11 Sep 2026",
     );
     expect(screen.queryByText("PN")).toBeNull();
     unmount();
@@ -173,9 +173,9 @@ describe("InvitationBody", () => {
         />,
       );
       const card = screen.getByTestId("invite-card");
-      expect(card).toHaveTextContent("invited you on Sep 10, 2026");
-      expect(card).toHaveTextContent("Sep 11, 2026");
-      expect(card).not.toHaveTextContent("Sep 12, 2026");
+      expect(card).toHaveTextContent("invited you on 10 Sep 2026");
+      expect(card).toHaveTextContent("11 Sep 2026");
+      expect(card).not.toHaveTextContent("12 Sep 2026");
     },
   );
 
@@ -198,15 +198,19 @@ describe("InvitationBody", () => {
     expect(
       screen.getByRole("link", { name: "Log in to accept" }),
     ).toHaveAttribute("href", "/login?next=%2Finvite%2Finvi_1");
-    expect(screen.getByText("Sep 18, 2026")).toBeInTheDocument();
+    expect(screen.getByText("18 Sep 2026")).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent("Signed in as");
   });
 
-  it("closed · keeps the card and says why at its top, with no actions", async () => {
+  it("closed · keeps the card, its two actions disabled and its footer, and says why at its top", async () => {
     const accepted = await renderServer(
       <InvitationBody
         invitation={invitation}
-        decision={{ kind: "closed", status: "accepted" }}
+        decision={{
+          kind: "closed",
+          status: "accepted",
+          signedInAs: "marcus.bell@acme.example",
+        }}
       />,
     );
     const alert = screen.getByRole("alert");
@@ -219,18 +223,28 @@ describe("InvitationBody", () => {
     expect(screen.getByTestId("invite-card")).toHaveTextContent(
       "Priya Natarajan",
     );
+    // The design keeps both actions; neither can be pressed.
     expect(
-      screen.queryByRole("button", { name: "Accept invitation" }),
-    ).toBeNull();
+      screen.getByRole("button", { name: "Accept invitation" }),
+    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Decline" })).toBeDisabled();
+    expect(document.body).toHaveTextContent(
+      "Signed in as marcus.bell@acme.example · Not you?",
+    );
     accepted.unmount();
     await renderServer(
       <InvitationBody
         invitation={invitation}
-        decision={{ kind: "closed", status: "revoked" }}
+        decision={{ kind: "closed", status: "revoked", signedInAs: null }}
       />,
     );
     expect(screen.getByTestId("invite-closed-revoked")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Log in to accept" })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Accept invitation" }),
+    ).toBeDisabled();
+    // Nobody is signed in, so the footer names nobody.
+    expect(document.body).not.toHaveTextContent("Signed in as");
   });
 
   it("not found", async () => {

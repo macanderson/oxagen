@@ -4,6 +4,7 @@
 
 import { useTranslations } from "next-intl";
 import { useState } from "react";
+import { rememberSignedIn } from "./auth-client";
 import { acceptInvitation, declineInvitation } from "./invite-actions";
 import { FormAlert } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
@@ -30,8 +31,11 @@ export function InviteDecision({ token }: { token: string }) {
     try {
       if (kind === "accept") {
         const result = await acceptInvitation(token);
-        if (result.ok) navigate.replace(result.value.to);
-        else setFailure(failureOf(result.reason));
+        if (result.ok) {
+          // Fleet shows "Signed in as …" once (SignedInToast), as the design does.
+          rememberSignedIn();
+          navigate.replace(result.value.to);
+        } else setFailure(failureOf(result.reason));
       } else {
         const result = await declineInvitation(token);
         if (result.ok) setDeclined(true);

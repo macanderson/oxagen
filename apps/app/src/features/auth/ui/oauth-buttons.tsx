@@ -4,17 +4,23 @@
 // never leave the page (provider unset, network) show as a form alert; failures
 // after the provider round-trip land on /login?error= via errorCallbackURL.
 import { useTranslations } from "next-intl";
-import { type ReactNode, useState } from "react";
+import { useState } from "react";
 import type { SafePath } from "@/shared/safe-path";
 import { buttonSecondary } from "@/ui/control-styles";
 import type { AuthOutcomeKey } from "../auth-errors";
-import { liveSignInSocial } from "../auth-client";
+import {
+  liveSignInSocial,
+  rememberSignedIn,
+  takeSignedIn,
+} from "../auth-client";
 import { AuthAlert, AuthOr } from "./auth-card";
 
 type Provider = "google" | "github";
 
 function ProviderMark({ provider }: { provider: Provider }) {
-  // Provider marks are brand glyphs, not interface icons; drawn in currentColor so they stay on house tokens.
+  // Provider marks are brand glyphs, not interface icons. GitHub's is one
+  // colour, drawn in currentColor so it follows the theme. Google's four-colour
+  // G is drawn in its own colours, as the design and Google's brand rules draw it.
   if (provider === "github") {
     return (
       <svg
@@ -30,26 +36,42 @@ function ProviderMark({ provider }: { provider: Provider }) {
   return (
     <svg
       aria-hidden
-      viewBox="0 0 24 24"
+      data-mark="google"
+      viewBox="0 0 18 18"
       className="size-4 flex-none"
-      fill="currentColor"
     >
-      <path d="M12 11v3.1h7c-.3 1.9-2.2 5.6-7 5.6-4.2 0-7.6-3.5-7.6-7.7S7.8 4.3 12 4.3c2.4 0 4 .9 5 1.8L19.5 4C17.9 2.5 15.3 1.5 12 1.5 6.2 1.5 1.5 6.2 1.5 12S6.2 22.5 12 22.5c6.9 0 11.5-4.9 11.5-11.8 0-.8-.1-1.4-.2-2H12Z" />
+      <path
+        fill="#4285F4"
+        d="M17.6 9.2c0-.6-.05-1.2-.16-1.8H9v3.4h4.8a4.1 4.1 0 0 1-1.8 2.7v2.2h2.9c1.7-1.6 2.7-3.9 2.7-6.5z"
+      />
+      <path
+        fill="#34A853"
+        d="M9 18c2.4 0 4.5-.8 6-2.2l-2.9-2.2c-.8.5-1.8.9-3.1.9-2.4 0-4.4-1.6-5.1-3.8H.9v2.3A9 9 0 0 0 9 18z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M3.9 10.7a5.4 5.4 0 0 1 0-3.4V5H.9a9 9 0 0 0 0 8z"
+      />
+      <path
+        fill="#EA4335"
+        d="M9 3.6c1.3 0 2.5.5 3.4 1.3l2.6-2.6A9 9 0 0 0 .9 5l3 2.3C4.6 5.2 6.6 3.6 9 3.6z"
+      />
     </svg>
   );
 }
 
 /**
  * Continue with Google and Continue with GitHub, then the "or" rule (mockups
- * `obSso`). `children` sits under the two providers, before the rule: the
- * login screen's single sign-on entry.
+ * `obSso`). `announceSignIn` is set on Log in, where a provider that succeeds
+ * lands on a signed-in page that shows "Signed in as …" once; Sign up lands
+ * on onboarding and sets nothing.
  */
 export function OAuthButtons({
   callbackURL,
-  children,
+  announceSignIn = false,
 }: {
   callbackURL: SafePath;
-  children?: ReactNode;
+  announceSignIn?: boolean;
 }) {
   const t = useTranslations("auth");
   const tSso = useTranslations("auth.sso");
@@ -59,10 +81,18 @@ export function OAuthButtons({
   async function start(provider: Provider) {
     setPending(provider);
     setOutcome(null);
+    // Marked before the browser leaves for the provider, and dropped when
+    // the start fails here; a failure after the round-trip lands on /login,
+    // which drops it too.
+    if (announceSignIn) rememberSignedIn();
     try {
       const result = await liveSignInSocial({ provider, callbackURL });
-      if (!result.ok) setOutcome(result.outcome);
+      if (!result.ok) {
+        if (announceSignIn) takeSignedIn();
+        setOutcome(result.outcome);
+      }
     } catch {
+      if (announceSignIn) takeSignedIn();
       setOutcome("unavailable");
     } finally {
       setPending(null);
@@ -90,7 +120,6 @@ export function OAuthButtons({
             <span>{tSso(provider)}</span>
           </button>
         ))}
-        {children}
       </div>
       <AuthOr label={tSso("or")} />
     </div>
