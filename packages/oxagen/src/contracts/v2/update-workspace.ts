@@ -245,6 +245,9 @@ export const updateWorkspace = defineTool({
      */
     steering: workspaceSettingsWrite.output.shape.steering,
 
+    runEnrichmentEnabled:
+      workspaceSettingsWrite.output.shape.runEnrichmentEnabled,
+
     governanceMode: z.enum(["solo", "team", "regulated"]),
     /** Null means "inherit the organization's" — see the input field. */
     retentionMode: z.enum(["content_exact", "digest_only"]).nullable(),
