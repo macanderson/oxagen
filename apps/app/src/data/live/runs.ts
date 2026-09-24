@@ -118,6 +118,10 @@ export const runs: DataSource["runs"] = {
           ...pr,
           checkoutRefs: checkoutIds,
         })),
+        subagents: read.value.subagents.map(({ id, ...subagent }) => ({
+          ...subagent,
+          agentRef: id,
+        })),
       },
       "runs.work",
     );
