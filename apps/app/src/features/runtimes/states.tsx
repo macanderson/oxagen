@@ -210,7 +210,7 @@ export function RuntimesFailure({
         >
           <p className={body}>
             {t.rich("error.body", {
-              code: `${read.status} ${read.code}`,
+              code: `${String(read.status)} ${read.code}`,
               c: (chunks) => <code className={code}>{chunks}</code>,
             })}
           </p>
