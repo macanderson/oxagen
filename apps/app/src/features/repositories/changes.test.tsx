@@ -9,6 +9,7 @@ import type {
   RepositoryChange,
   RepositoryChanges,
 } from "@/data/contracts/repository";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { Changes, CiLight } from "./changes";
 
@@ -45,18 +46,18 @@ const VALUE: RepositoryChanges = {
 afterEach(cleanup);
 
 function table(onOpen = vi.fn()) {
-  render(
+  const { container } = render(
     <IntlProvider>
       <Changes changes={{ kind: "ready", value: VALUE }} onOpen={onOpen} />
     </IntlProvider>,
   );
-  return onOpen;
+  return { onOpen, container };
 }
 
 describe("the Changes table", () => {
   it("opens a row with Enter or Space, and ignores other keys", async () => {
     const user = userEvent.setup();
-    const onOpen = table();
+    const { onOpen } = table();
     const row = screen.getByTestId("change-row-prp_run1");
     row.focus();
     await user.keyboard("{Enter}");
@@ -68,7 +69,7 @@ describe("the Changes table", () => {
   });
 
   it("ignores a key pressed on something inside the row rather than the row itself (negative)", () => {
-    const onOpen = table();
+    const { onOpen } = table();
     const row = screen.getByTestId("change-row-prp_run1");
     const inner = within(row).getByText("ctx.scr.prp_run1");
     inner.dispatchEvent(
@@ -89,8 +90,8 @@ describe("the Changes table", () => {
     );
   });
 
-  it("draws running as a pulse, passed as green, and an open change as queued", () => {
-    table();
+  it("draws running as a pulse, passed as green, and an open change as queued", async () => {
+    const { container } = table();
     const light = (id: string) =>
       screen
         .getByTestId(`change-row-${id}`)
@@ -102,6 +103,7 @@ describe("the Changes table", () => {
     expect(screen.getByTestId("change-row-prp_open1")).toHaveTextContent(
       "the reconciler",
     );
+    await expectNoAxe(container);
   });
 
   it("reads a merged change as passed, and a failed one as a cross", () => {

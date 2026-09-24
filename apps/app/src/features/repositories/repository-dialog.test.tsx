@@ -14,6 +14,7 @@ import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RepositoryTree } from "@/data/contracts/repository";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import type { RepositoryRow } from "./view";
 
@@ -140,6 +141,7 @@ describe("the repository dialog", () => {
     const root = dialog(LINKED);
     expect(root).toHaveTextContent("Scope is repository.");
     expect(root).toHaveTextContent("1 file at fedcba9");
+    await expectNoAxe(root);
     await user.click(within(root).getByTestId("repository-dialog-changes"));
     expect(handlers.onSeeChanges).toHaveBeenCalledTimes(1);
   });
@@ -160,7 +162,7 @@ describe("the repository dialog", () => {
     ).toHaveTextContent("steered by acme/docs-site and by nothing of its own");
   });
 
-  it("points at the init pull request that is waiting to be merged", () => {
+  it("points at the init pull request that is waiting to be merged", async () => {
     const root = dialog({
       ...LINKED,
       tree: {
@@ -183,6 +185,7 @@ describe("the repository dialog", () => {
       "href",
       "https://github.com/acme/docs-site/pull/7",
     );
+    await expectNoAxe(root);
   });
 
   it("offers the main repository's setup again when its connection was retired", () => {
