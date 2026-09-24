@@ -7,21 +7,27 @@
 // host its session belongs to. The collector takes the row on its next ingest
 // response or command poll (`fetch_commands`) and reports what became of it.
 //
-// The one connection point in this tree is the hook adapter (decision 1 of
-// ADR-056): a run is reachable when it is a live wrapped session at `harness`
-// or `gateway` tier. An `observe`-tier session has no adapter in the path, so
-// a command addressed to it directly is refused (§7.3 "refused, not queued"),
-// and a broadcast records it as `failed` with the reason so the delivery
-// report is complete (§7.6). A direct ledger cancel fences further appends and
+// The connection point is the host's command poll (ADR-056, ADR-163): a run is
+// reachable when it is a live wrapped session whose host is enrolled and has
+// polled within `HOST_POLL_WINDOW_MS`, whatever its enforcement tier. The tier
+// governs policy verdicts; it never takes away the operator's ability to stop
+// their own agent. A run that cannot be reached is refused when addressed
+// directly (§7.3 "refused, not queued"), and a broadcast records it as
+// `failed` with the reason so the delivery report is complete (§7.6). The
+// reason is `commandBlockOf`'s, the rule every run row also reads, so the page
+// never offers a control this handler refuses. A direct ledger cancel fences further appends and
 // revokes its run credentials in the command transaction. Pause and resume
 // fence ledger ingress. Steering still requires a producer connection point.
 // Broadcasts enumerate wrapped sessions.
 //
 // A delivery mode is resolved per recipient at dispatch, at or below the
-// requested one: the hook adapter cannot stop an in-flight call, so
-// `interrupt` degrades to `next_step` with `degraded_reason = harness_tier`.
-// A run on the `gateway` tier has its model traffic routed through the host's
-// loopback proxy, which can, so there `interrupt` is delivered as `interrupt`.
+// requested one, and only to a mode the host can carry. The hook adapter
+// delivers steering text at the next prompt, so without a host that
+// advertises a step carrier (`steer_next_step`) both `next_step` and
+// `interrupt` degrade to `turn_boundary` with `degraded_reason =
+// no_step_carrier`. With one, `interrupt` degrades to `next_step`
+// (`harness_tier`) unless the run's model traffic goes through the host's
+// loopback proxy (`gateway`, `contained`), which can cut a call in flight.
 // Both modes are recorded, and the report shows the achieved one.
 //
 // A new command supersedes an earlier `queued` command of the same kind on the
@@ -46,14 +52,48 @@ import {
   lockRunForControl,
   createPostgresRunStore,
 } from "@oxagen/run-ledger";
+import {
+  type CommandBlock,
+  commandBlockOf,
+  type SteerBlock,
+  steerBlockOf,
+} from "@oxagen/oxagen/contracts/run.list";
 import { and, desc, eq, isNull, ne } from "drizzle-orm";
 import { logger } from "./logger";
 import { ledgerIdentityQuery, type RunScope, runScope } from "./run.list";
 
 // ---- Delivery mode resolution --------------------------------------------------------
 
-/** Why the achieved mode is below the requested one (spec §7.3). */
-type DegradedReason = "harness_tier";
+/**
+ * The bundle feature a host advertises when it can put steering text in
+ * front of the agent before its next step, rather than at the next prompt.
+ * The host side (#4027) declares the same word in `@oxagen/tacho`'s
+ * `wire.ts`; this copy goes when that lands.
+ */
+export const BUNDLE_FEATURE_STEER_NEXT_STEP = "steer_next_step";
+
+/**
+ * The runtimes whose hook adapter carries a steer mid-turn, once the host
+ * advertises the feature. Claude Code and Codex deliver at `PostToolUse` and
+ * at `Stop` as a block. Cursor's adapter delivers at `Stop` only, which is
+ * the end of the turn (ADR-141), so a host carrying the feature still cannot
+ * move a Cursor steer earlier. A Stella steer never gets this far
+ * (`steerBlockOf`).
+ */
+const STEP_CARRIER_RUNTIMES: ReadonlySet<string> = new Set([
+  "claude-code",
+  "codex",
+]);
+
+/**
+ * Why the achieved mode is below the requested one (spec §7.3).
+ *
+ * - `no_step_carrier`: the host delivers steering text only at the next
+ *   prompt, so the steer waits for the next turn.
+ * - `harness_tier`: the host can steer before the next step, but nothing on
+ *   the run's path can cut a model call in flight.
+ */
+type DegradedReason = "no_step_carrier" | "harness_tier";
 
 type ResolvedMode = {
   deliveryMode: TachoDeliveryMode;
@@ -61,23 +101,34 @@ type ResolvedMode = {
 };
 
 /**
- * The strongest mode the recipient's connection point can carry at or below
- * the request.
+ * The strongest mode the recipient's host can carry at or below the request.
  *
- * The hook adapter injects at the next prompt boundary and cannot stop a call
- * in flight, so on the `harness` tier `interrupt` lands as `next_step` and says
- * so. `turn_boundary` is the next turn's prompt, which the adapter reaches.
+ * The hook adapter injects steering text at the next prompt
+ * (`UserPromptSubmit`), so `turn_boundary` is the one mode every host
+ * delivers. `next_step` needs a host that advertises
+ * `BUNDLE_FEATURE_STEER_NEXT_STEP` and a runtime in `STEP_CARRIER_RUNTIMES`;
+ * without both, `next_step` and `interrupt` are recorded as `turn_boundary`, which is when the text will arrive. Cutting
+ * a call without delivering the text would disrupt the run and steer nothing.
  *
- * On the `gateway` tier the run's model traffic is routed through the host's
- * loopback proxy (ADR-094), which can cut the call in flight, so `interrupt` is
- * delivered as `interrupt` (ADR-095: "`interrupt` degrades at `harness` and is
- * real at `gateway`"). The host still reports what happened: the applied frame
- * carries `command.interrupted`, which is `1` only when a call was cut.
+ * With a step carrier, `interrupt` also needs the run's model traffic routed
+ * through the host's loopback proxy (ADR-094), which can cut the call in
+ * flight: the `gateway` and `contained` tiers (ADR-095). Elsewhere it lands as
+ * `next_step`. The host still reports what happened: the applied frame carries
+ * `command.interrupted`, which is `1` only when a call was cut.
  */
 export function resolveDeliveryMode(
   requested: TachoDeliveryMode,
-  enforcementTier = "harness",
+  enforcementTier: string,
+  hostFeatures: readonly string[],
+  runtime: string,
 ): ResolvedMode {
+  if (requested === "turn_boundary")
+    return { deliveryMode: requested, degradedReason: null };
+  if (
+    !hostFeatures.includes(BUNDLE_FEATURE_STEER_NEXT_STEP) ||
+    !STEP_CARRIER_RUNTIMES.has(runtime)
+  )
+    return { deliveryMode: "turn_boundary", degradedReason: "no_step_carrier" };
   if (
     requested === "interrupt" &&
     enforcementTier !== "gateway" &&
@@ -97,20 +148,57 @@ export type RecipientSession = {
   sessionUuid: string;
   hostId: string | null;
   agentKey: string;
+  /** `tacho.sessions.runtime`: the harness, which decides the steer carrier. */
+  runtime: string;
   /** `tacho.sessions.outcome`: `running` is live. */
   outcome: string;
   /** `tacho.sessions.enforcement_tier`: gateway, harness or observe. */
   enforcementTier: string;
+  /** The session's host as its polls left it; null when it names none. */
+  host: {
+    status: string;
+    lastSeenAt: Date | null;
+    /** What the host advertised on its last health report. */
+    bundleFeatures: readonly string[];
+  } | null;
 };
 
-/** Why a recipient cannot take the command (recorded on the row, or refused). */
-type UndeliverableReason = "run_sealed" | "observe_tier";
-
-function undeliverable(session: RecipientSession): UndeliverableReason | null {
-  if (session.outcome !== "running") return "run_sealed";
-  if (session.enforcementTier === "observe") return "observe_tier";
-  return null;
+/**
+ * Why a recipient cannot take the command (recorded on the row, or refused).
+ * The run's own rule, so the controls a row offers and this handler agree.
+ */
+function undeliverable(
+  session: RecipientSession,
+  now: Date,
+): CommandBlock | null {
+  return commandBlockOf({
+    outcome: session.outcome,
+    host: session.host,
+    now,
+  });
 }
+
+/** Why this command, rather than any command, cannot reach the session. */
+function commandUndeliverable(
+  session: RecipientSession,
+  command: RunCommand,
+  now: Date,
+): CommandBlock | SteerBlock | null {
+  const block = undeliverable(session, now);
+  if (block !== null) return block;
+  return PROMPT_COMMANDS.has(command) ? steerBlockOf(session.runtime) : null;
+}
+
+/** What `dispatch_command` says when a run named directly cannot be reached. */
+const BLOCK_MESSAGES: Record<CommandBlock | SteerBlock, string> = {
+  no_prompt_carrier:
+    "The run's harness reads steering text only when a session starts, so this live run would never see it",
+  run_sealed: "The run has ended; nothing can receive it",
+  no_host: "The run names no enrolled host to carry the command",
+  host_revoked: "The run's host enrollment was revoked; it takes no commands",
+  host_offline:
+    "The run's host has not checked in for five minutes; nothing would take the command",
+};
 
 /** §7.6 addressing as recorded on every row of a dispatch. */
 export function addressOf(target: CommandTarget): string {
@@ -199,6 +287,8 @@ async function resolveRecipients(
   store: CommandStore,
   scope: RunScope,
   target: CommandTarget,
+  command: RunCommand,
+  now: Date,
 ): Promise<RecipientSession[]> {
   switch (target.kind) {
     case "run": {
@@ -212,17 +302,8 @@ async function resolveRecipients(
       }
       const session = await store.session(scope, target.id);
       if (!session) throw notFound("run_not_found");
-      const reason = undeliverable(session);
-      if (reason === "run_sealed")
-        throw refused(
-          "run_sealed",
-          "The run has ended; nothing can receive it",
-        );
-      if (reason === "observe_tier")
-        throw refused(
-          "observe_tier",
-          "An observe-tier run has no connection point; the command is refused",
-        );
+      const reason = commandUndeliverable(session, command, now);
+      if (reason !== null) throw refused(reason, BLOCK_MESSAGES[reason]);
       return [session];
     }
     case "agent":
@@ -290,13 +371,24 @@ export function createDispatchCommandHandler(
           }),
         ];
       }
-      const sessions = await resolveRecipients(store, scope, input.target);
+      const sessions = await resolveRecipients(
+        store,
+        scope,
+        input.target,
+        input.command,
+        now,
+      );
       const ids: string[] = [];
       for (const session of sessions) {
-        const reason = undeliverable(session);
+        const reason = commandUndeliverable(session, input.command, now);
         const resolved =
           requestedMode !== null && reason === null
-            ? resolveDeliveryMode(requestedMode, session.enforcementTier)
+            ? resolveDeliveryMode(
+                requestedMode,
+                session.enforcementTier,
+                session.host?.bundleFeatures ?? [],
+                session.runtime,
+              )
             : null;
         const payload: Record<string, unknown> = {
           address,
@@ -349,6 +441,7 @@ export function createDispatchCommandHandler(
 // ---- Postgres ------------------------------------------------------------------------
 
 const sessions = schema.tachoSessions;
+const hosts = schema.tachoHosts;
 const commands = schema.tachoControlCommands;
 
 const recipientColumns = {
@@ -357,9 +450,51 @@ const recipientColumns = {
   sessionUuid: sessions.sessionUuid,
   hostId: sessions.hostId,
   agentKey: sessions.agentKey,
+  runtime: sessions.runtime,
   outcome: sessions.outcome,
   enforcementTier: sessions.enforcementTier,
+  hostRowId: hosts.id,
+  hostStatus: hosts.status,
+  hostLastSeenAt: hosts.lastSeenAt,
+  hostBundleFeatures: hosts.bundleFeatures,
 };
+
+/** A session row with its host's liveness, as `recipientColumns` selects it. */
+type RecipientRow = {
+  id: string;
+  publicId: string;
+  sessionUuid: string;
+  hostId: string | null;
+  agentKey: string;
+  runtime: string;
+  outcome: string;
+  enforcementTier: string;
+  hostRowId: string | null;
+  hostStatus: string | null;
+  hostLastSeenAt: Date | null;
+  hostBundleFeatures: string[] | null;
+};
+
+function recipientOf(row: RecipientRow): RecipientSession {
+  const {
+    hostRowId,
+    hostStatus,
+    hostLastSeenAt,
+    hostBundleFeatures,
+    ...session
+  } = row;
+  return {
+    ...session,
+    host:
+      hostRowId === null || hostStatus === null
+        ? null
+        : {
+            status: hostStatus,
+            lastSeenAt: hostLastSeenAt,
+            bundleFeatures: hostBundleFeatures ?? [],
+          },
+  };
+}
 
 export function postgresCommandStore(tx: Tx): CommandStore {
   const ledger = createPostgresRunStore();
@@ -368,6 +503,7 @@ export function postgresCommandStore(tx: Tx): CommandStore {
       const rows = await tx
         .select(recipientColumns)
         .from(sessions)
+        .leftJoin(hosts, eq(hosts.id, sessions.hostId))
         .where(
           and(
             eq(sessions.publicId, publicId),
@@ -377,12 +513,13 @@ export function postgresCommandStore(tx: Tx): CommandStore {
           ),
         )
         .limit(1);
-      return rows[0] ?? null;
+      return rows[0] ? recipientOf(rows[0]) : null;
     },
-    liveSessions: (scope, agentKey) =>
-      tx
+    liveSessions: async (scope, agentKey) => {
+      const rows = await tx
         .select(recipientColumns)
         .from(sessions)
+        .leftJoin(hosts, eq(hosts.id, sessions.hostId))
         .where(
           and(
             eq(sessions.orgId, scope.orgId),
@@ -392,7 +529,9 @@ export function postgresCommandStore(tx: Tx): CommandStore {
             agentKey === null ? undefined : eq(sessions.agentKey, agentKey),
           ),
         )
-        .orderBy(sessions.startedAt),
+        .orderBy(sessions.startedAt);
+      return rows.map(recipientOf);
+    },
     setLedgerPaused: async ({
       scope,
       publicId,

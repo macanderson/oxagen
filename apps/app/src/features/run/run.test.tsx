@@ -844,6 +844,21 @@ describe("controls", () => {
     }
   });
 
+  it("disables only Steer on a live run whose harness carries no mid-session prompt", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({ status: "live", steerBlock: "no_prompt_carrier" }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-steer")).toBeDisabled();
+    for (const command of ["pause", "resume", "cancel"]) {
+      expect(screen.getByTestId(`run-${command}`)).not.toBeDisabled();
+    }
+  });
+
   it("allows ledger ingress control and explains the remaining control limit", async () => {
     await renderRun({
       detail: ok(
