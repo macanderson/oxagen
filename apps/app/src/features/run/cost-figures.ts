@@ -103,7 +103,10 @@ export type Ledger = {
   modelSteps: number;
   toolSteps: number;
   frames: number;
-  /** Every turn's recorded cost summed; null when no turn carried one. */
+  /**
+   * Every turn's recorded cost summed; null when no turn carried one, or when
+   * the turns carry more than one currency and no sum spans them.
+   */
   cost: Money | null;
   /** The dearest turn's own cost, the scale the per-turn bars sit against. */
   max: Money | null;

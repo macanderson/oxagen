@@ -327,7 +327,13 @@ function WhereFromWork({
   return (
     <WhereRow>
       {repo === undefined ? (
-        <Chip>{t("repoNotCaptured")}</Chip>
+        <Chip>
+          {/* The branch chip beside it is what was captured, so only the
+              repository is named as missing then. */}
+          {checkout?.branch == null
+            ? t("repoNotCaptured")
+            : t("repoOnlyNotCaptured")}
+        </Chip>
       ) : (
         <ForgeChip url={repo.url}>
           {repo.owner}/{repo.name}

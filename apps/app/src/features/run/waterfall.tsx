@@ -376,7 +376,12 @@ export function WaterfallPanel({
                 data-testid="waterfall-unpriced"
                 className="m-0 max-w-prose text-[12.5px] text-muted-foreground"
               >
-                {t("unpriced")}
+                {/* No total means either no turn carried a cost, or the
+                    turns carry more than one currency and no sum spans
+                    them. The rows below show which, so the line says it. */}
+                {ledger.rows.some((row) => row.cost !== null)
+                  ? t("mixedCurrency")
+                  : t("unpriced")}
               </p>
             ) : (
               <>

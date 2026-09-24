@@ -685,9 +685,10 @@ describe("header", () => {
       ),
     });
     const strip = within(await screen.findByTestId("run-checkout"));
-    // The chip reads "repository and branch not captured" while the branch is
-    // drawn beside it: the words are the design's, and the branch is recorded.
-    expect(strip.getByText("repository and branch not captured")).toBeTruthy();
+    // The branch is recorded and drawn, so the chip names only the repository
+    // as missing rather than contradicting the branch beside it.
+    expect(strip.getByText("repository not captured")).toBeTruthy();
+    expect(strip.queryByText("repository and branch not captured")).toBeNull();
     expect(strip.getByText("release/3.2")).toBeTruthy();
     expect(strip.queryByRole("link")).toBeNull();
     // The work read named no machine, so the path is the run row's host.

@@ -154,7 +154,9 @@ describe("WaterfallPanel", () => {
       turn({ turn: 1, seq: "1", cost: null }),
       turn({ turn: 2, seq: "10", cost: null }),
     ]);
-    expect(screen.getByTestId("waterfall-unpriced")).toBeTruthy();
+    expect(screen.getByTestId("waterfall-unpriced")).toHaveTextContent(
+      "No turn in this run carries a cost",
+    );
     expect(screen.queryByTestId("waterfall-bar")).toBeNull();
     expect(screen.getAllByTestId("waterfall-row")).toHaveLength(2);
     expect(screen.getByTestId("waterfall-total").children[4]).toHaveTextContent(
@@ -201,9 +203,9 @@ describe("WaterfallPanel", () => {
   });
 
   it("draws no chart for a run priced in two currencies, and keeps each turn's own cost in the table (negative)", () => {
-    // `ledgerOf` has no one total across currencies, so there is no scale.
-    // The sentence drawn in the chart's place today says no turn carries a
-    // cost, which is not what the rows show; this test holds the rows.
+    // `ledgerOf` has no one total across currencies, so there is no scale,
+    // and the line in the chart's place says so rather than claiming no turn
+    // carries a cost.
     renderPanel([
       turn({ turn: 1, seq: "1", cost: usd("400000") }),
       turn({
@@ -214,6 +216,9 @@ describe("WaterfallPanel", () => {
     ]);
     expect(screen.queryByTestId("waterfall")).toBeNull();
     expect(screen.queryByTestId("waterfall-bar")).toBeNull();
+    expect(screen.getByTestId("waterfall-unpriced")).toHaveTextContent(
+      "more than one currency",
+    );
     const [usdTurn, eurTurn] = screen.getAllByTestId("waterfall-row");
     if (usdTurn === undefined || eurTurn === undefined)
       throw new Error("two turns");

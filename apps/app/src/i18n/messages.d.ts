@@ -5350,6 +5350,7 @@ type Messages = {
       ofRecorded: string;
       empty: string;
       unpriced: string;
+      mixedCurrency: string;
       cut: string;
     };
     replay: {
@@ -5433,6 +5434,7 @@ type Messages = {
       harnessNotRecorded: string;
       versionNotCaptured: string;
       repoNotCaptured: string;
+      repoOnlyNotCaptured: string;
       noPullRequest: string;
       pathNotCaptured: string;
       noMachine: string;

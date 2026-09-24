@@ -760,6 +760,7 @@
       "ofRecorded": "of {cost} recorded",
       "empty": "This run has no turn the recording could fold, so there is nothing to lay out.",
       "unpriced": "No turn in this run carries a cost, so the bars have no scale to sit against. The turns are listed as recorded.",
+      "mixedCurrency": "The turns carry costs in more than one currency, so no one total gives the bars a scale. Each turn's cost is listed as recorded.",
       "cut": "This stops short of the end of the run: the run is still recording, or it has more turns and steps than these reads carry."
     },
     "replay": {
@@ -843,6 +844,7 @@
       "harnessNotRecorded": "harness not recorded",
       "versionNotCaptured": "version not captured",
       "repoNotCaptured": "repository and branch not captured",
+      "repoOnlyNotCaptured": "repository not captured",
       "noPullRequest": "no pull request",
       "pathNotCaptured": "path not captured",
       "noMachine": "machine not recorded",
