@@ -1787,6 +1787,29 @@ describe("visibleSteps and visibleFrames edges", () => {
     expect(shape(keyed)).toEqual([["s1", ["1", "2", "3"]]]);
     expect(visibleFrames(nth(keyed, 0)).map((f) => f.seq)).toEqual(["1", "2"]);
   });
+
+  it("keeps a digest-only copy when no copy of that same call carries the body (negative)", () => {
+    // The body of call A is no reason to hide call B's only copy.
+    const step = stepOver("tool", [
+      frame({
+        seq: "1",
+        kind: "tool_call",
+        type: "tool_call",
+        label: "Bash ok",
+        callKey: "toolu_a",
+        response: body("1", '{"input":{},"output":"ok"}'),
+      }),
+      frame({
+        seq: "2",
+        kind: "tool_call",
+        type: "tool_call",
+        label: "Bash ok",
+        callKey: "toolu_b",
+        response: body("2", null),
+      }),
+    ]);
+    expect(visibleFrames(step).map((f) => f.seq)).toEqual(["1", "2"]);
+  });
 });
 
 describe("frameCost", () => {
